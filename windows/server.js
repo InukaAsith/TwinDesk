@@ -149,7 +149,10 @@ class Server extends EventEmitter {
         if (now - ctx.lastRx > timeout) {
           console.log(`[server] ${ctx.name || ctx.address} silent for ${timeout} ms, closing`);
           ctx.ws.terminate();
-        } else if (now - ctx.lastTx >= every) {
+        } else if (busy ? now - (ctx.lastPing || 0) >= every : now - ctx.lastTx >= every) {
+          // A busy link pings on its own every PING_MS (both ends measure the round trip, which the
+          // window shows); an idle one only when nothing was sent for IDLE_PING_MS.
+          ctx.lastPing = now;
           this.send(ctx, { t: P.T.PING, ts: now });
         }
       } else if (now - ctx.connectedAt > P.UNAUTH_TIMEOUT_MS) {

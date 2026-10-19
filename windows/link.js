@@ -383,7 +383,11 @@ class Link {
       if (this.ws) this.ws.terminate();
       return;
     }
-    if (now - this.lastTx >= (busy ? P.PING_MS : P.IDLE_PING_MS)) this._raw({ t: T.PING, ts: now });
+    // Busy: our own ping every PING_MS (each end measures the round trip); idle: only when quiet.
+    if (busy ? now - (this.lastPing || 0) >= P.PING_MS : now - this.lastTx >= P.IDLE_PING_MS) {
+      this.lastPing = now;
+      this._raw({ t: T.PING, ts: now });
+    }
   }
 
   // Local events ('welcome', 'closed') share the handler table with message types.

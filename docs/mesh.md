@@ -28,7 +28,7 @@ slices, each with tests, without changing what a two-device setup does today.
   "one session at a time" rule any more: the phone no longer pushes computers away and computers are
   not refused with `busy` because another link is up.
 - Keep-alive costs scale with the number of links, so the policy depends on use:
-  a link that is driving or being driven (or the selected one) pings every `PING_MS` (1 s) and times
+  a link that is driving or being driven (or the selected one) pings every `PING_MS` (1 s) from each end (so both ends can show the round trip) and times
   out after `TIMEOUT_MS` (4 s), as today; every other link pings every `IDLE_PING_MS` (5 s) and times
   out after `IDLE_TIMEOUT_MS` (15 s). Any received message counts as a sign of life; a ping is only
   sent when nothing was sent on that link for the interval.

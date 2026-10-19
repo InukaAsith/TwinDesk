@@ -34,7 +34,8 @@ test('a busy link pings about every second and an idle link about every five sec
     B.server.setBusy(A.id, true);
     await new Promise((r) => setTimeout(r, 3600));
     const busy = aSide.n + bSide.n;
-    assert.ok(busy >= 2 && busy <= 6, `busy link sent ${busy} pings in 3.6 s, expected about 3`);
+    // Both ends of a busy link ping on their own (each measures the round trip): about 2 per second.
+    assert.ok(busy >= 5 && busy <= 10, `busy link sent ${busy} pings in 3.6 s, expected about 7`);
 
     A.links.setBusy(B.id, false);
     B.server.setBusy(A.id, false);

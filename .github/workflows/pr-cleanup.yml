@@ -21,5 +21,5 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName -q '.[].tagName' | grep -E -- "-pr${PR_NUMBER}$" || true); do
-            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes || true
           done

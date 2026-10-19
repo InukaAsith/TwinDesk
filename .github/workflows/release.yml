@@ -112,7 +112,8 @@ jobs:
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
             # This pull request's earlier builds (v2.1.1-pr9 once v2.1.2-pr9 is up) go away.
             for old in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName -q '.[].tagName' | grep -E -- "-pr${PR_NUMBER}$" | grep -vx "$TAG" || true); do
-              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+              # A draft has no tag to clean up (that call fails with 422): delete it without.
+              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes || true
             done
           else
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
