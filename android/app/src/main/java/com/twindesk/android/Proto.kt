@@ -18,6 +18,13 @@ object Proto {
     const val PING_MS = 1000L
     const val TIMEOUT_MS = 4000L
     const val PHONE_GRACE_MS = 30000L
+    // Mesh (docs/mesh.md; same values as shared/protocol.js): many computers at once.
+    const val MAX_DEVICES = 10
+    const val IDLE_PING_MS = 5000L
+    const val IDLE_TIMEOUT_MS = 15000L
+    const val POOL_SEEN_LIMIT = 200 // (origin, seq) pairs remembered per pool for dedupe
+    const val POOL_MAX_HOPS = 9 // one less than MAX_DEVICES: a chain of ten, and duplicates are dropped
+    val RECONNECT_MS = longArrayOf(1000L, 2000L, 3000L) // a dropped link redials after these; then the last one
     const val CLIP_MAX_BYTES = 256 * 1024
     const val FILE_CHUNK_BYTES = 64 * 1024
     const val MAX_PAYLOAD = 16 * 1024 * 1024
