@@ -32,6 +32,25 @@ class Session extends EventEmitter {
     this.swapOut = P.newRoleSwapState('');
     this._subscribed = new WeakSet();
     this._up = false;
+    this._linkMesh = false; // the guest link's welcome said mesh: 1
+    this.meshCapable = false; // the device speaks the mesh (hello/welcome `mesh: 1`); set when it comes up
+    this.taps = []; // hub: fn(msg) -> true when it consumed the message (see _deliver)
+    this.lifeFns = []; // hub: fn(up) when the device becomes connected or stops being connected
+  }
+
+  // Hub hooks. A tap sees every message of this device before the handlers; returning true
+  // keeps the message away from them.
+  tap(fn) {
+    this.taps.push(fn);
+  }
+
+  onLife(fn) {
+    this.lifeFns.push(fn);
+  }
+
+  // Re-read the connection state and fire onLife when it changed (the hub calls it once at attach).
+  refresh() {
+    this._sync();
   }
 
   // ---- what features use (same as the one-to-one peer) ----
@@ -140,7 +159,10 @@ class Session extends EventEmitter {
       link.onAny = (msg) => {
         if (this.link === link) this._fromGuest(msg);
       };
-      link.on('welcome', (msg) => this._sync(msg));
+      link.on('welcome', (msg) => {
+        this._linkMesh = !!(msg && msg.mesh);
+        this._sync(msg);
+      });
       link.on('closed', () => this._sync());
       link.onState(() => this.link === link && this._changed());
     }
@@ -151,15 +173,13 @@ class Session extends EventEmitter {
   setCtx(ctx) {
     const prev = this.ctx;
     if (prev === ctx) return;
+    // Replaced by a new socket of the same device: down (replaced), then up below, so the features start clean.
+    if (prev && ctx && this._up) this._transition(false, {}, true);
     this.ctx = ctx;
     if (ctx) {
       this.name = ctx.name || this.name;
       this.swapIn = P.newRoleSwapState(ctx.name);
       this.swapOut = P.newRoleSwapState(ctx.name);
-    }
-    if (prev && ctx && this._up) { // replaced: the features start clean again
-      this._up = false;
-      this._emit('closed', {});
     }
     this._sync();
   }
@@ -178,6 +198,7 @@ class Session extends EventEmitter {
 
   _deliver(msg) {
     if (!this._allowed(msg.t)) return;
+    for (const tap of this.taps) if (tap(msg) === true) return;
     const fns = this.handlers.get(msg.t);
     if (fns) for (const fn of fns) fn(msg);
     else if (!this.unknown.has(msg.t)) {
@@ -195,13 +216,19 @@ class Session extends EventEmitter {
   // msg: the guest link's welcome message, when that is what came up.
   _sync(msg) {
     const up = this.connected;
-    if (up === this._up) return this._changed();
+    if (up !== this._up) this._transition(up, msg);
+    this._changed();
+  }
+
+  // The device came up or went down: features get welcome or closed, the hub gets onLife(up, replaced).
+  _transition(up, msg, replaced = false) {
     this._up = up;
     if (up) {
+      this.meshCapable = this.linkUp ? this._linkMesh : !!(this.ctx && this.ctx.mesh);
       const welcome = this.hosting ? { macId: this.ctx.deviceId, macName: this.ctx.name, os: this.ctx.os } : msg || {};
       this._emit('welcome', welcome);
     } else this._emit('closed', {});
-    this._changed();
+    for (const fn of this.lifeFns) fn(up, replaced);
   }
 
   _emit(type, msg) {
