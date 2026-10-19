@@ -12,15 +12,14 @@ const store = require('./store');
 const HEX = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
 
 class Pairing extends EventEmitter {
-  // busy() -> true while this Mac is a guest of another Mac (one session at a time);
-  // yieldTo() ends that guest session when a phone takes the session over.
-  constructor(server, identity, { busy = () => false, yieldTo = () => {} } = {}) {
+  // identity: {macId, macName, fp}. storage: {read, write} (default: store.js). No client is refused
+  // because another one is connected (mesh, docs/mesh.md): one pairing at a time.
+  constructor(server, identity, { storage } = {}) {
     super();
-    this.busy = busy;
-    this.yieldTo = yieldTo;
+    this.store = storage || store;
     this.server = server;
     this.id = identity;
-    this.paired = store.read('paired.json', []);
+    this.paired = this.store.read('paired.json', []);
     this.pending = null; // {ctx, id, name, commit, nm, nw, code, confirmed, allowed, timer}
     server.on('preauth', (ctx, msg) => this._onMessage(ctx, msg));
     server.on('closed', (ctx) => this._onClosed(ctx));
@@ -62,7 +61,7 @@ class Pairing extends EventEmitter {
   }
 
   _save() {
-    store.write('paired.json', this.paired);
+    this.store.write('paired.json', this.paired);
   }
 
   _onMessage(ctx, msg) {
@@ -70,7 +69,6 @@ class Pairing extends EventEmitter {
 
     const p = this.pending;
     if (msg.t === P.T.PAIR_START) {
-      if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
       if (p && p.ctx !== ctx) return this.server.fail(ctx, P.E.BUSY, 'Another pairing is in progress');
       if (p) return this.server.fail(ctx, P.E.BAD_MESSAGE, 'Pairing already started');
       if (msg.v !== P.PROTOCOL_VERSION) {
@@ -134,7 +132,7 @@ class Pairing extends EventEmitter {
     this.paired = this.paired.filter((x) => x.id !== p.id);
     this.paired.push({ id: p.id, name: p.name, os: p.os, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now });
     this._save();
-    this.server.send(p.ctx, { t: P.T.PAIR_OK, token, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC });
+    this.server.send(p.ctx, { t: P.T.PAIR_OK, token, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC, mesh: 1 });
     console.log(`[pairing] paired with ${p.name} (${p.id})`);
     this._clear();
   }
@@ -147,30 +145,15 @@ class Pairing extends EventEmitter {
     if (!e || !P.tokenMatches(msg.token, e.tokenHash)) {
       return this.server.fail(ctx, P.E.BAD_TOKEN, 'Not paired with this Mac');
     }
-    // A phone only says hello when someone asked for it (or to resume): it takes the session.
-    // A computer waits while a phone holds it.
-    const phone = (Object.values(P.OS).includes(msg.os) ? msg.os : e.os) === P.OS.ANDROID;
-    if (phone) {
-      if (this.busy()) this.yieldTo();
-      if (this.server.phoneGrace && this.server.phoneGrace.id !== e.id) this.server.endPhoneGrace();
-    } else if (this.server.phoneHolds()) {
-      return this.server.fail(ctx, P.E.BUSY, `Connected to a phone (${this._phoneName()})`);
-    } else if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
     if (typeof msg.name === 'string' && msg.name && msg.name !== e.name) e.name = msg.name.slice(0, 64);
     if (Object.values(P.OS).includes(msg.os)) e.os = msg.os;
     e.lastSeen = Date.now();
     this._save();
+    ctx.mesh = !!msg.mesh; // the device speaks the mesh (docs/mesh.md): it gets the roster
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
-      t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC,
+      t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC, mesh: 1,
     });
     this.emit('change');
-  }
-
-  _phoneName() {
-    const c = this.server.current;
-    const id = c ? c.deviceId : this.server.phoneGrace && this.server.phoneGrace.id;
-    const e = this.paired.find((x) => x.id === id);
-    return (c && c.name) || (e && e.name) || 'phone';
   }
 
   _abort(code, message) {
