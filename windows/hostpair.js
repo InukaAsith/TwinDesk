@@ -149,8 +149,9 @@ class Pairing extends EventEmitter {
     if (Object.values(P.OS).includes(msg.os)) e.os = msg.os;
     e.lastSeen = Date.now();
     this._save();
+    ctx.mesh = !!msg.mesh; // the device speaks the mesh (docs/mesh.md): it gets the roster
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
-      t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.id, macName: this.id.name, os: P.OS.WIN,
+      t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.id, macName: this.id.name, os: P.OS.WIN, mesh: 1,
     });
     this.emit('change');
   }
