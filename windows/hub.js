@@ -232,9 +232,10 @@ class Hub extends EventEmitter {
       consumed = true;
       for (const fn of fns) fn(msg, s.id);
     }
-    if (s.id === this.selectedId && this._facadeHandlers.has(msg.t)) {
+    // A feature's type from a device that is not selected: nobody reads it here, and it is not unknown.
+    if (this._facadeHandlers.has(msg.t)) {
       consumed = true;
-      this._facadeEmit(msg.t, msg);
+      if (s.id === this.selectedId) this._facadeEmit(msg.t, msg);
     }
     return consumed;
   }
