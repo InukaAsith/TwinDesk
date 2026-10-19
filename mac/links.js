@@ -70,6 +70,16 @@ class LinkManager extends EventEmitter {
     return [...this.links.values()];
   }
 
+  // The stored hosts as the UI lists them: [{id, name, os, address, lastSeen}].
+  get hosts() {
+    return this.view().hosts;
+  }
+
+  // Try the hosts again at once (a Mac host that came back, or an inbound link that ended).
+  poke() {
+    for (const link of this.links.values()) if (!link.authed) link.poke();
+  }
+
   get(id) {
     return this.links.get(id) || null;
   }
@@ -191,6 +201,7 @@ class LinkManager extends EventEmitter {
     link.on('welcome', (msg) => this.emit('welcome', link, msg));
     link.on('closed', (msg) => this.emit('closed', link, msg));
     link.onState(() => this.emit('change', link));
+    link.on('request', () => this.emit('request', link)); // a pairing code is ready: show the window
     return link;
   }
 

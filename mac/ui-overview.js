@@ -93,6 +93,8 @@ UI.tab({
     const adbPairRow = UI.row('Pairing code', 'Or type it on the phone, in TwinDesk’s notification', [adbCode, adbWhere, adbPair]);
     const adbCard = UI.card('Phone screen, mouse and keyboard', [adbRow, adbPairRow]);
     const pairedList = el('div');
+    // Devices: every computer and phone of the mesh. Use makes it the one the features talk to.
+    const devicesList = el('div');
 
     body.append(
       permCard,
@@ -101,15 +103,40 @@ UI.tab({
       hero,
       adbCard,
       UI.pair(UI.dir('m2w', m2w.map((x) => x.row)), UI.dir('w2m', w2m.map((x) => x.row))),
+      UI.card('Devices', [devicesList]),
       UI.card('Paired', [pairedList]),
     );
 
     let foundKey = '';
     let pairedKey = '';
+    let devicesKey = '';
     return (s) => {
       const p = UI.names(s);
       const c = s.client;
       const g = s.guest || { status: {}, hosts: [] };
+
+      // devices of the mesh
+      const devKey = JSON.stringify(s.peers || []);
+      if (devKey !== devicesKey) {
+        devicesKey = devKey;
+        const devs = s.peers || [];
+        devicesList.replaceChildren(...(devs.length
+          ? devs.map((dv) => {
+            const direct = Array.isArray(dv.direct) ? dv.direct.length : 0;
+            const state = dv.connected ? (dv.rtt != null ? `${dv.rtt} ms` : 'Connected')
+              : dv.state === 'waiting' ? 'Waiting for it to connect' : dv.state === 'connecting' || dv.state === 'reconnecting' ? 'Connecting…' : 'Not connected';
+            const hint = [state, dv.connected && direct ? `${direct} direct link${direct === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+            const r = UI.row(dv.name || 'Device', hint, [
+              dv.selected ? el('span', { class: 'pill good', text: 'In use' }) : null,
+              dv.connected && !dv.selected ? UI.button('Use', () => api.selectPeer(dv.id), 'small') : null,
+              UI.button('Forget', () => api.forgetPeer(dv.id), 'small'),
+            ]);
+            r.querySelector('.text').prepend(UI.osIcon(dv.os));
+            r.classList.add('with-ico');
+            return r;
+          })
+          : [UI.row('No devices yet', 'Pair with a computer in Nearby.')]));
+      }
 
       // this Mac
       addrVal.textContent = s.addresses.length ? s.addresses[0] : 'No network';

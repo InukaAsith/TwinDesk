@@ -159,6 +159,15 @@ function setupIpc(ctx) {
       const dev = ctx.discovery.get(String(deviceId));
       if (dev) connectTo(dev);
     },
+    // Devices list: Use makes the device the one the features talk to; Forget removes its pairing.
+    selectPeer(deviceId) {
+      if (ctx.hub) ctx.hub.select(String(deviceId));
+    },
+    forgetPeer(deviceId) {
+      if (!ctx.hub) return;
+      ctx.hub.forgetPeer(String(deviceId));
+      ctx.terminal.forget(String(deviceId));
+    },
     confirmGuestCode() {
       ctx.link.confirmCode();
     },

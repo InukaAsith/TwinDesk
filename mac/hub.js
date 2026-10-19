@@ -45,6 +45,7 @@ function viewOf(s) {
     lastRx: s.lastRx,
     authed: true,
     ws: c ? c.ws : (s.link ? s.link.ws : null),
+    ice: c ? c.ice : null, // a phone through adb reverse: the relay's RTCConfiguration (wired.js)
   };
 }
 

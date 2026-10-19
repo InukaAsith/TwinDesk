@@ -7,7 +7,8 @@
 //   addresses: ['192.168.1.5', ...],           // this Mac's IPv4 addresses (the server listens on P.PORT)
 //   discovery: { on, error, localNetwork },      // discovery.js status
 //   found: [{ id, name, os, address, port, invited }],   // other TwinDesk computers nearby
-//   guest: { status: {state, message}, pairing: null|{phase, name, address, code, error}, hosts: [...] },  // link.js
+//   guest: { status: {state, message}, pairing: null|{phase, name, address, code, error}, hosts: [...] },  // links.js
+//   peers: [{id, name, os, state, rtt, role, selected, connected, direct}],   // hub.js: every device of the mesh
 //   connect: { busy, message, error },           // last "Connect by address" / Pair attempt
 //   serverError: null | 'message',            // e.g. port already in use
 //   client: null | { id, name, os, role, address, rttMs },   // the session (peer.js); role 'host' = we are its guest
@@ -56,10 +57,12 @@ const P = require('../shared/protocol.js');
 const store = require('./store');
 const identity = require('./identity');
 const { Discovery, interfaces } = require('./discovery');
-const { Link } = require('./link');
+const { LinkManager } = require('./links');
+const { Hub } = require('./hub');
 const { Peer } = require('./peer');
 const { Server } = require('./server');
 const { Pairing } = require('./pairing');
+const { Mesh } = require('../shared/mesh.js');
 const { startServices } = require('./services');
 const { setupIpc } = require('./ipc');
 const login = require('./login');
@@ -78,7 +81,9 @@ let tray = null;
 let hud = null;
 let quitting = false;
 let startHidden = process.argv.includes('--hidden');
-let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
+// server: this Mac's server (many clients); links: the hosts we dial; hub: the mesh (hub.js);
+// peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
+let settings, id, server, pairing, discovery, links, hub, mesh, peer, phonePeer, svc, actions, pairSync, updates;
 
 const state = {
   macName: '',
@@ -98,6 +103,7 @@ const state = {
   discovery: { on: false, error: '', localNetwork: true },
   found: [],
   guest: null,
+  peers: [], // every device of the mesh (hub.peers()): name, os, state, selected, direct links
   connect: { busy: false, message: '', error: false },
 };
 
@@ -158,6 +164,16 @@ function pushState() {
   pushQueued = true;
   setImmediate(() => {
     pushQueued = false;
+    // A throw here must not leave the window on the old state (it froze once): log it and go on.
+    try {
+      publishState();
+    } catch (e) {
+      console.error('[main] state push failed:', (e && e.stack) || e);
+    }
+  });
+}
+
+function publishState() {
     // The address the other computer can reach, first (the UI shows only this one):
     // on the peer's network, then real adapters (en*), the default route, VPN tunnels and bridges last.
     const peerNet = String((peer && peer.current && peer.current.address) || '').replace(/^::ffff:/, '').split('.').slice(0, 3).join('.');
@@ -170,7 +186,8 @@ function pushState() {
       state.discovery = { ...discovery.status };
       state.found = discovery.list();
     }
-    if (link) state.guest = link.view();
+    if (links) state.guest = links.view();
+    state.peers = hub ? hub.peers() : [];
     const c = peer && peer.current;
     state.client = c ? { id: c.deviceId, name: c.name, os: c.os, role: c.role, address: c.address, rttMs: c.rttMs } : null;
     const { helper, displays, stream, clipboard: clip, kvm } = svc || {};
@@ -218,7 +235,6 @@ function pushState() {
     sendScreenState();
     if (win && !win.isDestroyed()) win.webContents.send('state', state);
     updateTray();
-  });
 }
 
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
@@ -451,17 +467,23 @@ app.whenReady().then(() => {
   discovery = new Discovery(id, server.port);
   discovery.on('change', pushState);
   discovery.start();
-  link = new Link(id, {
-    canConnect: () => !server.current && !(pairing && pairing.pending) && !server.phoneHolds(),
-    resolve: (hostId) => discovery.get(hostId),
-  });
-  link.on('change', pushState);
-  link.on('request', showWindow);
-  pairing = new Pairing(server, id, { busy: () => !!link.ctx, yieldTo: () => link.stop() });
-  server.on('phoneFree', () => { link.poke(); pushState(); });
+  mesh = new Mesh({ selfId: id.macId });
+  pairing = new Pairing(server, id);
   pairing.on('change', pushState);
   pairing.on('request', showWindow);
-  peer = new Peer(server, link);
+  server.on('phoneFree', () => { links.poke(); pushState(); });
+  links = new LinkManager({
+    device: { id: id.macId, name: id.macName },
+    hostPairing: pairing,
+    resolveAddress: (macId) => discovery.get(macId),
+  });
+  links.on('change', pushState);
+  links.on('request', showWindow);
+  hub = new Hub({ device: { id: id.macId, name: id.macName }, links, mesh, server, pairing });
+  hub.on('change', pushState);
+  // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
+  peer = new Peer(hub.facade, server);
+  phonePeer = new Peer(hub.phoneRoute(), server);
   peer.on('client', (ctx) => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
@@ -469,28 +491,29 @@ app.whenReady().then(() => {
   });
   peer.on('closed', pushState);
   peer.on('rtt', pushState);
-  link.start();
+  hub.start();
 
-  svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
+  svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
+    hub, mesh, selfName: () => id.macName });
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
-  svc.phone = new Phone({ server: peer, raw: server, discovery, pairing });
+  svc.phone = new Phone({ server: phonePeer, raw: server, discovery, pairing });
   svc.phone.on('change', pushState);
   // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
-  peer.on('client', (ctx) => ctx.os === P.OS.ANDROID && peer.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
+  phonePeer.on('client', (ctx) => ctx.os === P.OS.ANDROID && phonePeer.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
   // The phone's screen, input, clipboard and app windows, through wireless debugging.
-  svc.phone.bridge = new PhoneBridge({ server: peer, phone: svc.phone, getSettings: () => settings, clipboard: svc.clipboard });
+  svc.phone.bridge = new PhoneBridge({ server: phonePeer, phone: svc.phone, getSettings: () => settings, clipboard: svc.clipboard });
   svc.phone.bridge.on('change', pushState);
   // A paired phone on a USB cable: the session, screen and sound through it (no Wi-Fi needed).
-  svc.wired = new Wired({ adb: svc.phone.bridge.adb, raw: server, peer, getId: () => id.macId,
+  svc.wired = new Wired({ adb: svc.phone.bridge.adb, raw: server, peer: phonePeer, getId: () => id.macId,
     hasPhone: () => pairing.list().some((x) => x.os === P.OS.ANDROID) });
   svc.wired.on('change', pushState);
   svc.phone.bridge.wired = svc.wired;
   svc.phone.wired = svc.wired;
-  svc.phoneViews = new PhoneViews({ bridge: svc.phone.bridge, phone: svc.phone, getSettings: () => settings, server: peer, fileSend: svc.fileSend });
+  svc.phoneViews = new PhoneViews({ bridge: svc.phone.bridge, phone: svc.phone, getSettings: () => settings, server: phonePeer, fileSend: svc.fileSend });
   svc.phoneViews.on('change', pushState);
   // A phone notification clicked here: its app in a window.
-  svc.notifs.on('click', (m) => peer.current && peer.current.os === P.OS.ANDROID && svc.phoneViews.openNotified(m.app, m.appName));
+  svc.notifs.on('click', (m) => phonePeer.current && phonePeer.current.os === P.OS.ANDROID && svc.phoneViews.openNotified(m.app, m.appName));
   // The phone in Finder, through adb (the cable, else wireless debugging): only when Mount is clicked.
   svc.phoneDrive = new PhoneDrive({ adb: svc.phone.bridge.adb, bridge: svc.phone.bridge, phone: svc.phone });
   svc.phoneDrive.on('change', pushState);
@@ -522,7 +545,7 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link, ...svc, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, hub, ...svc, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
@@ -549,7 +572,7 @@ app.whenReady().then(() => {
   });
   createWindow();
   refreshPermissions();
-  if (process.env.MACSHARE_DEV_TEST) require('./dev/m2m')({ role: process.env.MACSHARE_DEV_TEST, svc, actions, link, pairing, peer });
+  if (process.env.MACSHARE_DEV_TEST) require('./dev/m2m')({ role: process.env.MACSHARE_DEV_TEST, svc, actions, link: links, pairing, peer });
   readDefaultIf();
   setInterval(() => {
     readDefaultIf();
@@ -577,6 +600,6 @@ app.on('before-quit', () => {
   if (svc && svc.wired) svc.wired.stop();
   if (svc) svc.shutdown(); // KVM home first, so the helper releases input
   if (discovery) discovery.stop();
-  if (link) link.stop();
+  if (links) links.close();
   if (server) server.close();
 });
