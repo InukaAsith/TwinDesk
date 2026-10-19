@@ -1,54 +1,25 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The one session this Mac has, whichever side opened it:
-//   host  — a PC or a Mac connected to our server (server.js), the usual case;
-//   guest — we connected to another Mac (link.js).
-// Feature code talks to this object exactly as it used to talk to the server: on('client'),
-// on('closed'), on('t:<type>'), current, sendToClient(msg), send(ctx, msg). As a guest this Mac
-// is in its non-native role, so every message goes through P.swapRole both ways.
+// The one-to-one API the features have always used, over a hub route (hub.js): `current`, send(ctx,
+// msg), sendToClient(msg), inject(msg), keySwap(settings), and the events 'client', 'closed', 'rtt',
+// 'message' and 't:<type>'. Role swapping (this Mac is the non-native role when it is a guest of the
+// other computer) lives in session.js now, as it did here for the one peer.
+//
+// Two routes: hub.facade (the SELECTED device: files, screen, terminal, apps, ...) and the phone
+// route (hub.phoneRoute(): the phone whichever computer is selected, see phone.js and friends).
 'use strict';
 
-const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 
-class Peer extends EventEmitter {
-  constructor(server, link) {
-    super();
+class Peer {
+  // route: a Route from hub.js; server: the Server (server.js), for what the phone code reads from it.
+  constructor(route, server = null) {
+    this.route = route;
     this.server = server;
-    this.link = link;
-    this.unknown = new Set();
-    this.swapIn = null;
-    this.swapOut = null;
-
-    server.on('client', (ctx) => {
-      if (!ctx.os) ctx.os = P.OS.WIN;
-      ctx.role = 'guest';
-      this.emit('client', ctx);
-    });
-    server.on('closed', (ctx) => {
-      if (ctx.authed) this.emit('closed', ctx);
-      if (!server.current) link.poke();
-    });
-    server.on('rtt', (ctx) => this.emit('rtt', ctx));
-    server.on('message', (msg, ctx) => this._deliver(msg, ctx));
-
-    link.on('welcome', (ctx) => {
-      this.swapIn = P.newRoleSwapState(ctx.name);
-      this.swapOut = P.newRoleSwapState(ctx.name);
-      this.emit('client', ctx);
-    });
-    link.on('closed', (ctx) => this.emit('closed', ctx));
-    link.on('rtt', (ctx) => this.emit('rtt', ctx));
-    link.on('message', (msg) => {
-      const ctx = link.ctx;
-      if (!ctx) return;
-      for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, ctx);
-    });
   }
 
-  // The authenticated session: {deviceId, name, os, role ('guest' = they connected to us,
-  // 'host' = we connected to them), address, rttMs, lastRx, ws}.
+  // The device's client object ({deviceId, name, os, role, address, rttMs, lastRx, authed, ws}) or null.
   get current() {
-    return this.server.current || this.link.ctx || null;
+    return this.route.current;
   }
 
   get sameOs() {
@@ -62,32 +33,47 @@ class Peer extends EventEmitter {
     return settings.keys.swapCtrlCmd !== false && P.keySwapNeeded(P.OS.MAC, c && c.os);
   }
 
+  // The ctx argument is kept for the callers; a route has exactly one device.
   send(ctx, msg) {
-    if (!ctx) return;
-    if (ctx === this.link.ctx) {
-      for (const m of P.swapRole(msg, this.swapOut)) this.link.send(m);
-    } else {
-      this.server.send(ctx, msg);
-    }
+    if (!ctx) return false;
+    return this.route.send(msg);
   }
 
   sendToClient(msg) {
-    this.send(this.current, msg);
+    return this.route.send(msg);
   }
 
-  // A message as if the peer had sent it (the phone bridge answers for the phone's input).
+  // A message as if the device had sent it (the phone bridge answers for the phone's input).
   inject(msg) {
-    const c = this.current;
-    if (c) this._deliver(msg, c);
+    this.route.inject(msg);
   }
 
-  _deliver(msg, ctx) {
-    if (this.listenerCount(`t:${msg.t}`) === 0 && !this.unknown.has(msg.t)) {
-      this.unknown.add(msg.t);
-      console.log(`[peer] no handler for "${msg.t}" (ignored)`);
-    }
-    this.emit(`t:${msg.t}`, msg, ctx);
-    this.emit('message', msg, ctx);
+  on(event, fn) {
+    this.route.on(event, fn);
+    return this;
+  }
+
+  once(event, fn) {
+    this.route.once(event, fn);
+    return this;
+  }
+
+  off(event, fn) {
+    this.route.off(event, fn);
+    return this;
+  }
+
+  emit(event, ...args) {
+    return this.route.emit(event, ...args);
+  }
+
+  listenerCount(event) {
+    return this.route.listenerCount(event);
+  }
+
+  setMaxListeners(n) {
+    this.route.setMaxListeners(n);
+    return this;
   }
 }
 
