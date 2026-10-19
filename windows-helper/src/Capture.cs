@@ -14,7 +14,10 @@ namespace MacShare
     class Capture
     {
         // config (kvmConfig)
-        public string Side;          // crossing side of this PC (null = unknown)
+        // Sides of this PC whose outer edge is watched for a crossing (kvmConfig sides; each one leads
+        // to another device). The first one is also Side: the file-drag strip (DropEdge) uses it.
+        public readonly List<string> Sides = new List<string>();
+        public string Side { get { return Sides.Count > 0 ? Sides[0] : null; } }
         public double ResistancePx = 120;
         // kvmConfig hotkey: one key, or the left and right one ("both")
         public HashSet<uint> HotkeyVks = new HashSet<uint> { 0xA5 }; // Right Alt
@@ -33,8 +36,9 @@ namespace MacShare
         readonly HashSet<int> heldButtons = new HashSet<int>(), swallowButtons = new HashSet<int>();
         DateTime lastCmd = DateTime.UtcNow;
 
-        // edge push (home) and return edge (driven)
-        double push; DateTime lastPush;
+        // edge push (home) per watched side, and the return edge (driven)
+        class EdgePush { public double Amount; public DateTime Last; }
+        readonly Dictionary<string, EdgePush> pushes = new Dictionary<string, EdgePush>();
         bool retArmed; string retSide; double retResistance, retPush; DateTime retLast;
 
         // hotkey double-tap
@@ -140,7 +144,28 @@ namespace MacShare
 
         // ---- capture on/off ----
 
+        // Watches these sides (valid names only, no repeats). Empty: no edge crossing.
+        public void SetSides(IEnumerable<string> list)
+        {
+            Sides.Clear();
+            foreach (string s in list)
+                if ((s == "left" || s == "right" || s == "top" || s == "bottom") && !Sides.Contains(s)) Sides.Add(s);
+        }
+
+        // The watched side whose outer edge the point is on (null: none).
+        string EdgeAt(int x, int y)
+        {
+            foreach (string s in Sides) if (Screens.OnOuterEdge(x, y, s)) return s;
+            return null;
+        }
+
         public void Begin(bool mouse, bool keys)
+        {
+            Begin(mouse, keys, null);
+        }
+
+        // edge: the side that was crossed (null: the pointer's own edge, or none), for the animation.
+        public void Begin(bool mouse, bool keys, string edge)
         {
             if (capturing) { capMouse = mouse; capKeys = keys; return; }
             capturing = true; capMouse = mouse; capKeys = keys;
@@ -154,13 +179,13 @@ namespace MacShare
                 saved = new Point(p.x, p.y);
                 // Leaving: the animation where it goes, then the pointer hides and stays put for
                 // the eye (it is parked in the middle only to measure motion).
-                if (Flash != null) Flash.Play(saved, Side != null && Screens.OnOuterEdge(p.x, p.y, Side) ? Side : null, true);
+                if (Flash != null) Flash.Play(saved, edge ?? EdgeAt(p.x, p.y), true);
                 HideCursor.Hide();
                 // Park in the middle so outward motion isn't clamped by the screen edge.
                 parked = Screens.Center();
                 Native.SetCursorPos(parked.X, parked.Y);
             }
-            push = 0;
+            pushes.Clear();
         }
 
         // side == null: put the pointer back where capture began.
@@ -178,9 +203,9 @@ namespace MacShare
                 Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
                 Native.SetCursorPos(p.X, p.Y);
                 HideCursor.Show();
-                if (Flash != null) Flash.Play(p, side ?? (Side != null && Screens.OnOuterEdge(p.X, p.Y, Side) ? Side : null), false); // arriving
+                if (Flash != null) Flash.Play(p, side ?? EdgeAt(p.X, p.Y), false); // arriving
             }
-            push = 0;
+            pushes.Clear();
         }
 
         public bool Capturing { get { return capturing; } }
@@ -386,20 +411,27 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
-            if (!DriveOther || Side == null || AnyButtonDown()) { push = 0; return; } // Rule 6: no crossing mid-drag
-            double outward = Screens.Outward(Side, dx, dy);
-            if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, Side)) { push = 0; return; }
-            DateTime now = DateTime.UtcNow;
-            if ((now - lastPush).TotalMilliseconds > 300) push = 0;
-            lastPush = now;
-            push += outward;
-            if (push < ResistancePx) return;
-            double offset = Screens.Offset(p.x, p.y, Side);
-            Begin(true, EdgeKeyboard); // start capturing at once so no motion leaks, then tell main
-            saved = new Point(p.x, p.y);
-            Dictionary<string, object> d = Ev("edge");
-            d["offset"] = Math.Round(offset, 4);
-            emit(d);
+            if (!DriveOther || Sides.Count == 0 || AnyButtonDown()) { pushes.Clear(); return; } // Rule 6: no crossing mid-drag
+            foreach (string side in Sides)
+            {
+                double outward = Screens.Outward(side, dx, dy);
+                if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, side)) { pushes.Remove(side); continue; }
+                DateTime now = DateTime.UtcNow;
+                EdgePush e;
+                if (!pushes.TryGetValue(side, out e)) { e = new EdgePush(); pushes[side] = e; }
+                if ((now - e.Last).TotalMilliseconds > 300) e.Amount = 0;
+                e.Last = now;
+                e.Amount += outward;
+                if (e.Amount < ResistancePx) continue;
+                double offset = Screens.Offset(p.x, p.y, side);
+                Begin(true, EdgeKeyboard, side); // start capturing at once so no motion leaks, then tell main
+                saved = new Point(p.x, p.y);
+                Dictionary<string, object> d = Ev("edge");
+                d["offset"] = Math.Round(offset, 4);
+                d["side"] = side;
+                emit(d);
+                return;
+            }
         }
 
         // Injected moves report here too (Injector.Moved): the owner's hand reaches the edge.

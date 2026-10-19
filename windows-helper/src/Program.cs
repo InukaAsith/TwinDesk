@@ -151,7 +151,15 @@ namespace MacShare
                 {
                     case "ping": case "keepalive": break;
                     case "kvmConfig":
-                        capture.Side = Json.Str(c, "side", null);
+                        // sides: every side that leads to a connected device; without it, the one side (older app).
+                        List<string> sides = Json.Strs(c, "sides");
+                        if (sides == null)
+                        {
+                            sides = new List<string>();
+                            string one = Json.Str(c, "side", null);
+                            if (one != null) sides.Add(one);
+                        }
+                        capture.SetSides(sides);
                         capture.ResistancePx = Json.Num(c, "resistancePx", 120);
                         capture.HotkeyVks = HotkeyVks(Json.Str(c, "hotkey", "AltRight"));
                         capture.DriveOther = Json.Bool(c, "driveOther", false);
