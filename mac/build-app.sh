@@ -19,6 +19,9 @@ EV=$(node -p "require('./node_modules/electron/package.json').version")
 FULL_APK=$(ls "$ROOT"/android/dist/*-full.apk 2>/dev/null | sort | tail -1)
 if [ -n "$FULL_APK" ]; then cp "$FULL_APK" vendor/twindesk-android-full.apk; else echo "note: no android/dist/*-full.apk — the app won't offer the full Android build"; fi
 
+# adb for wireless debugging (phone-bridge.js), fetched once into mac/vendor/adb (scripts/fetch-adb.sh).
+sh scripts/fetch-adb.sh
+
 rm -rf "$STAGE" && mkdir -p "$STAGE/mac" "$STAGE/shared" "$STAGE/mac-helper/.build/release" "$STAGE/node_modules"
 rsync -a --exclude node_modules --exclude dist --exclude dev --exclude dmg --exclude build-app.sh --exclude build-dmg.sh --exclude scripts/signing-identity.sh ./ "$STAGE/mac/"
 cp "$ROOT"/shared/*.js "$STAGE/shared/"
