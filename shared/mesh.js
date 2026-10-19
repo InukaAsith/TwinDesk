@@ -12,18 +12,7 @@
 
 const { EventEmitter } = require('events');
 
-// Protocol constants come from protocol.js. The mesh constants were added on the feature/mesh
-// branch (docs/mesh.md); until they are merged the values below are the documented ones, so this
-// file works on its own. Values from protocol.js win when present.
-const P = Object.assign({
-  MAX_DEVICES: 10,
-  PING_MS: 1000,
-  TIMEOUT_MS: 4000,
-  IDLE_PING_MS: 5000,
-  IDLE_TIMEOUT_MS: 15000,
-  POOL_SEEN_LIMIT: 200,
-  POOL_MAX_HOPS: 3,
-}, require('./protocol.js'));
+const P = require('./protocol.js');
 
 const STAMP_FIELDS = ['o', 's', 'd', 'h'];
 

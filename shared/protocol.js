@@ -29,7 +29,7 @@
     IDLE_TIMEOUT_MS: 15000,
     INBOUND_WAIT_MS: 5000, // two computers that hold each other as hosts: the larger id waits this long for the other to dial
     POOL_SEEN_LIMIT: 200, // (origin, seq) pairs remembered per pool for dedupe
-    POOL_MAX_HOPS: 3,
+    POOL_MAX_HOPS: 9, // one less than MAX_DEVICES: enough for a chain of ten (duplicates are dropped, so no storms)
     PAIR_TIMEOUT_MS: 60000,
     UNAUTH_TIMEOUT_MS: 70000, // Mac closes sockets that never authenticate
     RECONNECT_MS: [1000, 2000, 3000], // Windows: then keep using the last value

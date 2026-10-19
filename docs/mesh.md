@@ -74,7 +74,8 @@ string, `selected` is the session object; never overload them.
   - relay: forward the unchanged message to every connected pool-capable peer that is not
     `fromId`, not `o`, and not listed in `d` (they got it from the origin directly). In a full mesh
     nothing is forwarded; where a link is missing the item still arrives, once.
-  - a hop counter `h` (0 at the origin, +1 per relay, dropped above 3) bounds any loop.
+  - a hop counter `h` (0 at the origin, +1 per relay, no relay once it would pass `POOL_MAX_HOPS` = 9, enough for a chain of ten devices) bounds any loop.
+- A peer that switched the pool off (`pool:false` in the registry) is never sent items and items from it are ignored. A device that switched it off for itself does not call the pool at all, so it neither applies nor relays. A failed send to a direct link is not retried: that link is down and the device gets the next item after it reconnects.
 - Applying an item must not publish it again (no echo): the feature remembers what it just wrote to
   the OS clipboard or showed as a notification for 30 s and ignores the OS event it causes.
 - Clipboard items are text up to `CLIP_MAX_BYTES`. A device may switch the pool off for itself
