@@ -187,7 +187,7 @@ class Link {
 
   _hello() {
     const p = this.pairing;
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.WIN, token: p.token });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.WIN, token: p.token, mesh: 1 });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No welcome from {name}';
       if (this.ws) this.ws.terminate();
