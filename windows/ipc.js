@@ -50,12 +50,20 @@ function setupIpc(ctx) {
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => link.cancelPair());
-  handle('forget', () => link.forget());
+  handle('forget', () => {
+    const id = hub.selectedId;
+    link.forget();
+    if (id) kvm.forgetDevice(id);
+  });
   handle('respondPair', (allow) => link.respondPair(allow === true)); // host: Allow / Deny
   handle('forgetGuest', (id) => typeof id === 'string' && link.forgetGuest(id));
   // Devices (docs/mesh.md): the selected one takes the one-to-one features; Forget drops one device.
   handle('setActivePeer', (id) => typeof id === 'string' && hub.select(id.slice(0, 64)));
-  handle('forgetPeer', (id) => typeof id === 'string' && hub.forgetPeer(id.slice(0, 64)));
+  handle('forgetPeer', (id) => {
+    if (typeof id !== 'string') return;
+    hub.forgetPeer(id.slice(0, 64));
+    kvm.forgetDevice(id.slice(0, 64));
+  });
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
   handle('checkWake', () => wake.check());
@@ -64,7 +72,7 @@ function setupIpc(ctx) {
 
   handle('setKvm', (partial) => {
     if (partial && typeof partial.linked === 'boolean') kvm.setLinked(partial.linked); // home first, tells the other side
-    const { linked, ...rest } = partial && typeof partial === 'object' ? partial : {};
+    const { linked, edges, ...rest } = partial && typeof partial === 'object' ? partial : {}; // edges: setEdge only
     change('kvm', rest, () => kvm.applyConfig());
   });
   handle('setLayout', (side) => kvm.setLayout(side));

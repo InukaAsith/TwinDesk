@@ -1,19 +1,32 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Shared cursor and keyboard: state machine, Windows side, both roles
-// (this PC drives the Mac, or the Mac drives this PC).
+// (this PC drives a device, or a device drives this PC).
+//
+// The edges (settings.kvm.edges, shared/kvm-edges.js): each side of this screen leads to one paired
+// device. The device whose keyboard and mouse are used is the centre of a star: crossing an edge
+// selects the device behind it (hub.select) and takes it; coming back goes home.
+//
+// Messages come and go through the hub's bus, which knows the device each one is from or to, so
+// every device is handled on its own. `partner` is the device our input goes to (driving) or comes
+// from (driven); `drivenBy` is the same thing when we are driven.
+'use strict';
+
 const P = require('../shared/protocol.js');
+const E = require('../shared/kvm-edges.js');
 
 const T = P.T;
 const K_TYPES = new Set([T.K_MOVE, T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP]);
+const DEFAULT_LAYOUT_SIDES = ['right', 'left', 'top', 'bottom']; // a host with no edges yet: the first free one
 
 class Kvm {
-  // opts: link, helper, clip, fileDrop, fileRecv, settings (shared object), save(), onChange()
+  // opts: hub (hub.js: bus, sessions, select, selectedId), helper, clip, fileDrop, fileRecv, dragRecv,
+  // settings (shared object), save(), onChange()
   constructor(opts) {
     Object.assign(this, opts);
     this.mode = 'home'; // 'home' | 'driving' | 'driven'
     this.route = 0;
     this.peerRoute = 0;
-    this.pcSide = this.settings.kvm.pcSide; // from kvm.layout: where this PC is, seen from the other computer (saved)
+    this.partner = null; // the device our input goes to (driving) or comes from (driven); null at home
     this.message = '';
     this.acceptTimer = null;
     this.keepalive = null;
@@ -21,54 +34,40 @@ class Kvm {
     this.dragPending = false; // we crossed with a file drag; cleared when our left button comes up
     this.local = null; // phone-bridge.js: drives a phone itself (its input goes through adb, not the link)
     this.blockEdge = () => false; // main.js: true while the edge must not cross (a phone window has focus)
+    this.dragPolicyBy = new Map(); // device id -> its drag.policy (its switch for drags towards it); default yes
+    this.sentDragPolicy = undefined;
 
-    const link = this.link;
-    // kvm.layout is "either": pcSide = the sender's crossing side, which is where this
-    // PC is seen from the sender. Adopt it, save it, never echo.
-    link.on(T.KVM_LAYOUT, (m) => {
-      if (!P.SIDES.includes(m.pcSide)) return;
-      this._setPcSide(m.pcSide);
+    const hub = this.hub;
+    const bus = hub.bus;
+    bus.on(T.KVM_LAYOUT, (m, from) => this._onLayout(m, from));
+    bus.on(T.KVM_TAKE, (m, from) => this._onTake(m, from));
+    bus.on(T.KVM_LINK, (m, from) => this._onLink(m, from)); // the other side switched it: follow, no echo
+    bus.on(T.KVM_ACCEPT, (m, from) => {
+      if (this.mode === 'driving' && from === this.partner && m.route === this.route) this._clearAccept();
     });
-    link.on(T.KVM_TAKE, (m) => this._onTake(m));
-    link.on(T.KVM_LINK, (m) => this.setLinked(m.on !== false, false)); // the other side switched it: follow, no echo
-    link.on(T.KVM_ACCEPT, (m) => {
-      if (this.mode === 'driving' && m.route === this.route) this._clearAccept();
-    });
-    link.on(T.KVM_REFUSE, (m) => {
-      if (this.mode !== 'driving' || m.route !== this.route) return;
+    bus.on(T.KVM_REFUSE, (m, from) => {
+      if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       this._goHome(m.why === P.REFUSE.BUSY ? '{Name} is driving {me}' : m.why === P.REFUSE.NOT_ALLOWED ? "{Name} doesn't accept input from {me}" : '{Name} refused');
     });
-    link.on(T.KVM_RELEASE, (m) => {
-      if (this.mode === 'driven' && m.route >= this.peerRoute) this._drivenHome('{Name} took its input back', false);
+    bus.on(T.KVM_RELEASE, (m, from) => {
+      if (this.mode === 'driven' && from === this.partner && m.route >= this.peerRoute) this._drivenHome('{Name} took its input back', false);
     });
-    link.on(T.KVM_HOME, (m) => {
-      if (this.mode !== 'driving' || m.route !== this.route) return;
+    bus.on(T.KVM_HOME, (m, from) => {
+      if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
-      this.helper.send('capture', has ? { on: false, side: this.crossingSide, offset: m.offset } : { on: false });
+      const side = this._sideOf(from);
+      this.helper.send('capture', has && side ? { on: false, side, offset: m.offset } : { on: false });
       this._setMode('home', '');
     });
-    for (const t of K_TYPES) link.on(t, (m) => this._inject(m));
-    link.on(T.K_GESTURE, (m) => this._onGesture(m)); // Trackpad gestures
-    link.on('welcome', () => {
-      this.peerDrags = true;
-      this.sentDragPolicy = undefined;
-      this.applyConfig(); // re-sends our drag.policy
-      // As the host this PC sends the layout (a Mac host sends its own). Default: the other one on the right.
-      if (link.hosting) link.send({ t: T.KVM_LAYOUT, pcSide: this.crossingSide || 'right' });
-      if (link.hosting && !this.pcSide) this._setPcSide('left');
-      // Cursor sharing is remembered per paired device; take this pair's value, and as
-      // the host tell it so both computers agree (kvm.link keeps them in step after that).
-      const id = this._peerId();
-      const by = this.cfg.linkedBy;
-      if (id && id in by && by[id] !== this.linked) this.setLinked(by[id], false, false);
-      if (link.hosting) link.send({ t: T.KVM_LINK, on: this.linked });
-    });
-    this.peerDrags = true; // the Mac's drag.policy (assume yes until told)
-    link.on(T.DRAG_POLICY, (m) => { this.peerDrags = m.accept !== false; this.applyConfig(); });
-    link.on('closed', () => {
-      this._linkLost('{Name} disconnected');
+    for (const t of K_TYPES) bus.on(t, (m, from) => this._inject(m, from));
+    bus.on(T.K_GESTURE, (m, from) => this._onGesture(m, from)); // Trackpad gestures
+    bus.on(T.DRAG_POLICY, (m, from) => {
+      this.dragPolicyBy.set(from, m.accept !== false);
       this.applyConfig();
     });
+    bus.onPeer('welcome', (id) => this._onPeerUp(id));
+    bus.onPeer('closed', (id) => this._onPeerDown(id));
+    hub.on('selected', (id) => this._onSelected(id));
 
     const helper = this.helper;
     helper.on('ready', () => {
@@ -80,72 +79,192 @@ class Kvm {
     helper.on('event', (name, msg) => this._onHelper(name, msg));
   }
 
-  // The user picked where the other computer is (side of this PC): tell the other side.
-  setLayout(side) {
-    if (!P.SIDES.includes(side)) return;
-    this._setPcSide(P.opposite(side));
-    this.link.send({ t: T.KVM_LAYOUT, pcSide: side });
+  get cfg() {
+    return this.settings.kvm;
   }
 
-  _setPcSide(pcSide) {
-    this.pcSide = pcSide;
-    this.settings.kvm.pcSide = pcSide;
+  get edges() {
+    return this.cfg.edges;
+  }
+
+  // Cursor sharing as a whole: off = everything home, no crossing either way, takes refused.
+  get linked() {
+    return this.cfg.linked !== false;
+  }
+
+  // The side of this PC that leads to the selected device (null: none).
+  get crossingSide() {
+    return E.edgeForPeer(this.edges, this.hub.selectedId);
+  }
+
+  // Device id -> connected now.
+  _connectedTo(id) {
+    const s = id ? this.hub.sessions.get(id) : null;
+    return !!s && s.connected;
+  }
+
+  get connected() {
+    return this._connectedTo(this.hub.selectedId);
+  }
+
+  // Cursor sharing for one device: the selected one uses the switch, the others their own memory.
+  _linkedFor(id) {
+    if (id && id === this.hub.selectedId) return this.linked;
+    return !!id && this.cfg.linkedBy[id] !== false;
+  }
+
+  // The side that leads to this device, or null.
+  _sideOf(id) {
+    return E.edgeForPeer(this.edges, id);
+  }
+
+  _peerOs(id) {
+    const s = id ? this.hub.sessions.get(id) : null;
+    return s ? s.peerOs : P.OS.MAC;
+  }
+
+  _lastRx() {
+    const s = this.partner ? this.hub.sessions.get(this.partner) : null;
+    return s ? s.lastRx : 0;
+  }
+
+  _send(id, msg) {
+    return this.hub.bus.send(id, msg);
+  }
+
+  // The user picked where the other computer is: the edge `side` leads to device `id` (null: none).
+  // Refused (false) when that side already leads to another device. Tells the device when it is up.
+  setEdge(side, id) {
+    const next = E.assignEdge(this.edges, side, id || null);
+    if (!next) return false;
+    if (JSON.stringify(next) !== JSON.stringify(this.edges)) this._storeEdges(next);
+    if (id && this._connectedTo(id)) this._send(id, { t: T.KVM_LAYOUT, pcSide: side }); // its edge towards us is the opposite
+    return true;
+  }
+
+  // ui (older name): the selected device goes to this side.
+  setLayout(side) {
+    return this.setEdge(side, this.hub.selectedId);
+  }
+
+  // A device was forgotten: no edge leads to it any more.
+  forgetDevice(id) {
+    const next = E.clearPeer(this.edges, id);
+    if (JSON.stringify(next) !== JSON.stringify(this.edges)) this._storeEdges(next);
+  }
+
+  _storeEdges(next) {
+    this.cfg.edges = next;
     if (this.save) this.save();
     this.applyConfig();
     this.onChange();
   }
 
-  // Side of this PC that faces the Mac.
-  get crossingSide() {
-    return this.pcSide ? P.opposite(this.pcSide) : null;
+  // kvm.layout from a device: the edge facing it is the opposite of its crossing side. Another
+  // device's edge is never overwritten (E refuses).
+  _onLayout(m, from) {
+    if (!P.SIDES.includes(m.pcSide) || !from) return;
+    const next = E.setRemoteEdge(this.edges, m.pcSide, from);
+    if (!next) return;
+    if (JSON.stringify(next) !== JSON.stringify(this.edges)) this._storeEdges(next);
   }
 
-  get cfg() {
-    return this.settings.kvm;
+  // A device came up (its welcome). A device that dialled us gets our layout and cursor state; the
+  // dialled side learns it from them.
+  _onPeerUp(id) {
+    const s = this.hub.sessions.get(id);
+    this.dragPolicyBy.delete(id);
+    this.sentDragPolicy = undefined;
+    if (s && s.hosting) {
+      let side = this._sideOf(id);
+      if (!side && Object.values(this.edges).every((x) => !x)) { // first setup: the other one on the right
+        side = DEFAULT_LAYOUT_SIDES.find((x) => !this.edges[x]) || null;
+        if (side) this._storeEdges(E.assignEdge(this.edges, side, id));
+      }
+      if (side) this._send(id, { t: T.KVM_LAYOUT, pcSide: side });
+      this._send(id, { t: T.KVM_LINK, on: this._linkedFor(id) });
+    }
+    this.applyConfig(); // re-sends our drag.policy
   }
 
-  get connected() {
-    return this.link.status.state === 'connected';
+  _onPeerDown(id) {
+    if ((this.mode === 'driving' || this.mode === 'driven') && id === this.partner) {
+      this._linkLost('{Name} disconnected');
+    }
+    this.applyConfig();
   }
 
-  // Tell the helper where the edge is and whether to watch it.
-  // Drags across the edge go out when our switch and our "send" are on and the Mac takes them.
-  _dragsOut() {
+  // The selection changed: the cursor switch follows the selected device's own memory.
+  _onSelected(id) {
+    const by = this.cfg.linkedBy;
+    if (id && id in by && by[id] !== this.linked) this.setLinked(by[id], false, false);
+    this.applyConfig();
+  }
+
+  // The other side switched cursor sharing (kvm.link). For the selected device it is the switch
+  // itself; for another device it is only remembered.
+  _onLink(m, from) {
+    const on = m.on !== false;
+    if (from === this.hub.selectedId) {
+      this.setLinked(on, false);
+      return;
+    }
+    this.cfg.linkedBy = { ...this.cfg.linkedBy, [from]: on };
+    if (this.save) this.save();
+    this.applyConfig();
+    this.onChange();
+  }
+
+  // Tell the helper which sides to watch and whether to watch them. A side is watched when the
+  // device behind it is connected and cursor sharing for it is on.
+  // Drags across the edge go out when our switch and our "send" are on and the device takes them.
+  _watchedSides() {
+    const k = this.cfg;
+    if (!k.driveOther || !k.mouse || this.blockEdge()) return [];
+    return E.SIDES.filter((side) => {
+      const id = k.edges[side];
+      return !!id && this._connectedTo(id) && this._linkedFor(id);
+    });
+  }
+
+  _dragsOut(id) {
     const f = this.settings.files;
-    return !!(f.edgeDrag && f.dropToMac && this.peerDrags);
+    return !!(f.edgeDrag && f.dropToMac) && this.dragPolicyBy.get(id) !== false;
+  }
+
+  // The drag.policy of the selected device (the Cursor tab shows it; the same as before for one device).
+  get peerDrags() {
+    return this.dragPolicyBy.get(this.hub.selectedId) !== false;
   }
 
   applyConfig() {
     const k = this.cfg;
+    const sides = this._watchedSides();
     this.helper.send('kvmConfig', {
-      side: this.crossingSide,
+      side: sides[0] || null, // the first side also drives the file-drag strip (DropEdge)
+      sides,
       resistancePx: k.resistancePx,
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
-      driveOther: !!(this.linked && k.driveOther && k.mouse && this.connected && this.crossingSide && !this.blockEdge()),
+      driveOther: sides.length > 0,
       keyboard: !!k.keyboard,
       deadmanMs: P.HELPER_DEADMAN_MS,
       doubleTapMs: P.DOUBLE_TAP_MS,
-      dragFiles: this._dragsOut(), // the edge strip that picks up file drags
+      dragFiles: this._dragsOut(sides.length ? k.edges[sides[0]] : null), // the edge strip that picks up file drags
       gestures: k.gestures !== false, // Touchpad gestures go over as k.ge while capturing
     });
-    // Our switch, for the Mac (it doesn't pick up drags towards us while it's off).
+    // Our switch, for every connected device (it doesn't pick up drags towards us while it's off).
     const accept = !!this.settings.files.edgeDrag;
-    if (this.connected && accept !== this.sentDragPolicy) {
+    if (accept !== this.sentDragPolicy) {
       this.sentDragPolicy = accept;
-      this.link.send({ t: T.DRAG_POLICY, accept });
+      for (const id of this.hub.bus.connectedIds()) this._send(id, { t: T.DRAG_POLICY, accept });
     }
   }
 
-  // Cursor sharing as a whole: off = everything
-  // home, no crossing either way, takes refused. tell: also switch the other computer (kvm.link).
-  get linked() {
-    return this.cfg.linked !== false;
-  }
-
-  // card: show the big on/off card (not when a connect restores this pair's value).
+  // Cursor sharing switched on or off (the switch, the hotkey, or a device): kvm.link tells the other side.
+  // tell: also switch the other computer. card: show the big on/off card.
   setLinked(on, tell = true, card = true) {
-    const id = this.connected && this._peerId();
-    if (id) this.cfg.linkedBy = { ...this.cfg.linkedBy, [id]: on }; // Per pair
+    const id = this.connected ? this.hub.selectedId : null;
+    if (id) this.cfg.linkedBy = { ...this.cfg.linkedBy, [id]: on }; // per pair
     if (on === this.linked) {
       if (id && this.save) this.save();
       return;
@@ -154,45 +273,32 @@ class Kvm {
     this.cfg.linked = on;
     if (on) this.cfg.mouse = true; // the one Cursor switch turns the mouse on with it
     if (this.save) this.save();
-    if (tell && this.connected) this.link.send({ t: T.KVM_LINK, on });
+    if (tell && id) this._send(id, { t: T.KVM_LINK, on });
     this.applyConfig();
     if (card && this.onLinked) this.onLinked(on, tell); // main.js: the big card
     this.onChange();
   }
 
-  _peerId() {
-    const s = this.link.snapshot().session;
-    return s && s.id ? String(s.id) : '';
-  }
-
   view() {
-    return { linked: this.linked, mode: this.mode, message: this.message, pcSide: this.pcSide, helper: this.helper.running ? '' : this.helper.error || 'starting' };
+    return { linked: this.linked, mode: this.mode, message: this.message, edges: { ...this.edges }, helper: this.helper.running ? '' : this.helper.error || 'starting' };
   }
 
-  // ---- owner (this PC drives the Mac) ----
+  // ---- owner (this PC drives a device) ----
 
+  // Can the selected device be driven now (the hotkey takes it).
   _canDrive() {
+    return this._canDriveTo(this.hub.selectedId);
+  }
+
+  _canDriveTo(id) {
     const k = this.cfg;
-    return this.connected && this.linked && k.driveOther && (k.mouse || k.keyboard);
+    return this._connectedTo(id) && this._linkedFor(id) && k.driveOther && (k.mouse || k.keyboard);
   }
 
   _onHelper(name, msg) {
     switch (name) {
-      case 'edge': // The helper is already capturing
-        if (this.mode !== 'home' || !this._canDrive() || !this.cfg.mouse || !this.crossingSide) {
-          this.helper.send('capture', { on: false });
-          return;
-        }
-        {
-          // A file/folder drag crossed: the Mac shows it as its own drag; the data follows.
-          const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut() ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
-          const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
-          this._take({ side: P.opposite(this.crossingSide), offset: msg.offset, ...(drag ? { drag: { count: drag.count } } : {}) });
-          if (drag) { // order: kvm.take, drag.start, then the files
-            this.fileDrop.beginDrag(drag);
-            this.dragPending = true;
-          }
-        }
+      case 'edge':
+        this._onEdge(msg);
         break;
       // Double-tap: cursor sharing off (everything
       // home) and on again. In keyboard-only mode (Cursor off, "Switch the keyboard with the hotkey"
@@ -205,7 +311,7 @@ class Kvm {
             if (this.connected && !k.driveOther) this._note('Mouse and keyboard to the other computer is off');
           } else {
             this.helper.send('capture', { on: true, mouse: false, keyboard: true });
-            this._take({});
+            this._take({}, this.hub.selectedId);
           }
           break;
         }
@@ -237,10 +343,31 @@ class Kvm {
     }
   }
 
-  _take(where) {
+  // The helper crossed one of the watched edges (msg.side) at msg.offset.
+  _onEdge(msg) {
+    if (this.mode === 'driving') return; // already capturing: a late edge is not ours to act on
+    const side = E.SIDES.includes(msg.side) ? msg.side : this.crossingSide; // an older helper: the selected side
+    const id = side ? this.edges[side] : null;
+    if (this.mode !== 'home' || !id || !this._canDriveTo(id) || !this.cfg.mouse || !this.hub.select(id)) {
+      this.helper.send('capture', { on: false });
+      return;
+    }
+    // A file/folder drag crossed: the other device shows it as its own drag; the data follows.
+    const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut(id) ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
+    const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
+    this._take({ side: P.opposite(side), offset: msg.offset, ...(drag ? { drag: { count: drag.count } } : {}) }, id);
+    if (drag) { // order: kvm.take, drag.start, then the files
+      this.fileDrop.beginDrag(drag);
+      this.dragPending = true;
+    }
+  }
+
+  // id: the device the input goes to (the selected one for the hotkey).
+  _take(where, id) {
     this.route++;
     const k = this.cfg;
     this.keyboardOnly = !where.side; // the hotkey in keyboard-only mode (edge crossings carry a side)
+    this.partner = id || null;
     this._drive({ t: T.KVM_TAKE, route: this.route, ...where, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard });
     this._setMode('driving', '');
     this.clip.sendIfChanged('switch');
@@ -259,10 +386,10 @@ class Kvm {
     this._setMode('home', message);
   }
 
-  // Input while driving goes to the other computer, or to the phone bridge when a phone is the peer.
+  // Input while driving goes to the partner device, or to the phone bridge when a phone is the peer.
   _drive(msg) {
     if (this.local && this.local.drives()) this.local.handle(msg);
-    else this.link.send(msg);
+    else if (this.partner) this._send(this.partner, msg);
   }
 
   // Row 9.
@@ -276,44 +403,50 @@ class Kvm {
     this.acceptTimer = null;
   }
 
-  // ---- driven (the Mac drives this PC) ----
+  // ---- driven (a device drives this PC) ----
 
-  _onTake(m) {
+  _onTake(m, from) {
     const route = Number(m.route) || 0;
     if (this.mode === 'driving') {
-      this.link.send({ t: T.KVM_REFUSE, route, why: P.REFUSE.BUSY });
+      this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.BUSY });
       return;
     }
     if (this.mode === 'driven') {
+      if (from !== this.partner) { // another device drives us: only the one that does may
+        this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.BUSY });
+        return;
+      }
       if (route <= this.peerRoute) return;
       this.peerRoute = route;
-      this.link.send({ t: T.KVM_ACCEPT, route });
+      this._send(from, { t: T.KVM_ACCEPT, route });
       if (m.side && m.mouse !== false) this.helper.send('place', { side: m.side, offset: m.offset });
       return;
     }
-    if (!this.cfg.beDriven || !this.linked) { // cursor sharing off
-      this.link.send({ t: T.KVM_REFUSE, route, why: P.REFUSE.NOT_ALLOWED });
+    if (!this.cfg.beDriven || !this._linkedFor(from)) { // cursor sharing off
+      this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.NOT_ALLOWED });
       this._note('{Name} tried to use {me}. It’s turned off here.');
       return;
     }
+    this.partner = from;
     this.peerRoute = route;
-    this.link.send({ t: T.KVM_ACCEPT, route });
+    this._send(from, { t: T.KVM_ACCEPT, route });
     this.keyboardOnly = m.mouse === false;
     this._setMode('driven', '');
     if (m.mouse !== false) {
-      this.helper.send('place', P.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
-      if (this.crossingSide) this.helper.send('armReturn', { on: true, side: this.crossingSide, resistancePx: this.cfg.resistancePx });
+      this.helper.send('place', E.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
+      const back = this._sideOf(from); // the edge that leads back to the driver
+      if (back) this.helper.send('armReturn', { on: true, side: back, resistancePx: this.cfg.resistancePx });
     }
   }
 
   // Row 8.
-  _inject(m) {
-    if (this.mode !== 'driven') return;
+  _inject(m, from) {
+    if (this.mode !== 'driven' || from !== this.partner) return;
     const k = this.cfg;
     const ev = { ...m };
     if (ev.t === T.K_KEY_DOWN || ev.t === T.K_KEY_UP) {
       if (typeof ev.code !== 'string') return;
-      if (this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this.link.peerOs)) ev.code = P.mapKeyFromOtherPlatform(ev.code);
+      if (this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this._peerOs(from))) ev.code = P.mapKeyFromOtherPlatform(ev.code);
     } else if (ev.t === T.K_MOVE) {
       ev.dx = (Number(ev.dx) || 0) * k.speed;
       ev.dy = (Number(ev.dy) || 0) * k.speed;
@@ -323,17 +456,17 @@ class Kvm {
     }
     if (ev.t === T.K_KEY_DOWN && ev.code === 'Escape' && this.dragRecv && this.dragRecv.dragging) this.dragRecv.cancel('cancelled', false);
     this.helper.send('inject', { ev });
-    // The Mac released its left button here: its drag drops where the pointer is.
+    // The other device released its left button here: its drag drops where the pointer is.
     if (ev.t === T.K_UP && ev.b === P.BUTTON.LEFT) { this.fileRecv.onRelease(); if (this.dragRecv) this.dragRecv.onRelease(); }
   }
 
   // A trackpad gesture from the other computer, done the
   // Windows way. There is no virtual precision touchpad we could feed, so each one is
   // its Windows shortcut; the Mac's system swipes (`dock`) act once, at their end, on what they meant.
-  _onGesture(m) {
-    if (this.mode !== 'driven' || this.cfg.gestures === false || !m || typeof m.g !== 'string') return;
+  _onGesture(m, from) {
+    if (this.mode !== 'driven' || from !== this.partner || this.cfg.gestures === false || !m || typeof m.g !== 'string') return;
     if (m.g === 'dock') {
-      if (m.phase === 'end' && typeof m.mean === 'string' && m.mean !== 'dock') this._onGesture({ g: m.mean });
+      if (m.phase === 'end' && typeof m.mean === 'string' && m.mean !== 'dock') this._onGesture({ g: m.mean }, from);
       return;
     }
     const inj = (ev) => this.helper.send('inject', { ev });
@@ -369,13 +502,14 @@ class Kvm {
 
   // Row 8c: we send the input home (return edge or hotkey).
   _sendHome(offset) {
-    this.link.send(typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset } : { t: T.KVM_HOME, route: this.peerRoute });
+    const msg = typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset } : { t: T.KVM_HOME, route: this.peerRoute };
+    this._send(this.partner, msg);
     this._drivenHome('', true);
   }
 
   // Rows 8b, 8c, 9b.
   _drivenHome(message, sendClip) {
-    if (this.dragRecv) this.dragRecv.onHome(); // a drag from the Mac not dropped yet is cancelled
+    if (this.dragRecv) this.dragRecv.onHome(); // a drag from the other device not dropped yet is cancelled
     this.helper.send('releaseAll');
     this.helper.send('armReturn', { on: false });
     this._setMode('home', message);
@@ -402,6 +536,7 @@ class Kvm {
   _setMode(mode, message) {
     const was = this.mode;
     this.mode = mode;
+    if (mode === 'home') this.partner = null;
     if (was !== mode && this.onWhere) this.onWhere(mode, was); // the switching popup (main.js)
     if (mode === 'home' && this.dragPending) { // went home before releasing: the files don't go
       this.dragPending = false;
@@ -422,7 +557,7 @@ class Kvm {
     this.silence = null;
     if (mode !== 'home') {
       this.silence = setInterval(() => {
-        if (Date.now() - (this.link.lastRx || 0) > P.KVM_SILENCE_MS) this._linkLost('{Name} stopped answering');
+        if (Date.now() - this._lastRx() > P.KVM_SILENCE_MS) this._linkLost('{Name} stopped answering');
       }, 250);
     }
     this.onChange();

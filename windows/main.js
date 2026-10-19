@@ -46,7 +46,7 @@ const { Wired } = require('./wired');
 const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneViews } = require('./phoneview');
-const { normalize, apply: applySettings } = require('./settings');
+const { normalize, apply: applySettings, migrateKvm } = require('./settings');
 
 // Packaged: electron-builder's appId is the shortcut's AppUserModelID. In development Windows
 // only shows toasts for an id it knows, and electron.exe's path works.
@@ -172,7 +172,9 @@ function start() {
   helper = new Helper();
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
-  kvm = new Kvm({ link, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
+  // Settings from before the cursor edges: one paired device takes the side its old pcSide gave it.
+  if (migrateKvm(settings, hub.peers().map((p) => p.id))) saveSettings();
+  kvm = new Kvm({ hub, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
   hud = new Hud(() => settings);
   const hudShow = hud.show.bind(hud);
   hud.show = (kind, text, sub) => hudShow(kind, fillNames(text), fillNames(sub || '')); // device names in popups
@@ -462,7 +464,7 @@ function buildState() {
     macInput: screen.macInput, // the Mac's "Receive input" switch
     input: kvm.mode,
     kvmState: kvm.view(),
-    kvm: { ...settings.kvm, pcSide: kvm.pcSide },
+    kvm: { ...settings.kvm },
     keys: settings.keys,
     monitor: settings.monitor,
     clipboard: { ...settings.clipboard, ...clip.view },

@@ -2,6 +2,7 @@
 // settings.json: defaults and validation. Every value from
 // disk or from the UI goes through normalize(), so main never stores anything out of range.
 const P = require('../shared/protocol.js');
+const E = require('../shared/kvm-edges.js');
 
 const TABS = ['phone', 'overview', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'terminal', 'audio', 'apps', 'general', 'about'];
 
@@ -40,7 +41,8 @@ function normalize(s) {
       driveOther: bool(kvm.driveOther, true),
       beDriven: bool(kvm.beDriven, true),
       resistancePx: Math.round(num(kvm.resistancePx, P.RESISTANCE_PX, 0, 400)),
-      pcSide: P.SIDES.includes(kvm.pcSide) ? kvm.pcSide : null, // where this PC is, seen from the other computer (kvm.layout)
+      pcSide: P.SIDES.includes(kvm.pcSide) ? kvm.pcSide : null, // legacy: where this PC is, seen from the other computer; migrateKvm() turns it into edges
+      edges: E.normalizeEdges(kvm.edges), // each side of this screen -> the paired device behind it (shared/kvm-edges.js)
       speed: Math.round(num(kvm.speed, 1.0, 0.25, 3) * 100) / 100,
       reverseScroll: bool(kvm.reverseScroll, false),
       linked: bool(kvm.linked, true), // cursor sharing on (the hotkey's double-tap switches it, kvm.link)
@@ -174,4 +176,14 @@ function apply(settings, section, partial) {
   return changed;
 }
 
-module.exports = { normalize, apply };
+// Settings from before the edges (kvm.pcSide): with exactly one paired device, its edge is set and
+// pcSide is dropped. Returns true when settings changed (the caller saves).
+function migrateKvm(settings, deviceIds) {
+  const k = settings.kvm;
+  const next = E.migrateEdges(k, deviceIds);
+  if (JSON.stringify(next) === JSON.stringify(E.normalizeEdges(k.edges))) return false;
+  settings.kvm = { ...k, edges: next, pcSide: null };
+  return true;
+}
+
+module.exports = { normalize, apply, migrateKvm };
