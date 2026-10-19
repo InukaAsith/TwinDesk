@@ -473,6 +473,13 @@ Set the `ANDROID_KEYSTORE` secret to the key the Android app is signed with
 Windows builds carry the full Android app. Without it the APKs get the runner's own key and the
 computers' builds leave the Android app out.
 
+To Authenticode-sign the Windows installers, set the `WIN_CSC_LINK` secret to a base64-encoded
+Windows code-signing `.pfx` certificate and `WIN_CSC_KEY_PASSWORD` to its password. Keep the
+certificate and password out of the repository. When `WIN_CSC_LINK` is set, the Windows build fails
+if signing cannot complete instead of silently publishing an unsigned installer. Signing gives
+users a verified publisher and can help SmartScreen reputation build over time; it does not
+guarantee that antivirus products will stop flagging a file.
+
 ## License
 
 TwinDesk is free software, licensed under the [GNU General Public License v3.0](LICENSE).

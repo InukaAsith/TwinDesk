@@ -107,7 +107,13 @@ async function pack(arch) {
       directories: { app: STAGE, output: path.join(WIN, 'dist') },
       asar: false,
       npmRebuild: false,
-      win: { icon: path.join(__dirname, 'icon.ico'), executableName: 'TwinDesk' },
+      win: {
+        icon: path.join(__dirname, 'icon.ico'),
+        executableName: 'TwinDesk',
+        // electron-builder signs with WIN_CSC_LINK when supplied. Don't silently release an
+        // unsigned installer after the signing secret has been configured.
+        forceCodeSigning: Boolean(process.env.WIN_CSC_LINK),
+      },
       nsis: {
         oneClick: false,
         perMachine: true,

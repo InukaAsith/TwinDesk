@@ -39,6 +39,11 @@ jobs:
       - name: Build the installers (x64 and arm64)
         working-directory: windows
         run: npm run dist -- x64 arm64
+        env:
+          # Optional Authenticode certificate. Store a base64-encoded PFX and its password
+          # as repository secrets; the build fails if signing is configured but cannot complete.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       - name: Upload the x64 installer
         uses: actions/upload-artifact@v4
