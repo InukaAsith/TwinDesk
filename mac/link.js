@@ -1,17 +1,22 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Guest role: this Mac connects to another Mac that hosts.
-// WSS client with certificate pinning, pairing as the initiator, hello, liveness, reconnect.
-// Same protocol as windows/link.js; stored hosts live in hosts.json.
+// Guest role: this Mac dials ONE computer it was paired from (a host). WSS client with certificate
+// pinning, pairing as the initiator, hello, busy-aware liveness, reconnect. Port of
+// windows/link.js; links.js (LinkManager) keeps one Link per host in hosts.json.
 //
-// Events: 'change' — status/pairing changed; 'welcome' (msg); 'closed'; 'message' (msg); 'rtt'.
+// Events (EventEmitter): 'welcome' (msg), 'closed' ({}), 'request' (a pairing code is ready).
+// After `welcome`, messages go to onAny(msg) when it is set (session.js), else to 'message'.
+// onState(fn) is called on every status or pairing change.
 'use strict';
 
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
-const store = require('./store');
 
 const T = P.T;
+// A host without `os` is an older Mac.
+const osOf = (o) => (Object.values(P.OS).includes(o) ? o : P.OS.MAC);
+const KEEPALIVE_TICK_MS = 250; // how often the keep-alive decides whether to ping
+
 const PAIR_ERRORS = {
   [P.E.PAIR_REFUSED]: 'Pairing was refused.',
   [P.E.PAIR_TIMEOUT]: 'Pairing timed out.',
@@ -20,49 +25,69 @@ const PAIR_ERRORS = {
 };
 
 class Link extends EventEmitter {
-  // id: {macId, macName}; canConnect() -> false while this Mac hosts a session
-  constructor(id, { canConnect = () => true, resolve = () => null } = {}) {
+  // opts: device {id, name} (this Mac: id = macId); store {load() -> entry|null, save(entry), clear()};
+  //   resolveAddress(macId) -> {address, port}|null; blocked() -> true while this link must not dial
+  //   (mesh tie-break, inbound link present); busy() -> true while the link is busy (ping every
+  //   PING_MS, else every IDLE_PING_MS; default: busy).
+  constructor(opts) {
     super();
-    this.id = id;
-    this.canConnect = canConnect;
-    this.resolve = resolve; // hostId -> {address, port} seen by discovery
-    this.hosts = store.read('hosts.json', []); // [{id, name, os, address, port, fp, token, lastSeen}]
-    this.pairState = null; // {phase, address, port, name, code, error}
-    this.status = { state: 'idle', message: '' };
+    this.device = opts.device;
+    this.blocked = opts.blocked || (() => false);
+    this.busy = opts.busy || (() => true);
+    this.store = opts.store;
+    this.resolveAddress = opts.resolveAddress || (() => null);
+    this.pairing = this.store.load(); // {macId, macName, address, port, fp, token, os} or null
+    this.pairState = null; // pairing in progress: {phase, address, port, macName, code, error}
+    this.status = { state: this.pairing ? 'connecting' : 'not_paired', rtt: null, message: '' };
     this.ws = null;
     this.mode = null; // 'session' | 'pair'
     this.authed = false;
-    this.host = null; // the stored host we are connected/connecting to
-    this.ctx = null; // peer context while authed
+    this.destroyed = false;
     this.attempt = 0;
     this.timers = {};
+    this.lastRx = 0;
+    this.lastTx = 0;
+    this.lastError = '';
+    this.seenFp = '';
+    this.onAny = null; // session.js: gets every message after welcome
+    this.stateFns = [];
   }
+
+  // ---- public API ----
 
   start() {
-    this._scheduleReconnect(500);
+    if (this.pairing) this._connect('session');
   }
 
-  stop() {
-    clearTimeout(this.timers.reconnect);
-    this._closeSocket();
-  }
-
-  view() {
-    return {
-      status: { ...this.status },
-      pairing: this.pairState ? { ...this.pairState } : null,
-      hosts: this.hosts.map(({ id, name, os, address, lastSeen }) => ({ id, name, os, address, lastSeen })),
-    };
+  onState(fn) {
+    this.stateFns.push(fn);
   }
 
   send(obj) {
-    if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify(obj));
+    this.lastTx = Date.now();
+    return true;
   }
 
-  startPairing({ address, port, name }) {
+  // Bytes queued on the socket (file transfers wait while this is high).
+  get bufferedAmount() {
+    return this.ws ? this.ws.bufferedAmount : 0;
+  }
+
+  // {link, pairing, paired} for the UI (the shape hub.snapshot() uses).
+  snapshot() {
+    const p = this.pairing;
+    return {
+      link: { ...this.status, macName: p ? p.macName : '', address: p ? p.address : '' },
+      pairing: this.pairState ? { ...this.pairState } : null,
+      paired: p ? { macId: p.macId, macName: p.macName, address: p.address, port: p.port, os: osOf(p.os) } : null,
+    };
+  }
+
+  startPairing({ address, port, macName }) {
     clearTimeout(this.timers.reconnect);
-    this.pairState = { phase: 'connecting', address, port: port || P.PORT, name: name || address, code: '', error: '' };
+    this.pairState = { phase: 'connecting', address, port: port || P.PORT, macName: macName || address, code: '', error: '' };
     this._connect('pair');
     this._changed();
   }
@@ -76,39 +101,55 @@ class Link extends EventEmitter {
   }
 
   cancelPair() {
-    if (!this.pairState) return;
-    if (this.mode === 'pair' && this.pairState.phase !== 'failed') this._raw({ t: T.PAIR_CANCEL });
+    const ps = this.pairState;
+    if (!ps) return;
+    if (this.mode === 'pair' && ps.phase !== 'failed') this._raw({ t: T.PAIR_CANCEL });
     this.pairState = null;
     if (this.mode === 'pair') this._closeSocket();
-    this._changed();
+    this._resume();
+  }
+
+  forget() {
+    clearTimeout(this.timers.reconnect);
+    this._closeSocket();
+    this.store.clear();
+    this.pairing = null;
+    this._setStatus('not_paired', '');
+  }
+
+  // The host dialled us (mesh): drop our own socket to it, so there is one link. Our link waits
+  // until the inbound one ends (poke()).
+  yieldSession() {
+    if (!this.authed) return;
+    this._closeSocket();
     this._scheduleReconnect();
   }
 
-  forget(hostId) {
-    if (this.host && this.host.id === hostId) this._closeSocket();
-    this.hosts = this.hosts.filter((h) => h.id !== hostId);
-    this._save();
-    this._changed();
+  // Stop for good: no socket, no reconnect (the manager closes its links this way).
+  destroy() {
+    this.destroyed = true;
+    clearTimeout(this.timers.reconnect);
+    this._closeSocket();
   }
 
-  // Another session ended or started on this Mac: try again / stand back.
+  // Try again at once (the host went away and came back, or an inbound link ended).
   poke() {
-    if (!this.ws && !this.pairState) this._scheduleReconnect(300);
+    if (this.destroyed || !this.pairing || this.pairState || this.ws || this.status.state === 'identity_changed') return;
+    this.attempt = 0;
+    clearTimeout(this.timers.reconnect);
+    this.timers.reconnect = setTimeout(() => !this.ws && !this.pairState && this._connect('session'), 300);
   }
 
   // ---- connection ----
 
-  _save() {
-    store.write('hosts.json', this.hosts);
-  }
-
-  _connect(mode, host) {
+  _connect(mode) {
+    if (this.destroyed) return;
     this._closeSocket();
     clearTimeout(this.timers.reconnect);
+    if (mode === 'session' && this.blocked()) return this._scheduleReconnect(); // mesh: wait our turn
     this.mode = mode;
-    this.host = host || null;
     this.nw = this.nm = null;
-    const target = mode === 'pair' ? this.pairState : host;
+    const target = mode === 'pair' ? this.pairState : this.pairing;
     const ws = new WebSocket(`wss://${target.address}:${target.port}`, {
       rejectUnauthorized: false, // self-signed; the fingerprint is pinned instead
       maxPayload: P.MAX_PAYLOAD,
@@ -117,32 +158,36 @@ class Link extends EventEmitter {
     this.ws = ws;
     let seenFp = '';
     ws.on('upgrade', (res) => { seenFp = P.normFingerprint(res.socket.getPeerCertificate().fingerprint256); });
-    ws.on('open', () => ws === this.ws && this._onOpen(seenFp, target.address));
+    ws.on('open', () => ws === this.ws && this._onOpen(seenFp));
     ws.on('message', (data, isBinary) => ws === this.ws && !isBinary && this._onMessage(String(data)));
     ws.on('error', (err) => { if (ws === this.ws) this.lastError = err.code || err.message; });
     ws.on('close', () => ws === this.ws && this._onClose());
   }
 
-  _onOpen(seenFp, address) {
+  _onOpen(seenFp) {
     this.seenFp = seenFp;
-    this.address = address;
     this.lastRx = Date.now();
     this.lastError = '';
     if (this.mode === 'pair') {
       this.nw = P.randomHex(16);
-      this._raw({ t: T.PAIR_START, v: P.PROTOCOL_VERSION, id: this.id.macId, name: this.id.macName, os: P.OS.MAC, commit: P.commitOf(this.nw) });
+      this._raw({ t: T.PAIR_START, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, commit: P.commitOf(this.nw) });
       this.pairState.phase = 'starting';
       return this._changed();
     }
-    if (!seenFp || seenFp !== this.host.fp) {
+    if (this.blocked()) { // another computer connected to us meanwhile
       this._closeSocket();
-      return this._setStatus('identity_changed', `${this.host.name} looks different now. Forget it and pair again.`);
+      return this._scheduleReconnect();
+    }
+    if (!seenFp || seenFp !== this.pairing.fp) {
+      this._closeSocket();
+      return this._setStatus('identity_changed', `${this.pairing.macName} looks different now. Forget it and pair again.`);
     }
     this._hello();
   }
 
   _hello() {
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.id.macId, name: this.id.macName, os: P.OS.MAC, token: this.host.token });
+    const p = this.pairing;
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1 });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
@@ -158,7 +203,6 @@ class Link extends EventEmitter {
     }
     if (!msg || typeof msg.t !== 'string') return;
     this.lastRx = Date.now();
-    if (this.ctx) this.ctx.lastRx = this.lastRx;
     switch (msg.t) {
       case T.PAIR_NONCE: return this._onNonce(msg);
       case T.PAIR_OK: return this._onPairOk(msg);
@@ -167,13 +211,12 @@ class Link extends EventEmitter {
       case T.ERROR: return this._onError(msg);
       case T.PING: return this.authed && this._raw({ t: T.PONG, ts: msg.ts });
       case T.PONG:
-        if (typeof msg.ts === 'number' && this.ctx) {
-          this.ctx.rttMs = Math.max(0, Date.now() - msg.ts);
-          this.emit('rtt', this.ctx);
-        }
-        return;
+        if (typeof msg.ts === 'number') this.status.rtt = Math.max(0, Date.now() - msg.ts);
+        return this._changed();
     }
-    if (this.authed) this.emit('message', msg);
+    if (!this.authed) return;
+    if (this.onAny) return this.onAny(msg);
+    this.emit('message', msg);
   }
 
   _onNonce(msg) {
@@ -197,21 +240,18 @@ class Link extends EventEmitter {
     if (typeof msg.token !== 'string' || !msg.token || typeof msg.macId !== 'string') {
       return this._pairFailed('The other computer sent a bad pairing message.');
     }
-    const host = {
-      id: msg.macId,
-      name: typeof msg.macName === 'string' && msg.macName ? msg.macName.slice(0, 64) : ps.name,
-      os: msg.os || P.OS.MAC,
+    this.pairing = {
+      macId: msg.macId,
+      macName: typeof msg.macName === 'string' && msg.macName ? msg.macName.slice(0, 64) : ps.macName,
       address: ps.address,
       port: ps.port,
       fp: this.seenFp,
       token: msg.token,
-      lastSeen: Date.now(),
+      os: osOf(msg.os),
     };
-    this.hosts = [host, ...this.hosts.filter((h) => h.id !== host.id)];
-    this._save();
+    this.store.save(this.pairing);
     this.pairState = null;
     this.mode = 'session';
-    this.host = host;
     this._setStatus('connecting', '');
     this._hello();
   }
@@ -221,35 +261,31 @@ class Link extends EventEmitter {
     clearTimeout(this.timers.hello);
     this.authed = true;
     this.attempt = 0;
-    const h = this.host;
-    if (typeof msg.macName === 'string' && msg.macName) h.name = msg.macName.slice(0, 64);
-    h.lastSeen = Date.now();
-    this._save();
-    this.ctx = {
-      ws: this.ws, authed: true, deviceId: h.id, name: h.name, os: msg.os || P.OS.MAC, role: 'host',
-      address: this.address, lastRx: Date.now(), rttMs: null,
-    };
-    this.timers.ping = setInterval(() => {
-      if (Date.now() - this.lastRx > P.TIMEOUT_MS) {
-        this.lastError = 'Stopped answering';
-        if (this.ws) this.ws.terminate();
-        return;
-      }
-      this._raw({ t: T.PING, ts: Date.now() });
-    }, P.PING_MS);
+    const os = osOf(msg.os || this.pairing.os);
+    if ((typeof msg.macName === 'string' && msg.macName && msg.macName !== this.pairing.macName) || os !== this.pairing.os) {
+      if (typeof msg.macName === 'string' && msg.macName) this.pairing.macName = msg.macName.slice(0, 64);
+      this.pairing.os = os;
+      this.store.save(this.pairing);
+    }
+    this.status.rtt = null;
+    this.lastTx = Date.now();
+    this.timers.ping = setInterval(() => this._keepalive(), KEEPALIVE_TICK_MS);
     this._setStatus('connected', '');
-    this.emit('welcome', this.ctx);
+    this.emit('welcome', msg);
   }
 
   _onError(msg) {
     const code = msg.code;
     if (this.mode === 'pair') return this._pairFailed(PAIR_ERRORS[code] || `Pairing failed (${code}).`);
-    if (code === P.E.BAD_TOKEN && this.host) {
-      const name = this.host.name;
-      this.forget(this.host.id);
-      return this._setStatus('idle', `${name} forgot this Mac. Pair again.`);
+    if (code === P.E.BAD_TOKEN) {
+      const name = this.pairing ? this.pairing.macName : 'the other computer';
+      this.forget();
+      this._setStatus('not_paired', `${name} forgot this Mac. Pair again.`);
+      return;
     }
-    this.lastError = code === P.E.BUSY ? 'Busy with another device' : `Closed (${code})`;
+    if (code === P.E.REPLACED) this.lastError = 'Another connection from this Mac replaced this one';
+    else this.lastError = code === P.E.BUSY ? 'Busy with another device' : `Closed (${code})`;
+    // The host closes the socket after an error; _onClose reconnects.
   }
 
   _pairFailed(error) {
@@ -258,13 +294,15 @@ class Link extends EventEmitter {
     Object.assign(ps, { phase: 'failed', error, code: '' });
     this._closeSocket();
     this._changed();
-    this._scheduleReconnect();
+    this._resume();
   }
 
   _onClose() {
+    const wasAuthed = this.authed;
     this._clearSocketTimers();
     this.ws = null;
-    this._dropSession();
+    this.authed = false;
+    if (wasAuthed) this._emit('closed', {});
     if (this.mode === 'pair') {
       const ps = this.pairState;
       if (ps && ps.phase !== 'failed') {
@@ -274,47 +312,45 @@ class Link extends EventEmitter {
       }
       return;
     }
-    if (this.status.state !== 'identity_changed') this._scheduleReconnect();
+    if (this.pairing && this.status.state !== 'identity_changed') this._scheduleReconnect();
   }
 
-  _dropSession() {
-    if (!this.authed) return;
-    this.authed = false;
-    const ctx = this.ctx;
-    this.ctx = null;
-    this.emit('closed', ctx);
-  }
-
-  // Reconnect to the most recently used stored host that discovery sees (else the last address).
-  _scheduleReconnect(delay) {
-    clearTimeout(this.timers.reconnect);
-    if (!this.hosts.length || this.pairState) {
-      if (!this.hosts.length && this.status.state !== 'idle') this._setStatus('idle', this.status.message);
-      return;
+  // Back to the stored pairing (if any) after a pairing attempt ended.
+  _resume() {
+    if (this.pairing) {
+      this.attempt = 0;
+      if (!this.ws || this.mode !== 'session') this._scheduleReconnect();
+    } else {
+      this._setStatus('not_paired', this.status.message);
     }
+  }
+
+  _scheduleReconnect() {
+    if (this.destroyed) return;
+    clearTimeout(this.timers.reconnect);
     const delays = P.RECONNECT_MS;
-    const d = delay !== undefined ? delay : delays[Math.min(this.attempt, delays.length - 1)];
+    const delay = delays[Math.min(this.attempt, delays.length - 1)];
     this.attempt++;
-    if (this.status.state === 'connected') this._setStatus('reconnecting', this.lastError || '');
+    this._setStatus('reconnecting', this.lastError || '');
     this.timers.reconnect = setTimeout(() => {
-      if (this.pairState || this.ws) return;
-      if (!this.canConnect()) return this._setStatus('standby', '');
-      const seen = this.hosts.find((h) => this.resolve(h.id)) || this.hosts[0];
-      const at = this.resolve(seen.id);
-      if (at && (at.address !== seen.address || at.port !== seen.port)) {
-        Object.assign(seen, { address: at.address, port: at.port });
-        this._save();
+      if (!this.pairing || this.pairState || this.destroyed) return;
+      const seen = this.resolveAddress(this.pairing.macId);
+      if (seen && (seen.address !== this.pairing.address || seen.port !== this.pairing.port)) {
+        this.pairing.address = seen.address;
+        this.pairing.port = seen.port;
+        this.store.save(this.pairing);
       }
-      this._setStatus('connecting', this.lastError || '');
-      this._connect('session', seen);
-    }, d);
+      this._connect('session');
+    }, delay);
   }
 
   _closeSocket() {
     const ws = this.ws;
     this._clearSocketTimers();
     this.ws = null;
-    this._dropSession();
+    const wasAuthed = this.authed;
+    this.authed = false;
+    if (wasAuthed) this._emit('closed', {});
     if (!ws) return;
     if (ws.readyState === WebSocket.OPEN) ws.close();
     else ws.terminate();
@@ -326,16 +362,36 @@ class Link extends EventEmitter {
   }
 
   _raw(obj) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(obj));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(obj));
+      this.lastTx = Date.now();
+    }
+  }
+
+  // Keep-alive: ping only when nothing was sent for the interval; a silent link is closed.
+  _keepalive() {
+    const now = Date.now();
+    const busy = this.busy();
+    if (now - this.lastRx > (busy ? P.TIMEOUT_MS : P.IDLE_TIMEOUT_MS)) {
+      this.lastError = 'Stopped answering';
+      if (this.ws) this.ws.terminate();
+      return;
+    }
+    if (now - this.lastTx >= (busy ? P.PING_MS : P.IDLE_PING_MS)) this._raw({ t: T.PING, ts: now });
+  }
+
+  // Local events ('welcome', 'closed') go to the listeners of this EventEmitter.
+  _emit(type, msg) {
+    this.emit(type, msg);
   }
 
   _setStatus(state, message) {
-    this.status = { state, message: message || '' };
+    this.status = { state, message: message || '', rtt: state === 'connected' ? this.status.rtt : null };
     this._changed();
   }
 
   _changed() {
-    this.emit('change');
+    for (const fn of this.stateFns) fn();
   }
 }
 
