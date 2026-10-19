@@ -1,10 +1,25 @@
 name: Build Android
 
+# release.yml calls this for pull requests and merges to main (version, code and release_tag set).
+# Pushing a v* tag, or running it by hand with a tag, builds that ref and puts the files on that release.
 on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ''
+      code:
+        type: string
+        default: ''
+      release_tag:
+        type: string
+        default: ''
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Release to put the files on (e.g. v2.0.1; made as a draft if it isn't there). Empty = run artifacts only.
+        description: Release to put the files on (e.g. v2.1.0). Empty = run artifacts only.
         required: false
         default: ''
 
@@ -15,12 +30,18 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name) || inputs.tag }}
 
     steps:
-      # Always the main branch, whichever branch the run was started from.
+      # Build the pushed tag or branch, or the ref selected for a manual run.
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
+
+      - name: Set the version
+        if: inputs.version != ''
+        run: bash .github/scripts/set-version.sh "${{ inputs.version }}" "${{ inputs.code }}"
 
       - uses: actions/setup-java@v4
         with:
@@ -57,11 +78,20 @@ jobs:
           name: twindesk-android
           path: android/dist/TwinDesk-*.apk
 
+      # The computers' installers carry the full APK (installed over the phone's app through wireless
+      # debugging): the Windows and Mac jobs of the same run take it from here.
+      - name: Keep the full APK for the desktop builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-full-apk
+          path: android/dist/TwinDesk-*-full.apk
+
       # Straight onto the release, no download and re-upload.
       - name: Upload to the release
-        if: inputs.tag != ''
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes "" || true
-          gh release upload "${{ inputs.tag }}" android/dist/TwinDesk-*.apk --clobber
+          TAG="$RELEASE_TAG"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes --latest || true
+          gh release upload "$TAG" android/dist/TwinDesk-*.apk --clobber

@@ -1,0 +1,119 @@
+name: Build and release
+
+# A pull request to main builds Windows, Android and Mac and puts them on a pre-release for that
+# pull request (v2.1.1-pr9: the next patch after the newest release). A merge to main builds the
+# next minor (2.1.0 -> 2.2.0) and releases it. Pull requests from forks only keep the artifacts:
+# their token can't write releases.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+      tag: ${{ steps.v.outputs.tag }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out the version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_FROM_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: bash .github/scripts/release-version.sh
+
+      # A draft the builds put their files on; the last job publishes it. A pull request that
+      # pushes again keeps its release: the tag moves to the new commit and the files are replaced.
+      - name: Prepare the release
+        if: steps.v.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+          SHA: ${{ steps.v.outputs.sha }}
+          PRERELEASE: ${{ steps.v.outputs.prerelease }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$SHA" -F force=true
+            fi
+            exit 0
+          fi
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release create "$TAG" --target "$SHA" --draft --prerelease \
+              --title "$TAG: PR #$PR_NUMBER" \
+              --notes "Test build of pull request #$PR_NUMBER ($PR_TITLE), commit ${SHA:0:7}. Not for everyday use: it goes away when the pull request closes."
+          else
+            gh release create "$TAG" --target "$SHA" --draft --title "$TAG" --generate-notes
+          fi
+
+  android:
+    needs: version
+    uses: ./.github/workflows/build-android.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      code: ${{ needs.version.outputs.code }}
+      release_tag: ${{ needs.version.outputs.publish == 'true' && needs.version.outputs.tag || '' }}
+    secrets: inherit
+
+  windows:
+    needs: [version, android]
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      code: ${{ needs.version.outputs.code }}
+      release_tag: ${{ needs.version.outputs.publish == 'true' && needs.version.outputs.tag || '' }}
+    secrets: inherit
+
+  mac:
+    needs: [version, android]
+    uses: ./.github/workflows/build-mac.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      code: ${{ needs.version.outputs.code }}
+      release_tag: ${{ needs.version.outputs.publish == 'true' && needs.version.outputs.tag || '' }}
+    secrets: inherit
+
+  publish:
+    needs: [version, android, windows, mac]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+            # This pull request's earlier builds (v2.1.1-pr9 once v2.1.2-pr9 is up) go away.
+            for old in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName -q '.[].tagName' | grep -E -- "-pr${PR_NUMBER}$" | grep -vx "$TAG" || true); do
+              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+            done
+          else
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          fi

@@ -1,0 +1,25 @@
+name: Remove the pull request's pre-release
+
+# The test build of a pull request (v2.1.1-pr9) goes away when the pull request closes or merges.
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    # A fork's pull request never had one (its token can't write releases).
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete the pre-release and its tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName -q '.[].tagName' | grep -E -- "-pr${PR_NUMBER}$" || true); do
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done

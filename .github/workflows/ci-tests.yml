@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ws is the only runtime dependency the tests need.
+      - name: Install dependencies
+        working-directory: windows
+        run: npm install --ignore-scripts
+
+      - name: Syntax check
+        run: |
+          find windows linux mac shared -name '*.js' -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/vendor/*' -print0 | xargs -0 -n1 node --check
+
+      - name: Run the tests
+        env:
+          NODE_PATH: ${{ github.workspace }}/windows/node_modules
+          # npm install --ignore-scripts leaves electron without its binary; the modules the tests
+          # load only ask it for paths (app.getPath is never called in a test).
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp/electron
+        run: |
+          shopt -s nullglob
+          for f in shared/test/*.js windows/test/*.js linux/test/*.js mac/test/*.js; do
+            echo "== $f"
+            node "$f"
+          done

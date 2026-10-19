@@ -1,0 +1,94 @@
+name: Build Mac
+
+# release.yml calls this for pull requests and merges to main (version, code and release_tag set).
+# Pushing a v* tag, or running it by hand with a tag, builds that ref and puts the files on that release.
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ''
+      code:
+        type: string
+        default: ''
+      release_tag:
+        type: string
+        default: ''
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to put the files on (e.g. v2.1.0). Empty = run artifacts only.
+        required: false
+        default: ''
+
+# Write: the full Android APK can come from an existing release when no signing secret is present.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Apple Silicon: the .dmg is for arm64 Macs.
+    runs-on: macos-14
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || (github.ref_type == 'tag' && github.ref_name) || inputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set the version
+        if: inputs.version != ''
+        run: bash .github/scripts/set-version.sh "${{ inputs.version }}" "${{ inputs.code }}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The full APK of this run's Android build; tag and manual builds take the one on a release.
+      - name: Full Android APK from this run
+        if: inputs.version != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: android-full-apk
+          path: android/dist
+
+      - if: inputs.version == ''
+        uses: ./.github/actions/android-full
+        with:
+          keystore: ${{ secrets.ANDROID_KEYSTORE }}
+
+      - name: Install dependencies
+        working-directory: mac
+        run: npm install
+
+      # swiftc builds the helper; the app is signed with a self-signed certificate made on this runner
+      # (mac/scripts/signing-identity.sh), so macOS asks for Screen Recording, Accessibility and Input
+      # Monitoring again after every update from CI. adb comes from mac/scripts/fetch-adb.sh.
+      - name: Build TwinDesk.app
+        working-directory: mac
+        run: npm run dist
+
+      - name: Build the disk image
+        working-directory: mac
+        run: |
+          npm run dmg
+          v=$(node -p "require('./package.json').version")
+          mv dist/TwinDesk.dmg "dist/TwinDesk-$v-arm64.dmg"
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: twindesk-mac-arm64
+          path: mac/dist/*.dmg
+
+      - name: Upload to the release
+        if: env.RELEASE_TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$RELEASE_TAG"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes --latest || true
+          gh release upload "$TAG" mac/dist/*.dmg --clobber
