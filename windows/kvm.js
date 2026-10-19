@@ -142,11 +142,6 @@ class Kvm {
     return true;
   }
 
-  // ui (older name): the selected device goes to this side.
-  setLayout(side) {
-    return this.setEdge(side, this.hub.selectedId);
-  }
-
   // A device was forgotten: no edge leads to it any more.
   forgetDevice(id) {
     const next = E.clearPeer(this.edges, id);

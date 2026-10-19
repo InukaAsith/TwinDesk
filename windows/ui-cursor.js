@@ -1,6 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Cursor tab: share the pointer across the screen edge. Two direction cards, the
-// layout (pick where the other computer is; either side can change it) and the live state below. Behaviour: kvm.js and windows-helper.
+// Cursor tab: share the pointer across the screen edge. The two direction cards, the layout (which
+// paired device is behind each edge of this screen; each edge can lead to a different one) and the
+// live state. Behaviour: kvm.js and windows-helper.
 'use strict';
 
 UI.tab({
@@ -16,9 +17,7 @@ UI.tab({
   build(body) {
     const { el, api } = UI;
     const set = (partial) => api.setKvm(partial);
-    // kvm.layout says where the PC is seen from the Mac; the Mac is on the opposite side of the PC.
-    const MAC_SIDE = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
-    const CELL = { top: 1, left: 3, right: 5, bottom: 7 };
+    const EDGES = [['top', 'Top edge'], ['right', 'Right edge'], ['bottom', 'Bottom edge'], ['left', 'Left edge']];
 
     const speed = UI.slider({ min: 0.25, max: 3, step: 0.05, format: (v) => v.toFixed(2) + '×' }, (v) => set({ speed: v }));
     const reverse = UI.switch((v) => set({ reverseScroll: v }), { label: 'Reverse scrolling' });
@@ -35,27 +34,32 @@ UI.tab({
       ] },
     );
 
-    const cells = [];
-    const grid = el('div', { class: 'layout-grid' });
-    const SIDE_OF = { 1: 'top', 3: 'left', 5: 'right', 7: 'bottom' };
-    for (let i = 0; i < 9; i++) {
-      const c = el('div', { class: i === 4 ? 'screen pc-screen' : '', text: i === 4 ? '{me}' : '' });
-      if (SIDE_OF[i]) c.onclick = () => api.setLayout(SIDE_OF[i]); // kvm.layout from either side
-      cells.push(c);
-      grid.append(c);
-    }
-    const layoutHint = el('div', { class: 'layout-hint' });
+    // The device behind each edge of this screen. One device sits on one edge; an edge holds one device.
+    const refused = UI.note('info', '');
+    let last = null; // the last state, to put a refused choice back
+    const edgeRows = EDGES.map(([side, label]) => {
+      const sel = UI.select([{ value: '', label: 'None' }], (v) => {
+        api.setEdge(side, v || null).then((ok) => {
+          refused.set(ok === false ? 'That edge already leads to another device. Set it to None first.' : '');
+          if (last) render(last);
+        });
+      });
+      return { side, sel, row: UI.row(label, '', [sel.el]) };
+    });
+    const layout = UI.card('Layout', [...edgeRows.map((r) => r.row), refused], { cls: 'keep-on' });
+
     const status = UI.inputStatus();
 
     body.append(
       pair.el,
       UI.card('Feel', [gestureRow]),
       UI.card('Right now', [status], { cls: 'keep-on' }),
-      el('div', { class: 'card-title', text: 'Where the other computer is' }),
-      el('div', { class: 'card layout' }, [grid, layoutHint]),
+      layout,
     );
 
-    return (s) => {
+    // Each edge's choices: None, then every paired device; a connected one says so.
+    function render(s) {
+      last = s;
       const k = s.kvm;
       pair.update(s);
       status.update(s);
@@ -63,18 +67,16 @@ UI.tab({
       reverse.set(k.reverseScroll);
       gestures.set(k.gestures !== false);
       resistance.set(k.resistancePx);
-      const p = UI.peer(s);
-      const side = k.pcSide ? MAC_SIDE[k.pcSide] : null;
-      cells.forEach((c, i) => {
-        if (i === 4) return;
-        const here = side && CELL[side] === i;
-        c.className = Object.values(CELL).includes(i) ? 'cell' + (here ? ' mac-here' : '') : '';
-        c.textContent = here ? p.them : '';
-        c.title = here ? '' : 'Put ' + p.them + ' here';
-      });
-      const who = p.os === 'mac' ? 'Your Mac' : p.them;
-      layoutHint.textContent = (side ? who + ' is ' + { left: 'to the left of', right: 'to the right of', top: 'above', bottom: 'below' }[side] + ' {me}. ' : '')
-        + 'Click a side to move it.';
-    };
+      const devices = (s.peers || []).filter((d) => d && d.id);
+      const options = [{ value: '', label: 'None' }].concat(devices.map((d) => ({ value: d.id, label: d.name + (d.connected ? '' : ' (not connected)') })));
+      for (const r of edgeRows) {
+        const id = (k.edges && k.edges[r.side]) || '';
+        const d = devices.find((x) => x.id === id);
+        r.sel.options(options);
+        r.sel.set(id);
+        r.row.setHint(!id ? 'Nothing crosses this edge' : d && d.connected ? 'Connected' : 'Not connected');
+      }
+    }
+    return render;
   },
 });
