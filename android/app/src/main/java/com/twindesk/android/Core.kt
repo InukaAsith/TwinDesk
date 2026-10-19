@@ -110,6 +110,16 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     fun hosts(): List<Host> = store.hosts()
 
+    // The pool's view of the connected computers (Clip and Notifs): each gets the items where accept says so.
+    fun poolPeers(accept: (String) -> Boolean): List<PoolPeer> = links.connectedLinks().map { l ->
+        val id = l.hostId
+        PoolPeer(id, l.mesh, true) { m -> accept(id) && l.send(m.toJson()) }
+    }
+
+    // The name of the computer an item started on (its origin), else the one it came from.
+    fun nameOf(origin: String?, from: Host): String =
+        origin?.let { o -> store.hosts().find { it.id == o }?.name } ?: from.name
+
     // What the computers list says about a paired computer.
     fun stateOf(h: Host): String {
         val l = links.existing(h.id)
