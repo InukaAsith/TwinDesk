@@ -206,6 +206,50 @@ function peerIds(state) {
   return (state.peers || []).filter((p) => p.connected).map((p) => p.id).sort();
 }
 
+// Waits until a state holds, and says whether it did (the check reports the result, not the wait).
+const holds = (node, pred, what, ms = 15000) => waitState(node, pred, what, ms).then(() => true, () => false);
+
+// The cursor edges: top = B, bottom = C on A. An edge event drives the device behind it; going home
+// (captureEnded, as the helper reports the hotkey) brings every instance back. The helper of each
+// instance is real: the edge events are simulated, the pointer is not. Note: driven B places the
+// pointer at its edge on this desktop (its helper), and the edges are cleared again at the end.
+async function edgesScenario(A, B, C) {
+  const ev = (node, expr) => evalIn(node, expr);
+  const set = async (side, id) => ev(A, `window.macshare.setEdge('${side}', ${id ? `'${id}'` : 'null'})`);
+  const helperEvent = (node, name, msg) => ev(node, `window.macshare.devHelperEvent('${name}', ${JSON.stringify(msg)})`);
+
+  check('A draws the Layout card in the Cursor tab', await ev(A, `UI.go('cursor')`).then(() =>
+    waitFor(async () => (await ev(A, `document.body.textContent`)).includes('Layout'), 'the Layout card', 15000)).then(() => true, () => false));
+  check('A sets its top edge to B (setEdge)', (await set('top', B.id)) === true);
+  check('A sets its bottom edge to C (setEdge)', (await set('bottom', C.id)) === true);
+  check('A shows top = B and bottom = C', await holds(A, (s) => s.kvm.edges.top === B.id && s.kvm.edges.bottom === C.id, 'A edges'));
+  check('B and C are told their side of A (kvm.layout)', await holds(B, (s) => s.kvm.edges.bottom === A.id, 'B edges')
+    && await holds(C, (s) => s.kvm.edges.top === A.id, 'C edges'));
+
+  // Top: A drives B, B is driven.
+  await helperEvent(A, 'edge', { side: 'top', offset: 0.5 });
+  check('edge top: A is driving, with B selected', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === B.id, 'A driving B'));
+  check('edge top: B shows being driven', await holds(B, (s) => s.input === 'driven', 'B driven'));
+  check('edge top: C is not touched', (await stateOf(C)).input === 'home');
+  await helperEvent(A, 'captureEnded', { reason: 'hotkey' });
+  check('after going home A is home and B too', await holds(A, (s) => s.input === 'home', 'A home')
+    && await holds(B, (s) => s.input === 'home', 'B home'));
+
+  // Bottom: A drives C.
+  await helperEvent(A, 'edge', { side: 'bottom', offset: 0.5 });
+  check('edge bottom: A is driving, with C selected', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === C.id, 'A driving C'));
+  check('edge bottom: C shows being driven', await holds(C, (s) => s.input === 'driven', 'C driven'));
+  check('edge bottom: B is not touched', (await stateOf(B)).input === 'home');
+  await helperEvent(A, 'captureEnded', { reason: 'hotkey' });
+  check('after going home from C, A is home and C too', await holds(A, (s) => s.input === 'home', 'A home again')
+    && await holds(C, (s) => s.input === 'home', 'C home'));
+
+  // Cleared: no edge leads anywhere, the sides are not watched.
+  await set('top', null);
+  await set('bottom', null);
+  check('edges cleared again', await holds(A, (s) => !s.kvm.edges.top && !s.kvm.edges.bottom, 'A no edges'));
+}
+
 async function main() {
   const byName = Object.fromEntries(NODES.map((n) => [n.name, n]));
   try {
@@ -291,6 +335,10 @@ async function main() {
     }
     const sentA = await waitState(A, (st) => hits(st, 'out') >= 1, 'A remembers its copy', 15000).catch(() => null);
     check('A remembers its own copy as sent, once', !!sentA && hits(sentA, 'out') === 1);
+
+    // Cursor edges (docs/mesh.md): A's top edge leads to B and its bottom edge to C. The edges are set
+    // through the real IPC; the helper's edge events come through devHelperEvent (the same listener).
+    await edgesScenario(A, B, C);
 
     // The state keeps updating after every step: a fresh read from the main process works.
     for (const n of NODES) {

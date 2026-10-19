@@ -75,6 +75,11 @@ function setupIpc(ctx) {
     const { linked, edges, ...rest } = partial && typeof partial === 'object' ? partial : {}; // edges: setEdge only
     change('kvm', rest, () => kvm.applyConfig());
   });
+  // Dev only (windows/test/dev/e2e-app.js, MACSHARE_DEV_PORT set): a helper event, as if the helper
+  // had sent it (kvm.js gets it through the same listener). Without that variable there is no handler.
+  if (process.env.MACSHARE_DEV_PORT) {
+    handle('devHelperEvent', (name, msg) => kvm.helper.emit('event', String(name).slice(0, 40), msg && typeof msg === 'object' ? msg : {}));
+  }
   // The edge `side` of this PC leads to device `id` (null: none). false when that side already
   // leads to another device (the UI shows why). A device on another side is moved here.
   handle('setEdge', (side, id) => {
