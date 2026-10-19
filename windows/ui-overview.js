@@ -101,10 +101,15 @@ UI.tab({
     const adbPairRow = UI.row('Pairing code', 'Or type it on the phone, in TwinDesk’s notification', [adbCode, adbWhere, adbPair]);
     const adbCard = UI.card('Phone screen, mouse and keyboard', [adbRow, adbPairRow]);
 
+    // ---- devices (docs/mesh.md): every paired device; the selected one is what the features below use ----
+    const devicesList = el('div');
+    let devicesKey = '';
+
     const pairedList = el('div');
     body.append(
       UI.card('', [addrRow, ipRow]),
       UI.card('Found nearby', [discRow, foundList], { actions: [refresh] }),
+      UI.card('Devices', [devicesList]),
       hero,
       adbCard,
       pair.el,
@@ -168,16 +173,19 @@ UI.tab({
       // Paired both ways: the computer we connect to (s.paired) and the ones that connect to us (s.guests).
       const known = new Set([...(s.paired ? [s.paired.macId] : []), ...s.guests.map((g) => g.id)]);
       const live = s.peer && connected ? s.peer.id : '';
-      const fk = JSON.stringify([s.found, [...known], live, busy, blocked]);
+      const peers = s.peers || [];
+      const up = new Set(peers.filter((d) => d.connected).map((d) => d.id)); // every connected device
+      const fk = JSON.stringify([s.found, [...known], [...up], busy, blocked]);
       if (fk !== foundKey) {
         foundKey = fk;
         let focus = null;
         const rows = s.found.map((dev) => {
           const isKnown = known.has(dev.id);
-          const online = dev.id === live;
+          const online = up.has(dev.id);
           // A Mac hosts; with a PC or Linux the one who clicks is the guest. A phone is asked to pair.
+          // Another computer can be paired while others are connected.
           const btn = online || isKnown ? null : UI.button(dev.os === 'mac' || dev.os === 'android' ? 'Pair' : 'Connect', () => api.pair(dev.id), 'small' + (dev.invited ? ' primary' : ''));
-          if (btn) btn.disabled = busy || connected;
+          if (btn) btn.disabled = busy;
           if (btn && dev.invited && !busy) focus = btn;
           const r = UI.row(dev.name, dev.address + (dev.invited ? ' · wants to connect' : ''), [
             online ? el('span', { class: 'pill good', text: 'Connected' }) : isKnown ? el('span', { class: 'pill muted', text: 'Paired' }) : null, btn]);
@@ -190,9 +198,31 @@ UI.tab({
         if (focus) focus.focus();
       }
 
+      // devices: the connected ones first, the selected one at the top
+      const dk = JSON.stringify([peers, s.mesh && s.mesh.selectedId]);
+      if (dk !== devicesKey) {
+        devicesKey = dk;
+        const sorted = peers.slice().sort((a, b) => (b.selected - a.selected) || (b.connected - a.connected));
+        const drows = sorted.map((d) => {
+          const hint = d.connected
+            ? (d.rtt != null ? d.rtt + ' ms' : 'Connected') + (Array.isArray(d.direct) && d.direct.length ? ' · linked to ' + d.direct.length : '')
+            : d.state === 'waiting' ? 'Waiting for it to connect'
+              : d.state === 'identity_changed' ? 'Looks different now. Forget it and pair again.'
+                : d.state === 'connecting' || d.state === 'reconnecting' ? 'Connecting…' : 'Not connected';
+          const pill = d.selected ? el('span', { class: 'pill good', text: 'Selected' }) : d.connected ? el('span', { class: 'pill muted', text: 'Connected' }) : null;
+          const use = d.connected && !d.selected ? UI.button('Use', () => api.setActivePeer(d.id), 'small') : null;
+          const forget = UI.button('Forget', () => api.forgetPeer(d.id), 'small');
+          const r = UI.row(d.name || 'Device', hint, [pill, use, forget]);
+          r.querySelector('.text').prepend(UI.osIcon(d.os));
+          r.classList.add('with-ico');
+          return r;
+        });
+        devicesList.replaceChildren(...(drows.length ? drows : [UI.row('No devices yet', 'Pair with a computer in Found nearby.')]));
+      }
+
       // paired
       const wk = s.wake || { peers: {} };
-      const pk = JSON.stringify([s.paired, s.guests, live, Object.keys(wk.peers), wk.waking]);
+      const pk = JSON.stringify([s.paired, s.guests, [...up], Object.keys(wk.peers), wk.waking]);
       if (pk === pairedKey) return;
       pairedKey = pk;
       const all = [
@@ -200,7 +230,7 @@ UI.tab({
         ...s.guests.map((g) => ({ id: g.id, name: g.name, os: g.os, hint: g.lastSeen ? 'Last seen ' + UI.ago(g.lastSeen) : '', forget: () => api.forgetGuest(g.id) })),
       ];
       pairedList.replaceChildren(...(all.length ? all.map((x) => {
-        const online = x.id === live;
+        const online = up.has(x.id);
         const waking = !online && wk.waking === x.id;
         // An offline computer that told us how to wake it gets Wake.
         const wakeBtn = !online && wk.peers[x.id] ? UI.button(waking ? 'Waking…' : 'Wake', () => api.wakePeer(x.id), 'small') : null;
