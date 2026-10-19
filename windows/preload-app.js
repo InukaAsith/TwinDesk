@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('macshare', {
   forget: call('forget'),
   respondPair: call('respondPair'),
   forgetGuest: call('forgetGuest'),
+  setActivePeer: call('setActivePeer'), // the device the one-to-one features talk to (hub.select)
+  forgetPeer: call('forgetPeer'), // a device by id: its link and its pairing (hub.forgetPeer)
   wakePeer: call('wakePeer'),
   setWake: call('setWake'),
   checkWake: call('checkWake'),

@@ -211,9 +211,9 @@ class Server extends EventEmitter {
     this.emit('phoneFree');
   }
 
-  // Disconnect the phone on purpose (the primary client when it is a phone).
-  releasePhone() {
-    const c = this.current;
+  // Disconnect a phone on purpose (ctx: its client; default the primary client, when it is a phone).
+  releasePhone(ctx = this.current) {
+    const c = ctx;
     if (c && c.os === P.OS.ANDROID) {
       c.released = true;
       this.fail(c, P.E.RELEASED, 'The PC disconnected the phone');

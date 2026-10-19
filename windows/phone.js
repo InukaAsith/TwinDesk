@@ -115,7 +115,7 @@ class Phone extends EventEmitter {
 
   // Let the phone go: it won't resume, and the computer reconnects by itself.
   disconnect() {
-    this.raw.releasePhone();
+    this.raw.releasePhone(this.server.current);
   }
 
   _fail(message) {
@@ -152,7 +152,6 @@ class Phone extends EventEmitter {
       connected: isPhone(c) ? { id: c.deviceId, name: c.name, rttMs: c.rttMs, usb: !!c.ice } : null,
       connecting: this.connecting ? { id: this.connecting.id, name: this.connecting.name } : null,
       message: this.message,
-      held: !isPhone(c) && this.raw.phoneHolds(), // the phone dropped and may come back
       info: this.info && { ...this.info, wallpaper: !!this.info.wallpaper },
       adb: this.adb,
       apps: this.apps.length,

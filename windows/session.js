@@ -243,9 +243,10 @@ class Session extends EventEmitter {
 
 // One Session per device id, bound to a LinkManager (links.js) and a Server (server.js).
 class Sessions extends EventEmitter {
+  // links: LinkManager (its guest links feed the sessions); the server may come later (bindServer).
   constructor({ links = null, server = null } = {}) {
     super();
-    this.server = server;
+    this.server = null;
     this.sessions = new Map(); // deviceId -> Session
     if (links) {
       links.on('add', (link) => this._linkAdded(link));
@@ -255,17 +256,25 @@ class Sessions extends EventEmitter {
       });
       for (const link of links.list()) this._linkAdded(link);
     }
-    if (server) {
-      server.on('client', (ctx) => this.ensure(ctx.deviceId).setCtx(ctx));
-      server.on('closed', (ctx) => {
-        const s = this.sessions.get(ctx.deviceId);
-        if (s && s.ctx === ctx) s.setCtx(null);
-      });
-      server.on('message', (msg, ctx) => {
-        const s = this.sessions.get(ctx.deviceId);
-        if (s) s.fromHost(msg, ctx);
-      });
-    }
+    if (server) this.bindServer(server);
+  }
+
+  // Our server (server.js): its clients become the host sides of their devices' sessions.
+  bindServer(server) {
+    if (this.server) return;
+    this.server = server;
+    for (const s of this.sessions.values()) s.server = server;
+    server.on('client', (ctx) => this.ensure(ctx.deviceId).setCtx(ctx));
+    server.on('closed', (ctx) => {
+      const s = this.sessions.get(ctx.deviceId);
+      if (s && s.ctx === ctx) s.setCtx(null);
+    });
+    server.on('message', (msg, ctx) => {
+      const s = this.sessions.get(ctx.deviceId);
+      if (s) s.fromHost(msg, ctx);
+    });
+    // Clients that authenticated before the server was bound (none today, but cheap to be right).
+    for (const c of server.clients.values()) this.ensure(c.deviceId).setCtx(c);
   }
 
   get(id) {

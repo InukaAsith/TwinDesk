@@ -53,14 +53,14 @@ class Wired extends EventEmitter {
 
   // The USB serial of a phone connected through the cable, or null.
   serialOf(deviceId) {
-    const c = this.raw.current;
+    const c = this.peer.current; // the phone's session (phone-link.js)
     if (!c || c.deviceId !== deviceId || !c.ice) return null;
     const s = this.byDevice.get(deviceId);
     return s && this.plugged.has(s) ? s : null;
   }
 
   get wired() {
-    const c = this.raw.current;
+    const c = this.peer.current;
     return !!(c && c.os === P.OS.ANDROID && c.ice);
   }
 
@@ -78,7 +78,7 @@ class Wired extends EventEmitter {
     try {
       // adb only for a phone that's here: linked now, or a paired one on the cable (asked of the
       // system, not adb). Until then no adb server runs.
-      const linked = !!(this.raw.current && this.raw.current.os === P.OS.ANDROID);
+      const linked = !!(this.peer.current && this.peer.current.os === P.OS.ANDROID);
       const here = linked || (this.hasPhone() && await usbadb.present());
       const usb = !here ? [] : (await this.adb.devices()).filter((d) => d.state === 'device' && isUsb(d.serial)).map((d) => d.serial);
       for (const s of [...this.plugged.keys()]) {
