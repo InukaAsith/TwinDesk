@@ -43,5 +43,10 @@ EOF
   rm -rf "$T"
 fi
 security unlock-keychain -p $PW "$KC"
+# A CI runner's codesign only finds the key when the keychain is in the search list (not done on
+# a developer's Mac: that would change their keychain list).
+if [ -n "$CI" ]; then
+  security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+fi
 security find-identity -p codesigning "$KC" | grep -q "\"$NAME\"" || { echo "no \"$NAME\" in $KC" >&2; exit 1; }
 echo "$KC"

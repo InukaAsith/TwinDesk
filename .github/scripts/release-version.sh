@@ -58,6 +58,8 @@ case "$EVENT_NAME" in
     tag="v$version-pr$PR_NUMBER"
     # A pull request from a fork can't write releases (read-only token): build only.
     [ "$PR_FROM_FORK" = "true" ] || publish=true
+    # [no-release] in the head commit message: build (the compile check) but publish nothing.
+    case "$(git log -1 --format=%B "$PR_HEAD_SHA" 2>/dev/null || true)" in *"[no-release]"*) publish=false ;; esac
     ;;
   *)
     version="$major.$minor.$((patch + 1))"

@@ -105,9 +105,19 @@ PLIST
 # updates; ad-hoc (no certificate made) works, but each update asks for them again.
 if KC=$(scripts/signing-identity.sh); then SIGN="--keychain $KC --sign"; ID="TwinDesk Self-Signed"
 else echo "note: signing ad-hoc: permissions won't carry over to the next update"; SIGN="--sign"; ID="-"; fi
-for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do codesign --force $SIGN "$ID" "$b"; done
-codesign --force --deep $SIGN "$ID" dist/TwinDesk.app
-codesign --force $SIGN "$ID" --entitlements dist/share.entitlements "$APPEX" # --deep dropped its sandbox
-codesign --force $SIGN "$ID" dist/TwinDesk.app && rm -f dist/share.entitlements
+sign_all() {
+  for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do codesign --force $SIGN "$ID" "$b" || return 1; done
+  codesign --force --deep $SIGN "$ID" dist/TwinDesk.app || return 1
+  codesign --force $SIGN "$ID" --entitlements dist/share.entitlements "$APPEX" || return 1 # --deep dropped its sandbox
+  codesign --force $SIGN "$ID" dist/TwinDesk.app || return 1
+}
+# A certificate that can't sign (a runner's keychain, say) must not stop the build: sign ad-hoc.
+if ! sign_all; then
+  [ "$ID" != "-" ] || exit 1
+  echo "note: signing with $ID failed, signing ad-hoc: permissions won't carry over to the next update"
+  SIGN="--sign"; ID="-"
+  sign_all
+fi
+rm -f dist/share.entitlements
 codesign -dr - dist/TwinDesk.app 2>&1 | grep designated
 echo "built mac/dist/TwinDesk.app"
