@@ -80,6 +80,9 @@ object Proto {
         const val ADB_BRIDGE = "adb.bridge"
         const val WOL_INFO = "wol.info"
         const val MESH_ROSTER = "mesh.roster" // the computers this phone is connected to (docs/mesh.md)
+        const val KVM_TAKE = "kvm.take"
+        const val KVM_RELEASE = "kvm.release"
+        const val KVM_HOME = "kvm.home"
     }
 
     object E {

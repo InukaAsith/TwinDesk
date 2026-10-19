@@ -15,6 +15,23 @@ class Kvm(core: Core) : Feature(core) {
 
     private val opposite = mapOf("left" to "right", "right" to "left", "top" to "bottom", "bottom" to "top")
 
+    // The computer driving this phone's mouse and keyboard right now (its kvm.take), until it lets go.
+    @Volatile var driverId: String? = null; private set
+
+    // kvm.take / kvm.release / kvm.home from any connected computer (Core routes them here, whichever
+    // computer is attached). The one that takes the phone becomes the attached computer, so the
+    // pointer overlay and the input follow it.
+    fun onDriver(t: String, host: Host) {
+        if (t == Proto.T.KVM_TAKE) {
+            driverId = host.id
+            core.select(host.id)
+        } else if (driverId == host.id) {
+            driverId = null
+            core.driverChanged()
+        }
+        core.changed()
+    }
+
     // kvm.layout {pcSide}: where the other side is, from the sender. Ours is the opposite of theirs.
     fun setMacSide(side: String) {
         if (side !in opposite) return
@@ -34,7 +51,7 @@ class Kvm(core: Core) : Feature(core) {
             "kvm.layout" -> opposite[m.optString("pcSide")]?.let { core.store.setPrefsString("kvm.macSide", it) }
             "kvm.link" -> linked = m.optBoolean("on", true)
             "phone.mac" -> hotkey = m.optString("hotkey").ifEmpty { hotkey }
-            "kvm.take", "kvm.release", "k.mm", "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" -> Unit // the Mac injects through adb
+            "k.mm", "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" -> Unit // the computer injects through adb
             else -> return false
         }
         core.changed()

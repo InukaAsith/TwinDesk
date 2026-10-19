@@ -235,9 +235,13 @@ class Core private constructor(val ctx: Context) : Link.Events {
         }
     }
 
-    // Quick keep-alive for the link of the attached computer (Mesh.kt keepalive); the others are idle.
+    // The driver of this phone changed (Kvm): the attached computer and the busy flags follow.
+    fun driverChanged() = attach()
+
+    // Quick keep-alive for the attached computer and for the one driving this phone (Mesh.kt keepalive).
     private fun refreshBusy(attached: String?) {
-        for (l in links.all()) l.busy = l.hostId.isNotEmpty() && l.hostId == attached
+        val driver = kvm.driverId
+        for (l in links.all()) l.busy = l.hostId.isNotEmpty() && (l.hostId == attached || l.hostId == driver)
     }
 
     // ---- Link.Events ----
@@ -270,6 +274,11 @@ class Core private constructor(val ctx: Context) : Link.Events {
         val t = m.optString("t")
         if (t == Proto.T.MESH_ROSTER) {
             rosters[host.id] = m.optJSONArray("peers")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+            return
+        }
+        // A computer taking or letting go of the phone's mouse and keyboard, from any computer.
+        if (t == Proto.T.KVM_TAKE || t == Proto.T.KVM_RELEASE || t == Proto.T.KVM_HOME) {
+            kvm.onDriver(t, host)
             return
         }
         // The one-to-one features hear the attached computer only.
