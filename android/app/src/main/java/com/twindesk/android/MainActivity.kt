@@ -213,11 +213,11 @@ private fun Identity(core: Core, v: Int, logo: Int) {
             Text("TwinDesk", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = pal.text)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val h = core.host
-                Dot(when { h != null -> pal.good; core.link.pair != null || core.link.state == "connecting" -> pal.warn; else -> pal.faint }, 7)
+                Dot(when { h != null -> pal.good; core.pairLink.pair != null || core.link.state == "connecting" -> pal.warn; else -> pal.faint }, 7)
                 Text(
                     when {
                         h != null -> h.name + (if (core.link.wired) " · USB" else "") + (core.link.rttMs?.let { " · $it ms" } ?: "")
-                        core.link.pair != null -> "Pairing…"
+                        core.pairLink.pair != null -> "Pairing…"
                         core.link.state == "connecting" -> "Connecting…"
                         else -> "Not connected"
                     },
@@ -307,6 +307,7 @@ private fun NotConnected(core: Core, v: Int) = Note("Not connected. Connect to $
 private fun OverviewPage(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     val link = core.link
+    val pairing = core.pairLink
     val host = core.host
     val me = core.store.deviceName
     val ip = remember(v) { core.adb.address() } // this phone's Wi-Fi address, for pairing by address on the computer
@@ -320,7 +321,7 @@ private fun OverviewPage(core: Core, v: Int) {
             Secondary("Not now") { core.dismissInvite() }
         }
     }
-    link.pair?.let { p ->
+    pairing.pair?.let { p ->
         MacCard("Pairing with ${p.name}") {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (p.phase) {
@@ -328,13 +329,13 @@ private fun OverviewPage(core: Core, v: Int) {
                         Text("Check that ${p.name} shows the same code.", color = pal.text)
                         Text("${p.code.take(3)} ${p.code.drop(3)}", fontSize = 40.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp, color = pal.text)
                         if (p.phase == "code") Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Primary("Codes match") { link.confirmCode() }
-                            Secondary("Cancel") { link.cancelPairing() }
+                            Primary("Codes match") { pairing.confirmCode() }
+                            Secondary("Cancel") { pairing.cancelPairing() }
                         } else Text("Waiting for Allow on ${p.name}…", color = pal.muted)
                     }
                     "failed" -> {
                         Text(p.error, color = pal.bad)
-                        Secondary("OK") { link.cancelPairing() }
+                        Secondary("OK") { pairing.cancelPairing() }
                     }
                     else -> Text("Connecting…", color = pal.muted)
                 }
@@ -351,7 +352,7 @@ private fun OverviewPage(core: Core, v: Int) {
                     if (host != null) Brush.horizontalGradient(listOf(pal.good, pal.accent)) else Brush.horizontalGradient(listOf(pal.trackOff, pal.trackOff)),
                 ))
                 Text(
-                    when { host != null -> listOfNotNull(if (link.wired) "USB" else null, link.rttMs?.let { "$it ms" }).joinToString(" · ").ifEmpty { "Connected" }; link.state == "connecting" -> "Connecting…"; link.pair != null -> "Pairing…"; else -> "Not connected" },
+                    when { host != null -> listOfNotNull(if (link.wired) "USB" else null, link.rttMs?.let { "$it ms" }).joinToString(" · ").ifEmpty { "Connected" }; link.state == "connecting" -> "Connecting…"; pairing.pair != null -> "Pairing…"; else -> "Not connected" },
                     color = pal.muted, fontSize = 11.sp, maxLines = 2, lineHeight = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
                 )
             }
@@ -414,13 +415,13 @@ private fun OverviewPage(core: Core, v: Int) {
         else { m2p(Modifier); p2m(Modifier) }
     }
 
-    if (host == null) MacCard("Nearby") {
+    MacCard("Nearby") {
         val hosts = core.hosts()
         var first = true
         for (h in hosts) {
             val near = core.discovery.found.containsKey(h.id)
-            MacRow(h.name, if (link.state == "connecting" && link.host?.id == h.id) "Connecting…" else if (near) "Nearby · paired" else "Paired · not nearby", first) {
-                Primary("Connect") { core.connect(h) }
+            MacRow(h.name, if (core.links.existing(h.id)?.connected == true) "Connected" else if (core.links.existing(h.id)?.state == "connecting") "Connecting…" else if (near) "Nearby · paired" else "Paired · not nearby", first) {
+                if (core.links.existing(h.id)?.connected != true) Primary("Connect") { core.connect(h) }
             }
             first = false
         }
@@ -784,8 +785,8 @@ private fun GeneralPage(core: Core, v: Int) {
     }
     if (core.hosts().isNotEmpty()) MacCard("Paired") {
         core.hosts().forEachIndexed { i, h ->
-            MacRow(h.name, if (core.host?.id == h.id) (if (core.link.wired) "Connected over USB" else "Connected") else "Last address ${h.address}", first = i == 0) {
-                if (core.host?.id == h.id) Pill("Online", "good")
+            MacRow(h.name, core.stateOf(h), first = i == 0) {
+                if (core.links.existing(h.id)?.connected == true) Pill("Online", "good")
                 TextButton(onClick = { core.forget(h.id) }) { Text("Forget", color = pal.bad) }
             }
         }

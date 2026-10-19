@@ -79,6 +79,7 @@ object Proto {
         const val ADB_PAIR = "adb.pair"
         const val ADB_BRIDGE = "adb.bridge"
         const val WOL_INFO = "wol.info"
+        const val MESH_ROSTER = "mesh.roster" // the computers this phone is connected to (docs/mesh.md)
     }
 
     object E {

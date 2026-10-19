@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The phone's side of the session: a WSS client with the computer's certificate pinned, pairing as
-// the initiator (numeric comparison), hello, liveness. Like windows/link.js and mac/link.js, except
-// that a phone connects only when asked (or to resume a session that dropped by accident).
+// One session with one computer: a WSS client with that computer's certificate pinned, hello, liveness.
+// The phone has one Link per paired computer (LinkManager); pairing uses a Link of its own until
+// the pairing succeeds, then the new computer gets a session Link (Core.onPaired). Like windows/link.js
+// and mac/link.js. A Link dials; the phone never listens.
 package com.twindesk.android
 
 import android.util.Log
@@ -34,9 +35,11 @@ class Link(
 ) {
     interface Events {
         fun onChange()
-        fun onWelcome(host: Host)
-        fun onMessage(m: JSONObject)
-        fun onClosed(host: Host, code: String?)
+        fun onWelcome(link: Link, host: Host)
+        fun onMessage(link: Link, m: JSONObject)
+        fun onClosed(link: Link, host: Host, code: String?)
+        // A pairing succeeded: the pairing link is done and the computer is paired (see Core.onPaired).
+        fun onPaired(link: Link, host: Host)
     }
 
     // idle | connecting | connected | failed
@@ -47,14 +50,21 @@ class Link(
     @Volatile var rttMs: Long? = null; private set
     // On a USB cable: the computer's port reached through adb reverse on this device's 127.0.0.1.
     @Volatile var wired = false; private set
+    // The computer answered hello with mesh: 1, so it takes the pool and the roster (docs/mesh.md).
+    @Volatile var mesh = false; private set
+    // Selected or driving: keep-alive is the quick kind (Mesh.kt keepalive). Set by Core.
+    @Volatile var busy = false
     val connected get() = state == "connected"
+    // The id of the computer this link is for ("" before any host).
+    val hostId: String get() = host?.id ?: ""
 
     private val exec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "td-link").apply { isDaemon = true } }
     private var ws: WebSocket? = null
     private var mode = "" // session | pair
     private var nw = ""
     private var seenFp = ""
-    private var lastRx = 0L
+    @Volatile private var lastRx = 0L
+    @Volatile private var lastTx = 0L
     private var lastCode: String? = null
     private var pinger: ScheduledFuture<*>? = null
     private var helloTimer: ScheduledFuture<*>? = null
@@ -106,6 +116,7 @@ class Link(
     fun send(m: JSONObject): Boolean {
         val w = ws ?: return false
         if (state != "connected") return false
+        lastTx = System.currentTimeMillis()
         return w.send(m.toString())
     }
 
@@ -170,7 +181,7 @@ class Link(
 
     private fun hello() {
         val h = host ?: return
-        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token))
+        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "mesh" to 1))
         helloTimer?.cancel(false)
         helloTimer = exec.schedule({ if (state != "connected") { message = "No answer"; ws?.cancel() } }, Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
@@ -188,7 +199,7 @@ class Link(
             Proto.T.PING -> { if (state == "connected") raw(msg(Proto.T.PONG, "ts" to m.opt("ts"))); return }
             Proto.T.PONG -> { if (m.has("ts")) rttMs = maxOf(0, System.currentTimeMillis() - m.optLong("ts")); return }
         }
-        if (state == "connected") events.onMessage(m)
+        if (state == "connected") events.onMessage(this, m)
     }
 
     private fun onNonce(m: JSONObject) {
@@ -208,13 +219,14 @@ class Link(
         val token = m.optString("token")
         val id = m.optString("macId")
         if (token.isEmpty() || id.isEmpty()) return pairFailed("The computer sent a bad pairing message.")
+        if (store.hosts().none { it.id == id } && store.hosts().size >= Proto.MAX_DEVICES) {
+            return pairFailed("This phone already has ${Proto.MAX_DEVICES} computers paired.")
+        }
         val h = Host(id, m.optString("macName").take(64).ifEmpty { p.name }, m.optString("os", "mac"), p.address, p.port, seenFp, token, System.currentTimeMillis())
         store.putHost(h)
         pair = null
-        mode = "session"
-        host = h
-        setState("connecting", "")
-        hello()
+        // The session with this computer starts on a link of its own (Core.onPaired).
+        events.onPaired(this, h)
     }
 
     private fun onWelcome(m: JSONObject) {
@@ -225,14 +237,25 @@ class Link(
         h.lastSeen = System.currentTimeMillis()
         store.putHost(h)
         rttMs = null
-        pinger = exec.scheduleWithFixedDelay({
-            if (System.currentTimeMillis() - lastRx > Proto.TIMEOUT_MS) {
-                message = "Stopped answering"
-                ws?.cancel()
-            } else raw(msg(Proto.T.PING, "ts" to System.currentTimeMillis()))
-        }, Proto.PING_MS, Proto.PING_MS, TimeUnit.MILLISECONDS)
+        mesh = m.optInt("mesh", 0) == 1
+        lastTx = System.currentTimeMillis()
+        pinger?.cancel(false)
+        // Liveness, checked every quarter second: a ping only when nothing went out for the interval
+        // (Mesh.kt keepalive: busy links often, the others rarely).
+        pinger = exec.scheduleWithFixedDelay({ keepAliveTick() }, 250, 250, TimeUnit.MILLISECONDS)
         setState("connected", "")
-        events.onWelcome(h)
+        events.onWelcome(this, h)
+    }
+
+    private fun keepAliveTick() {
+        val now = System.currentTimeMillis()
+        val k = keepalive(busy)
+        if (now - lastRx > k.timeoutMs) {
+            message = "Stopped answering"
+            ws?.cancel()
+        } else if (now - lastTx >= k.intervalMs) {
+            raw(msg(Proto.T.PING, "ts" to now))
+        }
     }
 
     private val pairErrors = mapOf(
@@ -281,7 +304,7 @@ class Link(
             if (message.isEmpty() && failure != null) message = failure
             setState(if (was == "connected" || was == "connecting") "idle" else was, message)
         }
-        host?.let { events.onClosed(it, lastCode) }
+        host?.let { events.onClosed(this, it, lastCode) }
     }
 
     private fun closeSocket() {
@@ -292,10 +315,11 @@ class Link(
         val wasConnected = state == "connected"
         if (wasConnected) state = "idle"
         w?.close(1000, null)
-        if (wasConnected) host?.let { events.onClosed(it, "local") }
+        if (wasConnected) host?.let { events.onClosed(this, it, "local") }
     }
 
     private fun raw(m: JSONObject) {
+        lastTx = System.currentTimeMillis()
         ws?.send(m.toString())
     }
 
