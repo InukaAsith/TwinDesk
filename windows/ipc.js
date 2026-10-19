@@ -6,10 +6,10 @@ const P = require('../shared/protocol.js');
 const { LINKS } = require('../shared/about.js');
 const { apply } = require('./settings');
 
-// ctx: link, discovery, screen, clip, kvm, terminal, fileDrop, smb, apps, phone, phoneViews, connectPhoneDev(d), settings, save(), push(), buildState(),
+// ctx: hub, link (the selected device's facade), discovery, screen, clip, kvm, terminal, fileDrop, smb, apps, phone, phoneViews, connectPhoneDev(d), settings, save(), push(), buildState(),
 //      checkFirewall(), fixFirewall(), setStartup(on)
 function setupIpc(ctx) {
-  const { link, discovery, screen, clip, kvm, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, settings } = ctx;
+  const { hub, link, discovery, screen, clip, kvm, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, settings } = ctx;
 
   const handle = (name, fn) => ipcMain.handle(name, (_e, ...args) => fn(...args));
   const change = (section, partial, after) => {
@@ -53,6 +53,9 @@ function setupIpc(ctx) {
   handle('forget', () => link.forget());
   handle('respondPair', (allow) => link.respondPair(allow === true)); // host: Allow / Deny
   handle('forgetGuest', (id) => typeof id === 'string' && link.forgetGuest(id));
+  // Devices (docs/mesh.md): the selected one takes the one-to-one features; Forget drops one device.
+  handle('setActivePeer', (id) => typeof id === 'string' && hub.select(id.slice(0, 64)));
+  handle('forgetPeer', (id) => typeof id === 'string' && hub.forgetPeer(id.slice(0, 64)));
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
   handle('checkWake', () => wake.check());

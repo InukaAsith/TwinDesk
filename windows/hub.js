@@ -58,6 +58,12 @@ class Hub extends EventEmitter {
     if (server && pairing) this.attachHost(server, pairing);
   }
 
+  // No host role: the certificate could not be made (the status says why).
+  hostFailed(message) {
+    this._host = { on: false, error: String(message || '') };
+    this._change();
+  }
+
   // The host role (our server and the pairing responder). Devices that dial us, pending pairing
   // requests and the listen state appear from here on. Calling it again does nothing.
   attachHost(server, pairing) {

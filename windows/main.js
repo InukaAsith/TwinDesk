@@ -10,8 +10,9 @@ const path = require('path');
 const P = require('../shared/protocol.js');
 const store = require('./store');
 const { Discovery, interfaces, isIPv4, ipToInt } = require('./discovery');
-const Link = require('./link');
-const Peer = require('./peer');
+const { LinkManager } = require('./links');
+const { Mesh } = require('../shared/mesh.js');
+const { Hub } = require('./hub');
 const { Server } = require('./server');
 const { Pairing: HostPairing } = require('./hostpair');
 const identity = require('./identity');
@@ -81,7 +82,10 @@ let hud = null;
 let about = null; // shared/about.js, read once for the About page
 let quitting = false;
 let discovery = null;
-let link = null;
+let hub = null; // hub.js: every paired device (pooled features use its bus and mesh)
+let links = null; // links.js: our guest links, one per host
+let mesh = null; // shared/mesh.js: the device registry and roster
+let link = null; // hub.facade: the SELECTED device, for every one-to-one feature
 let settings = null;
 let device = null;
 let screen = null;
@@ -107,7 +111,6 @@ let fileClip = null;
 let sshd = null;
 let kvm = null;
 let wired = null; // wired.js, with the phone
-let hostServer = null; // server.js, once the certificate exists
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
 let phoneViews = null; // its screen and apps in windows here (phoneview.js)
 let lastMode = 'home';
@@ -135,28 +138,20 @@ function start() {
   discovery.on('invite', () => { pushState(); showMain(); }); // a Mac wants to connect: Pair is focused
   discovery.start();
 
-  // link = the peer layer (peer.js): guest of a Mac or another computer, or host of a PC/Linux.
-  // Every feature below talks to it as it talked to link.js.
-  const guest = new Link({
-    device,
-    blocked: () => link.hosting || !!(hostServer && hostServer.phoneHolds()), // a phone keeps it while it may come back
-    store: {
-      load: () => {
-        const p = store.read('pairing.json', null);
-        return p && p.macId && p.token && p.fp && p.address ? p : null;
-      },
-      save: (p) => store.write('pairing.json', p),
-      clear: () => store.remove('pairing.json'),
-    },
-    resolveAddress: (macId) => discovery.get(macId),
-  });
-  link = new Peer(guest);
-  startHost(guest);
-  link.onState(() => {
+  // The mesh (docs/mesh.md): one guest link per paired host (links.js), the device registry (mesh),
+  // and the hub that joins them to the host side (startHost attaches it) and to the features:
+  // pooled ones (clipboard, notifications) use hub.bus, the one-to-one ones use `link`, the facade of
+  // the selected device.
+  links = new LinkManager({ device, resolveAddress: (macId) => discovery.get(macId) });
+  mesh = new Mesh({ selfId: device.id });
+  hub = new Hub({ device, links, mesh });
+  link = hub.facade;
+  hub.on('change', () => {
     discovery.wantProbes = link.snapshot().link.state !== 'connected'; // probe every 10 s only while not connected
     pushState();
   });
-  clip = new Clip(link, () => settings.clipboard, pushState);
+  startHost();
+  clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState });
   screen = new Screen({
     link,
     clip,
@@ -198,7 +193,10 @@ function start() {
   };
   vdd = new Vdd({ helper, onChange: pushState });
   // Notifications both ways, Send files, copy/paste files with shortcuts
-  notifs = new Notifs({ link, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'], peerName, onChange: pushState });
+  notifs = new Notifs({
+    bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
+    peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
+  });
   fileClip = new FileClip({ link, helper, fileDrop, fileRecv, dragRecv, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState });
   // A paste Windows copies itself (dragrecv.js) — its files skip filerecv.js.
   fileRecv.claims = (m) => dragRecv._pasteOf(m);
@@ -249,7 +247,7 @@ function start() {
     },
   });
   updates.start();
-  const ipc = setupIpc({ link, discovery, screen, clip, kvm, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
+  const ipc = setupIpc({ hub, link, discovery, screen, clip, kvm, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, connectPhoneDev,
     checkFirewall, fixFirewall, setStartup, onApp: updateTray });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
@@ -267,24 +265,21 @@ function start() {
   if (process.argv.includes('--test-monitor')) screen.open(true); // dev: ?test=1 pattern
 }
 
-// Host role: our own server, once the certificate exists (made on first start).
-async function startHost(guest) {
+// Host role: our own server, once the certificate exists (made on first start). Until then the hub
+// has its guest links only.
+async function startHost() {
   try {
     const id = await identity.load();
     discovery.self.fp = id.fp; // beacons carry it now
     const server = new Server(id);
     discovery.self.port = server.port;
-    // A phone's hello takes the session: the computer we're a guest of is dropped (yieldTo).
-    const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp }, { busy: () => guest.authed, yieldTo: () => guest.yieldSession() });
+    const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp });
     pairing.on('request', showMain); // a code to compare: bring the window up
-    link.attachHost(server, pairing);
-    hostServer = server;
-    server.on('phoneFree', () => { guest.poke(); pushState(); });
+    hub.attachHost(server, pairing);
     startPhone(server, pairing);
   } catch (e) {
     console.error('[host]', e.message);
-    link.host = { on: false, error: 'No certificate: ' + e.message };
-    pushState();
+    hub.hostFailed('No certificate: ' + e.message);
   }
 }
 
@@ -292,7 +287,7 @@ async function startHost(guest) {
 // touch, mouse, keyboard and clipboard through wireless debugging (phone-bridge.js), and its
 // screen and apps in windows here (phoneview.js).
 function startPhone(server, pairing) {
-  const pl = new PhoneLink(link, server);
+  const pl = new PhoneLink(hub, server);
   phone = new Phone({ server: pl, raw: server, discovery, pairing });
   phone.on('change', pushState);
   // The phone's Keyboard page names this PC's hotkey (double-tap = everything back here).
@@ -379,21 +374,27 @@ function openMacApp(id) {
 // ---- state ----
 
 let pushQueued = false;
+// Queued: one state push per tick. It never throws (an exception here became an Electron error
+// dialog, or a window that stopped updating): a failure is logged and the next push tries again.
 function pushState() {
   if (pushQueued) return;
   pushQueued = true;
   setImmediate(() => {
     pushQueued = false;
-    const s = buildState();
-    if (pcScreen) pcScreen.sendState(); // The viewer learns what we share
-    if (sendTo) sendTo.sync(s.peer && s.peer.name);
-    if (pairSync) pairSync.check(); // Tell the other computer what changed here // the Send to entry follows the peer's name
-    // A pairing code to compare: bring the window to the front.
-    const phase = s.pairing ? s.pairing.phase : null;
-    if (phase === 'code' && lastPairPhase !== 'code') showMain();
-    lastPairPhase = phase;
-    if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('state', s);
-    updateTray(s);
+    try {
+      const s = buildState();
+      if (pcScreen) pcScreen.sendState(); // The viewer learns what we share
+      if (sendTo) sendTo.sync(s.peer && s.peer.name);
+      if (pairSync) pairSync.check(); // Tell the other computer what changed here // the Send to entry follows the peer's name
+      // A pairing code to compare: bring the window to the front.
+      const phase = s.pairing ? s.pairing.phase : null;
+      if (phase === 'code' && lastPairPhase !== 'code') showMain();
+      lastPairPhase = phase;
+      if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('state', s);
+      updateTray(s);
+    } catch (e) {
+      console.error('[state] error', e && e.stack ? e.stack : e);
+    }
   });
 }
 
@@ -450,6 +451,9 @@ function buildState() {
     device,
     ...link.snapshot(),
     peer: peerView(),
+    // Every paired device (connected or not), and the mesh's selection and live links.
+    peers: hub.peers(),
+    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds() },
     found: discovery.list(),
     discovery: { ...discovery.status },
     addresses: ownAddresses(),
