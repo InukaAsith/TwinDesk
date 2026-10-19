@@ -21,6 +21,7 @@ class Notifs {
     this.sent = 0;
     this.shown = 0;
     this.live = new Set(); // shown toasts, kept alive until closed
+    this.echoes = []; // {title, body, until}: shown here from the other side, never sent back
 
     const link = this.link;
     link.on('welcome', () => {
@@ -137,6 +138,11 @@ class Notifs {
   _local(ev) {
     const app = str(ev.app, 300);
     if (!app) return;
+    // One we showed from the other side, read back from this computer's notifications: sending it
+    // would bounce it between the two forever (the app-id filter misses it on some setups).
+    const now = Date.now();
+    this.echoes = this.echoes.filter((e) => e.until > now);
+    if (this.echoes.some((e) => e.title === str(ev.title, 200) && str(ev.body).includes(e.body))) return;
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
     if (this.apps.size > 60) this.apps.delete(this.apps.keys().next().value);
     if (this.cfg.send && this.peerAccepts && this.connected && !this.cfg.muted.includes(app)) {
@@ -154,8 +160,10 @@ class Notifs {
     if (!this.cfg.receive || !Notification.isSupported()) return;
     const peer = this.peerName();
     const appName = str(m.appName, 100);
+    const title = str(m.title, 200) || appName || peer;
+    this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
     const n = new Notification({
-      title: str(m.title, 200) || appName || peer,
+      title,
       body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
     });
     this.live.add(n);
