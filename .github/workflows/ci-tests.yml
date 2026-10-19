@@ -41,3 +41,18 @@ jobs:
             echo "== $f"
             node "$f"
           done
+  # The Kotlin port of the mesh pool (android/.../Mesh.kt) against the same scenarios as
+  # shared/test/mesh-pool.js. Plain JVM tests: no emulator.
+  android-unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Run the Android unit tests
+        working-directory: android
+        run: ./gradlew --no-daemon testStandardDebugUnitTest
