@@ -2,14 +2,17 @@
 // Host role (PC ↔ PC): HTTPS + WebSocket server on PORT: sessions, liveness, routing
 // of authenticated messages. Port of mac/server.js; the certificate comes from identity.js (PKCS#12).
 //
+// Many clients at once (mesh): `clients` maps deviceId -> ctx for every authenticated client.
+// `current` is the primary client (setPrimary(), else the most recently authenticated one,
+// preferring a non-Android client); features that talk to "the phone" keep using it.
+//
 // Events:
-//   'preauth' (ctx, msg)  — hello / pair.* before auth (pairing.js handles them)
+//   'preauth' (ctx, msg)  — hello / pair.* before auth (hostpair.js handles them)
 //   'client'  (ctx)       — a client got `welcome`
-//   'message' (msg, ctx)  — any message from the authenticated client except ping/pong (peer.js routes)
+//   'message' (msg, ctx)  — any message from the authenticated client except ping/pong
 //   'closed'  (ctx)       — a socket closed (authed or not)
 //   'rtt'     (ctx)       — ctx.rttMs updated
 //   'listening' / 'listenError' (err)
-//   'phoneFree'           — a phone's hold on the session ended (computers may connect again)
 'use strict';
 
 const https = require('https');
@@ -22,49 +25,94 @@ const ICE_OFFERS = new Set([P.T.RTC_OFFER, P.T.AUDIO_OFFER]);
 // Dev only: listen elsewhere (a second copy on the same PC).
 const LISTEN_PORT = Number(process.env.MACSHARE_DEV_PORT) || P.PORT;
 
+// How often liveness is checked. A ping goes out only when nothing was sent for the interval.
+const TICK_MS = 250;
+
 class Server extends EventEmitter {
-  constructor({ pfx, passphrase }) {
+  // opts: pfx, passphrase; port (default PORT; 0 = any free port, see `port` after 'listening');
+  //   now () -> ms (tests inject a fake clock); tick (false: no timer, call liveness() yourself).
+  constructor({ pfx, passphrase, port, now, tick = true } = {}) {
     super();
-    this.current = null; // ctx of the authenticated client
-    this.phoneGrace = null; // {id, until}: a phone's session just dropped, it may come back (P.PHONE_GRACE_MS)
-    this.sockets = new Set();
+    this.clients = new Map(); // deviceId -> ctx, authenticated and connected
+    this.sockets = new Set(); // every ctx, authed or not
+    this.primaryId = null; // setPrimary()
+    this.busyFlags = new Map(); // deviceId -> boolean from setBusy()
+    this.authSeq = 0; // orders authentications (most recent first)
+    this.phoneGrace = null; // always null: a phone no longer holds the session (kept for phone.js)
+    this._now = now || (() => Date.now());
     this.https = https.createServer({ pfx, passphrase });
     this.wss = new WebSocketServer({ server: this.https, maxPayload: P.MAX_PAYLOAD });
     this.wss.on('connection', (ws, req) => this._onConnection(ws, req));
     this.wss.on('error', () => {}); // ws repeats the server's errors here; listenError below reports them
     this.https.on('error', (err) => this.emit('listenError', err)); // e.g. EADDRINUSE: another copy listens
-    this.port = LISTEN_PORT;
-    this.https.listen(LISTEN_PORT, '0.0.0.0', () => this.emit('listening'));
-    this.tick = setInterval(() => this._liveness(), P.PING_MS);
+    this.port = port !== undefined ? port : LISTEN_PORT;
+    this.https.listen(this.port, '0.0.0.0', () => {
+      this.port = this.https.address().port;
+      this.emit('listening');
+    });
+    this.tick = tick ? setInterval(() => this.liveness(), TICK_MS) : null;
+  }
+
+  // The primary client: setPrimary()'s device while it is connected; else the most recently
+  // authenticated one, a non-Android client first. null when nobody is connected.
+  get current() {
+    if (this.primaryId) {
+      const c = this.clients.get(this.primaryId);
+      if (c) return c;
+    }
+    let best = null;
+    for (const c of this.clients.values()) {
+      if (!best) best = c;
+      else if ((best.os === P.OS.ANDROID) !== (c.os === P.OS.ANDROID)) {
+        if (c.os !== P.OS.ANDROID) best = c;
+      } else if (c.authSeq > best.authSeq) best = c;
+    }
+    return best;
+  }
+
+  // The client that is the primary one (null: the most recently authenticated again).
+  setPrimary(deviceId) {
+    this.primaryId = deviceId || null;
+  }
+
+  // A busy client (driving, driven, or selected) is pinged every PING_MS; the others every
+  // IDLE_PING_MS. Default: the primary client is busy.
+  setBusy(deviceId, flag) {
+    this.busyFlags.set(deviceId, !!flag);
+  }
+
+  _isBusy(ctx) {
+    const flag = this.busyFlags.get(ctx.deviceId);
+    return flag === undefined ? ctx === this.current : flag;
   }
 
   _onConnection(ws, req) {
-    const now = Date.now();
+    const now = this._now();
     const ctx = {
       ws,
       authed: false,
       deviceId: null,
       name: null,
+      os: null,
+      authSeq: 0,
       address: (req.socket.remoteAddress || '').replace(/^::ffff:/, ''),
       connectedAt: now,
       lastRx: now,
+      lastTx: now,
       rttMs: null,
     };
     this.sockets.add(ctx);
     ws.on('message', (data, isBinary) => this._onMessage(ctx, data, isBinary));
     ws.on('close', () => {
       this.sockets.delete(ctx);
-      if (this.current === ctx) {
-        this.current = null;
-        if (ctx.os === P.OS.ANDROID && !ctx.released) this._phoneGrace(ctx.deviceId);
-      }
+      if (ctx.authed && this.clients.get(ctx.deviceId) === ctx) this.clients.delete(ctx.deviceId);
       this.emit('closed', ctx);
     });
     ws.on('error', (err) => console.error(`[server] socket ${ctx.address}: ${err.message}`));
   }
 
   _onMessage(ctx, data, isBinary) {
-    ctx.lastRx = Date.now();
+    ctx.lastRx = this._now();
     let msg;
     try {
       if (isBinary) throw new Error('binary');
@@ -82,7 +130,7 @@ class Server extends EventEmitter {
     if (msg.t === P.T.PING) return this.send(ctx, { t: P.T.PONG, ts: msg.ts });
     if (msg.t === P.T.PONG) {
       if (typeof msg.ts === 'number') {
-        ctx.rttMs = Math.max(0, Date.now() - msg.ts);
+        ctx.rttMs = Math.max(0, this._now() - msg.ts);
         this.emit('rtt', ctx);
       }
       return;
@@ -90,14 +138,18 @@ class Server extends EventEmitter {
     this.emit('message', msg, ctx); // peer.js routes it by type
   }
 
-  _liveness() {
-    const now = Date.now();
+  // Pings the clients that have been silent for their interval, closes the ones silent too long.
+  // Called by the timer; tests call it with a fake clock.
+  liveness(now = this._now()) {
     for (const ctx of this.sockets) {
       if (ctx.authed) {
-        if (now - ctx.lastRx > P.TIMEOUT_MS) {
-          console.log(`[server] ${ctx.name || ctx.address} silent for ${P.TIMEOUT_MS} ms, closing`);
+        const busy = this._isBusy(ctx);
+        const timeout = busy ? P.TIMEOUT_MS : P.IDLE_TIMEOUT_MS;
+        const every = busy ? P.PING_MS : P.IDLE_PING_MS;
+        if (now - ctx.lastRx > timeout) {
+          console.log(`[server] ${ctx.name || ctx.address} silent for ${timeout} ms, closing`);
           ctx.ws.terminate();
-        } else {
+        } else if (now - ctx.lastTx >= every) {
           this.send(ctx, { t: P.T.PING, ts: now });
         }
       } else if (now - ctx.connectedAt > P.UNAUTH_TIMEOUT_MS) {
@@ -111,9 +163,10 @@ class Server extends EventEmitter {
     // A phone on the USB cable: its WebRTC goes through the relay too (wired.js).
     if (ctx.ice && ICE_OFFERS.has(msg.t)) msg = { ...msg, ice: ctx.ice };
     ctx.ws.send(JSON.stringify(msg));
+    ctx.lastTx = this._now();
   }
 
-  // Send to the authenticated client, if any.
+  // Send to the primary client, if any.
   sendToClient(msg) {
     this.send(this.current, msg);
   }
@@ -124,36 +177,33 @@ class Server extends EventEmitter {
     ctx.ws.close();
   }
 
-  // Mark ctx authenticated; a newer client replaces the older one.
+  // Mark ctx authenticated. A client with the same device id replaces the older socket of that
+  // device only; other devices are untouched.
   authenticate(ctx, { deviceId, name, os }, welcome) {
-    if (this.current && this.current !== ctx) {
-      const old = this.current;
-      this.current = null;
+    const old = this.clients.get(deviceId);
+    if (old && old !== ctx) {
+      this.clients.delete(deviceId);
       this.fail(old, P.E.REPLACED, 'Another connection from a paired device replaced this one');
     }
     ctx.authed = true;
     ctx.deviceId = deviceId;
     ctx.name = name;
     ctx.os = os;
+    ctx.authSeq = ++this.authSeq;
     ctx.ice = this.iceFor ? this.iceFor(ctx) : null; // a phone through adb reverse: the relay's RTCConfiguration
-    this.current = ctx;
+    this.clients.set(deviceId, ctx);
     this.send(ctx, welcome);
     this.emit('client', ctx);
   }
 
-  // A phone holds the session (or just dropped it and may resume): computers are refused.
+  // Phones no longer hold the session: computers are never refused because of one.
   phoneHolds() {
-    if (this.current && this.current.os === P.OS.ANDROID) return true;
-    return !!this.phoneGrace && Date.now() < this.phoneGrace.until;
+    return false;
   }
 
-  _phoneGrace(id) {
-    clearTimeout(this.graceTimer);
-    this.phoneGrace = { id, until: Date.now() + P.PHONE_GRACE_MS };
-    this.graceTimer = setTimeout(() => this.endPhoneGrace(), P.PHONE_GRACE_MS);
-  }
+  // Kept for phone.js and the app's phone code; no grace period is started any more.
+  _phoneGrace() {}
 
-  // The computers may connect again (the phone's grace ran out, or it was let go).
   endPhoneGrace() {
     clearTimeout(this.graceTimer);
     if (!this.phoneGrace) return;
@@ -161,7 +211,7 @@ class Server extends EventEmitter {
     this.emit('phoneFree');
   }
 
-  // Disconnect the phone on purpose: it won't resume, and the computers may connect at once.
+  // Disconnect the phone on purpose (the primary client when it is a phone).
   releasePhone() {
     const c = this.current;
     if (c && c.os === P.OS.ANDROID) {

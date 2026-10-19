@@ -20,8 +20,12 @@
     // replaces the computer. Computers are refused (busy) while it holds the session and for
     // PHONE_GRACE_MS after it drops, so a Wi-Fi blip doesn't hand the session back.
     PHONE_GRACE_MS: 30000,
-    PING_MS: 1000,
-    TIMEOUT_MS: 4000, // close the session after this much silence
+    PING_MS: 1000, // a busy link (driving, driven, or the selected device) pings this often...
+    TIMEOUT_MS: 4000, // ...and closes after this much silence
+    IDLE_PING_MS: 5000, // every other link (mesh: many links at once)
+    IDLE_TIMEOUT_MS: 15000,
+    MAX_DEVICES: 10, // mesh: most paired devices (links) at once
+    INBOUND_WAIT_MS: 4000, // mesh tie-break: the larger id of two mutual computers waits this long for the other's dial
     PAIR_TIMEOUT_MS: 60000,
     UNAUTH_TIMEOUT_MS: 70000, // Mac closes sockets that never authenticate
     RECONNECT_MS: [1000, 2000, 3000], // Windows: then keep using the last value
