@@ -8,6 +8,7 @@ const T = P.T;
 // A host without `os` is an older Mac.
 const osOf = (o) => (Object.values(P.OS).includes(o) ? o : P.OS.MAC);
 const HELLO_TIMEOUT_MS = P.TIMEOUT_MS; // no `welcome` this long after hello = retry
+const KEEPALIVE_TICK_MS = 250; // how often the keep-alive decides whether to ping
 
 const PAIR_ERRORS = {
   [P.E.PAIR_REFUSED]: '{Name} refused pairing.',
@@ -18,10 +19,15 @@ const PAIR_ERRORS = {
 
 class Link {
   // opts: device {id, name}, store {load, save, clear}, resolveAddress(macId) -> {address, port}|null,
-  //   blocked() -> true while this PC hosts a session (one session at a time), or a phone holds it
+  //   blocked() -> true while this link must not dial (the old one-session rule; mesh: the manager's
+  //   tie-break and inbound links), busy() -> true while the link is busy (ping every PING_MS, else
+  //   every IDLE_PING_MS; default: busy, as before the mesh)
   constructor(opts) {
     this.device = opts.device;
     this.blocked = opts.blocked || (() => false);
+    this.busy = opts.busy || (() => true);
+    this.destroyed = false;
+    this.lastTx = 0;
     this.onAny = null; // peer.js: gets every message after welcome instead of the per-type handlers
     this.store = opts.store;
     this.resolveAddress = opts.resolveAddress;
@@ -56,6 +62,7 @@ class Link {
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify(obj));
+    this.lastTx = Date.now();
     return true;
   }
 
@@ -113,8 +120,15 @@ class Link {
     this._scheduleReconnect();
   }
 
+  // Stop for good: no socket, no reconnect (the mesh manager closes its links this way).
+  destroy() {
+    this.destroyed = true;
+    clearTimeout(this.timers.reconnect);
+    this._closeSocket();
+  }
+
   poke() {
-    if (!this.pairing || this.pairState || this.ws || this.status.state === 'identity_changed') return;
+    if (this.destroyed || !this.pairing || this.pairState || this.ws || this.status.state === 'identity_changed') return;
     this.attempt = 0;
     clearTimeout(this.timers.reconnect);
     this.timers.reconnect = setTimeout(() => !this.ws && !this.pairState && this._connect('session'), 300);
@@ -123,6 +137,7 @@ class Link {
   // ---- connection ----
 
   _connect(mode) {
+    if (this.destroyed) return;
     this._closeSocket();
     clearTimeout(this.timers.reconnect);
     if (mode === 'session' && this.blocked()) return this._scheduleReconnect(); // hosting: try again later
@@ -256,14 +271,8 @@ class Link {
       this.store.save(this.pairing);
     }
     this.status.rtt = null;
-    this.timers.ping = setInterval(() => {
-      if (Date.now() - this.lastRx > P.TIMEOUT_MS) {
-        this.lastError = '{Name} stopped answering';
-        if (this.ws) this.ws.terminate();
-        return;
-      }
-      this._raw({ t: T.PING, ts: Date.now() });
-    }, P.PING_MS);
+    this.lastTx = Date.now();
+    this.timers.ping = setInterval(() => this._keepalive(), KEEPALIVE_TICK_MS);
     this._setStatus('connected', '');
     this._emit('welcome', msg);
   }
@@ -323,6 +332,7 @@ class Link {
   }
 
   _scheduleReconnect() {
+    if (this.destroyed) return;
     clearTimeout(this.timers.reconnect);
     const delays = P.RECONNECT_MS;
     const delay = delays[Math.min(this.attempt, delays.length - 1)];
@@ -358,7 +368,22 @@ class Link {
   }
 
   _raw(obj) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(obj));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(obj));
+      this.lastTx = Date.now();
+    }
+  }
+
+  // Keep-alive: ping only when nothing was sent for the interval; a silent link is closed.
+  _keepalive() {
+    const now = Date.now();
+    const busy = this.busy();
+    if (now - this.lastRx > (busy ? P.TIMEOUT_MS : P.IDLE_TIMEOUT_MS)) {
+      this.lastError = '{Name} stopped answering';
+      if (this.ws) this.ws.terminate();
+      return;
+    }
+    if (now - this.lastTx >= (busy ? P.PING_MS : P.IDLE_PING_MS)) this._raw({ t: T.PING, ts: now });
   }
 
   // Local events ('welcome', 'closed') share the handler table with message types.
