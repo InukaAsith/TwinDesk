@@ -522,6 +522,47 @@ test('(f) a device that connects again with its id replaces its socket: the sele
   }
 });
 
+test('(g) a hub that gets its server late (attachHost): safe before, then the pending request and the dialled device appear', async () => {
+  const cert = loadTestCert();
+  const id = crypto.randomUUID();
+  const storage = memoryStorage();
+  const links = new LinkManager({ device: { id, name: 'L' }, storage });
+  const mesh = new Mesh({ selfId: id });
+  const hub = new Hub({ device: { id, name: 'L' }, links, mesh });
+  assert.doesNotThrow(() => hub.snapshot(), 'snapshot before the host exists');
+  assert.strictEqual(hub.snapshot().host.on, false, 'no host yet');
+  assert.deepStrictEqual(hub.peers(), []);
+  assert.strictEqual(hub.respondPair(true), undefined, 'respondPair without a pairing does nothing');
+
+  const server = new Server({ pfx: cert.pfx, passphrase: cert.passphrase, port: 0 });
+  await new Promise((resolve) => server.once('listening', resolve));
+  const pairing = new Pairing(server, { id, name: 'L', fp: cert.fp }, { storage });
+  hub.attachHost(server, pairing);
+  hub.attachHost(server, pairing); // again: nothing happens
+  assert.strictEqual(hub.snapshot().host.on, true, 'listening once attached');
+  const B = await hubNode('B');
+  try {
+    assert.ok(B.links.startPairing({ address: HOST, port: server.port, macName: 'L' }), 'B dials the late host');
+    await waitFor(() => pairing.pending && pairing.pending.code, 'the pairing request reaches the late host');
+    const req = hub.snapshot();
+    assert.strictEqual(req.pairing.phase, 'request', 'the request is shown');
+    assert.strictEqual(req.pairing.code, pairing.pending.code);
+    snaps({ name: 'L', hub });
+    pairing.respond(true);
+    B.links.confirmCode();
+    await waitFor(() => hub.sessions.get(B.id) && hub.sessions.get(B.id).connected, 'B connected to the late host');
+    const peers = hub.peers();
+    assert.deepStrictEqual(peers.map((p) => p.id), [B.id], 'B is listed');
+    assert.ok(peers[0].connected && peers[0].selected, 'B is connected and selected (the first device)');
+    assert.strictEqual(hub.facade.hosting, true, 'the facade sees the dialled device');
+    snaps({ name: 'L', hub }, B);
+  } finally {
+    close(B);
+    links.close();
+    server.close();
+  }
+});
+
 async function main() {
   await runTests(tests);
 }

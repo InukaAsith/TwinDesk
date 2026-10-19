@@ -29,25 +29,42 @@ function addTo(map, key, fn) {
 }
 
 class Hub extends EventEmitter {
-  // device {id, name}; links: LinkManager (links.js); server: Server (server.js);
-  // pairing: Pairing (hostpair.js); mesh: Mesh (shared/mesh.js), whose selfId is device.id.
-  constructor({ device, links, server, pairing, mesh }) {
+  // device {id, name}; links: LinkManager (links.js); mesh: Mesh (shared/mesh.js), whose selfId is
+  // device.id. server (Server, server.js) and pairing (Pairing, hostpair.js) may come now or later:
+  // the certificate is read asynchronously, so main.js calls attachHost() when it exists.
+  constructor({ device, links, server = null, pairing = null, mesh }) {
     super();
     this.device = device;
     this.links = links;
-    this.server = server;
-    this.pairing = pairing;
+    this.server = null;
+    this.pairing = null;
     this.mesh = mesh;
     this.selectedId = null;
-    this.sessions = new Sessions({ links, server });
+    this.sessions = new Sessions({ links });
     this.bus = this._makeBus();
     this.facade = this._makeFacade();
     this._busHandlers = new Map(); // type -> [fn(msg, fromId)]
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this._facadeHandlers = new Map(); // type | 'welcome' | 'closed' -> [fn(arg)]
     this._facadeStateFns = [];
-    this._host = { on: !!(server.https && server.https.listening), error: '' };
+    this._host = { on: false, error: '' };
 
+    links.on('add', () => this._change());
+    links.on('remove', () => this._change());
+    links.on('change', () => this._change());
+
+    this.sessions.on('session', (s) => this._attach(s));
+    for (const s of this.sessions.list()) this._attach(s);
+    if (server && pairing) this.attachHost(server, pairing);
+  }
+
+  // The host role (our server and the pairing responder). Devices that dial us, pending pairing
+  // requests and the listen state appear from here on. Calling it again does nothing.
+  attachHost(server, pairing) {
+    if (this.server) return;
+    this.server = server;
+    this.pairing = pairing;
+    this._host = { on: !!(server.https && server.https.listening), error: '' };
     server.on('listening', () => { this._host = { on: true, error: '' }; this._change(); });
     server.on('listenError', (err) => {
       this._host = {
@@ -57,14 +74,13 @@ class Hub extends EventEmitter {
       this._change();
     });
     server.on('rtt', () => this._change());
-    links.on('add', () => this._change());
-    links.on('remove', () => this._change());
-    links.on('change', () => this._change());
     pairing.on('change', () => this._change());
     pairing.on('request', () => this._change());
-
-    this.sessions.on('session', (s) => this._attach(s));
-    for (const s of this.sessions.list()) this._attach(s);
+    this.links.hostPairing = pairing; // mutual pairs: a device that holds us as its host
+    this.links.bindServer(server);
+    this.sessions.bindServer(server);
+    if (this.selectedId) server.setPrimary(this.selectedId);
+    this._change();
   }
 
   // The Session of the selected device (null: nothing selected).
@@ -89,23 +105,23 @@ class Hub extends EventEmitter {
 
   // Cancels our pairing request, or refuses a pairing request from another device.
   cancelPair() {
-    if (this.pairing.pending) this.pairing.respond(false);
+    if (this.pairing && this.pairing.pending) this.pairing.respond(false);
     else this.links.cancelPair();
   }
 
   // Allow / deny a pairing request from another device (the host side).
   respondPair(allow) {
-    this.pairing.respond(allow);
+    if (this.pairing) this.pairing.respond(allow);
   }
 
   // Forget a device: its guest link (we dialled it) and its host entry (it dialled us), both.
   forgetPeer(id) {
     if (this.links.get(id)) this.links.forget(id);
-    if (this.pairing.list().some((x) => x.id === id)) this.pairing.forget(id);
+    if (this.pairing && this.pairing.list().some((x) => x.id === id)) this.pairing.forget(id);
   }
 
   forgetGuest(id) {
-    this.pairing.forget(id);
+    if (this.pairing) this.pairing.forget(id);
   }
 
   // Makes `id` the selected device. False when that device is not connected.
@@ -126,7 +142,7 @@ class Hub extends EventEmitter {
     const add = (id) => {
       if (id && id !== this.device.id && !ids.includes(id)) ids.push(id);
     };
-    const guests = this.pairing.list();
+    const guests = this.pairing ? this.pairing.list() : [];
     for (const link of this.links.list()) if (link.pairing) add(link.pairing.macId);
     for (const g of guests) add(g.id);
     for (const s of this.sessions.list()) if (s.connected) add(s.id);
@@ -172,7 +188,7 @@ class Hub extends EventEmitter {
     let link;
     if (hosting) link = { state: 'connected', rtt: s.ctx.rttMs, message: '', macName: s.ctx.name, address: s.ctx.address };
     else link = g ? g.link : this._nothingLink();
-    const req = this.pairing.pendingView();
+    const req = this.pairing ? this.pairing.pendingView() : null;
     const ps = this.links.pairState();
     const pairing = req
       ? { phase: 'request', role: 'host', macName: req.name, os: req.os, code: req.code || '', allowed: req.allowed, address: '' }
@@ -181,7 +197,7 @@ class Hub extends EventEmitter {
       link,
       pairing,
       paired: g ? g.paired : null,
-      guests: this.pairing.list(),
+      guests: this.pairing ? this.pairing.list() : [],
       session: s ? { role: s.role, id: s.id, name: s.displayName(), os: s.peerOs } : null,
       host: { ...this._host },
       peers: this.peers(),
@@ -303,7 +319,7 @@ class Hub extends EventEmitter {
   }
 
   _nothingState() {
-    return this.pairing.list().length || this.links.list().length ? 'connecting' : 'not_paired';
+    return (this.pairing && this.pairing.list().length) || this.links.list().length ? 'connecting' : 'not_paired';
   }
 
   _nothingLink() {
@@ -363,6 +379,9 @@ class Hub extends EventEmitter {
       },
       get server() {
         return hub.server;
+      },
+      get pairing() {
+        return hub.pairing;
       },
       snapshot: () => hub.snapshot(),
       start: () => hub.start(),
