@@ -14,7 +14,17 @@
 set -euo pipefail
 
 base=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" -q .tag_name 2>/dev/null || true)
+# No release yet: gh prints the 404 body on stdout, so only a tag counts.
+case "$base" in v[0-9]*) ;; *) base="" ;; esac
 [ -n "$base" ] || base="v$(grep -m1 versionName android/app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')"
+# .github/version-floor: never count from below this (a phone that already runs a higher versionCode
+# refuses an older APK). Delete the file once releases here are past it.
+if [ -f .github/version-floor ]; then
+  floor=$(tr -d "[:space:]" < .github/version-floor)
+  [ "$(printf "%s
+%s
+" "${base#v}" "$floor" | sort -V | tail -1)" = "$floor" ] && base="v$floor"
+fi
 IFS=. read -r major minor patch <<< "${base#v}"
 patch=${patch%%[!0-9]*}
 
