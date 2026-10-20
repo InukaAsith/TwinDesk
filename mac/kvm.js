@@ -58,7 +58,7 @@ class Kvm extends EventEmitter {
       },
       [P.T.KVM_HOME]: (m, from) => {
         if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
-        const side = this._sideOf(from);
+        const side = this.viaSide || this._sideOf(from); // driving a phone through a computer: back at the edge that led to the phone
         this.helper.send('capture', typeof m.offset === 'number' && side ? { on: false, side, offset: m.offset } : { on: false });
         this._setMode('home', '');
       },
@@ -291,15 +291,32 @@ class Kvm extends EventEmitter {
     return this._connectedTo(id) && !!this.cfg.driveOther && this.linked;
   }
 
+  // A connected computer (not a phone) we may drive, to drive the phone `id` through.
+  _relayFor(id) {
+    for (const [sid, sess] of this.hub.sessions) {
+      if (sid !== id && sess.connected && this._peerOs(sid) !== P.OS.ANDROID && this._canDriveTo(sid)) return sid;
+    }
+    return null;
+  }
+
   // id: the device the input goes to (the selected one for the hotkey, the neighbour for an edge).
   _take(fields, id) {
     const k = this.cfg;
     this.route++;
-    this.partner = id || null;
+    // A phone this Mac has no working bridge to (wireless debugging not set up here, or down): another
+    // computer that has one drives it for us (kvm.take with `via`); the phone hands the pointer back to us.
+    let target = id || null;
+    let via = '';
+    if (id && this.local && this.local.drives(id) && !this.local.drivable()) {
+      const relay = this._relayFor(id);
+      if (relay) { target = relay; via = id; }
+    }
+    this.viaSide = via && fields.where.side ? P.opposite(fields.where.side) : null; // our edge that leads to the phone
+    this.partner = target;
     this.keyboardOnly = !fields.where.side;
     this._setMode('driving', '');
     this.input.releaseAll();
-    const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard, ...fields.where };
+    const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard, ...fields.where, ...(via ? { via } : {}) };
     const plan = fields.paths && fields.paths.length ? this.fileSend.planDrag(fields.paths) : null;
     if (plan) take.drag = { count: plan.items.length };
     this._drive(take);

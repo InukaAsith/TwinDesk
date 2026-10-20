@@ -439,11 +439,20 @@ class Kvm {
       this._note('{Name} tried to use {me}. It’s turned off here.');
       return;
     }
+    // A driver with no bridge of its own to a phone asks us to drive that phone for it (m.via): the input it
+    // sends us goes on to the phone through our bridge, and the phone hands the pointer back to the driver.
+    const via = typeof m.via === 'string' && m.via ? m.via : '';
+    if (via && !(this._peerOs(via) === P.OS.ANDROID && this.local && this.local.drives(via) && this.local.drivable() && this._linkedFor(via))) {
+      console.log('[kvm] ' + from + ' asked us to drive ' + via + ' but we cannot');
+      this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.NOT_ALLOWED });
+      return;
+    }
     this.partner = from;
     this.peerRoute = route;
     this._send(from, { t: T.KVM_ACCEPT, route });
     this.keyboardOnly = m.mouse === false;
     this._setMode('driven', '');
+    if (via) return this._relayTo(via, P.opposite(m.side || 'left'), Number(m.offset) || 0.5, true);
     if (m.mouse !== false) {
       this.helper.send('place', E.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
       this._armReturn();
@@ -512,9 +521,9 @@ class Kvm {
       && this.local.drives(to) && this.local.drivable() && this._linkedFor(to) && this.cfg.driveOther && !!this.cfg.mouse;
   }
 
-  _relayTo(to, side, offset) {
+  _relayTo(to, side, offset, viaTake = false) {
     this.subRoute++;
-    this.sub = { to, side, route: this.subRoute };
+    this.sub = { to, side, route: this.subRoute, viaTake };
     console.log('[kvm] relay to ' + to + ' side ' + side + ' (driven by ' + this.partner + ')');
     this.helper.send('armReturn', { on: false });
     this.local.handle({ t: T.KVM_TAKE, route: this.subRoute, side: P.opposite(side), offset, mouse: true, keyboard: true });
@@ -527,6 +536,11 @@ class Kvm {
     this.sub = null;
     console.log('[kvm] relay back from ' + sub.to);
     if (this.mode !== 'driven') return;
+    if (sub.viaTake) { // the driver asked for this phone: the pointer goes straight back to it
+      const home = typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset } : { t: T.KVM_HOME, route: this.peerRoute };
+      this._send(this.partner, home);
+      return this._drivenHome('', true);
+    }
     this.helper.send('place', { side: sub.side, offset: typeof offset === 'number' ? offset : 0.5 });
     this._armReturn();
   }

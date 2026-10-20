@@ -269,6 +269,41 @@ test('B cannot drive the phone itself (the bridge is not ready): B asks A to tak
   }
 });
 
+test('a computer with no bridge asks B to drive the phone for it (kvm.take with via): B relays, the phone hands the pointer back to the asker', async () => {
+  const N = await world(['A', 'B'], [['A', 'B']]);
+  let phone = null;
+  try {
+    const { A, B } = N;
+    kvmOn(A); kvmOn(B);
+    phone = await pairPhone(B, { name: 'Phone' });
+    await helloPhone(phone.client, { id: phone.id, token: phone.token });
+    await waitFor(() => B.hub.sessions.get(phone.id) && B.hub.sessions.get(phone.id).connected, 'the phone is connected to B');
+    const localLog = [];
+    B.kvm.local = fakeBridge(B, phone, localLog);
+    A.hub.bus.send(B.id, { t: T.KVM_TAKE, route: 5, side: 'top', offset: 0.3, mouse: true, keyboard: true, via: phone.id });
+    await waitFor(() => localLog.some((m) => m.t === T.KVM_TAKE), 'B takes the phone through its bridge');
+    assert.strictEqual(localLog.find((m) => m.t === T.KVM_TAKE).side, 'top', 'the phone sees the pointer enter at the side the asker said');
+    assert.ok(got(A, T.KVM_ACCEPT).length >= 1, 'A got kvm.accept');
+    assert.strictEqual(B.kvm.mode, 'driven');
+    A.hub.bus.send(B.id, { t: T.K_MOVE, dx: 2, dy: 3 });
+    await waitFor(() => localLog.some((m) => m.t === T.K_MOVE), 'A’s move reaches the phone');
+    const take = localLog.find((m) => m.t === T.KVM_TAKE);
+    B.hub.sessions.get(phone.id).inject({ t: T.KVM_HOME, route: take.route, offset: 0.6 });
+    await waitFor(() => got(A, T.KVM_HOME).length === 1, 'A gets kvm.home from B');
+    assert.strictEqual(got(A, T.KVM_HOME)[0].m.offset, 0.6);
+    await waitFor(() => B.kvm.mode === 'home', 'B is home again');
+    // B cannot drive it: refused
+    B.kvm.local = fakeBridge(B, phone, localLog, false);
+    A.hub.bus.send(B.id, { t: T.KVM_TAKE, route: 6, side: 'top', offset: 0.3, mouse: true, keyboard: true, via: phone.id });
+    await waitFor(() => got(A, T.KVM_ACCEPT).length >= 1 && B.log.length >= 0 && true, 'answered');
+    await sleep(300);
+    assert.strictEqual(B.kvm.mode, 'home', 'B refused: it is not driven');
+  } finally {
+    if (phone) phone.client.close();
+    closeAll(N);
+  }
+});
+
 function snaps(N) {
   for (const n of Object.values(N)) {
     const s = n.hub.snapshot();

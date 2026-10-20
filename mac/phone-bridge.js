@@ -410,6 +410,11 @@ class PhoneBridge extends EventEmitter {
     else this.server.inject(msg);
   }
 
+  // Can a kvm.take be served now (adb connected and the phone's screen known).
+  drivable() {
+    return !!(this.control && !this.control.closed && this._display());
+  }
+
   _display() {
     const info = this.phone.info;
     return info && info.display;
