@@ -109,8 +109,10 @@ class PhoneInfo(core: Core) : Feature(core) {
         }.getOrNull()?.also { wallpaper = it }
     }
 
-    fun sendInfo(withWallpaper: Boolean) {
-        if (!core.link.connected) return
+    // To every connected computer (each one drives the phone through its own adb connection and needs the
+    // screen size and state), or to just one that has said hello.
+    fun sendInfo(withWallpaper: Boolean, only: String? = null) {
+        if (core.links.connectedLinks().isEmpty()) return
         core.bg.execute {
             val m = msg(
                 Proto.T.PHONE_INFO, "model" to Build.MODEL, "maker" to Build.MANUFACTURER.replaceFirstChar { it.uppercase() },
@@ -119,17 +121,21 @@ class PhoneInfo(core: Core) : Feature(core) {
             )
             val key = m.toString()
             if (withWallpaper) wallpaperImage()?.let { m.put("wallpaper", it) }
+            if (only != null) { core.sendTo(only, m); return@execute }
             if (!withWallpaper && key == lastSent) return@execute
             lastSent = key
-            core.send(m)
+            core.sendAll(m)
         }
     }
+
+    // A computer that is not the attached one still needs to know the screen size and state of the phone.
+    override fun onPeerWelcome(host: Host) = sendInfo(true, host.id)
 }
 
 class Apps(core: Core) : Feature(core) {
-    override fun onMessage(t: String, m: JSONObject): Boolean {
+    override fun onMessage(t: String, m: JSONObject, host: Host): Boolean {
         if (t != Proto.T.PHONE_APPS_LIST) return false
-        core.bg.execute { core.send(msg(Proto.T.PHONE_APPS, "apps" to jsonArray(list()))) }
+        core.bg.execute { core.sendTo(host.id, msg(Proto.T.PHONE_APPS, "apps" to jsonArray(list()))) }
         return true
     }
 
@@ -224,7 +230,7 @@ class Adb(core: Core) : Feature(core) {
     fun sendState() {
         val on = wifiDebugging
         if (on && core.link.connected) watchConnectPort() else { stopConnectWatch(); connectPort = 0 }
-        core.send(msg(Proto.T.ADB_STATE, "devOptions" to devOptions, "wifi" to on, "canEnable" to canEnable, "address" to address(), "full" to BuildConfig.NOTIF_LISTENER, "port" to connectPort))
+        core.sendAll(msg(Proto.T.ADB_STATE, "devOptions" to devOptions, "wifi" to on, "canEnable" to canEnable, "address" to address(), "full" to BuildConfig.NOTIF_LISTENER, "port" to connectPort))
         core.changed()
     }
 
@@ -283,6 +289,9 @@ class Adb(core: Core) : Feature(core) {
         main.post { check() }
     }
 
+    // Every computer drives the phone through its own adb connection: each hears the state when it connects.
+    override fun onPeerWelcome(host: Host) = sendState()
+
     override fun onClosed() {
         viewed = false
         stopConnectWatch()
@@ -327,7 +336,7 @@ class Adb(core: Core) : Feature(core) {
         if (digits.length != 6) return Notify.pairResult(core.ctx, "The pairing code has six digits", "Type the code Settings shows.", true)
         if (!core.link.connected) return Notify.pairResult(core.ctx, "Not connected", "Connect to your computer in TwinDesk first.", true)
         pairing = true
-        core.send(msg(Proto.T.ADB_PAIR, "code" to digits, "port" to pairPort))
+        core.sendAll(msg(Proto.T.ADB_PAIR, "code" to digits, "port" to pairPort)) // whichever computer is pairing hears it
         Notify.pairResult(core.ctx, "Pairing…", "Sent to ${core.host?.name ?: "your computer"}", false, progress = true)
         core.changed()
     }

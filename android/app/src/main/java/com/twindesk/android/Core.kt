@@ -284,7 +284,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
             return
         }
         // The one-to-one features hear the attached computer only; the pooled types from every computer.
-        if (host.id != attachedId && t !in POOLED_TYPES) return
+        if (host.id != attachedId && t !in POOLED_TYPES && t !in FROM_ANY_COMPUTER) return
         main.post {
             for (f in features) {
                 val mine = try { f.onMessage(t, m, host) } catch (e: Exception) { RemoteLog.e("TwinDesk", "message $t", e); true }
@@ -313,6 +313,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     companion object {
         // Message types a computer that is not the attached one may send: the pooled ones (clipboard,
         // notifications, layout) and the policy switches that go with them.
+        // What every computer sends the phone for its own adb bridge (the pointer overlay, the bridge state, the app list), attached or not.
+        private val FROM_ANY_COMPUTER = setOf(Proto.T.PHONE_POINTER, Proto.T.ADB_BRIDGE, Proto.T.PHONE_APPS_LIST)
         private val POOLED_TYPES = setOf(Proto.T.LAYOUT, Proto.T.CLIP, Proto.T.CLIP_POLICY, Proto.T.NOTIF, Proto.T.NOTIF_POLICY)
         @Volatile private var instance: Core? = null
         fun get(ctx: Context): Core = instance ?: synchronized(this) {
