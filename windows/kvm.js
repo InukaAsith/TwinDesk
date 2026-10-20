@@ -26,6 +26,8 @@ class Kvm {
     this.mode = 'home'; // 'home' | 'driving' | 'driven'
     this.route = 0;
     this.peerRoute = 0;
+    this.sub = null; // driven by a computer, passing its input on to a phone through our own bridge: {to, side, route}
+    this.subRoute = 0;
     this.partner = null; // the device our input goes to (driving) or comes from (driven); null at home
     this.message = '';
     this.acceptTimer = null;
@@ -47,6 +49,7 @@ class Kvm {
       if (this.mode === 'driving' && from === this.partner && m.route === this.route) this._clearAccept();
     });
     bus.on(T.KVM_REFUSE, (m, from) => {
+      if (this.sub && from === this.sub.to && m.route === this.sub.route) return this._relayBack(undefined);
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       this._goHome(m.why === P.REFUSE.BUSY ? '{Name} is driving {me}' : m.why === P.REFUSE.NOT_ALLOWED ? "{Name} doesn't accept input from {me}" : '{Name} refused');
     });
@@ -54,6 +57,7 @@ class Kvm {
       if (this.mode === 'driven' && from === this.partner && m.route >= this.peerRoute) this._drivenHome('{Name} took its input back', false);
     });
     bus.on(T.KVM_HOME, (m, from) => {
+      if (this.sub && from === this.sub.to && m.route === this.sub.route) return this._relayBack(m.offset); // the phone hands the pointer back
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
       const side = this._sideOf(from);
@@ -460,6 +464,7 @@ class Kvm {
     const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
     if (!side || side === this.layoutSync.sideTo(this.partner)) return this._sendHome(msg.offset);
     const to = this.layoutSync.across(side);
+    if (to && to !== this.partner && this._canRelay(to)) return this._relayTo(to, side, Number(msg.offset) || 0);
     if (to && to !== this.partner) this._send(this.partner, { t: T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
     this._armReturn();
   }
@@ -469,6 +474,11 @@ class Kvm {
     if (this.mode !== 'driven' || from !== this.partner) return;
     const k = this.cfg;
     const ev = { ...m };
+    if (this.sub) { // the input goes on to the phone, in Windows key codes (the bridge swaps for the phone)
+      if ((ev.t === T.K_KEY_DOWN || ev.t === T.K_KEY_UP) && typeof ev.code === 'string' && this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this._peerOs(from))) ev.code = P.mapKeyFromOtherPlatform(ev.code);
+      this.local.handle(ev);
+      return;
+    }
     if (ev.t === T.K_KEY_DOWN || ev.t === T.K_KEY_UP) {
       if (typeof ev.code !== 'string') return;
       if (this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this._peerOs(from))) ev.code = P.mapKeyFromOtherPlatform(ev.code);
@@ -483,6 +493,40 @@ class Kvm {
     this.helper.send('inject', { ev });
     // The other device released its left button here: its drag drops where the pointer is.
     if (ev.t === T.K_UP && ev.b === P.BUTTON.LEFT) { this.fileRecv.onRelease(); if (this.dragRecv) this.dragRecv.onRelease(); }
+  }
+
+  // ---- relay: a computer drives this PC and its pointer reaches the edge of a phone we can drive ----
+  // The driver (a Mac, say) may not have wireless debugging set up for that phone, we do: the input it
+  // sends us goes to the phone through our bridge until the phone hands the pointer back.
+
+  _canRelay(to) {
+    return !this.sub && this.mode === 'driven' && !this.keyboardOnly && this._peerOs(to) === P.OS.ANDROID && !!this.local
+      && this.local.drives(to) && this.local.drivable() && this._linkedFor(to) && this.cfg.driveOther && !!this.cfg.mouse;
+  }
+
+  _relayTo(to, side, offset) {
+    this.subRoute++;
+    this.sub = { to, side, route: this.subRoute };
+    console.log('[kvm] relay to ' + to + ' side ' + side + ' (driven by ' + this.partner + ')');
+    this.helper.send('armReturn', { on: false });
+    this.local.handle({ t: T.KVM_TAKE, route: this.subRoute, side: P.opposite(side), offset, mouse: true, keyboard: true });
+  }
+
+  // The phone handed the pointer back (or refused): we are an ordinary driven PC again, the pointer at the edge it left by.
+  _relayBack(offset) {
+    const sub = this.sub;
+    if (!sub) return;
+    this.sub = null;
+    console.log('[kvm] relay back from ' + sub.to);
+    if (this.mode !== 'driven') return;
+    this.helper.send('place', { side: sub.side, offset: typeof offset === 'number' ? offset : 0.5 });
+    this._armReturn();
+  }
+
+  _endRelay() {
+    if (!this.sub) return;
+    this.sub = null;
+    if (this.local) this.local.handle({ t: T.KVM_RELEASE });
   }
 
   // A trackpad gesture from the other computer, done the
@@ -534,6 +578,7 @@ class Kvm {
 
   // Rows 8b, 8c, 9b.
   _drivenHome(message, sendClip) {
+    this._endRelay();
     if (this.dragRecv) this.dragRecv.onHome(); // a drag from the other device not dropped yet is cancelled
     this.helper.send('releaseAll');
     this.helper.send('armReturn', { on: false });
@@ -544,6 +589,7 @@ class Kvm {
   _linkLost(message) {
     if (this.mode === 'driving') this._goHome(message);
     else if (this.mode === 'driven') {
+      this._endRelay();
       this.helper.send('releaseAll');
       this.helper.send('armReturn', { on: false });
       this._setMode('home', message);

@@ -136,8 +136,9 @@ async function row(N, cells = { A: [0, 0], B: [1, 0], C: [2, 0] }) {
 
 // The phone bridge as the app has it: drives() answers for the PARTNER it is asked about. The old bridge
 // ignored the question (true whenever a phone is connected); a call without an id gets that old answer.
-function fakeBridge(A, phone, log) {
+function fakeBridge(A, phone, log, ready = true) {
   return {
+    drivable: () => ready,
     drives: (id) => (id === undefined ? true : id === phone.id),
     handle: (m) => {
       log.push(m);
@@ -185,6 +186,83 @@ test('a phone AND a computer connected: an edge to the computer takes the comput
     await waitFor(() => localLog.some((m) => m.t === T.K_MOVE), 'the move goes to the phone');
     assert.strictEqual(got(B, T.K_MOVE).length, 1, 'and not to B');
     snaps(N);
+  } finally {
+    if (phone) phone.client.close();
+    closeAll(N);
+  }
+});
+
+test('a computer drives B and B’s pointer reaches the phone: B passes the input to the phone itself, and takes it back when the phone hands the pointer back', async () => {
+  const N = await world(['A', 'B'], [['A', 'B']]);
+  let phone = null;
+  try {
+    const { A, B } = N;
+    kvmOn(A); kvmOn(B);
+    phone = await pairPhone(B, { name: 'Phone' });
+    await helloPhone(phone.client, { id: phone.id, token: phone.token });
+    await waitFor(() => B.hub.sessions.get(phone.id) && B.hub.sessions.get(phone.id).connected, 'the phone is connected to B');
+    const localLog = [];
+    B.kvm.local = fakeBridge(B, phone, localLog);
+    // A - B - phone in one row
+    assert.ok(B.layoutSync.place(A.id, -1, 0) && B.layoutSync.place(B.id, 0, 0) && B.layoutSync.place(phone.id, 1, 0));
+    await waitFor(() => A.kvm.edges.right === B.id && B.kvm.edges.right === phone.id, 'A - B - phone');
+
+    await driveVia(A, B, 'right');
+    await waitFor(() => B.kvm.mode === 'driven', 'B is driven by A');
+    B.helper.emit('event', 'return', { side: 'right', offset: 0.4 });
+    await waitFor(() => localLog.some((m) => m.t === T.KVM_TAKE), 'B takes the phone through its own bridge');
+    const take = localLog.find((m) => m.t === T.KVM_TAKE);
+    assert.strictEqual(take.side, 'left', 'the phone sees the pointer arrive at its left');
+    assert.strictEqual(take.offset, 0.4);
+    assert.strictEqual(got(A, T.KVM_NEXT).length, 0, 'A was not asked to take the phone: it may have no bridge to it');
+    assert.strictEqual(B.helper.last('armReturn').on, false);
+    assert.strictEqual(A.kvm.mode, 'driving', 'A keeps driving B');
+
+    // A's input now goes to the phone, not into B
+    const injects = B.helper.count('inject');
+    A.helper.emit('event', 'ev', { ev: { t: T.K_MOVE, dx: 3, dy: 4 } });
+    await waitFor(() => localLog.some((m) => m.t === T.K_MOVE), 'A’s move reaches the phone through B');
+    assert.strictEqual(B.helper.count('inject'), injects, 'and is not injected into B');
+
+    // the phone hands the pointer back: B is an ordinary driven PC again, at its right edge
+    B.hub.sessions.get(phone.id).inject({ t: T.KVM_HOME, route: take.route, offset: 0.7 });
+    await waitFor(() => B.helper.last('place') && B.helper.last('place').side === 'right', 'the pointer is back on B’s right edge');
+    assert.strictEqual(B.helper.last('place').offset, 0.7);
+    assert.strictEqual(B.helper.last('armReturn').on, true);
+    A.helper.emit('event', 'ev', { ev: { t: T.K_MOVE, dx: 1, dy: 1 } });
+    await waitFor(() => B.helper.count('inject') === injects + 1, 'A’s input goes into B again');
+
+    // the driver takes B back while the phone is driven: the phone is released
+    B.helper.emit('event', 'return', { side: 'right', offset: 0.5 });
+    await waitFor(() => localLog.filter((m) => m.t === T.KVM_TAKE).length === 2, 'the phone is taken again');
+    A.kvm.home();
+    await waitFor(() => B.kvm.mode === 'home', 'B is home');
+    assert.ok(localLog.some((m) => m.t === T.KVM_RELEASE), 'the phone gets kvm.release');
+    snaps(N);
+  } finally {
+    if (phone) phone.client.close();
+    closeAll(N);
+  }
+});
+
+test('B cannot drive the phone itself (the bridge is not ready): B asks A to take it with kvm.next, as before', async () => {
+  const N = await world(['A', 'B'], [['A', 'B']]);
+  let phone = null;
+  try {
+    const { A, B } = N;
+    kvmOn(A); kvmOn(B);
+    phone = await pairPhone(B, { name: 'Phone' });
+    await helloPhone(phone.client, { id: phone.id, token: phone.token });
+    await waitFor(() => B.hub.sessions.get(phone.id) && B.hub.sessions.get(phone.id).connected, 'the phone is connected to B');
+    const localLog = [];
+    B.kvm.local = fakeBridge(B, phone, localLog, false);
+    assert.ok(B.layoutSync.place(A.id, -1, 0) && B.layoutSync.place(B.id, 0, 0) && B.layoutSync.place(phone.id, 1, 0));
+    await waitFor(() => A.kvm.edges.right === B.id && B.kvm.edges.right === phone.id, 'A - B - phone');
+    await driveVia(A, B, 'right');
+    await waitFor(() => B.kvm.mode === 'driven', 'B is driven by A');
+    B.helper.emit('event', 'return', { side: 'right', offset: 0.4 });
+    await waitFor(() => got(A, T.KVM_NEXT).length === 1, 'A is asked to take the phone');
+    assert.strictEqual(localLog.length, 0, 'B did not touch its bridge');
   } finally {
     if (phone) phone.client.close();
     closeAll(N);

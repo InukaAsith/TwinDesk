@@ -220,8 +220,8 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 
 /* Cursor tab, Layout: the grid of paired devices (ui-cursor.js). A tile is a device; an empty place is
    where one can go. */
-.layout-grid { display: grid; gap: 8px; padding: 12px; }
-.lay-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 10px 6px;
+.layout-grid { display: grid; flex: none; grid-auto-rows: minmax(96px, auto); gap: 8px; padding: 12px; box-sizing: border-box; width: 100%; }
+.lay-tile { display: flex; justify-content: center; box-sizing: border-box; min-height: 96px; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 10px 6px;
   border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: inherit; font: inherit; cursor: pointer; }
 .lay-tile.here { border-color: var(--accent); background: var(--accent-soft); }
 .lay-tile.off { opacity: 0.55; }
@@ -229,5 +229,5 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 .lay-tile .os-ico { flex: none; }
 .lay-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .lay-state { font-size: 11px; opacity: 0.7; }
-.lay-place { min-height: 64px; border: 1px dashed var(--line); border-radius: 10px; background: transparent; cursor: pointer; font: inherit; }
+.lay-place { min-height: 96px; width: 100%; box-sizing: border-box; border: 1px dashed var(--line); border-radius: 10px; background: transparent; cursor: pointer; font: inherit; }
 .lay-place.target { border-color: var(--accent); }

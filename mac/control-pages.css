@@ -31,7 +31,7 @@
 
 /* Cursor: layout picker */
 .layout { display: flex; align-items: center; gap: 24px; padding: 18px; }
-.layout-grid { display: grid; grid-template-columns: 70px 150px 70px; grid-template-rows: 44px 94px 44px; gap: 6px; flex: none; }
+.layout-grid { display: grid; flex: none; grid-auto-rows: minmax(96px, auto); gap: 8px; padding: 12px; box-sizing: border-box; width: 100%; }
 .screen { border-radius: 6px; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
 .mac-screen { background: linear-gradient(135deg, #5ac8fa, #0a84ff); color: #fff; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); }
 .slot { border: 1.5px dashed var(--control-line); border-radius: 6px; background: none; font-weight: 600; font-size: 12px; color: #fff; cursor: default; }
@@ -43,14 +43,14 @@
 .layout-hint { color: var(--muted); }
 /* The shared layout: one tile per device, empty places between them (docs/mesh.md, "Shared layout") */
 .layout-map { display: grid; gap: 8px; padding: 12px; }
-.lay-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 10px 6px; border: 1.5px solid var(--control-line); border-radius: 10px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.lay-tile { display: flex; justify-content: center; box-sizing: border-box; min-height: 96px; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 10px 6px; border: 1.5px solid var(--control-line); border-radius: 10px; background: none; color: inherit; font: inherit; cursor: pointer; }
 .lay-tile.here { border-color: var(--accent); background: var(--accent-soft); }
 .lay-tile.off { opacity: 0.55; }
 .lay-tile.picked { box-shadow: 0 0 0 2px var(--accent); }
 .lay-tile .os-ico { flex: none; }
 .lay-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .lay-state { font-size: 11px; opacity: 0.7; }
-.lay-place { min-height: 64px; border: 1px dashed var(--control-line); border-radius: 10px; background: transparent; cursor: pointer; font: inherit; }
+.lay-place { min-height: 96px; width: 100%; box-sizing: border-box; border: 1px dashed var(--control-line); border-radius: 10px; background: transparent; cursor: pointer; font: inherit; }
 .lay-place.target { border-color: var(--accent); }
 kbd.key { font: 12px -apple-system, sans-serif; padding: 2px 7px; border-radius: 5px; border: 1px solid var(--control-line); border-bottom-width: 2px; background: var(--control); }
 

@@ -396,6 +396,11 @@ class PhoneBridge extends EventEmitter {
     return isPhone(c) && (id === undefined || id === null || c.deviceId === id);
   }
 
+  // Can a kvm.take be served now (the bridge is connected and knows the phone's screen).
+  drivable() {
+    return !!(this.control && !this.control.closed && this._display());
+  }
+
   _display() {
     const info = this.phone.info;
     return info && info.display;
