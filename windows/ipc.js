@@ -186,7 +186,7 @@ function setupIpc(ctx) {
       { label: 'Pin to Start', click: () => ctx.phoneViews.pin(arg.id, name) },
     ]).popup();
   });
-  phone('phoneRetry', () => ctx.phone.bridge._kick());
+  phone('phoneRetry', (id) => { const u = typeof id === 'string' && id ? ctx.phone.unit(id.slice(0, 64)) : null; (u || ctx.phone).bridge._kick(); });
   phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
   handle('phoneAssets', () => (ctx.phone ? ctx.phone.assetsView() : { wallpaper: '', apps: [] }));
   handle('installVdd', () => vdd.install());

@@ -101,6 +101,21 @@ UI.tab({
     const adbPairRow = UI.row('Pairing code', 'Or type it on the phone, in TwinDesk’s notification', [adbCode, adbWhere, adbPair]);
     const adbCard = UI.card('Phone screen, mouse and keyboard', [adbRow, adbPairRow]);
 
+    // Every phone whose screen/mouse/keyboard connection (wireless debugging or cable) is not working yet, each with
+    // a Fix button: it makes that phone the selected one (its pairing fields show below) and tries again.
+    const FIX_HINT = {
+      waitingWifi: 'Turn on Developer options › Wireless debugging on the phone (same Wi-Fi), then tap Fix.',
+      needsPair: 'Pair once: Wireless debugging › Pair device with pairing code on the phone, then type the code in the Pairing code row below.',
+      missing: 'adb is missing from this build.',
+      connecting: 'Looking for the phone’s wireless debugging… If this stays, tap Fix.',
+      error: 'The connection stopped. Tap Fix to try again.',
+    };
+    const fixList = el('div');
+    const fixCard = UI.card('Phones that need fixing', [fixList]);
+    let fixKey = '';
+    const notReadySince = new Map();
+    setInterval(() => { if (last) update(last); }, 4000); // 'connecting' for 8 s turns into a problem without another state push
+
     // ---- devices (docs/mesh.md): every paired device; the selected one is what the features below use ----
     const devicesList = el('div');
     let devicesKey = '';
@@ -110,6 +125,7 @@ UI.tab({
       UI.card('', [addrRow, ipRow]),
       UI.card('Found nearby', [discRow, foundList], { actions: [refresh] }),
       UI.card('Devices', [devicesList]),
+      fixCard,
       hero,
       adbCard,
       pair.el,
@@ -153,6 +169,26 @@ UI.tab({
         adbPill.textContent = label;
         adbRow.setHint(br.message || '');
         adbPairRow.hidden = !pairable;
+      }
+
+      // A phone that is only just connecting is not a problem yet: 'connecting' counts after 8 s.
+      const now = Date.now();
+      for (const p of ph.phones || []) {
+        if (p.state === 'ready' || p.state === 'off') notReadySince.delete(p.id);
+        else if (!notReadySince.has(p.id)) notReadySince.set(p.id, now);
+      }
+      const broken = (ph.phones || []).filter((p) => p.state && p.state !== 'ready' && p.state !== 'off'
+        && (p.state !== 'connecting' || now - (notReadySince.get(p.id) || now) > 8000));
+      fixCard.hidden = !broken.length;
+      const key = JSON.stringify(broken.map((p) => [p.id, p.state, p.message]));
+      if (key !== fixKey) {
+        fixKey = key;
+        fixList.replaceChildren(...broken.map((p) => {
+          const [cls, label] = ADB[p.state] || ADB.error;
+          const pill = el('span', { class: `pill ${cls}`, text: label });
+          const fix = UI.button('Fix', () => Promise.resolve(api.setActivePeer(p.id)).then(() => api.phoneRetry(p.id)), 'small primary');
+          return UI.row(p.name || 'Phone', p.message || FIX_HINT[p.state] || '', [pill, fix]);
+        }));
       }
 
       // this PC
