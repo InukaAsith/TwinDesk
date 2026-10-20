@@ -8,7 +8,7 @@
 'use strict';
 
 const path = require('path');
-const { BrowserWindow, ipcMain, session, desktopCapturer } = require('electron');
+const { BrowserWindow, ipcMain, session, desktopCapturer, webContents } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 
@@ -16,6 +16,25 @@ const RETRY_MS = 2000;
 // A phone over Wi-Fi: a high rate only fills the radio's queues (latency) without looking sharper
 // on a phone screen, and a smaller keyframe gets there sooner.
 const PHONE_MBPS = 16;
+
+// One display-media handler for the session, shared by every Stream (one per target device): the
+// request tells which capture window asked, so each Stream gives its own source.
+const byCapture = new Map(); // webContents id -> Stream
+let handlerSet = false;
+function setHandler() {
+  if (handlerSet) return;
+  handlerSet = true;
+  session.defaultSession.setDisplayMediaRequestHandler(async (req, cb) => {
+    try {
+      const wc = req.frame ? webContents.fromFrame(req.frame) : null;
+      const st = (wc && byCapture.get(wc.id)) || byCapture.values().next().value;
+      cb({ video: await st._source() });
+    } catch (e) {
+      console.error(`[stream] no capture source: ${e.message}`);
+      cb({});
+    }
+  });
+}
 
 class Stream extends EventEmitter {
   constructor(server, displays, getSettings, hub) {
@@ -32,14 +51,9 @@ class Stream extends EventEmitter {
     this.viewer = null; // the peer's screen.policy accept; null = never said (older app: always watching)
     this.view = { status: 'off', display: null, width: 0, height: 0, fps: 0, mbps: 0, encoder: '', codec: '' };
 
-    session.defaultSession.setDisplayMediaRequestHandler(async (_req, cb) => {
-      try {
-        cb({ video: await this._source() });
-      } catch (e) {
-        console.error(`[stream] no capture source: ${e.message}`);
-        cb({});
-      }
-    });
+    this.choice = null; // this target's own choice {mode: 'none'|'mirror'|'virtual', displayId?}; null = the shared settings
+    this.audioOk = () => true; // StreamSet: only the active target's stream carries the sound
+    setHandler();
 
     // A new peer says within moments whether its viewer is open (screen.policy); an older app never
     // does. So wait up to 1.5 s before sending anything, then treat silence as "watching".
@@ -100,12 +114,20 @@ class Stream extends EventEmitter {
     });
   }
 
+  // The display this target gets: its own choice, else what the shared settings say.
+  _target() {
+    const c = this.choice;
+    if (c && c.mode === 'mirror') return this.displays.byId(c.displayId) || this.displays.target();
+    if (c && c.mode === 'virtual') return this.displays.virtualTarget() || this.displays.target();
+    return this.displays.target();
+  }
+
   _fromCapture(e) {
     return this.win && !this.win.isDestroyed() && e.sender === this.win.webContents;
   }
 
   async _source() {
-    const target = this.displays.target();
+    const target = this._target();
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
     const src = (target && sources.find((s) => s.display_id === String(target.id))) || sources[0];
     if (!src) throw new Error('no screens (Screen Recording permission?)');
@@ -123,6 +145,7 @@ class Stream extends EventEmitter {
         backgroundThrottling: false,
       },
     });
+    byCapture.set(this.win.webContents.id, this);
     this.win.webContents.on('render-process-gone', (_e, d) => {
       console.error(`[stream] capture window gone: ${d.reason}`);
       this.win = null;
@@ -152,14 +175,15 @@ class Stream extends EventEmitter {
     if (!this.getSettings().sharing.on) return this.stop('off');
     if (!this.server.current) return this._stopWindow('nothing connected');
     if (this.viewer === false || this.waitingPolicy) return this._stopWindow('no viewer');
-    const target = this.displays.target();
+    if (this.choice && this.choice.mode === 'none') return this._stopWindow('off for this device');
+    const target = this._target();
     if (!target) return this._stopWindow('no display to share');
 
     const s = ++this.session;
     const { width, height } = this._outSize(target);
     // Sound goes with the screen only when "Share sound with the screen" is on (else: none, for latency).
     let audio = false;
-    if (this.getSettings().sharing.audio) {
+    if (this.getSettings().sharing.audio && this.audioOk()) {
       await this._ensureWindow();
       audio = await this.hub.acquire('screen', this.win.webContents);
       this.audio.error = audio ? null : this.hub.error;
@@ -209,7 +233,7 @@ class Stream extends EventEmitter {
 
   _displaysChanged() {
     if (!this.active) return;
-    const t = this.displays.target();
+    const t = this._target();
     if (!t || t.id !== this.active.displayId || t.pixelWidth !== this.active.width || t.pixelHeight !== this.active.height) {
       this.restart('display changed');
     }

@@ -9,6 +9,7 @@ const { powerSaveBlocker } = require('electron');
 const { Helper } = require('./helper');
 const { Displays } = require('./displays');
 const { Stream } = require('./stream');
+const { StreamSet } = require('./streams');
 const { Input } = require('./input');
 const { Clip } = require('./clipboard');
 const { Kvm } = require('./kvm');
@@ -36,7 +37,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const helper = new Helper();
   const displays = new Displays(helper, s);
   const hub = new AudioHub(helper, s);
-  const stream = new Stream(server, displays, s, hub);
+  const stream = new StreamSet({ hub: meshHub, server, displays, make: (peer) => new Stream(peer, displays, s, hub) }); // one Stream per connected device
   let kvm = null;
   // Stream input only when "Receive input" is on and shared input is home.
   const input = new Input(server, helper, displays, {

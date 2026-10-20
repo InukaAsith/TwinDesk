@@ -87,8 +87,44 @@ UI.tab({
       return [k, v];
     }));
 
+    // This Mac's displays as the OS arranges them, and what each connected device gets.
+    const map = el('div', { class: 'screen-map' });
+    map.style.cssText = 'position:relative;height:120px;margin:8px 0';
+    const targetsBox = el('div', { class: 'screen-targets' });
+    let targetsKey = '';
+    const drawMap = (displays, targets) => {
+      map.textContent = '';
+      if (!displays.length) return;
+      const x0 = Math.min(...displays.map((d) => d.x)), y0 = Math.min(...displays.map((d) => d.y));
+      const w = Math.max(...displays.map((d) => d.x + d.w)) - x0, h = Math.max(...displays.map((d) => d.y + d.h)) - y0;
+      const k = Math.min(100 / h, (map.clientWidth || 480) / w, 1);
+      for (const d of displays) {
+        const who = targets.filter((t) => t.mode === 'mirror' && t.displayId === d.id).map((t) => t.name);
+        const box = el('div', { text: [d.name + (d.primary ? ' (main)' : ''), d.w + ' × ' + d.h].concat(who.length ? ['→ ' + who.join(', ')] : []).join(String.fromCharCode(10)) });
+        box.style.cssText = `position:absolute;box-sizing:border-box;border:1px solid var(--accent,#0a84ff);border-radius:4px;font-size:11px;white-space:pre;overflow:hidden;padding:2px 4px;opacity:${who.length ? 1 : 0.6};`
+          + `left:${(d.x - x0) * k}px;top:${(d.y - y0) * k}px;width:${d.w * k}px;height:${d.h * k}px`;
+        map.append(box);
+      }
+      map.style.height = h * k + 'px';
+    };
+    const drawTargets = (st) => {
+      const key = JSON.stringify([st.targets, st.displays]);
+      if (key === targetsKey) return;
+      targetsKey = key;
+      targetsBox.textContent = '';
+      for (const t of st.targets) {
+        const choices = [{ value: 'default', label: 'As set above' }, { value: 'none', label: 'Off' }, { value: 'virtual', label: 'Virtual display' },
+          ...st.displays.map((d) => ({ value: 'mirror:' + d.id, label: 'Mirror ' + d.name }))];
+        const sel = UI.select(choices, (v) => api.setStreamTarget(t.id, v.startsWith('mirror:') ? { mode: 'mirror', displayId: v.slice(7) } : { mode: v }));
+        sel.set(t.mode === 'mirror' ? 'mirror:' + t.displayId : t.mode);
+        targetsBox.append(UI.row(t.name, '', [sel]));
+      }
+    };
+    const screens = UI.card('Displays', [map, targetsBox]);
+
     body.append(
       helperNote,
+      screens,
       UI.card('Screen', [modeRow, displayRow]),
       UI.card('Virtual display', [virtRow, sizeRow]),
       UI.card('Picture', [
@@ -104,6 +140,13 @@ UI.tab({
       helperNote.hidden = !!(s.helper && s.helper.running);
       const sh = s.sharing;
       if (!sh) return;
+      const sd = s.stream && s.stream.displays;
+      screens.hidden = !(sd && sd.length);
+      if (sd && sd.length) {
+        drawMap(sd, s.stream.targets || []);
+        targetsBox.hidden = !s.stream.targets || s.stream.targets.length < 2; // one device: the cards below do it all
+        if (!targetsBox.hidden) drawTargets(s.stream);
+      }
       mode.set(s.displayMode);
       modeRow.setHint({ extend: 'Shows the TwinDesk virtual display', mirror: 'Shows {me}’s main screen', custom: '' }[s.displayMode]);
 

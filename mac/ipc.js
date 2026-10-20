@@ -235,6 +235,11 @@ function setupIpc(ctx) {
       if (!on) ctx.input.releaseAll();
       ctx.server.sendToClient({ t: P.T.STREAM_INPUT, on: !!on }); // Windows goes view-only when off
     },
+    // Share this Mac's screen with one device its own way: { mode: 'default'|'none'|'mirror'|'virtual', displayId? }.
+    setStreamTarget(id, choice) {
+      if (typeof id !== 'string' || !choice || typeof choice !== 'object') return undefined;
+      return ctx.stream.setTarget(id, { mode: String(choice.mode), displayId: choice.displayId });
+    },
     // null = the TwinDesk virtual display
     selectDisplay(displayId) {
       settings.sharing.displayId = displayId == null ? null : Number(displayId);
