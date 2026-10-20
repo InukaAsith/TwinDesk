@@ -44,8 +44,7 @@ object LayoutRules {
             if (b is String) by = b.take(MAX_BY)
             val src = value.optJSONObject("cells")
             if (src != null) {
-                val ids = keysOf(src)
-                ids.sort()
+                val ids = keysOf(src).sorted()
                 val taken = HashSet<String>()
                 var count = 0
                 for (id in ids) {
@@ -93,4 +92,35 @@ object LayoutRules {
 
     // The layout two devices agree on: the newer one.
     fun merge(a: JSONObject?, b: JSONObject?): JSONObject = if (newer(b, a)) normalize(b) else normalize(a)
+}
+
+// The shared layout as a pooled item, like the clipboard (its own Pool; docs/mesh.md, "Shared layout"). A
+// layout from any computer is applied once when it is newer than the stored one, and the Pool relays it.
+// A computer that connects gets the stored layout, so a late joiner converges. The phone never makes one.
+class LayoutFeature(core: Core) : Feature(core) {
+    private val pool = Pool(core.store.deviceId, { core.poolPeers { true } })
+
+    // A layout is kept only when it is usable: rev >= 1 and at least one cell.
+    private fun usable(l: JSONObject): Boolean = l.optLong("rev") >= 1 && (l.optJSONObject("cells")?.length() ?: 0) > 0
+
+    private fun stored(): JSONObject? = core.store.getLayout()?.let { LayoutRules.normalize(it) }?.takeIf { usable(it) }
+
+    override fun onPeerWelcome(host: Host) {
+        val l = stored() ?: return
+        pool.publish(mapOf("t" to Proto.T.LAYOUT, "layout" to l))
+    }
+
+    override fun onMessage(t: String, m: JSONObject, host: Host): Boolean {
+        if (t != Proto.T.LAYOUT) return false
+        val r = pool.receive(host.id, m.toPoolMsg())
+        if (r.fresh) {
+            val incoming = LayoutRules.normalize(m.optJSONObject("layout"))
+            val current = core.store.getLayout()?.let { LayoutRules.normalize(it) } ?: LayoutRules.normalize(null)
+            if (usable(incoming) && LayoutRules.newer(incoming, current)) {
+                core.store.setLayout(incoming)
+                core.changed()
+            }
+        }
+        return true
+    }
 }
