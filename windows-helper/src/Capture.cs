@@ -43,6 +43,7 @@ namespace MacShare
         readonly List<string> retSides = new List<string>();
         readonly Dictionary<string, EdgePush> retPushes = new Dictionary<string, EdgePush>();
         bool retArmed; double retResistance;
+        DateTime lastEdgeNote = DateTime.MinValue;
 
         // hotkey double-tap
         bool hkDown; DateTime lastTapUp = DateTime.MinValue;
@@ -425,6 +426,14 @@ namespace MacShare
             foreach (string side in Sides)
             {
                 double outward = Screens.Outward(side, dx, dy);
+                // A push against a watched side's edge that is not the outer edge of the desktop crosses nothing: say so (once in a while) for the logs.
+                if (outward > 0 && Screens.NearEdge(p.x, p.y, side, 8) && !Screens.OnOuterEdge(p.x, p.y, side) && (DateTime.UtcNow - lastEdgeNote).TotalMilliseconds > 2000)
+                {
+                    lastEdgeNote = DateTime.UtcNow;
+                    Dictionary<string, object> note = Ev("edgeNote");
+                    note["side"] = side; note["x"] = p.x; note["y"] = p.y; note["monitors"] = Screens.Describe();
+                    emit(note);
+                }
                 if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, side)) { pushes.Remove(side); continue; }
                 DateTime now = DateTime.UtcNow;
                 EdgePush e;

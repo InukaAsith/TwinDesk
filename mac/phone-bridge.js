@@ -215,6 +215,17 @@ class PhoneBridge extends EventEmitter {
       await this._checkInput(ready);
       return this._startControl();
     }
+    // Say once per change why it was not found (the user has no console): which adb devices exist, what the cable knows.
+    const id = this.server.current && this.server.current.deviceId;
+    const list = await this.adb.devices();
+    const usbSerial = this.wired && id ? this.wired.serialOf(id) : null;
+    this._logOnce('find', `no adb device for ${this.server.current && this.server.current.name} (address ${address || 'unknown'}): adb sees [${list.map((x) => `${x.serial}=${x.state}`).join(', ') || 'nothing'}], on the cable: ${usbSerial || 'not known'}, wireless debugging ${a.wifi ? 'on' : 'off'}`);
+    if (usbSerial) { // this phone is on the cable: never ask for Wi-Fi
+      const st = list.find((x) => x.serial === usbSerial);
+      return this._set('connecting', st && st.state === 'unauthorized'
+        ? 'Allow USB debugging for this computer on the phone (tap Allow on its prompt).'
+        : `Waiting for adb on the cable (${st ? st.state : 'not listed'})…`);
+    }
     if (!a.wifi) {
       if (a.canEnable) {
         this.server.sendToClient({ t: T.ADB_ENABLE, on: true });
@@ -259,6 +270,13 @@ class PhoneBridge extends EventEmitter {
     this._set('needsPair', unpaired ? 'Pair this Mac with the phone once: on the phone, Wireless debugging › Pair device with pairing code.'
       : this.pairing ? 'Type the code the phone shows.'
         : 'On the phone: Settings › Developer options › Wireless debugging › Pair device with pairing code.');
+  }
+
+  _logOnce(key, text) {
+    this.logged = this.logged || new Map();
+    if (this.logged.get(key) === text) return;
+    this.logged.set(key, text);
+    console.log(`[phone] ${text}`);
   }
 
   _known(on) {

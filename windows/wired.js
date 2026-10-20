@@ -43,7 +43,10 @@ class Wired extends EventEmitter {
     raw.iceFor = (ctx) => (ctx.os === P.OS.ANDROID && isLoopback(ctx.address) && this.turnOk ? this._ice() : null);
     peer.on('t:phone.wired', (m, ctx) => {
       const hit = [...this.plugged].find(([, p]) => p.nonce && p.nonce === m.nonce);
-      if (!hit || !ctx.deviceId) return;
+      if (!hit || !ctx.deviceId) {
+        console.log(`[wired] ${ctx.name || ctx.deviceId} sent phone.wired with a nonce that matches no cable we asked (${m.nonce ? 'unknown' : 'missing'}): it is on the cable, but we cannot tell which USB device it is`);
+        return;
+      }
       this.byDevice.set(ctx.deviceId, hit[0]);
       console.log(`[wired] ${ctx.name} is on the cable (${hit[0]})`);
       this.emit('change');
@@ -79,7 +82,9 @@ class Wired extends EventEmitter {
       // system, not adb). Until then no adb server runs.
       const linked = this.peer.all().length > 0;
       const here = linked || (this.hasPhone() && await usbadb.present());
-      const usb = !here ? [] : (await this.adb.devices()).filter((d) => d.state === 'device' && isUsb(d.serial)).map((d) => d.serial);
+      const all = !here ? [] : (await this.adb.devices()).filter((d) => isUsb(d.serial));
+      this._logDevices(here, all);
+      const usb = all.filter((d) => d.state === 'device').map((d) => d.serial);
       for (const s of [...this.plugged.keys()]) {
         if (usb.includes(s)) continue;
         this.plugged.delete(s);
@@ -96,6 +101,18 @@ class Wired extends EventEmitter {
       }
     } finally {
       this.polling = false;
+    }
+  }
+
+  // One line when what adb sees on the cables changes (and why nothing happens: unauthorized, offline, no phone here).
+  _logDevices(here, all) {
+    const key = here ? all.map((d) => `${d.serial}=${d.state}`).join(',') || 'none' : 'no phone here (not linked, nothing paired on a cable): adb not asked';
+    if (key === this._devKey) return;
+    this._devKey = key;
+    console.log(`[wired] usb devices: ${key}`);
+    for (const d of all) {
+      if (d.state === 'unauthorized') console.log(`[wired] ${d.serial} is unauthorized: allow USB debugging for this computer on the phone (tap Allow on its prompt)`);
+      else if (d.state !== 'device') console.log(`[wired] ${d.serial} is ${d.state}: not usable yet`);
     }
   }
 
@@ -129,19 +146,29 @@ class Wired extends EventEmitter {
       r = await this.adb.run(['-s', serial, 'reverse', `tcp:${p}`, `tcp:${port}`], { timeout: 5000 });
       if (!r.code) return p || Number(r.out.trim());
     }
-    throw new Error(`adb reverse ${port}: ${(r.err || r.out).trim()}`);
+    throw new Error(`${serial}: adb reverse ${port} failed: ${(r.err || r.out).trim()}`);
   }
 
   async _invite(serial) {
     const has = await this.adb.shell(serial, `pm path ${APP_ID}`, { timeout: 5000 });
-    if (!/package:/.test(has.out)) return;
+    if (!/package:/.test(has.out)) {
+      console.log(`[wired] ${serial}: TwinDesk is not installed on it (pm path said: ${(has.out || has.err || 'nothing').trim().slice(0, 120)}): nothing to connect`);
+      return;
+    }
     const port = await this._reverse(serial, this.raw.port);
     this.phoneTurn = await this._reverse(serial, TURN_PORT);
+    console.log(`[wired] ${serial}: adb reverse done (server port ${port}, relay port ${this.phoneTurn})`);
     const nonce = crypto.randomBytes(8).toString('hex');
     const r = await this.adb.shell(serial, `am broadcast -f 32 -n ${APP_ID}/.WiredReceiver --es host ${this.getId()} --ei port ${port} --es nonce ${nonce}`, { timeout: 8000 });
-    if (!/Broadcast completed/.test(r.out)) throw new Error(`broadcast: ${(r.out || r.err || '').trim()}`);
+    if (!/Broadcast completed/.test(r.out)) throw new Error(`${serial}: broadcast failed: ${(r.out || r.err || '').trim()}`);
     this.plugged.set(serial, { nonce, at: Date.now(), linked: true });
-    console.log(`[wired] asked ${serial} to connect through the cable`);
+    console.log(`[wired] asked ${serial} to connect through the cable (broadcast: ${(r.out || '').trim().replace(/\s+/g, ' ').slice(0, 100)})`);
+    setTimeout(() => { // the phone says phone.wired with this nonce once its session is up
+      const p = this.plugged.get(serial);
+      if (p && p.nonce === nonce && ![...this.byDevice.values()].includes(serial)) {
+        console.log(`[wired] ${serial}: no phone.wired from it within 15 s: the app did not connect through the cable (not paired with this computer? an old app without cable support? it must be open or allowed to start in the background)`);
+      }
+    }, 15000).unref();
   }
 
   stop() {

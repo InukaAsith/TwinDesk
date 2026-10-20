@@ -2,6 +2,7 @@
 // Monitors (physical pixels; the process is per-monitor DPI aware), outer edges, offsets along a
 // side, landing points, clamping and the DPI scale under a point.
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -50,6 +51,29 @@ namespace MacShare
                 case "bottom": return y >= m.Bottom - 2 && !Contains(x, m.Bottom);
             }
             return false;
+        }
+
+        // Within `px` of the edge of the monitor the point is on (whether or not another monitor continues beyond it).
+        public static bool NearEdge(int x, int y, string side, int px)
+        {
+            Rectangle m;
+            if (!MonitorAt(x, y, out m)) return false;
+            switch (side)
+            {
+                case "left": return x <= m.Left + px;
+                case "right": return x >= m.Right - 1 - px;
+                case "top": return y <= m.Top + px;
+                case "bottom": return y >= m.Bottom - 1 - px;
+            }
+            return false;
+        }
+
+        // "left,top,right,bottom;..." of every monitor, for the logs.
+        public static string Describe()
+        {
+            List<string> l = new List<string>();
+            foreach (Rectangle r in All()) l.Add(r.Left + "," + r.Top + "," + r.Right + "," + r.Bottom);
+            return string.Join(";", l.ToArray());
         }
 
         // Outward component of a motion for `side` (positive = pushing through it).

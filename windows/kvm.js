@@ -316,6 +316,9 @@ class Kvm {
       case 'return':
         if (this.mode === 'driven') this._onReturn(msg);
         break;
+      case 'edgeNote': // pushing on a watched side's edge that is not the outer edge of the desktop (more monitors beyond it)
+        console.log('[kvm] push at ' + msg.side + ' edge (' + msg.x + ',' + msg.y + ') is not the outer edge; monitors ' + msg.monitors);
+        break;
       case 'ev':
         if (this.mode === 'driving' && msg.ev && (K_TYPES.has(msg.ev.t) || (msg.ev.t === T.K_GESTURE && this.cfg.gestures !== false))) {
           if (this.fileClip && this.fileClip.intercept(msg.ev)) break; // copy/paste shortcut: done over there
