@@ -311,8 +311,9 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     companion object {
-        // Message types a computer that is not the attached one may send (they are pooled).
-        private val POOLED_TYPES = setOf(Proto.T.LAYOUT)
+        // Message types a computer that is not the attached one may send: the pooled ones (clipboard,
+        // notifications, layout) and the policy switches that go with them.
+        private val POOLED_TYPES = setOf(Proto.T.LAYOUT, Proto.T.CLIP, Proto.T.CLIP_POLICY, Proto.T.NOTIF, Proto.T.NOTIF_POLICY)
         @Volatile private var instance: Core? = null
         fun get(ctx: Context): Core = instance ?: synchronized(this) {
             instance ?: Core(ctx.applicationContext).also { instance = it; it.start() }
