@@ -442,7 +442,7 @@ class Kvm {
     // A driver with no bridge of its own to a phone asks us to drive that phone for it (m.via): the input it
     // sends us goes on to the phone through our bridge, and the phone hands the pointer back to the driver.
     const via = typeof m.via === 'string' && m.via ? m.via : '';
-    if (via && !(this._peerOs(via) === P.OS.ANDROID && this.local && this.local.drives(via) && this.local.drivable() && this._linkedFor(via))) {
+    if (via && !(this._peerOs(via) === P.OS.ANDROID && this.local && this.local.drives(via) && (!this.local.drivable || this.local.drivable()) && this._linkedFor(via))) {
       console.log('[kvm] ' + from + ' asked us to drive ' + via + ' but we cannot');
       this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.NOT_ALLOWED });
       return;
@@ -518,7 +518,7 @@ class Kvm {
 
   _canRelay(to) {
     return !this.sub && this.mode === 'driven' && !this.keyboardOnly && this._peerOs(to) === P.OS.ANDROID && !!this.local
-      && this.local.drives(to) && this.local.drivable() && this._linkedFor(to) && this.cfg.driveOther && !!this.cfg.mouse;
+      && this.local.drives(to) && (!this.local.drivable || this.local.drivable()) && this._linkedFor(to) && this.cfg.driveOther && !!this.cfg.mouse;
   }
 
   _relayTo(to, side, offset, viaTake = false) {

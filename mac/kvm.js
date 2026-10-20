@@ -307,7 +307,7 @@ class Kvm extends EventEmitter {
     // computer that has one drives it for us (kvm.take with `via`); the phone hands the pointer back to us.
     let target = id || null;
     let via = '';
-    if (id && this.local && this.local.drives(id) && !this.local.drivable()) {
+    if (id && this.local && this.local.drives(id) && this.local.drivable && !this.local.drivable()) {
       const relay = this._relayFor(id);
       if (relay) { target = relay; via = id; }
     }
