@@ -341,13 +341,17 @@ class PhoneBridge extends EventEmitter {
     s.on('closed', (why) => {
       if (this.control !== s) return;
       this.control = null;
-      if (this.kvm) this._kvmEnd(true);
+      if (this.kvm) { // keep driving through a short gap: the connection is retried in 2 s; after 8 s the pointer goes home
+        const route = this.kvm.route;
+        setTimeout(() => { if (this.kvm && this.kvm.route === route && (!this.control || this.control.closed)) this._goHome(); }, 8000);
+      }
       this._set('error', `The phone connection stopped (${why}).`);
       setTimeout(() => this._kick(), 2000);
     });
     await s.start();
     this.control = s;
     this._set('ready');
+    if (this.kvm) this._hover(); // taken while the connection was down: the pointer goes where it should be
   }
 
   // The phone copied something (scrcpy sees it even with TwinDesk in the background): it goes
@@ -421,10 +425,23 @@ class PhoneBridge extends EventEmitter {
 
   _take(m) {
     const d = this._display();
-    if (!this.control || this.control.closed || !d) {
+    const pending = !this.control || this.control.closed;
+    // The adb connection drops now and then and comes back within seconds: take the phone anyway (its
+    // pointer shows at once, touches follow when the connection is back) instead of refusing for a gap.
+    // Only a phone that was never set up (or has no screen info) is refused.
+    if (!d || (pending && !['connecting', 'error', 'ready'].includes(this.state))) {
+      console.log(`[phone] take refused (state ${this.state}, control ${pending ? 'down' : 'up'}, display ${d ? 'known' : 'unknown'})`);
       setImmediate(() => this.server.inject({ t: T.KVM_REFUSE, route: m.route, why: P.REFUSE.NOT_ALLOWED }));
       this.emit('popup', 'home', this.state === 'ready' ? 'The phone isn’t ready yet' : 'Set up wireless debugging on the Phone page first');
       return;
+    }
+    if (pending) {
+      console.log(`[phone] take while the connection is down (${this.state}): waiting for it`);
+      this._kick();
+      const route = m.route;
+      setTimeout(() => { // gave up: hand the pointer back
+        if (this.kvm && this.kvm.route === route && (!this.control || this.control.closed)) this._goHome();
+      }, 8000);
     }
     const off = Math.max(0, Math.min(1, Number(m.offset) || 0.5));
     const side = m.side || 'left';
