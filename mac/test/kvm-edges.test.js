@@ -108,10 +108,10 @@ async function setup() {
   const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
   const drop = { dragIn: { dragging: false, armDrag() {}, onDriven() {}, cancel() {}, release() {} }, cancelDrag() {}, release() {}, armDrag() {} };
   const kvm = new Kvm({
-    hub: A.hub, server: new Peer(A.hub.facade, A.server), helper, getSettings: () => settings,
+    hub: A.hub, helper, getSettings: () => settings,
     clipboard: { sendIfChanged: () => true }, input: { releaseAll() {} }, drop, fileSend, save() {},
   });
-  kvm.local = bridge;
+  kvm.attachLocal(bridge);
 
   const phone = await hello(A.port, { id: phoneId, name: 'Phone', os: P.OS.ANDROID, token });
   assert.strictEqual(phone.reply.t, T.WELCOME, 'the phone is welcomed');

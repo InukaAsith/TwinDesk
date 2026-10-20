@@ -517,7 +517,7 @@ app.whenReady().then(() => {
   // The phone in Finder, through adb (the cable, else wireless debugging): only when Mount is clicked.
   svc.phoneDrive = new PhoneDrive({ adb: svc.phone.bridge.adb, bridge: svc.phone.bridge, phone: svc.phone });
   svc.phoneDrive.on('change', pushState);
-  svc.kvm.local = svc.phone.bridge;
+  svc.kvm.attachLocal(svc.phone.bridge);
   const blockEdge = svc.kvm.blockEdge;
   svc.kvm.blockEdge = () => blockEdge() || svc.phoneViews.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
