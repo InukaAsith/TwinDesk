@@ -62,6 +62,8 @@ app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/
 // Renamed MacShare → TwinDesk: settings, pairing and keys stay in the folder they've always been
 // in (Electron would follow the new product name). A dev copy's --user-data-dir still wins.
 if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'MacShare'));
+// Everything the main process prints also goes to <userData>/logs/main.log (the installed app has no console).
+require('../shared/logfile.js').install(path.join(app.getPath('userData'), 'logs'));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

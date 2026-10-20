@@ -322,10 +322,12 @@ class Kvm {
 
   // The helper crossed one of the watched edges (msg.side) at msg.offset.
   _onEdge(msg) {
+    console.log('[kvm] edge ' + (msg && msg.side) + ' while ' + this.mode);
     if (this.mode === 'driving') return; // already capturing: a late edge is not ours to act on
     const side = E.SIDES.includes(msg.side) ? msg.side : this.crossingSide; // an older helper: the selected side
     const id = side ? this.edges[side] : null;
     if (this.mode !== 'home' || !id || !this._canDriveTo(id) || !this.cfg.mouse || !this.hub.select(id)) {
+      console.log('[kvm] edge ' + side + ' not taken: mode=' + this.mode + ' device=' + (id || 'none') + ' canDrive=' + (id ? this._canDriveTo(id) : false) + ' mouse=' + this.cfg.mouse);
       this.helper.send('capture', { on: false });
       return;
     }
@@ -351,7 +353,10 @@ class Kvm {
     this._clearAccept();
     const route = this.route;
     this.acceptTimer = setTimeout(() => {
-      if (this.mode === 'driving' && this.route === route) this._goHome('Your Mac didn’t answer');
+      if (this.mode === 'driving' && this.route === route) {
+        console.log('[kvm] no kvm.accept from ' + id + ' within ' + P.KVM_TAKE_TIMEOUT_MS + ' ms: back home');
+        this._goHome('Your Mac didn’t answer');
+      }
     }, P.KVM_TAKE_TIMEOUT_MS);
   }
 
@@ -401,6 +406,7 @@ class Kvm {
   // ---- driven (a device drives this PC) ----
 
   _onTake(m, from) {
+    console.log('[kvm] take from ' + from + ' route ' + m.route + ' side ' + m.side + ' (this PC is ' + this.mode + ')');
     const route = Number(m.route) || 0;
     if (this.mode === 'driving') {
       this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.BUSY });
@@ -553,6 +559,7 @@ class Kvm {
   _setMode(mode, message) {
     const was = this.mode;
     this.mode = mode;
+    if (was !== mode) console.log('[kvm] ' + was + ' -> ' + mode + ' (partner ' + (this.partner || '-') + ')' + (message ? ': ' + message : ''));
     if (mode === 'home') this.partner = null;
     if (was !== mode && this.onWhere) this.onWhere(mode, was); // the switching popup (main.js)
     if (mode === 'home' && this.dragPending) { // went home before releasing: the files don't go
