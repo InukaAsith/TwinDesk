@@ -46,7 +46,7 @@ final class Capture {
 
   private var tap: CFMachPort?
   // kvmConfig
-  private var side = "right"
+  private var sides = ["right"]     // the edges watched (kvmConfig `sides`)
   private var resistance = 120.0
   private var edgeEnabled = false   // driveOther && mouse && link up (main decides)
   private var cfgKeyboard = true    // capture the keyboard when crossing at the edge
@@ -59,10 +59,10 @@ final class Capture {
   private var pinnedAt: CGPoint?            // where the pointer stays (hidden) while it is on the other computer
   private var lastCommand = 0.0
   private var deadman: Timer?
-  // edge / return edge push
-  private var edge = (push: 0.0, at: 0.0)
-  private var ret = (push: 0.0, at: 0.0)
-  private var returnSide: String?
+  // edge / return edge push, one state per side
+  private var edgeBy: [String: (push: Double, at: Double)] = [:]
+  private var retBy: [String: (push: Double, at: Double)] = [:]
+  private var returnSides: [String] = []
   private var returnResistance = 120.0
   private var dragPbCount = -1             // drag pasteboard changeCount when the left button went down
   // hotkey: a right-hand modifier, double-tapped (kvmConfig `hotkey`; default Right Option, kVK 0x3D, device flag 0x40)
@@ -98,7 +98,7 @@ final class Capture {
     return true
   }
 
-  func configure(side: String, resistance: Double, edgeEnabled: Bool, keyboard: Bool, dragFiles: Bool, hotkey: String) {
+  func configure(sides: [String], resistance: Double, edgeEnabled: Bool, keyboard: Bool, dragFiles: Bool, hotkey: String) {
     // "AltRight", "AltLeft" or "Alt" (either side); same for Control, Shift, Meta.
     let names = ["Alt", "Control", "Shift", "Meta"].contains(hotkey) ? [hotkey + "Left", hotkey + "Right"] : [hotkey]
     var keys: [UInt16: UInt64] = [:]
@@ -109,11 +109,11 @@ final class Capture {
       hkPending = nil
     }
     self.dragFiles = dragFiles
-    self.side = side
+    self.sides = sides
     self.resistance = resistance
     self.edgeEnabled = edgeEnabled
     self.cfgKeyboard = keyboard
-    edge.push = 0
+    edgeBy.removeAll()
   }
 
   // MARK: capture
@@ -158,7 +158,7 @@ final class Capture {
     }
     swallowUps.formUnion(remoteDown)
     remoteDown.removeAll()
-    edge.push = 0
+    edgeBy.removeAll()
   }
 
   func warp(_ p: CGPoint) {
@@ -166,18 +166,39 @@ final class Capture {
     CGAssociateMouseAndMouseCursorPosition(1) // also ends the ~0.25 s local-event suppression after a warp
   }
 
-  func armReturn(on: Bool, side: String, resistance: Double) {
-    returnSide = on ? side : nil
+  func armReturn(on: Bool, sides: [String], resistance: Double) {
+    returnSides = on ? sides : []
     returnResistance = resistance
-    ret.push = 0
+    retBy.removeAll()
   }
 
   /// Return-edge check while driven; called for local moves and for injected relative moves.
+  /// Any armed side counts: the way back to the driver, or an edge that leads on to another device.
   func checkReturn(_ p: CGPoint, dx: Double, dy: Double) {
-    guard let side = returnSide, let off = Capture.push(&ret, p, dx, dy, side, returnResistance) else { return }
-    returnSide = nil
-    Flash.shared.leave(at: p, side: side)
-    emit(["event": "return", "offset": off])
+    guard !returnSides.isEmpty else { return }
+    var hit: (side: String, offset: Double)? = nil
+    for side in returnSides {
+      var st = retBy[side] ?? (push: 0.0, at: 0.0)
+      let off = Capture.push(&st, p, dx, dy, side, returnResistance)
+      retBy[side] = st
+      if hit == nil, let off = off { hit = (side: side, offset: off) }
+    }
+    guard let found = hit else { return }
+    returnSides = []
+    Flash.shared.leave(at: p, side: found.side)
+    emit(["event": "return", "side": found.side, "offset": found.offset])
+  }
+
+  /// The first watched edge the pointer pushed through (its side and offset), if any.
+  private func edgeCrossing(_ p: CGPoint, dx: Double, dy: Double) -> (side: String, offset: Double)? {
+    var hit: (side: String, offset: Double)? = nil
+    for side in sides {
+      var st = edgeBy[side] ?? (push: 0.0, at: 0.0)
+      let off = Capture.push(&st, p, dx, dy, side, resistance)
+      edgeBy[side] = st
+      if hit == nil, let off = off { hit = (side: side, offset: off) }
+    }
+    return hit
   }
 
   /// Accumulate outward motion on an outer edge; returns the offset when it went through.
@@ -379,14 +400,14 @@ final class Capture {
     if type == .leftMouseDown { dragPbCount = NSPasteboard(name: .drag).changeCount }
     // A file drag pushed through the crossing edge carries the files over.
     if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles,
-       let off = Capture.push(&edge, e.location, dx, dy, side, resistance) {
+       let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
       let paths = draggedFiles()
       log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
       if !paths.isEmpty {
         startCapture(mouse: true, keyboard: cfgKeyboard)
         DragIn.shared.swallowLocalDrag(at: e.location) // Finder's drag ends here, quietly
-        Flash.shared.leave(at: e.location, side: side)
-        emit(["event": "edge", "offset": off, "drag": ["paths": paths]])
+        Flash.shared.leave(at: e.location, side: hit.side)
+        emit(["event": "edge", "side": hit.side, "offset": hit.offset, "drag": ["paths": paths]])
         return true
       }
     }
@@ -394,10 +415,10 @@ final class Capture {
       // The system's own button state: counting downs and ups here stuck at 1 when the tap missed
       // an up (disabled by a timeout meanwhile), and nothing crossed again until a restart.
       if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0,
-         let off = Capture.push(&edge, e.location, dx, dy, side, resistance) {
+         let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
-        Flash.shared.leave(at: e.location, side: side)
-        emit(["event": "edge", "offset": off])
+        Flash.shared.leave(at: e.location, side: hit.side)
+        emit(["event": "edge", "side": hit.side, "offset": hit.offset])
         return true
       }
       checkReturn(e.location, dx: dx, dy: dy)

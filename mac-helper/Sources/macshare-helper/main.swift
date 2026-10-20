@@ -55,7 +55,9 @@ func handle(_ line: String) {
   case "kvmConfig":
     guard Capture.shared.startTap() else { return replyError(id, "event tap failed (Accessibility / Input Monitoring)") }
     Flash.shared.prepare()
-    Capture.shared.configure(side: (msg["side"] as? String) ?? "right", resistance: num("resistancePx", 120),
+    // `sides` (every edge with a device behind it); `side` alone is the one edge of older apps.
+    let sides = (msg["sides"] as? [String]) ?? [(msg["side"] as? String) ?? "right"]
+    Capture.shared.configure(sides: sides, resistance: num("resistancePx", 120),
                              edgeEnabled: (msg["driveOther"] as? Bool) ?? false, keyboard: (msg["keyboard"] as? Bool) ?? true,
                              dragFiles: (msg["dragFiles"] as? Bool) ?? true, hotkey: (msg["hotkey"] as? String) ?? "AltRight")
     Capture.shared.gestures = (msg["gestures"] as? Bool) ?? true
@@ -80,8 +82,8 @@ func handle(_ line: String) {
     Flash.shared.arrive(at: to, side: side) // the PC's pointer arrives here
     reply(id)
   case "armReturn":
-    Capture.shared.armReturn(on: (msg["on"] as? Bool) ?? false, side: (msg["side"] as? String) ?? "right",
-                             resistance: num("resistancePx", 120))
+    let sides = (msg["sides"] as? [String]) ?? [(msg["side"] as? String) ?? "right"]
+    Capture.shared.armReturn(on: (msg["on"] as? Bool) ?? false, sides: sides, resistance: num("resistancePx", 120))
     reply(id)
   case "inject":
     if let ev = msg["ev"] as? [String: Any] { injector.injectRel(ev) }
