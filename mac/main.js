@@ -105,6 +105,7 @@ const state = {
   found: [],
   guest: null,
   peers: [], // every device of the mesh (hub.peers()): name, os, state, selected, direct links
+  layout: null, // the shared layout (layout-sync.js): { rev, by, cells, grid } for the Cursor tab
   connect: { busy: false, message: '', error: false },
 };
 
@@ -189,6 +190,7 @@ function publishState() {
     }
     if (links) state.guest = links.view();
     state.peers = hub ? hub.peers() : [];
+    state.layout = layoutSync ? layoutSync.state() : null; // the shared layout: { rev, by, cells (this Mac's view), grid }
     const c = peer && peer.current;
     state.client = c ? { id: c.deviceId, name: c.name, os: c.os, role: c.role, address: c.address, rttMs: c.rttMs } : null;
     const { helper, displays, stream, clipboard: clip, kvm } = svc || {};
@@ -565,7 +567,7 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, hub, ...svc, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, hub, layoutSync, ...svc, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {

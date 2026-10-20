@@ -272,6 +272,17 @@ function setupIpc(ctx) {
       setGroup('kvm', partial);
       ctx.kvm.settingsChanged(prev);
     },
+    // The shared layout (docs/mesh.md): a device goes to a cell (a device there moves to its old cell, or
+    // they swap); a device goes off the map. Invalid arguments are ignored; the new layout comes with the state.
+    setLayoutCell(arg) {
+      const { id, x, y } = arg || {};
+      if (typeof id !== 'string' || !id || id.length > 64 || !Number.isInteger(x) || !Number.isInteger(y)) return;
+      ctx.layoutSync.place(id, x, y);
+    },
+    removeFromLayout(id) {
+      if (typeof id !== 'string' || !id || id.length > 64) return;
+      ctx.layoutSync.remove(id);
+    },
     setTerminal(partial) {
       const prev = settings.terminal.connectPc;
       setGroup('terminal', partial);

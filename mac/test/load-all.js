@@ -148,7 +148,8 @@ if (hub && server) {
   build('PhoneDrive', () => new loaded['phonedrive.js'].PhoneDrive({ adb: fakeAdb, bridge, phone }));
   const wired = build('Wired', () => new loaded['wired.js'].Wired({ adb: fakeAdb, raw: server, peer: phonePeer, getId: () => identity.macId, hasPhone: () => false }));
   if (wired) clearInterval(wired.timer); // its poll timer would keep this check running
-  build('Kvm', () => new loaded['kvm.js'].Kvm({ server: peer, helper, getSettings, clipboard: new loaded['clipboard.js'].Clip({ bus: hub.bus, mesh, getSettings, clipboard: fakeClipboard(), helper }), input, drop: { dragIn: {}, on() {} }, fileSend: new EventEmitter() }));
+  const layoutSync = build('LayoutSync', () => new loaded['layout-sync.js']({ bus: hub.bus, mesh, selfId: identity.macId, storage: { get: () => null, set() {} }, knownIds: () => [] }));
+  build('Kvm', () => new loaded['kvm.js'].Kvm({ hub, layoutSync, helper, getSettings, clipboard: new loaded['clipboard.js'].Clip({ bus: hub.bus, mesh, getSettings, clipboard: fakeClipboard(), helper }), input, drop: { dragIn: {}, on() {} }, fileSend: new EventEmitter() }));
 }
 
 if (server) server.close();
