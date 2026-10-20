@@ -91,30 +91,33 @@ string, `selected` is the session object; never overload them.
 
 ## Shared layout (one map for the whole mesh)
 
-Where the devices sit relative to each other is ONE map held by every device, edited from any of
-them, so the arrangement looks the same everywhere: Windows leftmost, the Mac on its right, the
-phone on the Mac's right is that on every screen. The rules are in  (pure, tested).
+Where the devices sit relative to each other is ONE map held by every device and edited from any of
+them, so the arrangement looks the same everywhere: with Windows leftmost, the Mac on its right and
+the phone on the Mac's right, every screen shows exactly that. The rules are in `shared/layout.js`
+(pure, tested).
 
-- A layout is : one cell of an integer grid per device.
+- A layout is `{ rev, by, cells: { deviceId: { x, y } } }`: one cell of an integer grid per device.
   What a screen edge leads to is the nearest device on the same row (left, right) or column (top,
-  bottom). Each device derives its own edges from the layout: .
-   is migrated once into a layout () and is derived from then on.
-- Only a person's edit changes the stored layout (, : rev + 1,  = the editing
-  device). Devices that appeared or went away are handled by , computed identically on
-  every device from the same layout and the same known ids, never stored or sent.
-- Sync: the layout is a pooled item ( pool, message , the usual
-  /// stamps). A device applies an item only when it is newer (: higher rev, then
-  , then the canonical string: the same winner everywhere); a device that was edited publishes it;
+  bottom). Each device derives its own edges from the layout:
+  `neighbors(view(layout, knownIds), selfId)`. `settings.kvm.edges` is migrated once into a layout
+  (`fromEdges`) and is derived from then on.
+- Only a person's edit changes the stored layout (`place`, `remove`: rev + 1, `by` = the editing
+  device). Devices that appeared or went away are handled by `view()`, computed identically on every
+  device from the same layout and the same known ids, never stored or sent.
+- Sync: the layout is a pooled item (its own pool, message `{ t: 'layout', layout }`, the usual
+  `o`/`s`/`d`/`h` stamps). A device applies an item only when it is newer (`newer`: higher rev, then
+  `by`, then the canonical string: the same winner everywhere). A device that was edited publishes it;
   a device that connects sends its stored layout to the new peer, so late joiners converge. Concurrent
   edits at the same rev: one wins on every device.
 - Chains: the owner is the device whose physical keyboard and mouse are used. It takes a neighbour
-  (). While a device B is driven, its pointer reaching an edge that leads back to the owner
-  sends  as today; reaching an edge that leads to another device T sends
-   to the owner, which releases B () and takes T
-  ( with , the same offset). So Windows, Mac and phone in one row are
-  reached from the Windows keyboard in turn, and from the Mac keyboard in both directions.
-  The helpers' return watch covers every edge that has a neighbour (; the   event carries ). A phone driven through the owner's wireless debugging ends a chain (it has
-  no edges of its own beyond the one it was entered by) unless the owner's bridge reports another edge.
+  (`kvm.take`). While a device B is driven, its pointer reaching an edge that leads back to the owner
+  sends `kvm.home` as today; reaching an edge that leads to another device T sends
+  `kvm.next { route, to: T, side, offset }` to the owner, which releases B (`kvm.release`) and takes T
+  (`kvm.take` with `side: opposite(side)` and the same offset). So Windows, Mac and phone in one row
+  are reached in turn from the Windows keyboard, and from the Mac keyboard in both directions. The
+  helpers' return watch covers every edge that has a neighbour (`armReturn { sides }`, and the `return`
+  event carries `side`). A phone driven through the owner's wireless debugging ends a chain: it has no
+  edges of its own beyond the one it was entered by.
 - The editor (Cursor tab, every desktop app) draws the grid with every device as a tile; click a
   tile and a free cell, or a tile and another tile to swap. Android stores and relays the layout and
   can end a chain; editing from the phone is not in this change.
