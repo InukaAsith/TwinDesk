@@ -370,7 +370,9 @@ class Kvm {
 
   // Input while driving goes to the partner device, or to the phone bridge when a phone is the peer.
   _drive(msg) {
-    if (this.local && this.local.drives()) this.local.handle(msg);
+    // The phone bridge only when the PARTNER is the phone (a phone being connected is not enough: a
+    // take meant for a computer went to the bridge and nobody answered it).
+    if (this.local && this.local.drives(this.partner)) this.local.handle(msg);
     else if (this.partner) this._send(this.partner, msg);
   }
 

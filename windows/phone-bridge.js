@@ -390,8 +390,10 @@ class PhoneBridge extends EventEmitter {
 
   // ---- this PC's mouse and keyboard on the phone (Kvm drives us) ----
 
-  drives() {
-    return isPhone(this.server.current);
+  // True when the device Kvm is driving (id) is the phone this bridge serves; without an id, when a phone is connected.
+  drives(id) {
+    const c = this.server.current;
+    return isPhone(c) && (id === undefined || id === null || c.deviceId === id);
   }
 
   _display() {
