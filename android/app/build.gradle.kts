@@ -12,6 +12,8 @@ android {
         targetSdk = 36
         versionCode = 20001
         versionName = "2.0.1"
+        // The repository whose CI built this app: the updater follows that project's releases (Updates.kt).
+        buildConfigField("String", "UPDATE_REPO", "\"${System.getenv("GITHUB_REPOSITORY") ?: "InukaAsith/TwinDesk"}\"")
     }
     // Two builds of the same app (same id and signature, so one installs over the other):
     //   standard — what people download: no notification access, which Play Protect blocks on apps
@@ -55,4 +57,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

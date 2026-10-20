@@ -75,7 +75,7 @@ const DEFAULT_SETTINGS = {
   // (everything allowed, or skipped), so it never takes over the window again (General shows the rest).
   ui: { tab: 'overview', setupSkipped: '', setupDone: false },
   app: { openAtLogin: false, keepAwake: true, hud: true }, // hud = popup when switching computers
-  updates: { auto: true, notified: '' }, // check GitHub for new releases; notified = last version announced
+  updates: { auto: true, channel: '', install: 'ask', notified: '' }, // channel '' = by this build (a pre-release starts on beta); // check GitHub for new releases; notified = last version announced
   audio: { send: false, receive: false, muteLocal: false, volume: 1 }, // Independent, both ways
   terminal: { allowPc: false, connectPc: false }, // the other computer -> this Mac shell; this Mac -> the other one (`ssh twindesk`)
   files: { acceptDrops: true, folder: '', reveal: true, dragEdge: true, // '' = Downloads; dragEdge = drag.policy

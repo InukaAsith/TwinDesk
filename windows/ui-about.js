@@ -41,9 +41,13 @@ UI.tab({
     // Updates: new releases of TwinDesk on GitHub.
     const updStatus = el('span', { class: 'value' });
     const updCheck = UI.button('Check now', () => api.checkUpdates(), 'small');
-    const updGet = UI.button('Download', () => api.openUpdate(), 'small primary');
+    let updCan = false;
+    const updGet = UI.button('Update now', () => (updCan ? api.installUpdate() : api.openUpdate()), 'small primary');
     const updRow = UI.row('TwinDesk', '', [updStatus, updGet, updCheck]);
     const updAuto = UI.switch((v) => api.setUpdates({ auto: v }), { label: 'Check for updates automatically' });
+    const updBeta = UI.switch((v) => api.setUpdates({ channel: v ? 'beta' : 'stable' }), { label: 'Include beta releases' });
+    const updSelf = UI.switch((v) => api.setUpdates({ install: v ? 'auto' : 'ask' }), { label: 'Install updates automatically' });
+    const updSrc = UI.row('Update source', '', []);
 
     const pc = facts('This computer', ['Computer name', 'System', 'Kernel', 'Processor', 'Memory', 'Architecture']);
     const build = facts('This app', ['Version', 'Built for', 'Electron', 'Chromium', 'Node.js']);
@@ -54,6 +58,9 @@ UI.tab({
       UI.card('Updates', [
         updRow,
         UI.row('Check automatically', 'Looks for new releases on GitHub every few hours', [updAuto]),
+        UI.row('Beta releases', 'Pre-releases from the same project, to try changes early', [updBeta]),
+        UI.row('Install automatically', 'Downloads and restarts TwinDesk by itself when nothing is being shared. Your settings and permissions stay', [updSelf]),
+        updSrc,
       ], { cls: 'keep-on' }),
       pc,
       build,
@@ -85,12 +92,20 @@ UI.tab({
       build.set({ Version: a.app.version, 'Built for': a.app.arch, Electron: a.app.electron, Chromium: a.app.chrome, 'Node.js': a.app.node });
       const u = s.updates;
       if (u) {
+        updCan = !!u.canInstall;
         updAuto.set(u.auto);
-        updCheck.disabled = u.checking;
+        updBeta.set(u.channel === 'beta');
+        updSelf.set(u.install === 'auto');
+        updSrc.setHint('github.com/' + u.repo + ' · ' + (u.channel === 'beta' ? 'beta' : 'stable') + ' channel');
+        const busy = u.state === 'downloading' || u.state === 'installing';
+        updCheck.disabled = u.checking || busy;
+        updGet.disabled = busy;
         updGet.hidden = !u.available;
-        updStatus.textContent = u.checking ? 'Checking…' : u.available ? u.latest + ' is available' : u.checkedAt ? 'Up to date' : '';
-        updRow.setHint(u.error ? 'Couldn’t check: ' + u.error
-          : u.available ? 'You have ' + u.current + '. ' + (u.download ? 'Download ' + u.download.name : 'Opens the release page')
+        updStatus.textContent = u.state === 'downloading' ? 'Downloading… ' + Math.round((u.progress || 0) * 100) + '%'
+          : u.state === 'installing' ? 'Restarting…'
+            : u.checking ? 'Checking…' : u.available ? u.latest + (u.prerelease ? ' (beta)' : '') + ' is available' : u.checkedAt ? 'Up to date' : '';
+        updRow.setHint(u.error ? 'Couldn’t update: ' + u.error
+          : u.available ? 'You have ' + u.current + '. ' + (u.canInstall && u.download ? 'Updates in place and restarts; your settings and permissions stay' : u.download ? 'Download ' + u.download.name : 'Opens the release page')
             : u.noReleases ? 'Version ' + u.current + '. No releases published yet'
               : 'Version ' + u.current + (u.checkedAt ? ' · checked ' + new Date(u.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''));
       }

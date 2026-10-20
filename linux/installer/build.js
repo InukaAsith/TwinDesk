@@ -55,6 +55,9 @@ async function main() {
   copy(path.join(ROOT, 'shared', 'turn.js'), path.join(STAGE, 'shared', 'turn.js')); // the phone on a USB cable
   copy(path.join(ROOT, 'shared', 'sshconfig.js'), path.join(STAGE, 'shared', 'sshconfig.js'));
   copy(path.join(ROOT, 'shared', 'updates.js'), path.join(STAGE, 'shared', 'updates.js'));
+  copy(path.join(ROOT, 'shared', 'updates-install.js'), path.join(STAGE, 'shared', 'updates-install.js'));
+  // Which repository this build came from: the updater follows that project's releases (shared/updates.js).
+  fs.writeFileSync(path.join(STAGE, 'shared', 'update-source.json'), JSON.stringify({ repo: process.env.GITHUB_REPOSITORY || '' }) + '\n');
   copy(path.join(ROOT, 'shared', 'about.js'), path.join(STAGE, 'shared', 'about.js'));
   copy(path.join(ROOT, 'shared', 'framegen.js'), path.join(STAGE, 'shared', 'framegen.js'));
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper'));
