@@ -165,6 +165,8 @@ function setupIpc(ctx) {
   handle('setMacApps', (partial) => change('macApps', partial, () => peerApps.apply()));
   handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); }));
   handle('setPcScreenMode', (mode) => pcScreen.setMode(mode));
+  // Share screen to one target: { mode: 'off'|'mirror'|'extend', displayId? } for device `id` (screen-mesh stream table).
+  handle('setPcScreenTarget', (id, choice) => typeof id === 'string' && choice && typeof choice === 'object' ? pcScreen.setTarget(id, choice) : undefined);
   // A phone as the peer (phone.js, phone-bridge.js, phoneview.js; there once our server runs)
   const phone = (name, fn) => handle(name, (...args) => (ctx.phone ? fn(...args) : undefined));
   phone('connectPhone', (id) => ctx.phone.connect(String(id)));

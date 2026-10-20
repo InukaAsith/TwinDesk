@@ -32,6 +32,7 @@ const FileRecv = require('./filerecv');
 const DragRecv = require('./dragrecv');
 const Sshd = require('./sshd');
 const PcScreen = require('./pcscreen');
+const { PcScreenSet } = require('./pcscreenset');
 const PcApps = require('./pcapps');
 const PeerApps = require('./peerapps');
 const Sender = require('./sender');
@@ -254,7 +255,15 @@ function start() {
   };
   wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
   const sender = new Sender(link); // every rtc2 video session we send (screen, app windows)
-  pcScreen = new PcScreen({ link, helper, sender, vdd, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
+  let senders = 0; // one per sharing target (a link of its own each), numbers far from the selected-device sender's
+  pcScreen = new PcScreenSet({
+    hub, model: PcScreen.displayModel, onChange: pushState,
+    make: (scoped, extendFree) => {
+      const pc = new PcScreen({ link: scoped, helper, sender: new Sender(scoped, 1000000 * ++senders), vdd, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
+      pc.extendFree = extendFree;
+      return pc;
+    },
+  });
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
   helper.on('exit', pushState);

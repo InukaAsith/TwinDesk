@@ -11,13 +11,15 @@ const P = require('../shared/protocol.js');
 const T = P.T;
 
 class Sender extends EventEmitter {
-  constructor(link) {
+  // base: the first session number minus one; a sender on a link of its own starts high so its numbers
+  // never meet those of the selected-device sender on the same link (the Mac routes by session).
+  constructor(link, base = 0) {
     super();
     this.link = link;
     this.win = null;
     this.ready = false;
     this.queue = [];
-    this.counter = 0;
+    this.counter = base;
     this.live = new Set(); // sessions started and not stopped
     this.windows = new Set(); // the live sessions that are app windows (tagged win: 'send')
 

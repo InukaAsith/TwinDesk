@@ -57,6 +57,7 @@ contextBridge.exposeInMainWorld('macshare', {
   pinApp: call('pinApp'),
   setPcScreen: call('setPcScreen'),
   setPcScreenMode: call('setPcScreenMode'),
+  setPcScreenTarget: call('setPcScreenTarget'),
   connectPhone: call('connectPhone'),
   disconnectPhone: call('disconnectPhone'),
   setPhone: call('setPhone'),

@@ -350,6 +350,42 @@ class Hub extends EventEmitter {
     };
   }
 
+  // The facade API for ONE device, whether or not it is selected: handlers hear only that device
+  // ('welcome' / 'closed' for it coming and going), send() goes to its session. Per-device stacks
+  // (pcscreenset.js) are made on it; bind(id) attaches one made before the device was there.
+  scoped(id = null) {
+    const hub = this;
+    const sess = () => (link.id ? hub.sessions.get(link.id) : null);
+    const link = {
+      id,
+      bind(next) { link.id = next; },
+      on(type, fn) {
+        if (type === 'welcome' || type === 'closed') addTo(hub._peerHandlers, type, (pid, info) => pid === link.id && fn(info));
+        else hub.bus.on(type, (m, from) => from === link.id && fn(m));
+      },
+      onState(fn) { hub._facadeStateFns.push(fn); },
+      send(obj) {
+        const s = sess();
+        return !!s && s.connected && s.send(obj) === true;
+      },
+      inject(msg) {
+        const s = sess();
+        if (s && s.connected) s.inject(msg);
+      },
+      get status() {
+        const s = sess();
+        return s ? s.status : { state: hub._nothingState(), rtt: null, message: '' };
+      },
+      get lastRx() { const s = sess(); return s ? s.lastRx : 0; },
+      get bufferedAmount() { const s = sess(); return s ? s.bufferedAmount : 0; },
+      get hosting() { const s = sess(); return !!s && s.hosting; },
+      get peerOs() { const s = sess(); return s ? s.peerOs : P.OS.MAC; },
+      get server() { return hub.server; },
+      get pairing() { return hub.pairing; },
+    };
+    return link;
+  }
+
   _makeFacade() {
     const hub = this;
     return {

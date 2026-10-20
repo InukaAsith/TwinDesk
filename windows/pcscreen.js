@@ -24,19 +24,12 @@ class PcScreen {
     this.status = { status: 'off', error: '', name: '', width: 0, height: 0 };
     this.input = new RemoteInput(opts);
     this.busy = false;
+    this.monitorId = null; // this target's own Mirror monitor (else the shared setting's)
     this.lastMode = 'mirror'; // what screen.ctl {share:true} starts (the last mode used)
     this.stateKey = ''; // the last screen.state sent on this connection
 
     const link = this.link;
-    link.on('welcome', () => {
-      this.mac = { accept: false, width: 0, height: 0, told: false };
-      this.stateKey = '';
-      clearTimeout(this.policyTimer);
-      this.policyTimer = setTimeout(() => { // never told: an older app, always watching
-        if (!this.mac.told) { this.mac.accept = true; this.apply(); }
-      }, 1500);
-      this.apply();
-    });
+    link.on('welcome', () => this.welcome());
     link.on('closed', () => { clearTimeout(this.policyTimer); this.mac.accept = false; this.stateKey = ''; this.apply(); });
     link.on(T.SCREEN_CTL, (m) => this._onCtl(m));
     link.on(T.SCREEN_POLICY, (m) => {
@@ -66,6 +59,17 @@ class PcScreen {
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) displays.on(ev, () => this.apply());
   }
 
+  // The device is there (a link event, or the set that made this one for a device already connected).
+  welcome() {
+    this.mac = { accept: false, width: 0, height: 0, told: false };
+    this.stateKey = '';
+    clearTimeout(this.policyTimer);
+    this.policyTimer = setTimeout(() => { // never told: an older app, always watching
+      if (!this.mac.told) { this.mac.accept = true; this.apply(); }
+    }, 1500);
+    this.apply();
+  }
+
   get cfg() {
     return this.settings.pcScreen;
   }
@@ -73,6 +77,10 @@ class PcScreen {
   async setMode(mode) {
     if (!['off', 'mirror', 'extend'].includes(mode) || this.busy) return;
     if (mode === 'extend' && !this.vdd.state.installed) mode = 'mirror'; // no virtual display driver
+    if (mode === 'extend' && this.extendFree && !this.extendFree()) { // one virtual display, another target has it
+      this.status.error = 'The virtual display is already used by another device';
+      return this.onChange();
+    }
     const was = this.mode;
     if (mode !== 'off') this.lastMode = mode;
     this.mode = mode;
@@ -154,7 +162,7 @@ class PcScreen {
       if (!mon) return null;
       return all.find((d) => { const r = displays.dipToScreenRect(null, d.bounds); return r.x === mon.x && r.y === mon.y; }) || null;
     }
-    return all.find((d) => String(d.id) === this.cfg.monitor) || displays.getPrimaryDisplay();
+    return all.find((d) => String(d.id) === (this.monitorId || this.cfg.monitor)) || displays.getPrimaryDisplay();
   }
 
   // After welcome, a policy, a settings or display change.
@@ -276,8 +284,23 @@ class PcScreen {
   }
 
   view() {
-    return { ...this.cfg, mode: this.mode, busy: this.busy, mac: this.mac, ...this.status, stats: this.stats || null, extendPx: this._extendSize(), sending: !!this.sending, monitors: this.monitors(), vdd: this.vdd.view() };
+    return { ...this.cfg, monitor: this.monitorId || this.cfg.monitor, mode: this.mode, busy: this.busy, mac: this.mac, ...this.status, stats: this.stats || null, extendPx: this._extendSize(), sending: !!this.sending, monitors: this.monitors(), vdd: this.vdd.view() };
   }
 }
+
+
+// This computer's displays as the screen-mesh model (shared/screen-mesh.js): ids are Electron's,
+// positions relative to the main display (negative x and y are normal), physical pixels.
+PcScreen.displayModel = () => {
+  const primary = displays.getPrimaryDisplay();
+  const rects = displays.getAllDisplays().map((d) => ({ d, r: displays.dipToScreenRect(null, d.bounds) }));
+  const o = rects.find(({ d }) => d.id === primary.id);
+  const ox = o ? o.r.x : 0;
+  const oy = o ? o.r.y : 0;
+  return rects.map(({ d, r }, i) => ({
+    id: String(d.id), name: d.label || (d.internal ? 'Built-in screen' : 'Monitor ' + (i + 1)),
+    x: r.x - ox, y: r.y - oy, w: r.width, h: r.height, scale: d.scaleFactor || 1, primary: d.id === primary.id,
+  }));
+};
 
 module.exports = PcScreen;
