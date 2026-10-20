@@ -56,4 +56,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("com.squareup.okhttp3:okhttp:5.5.0")
     testImplementation("junit:junit:4.13.2")
+    // The Android stub jar throws on org.json in plain JVM tests; the real implementation goes first.
+    testImplementation("org.json:json:20240303")
 }

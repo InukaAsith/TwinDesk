@@ -73,7 +73,9 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val shortcuts = Shortcuts(this)
     val kvm = Kvm(this)
     val updates = Updates(this)
-    private val features: List<Feature> = listOf(sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, drive, screen, macSound, shortcuts, kvm)
+    // The shared layout of the mesh: stored and relayed by the phone, never edited here (docs/mesh.md).
+    val layout = LayoutFeature(this)
+    private val features: List<Feature> = listOf(sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, drive, screen, macSound, shortcuts, kvm, layout)
 
     // The link of the attached computer (idle when none is connected) and the computer behind it.
     val link: Link get() = attachedId?.let { links.existing(it) } ?: idle
@@ -281,8 +283,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
             kvm.onDriver(t, host)
             return
         }
-        // The one-to-one features hear the attached computer only.
-        if (host.id != attachedId) return
+        // The one-to-one features hear the attached computer only; the pooled types from every computer.
+        if (host.id != attachedId && t !in POOLED_TYPES) return
         main.post {
             for (f in features) {
                 val mine = try { f.onMessage(t, m, host) } catch (e: Exception) { Log.e("TwinDesk", "message $t", e); true }
@@ -309,6 +311,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     companion object {
+        // Message types a computer that is not the attached one may send (they are pooled).
+        private val POOLED_TYPES = setOf(Proto.T.LAYOUT)
         @Volatile private var instance: Core? = null
         fun get(ctx: Context): Core = instance ?: synchronized(this) {
             instance ?: Core(ctx.applicationContext).also { instance = it; it.start() }

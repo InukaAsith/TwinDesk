@@ -83,4 +83,8 @@ class Store(private val ctx: Context) {
     // Two-way switches remembered per pair (pair.sync), as JSON by host id.
     fun pairSync(hostId: String): JSONObject? = prefs.getString("sync.$hostId", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
     fun setPairSync(hostId: String, v: JSONObject) = prefs.edit().putString("sync.$hostId", v.toString()).apply()
+
+    // The newest shared layout heard of (docs/mesh.md, "Shared layout"), kept as its JSON text.
+    fun getLayout(): JSONObject? = prefs.getString("layout", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+    fun setLayout(v: JSONObject) = prefs.edit().putString("layout", v.toString()).apply()
 }
