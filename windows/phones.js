@@ -176,6 +176,9 @@ class PhoneSet extends EventEmitter {
       // Every phone connected now, each with how its adb connection is doing.
       phones: this.all.filter((u) => u.link.current).map((u) => ({
         id: u.link.current.deviceId, name: u.link.current.name, usb: !!u.link.current.ice, state: u.bridge.state, via: u.bridge.via,
+        rttMs: u.link.current.rttMs, // each phone's own link, battery and colours (the sidebar tiles)
+        battery: u.phone.info ? u.phone.info.battery : null, charging: !!(u.phone.info && u.phone.info.charging),
+        colors: u.phone.info && u.phone.info.colors && u.phone.info.colors.length ? u.phone.info.colors : null,
       })),
     };
   }

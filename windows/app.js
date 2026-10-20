@@ -137,16 +137,19 @@
     }
     const info = ph.info || {};
     const colors = info.colors && info.colors.length ? info.colors : null;
-    const key = JSON.stringify([ph.nearby, ph.connecting, ph.connected && ph.connected.rttMs, ph.held, info.battery, info.charging, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
+    const key = JSON.stringify([ph.nearby, ph.connecting, ph.connected && ph.connected.rttMs, ph.phones, ph.activeId, ph.held, info.battery, info.charging, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
     if (key === phonesKey) return;
     phonesKey = key;
     $('phones').replaceChildren(...ph.nearby.map((d) => {
+      const mine = (ph.phones || []).find((x) => x.id === d.id) || null; // this phone's own numbers, not the active one's
+      const dcolors = mine && mine.colors ? mine.colors : colors;
       const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
-      if (d.connected && UI.phoneWall) wall.style.backgroundImage = UI.phoneWall;
-      else if (d.connected && colors) wall.style.backgroundImage = 'linear-gradient(160deg, ' + colors.join(', ') + (colors.length === 1 ? ', ' + colors[0] : '') + ')';
+      if (d.connected && UI.phoneWall && (!ph.activeId || ph.activeId === d.id)) wall.style.backgroundImage = UI.phoneWall;
+      else if (d.connected && dcolors) wall.style.backgroundImage = 'linear-gradient(160deg, ' + dcolors.join(', ') + (dcolors.length === 1 ? ', ' + dcolors[0] : '') + ')';
       const connecting = ph.connecting && ph.connecting.id === d.id;
       const sub = d.connected
-        ? (ph.connected.rttMs != null ? ph.connected.rttMs + ' ms' : 'Connected') + (info.battery != null ? ' · ' + info.battery + '%' + (info.charging ? ' ⚡' : '') : '')
+        ? ((mine ? mine.rttMs : ph.connected && ph.connected.rttMs) != null ? (mine ? mine.rttMs : ph.connected.rttMs) + ' ms' : 'Connected')
+          + ((mine ? mine.battery : info.battery) != null ? ' · ' + (mine ? mine.battery : info.battery) + '%' + ((mine ? mine.charging : info.charging) ? ' ⚡' : '') : '')
         : connecting ? 'Connecting…' : 'Nearby · Click to connect';
       const b = el('button', { class: 'phone-tile' + (d.connected ? ' connected' : ''), title: d.connected ? d.name : 'Connect to ' + d.name }, [
         wall,
