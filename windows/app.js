@@ -157,8 +157,12 @@
         d.connected ? el('span', { class: 'dot good' }) : null,
       ]);
       b.dataset.connected = d.connected ? '1' : '';
-      b.classList.toggle('active', d.connected && current && current.def.id === 'phone');
-      b.onclick = () => (d.connected ? show('phone', true) : api.connectPhone(d.id));
+      b.classList.toggle('active', d.connected && current && current.def.id === 'phone' && (!ph.activeId || ph.activeId === d.id)); // only the phone whose page is open
+      // A connected phone: make it the selected device first, so its own page opens (not the last one that connected).
+      b.onclick = () => {
+        if (!d.connected) return api.connectPhone(d.id);
+        Promise.resolve(api.setActivePeer(d.id)).then(() => show('phone', true), () => show('phone', true));
+      };
       return b;
     }));
   }

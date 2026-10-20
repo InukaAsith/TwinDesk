@@ -69,7 +69,7 @@ class Link(
     private var pinger: ScheduledFuture<*>? = null
     private var helloTimer: ScheduledFuture<*>? = null
 
-    private fun run(block: () -> Unit) = exec.execute { try { block() } catch (e: Exception) { Log.e("TwinDesk", "link", e) } }
+    private fun run(block: () -> Unit) = exec.execute { try { block() } catch (e: Exception) { RemoteLog.e("TwinDesk", "link", e) } }
 
     // usbPort: connect through the cable (adb reverse) instead of the network; the host's own
     // address stays as it is, for when the cable comes out.

@@ -10,7 +10,7 @@ const util = require('util');
 
 const MAX_BYTES = 1024 * 1024;
 
-function install(dir, { maxBytes = MAX_BYTES, target = console, name = 'main.log' } = {}) {
+function install(dir, { maxBytes = MAX_BYTES, target = console, name = 'main.log', ship = null } = {}) {
   let file = null;
   let size = 0;
   try {
@@ -28,6 +28,7 @@ function install(dir, { maxBytes = MAX_BYTES, target = console, name = 'main.log
         size = 0;
       }
       fs.appendFileSync(file, line);
+      if (ship) ship.push(line.trimEnd());
       size += line.length;
     } catch (e) { /* a log must never break the app */ }
   };

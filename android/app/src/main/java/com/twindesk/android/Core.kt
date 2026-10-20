@@ -160,8 +160,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // WiredReceiver): take the session through the cable, also from a Wi-Fi session with it.
     fun connectWired(id: String, port: Int, nonce: String) {
         val h = store.hosts().find { it.id == id }
-        if (h == null) { Log.i("TwinDesk", "USB: $id isn't paired here"); return }
-        Log.i("TwinDesk", "USB: connecting to ${h.name} through the cable")
+        if (h == null) { RemoteLog.i("TwinDesk", "USB: $id isn't paired here"); return }
+        RemoteLog.i("TwinDesk", "USB: connecting to ${h.name} through the cable")
         wiredNonce = nonce
         links.resume(id)
         links.linkFor(id).connect(h, port)
@@ -201,7 +201,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     private fun onInvite(f: Found) {
         val h = store.hosts().find { it.id == f.id }
         if (h != null) {
-            Log.i("TwinDesk", "invite from ${f.name}: connecting")
+            RemoteLog.i("TwinDesk", "invite from ${f.name}: connecting")
             if (links.existing(h.id)?.let { it.connected || it.state == "connecting" } == true) return
             h.address = f.address
             h.port = f.port
@@ -251,13 +251,13 @@ class Core private constructor(val ctx: Context) : Link.Events {
     override fun onChange() = changed()
 
     override fun onWelcome(from: Link, host: Host) {
-        Log.i("TwinDesk", "session with ${host.name}")
+        RemoteLog.i("TwinDesk", "session with ${host.name}")
         Notify.cancelInvite(ctx)
         links.welcomed(host.id)
         since[host.id] = System.currentTimeMillis()
         // Tells the computer which of its USB devices this is (its screen and input use that one).
         if (from.wired) from.send(JSONObject().put("t", "phone.wired").put("nonce", wiredNonce))
-        for (f in features) runCatching { f.onPeerWelcome(host) }.onFailure { Log.e("TwinDesk", "peer welcome", it) }
+        for (f in features) runCatching { f.onPeerWelcome(host) }.onFailure { RemoteLog.e("TwinDesk", "peer welcome", it) }
         if (selectedId?.let { links.existing(it)?.connected == true } != true) selectedId = host.id
         attach()
         broadcastRoster()
@@ -287,7 +287,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         if (host.id != attachedId && t !in POOLED_TYPES) return
         main.post {
             for (f in features) {
-                val mine = try { f.onMessage(t, m, host) } catch (e: Exception) { Log.e("TwinDesk", "message $t", e); true }
+                val mine = try { f.onMessage(t, m, host) } catch (e: Exception) { RemoteLog.e("TwinDesk", "message $t", e); true }
                 if (mine) return@post
             }
         }

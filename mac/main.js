@@ -49,7 +49,12 @@ app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/
 // Renamed to TwinDesk: settings, pairing and the identity stay in the old folder.
 app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), 'MacShare')); // PROFILE: a second dev copy
 // Everything the main process prints also goes to <userData>/logs/main.log (a problem seen on this Mac can be read afterwards).
-require('../shared/logfile.js').install(path.join(app.getPath('userData'), 'logs'));
+// Every log line also goes to the test log server on the local network while this pre-release is being tested
+// (tools/logserver.js on 192.168.2.100). TWINDESK_LOG_SERVER=off (or a url) changes it.
+const { LogShip } = require('../shared/logship.js');
+require('../shared/logfile.js').install(path.join(app.getPath('userData'), 'logs'), {
+  ship: new LogShip({ url: process.env.TWINDESK_LOG_SERVER || 'http://192.168.2.100:47900/log', device: require('os').hostname() }),
+});
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
