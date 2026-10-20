@@ -127,7 +127,7 @@ UI.tab({
       const term = search.value.trim().toLowerCase();
       const shown = term ? apps.filter((a) => a.name.toLowerCase().includes(term)) : apps;
       appsNote.set(!ready ? 'Apps open in their own windows once wireless debugging is set up.' : !apps.length ? 'Loading the phone’s apps…' : '');
-      const ak = JSON.stringify([shown.length, term, ph.assets, ready]);
+      const ak = JSON.stringify([shown.length, term, ph.assets, ph.activeId, ready]);
       if (ak !== appsKey) {
         appsKey = ak;
         grid.replaceChildren(...shown.slice(0, 400).map((a) => {

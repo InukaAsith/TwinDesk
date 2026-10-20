@@ -123,11 +123,12 @@
   // Paired phones nearby, above Overview: the phone's wallpaper, its name and the link. Clicking
   // one connects it (the computer steps aside); the connected one opens its page.
   let phonesKey = '';
-  let assetsSeen = -1;
+  let assetsSeen = '';
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
-    if (ph.assets !== assetsSeen) {
-      assetsSeen = ph.assets;
+    const assetsKey = (ph.activeId || '') + ':' + ph.assets; // the counter is per phone: two phones can show the same number
+    if (assetsKey !== assetsSeen) {
+      assetsSeen = assetsKey;
       api.phoneAssets().then((a) => {
         UI.phoneAssets = a;
         UI.phoneWall = a.wallpaper ? 'url("' + a.wallpaper + '")' : '';
