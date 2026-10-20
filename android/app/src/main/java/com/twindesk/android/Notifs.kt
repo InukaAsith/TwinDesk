@@ -47,6 +47,19 @@ class Notifs(core: Core) : Feature(core) {
         accepts.remove(host.id)
     }
 
+    // The same text from the same app within a few seconds goes once: a notification shown on one device can come back
+    // as a new one (each trip has its own id), and that loop must end here.
+    private val recent = HashMap<String, Long>()
+    @Synchronized private fun repeated(vararg parts: String): Boolean {
+        val now = System.currentTimeMillis()
+        val key = parts.joinToString("\u0001") { it.take(200) }
+        val was = recent[key]
+        if (was != null && now - was < 15_000) return true
+        recent[key] = now
+        if (recent.size > 300) recent.entries.removeAll { now - it.value >= 15_000 }
+        return false
+    }
+
     // From NotifListener: a new notification on this phone.
     fun posted(sbn: StatusBarNotification) {
         if (!peerAccepts || !core.sync.get("notifs", "out") || core.links.connectedLinks().isEmpty()) return
@@ -59,6 +72,7 @@ class Notifs(core: Core) : Feature(core) {
         val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         val text = (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString() ?: ""
         if (title.isEmpty() && text.isEmpty()) return
+        if (repeated("out", sbn.packageName, title, text)) return
         val pm = core.ctx.packageManager
         val appName = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(sbn.packageName, 0)).toString() }.getOrDefault(sbn.packageName)
         val hide = core.store.flag("notifs.hideText", false)
@@ -82,6 +96,7 @@ class Notifs(core: Core) : Feature(core) {
                 val app = m.str("appName", 80).ifEmpty { m.str("app", 80) }
                 val title = m.str("title", 300)
                 val text = listOf(m.str("subtitle", 200), m.str("body", 1000)).filter { it.isNotEmpty() }.joinToString("\n")
+                if (repeated("in", m.str("app", 80), title, text)) return true
                 Notify.fromComputer(core.ctx, m.str("id", 200), app, title, text, core.nameOf(r.msg.o, host))
                 shown++
             }

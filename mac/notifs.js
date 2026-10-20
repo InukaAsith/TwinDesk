@@ -11,6 +11,8 @@ const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { Pool } = require('../shared/mesh.js');
 
+const { NotifGuard, isOwn } = require('../shared/notif-guard.js');
+
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
 
@@ -49,6 +51,7 @@ class Notifs extends EventEmitter {
     this.sent = 0;
     this.shown = 0;
     this.live = new Set(); // shown toasts, kept alive until closed
+    this.guard = new NotifGuard(); // the same text from the same app within seconds goes once (a loop between devices)
     this.echoes = []; // {title, body, until}: shown here from another device, never sent back
 
     const bus = this.bus;
@@ -156,6 +159,8 @@ class Notifs extends EventEmitter {
     const now = Date.now();
     this.echoes = this.echoes.filter((e) => e.until > now);
     if (this.echoes.some((e) => e.title === str(ev.title, 200) && str(ev.body).includes(e.body))) return;
+    if (isOwn(app, ev.appName)) return; // TwinDesk's own toasts are never forwarded
+    if (this.guard.repeat('out', app, ev.title, ev.body)) return;
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
     if (this.apps.size > 60) this.apps.delete(this.apps.keys().next().value);
     if (this.cfg.send && !(this.cfg.muted || []).includes(app) && this._anyAccepts()) {
@@ -173,6 +178,7 @@ class Notifs extends EventEmitter {
     if (!this.cfg.receive) return;
     const r = this.pool.receive(from, m);
     if (!r.fresh || !this.Notification || !this.Notification.isSupported()) return;
+    if (this.guard.repeat('in', m.app, m.title, m.body)) return; // a repeat of what was just shown
     const origin = this._nameOf(r.msg.o, m.on, from);
     const appName = str(m.appName, 100);
     const title = str(m.title, 200) || appName || origin;
