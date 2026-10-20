@@ -505,6 +505,7 @@ class PhoneBridge extends EventEmitter {
     const scale = Math.max(1, Math.min(3.5, (d.dpi || 420) / 160)) * (cfg.speed || 1);
     const dx = (Number(m.dx) || 0) * scale;
     const dy = (Number(m.dy) || 0) * scale;
+    if ((k.logged = (k.logged || 0) + 1) <= 8) console.log(`[phone] move ${k.logged}: dx=${m.dx} dy=${m.dy} scale=${scale.toFixed(2)} from (${Math.round(k.x)},${Math.round(k.y)}) side ${k.side} push ${Math.round(k.push)}`);
     // Back over the edge toward this PC (after a little push, the resistance).
     const back = { left: [dx, k.x <= 0, -1], right: [dx, k.x >= d.w - 1, 1], top: [dy, k.y <= 0, -1], bottom: [dy, k.y >= d.h - 1, 1] }[k.side];
     if (back && back[1] && Math.sign(back[0]) === back[2]) {
