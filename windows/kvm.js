@@ -49,6 +49,7 @@ class Kvm {
       if (this.mode === 'driving' && from === this.partner && m.route === this.route) this._clearAccept();
     });
     bus.on(T.KVM_REFUSE, (m, from) => {
+      console.log('[kvm] kvm.refuse from ' + from + ' (' + m.why + ', mode ' + this.mode + ')');
       if (this.sub && from === this.sub.to && m.route === this.sub.route) return this._relayBack(undefined);
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       this._goHome(m.why === P.REFUSE.BUSY ? '{Name} is driving {me}' : m.why === P.REFUSE.NOT_ALLOWED ? "{Name} doesn't accept input from {me}" : '{Name} refused');
@@ -57,6 +58,7 @@ class Kvm {
       if (this.mode === 'driven' && from === this.partner && m.route >= this.peerRoute) this._drivenHome('{Name} took its input back', false);
     });
     bus.on(T.KVM_HOME, (m, from) => {
+      console.log('[kvm] kvm.home from ' + from + ' (offset ' + m.offset + ', mode ' + this.mode + ')');
       if (this.sub && from === this.sub.to && m.route === this.sub.route) return this._relayBack(m.offset); // the phone hands the pointer back
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
@@ -328,6 +330,7 @@ class Kvm {
         }
         break;
       case 'captureEnded': // dead-man or a local stop: input is back here
+        console.log('[kvm] capture ended by the helper: ' + (msg.reason || 'stopped'));
         if (this.mode === 'driving') this._release(msg.reason === 'deadman' ? '' : '');
         break;
     }

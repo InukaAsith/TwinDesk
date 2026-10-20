@@ -466,6 +466,7 @@ class PhoneBridge extends EventEmitter {
     const x = side === 'left' ? 0 : side === 'right' ? d.w - 1 : off * (d.w - 1);
     const y = side === 'top' ? 0 : side === 'bottom' ? d.h - 1 : off * (d.h - 1);
     this.kvm = { route: m.route, x, y, side, push: 0, buttons: 0, mouse: m.mouse !== false };
+    console.log(`[phone] driving starts: entered at ${side} (${Math.round(x)},${Math.round(y)}) of ${d.w}x${d.h}`);
     this.keys.clear();
     if (this.inputBlocked) this.emit('popup', 'home', INPUT_BLOCKED);
     // Answer after Kvm's _take returns: it starts its "no answer" timer right after sending kvm.take.
@@ -523,6 +524,7 @@ class PhoneBridge extends EventEmitter {
     if (!k) return;
     const offset = k.side === 'left' || k.side === 'right' ? k.y / Math.max(1, d.h - 1) : k.x / Math.max(1, d.w - 1);
     const route = k.route;
+    console.log(`[phone] pointer pushed back over the ${k.side} edge at (${Math.round(k.x)},${Math.round(k.y)}): handing it back`);
     this._kvmEnd(false);
     this.server.inject({ t: T.KVM_HOME, route, offset });
   }
@@ -530,6 +532,7 @@ class PhoneBridge extends EventEmitter {
   _kvmEnd(tellKvm) {
     const k = this.kvm;
     if (!k) return;
+    console.log(`[phone] driving ends (${tellKvm ? 'the connection or the app ended it' : 'released or handed back'})`);
     const d = this._display();
     if (k.buttons && d && this.control) this.control.mouse(ACTION.UP, k.x, k.y, d.w, d.h, k.buttons, 0);
     for (const code of [...this.keys.held]) this._key({ t: T.K_KEY_UP, code });
