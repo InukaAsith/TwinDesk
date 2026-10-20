@@ -2,9 +2,10 @@
 // Shared cursor and keyboard: state machine, Windows side, both roles
 // (this PC drives a device, or a device drives this PC).
 //
-// The edges (settings.kvm.edges, shared/kvm-edges.js): each side of this screen leads to one paired
-// device. The device whose keyboard and mouse are used is the centre of a star: crossing an edge
-// selects the device behind it (hub.select) and takes it; coming back goes home.
+// The edges come from the shared layout (windows/layout-sync.js, docs/mesh.md "Shared layout"): each
+// side of this screen leads to the device the layout puts next to this one. The device whose keyboard
+// and mouse are used is the centre of a star: crossing an edge selects the device behind it
+// (hub.select) and takes it; coming back goes home.
 //
 // Messages come and go through the hub's bus, which knows the device each one is from or to, so
 // every device is handled on its own. `partner` is the device our input goes to (driving) or comes
@@ -16,11 +17,10 @@ const E = require('../shared/kvm-edges.js');
 
 const T = P.T;
 const K_TYPES = new Set([T.K_MOVE, T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP]);
-const DEFAULT_LAYOUT_SIDES = ['right', 'left', 'top', 'bottom']; // a host with no edges yet: the first free one
 
 class Kvm {
-  // opts: hub (hub.js: bus, sessions, select, selectedId), helper, clip, fileDrop, fileRecv, dragRecv,
-  // settings (shared object), save(), onChange()
+  // opts: hub (hub.js: bus, sessions, select, selectedId), layoutSync (layout-sync.js), helper, clip,
+  // fileDrop, fileRecv, dragRecv, settings (shared object), save(), onChange()
   constructor(opts) {
     Object.assign(this, opts);
     this.mode = 'home'; // 'home' | 'driving' | 'driven'
@@ -39,7 +39,7 @@ class Kvm {
 
     const hub = this.hub;
     const bus = hub.bus;
-    bus.on(T.KVM_LAYOUT, (m, from) => this._onLayout(m, from));
+    bus.on(T.KVM_LAYOUT, () => {}); // an older app's edge (the layout is the one map): nothing to do here
     bus.on(T.KVM_TAKE, (m, from) => this._onTake(m, from));
     bus.on(T.KVM_LINK, (m, from) => this._onLink(m, from)); // the other side switched it: follow, no echo
     bus.on(T.KVM_ACCEPT, (m, from) => {
@@ -83,8 +83,9 @@ class Kvm {
     return this.settings.kvm;
   }
 
+  // This PC's edges: the device the shared layout puts on each side ({left, right, top, bottom}).
   get edges() {
-    return this.cfg.edges;
+    return this.layoutSync.neighbors();
   }
 
   // Cursor sharing as a whole: off = everything home, no crossing either way, takes refused.
@@ -132,50 +133,29 @@ class Kvm {
     return this.hub.bus.send(id, msg);
   }
 
-  // The user picked where the other computer is: the edge `side` leads to device `id` (null: none).
-  // Refused (false) when that side already leads to another device. Tells the device when it is up.
-  setEdge(side, id) {
-    const next = E.assignEdge(this.edges, side, id || null);
-    if (!next) return false;
-    if (JSON.stringify(next) !== JSON.stringify(this.edges)) this._storeEdges(next);
-    if (id && this._connectedTo(id)) this._send(id, { t: T.KVM_LAYOUT, pcSide: side }); // its edge towards us is the opposite
-    return true;
-  }
-
-  // A device was forgotten: no edge leads to it any more.
+  // A device was forgotten: it leaves the shared layout (a person's edit, synced to the others).
   forgetDevice(id) {
-    const next = E.clearPeer(this.edges, id);
-    if (JSON.stringify(next) !== JSON.stringify(this.edges)) this._storeEdges(next);
-  }
-
-  _storeEdges(next) {
-    this.cfg.edges = next;
-    if (this.save) this.save();
+    this.layoutSync.remove(id);
     this.applyConfig();
-    this.onChange();
   }
 
-  // kvm.layout from a device: the edge facing it is the opposite of its crossing side. Another
-  // device's edge is never overwritten (E refuses).
-  _onLayout(m, from) {
-    if (!P.SIDES.includes(m.pcSide) || !from) return;
-    const next = E.setRemoteEdge(this.edges, m.pcSide, from);
-    if (!next) return;
-    if (JSON.stringify(next) !== JSON.stringify(this.edges)) this._storeEdges(next);
+  // The shared layout changed (here or on another device): the watched sides follow it, and each
+  // connected device is told which side it is on, as the older apps expect (kvm.layout).
+  layoutChanged() {
+    this.applyConfig();
+    for (const id of this.hub.bus.connectedIds()) {
+      const side = this._sideOf(id);
+      if (side) this._send(id, { t: T.KVM_LAYOUT, pcSide: side }); // its edge towards us is the opposite
+    }
   }
 
-  // A device came up (its welcome). A device that dialled us gets our layout and cursor state; the
-  // dialled side learns it from them.
+  // A device came up (its welcome). A device that dialled us gets our side of it and our cursor state.
   _onPeerUp(id) {
     const s = this.hub.sessions.get(id);
     this.dragPolicyBy.delete(id);
     this.sentDragPolicy = undefined;
     if (s && s.hosting) {
-      let side = this._sideOf(id);
-      if (!side && Object.values(this.edges).every((x) => !x)) { // first setup: the other one on the right
-        side = DEFAULT_LAYOUT_SIDES.find((x) => !this.edges[x]) || null;
-        if (side) this._storeEdges(E.assignEdge(this.edges, side, id));
-      }
+      const side = this._sideOf(id);
       if (side) this._send(id, { t: T.KVM_LAYOUT, pcSide: side });
       this._send(id, { t: T.KVM_LINK, on: this._linkedFor(id) });
     }
@@ -216,8 +196,9 @@ class Kvm {
   _watchedSides() {
     const k = this.cfg;
     if (!k.driveOther || !k.mouse || this.blockEdge()) return [];
+    const edges = this.edges;
     return E.SIDES.filter((side) => {
-      const id = k.edges[side];
+      const id = edges[side];
       return !!id && this._connectedTo(id) && this._linkedFor(id);
     });
   }
@@ -244,7 +225,7 @@ class Kvm {
       keyboard: !!k.keyboard,
       deadmanMs: P.HELPER_DEADMAN_MS,
       doubleTapMs: P.DOUBLE_TAP_MS,
-      dragFiles: this._dragsOut(sides.length ? k.edges[sides[0]] : null), // the edge strip that picks up file drags
+      dragFiles: this._dragsOut(sides.length ? this.edges[sides[0]] : null), // the edge strip that picks up file drags
       gestures: k.gestures !== false, // Touchpad gestures go over as k.ge while capturing
     });
     // Our switch, for every connected device (it doesn't pick up drags towards us while it's off).

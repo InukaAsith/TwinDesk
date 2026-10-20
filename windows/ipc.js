@@ -9,7 +9,7 @@ const { apply } = require('./settings');
 // ctx: hub, link (the selected device's facade), discovery, screen, clip, kvm, terminal, fileDrop, smb, apps, phone, phoneViews, connectPhoneDev(d), settings, save(), push(), buildState(),
 //      checkFirewall(), fixFirewall(), setStartup(on)
 function setupIpc(ctx) {
-  const { hub, link, discovery, screen, clip, kvm, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, settings } = ctx;
+  const { hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, settings } = ctx;
 
   const handle = (name, fn) => ipcMain.handle(name, (_e, ...args) => fn(...args));
   const change = (section, partial, after) => {
@@ -80,12 +80,17 @@ function setupIpc(ctx) {
   if (process.env.MACSHARE_DEV_PORT) {
     handle('devHelperEvent', (name, msg) => kvm.helper.emit('event', String(name).slice(0, 40), msg && typeof msg === 'object' ? msg : {}));
   }
-  // The edge `side` of this PC leads to device `id` (null: none). false when that side already
-  // leads to another device (the UI shows why). A device on another side is moved here.
-  handle('setEdge', (side, id) => {
-    if (!P.SIDES.includes(side)) return false;
-    if (id !== null && typeof id !== 'string') return false;
-    return kvm.setEdge(side, id ? id.slice(0, 64) : null);
+  // The shared layout (docs/mesh.md): device `id` goes to grid cell (x, y); a device there moves to
+  // its old cell (swap). false when the arguments are not valid or the device is not in the mesh.
+  handle('setLayoutCell', (id, x, y) => {
+    if (typeof id !== 'string' || !id || id.length > 64) return false;
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+    return layoutSync.place(id, x, y);
+  });
+  // A device off the map (its cell is removed from the shared layout). false when it has no cell.
+  handle('removeFromLayout', (id) => {
+    if (typeof id !== 'string' || !id || id.length > 64) return false;
+    return layoutSync.remove(id);
   });
   handle('setKeys', (partial) => change('keys', partial, () => kvm.applyConfig())); // the hotkey lives in the helper
   handle('setApp', (partial) => change('app', partial, () => ctx.onApp && ctx.onApp()));

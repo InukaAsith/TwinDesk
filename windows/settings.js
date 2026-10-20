@@ -3,6 +3,7 @@
 // disk or from the UI goes through normalize(), so main never stores anything out of range.
 const P = require('../shared/protocol.js');
 const E = require('../shared/kvm-edges.js');
+const L = require('../shared/layout.js');
 
 const TABS = ['phone', 'overview', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'terminal', 'audio', 'apps', 'general', 'about'];
 
@@ -113,6 +114,7 @@ function normalize(s) {
       input: bool(pcs.input, true), // the Mac's mouse and keyboard drive this PC
       remote: bool(pcs.remote, true), // The viewer may start/stop and switch it (screen.ctl)
     },
+    layout: storedLayout(s.layout), // the mesh's shared layout (windows/layout-sync.js); null until one was edited
     pairSync: pairSync(s.pairSync), // {deviceId: {feature: {out, in}}} (pairsync.js)
     wake: { peers: wakePeers(wk.peers) }, // {deviceId: {name, os, macs, address, at}} from wol.info
     pcApps: { allow: bool(pca.allow, true) },
@@ -131,6 +133,12 @@ function normalize(s) {
     ui: { tab: OLD_TABS[ui.tab] || (TABS.includes(ui.tab) ? ui.tab : 'overview') },
     windows: s.windows && typeof s.windows === 'object' ? s.windows : {},
   };
+}
+
+// The stored shared layout: a valid layout with at least one edit (rev >= 1), else null.
+function storedLayout(v) {
+  const l = L.normalize(v);
+  return l.rev > 0 ? l : null;
 }
 
 // pair.sync values per paired device: booleans only, at most 20 devices.

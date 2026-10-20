@@ -26,7 +26,8 @@ contextBridge.exposeInMainWorld('macshare', {
   openMonitor: call('openMonitor'),
   remoteScreen: call('remoteScreen'),
   setKvm: call('setKvm'),
-  setEdge: call('setEdge'),
+  setLayoutCell: call('setLayoutCell'),
+  removeFromLayout: call('removeFromLayout'),
   devHelperEvent: call('devHelperEvent'), // dev only: the main process has no handler without MACSHARE_DEV_PORT
   setKeys: call('setKeys'),
   setApp: call('setApp'),

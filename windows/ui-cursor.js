@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Cursor tab: share the pointer across the screen edge. The two direction cards, the layout (which
-// paired device is behind each edge of this screen; each edge can lead to a different one) and the
-// live state. Behaviour: kvm.js and windows-helper.
+// Cursor tab: share the pointer across the screen edge. The two direction cards and the live state.
+// Which device is behind each edge is the shared layout (docs/mesh.md), edited in the grid of this tab.
+// Behaviour: kvm.js and windows-helper.
 'use strict';
 
 UI.tab({
@@ -17,7 +17,6 @@ UI.tab({
   build(body) {
     const { el, api } = UI;
     const set = (partial) => api.setKvm(partial);
-    const EDGES = [['top', 'Top edge'], ['right', 'Right edge'], ['bottom', 'Bottom edge'], ['left', 'Left edge']];
 
     const speed = UI.slider({ min: 0.25, max: 3, step: 0.05, format: (v) => v.toFixed(2) + '×' }, (v) => set({ speed: v }));
     const reverse = UI.switch((v) => set({ reverseScroll: v }), { label: 'Reverse scrolling' });
@@ -34,48 +33,21 @@ UI.tab({
       ] },
     );
 
-    // The device behind each edge of this screen. One device sits on one edge; an edge holds one device.
-    const refused = UI.note('info', '');
-    let last = null; // the last state, to put a refused choice back
-    const edgeRows = EDGES.map(([side, label]) => {
-      const sel = UI.select([{ value: '', label: 'None' }], (v) => {
-        api.setEdge(side, v || null).then((ok) => {
-          refused.set(ok === false ? 'That edge already leads to another device. Set it to None first.' : '');
-          if (last) render(last);
-        });
-      });
-      return { side, sel, row: UI.row(label, '', [sel.el]) };
-    });
-    const layout = UI.card('Layout', [...edgeRows.map((r) => r.row), refused], { cls: 'keep-on' });
-
     const status = UI.inputStatus();
 
     body.append(
       pair.el,
       UI.card('Feel', [gestureRow]),
       UI.card('Right now', [status], { cls: 'keep-on' }),
-      layout,
     );
 
-    // Each edge's choices: None, then every paired device; a connected one says so.
     function render(s) {
-      last = s;
-      const k = s.kvm;
       pair.update(s);
       status.update(s);
-      speed.set(k.speed);
-      reverse.set(k.reverseScroll);
-      gestures.set(k.gestures !== false);
-      resistance.set(k.resistancePx);
-      const devices = (s.peers || []).filter((d) => d && d.id);
-      const options = [{ value: '', label: 'None' }].concat(devices.map((d) => ({ value: d.id, label: d.name + (d.connected ? '' : ' (not connected)') })));
-      for (const r of edgeRows) {
-        const id = (k.edges && k.edges[r.side]) || '';
-        const d = devices.find((x) => x.id === id);
-        r.sel.options(options);
-        r.sel.set(id);
-        r.row.setHint(!id ? 'Nothing crosses this edge' : d && d.connected ? 'Connected' : 'Not connected');
-      }
+      speed.set(s.kvm.speed);
+      reverse.set(s.kvm.reverseScroll);
+      gestures.set(s.kvm.gestures !== false);
+      resistance.set(s.kvm.resistancePx);
     }
     return render;
   },

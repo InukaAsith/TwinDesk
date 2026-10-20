@@ -1,7 +1,8 @@
-// The cursor edges (windows/kvm.js, shared/kvm-edges.js) on real sockets: node A has a real Kvm with a
+// The cursor edges (windows/kvm.js, windows/layout-sync.js) on real sockets: node A has a real Kvm with a
 // fake helper (it records what it is told and lets the test emit helper events); B and C are other
-// computers whose hub bus records the kvm messages they get. Real Server, Pairing, LinkManager, Mesh
-// and Hub on every node, paired with the real pairing protocol.
+// computers whose hub bus records the kvm messages they get. Real Server, Pairing, LinkManager, Mesh,
+// Hub and LayoutSync on every node, paired with the real pairing protocol. The edges of A are the
+// shared layout around A (docs/mesh.md, "Shared layout").
 // Run with: node windows/test/kvm-edges.test.js  (NODE_PATH and ELECTRON_OVERRIDE_DIST_PATH as in CI)
 'use strict';
 
@@ -15,6 +16,7 @@ const { Pairing } = require('../hostpair.js');
 const { LinkManager } = require('../links.js');
 const { Hub } = require('../hub.js');
 const Kvm = require('../kvm.js');
+const LayoutSync = require('../layout-sync.js');
 const { normalize, migrateKvm } = require('../settings.js');
 const { runTests } = require('./lib/run.js');
 const { loadTestCert } = require('./lib/testcert.js');
@@ -23,9 +25,10 @@ const { close, waitFor, pair, memoryStorage } = require('./lib/mesh.js');
 const T = P.T;
 const TRIANGLE = [['A', 'B'], ['A', 'C'], ['B', 'C']]; // [dialer, host]
 const NONE = { left: null, right: null, top: null, bottom: null };
+const CELL = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] }; // where a side is, from A
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// A computer: Server + Pairing (host side) + LinkManager (guest side) + Mesh + Hub.
+// A computer: Server + Pairing (host side) + LinkManager (guest side) + Mesh + Hub + LayoutSync.
 async function hubNode(name) {
   const cert = loadTestCert();
   const id = crypto.randomUUID();
@@ -37,7 +40,16 @@ async function hubNode(name) {
   links.bindServer(server);
   const mesh = new Mesh({ selfId: id });
   const hub = new Hub({ device: { id, name }, links, server, pairing, mesh });
-  return { name, id, port: server.port, server, pairing, links, mesh, hub, log: [] };
+  const n = { name, id, port: server.port, server, pairing, links, mesh, hub, log: [], kvm: null, settings: normalize({}) };
+  n.layoutSync = new LayoutSync({
+    bus: hub.bus,
+    mesh,
+    selfId: id,
+    storage: { get: () => n.settings.layout, set: (l) => { n.settings.layout = l; } },
+    knownIds: () => hub.peers().map((p) => p.id),
+    onChange: () => { if (n.kvm) n.kvm.layoutChanged(); },
+  });
+  return n;
 }
 
 async function world(names, pairs) {
@@ -84,21 +96,29 @@ class RecHelper extends EventEmitter {
 
 // A real Kvm on node n (the one that drives), with a recording helper.
 function kvmOn(n) {
-  const settings = normalize({});
   n.helper = new RecHelper();
-  n.settings = settings;
   n.kvm = new Kvm({
     hub: n.hub,
+    layoutSync: n.layoutSync,
     helper: n.helper,
     clip: { sendIfChanged: () => true },
     fileDrop: { prepareDrag: () => null, beginDrag() {}, cancelRelease() {} },
     fileRecv: { onRelease() {} },
     dragRecv: null,
-    settings,
+    settings: n.settings,
     save: () => {},
     onChange: () => {},
   });
   return n.kvm;
+}
+
+// Puts the devices on A's layout: `sides` maps a side of A to the device there (A itself at the middle).
+function lay(A, sides) {
+  assert.strictEqual(A.layoutSync.place(A.id, 0, 0), true);
+  for (const side of Object.keys(sides)) {
+    const [x, y] = CELL[side];
+    assert.strictEqual(A.layoutSync.place(sides[side].id, x, y), true, `place ${sides[side].name} on ${side}`);
+  }
 }
 
 // The kvm messages a computer gets (the bus of its hub sees them whoever sent them).
@@ -129,10 +149,10 @@ test('top leads to B and bottom to C: each take goes to that device only; B acce
     const { A, B, C } = N;
     record(B); record(C);
     const kvm = kvmOn(A);
-    assert.strictEqual(kvm.setEdge('top', B.id), true);
-    assert.deepStrictEqual(A.settings.kvm.edges, { ...NONE, top: B.id });
+    lay(A, { top: B, bottom: C });
+    assert.deepStrictEqual(kvm.edges, { ...NONE, top: B.id, bottom: C.id });
     await waitFor(() => got(B, T.KVM_LAYOUT).some((x) => x.m.pcSide === 'top'), 'B is told where A is');
-    assert.deepStrictEqual(got(C, T.KVM_LAYOUT), [], 'C is told nothing about the top edge');
+    assert.strictEqual(got(C, T.KVM_LAYOUT).slice(-1)[0].m.pcSide, 'bottom', 'C is told its side last');
 
     const take = await driveVia(A, B, 'top', 0.4);
     assert.strictEqual(take.m.side, 'bottom', 'B sees the take at its bottom: the side opposite to top');
@@ -162,8 +182,6 @@ test('top leads to B and bottom to C: each take goes to that device only; B acce
     snaps(A, B, C);
 
     // Bottom leads to C: C takes, and B gets nothing new.
-    assert.strictEqual(kvm.setEdge('bottom', C.id), true);
-    await waitFor(() => got(C, T.KVM_LAYOUT).some((x) => x.m.pcSide === 'bottom'), 'C is told where A is');
     const takeC = await driveVia(A, C, 'bottom', 0.6);
     assert.strictEqual(takeC.m.side, 'top', 'C sees the take at its top');
     assert.strictEqual(got(B, T.KVM_TAKE).length, 1, 'B got only the first take');
@@ -183,8 +201,7 @@ test('while driving B, an edge that leads to C is ignored: no take to C, still d
     const { A, B, C } = N;
     record(B); record(C);
     const kvm = kvmOn(A);
-    kvm.setEdge('top', B.id);
-    kvm.setEdge('bottom', C.id);
+    lay(A, { top: B, bottom: C });
     await driveVia(A, B, 'top');
     const before = A.helper.sent.length;
     A.helper.emit('event', 'edge', { side: 'bottom', offset: 0.5 });
@@ -208,7 +225,7 @@ test('B drops while A drives it: A goes home without errors; B drops while drivi
     const { A, B, C } = N;
     record(B); record(C);
     const kvm = kvmOn(A);
-    kvm.setEdge('top', B.id);
+    lay(A, { top: B });
 
     // A drives B, B goes away.
     await driveVia(A, B, 'top');
@@ -242,9 +259,10 @@ test('applyConfig sends sides = the edges whose device is connected and linked; 
     const { A, B, C } = N;
     const kvm = kvmOn(A);
     kvm.applyConfig();
-    assert.deepStrictEqual(sides(A), [], 'no edges: nothing watched');
-    kvm.setEdge('top', B.id);
-    kvm.setEdge('bottom', C.id);
+    // No layout yet: the paired devices sit in a row, the first one next to this PC (as the first
+    // pairing always did, on the right), so one side is watched.
+    assert.strictEqual(sides(A).length, 1, 'one side watched in the default row');
+    lay(A, { top: B, bottom: C }); // the layout change re-sends the sides
     assert.deepStrictEqual(sides(A), ['top', 'bottom']);
     assert.strictEqual(A.helper.last('kvmConfig').side, 'top', 'the first side also drives the file strip');
     A.links.get(C.id).ws.terminate();
@@ -269,8 +287,7 @@ test('cursor sharing is per device: a device with it off is not crossed to, the 
     const { A, B, C } = N;
     record(B); record(C);
     const kvm = kvmOn(A);
-    kvm.setEdge('top', B.id);
-    kvm.setEdge('bottom', C.id);
+    lay(A, { top: B, bottom: C });
     assert.strictEqual(A.hub.select(B.id), true);
     C.hub.bus.send(A.id, { t: T.KVM_LINK, on: false }); // C switches its cursor sharing off, not the selected B
     await waitFor(() => A.settings.kvm.linkedBy[C.id] === false, 'C remembered as off');
@@ -291,48 +308,37 @@ test('cursor sharing is per device: a device with it off is not crossed to, the 
   }
 });
 
-test('kvm.layout from a device sets its edge; a device never takes another device’s edge', async () => {
+test('kvm.layout from an older app does not change the layout: the shared layout is the one map', async () => {
   const N = await world(['A', 'B', 'C'], TRIANGLE);
   try {
     const { A, B, C } = N;
     const kvm = kvmOn(A);
-    // B crosses on its left: it is on our right.
-    B.hub.bus.send(A.id, { t: T.KVM_LAYOUT, pcSide: 'left' });
-    await waitFor(() => kvm.edges.right === B.id, 'B is on our right');
-    // C crosses on its left as well: the right edge is B's, so C is refused.
+    const before = kvm.edges;
+    B.hub.bus.send(A.id, { t: T.KVM_LAYOUT, pcSide: 'bottom' });
     C.hub.bus.send(A.id, { t: T.KVM_LAYOUT, pcSide: 'left' });
     await sleep(150);
-    assert.deepStrictEqual(kvm.edges, { ...NONE, right: B.id }, 'C did not take B’s edge');
-    // C crosses on its bottom: it is on our top.
-    C.hub.bus.send(A.id, { t: T.KVM_LAYOUT, pcSide: 'bottom' });
-    await waitFor(() => kvm.edges.top === C.id, 'C is on our top');
-    // B moves to our bottom: refreshed; the top stays C's.
-    B.hub.bus.send(A.id, { t: T.KVM_LAYOUT, pcSide: 'top' });
-    await waitFor(() => kvm.edges.bottom === B.id, 'B moved to our bottom');
-    assert.deepStrictEqual(kvm.edges, { ...NONE, top: C.id, bottom: B.id });
+    assert.deepStrictEqual(kvm.edges, before, 'no edge was set by a message');
+    assert.strictEqual(A.layoutSync.get(), null, 'nothing stored');
     snaps(A, B, C);
   } finally {
     closeAll(N);
   }
 });
 
-test('two devices cannot share a side; a device on another side moves; clearing a side', async () => {
+test('a device placed on another device’s cell takes it over and the other moves; a device taken off leaves its side', async () => {
   const N = await world(['A', 'B', 'C'], TRIANGLE);
   try {
     const { A, B, C } = N;
     const kvm = kvmOn(A);
-    assert.strictEqual(kvm.setEdge('top', B.id), true);
-    assert.strictEqual(kvm.setEdge('top', C.id), false, 'top is B’s: refused');
-    assert.deepStrictEqual(kvm.edges, { ...NONE, top: B.id });
-    assert.strictEqual(kvm.setEdge('right', B.id), true, 'B moves to the right');
-    assert.deepStrictEqual(kvm.edges, { ...NONE, right: B.id });
-    assert.strictEqual(kvm.setEdge('top', C.id), true);
-    assert.deepStrictEqual(kvm.edges, { ...NONE, right: B.id, top: C.id });
-    assert.strictEqual(kvm.setEdge('right', null), true, 'clearing a side');
-    assert.deepStrictEqual(kvm.edges, { ...NONE, top: C.id });
-    assert.strictEqual(kvm.setEdge('diagonal', C.id), false, 'a side that does not exist');
+    lay(A, { top: B, bottom: C });
+    assert.deepStrictEqual(kvm.edges, { ...NONE, top: B.id, bottom: C.id });
+    assert.strictEqual(A.layoutSync.place(C.id, 0, -1), true, 'C goes on the top cell');
+    assert.deepStrictEqual(kvm.edges, { ...NONE, top: C.id, bottom: B.id }, 'top is C now, and B took C’s old cell');
+    assert.strictEqual(A.layoutSync.place(B.id, 99, 0), false, 'a cell out of range is refused');
+    A.hub.forgetPeer(C.id); // as Forget does: unpaired, then taken off the layout
     kvm.forgetDevice(C.id);
-    assert.deepStrictEqual(kvm.edges, NONE, 'a forgotten device leaves its edge');
+    assert.strictEqual(A.layoutSync.get().cells[C.id], undefined, 'a forgotten device is taken off the layout');
+    assert.deepStrictEqual(kvm.edges, { ...NONE, bottom: B.id }, 'the forgotten top is gone; B stays at the bottom');
     snaps(A, B, C);
   } finally {
     closeAll(N);
@@ -362,17 +368,22 @@ test('settings from before the edges: one paired device takes the side its pcSid
   }
 });
 
-test('a stale helper edge with no device behind it, and a device that is not connected, are refused at once', async () => {
+test('a helper edge with no device behind it, and a device that is not connected, are refused at once', async () => {
   const N = await world(['A', 'B', 'C'], TRIANGLE);
   try {
-    const { A } = N;
+    const { A, B } = N;
     const kvm = kvmOn(A);
-    kvm.setEdge('left', crypto.randomUUID()); // a device that is not paired here
-    A.helper.emit('event', 'edge', { side: 'left', offset: 0.5 });
+    lay(A, { top: B, bottom: N.C });
+    A.helper.emit('event', 'edge', { side: 'left', offset: 0.5 }); // no device on the left
     A.helper.emit('event', 'edge', { side: 'right', offset: 0.5 }); // no device on the right
     assert.strictEqual(kvm.mode, 'home');
     assert.strictEqual(A.helper.last('capture').on, false);
-    snaps(A);
+    A.links.get(B.id).ws.terminate();
+    await waitFor(() => !A.hub.sessions.get(B.id).connected, 'B dropped');
+    A.helper.emit('event', 'edge', { side: 'top', offset: 0.5 }); // B is on top, but not connected
+    assert.strictEqual(kvm.mode, 'home');
+    assert.strictEqual(A.helper.last('capture').on, false);
+    snaps(A, B);
   } finally {
     closeAll(N);
   }

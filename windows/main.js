@@ -21,6 +21,7 @@ const Clip = require('./clip');
 const setupIpc = require('./ipc');
 const Helper = require('./helper');
 const Kvm = require('./kvm');
+const LayoutSync = require('./layout-sync'); // the mesh's shared layout (docs/mesh.md)
 const firewall = require('./firewall');
 const Terminal = require('./terminal');
 const FileDrop = require('./filedrop');
@@ -110,6 +111,7 @@ let notifs = null;
 let fileClip = null;
 let sshd = null;
 let kvm = null;
+let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let wired = null; // wired.js, with the phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
 let phoneViews = null; // its screen and apps in windows here (phoneview.js)
@@ -174,7 +176,18 @@ function start() {
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
   // Settings from before the cursor edges: one paired device takes the side its old pcSide gave it.
   if (migrateKvm(settings, hub.peers().map((p) => p.id))) saveSettings();
-  kvm = new Kvm({ hub, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
+  // The shared layout: one map of the paired devices for the whole mesh (its own pool, docs/mesh.md).
+  // The layout is drawn for the paired devices; a forgotten one leaves it.
+  layoutSync = new LayoutSync({
+    bus: hub.bus,
+    mesh,
+    selfId: device.id,
+    storage: { get: () => settings.layout, set: (l) => { settings.layout = l; saveSettings(); } },
+    knownIds: () => hub.peers().map((p) => p.id),
+    legacyEdges: () => settings.kvm.edges, // settings from before the layout: once
+    onChange: () => { if (kvm) kvm.layoutChanged(); pushState(); },
+  });
+  kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
   hud = new Hud(() => settings);
   const hudShow = hud.show.bind(hud);
   hud.show = (kind, text, sub) => hudShow(kind, fillNames(text), fillNames(sub || '')); // device names in popups
@@ -249,7 +262,7 @@ function start() {
     },
   });
   updates.start();
-  const ipc = setupIpc({ hub, link, discovery, screen, clip, kvm, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
+  const ipc = setupIpc({ hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, connectPhoneDev,
     checkFirewall, fixFirewall, setStartup, onApp: updateTray });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
@@ -465,6 +478,7 @@ function buildState() {
     input: kvm.mode,
     kvmState: kvm.view(),
     kvm: { ...settings.kvm },
+    layout: layoutSync.state(), // the shared layout: { rev, by, cells (this device's view), grid }
     keys: settings.keys,
     monitor: settings.monitor,
     clipboard: { ...settings.clipboard, ...clip.view },
