@@ -221,6 +221,11 @@ class Kvm {
   applyConfig() {
     const k = this.cfg;
     const sides = this._watchedSides();
+    const key = sides.map((x) => x + '=' + this.edges[x]).join(',');
+    if (key !== this._sidesKey) { // only a change is worth a line
+      this._sidesKey = key;
+      console.log('[kvm] watching sides: ' + (key || 'none') + ' (edges ' + JSON.stringify(this.edges) + ')');
+    }
     this.helper.send('kvmConfig', {
       side: sides[0] || null, // the first side also drives the file-drag strip (DropEdge)
       sides,
@@ -453,6 +458,7 @@ class Kvm {
   }
 
   _armReturn() {
+    console.log('[kvm] return watch on: ' + this._returnSides().join(',') + ' (partner ' + this.partner + ')');
     this.helper.send('armReturn', { on: true, sides: this._returnSides(), resistancePx: this.cfg.resistancePx });
   }
 
@@ -462,8 +468,10 @@ class Kvm {
   // take the device leaves the edge live.
   _onReturn(msg) {
     const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
-    if (!side || side === this.layoutSync.sideTo(this.partner)) return this._sendHome(msg.offset);
-    const to = this.layoutSync.across(side);
+    const to = side ? this.layoutSync.across(side) : null;
+    console.log('[kvm] return ' + side + ' -> ' + (to || 'nobody') + ' (partner ' + this.partner + ')');
+    // The way back: the side of the device that drives us (judged by who is there, not only by the side we expect).
+    if (!side || to === this.partner || side === this.layoutSync.sideTo(this.partner)) return this._sendHome(msg.offset);
     if (to && to !== this.partner && this._canRelay(to)) return this._relayTo(to, side, Number(msg.offset) || 0);
     if (to && to !== this.partner) this._send(this.partner, { t: T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
     this._armReturn();
