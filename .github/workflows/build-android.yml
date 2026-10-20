@@ -57,7 +57,12 @@ jobs:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
         run: |
           if [ -z "$KEYSTORE" ]; then
-            echo "::warning::No ANDROID_KEYSTORE secret: signed with the runner's debug key"
+            # One fixed key for every build of this repository (not a secret: anyone could sign with it, so
+            # add the ANDROID_KEYSTORE secret to replace it). Without a fixed key each runner makes its
+            # own, and Android refuses an update signed differently from the installed app.
+            echo "::warning::No ANDROID_KEYSTORE secret: signed with the repository's shared key (.github/android-shared.keystore)"
+            mkdir -p ~/.android
+            cp .github/android-shared.keystore ~/.android/debug.keystore
           else
             mkdir -p ~/.android
             echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore

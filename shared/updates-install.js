@@ -148,7 +148,12 @@ function plan({ platform, file, pid, execPath, dir, env = {} }) {
 function run(p) {
   fs.mkdirSync(path.dirname(p.scriptPath), { recursive: true });
   fs.writeFileSync(p.scriptPath, p.script, { mode: 0o755 });
-  const child = spawn(p.cmd, p.args, { detached: true, stdio: 'ignore', windowsHide: true });
+  // Windows: a detached PowerShell has no console and never runs the script, and a plain child dies with
+  // its parent in some job setups. `start` makes it an independent process that outlives the app.
+  const child = p.kind === 'win'
+    ? spawn('cmd.exe', ['/d', '/c', 'start', '""', '/min', p.cmd, ...p.args.map((a) => (/[\\/]/.test(a) ? `"${a}"` : a))],
+      { stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true })
+    : spawn(p.cmd, p.args, { detached: true, stdio: 'ignore', windowsHide: true });
   child.on('error', () => {});
   child.unref();
 }
