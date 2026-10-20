@@ -381,7 +381,7 @@ class Kvm {
   _drive(msg) {
     // The phone bridge only when the PARTNER is the phone (a phone being connected is not enough: a
     // take meant for a computer went to the bridge and nobody answered it).
-    if (this.local && this.local.drives(this.partner)) this.local.handle(msg);
+    if (this.local && this.local.drives(this.partner)) this.local.handle(msg, this.partner);
     else if (this.partner) this._send(this.partner, msg);
   }
 
@@ -442,7 +442,7 @@ class Kvm {
     // A driver with no bridge of its own to a phone asks us to drive that phone for it (m.via): the input it
     // sends us goes on to the phone through our bridge, and the phone hands the pointer back to the driver.
     const via = typeof m.via === 'string' && m.via ? m.via : '';
-    if (via && !(this._peerOs(via) === P.OS.ANDROID && this.local && this.local.drives(via) && (!this.local.drivable || this.local.drivable()) && this._linkedFor(via))) {
+    if (via && !(this._peerOs(via) === P.OS.ANDROID && this.local && this.local.drives(via) && (!this.local.drivable || this.local.drivable(via)) && this._linkedFor(via))) {
       console.log('[kvm] ' + from + ' asked us to drive ' + via + ' but we cannot');
       this._send(from, { t: T.KVM_REFUSE, route, why: P.REFUSE.NOT_ALLOWED });
       return;
@@ -493,7 +493,7 @@ class Kvm {
     const ev = { ...m };
     if (this.sub) { // the input goes on to the phone, in Windows key codes (the bridge swaps for the phone)
       if ((ev.t === T.K_KEY_DOWN || ev.t === T.K_KEY_UP) && typeof ev.code === 'string' && this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this._peerOs(from))) ev.code = P.mapKeyFromOtherPlatform(ev.code);
-      this.local.handle(ev);
+      this.local.handle(ev, this.sub.to);
       return;
     }
     if (ev.t === T.K_KEY_DOWN || ev.t === T.K_KEY_UP) {
@@ -518,7 +518,7 @@ class Kvm {
 
   _canRelay(to) {
     return !this.sub && this.mode === 'driven' && !this.keyboardOnly && this._peerOs(to) === P.OS.ANDROID && !!this.local
-      && this.local.drives(to) && (!this.local.drivable || this.local.drivable()) && this._linkedFor(to) && this.cfg.driveOther && !!this.cfg.mouse;
+      && this.local.drives(to) && (!this.local.drivable || this.local.drivable(to)) && this._linkedFor(to) && this.cfg.driveOther && !!this.cfg.mouse;
   }
 
   _relayTo(to, side, offset, viaTake = false) {
@@ -526,7 +526,7 @@ class Kvm {
     this.sub = { to, side, route: this.subRoute, viaTake };
     console.log('[kvm] relay to ' + to + ' side ' + side + ' (driven by ' + this.partner + ')');
     this.helper.send('armReturn', { on: false });
-    this.local.handle({ t: T.KVM_TAKE, route: this.subRoute, side: P.opposite(side), offset, mouse: true, keyboard: true });
+    this.local.handle({ t: T.KVM_TAKE, route: this.subRoute, side: P.opposite(side), offset, mouse: true, keyboard: true }, to);
   }
 
   // The phone handed the pointer back (or refused): we are an ordinary driven PC again, the pointer at the edge it left by.
@@ -547,8 +547,9 @@ class Kvm {
 
   _endRelay() {
     if (!this.sub) return;
+    const to = this.sub.to;
     this.sub = null;
-    if (this.local) this.local.handle({ t: T.KVM_RELEASE });
+    if (this.local) this.local.handle({ t: T.KVM_RELEASE }, to);
   }
 
   // A trackpad gesture from the other computer, done the

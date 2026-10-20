@@ -60,10 +60,69 @@ class PhoneLink extends EventEmitter {
     if (s) s.inject(msg);
   }
 
+  // The phone with this device id when it is connected now, else null.
+  ctxOf(id) {
+    const c = id ? this.raw.clients.get(id) : null;
+    return isAndroid(c) ? c : null;
+  }
+
+  // Every phone connected now.
+  all() {
+    return [...this.raw.clients.values()].filter(isAndroid);
+  }
+
+  // The view of one phone: the same API as this object (current, sendToClient, inject, keySwap, 'client',
+  // 'closed', 't:<type>') but only that phone, so a bridge, a Phone and a window set can each serve a phone
+  // of their own. bind(id) attaches a scoped link made before any phone was there.
+  scoped(id = null) {
+    return new ScopedPhoneLink(this, id);
+  }
+
   keySwap(settings) {
     const c = this.current;
     return settings.keys.swapCtrlCmd !== false && P.keySwapNeeded(P.OS.WIN, c && c.os);
   }
 }
 
-module.exports = { PhoneLink };
+class ScopedPhoneLink extends EventEmitter {
+  constructor(parent, id) {
+    super();
+    this.parent = parent;
+    this.id = id;
+    this.raw = parent.raw;
+    this.hub = parent.hub;
+    this.wired = new Set();
+    parent.on('client', (ctx) => ctx.deviceId === this.id && this.emit('client', ctx));
+    parent.on('closed', (ctx) => ctx.deviceId === this.id && this.emit('closed', ctx));
+    this.on('newListener', (ev) => {
+      if (typeof ev !== 'string' || !ev.startsWith('t:') || this.wired.has(ev)) return;
+      this.wired.add(ev);
+      parent.on(ev, (m, ctx) => ctx && ctx.deviceId === this.id && this.emit(ev, m, ctx));
+    });
+  }
+
+  bind(id) {
+    this.id = id;
+  }
+
+  get current() {
+    return this.parent.ctxOf(this.id);
+  }
+
+  sendToClient(msg) {
+    const s = this.id && this.hub.sessions.get(this.id);
+    if (s && this.current) s.send(msg);
+  }
+
+  inject(msg) {
+    const s = this.id && this.hub.sessions.get(this.id);
+    if (s && this.current) s.inject(msg);
+  }
+
+  keySwap(settings) {
+    const c = this.current;
+    return settings.keys.swapCtrlCmd !== false && P.keySwapNeeded(P.OS.WIN, c && c.os);
+  }
+}
+
+module.exports = { PhoneLink, ScopedPhoneLink };

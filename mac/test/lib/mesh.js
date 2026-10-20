@@ -171,7 +171,27 @@ async function hello(port, { id, name, os = P.OS.WIN, token, mesh = 1 }) {
   return { client: c, reply };
 }
 
+// A phone pairs with `host` (a phone dials, whatever the other side is): resolves {client, token, id}.
+async function pairPhone(host, { id = crypto.randomUUID(), name = 'Phone' } = {}) {
+  const c = await rawConnect(host.port);
+  const nw = P.randomHex(16);
+  c.send({ t: P.T.PAIR_START, v: P.PROTOCOL_VERSION, id, name, os: P.OS.ANDROID, commit: P.commitOf(nw) });
+  const nonce = await c.until((m) => m.t === P.T.PAIR_NONCE);
+  c.send({ t: P.T.PAIR_REVEAL, nonce: nw });
+  const code = P.sasCode(host.fp, nw, nonce.nonce);
+  await waitFor(() => host.pairing.pending && host.pairing.pending.code === code, 'the phone code');
+  host.pairing.respond(true);
+  c.send({ t: P.T.PAIR_CONFIRM });
+  const ok = await c.until((m) => m.t === P.T.PAIR_OK);
+  return { client: c, token: ok.token, id };
+}
+
+async function helloPhone(c, { id, name = 'Phone', token }) {
+  c.send({ t: P.T.HELLO, v: P.PROTOCOL_VERSION, id, name, os: P.OS.ANDROID, token, mesh: 1 });
+  return c.until((m) => m.t === P.T.WELCOME || m.t === P.T.ERROR);
+}
+
 module.exports = {
   HOST, node, close, waitFor, pair, linked, socketCount, memoryStorage, loadTestCert,
-  RawClient, rawConnect, hello,
+  RawClient, rawConnect, hello, pairPhone, helloPhone,
 };

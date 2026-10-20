@@ -54,10 +54,10 @@ function fullApk() {
 }
 
 class PhoneBridge extends EventEmitter {
-  constructor({ server, phone, getSettings, clipboard }) {
+  constructor({ server, phone, getSettings, clipboard, adb }) {
     super();
     Object.assign(this, { server, phone, getSettings, clipboard });
-    this.adb = new Adb();
+    this.adb = adb || new Adb(); // phones share one adb (one adb server)
     // off | missing | waitingWifi | needsPair | connecting | ready | error
     this.state = 'off';
     this.message = '';

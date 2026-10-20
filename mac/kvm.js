@@ -92,7 +92,8 @@ class Kvm extends EventEmitter {
   // as messages from the partner. Called once by main.js and by the tests.
   attachLocal(bridge) {
     this.local = bridge;
-    if (bridge) bridge.reply = (msg) => this.onPartnerMessage(this.partner, msg);
+    // A phone's answers come as the partner's messages; a PhoneSet says which phone answered.
+    if (bridge) bridge.reply = (msg, id) => this.onPartnerMessage(id || this.partner, msg);
   }
 
   // A message as if the partner device had sent it (the phone bridge's replies).
@@ -307,7 +308,7 @@ class Kvm extends EventEmitter {
     // computer that has one drives it for us (kvm.take with `via`); the phone hands the pointer back to us.
     let target = id || null;
     let via = '';
-    if (id && this.local && this.local.drives(id) && this.local.drivable && !this.local.drivable()) {
+    if (id && this.local && this.local.drives(id) && this.local.drivable && !this.local.drivable(id)) {
       const relay = this._relayFor(id);
       if (relay) { target = relay; via = id; }
     }
@@ -354,7 +355,7 @@ class Kvm extends EventEmitter {
   // that device's socket.
   _drive(msg) {
     if (!this.partner) return;
-    if (this.local && this.local.drives(this.partner)) this.local.handle(msg);
+    if (this.local && this.local.drives(this.partner)) this.local.handle(msg, this.partner);
     else this._send(this.partner, msg);
   }
 

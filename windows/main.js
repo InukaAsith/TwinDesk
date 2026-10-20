@@ -46,6 +46,8 @@ const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
 const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
+const { PhoneSet } = require('./phones');
+const { Adb } = require('./adb');
 const { PhoneViews } = require('./phoneview');
 const { normalize, apply: applySettings, migrateKvm } = require('./settings');
 
@@ -116,7 +118,7 @@ let kvm = null;
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let wired = null; // wired.js, with the phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
-let phoneViews = null; // its screen and apps in windows here (phoneview.js)
+// (the screen and apps of a phone in windows here: phoneview.js, per phone, phone.views for the active one)
 let lastMode = 'home';
 let fw = { checking: true, ok: null, message: 'Checking…' }; // firewall self-check
 // Started at sign-in (tray only), or by a pinned Mac app's shortcut (that app only).
@@ -266,7 +268,7 @@ function start() {
   });
   updates.start();
   const ipc = setupIpc({ hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phoneViews; }, connectPhoneDev,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, connectPhoneDev,
     checkFirewall, fixFirewall, setStartup, onApp: updateTray });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
@@ -306,33 +308,48 @@ async function startHost() {
 // screen and apps in windows here (phoneview.js).
 function startPhone(server, pairing) {
   const pl = new PhoneLink(hub, server);
-  phone = new Phone({ server: pl, raw: server, discovery, pairing });
-  phone.on('change', pushState);
-  // The phone's Keyboard page names this PC's hotkey (double-tap = everything back here).
-  pl.on('client', (ctx) => ctx.os === P.OS.ANDROID && pl.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_WIN, 'win') }));
-  phone.bridge = new PhoneBridge({ server: pl, phone, getSettings: () => settings, clipboard: clip });
+  const adb = new Adb(); // one adb for every phone
   // A paired phone on a USB cable: the session, screen and sound through it (no Wi-Fi needed).
-  wired = new Wired({ adb: phone.bridge.adb, raw: server, peer: pl, getId: () => device.id,
+  wired = new Wired({ adb, raw: server, peer: pl, getId: () => device.id,
     hasPhone: () => pairing.list().some((x) => x.os === P.OS.ANDROID) });
   wired.on('change', pushState);
-  phone.bridge.wired = wired;
-  phone.wired = wired;
-  phone.bridge.on('change', () => {
-    pushState();
-    if (pendingPhoneApp && phone.bridge.state === 'ready') {
-      const p = pendingPhoneApp;
-      pendingPhoneApp = null;
-      if (Date.now() < p.until) openPhoneApp(p.pkg);
-    }
+  // Every phone gets its own stack (phone.js, phone-bridge.js, phoneview.js) made on a link scoped to it
+  // (phones.js); `phone` is also the single-phone API for the active one.
+  phone = new PhoneSet({
+    hub, link: pl, raw: server, discovery, pairing, wired,
+    make: (scoped) => {
+      const ph = new Phone({ server: scoped, raw: server, discovery, pairing });
+      const bridge = new PhoneBridge({ server: scoped, phone: ph, getSettings: () => settings, clipboard: clip, adb });
+      ph.bridge = bridge;
+      ph.wired = wired;
+      bridge.wired = wired;
+      const views = new PhoneViews({ bridge, phone: ph, getSettings: () => settings, server: scoped, fileSend: fileDrop });
+      return { phone: ph, bridge, views };
+    },
+    onUnit: (u) => {
+      u.phone.on('change', pushState);
+      // The phone's Keyboard page names this PC's hotkey (double-tap = everything back here).
+      u.link.on('client', (ctx) => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_WIN, 'win') }));
+      u.bridge.on('change', () => {
+        pushState();
+        if (pendingPhoneApp && phone.bridge.state === 'ready') {
+          const p = pendingPhoneApp;
+          pendingPhoneApp = null;
+          if (Date.now() < p.until) openPhoneApp(p.pkg);
+        }
+      });
+      u.bridge.on('popup', (kind, text) => hud.show(kind, text));
+      u.views.on('change', pushState);
+      u.views.on('focus', () => kvm.applyConfig());
+    },
   });
-  phone.bridge.on('popup', (kind, text) => hud.show(kind, text));
-  phoneViews = new PhoneViews({ bridge: phone.bridge, phone, getSettings: () => settings, server: pl, fileSend: fileDrop });
-  phoneViews.on('change', pushState);
-  // A phone notification clicked here: its app in a window.
-  notifs.onClick = (m) => pl.current && pl.current.os === P.OS.ANDROID && phoneViews.openNotified(m.app, m.appName);
-  phoneViews.on('focus', () => kvm.applyConfig());
-  kvm.local = phone.bridge; // driving a phone goes through adb
-  kvm.blockEdge = () => phoneViews.focused; // moving inside the phone window never crosses
+  // A phone notification clicked here: its app in a window (on the phone it came from).
+  notifs.onClick = (m) => {
+    const u = phone.unit(m.originId);
+    if (u && u.link.current) u.views.openNotified(m.app, m.appName);
+  };
+  kvm.local = phone; // driving a phone goes through adb, by the partner: phone.drives(id) / handle(msg, id)
+  kvm.blockEdge = () => phone.focused; // moving inside the phone window never crosses
   pushState();
 }
 
@@ -365,7 +382,7 @@ function openPhoneAppArg(argv) {
 }
 
 function openPhoneApp(pkg) {
-  if (phone && phoneViews && phone.connected && phone.bridge.state === 'ready') return phoneViews.openApp(pkg, (phone.apps.find((a) => a.id === pkg) || {}).name);
+  if (phone && phone.connected && phone.bridge.state === 'ready') return phone.views.openApp(pkg, (phone.apps.find((a) => a.id === pkg) || {}).name);
   const first = !pendingPhoneApp;
   pendingPhoneApp = { pkg, until: (pendingPhoneApp && pendingPhoneApp.until) || Date.now() + 2 * 60 * 1000 };
   if (first && hud) hud.show('home', 'Opening it when the phone is ready…');
@@ -716,7 +733,7 @@ app.on('before-quit', () => {
   if (pcApps) pcApps.shutdown();
   if (peerApps) peerApps.shutdown();
   if (fileClip) fileClip.shutdown();
-  if (phoneViews) phoneViews.shutdown();
+  if (phone) phone.shutdown();
   if (wired) wired.stop();
   if (phone) phone.bridge.adb.killServer();
   if (kvm) kvm.shutdown(); // gives back any captured input and stops the helper

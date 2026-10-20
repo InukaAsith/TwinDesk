@@ -209,9 +209,9 @@ class Server extends EventEmitter {
   }
 
   // Disconnect the phone(s) on purpose: they are told why and may not resume at once.
-  releasePhone() {
+  releasePhone(ctx = null) {
     for (const c of this.clients.values()) {
-      if (c.os !== P.OS.ANDROID) continue;
+      if (c.os !== P.OS.ANDROID || (ctx && c.deviceId !== ctx.deviceId)) continue;
       c.released = true;
       this.fail(c, P.E.RELEASED, 'The Mac disconnected the phone');
       setTimeout(() => c.ws.terminate(), 1000); // an older phone app never answers the close

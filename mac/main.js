@@ -73,6 +73,8 @@ const { Hud } = require('./hud');
 const { PairSync } = require('./pairsync');
 const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
+const { PhoneSet, PhoneDir } = require('./phones');
+const { Adb } = require('./adb');
 const { Wired } = require('./wired');
 const { PhoneViews } = require('./phoneview');
 const { PhoneDrive } = require('./phonedrive');
@@ -507,7 +509,6 @@ app.whenReady().then(() => {
   });
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
-  phonePeer = new Peer(hub.phoneRoute(), server);
   peer.on('client', (ctx) => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
@@ -521,29 +522,46 @@ app.whenReady().then(() => {
     hub, mesh, layoutSync, selfName: () => id.macName });
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
-  svc.phone = new Phone({ server: phonePeer, raw: server, discovery, pairing });
-  svc.phone.on('change', pushState);
-  // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
-  phonePeer.on('client', (ctx) => ctx.os === P.OS.ANDROID && phonePeer.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
-  // The phone's screen, input, clipboard and app windows, through wireless debugging.
-  svc.phone.bridge = new PhoneBridge({ server: phonePeer, phone: svc.phone, getSettings: () => settings, clipboard: svc.clipboard });
-  svc.phone.bridge.on('change', pushState);
-  // A paired phone on a USB cable: the session, screen and sound through it (no Wi-Fi needed).
-  svc.wired = new Wired({ adb: svc.phone.bridge.adb, raw: server, peer: phonePeer, getId: () => id.macId,
+  // Every phone gets its own stack (phone.js, phone-bridge.js, phoneview.js) on a link bound to it (phones.js);
+  // svc.phone is also the single-phone API for the active one. One adb for all of them.
+  const adb = new Adb();
+  const phoneDir = new PhoneDir(hub, server);
+  svc.wired = new Wired({ adb, raw: server, peer: phoneDir, getId: () => id.macId,
     hasPhone: () => pairing.list().some((x) => x.os === P.OS.ANDROID) });
   svc.wired.on('change', pushState);
-  svc.phone.bridge.wired = svc.wired;
-  svc.phone.wired = svc.wired;
-  svc.phoneViews = new PhoneViews({ bridge: svc.phone.bridge, phone: svc.phone, getSettings: () => settings, server: phonePeer, fileSend: svc.fileSend });
-  svc.phoneViews.on('change', pushState);
-  // A phone notification clicked here: its app in a window.
-  svc.notifs.on('click', (m) => phonePeer.current && phonePeer.current.os === P.OS.ANDROID && svc.phoneViews.openNotified(m.app, m.appName));
+  svc.phone = new PhoneSet({
+    hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
+    make: (scoped) => {
+      const ph = new Phone({ server: scoped, raw: server, discovery, pairing });
+      const bridge = new PhoneBridge({ server: scoped, phone: ph, getSettings: () => settings, clipboard: svc.clipboard, adb });
+      ph.bridge = bridge;
+      ph.wired = svc.wired;
+      bridge.wired = svc.wired;
+      const views = new PhoneViews({ bridge, phone: ph, getSettings: () => settings, server: scoped, fileSend: svc.fileSend });
+      return { phone: ph, bridge, views };
+    },
+    onUnit: (u) => {
+      u.phone.on('change', pushState);
+      // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
+      u.link.on('client', () => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
+      u.bridge.on('change', pushState);
+      u.views.on('change', pushState);
+      u.bridge.on('popup', (kind, text) => hud.show(kind, text));
+    },
+  });
+  svc.phone.on('change', pushState);
+  svc.phoneViews = svc.phone.viewsProxy; // the windows of the active phone
+  // A phone notification clicked here: its app in a window (on the phone it came from).
+  svc.notifs.on('click', (m) => {
+    const u = svc.phone.unit(m.originId);
+    if (u && u.link.current) u.views.openNotified(m.app, m.appName);
+  });
   // The phone in Finder, through adb (the cable, else wireless debugging): only when Mount is clicked.
-  svc.phoneDrive = new PhoneDrive({ adb: svc.phone.bridge.adb, bridge: svc.phone.bridge, phone: svc.phone });
+  svc.phoneDrive = new PhoneDrive({ adb, bridge: svc.phone.bridgeProxy, phone: svc.phone });
   svc.phoneDrive.on('change', pushState);
-  svc.kvm.attachLocal(svc.phone.bridge);
+  svc.kvm.attachLocal(svc.phone);
   const blockEdge = svc.kvm.blockEdge;
-  svc.kvm.blockEdge = () => blockEdge() || svc.phoneViews.focused; // moving inside the phone window never crosses
+  svc.kvm.blockEdge = () => blockEdge() || svc.phone.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
   peer.on(`t:${P.T.SCREEN_CTL}`, (m) => onScreenCtl(m));
   // Two-way switches shared with the other computer, per pair (pairsync.js).
@@ -581,7 +599,6 @@ app.whenReady().then(() => {
   });
   svc.fileClip.on('popup', (kind, text) => hud.show(kind, text));
   svc.pcApps.on('popup', (kind, text) => hud.show(kind, text));
-  svc.phone.bridge.on('popup', (kind, text) => hud.show(kind, text));
   if (app.isPackaged) app.setAsDefaultProtocolClient('macshare');
   for (const url of linkQueue.splice(0)) handleLink(url);
   // The hotkey's double-tap: the big card "Cursor sharing on/off" (also when the other side switched it).
@@ -620,7 +637,7 @@ app.on('will-quit', () => {
 });
 app.on('before-quit', () => {
   quitting = true;
-  if (svc && svc.phoneViews) svc.phoneViews.shutdown();
+  if (svc && svc.phone) svc.phone.shutdown();
   if (svc && svc.phoneDrive) svc.phoneDrive.shutdown();
   if (svc && svc.wired) svc.wired.stop();
   if (svc) svc.shutdown(); // KVM home first, so the helper releases input
