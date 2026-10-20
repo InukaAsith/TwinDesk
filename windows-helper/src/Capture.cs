@@ -43,7 +43,7 @@ namespace MacShare
         readonly List<string> retSides = new List<string>();
         readonly Dictionary<string, EdgePush> retPushes = new Dictionary<string, EdgePush>();
         bool retArmed; double retResistance;
-        DateTime lastEdgeNote = DateTime.MinValue;
+        DateTime lastEdgeNote = DateTime.MinValue, lastOuterNote = DateTime.MinValue;
 
         // hotkey double-tap
         bool hkDown; DateTime lastTapUp = DateTime.MinValue;
@@ -422,6 +422,17 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
+            // For the logs: a push against any outer edge of the desktop says whether it is watched and why nothing crossed.
+            foreach (string any in new string[] { "left", "right", "top", "bottom" })
+            {
+                if (Screens.Outward(any, dx, dy) <= 0 || !Screens.OnOuterEdge(p.x, p.y, any) || (DateTime.UtcNow - lastOuterNote).TotalMilliseconds < 2000) continue;
+                lastOuterNote = DateTime.UtcNow;
+                Dictionary<string, object> n2 = Ev("edgeNote");
+                n2["side"] = any; n2["x"] = p.x; n2["y"] = p.y; n2["monitors"] = Screens.Describe();
+                n2["watched"] = string.Join(",", Sides.ToArray()); n2["driveOther"] = DriveOther; n2["button"] = AnyButtonDown(); n2["outer"] = true;
+                emit(n2);
+                break;
+            }
             if (!DriveOther || Sides.Count == 0 || AnyButtonDown()) { pushes.Clear(); return; } // Rule 6: no crossing mid-drag
             foreach (string side in Sides)
             {
