@@ -209,45 +209,62 @@ function peerIds(state) {
 // Waits until a state holds, and says whether it did (the check reports the result, not the wait).
 const holds = (node, pred, what, ms = 15000) => waitState(node, pred, what, ms).then(() => true, () => false);
 
-// The cursor edges: top = B, bottom = C on A. An edge event drives the device behind it; going home
-// (captureEnded, as the helper reports the hotkey) brings every instance back. The helper of each
-// instance is real: the edge events are simulated, the pointer is not. Note: driven B places the
-// pointer at its edge on this desktop (its helper), and the edges are cleared again at the end.
-async function edgesScenario(A, B, C) {
+// The shared layout (docs/mesh.md, "Shared layout"): B sets the row A - B - C through the real IPC, and
+// every instance shows the same layout. C then edits it and A and B follow. Then the chain, with the
+// helper events simulated (devHelperEvent; the pointer is not): A drives B through its right edge, B's
+// pointer leaves to the right so A drives C, C's pointer leaves to the left so A drives B again, and B's
+// pointer leaves to the left and brings everything home. Every step: the driving / driven / home state
+// of each instance (UI.state.input).
+async function layoutScenario(A, B, C) {
   const ev = (node, expr) => evalIn(node, expr);
-  const set = async (side, id) => ev(A, `window.macshare.setEdge('${side}', ${id ? `'${id}'` : 'null'})`);
   const helperEvent = (node, name, msg) => ev(node, `window.macshare.devHelperEvent('${name}', ${JSON.stringify(msg)})`);
+  const setCell = (node, id, x, y) => ev(node, `window.macshare.setLayoutCell('${id}', ${x}, ${y})`);
 
-  check('A draws the Layout card in the Cursor tab', await ev(A, `UI.go('cursor')`).then(() =>
-    waitFor(async () => (await ev(A, `document.body.textContent`)).includes('Layout'), 'the Layout card', 15000)).then(() => true, () => false));
-  check('A sets its top edge to B (setEdge)', (await set('top', B.id)) === true);
-  check('A sets its bottom edge to C (setEdge)', (await set('bottom', C.id)) === true);
-  check('A shows top = B and bottom = C', await holds(A, (s) => s.kvm.edges.top === B.id && s.kvm.edges.bottom === C.id, 'A edges'));
-  check('B and C are told their side of A (kvm.layout)', await holds(B, (s) => s.kvm.edges.bottom === A.id, 'B edges')
-    && await holds(C, (s) => s.kvm.edges.top === A.id, 'C edges'));
+  check('A draws the Layout card with a tile for each device', await ev(A, `UI.go('cursor')`).then(() =>
+    waitFor(async () => (await ev(A, `document.querySelectorAll('.lay-tile').length`)) === 3, 'three device tiles', 15000)).then(() => true, () => false));
 
-  // Top: A drives B, B is driven.
-  await helperEvent(A, 'edge', { side: 'top', offset: 0.5 });
-  check('edge top: A is driving, with B selected', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === B.id, 'A driving B'));
-  check('edge top: B shows being driven', await holds(B, (s) => s.input === 'driven', 'B driven'));
-  check('edge top: C is not touched', (await stateOf(C)).input === 'home');
-  await helperEvent(A, 'captureEnded', { reason: 'hotkey' });
-  check('after going home A is home and B too', await holds(A, (s) => s.input === 'home', 'A home')
+  // B sets the row: A at x0, B at x1, C at x2 (all on row 0).
+  check('B puts A at x0 (setLayoutCell)', (await setCell(B, A.id, 0, 0)) === true);
+  check('B puts B at x1', (await setCell(B, B.id, 1, 0)) === true);
+  check('B puts C at x2', (await setCell(B, C.id, 2, 0)) === true);
+  const row = (s) => ['A', 'B', 'C'].every((k, i) => {
+    const id = { A: A.id, B: B.id, C: C.id }[k];
+    return s.layout && s.layout.cells[id] && s.layout.cells[id].x === i && s.layout.cells[id].y === 0;
+  });
+  const sameAs = (ref) => (s) => row(s) && s.layout.rev === ref.layout.rev && s.layout.by === ref.layout.by
+    && JSON.stringify(s.layout.cells) === JSON.stringify(ref.layout.cells);
+  const refB = await waitState(B, row, 'B shows the row', 15000);
+  check('A, B and C all show the same UI.state.layout (the row A-B-C)', await holds(A, sameAs(refB), 'A layout')
+    && await holds(B, sameAs(refB), 'B layout') && await holds(C, sameAs(refB), 'C layout'));
+
+  // C edits the layout (here: it places itself at its own cell again, a new revision): A and B follow.
+  check('C edits the layout (setLayoutCell from C)', (await setCell(C, C.id, 2, 0)) === true);
+  const refC = await waitState(C, (s) => s.layout.by === C.id && s.layout.rev > refB.layout.rev, 'C shows its own edit', 15000);
+  check('A and B follow the edit from C (same rev, by C)', await holds(A, sameAs(refC), 'A follows C')
+    && await holds(B, sameAs(refC), 'B follows C'));
+
+  // Chain. A drives B.
+  await helperEvent(A, 'edge', { side: 'right', offset: 0.5 });
+  check('edge right: A is driving, with B selected', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === B.id, 'A driving B'));
+  check('edge right: B is driven, C is home', await holds(B, (s) => s.input === 'driven', 'B driven') && (await stateOf(C)).input === 'home');
+
+  // B's pointer leaves to the right: B hands the input on, A releases B and drives C.
+  await helperEvent(B, 'return', { side: 'right', offset: 0.5 });
+  check('return right on B: A is driving, with C selected', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === C.id, 'A driving C'));
+  check('return right on B: C is driven, B is home', await holds(C, (s) => s.input === 'driven', 'C driven')
     && await holds(B, (s) => s.input === 'home', 'B home'));
 
-  // Bottom: A drives C.
-  await helperEvent(A, 'edge', { side: 'bottom', offset: 0.5 });
-  check('edge bottom: A is driving, with C selected', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === C.id, 'A driving C'));
-  check('edge bottom: C shows being driven', await holds(C, (s) => s.input === 'driven', 'C driven'));
-  check('edge bottom: B is not touched', (await stateOf(B)).input === 'home');
-  await helperEvent(A, 'captureEnded', { reason: 'hotkey' });
-  check('after going home from C, A is home and C too', await holds(A, (s) => s.input === 'home', 'A home again')
+  // C's pointer leaves to the left, towards B (not the driver): A takes B again.
+  await helperEvent(C, 'return', { side: 'left', offset: 0.5 });
+  check('return left on C: A is driving, with B selected again', await holds(A, (s) => s.input === 'driving' && s.mesh.selectedId === B.id, 'A driving B again'));
+  check('return left on C: B is driven, C is home', await holds(B, (s) => s.input === 'driven', 'B driven again')
     && await holds(C, (s) => s.input === 'home', 'C home'));
 
-  // Cleared: no edge leads anywhere, the sides are not watched.
-  await set('top', null);
-  await set('bottom', null);
-  check('edges cleared again', await holds(A, (s) => !s.kvm.edges.top && !s.kvm.edges.bottom, 'A no edges'));
+  // B's pointer leaves to the left, back to A: everything home.
+  await helperEvent(B, 'return', { side: 'left', offset: 0.5 });
+  check('return left on B: A is home, B is home, C is home', await holds(A, (s) => s.input === 'home', 'A home')
+    && await holds(B, (s) => s.input === 'home', 'B home') && await holds(C, (s) => s.input === 'home', 'C home'));
+  check('the selection stays on B after going home', await holds(A, (s) => s.mesh.selectedId === B.id, 'A keeps B selected'));
 }
 
 async function main() {
@@ -336,9 +353,9 @@ async function main() {
     const sentA = await waitState(A, (st) => hits(st, 'out') >= 1, 'A remembers its copy', 15000).catch(() => null);
     check('A remembers its own copy as sent, once', !!sentA && hits(sentA, 'out') === 1);
 
-    // Cursor edges (docs/mesh.md): A's top edge leads to B and its bottom edge to C. The edges are set
-    // through the real IPC; the helper's edge events come through devHelperEvent (the same listener).
-    await edgesScenario(A, B, C);
+    // The shared layout and the chain (docs/mesh.md): the layout is set through the real IPC, the helper's
+    // events come through devHelperEvent (the same listener the helper uses).
+    await layoutScenario(A, B, C);
 
     // The state keeps updating after every step: a fresh read from the main process works.
     for (const n of NODES) {
