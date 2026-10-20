@@ -49,8 +49,9 @@ namespace MacShare
         public static List<string> Strs(Dictionary<string, object> d, string k)
         {
             object v;
-            object[] arr = d != null && d.TryGetValue(k, out v) ? v as object[] : null;
-            if (arr == null) return null;
+            // JavaScriptSerializer hands nested arrays over as ArrayList (object[] in some paths): take either.
+            System.Collections.IEnumerable arr = d != null && d.TryGetValue(k, out v) ? v as System.Collections.IEnumerable : null;
+            if (arr == null || arr is string) return null;
             List<string> r = new List<string>();
             foreach (object o in arr) if (o is string) r.Add((string)o);
             return r;
