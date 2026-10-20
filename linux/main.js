@@ -243,6 +243,7 @@ function start() {
   // New releases on GitHub: a notification once per version, the tray item and About › Updates.
   updates = new Updates({
     current: app.getVersion(), platform: 'linux', prefer: process.env.APPIMAGE || !app.isPackaged ? 'appimage' : 'deb', getSettings: () => settings, save: saveSettings, onChange: pushState,
+    canInstall: app.isPackaged, idle: () => !kvm || kvm.mode === 'home', quit: () => app.quit(),
     notify: (title, body, onClick) => {
       if (!Notification.isSupported()) return;
       updateNote = new Notification({ title, body });
@@ -651,7 +652,7 @@ function updateTray(s) {
     ] },
     check('Show a Popup When Switching', settings.app.hud, (i) => set('app', { hud: i.checked })),
     { type: 'separator' },
-    ...(s.updates && s.updates.available ? [{ label: 'Download TwinDesk ' + s.updates.latest + '…', click: () => updates.open() }] : []),
+    ...(s.updates && s.updates.available ? [{ label: (s.updates.canInstall ? 'Update to TwinDesk ' : 'Download TwinDesk ') + s.updates.latest + '…', click: () => updates.act() }] : []),
     { label: 'Open TwinDesk…', click: showMain },
     { label: 'Quit TwinDesk', click: () => app.quit() },
   ]));

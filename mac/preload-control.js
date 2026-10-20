@@ -11,7 +11,7 @@ const ACTIONS = [
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'selectPeer', 'forgetPeer', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost', 'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup',
   'connectPhone', 'disconnectPhone', 'setPhone', 'phonePair', 'phoneScreen', 'phoneOpenApp', 'phoneCloseView', 'phoneRetry', 'phoneInstallFull', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
-  'setUpdates', 'checkUpdates', 'openUpdate', 'openLink', 'setLayoutCell', 'removeFromLayout',
+  'setUpdates', 'checkUpdates', 'openUpdate', 'installUpdate', 'openLink', 'setLayoutCell', 'removeFromLayout',
 ];
 
 const api = {

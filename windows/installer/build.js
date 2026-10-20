@@ -63,6 +63,8 @@ async function main() {
   copy(WIN, path.join(STAGE, 'windows'), (name) => !SKIP.has(name));
   // Every shared module the app requires (a list kept by hand once left the installer without a new one).
   for (const f of fs.readdirSync(path.join(ROOT, 'shared'))) if (f.endsWith('.js')) copy(path.join(ROOT, 'shared', f), path.join(STAGE, 'shared', f));
+  // Which repository this build came from: the updater follows that project's releases (shared/updates.js).
+  fs.writeFileSync(path.join(STAGE, 'shared', 'update-source.json'), JSON.stringify({ repo: process.env.GITHUB_REPOSITORY || '' }) + '\n');
   copy(path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper.exe'),
     path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper.exe'));
   // A phone: its screen, apps and input go through adb and scrcpy-server (phone-bridge.js).

@@ -36,7 +36,7 @@ const SCHEMA = {
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight') },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool },
-  updates: { auto: bool },
+  updates: { auto: bool, channel: oneOf(['', 'stable', 'beta'], ''), install: oneOf(['ask', 'auto'], 'ask') },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1) },
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
@@ -406,6 +406,10 @@ function setupIpc(ctx) {
     setUpdates(partial) {
       setGroup('updates', partial);
       ctx.updates.start();
+      if (partial && 'channel' in partial) ctx.updates.check(true);
+    },
+    installUpdate() {
+      ctx.updates.install().catch(() => {});
     },
     checkUpdates() {
       ctx.updates.check(true);

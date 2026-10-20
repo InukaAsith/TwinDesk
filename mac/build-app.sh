@@ -25,6 +25,8 @@ sh scripts/fetch-adb.sh
 rm -rf "$STAGE" && mkdir -p "$STAGE/mac" "$STAGE/shared" "$STAGE/mac-helper/.build/release" "$STAGE/node_modules"
 rsync -a --exclude node_modules --exclude dist --exclude dev --exclude test --exclude dmg --exclude build-app.sh --exclude build-dmg.sh --exclude scripts/signing-identity.sh ./ "$STAGE/mac/"
 cp "$ROOT"/shared/*.js "$STAGE/shared/"
+# Which repository this build came from: the updater follows that project's releases (shared/updates.js).
+printf '{"repo":"%s"}\n' "${GITHUB_REPOSITORY:-}" > "$STAGE/shared/update-source.json"
 cp "$ROOT"/mac-helper/.build/release/macshare-helper "$ROOT"/mac-helper/.build/release/macshare-dockstub "$STAGE/mac-helper/.build/release/"
 cp -R node_modules/ws "$STAGE/node_modules/"
 mkdir -p "$STAGE/mac/node_modules" && cp -R node_modules/ws "$STAGE/mac/node_modules/"
@@ -100,21 +102,25 @@ cat > dist/share.entitlements <<'PLIST'
 </dict></plist>
 PLIST
 
-# One signature over the whole bundle (helpers first), so the edited Info.plist is sealed. With
-# TwinDesk's own certificate (scripts/signing-identity.sh) macOS keeps its permissions across
-# updates; ad-hoc (no certificate made) works, but each update asks for them again.
+# One signature over the whole bundle (helpers first), so the edited Info.plist is sealed.
+# The designated requirement is spelled out: "this bundle id", nothing about the build or the
+# certificate. macOS keeps Screen Recording, Accessibility and Input Monitoring per app by that
+# requirement, so every update (ad-hoc or not, from whichever machine or CI run built it) is the
+# same app to it and the user's permissions carry over; the updater replaces the app in place.
 if KC=$(scripts/signing-identity.sh); then SIGN="--keychain $KC --sign"; ID="TwinDesk Self-Signed"
-else echo "note: signing ad-hoc: permissions won't carry over to the next update"; SIGN="--sign"; ID="-"; fi
+else echo "note: signing ad-hoc (the requirement below still keeps permissions across updates)"; SIGN="--sign"; ID="-"; fi
+req() { echo "=designated => identifier \"$1\""; }
 sign_all() {
-  for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do codesign --force $SIGN "$ID" "$b" || return 1; done
+  # --deep first (Electron's own frameworks and helper apps), then each of ours with its own requirement.
   codesign --force --deep $SIGN "$ID" dist/TwinDesk.app || return 1
-  codesign --force $SIGN "$ID" --entitlements dist/share.entitlements "$APPEX" || return 1 # --deep dropped its sandbox
-  codesign --force $SIGN "$ID" dist/TwinDesk.app || return 1
+  for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do n=$(basename "$b"); codesign --force $SIGN "$ID" -i "$n" -r "$(req "$n")" "$b" || return 1; done
+  codesign --force $SIGN "$ID" --entitlements dist/share.entitlements -r "$(req org.macshare.mac.share)" "$APPEX" || return 1 # --deep dropped its sandbox
+  codesign --force $SIGN "$ID" -r "$(req org.macshare.mac)" dist/TwinDesk.app || return 1
 }
 # A certificate that can't sign (a runner's keychain, say) must not stop the build: sign ad-hoc.
 if ! sign_all; then
   [ "$ID" != "-" ] || exit 1
-  echo "note: signing with $ID failed, signing ad-hoc: permissions won't carry over to the next update"
+  echo "note: signing with $ID failed, signing ad-hoc (the requirement still keeps permissions across updates)"
   SIGN="--sign"; ID="-"
   sign_all
 fi

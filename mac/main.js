@@ -433,7 +433,7 @@ function updateTray() {
       },
       check('Show a Popup When Switching', settings.app.hud !== false, (i) => actions.setApp({ hud: i.checked })),
       { type: 'separator' },
-      ...(updates && updates.status.available ? [{ label: `Download TwinDesk ${updates.status.latest}…`, click: () => updates.open() }] : []),
+      ...(updates && updates.status.available ? [{ label: `${updates.canInstall ? 'Update to' : 'Download'} TwinDesk ${updates.status.latest}…`, click: () => updates.act() }] : []),
       { label: 'Open TwinDesk…', click: showWindow },
       { label: 'Quit TwinDesk', click: () => app.quit() },
     ]),
@@ -561,6 +561,7 @@ app.whenReady().then(() => {
   updates = new Updates({
     current: app.getVersion(), platform: 'mac', getSettings: () => settings,
     save: () => store.saveSettings(settings), onChange: pushState,
+    canInstall: app.isPackaged, idle: () => !svc.kvm || svc.kvm.view.where === 'home', quit: () => app.quit(),
     notify: (title, body, onClick) => {
       if (!Notification.isSupported()) return;
       const n = new Notification({ title, body });
