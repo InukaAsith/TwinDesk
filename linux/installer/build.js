@@ -18,7 +18,7 @@ const STAGE = path.join(LIN, 'dist', 'stage');
 const pkg = require(path.join(LIN, 'package.json'));
 const electronVersion = require(path.join(LIN, 'node_modules', 'electron', 'package.json')).version;
 
-const SKIP = new Set(['node_modules', 'dist', 'installer', 'package-lock.json']);
+const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json']); // tests stay out of the package
 
 function copy(from, to, filter = () => true) {
   const st = fs.statSync(from);
@@ -49,14 +49,8 @@ async function main() {
   console.log('Staging…');
   fs.rmSync(STAGE, { recursive: true, force: true });
   copy(LIN, path.join(STAGE, 'linux'), (name) => !SKIP.has(name));
-  copy(path.join(ROOT, 'shared', 'protocol.js'), path.join(STAGE, 'shared', 'protocol.js'));
-  copy(path.join(ROOT, 'shared', 'adbmdns.js'), path.join(STAGE, 'shared', 'adbmdns.js'));
-  copy(path.join(ROOT, 'shared', 'usbadb.js'), path.join(STAGE, 'shared', 'usbadb.js')); // a phone on the cable, asked without adb
-  copy(path.join(ROOT, 'shared', 'turn.js'), path.join(STAGE, 'shared', 'turn.js')); // the phone on a USB cable
-  copy(path.join(ROOT, 'shared', 'sshconfig.js'), path.join(STAGE, 'shared', 'sshconfig.js'));
-  copy(path.join(ROOT, 'shared', 'updates.js'), path.join(STAGE, 'shared', 'updates.js'));
-  copy(path.join(ROOT, 'shared', 'about.js'), path.join(STAGE, 'shared', 'about.js'));
-  copy(path.join(ROOT, 'shared', 'framegen.js'), path.join(STAGE, 'shared', 'framegen.js'));
+  // Every shared module the app requires (a list kept by hand once left the installer without a new one).
+  for (const f of fs.readdirSync(path.join(ROOT, 'shared'))) if (f.endsWith('.js')) copy(path.join(ROOT, 'shared', f), path.join(STAGE, 'shared', f));
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper'));
   // A phone: its screen, apps and input go through adb and scrcpy-server (phone-bridge.js).
   if (!fs.existsSync(path.join(LIN, 'vendor', 'scrcpy-server'))) {
