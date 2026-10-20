@@ -396,8 +396,18 @@ class PhoneBridge extends EventEmitter {
 
   // ---- the Mac's mouse and keyboard on the phone (Kvm drives us) ----
 
-  drives() {
-    return isPhone(this.server.current);
+  // Is device `id` the phone this bridge drives? (The phone route follows the phone, whichever computer
+  // is selected: the partner Kvm drives decides, not the selection.)
+  drives(id) {
+    const c = this.server.current;
+    return !!id && isPhone(c) && c.deviceId === id;
+  }
+
+  // What Kvm hears from the phone's side (accept, refuse, home): the reply hook Kvm sets (kvm.attachLocal),
+  // else the phone route's inject.
+  _toKvm(msg) {
+    if (this.reply) this.reply(msg);
+    else this.server.inject(msg);
   }
 
   _display() {
@@ -421,7 +431,7 @@ class PhoneBridge extends EventEmitter {
   _take(m) {
     const d = this._display();
     if (!this.control || this.control.closed || !d) {
-      setImmediate(() => this.server.inject({ t: T.KVM_REFUSE, route: m.route, why: P.REFUSE.NOT_ALLOWED }));
+      setImmediate(() => this._toKvm({ t: T.KVM_REFUSE, route: m.route, why: P.REFUSE.NOT_ALLOWED }));
       this.emit('popup', 'home', this.state === 'ready' ? 'The phone isn’t ready yet' : 'Set up wireless debugging on the Phone page first');
       return;
     }
@@ -433,7 +443,7 @@ class PhoneBridge extends EventEmitter {
     this.keys.clear();
     if (this.inputBlocked) this.emit('popup', 'home', INPUT_BLOCKED);
     // Answer after Kvm's _take returns: it starts its "no answer" timer right after sending kvm.take.
-    setImmediate(() => this.server.inject({ t: T.KVM_ACCEPT, route: m.route }));
+    setImmediate(() => this._toKvm({ t: T.KVM_ACCEPT, route: m.route }));
     this._hover();
     this.emit('change');
   }
@@ -488,7 +498,7 @@ class PhoneBridge extends EventEmitter {
     const offset = k.side === 'left' || k.side === 'right' ? k.y / Math.max(1, d.h - 1) : k.x / Math.max(1, d.w - 1);
     const route = k.route;
     this._kvmEnd(false);
-    this.server.inject({ t: T.KVM_HOME, route, offset });
+    this._toKvm({ t: T.KVM_HOME, route, offset });
   }
 
   _kvmEnd(tellKvm) {
@@ -500,7 +510,7 @@ class PhoneBridge extends EventEmitter {
     this.kvm = null;
     clearTimeout(this.pointerTimer);
     this._pointer(false);
-    if (tellKvm) this.server.inject({ t: T.KVM_HOME, route: k.route });
+    if (tellKvm) this._toKvm({ t: T.KVM_HOME, route: k.route });
     this.emit('change');
   }
 

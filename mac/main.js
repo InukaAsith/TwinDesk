@@ -63,6 +63,7 @@ const { Peer } = require('./peer');
 const { Server } = require('./server');
 const { Pairing } = require('./pairing');
 const { Mesh } = require('../shared/mesh.js');
+const LayoutSync = require('./layout-sync'); // the mesh's shared layout (docs/mesh.md)
 const { startServices } = require('./services');
 const { setupIpc } = require('./ipc');
 const login = require('./login');
@@ -83,7 +84,7 @@ let quitting = false;
 let startHidden = process.argv.includes('--hidden');
 // server: this Mac's server (many clients); links: the hosts we dial; hub: the mesh (hub.js);
 // peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
-let settings, id, server, pairing, discovery, links, hub, mesh, peer, phonePeer, svc, actions, pairSync, updates;
+let settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
 
 const state = {
   macName: '',
@@ -104,6 +105,7 @@ const state = {
   found: [],
   guest: null,
   peers: [], // every device of the mesh (hub.peers()): name, os, state, selected, direct links
+  layout: null, // the shared layout (layout-sync.js): { rev, by, cells, grid } for the Cursor tab
   connect: { busy: false, message: '', error: false },
 };
 
@@ -188,6 +190,7 @@ function publishState() {
     }
     if (links) state.guest = links.view();
     state.peers = hub ? hub.peers() : [];
+    state.layout = layoutSync ? layoutSync.state() : null; // the shared layout: { rev, by, cells (this Mac's view), grid }
     const c = peer && peer.current;
     state.client = c ? { id: c.deviceId, name: c.name, os: c.os, role: c.role, address: c.address, rttMs: c.rttMs } : null;
     const { helper, displays, stream, clipboard: clip, kvm } = svc || {};
@@ -481,6 +484,25 @@ app.whenReady().then(() => {
   links.on('request', showWindow);
   hub = new Hub({ device: { id: id.macId, name: id.macName }, links, mesh, server, pairing });
   hub.on('change', pushState);
+  // The shared layout (docs/mesh.md, "Shared layout"): where every device sits. The cursor's edges come from it.
+  // A Mac from before the layout: its one PC on pcSide becomes the layout once (legacyEdges).
+  layoutSync = new LayoutSync({
+    bus: hub.bus,
+    mesh,
+    selfId: id.macId,
+    storage: { get: () => settings.layout, set: (l) => { settings.layout = l; store.saveSettings(settings); } },
+    knownIds: () => hub.peers().map((p) => p.id),
+    legacyEdges: () => {
+      const k = settings.kvm || {};
+      if (k.edges && Object.values(k.edges).some(Boolean)) return k.edges;
+      const pcs = hub.peers().filter((p) => p.os !== P.OS.ANDROID);
+      return pcs.length === 1 && k.pcSide ? { [k.pcSide]: pcs[0].id } : null;
+    },
+    onChange: () => {
+      if (svc) svc.kvm.layoutChanged();
+      pushState();
+    },
+  });
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
   phonePeer = new Peer(hub.phoneRoute(), server);
@@ -494,7 +516,7 @@ app.whenReady().then(() => {
   hub.start();
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
-    hub, mesh, selfName: () => id.macName });
+    hub, mesh, layoutSync, selfName: () => id.macName });
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
   svc.phone = new Phone({ server: phonePeer, raw: server, discovery, pairing });
@@ -517,7 +539,7 @@ app.whenReady().then(() => {
   // The phone in Finder, through adb (the cable, else wireless debugging): only when Mount is clicked.
   svc.phoneDrive = new PhoneDrive({ adb: svc.phone.bridge.adb, bridge: svc.phone.bridge, phone: svc.phone });
   svc.phoneDrive.on('change', pushState);
-  svc.kvm.local = svc.phone.bridge;
+  svc.kvm.attachLocal(svc.phone.bridge);
   const blockEdge = svc.kvm.blockEdge;
   svc.kvm.blockEdge = () => blockEdge() || svc.phoneViews.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
@@ -545,7 +567,7 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, hub, ...svc, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, hub, layoutSync, ...svc, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
