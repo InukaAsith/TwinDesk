@@ -48,6 +48,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/min_ms:0,max_ms:0/WebRTC-FlexFEC-03/Enabled/WebRTC-FlexFEC-03-Advertised/Enabled/');
 // Renamed to TwinDesk: settings, pairing and the identity stay in the old folder.
 app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), 'MacShare')); // PROFILE: a second dev copy
+// Everything the main process prints also goes to <userData>/logs/main.log (a problem seen on this Mac can be read afterwards).
+require('../shared/logfile.js').install(path.join(app.getPath('userData'), 'logs'));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);

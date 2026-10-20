@@ -258,7 +258,7 @@ class Kvm extends EventEmitter {
 
   _setMode(mode, message) {
     const prev = this.mode;
-    if (process.env.TWINDESK_DEBUG_KVM && prev !== mode) console.log(`[kvm] ${prev} -> ${mode}${message ? ` (${message})` : ''}`);
+    if (prev !== mode) console.log(`[kvm] ${prev} -> ${mode}${message ? ` (${message})` : ''}`);
     this.mode = mode;
     if (mode === 'home') this.partner = null;
     if (prev !== mode) this.emit('where', mode, prev); // hud.js shows it
