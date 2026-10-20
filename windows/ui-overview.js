@@ -235,7 +235,8 @@ UI.tab({
       }
 
       // devices: the connected ones first, the selected one at the top
-      const dk = JSON.stringify([peers, s.mesh && s.mesh.selectedId]);
+      const linkedMap = (s.kvm && s.kvm.linkedBy) || {};
+      const dk = JSON.stringify([peers, s.mesh && s.mesh.selectedId, linkedMap, s.kvm && s.kvm.linked]);
       if (dk !== devicesKey) {
         devicesKey = dk;
         const sorted = peers.slice().sort((a, b) => (b.selected - a.selected) || (b.connected - a.connected));
@@ -248,7 +249,11 @@ UI.tab({
           const pill = d.selected ? el('span', { class: 'pill good', text: 'Selected' }) : d.connected ? el('span', { class: 'pill muted', text: 'Connected' }) : null;
           const use = d.connected && !d.selected ? UI.button('Use', () => api.setActivePeer(d.id), 'small') : null;
           const forget = UI.button('Forget', () => api.forgetPeer(d.id), 'small');
-          const r = UI.row(d.name || 'Device', hint, [pill, use, forget]);
+          // Cursor sharing with this device (off when the hotkey was double-tapped while it was selected, or the device said so).
+          const on = d.selected ? !!(s.kvm && s.kvm.linked) : linkedMap[d.id] !== false;
+          const cursor = d.connected ? UI.switch((v) => api.setLinkedFor(d.id, v), { label: 'Cursor' }) : null;
+          if (cursor) cursor.set(on);
+          const r = UI.row(d.name || 'Device', hint + (d.connected && !on ? ' · Cursor sharing is off for it' : ''), [pill, cursor, use, forget]);
           r.querySelector('.text').prepend(UI.osIcon(d.os));
           r.classList.add('with-ico');
           return r;

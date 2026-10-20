@@ -267,6 +267,20 @@ class Kvm {
     this.onChange();
   }
 
+  // Cursor sharing for one device, whichever is selected (the Overview's per-device switch). The selected
+  // device uses the one Cursor switch, the others their own memory (linkedBy); the device is told.
+  setLinkedFor(id, on) {
+    if (typeof id !== 'string' || !id) return;
+    on = !!on;
+    if (id === this.hub.selectedId) return this.setLinked(on, true, false);
+    this.cfg.linkedBy = { ...this.cfg.linkedBy, [id]: on };
+    if (!on && this.partner === id) this.home();
+    if (this.save) this.save();
+    this._send(id, { t: T.KVM_LINK, on });
+    this.applyConfig();
+    this.onChange();
+  }
+
   view() {
     return { linked: this.linked, mode: this.mode, message: this.message, edges: { ...this.edges }, helper: this.helper.running ? '' : this.helper.error || 'starting' };
   }

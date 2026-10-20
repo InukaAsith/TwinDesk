@@ -82,6 +82,7 @@ function setupIpc(ctx) {
   }
   // The shared layout (docs/mesh.md): device `id` goes to grid cell (x, y); a device there moves to
   // its old cell (swap). false when the arguments are not valid or the device is not in the mesh.
+  handle('setLinkedFor', (id, on) => typeof id === 'string' && kvm.setLinkedFor(id.slice(0, 64), !!on));
   handle('setLayoutCell', (id, x, y) => {
     if (typeof id !== 'string' || !id || id.length > 64) return false;
     if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
