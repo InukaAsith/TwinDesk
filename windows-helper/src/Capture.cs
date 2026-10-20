@@ -39,7 +39,10 @@ namespace MacShare
         // edge push (home) per watched side, and the return edge (driven)
         class EdgePush { public double Amount; public DateTime Last; }
         readonly Dictionary<string, EdgePush> pushes = new Dictionary<string, EdgePush>();
-        bool retArmed; string retSide; double retResistance, retPush; DateTime retLast;
+        // The return watch (this PC is driven): every side that has a device behind it, the push per side.
+        readonly List<string> retSides = new List<string>();
+        readonly Dictionary<string, EdgePush> retPushes = new Dictionary<string, EdgePush>();
+        bool retArmed; double retResistance;
 
         // hotkey double-tap
         bool hkDown; DateTime lastTapUp = DateTime.MinValue;
@@ -210,12 +213,19 @@ namespace MacShare
 
         public bool Capturing { get { return capturing; } }
 
-        public void ArmReturn(bool on, string side, double resistance)
+        // Watches these sides for the pointer leaving this PC (valid names only, no repeats). Off, or none
+        // given: nothing is watched.
+        public void ArmReturn(bool on, IEnumerable<string> sides, double resistance)
         {
-            retArmed = on && side != null;
-            retSide = side;
+            retSides.Clear();
+            retPushes.Clear();
+            if (on && sides != null)
+            {
+                foreach (string s in sides)
+                    if ((s == "left" || s == "right" || s == "top" || s == "bottom") && !retSides.Contains(s)) retSides.Add(s);
+            }
+            retArmed = retSides.Count > 0;
             retResistance = resistance;
-            retPush = 0;
         }
 
         void Tick()
@@ -435,21 +445,31 @@ namespace MacShare
         }
 
         // Injected moves report here too (Injector.Moved): the owner's hand reaches the edge.
+        // The return event names the side it left by. Pushes are summed per side; the first side to reach
+        // the resistance wins and the watch is off until main arms it again.
         public void FeedReturn(int x, int y, double dx, double dy)
         {
             if (!retArmed) return;
-            double outward = Screens.Outward(retSide, dx, dy);
-            if (outward <= 0 || !Screens.OnOuterEdge(x, y, retSide)) { retPush = 0; return; }
             DateTime now = DateTime.UtcNow;
-            if ((now - retLast).TotalMilliseconds > 300) retPush = 0;
-            retLast = now;
-            retPush += outward;
-            if (retPush < retResistance) return;
-            retArmed = false;
-            if (Flash != null) Flash.Play(new Point(x, y), retSide, true); // leaving this PC for the Mac
-            Dictionary<string, object> d = Ev("return");
-            d["offset"] = Math.Round(Screens.Offset(x, y, retSide), 4);
-            emit(d);
+            foreach (string side in retSides)
+            {
+                double outward = Screens.Outward(side, dx, dy);
+                if (outward <= 0 || !Screens.OnOuterEdge(x, y, side)) { retPushes.Remove(side); continue; }
+                EdgePush e;
+                if (!retPushes.TryGetValue(side, out e)) { e = new EdgePush(); retPushes[side] = e; }
+                if ((now - e.Last).TotalMilliseconds > 300) e.Amount = 0;
+                e.Last = now;
+                e.Amount += outward;
+                if (e.Amount < retResistance) continue;
+                retArmed = false;
+                retPushes.Clear();
+                if (Flash != null) Flash.Play(new Point(x, y), side, true); // leaving this PC for another device
+                Dictionary<string, object> d = Ev("return");
+                d["offset"] = Math.Round(Screens.Offset(x, y, side), 4);
+                d["side"] = side;
+                emit(d);
+                return;
+            }
         }
 
         // Message-only window that receives WM_INPUT for the mouse (usage page 1, usage 2) and, since

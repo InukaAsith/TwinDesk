@@ -95,6 +95,7 @@
       KVM_RELEASE: 'kvm.release',
       KVM_HOME: 'kvm.home',
       KVM_LINK: 'kvm.link', // either {on}: mouse and keyboard sharing switched on/off (hotkey double-tap); the other side follows
+      KVM_NEXT: 'kvm.next', // {route, to, side, offset}: a device we drive reached an edge that leads to device `to` (a chain, docs/mesh.md)
       K_MOVE: 'k.mm',
       K_DOWN: 'k.md',
       K_UP: 'k.mu',

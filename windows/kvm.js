@@ -42,6 +42,7 @@ class Kvm {
     bus.on(T.KVM_LAYOUT, () => {}); // an older app's edge (the layout is the one map): nothing to do here
     bus.on(T.KVM_TAKE, (m, from) => this._onTake(m, from));
     bus.on(T.KVM_LINK, (m, from) => this._onLink(m, from)); // the other side switched it: follow, no echo
+    bus.on(T.KVM_NEXT, (m, from) => this._onNext(m, from)); // a device we drive hands the input on (a chain)
     bus.on(T.KVM_ACCEPT, (m, from) => {
       if (this.mode === 'driving' && from === this.partner && m.route === this.route) this._clearAccept();
     });
@@ -304,7 +305,7 @@ class Kvm {
         break;
       }
       case 'return':
-        if (this.mode === 'driven') this._sendHome(msg.offset);
+        if (this.mode === 'driven') this._onReturn(msg);
         break;
       case 'ev':
         if (this.mode === 'driving' && msg.ev && (K_TYPES.has(msg.ev.t) || (msg.ev.t === T.K_GESTURE && this.cfg.gestures !== false))) {
@@ -368,6 +369,24 @@ class Kvm {
     else if (this.partner) this._send(this.partner, msg);
   }
 
+  // A device we drive (partner) reached an edge that leads to device `to` (kvm.next): the chain. Only the
+  // one we drive may say it, only for a neighbour in the layout that is connected to us, and never from
+  // a phone (it ends a chain). We release the device and take `to`, as an edge crossing would: the
+  // device it reached sees the input come in through the side opposite to the one it left by.
+  _onNext(m, from) {
+    if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route || this.keyboardOnly) return;
+    if (this._peerOs(from) === P.OS.ANDROID) return; // a phone has no edges of its own: it ends a chain
+    const side = E.SIDES.includes(m.side) ? m.side : null;
+    const to = typeof m.to === 'string' ? m.to : '';
+    if (!side || !to || to === from || to === this.hub.device.id) return;
+    if (this.layoutSync.across(side, from) !== to) return; // not the device next to `from` on that side
+    if (!this._canDriveTo(to) || !this.cfg.mouse) return; // connected, and our switch and cursor sharing for it
+    if (!this.hub.select(to)) return;
+    this.route++;
+    this._send(from, { t: T.KVM_RELEASE, route: this.route }); // the device we drove goes home
+    this._take({ side: P.opposite(side), offset: Number(m.offset) || 0 }, to);
+  }
+
   // Row 9.
   _goHome(message) {
     this.helper.send('capture', { on: false });
@@ -410,9 +429,31 @@ class Kvm {
     this._setMode('driven', '');
     if (m.mouse !== false) {
       this.helper.send('place', E.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
-      const back = this._sideOf(from); // the edge that leads back to the driver
-      if (back) this.helper.send('armReturn', { on: true, side: back, resistancePx: this.cfg.resistancePx });
+      this._armReturn();
     }
+  }
+
+  // The sides of this PC that have a device behind them (the layout): the helper watches them while
+  // this PC is driven, the way back to the driver and every edge that leads on to another device.
+  _returnSides() {
+    const edges = this.edges;
+    return E.SIDES.filter((side) => !!edges[side]);
+  }
+
+  _armReturn() {
+    this.helper.send('armReturn', { on: true, sides: this._returnSides(), resistancePx: this.cfg.resistancePx });
+  }
+
+  // The helper saw the pointer leave this PC (driven) through `side`. Back to the driver: kvm.home as
+  // before. Past another device: kvm.next, so the driver takes that device (see _onNext). Nothing
+  // behind that side: ignored. The watch is armed again unless we went home, so a driver that did not
+  // take the device leaves the edge live.
+  _onReturn(msg) {
+    const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
+    if (!side || side === this.layoutSync.sideTo(this.partner)) return this._sendHome(msg.offset);
+    const to = this.layoutSync.across(side);
+    if (to && to !== this.partner) this._send(this.partner, { t: T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
+    this._armReturn();
   }
 
   // Row 8.

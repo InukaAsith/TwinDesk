@@ -259,9 +259,9 @@ test('applyConfig sends sides = the edges whose device is connected and linked; 
     const { A, B, C } = N;
     const kvm = kvmOn(A);
     kvm.applyConfig();
-    // No layout yet: the paired devices sit in a row, the first one next to this PC (as the first
-    // pairing always did, on the right), so one side is watched.
-    assert.strictEqual(sides(A).length, 1, 'one side watched in the default row');
+    // No layout yet: the paired devices sit in a row in id order (this PC among them), so the sides
+    // watched are the row’s neighbours of this PC: left and/or right, never top or bottom.
+    assert.ok(sides(A).length >= 1 && sides(A).every((s) => s === 'left' || s === 'right'), 'the default row only');
     lay(A, { top: B, bottom: C }); // the layout change re-sends the sides
     assert.deepStrictEqual(sides(A), ['top', 'bottom']);
     assert.strictEqual(A.helper.last('kvmConfig').side, 'top', 'the first side also drives the file strip');

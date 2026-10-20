@@ -180,7 +180,15 @@ namespace MacShare
                         capture.Flash.Play(p, center ? null : Json.Str(c, "side", "left"), false); // the Mac arrives here
                         break;
                     case "armReturn":
-                        capture.ArmReturn(Json.Bool(c, "on", false), Json.Str(c, "side", null), Json.Num(c, "resistancePx", 120));
+                        // sides: every side with a device behind it; without it, the one side (older app).
+                        List<string> retSides = Json.Strs(c, "sides");
+                        if (retSides == null)
+                        {
+                            retSides = new List<string>();
+                            string oneSide = Json.Str(c, "side", null);
+                            if (oneSide != null) retSides.Add(oneSide);
+                        }
+                        capture.ArmReturn(Json.Bool(c, "on", false), retSides, Json.Num(c, "resistancePx", 120));
                         break;
                     case "inject":
                         Dictionary<string, object> ev = Json.Obj(c, "ev");
