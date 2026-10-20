@@ -34,6 +34,7 @@ Module._load = function patched(request) {
 const P = require('../../shared/protocol.js');
 const { Peer } = require('../peer.js');
 const { Kvm } = require('../kvm.js');
+const LayoutSync = require('../layout-sync.js');
 const { PhoneBridge } = require('../phone-bridge.js');
 const store = require('../store.js');
 const { runTests } = require('../../windows/test/lib/run.js');
@@ -107,8 +108,16 @@ async function setup() {
   bridge.control = control;
   const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
   const drop = { dragIn: { dragging: false, armDrag() {}, onDriven() {}, cancel() {}, release() {} }, cancelDrag() {}, release() {}, armDrag() {} };
+  // The shared layout, from the edges the settings had (migrated once: right = the phone, top = B).
+  const layoutSync = new LayoutSync({
+    bus: A.hub.bus, mesh: A.mesh, selfId: A.id,
+    storage: { get: () => settings.layout, set: (l) => { settings.layout = l; } },
+    knownIds: () => A.hub.peers().map((p) => p.id),
+    legacyEdges: () => settings.kvm.edges,
+    onChange: () => {},
+  });
   const kvm = new Kvm({
-    hub: A.hub, helper, getSettings: () => settings,
+    hub: A.hub, layoutSync, helper, getSettings: () => settings,
     clipboard: { sendIfChanged: () => true }, input: { releaseAll() {} }, drop, fileSend, save() {},
   });
   kvm.attachLocal(bridge);

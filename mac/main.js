@@ -63,6 +63,7 @@ const { Peer } = require('./peer');
 const { Server } = require('./server');
 const { Pairing } = require('./pairing');
 const { Mesh } = require('../shared/mesh.js');
+const LayoutSync = require('./layout-sync'); // the mesh's shared layout (docs/mesh.md)
 const { startServices } = require('./services');
 const { setupIpc } = require('./ipc');
 const login = require('./login');
@@ -83,7 +84,7 @@ let quitting = false;
 let startHidden = process.argv.includes('--hidden');
 // server: this Mac's server (many clients); links: the hosts we dial; hub: the mesh (hub.js);
 // peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
-let settings, id, server, pairing, discovery, links, hub, mesh, peer, phonePeer, svc, actions, pairSync, updates;
+let settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
 
 const state = {
   macName: '',
@@ -481,6 +482,25 @@ app.whenReady().then(() => {
   links.on('request', showWindow);
   hub = new Hub({ device: { id: id.macId, name: id.macName }, links, mesh, server, pairing });
   hub.on('change', pushState);
+  // The shared layout (docs/mesh.md, "Shared layout"): where every device sits. The cursor's edges come from it.
+  // A Mac from before the layout: its one PC on pcSide becomes the layout once (legacyEdges).
+  layoutSync = new LayoutSync({
+    bus: hub.bus,
+    mesh,
+    selfId: id.macId,
+    storage: { get: () => settings.layout, set: (l) => { settings.layout = l; store.saveSettings(settings); } },
+    knownIds: () => hub.peers().map((p) => p.id),
+    legacyEdges: () => {
+      const k = settings.kvm || {};
+      if (k.edges && Object.values(k.edges).some(Boolean)) return k.edges;
+      const pcs = hub.peers().filter((p) => p.os !== P.OS.ANDROID);
+      return pcs.length === 1 && k.pcSide ? { [k.pcSide]: pcs[0].id } : null;
+    },
+    onChange: () => {
+      if (svc) svc.kvm.layoutChanged();
+      pushState();
+    },
+  });
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
   phonePeer = new Peer(hub.phoneRoute(), server);
@@ -494,7 +514,7 @@ app.whenReady().then(() => {
   hub.start();
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
-    hub, mesh, selfName: () => id.macName });
+    hub, mesh, layoutSync, selfName: () => id.macName });
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
   svc.phone = new Phone({ server: phonePeer, raw: server, discovery, pairing });

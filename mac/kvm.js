@@ -22,10 +22,10 @@ const REFUSED = { busy: '{them} is using this computer right now', not_allowed: 
 
 class Kvm extends EventEmitter {
   // hub: hub.js (bus, sessions, select, selectedId, device); helper: the Mac helper; getSettings;
-  // clipboard, input, drop, fileSend: the features; layoutSync: layout-sync.js (the edges).
-  constructor({ hub, helper, getSettings, clipboard, input, drop, fileSend }) {
+  // clipboard, input, drop, fileSend: the features; layoutSync: layout-sync.js (the edges come from it).
+  constructor({ hub, layoutSync, helper, getSettings, clipboard, input, drop, fileSend }) {
     super();
-    Object.assign(this, { hub, helper, getSettings, clipboard, input, drop, fileSend });
+    Object.assign(this, { hub, layoutSync, helper, getSettings, clipboard, input, drop, fileSend });
     this.dragOut = null; // id of our file drag while it is on the PC and not yet dropped
     fileSend.on('policy', () => this.config());
     fileSend.on('dragEnd', (drag) => {
@@ -101,13 +101,39 @@ class Kvm extends EventEmitter {
     if (fn) fn(msg, id);
   }
 
-  // What this Mac's edges lead to: { left, right, top, bottom }, device id or null. Until the shared
-  // layout is in use, a settings edge map, or the one device on the side set by pcSide.
+  // What this Mac's edges lead to: { left, right, top, bottom }, device id or null. The shared layout
+  // puts the nearest device on each side (docs/mesh.md, "Shared layout").
   get edges() {
-    const e = E.normalizeEdges(this.cfg.edges);
-    const any = E.SIDES.some((s) => e[s]);
-    if (!any && this.hub.selectedId && this.cfg.pcSide) e[this.cfg.pcSide] = this.hub.selectedId;
-    return e;
+    return this.layoutSync.neighbors();
+  }
+
+  // The shared layout changed (here or on another device): the helper watches the new sides, and each
+  // connected device is told which side it is on, as the older apps expect (kvm.layout).
+  layoutChanged() {
+    this.config();
+    for (const id of this.hub.bus.connectedIds()) {
+      const side = this._sideOf(id);
+      if (side) this._send(id, { t: P.T.KVM_LAYOUT, pcSide: side }); // its edge towards us is the opposite
+    }
+  }
+
+  // A device was forgotten: it leaves the shared layout (a person's edit, synced to the others).
+  forgetDevice(id) {
+    this.layoutSync.remove(id);
+    this.config();
+  }
+
+  // Settings changed (ipc.js setKvm): the switch follows the other computer, the rest is applied here.
+  settingsChanged(prev) {
+    if (prev && prev.linked !== this.cfg.linked) {
+      const on = this.linked;
+      this.cfg.linked = prev.linked; // setLinked does the work (home first, tell the peer)
+      return this.setLinked(on);
+    }
+    this.config();
+    const k = this.cfg;
+    if (this.mode === 'driving' && !k.driveOther) this.goHome('Turned off');
+    if (this.mode === 'driven' && !k.beDriven) this._sendHome(undefined, 'Turned off');
   }
 
   // Messages name the other computer (it may be gone already: the last name we knew).

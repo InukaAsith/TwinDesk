@@ -166,6 +166,7 @@ function setupIpc(ctx) {
     forgetPeer(deviceId) {
       if (!ctx.hub) return;
       ctx.hub.forgetPeer(String(deviceId));
+      ctx.kvm.forgetDevice(String(deviceId)); // it leaves the shared layout too (docs/mesh.md)
       ctx.terminal.forget(String(deviceId));
     },
     confirmGuestCode() {

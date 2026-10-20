@@ -30,7 +30,7 @@ const store = require('./store');
 
 // hub: the mesh hub (hub.js) for the pooled features; mesh: the shared/mesh.js registry; selfName():
 // this Mac's name, sent with its notifications.
-function startServices({ server, getSettings, pushState, onHelperReady, hub: meshHub, mesh, selfName = () => '' }) {
+function startServices({ server, getSettings, pushState, onHelperReady, hub: meshHub, mesh, layoutSync, selfName = () => '' }) {
   const s = getSettings;
   server.setMaxListeners(50); // one 'client'/'closed' listener per feature
   const helper = new Helper();
@@ -46,7 +46,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper });
   const drop = new Drop({ server, helper, displays, getSettings: s });
   const fileSend = new FileSend(server, s);
-  kvm = new Kvm({ hub: meshHub, helper, getSettings: s, clipboard, input, drop, fileSend });
+  kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
   const terminal = new Terminal(server, s);
   const smb = new Smb({ server, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) });
 
