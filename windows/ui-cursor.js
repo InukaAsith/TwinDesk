@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Cursor tab: share the pointer across the screen edge. The two direction cards and the live state.
-// Which device is behind each edge is the shared layout (docs/mesh.md), edited in the grid of this tab.
-// Behaviour: kvm.js and windows-helper.
+// Cursor tab: share the pointer across the screen edge. The two direction cards, the layout (the grid
+// of the paired devices: a device's edges lead to its neighbours on the grid, docs/mesh.md) and the
+// live state. Behaviour: kvm.js and windows-helper.
 'use strict';
 
 UI.tab({
@@ -33,21 +33,112 @@ UI.tab({
       ] },
     );
 
+    // ---- the layout: a grid of tiles (docs/mesh.md, "Shared layout") ----
+    // Every paired device is a tile; its edges lead to the nearest tile on its row or column. Click a tile
+    // and then an empty place to move it there, or then another tile to swap the two. Each change goes
+    // through setLayoutCell, so every computer shows the same grid.
+    let picked = null; // the device id picked, waiting for a place or another tile
+    let last = null; // the last state, to draw the grid again
+    const layoutHint = UI.note('info', '');
+    const gridEl = UI.el('div', { class: 'layout-grid' });
+    const layoutCard = UI.card('Layout', [gridEl, layoutHint], { cls: 'keep-on' });
+
+    const cellOf = (id) => (last && last.layout && last.layout.cells[id]) || null;
+
+    function move(id, x, y) {
+      api.setLayoutCell(id, x, y).then((ok) => {
+        if (ok === false) layoutHint.set('That did not move.');
+      });
+    }
+
+    function pick(id) {
+      picked = id;
+      if (last) drawLayout(last);
+    }
+
+    // A tile was clicked: it is picked; a picked tile clicked again is put down; with a tile already picked,
+    // the two swap places.
+    function onTile(id) {
+      if (picked === id) return pick(null);
+      if (!picked) return pick(id);
+      const from = picked;
+      const to = cellOf(id);
+      pick(null);
+      if (to) move(from, to.x, to.y);
+    }
+
+    // An empty place was clicked: the picked device moves there.
+    function onPlace(x, y) {
+      if (!picked) return;
+      const id = picked;
+      pick(null);
+      move(id, x, y);
+    }
+
+    function tile(id, info) {
+      const state = info.self ? 'This PC' : info.connected ? 'Connected' : 'Not connected';
+      return UI.el('button', {
+        class: 'lay-tile' + (info.self ? ' here' : '') + (info.connected || info.self ? '' : ' off') + (picked === id ? ' picked' : ''),
+        attrs: { type: 'button', title: info.name + ' — ' + state },
+        onclick: () => onTile(id),
+      }, [
+        UI.osIcon(info.os),
+        UI.el('span', { class: 'lay-name', text: info.name }),
+        UI.el('span', { class: 'lay-state', text: state }),
+      ]);
+    }
+
+    function place(x, y) {
+      return UI.el('button', {
+        class: 'lay-place' + (picked ? ' target' : ''),
+        attrs: { type: 'button', 'aria-label': 'Empty place' },
+        onclick: () => onPlace(x, y),
+      });
+    }
+
+    function drawLayout(s) {
+      const lay = s && s.layout;
+      if (!lay || !lay.grid || !s.device) return;
+      if (picked && !lay.cells[picked]) picked = null; // a device that is gone cannot be moved
+      const people = new Map([[s.device.id, { name: s.device.name || 'This PC', os: 'win', connected: true, self: true }]]);
+      for (const d of s.peers || []) {
+        if (d && d.id) people.set(d.id, { name: d.name || d.id.slice(0, 8), os: d.os, connected: !!d.connected, self: false });
+      }
+      const at = new Map();
+      for (const id of Object.keys(lay.cells)) at.set(lay.cells[id].x + ',' + lay.cells[id].y, id);
+      const g = lay.grid;
+      gridEl.style.gridTemplateColumns = `repeat(${g.maxX - g.minX + 1}, minmax(96px, 1fr))`;
+      const cells = [];
+      for (let y = g.minY; y <= g.maxY; y++) {
+        for (let x = g.minX; x <= g.maxX; x++) {
+          const id = at.get(x + ',' + y);
+          cells.push(id ? tile(id, people.get(id) || { name: id.slice(0, 8), os: '', connected: false, self: false }) : place(x, y));
+        }
+      }
+      gridEl.replaceChildren(...cells);
+      layoutHint.set(picked
+        ? 'Now click an empty place to move it there, or another device to swap places.'
+        : 'Click a device, then an empty place to move it there, or another device to swap places.');
+    }
+
     const status = UI.inputStatus();
 
     body.append(
       pair.el,
       UI.card('Feel', [gestureRow]),
       UI.card('Right now', [status], { cls: 'keep-on' }),
+      layoutCard,
     );
 
     function render(s) {
+      last = s;
       pair.update(s);
       status.update(s);
       speed.set(s.kvm.speed);
       reverse.set(s.kvm.reverseScroll);
       gestures.set(s.kvm.gestures !== false);
       resistance.set(s.kvm.resistancePx);
+      drawLayout(s);
     }
     return render;
   },
