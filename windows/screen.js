@@ -43,12 +43,14 @@ class Screen {
       this.remote = null;
       this.startedByUs = false;
       this.wantStart = !this.test && !!(this.win && !this.win.isDestroyed() && this.win.isVisible()); // reconnected while watching
+      this._pushRemote();
       this.policy();
     });
     link.on('closed', () => {
       this.sentAccept = null;
       this.remote = null;
       this.startedByUs = false;
+      this._pushRemote();
       this._stop();
       this._setMacInput(true); // the Mac re-sends it after welcome
     });
@@ -69,6 +71,18 @@ class Screen {
       if (!this.win || e.sender !== this.win.webContents || !st || typeof st !== 'object' || this.state.state !== 'on') return;
       this.state = { ...this.state, stats: st };
       this.onChange();
+    });
+    // The window's toolbar: the peer's sharing (as the Receive tab), frame generation, full screen.
+    ipcMain.on('monitor-ctl', (e, m) => {
+      if (!this.win || e.sender !== this.win.webContents || !m || typeof m !== 'object') return;
+      if (typeof m.framegen === 'boolean') {
+        this.settings.monitor.framegen = m.framegen;
+        this.saveSettings();
+        this._pushAudio();
+        this.onChange();
+      }
+      if (m.fullScreen) this.win.setFullScreen(!this.win.isFullScreen());
+      if (typeof m.share === 'boolean' || m.mode) this.control({ share: m.share, mode: m.mode });
     });
     ipcMain.on('monitor-ready', (e) => {
       if (!this.win || e.sender !== this.win.webContents) return;

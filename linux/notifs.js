@@ -4,9 +4,11 @@
 // them off the session bus (`dbus-monitor` on org.freedesktop.Notifications.Notify, which every
 // desktop's notification daemon serves), only while something would be sent. The other computer's
 // show here as desktop notifications from TwinDesk (libnotify).
-const { Notification } = require('electron');
+const { Notification, nativeImage } = require('electron');
+const path = require('path');
 const { spawn } = require('child_process');
 const P = require('../shared/protocol.js');
+const { IconsIn } = require('../shared/notificon.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -14,6 +16,7 @@ const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
 class Notifs {
   // opts: link, helper, settings (shared), save(), selfIds: [AUMID], peerName(), onChange(), onClick({app, appName})? (main.js: a phone's notification clicked)
   constructor(opts) {
+    this.iconsIn = new IconsIn(nativeImage, path.join(__dirname, 'assets', 'sidebar-icon@2x.png')); // TwinDesk's for apps without one
     Object.assign(this, opts);
     this.peerAccepts = false; // the other side's notif.policy (assume no until told)
     this.readable = null; // the helper can read the database
@@ -164,6 +167,7 @@ class Notifs {
     this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
     const n = new Notification({
       title,
+      icon: this.iconsIn.for(m),
       body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
     });
     this.live.add(n);

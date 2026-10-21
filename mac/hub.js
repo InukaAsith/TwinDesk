@@ -40,6 +40,7 @@ function viewOf(s) {
     name: s.displayName(),
     os: s.peerOs,
     role: s.role,
+    transport: s.transport, // 'ble' (Bluetooth, blepipe.js) or 'ip'
     address: c ? c.address : (s.link && s.link.pairing ? s.link.pairing.address : ''),
     rttMs: s.status.rtt != null ? s.status.rtt : (c ? c.rttMs : null),
     lastRx: s.lastRx,
@@ -102,6 +103,7 @@ class Route extends EventEmitter {
   deliver(msg) {
     const s = this.session;
     if (!s) return false;
+    if (this.tap) this.tap(msg); // netlink.js: every message of the target
     const v = viewOf(s);
     this.emit(`t:${msg.t}`, msg, v);
     this.emit('message', msg, v);
@@ -113,8 +115,14 @@ class Route extends EventEmitter {
     this.emit('rtt', viewOf(this.session));
   }
 
-  // Send to the target (the ctx argument of peer.js is ignored: a route has one device).
+  // Send to the target (the ctx argument of peer.js is ignored: a route has one device). A message
+  // the hold hook takes (files waiting for Wi-Fi, netlink.js) is sent later through sendNow.
   send(obj) {
+    if (this.hold && this.hold(obj)) return true;
+    return this.sendNow(obj);
+  }
+
+  sendNow(obj) {
     const s = this.session;
     return !!s && s.send(obj) === true;
   }
@@ -388,6 +396,12 @@ class Hub extends EventEmitter {
     if (e) {
       e.mesh = s.meshCapable;
       e.name = s.displayName();
+    }
+    const tr = s.transport; // onto Bluetooth or back: the device's features hear 'transport'
+    if (tr !== s.lastTransport) {
+      s.lastTransport = tr;
+      this._peerEvent('transport', s.id, {});
+      for (const r of this.routes) if (r.targetId === s.id) r.emit('transport', {});
     }
     this._refreshRoutes();
     this._change();

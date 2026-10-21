@@ -26,8 +26,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 class Files(core: Core) : Feature(core) {
-    // Where a batch goes: Downloads (with a notification), or a folder of ours (FileClip's copy).
-    class Target(val toDownloads: Boolean, val dir: File? = null, val onDone: ((Batch) -> Unit)? = null)
+    // Where a batch goes: Downloads (with a notification), or a folder of ours (FileClip's copy), or
+    // one on the storage the computer chose (FsBrowse: `where` names it, keepBoth: a name already
+    // there gets " 2", nothing is overwritten).
+    class Target(val toDownloads: Boolean, val dir: File? = null, val where: String = "", val keepBoth: Boolean = false, val onDone: ((Batch) -> Unit)? = null)
 
     class Incoming(val id: String, val batch: String, val name: String, val rel: String, val size: Long, val out: OutputStream, val uri: Uri?, val file: File?) {
         val hash: MessageDigest = MessageDigest.getInstance("SHA-256")
@@ -52,6 +54,8 @@ class Files(core: Core) : Feature(core) {
 
     class OutBatch(val id: String, val kind: String, val name: String, val files: Int, val bytes: Long) {
         var sent = 0L
+        val key = (id.hashCode() and 0x7fff) or 0x8000 // its notification (apart from the incoming ones')
+        var shown = false // big enough for one (the progress bar while it goes)
     }
 
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "td-files-in").apply { isDaemon = true } }
@@ -168,7 +172,13 @@ class Files(core: Core) : Feature(core) {
                 val uri = core.ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: throw IllegalStateException("no space")
                 Incoming(id, batchId, name, rel.joinToString("/"), size, core.ctx.contentResolver.openOutputStream(uri)!!, uri, null)
             } else {
-                val f = File(batch.target.dir!!, rel.joinToString("/"))
+                var f = File(batch.target.dir!!, rel.joinToString("/"))
+                if (batch.target.keepBoth && rel.size == 1) {
+                    var i = 2
+                    val dot = name.lastIndexOf('.')
+                    val (base, ext) = if (dot > 0) name.substring(0, dot) to name.substring(dot) else name to ""
+                    while (f.exists()) f = File(batch.target.dir, "$base ${i++}$ext")
+                }
                 f.parentFile?.mkdirs()
                 Incoming(id, batchId, name, rel.joinToString("/"), size, f.outputStream(), null, f)
             }
@@ -212,10 +222,10 @@ class Files(core: Core) : Feature(core) {
             core.ctx.contentResolver.update(f.uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
             batch?.placed?.add(f.uri to mimeOf(f.name))
         } else if (f.file != null) {
-            val uri = FileProvider.getUriForFile(core.ctx, "${core.ctx.packageName}.files", f.file)
-            batch?.placed?.add(uri to mimeOf(f.name))
+            // (only FileClip's folder is shared through the FileProvider; a folder on the storage isn't)
+            runCatching { FileProvider.getUriForFile(core.ctx, "${core.ctx.packageName}.files", f.file) }.getOrNull()?.let { batch?.placed?.add(it to mimeOf(f.name)) }
         }
-        core.send(msg(Proto.T.FILE_DONE, "id" to f.id, "ok" to true, "path" to "Download/TwinDesk/${f.rel}"))
+        core.send(msg(Proto.T.FILE_DONE, "id" to f.id, "ok" to true, "path" to (batch?.target?.where?.ifEmpty { null } ?: "Download/TwinDesk") + "/${f.rel}"))
         batch?.let { fileFinished(it, true) }
     }
 
@@ -234,7 +244,7 @@ class Files(core: Core) : Feature(core) {
         if (!ok) b.ok = false
         if (b.done < b.count) return
         batches.remove(b.id)
-        val where = "Download/TwinDesk"
+        val where = b.target.where.ifEmpty { "Download/TwinDesk" }
         if (drags.remove(b.id) != null) core.send(msg("drag.end", "drag" to b.id, "result" to if (b.ok) "dropped" else "failed", "where" to where))
         else core.send(msg(Proto.T.FILES_DONE, "batch" to b.id, "ok" to b.ok, "where" to where, "files" to b.done))
         val from = core.host?.name ?: "your computer"
@@ -244,6 +254,7 @@ class Files(core: Core) : Feature(core) {
         if (b.target.onDone != null) {
             Notify.cancelFiles(core.ctx, b.key)
             b.target.onDone.invoke(b)
+            if (b.target.where.isNotEmpty()) Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Not everything arrived from $from", "In ${b.target.where}", null, null)
         } else {
             val open = if (b.placed.size == 1) Notify.viewIntent(b.placed[0].first, b.placed[0].second)
             else Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -256,14 +267,15 @@ class Files(core: Core) : Feature(core) {
         val now = System.currentTimeMillis()
         if (!force && now - b.lastNote < 500) return
         b.lastNote = now
-        if (b.target.onDone != null) Notify.fclipProgress(core.ctx, "Copying ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", pct(b.got, b.bytes))
+        if (b.target.onDone != null && b.target.where.isEmpty()) Notify.fclipProgress(core.ctx, "Copying ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", pct(b.got, b.bytes))
         else Notify.files(core.ctx, b.key, "Receiving ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", "${pct(b.got, b.bytes)}%", pct(b.got, b.bytes), null)
         core.changed()
     }
 
     // ---- out ----
 
-    data class Item(val uri: Uri, val name: String, val size: Long)
+    // rel: where it goes, folders kept (FsBrowse's folders); empty: the name alone.
+    data class Item(val uri: Uri, val name: String, val size: Long, val rel: String = "")
 
     fun describe(uris: List<Uri>): List<Item> = uris.mapNotNull { uri ->
         runCatching {
@@ -284,13 +296,13 @@ class Files(core: Core) : Feature(core) {
     fun send(items: List<Item>, kind: String, batch: String = UUID.randomUUID().toString()): Boolean {
         if (!core.link.connected || items.isEmpty()) return false
         val seen = mutableSetOf<String>()
-        val unique = items.map { var n = it.name; var i = 2; while (!seen.add(n)) { n = it.name.substringBeforeLast('.') + " ${i++}" + it.name.substringAfterLast('.', "").let { e -> if (e.isEmpty()) "" else ".$e" } }; it.copy(name = n) }
+        val unique = items.map { if (it.rel.contains('/')) return@map it; var n = it.name; var i = 2; while (!seen.add(n)) { n = it.name.substringBeforeLast('.') + " ${i++}" + it.name.substringAfterLast('.', "").let { e -> if (e.isEmpty()) "" else ".$e" } }; it.copy(name = n) }
         val bytes = unique.sumOf { it.size }
         outBatches[batch] = OutBatch(batch, kind, if (unique.size == 1) unique[0].name else plural(unique.size, "item"), unique.size, bytes)
         unique.forEachIndexed { index, it ->
             val id = UUID.randomUUID().toString()
             outgoing.add(Outgoing(id, it.uri, it.name, it.size, batch))
-            core.send(msg(Proto.T.FILE_OFFER, "id" to id, "name" to it.name, "size" to it.size, "drop" to kind, "batch" to batch, "rel" to it.name, "index" to index, "count" to unique.size, "bytes" to bytes))
+            core.send(msg(Proto.T.FILE_OFFER, "id" to id, "name" to it.name, "size" to it.size, "drop" to kind, "batch" to batch, "rel" to it.rel.ifEmpty { it.name }, "index" to index, "count" to unique.size, "bytes" to bytes))
         }
         core.changed()
         return true
@@ -314,7 +326,14 @@ class Files(core: Core) : Feature(core) {
                         core.send(msg(Proto.T.FILE_CHUNK, "id" to f.id, "seq" to seq++, "data" to Base64.getEncoder().encodeToString(buf.copyOf(n))))
                         f.sent += n
                         outBatches[f.batch]?.let { it.sent += n }
-                        if (seq % 32 == 0) core.changed()
+                        if (seq % 32 == 0) {
+                            core.changed()
+                            // Over 5 MB: a notification with a live progress bar, as for files coming in.
+                            outBatches[f.batch]?.takeIf { it.bytes > 5L * 1024 * 1024 }?.let { b ->
+                                b.shown = true
+                                Notify.files(core.ctx, b.key, "Sending ${b.name} to ${core.host?.name ?: "your computer"}", "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true)
+                            }
+                        }
                     }
                 }
                 core.send(msg(Proto.T.FILE_END, "id" to f.id, "sha256" to md.digest().hex()))
@@ -334,6 +353,7 @@ class Files(core: Core) : Feature(core) {
         val b = outBatches.remove(m.optString("batch")) ?: return
         outgoing.removeIf { it.batch == b.id }
         val to = core.host?.name ?: "your computer"
+        if (b.shown) Notify.files(core.ctx, b.key, if (m.optBoolean("ok")) "Sent ${b.name}" else "Not everything arrived", "On $to", null, null, up = true)
         recent.add(0, if (m.optBoolean("ok")) "Sent ${b.name} to $to" else "${b.name} didn’t all arrive on $to")
         while (recent.size > 20) recent.removeAt(recent.size - 1)
         core.changed()

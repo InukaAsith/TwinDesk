@@ -34,6 +34,7 @@ class LinkManager extends EventEmitter {
     this.hostPairing = hostPairing;
     this.resolveAddress = resolveAddress;
     this.inboundWaitMs = inboundWaitMs;
+    this.ble = null; // BleGuest (blepipe.js), set by setBle(): a host not on this network, near over Bluetooth
     this.links = new Map(); // macId -> Link
     this.pairLink = null; // the Link of the pairing in progress (not yet a host)
     this.inbound = new Set(); // ids with an authenticated inbound link (they dialled us)
@@ -144,10 +145,17 @@ class LinkManager extends EventEmitter {
 
   // ---- internals ----
 
+  // Bluetooth for the links (main.js, once its BleGuest exists): every link, now and later.
+  setBle(ble) {
+    this.ble = ble;
+    for (const link of this.links.values()) link.ble = ble;
+  }
+
   _newLink(entry) {
     let link = null;
     link = new Link({
       device: this.device,
+      ble: this.ble,
       blocked: () => this._blocked(link),
       busy: () => this._busy(link),
       resolveAddress: (id) => (this.resolveAddress ? this.resolveAddress(id) : null),

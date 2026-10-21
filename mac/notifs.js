@@ -10,20 +10,26 @@
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { Pool } = require('../shared/mesh.js');
-
 const { NotifGuard, isOwn } = require('../shared/notif-guard.js');
+const { IconsOut, IconsIn } = require('../shared/notificon.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
 
 // The Pool's view of the mesh for notifications. Items from a device are always shown here; items
 // go only to devices whose notif.policy accepted (mesh entry .notifPool === true), checked in send().
-function notifPeers(mesh) {
+function notifPeers(mesh, notifs) {
   return mesh.peers().map((e) => ({
     id: e.id,
     mesh: e.mesh,
     pool: true,
-    send: (msg) => e.notifPool === true && e.send(msg),
+    send: (msg) => {
+      if (e.notifPool !== true) return false;
+      // The app's icon (sent once per app and device session), kept out of the pool's own copies.
+      const { _icon, ...rest } = msg;
+      const icon = _icon ? notifs.iconsOut.take(e.id, rest.app, _icon) : undefined;
+      return e.send(icon ? { ...rest, icon } : rest);
+    },
   }));
 }
 
@@ -45,7 +51,9 @@ class Notifs extends EventEmitter {
     this.selfName = opts.selfName;
     this.peerName = opts.peerName;
     this.Notification = opts.Notification || require('electron').Notification;
-    this.pool = new Pool({ name: 'notif', selfId: this.mesh.selfId, peers: () => notifPeers(this.mesh) });
+    this.iconsOut = new IconsOut(); // our app icons go with the first notification of each app per device session
+    this.iconsIn = new IconsIn(require('electron').nativeImage); // none: macOS shows TwinDesk's icon with every notification
+    this.pool = new Pool({ name: 'notif', selfId: this.mesh.selfId, peers: () => notifPeers(this.mesh, this) });
     this.access = 'unknown'; // 'ok' | 'noAccess' (Full Disk Access) | 'unknown'
     this.apps = new Map(); // app -> {app, appName, at} seen here (newest first in the view)
     this.sent = 0;
@@ -162,11 +170,11 @@ class Notifs extends EventEmitter {
     if (isOwn(app, ev.appName)) return; // TwinDesk's own toasts are never forwarded
     if (this.guard.repeat('out', app, ev.title, ev.body)) return;
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
-    if (this.apps.size > 60) this.apps.delete(this.apps.keys().next().value);
     if (this.cfg.send && !(this.cfg.muted || []).includes(app) && this._anyAccepts()) {
       const r = this.pool.publish({
         t: T.NOTIF, id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle),
         body: this.cfg.hideText ? '' : str(ev.body), at: Math.round(Number(ev.at)) || Date.now(), on: this._selfName(),
+        _icon: ev.icon, // stripped per device in notifPeers (the icon goes once per app and session)
       });
       if (r.sent.length) this.sent++;
     }
@@ -186,6 +194,7 @@ class Notifs extends EventEmitter {
     this.echoes.push({ title, body: body.slice(0, 80), until: Date.now() + 30000 });
     const n = new this.Notification({
       title,
+      icon: this.iconsIn.for(m),
       subtitle: [appName, origin].filter(Boolean).join(' · '),
       body: [str(m.subtitle, 200), body].filter(Boolean).join('\n'),
     });

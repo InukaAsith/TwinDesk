@@ -52,6 +52,9 @@ class PcScreen {
       this.apply();
     });
     link.on('closed', () => { clearTimeout(this.policyTimer); this.mac.accept = false; this.stateKey = ''; this.apply(); });
+    // The session moved (Bluetooth -> a Wi-Fi Direct link, or back): a session offered on the old path
+    // never connects on the new one; the transport is part of the key, so apply() starts again.
+    link.on('transport', () => this.apply());
     link.on(T.SCREEN_CTL, (m) => this._onCtl(m));
     link.on(T.SCREEN_POLICY, (m) => {
       const n = (v) => (Number.isInteger(v) && v >= 320 && v <= 7680 ? v : 0);
@@ -183,14 +186,16 @@ class PcScreen {
 
   async _applyOnce() {
     const connected = this.link.status.state === 'connected';
-    const want = connected && this.mode !== 'off' && !this.busy && this.mac.accept;
+    // Bluetooth can't carry the picture: it starts once the session is on Wi-Fi (netlink.js).
+    const transport = (this.link.current && this.link.current.transport) || 'ip';
+    const want = connected && this.mode !== 'off' && !this.busy && this.mac.accept && transport !== 'ble';
     if (!want) return this._stopSend(connected);
     const d = await this._target();
     if (!d) return this._stopSend(true);
     const rect = screenRect(d);
     const [width, height] = this._streamSize(rect);
     const fps = PcScreen.fps(d);
-    const key = [d.id, rect.x, rect.y, rect.width, rect.height, width, this.cfg.mbps, this.cfg.sound, fps].join(',');
+    const key = [d.id, rect.x, rect.y, rect.width, rect.height, width, this.cfg.mbps, this.cfg.sound, fps, transport].join(',');
     if (this.sending && this.sending.key === key) return;
     // Wayland: the portal's picker lists the virtual monitor with the others.
     if (WAYLAND && this.mode === 'extend' && this.popup) this.popup('away', 'Choose “Virtual remote monitor” to extend onto {name}');
@@ -245,7 +250,8 @@ class PcScreen {
     if (m.share === false) return this.setMode('off');
     if (mode && (m.share === true || this.mode !== 'off')) return this.setMode(mode);
     if (mode) { this.lastMode = mode; return this.onChange(); }
-    if (m.share === true && this.mode === 'off') return this.setMode(this.lastMode);
+    // Started from the viewer: Mirror (a virtual display doesn't always start); Extend is its switch.
+    if (m.share === true && this.mode === 'off') return this.setMode('mirror');
   }
 
   // Frames per second to send: the display's refresh rate (30–120), so motion is never decimated.

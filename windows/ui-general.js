@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // General tab: start with Windows, the switching popup, firewall self-check (+ Fix), wake from the
-// network, helper, the virtual display driver (Extend), this PC.
+// network, Bluetooth for devices not on this network, helper, the virtual display driver (Extend), this PC.
 'use strict';
 
 UI.tab({
@@ -28,6 +28,18 @@ UI.tab({
     const vddPill = el('span', { class: 'pill' });
     const vddInstall = UI.button('Install', () => api.installVdd(), 'small primary');
     const vddRow = UI.row('Virtual display driver', '', [vddPill, vddInstall]); // Share screen › Extend (vdd.js)
+    // Bluetooth when not on the same network: with phones (on unless switched off), with computers (off unless switched on).
+    const bleSw = UI.switch((v) => api.setNet({ ble: v }), { label: 'Bluetooth with phones' });
+    const bleRow = UI.row('Bluetooth with phones', '', [bleSw]);
+    const blePcSw = UI.switch((v) => api.setNet({ blePc: v }), { label: 'Bluetooth with computers' });
+    const blePcRow = UI.row('Bluetooth with computers', '', [blePcSw]);
+    // Bluetooth off altogether while the session is on the same Wi-Fi (blepolicy.js wifiQuiet).
+    const bleWifiSw = UI.switch((v) => api.setNet({ bleWifiOff: v }), { label: 'Turn off Bluetooth on Wi-Fi connections' });
+    const bleWifiRow = UI.row('Turn off Bluetooth on Wi-Fi connections', '', [bleWifiSw]);
+    // What Windows has to allow, in one place (each is also asked for where a feature needs it).
+    const btPill = el('span', { class: 'pill' });
+    const btRow = UI.row('Bluetooth', 'For a phone or computer that isn’t on this network', [btPill, UI.button('Open', () => api.openBluetoothSettings(), 'small')]);
+    const locRow = UI.row('Location', 'To join a phone’s or computer’s Wi-Fi Direct (Windows shows Wi-Fi networks only with it)', [UI.button('Open', () => api.netLocation(), 'small')]);
     const deviceName = el('span', { class: 'value' });
     const deviceRow = UI.row('Computer name', 'How other computers see this one', [deviceName]);
 
@@ -36,7 +48,8 @@ UI.tab({
         UI.row('Start with Windows', '', [startup]),
         UI.row('Show a popup when switching', 'When the mouse and keyboard move between computers', [hudSw]),
       ]),
-      UI.card('Network and sharing', [fwRow, wakeRow, sendToRow]),
+      UI.card('Permissions', [fwRow, btRow, locRow]),
+      UI.card('Network and sharing', [wakeRow, sendToRow, bleRow, blePcRow, bleWifiRow]),
       UI.card('This computer', [deviceRow, helperRow, vddRow]),
     );
 
@@ -67,6 +80,21 @@ UI.tab({
       vddInstall.disabled = !!v.busy;
       vddRow.setHint(v.message ? v.message : v.installed ? 'Adds the extra screen for Share screen › Extend'
         : 'Needed for Share screen › Extend. Asks for administrator rights once');
+      const n = s.net || {};
+      const radio = n.radio === 'off' ? 'Bluetooth is off in Windows settings'
+        : n.radio === 'unsupported' ? 'This PC’s Bluetooth can’t do it (needs Bluetooth LE)' : '';
+      bleSw.set(n.ble !== false);
+      bleRow.setHint(n.ble === false ? 'Only phones on this network or a USB cable connect'
+        : radio || 'A phone nearby connects through Bluetooth; files and screens switch to Wi-Fi Direct for a moment');
+      blePcSw.set(n.blePc === true);
+      bleWifiSw.set(n.bleWifiOff !== false);
+      bleWifiRow.setHint(n.bleWifiOff === false ? 'Bluetooth stays on beside the Wi-Fi, the way back if it drops'
+        : n.bleOff ? 'Off now: the session is on the same Wi-Fi. Bluetooth comes back when it ends'
+          : 'On the same Wi-Fi network (not Wi-Fi Direct), Bluetooth goes off until the session ends. With a computer, phones can’t find this one meanwhile');
+      blePcRow.setHint(n.blePc !== true ? 'Only computers on this network connect'
+        : radio || 'A computer nearby connects through Bluetooth; files and screens switch to Wi-Fi Direct for a moment');
+      btPill.textContent = n.radio === 'off' ? 'Off' : n.radio === 'unsupported' ? 'Not supported' : n.radio ? 'On' : 'Unknown';
+      btPill.className = 'pill ' + (n.radio === 'off' || n.radio === 'unsupported' ? 'bad' : n.radio ? 'good' : 'muted');
       deviceName.textContent = s.device.name;
     };
   },

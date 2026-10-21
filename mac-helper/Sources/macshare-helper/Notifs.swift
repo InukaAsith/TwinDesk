@@ -82,12 +82,18 @@ final class NotifWatch {
       if title.isEmpty && body.isEmpty { continue }
       let date = (plist["date"] as? Double).map { ($0 + 978307200) * 1000 } ?? Date().timeIntervalSince1970 * 1000
       emit(["event": "notif", "id": String(last), "app": app, "appName": name(of: app),
-            "title": cut(title), "subtitle": cut(subtitle), "body": cut(body), "at": date])
+            "title": cut(title), "subtitle": cut(subtitle), "body": cut(body), "at": date, "icon": icon(of: app)])
     }
     state("ok")
   }
 
   private func cut(_ s: String) -> String { s.count > 500 ? String(s.prefix(500)) : s }
+
+  /// The app's icon (64 px PNG data: URL, cached by Apps.icon), or "".
+  private func icon(of bundle: String) -> String {
+    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return "" }
+    return Apps.icon(url)
+  }
 
   private func name(of bundle: String) -> String {
     if let n = names[bundle] { return n }

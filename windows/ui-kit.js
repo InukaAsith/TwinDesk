@@ -18,11 +18,17 @@ const ICONS = {
   apps: 'M4 4h5v5H4z M11 4h5v5h-5z M4 11h5v5H4z M11 11h5v5h-5z',
   general: 'M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M4.7 15.3l1.4-1.4 M13.9 6.1l1.4-1.4',
   about: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M10 9v5 M10 6.2v.1',
+  drive: 'M3 12h14v4H3z M14 14h.5 M10 3v6 M7 6l3 3 3-3',
   bell: 'M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0',
   pin: 'M10 4v9 M5.5 8.5 10 13l4.5-4.5 M5 16h10',
   up: 'M10 16V4 M5 9l5-5 5 5',
   down: 'M10 4v12 M5 11l5 5 5-5',
   phone: 'M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2',
+  call: 'M6 3h2.5l1.2 3.2-1.7 1.3a9 9 0 0 0 4.5 4.5l1.3-1.7 3.2 1.2V16a1 1 0 0 1-1 1A13 13 0 0 1 3 4a1 1 0 0 1 1-1z',
+  message: 'M3 4.5h14v9H8.5L5 16.5v-3H3z',
+  photo: 'M3 4.5h14v11H3z M3 13l4-4 3.5 3.5 2-2L17 14.5 M12.5 7.5h.1',
+  doc: 'M5 2.5h6.5L15 6v11.5H5z M11.5 2.5V6H15',
+  folder: 'M2.5 5h5.5l1.5 2h8v9.5h-15z',
 };
 
 const UI = {
@@ -316,6 +322,13 @@ const UI = {
 
   // Small device glyph by OS: 'mac' | 'win' | 'linux' | 'android'.
   osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' ? 'phone' : 'pc'),
+  // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's.
+  appIcon(src) {
+    const fallback = 'assets/sidebar-icon@2x.png';
+    const img = UI.el('img', { src: src || fallback, alt: '' });
+    img.onerror = () => { img.onerror = null; img.src = fallback; };
+    return img;
+  },
   osIcon(os) {
     return UI.el('span', { class: `os-ico ${UI.osClass(os)}`, attrs: { 'aria-label': os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'android' ? 'Phone' : 'PC' } });
   },
@@ -413,10 +426,12 @@ const UI = {
       const k = s.kvmState;
       const p = UI.peer(s);
       const WHERE = { home: 'On ' + p.me, driving: 'On ' + p.name, driven: p.Name + ' is using ' + p.me };
-      pill.textContent = k.linked === false ? 'Sharing off' : WHERE[k.mode] || WHERE.home;
-      pill.className = 'pill ' + (k.linked === false ? 'bad' : k.mode === 'home' ? 'muted' : 'good');
+      const off = k.linked === false || k.paused;
+      pill.textContent = off ? 'Sharing off' : WHERE[k.mode] || WHERE.home;
+      pill.className = 'pill ' + (off ? 'bad' : k.mode === 'home' ? 'muted' : 'good');
       row.setHint(k.helper && k.helper !== 'starting' ? k.helper
         : k.linked === false ? 'Cursor sharing is off. Double-tap ' + UI.hotkeyName(s) + ' to turn it on.'
+        : k.paused ? 'Cursor sharing is off over Bluetooth. It comes back on Wi-Fi, or double-tap ' + UI.hotkeyName(s) + ' to turn it on.'
         : s.link.state !== 'connected' ? 'Waiting for ' + p.the
           : k.mode === 'home' && !k.message ? 'Connected to ' + p.name + '. Double-tap ' + UI.hotkeyName(s) + ' to turn cursor sharing off.'
           : k.message || 'Double-tap ' + UI.hotkeyName(s) + ({ home: ' to turn cursor sharing off', driving: ' to come back and turn cursor sharing off', driven: ' to take it back' }[k.mode] || ''));

@@ -116,7 +116,7 @@ UI.tab({
       installBtn.textContent = v.busy === 'install' ? 'Installing…' : 'Install';
       removeBtn.hidden = !v.removable;
       removeBtn.disabled = !!v.busy || p.mode === 'extend';
-      driver.setHint(v.busy === 'remove' ? 'Removing…' : v.busy === 'install' ? 'Installing…' : v.removable ? 'Installed. Adds the extra screen for Extend.'
+      driver.setHint(v.busy === 'remove' ? 'Removing…' : v.busy === 'install' ? 'Installing…' : v.hint ? v.hint : v.removable ? 'Installed. Adds the extra screen for Extend.'
         : 'Adds an extra screen for Extend by switching on a spare display output. Installs a small helper and asks for your password once.');
       const extend = !v.checked || (v.setup && !v.message) ? '' : !v.installed ? (v.message || 'Extend isn’t available on this desktop') + '.'
         : v.message ? v.message + '.' : '';

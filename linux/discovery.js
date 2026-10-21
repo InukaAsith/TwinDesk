@@ -51,6 +51,7 @@ class Discovery extends EventEmitter {
     this.sock = null;
     this.timers = [];
     this.sendErrors = new Set();
+    this.extras = []; // Bluetooth (blepipe.js BleHost, BleGuest): devices near but not on this network, {list(), invite?(id)}
   }
 
   start() {
@@ -67,18 +68,31 @@ class Discovery extends EventEmitter {
     this.sock = null;
   }
 
+  // On the network first; Bluetooth adds the ones it alone sees (ble: true, address 'ble:…').
   list() {
-    return [...this.found.values()]
-      .map(({ id, name, os: o, address, port, fp, invited }) => ({ id, name, os: o, address, port, fp, invited: !!invited }))
-      .sort((a, b) => (b.invited - a.invited) || a.name.localeCompare(b.name));
+    const out = [...this.found.values()]
+      .map(({ id, name, os: o, address, port, fp, invited }) => ({ id, name, os: o, address, port, fp, invited: !!invited }));
+    for (const x of this.extras) for (const d of x.list()) if (d.id !== this.self.id && !out.some((o) => o.id === d.id)) out.push({ ...d, invited: !!d.invited });
+    return out.sort((a, b) => (b.invited - a.invited) || a.name.localeCompare(b.name));
   }
 
   get(id) {
     return this.found.get(id) || null;
   }
 
+  // Seen over Bluetooth only (not on this network): the list entry, else null.
+  near(id) {
+    if (this.found.has(id)) return null;
+    for (const x of this.extras) {
+      const d = x.list().find((e) => e.id === id);
+      if (d) return d;
+    }
+    return null;
+  }
+
   // The user acted on an invite (paired or cancelled): it is an ordinary entry again.
   clearInvite(id) {
+    for (const x of this.extras) if (x.clearInvite) x.clearInvite(id);
     const d = this.found.get(id);
     if (d && d.invited) {
       d.invited = false;
@@ -95,8 +109,25 @@ class Discovery extends EventEmitter {
 
   // Ask a phone at address to connect to us (the phone tile; a phone has no server to pair with).
   invite(address) {
+    if (String(address).startsWith('ble:')) {
+      for (const x of this.extras) {
+        const d = x.invite && x.list().find((e) => e.address === address);
+        if (d) return x.invite(d.id);
+      }
+      return;
+    }
     const { id, name, os: o, port, fp } = this.self;
     this._send({ t: P.T.INVITE, v: P.PROTOCOL_VERSION, id, name, os: o, port, fp }, address);
+  }
+
+  // Refresh: what was found is forgotten (an invite stays), and whoever is there answers again.
+  refresh() {
+    let changed = false;
+    for (const [id, d] of this.found) if (!d.invited) changed = this.found.delete(id);
+    if (changed) this.emit('change');
+    this._beacon();
+    this.probe();
+    setTimeout(() => this.probe(), 500); // UDP may drop one
   }
 
   // Ask one address who is there; resolves to the device or null after PROBE_REPLY_MS.

@@ -24,11 +24,14 @@ class Peer {
     this.unknown = new Set();
     this.swapIn = null;
     this.swapOut = null;
+    this.hold = null; // (msg) -> true: held for Wi-Fi (netlink.js), sent later through sendNow
+    this.tap = null; // (msg): every message from the peer (netlink.js)
 
     link.onState(() => this._changed());
     link.onAny = (msg) => this._deliver(msg);
     link.on('welcome', (msg) => this._emit('welcome', msg));
     link.on('closed', (msg) => this._emit('closed', msg));
+    link.on('transport', () => { this._emit('transport', {}); this._changed(); });
   }
 
   // The host role, once identity.js has a certificate.
@@ -54,6 +57,11 @@ class Peer {
       }
     });
     server.on('rtt', () => this._changed());
+    server.on('transport', (ctx) => {
+      if (ctx !== server.current) return;
+      this._emit('transport', {});
+      this._changed();
+    });
     server.on('message', (msg, ctx) => {
       if (ctx !== server.current) return;
       for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m);
@@ -84,7 +92,25 @@ class Peer {
     return p ? p.os : P.OS.MAC;
   }
 
+  // The session for netlink.js: {deviceId, os, role ('guest' = they connected to us), transport}.
+  get current() {
+    if (this.hosting) {
+      const c = this.server.current;
+      return { deviceId: c.deviceId, os: c.os || P.OS.WIN, role: 'guest', transport: c.transport === 'ble' ? 'ble' : 'ip', address: c.address };
+    }
+    if (!this.link.authed) return null;
+    const p = this.link.snapshot().paired;
+    return p && { deviceId: p.macId, os: p.os, role: 'host', transport: this.link.transport === 'ble' ? 'ble' : 'ip', address: p.address };
+  }
+
   send(obj) {
+    if (!obj || !this._allowed(obj.t)) return false;
+    // Through Bluetooth, files wait for Wi-Fi (netlink.js); they come back through sendNow.
+    if (this.hold && this.hold(obj)) return true;
+    return this.sendNow(obj);
+  }
+
+  sendNow(obj) {
     if (!obj || !this._allowed(obj.t)) return false;
     if (!this.hosting) return this.link.send(obj);
     for (const m of P.swapRole(obj, this.swapOut)) this.server.send(this.server.current, m);
@@ -119,7 +145,7 @@ class Peer {
     const req = this.pairing && this.pairing.pendingView();
     return {
       link: c ? { state: 'connected', rtt: c.rttMs, message: '', macName: c.name, address: c.address } : g.link,
-      pairing: req ? { phase: 'request', role: 'host', macName: req.name, os: req.os, code: req.code || '', allowed: req.allowed, address: '' } : g.pairing,
+      pairing: req ? { phase: 'request', role: 'host', macName: req.name, os: req.os, code: req.code || '', allowed: req.allowed, wired: !!req.wired, address: '' } : g.pairing,
       paired: g.paired,
       guests: this.pairing ? this.pairing.list() : [],
       session: c ? { role: 'host', id: c.deviceId, name: c.name, os: c.os || P.OS.WIN }
@@ -137,6 +163,21 @@ class Peer {
     else this.link.cancelPair();
   }
   forget() { this.link.forget(); }
+  // Connect again or Take over the computer we're a guest of.
+  connect(takeover) {
+    if (this.hosting) this.server.release(); // switching from a guest of ours to our host
+    this.link.connect(takeover);
+  }
+
+  // Disconnect, whichever side opened the session: a guest of ours doesn't come back by itself
+  // (released), and as a guest we don't reconnect until Connect.
+  disconnect() {
+    if (this.hosting) this.server.release();
+    else this.link.disconnect();
+  }
+
+  // Connect on a computer that connects to us: it was invited, and its hello takes the session over.
+  expect(id) { if (this.pairing) this.pairing.expect(id); }
 
   // ---- host side ----
   respondPair(allow) { if (this.pairing) this.pairing.respond(allow); }
@@ -144,6 +185,7 @@ class Peer {
 
   _deliver(msg) {
     if (!this._allowed(msg.t)) return;
+    if (this.tap) this.tap(msg);
     const fns = this.handlers.get(msg.t);
     if (fns) for (const fn of fns) fn(msg);
     else if (!this.unknown.has(msg.t)) {

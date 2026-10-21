@@ -1,8 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The pointer is hidden on this PC while it drives the Mac ("Crossing between the
 // computers"): every system cursor is swapped for a blank one, and the user's own cursors are
-// reloaded from their settings when it comes back. Also reloaded when the helper starts, in case a
-// crash ever left them blank.
+// reloaded from their settings when it comes back. Also reloaded when the helper starts or crashes,
+// in case they were ever left blank (the installer reloads them too, after stopping the helper).
 using System;
 using System.Runtime.InteropServices;
 
@@ -38,9 +38,18 @@ namespace MacShare
             Restore();
         }
 
+        // Reloading can fail (a UAC prompt on the secure desktop, an elevated window in front): it
+        // is tried again every tick (Retry) until it works, so a pointer is never left blank.
+        static bool restorePending;
+
         public static void Restore()
         {
-            SystemParametersInfo(0x0057 /* SPI_SETCURSORS */, 0, IntPtr.Zero, 0);
+            restorePending = !SystemParametersInfo(0x0057 /* SPI_SETCURSORS */, 0, IntPtr.Zero, 0x02 /* SPIF_SENDCHANGE */);
+        }
+
+        public static void Retry()
+        {
+            if (restorePending && !hidden) Restore();
         }
     }
 }

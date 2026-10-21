@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,10 +22,14 @@ Display *dpy_ev, *dpy_in;
 Window root_ev, root_in;
 static int wl; // the Wayland backend
 
+static pthread_mutex_t out_mu = PTHREAD_MUTEX_INITIALIZER; // ble.c writes from its threads too
+
 void emit(const char *line) {
+  pthread_mutex_lock(&out_mu);
   fputs(line, stdout);
   fputc('\n', stdout);
   fflush(stdout);
+  pthread_mutex_unlock(&out_mu);
 }
 
 static void reply(const JObj *c, const char *error, const char *extra) {
@@ -42,9 +47,10 @@ static void reply(const JObj *c, const char *error, const char *extra) {
 }
 
 static void dispatch(const char *line) {
+  capture_touch(); // any command resets the dead-man timer
+  if (ble_handle(line)) return; // Bluetooth: ble.c's thread, both backends
   JObj *c = json_parse(line);
   if (!c) return;
-  capture_touch(); // any command resets the dead-man timer
   const char *cmd = jstr(c, "cmd", "");
   const char *error = NULL;
   char extra[200] = "";
@@ -151,6 +157,7 @@ static void dispatch(const char *line) {
 }
 
 static void quit(int code) {
+  ble_shutdown();
   if (wl) {
     wl_shutdown();
     exit(code);
@@ -175,7 +182,7 @@ static int xio(Display *d) {
   _exit(2); // the server is gone: nothing left to give back
 }
 
-static char inbuf[65536];
+static char inbuf[1 << 20]; // bleSend: up to 64 KB as base64
 static size_t inlen;
 
 static void read_stdin(void) {

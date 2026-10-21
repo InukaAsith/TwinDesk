@@ -17,6 +17,7 @@ object Proto {
     const val DEVICE_STALE_MS = 10000L
     const val PING_MS = 1000L
     const val TIMEOUT_MS = 4000L
+    const val BLE_TIMEOUT_MS = 20000L // through Bluetooth, where one big message takes seconds
     const val PHONE_GRACE_MS = 30000L
     // Mesh (docs/mesh.md; same values as shared/protocol.js): many computers at once.
     const val MAX_DEVICES = 10
@@ -47,6 +48,7 @@ object Proto {
         const val ERROR = "error"
         const val PING = "ping"
         const val PONG = "pong"
+        const val BYE = "bye" // Disconnect on purpose: the computer doesn't wait for us to come back
         const val CLIP = "clip"
         const val CLIP_POLICY = "clip.policy"
         const val NOTIF = "notif"
@@ -72,8 +74,15 @@ object Proto {
         const val PHONE_APPS_LIST = "phone.apps.list"
         const val PHONE_APPS = "phone.apps"
         const val PHONE_POINTER = "phone.pointer"
+        const val PHONE_IN = "phone.in"
+        const val PHONE_INPUT = "phone.input"
+        const val PHONE_INPUT_ASK = "phone.input.ask"
+        const val PHONE_INPUT_VIA = "phone.input.via"
         const val PHONE_WAKE = "phone.wake"
         const val PHONE_AWAKE = "phone.awake"
+        const val PHONE_SOUND_WANT = "phone.sound.want"
+        const val PHONE_SOUND = "phone.sound"
+        const val PHONE_SOUND_STATE = "phone.sound.state"
         const val ADB_STATE = "adb.state"
         const val ADB_ENABLE = "adb.enable"
         const val ADB_PAIR = "adb.pair"
@@ -84,6 +93,43 @@ object Proto {
         const val KVM_TAKE = "kvm.take"
         const val KVM_RELEASE = "kvm.release"
         const val KVM_HOME = "kvm.home"
+        // Wi-Fi for a session through Bluetooth (Netlink.kt, shared/netlink.js)
+        const val NET_CAPS = "net.caps"
+        const val NET_NEED = "net.need"
+        const val NET_JOIN = "net.join"
+        const val NET_JOINED = "net.joined"
+        const val NET_RELEASE = "net.release"
+        const val NET_HOTSPOT = "net.hotspot"
+        const val DRAG_START = "drag.start"
+        // Calls, Messages and Media on the computer (Hub.kt, shared/phonehub.js)
+        const val HUB_POLICY = "hub.policy"
+        const val HUB_STATE = "hub.state"
+        const val HUB_ASK = "hub.ask"
+        const val HUB_SET = "hub.set"
+        const val HUB_BT = "hub.bt"
+        const val CALL_STATE = "call.state"
+        const val CALL_DO = "call.do"
+        const val CALL_DONE = "call.done"
+        const val CALL_LOG = "call.log"
+        const val CONTACTS = "contacts"
+        const val SMS_THREADS = "sms.threads"
+        const val SMS_THREAD = "sms.thread"
+        const val SMS_PART = "sms.part"
+        const val SMS_SEND = "sms.send"
+        const val SMS_SENT = "sms.sent"
+        const val SMS_NEW = "sms.new"
+        const val MEDIA_LIST = "media.list"
+        const val MEDIA_THUMB = "media.thumb"
+        const val MEDIA_VIEW = "media.view"
+        const val MEDIA_SAVE = "media.save"
+        const val FS_LIST = "fs.list"
+        const val FS_DO = "fs.do"
+        const val FS_DONE = "fs.done"
+        const val FS_SAVE = "fs.save"
+        const val FS_EXPECT = "fs.expect"
+        const val SHARE_OFFER = "share.offer" // phone->computer {on, port, secret, name}: our shared folder over WebDAV (FolderShare.kt)
+        const val SHARE_HOST = "share.host" // computer->phone {on, port, token, name}: its shared folder, in the Files app (PcShareProvider.kt)
+        const val SHARE_SET = "share.set" // phone->computer {serve}: the computer's folder for this phone on or off (its setting)
     }
 
     object E {
@@ -94,6 +140,7 @@ object Proto {
         const val BUSY = "busy"
         const val REPLACED = "replaced"
         const val RELEASED = "released"
+        const val ASLEEP = "asleep" // the computer went to sleep: not again on our own (it invites us when it wakes)
     }
 
     private val random = SecureRandom()

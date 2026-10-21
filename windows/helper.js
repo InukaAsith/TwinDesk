@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Spawns windows-helper and talks JSON lines with it (same shape as mac/helper.js).
-//   request(cmd, args) -> Promise<reply>   (has an id, waits for {"id","ok"})
+//   request(cmd, args, ms) -> Promise<reply>   (has an id, waits ms (3 s) for {"id","ok"})
 //   send(cmd, args)                        (fire-and-forget)
 // Events: 'event' (name, msg) for {"event":...} lines; 'ready' after each start; 'exit' (code).
 // The helper is restarted after it exits, unless stop() was called.
@@ -92,14 +92,14 @@ class Helper extends EventEmitter {
     return this._write({ ...args, cmd });
   }
 
-  request(cmd, args = {}) {
+  request(cmd, args = {}, ms = REQUEST_MS) {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
       if (!this._write({ ...args, cmd, id })) return reject(new Error('helper not running'));
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('helper: ' + cmd + ' timed out'));
-      }, REQUEST_MS);
+      }, ms);
       this.pending.set(id, { resolve, reject, timer });
     });
   }

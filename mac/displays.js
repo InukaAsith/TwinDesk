@@ -27,11 +27,13 @@ class Displays extends EventEmitter {
     helper.on('event', (name) => {
       if (name === 'displayTerminated') {
         this.virtualId = null;
+        this.virtualKey = '';
         this._changed();
       }
     });
     helper.on('exit', () => {
       this.virtualId = null;
+      this.virtualKey = '';
       this._changed();
     });
   }
@@ -62,17 +64,24 @@ class Displays extends EventEmitter {
         if (!v.enabled || !this.getSettings().sharing.on) {
           if (this.virtualId !== null) await this.helper.request('destroyDisplay');
           this.virtualId = null;
+          this.virtualKey = '';
           return;
         }
         const size = this.override || v;
+        // Already there as asked: keep it (re-creating it pulls it from under a capture that just
+        // started on it; several callers apply at once when sharing starts).
+        const key = JSON.stringify([size.width, size.height, !!size.hiDPI, v.hz || 60]);
+        if (this.virtualId !== null && key === this.virtualKey && screen.getAllDisplays().some((d) => d.id === this.virtualId)) return;
         const r = await this.helper.request('createDisplay', {
           width: size.width, height: size.height, hiDPI: !!size.hiDPI, hz: v.hz || 60, name: 'TwinDesk',
         });
         this.virtualId = r.displayId;
+        this.virtualKey = key;
         console.log(`[displays] virtual display ${r.displayId}: ${size.width}x${size.height} pt, ${r.pixelWidth}x${r.pixelHeight} px`);
         await this._waitForDisplay(r.displayId);
       } catch (e) {
         this.virtualId = null;
+        this.virtualKey = '';
         this.virtualError = e.message;
         console.error(`[displays] virtual display: ${e.message}`);
       } finally {

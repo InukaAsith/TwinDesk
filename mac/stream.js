@@ -90,6 +90,12 @@ class Stream extends EventEmitter {
       }
       if (!server.current) this._stopWindow('nothing connected');
     });
+    // The session moved (Bluetooth -> a Wi-Fi Direct link, or back): a session offered on the old
+    // path has no candidates for the new one and never connects. Start again on this one.
+    server.on('transport', (c) => {
+      const moved = this.active ? this.active.transport !== c.transport : this.view.status === 'waiting for Wi-Fi' && c.transport !== 'ble';
+      if (moved) this.restart(`moved to ${c.transport === 'ble' ? 'Bluetooth' : 'Wi-Fi'}`);
+    });
     server.on(`t:${P.T.RTC_ANSWER}`, (msg) => this._toWindow('remote', msg));
     server.on(`t:${P.T.RTC_ICE}`, (msg) => this._toWindow('remote', msg));
     displays.on('change', () => this._displaysChanged());
@@ -176,6 +182,8 @@ class Stream extends EventEmitter {
     if (!this.server.current) return this._stopWindow('nothing connected');
     if (this.viewer === false || this.waitingPolicy) return this._stopWindow('no viewer');
     if (this.choice && this.choice.mode === 'none') return this._stopWindow('off for this device');
+    // Bluetooth can't carry the picture: it starts once the session is on Wi-Fi (netlink.js, 'transport').
+    if (this.server.current && this.server.current.transport === 'ble') return this._stopWindow('waiting for Wi-Fi');
     const target = this._target();
     if (!target) return this._stopWindow('no display to share');
 
@@ -192,7 +200,7 @@ class Stream extends EventEmitter {
     }
     this.audio.on = audio;
     if (this.session !== s) return;
-    this.active = { session: s, displayId: target.id, width: target.pixelWidth, height: target.pixelHeight };
+    this.active = { session: s, displayId: target.id, width: target.pixelWidth, height: target.pixelHeight, transport: this.server.current.transport };
     Object.assign(this.view, { display: target.label, width, height, fps: 0, mbps: 0 });
     this._setStatus('starting');
     console.log(`[stream] session ${s} (${reason}): ${target.label} ${target.pixelWidth}x${target.pixelHeight} -> ${width}x${height}`);

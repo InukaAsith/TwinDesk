@@ -38,7 +38,13 @@ try {
   $find = { Get-PnpDevice -Class Display -ErrorAction SilentlyContinue | Where-Object { $_.HardwareID -contains $HwId } }
   if (-not (& $find)) {
     $p = Start-Process -FilePath $Helper -ArgumentList '--add-root-device', ('"' + $inf + '"'), $HwId -Wait -PassThru -WindowStyle Hidden
-    if ($p.ExitCode -ne 0) { throw 'the display driver did not install' }
+    if ($p.ExitCode -ne 0) {
+      # The helper exits with Windows' error. 0x800B0109 (CERT_E_UNTRUSTEDROOT): Code Integrity
+      # refused the package's signature, as Windows on ARM does for drivers that aren't Microsoft-signed.
+      $code = '{0:X8}' -f $p.ExitCode
+      if ($code -eq '800B0109') { throw 'Windows refused the driver''s signature (0x800B0109)' }
+      throw ('the display driver did not install (error 0x' + $code + ', see C:\Windows\INF\setupapi.dev.log)')
+    }
     Set-Content -Path (Join-Path $dir 'installed-by-macshare') -Value (Get-Date -Format o)
     Start-Sleep -Seconds 3
   }

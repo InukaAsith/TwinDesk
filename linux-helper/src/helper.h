@@ -119,6 +119,10 @@ void wl_position(int *x, int *y);
 void wl_shutdown(void);
 int wl_devices(void);
 
+// ---- ble.c: Bluetooth LE through BlueZ (Ble.cs's commands and events), its own thread ----
+int ble_handle(const char *line); // 1: a ble*/blp* command, taken
+void ble_shutdown(void);
+
 double now_ms(void);
 
 #endif

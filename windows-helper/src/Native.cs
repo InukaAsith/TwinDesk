@@ -34,6 +34,16 @@ namespace MacShare
         [DllImport("user32.dll", SetLastError = true)]
         public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+        // ---- keyboard layout (Inject.NextLayout) ----
+        public const uint WM_INPUTLANGCHANGEREQUEST = 0x0050;
+        public const int INPUTLANGCHANGE_FORWARD = 0x0002, HKL_NEXT = 1;
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
         // ---- cursor, metrics ----
         [StructLayout(LayoutKind.Sequential)]
         public struct POINT { public int x, y; public POINT(int x, int y) { this.x = x; this.y = y; } }
@@ -72,6 +82,40 @@ namespace MacShare
         [DllImport("user32.dll")] public static extern bool UnhookWindowsHookEx(IntPtr hook);
         [DllImport("user32.dll")] public static extern IntPtr CallNextHookEx(IntPtr hook, int nCode, IntPtr wParam, IntPtr lParam);
         [DllImport("kernel32.dll")] public static extern IntPtr GetModuleHandle(string name);
+
+        // The input desktop: none we may open while a UAC prompt (the secure desktop) or the lock
+        // screen is showing. Input can't be injected there, nor hooked.
+        [DllImport("user32.dll")] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
+        [DllImport("user32.dll")] public static extern bool CloseDesktop(IntPtr desktop);
+        public static bool SecureDesktop()
+        {
+            IntPtr d = OpenInputDesktop(0, false, 0x0001 /* DESKTOP_READOBJECTS */);
+            if (d == IntPtr.Zero) return true;
+            CloseDesktop(d);
+            return false;
+        }
+
+        // Windows' power throttling (EcoQoS, Efficiency mode) slows a process it thinks is in the
+        // background: this one only ever has hidden windows, but it carries the user's input.
+        [StructLayout(LayoutKind.Sequential)]
+        public struct PROCESS_POWER_THROTTLING_STATE { public uint Version, ControlMask, StateMask; }
+        [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32.dll")] public static extern bool SetPriorityClass(IntPtr process, uint priorityClass);
+        [DllImport("kernel32.dll")] public static extern bool SetProcessInformation(IntPtr process, int infoClass, ref PROCESS_POWER_THROTTLING_STATE info, int size);
+        public static void NoThrottling()
+        {
+            IntPtr me = GetCurrentProcess();
+            SetPriorityClass(me, 0x8000 /* ABOVE_NORMAL_PRIORITY_CLASS */);
+            try
+            {
+                PROCESS_POWER_THROTTLING_STATE s = new PROCESS_POWER_THROTTLING_STATE();
+                s.Version = 1;
+                s.ControlMask = 0x1 /* EXECUTION_SPEED */ | 0x4 /* IGNORE_TIMER_RESOLUTION */;
+                s.StateMask = 0; // controlled, and off
+                SetProcessInformation(me, 4 /* ProcessPowerThrottling */, ref s, Marshal.SizeOf(typeof(PROCESS_POWER_THROTTLING_STATE)));
+            }
+            catch (EntryPointNotFoundException) { /* older Windows: no throttling either */ }
+        }
 
         // ---- raw input ----
         public const int WM_INPUT = 0x00FF;

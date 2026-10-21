@@ -10,14 +10,15 @@ namespace MacShare
     {
         static readonly JavaScriptSerializer S = new JavaScriptSerializer();
 
+        // Bluetooth events come from many threads (Net.cs): one at a time through the serializer.
         public static Dictionary<string, object> Parse(string line)
         {
-            return S.Deserialize<Dictionary<string, object>>(line);
+            lock (S) return S.Deserialize<Dictionary<string, object>>(line);
         }
 
         public static string Write(Dictionary<string, object> d)
         {
-            return S.Serialize(d);
+            lock (S) return S.Serialize(d);
         }
 
         public static string Str(Dictionary<string, object> d, string k, string def)

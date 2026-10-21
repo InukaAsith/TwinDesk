@@ -1,7 +1,7 @@
 {
   "name": "macshare-linux",
   "productName": "TwinDesk",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "TwinDesk for Linux: share mouse, keyboard, clipboard, files, sound and screens with a Mac, a PC or another Linux computer.",
   "license": "GPL-3.0",
   "private": true,

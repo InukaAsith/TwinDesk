@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -55,6 +56,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -113,6 +116,10 @@ object Ico {
     val bell = lineIcon("bell", "M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0")
     val phone = lineIcon("phone", "M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2")
     val more = lineIcon("more", "M4.5 10h.1 M10 10h.1 M15.5 10h.1")
+    val call = lineIcon("call", "M6 3h2.5l1.2 3.2-1.7 1.3a9 9 0 0 0 4.5 4.5l1.3-1.7 3.2 1.2V16a1 1 0 0 1-1 1A13 13 0 0 1 3 4a1 1 0 0 1 1-1z")
+    val message = lineIcon("message", "M3 4.5h14v9H8.5L5 16.5v-3H3z")
+    val photo = lineIcon("photo", "M3 4.5h14v11H3z M3 13l4-4 3.5 3.5 2-2L17 14.5 M12.5 7.5h.1")
+    val folder = lineIcon("folder", "M2.5 5h5.5l1.5 2h8v9.5h-15z")
 }
 
 // A sidebar tile: the icon in white on its section's gradient (the Mac's `.tile`).
@@ -132,10 +139,10 @@ fun Dot(color: Color, size: Int = 8) = Box(Modifier.size(size.dp).clip(CircleSha
 
 // One sidebar entry (the Mac's `.nav-item`): tile, label, and a green dot when the feature is on.
 @Composable
-fun NavItem(icon: ImageVector, colors: List<Color>, label: String, selected: Boolean, on: Boolean, onClick: () -> Unit) {
+fun NavItem(icon: ImageVector, colors: List<Color>, label: String, selected: Boolean, on: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(8.dp))
-            .background(if (selected) pal.accent else Color.Transparent).clickable(onClick = onClick).padding(horizontal = 8.dp),
+        Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(8.dp)).alpha(if (enabled) 1f else 0.4f)
+            .background(if (selected) pal.accent else Color.Transparent).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Tile(icon, colors)
@@ -179,21 +186,40 @@ fun MacCard(title: String = "", modifier: Modifier = Modifier, content: @Composa
     }
 }
 
-// A row: label and hint on the left, controls on the right; a hairline between rows.
+// A row: label and hint on the left, controls on the right; a hairline between rows. Controls too
+// wide to leave the label room (under ~half the row) go on their own line under it, at the right.
 @Composable
 fun MacRow(label: String, hint: String = "", first: Boolean = false, onClick: (() -> Unit)? = null, controls: @Composable RowScope.() -> Unit = {}) {
     Column {
         if (!first) Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(pal.line))
-        Row(
-            Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(label, color = pal.text, fontSize = 15.sp)
-                if (hint.isNotEmpty()) Text(hint, color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 1.dp))
+        Layout(
+            content = {
+                Column {
+                    Text(label, color = pal.text, fontSize = 15.sp)
+                    if (hint.isNotEmpty()) Text(hint, color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(top = 1.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = controls)
+            },
+            modifier = Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
+        ) { ms, c ->
+            val w = c.maxWidth
+            val ctl = ms[1].measure(Constraints(maxWidth = w))
+            val gap = if (ctl.width > 0) 12.dp.roundToPx() else 0
+            if (w - ctl.width - gap >= w * 0.45f) {
+                val lbl = ms[0].measure(Constraints(maxWidth = w - ctl.width - gap))
+                val h = maxOf(lbl.height, ctl.height)
+                layout(w, h) {
+                    lbl.place(0, (h - lbl.height) / 2)
+                    ctl.place(w - ctl.width, (h - ctl.height) / 2)
+                }
+            } else {
+                val lbl = ms[0].measure(Constraints(maxWidth = w))
+                val v = 10.dp.roundToPx()
+                layout(w, lbl.height + v + ctl.height) {
+                    lbl.place(0, 0)
+                    ctl.place(w - ctl.width, lbl.height + v)
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = controls)
         }
     }
 }

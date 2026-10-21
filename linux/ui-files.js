@@ -103,8 +103,9 @@ UI.tab({
         : !f.edgeDrag ? '' : f.session === 'wayland' ? 'From ' + p.the + ': drop on a folder or the desktop. From here: needs an Xorg session'
           : 'Drag through the screen edge. Here, drop on a folder or the desktop');
       mount.set(f.mountMac);
-      openBtn.hidden = !m.drive;
-      macDrive.setHint(m.mountMessage || (!f.mountMac ? '' : m.drive ? 'In the file manager’s sidebar' : m.busy === 'mount' ? 'Connecting…' : 'Waiting for {name} to share one'));
+      openBtn.hidden = !m.drive && !m.wifi;
+      macDrive.setHint(m.mountMessage || (!f.mountMac ? '' : m.drive ? 'In the file manager’s sidebar' : m.busy === 'mount' ? 'Connecting…'
+        : m.wifi ? 'Over Bluetooth: Open connects it with Wi-Fi Direct' : 'Waiting for {name} to share one'));
       share.set(f.shareOn);
       const busy = m.busy === 'setup' ? 'Setting up Samba…' : m.busy === 'remove' ? 'Removing…' : '';
       sharePill.hidden = !f.shareOn && !busy;

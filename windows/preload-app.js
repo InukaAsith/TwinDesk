@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('macshare', {
   getState: call('getState'),
   onState: (fn) => ipcRenderer.on('state', (_e, s) => fn(s)),
   onGo: (fn) => ipcRenderer.on('go', (_e, tab) => fn(tab)),
+  hub: call('hub'), // Calls, Messages and Photos (shared/phonehub.js)
+  onHub: (fn) => ipcRenderer.on('hub', (_e, m) => fn(m)), // the phone's answers for them
   pair: call('pair'),
   connectAddress: call('connectAddress'),
   refreshFound: call('refreshFound'),
@@ -16,6 +18,9 @@ contextBridge.exposeInMainWorld('macshare', {
   confirmCode: call('confirmCode'),
   cancelPair: call('cancelPair'),
   forget: call('forget'),
+  disconnect: call('disconnect'),
+  connectAgain: call('connectAgain'),
+  connectGuest: call('connectGuest'),
   respondPair: call('respondPair'),
   forgetGuest: call('forgetGuest'),
   setActivePeer: call('setActivePeer'), // the device the one-to-one features talk to (hub.select)
@@ -61,6 +66,9 @@ contextBridge.exposeInMainWorld('macshare', {
   connectPhone: call('connectPhone'),
   disconnectPhone: call('disconnectPhone'),
   setPhone: call('setPhone'),
+  setMount: call('setMount'),
+  phoneMount: call('phoneMount'),
+  phoneUnmount: call('phoneUnmount'),
   phonePair: call('phonePair'),
   phoneScreen: call('phoneScreen'),
   phoneOpenApp: call('phoneOpenApp'),
@@ -76,6 +84,12 @@ contextBridge.exposeInMainWorld('macshare', {
   checkFirewall: call('checkFirewall'),
   fixFirewall: call('fixFirewall'),
   setStartup: call('setStartup'),
+  setNet: call('setNet'),
+  netCancel: call('netCancel'),
+  netLocation: call('netLocation'),
+  openBluetoothSettings: call('openBluetoothSettings'),
+  netWifi: call('netWifi'),
+  netJoinHotspot: call('netJoinHotspot'),
   sendFiles: call('sendFiles'),
   chooseSendFiles: call('chooseSendFiles'),
   pathsOf: (files) => [...files].map((f) => webUtils.getPathForFile(f)).filter(Boolean), // dropped files → paths

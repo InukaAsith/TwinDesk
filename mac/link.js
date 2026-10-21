@@ -43,6 +43,11 @@ class Link extends EventEmitter {
     this.mode = null; // 'session' | 'pair'
     this.authed = false;
     this.destroyed = false;
+    // Disconnect here, or the host let us go / another device took over: no reconnecting by itself
+    // until connect(). {why: 'local' | released | replaced, message}
+    this.stopped = null;
+    this.takeover = false; // the next hello takes the session from whoever has it (Take over, an invite)
+    this.busyBy = ''; // the host is in use by someone else: tried again now and then
     this.attempt = 0;
     this.timers = {};
     this.lastRx = 0;
@@ -79,7 +84,7 @@ class Link extends EventEmitter {
   snapshot() {
     const p = this.pairing;
     return {
-      link: { ...this.status, macName: p ? p.macName : '', address: p ? p.address : '' },
+      link: { ...this.status, busy: this.authed ? '' : this.busyBy, macName: p ? p.macName : '', address: p ? p.address : '' },
       pairing: this.pairState ? { ...this.pairState } : null,
       paired: p ? { macId: p.macId, macName: p.macName, address: p.address, port: p.port, os: osOf(p.os) } : null,
     };
@@ -109,7 +114,27 @@ class Link extends EventEmitter {
     this._resume();
   }
 
+  // Disconnect: stays away until Connect (or the host invites us).
+  disconnect() {
+    if (!this.pairing) return;
+    this.stopped = { why: 'local', message: '' };
+    clearTimeout(this.timers.reconnect);
+    if (this.authed) this._raw({ t: T.BYE }); // on purpose: the host doesn't wait for us
+    this._closeSocket();
+    this._setStatus('stopped', '');
+  }
+
+  // Connect again, or Take over (takeover: the host's session with another device ends).
+  connect(takeover = false) {
+    if (!this.pairing || this.pairState) return;
+    this.stopped = null;
+    this.takeover = !!takeover;
+    this.attempt = 0;
+    this._connect('session');
+  }
+
   forget() {
+    this.stopped = null;
     clearTimeout(this.timers.reconnect);
     this._closeSocket();
     this.store.clear();
@@ -134,7 +159,7 @@ class Link extends EventEmitter {
 
   // Try again at once (the host went away and came back, or an inbound link ended).
   poke() {
-    if (this.destroyed || !this.pairing || this.pairState || this.ws || this.status.state === 'identity_changed') return;
+    if (this.destroyed || !this.pairing || this.pairState || this.ws || this.stopped || this.status.state === 'identity_changed') return;
     this.attempt = 0;
     clearTimeout(this.timers.reconnect);
     this.timers.reconnect = setTimeout(() => !this.ws && !this.pairState && this._connect('session'), 300);
@@ -187,7 +212,7 @@ class Link extends EventEmitter {
 
   _hello() {
     const p = this.pairing;
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1 });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
@@ -270,6 +295,8 @@ class Link extends EventEmitter {
     this.status.rtt = null;
     this.lastTx = Date.now();
     this.timers.ping = setInterval(() => this._keepalive(), KEEPALIVE_TICK_MS);
+    this.takeover = false;
+    this.busyBy = '';
     this._setStatus('connected', '');
     this.emit('welcome', msg);
   }
@@ -283,8 +310,10 @@ class Link extends EventEmitter {
       this._setStatus('not_paired', `${name} forgot this Mac. Pair again.`);
       return;
     }
-    if (code === P.E.REPLACED) this.lastError = 'Another connection from this Mac replaced this one';
-    else this.lastError = code === P.E.BUSY ? 'Busy with another device' : `Closed (${code})`;
+    if (code === P.E.REPLACED || code === P.E.RELEASED) {
+      this.stopped = { why: code, message: String(msg.message || (code === P.E.RELEASED ? 'Disconnected' : 'Another device took over')).slice(0, 120) };
+    } else if (code === P.E.BUSY) this.lastError = this.busyBy = String(msg.message || 'In use by another device').slice(0, 120);
+    else this.lastError = `Closed (${code})`;
     // The host closes the socket after an error; _onClose reconnects.
   }
 
@@ -312,6 +341,7 @@ class Link extends EventEmitter {
       }
       return;
     }
+    if (this.stopped) return this._setStatus('stopped', this.stopped.message);
     if (this.pairing && this.status.state !== 'identity_changed') this._scheduleReconnect();
   }
 
@@ -325,11 +355,13 @@ class Link extends EventEmitter {
     }
   }
 
-  _scheduleReconnect() {
+  _scheduleReconnect(delayMs) {
     if (this.destroyed) return;
     clearTimeout(this.timers.reconnect);
+    if (this.stopped) return this._setStatus('stopped', this.stopped.message);
     const delays = P.RECONNECT_MS;
-    const delay = delays[Math.min(this.attempt, delays.length - 1)];
+    // In use by another device: now and then (and at once when the host says it's free: poke).
+    const delay = delayMs !== undefined ? delayMs : this.busyBy ? 10000 : delays[Math.min(this.attempt, delays.length - 1)];
     this.attempt++;
     this._setStatus('reconnecting', this.lastError || '');
     this.timers.reconnect = setTimeout(() => {

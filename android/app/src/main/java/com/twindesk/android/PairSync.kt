@@ -16,7 +16,7 @@ class PairSync(core: Core) : Feature(core) {
     )
 
     // Shared values, the same on both sides (the Mac's VALUES): stored as strings.
-    private val valueDefaults = mapOf("keyboard" to "true", "speed" to "1", "reverseScroll" to "false", "gestures" to "true", "pace" to "fast")
+    private val valueDefaults = mapOf("keyboard" to "true", "speed" to "1", "reverseScroll" to "false", "gestures" to "true", "pace" to "fast", "ble" to "true")
 
     fun value(key: String): String = core.store.prefsString("value.$key", valueDefaults[key] ?: "")
 

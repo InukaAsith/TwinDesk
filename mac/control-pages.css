@@ -28,6 +28,8 @@
 .hero-link-text { color: var(--muted); font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .hero-status { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--row-line); text-align: center; color: var(--muted); }
 .hero-status.bad { color: var(--bad); }
+.hero-actions { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+.hero-actions[hidden] { display: none; }
 
 /* Cursor: layout picker */
 .layout { display: flex; align-items: center; gap: 24px; padding: 18px; }
@@ -159,6 +161,9 @@ body.setup #sidebar { display: none; }
 .phone-hero-text .hero-name { text-align: left; }
 .phone-hero-text .hero-status { text-align: left; margin: 0; }
 .phone-hero-actions { display: flex; gap: 8px; margin-top: 8px; }
+.how-steps { margin: 4px 16px 12px 36px; padding: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.how-steps li { margin: 4px 0; }
+.phone-hero-via { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--muted); font-size: 13px; }
 .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 4px; padding: 6px 10px 12px; max-height: 340px; overflow-y: auto; }
 .app-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 4px; border: 0; border-radius: 9px; background: none; cursor: default; }
 .app-tile:hover:not(:disabled) { background: var(--nav-hover); }

@@ -14,11 +14,21 @@
   <div id="overlay">Mac is not sharing</div>
   <pre id="stats" class="hidden"></pre>
   <div id="drop-status" class="hidden"></div>
+  <div id="bar">
+    <button id="b-extend" title="Use this window as an extra screen of the other computer" hidden>Extend</button>
+    <button id="b-mirror" title="Show the other computer’s main screen" hidden>Mirror</button>
+    <span class="sep" id="sep-mode" hidden></span>
+    <button id="b-fg" title="Frame generation: fills in late or dropped frames">Frame generation</button>
+    <button id="b-full" title="Full screen (F11)">Full screen</button>
+    <span class="sep" id="sep-stop" hidden></span>
+    <button id="b-stop" title="Stop sharing on the other computer" hidden>Stop</button>
+  </div>
   <script src="../shared/protocol.js"></script>
   <script src="../shared/framegen.js"></script>
   <script src="monitor.js"></script>
   <script src="monitor-input.js"></script>
   <script src="monitor-drop.js"></script>
   <script src="monitor-apps.js"></script>
+  <script src="monitor-bar.js"></script>
 </body>
 </html>

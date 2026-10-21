@@ -32,7 +32,7 @@ class Pairing extends EventEmitter {
   // What the control window shows about an in-progress request.
   pendingView() {
     const p = this.pending;
-    return p && { name: p.name, os: p.os, code: p.code, confirmed: p.confirmed, allowed: p.allowed };
+    return p && { name: p.name, os: p.os, code: p.code, confirmed: p.confirmed, allowed: p.allowed, wired: p.wired };
   }
 
   touch(id) {
@@ -89,6 +89,9 @@ class Pairing extends EventEmitter {
         code: null,
         confirmed: false,
         allowed: false,
+        // A phone on the USB cable, with the nonce wired.js sent it through adb (wired.knows):
+        // no code to compare, only Allow here.
+        wired: !!(this.isWired && this.isWired(msg.wired)),
         timer: setTimeout(() => this._abort(P.E.PAIR_TIMEOUT, 'Pairing timed out'), P.PAIR_TIMEOUT_MS),
       };
       this.server.send(ctx, { t: P.T.PAIR_NONCE, nonce: nm, os: P.OS.WIN });

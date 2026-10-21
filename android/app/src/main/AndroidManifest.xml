@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" /> <!-- the sound capture without wireless debugging (Sound.kt): Android asks it for any capture -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -21,6 +23,31 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <!-- Granted by the Mac over wireless debugging: switch wireless debugging on by ourselves. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- Not on one network: the computer over Bluetooth LE (Ble.kt), Wi-Fi Direct for files and
+         screens (Netlink.kt). Neither is used to find where the phone is. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="31" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- BleServe.kt: this phone advertises, for a PC whose Bluetooth can't -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" tools:targetApi="31" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" tools:targetApi="33" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Calls, Messages and Photos on the computer (Hub.kt): each asked for only when it's switched
+         on, never in Setup. The SMS ones are in TwinDesk with notifications (src/full). -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
 
     <!-- The phone's apps for the Mac's app windows. -->
     <queries>
@@ -106,10 +133,35 @@
             android:noHistory="true"
             android:taskAffinity="" />
 
+        <!-- The computer's mouse and keyboard without wireless debugging (Input.kt): off until the person switches it on -->
+        <service
+            android:name=".InputService"
+            android:exported="false"
+            android:label="@string/input_service"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/input_service" />
+        </service>
+
         <service
             android:name=".TwinService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- This phone's sound on the computer without wireless debugging (Sound.kt) -->
+        <service
+            android:name=".SoundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <activity
+            android:name=".SoundActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
 
         <service
             android:name=".ClipTile"
@@ -153,6 +205,14 @@
             android:turnScreenOn="true"
             android:taskAffinity="" />
 
+        <!-- Android's prompt for what Calls, Messages or Photos need (Hub.kt). -->
+        <activity
+            android:name=".PermActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
         <receiver android:name=".ActionReceiver" android:exported="false" />
         <receiver
             android:name=".WiredReceiver"
@@ -173,6 +233,18 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- The computer's shared folder in the Files app and file pickers (PcShareProvider.kt). -->
+        <provider
+            android:name=".PcShareProvider"
+            android:authorities="${applicationId}.pcshare"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
         </provider>
     </application>
 </manifest>

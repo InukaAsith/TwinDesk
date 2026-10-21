@@ -3,11 +3,23 @@
 // disk or from the UI goes through normalize(), so main never stores anything out of range.
 const P = require('../shared/protocol.js');
 
-const TABS = ['phone', 'overview', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'terminal', 'audio', 'apps', 'general', 'about'];
+const TABS = ['phone', 'overview', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'apps', 'general', 'about'];
 
 const OLD_TABS = { display: 'mac-pc', receive: 'mac-pc', share: 'pc-mac' }; // older names
 
 const bool = (v, d) => (typeof v === 'boolean' ? v : d);
+// Which Bluetooth device each phone is (shared/phonehub.js): {phone's id: device id}, a few.
+const btDevices = (v) => Object.fromEntries(Object.entries(v && typeof v === 'object' ? v : {})
+  .filter(([k, id]) => typeof k === 'string' && k.length <= 100 && typeof id === 'string' && id).slice(-20).map(([k, id]) => [k, id.slice(0, 400)])); // Windows' device ids are long
+// A phone's hotspot as typed once, per phone: {deviceId: {ssid, pass (safeStorage, base64)}}.
+const hotspots = (v) => {
+  const out = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const [id, h] of Object.entries(v).slice(0, 20)) {
+    if (h && typeof h.ssid === 'string' && typeof h.pass === 'string') out[id.slice(0, 64)] = { ssid: h.ssid.slice(0, 32), pass: h.pass.slice(0, 2000) };
+  }
+  return out;
+};
 // A global shortcut (Electron accelerator): Ctrl, Alt or the Windows key, plus one key.
 const KEY = /^(?:(?:Control|Alt|Shift|Super)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Tab|Backspace|Delete|Enter|Up|Down|Left|Right)$/;
 const accel = (v, d) => (typeof v === 'string' && KEY.test(v) && /Control|Alt|Super/.test(v) ? v : d);
@@ -32,6 +44,9 @@ function normalize(s) {
   const nf = s.notifs || {};
   const wk = s.wake || {};
   const ph = s.phone || {};
+  const mt = s.mount || {};
+  const hub = s.hub || {};
+  const nt = s.net || {};
   return {
     rev: 8, // settings revision (upgrades in normalize, like the Mac's store.js)
     kvm: {
@@ -49,6 +64,7 @@ function normalize(s) {
         ? Object.fromEntries(Object.entries(kvm.linkedBy).filter(([, v]) => typeof v === 'boolean').slice(0, 50)) : {},
       gestures: bool(kvm.gestures, true), // Trackpad gestures work on the other computer (pair.sync 'gestures')
       hotkeySwitch: bool(kvm.hotkeySwitch, false), // keyboard only (Cursor off): double-tap moves the keyboard over and back
+      ble: bool(kvm.ble, true), // cursor sharing while the session runs through Bluetooth (pair.sync 'ble')
     },
     // hotkey: double-tap = mouse and keyboard home
     keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN },
@@ -120,6 +136,21 @@ function normalize(s) {
       bitrateMbps: Math.round(num(ph.bitrateMbps, 8, 2, 40)),
       maxSize: [0, 1920, 1600, 1280, 1024].includes(ph.maxSize) ? ph.maxSize : 0,
       wallpaper: bool(ph.wallpaper, true),
+      input: ph.input === 'phone' ? 'phone' : 'adb', // the mouse and keyboard through adb, or the phone's Accessibility service
+      inputPicked: bool(ph.inputPicked, false), // not picked: automatic (phone-bridge.js inputMode)
+    },
+    // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);
+    // bleWifiOff: none at all while the session is on the same Wi-Fi (blepolicy.js wifiQuiet)
+    net: { ble: bool(nt.ble, true), blePc: bool(nt.blePc, false), bleWifiOff: bool(nt.bleWifiOff, true), hotspots: hotspots(nt.hotspots), keepWifi: bool(nt.keepWifi, true) },
+    mount: { on: bool(mt.on, false) }, // the phone as a drive (phonedrive.js), only when Mount is clicked
+    // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
+    // callAudio: the calls' sound here over Bluetooth; btDevices: which paired Bluetooth device each
+    // phone is (its device id -> the Bluetooth device's id), found by its name or picked.
+    hub: {
+      calls: bool(hub.calls, false), messages: bool(hub.messages, false), media: bool(hub.media, false), files: bool(hub.files, false),
+      callAudio: bool(hub.callAudio, true), btDevices: btDevices(hub.btDevices),
+      // Shared folders (shared/foldershare.js), both ways, off until switched on.
+      shareMount: bool(hub.shareMount, false), shareServe: bool(hub.shareServe, false), shareFolder: typeof hub.shareFolder === 'string' ? hub.shareFolder.slice(0, 1000) : '',
     },
     macApps: { on: bool(mca.on, true) }, // The other computer's apps open here (pair.sync 'apps' in) // The Mac may open this PC's apps (it shows them only if it accepts)
     // Setup screen: shown once. done: everything was ready, or 'Skip for now' was pressed; after that

@@ -107,11 +107,31 @@ class Screen(core: Core) : Feature(core) {
         h.post(opts()) // first: the computer's name for the messages below
         lastInfo?.let { h.post(it) }
         state?.let { h.post(it) }
-        core.send(msg("screen.policy", "accept" to true, "width" to w, "height" to hpx))
         Notify.cancelScreen(core.ctx)
+        // Through Bluetooth the picture needs Wi-Fi first (Netlink): asked for once it's there (onWifi).
+        if (core.link.ble) {
+            waitWifi = w to hpx
+            core.net.need("screen")
+            core.changed()
+            return
+        }
+        policy(w, hpx)
+    }
+
+    private fun policy(w: Int, hpx: Int) {
+        core.send(msg("screen.policy", "accept" to true, "width" to w, "height" to hpx))
         // Show the Mac's screen = the Mac starts sharing, in the mode used last.
         if (state == null) wantStart = true else startIfNeeded()
         core.changed()
+    }
+
+    @Volatile private var waitWifi: Pair<Int, Int>? = null
+
+    // The session moved onto Wi-Fi (Core): the viewer that was waiting for it starts now.
+    fun onWifi() {
+        val (w, hpx) = waitWifi ?: return
+        waitWifi = null
+        if (viewing) core.bg.execute { policy(w, hpx) }
     }
 
     private fun startIfNeeded() {
@@ -121,13 +141,10 @@ class Screen(core: Core) : Feature(core) {
         control(share = true, mode = pickMode())
     }
 
-    // Extend (a screen of the phone's own shape) unless Mirror was picked here; what the computer
-    // offers wins (a PC without its virtual display driver only mirrors). "screen.mode" was saved
-    // on every start, so it isn't a choice: "screen.picked" is.
+    // Always Mirror to start with (the computer's screen as it is); Extend is a tap away in the viewer.
     private fun pickMode(): String {
-        val want = core.store.prefsString("screen.picked", "extend")
         val modes = state?.optJSONArray("modes")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: listOf("extend", "mirror")
-        return if (want in modes) want else modes.firstOrNull() ?: "mirror"
+        return if ("mirror" in modes) "mirror" else modes.firstOrNull() ?: "mirror"
     }
 
     // The computer started sharing by itself (its Share Screen): open the viewer, or, where
@@ -149,6 +166,8 @@ class Screen(core: Core) : Feature(core) {
         viewing = false
         size = null
         wantStart = false
+        waitWifi = null
+        core.net.release("screen")
         if (core.link.connected) {
             core.send(msg("screen.policy", "accept" to false))
             if (startedByUs && sharing) control(share = false)
@@ -195,9 +214,8 @@ class Screen(core: Core) : Feature(core) {
         if (core.link.connected && sharing) control(share = false, close = true)
     }
 
-    // Mirror / Extend tapped in the viewer: remembered for next time.
+    // Mirror / Extend tapped in the viewer (for this time: the next one starts on Mirror again).
     fun pick(mode: String) {
-        core.store.setPrefsString("screen.picked", mode)
         control(share = true, mode = mode)
     }
 

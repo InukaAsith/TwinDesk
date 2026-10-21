@@ -9,7 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const P = require('../shared/protocol.js');
-const { run, runElevated, q } = require('./ps');
+const { script, scriptElevated } = require('./ps');
 
 const T = P.T;
 const SSH_DATA = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ssh');
@@ -36,7 +36,7 @@ class Sshd {
 
   async refresh() {
     try {
-      const out = (await run("$s = Get-Service sshd -ErrorAction SilentlyContinue; if (-not $s) { 'missing' } elseif ($s.Status -eq 'Running') { 'running' } else { 'stopped' }")).trim();
+      const out = (await script('sshd-status')).trim();
       this.service = /^(running|stopped|missing)$/.test(out) ? out : 'unknown';
     } catch (_) { this.service = 'unknown'; }
     if (this.isAdmin === null) this.isAdmin = await adminMember();
@@ -86,12 +86,7 @@ class Sshd {
       const keyFile = path.join(os.tmpdir(), 'macshare-key-' + process.pid + '.txt');
       fs.writeFileSync(keyFile, line);
       try {
-        await runElevated(`
-$f = ${q(ADMIN_KEYS)}; $line = (Get-Content -Raw ${q(keyFile)}).Trim()
-$keep = @(); if (Test-Path $f) { $keep = @(Get-Content $f | Where-Object { -not $_.EndsWith(${q(marker)}) }) }
-Set-Content -Path $f -Value ($keep + $line) -Encoding ascii
-icacls $f /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null
-`);
+        await scriptElevated('sshd-key', { Path: ADMIN_KEYS, Marker: marker, KeyFile: keyFile });
       } finally { try { fs.unlinkSync(keyFile); } catch (_) { /* gone */ } }
     } else {
       const dir = path.join(os.homedir(), '.ssh');
@@ -108,7 +103,7 @@ icacls $f /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null
     const marker = ' macshare:' + this.macId();
     try {
       if (this.isAdmin) {
-        await runElevated(`$f = ${q(ADMIN_KEYS)}; if (Test-Path $f) { Set-Content -Path $f -Value @(Get-Content $f | Where-Object { -not $_.EndsWith(${q(marker)}) }) -Encoding ascii }`);
+        await scriptElevated('sshd-key', { Path: ADMIN_KEYS, Marker: marker });
       } else {
         const f = path.join(os.homedir(), '.ssh', 'authorized_keys');
         if (fs.existsSync(f)) fs.writeFileSync(f, fs.readFileSync(f, 'utf8').split(/\r?\n/).filter((l) => l && !l.endsWith(marker)).join('\n') + '\n');
@@ -127,11 +122,7 @@ icacls $f /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null
     this.busy = true;
     this.onChange();
     try {
-      await runElevated(`
-if (-not (Get-Service sshd -ErrorAction SilentlyContinue)) { Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null }
-Set-Service -Name sshd -StartupType Automatic
-Start-Service sshd
-`, 600000);
+      await scriptElevated('sshd-setup', {}, 600000);
       this.message = '';
     } catch (e) {
       this.message = /cancel/i.test(e.message) ? 'The administrator prompt was declined' : 'Setup failed: ' + e.message;

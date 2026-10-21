@@ -6,6 +6,7 @@
 
 UI.tab({
   id: 'terminal',
+  wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
   hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
   order: 60,
   title: 'Terminal',

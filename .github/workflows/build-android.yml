@@ -22,6 +22,10 @@ on:
         description: Release to put the files on (e.g. v2.1.0). Empty = run artifacts only.
         required: false
         default: ''
+      ref:
+        description: Branch to build (a test branch; releases come from main).
+        required: false
+        default: main
 
 # Write: the files can go straight onto a release.
 permissions:
@@ -37,7 +41,7 @@ jobs:
       # Build the pushed tag or branch, or the ref selected for a manual run.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set the version
         if: inputs.version != ''

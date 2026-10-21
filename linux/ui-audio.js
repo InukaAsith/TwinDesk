@@ -6,6 +6,7 @@
 
 UI.tab({
   id: 'audio',
+  wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
   order: 70,
   title: 'Audio',
   color: 'linear-gradient(#ff6482, #ff2d55)',
@@ -39,7 +40,8 @@ UI.tab({
       mute.set(a.muteLocal); // not on Linux: the loopback hears what the speakers play
       recvState.hidden = !a.receive;
       const nm = UI.peer(s).name;
-      recvState.label.textContent = a.receiving ? 'Playing ' + nm : connected ? 'Turned off on ' + nm : 'Waiting for ' + nm;
+      const phone = UI.phoneSound && UI.phoneSound(s);
+      recvState.label.textContent = phone != null ? phone : a.receiving ? 'Playing ' + nm : connected ? 'Turned off on ' + nm : 'Waiting for ' + nm;
       sendState.hidden = !a.send && !a.error;
       sendState.label.textContent = a.sending ? 'Playing on ' + nm : !connected ? 'Waiting for ' + nm : !a.macAccepts ? 'Turned off on ' + nm : 'Connecting…';
       sendState.setHint(a.error || '');

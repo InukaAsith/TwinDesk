@@ -4,6 +4,7 @@
 
 UI.tab({
   id: 'terminal',
+  wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
   hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
   group: 'More',
   order: 60,
@@ -34,7 +35,8 @@ UI.tab({
       const o = t.toPc || {};
       outSw.set(t.connectPc);
       shellBtn.hidden = !o.ready;
-      const WHY = { waiting: `Waiting for ${pc}…`, not_allowed: `Turned off on ${pc}`, remote_login_off: UI.peer(s).os === 'mac' ? `Turn on Remote Login on ${pc}` : `Set up the SSH server in TwinDesk on ${pc}` };
+      const WHY = { waiting: `Waiting for ${pc}…`, not_allowed: `Turned off on ${pc}`, remote_login_off: UI.peer(s).os === 'mac' ? `Turn on Remote Login on ${pc}` : `Set up the SSH server in TwinDesk on ${pc}`,
+        bluetooth: `The terminal doesn’t work over Bluetooth. Connect with Wi-Fi Direct, or join ${pc}’s network.` };
       outRow.setHint(!t.connectPc ? '' : o.ready ? `Ready, signed in as ${o.user}` : WHY[o.why] || (o.why ? `Not ready: ${o.why}` : `Waiting for ${pc}`));
       cmdRow.setHint('');
       inSw.set(t.allowPc);

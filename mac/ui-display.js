@@ -25,7 +25,7 @@ UI.tab({
     ];
     const STATUS = {
       off: 'Off', starting: 'Starting…', 'waiting for answer': 'Waiting for {name}…', new: 'Connecting…',
-      connecting: 'Connecting…', live: 'Live', 'no viewer': 'Ready — starts when {name} opens it', 'nothing connected': 'Waiting for {name}', 'no display to share': 'No display to share', disconnected: 'Reconnecting…', failed: 'Retrying…', closed: 'Closed',
+      connecting: 'Connecting…', live: 'Live', 'no viewer': 'Ready — starts when {name} opens it', 'waiting for Wi-Fi': 'Waiting for Wi-Fi', 'nothing connected': 'Waiting for {name}', 'no display to share': 'No display to share', disconnected: 'Reconnecting…', failed: 'Retrying…', closed: 'Closed',
     };
 
     const helperNote = UI.note('bad', 'Something went wrong in the background. Restart TwinDesk.');

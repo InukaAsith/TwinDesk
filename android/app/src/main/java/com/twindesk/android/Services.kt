@@ -40,7 +40,7 @@ class TwinService : Service() {
         private var lastKey = ""
         fun refresh(ctx: Context) {
             val core = Core.get(ctx)
-            val key = listOf(core.host?.name, core.link.state, core.adb.wifiDebugging, core.files.activeLine(), core.hosts().firstOrNull { core.discovery.found.containsKey(it.id) }?.id).toString()
+            val key = listOf(core.host?.name, core.link.state, core.adb.wifiDebugging, core.files.activeLine(), core.hosts().firstOrNull { core.isNear(it.id) }?.id).toString()
             if (key == lastKey) return
             lastKey = key
             ctx.getSystemService(NotificationManager::class.java).notify(Notify.ID_LINK, Notify.link(ctx, core))
@@ -66,6 +66,7 @@ class ActionReceiver : BroadcastReceiver() {
             FCLIP_COPY -> core.fclip.fetch(arg, save = false)
             FCLIP_SAVE -> core.fclip.fetch(arg, save = true)
             ADB_ON -> core.adb.turnOn()
+            SOUND_STOP -> core.sound.stop()
             PAIR_CODE -> {
                 val code = android.app.RemoteInput.getResultsFromIntent(intent)?.getCharSequence("code")?.toString() ?: ""
                 core.adb.sendPairCode(code)
@@ -92,6 +93,7 @@ class ActionReceiver : BroadcastReceiver() {
         const val ADB_ON = "com.twindesk.android.ADB_ON"
         const val PAIR_CODE = "com.twindesk.android.PAIR_CODE"
         const val EXIT = "com.twindesk.android.EXIT"
+        const val SOUND_STOP = "com.twindesk.android.SOUND_STOP"
     }
 }
 
@@ -103,7 +105,7 @@ class WiredReceiver : BroadcastReceiver() {
         val port = intent.getIntExtra("port", 0)
         if (port <= 0 || port > 65535) return
         runCatching { TwinService.start(ctx) }
-        Core.get(ctx).connectWired(id, port, intent.getStringExtra("nonce") ?: "")
+        Core.get(ctx).connectWired(id, port, intent.getStringExtra("nonce") ?: "", intent.getStringExtra("name")?.take(64) ?: "")
     }
 }
 

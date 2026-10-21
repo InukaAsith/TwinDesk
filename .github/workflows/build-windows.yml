@@ -22,6 +22,15 @@ on:
         description: Release to put the files on (e.g. v2.1.0). Empty = run artifacts only.
         required: false
         default: ''
+      ref:
+        description: Branch to build (a test branch; releases come from main).
+        required: false
+        default: main
+      virustotal:
+        description: Scan the installers on VirusTotal (needs the VT_API_KEY secret; uploads are shared with its partners)
+        type: boolean
+        required: false
+        default: false
 
 # Write: the full Android APK can come from an existing release when no signing secret is present.
 permissions:
@@ -37,7 +46,7 @@ jobs:
       # Build the pushed tag or branch, or the ref selected for a manual run.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set the version
         if: inputs.version != ''
@@ -61,6 +70,18 @@ jobs:
         with:
           keystore: ${{ secrets.ANDROID_KEYSTORE }}
 
+      # The app's PowerShell scripts (ps.js runs only these): each one parses in Windows PowerShell.
+      - name: Check the PowerShell scripts
+        shell: powershell
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem windows/scripts/*.ps1, windows-helper/calls/*.ps1) {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs)
+            foreach ($e in $errs) { Write-Output "$($f.Name):$($e.Extent.StartLineNumber): $($e.Message)"; $bad++ }
+          }
+          if ($bad) { exit 1 }
+
       - name: Install dependencies
         working-directory: windows
         run: npm install
@@ -69,7 +90,12 @@ jobs:
       # serves both installers.
       - name: Build the installer (x64)
         working-directory: windows
-        run: npm run dist -- x64
+        run: npm run dist -- x64 arm64
+        env:
+          # Optional Authenticode certificate. Store a base64-encoded PFX and its password
+          # as repository secrets; the build fails if signing is configured but cannot complete.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       - name: Upload the x64 installer
         uses: actions/upload-artifact@v4
@@ -88,3 +114,46 @@ jobs:
           TAG="$RELEASE_TAG"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes --latest || true
           gh release upload "$TAG" windows/dist/*.exe --clobber
+
+  # The installers uploaded to VirusTotal and scanned: what each engine said goes in the run's
+  # summary, with the link to the full report. VT_API_KEY: a free VirusTotal account's API key.
+  virustotal:
+    if: inputs.virustotal
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Scan
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          [ -n "$VT_API_KEY" ] || { echo "::error::No VT_API_KEY secret: gh secret set VT_API_KEY"; exit 1; }
+          api() { curl -sS --fail-with-body -H "x-apikey: $VT_API_KEY" "$@"; }
+          echo "## VirusTotal" >> "$GITHUB_STEP_SUMMARY"
+          for f in $(find dist -name '*.exe' | sort); do
+            name=$(basename "$f")
+            sha=$(sha256sum "$f" | cut -d' ' -f1)
+            # Over 32 MB: an upload URL of its own.
+            url=$(api https://www.virustotal.com/api/v3/files/upload_url | jq -r .data)
+            id=$(api -F "file=@$f" "$url" | jq -r .data.id)
+            echo "$name: uploaded ($sha), analysis $id"
+            # Every engine within a few minutes; a big file sometimes takes longer.
+            status=queued
+            for i in $(seq 1 60); do
+              status=$(api "https://www.virustotal.com/api/v3/analyses/$id" | jq -r .data.attributes.status)
+              [ "$status" = completed ] && break
+              sleep 20
+            done
+            a=$(api "https://www.virustotal.com/api/v3/analyses/$id")
+            stats=$(echo "$a" | jq -r '.data.attributes.stats | "\(.malicious) malicious, \(.suspicious) suspicious, \(.undetected) undetected"')
+            hits=$(echo "$a" | jq -r '.data.attributes.results | to_entries[] | select(.value.category == "malicious" or .value.category == "suspicious") | "- **\(.key)** (\(.value.category)): \(.value.result)"')
+            echo "$name ($status): $stats"
+            echo "$hits"
+            printf '### %s\n%s (%s) · [report](https://www.virustotal.com/gui/file/%s)\n\n%s\n\n' "$name" "$stats" "$status" "$sha" "$hits" >> "$GITHUB_STEP_SUMMARY"
+          done

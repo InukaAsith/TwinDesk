@@ -13,8 +13,14 @@
 //     password from the person at the computer (the .deb installs both; Install does it once
 //     otherwise). The output then gets a mode of the size wanted (xrandr --newmode / --addmode) and
 //     goes right of the main monitor, through Mutter's DisplayConfig on GNOME (Mutter undoes raw
-//     xrandr changes to a monitor it manages) and xrandr --output elsewhere. Drivers with no spare
-//     output (NVIDIA's) can't.
+//     xrandr changes to a monitor it manages) and xrandr --output elsewhere.
+//   X11 with NVIDIA's own driver — it names its outputs itself and ignores the kernel's connector
+//     status, so none of that works. Install puts the screen in its configuration instead: a free
+//     DisplayPort output forced connected (ConnectedMonitor, which replaces its detection, so the
+//     ports in use are listed too) with a TwinDesk EDID of common sizes (CustomEDID), read when X
+//     starts (log out and back in once). Extend then switches that output on at the size nearest
+//     the other screen's shape, and off after; off at start too once the person says so (the
+//     desktop turns every connected screen on at login, and switching it off blanks every monitor).
 // It is on only while Extend is on, like the Mac's TwinDesk display.
 const fs = require('fs');
 const path = require('path');
@@ -37,6 +43,9 @@ done
 echo "no connector $2" >&2
 exit 1
 `;
+const NV_CONF = '/etc/X11/xorg.conf.d/20-twindesk-nvidia.conf';
+const NV_EDID = '/etc/X11/twindesk-virtual.edid';
+const EDID_NAME = 'TwinDesk';
 const POLICY_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
@@ -237,6 +246,21 @@ function connectorName(out) {
   return out.name;
 }
 
+// The output has a kernel connector HELPER can switch (/sys/class/drm/card*-<name>/status): one
+// X knows by its CONNECTOR_ID. NVIDIA's own driver names its X outputs itself, gives them none and
+// does its own detection, so a name that happens to match is another port.
+function hasConnector(out) {
+  if (!out.id) return false;
+  const name = connectorName(out);
+  try {
+    return fs.readdirSync('/sys/class/drm').some((n) => n.replace(/^card\d+-/, '') === name && fs.existsSync('/sys/class/drm/' + n + '/status'));
+  } catch (_) {
+    return false;
+  }
+}
+
+const NVIDIA = () => fs.existsSync('/sys/module/nvidia_drm');
+
 async function waitFor(fn, ms) {
   for (const end = Date.now() + ms; ;) {
     const v = await fn().catch(() => null);
@@ -259,15 +283,21 @@ function cvtRB(w, h) {
 }
 
 // `xrandr --verbose`: outputs with their state, geometry (physical px), DRM connector id and how
-// many CRTCs could drive them (none: the output can't come on at all).
-async function outputs() {
-  const text = await run('xrandr', ['--verbose']);
+// many CRTCs could drive them (none: the output can't come on at all). probe: X looks at every port
+// again first; without it, what X last saw (--current). A probe at start blanked every monitor for a
+// moment on NVIDIA, and the desktop, told the screens changed, applied its saved layout again.
+async function outputs(probe = true) {
+  const text = await run('xrandr', probe ? ['--verbose'] : ['--current', '--verbose']);
   const list = [];
   for (const line of text.split('\n')) {
     const m = /^(\S+) (connected|disconnected)( primary)?(?: (\d+)x(\d+)\+(-?\d+)\+(-?\d+))?/.exec(line);
-    if (m) list.push({ name: m[1], connected: m[2] === 'connected', primary: !!m[3], active: !!m[4], width: +m[4] || 0, height: +m[5] || 0, x: +m[6] || 0, y: +m[7] || 0, id: 0, crtcs: 0 });
+    if (m) list.push({ name: m[1], connected: m[2] === 'connected', primary: !!m[3], active: !!m[4], width: +m[4] || 0, height: +m[5] || 0, x: +m[6] || 0, y: +m[7] || 0, id: 0, crtcs: 0, edid: '', modes: [] });
     const out = list[list.length - 1];
     if (!out) continue;
+    if (/^\t\t[0-9a-f]{32}$/.test(line) && out.inEdid) out.edid += line.trim();
+    out.inEdid = /^\tEDID:/.test(line) || (out.inEdid && /^\t\t[0-9a-f]{32}$/.test(line));
+    const mode = /^  (\d+)x(\d+)[i]? \(0x[0-9a-f]+\)/.exec(line);
+    if (mode) out.modes.push([+mode[1], +mode[2]]);
     const id = /^\s+CONNECTOR_ID:\s*(\d+)/.exec(line);
     if (id) out.id = +id[1];
     const crtcs = /^\s+CRTCs:(.*)$/.exec(line);
@@ -276,7 +306,74 @@ async function outputs() {
   return list;
 }
 
-const spareOf = (outs) => outs.filter((o) => !o.connected && o.crtcs > 0);
+// Our NVIDIA screen: the output whose EDID names TwinDesk.
+const OUR_EDID = Buffer.from(EDID_NAME).toString('hex');
+const nvOurs = (outs) => outs.find((o) => o.connected && o.edid.includes(OUR_EDID)) || null;
+
+// A detailed timing descriptor (18 bytes) for w × h at 60 Hz (CVT reduced blanking).
+function dtd(w, h) {
+  const a = cvtRB(w, h).args.map(Number); // clock, hdisp, hss, hse, htot, vdisp, vss, vse, vtot
+  const [clk, hd, hss, hse, ht, vd, vss, vse, vt] = a;
+  const hb = ht - hd, vb = vt - vd, hso = hss - hd, hsw = hse - hss, vso = vss - vd, vsw = vse - vss;
+  const d = Buffer.alloc(18);
+  d.writeUInt16LE(Math.round(clk * 100), 0);
+  d[2] = hd & 0xff; d[3] = hb & 0xff; d[4] = ((hd >> 8) << 4) | (hb >> 8);
+  d[5] = vd & 0xff; d[6] = vb & 0xff; d[7] = ((vd >> 8) << 4) | (vb >> 8);
+  d[8] = hso & 0xff; d[9] = hsw & 0xff; d[10] = ((vso & 0xf) << 4) | (vsw & 0xf);
+  d[11] = ((hso >> 8) << 6) | ((hsw >> 8) << 4) | ((vso >> 4) << 2) | (vsw >> 4);
+  d[12] = 530 & 0xff; d[13] = 300 & 0xff; d[14] = ((530 >> 8) << 4) | (300 >> 8); // 53 × 30 cm
+  d[17] = 0x1a; // digital separate sync, +hsync -vsync
+  return d;
+}
+
+const text13 = (tag, t) => Buffer.concat([Buffer.from([0, 0, 0, tag, 0]), Buffer.from((t + '\n').padEnd(13, ' ').slice(0, 13), 'ascii')]);
+const checksum = (b) => { b[127] = (256 - (b.subarray(0, 127).reduce((x, y) => x + y, 0) % 256)) % 256; return b; };
+
+// TwinDesk's virtual screen as NVIDIA reads it (CustomEDID): EDID 1.4 with 1920 × 1080 preferred,
+// 2560 × 1440, and a CTA extension with the 16:10 and Mac shapes.
+const NV_SIZES = [[1920, 1080], [2560, 1440], [1920, 1200], [2560, 1600], [1680, 1050], [1440, 900], [2560, 1664], [1280, 720]];
+function edid() {
+  const b = Buffer.alloc(128);
+  Buffer.from([0, 255, 255, 255, 255, 255, 255, 0]).copy(b, 0);
+  b.writeUInt16BE(((20 << 10) | (23 << 5) | 4), 8); // "TWD"
+  b.writeUInt16LE(1, 10); b.writeUInt32LE(1, 12); b[16] = 1; b[17] = 36; // week 1 of 2026
+  b[18] = 1; b[19] = 4; b[20] = 0x80; b[21] = 53; b[22] = 30; b[23] = 120; b[24] = 0x02;
+  Buffer.from([0xee, 0x91, 0xa3, 0x54, 0x4c, 0x99, 0x26, 0x0f, 0x50, 0x54]).copy(b, 25); // sRGB
+  b.fill(1, 38, 54); // no standard timings
+  dtd(...NV_SIZES[0]).copy(b, 54);
+  dtd(...NV_SIZES[1]).copy(b, 72);
+  text13(0xfc, EDID_NAME).copy(b, 90);
+  Buffer.from([0, 0, 0, 0xfd, 0, 50, 75, 30, 160, 30, 0x01, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20]).copy(b, 108); // ranges: 50–75 Hz, ≤ 300 MHz
+  b[126] = 1;
+  const x = Buffer.alloc(128);
+  x[0] = 2; x[1] = 3; x[2] = 4;
+  NV_SIZES.slice(2).forEach((sz, i) => dtd(...sz).copy(x, 4 + i * 18));
+  return Buffer.concat([checksum(b), checksum(x)]);
+}
+
+// NVIDIA's ports from the X server's log: which are connected, and a free DisplayPort one for us
+// (each DisplayPort connector also shows as the TMDS port after it, too slow for big screens:
+// neither of the pair may be in use).
+function nvPorts() {
+  let text = '';
+  for (const f of [path.join(require('os').homedir(), '.local/share/xorg/Xorg.0.log'), '/var/log/Xorg.0.log']) {
+    try { const t = fs.readFileSync(f, 'utf8'); if (/NVIDIA\(/.test(t)) { text = t; break; } } catch (_) { /* next */ }
+  }
+  const state = {};
+  const kind = {};
+  for (const line of text.split('\n')) {
+    const m = /NVIDIA\(GPU-\d+\): (?:.*\()?(DFP-\d+)\)?: (connected|disconnected|Internal (\w+))/.exec(line);
+    if (!m) continue;
+    if (m[3]) kind[m[1]] = m[3]; else state[m[1]] = m[2];
+  }
+  const connected = Object.keys(state).filter((k) => state[k] === 'connected');
+  const n = (k) => +k.split('-')[1];
+  const free = Object.keys(kind).filter((k) => kind[k] === 'DisplayPort' && state[k] !== 'connected' && state['DFP-' + (n(k) + 1)] !== 'connected')
+    .sort((a, b) => n(b) - n(a));
+  return { connected, pick: free[0] || '' };
+}
+
+const spareOf = (outs) => outs.filter((o) => !o.connected && o.crtcs > 0 && hasConnector(o));
 const SWITCHED_OFF = 'something on this computer switched it off again (in a virtual machine, its guest tools do that)';
 const modeName = (w, h) => 'TwinDesk_' + cvtRB(w, h).width + 'x' + h;
 
@@ -310,22 +407,50 @@ class Vdd {
     try {
       if (WAYLAND) {
         const r = JSON.parse(await run('python3', ['-c', CHECK]));
-        this._set({ checked: true, kind: 'mutter', installed: !!(r.mutter && r.pipewiresrc),
+        this._set({ checked: true, kind: 'mutter', hint: '', installed: !!(r.mutter && r.pipewiresrc),
           message: !r.mutter ? 'Extend on Wayland needs GNOME (its virtual monitors)' : !r.pipewiresrc ? 'Extend needs GStreamer’s PipeWire plugin (gstreamer1.0-pipewire)' : '' });
       } else {
         this.gnome = await run('python3', ['-c', CHECK]).then((t) => JSON.parse(t).displayconfig === true).catch(() => false);
         if (!this.state.on) await this._xLeftover();
-        const outs = await outputs();
-        for (const o of outs) if (o.active && !o.connected) await run('xrandr', ['--output', o.name, '--off']).catch(() => {}); // older versions' mode on a spare output
+        const outs = await outputs(false); // at start: no probe (X saw the ports at login)
+        this._offAsked(outs.filter((o) => o.active && !o.connected).map((o) => o.name)); // older versions' mode on a spare output
         const spare = spareOf(outs).length > 0 || (this.state.on && !!this.output);
+        if (!spare && NVIDIA() && !outs.some((o) => o.id)) return this._nvCheck(outs);
         const ready = helperReady();
         const { app } = require('electron');
-        this._set({ checked: true, kind: 'xrandr', installed: spare && ready, setup: spare && !ready,
+        this._set({ checked: true, kind: 'xrandr', hint: '', installed: spare && ready, setup: spare && !ready,
           removable: ready && !(app.isPackaged && !process.env.APPIMAGE), // the .deb's own files stay
-          message: spare ? '' : 'Your graphics driver has no spare output for a virtual monitor' });
+          message: spare ? '' : NVIDIA() ? 'NVIDIA’s driver doesn’t let TwinDesk add a monitor on X11. Extend works on GNOME with Wayland, or with the open-source driver'
+            : 'Your graphics driver has no spare output for a virtual monitor' });
       }
     } catch (e) {
       this._set({ checked: true, installed: false, message: WAYLAND ? 'Extend needs Python 3 with GObject (python3-gi)' : 'Couldn’t check the monitors: ' + e.message });
+    }
+  }
+
+  // Our screens found on at start (the desktop's login layout, an older version's mode), to switch
+  // off: asked first, not done by itself (each is a mode change, and on NVIDIA that blanks every
+  // monitor for a moment). Leave it on: not asked again until TwinDesk starts again. Off only if
+  // Extend didn't take it meanwhile.
+  async _offAsked(names) {
+    this.declined = this.declined || new Set();
+    names = names.filter((n) => !this.declined.has(n));
+    if (!names.length || this.asking) return;
+    this.asking = true;
+    try {
+      const { dialog } = require('electron');
+      const r = await dialog.showMessageBox({
+        type: 'question', title: 'TwinDesk', buttons: ['Switch it off', 'Leave it on'], defaultId: 0, cancelId: 1,
+        message: 'Switch off TwinDesk’s extra screen?',
+        detail: 'TwinDesk’s extra screen for Extend is on (' + names.join(', ') + '), so windows can end up on a screen nobody sees until Extend is on. '
+          + 'Switching it off makes your monitors go black for a moment.',
+      });
+      if (r.response !== 0) { for (const n of names) this.declined.add(n); return; }
+      for (const n of names) if (!(this.state.on && n === this.output)) await run('xrandr', ['--output', n, '--off']).catch(() => {});
+    } catch (e) {
+      console.warn('[vdd] off', e.message);
+    } finally {
+      this.asking = false;
     }
   }
 
@@ -335,6 +460,39 @@ class Vdd {
     this.size = [width, height];
     // Mutter reads an output's modes as it comes on: on GNOME a new size means off and on again.
     return changed && this.state.on && (this.state.kind === 'mutter' || this.gnome);
+  }
+
+  // NVIDIA (X11): our screen in its configuration (Install), live once X read it (after logging in).
+  async _nvCheck(outs) {
+    const ours = nvOurs(outs);
+    const conf = fs.existsSync(NV_CONF);
+    if (ours && ours.active && !this.state.on) this._offAsked([ours.name]); // the desktop's login layout
+    const ports = conf || ours ? null : nvPorts();
+    this._set({
+      checked: true, kind: 'nvidia', installed: !!ours, setup: !conf && !ours && !!(ports && ports.pick), removable: conf,
+      hint: ours ? (conf ? 'Installed. Adds the extra screen for Extend.' : 'Removed. Log out and back in to finish.')
+        : conf ? 'Log out and back in once to finish installing.'
+          : 'NVIDIA’s driver needs the extra screen in its settings. Install asks for your password once, then log out and back in. If you later plug a monitor into another port, install again.',
+      message: ours ? (conf ? '' : 'Removed: log out and back in to finish') : conf ? 'Log out and back in once to finish adding the extra screen for Extend'
+        : ports && ports.pick ? '' : 'NVIDIA’s driver doesn’t let TwinDesk add a monitor on X11, and this card has no free DisplayPort port for one',
+    });
+  }
+
+  // Our NVIDIA screen on, at the size nearest the other screen's shape, right of the others.
+  async _nvOn() {
+    const outs = await outputs();
+    const ours = nvOurs(outs);
+    if (!ours) throw new Error('log out and back in once to finish installing');
+    const [w, h] = this.size;
+    const want = w / h;
+    const pick = ours.modes.slice().sort((a, b) => Math.abs(a[0] / a[1] - want) - Math.abs(b[0] / b[1] - want) || Math.abs(a[0] - w) - Math.abs(b[0] - w))[0];
+    if (!pick) throw new Error('the extra screen has no sizes');
+    this.output = ours.name;
+    const main = outs.find((o) => o.primary && o.active && o.name !== ours.name) || outs.filter((o) => o.active && o.name !== ours.name).sort((a, b) => b.x + b.width - (a.x + a.width))[0];
+    await run('xrandr', ['--output', ours.name, '--mode', pick[0] + 'x' + pick[1], ...(main ? ['--right-of', main.name] : [])]);
+    const mon = await waitFor(() => this.find(), 5000);
+    if (!mon) throw new Error('the desktop didn’t switch it on');
+    return mon;
   }
 
   // Switch the virtual monitor on/off. Resolves to the monitor (on) or true (off), false on failure.
@@ -351,11 +509,12 @@ class Vdd {
     if (!this.state.installed) return false;
     try {
       if (on) {
-        const mon = this.state.kind === 'mutter' ? await this._mutterOn() : await this._xOn();
+        const mon = this.state.kind === 'mutter' ? await this._mutterOn() : this.state.kind === 'nvidia' ? await this._nvOn() : await this._xOn();
         this._set({ on: true, message: '' });
         return mon;
       }
       if (this.state.kind === 'mutter') this._mutterOff();
+      else if (this.state.kind === 'nvidia') await run('xrandr', ['--output', this.output, '--off']).catch(() => {});
       else await this._xOff();
       this.mon = null;
       this._set({ on: false });
@@ -505,13 +664,29 @@ class Vdd {
     if (!r.ok) throw new Error(r.error || 'the desktop didn’t answer');
   }
 
-  // X11: HELPER and its polkit action, once (pkexec asks for the password).
+  // X11: HELPER and its polkit action, once (pkexec asks for the password). NVIDIA: its
+  // configuration and our EDID instead.
   async install() {
     if (this.state.busy) return;
     this._set({ busy: 'install', message: '' });
     const put = (file, text, mode) => `echo ${Buffer.from(text).toString('base64')} | base64 -d > ${file} && chmod ${mode} ${file}`;
     try {
-      await run('pkexec', ['sh', '-c', [`mkdir -p ${path.dirname(HELPER)}`, put(HELPER, HELPER_SH, 755), put(POLICY, POLICY_XML, 644)].join(' && ')], 120000);
+      if (this.state.kind === 'nvidia') {
+        const ports = nvPorts();
+        if (!ports.pick) throw new Error('no free DisplayPort port');
+        const conf = `# TwinDesk: an extra screen for Extend on NVIDIA's driver (Share screen › Extend; Remove takes it away).
+# ConnectedMonitor replaces the driver's detection: the ports in use when it was installed, and ours.
+Section "OutputClass"
+    Identifier "TwinDesk virtual screen"
+    MatchDriver "nvidia-drm"
+    Option "ConnectedMonitor" "${[...ports.connected, ports.pick].join(', ')}"
+    Option "CustomEDID" "${ports.pick}:${NV_EDID}"
+EndSection
+`;
+        await run('pkexec', ['sh', '-c', [`mkdir -p ${path.dirname(NV_CONF)}`, put(NV_EDID, edid(), 644), put(NV_CONF, conf, 644)].join(' && ')], 120000);
+      } else {
+        await run('pkexec', ['sh', '-c', [`mkdir -p ${path.dirname(HELPER)}`, put(HELPER, HELPER_SH, 755), put(POLICY, POLICY_XML, 644)].join(' && ')], 120000);
+      }
     } catch (e) {
       this.state.message = e.code === 126 ? 'The password prompt was closed' : 'Installing the virtual display helper failed: ' + e.message;
     } finally {
@@ -525,7 +700,7 @@ class Vdd {
     this._set({ busy: 'remove', message: '' });
     try {
       if (this.state.on) await this.setOn(false);
-      await run('pkexec', ['rm', '-f', HELPER, POLICY], 120000);
+      await run('pkexec', ['rm', '-f', ...(this.state.kind === 'nvidia' ? [NV_CONF, NV_EDID] : [HELPER, POLICY])], 120000);
     } catch (e) {
       this.state.message = e.code === 126 ? 'The password prompt was closed' : 'Removing the virtual display helper failed: ' + e.message;
     } finally {

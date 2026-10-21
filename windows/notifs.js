@@ -4,8 +4,10 @@
 // notification database. Notifications from the other devices show here as Windows toasts from
 // TwinDesk (main.js sets the AppUserModelID, or Windows shows none). Port of mac/notifs.js.
 const electron = require('electron');
+const path = require('path');
 const P = require('../shared/protocol.js');
 const { Pool } = require('../shared/mesh.js');
+const { IconsIn } = require('../shared/notificon.js');
 
 const electronNotification = electron.Notification; // undefined under plain node (tests inject one)
 const { NotifGuard, isOwn } = require('../shared/notif-guard.js');
@@ -49,6 +51,7 @@ class Notifs {
     this.onClick = opts.onClick;
     this.selfName = opts.selfName;
     this.Notification = opts.Notification || electronNotification;
+    this.iconsIn = electron.nativeImage ? new IconsIn(electron.nativeImage, path.join(__dirname, 'assets', 'sidebar-icon@2x.png')) : null; // TwinDesk's for apps without one
     this.pool = new Pool({ name: 'notif', selfId: this.mesh.selfId, peers: () => notifPeers(this.mesh) });
     this.readable = null; // the helper can read the database
     this.apps = new Map(); // app → {app, appName, at} seen here
@@ -186,6 +189,7 @@ class Notifs {
     // Windows toasts have no subtitle: the first line is "<appName> · <device>".
     const n = new this.Notification({
       title,
+      icon: this.iconsIn ? this.iconsIn.for(m) : undefined,
       body: [[appName, origin].filter(Boolean).join(' · '), str(m.subtitle, 200), body].filter(Boolean).join('\n'),
     });
     this.live.add(n);

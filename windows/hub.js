@@ -226,6 +226,8 @@ class Hub extends EventEmitter {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
+    // The selected device's messages reach the net hook first (netlink.js: its net.* and file chunks).
+    if (this.netTap && s.id === this.selectedId) this.netTap(msg);
     let consumed = false;
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
@@ -264,6 +266,12 @@ class Hub extends EventEmitter {
   }
 
   _stateOf(s) {
+    const tr = s.transport; // onto Bluetooth or back: the device's features hear 'transport'
+    if (tr !== s.lastTransport) {
+      s.lastTransport = tr;
+      this._peerEvent('transport', s.id, {});
+      if (s.id === this.selectedId) this._facadeEmit('transport', {});
+    }
     const e = this.mesh.get(s.id);
     if (e) {
       e.mesh = s.meshCapable;
@@ -391,9 +399,26 @@ class Hub extends EventEmitter {
     return {
       on: (type, fn) => addTo(hub._facadeHandlers, type, fn),
       onState: (fn) => hub._facadeStateFns.push(fn),
+      // A message to the selected device; while it is on Bluetooth, files may wait for Wi-Fi (netHold).
       send: (obj) => {
+        if (hub.netHold && hub.netHold(obj)) return true;
         const s = hub.selected;
         return !!s && s.send(obj) === true;
+      },
+      sendNow: (obj) => {
+        const s = hub.selected;
+        return !!s && s.send(obj) === true;
+      },
+      // What the one-to-one features see of the selected device's link (netlink.js, the Overview).
+      get current() {
+        const s = hub.selected;
+        if (!s || !s.connected) return null;
+        const hosting = s.hosting;
+        return {
+          deviceId: s.id, name: s.displayName(), os: s.peerOs, role: s.role, transport: s.transport,
+          address: hosting ? s.ctx.address : (s.link && s.link.pairing ? s.link.pairing.address : ''),
+          rttMs: s.status.rtt, lastRx: s.lastRx, ws: hosting ? s.ctx.ws : (s.link ? s.link.ws : null),
+        };
       },
       // A message as if the selected device had sent it (the phone bridge answers for the phone).
       inject: (msg) => {

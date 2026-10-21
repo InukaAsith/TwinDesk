@@ -9,7 +9,7 @@ const { desktopCapturer, screen: displays } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const P = require('../shared/protocol.js');
-const { run } = require('./ps');
+const { script } = require('./ps');
 const RemoteInput = require('./remote-input');
 const PcScreen = require('./pcscreen'); // fps()
 
@@ -28,7 +28,7 @@ const FOLDERS = {
   '{F38BF404-1D43-42F2-9305-67DE0B28FC23}': process.env.SystemRoot,
   '{D65231B0-B2F1-4857-A4CE-A8E7C6EA7D27}': path.join(process.env.SystemRoot || 'C:\\Windows', 'SysWOW64'),
 };
-const LIST_PS = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; @(Get-StartApps | Select-Object Name, AppID) | ConvertTo-Json -Compress";
+const LIST_PS = 'pcapps-list'; // scripts/pcapps-list.ps1: Get-StartApps as JSON
 
 // The exe of a desktop app's AppID ('{folder}\\dir\\app.exe' or a full path), else '' (an AUMID).
 function exeOf(appId) {
@@ -112,7 +112,7 @@ class PcApps {
 
   async _apps() {
     if (this.apps && Date.now() - this.appsAt < 60000) return this.apps;
-    const raw = JSON.parse((await run(LIST_PS, 60000)).trim() || '[]');
+    const raw = JSON.parse((await script(LIST_PS, {}, 60000)).trim() || '[]');
     const seen = new Set();
     this.apps = (Array.isArray(raw) ? raw : [raw])
       .filter((a) => a && typeof a.Name === 'string' && typeof a.AppID === 'string' && !SKIP.test(a.Name))

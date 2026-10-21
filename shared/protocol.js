@@ -30,6 +30,7 @@
     INBOUND_WAIT_MS: 5000, // two computers that hold each other as hosts: the larger id waits this long for the other to dial
     POOL_SEEN_LIMIT: 200, // (origin, seq) pairs remembered per pool for dedupe
     POOL_MAX_HOPS: 9, // one less than MAX_DEVICES: enough for a chain of ten (duplicates are dropped, so no storms)
+    BLE_TIMEOUT_MS: 20000, // the same through Bluetooth, where one big message takes seconds
     PAIR_TIMEOUT_MS: 60000,
     UNAUTH_TIMEOUT_MS: 70000, // Mac closes sockets that never authenticate
     RECONNECT_MS: [1000, 2000, 3000], // Windows: then keep using the last value
@@ -39,6 +40,9 @@
     // Mouse & keyboard sharing
     KVM_TAKE_TIMEOUT_MS: 1000, // owner goes home if no kvm.accept by then
     KVM_SILENCE_MS: 2000, // while driving/driven: no message from the peer for this long = link lost
+    KVM_SILENCE_BLE_MS: 6000, // the same through Bluetooth (a slower, burstier link)
+    KVM_MOVE_BLE_MS: 16, // through Bluetooth: cursor moves summed and sent at most this often
+    KVM_BLE_BACKLOG: 512, // … and held (still summed) while this many bytes wait for the radio
     HELPER_KEEPALIVE_MS: 500, // main -> helper keepalive while capturing
     HELPER_DEADMAN_MS: 1500, // helper stops capturing by itself after this much keepalive silence
     RESISTANCE_PX: 120, // default push through an edge before crossing
@@ -73,6 +77,7 @@
       ERROR: 'error',
       PING: 'ping',
       PONG: 'pong',
+      BYE: 'bye', // guest->host: Disconnect on purpose (a phone gets no grace to resume; computers may connect at once)
       // screen sharing
       STREAM_INFO: 'stream.info',
       STREAM_STOP: 'stream.stop',
@@ -178,14 +183,86 @@
       PHONE_APPS_LIST: 'phone.apps.list', // Mac->phone
       PHONE_APPS: 'phone.apps', // phone->Mac {apps: [{id (package), name, icon (data URL PNG)}]}
       PHONE_POINTER: 'phone.pointer', // Mac->phone {on, x?, y?}: where the Mac's pointer is while it drives the phone (the app draws it)
+      // Driving the phone without wireless debugging (shared/phoneinput.js): the phone applies the input itself
+      PHONE_IN: 'phone.in', // computer->phone {a: 'd'|'m'|'u'|'s'|'k', …}: touch, scroll, key
+      PHONE_INPUT: 'phone.input', // phone->computer {on}: it can apply phone.in (its Accessibility service is on)
+      PHONE_INPUT_ASK: 'phone.input.ask', // computer->phone: the person wants to drive it: ask to switch that on
+      PHONE_INPUT_VIA: 'phone.input.via', // computer->phone {via: 'adb'|'phone'}: the input choice changed here (phone.input carries the phone's)
       PHONE_WAKE: 'phone.wake', // computer->phone: screen on and ask for the unlock (on the phone), e.g. to open an app from a notification clicked here
       PHONE_AWAKE: 'phone.awake', // phone->computer {unlocked, waiting?}: unlocked (now, or once the person unlocked it); waiting = it's asking for the unlock
+      PHONE_SOUND_WANT: 'phone.sound.want', // computer->phone {on}: its sound here without wireless debugging (playback capture, Start on the phone), while adb can't carry it
+      PHONE_SOUND: 'phone.sound', // phone->computer {codec: 'opus'|'pcm', p: [base64]}: 20 ms each (Opus packets, or 48 kHz stereo s16le)
+      PHONE_SOUND_STATE: 'phone.sound.state', // phone->computer {on, waiting (for Start on the phone), error, codec}
       // Wireless debugging (adb), which the Mac uses for the screen, touch, mouse and keyboard,
       // the clipboard in the background and apps in their own windows (scrcpy):
-      ADB_STATE: 'adb.state', // phone->Mac {devOptions, wifi (wireless debugging on), canEnable (WRITE_SECURE_SETTINGS granted), address, full, port (its wireless debugging port from its own mDNS, 0 if not known yet)}
+      ADB_STATE: 'adb.state', // phone->Mac {devOptions, wifi (wireless debugging on), canEnable (WRITE_SECURE_SETTINGS granted), address, full, port (its wireless debugging port from its own mDNS, 0 if not known yet), net (on a Wi-Fi network: wireless debugging can't be on without one)}
       ADB_ENABLE: 'adb.enable', // Mac->phone {on}: switch wireless debugging (needs canEnable)
       ADB_PAIR: 'adb.pair', // phone->computer {code, port?}: the code from "Pair device with pairing code", typed on the phone (port: its pairing port, 0 if unknown)
       ADB_BRIDGE: 'adb.bridge', // computer->phone {state, message}: how the computer's wireless debugging link is doing (off|missing|waitingWifi|needsPair|connecting|ready|error)
+      // A session through Bluetooth moves onto Wi-Fi for files and screens (shared/netlink.js): one
+      // side hosts a network (Wi-Fi Direct group / Windows' legacy access point), the other joins
+      // it, and the guest moves the session onto it (hello {resume}, below) without ending it.
+      NET_CAPS: 'net.caps', // either {host, join, hotspot, band5?}: what this side can do (host = a network the other joins; band5 false = joins 2.4 GHz only)
+      NET_NEED: 'net.need', // either {why: 'files'|'screen'}: please host a network (I can't)
+      NET_JOIN: 'net.join', // host->joiner {ssid, pass} | {error}: it's up, join it
+      NET_JOINED: 'net.joined', // joiner->host {ok, error?}
+      NET_RELEASE: 'net.release', // either {why}: I don't need it any more; {all: true}: Back to Bluetooth, nobody does
+      NET_HOTSPOT: 'net.hotspot', // computer->phone {on}: ask the person to switch the phone's hotspot on (the screen through adb)
+      // Calls, Messages and Media from a phone (shared/phonehub.js here, Hub.kt on the phone). Each is
+      // off until switched on (its page here, or the phone's Overview); while one is off the phone
+      // keeps nothing running for it: no listener, no observer, no query.
+      HUB_POLICY: 'hub.policy', // computer->phone {calls, messages, media, files, bt}: which are on here (at every session start: it also says the computer has them); bt = call audio here over Bluetooth
+      HUB_STATE: 'hub.state', // phone->computer {calls: {perm}, messages: {perm}, media: {perm}, files: {perm}, bt: {name, bonded, le, bonding, forget, allowed, radio}}: perm 'ok'|'partial'|'ask'|'blocked'|'none' (not in this build)
+      HUB_ASK: 'hub.ask', // computer->phone {what: 'calls'|'messages'|'media'|'files'|'bt'}: ask the person on the phone for that one's permissions
+      HUB_SET: 'hub.set', // phone->computer {what, on}: switched on or off on the phone
+      HUB_BT: 'hub.bt', // computer->phone {address, unpair?}: this computer's Bluetooth address (is the phone paired with it?); unpair: forget it (classic and LE). phone->computer {unpair: true}: Forget on the phone, the computer forgets it too. Pairing itself is the person's, in Bluetooth settings
+      CALL_STATE: 'call.state', // phone->computer {state: 'idle'|'ringing'|'offhook', number, name, photo?, dir: 'in'|'out', since}
+      CALL_DO: 'call.do', // computer->phone {a: 'dial'|'answer'|'end'|'mute', number?, on?}
+      CALL_DONE: 'call.done', // phone->computer {a, ok, error?}
+      CALL_LOG: 'call.log', // computer->phone {n} | phone->computer {items: [{number, name, type: 'in'|'out'|'missed'|'rejected'|'blocked', at, dur}]}
+      CONTACTS: 'contacts', // computer->phone {q} | phone->computer {q, items: [{name, numbers: [{n, label}]}]}
+      SMS_THREADS: 'sms.threads', // computer->phone {n} | phone->computer {items: [{id, addrs, name, snippet, at, unread, out}]}
+      SMS_THREAD: 'sms.thread', // computer->phone {id, before?, n} | phone->computer {id, before, items: [{id, body, at, out, from, status, parts?: [{id, type}]}], more}
+      SMS_PART: 'sms.part', // computer->phone {id}: an MMS picture | phone->computer {id, data}
+      SMS_SEND: 'sms.send', // computer->phone {to, body, ref}
+      SMS_SENT: 'sms.sent', // phone->computer {ref, ok, error?}
+      SMS_NEW: 'sms.new', // phone->computer {thread, summary, msg}: a message arrived or was sent on the phone
+      MEDIA_LIST: 'media.list', // computer->phone {kind: 'all'|'photos'|'videos'|'screenshots', before?, n} | phone->computer {kind, before, items: [{id, video, at, w, h, size, name, dur, album}], more}
+      MEDIA_THUMB: 'media.thumb', // computer->phone {ids}: these next (the ones still waiting are dropped) | phone->computer {id, data}
+      MEDIA_VIEW: 'media.view', // computer->phone {id} | phone->computer {id, data}: a big preview
+      MEDIA_SAVE: 'media.save', // computer->phone {ids}: send these files here (they come as file.offer, drop 'send')
+      // Files: the phone's storage, through TwinDesk on it with All files access (no ADB). Paths are
+      // relative to the phone's shared storage ('' its top, 'DCIM/Camera'), never '..'.
+      FS_LIST: 'fs.list', // computer->phone {path, hidden?} | phone->computer {path, items: [{name, dir, size, at, n? (a folder's items)}], free, total, error?}
+      FS_DO: 'fs.do', // computer->phone {a: 'mkdir'|'rename'|'delete', path, name? (mkdir, rename: the new name), paths? (delete), ref}
+      FS_DONE: 'fs.done', // phone->computer {ref, ok, error?, path (the folder that changed)}
+      FS_SAVE: 'fs.save', // computer->phone {paths}: send these here, folders with what's in them (file.offer, drop 'send')
+      FS_EXPECT: 'fs.expect', // computer->phone {batch, path}: the files of this batch (file.offer, drop 'send') go into that folder
+      // Shared folders (shared/foldershare.js, FolderShare.kt), on USB, Wi-Fi or Wi-Fi Direct only.
+      SHARE_OFFER: 'share.offer', // phone->computer {on, port, secret, name}: its folder over WebDAV at its address, http://<it>:<port>/<secret>/<name>/; sent again when the session moves
+      SHARE_HOST: 'share.host', // computer->phone {on, port, token, name}: this computer's folder, http://<computer>:<port>/<token>/<op>?p= (list, stat, file, mkdir, delete, rename)
+      SHARE_SET: 'share.set', // phone->computer {serve}: switch the computer's folder for the phone on or off (its setting; share.host says how it is)
+      // Resume: `welcome` carries {resume: key}; the guest opens a second socket (another path to the
+      // host, e.g. the network once both are on one) with hello {..., resume: key} and gets welcome
+      // {resumed: true}: from then on both sides send on it, and the first socket stays as the
+      // fallback (the session ends only when both are gone).
+    },
+
+    // Bluetooth LE, when the two aren't on one network (shared/blepipe.js): the host advertises this
+    // GATT service; a guest reads INFO (the host's beacon JSON), writes CTRL ({op: 'hello', id, name,
+    // os} | {op: 'open'} | {op: 'close'}; the host notifies {op: 'invite'} | {op: 'closed'}) and
+    // pipes the session's bytes: guest writes UP, host notifies DOWN. The session (TLS, pinned
+    // certificate, token) runs through that pipe unchanged, the host's side from 127.0.0.1.
+    BLE: {
+      SERVICE: 'b7f30001-2c4e-4d1a-9a57-3e8c2f6d0a91',
+      INFO: 'b7f30002-2c4e-4d1a-9a57-3e8c2f6d0a91',
+      CTRL: 'b7f30003-2c4e-4d1a-9a57-3e8c2f6d0a91',
+      UP: 'b7f30004-2c4e-4d1a-9a57-3e8c2f6d0a91',
+      DOWN: 'b7f30005-2c4e-4d1a-9a57-3e8c2f6d0a91',
+      // A phone advertises this one with the same characteristics (its GATT server; the session is
+      // still ours): a PC's Bluetooth often can't advertise reliably. The PC connects, says hello,
+      // and opens a pipe when it wants the session or the phone asks (CTRL {op: 'want'}).
+      PHONE_SERVICE: 'b7f30006-2c4e-4d1a-9a57-3e8c2f6d0a91',
     },
 
     // Error codes (field `code` of an `error` message)
@@ -197,6 +274,7 @@
       BUSY: 'busy',
       REPLACED: 'replaced',
       RELEASED: 'released', // the Mac let the phone go (Disconnect): don't resume on your own
+      ASLEEP: 'asleep', // the host went to sleep: don't come back on your own (it invites you when it wakes)
       BAD_MESSAGE: 'bad_message',
     },
 

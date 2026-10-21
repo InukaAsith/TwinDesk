@@ -206,6 +206,35 @@ func handle(_ line: String) {
   case "destroyDisplay":
     virtualDisplay.destroy()
     reply(id)
+  case "bleStart":
+    BlePeripheral.shared.start(info: Data(((msg["info"] as? String) ?? "{}").utf8))
+    reply(id)
+  case "bleStop":
+    BlePeripheral.shared.stop()
+    reply(id)
+  case "bleSend":
+    if let dev = msg["dev"] as? String, let b64 = msg["data"] as? String, let data = Data(base64Encoded: b64) {
+      BlePeripheral.shared.send(dev: dev, data: data)
+    }
+  case "bleCtrl":
+    if let dev = msg["dev"] as? String, let text = msg["msg"] as? String { BlePeripheral.shared.ctrl(dev: dev, text: text) }
+  case "bleLook":
+    BleLook.shared.look((msg["on"] as? Bool) ?? false)
+    reply(id)
+  case "bleInvite":
+    if let dev = msg["dev"] as? String, let text = msg["msg"] as? String { BleLook.shared.invite(dev: dev, text: text) }
+    reply(id)
+  case "wifiInfo":
+    reply(id, WifiCtl.shared.info())
+  case "wifiLocation":
+    WifiCtl.shared.askLocation()
+    reply(id)
+  case "wifiJoin":
+    WifiCtl.shared.join(ssid: (msg["ssid"] as? String) ?? "", password: (msg["password"] as? String) ?? "") { err in
+      if let err = err { replyError(id, err) } else { reply(id) }
+    }
+  case "wifiLeave":
+    WifiCtl.shared.leave { reply(id) }
   default:
     replyError(id, "unknown cmd \(cmd)")
   }

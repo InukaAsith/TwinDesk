@@ -34,9 +34,39 @@ class Peer {
   }
 
   // The ctx argument is kept for the callers; a route has exactly one device.
+  // Through Bluetooth, files wait for Wi-Fi (netlink.js): `hold` takes them, sendNow sends them later.
   send(ctx, msg) {
     if (!ctx) return false;
     return this.route.send(msg);
+  }
+
+  sendNow(msg) {
+    return this.route.sendNow(msg);
+  }
+
+  // Disconnect, whichever side opened the session: a device connected to us doesn't come back by
+  // itself (released); as a guest we don't reconnect until Connect.
+  disconnect() {
+    const s = this.route.session;
+    if (!s) return;
+    if (s.hostUp && this.server) return this.server.release(s.ctx);
+    if (s.link) s.link.disconnect();
+  }
+
+  get hold() {
+    return this.route.hold || null;
+  }
+
+  set hold(fn) {
+    this.route.hold = fn;
+  }
+
+  get tap() {
+    return this.route.tap || null;
+  }
+
+  set tap(fn) {
+    this.route.tap = fn;
   }
 
   sendToClient(msg) {

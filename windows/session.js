@@ -150,6 +150,12 @@ class Session extends EventEmitter {
 
   // ---- connections (the hub calls these) ----
 
+  // 'ble' while the session's socket runs through Bluetooth (blepipe.js), else 'ip'.
+  get transport() {
+    if (this.link && this.link.authed) return this.link.transport === 'ble' ? 'ble' : 'ip';
+    return this.ctx && this.ctx.transport === 'ble' ? 'ble' : 'ip';
+  }
+
   // The guest link of this device (null: none). Its messages come only from this link.
   setLink(link) {
     if (link === this.link) return;
@@ -165,6 +171,7 @@ class Session extends EventEmitter {
       });
       link.on('closed', () => this._sync());
       link.onState(() => this.link === link && this._changed());
+      link.on('transport', () => this._changed()); // the session moved to Bluetooth or back (kvm, the Overview)
     }
     this._sync();
   }
@@ -265,6 +272,10 @@ class Sessions extends EventEmitter {
     this.server = server;
     for (const s of this.sessions.values()) s.server = server;
     server.on('client', (ctx) => this.ensure(ctx.deviceId).setCtx(ctx));
+    server.on('transport', (ctx) => {
+      const s = this.sessions.get(ctx.deviceId);
+      if (s) s._changed();
+    });
     server.on('closed', (ctx) => {
       const s = this.sessions.get(ctx.deviceId);
       if (s && s.ctx === ctx) s.setCtx(null);

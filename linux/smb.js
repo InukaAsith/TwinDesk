@@ -278,6 +278,7 @@ smbcontrol all reload-config 2>/dev/null || true
     return {
       busy: this.busy, message: this.message, sharing: !!(this.cfg.shareOn && this._creds()),
       peer: this.peerState, macShare: this.mac ? this.mac.share : '', drive: this.mounted ? this.mounted.path || this.mounted.uri : '', mountMessage: this.mountMessage,
+      wifi: !this.mounted && !!this.mac && !!(this.canWifi && this.canWifi()), // through Bluetooth: Open connects it over Wi-Fi Direct
       folder: this.cfg.shareFolder || this.defaultFolder,
     };
   }

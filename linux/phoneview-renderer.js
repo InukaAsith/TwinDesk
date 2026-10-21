@@ -159,6 +159,51 @@
     player.port.postMessage(f, [f.buffer]);
   });
 
+  // The phone's own capture (no wireless debugging): Opus packets through the session, 20 ms each
+  // (or raw 48 kHz stereo s16le from a phone without an Opus encoder).
+  let opusDec = null;
+  let ts = 0;
+  const play = (f) => player && player.port.postMessage(f, [f.buffer]);
+  const fromOpus = (a) => {
+    const n = a.numberOfFrames;
+    const f = new Float32Array(n * 2);
+    const ch = [];
+    for (let c = 0; c < Math.min(2, a.numberOfChannels); c++) {
+      const p = new Float32Array(n);
+      a.copyTo(p, { planeIndex: c, format: 'f32-planar' });
+      ch.push(p);
+    }
+    a.close();
+    const [l, r = l] = ch;
+    for (let i = 0; i < n; i++) { f[i * 2] = l[i]; f[i * 2 + 1] = r[i]; }
+    play(f);
+  };
+  api.on('netaudio', (m) => {
+    if (!player) {
+      if (!startAudio.started) startAudio.started = startAudio().catch((e) => console.warn('audio', e.message));
+      return;
+    }
+    for (const b64 of m.p) {
+      const bin = atob(b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      if (m.codec === 'pcm') {
+        const s16 = new Int16Array(u8.buffer, 0, u8.byteLength >> 1);
+        const f = new Float32Array(s16.length);
+        for (let i = 0; i < s16.length; i++) f[i] = s16[i] / 32768;
+        play(f);
+        continue;
+      }
+      if (!opusDec || opusDec.state === 'closed') {
+        opusDec = new AudioDecoder({ output: fromOpus, error: (e) => console.warn('opus', e.message) });
+        opusDec.configure({ codec: 'opus', sampleRate: 48000, numberOfChannels: 2 });
+        ts = 0;
+      }
+      opusDec.decode(new EncodedAudioChunk({ type: 'key', timestamp: ts, data: u8 }));
+      ts += 20000;
+    }
+  });
+
   // ---- input ----
 
   const at = (e) => {

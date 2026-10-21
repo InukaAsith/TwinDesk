@@ -25,6 +25,7 @@ const FEATURES = {
 const VALUES = {
   pace: { path: ['monitor', 'pacing'], allowed: ['fast', 'smooth'] },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
+  ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)
   // Set on either side for this PC's mouse and keyboard on a phone (its Cursor and Keyboard pages).
   keyboard: { path: ['kvm', 'keyboard'], allowed: [true, false], phone: true },
   speed: { path: ['kvm', 'speed'], allowed: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3], phone: true },

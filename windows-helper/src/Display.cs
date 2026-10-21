@@ -202,9 +202,10 @@ namespace MacShare
                     bool reboot;
                     if (!UpdateDriverForPlugAndPlayDevices(IntPtr.Zero, hwid, inf, INSTALLFLAG_FORCE, out reboot))
                     {
-                        Exception e = Win32("UpdateDriverForPlugAndPlayDevices");
+                        int err = Marshal.GetLastWin32Error();
+                        Console.Error.WriteLine("UpdateDriverForPlugAndPlayDevices failed (" + err + ")");
                         SetupDiCallClassInstaller(DIF_REMOVE, set, ref d); // no half-installed device left behind
-                        throw e;
+                        return err != 0 ? err : 1; // the exit code: vdd-install.ps1 names it (0x800B0109: signature refused)
                     }
                 }
                 finally { SetupDiDestroyDeviceInfoList(set); }

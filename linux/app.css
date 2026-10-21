@@ -41,6 +41,9 @@ button, input, select { font: inherit; color: inherit; }
 .who { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .app-name { font-weight: 700; font-size: 18px; line-height: 1.2; text-align: left; letter-spacing: -0.2px; }
 .peer { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+/* one line whatever the ping says: wrapping would move the icon beside it each time it changes */
+.peer { max-width: 100%; min-width: 0; }
+#peer-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--idle); flex: none; }
 .dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
 
@@ -217,3 +220,16 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* The popup over the window while the banner waits for an answer here (shared/pairpop.js). */
+.pair-pop { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 50; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px; border-radius: 14px; display: flex; flex-direction: column; gap: 16px; background: var(--card); border: 1px solid var(--warn); box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35), 0 12px 40px rgba(0, 0, 0, 0.3); font-size: 14px; }
+.pair-pop[hidden] { display: none; }
+.pair-pop strong { font-size: 16px; }
+.pair-pop .hint { color: var(--muted); font-size: 12px; }
+.pair-pop .banner-actions { justify-content: flex-end; }
+.pair-pop:not([hidden]) { animation: pop-in 0.3s var(--spring) both; }
+@keyframes pop-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
+
+/* Wireless debugging over Bluetooth (UI.adbBle): greyed out, it says why. */
+.wifi-only { opacity: 0.55; }
+.wifi-only button, .wifi-only input { pointer-events: none; }

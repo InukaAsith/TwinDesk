@@ -103,8 +103,14 @@ class Terminal {
   }
 
   // Opens Windows Terminal (or a console) with `ssh twindesk`.
+  // Through Bluetooth there's no address ssh can reach (the session runs through a local pipe).
+  get onBle() {
+    const c = this.link.current;
+    return !!c && c.transport === 'ble';
+  }
+
   open() {
-    if (this.status !== 'ready') return;
+    if (this.status !== 'ready' || this.onBle) return;
     try { this._writeHost(); } catch (e) { return this._set('error', e.message); }
     const opts = { detached: true, stdio: 'ignore', windowsHide: false };
     const title = (this.link.snapshot().link.macName || 'TwinDesk').replace(/["&|<>^]/g, '');
@@ -120,6 +126,9 @@ class Terminal {
   }
 
   view() {
+    if (this.status === 'ready' && this.onBle) {
+      return { status: 'unavailable', message: 'The terminal doesn’t work over Bluetooth. Connect with Wi-Fi Direct, or join {name}’s network.', user: this.info && this.info.user, command: 'ssh ' + SshConfig.ALIAS };
+    }
     return { status: this.status, message: this.message, user: this.info && this.info.user, command: 'ssh ' + SshConfig.ALIAS };
   }
 }

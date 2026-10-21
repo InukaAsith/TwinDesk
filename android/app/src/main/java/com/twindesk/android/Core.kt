@@ -44,6 +44,14 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // Pairing has a socket of its own until the computer is paired.
     val pairLink = Link(store, this)
     private val idle = Link(store, this) // what the one-to-one features see when no computer is attached
+    // Computers that aren't on this phone's network, through Bluetooth (Ble.kt).
+    val ble = Ble(ctx, { JSONObject().put("id", store.deviceId).put("name", store.deviceName).put("os", Proto.OS) },
+        { id -> store.hosts().any { it.id == id } }, ::changed, ::onInvite)
+    val bleOn get() = store.flag("ble", true)
+    val bleWifiOff get() = store.flag("bleWifiOff", true) // General's Turn off Bluetooth on Wi-Fi connections (bleTick)
+    // … and PCs that connect to us: this phone advertises (BleServe.kt), as a PC's Bluetooth often can't.
+    val serve = BleServe(ctx, { JSONObject().put("id", store.deviceId).put("name", store.deviceName).put("os", Proto.OS) }, ::changed, ::onServeOpen)
+    init { links.bleRx = { maxOf(ble.lastDown, serve.lastRx) } } // a session through Bluetooth: its bytes are a sign of life
 
     // An unpaired computer asked us to pair (shown until acted on).
     @Volatile var invite: Found? = null; private set
@@ -75,7 +83,12 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val updates = Updates(this)
     // The shared layout of the mesh: stored and relayed by the phone, never edited here (docs/mesh.md).
     val layout = LayoutFeature(this)
-    private val features: List<Feature> = listOf(sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, drive, screen, macSound, shortcuts, kvm, layout)
+    val net = Netlink(this) // Wi-Fi for a session through Bluetooth (netlink.js)
+    val input = Input(this)
+    val hub = Hub(this) // Calls, Messages and Photos on the computer: nothing runs until one is on
+    val share = FolderShare(this) // shared folders with the computer, both ways
+    val sound = PhoneSound(this) // this phone's sound there without wireless debugging
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, layout, hub, share, sound)
 
     // The link of the attached computer (idle when none is connected) and the computer behind it.
     val link: Link get() = attachedId?.let { links.existing(it) } ?: idle
@@ -89,7 +102,47 @@ class Core private constructor(val ctx: Context) : Link.Events {
         // ones discovery sees (dialDue, with the backoff of each link).
         for (h in store.hosts()) dial(h)
         bg.scheduleWithFixedDelay({ dialDue() }, Proto.BEACON_MS, Proto.BEACON_MS, TimeUnit.MILLISECONDS)
+        bg.scheduleWithFixedDelay({ runCatching { bleTick() }.onFailure { RemoteLog.e("TwinDesk", "ble", it) } }, 2, 2, TimeUnit.SECONDS)
     }
+
+    // Every 2 s: Bluetooth scans while it may be needed (no computer connected, or one connected
+    // through it), and a session through Bluetooth moves onto the network as soon as the computer is
+    // seen there (the same Wi-Fi, or a group Netlink made). On the same Wi-Fi, with General's Turn off
+    // Bluetooth on Wi-Fi connections on, Bluetooth goes altogether: the Wi-Fi dropping ends the session,
+    // which comes back over Bluetooth (dialDue). On a group Netlink made, or a USB cable, it stays.
+    private val resumeTried = HashMap<String, Long>()
+    private fun bleTick() {
+        ble.prune()
+        val l = link
+        if (bleWifiOff && l.connected && net.via == "Wi-Fi") {
+            l.dropAlt()
+            ble.trim()
+            serve.trim()
+        }
+        val want = bleOn && ble.allowed() && ble.radioOn && (!l.connected || l.ble)
+        ble.scan(want)
+        if (!bleOn && ble.found.isNotEmpty()) ble.stop()
+        serve.advertise(bleOn && serve.allowed() && ble.radioOn && !l.connected)
+        if (!bleOn && serve.found.isNotEmpty()) serve.stop()
+        val h = l.host
+        if (l.connected && !l.ble) screen.onWifi()
+        if (h == null || !l.connected || !l.ble || l.resuming) return
+        val f = discovery.found[h.id] ?: return
+        val now = System.currentTimeMillis()
+        if (now - (resumeTried[f.address] ?: 0) < 8000) return
+        resumeTried[f.address] = now
+        RemoteLog.i("TwinDesk", "${h.name} is on the network at ${f.address}: moving the session there")
+        l.resume(f.address, f.port)
+    }
+
+    // Computers near: on the network, then the ones only Bluetooth sees.
+    fun nearby(): List<Found> {
+        val onNet = discovery.list()
+        val near = onNet + ble.found.values.filter { b -> bleOn && onNet.none { it.id == b.id } }.sortedBy { it.name }
+        return near + serve.found.values.filter { b -> bleOn && near.none { it.id == b.id } }.sortedBy { it.name }
+    }
+
+    fun isNear(id: String) = discovery.found.containsKey(id) || (bleOn && (ble.found.containsKey(id) || serve.found.containsKey(id)))
 
     // Wi-Fi out of power save while a screen streams either way (power save adds 50–200 ms bursts).
     private val wifiFast by lazy { WifiFast(ctx) }
@@ -102,7 +155,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     // To the attached computer (the one-to-one features).
-    fun send(m: JSONObject): Boolean = link.send(m)
+    // Through Bluetooth, files wait for Wi-Fi (Netlink.holdOut).
+    fun send(m: JSONObject): Boolean = net.holdOut(m) || link.send(m)
 
     fun sendTo(hostId: String, m: JSONObject): Boolean = links.existing(hostId)?.send(m) ?: false
 
@@ -140,15 +194,53 @@ class Core private constructor(val ctx: Context) : Link.Events {
         dial(h)
     }
 
-    // Dial a paired computer, at the address discovery last saw for it.
-    private fun dial(h: Host) {
-        val seen = discovery.found[h.id]
+    // Dial a paired computer, at the address discovery last saw for it; not on this network but near:
+    // through Bluetooth (a PC's link to us first: blePipe). skipNet: the network just failed to reach
+    // it (a stale address after the Wi-Fi went): Bluetooth first.
+    private fun dial(h: Host, skipNet: Boolean = false) {
+        val seen = if (skipNet) null else discovery.found[h.id]
         if (seen != null && (seen.address != h.address || seen.port != h.port)) {
             h.address = seen.address
             h.port = seen.port
             store.putHost(h)
         }
-        links.linkFor(h.id).connect(h)
+        val l = links.linkFor(h.id)
+        val viaBle = seen == null && bleOn && (serve.get(h.id) != null || ble.get(h.id) != null)
+        if (viaBle) {
+            bg.execute {
+                val port = blePipe(h.id)
+                if (port != null) l.connect(h, blePort = port)
+                else if (h.address != "127.0.0.1") l.connect(h)
+            }
+            return
+        }
+        l.connect(h)
+    }
+
+    // A PC opened a pipe on its own (its Pair or Connect, an invite): a paired one connects through
+    // it now, an unpaired one is shown as an invite (Pair asks it for a pipe again).
+    private fun onServeOpen(f: Found, port: Int): Boolean {
+        val h = store.hosts().find { it.id == f.id }
+        if (h == null || links.existing(f.id)?.let { it.connected || it.state == "connecting" } == true) {
+            if (h == null) onInvite(f.copy(invited = true))
+            return false
+        }
+        RemoteLog.i("TwinDesk", "${f.name} opened a Bluetooth pipe: connecting")
+        links.resume(f.id)
+        links.linkFor(f.id).connect(h, blePort = port)
+        return true
+    }
+
+    // A pipe to a computer near over Bluetooth: through the link a PC holds to us (BleServe) first,
+    // as it is up already, else to the computer's own advertising (Ble), which a PC's Bluetooth
+    // often can't keep up (it was tried first, and Pair failed in silence when it was stale).
+    private fun blePipe(id: String): Int? =
+        (if (serve.get(id) != null) serve.open(id) else null) ?: (if (ble.get(id) != null) ble.open(id) else null)
+
+    // Another paired computer, while connected: this one is let go (bye), then that one.
+    fun switchTo(h: Host) {
+        disconnect()
+        connect(h)
     }
 
     // Every beacon period: the paired computers that discovery sees and that are due for a dial.
@@ -158,9 +250,18 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     // The computer found this device on a USB cable (adb reverse to its port, then a broadcast:
     // WiredReceiver): take the session through the cable, also from a Wi-Fi session with it.
-    fun connectWired(id: String, port: Int, nonce: String) {
+    fun connectWired(id: String, port: Int, nonce: String, name: String = "") {
         val h = store.hosts().find { it.id == id }
-        if (h == null) { RemoteLog.i("TwinDesk", "USB: $id isn't paired here"); return }
+        if (h == null) {
+            // Not paired yet: pair through the cable (no Wi-Fi needed), then the session follows.
+            if (pairLink.pair != null && pairLink.pair?.phase != "failed") { RemoteLog.i("TwinDesk", "USB: already pairing"); return }
+            RemoteLog.i("TwinDesk", "USB: pairing with ${name.ifEmpty { id }} through the cable")
+            wiredNonce = nonce
+            invite?.let { discovery.clearInvite(it.id) }
+            invite = null
+            pairLink.startPairing("127.0.0.1", port, name.ifEmpty { "Computer" }, nonce)
+            return
+        }
         RemoteLog.i("TwinDesk", "USB: connecting to ${h.name} through the cable")
         wiredNonce = nonce
         links.resume(id)
@@ -179,6 +280,18 @@ class Core private constructor(val ctx: Context) : Link.Events {
     fun pair(f: Found) {
         invite = null
         discovery.clearInvite(f.id)
+        if (f.address.startsWith("blp:") || f.address.startsWith("ble:")) {
+            // Through Bluetooth: "Connecting…" at once (the pipe takes a few seconds), and why when it
+            // doesn't open (it used to say nothing, so Pair looked dead).
+            pairLink.pairOpening(f.name)
+            bg.execute {
+                val port = blePipe(f.id)
+                if (pairLink.pair?.phase != "connecting" || pairLink.pair?.port != 0) return@execute // cancelled meanwhile
+                if (port != null) pairLink.startPairing("127.0.0.1", port, f.name, viaBle = true)
+                else pairLink.pairUnreachable("${f.name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.")
+            }
+            return
+        }
         pairLink.startPairing(f.address, f.port, f.name)
     }
 
@@ -203,8 +316,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
         if (h != null) {
             RemoteLog.i("TwinDesk", "invite from ${f.name}: connecting")
             if (links.existing(h.id)?.let { it.connected || it.state == "connecting" } == true) return
-            h.address = f.address
-            h.port = f.port
+            if (!f.address.startsWith("ble:") && !f.address.startsWith("blp:")) {
+                h.address = f.address
+                h.port = f.port
+            }
             connect(h)
             return
         }
@@ -248,7 +363,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     // ---- Link.Events ----
 
-    override fun onChange() = changed()
+    override fun onChange() {
+        runCatching { share.linkChanged() } // the session moved (Bluetooth <-> Wi-Fi): shared folders follow
+        changed()
+    }
 
     override fun onWelcome(from: Link, host: Host) {
         RemoteLog.i("TwinDesk", "session with ${host.name}")

@@ -4,6 +4,7 @@
 
 UI.tab({
   id: 'audio',
+  wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
   group: 'More',
   order: 70,
   title: 'Audio',
@@ -39,7 +40,8 @@ UI.tab({
           : !a.peerAccepts ? `Turned off on ${pc}`
             : a.error ? `Can’t capture sound: ${a.error}`
               : live(a.sending) ? `Playing on ${pc}` : 'Connecting…');
-      recvRow.setHint(!a.receive || !s.client ? '' : live(a.receiving) ? `Playing ${pc}` : `Waiting for ${pc}`);
+      const phone = UI.phoneSound && UI.phoneSound(s);
+      recvRow.setHint(!a.receive ? '' : phone != null ? phone : !s.client ? '' : live(a.receiving) ? `Playing ${pc}` : `Waiting for ${pc}`);
     };
   },
 });

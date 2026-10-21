@@ -27,6 +27,9 @@ class SshClient extends EventEmitter {
     this.getSettings = getSettings;
     this.status = { ready: false, why: null, user: null };
     server.on('client', () => this._offer());
+    // Through Bluetooth the session's address is the pipe's own end (127.0.0.1: ssh would reach
+    // this Mac): not ready there; on Wi-Fi again, asked again for the new address.
+    server.on('transport', () => this._offer());
     server.on(`t:${P.T.SSH_INFO}`, (m, ctx) => this._onInfo(m, ctx));
   }
 
@@ -57,6 +60,11 @@ class SshClient extends EventEmitter {
     if (!this.enabled) return;
     if (!m.enabled) {
       this.status = { ready: false, why: m.why || 'not_allowed', user: null };
+      return this.emit('change');
+    }
+    if (ctx.transport === 'ble') {
+      SshConfig.setHost(null);
+      this.status = { ready: false, why: 'bluetooth', user: null };
       return this.emit('change');
     }
     const user = String(m.user || '');

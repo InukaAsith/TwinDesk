@@ -11,7 +11,10 @@ class LinkManager(private val store: Store, private val events: Link.Events) {
     private val retry = HashMap<String, Retry>()
     private val paused = HashSet<String>()
 
-    @Synchronized fun linkFor(id: String): Link = links.getOrPut(id) { Link(store, events) }
+    // Bytes arriving through Bluetooth count as a sign of life (Core sets it; every link gets it).
+    var bleRx: () -> Long = { 0L }
+
+    @Synchronized fun linkFor(id: String): Link = links.getOrPut(id) { Link(store, events).also { it.bleRx = bleRx } }
 
     @Synchronized fun existing(id: String): Link? = links[id]
 

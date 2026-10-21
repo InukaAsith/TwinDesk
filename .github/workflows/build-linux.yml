@@ -7,6 +7,10 @@ on:
         description: Release to put the files on (e.g. v2.0.1; made as a draft if it isn't there). Empty = run artifacts only.
         required: false
         default: ''
+      ref:
+        description: Branch to build (a test branch; releases come from main).
+        required: false
+        default: main
 
 # Write: the full Android APK can come from a draft release, which a read-only token can't see.
 permissions:
@@ -17,10 +21,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      # Always the main branch, whichever branch the run was started from.
+      # main unless another branch is asked for (ref), whichever branch the run was started from.
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.ref || 'main' }}
 
       - uses: actions/setup-node@v4
         with:
@@ -35,7 +39,8 @@ jobs:
             libxi-dev \
             libxtst-dev \
             libxrandr-dev \
-            libxfixes-dev
+            libxfixes-dev \
+            libglib2.0-dev
 
       - uses: ./.github/actions/android-full
         with:

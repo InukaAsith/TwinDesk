@@ -2,6 +2,7 @@
 // Input injection with CGEvent: absolute stream input (`input`) and releaseAll.
 // Relative KVM input (`inject`) is in InjectRelative.swift.
 // Every injected event is marked with eventSourceUserData = 0x4D53 so our own tap can skip it.
+import Carbon.HIToolbox
 import Cocoa
 
 let injectedMark: Int64 = 0x4D53
@@ -14,6 +15,13 @@ final class Injector {
   var heldButtons = Set<Int>()                 // P.BUTTON values
   private var lastDown: (at: TimeInterval, point: CGPoint, button: Int, count: Int64)?
   var clickCount: [Int: Int64] = [:]           // button -> click state of its current press
+  // Input source shortcuts from the other computer are done here (InputSources.next): macOS's
+  // input menu ignores a synthetic Ctrl+Space or 🌐. Ctrl(+Option)+Space (Win+Space on a PC, with
+  // the Ctrl/Cmd swap), a tap of 🌐/Fn, a tap of Option+Shift or Cmd+Shift (Alt+Shift, Ctrl+Shift on a PC).
+  private var swallowSpace = false
+  private var tapMods = Set<String>()          // modifiers (and Fn) pressed since none were held
+  private var tapDown = Set<String>()          // those held now
+  private var modsOnly = false                 // ...and no other key between
 
   init() {
     source = CGEventSource(stateID: .hidSystemState)
@@ -117,6 +125,28 @@ final class Injector {
   }
 
   func key(_ code: String, down: Bool) {
+    if code == "Space" {
+      let held = Set(heldMods.map(Injector.kind))
+      if down && (held == ["Control"] || held == ["Control", "Alt"]) {
+        swallowSpace = true
+        modsOnly = false
+        InputSources.next()
+        return
+      }
+      if !down && swallowSpace { swallowSpace = false; return }
+    }
+    if KeyCodes.modifiers[code] != nil || code == "Fn" {
+      if down {
+        if tapDown.isEmpty { tapMods = []; modsOnly = true }
+        tapDown.insert(code)
+        tapMods.insert(code)
+      } else if tapDown.remove(code) != nil && tapDown.isEmpty {
+        let kinds = Set(tapMods.map(Injector.kind))
+        if modsOnly && (kinds == ["Fn"] || kinds == ["Alt", "Shift"] || kinds == ["Meta", "Shift"]) { InputSources.next() }
+        modsOnly = false
+      }
+      if code == "Fn" { return } // only its tap means something (above)
+    } else if down { modsOnly = false }
     guard let vk = KeyCodes.toMac[code] else {
       log("no Mac key for \(code)")
       return
@@ -147,6 +177,11 @@ final class Injector {
     post(e)
   }
 
+  static func kind(_ code: String) -> String {
+    for k in ["Shift", "Control", "Alt", "Meta"] where code.hasPrefix(k) { return k }
+    return code
+  }
+
   /// Key-up every key and button we hold, clear modifiers.
   func releaseAll() {
     for vk in heldKeys {
@@ -155,9 +190,33 @@ final class Injector {
       post(e)
     }
     heldKeys.removeAll()
+    tapDown.removeAll()
+    modsOnly = false
+    swallowSpace = false
     for code in heldMods { key(code, down: false) }
     let p = CGEvent(source: nil)?.location ?? .zero
     for b in heldButtons { mouse(mouseType(b, down: false), at: p, button: b, clickState: clickCount[b] ?? 1) }
     heldButtons.removeAll()
+  }
+}
+
+// The keyboard layouts and input methods the person enabled, as the input menu lists them.
+enum InputSources {
+  /// The next one after the current (Ctrl+Space's "previous input source" with two of them).
+  static func next() {
+    let props = [
+      kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String,
+      kTISPropertyInputSourceIsSelectCapable as String: true,
+    ] as CFDictionary
+    guard let list = TISCreateInputSourceList(props, false)?.takeRetainedValue() as? [TISInputSource], list.count > 1 else { return }
+    let id = { (s: TISInputSource) -> String in
+      guard let p = TISGetInputSourceProperty(s, kTISPropertyInputSourceID) else { return "" }
+      return Unmanaged<CFString>.fromOpaque(p).takeUnretainedValue() as String
+    }
+    let cur = id(TISCopyCurrentKeyboardInputSource().takeRetainedValue())
+    let i = list.firstIndex { id($0) == cur } ?? -1
+    let to = list[(i + 1) % list.count]
+    TISSelectInputSource(to)
+    log("input source: \(id(to))")
   }
 }

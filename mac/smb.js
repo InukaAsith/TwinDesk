@@ -103,10 +103,20 @@ class Smb extends EventEmitter {
 
   // ---- the PC's folder here ----
 
+  // Through Bluetooth the PC's address is the pipe's: not mounted there. openPc moves the session
+  // onto Wi-Fi Direct first (this.wifi(on), from main.js), kept up while it's mounted.
+  get onBle() {
+    const c = this.server.server.current;
+    return !!c && c.transport === 'ble';
+  }
+
   async mountPc() {
     const o = this.offer;
     if (!o || !this.cfg.connectPc || this.mount.busy) return this.emit('change');
     if (this.mount.path && fs.existsSync(this.mount.path)) return this._state({ mounted: true });
+    if (this.onBle) return this.emit('change');
+    const c = this.server.server.current;
+    if (c && c.address) o.host = c.address; // where the session is now (it moves off Bluetooth)
     this.mount = { path: null, error: null, busy: true };
     this.emit('change');
     let err = null;
@@ -134,12 +144,25 @@ class Smb extends EventEmitter {
   async unmountPc() {
     const p = this.mount.path;
     this.mount = { path: null, error: null, busy: false };
+    if (this.wifi) this.wifi(false);
     if (p) await this.helper.request('smbUnmount', { path: p }).catch((e) => console.error(`[smb] unmount: ${e.message}`));
     this.emit('change');
   }
 
-  openPc() {
-    if (this.mount.path) shell.openPath(this.mount.path);
+  async openPc() {
+    if (this.mount.path) return shell.openPath(this.mount.path);
+    if (!this.offer || !this.onBle || !this.wifi || this.mount.busy) return;
+    this.mount = { path: null, error: null, busy: true };
+    this.emit('change');
+    const ok = await this.wifi(true);
+    this.mount.busy = false;
+    if (!ok) {
+      this.mount.error = 'Wi-Fi Direct didn’t come up';
+      return this.emit('change');
+    }
+    this.shownOnce = false; // shown once it's mounted
+    await this.mountPc();
+    if (!this.mount.path) this.wifi(false);
   }
 
   // ---- a folder of this Mac on the PC ----
@@ -213,6 +236,7 @@ class Smb extends EventEmitter {
       mounted: this.mount.path,
       mountError: this.mount.error,
       mounting: this.mount.busy,
+      wifi: !!this.offer && this.cfg.connectPc && !this.mount.path && this.onBle && !!this.wifi, // Open connects it over Wi-Fi Direct
       shareBusy: this.share.busy,
       shareError: this.share.error,
       peer: this.share.peer,

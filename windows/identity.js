@@ -9,21 +9,13 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 const P = require('../shared/protocol.js');
-const { run, q } = require('./ps');
+const { script } = require('./ps');
 
 const dir = () => path.join(app.getPath('userData'), 'identity');
 
 async function makePfx(pfx, pass) {
   fs.mkdirSync(path.dirname(pfx), { recursive: true });
-  await run(`
-$ErrorActionPreference = 'Stop'
-$c = New-SelfSignedCertificate -Subject 'CN=MacShare' -FriendlyName 'MacShare' -CertStoreLocation 'Cert:\\CurrentUser\\My' -KeyAlgorithm RSA -KeyLength 2048 -KeyExportPolicy Exportable -NotAfter (Get-Date).AddYears(10)
-try {
-  $pw = ConvertTo-SecureString -String ${q(pass)} -AsPlainText -Force
-  Export-PfxCertificate -Cert $c -FilePath ${q(pfx)} -Password $pw | Out-Null
-} finally {
-  Remove-Item -Path ('Cert:\\CurrentUser\\My\\' + $c.Thumbprint) -DeleteKey -ErrorAction SilentlyContinue
-}`, 60000);
+  await script('identity-make', { Pfx: pfx, Pass: pass }, 60000);
 }
 
 // The certificate (DER) inside a PKCS#12 file, for its fingerprint. Node can't read PKCS#12, so

@@ -6,9 +6,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+
+// The name Windows shows for this process: Location's prompt and its list of apps, Task Manager.
+[assembly: AssemblyTitle("TwinDesk")]
+[assembly: AssemblyProduct("TwinDesk")]
 
 namespace MacShare
 {
@@ -35,6 +40,8 @@ namespace MacShare
             invoker.CreateControl();
             IntPtr force = invoker.Handle; // the handle must exist before BeginInvoke from other threads
 
+            Native.NoThrottling(); // edge pushes and hooks keep their pace with the window hidden in the tray
+            AppDomain.CurrentDomain.UnhandledException += delegate { HideCursor.Restore(); };
             capture = new Capture(Emit);
             injector = new Injector();
             injector.Moved = capture.FeedReturn;
@@ -80,9 +87,11 @@ namespace MacShare
             {
                 string l = line;
                 if (l.Trim().Length == 0) continue;
+                if (Net.Handle(l)) continue; // Bluetooth / Wi-Fi Direct: on this thread (Net.cs)
                 invoker.BeginInvoke((MethodInvoker)delegate { Dispatch(l); });
             }
             // stdin closed: main is gone. Give the user their input back and exit.
+            Net.Shutdown();
             invoker.BeginInvoke((MethodInvoker)delegate
             {
                 capture.Shutdown();
@@ -195,6 +204,12 @@ namespace MacShare
                         if (ev != null) injector.Apply(ev);
                         break;
                     case "releaseAll": injector.ReleaseAll(); break;
+                    case "toastProgress": // a live toast with a progress bar (Toast.cs)
+                        Toast.Progress(Json.Str(c, "aumid", ""), Json.Str(c, "tag", "files"), Json.Str(c, "title", ""), Json.Str(c, "status", ""), Json.Num(c, "value", -1), Json.Str(c, "label", ""));
+                        break;
+                    case "toastDone":
+                        Toast.Done(Json.Str(c, "aumid", ""), Json.Str(c, "tag", "files"), Json.Str(c, "title", ""), Json.Str(c, "text", ""));
+                        break;
                     case "moveTo": Injector.MoveTo((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0)); break; // The Mac's pointer on this PC's screen
                     case "displays": c["displays"] = Display.List(); break;
                     case "displayExtend": c["changed"] = Display.ExtendIfDuplicated(Json.Str(c, "monitor", "")); break;

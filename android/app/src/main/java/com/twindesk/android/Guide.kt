@@ -1,8 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The wireless debugging steps, to let the computer show this screen and use its mouse and
-// keyboard here, each ticked off as it happens: a card on Overview while the computer isn't
-// paired with it, and a page from General › Setup. The pairing code is typed in TwinDesk's notification (Settings' code dialog closes if
-// you switch apps), or here when Settings is side by side; the phone sends it to the computer,
+// keyboard here, each ticked off as it happens: a page from Overview's Set up and General › Setup.
+// The pairing code is typed in TwinDesk's notification (Settings' code dialog closes if you switch
+// apps), or here when Settings is side by side; the phone sends it to the computer,
 // which pairs (adb.pair), and says how it went (adb.bridge).
 package com.twindesk.android
 
@@ -49,18 +49,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Open from anywhere (General › Setup, the Cursor page): App shows the guide page while this is
-// true. It never opens by itself: Overview has the same steps in a card under the connected card
-// while the computer isn't paired with wireless debugging (Hide puts it away; Setup still has it).
+// Open from anywhere (General › Setup, the Cursor page, Overview's line under Connected while
+// wireless debugging isn't set up): App shows the guide page while this is true. It never opens by itself.
 object Guide {
     val open = mutableStateOf(false)
-
-    fun hidden(core: Core) = core.store.flag("guide.seen", false)
-
-    fun hide(core: Core) {
-        core.store.setFlag("guide.seen", true)
-        core.changed()
-    }
 
     fun close(core: Core) {
         open.value = false
@@ -69,20 +61,6 @@ object Guide {
 }
 
 private val xiaomi = Build.MANUFACTURER.equals("Xiaomi", true) || Build.BRAND.equals("POCO", true) || Build.BRAND.equals("Redmi", true)
-
-// Overview's card: connected, and the computer says wireless debugging isn't working yet.
-@Composable
-fun WirelessCard(core: Core, ctx: Context, v: Int) {
-    @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
-    val a = core.adb
-    if (core.host == null || a.bridge.isEmpty() || !a.setupNeeded || Guide.hidden(core)) return
-    WirelessSteps(core, ctx, "Wireless debugging") {
-        Row(Modifier.padding(start = 16.dp, end = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("For the screen, mouse and keyboard. Files and the rest work without it.", color = pal.faint, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            TextButton(onClick = { Guide.hide(core) }) { Text("Hide", color = pal.muted) }
-        }
-    }
-}
 
 @Composable
 fun WirelessGuide(core: Core, ctx: Context, v: Int) {

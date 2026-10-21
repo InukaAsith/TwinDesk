@@ -10,7 +10,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
-const { run, runElevated, q } = require('./ps');
+const { script, scriptElevated } = require('./ps');
 
 const T = P.T;
 const SHARE = 'MacShare';
@@ -99,26 +99,9 @@ class Smb {
     const result = path.join(dir, 'smb-result.txt');
     fs.writeFileSync(pwFile, password, { mode: 0o600 });
     try { fs.unlinkSync(result); } catch (_) { /* none */ }
-    const script = `
-$ErrorActionPreference = 'Stop'
-try {
-  $pw = ConvertTo-SecureString (Get-Content -Raw ${q(pwFile)}).Trim() -AsPlainText -Force
-  Remove-Item ${q(pwFile)} -Force
-  if (Get-LocalUser -Name ${q(USER)} -ErrorAction SilentlyContinue) { Set-LocalUser -Name ${q(USER)} -Password $pw -PasswordNeverExpires $true }
-  else { New-LocalUser -Name ${q(USER)} -Password $pw -PasswordNeverExpires -UserMayNotChangePassword -Description 'TwinDesk file sharing (network only)' | Out-Null }
-  $k = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\SpecialAccounts\\UserList'
-  if (-not (Test-Path $k)) { New-Item -Path $k -Force | Out-Null } # -Force on an existing key deletes and recreates it, unhiding every other account
-  New-ItemProperty -Path $k -Name ${q(USER)} -Value 0 -PropertyType DWord -Force | Out-Null
-  icacls ${q(folder)} /grant (${q(USER)} + ':(OI)(CI)M') | Out-Null
-  if (Get-SmbShare -Name ${q(SHARE)} -ErrorAction SilentlyContinue) { Remove-SmbShare -Name ${q(SHARE)} -Force }
-  New-SmbShare -Name ${q(SHARE)} -Path ${q(folder)} -ChangeAccess ${q(USER)} | Out-Null
-  Get-NetFirewallRule -Group ${q(FPS_GROUP)} -ErrorAction SilentlyContinue | Where-Object { [string]$_.Direction -eq 'Inbound' -and [string]$_.Profile -match 'Private|Any' } | Enable-NetFirewallRule
-  Set-Content -Path ${q(result)} -Value 'ok'
-} catch { Set-Content -Path ${q(result)} -Value ('error: ' + $_.Exception.Message) }
-`;
     this._busy('setup');
     try {
-      await runElevated(script);
+      await scriptElevated('smb-share', { PwFile: pwFile, User: USER, Share: SHARE, Folder: folder, Group: FPS_GROUP, Result: result });
       const r = fs.existsSync(result) ? fs.readFileSync(result, 'utf8').trim() : 'error: the setup didn’t finish';
       if (r !== 'ok') throw new Error(r.replace(/^error: /, ''));
       fs.writeFileSync(this.credFile, safeStorage.encryptString(JSON.stringify({ user: USER, password })));
@@ -142,11 +125,7 @@ try {
     this.link.send({ t: T.SMB_REVOKE, share: SHARE });
     this._busy('remove');
     try {
-      await runElevated(`
-if (Get-SmbShare -Name ${q(SHARE)} -ErrorAction SilentlyContinue) { Remove-SmbShare -Name ${q(SHARE)} -Force }
-Remove-LocalUser -Name ${q(USER)} -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\SpecialAccounts\\UserList' -Name ${q(USER)} -ErrorAction SilentlyContinue
-`);
+      await scriptElevated('smb-unshare', { Share: SHARE, User: USER });
       this.message = '';
     } catch (e) {
       this.message = /cancel/i.test(e.message) ? 'Cancelled. The folder is still shared.' : e.message;
@@ -161,7 +140,7 @@ Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersio
   // Does Windows still have our share? (shown in the UI; no elevation needed)
   async checkShare() {
     try {
-      const out = await run(`$s = Get-SmbShare -Name ${q(SHARE)} -ErrorAction SilentlyContinue; if ($s) { $s.Path }`);
+      const out = await script('smb-path', { Share: SHARE });
       this.sharePath = out.trim();
     } catch (_) { this.sharePath = ''; }
     this.onChange();
@@ -240,6 +219,7 @@ Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersio
     return {
       busy: this.busy, message: this.message, sharing: !!(this.cfg.shareOn && this._creds()),
       peer: this.peerState, macShare: this.mac ? this.mac.share : '', drive: this.drive, mountMessage: this.mountMessage,
+      wifi: !this.drive && !!this.mac && !!(this.canWifi && this.canWifi()), // through Bluetooth: Open connects it over Wi-Fi Direct
       folder: this.cfg.shareFolder || path.join(os.homedir(), 'MacShare'),
     };
   }

@@ -59,6 +59,7 @@ const DEFAULT_SETTINGS = {
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
     linkedBy: {}, // The last `linked` per paired device id, restored on connect
     gestures: true, // Trackpad gestures work on the other computer (synced per pair)
+    ble: true, // cursor sharing while the session runs through Bluetooth (synced per pair)
     hotkeySwitch: false, // keyboard only (mouse off): double-tap the hotkey to move the keyboard over and back
   },
   keys: { swapCtrlCmd: true, hotkey: 'AltRight' }, // swap: keys from the PC, Ctrl -> Cmd, Win -> Control. hotkey: double-tap = everything home
@@ -84,8 +85,14 @@ const DEFAULT_SETTINGS = {
   apps: { offer: true }, // The PC can list and open this Mac's apps
   papps: { on: true }, // PC apps on this Mac, each window here with its own Dock icon
   // A phone as the peer: its screen window, apps and setup.
-  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true },
+  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false }, // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
   mount: { on: false }, // the phone in Finder (phonedrive.js), only when Mount is clicked
+  // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
+  // callAudio: the calls' sound on this Mac over Bluetooth (btDevices: which paired device each phone is).
+  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
+  // Not on one network: Bluetooth for the session (blepipe.js), Wi-Fi for files and screens
+  // (netlink.js). hotspots: {deviceId: {ssid, pass (safeStorage)}}, a phone's hotspot as typed once.
+  net: { ble: true, blePc: false, bleWifiOff: true, hotspots: {} }, // ble: with phones, blePc: with computers; bleWifiOff: none on the same Wi-Fi (blepolicy.js wifiQuiet)
 
   // The other computer's screen in a window here; framegen: shared/framegen.js.
   receive: { on: true, fullScreen: false, input: true, framegen: false },
@@ -98,7 +105,7 @@ function loadSettings() {
   const s = read('settings.json', {});
   if (s.sharing) s.sharing.on = false; // screen sharing never starts by itself
   const out = { ...DEFAULT_SETTINGS, ...s };
-  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
+  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
   if (s.ui && s.ui.setupSkipped && s.ui.setupDone === undefined) out.ui.setupDone = true;
   if ((s.rev || 0) < 7) { // Clipboard instant by default
     out.clipboard.mode = 'instant';

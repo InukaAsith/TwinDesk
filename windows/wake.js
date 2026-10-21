@@ -11,7 +11,7 @@ const dgram = require('dgram');
 const os = require('os');
 const P = require('../shared/protocol.js');
 const { interfaces } = require('./discovery');
-const { run, runElevated } = require('./ps');
+const { script, scriptElevated } = require('./ps');
 
 const T = P.T;
 const MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
@@ -34,24 +34,8 @@ function magic(mac) {
   return buf;
 }
 
-// Up physical adapters: may each wake the PC (armed in powercfg) and on a magic packet?
-const CHECK = `
-$armed = @(powercfg /devicequery wake_armed) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-$out = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | ForEach-Object {
-  $m = $null
-  try { $m = (Get-NetAdapterPowerManagement -Name $_.Name -ErrorAction Stop).WakeOnMagicPacket } catch {}
-  [pscustomobject]@{ name = $_.Name; armed = [bool]($armed -contains $_.InterfaceDescription); magic = "$m" }
-})
-ConvertTo-Json -Compress -InputObject $out
-`;
-
-// A switch, so both ways (elevated).
-const SET = (on) => `
-Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | ForEach-Object {
-  try { Set-NetAdapterPowerManagement -Name $_.Name -WakeOnMagicPacket ${on ? 'Enabled' : 'Disabled'} -ErrorAction Stop } catch {}
-  powercfg ${on ? '/deviceenablewake' : '/devicedisablewake'} $_.InterfaceDescription
-}
-`;
+// scripts/wake-check.ps1: up physical adapters, may each wake the PC (armed in powercfg) and on a
+// magic packet. scripts/wake-set.ps1 is the switch, both ways (elevated).
 
 class Wake {
   // opts: link, settings (shared, .wake), save(), onChange(), address() (the one the peer can reach)
@@ -104,7 +88,7 @@ class Wake {
 
   async check() {
     try {
-      const out = (await run(CHECK, 30000)).trim();
+      const out = (await script('wake-check', {}, 30000)).trim();
       const list = out ? [].concat(JSON.parse(out)) : [];
       const adapters = list.map((a) => ({ name: String(a.name), armed: !!a.armed, magic: String(a.magic || '') }));
       // magic is '' when Windows wouldn't tell us without elevation: then armed alone decides.
@@ -121,7 +105,7 @@ class Wake {
     this.state = { ...this.state, busy: true, error: '' };
     this.onChange();
     try {
-      await runElevated(SET(!!on));
+      await scriptElevated('wake-set', { On: !!on });
     } catch (e) {
       this.state.error = /cancel/i.test(e.message) ? 'Windows didn’t allow it' : e.message;
     }

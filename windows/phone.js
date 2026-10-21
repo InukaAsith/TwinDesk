@@ -56,8 +56,9 @@ class Phone extends EventEmitter {
       this.emit('change');
     });
     on(T.ADB_STATE, (m) => {
-      // full: the build with notification access (older apps didn't say: they all had it).
-      this.adb = { devOptions: !!m.devOptions, wifi: !!m.wifi, canEnable: !!m.canEnable, address: str(m.address, 64), full: m.full !== false, port: Number(m.port) | 0 };
+      // full: the build with notification access; net: on a Wi-Fi network, without which Android keeps
+      // wireless debugging off. Older apps said neither (they all had notification access).
+      this.adb = { devOptions: !!m.devOptions, wifi: !!m.wifi, canEnable: !!m.canEnable, address: str(m.address, 64), full: m.full !== false, port: Number(m.port) | 0, net: m.net !== false };
       this.emit('adb', this.adb);
       this.emit('change');
     });
@@ -102,7 +103,7 @@ class Phone extends EventEmitter {
       this.message = '';
       return this.emit('change');
     }
-    const d = this.discovery.get(String(id));
+    const d = this.discovery.get(String(id)) || this.discovery.near(String(id)); // the network, else Bluetooth
     if (!d || d.os !== P.OS.ANDROID) return this._fail('That phone isn’t nearby any more.');
     if (this.connected && this.server.current.deviceId === d.id) return;
     clearTimeout(this.connecting && this.connecting.timer);

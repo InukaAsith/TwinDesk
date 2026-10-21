@@ -276,6 +276,11 @@ final class Capture {
       if capturing && capKeyboard { ev(["t": "k.kd", "code": code]); ev(["t": "k.ku", "code": code]); return true }
       return false
     }
+    if code == "Fn" { // 🌐: the other computer switches its layout on a tap of it (Inject.key)
+      guard capturing && capKeyboard else { return false }
+      ev(["t": e.flags.contains(.maskSecondaryFn) ? "k.kd" : "k.ku", "code": code])
+      return true
+    }
     guard let m = KeyCodes.modifiers[code] else { return capturing && capKeyboard }
     let down = flags & m.device != 0
     if capturing && capKeyboard {

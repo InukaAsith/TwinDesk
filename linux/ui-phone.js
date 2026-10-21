@@ -23,9 +23,21 @@ UI.tab({
     const sub = el('div', { class: 'hero-status' });
     const showBtn = UI.button('Show Phone Screen', () => api.phoneScreen(true), 'primary');
     const discBtn = UI.button('Disconnect', () => api.disconnectPhone());
+    // On Bluetooth: onto a direct Wi-Fi link on request, until Back to Bluetooth (netlink.js 'user').
+    let wifiOn = false;
+    const wifiBtn = UI.button('Connect with Wi-Fi Direct', () => api.netWifi(!wifiOn));
+    const hotspotBtn = UI.button('Connect with hotspot', () => { api.netWifi('hotspot'); UI.go('overview'); }); // its name and password there
+    // How the mouse and keyboard reach the phone (settings.phone.input; the phone's own toggle too).
+    const via = UI.segmented([
+      { value: 'adb', label: 'ADB', title: 'Wireless debugging: full control' },
+      { value: 'phone', label: 'Accessibility', title: 'TwinDesk on the phone taps and types itself, over Wi-Fi, Wi-Fi Direct or Bluetooth. No developer options' },
+    ], (v) => api.setPhone({ input: v, inputPicked: true })); // picked: no longer automatic
     const hero = el('div', { class: 'card hero phone-hero' }, [
       dev,
-      el('div', { class: 'phone-hero-text' }, [name, sub, el('div', { class: 'phone-hero-actions' }, [showBtn, discBtn])]),
+      el('div', { class: 'phone-hero-text' }, [
+        name, sub,
+        el('div', { class: 'phone-hero-actions' }, [showBtn, wifiBtn, hotspotBtn, discBtn]),
+      ]),
     ]);
 
     // ---- wireless debugging ----
@@ -38,7 +50,21 @@ UI.tab({
     code.onkeydown = where.onkeydown = (e) => { if (e.key === 'Enter') pairBtn.click(); };
     const pairRow = UI.row('Pairing code', 'Or type it on the phone, in TwinDesk’s notification', [code, where, pairBtn]);
     const steps = UI.note('info', '');
-    const adbCard = UI.card('Screen, mouse and keyboard', [adbRow, pairRow, steps]);
+    // Wireless debugging off: one line, the steps behind Show me how.
+    let howOpen = false;
+    const howBtn = UI.button('Show me how', () => { howOpen = !howOpen; render(UI.state); }, 'small');
+    adbRow.querySelector('.controls').prepend(howBtn);
+    const how = el('ol', { class: 'how-steps' }, [
+      'On the phone: Settings › About phone › Software information › tap Build number 7 times. Developer options appear.',
+      'Settings › Developer options: turn on USB debugging.',
+      'On the same page, turn on Wireless debugging. The phone has to be on a Wi-Fi network (a direct Wi-Fi link alone isn’t enough).',
+      'Tap Wireless debugging › Pair device with pairing code, and type the code here, or in TwinDesk’s notification on the phone.',
+      'That’s all: after pairing once, TwinDesk turns wireless debugging on by itself.',
+    ].map((t) => el('li', { text: t })));
+    // The phone runs the standard build (no notification access): install the full one over it.
+    const fullBtn = UI.button('Install', () => api.phoneInstallFull(), 'small primary');
+    const fullRow = UI.row('Notifications from the phone', '', [fullBtn]);
+    const adbCard = UI.card('Screen, mouse and keyboard', [adbRow, how, pairRow, steps, fullRow]);
 
     // ---- apps ----
     const search = el('input', { type: 'search', placeholder: 'Search apps', autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': 'Search apps' } });
@@ -66,7 +92,10 @@ UI.tab({
     ]);
 
     const notConnected = UI.note('info', '');
-    body.append(notConnected, hero, adbCard, appsCard, winCard, optsCard);
+    // Below the phone's card: how the mouse and keyboard reach it (automatic until one is picked).
+    const viaRow = UI.row('Mouse and keyboard', '', [via.el]);
+    const viaCard = UI.card('', [viaRow]);
+    body.append(notConnected, hero, viaCard, adbCard, appsCard, winCard, optsCard);
 
     let appsKey = '';
     let winKey = '';
@@ -80,7 +109,7 @@ UI.tab({
       const c = ph.connected;
       const info = ph.info || {};
       const br = ph.bridge || { state: 'off' };
-      for (const x of [hero, adbCard, appsCard, winCard, optsCard]) x.hidden = !c;
+      for (const x of [hero, viaCard, adbCard, appsCard, winCard, optsCard]) x.hidden = !c;
       notConnected.set(c ? '' : ph.nearby && ph.nearby.length ? 'Click the phone above Overview to connect it.' : 'No phone connected. Open TwinDesk on the phone and pair it from Overview › Nearby.');
       if (!c) return;
 
@@ -94,20 +123,41 @@ UI.tab({
 
       const ready = br.state === 'ready';
       showBtn.disabled = !ready;
+      const n = s.net || {};
+      wifiOn = (n.why || []).includes('user') || !!n.linked; // made for the screen or files too
+      wifiBtn.textContent = wifiOn ? 'Back to Bluetooth' : 'Connect with Wi-Fi Direct';
+      wifiBtn.hidden = !(wifiOn || !!(s.net && s.net.transport === 'ble'));
+      hotspotBtn.hidden = wifiOn || n.state === 'hotspot' || !(s.net && s.net.transport === 'ble');
+      const off = br.state === 'waitingWifi';
+      howBtn.hidden = !off;
+      howBtn.textContent = howOpen ? 'Hide' : 'Show me how';
+      how.hidden = !off || !howOpen;
       const [cls, label] = STATES[br.state] || STATES.off;
       adbPill.className = `pill ${ready && br.inputBlocked ? 'bad' : cls}`;
       adbPill.textContent = ready && br.inputBlocked ? 'Touch blocked' : label;
-      adbRow.setHint(ready && br.inputBlocked ? 'The screen works, but Xiaomi refuses touch, mouse and keyboard from here. On the phone: Settings › Developer options › USB debugging (Security settings): on (it asks for a Mi account).'
+      adbRow.setHint(off ? (/direct Wi-Fi/.test(br.message) ? br.message : 'Wireless debugging is off on the phone. The screen and ADB control need it; Accessibility doesn’t.') : ready && br.inputBlocked ? 'The screen works, but Xiaomi refuses touch, mouse and keyboard from here. On the phone: Settings › Developer options › USB debugging (Security settings): on (it asks for a Mi account).'
         : ready ? 'The phone’s screen, touch, mouse and keyboard, and its clipboard in the background' : br.message);
       pairRow.hidden = br.state !== 'needsPair' && !br.canPair;
-      steps.set(br.state === 'waitingWifi'
-        ? 'On the phone: Settings › About phone › tap Build number 7 times (Developer options). Then Settings › System › Developer options › USB debugging and Wireless debugging: both on (wireless debugging only works with USB debugging on). After pairing once, TwinDesk turns them on by itself.'
-        : br.state === 'needsPair' ? 'TwinDesk pairs with the phone’s wireless debugging once. After that the phone’s screen, apps, mouse and keyboard work without this step.' : '');
+      steps.set(br.state === 'needsPair' ? 'TwinDesk pairs with the phone’s wireless debugging once. After that the phone’s screen, apps, mouse and keyboard work without this step.' : '');
+      if (UI.adbBle(s, adbCard, adbRow, adbPill)) { pairRow.hidden = how.hidden = howBtn.hidden = true; steps.set(''); }
+
+      // The standard build can't read notifications (Play Protect blocks downloaded apps that do).
+      const full = !ph.adb || ph.adb.full !== false;
+      const inst = br.install;
+      fullRow.hidden = full && !(inst && inst.state === 'done');
+      fullBtn.hidden = full;
+      fullBtn.disabled = !ready || !br.fullApk || (inst && inst.state === 'installing');
+      fullRow.setHint(inst && inst.state !== 'failed' && inst.message ? inst.message
+        : !br.fullApk ? 'This build of TwinDesk doesn’t carry the Android app.'
+          : `${inst && inst.state === 'failed' ? `${inst.message} ` : ''}The TwinDesk you downloaded can’t read the phone’s notifications (Play Protect blocks downloaded apps that can). Install the full app over it: its settings and pairing stay.${ready ? '' : ' Needs wireless debugging.'}`);
 
       const settings = ph.settings || {};
       sound.set(!!settings.sound);
       quality.set(String(settings.bitrateMbps || 8));
       wall.set(settings.wallpaper !== false);
+      via.set(br.input || (settings.input === 'phone' ? 'phone' : 'adb'));
+      viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? 'Automatic: ADB, wireless debugging is ready' : 'Automatic: Accessibility until wireless debugging is ready')
+        : br.input === 'phone' ? 'TwinDesk on the phone taps and types itself. The phone asks once to allow it in Accessibility' : 'Wireless debugging: full control');
 
       // apps (icons come with UI.phoneAssets)
       const apps = (UI.phoneAssets && UI.phoneAssets.apps) || [];
@@ -118,7 +168,7 @@ UI.tab({
       if (ak !== appsKey) {
         appsKey = ak;
         grid.replaceChildren(...shown.slice(0, 400).map((a) => {
-          const img = el('img', { src: a.icon || '', alt: '' });
+          const img = UI.appIcon(a.icon);
           const b = el('button', { class: 'app-tile', title: `Open ${a.name} in a window`, disabled: !ready }, [img, el('span', { text: a.name })]);
           b.onclick = () => api.phoneOpenApp({ id: a.id, name: a.name });
           return b;

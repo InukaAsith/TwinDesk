@@ -58,7 +58,7 @@ UI.tab({
       const items = a.list.filter((x) => !q || x.name.toLowerCase().includes(q));
       grid.replaceChildren(...items.map((x) => {
         const b = el('button', { class: 'app-tile', title: 'Open ' + x.name + ' on {name}' }, [
-          x.icon ? el('img', { src: x.icon, alt: '' }) : el('span', { class: 'app-noicon', text: x.name.slice(0, 1) }),
+          UI.appIcon(x.icon),
           el('span', { class: 'app-name', text: x.name }),
         ]);
         b.onclick = () => api.launchApp(x.id);

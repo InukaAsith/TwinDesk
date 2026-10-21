@@ -10,8 +10,8 @@ android {
         applicationId = "com.twindesk.android"
         minSdk = 29 // Android 10: wireless debugging needs 11, everything else works from 10
         targetSdk = 36
-        versionCode = 20001
-        versionName = "2.0.1"
+        versionCode = 20100
+        versionName = "2.1.0"
         // The repository whose CI built this app: the updater follows that project's releases (Updates.kt).
         // Where this test build sends its log lines (tools/logserver.js on the PC); LOG_SERVER=off in the environment turns it off.
         buildConfigField("String", "LOG_SERVER", "\"${System.getenv("LOG_SERVER").let { if (it == "off") "" else it ?: "http://192.168.2.100:47900/log" }}\"")

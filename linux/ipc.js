@@ -21,15 +21,17 @@ function setupIpc(ctx) {
   };
 
   handle('getState', () => ctx.buildState());
+  // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
+  handle('hub', (r) => ctx.hub().act(r));
 
   const pairWith = (d) => {
     discovery.clearInvite(d.id);
     if (d.os === P.OS.ANDROID) return ctx.connectPhoneDev(d); // a phone has no server to pair with
-    link.startPairing({ address: d.address, port: d.port, macName: d.name });
+    link.startPairing({ address: d.address, port: d.port, macName: d.name, id: d.id }); // id: one met over Bluetooth
   };
   handle('pair', (target) => {
     if (typeof target !== 'string' || !target.trim()) return;
-    const found = discovery.get(target);
+    const found = discovery.get(target) || discovery.near(target);
     if (found) return pairWith(found);
     const m = /^\s*([^\s:]+)(?::(\d{1,5}))?\s*$/.exec(target);
     if (!m) return;
@@ -47,11 +49,24 @@ function setupIpc(ctx) {
     const port = m[2] ? Number(m[2]) : P.PORT;
     if (port >= 1 && port <= 65535) link.startPairing({ address: m[1], port, macName: m[1] });
   });
-  handle('refreshFound', () => discovery.probe());
+  handle('refreshFound', () => discovery.refresh());
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
-  handle('cancelPair', () => link.cancelPair());
+  handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
   handle('forget', () => link.forget());
+  // Disconnect (either side of the session); Connect again / Take over the computer we're a guest of.
+  handle('disconnect', () => link.disconnect());
+  handle('connectAgain', () => link.connect(true));
+  // Connect on a paired device in our list that connects to us: a phone is asked as usual, a
+  // computer is invited and its hello takes the session over.
+  handle('connectGuest', (id) => {
+    if (typeof id !== 'string') return;
+    const d = discovery.get(id) || discovery.near(id);
+    if (!d) return;
+    if (d.os === P.OS.ANDROID) return ctx.connectPhoneDev(d);
+    link.expect(id);
+    discovery.invite(d.address);
+  });
   handle('respondPair', (allow) => link.respondPair(allow === true)); // host: Allow / Deny
   handle('forgetGuest', (id) => typeof id === 'string' && link.forgetGuest(id));
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
@@ -62,7 +77,8 @@ function setupIpc(ctx) {
 
   handle('setKvm', (partial) => {
     if (partial && typeof partial.linked === 'boolean') kvm.setLinked(partial.linked); // home first, tells the other side
-    const { linked, ...rest } = partial && typeof partial === 'object' ? partial : {};
+    if (partial && typeof partial.shared === 'boolean') kvm.setShared(partial.shared); // the Cursor tab's switch (Over Bluetooth through it)
+    const { linked, shared, ...rest } = partial && typeof partial === 'object' ? partial : {};
     change('kvm', rest, () => kvm.applyConfig());
   });
   handle('setLayout', (side) => kvm.setLayout(side));
@@ -114,7 +130,7 @@ function setupIpc(ctx) {
     if (!r.canceled && r.filePaths[0]) await smb.chooseFolder(r.filePaths[0]);
   });
   handle('removeShare', () => smb.unshare());
-  handle('openMacDrive', () => smb.open());
+  handle('openMacDrive', () => (smb.mounted ? smb.open() : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {
     const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && path.isAbsolute(p)).slice(0, 1000);
@@ -142,7 +158,12 @@ function setupIpc(ctx) {
   const phone = (name, fn) => handle(name, (...args) => (ctx.phone ? fn(...args) : undefined));
   phone('connectPhone', (id) => ctx.phone.connect(String(id)));
   phone('disconnectPhone', () => ctx.phone.disconnect());
-  handle('setPhone', (partial) => change('phone', partial));
+  handle('setPhone', (partial) => change('phone', partial, () => partial && 'input' in partial && ctx.phone && ctx.phone.bridge.tellVia()));
+  // The phone as a drive (phonedrive.js). The Mount page's switch: off unmounts and stops
+  // everything (nothing runs until Mount anyway).
+  phone('phoneMount', () => settings.mount.on && ctx.phoneDrive.mount());
+  phone('phoneUnmount', () => ctx.phoneDrive.unmount());
+  handle('setMount', (partial) => change('mount', partial, () => !settings.mount.on && ctx.phoneDrive && ctx.phoneDrive.stop()));
   phone('phonePair', (arg) => arg && typeof arg === 'object' && ctx.phone.bridge.pair(arg.code, arg.where));
   phone('phoneScreen', (open) => {
     if (open === false) {
@@ -152,6 +173,7 @@ function setupIpc(ctx) {
   phone('phoneOpenApp', (arg) => arg && typeof arg.id === 'string' && ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100)));
   phone('phoneCloseView', (id) => ctx.phoneViews.close(Number(id)));
   phone('phoneRetry', () => ctx.phone.bridge._kick());
+  phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
   handle('phoneAssets', () => (ctx.phone ? ctx.phone.assetsView() : { wallpaper: '', apps: [] }));
   handle('skipSetup', () => change('setup', { skipped: ctx.buildState().setup.missing, done: true }));
   handle('checkFirewall', () => ctx.checkFirewall());
@@ -161,6 +183,20 @@ function setupIpc(ctx) {
   handle('removeVdd', () => ctx.vdd.remove());
   handle('setStartup', (on) => ctx.setStartup(on === true));
   handle('quit', () => app.quit()); // General › Quit (some desktops have no tray)
+  // Not on the same network: Bluetooth on/off, and giving up on moving to Wi-Fi (netlink.js).
+  handle('setNet', (partial) => change('net', partial, () => ctx.applyNet()));
+  handle('netCancel', () => ctx.net && ctx.net.cancel());
+  handle('wifiSetup', () => ctx.wifi && ctx.wifi.setup()); // Keep Wi-Fi while hosting: the password prompt (wifi.js)
+  handle('netJoinHotspot', (arg) => ctx.joinHotspot(arg));
+  handle('openBluetoothSettings', () => ctx.openBluetoothSettings());
+  // Connect with Wi-Fi Direct (a session on Bluetooth), or back to Bluetooth (the link ends, whatever it was made for).
+  // on = 'hotspot': Connect with hotspot (a phone's; the Overview asks for its name and password).
+  handle('netWifi', (on) => {
+    if (!ctx.net) return;
+    if (on) return void ctx.net.need(on === 'hotspot' ? 'hotspot' : 'user');
+    ctx.net.drop();
+    if (ctx.pcScreen.mode !== 'off') ctx.pcScreen.setMode('off'); // Bluetooth can't carry the screen
+  });
 
   // pairsync.js applies a value the other computer changed, with the same side effects.
   const AFTER = {

@@ -14,6 +14,9 @@ const T = P.T;
 const HIGH_WATER = 1024 * 1024;
 const MAX_DRAG_FILES = 10000; // pause sending chunks above this many queued bytes
 const ANSWER_MS = 15000; // offer → accept/refuse
+// … through Bluetooth: the offer waits for Wi-Fi first (netlink.js holdOut, up to its 60 s
+// ASK_TIMEOUT_MS, then it goes through Bluetooth), so the answer can't come before that.
+const ANSWER_BLE_MS = 90000;
 const DONE_MS = 120000; // end → done (the Mac hashes and moves the file)
 
 class FileDrop {
@@ -150,7 +153,8 @@ class FileDrop {
     else if (job.release) offer.drop = 'release';
     else { offer.drop = 'point'; if (typeof job.x === 'number') { offer.x = job.x; offer.y = job.y; } }
     this.link.send(offer);
-    const a = await this._wait(id, [T.FILE_ACCEPT, T.FILE_REFUSE, T.FILE_CANCEL], ANSWER_MS);
+    const c = this.link.current;
+    const a = await this._wait(id, [T.FILE_ACCEPT, T.FILE_REFUSE, T.FILE_CANCEL], c && c.transport === 'ble' ? ANSWER_BLE_MS : ANSWER_MS);
     if (a.t !== T.FILE_ACCEPT) {
       const e = new Error(a.t === T.FILE_REFUSE ? refuseText(a.why) : 'Cancelled');
       e.refused = a.t === T.FILE_REFUSE ? a.why : '';

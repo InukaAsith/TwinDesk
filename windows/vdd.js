@@ -8,7 +8,7 @@ const { app } = require('electron');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { run, runElevated, q } = require('./ps');
+const { script, scriptElevated } = require('./ps');
 const Helper = require('./helper');
 
 // Pinned release, driver package only: the "x86" one is x64 despite its name (see the project's
@@ -23,10 +23,7 @@ const ADAPTER = /virtual display driver/i; // the device name in MttVDD.inf
 const MONITOR_ID = 'MTT1337'; // its monitor's EDID id (MONITOR\MTT1337\…)
 const SCHTASKS = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'schtasks.exe');
 
-const STATUS_PS = `
-$d = Get-PnpDevice -Class Display -ErrorAction SilentlyContinue | Where-Object { $_.HardwareID -contains 'Root\\MttVDD' } | Select-Object -First 1
-$t = Get-ScheduledTask -TaskPath '\\MacShare\\' -TaskName 'Extend on' -ErrorAction SilentlyContinue
-@{ device = [bool]$d; status = [string]$d.Status; tasks = [bool]$t } | ConvertTo-Json -Compress`;
+// scripts/vdd-status.ps1: the driver's device and status, and our Extend tasks.
 
 class Vdd {
   // opts: helper, onChange()
@@ -47,7 +44,7 @@ class Vdd {
   // Is the driver there and are our tasks there? At start (switching a leftover monitor off).
   async check() {
     try {
-      const r = JSON.parse((await run(STATUS_PS, 30000)).trim() || '{}');
+      const r = JSON.parse((await script('vdd-status', {}, 30000)).trim() || '{}');
       this._set({ checked: true, installed: !!(r.device && r.tasks), on: r.status === 'OK' });
       if (this.state.installed && this.state.on && !this.wanted) await this.setOn(false);
     } catch (e) {
@@ -59,22 +56,25 @@ class Vdd {
     if (this.state.busy) return;
     this._set({ busy: 'install', message: '' });
     const log = path.join(app.getPath('userData'), 'vdd-result.txt');
+    let cpu = '';
     try {
       try { fs.unlinkSync(log); } catch (_) { /* none */ }
       // The driver must match Windows, not this app (the x64 app also runs on ARM, emulated), so
       // ask WMI: Win32_Processor.Architecture 12 = ARM64.
-      const [sid, cpu] = (await run('[Security.Principal.WindowsIdentity]::GetCurrent().User.Value; '
-        + '(Get-CimInstance Win32_Processor | Select-Object -First 1).Architecture')).trim().split(/\s+/);
+      let sid;
+      [sid, cpu] = (await script('vdd-whoami')).trim().split(/\s+/);
       if (!/^S-1-[\d-]+$/.test(sid)) throw new Error('couldn’t read this account’s id');
       const driver = DRIVERS[cpu === '12' ? 'arm64' : 'x64'];
-      const script = '& ' + q(path.join(__dirname, 'scripts', 'vdd-install.ps1')) + ' -Helper ' + q(Helper.EXE) + ' -UserSid ' + q(sid)
-        + ' -Log ' + q(log) + ' -Url ' + q(driver.url) + ' -Sha256 ' + q(driver.sha256);
-      await runElevated(script, 300000);
+      await scriptElevated('vdd-install', { Helper: Helper.EXE, UserSid: sid, Log: log, Url: driver.url, Sha256: driver.sha256 }, 300000);
       const r = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim() : 'error: the setup didn’t finish';
       if (r !== 'ok') throw new Error(r.replace(/^error: /, ''));
       this.state.message = '';
     } catch (e) {
-      this.state.message = /cancel/i.test(e.message) ? 'The administrator prompt was declined' : 'Installing the display driver failed: ' + e.message;
+      if (/cancel/i.test(e.message)) this.state.message = 'The administrator prompt was declined';
+      // Windows on ARM takes only Microsoft-signed drivers; the ARM64 build is signed by SignPath
+      // only (VirtualDrivers/Virtual-Display-Driver#465). Install works again once a signed one is pinned.
+      else if (cpu === '12' && /800B0109/.test(e.message)) this.state.message = 'Extend isn’t available on Windows on ARM yet: Windows there accepts only Microsoft-signed display drivers, and the virtual display driver’s ARM64 build isn’t one (Virtual-Display-Driver#465)';
+      else this.state.message = 'Installing the display driver failed: ' + e.message;
     } finally {
       try { fs.unlinkSync(log); } catch (_) { /* none */ }
       this.state.busy = '';
@@ -88,7 +88,7 @@ class Vdd {
     const log = path.join(app.getPath('userData'), 'vdd-result.txt');
     try {
       if (this.state.on) await this.setOn(false);
-      await runElevated('& ' + q(path.join(__dirname, 'scripts', 'vdd-remove.ps1')) + ' -Log ' + q(log), 120000);
+      await scriptElevated('vdd-remove', { Log: log }, 120000);
       const r = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim() : 'error: it didn’t finish';
       if (r !== 'ok') throw new Error(r.replace(/^error: /, ''));
     } catch (e) {

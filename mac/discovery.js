@@ -48,6 +48,7 @@ class Discovery extends EventEmitter {
     this.sock = null;
     this.timers = [];
     this.sendErrors = new Set();
+    this.extra = null; // Bluetooth (blepipe.js BleHost): devices near but not on this network, {list(), invite(id)}
   }
 
   start() {
@@ -65,14 +66,16 @@ class Discovery extends EventEmitter {
     this.sock = null;
   }
 
+  // On the network first; Bluetooth adds the ones it alone sees (ble: true, address 'ble:…').
   list() {
-    return [...this.found.values()]
-      .map(({ id, name, os: o, address, port, fp, invited }) => ({ id, name, os: o, address, port, fp, invited: !!invited }))
-      .sort((a, b) => (b.invited - a.invited) || a.name.localeCompare(b.name));
+    const out = [...this.found.values()]
+      .map(({ id, name, os: o, address, port, fp, invited }) => ({ id, name, os: o, address, port, fp, invited: !!invited }));
+    if (this.extra) for (const d of this.extra.list()) if (!this.found.has(d.id)) out.push({ ...d, invited: false });
+    return out.sort((a, b) => (b.invited - a.invited) || a.name.localeCompare(b.name));
   }
 
   get(id) {
-    return this.found.get(id) || null;
+    return this.found.get(id) || (this.extra && this.extra.list().find((d) => d.id === id)) || null;
   }
 
   // Broadcast a probe (everyone answers with a beacon), or unicast it to one address.
@@ -80,6 +83,16 @@ class Discovery extends EventEmitter {
     const msg = { t: P.T.PROBE, v: P.PROTOCOL_VERSION, id: this.self.id };
     if (address) this._send(msg, address);
     else for (const target of this._targets()) this._send(msg, target);
+  }
+
+  // Refresh: what was found is forgotten (an invite stays), and whoever is there answers again.
+  refresh() {
+    let changed = false;
+    for (const [id, d] of this.found) if (!d.invited) changed = this.found.delete(id);
+    if (changed) this.emit('change');
+    this._beacon();
+    this.probe();
+    setTimeout(() => this.probe(), 500); // UDP may drop one
   }
 
   // Ask one address who is there; resolves to the device or null after PROBE_REPLY_MS.
@@ -100,6 +113,11 @@ class Discovery extends EventEmitter {
 
   // A Mac asks a PC to pair/connect to it (the Mac stays the host).
   invite(address) {
+    if (String(address).startsWith('ble:')) {
+      const d = this.extra && this.extra.list().find((x) => x.address === address);
+      if (d) this.extra.invite(d.id);
+      return;
+    }
     const { id, name, os: o, port, fp } = this.self;
     this._send({ t: P.T.INVITE, v: P.PROTOCOL_VERSION, id, name, os: o, port, fp }, address);
   }

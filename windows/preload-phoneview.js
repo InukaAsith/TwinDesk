@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('phoneview', {
   on: (ch, fn) => {
-    if (['size', 'video', 'audio', 'status'].includes(ch)) ipcRenderer.on(`phoneview:${ch}`, (_e, m) => fn(m));
+    if (['size', 'video', 'audio', 'netaudio', 'status'].includes(ch)) ipcRenderer.on(`phoneview:${ch}`, (_e, m) => fn(m));
   },
   send: (m) => ipcRenderer.send('phoneview:in', m),
   drop: (files) => ipcRenderer.send('phoneview:drop', [...files].map((f) => { try { return webUtils.getPathForFile(f); } catch { return ''; } }).filter(Boolean)),

@@ -22,10 +22,14 @@ const P = require('../shared/protocol.js');
 const { Adb } = require('./adb');
 const { Session, ACTION } = require('./scrcpy');
 const { KeyState, ANDROID } = require('./android-keys');
+const { PhoneInput } = require('../shared/phoneinput.js');
 
 const T = P.T;
 const APP_ID = 'com.twindesk.android';
 const POLL_MS = 3000;
+// adb's older TCP mode: unlike wireless debugging it doesn't need a Wi-Fi network (Android switches
+// wireless debugging off on a Wi-Fi Direct link), and stays on until the phone restarts.
+const TCPIP_PORT = 5555;
 const INPUT_BLOCKED = 'Xiaomi blocks touch and keys: on the phone, Developer options › USB debugging (Security settings)';
 const BUTTON = { 0: 1, 1: 2, 2: 4, 3: 8, 4: 16 }; // our button numbers -> MotionEvent.BUTTON_*
 const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
@@ -63,10 +67,15 @@ class PhoneBridge extends EventEmitter {
     this.message = '';
     this.serial = null;
     this.control = null; // control-only session
+    // Without wireless debugging: the phone applies the input itself (shared/phoneinput.js), when
+    // it says it can (phone.input {on}).
+    this.input = new PhoneInput((m) => this.server.sendToClient(m));
+    this.phoneInput = false;
     this.kvm = null; // the pointer while this PC drives the phone: {route, x, y, push}
     this.keys = new KeyState();
     this.views = null; // phoneview.js sets this
     this.setupDone = new Set(); // serials granted this run
+    this.tcpipDone = new Set(); // serials whose TCP mode was checked this run
     this.lastPort = new Map(); // phone address -> the wireless debugging port that last worked
     this.misses = 0; // tries in a row that found no way in
     // Phones (by id) adb has reached before. Android keeps the computer's key (Settings lists it),
@@ -74,6 +83,19 @@ class PhoneBridge extends EventEmitter {
     // MIUI) is "not yet", never "pair again": only adb refusing the key asks for a code. Kept
     // across restarts.
     this.known = new Set(readJson(knownFile(), []));
+    server.on(`t:${T.PHONE_INPUT}`, (m, ctx) => {
+      if (!isPhone(ctx)) return;
+      this.phoneInput = m.on === true;
+      // The phone's choice of input (changed there, or on connecting): the same setting here.
+      const ph = this.getSettings().phone;
+      if ((m.via === 'adb' || m.via === 'phone') && ph && (ph.input !== m.via || !ph.inputPicked)) { // 'auto' there: as it is here
+        ph.input = m.via;
+        ph.inputPicked = true;
+        this.emit('save');
+      }
+      this.emit('change');
+    });
+    server.on('closed', () => { this.phoneInput = false; });
     this.canPair = false; // still looking, but the code field shows (its pairing may be gone)
     this.inputBlocked = false; // Xiaomi with “USB debugging (Security settings)” off: touches and keys are refused
     this.wired = null; // wired.js: the phone on the USB cable
@@ -84,7 +106,7 @@ class PhoneBridge extends EventEmitter {
     server.on(`t:${T.ADB_PAIR}`, (m, ctx) => {
       if (!isPhone(ctx)) return;
       const port = Number(m.port) | 0;
-      const address = (this.phone.adb && this.phone.adb.address) || ctx.address;
+      const address = this.adbAddress();
       this.pair(m.code, port > 0 && port < 65536 ? `${address}:${port}` : '');
     });
     phone.on('info', () => this._kick());
@@ -99,6 +121,19 @@ class PhoneBridge extends EventEmitter {
     server.on('closed', () => {
       if (!isPhone(server.current)) this._stopAll('');
     });
+    // The phone's sound without wireless debugging (Sound.kt there): asked for while adb can't carry
+    // it; what comes plays in a hidden window (phoneview.js netSound).
+    this.netSound = { asked: false, on: false, waiting: false, error: '' };
+    const soundReset = () => Object.assign(this.netSound, { asked: false, on: false, waiting: false, error: '' });
+    server.on(`t:${T.PHONE_SOUND_STATE}`, (m, ctx) => {
+      if (!isPhone(ctx)) return;
+      Object.assign(this.netSound, { on: m.on === true, waiting: m.waiting === true, error: typeof m.error === 'string' ? m.error.slice(0, 200) : '' });
+      this.emit('change');
+    });
+    server.on(`t:${T.PHONE_SOUND}`, (m, ctx) => isPhone(ctx) && this.netSound.asked && this.views && this.views.netAudio(m));
+    server.on('client', () => { soundReset(); this._sound(); });
+    server.on('closed', () => { if (!isPhone(server.current)) soundReset(); this._sound(); });
+    server.on('transport', () => this._sound());
     setInterval(() => this._poll(), POLL_MS);
   }
 
@@ -106,9 +141,12 @@ class PhoneBridge extends EventEmitter {
     return {
       state: this.state, message: this.message, serial: this.serial, available: this.adb.available, canPair: this.canPair, inputBlocked: this.inputBlocked,
       via: this.via, // 'usb' | 'wifi' | null: how adb reaches the phone
+      input: this.inputVia, inputMode: this.inputMode, // the mouse and keyboard: what they go through now, and the choice
       control: !!(this.control && !this.control.closed), driving: !!this.kvm,
       install: this.install, fullApk: !!fullApk(),
       windows: this.views ? this.views.list() : [],
+      // the phone's sound without adb: asked for, playing, waiting for Start on the phone, or why not
+      sound: { net: this.netSound.asked, on: this.netSound.on, waiting: this.netSound.waiting, error: this.netSound.error },
     };
   }
 
@@ -164,11 +202,23 @@ class PhoneBridge extends EventEmitter {
     this.kickTimer = setTimeout(() => this._poll(), 50);
   }
 
-  // The phone's sound here on its own when Sound › receive is on (the screen window carries its own).
+  // The phone's sound here when Sound › receive is on (the screen window carries its own): through
+  // adb once it's ready, else captured by the phone (Start there), which then stays until it stops.
+  // Not through Bluetooth: too much for it.
   _sound() {
     if (!this.views) return;
-    const want = this.state === 'ready' && isPhone(this.server.current) && !!this.getSettings().audio.receive && !this.views.screenWithSound;
-    this.views.sound(want);
+    const c = this.server.current;
+    const want = isPhone(c) && !!this.getSettings().audio.receive && !this.views.screenWithSound;
+    const adb = this.state === 'ready';
+    const net = want && (!adb || this.netSound.on) && c.transport !== 'ble';
+    this.views.sound(want && adb && !net);
+    if (net !== this.netSound.asked) {
+      this.netSound.asked = net;
+      if (!net) Object.assign(this.netSound, { on: false, waiting: false, error: '' });
+      if (isPhone(c)) this.server.sendToClient({ t: T.PHONE_SOUND_WANT, on: net });
+      this.emit('change');
+    }
+    this.views.netSound(net);
   }
 
   async _poll() {
@@ -202,12 +252,13 @@ class PhoneBridge extends EventEmitter {
     if (!this.adb.available) return this._set('missing', 'adb or the scrcpy server is missing from this build.');
     const a = this.phone.adb;
     if (!a) return this._set('connecting', 'Waiting for the phone…');
-    const address = a.address || (this.server.current && this.server.current.address);
+    const address = this.adbAddress();
     const ready = await this._findDevice(address);
     if (ready) {
       this._known(true);
       this.serial = ready;
       await this._setup(ready);
+      if (await this._tcpip(ready)) return; // adbd restarts: found again on the next poll
       await this._checkInput(ready);
       return this._startControl();
     }
@@ -222,11 +273,30 @@ class PhoneBridge extends EventEmitter {
         ? 'Allow USB debugging for this computer on the phone (tap Allow on its prompt).'
         : `Waiting for adb on the cable (${st ? st.state : 'not listed'})…`);
     }
-    if (!a.wifi) {
-      if (a.canEnable) {
-        this.server.sendToClient({ t: T.ADB_ENABLE, on: true });
-        return this._set('connecting', 'Turning on wireless debugging…');
+    // TCP mode, switched on the last time we were in (USB cable or wireless debugging): works on a
+    // direct Wi-Fi link too, where wireless debugging can't (though its switch may still say on).
+    // Only at the session's own network address: on Bluetooth or the cable that's 127.0.0.1, where
+    // port 5555 is this computer's Android emulator, and the phone's Wi-Fi address is out of reach.
+    const c = this.server.current;
+    const sessionIp = c && c.transport !== 'ble' && c.address && !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(c.address) ? c.address.replace(/^::ffff:/, '') : '';
+    if (sessionIp && sessionIp === address) {
+      const serial = `${address}:${TCPIP_PORT}`;
+      const r = await this.adb.connect(address, TCPIP_PORT);
+      if (r.ok && await this._findDevice(address)) return this._kick();
+      // Not allowed yet ("failed to authenticate", kept as unauthorized): the phone asks; keep that connection.
+      if ((await this.adb.devices()).some((d) => d.serial === serial && d.state === 'unauthorized')) {
+        return this._set('waitingWifi', 'Tap Allow on the phone (“Allow USB debugging?”).');
       }
+      if (r.ok) await this.adb.disconnect(serial);
+    }
+    // A direct Wi-Fi link without a Wi-Fi network on the phone: wireless debugging can’t come on. (On
+    // its own Wi-Fi as well it can, reached at the session's address; older apps don't say: the address.)
+    const direct = a.net === false || (!a.wifi && /^192\.168\.(49|137)\./.test(address));
+    if (!a.wifi || direct) {
+      if (a.canEnable) this.server.sendToClient({ t: T.ADB_ENABLE, on: true }); // also refreshes adb.state
+      if (a.canEnable && !direct) return this._set('connecting', 'Turning on wireless debugging…');
+      // Android keeps wireless debugging off without a Wi-Fi network: a Wi-Fi Direct group isn't one.
+      if (direct) return this._set('waitingWifi', 'On a direct Wi-Fi link the phone can’t turn wireless debugging on (it needs a Wi-Fi network). Connect it once by USB cable or on the same Wi-Fi, and it works here too until the phone restarts. Meanwhile the mouse and keyboard work through Accessibility.');
       return this._set('waitingWifi', a.devOptions ? 'Turn on USB debugging and Wireless debugging on the phone (both).' : 'Turn on Developer options, then USB debugging and Wireless debugging on the phone (both).');
     }
     // Wireless debugging is on: connect where it listens. The phone tells us its port (it finds
@@ -318,9 +388,9 @@ class PhoneBridge extends EventEmitter {
     else {
       const a = this.phone.adb || {};
       const services = await this.adb.mdns();
-      const p = services.find((s) => s.type === 'pairing' && s.address === a.address) || this.pairing;
+      const p = services.find((s) => s.type === 'pairing' && (s.address === a.address || s.address === this.adbAddress())) || this.pairing;
       if (!p) return this._set('needsPair', 'Can’t see the phone’s pairing code screen. Keep it open, or type its address and port.');
-      [address, port] = [p.address, p.port];
+      [address, port] = [this.adbAddress() || p.address, p.port];
     }
     this._set('connecting', 'Pairing…');
     const r = await this.adb.pair(address, port, code);
@@ -349,6 +419,19 @@ class PhoneBridge extends EventEmitter {
     for (const c of cmds) await this.adb.shell(serial, c, { timeout: 8000 });
     this.setupDone.add(serial);
     setTimeout(() => this.server.sendToClient({ t: T.PHONE_APPS_LIST }), 500);
+  }
+
+  // TCP mode on (once per phone restart), for a direct Wi-Fi link later. True: adbd restarts now.
+  // On the USB cable wired.js has done it before the session moved onto it (here it would restart adbd under it).
+  async _tcpip(serial) {
+    if (this.tcpipDone.has(serial) || !serial.includes(':')) return false;
+    this.tcpipDone.add(serial);
+    const r = await this.adb.shell(serial, 'getprop service.adb.tcp.port', { timeout: 4000 });
+    if (r.out.trim() === String(TCPIP_PORT)) return false;
+    this._set('connecting', 'Setting up the phone for Wi-Fi Direct…');
+    await this.adb.run(['-s', serial, 'tcpip', String(TCPIP_PORT)], { timeout: 8000 });
+    setTimeout(() => this._kick(), 2000);
+    return true;
   }
 
   async _startControl() {
@@ -441,16 +524,61 @@ class PhoneBridge extends EventEmitter {
     }
   }
 
+  // Where the Mac's input goes: wireless debugging (scrcpy), else the phone itself.
+  // Where the phone's wireless debugging is reached: the session's own address while it's on a
+  // network (on a direct Wi-Fi link the Wi-Fi address the phone reports is on another network,
+  // or it has none), else that one (the session on the cable or Bluetooth, 127.0.0.1).
+  adbAddress() {
+    const c = this.server.current;
+    const a = this.phone.adb || {};
+    const onNet = c && c.address && c.address !== '127.0.0.1' && c.address !== '::1' && c.transport !== 'ble';
+    return (onNet ? c.address.replace(/^::ffff:/, '') : '') || a.address || (c && c.address) || '';
+  }
+
+  // settings.phone.input 'phone': always the phone itself (its Accessibility service), on Wi-Fi too.
+  get ctl() {
+    if (!this.viaPhone && this.control && !this.control.closed) return this.control;
+    return this.phoneInput ? this.input : null;
+  }
+
+  // The input choice changed here: to the phone, so its toggle shows the same.
+  tellVia() {
+    if (isPhone(this.server.current)) this.server.sendToClient({ t: T.PHONE_INPUT_VIA, via: this.inputMode });
+  }
+
+  get viaPhone() {
+    return (this.getSettings().phone || {}).input === 'phone';
+  }
+
+  // 'auto' until one is picked (here or on the phone): ADB once wireless debugging is ready, else
+  // Accessibility, whose permission the phone asks for only then. An 'adb' saved before it could
+  // be picked is 'auto'.
+  get inputMode() {
+    const ph = this.getSettings().phone || {};
+    return ph.input === 'phone' ? 'phone' : ph.input === 'adb' && ph.inputPicked ? 'adb' : 'auto';
+  }
+
+  // What the mouse and keyboard go through now, for the window's toggle.
+  get inputVia() {
+    const m = this.inputMode;
+    return m === 'auto' ? (this.state === 'ready' ? 'adb' : 'phone') : m;
+  }
+
   _take(m) {
     const d = this._display();
-    const pending = !this.control || this.control.closed;
+    const pending = !this.ctl || this.ctl.closed; // the input in use (adb control, or the phone's own input)
     // The adb connection drops now and then and comes back within seconds: take the phone anyway (its
     // pointer shows at once, touches follow when the connection is back) instead of refusing for a gap.
     // Only a phone that was never set up (or has no screen info) is refused.
     if (!d || (pending && !['connecting', 'error', 'ready'].includes(this.state))) {
-      console.log(`[phone] take refused (state ${this.state}, control ${pending ? 'down' : 'up'}, display ${d ? 'known' : 'unknown'})`);
+      console.log(`[phone] take refused (state ${this.state}, input ${pending ? 'down' : 'up'}, display ${d ? 'known' : 'unknown'})`);
       setImmediate(() => this.server.inject({ t: T.KVM_REFUSE, route: m.route, why: P.REFUSE.NOT_ALLOWED }));
-      this.emit('popup', 'home', this.state === 'ready' ? 'The phone isn’t ready yet' : 'Set up wireless debugging on the Phone page first');
+      if (d && (this.viaPhone || (this.state !== 'ready' && this.inputMode !== 'adb'))) { // no wireless debugging (Bluetooth), or chosen: the phone does it itself, once allowed
+        this.server.sendToClient({ t: T.PHONE_INPUT_ASK });
+        this.emit('popup', 'home', 'On the phone, allow TwinDesk to control it (the notification there)');
+      } else {
+        this.emit('popup', 'home', this.state === 'ready' ? 'The phone isn’t ready yet' : 'Set up wireless debugging on the Phone page first');
+      }
       return;
     }
     if (pending) {
@@ -479,9 +607,10 @@ class PhoneBridge extends EventEmitter {
   _pointer(on) {
     const k = this.kvm;
     const now = Date.now();
-    if (on && now - (this.lastPointer || 0) < 8) {
+    const gap = this.ctl === this.input ? 40 : 8; // through the session (maybe Bluetooth): fewer
+    if (on && now - (this.lastPointer || 0) < gap) {
       clearTimeout(this.pointerTimer);
-      this.pointerTimer = setTimeout(() => this._pointer(true), 8);
+      this.pointerTimer = setTimeout(() => this._pointer(true), gap);
       return;
     }
     this.lastPointer = now;
@@ -491,9 +620,9 @@ class PhoneBridge extends EventEmitter {
   _hover() {
     const k = this.kvm;
     const d = this._display();
-    if (!k || !d || !this.control) return;
-    if (k.buttons) this.control.mouse(ACTION.MOVE, k.x, k.y, d.w, d.h, 0, k.buttons);
-    else this.control.mouse(ACTION.HOVER_MOVE, k.x, k.y, d.w, d.h, 0, 0);
+    if (!k || !d || !this.ctl) return;
+    if (k.buttons) this.ctl.mouse(ACTION.MOVE, k.x, k.y, d.w, d.h, 0, k.buttons);
+    else this.ctl.mouse(ACTION.HOVER_MOVE, k.x, k.y, d.w, d.h, 0, 0);
     this._pointer(true);
   }
 
@@ -535,7 +664,7 @@ class PhoneBridge extends EventEmitter {
     if (!k) return;
     console.log(`[phone] driving ends (${tellKvm ? 'the connection or the app ended it' : 'released or handed back'})`);
     const d = this._display();
-    if (k.buttons && d && this.control) this.control.mouse(ACTION.UP, k.x, k.y, d.w, d.h, k.buttons, 0);
+    if (k.buttons && d && this.ctl) this.ctl.mouse(ACTION.UP, k.x, k.y, d.w, d.h, k.buttons, 0);
     for (const code of [...this.keys.held]) this._key({ t: T.K_KEY_UP, code });
     this.kvm = null;
     clearTimeout(this.pointerTimer);
@@ -547,43 +676,43 @@ class PhoneBridge extends EventEmitter {
   _button(m) {
     const k = this.kvm;
     const d = this._display();
-    if (!k || !d || !this.control) return;
+    if (!k || !d || !this.ctl) return;
     const down = m.t === T.K_DOWN;
     const b = Number(m.b) | 0;
     // Like scrcpy: right = Back, middle = Home; left (and the side buttons) are the mouse's.
-    if (b === 1) return this.control.backOrScreenOn(down ? ACTION.DOWN : ACTION.UP);
-    if (b === 2) return void (down && this.control.tap(ANDROID.HOME));
-    if (b === 3) return void (down && this.control.tap(ANDROID.BACK));
+    if (b === 1) return this.ctl.backOrScreenOn(down ? ACTION.DOWN : ACTION.UP);
+    if (b === 2) return void (down && this.ctl.tap(ANDROID.HOME));
+    if (b === 3) return void (down && this.ctl.tap(ANDROID.BACK));
     const bit = BUTTON[b] || 1;
     if (down) k.buttons |= bit;
     else k.buttons &= ~bit;
-    this.control.mouse(down ? ACTION.DOWN : ACTION.UP, k.x, k.y, d.w, d.h, bit, k.buttons);
+    this.ctl.mouse(down ? ACTION.DOWN : ACTION.UP, k.x, k.y, d.w, d.h, bit, k.buttons);
   }
 
   _wheel(m) {
     const k = this.kvm;
     const d = this._display();
-    if (!k || !d || !this.control) return;
+    if (!k || !d || !this.ctl) return;
     const line = m.mode === 'line';
     const rev = this.getSettings().kvm.reverseScroll ? -1 : 1;
     const hs = (-(Number(m.dx) || 0) / (line ? 1 : 40)) * rev;
     const vs = (-(Number(m.dy) || 0) / (line ? 1 : 40)) * rev;
-    if (hs || vs) this.control.scroll(k.x, k.y, d.w, d.h, hs, vs, k.buttons);
+    if (hs || vs) this.ctl.scroll(k.x, k.y, d.w, d.h, hs, vs, k.buttons);
   }
 
   _key(m) {
-    if (!this.kvm || !this.control || typeof m.code !== 'string') return;
+    if (!this.kvm || !this.ctl || typeof m.code !== 'string') return;
     const swap = this.server.keySwap(this.getSettings());
     const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
     const e = this.keys.event(code, down);
-    if (e) this.control.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
+    if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
 
   _gesture(m) {
-    if (!this.control || m.phase === 'begin' || m.phase === 'change') return;
+    if (!this.ctl || m.phase === 'begin' || m.phase === 'change') return;
     const key = { back: ANDROID.BACK, overview: ANDROID.APP_SWITCH, appWindows: ANDROID.APP_SWITCH, desktop: ANDROID.HOME, launcher: ANDROID.ALL_APPS }[m.g];
-    if (key) this.control.tap(key);
+    if (key) this.ctl.tap(key);
   }
 
   // ---- windows (phoneview.js) ----

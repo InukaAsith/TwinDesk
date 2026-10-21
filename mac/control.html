@@ -7,6 +7,7 @@
   <title>TwinDesk</title>
   <link rel="stylesheet" href="control.css">
   <link rel="stylesheet" href="control-pages.css">
+  <link rel="stylesheet" href="../shared/phonehub.css">
 </head>
 <body>
   <nav id="sidebar" aria-label="Sections">
@@ -26,12 +27,26 @@
     <section id="banner" class="banner" hidden>
       <div class="banner-text">
         <span id="pair-title"><strong id="pair-name"></strong> wants to pair</span>
-        <span class="code-label">Code</span> <span id="pair-code" class="code"></span>
+        <span id="pair-code-label" class="code-label">Code</span> <span id="pair-code" class="code"></span>
         <div id="pair-hint" class="hint"></div>
       </div>
       <div class="banner-actions">
         <button id="pair-deny" class="btn">Deny</button>
         <button id="pair-allow" class="btn primary">Allow</button>
+      </div>
+    </section>
+    <section id="net-banner" class="banner" hidden>
+      <div class="banner-text">
+        <span id="net-title"></span>
+        <div id="net-hint" class="hint"></div>
+        <div id="net-form" class="net-form" hidden>
+          <input id="net-ssid" type="text" placeholder="Hotspot name" autocomplete="off" spellcheck="false" aria-label="Hotspot name">
+          <input id="net-pass" type="password" placeholder="Password" autocomplete="off" aria-label="Hotspot password">
+        </div>
+      </div>
+      <div class="banner-actions">
+        <button id="net-cancel" class="btn">Cancel</button>
+        <button id="net-join" class="btn primary">Join</button>
       </div>
     </section>
     <div id="pages"></div>
@@ -55,6 +70,12 @@
   <script src="ui-general.js"></script>
   <script src="ui-about.js"></script>
   <script src="ui-setup.js"></script>
+  <script src="../shared/ui-hub.js"></script>
+  <script src="../shared/ui-calls.js"></script>
+  <script src="../shared/ui-messages.js"></script>
+  <script src="../shared/ui-media.js"></script>
+  <script src="../shared/ui-pfiles.js"></script>
+  <script src="../shared/pairpop.js"></script>
   <script src="ui-start.js"></script>
 </body>
 </html>

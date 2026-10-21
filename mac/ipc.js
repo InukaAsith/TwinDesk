@@ -13,9 +13,11 @@ const SETTINGS_URLS = {
   inputMonitoring: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
   localNetwork: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork',
   fullDisk: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+  bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth',
+  location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'apps', 'general', 'about'];
+const TABS = ['phone', 'overview', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'apps', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -32,7 +34,7 @@ const SCHEMA = {
   virtual: { enabled: bool, width: (v) => Math.round(clamp(640, 3840, 1920)(v)), height: (v) => Math.round(clamp(480, 2160, 1080)(v)), hiDPI: bool, hz: oneOf([30, 60], 60) },
   kvm: {
     pcSide: oneOf(P.SIDES, 'right'), mouse: bool, keyboard: bool, driveOther: bool, beDriven: bool,
-    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool,
+    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight') },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool },
@@ -46,7 +48,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth'], 'fast') },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -82,13 +84,32 @@ function setupIpc(ctx) {
       return ctx.phone.connect(dev.id);
     }
     if (dev && dev.os !== 'mac') {
-      if (pairing.list().some((p) => p.id === dev.id)) return report(`${dev.name} is paired. Open TwinDesk on it to connect.`);
+      // Paired: invited, and its hello takes the session over from whoever has it (Connect / Switch).
+      if (pairing.list().some((p) => p.id === dev.id)) {
+        pairing.expect(dev.id);
+        discovery.invite(dev.address);
+        return report(`Connecting to ${dev.name}…`);
+      }
       discovery.invite(dev.address);
+      if (dev.os === P.OS.ANDROID) { // the popup says Pair has to be pressed on the phone, for a minute at most
+        const inv = { id: dev.id, name: dev.name };
+        connect.inviting = inv;
+        setTimeout(() => { if (connect.inviting === inv) { connect.inviting = null; pushState(); } }, 60 * 1000);
+      }
       return report(`Asked ${dev.name} to connect. Confirm on ${dev.name}.`);
     }
-    if (dev && pairing.list().some((p) => p.id === dev.id)) return report(`${dev.name} is paired and connects to this Mac by itself.`);
+    if (dev && pairing.list().some((p) => p.id === dev.id)) {
+      // A Mac that connects to us: invited, and its hello takes the session over (Take over).
+      pairing.expect(dev.id);
+      discovery.invite(dev.address);
+      return report(`Connecting to ${dev.name}…`);
+    }
     if (dev && link.hosts.some((h) => h.id === dev.id)) {
-      link.poke();
+      // Switching from a device connected to us: it goes first (this Mac stands by while it hosts).
+      if (ctx.server.server.current) {
+        ctx.server.server.release();
+        setTimeout(() => link.connect(true), 800);
+      } else link.connect(true);
       return report(`Connecting to ${dev.name}…`);
     }
     report('');
@@ -111,8 +132,17 @@ function setupIpc(ctx) {
     disconnectPhone() {
       ctx.phone.disconnect();
     },
+    // Disconnect the session (phone or computer); Connect again / Take over the Mac we're a guest of.
+    disconnect() {
+      if (ctx.server.current && ctx.server.current.os === P.OS.ANDROID) return ctx.phone.disconnect();
+      ctx.server.disconnect();
+    },
+    connectAgain() {
+      ctx.link.connect(true);
+    },
     setPhone(partial) {
       setGroup('phone', partial);
+      if (partial && 'input' in partial) ctx.phone.bridge.tellVia();
     },
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);
@@ -173,13 +203,15 @@ function setupIpc(ctx) {
       ctx.link.confirmCode();
     },
     cancelGuestPair() {
+      connect.inviting = null;
+      pushState();
       ctx.link.cancelPair();
     },
     forgetHost(hostId) {
       ctx.link.forget(String(hostId));
     },
     refreshDiscovery() {
-      ctx.discovery.probe();
+      ctx.discovery.refresh();
     },
     copyText(text) {
       if (typeof text === 'string' && text.length < 200) clipboard.writeText(text);
@@ -206,8 +238,10 @@ function setupIpc(ctx) {
       if (by !== 'apps' && ctx.apps) ctx.apps.autoShare = false;
       settings.sharing.on = !!on;
       save();
-      if (on) ctx.displays.applyVirtual().then(() => ctx.stream.restart('sharing on'));
+      // Through Bluetooth the picture needs Wi-Fi first (netlink.js); it starts once the session is on it.
+      if (on) ctx.net.need('share').then(() => settings.sharing.on && ctx.displays.applyVirtual().then(() => ctx.stream.restart('sharing on')));
       else {
+        ctx.net.release('share');
         ctx.stream.stop('off');
         ctx.input.releaseAll();
         ctx.displays.applyVirtual(); // removes the virtual display
@@ -276,6 +310,7 @@ function setupIpc(ctx) {
       const prev = { ...settings.kvm };
       setGroup('kvm', partial);
       ctx.kvm.settingsChanged(prev);
+      if (partial && typeof partial.shared === 'boolean') ctx.kvm.setShared(partial.shared); // the Cursor tab's switch (Over Bluetooth through it)
     },
     // The shared layout (docs/mesh.md): a device goes to a cell (a device there moves to its old cell, or
     // they swap); a device goes off the map. Invalid arguments are ignored; the new layout comes with the state.
@@ -382,16 +417,50 @@ function setupIpc(ctx) {
       ctx.pcApps.list();
     },
     openPcApp(id) {
-      ctx.pcApps.open(String(id));
+      ctx.pcApps.open(String(id)); // Wi-Fi first through Bluetooth (main.js)
     },
     keepPcAppInDock(id) {
       ctx.pcApps.keepInDock(String(id));
     },
     showPcView() {
-      ctx.pcView.show();
+      ctx.net.need('view').then(() => ctx.pcView.show());
     },
     closePcView() {
       ctx.pcView.close();
+      ctx.net.release('view');
+    },
+    // Bluetooth when not on one network (netlink.js, blepipe.js).
+    setNet(partial) {
+      if (typeof partial.ble === 'boolean') settings.net.ble = partial.ble;
+      if (typeof partial.blePc === 'boolean') settings.net.blePc = partial.blePc;
+      if (typeof partial.bleWifiOff === 'boolean') settings.net.bleWifiOff = partial.bleWifiOff; // blepolicy.js wifiQuiet
+      save();
+      ctx.ble.apply();
+      if (partial.blePc === false && ctx.bleLook) ctx.bleLook.look(false); // computers off: stop looking now, not at the next tick
+      pushState();
+    },
+    // The banner: the phone's hotspot is on; join it (remembered for that phone).
+    netJoinHotspot(arg) {
+      const c = ctx.server.current;
+      const ssid = String((arg && arg.ssid) || '').trim().slice(0, 32);
+      let pass = String((arg && arg.pass) || '').slice(0, 63);
+      const saved = c && settings.net.hotspots[c.deviceId];
+      if (!pass && saved && saved.ssid === ssid) pass = ctx.netSecret.open(saved.pass);
+      if (!ssid || !c) return;
+      settings.net.hotspots[c.deviceId] = { ssid, pass: pass ? ctx.netSecret.seal(pass) : '' };
+      save();
+      ctx.net.joinHotspot(ssid, pass);
+    },
+    netCancel() {
+      ctx.net.cancel();
+    },
+    // Connect with Wi-Fi Direct (a session on Bluetooth), or with the phone's hotspot (on =
+    // 'hotspot'), or back to Bluetooth: the link ends whatever it was made for (the screen too:
+    // Bluetooth can't carry it).
+    netWifi(on) {
+      if (on) return void ctx.net.need(on === 'hotspot' ? 'hotspot' : 'user');
+      ctx.net.drop();
+      if (settings.sharing.on) actions.setSharing(false);
     },
     setAudio(partial) {
       setGroup('audio', partial);
@@ -438,6 +507,10 @@ function setupIpc(ctx) {
     },
     clearHistory() {
       ctx.clipboard.clearHistory();
+    },
+    // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
+    hub(r) {
+      ctx.phoneHub().act(r);
     },
     setTab(tab) {
       if (!TABS.includes(tab)) return;

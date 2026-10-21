@@ -6,17 +6,19 @@
 
 <p align="center">
   <b>All your computers and your phone, working as one desk.</b><br>
-  Screens, apps, files, clipboard, notifications, mouse and keyboard, shared between Mac, Windows, Linux and Android.<br>
-  Free and open source.
+  Screens, apps, files, clipboard, calls, texts, notifications, mouse and keyboard, shared between Mac, Windows, Linux and Android.<br>
+  Free and open source. No account, no cloud, and now no shared network needed.
 </p>
 
 <p align="center">
-  <a href="https://github.com/InukaAsith/TwinDesk/releases"><b>⬇️ Download</b></a> ·
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/latest"><b>⬇️ Download 2.1</b></a> ·
   <a href="https://twin-desk.vercel.app"><b>Website</b></a> ·
+  <a href="#-new-in-21"><b>What's new</b></a> ·
   <a href="#under-the-hood"><b>How it works</b></a>
 </p>
 
 <p align="center">
+  <img alt="Version 2.1" src="https://img.shields.io/github/v/release/InukaAsith/TwinDesk?label=version&color=4b8bff">
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-black">
   <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4">
   <img alt="Linux X11 and Wayland" src="https://img.shields.io/badge/Linux-X11%20%7C%20Wayland-f0a30a">
@@ -28,56 +30,135 @@
   <img src=".github/assets/hero.jpg" alt="One Mac's extended screen in a window on another Mac, the Mac's desktop extended onto a tablet, and TwinDesk on a phone" width="100%">
 </p>
 
-<p align="center"><i>A second Mac's screen in a window, the Mac's desktop extended onto a tablet, and the phone app. Every screenshot here is from the real app.</i></p>
-
----
-
 Your devices are good at their own jobs and bad at working together. TwinDesk fixes that.
 Put a **Mac and a Windows PC** side by side and use them with one mouse and keyboard. Open the
-PC's apps on the Mac. Turn an old laptop or your **Android tablet** into a second screen. Send a
-file from your phone in two taps, and paste on one device what you copied on another.
+PC's apps on the Mac. Turn an old laptop or your **Android tablet** into a second screen. Answer
+your **phone's calls and texts** from the computer, send a file in two taps, and paste on one
+device what you copied on another.
 
 - **Any combination.** Mac ↔ Windows, Mac ↔ Mac, PC ↔ PC, Linux ↔ anything, and Android ↔ any computer.
-- **No account, no cloud.** Devices talk directly over your network or a USB cable, on an encrypted link.
+- **Anywhere.** Same Wi-Fi, a USB cable, or no shared network at all: Bluetooth and a direct Wi-Fi link of their own.
+- **No account, no cloud.** Devices talk only to each other, on an encrypted link.
 - **No extra hardware, no root.** Install the app on each device and pair once.
 
 <table>
 <tr>
-<td width="50%" valign="top">
+<td width="33%" valign="top">
 
-### 💻 [Two computers, one desk](#-two-computers-one-desk)
+### 💻 [Computer features](#-computer-features)
 One mouse and keyboard · second screen · the other computer's apps in windows · files and folders · clipboard · terminal · sound · notifications
 
 </td>
-<td width="50%" valign="top">
+<td width="33%" valign="top">
 
-### 📱 [Your phone and tablet join in](#-your-phone-and-tablet-join-in)
-The phone's screen and apps in windows · tablet as a second screen · share menu on both sides · clipboard · notifications · Wi-Fi or USB
+### 📱 [Phone and tablet features](#-phone-and-tablet-features)
+Phone screen and apps in windows · tablet as a second screen · **calls** · **texts** · **photos** · **phone files** · share menu · clipboard · notifications
+
+</td>
+<td width="33%" valign="top">
+
+### 📡 [Connectivity features](#-connectivity-features)
+**Bluetooth** sessions · **Wi-Fi Direct** and **hotspot** links made on demand · USB cable · same Wi-Fi · picked for you, moved for you
 
 </td>
 </tr>
 </table>
 
-# 💻 Two computers, one desk
+---
 
-## 🖱 One mouse and keyboard for both
+# ✨ New in 2.1
+
+<p align="center">
+  <img src=".github/assets/v21-whats-new.jpg" alt="TwinDesk 2.1: the Overview over Bluetooth and the Calls page with an incoming call" width="100%">
+</p>
+
+TwinDesk 2.1 is the biggest update yet. Devices no longer need to be on the same network, and the
+phone is now on your computer in full: its calls, texts, photos and files.
+
+| | What's new | |
+|---|---|---|
+| 📡 | **Bluetooth sessions.** Phones and computers nearby connect with no shared network | [More](#-bluetooth-connection) |
+| ⚡ | **Wi-Fi Direct and hotspot.** A fast link of their own for files, screens and apps, made when needed | [More](#-wi-fi-direct-and-hotspot) |
+| 📞 | **Calls.** Answer, decline and dial; talk and listen on the computer | [More](#-calls) |
+| 💬 | **Messages.** Read and reply to your texts | [More](#-messages) |
+| 🖼 | **Photos.** Browse the phone's photos and videos, save them to the computer | [More](#-photos-and-phone-files) |
+| 🗂 | **Phone Files and shared folders.** The phone's storage on the computer, folders shared both ways | [More](#-photos-and-phone-files) |
+| ✨ | **And more.** Pair over USB, live file progress, Take over and Switch, mouse and keyboard without developer options | [More](#-more-in-21) |
+
+<sub>The 2.1 screenshots are the real app. The people, texts and photos in them are demo data.</sub>
+
+# 📡 Connectivity features
+
+## 📶 Bluetooth connection
+
+On a train, in a café with guest Wi-Fi that blocks devices, or with no Wi-Fi at all: devices that
+are near each other now **connect over Bluetooth LE** by themselves. The session, mouse and keyboard,
+clipboard, notifications, calls and texts all run over it, and the status line says so
+(*38 ms · Bluetooth*). It works between a phone and any computer, and between computers too: a Mac
+and a Windows PC, or Linux.
+
+<p align="center">
+  <img src=".github/assets/v21-bluetooth.jpg" alt="The Overview with a phone connected over Bluetooth, and a Mac driving a Windows PC over Bluetooth" width="100%">
+</p>
+
+Two switches decide who can turn up over Bluetooth: **Bluetooth with phones** (on) and **Bluetooth
+with computers** (off until you want it), on the Overview and in General. *Turn off Bluetooth on
+Wi-Fi connections* (on by default) switches the radio off once both devices are on the same Wi-Fi
+and brings it back when that Wi-Fi goes.
+
+## ⚡ Wi-Fi Direct and hotspot
+
+Bluetooth is great for the session but too slow for a screen or a big file. So when you start one,
+TwinDesk **brings up a direct Wi-Fi link** between the two devices for as long as it's needed, then
+goes back to Bluetooth (*Temporary Wi-Fi Direct*). Want it to stay? Press **Connect with Wi-Fi
+Direct** on either side, and **Back to Bluetooth** when you're done. A phone can also share its
+**hotspot**: the computer joins it, with the name and password typed once and remembered.
+
+<p align="center">
+  <img src=".github/assets/v21-wifi-direct.jpg" alt="The Overview on Wi-Fi Direct with Back to Bluetooth, and General's network settings" width="100%">
+</p>
+
+## 🔗 Automatic link selection
+
+<p align="center">
+  <img src=".github/assets/v21-connections.jpg" alt="Same Wi-Fi, Bluetooth LE, Wi-Fi Direct, phone hotspot and USB cable" width="100%">
+</p>
+
+You never have to choose. TwinDesk uses the same network when there is one, moves a phone onto
+the **USB cable** when you plug it in (and back when you unplug), and falls back to Bluetooth when
+the Wi-Fi goes. The link and its latency are always shown at the top of the app.
+
+| | Same Wi-Fi | USB cable | Bluetooth | + Wi-Fi Direct or hotspot |
+|---|:-:|:-:|:-:|:-:|
+| Session, clipboard, notifications | ✅ | ✅ | ✅ | ✅ |
+| Mouse and keyboard | ✅ | ✅ | ✅ | ✅ |
+| Calls and texts | ✅ | ✅ | ✅ | ✅ |
+| Screens, apps, files, photos, shared folders | ✅ | ✅ | moves to Wi-Fi Direct | ✅ |
+| Phone's screen through wireless debugging | ✅ | ✅ | moves to Wi-Fi Direct | ✅ |
+| Terminal between computers (`ssh twindesk`) | ✅ | — | on Wi-Fi Direct | ✅ |
+
+# 💻 Computer features
+
+## 🖱 Shared mouse and keyboard
 
 Push the pointer off the edge of your screen and **keep working on the other computer**, as if
 they were one. Your keyboard follows the pointer. Trackpad gestures (Spaces swipes, pinch to zoom,
 show desktop) carry over, and a double-tap of the hotkey brings everything home. Set which side the
-other computer is on, edge resistance and pointer speed.
+other computer is on, edge resistance and pointer speed. It works over Bluetooth too (*Over
+Bluetooth* on the Cursor page).
 
-## 🖥 A second screen, or the other screen in a window
+## 🖥 Extended display and remote screen
 
 Extend your Mac onto a PC or another Mac with a **real virtual display**, or mirror it. Or bring
 the other computer's screen into a window and control it from there. Low-latency H.264 with
-*Fastest* and *Smooth* playback, and optional frame generation.
+*Fastest* and *Smooth* playback, and optional frame generation. On Windows, a toolbar slides in at
+the top of the window for Extend or Mirror, Stop, frame generation and full screen.
 
 <p align="center">
   <img src=".github/assets/mac-screen-window.jpg" alt="The MacBook Pro's extended screen in a window on the Studio Mac, with the Receive screen settings" width="100%">
 </p>
 
-## 🪟 The other computer's apps, right here
+## 🪟 Remote apps in their own windows
 
 Open a **Windows app on your Mac** (or a Mac app on your PC) and it gets **a window of its own**,
 with its own Dock icon or Start-menu pin. No full remote desktop, just the app you need, next to
@@ -93,18 +174,19 @@ Pick any app from the other computer's list and it opens in a moment:
   <img src=".github/assets/computers-apps-cursor.jpg" alt="The other Mac's apps listed on the Apps page, and the Cursor page with the screen layout" width="100%">
 </p>
 
-## 📁 Files, folders and a terminal
+## 📁 File transfer, shared folders and terminal
 
 **Drag files across the screen edge** and drop them anywhere, or copy with <kbd>⌃⌥C</kbd> and
 paste with <kbd>⌃⌥V</kbd> (<kbd>Ctrl+Alt+C/V</kbd> on Windows and Linux). Send from the macOS Share
 menu or Explorer's *Send to*, or **share a folder** that shows up as a network drive on the other
-side. Need a shell? `ssh twindesk` opens one on the other computer, no passwords needed.
+side. Files on their way show **live progress** (a progress notification, or on the Mac the percentage beside the menu bar icon). Need a shell? `ssh twindesk`
+opens one on the other computer, no passwords needed.
 
 <p align="center">
   <img src=".github/assets/computers-files.jpg" alt="The Files page and the Terminal page" width="100%">
 </p>
 
-## 📋 One clipboard
+## 📋 Shared clipboard
 
 Copy on one computer and paste on the other, instantly or when you switch over. Entries from
 password managers are skipped, and a Recent list keeps the last few things you copied.
@@ -113,13 +195,20 @@ password managers are skipped, and a Recent list keeps the last few things you c
   <img src=".github/assets/computers-clipboard.jpg" alt="The same copied text in the clipboard history on both Macs" width="100%">
 </p>
 
-## 🔔 Notifications, sound and more
+## 🔔 Notifications, sound and Wake-on-LAN
 
 See one computer's notifications on the other as native notifications, and hear one computer's
 sound on the other. Wake a sleeping computer with Wake-on-LAN, and every switch you flip is
 shared by both sides and remembered for the pair.
 
-## 🤝 Mac and Windows, side by side
+## 🔀 Multiple devices
+
+Pair as many computers and phones as you like. **Switch** moves the session to another paired
+device nearby, **Take over** claims one that's busy with someone else, and **Disconnect** lets go:
+a device let go stays away until you connect it again. All from the Overview, the menu bar or the
+tray.
+
+## 🤝 Cross-platform pairing
 
 The same app on every platform, so a Mac and a PC pair just like two Macs. Here's a Mac connected to
 a Windows PC, with the PC's apps ready to open on the Mac:
@@ -132,12 +221,52 @@ a Windows PC, with the PC's apps ready to open on the Mac:
   <img src=".github/assets/computers-overview.jpg" alt="Overview on two paired Macs: the link, latency and what is shared in each direction" width="100%">
 </p>
 
-# 📱 Your phone and tablet join in
+# 📱 Phone and tablet features
 
 Most phone links stop at notifications and a file drop. In TwinDesk your Android phone or tablet is
-a **full peer**: it pairs like a computer and gets the same features.
+a **full peer**: it pairs like a computer and gets the same features, plus its calls, texts, photos
+and files.
 
-## Your phone, right on your desktop
+## 📞 Calls
+
+Answer, decline and make your phone's calls from the computer. When it rings, a small window shows
+who's calling with **Answer** and **Decline**, then the time, **Mute**, **End** and where the sound
+is. The **Calls** page has a number pad, contacts found as you type, all your contacts and the call
+history.
+
+With Bluetooth, the computer becomes **the phone's headset**, so you talk and listen right there
+(Mac, Windows, and Linux with PipeWire). Pair the two once in the system's Bluetooth settings, and
+the Calls page walks you through it.
+
+## 💬 Messages
+
+Read and reply to your texts on the **Messages** page: every conversation, pictures included, new
+ones as they arrive, and a count in the sidebar. Start a new conversation by number.
+
+<p align="center">
+  <img src=".github/assets/v21-calls-messages.jpg" alt="The Calls page with an incoming call and the call history, and the Messages page with a conversation" width="100%">
+</p>
+
+## 🖼 Photos and phone files
+
+Browse the phone's **photos and videos** on **Photos** (all, photos, videos or screenshots), open
+any of them big, and save one or many to the computer. **Phone Files** browses the phone's whole
+storage: open folders, save to the computer, upload, rename, delete and make folders, or just drop
+files on the page. It's TwinDesk on the phone doing it, so no developer options are needed.
+
+**Shared folders work both ways:** a folder the phone shares opens in **Finder, Explorer or the
+Linux file manager**, and a folder you share from the computer shows up in the phone's **Files app
+and file pickers**.
+
+<p align="center">
+  <img src=".github/assets/v21-photos-files.jpg" alt="The Photos page with the phone's gallery, and Phone Files with shared folders and the phone's storage" width="100%">
+</p>
+
+Calls, Messages, Photos and Phone Files are each **off until you switch them on**. Off means nothing
+of it runs on either side, and the phone asks for its permissions only then, at the top of that
+page, never during setup. Their tabs show only while a phone is connected.
+
+## 📲 Phone screen and apps on the computer
 
 See your phone's screen in a window and control it with your mouse, trackpad and keyboard. Better
 still, open **single Android apps in windows of their own**, side by side with your desktop apps.
@@ -154,7 +283,7 @@ the connection and a button to bring up the whole screen.
   <img src=".github/assets/mac-phone-page.jpg" alt="The Phone page on the Mac: the connected tablet and a grid of its apps" width="720">
 </p>
 
-## A second screen you already own
+## 🖥 Tablet as a second screen
 
 Turn a tablet or phone into an **extra monitor**. Choose **Extend** to get more desktop space, or
 **Mirror** to show what's on your screen. Drag windows onto it, and use touch as the mouse: tap to
@@ -165,7 +294,7 @@ itself.
   <img src=".github/assets/second-screen.jpg" alt="Share screen settings on the Mac, and the tablet showing the extended Mac desktop" width="100%">
 </p>
 
-## Sharing as easy as AirDrop
+## 📤 File sharing
 
 Share a photo or a document from **any Android app**: pick *Send to computer* or *Copy to computer*
 in the system share menu. On the computer, use the **macOS Share menu**, **Explorer's Send to**, drag
@@ -176,7 +305,7 @@ them anywhere on the phone. Files arrive with a notification you can tap to open
   <img src=".github/assets/share-files.jpg" alt="The Mac's Files page, the Android share menu with Send to computer and Copy to computer, and a received-file notification on the tablet" width="100%">
 </p>
 
-## Copy here, paste there
+## 📋 Clipboard sync
 
 Copy text on your computer and paste it on your phone, or the other way around. It's instant, it
 works in the background, and a Quick Settings tile sends the phone's clipboard with one tap.
@@ -185,16 +314,18 @@ works in the background, and a Quick Settings tile sends the phone's clipboard w
   <img src=".github/assets/clipboard.jpg" alt="The same copied text in the clipboard history on the Mac and on the tablet" width="100%">
 </p>
 
-## Your mouse and keyboard on the phone
+## 🖱 Mouse and keyboard on the phone
 
 Push the pointer past the edge of your screen and it **carries on onto the phone**. Type with your
 real keyboard in any Android app, scroll with your trackpad, then double-tap the hotkey to come back.
+It goes through wireless debugging, or through **Accessibility** with no developer options at all
+(over Bluetooth too); TwinDesk picks automatically, or you choose on the Cursor page.
 
 <p align="center">
   <img src=".github/assets/mouse-keyboard.jpg" alt="Cursor settings on the Mac and on the phone, with the device layout" width="100%">
 </p>
 
-## Notifications both ways
+## 🔔 Notification sync
 
 Your phone's notifications show up on your computer as **native notifications**, and the
 computer's can show up on your phone. Hide the message text for privacy or mute single apps.
@@ -203,13 +334,7 @@ computer's can show up on your phone. Hide the message text for privacy or mute 
   <img src=".github/assets/notifications.jpg" alt="Notification settings on the Mac and on the phone" width="100%">
 </p>
 
-## Wi-Fi or USB cable, your choice
-
-TwinDesk finds your phone on the network by itself and reconnects after a Wi-Fi drop. Plug in a
-**USB cable** and it switches over for even lower latency (single-digit milliseconds), then back to
-Wi-Fi when you unplug. The current link and its latency are always shown at the top of the app.
-
-## Made for phones and tablets
+## 📱 Android app
 
 The Android app adapts to the device: tabs at the bottom on a phone, a full sidebar on a tablet.
 Every page names the computer you're connected to and shows what's shared in each direction.
@@ -224,7 +349,23 @@ Every page names the computer you're connected to and shows what's shared in eac
 
 You also get **Quick Settings tiles** (*Send clipboard*, *Wireless debugging*), **home screen
 shortcuts** to the computer's screen, an ongoing notification with what's connected, and **sound**
-in both directions.
+in both directions (the phone captures its own sound now, no wireless debugging needed).
+
+## ✨ More in 2.1
+
+- **Pair a phone over the USB cable.** Plug it in and click Allow on the computer: no code to compare.
+- **The phone as a drive on Windows and Linux** too (Mount), as it already was in Finder.
+- **Live progress for files** everywhere: a progress notification on Windows, Linux and the phone, the percentage beside the menu bar icon on the Mac.
+- **Switch, Take over and Disconnect** for every session, on the Overview and in the menu bar or tray.
+- **Mouse and keyboard on the phone without developer options**, through Accessibility.
+- **The phone's sound without wireless debugging**: the phone captures it itself.
+- **Monitor 2 toolbar on Windows**, as on the Mac's viewer.
+- **Windows reliability:** mouse sharing keeps working from the tray, the pointer never stays blank
+  after a UAC prompt, and scrolling on the other computer no longer scrolls the app under the parked
+  pointer.
+- **Linux:** Bluetooth LE through BlueZ, Wi-Fi Direct through NetworkManager, and monitors that no
+  longer go black at start on NVIDIA.
+- **Signed Windows installers** are supported in the build.
 
 # Get it
 
@@ -232,11 +373,13 @@ in both directions.
 
 | Pair | What you get |
 |---|---|
-| Mac ↔ Windows PC | Everything in *Two computers, one desk* |
+| Mac ↔ Windows PC | Every computer feature |
 | Mac ↔ Mac | Everything |
 | PC ↔ PC | Everything |
 | Linux ↔ Mac, PC or Linux | Everything ([a few differences](#linux)) |
-| Android ↔ Mac, Windows or Linux | Everything in *Your phone and tablet join in* |
+| Android ↔ Mac, Windows or Linux | Every phone and tablet feature |
+
+Every pair connects over the same Wi-Fi, Bluetooth, or a direct Wi-Fi link; a phone also over a USB cable.
 
 <p align="center">
   <img src=".github/assets/tour.gif" alt="A tour of the TwinDesk window" width="820">
@@ -244,19 +387,20 @@ in both directions.
 
 ## Get started
 
-1. **Download** TwinDesk for each computer and your phone from the [releases](https://github.com/InukaAsith/TwinDesk/releases).
-2. **Open it on both.** They find each other on the same network (or over a USB cable for a phone).
-3. **Pair once** by comparing a code. From then on they connect by themselves.
+1. **Download** TwinDesk for each computer and your phone from the [releases](https://github.com/InukaAsith/TwinDesk/releases/latest).
+2. **Open it on both.** They find each other on the same network, over Bluetooth, or over a USB cable for a phone.
+3. **Pair once** by comparing a code (on a USB cable, just click Allow). From then on they connect by themselves.
 
-For the phone's screen, apps, touch and mouse, TwinDesk walks you through turning on Android's
-wireless debugging once ([details](#wireless-debugging)). Files, clipboard and notifications work
-right away.
+For the phone's screen and apps in windows, TwinDesk walks you through turning on Android's
+wireless debugging once ([details](#wireless-debugging)). Files, clipboard, notifications, calls,
+texts, photos and mouse and keyboard (through Accessibility) work without it.
 
 ## Privacy
 
-TwinDesk only talks to devices you've paired with, directly over your own network or cable. There
-are no accounts, no telemetry and no cloud relay. The only internet request is an update check
-against GitHub's public releases, which you can turn off.
+TwinDesk only talks to devices you've paired with, directly over your own network, Bluetooth, a
+direct Wi-Fi link or a cable. There are no accounts, no telemetry and no cloud relay. Your calls,
+texts and photos go straight from the phone to your computer and nowhere else. The only internet
+request is an update check against GitHub's public releases, which you can turn off.
 
 <br>
 
@@ -288,6 +432,9 @@ desktop portal. A few things work a little differently:
   .deb installs; with the AppImage, Share screen › *TwinDesk virtual display* › Install puts it in
   once, with your password.
 - **Apps.** Opening this computer's apps on the other side needs an Xorg session.
+- **Bluetooth and Wi-Fi Direct.** Bluetooth LE goes through BlueZ, and direct Wi-Fi links through
+  NetworkManager, hosted beside the computer's own Wi-Fi where the adapter allows (2.4 GHz groups
+  for a phone).
 - **Android phone.** Everything in [Android](#android-in-detail) works on Linux too: the phone's screen and
   apps in windows, the mouse and keyboard across the edge, files, clipboard, notifications and
   sound. The package carries adb; the Setup screen's firewall fix opens mDNS (5353/udp) so the
@@ -373,7 +520,14 @@ capturing and injecting input, virtual displays, gestures, window capture and na
 | `linux/` | Linux app (Electron) |
 | `linux-helper/` | Linux helper (C): XInput2 / XTest on X11, evdev / uinput on Wayland, XRandR, window list, XDND edge strip |
 | `android/` | Android app (Kotlin, Jetpack Compose); the computers drive the phone through adb and [scrcpy](https://github.com/Genymobile/scrcpy)'s server |
-| `shared/` | Wire protocol, frame generation and icons used by every app |
+| `shared/` | Used by every app: the wire protocol, the Bluetooth pipe and Wi-Fi Direct links, the phone hub (Calls, Messages, Photos, Phone Files), shared folders, frame generation and icons |
+
+The link between two devices is one TLS session wherever it runs: on the local network, through
+a phone's USB cable (adb), or through **Bluetooth LE** (a GATT pipe of TwinDesk's own,
+`shared/blepipe.js`). When a session on Bluetooth needs bandwidth, `shared/netlink.js` brings up a
+**Wi-Fi Direct** group or joins a phone's hotspot, moves the session onto it, and takes it down
+again once nothing needs it. Calls, Messages, Photos and Phone Files are `shared/phonehub.js` on
+the computers, answered by TwinDesk on the phone.
 
 Ports: TCP **47800** (control link) and UDP **47801** (discovery) on the local network.
 
@@ -459,8 +613,8 @@ cd android
 ./gradlew assembleRelease        # JDK 17+; app/build/outputs/apk/{standard,full}/release/
 ```
 
-`standard` is the build people download. `full` adds notification access, which Play Protect
-blocks in downloaded apps; the computers install it over wireless debugging (Phone page ›
+`standard` is the build people download. `full` adds notification access and the SMS permissions
+(Messages), which Play Protect blocks in downloaded apps; the computers install it over wireless debugging (Phone page ›
 Notifications from the phone), so `npm run dist` on each platform bundles the newest
 `android/dist/*-full.apk`.
 
@@ -472,6 +626,13 @@ Set the `ANDROID_KEYSTORE` secret to the key the Android app is signed with
 (`base64 -i ~/.android/debug.keystore`): the APKs then install over existing ones, and the Linux and
 Windows builds carry the full Android app. Without it the APKs get the runner's own key and the
 computers' builds leave the Android app out.
+
+To Authenticode-sign the Windows installers, set the `WIN_CSC_LINK` secret to a base64-encoded
+Windows code-signing `.pfx` certificate and `WIN_CSC_KEY_PASSWORD` to its password. Keep the
+certificate and password out of the repository. When `WIN_CSC_LINK` is set, the Windows build fails
+if signing cannot complete instead of silently publishing an unsigned installer. Signing gives
+users a verified publisher and can help SmartScreen reputation build over time; it does not
+guarantee that antivirus products will stop flagging a file.
 
 ## License
 

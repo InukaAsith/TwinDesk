@@ -111,10 +111,11 @@ UI.tab({
           : tilde(m.folder || m.defaultFolder));
       acceptSw.set(f.acceptDrops);
       pcSw.set(m.connectPc);
-      openBtn.hidden = !m.mounted;
+      openBtn.hidden = !m.mounted && !m.wifi;
       pcRow.setHint(!m.connectPc ? ''
         : m.mounted ? 'In Finder’s sidebar'
           : m.mounting ? 'Connecting…'
+            : m.wifi ? 'Over Bluetooth: Open connects it with Wi-Fi Direct'
             : m.mountError ? `Couldn’t connect: ${m.mountError}`
               : `Waiting for ${pc} to share a folder`);
       reveal.set(f.reveal);

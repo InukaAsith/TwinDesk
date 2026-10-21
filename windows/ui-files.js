@@ -101,8 +101,9 @@ UI.tab({
       edgeDrag.set(f.edgeDrag);
       edgeRow.setHint(f.edgeDrag && f.macDrags === false ? 'Turned off on {name}' : f.edgeDrag ? 'Drag through the screen edge and drop anywhere' : '');
       mount.set(f.mountMac);
-      openBtn.hidden = !m.drive;
-      macDrive.setHint(m.mountMessage || (!f.mountMac ? '' : m.drive ? 'Drive ' + m.drive : m.busy === 'mount' ? 'Connecting…' : 'Waiting for {name} to share one'));
+      openBtn.hidden = !m.drive && !m.wifi;
+      macDrive.setHint(m.mountMessage || (!f.mountMac ? '' : m.drive ? 'Drive ' + m.drive : m.busy === 'mount' ? 'Connecting…'
+        : m.wifi ? 'Over Bluetooth: Open connects it with Wi-Fi Direct' : 'Waiting for {name} to share one'));
       share.set(f.shareOn);
       const busy = m.busy === 'setup' ? 'Setting up…' : m.busy === 'remove' ? 'Removing…' : '';
       sharePill.hidden = !f.shareOn && !busy;

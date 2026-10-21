@@ -38,7 +38,7 @@ UI.tab({
       grid.replaceChildren(...apps.map((a) => {
         const st = p.launch[a.id];
         const b = el('button', { class: `app-tile${open.has(a.id) ? ' running' : ''}`, title: st && st !== 'ok' ? `Couldn’t open: ${st}` : `Open ${a.name} on ${UI.peer(UI.state).name}` }, [
-          a.icon ? el('img', { src: a.icon, alt: '' }) : el('span', { class: 'app-noicon', text: (a.name[0] || '?').toUpperCase() }),
+          UI.appIcon(a.icon),
           el('span', { class: 'app-name', text: a.name }),
           el('span', { class: 'app-state', text: open.has(a.id) ? 'Open' : st === '' ? 'Opening…' : st && st !== 'ok' ? 'Failed' : '' }),
         ]);

@@ -17,6 +17,12 @@ namespace MacShare
         readonly HashSet<int> heldButtons = new HashSet<int>();
         double fx, fy;              // sub-pixel remainder of relative moves (physical px)
         double wheelRem, hwheelRem; // remainder of wheel units
+        // Layout shortcuts from the other computer are done here (NextLayout): Win+Space (Ctrl+Space
+        // on a Mac, with the Ctrl/Cmd swap) without its Space, so it can't switch twice, and a tap
+        // of a Mac's 🌐/Fn (no Windows key for it). Alt+Shift and Ctrl+Shift go as keys, as typed.
+        readonly HashSet<string> tapDown = new HashSet<string>(); // modifiers (and Fn) held now
+        readonly HashSet<string> tapMods = new HashSet<string>(); // pressed since none were held
+        bool modsOnly, swallowSpace;
 
         // Called after every injected move with the new position and the requested logical delta
         // (the return edge watches pushes through the edge, armReturn).
@@ -97,6 +103,34 @@ namespace MacShare
 
         public void Key(string code, bool down)
         {
+            if (code == "Space")
+            {
+                if (down && tapDown.Count > 0 && Kinds(tapDown).SetEquals(new[] { "Meta" }))
+                {
+                    swallowSpace = true;
+                    modsOnly = false;
+                    NextLayout();
+                    SendVk(0xE8, true); // a key between: the Windows key coming up alone would open Start
+                    SendVk(0xE8, false);
+                    return;
+                }
+                if (!down && swallowSpace) { swallowSpace = false; return; }
+            }
+            if (code == "Fn" || Kind(code) != code)
+            {
+                if (down)
+                {
+                    if (tapDown.Count == 0) { tapMods.Clear(); modsOnly = true; }
+                    tapDown.Add(code);
+                    tapMods.Add(code);
+                }
+                else if (tapDown.Remove(code) && tapDown.Count == 0)
+                {
+                    if (modsOnly && Kinds(tapMods).SetEquals(new[] { "Fn" })) NextLayout();
+                    modsOnly = false;
+                }
+            }
+            else if (down) modsOnly = false;
             int scan = Keys.Scan(code);
             if (scan < 0) return;
             if (down) heldScans.Add(scan); else heldScans.Remove(scan);
@@ -113,6 +147,36 @@ namespace MacShare
             Send(i);
         }
 
+        static string Kind(string code)
+        {
+            foreach (string k in new[] { "Shift", "Control", "Alt", "Meta" }) if (code.StartsWith(k)) return k;
+            return code;
+        }
+
+        static HashSet<string> Kinds(IEnumerable<string> codes)
+        {
+            HashSet<string> out_ = new HashSet<string>();
+            foreach (string c in codes) out_.Add(Kind(c));
+            return out_;
+        }
+
+        // The foreground window's next keyboard layout, as Windows' own shortcut does it.
+        static void NextLayout()
+        {
+            IntPtr w = Native.GetForegroundWindow();
+            if (w != IntPtr.Zero) Native.PostMessage(w, Native.WM_INPUTLANGCHANGEREQUEST, new IntPtr(Native.INPUTLANGCHANGE_FORWARD), new IntPtr(Native.HKL_NEXT));
+        }
+
+        static void SendVk(ushort vk, bool down)
+        {
+            Native.INPUT i = new Native.INPUT();
+            i.type = Native.INPUT_KEYBOARD;
+            i.u.ki.wVk = vk;
+            i.u.ki.dwFlags = down ? 0 : Native.KEYEVENTF_KEYUP;
+            i.u.ki.dwExtraInfo = Native.MARK;
+            Send(i);
+        }
+
         // Esc down+up (cancels a local drag-and-drop loop).
         public static void Escape()
         {
@@ -124,6 +188,8 @@ namespace MacShare
         {
             foreach (int s in new List<int>(heldScans)) SendScan(s, false);
             heldScans.Clear();
+            tapDown.Clear();
+            modsOnly = swallowSpace = false;
             foreach (int b in new List<int>(heldButtons)) Button(b, false);
             heldButtons.Clear();
             wheelRem = hwheelRem = 0;

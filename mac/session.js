@@ -74,6 +74,12 @@ class Session extends EventEmitter {
     return this.linkUp || this.hostUp;
   }
 
+  // 'ble' while the session's socket runs through Bluetooth (blepipe.js), else 'ip'.
+  get transport() {
+    if (this.linkUp) return this.link.transport === 'ble' ? 'ble' : 'ip';
+    return this.hostUp && this.ctx.transport === 'ble' ? 'ble' : 'ip';
+  }
+
   // 'guest': the device connected to us (we are its host); 'host': we are its guest (we dialled it).
   get role() {
     return this.linkUp ? 'host' : 'guest';
@@ -175,6 +181,7 @@ class Session extends EventEmitter {
       });
       link.on('closed', () => this._sync());
       link.onState(() => this.link === link && this._changed());
+      link.on('transport', () => this._changed()); // the session moved to Bluetooth or back (kvm, the Overview)
     }
     this._sync();
   }
@@ -267,6 +274,10 @@ class Sessions extends EventEmitter {
     server.on('closed', (ctx) => {
       const s = this.sessions.get(ctx.deviceId);
       if (s && s.ctx === ctx) s.setCtx(null);
+    });
+    server.on('transport', (ctx) => {
+      const s = this.sessions.get(ctx.deviceId);
+      if (s) s._changed();
     });
     server.on('message', (msg, ctx) => {
       const s = this.sessions.get(ctx.deviceId);

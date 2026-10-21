@@ -23,6 +23,7 @@ const FEATURES = {
 const VALUES = {
   pace: { path: ['sharing', 'pace'], allowed: ['fast', 'smooth'] },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
+  ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)
   // Set on either side for this Mac's mouse and keyboard on a phone (its Cursor and Keyboard
   // pages); only with a phone.
   keyboard: { path: ['kvm', 'keyboard'], allowed: [true, false], phone: true },

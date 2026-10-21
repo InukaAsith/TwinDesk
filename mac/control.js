@@ -25,6 +25,11 @@ const ICONS = {
   up: 'M10 16V4 M5 9l5-5 5 5',
   down: 'M10 4v12 M5 11l5 5 5-5',
   phone: 'M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2',
+  call: 'M6 3h2.5l1.2 3.2-1.7 1.3a9 9 0 0 0 4.5 4.5l1.3-1.7 3.2 1.2V16a1 1 0 0 1-1 1A13 13 0 0 1 3 4a1 1 0 0 1 1-1z',
+  message: 'M3 4.5h14v9H8.5L5 16.5v-3H3z',
+  photo: 'M3 4.5h14v11H3z M3 13l4-4 3.5 3.5 2-2L17 14.5 M12.5 7.5h.1',
+  doc: 'M5 2.5h6.5L15 6v11.5H5z M11.5 2.5V6H15',
+  folder: 'M2.5 5h5.5l1.5 2h8v9.5h-15z',
 };
 
 const UI = {
@@ -257,6 +262,13 @@ const UI = {
 
   // A small device glyph for lists: 'mac' | 'win' | 'linux' | 'android'.
   osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' ? 'phone' : 'pc'),
+  // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's.
+  appIcon(src) {
+    const fallback = 'assets/sidebar-icon@2x.png';
+    const img = UI.el('img', { src: src || fallback, alt: '' });
+    img.onerror = () => { img.onerror = null; img.src = fallback; };
+    return img;
+  },
   osIcon(os) {
     return UI.el('span', { class: `os-ico ${UI.osClass(os)}`, attrs: { 'aria-label': os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'android' ? 'Phone' : 'PC' } });
   },
@@ -322,6 +334,7 @@ const UI = {
     const i = s.input || { where: 'home' };
     if (i.tapError) return ['bad', 'macOS is blocking the mouse and keyboard. Allow Accessibility and Input Monitoring in General, then restart.'];
     if (s.kvm && s.kvm.linked === false) return ['warn', `Cursor sharing is off. Double-tap ${UI.hotkeyName(s)} to turn it on.`];
+    if (i.paused) return ['warn', `Cursor sharing is off over Bluetooth. It comes back on Wi-Fi, or double-tap ${UI.hotkeyName(s)} to turn it on.`];
     if (!s.client) return ['info', `Waiting for ${UI.peer(s).name}.`];
     const hk = UI.hotkeyName(s);
     if (i.where === 'driving') return ['info', `You’re using ${s.client.name}. Double-tap ${hk} to come back and turn cursor sharing off.`];

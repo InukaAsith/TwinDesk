@@ -34,7 +34,7 @@ class Pairing extends EventEmitter {
   // What the control window shows about an in-progress request.
   pendingView() {
     const p = this.pending;
-    return p && { name: p.name, os: p.os, code: p.code, confirmed: p.confirmed, allowed: p.allowed };
+    return p && { name: p.name, os: p.os, code: p.code, confirmed: p.confirmed, allowed: p.allowed, wired: p.wired };
   }
 
   touch(id) {
@@ -92,6 +92,9 @@ class Pairing extends EventEmitter {
         code: null,
         confirmed: false,
         allowed: false,
+        // A phone on the USB cable, with the nonce wired.js sent it through adb (wired.knows):
+        // no code to compare, only Allow here.
+        wired: !!(this.isWired && this.isWired(msg.wired)),
         timer: setTimeout(() => this._abort(P.E.PAIR_TIMEOUT, 'Pairing timed out'), P.PAIR_TIMEOUT_MS),
       };
       this.server.send(ctx, { t: P.T.PAIR_NONCE, nonce: nm, os: P.OS.LINUX });
@@ -151,12 +154,18 @@ class Pairing extends EventEmitter {
     // A phone only says hello when someone asked for it (or to resume): it takes the session.
     // A computer waits while a phone holds it.
     const phone = (Object.values(P.OS).includes(msg.os) ? msg.os : e.os) === P.OS.ANDROID;
-    if (phone) {
+    // Take over (the person asked for it there, or here: Connect on it in this computer's list):
+    // whoever holds the session is let go. Else a computer waits while another device holds it.
+    const takeover = msg.takeover === true || (this.expected && this.expected.id === e.id && Date.now() < this.expected.until);
+    const held = this.server.current && this.server.current.authed && this.server.current.deviceId !== e.id ? this.server.current : null;
+    if (phone || takeover) {
+      this.expected = null;
       if (this.busy()) this.yieldTo();
       if (this.server.phoneGrace && this.server.phoneGrace.id !== e.id) this.server.endPhoneGrace();
     } else if (this.server.phoneHolds()) {
-      return this.server.fail(ctx, P.E.BUSY, `Connected to a phone (${this._phoneName()})`);
+      return this.server.fail(ctx, P.E.BUSY, `In use by ${this._phoneName()}`);
     } else if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
+    else if (held) return this.server.fail(ctx, P.E.BUSY, `In use by ${held.name || 'another device'}`);
     if (typeof msg.name === 'string' && msg.name && msg.name !== e.name) e.name = msg.name.slice(0, 64);
     if (Object.values(P.OS).includes(msg.os)) e.os = msg.os;
     e.lastSeen = Date.now();
@@ -165,6 +174,11 @@ class Pairing extends EventEmitter {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.id, macName: this.id.name, os: P.OS.LINUX,
     });
     this.emit('change');
+  }
+
+  // Connect on a paired computer in this one's list: its next hello (it was invited) takes over.
+  expect(id) {
+    this.expected = { id, until: Date.now() + 60000 };
   }
 
   _phoneName() {

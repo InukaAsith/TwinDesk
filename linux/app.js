@@ -13,15 +13,16 @@
 
   // Sidebar groups: no headings, one icon column, a small gap
   // between groups; General sits below a line.
-  const GROUP = { overview: 0, 'mac-pc': 1, 'pc-mac': 1, cursor: 2, keyboard: 2, clipboard: 3, notifications: 3, files: 3, terminal: 4, audio: 4, apps: 4 };
+  const GROUP = { overview: 0, calls: 0.5, messages: 0.5, media: 0.5, 'mac-pc': 1, 'pc-mac': 1, cursor: 2, keyboard: 2, clipboard: 3, notifications: 3, files: 3, terminal: 4, audio: 4, apps: 4 };
   let lastGroup;
+  let gap = null; // the gap before the current group (hidden with the group: renderSidebar)
   for (const def of UI.tabs.slice().sort((a, b) => (a.order ?? 50) - (b.order ?? 50))) {
     if (def.navHidden) { // reached another way (the phone tile)
       views.set(def.id, { def, ...buildPage(def), navBtn: el('button'), stateEl: el('span') });
       continue;
     }
     const group = GROUP[def.id];
-    if (!def.bottom && lastGroup !== undefined && group !== lastGroup) nav.append(el('li', { class: 'gap', attrs: { role: 'presentation' } }));
+    if (!def.bottom && lastGroup !== undefined && group !== lastGroup) nav.append(gap = el('li', { class: 'gap', attrs: { role: 'presentation' } }));
     lastGroup = group;
     if (def.bottom && !nav.querySelector('.sep')) nav.append(el('li', { class: 'sep', attrs: { role: 'presentation' } })); // one line above General and About
     const stateEl = el('span', { class: 'state' });
@@ -35,7 +36,7 @@
     ]);
     navBtn.onclick = () => show(def.id, true);
     nav.append(el('li', {}, [navBtn]));
-    views.set(def.id, { def, ...buildPage(def), navBtn, stateEl, navLabel });
+    views.set(def.id, { def, ...buildPage(def), navBtn, stateEl, navLabel, gap });
   }
 
   function buildPage(def) {
@@ -51,12 +52,19 @@
       master = UI.switch((v) => def.master.set(v), { label: def.title, disabled: !!def.master.disabled });
     }
     page.append(el('header', { class: 'page-head' }, [titles, master ? master.el : null]));
+    // Over Bluetooth, a page that needs Wi-Fi (and doesn't move the session onto it) says so, with
+    // the button that moves it there.
+    const wifiNote = def.wifiOnly ? UI.wifiGate() : null;
+    if (wifiNote) page.append(wifiNote.el);
     const body = el('div', { class: 'page-body' }, limitNote ? [limitNote] : []);
     page.append(body);
     pages.append(page);
     const render = def.build(body, page) || (() => {});
-    return { page, master, render, headText, limitNote };
+    return { page, body, master, render, headText, limitNote, wifiNote };
   }
+
+  // The session is through Bluetooth (pages that need Wi-Fi say so).
+  const onBle = (s) => !!(s && s.net && s.net.transport === 'ble');
 
   function show(id, user) {
     const v = views.get(id) || views.get('overview');
@@ -77,6 +85,11 @@
   }
 
   function renderPage(v, s) {
+    if (v.wifiNote) {
+      const off = onBle(s);
+      v.wifiNote.render(s, off);
+      v.body.inert = off; // shown as it is; it works again on Wi-Fi
+    }
     // macOnly: true = only with a Mac; 'linux' = everything but a Linux peer (Apps).
     const limited = !v.limitNote || !s.peer ? '' : v.def.macOnly === 'linux' ? (s.peer.os === 'linux' ? 'Not on Linux yet' : '') : UI.peer(s).limited;
     if (v.limitNote) v.limitNote.set(limited);
@@ -101,7 +114,7 @@
       : (s.pairing || l.state === 'connecting' || l.state === 'reconnecting') ? 'warn' : '';
     $('peer-dot').className = 'dot ' + dot;
     let text = 'Not paired';
-    if (l.state === 'connected') text = l.macName + (l.rtt != null ? ' · ' + l.rtt + ' ms' : '');
+    if (l.state === 'connected') text = l.macName + (UI.via(s) !== 'Wi-Fi' ? ' · ' + UI.via(s) : '') + (l.rtt != null ? ' · ' + l.rtt + ' ms' : '');
     else if (s.pairing) text = 'Pairing…';
     else if (l.state === 'connecting' || l.state === 'reconnecting') text = 'Reconnecting…';
     else if (l.state === 'identity_changed') text = 'Identity changed';
@@ -113,6 +126,8 @@
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
       if (hide && current === v) show(s.phone && s.phone.connected ? 'phone' : 'overview', false);
     }
+    // A group with every tab hidden takes its gap with it.
+    for (const v of views.values()) if (v.gap) v.gap.hidden = [...views.values()].every((x) => x.gap !== v.gap || !x.navBtn.parentElement || x.navBtn.parentElement.hidden);
     for (const v of views.values()) {
       const b = v.def.badge ? v.def.badge(s) : v.def.phase ? 'P' + v.def.phase : '';
       v.stateEl.className = 'state' + (b === 'on' ? ' on' : b === 'warn' ? ' warn' : '');
@@ -137,17 +152,25 @@
     }
     const info = ph.info || {};
     const colors = info.colors && info.colors.length ? info.colors : null;
-    const key = JSON.stringify([ph.nearby, ph.connecting, ph.connected && ph.connected.rttMs, ph.held, info.battery, info.charging, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
-    if (key === phonesKey) return;
+    // The connected phone's line (ping, battery) changes often: written in place, the tiles (and
+    // their wallpaper) built again only when something else changed, else they flicker.
+    const subOf = (d) => (d.connected
+      ? (ph.connected.rttMs != null ? ph.connected.rttMs + ' ms' : 'Connected') + (info.battery != null ? ' · ' + info.battery + '%' + (info.charging ? ' ⚡' : '') : '')
+      : ph.connecting && ph.connecting.id === d.id ? 'Connecting…' : 'Nearby · Click to connect');
+    const key = JSON.stringify([ph.nearby, ph.connecting, ph.held, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
+    if (key === phonesKey) {
+      ph.nearby.forEach((d, i) => {
+        const sub = $('phones').children[i] && $('phones').children[i].querySelector('.phone-sub');
+        if (sub && sub.textContent !== subOf(d)) sub.textContent = subOf(d);
+      });
+      return;
+    }
     phonesKey = key;
     $('phones').replaceChildren(...ph.nearby.map((d) => {
       const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
       if (d.connected && UI.phoneWall) wall.style.backgroundImage = UI.phoneWall;
       else if (d.connected && colors) wall.style.backgroundImage = 'linear-gradient(160deg, ' + colors.join(', ') + (colors.length === 1 ? ', ' + colors[0] : '') + ')';
-      const connecting = ph.connecting && ph.connecting.id === d.id;
-      const sub = d.connected
-        ? (ph.connected.rttMs != null ? ph.connected.rttMs + ' ms' : 'Connected') + (info.battery != null ? ' · ' + info.battery + '%' + (info.charging ? ' ⚡' : '') : '')
-        : connecting ? 'Connecting…' : 'Nearby · Click to connect';
+      const sub = subOf(d);
       const b = el('button', { class: 'phone-tile' + (d.connected ? ' connected' : ''), title: d.connected ? d.name : 'Connect to ' + d.name }, [
         wall,
         el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: d.name }), el('span', { class: 'phone-sub', text: sub })]),
@@ -161,13 +184,23 @@
   }
 
   function renderBanner(s) {
+    const inv = !s.pairing && s.inviting;
+    $('banner').hidden = !s.pairing && !inv;
+    if (inv) { // this computer asked a phone to pair: it goes on there
+      $('banner').classList.remove('failed');
+      $('pair-title').textContent = 'Press Pair on ' + inv.name;
+      $('pair-code-wrap').hidden = true;
+      $('pair-match').hidden = true;
+      $('pair-cancel').textContent = 'Cancel';
+      $('pair-hint').textContent = 'TwinDesk on ' + inv.name + ' asks to pair with this computer. Press Pair there, then compare the codes.';
+      return;
+    }
     const p = s.pairing;
-    $('banner').hidden = !p;
     if (!p) return;
     $('banner').classList.toggle('failed', p.phase === 'failed');
     const host = p.role === 'host'; // another computer asks to pair with this PC
     $('pair-title').textContent = host ? p.macName + ' wants to pair' : 'Pairing with ' + p.macName;
-    $('pair-code-wrap').hidden = !p.code;
+    $('pair-code-wrap').hidden = !p.code || !!p.wired; // on the USB cable: nothing to compare
     $('pair-code').textContent = p.code ? p.code.slice(0, 3) + ' ' + p.code.slice(3) : '';
     $('pair-match').hidden = host ? !p.code || p.allowed : p.phase !== 'code';
     $('pair-match').textContent = host ? 'Allow' : 'Codes match';
@@ -178,7 +211,7 @@
       code: 'Check that ' + p.macName + ' shows the same code, then click Codes match.',
       waiting: 'Waiting for Allow on ' + p.macName + '…',
       failed: p.error,
-      request: !p.code ? 'Waiting for the code…' : p.allowed ? 'Waiting for ' + p.macName + '…' : 'Check that ' + p.macName + ' shows the same code, then click Allow.',
+      request: p.wired ? (p.allowed ? 'Pairing…' : p.macName + ' is on the USB cable. Click Allow to pair.') : !p.code ? 'Waiting for the code…' : p.allowed ? 'Waiting for ' + p.macName + '…' : 'Check that ' + p.macName + ' shows the same code, then click Allow.',
     };
     $('pair-hint').textContent = hints[p.phase] || '';
   }
@@ -220,6 +253,7 @@
 
   $('pair-match').onclick = () => (UI.state && UI.state.pairing && UI.state.pairing.role === 'host' ? api.respondPair(true) : api.confirmCode());
   $('pair-cancel').onclick = () => api.cancelPair();
+  PairPop.attach($('banner'), $('pair-match')); // the popup over the window, Allow there presses this one
   window.addEventListener('macshare-go', (e) => show(e.detail, true));
   api.onGo((tab) => typeof tab === 'string' && views.has(tab) && show(tab, true));
 

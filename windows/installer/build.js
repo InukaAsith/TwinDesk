@@ -61,12 +61,21 @@ async function main() {
   console.log('Staging…');
   fs.rmSync(STAGE, { recursive: true, force: true });
   copy(WIN, path.join(STAGE, 'windows'), (name) => !SKIP.has(name));
-  // Every shared module the app requires (a list kept by hand once left the installer without a new one).
-  for (const f of fs.readdirSync(path.join(ROOT, 'shared'))) if (f.endsWith('.js')) copy(path.join(ROOT, 'shared', f), path.join(STAGE, 'shared', f));
+  // Every shared module (a list missed new ones: the app then failed on its first require), and the
+  // pages' styles and the call window (phonehub.css, callpop.html).
+  for (const name of fs.readdirSync(path.join(ROOT, 'shared'))) {
+    if (name.endsWith('.js') || /\.(css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
+  }
   // Which repository this build came from: the updater follows that project's releases (shared/updates.js).
   fs.writeFileSync(path.join(STAGE, 'shared', 'update-source.json'), JSON.stringify({ repo: process.env.GITHUB_REPOSITORY || '' }) + '\n');
   copy(path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper.exe'),
     path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper.exe'));
+  // The calls' sound on this PC (callaudio.js): its .exe, its signed package and that certificate.
+  for (const f of ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
+    const from = path.join(ROOT, 'windows-helper', 'bin', f);
+    if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
+    else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
+  }
   // A phone: its screen, apps and input go through adb and scrcpy-server (phone-bridge.js).
   if (!fs.existsSync(path.join(WIN, 'vendor', 'scrcpy-server'))) {
     copy(path.join(ROOT, 'mac', 'vendor', 'scrcpy-server'), path.join(STAGE, 'windows', 'vendor', 'scrcpy-server'));
@@ -103,7 +112,13 @@ async function pack(arch) {
       directories: { app: STAGE, output: path.join(WIN, 'dist') },
       asar: false,
       npmRebuild: false,
-      win: { icon: path.join(__dirname, 'icon.ico'), executableName: 'TwinDesk' },
+      win: {
+        icon: path.join(__dirname, 'icon.ico'),
+        executableName: 'TwinDesk',
+        // electron-builder signs with WIN_CSC_LINK when supplied. Don't silently release an
+        // unsigned installer after the signing secret has been configured.
+        forceCodeSigning: Boolean(process.env.WIN_CSC_LINK),
+      },
       nsis: {
         oneClick: false,
         perMachine: true,

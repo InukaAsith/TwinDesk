@@ -29,7 +29,16 @@ UI.tab({
     const discFix = UI.button('Allow', () => api.allowPermission('localNetwork'), 'small');
     discRow.querySelector('.controls').append(discFix);
     const foundList = el('div');
-    const refresh = UI.button('Refresh', () => api.refreshDiscovery(), 'small');
+    // General's two Bluetooth switches, here too: who can turn up through Bluetooth.
+    const bleSw = UI.switch((v) => api.setNet({ ble: v }), { label: 'Bluetooth with phones' });
+    const blePcSw = UI.switch((v) => api.setNet({ blePc: v }), { label: 'Bluetooth with computers' });
+    const bleRows = [UI.row('Bluetooth with phones', '', [bleSw]), UI.row('Bluetooth with computers', '', [blePcSw])];
+    const refresh = UI.button('Refresh', () => { // the list empties and fills again with whoever answers
+      api.refreshDiscovery();
+      refresh.disabled = true;
+      refresh.textContent = 'Looking…';
+      setTimeout(() => { refresh.disabled = false; refresh.textContent = 'Refresh'; }, 1500);
+    }, 'small');
 
     // ---- hero ----
     const WHERE = { driving: 'You’re using {name}', driven: '{name} is using {me}' };
@@ -39,6 +48,17 @@ UI.tab({
     const macName = el('div', { class: 'hero-name' });
     const peerDev = el('div', { class: 'device pc' });
     const status = el('div', { class: 'hero-status' });
+    // The session: Disconnect it (a phone or a computer); Connect again to the Mac we're a guest of
+    // after one, or Take over while another device has it.
+    const discBtn = UI.button('Disconnect', () => api.disconnect(), 'small');
+    const againBtn = UI.button('Connect', () => api.connectAgain(), 'small primary');
+    const sessionBtns = el('div', { class: 'hero-actions' }, [againBtn, discBtn]);
+    // A session on Bluetooth: onto a direct Wi-Fi link on request, until Back to Bluetooth.
+    const wifiBtn = UI.button('Connect with Wi-Fi Direct', () => api.netWifi(!wifiOn), 'small');
+    let wifiOn = false;
+    wifiBtn.hidden = true;
+    const hotspotBtn = UI.button('Connect with hotspot', () => api.netWifi('hotspot'), 'small'); // a phone's, this Mac joins
+    hotspotBtn.hidden = true;
     const hero = el('div', { class: 'card hero' }, [
       el('div', { class: 'hero-devices' }, [
         el('div', { class: 'hero-device' }, [el('div', { class: 'device mac' }), macName]),
@@ -46,6 +66,8 @@ UI.tab({
         el('div', { class: 'hero-device' }, [peerDev, peerName]),
       ]),
       status,
+      sessionBtns,
+      el('div', { class: 'hero-actions' }, [wifiBtn, hotspotBtn]),
     ]);
 
     // ---- feature switches ----
@@ -99,7 +121,7 @@ UI.tab({
     body.append(
       permCard,
       UI.card('', [addrRow, ipRow]),
-      UI.card('Nearby', [discRow, foundList], { actions: [refresh] }),
+      UI.card('Nearby', [discRow, foundList, ...bleRows], { actions: [refresh] }),
       hero,
       adbCard,
       UI.pair(UI.dir('m2w', m2w.map((x) => x.row)), UI.dir('w2m', w2m.map((x) => x.row))),
@@ -112,6 +134,8 @@ UI.tab({
     let devicesKey = '';
     return (s) => {
       const p = UI.names(s);
+      bleSw.set(!s.net || s.net.ble !== false);
+      blePcSw.set(!!s.net && s.net.blePc === true);
       const c = s.client;
       const g = s.guest || { status: {}, hosts: [] };
 
@@ -167,7 +191,7 @@ UI.tab({
         const rows = s.found.map((dev) => {
           const online = c && c.id === dev.id;
           const known = pairedIds.has(dev.id);
-          const label = online ? null : known ? 'Connect' : dev.os === 'mac' ? 'Pair' : 'Connect';
+          const label = online ? null : known ? 'Take over' : dev.os === 'mac' ? 'Pair' : 'Connect';
           const btn = label && UI.button(label, () => api.pairWith(dev.id), `small${dev.invited ? ' primary' : ''}`);
           const r = UI.row(dev.name, `${dev.address}${dev.invited ? ' · wants to connect' : ''}`,
             [online ? el('span', { class: 'pill good', text: 'Connected' }) : known ? el('span', { class: 'pill muted', text: 'Paired' }) : null, btn]);
@@ -187,7 +211,7 @@ UI.tab({
       else peerDev.style.removeProperty('--phone-wall');
       linkLine.className = `hero-link ${c ? 'up' : ''}`;
       const connecting = ['connecting', 'reconnecting'].includes(g.status.state);
-      linkText.textContent = c ? (c.rttMs != null ? `${c.rttMs} ms` : 'Connected')
+      linkText.textContent = c ? `${c.rttMs != null ? `${c.rttMs} ms · ` : ''}${UI.via(s)}`
         : s.pairing || gp ? 'Pairing…' : connecting ? 'Connecting…' : 'Not connected';
       const inp = s.input || { where: 'home' };
       const bad = s.serverError || (g.status.state === 'identity_changed' && g.status.message);
@@ -195,7 +219,20 @@ UI.tab({
         || (c ? UI.fill(WHERE[inp.where] || 'Connected')
           : pairedIds.size ? 'Open TwinDesk on the other computer to connect.'
             : 'Pick a computer above, or connect by address.');
+      // Disconnected (here or by the other side), taken over, or the Mac we connect to is in use.
+      const gStopped = !c && g.hosts.length && g.status.state === 'stopped';
+      const gBusy = !c && g.hosts.length && !gStopped && g.status.busy;
+      if (!bad && (gStopped || gBusy)) status.textContent = `${gStopped ? g.status.message || 'Disconnected' : gBusy}.`;
+      discBtn.hidden = !c;
+      againBtn.hidden = !(gStopped || gBusy);
+      againBtn.textContent = gBusy || (gStopped && g.status.message) ? 'Take over' : 'Connect';
+      sessionBtns.hidden = discBtn.hidden && againBtn.hidden;
       status.classList.toggle('bad', !!bad);
+      const n = s.net || {};
+      wifiOn = (n.why || []).includes('user') || !!n.linked; // made for the screen or files too
+      wifiBtn.textContent = wifiOn ? 'Back to Bluetooth' : 'Connect with Wi-Fi Direct';
+      wifiBtn.hidden = !c || !(wifiOn || c.transport === 'ble');
+      hotspotBtn.hidden = !c || wifiOn || n.state === 'hotspot' || c.transport !== 'ble' || !UI.isPhone(s);
 
       // the phone's wireless debugging: only while it needs something
       const ph = s.phone || {};
@@ -208,6 +245,7 @@ UI.tab({
         adbPill.textContent = label;
         adbRow.setHint(br.message || '');
         adbPairRow.hidden = !pairable;
+        if (UI.adbBle(s, adbCard, adbRow, adbPill)) adbPairRow.hidden = true;
       }
 
       for (const x of quick) {
@@ -217,7 +255,8 @@ UI.tab({
 
       // paired: guests (they connect to us) and hosts (we connect to them)
       const wk = (s.wake && s.wake.peers) || {};
-      const pk = JSON.stringify([s.paired, g.hosts, c && c.id, Object.keys(wk), s.wake && s.wake.last]);
+      const near = new Set(s.found.map((dev) => dev.id));
+      const pk = JSON.stringify([s.paired, g.hosts, c && c.id, Object.keys(wk), s.wake && s.wake.last, [...near]]);
       if (pk === pairedKey) return;
       pairedKey = pk;
       const all = [...s.paired, ...g.hosts.map((h) => ({ ...h, host: true }))];
@@ -228,6 +267,8 @@ UI.tab({
             [online ? el('span', { class: 'pill good', text: 'Online' }) : null,
               // Wake it over the network (it told us how while connected).
               !online && wk[x.id] ? UI.button(s.wake.last && s.wake.last.id === x.id && Date.now() - s.wake.last.at < 20000 ? 'Waking…' : 'Wake', () => api.wakePeer(x.id), 'small') : null,
+              // Switch to it (nearby): whatever the session is now, it ends.
+              !online && near.has(x.id) ? UI.button(c ? 'Switch' : 'Connect', () => api.pairWith(x.id), 'small') : null,
               UI.button('Forget', () => api.forget(x.id), 'small')]);
           r.querySelector('.text').prepend(UI.osIcon(x.os));
           r.classList.add('with-ico');
