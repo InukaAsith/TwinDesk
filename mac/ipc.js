@@ -78,7 +78,8 @@ function setupIpc(ctx) {
     pushState();
   };
   async function connectTo(dev, address) {
-    const { link, discovery, pairing } = ctx;
+    const { discovery, pairing } = ctx;
+    const link = ctx.link; // the guest links (links.js): one per host
     if (dev && dev.os === P.OS.ANDROID && pairing.list().some((p) => p.id === dev.id)) {
       report('');
       return ctx.phone.connect(dev.id);
@@ -86,7 +87,6 @@ function setupIpc(ctx) {
     if (dev && dev.os !== 'mac') {
       // Paired: invited, and its hello takes the session over from whoever has it (Connect / Switch).
       if (pairing.list().some((p) => p.id === dev.id)) {
-        pairing.expect(dev.id);
         discovery.invite(dev.address);
         return report(`Connecting to ${dev.name}…`);
       }
@@ -100,7 +100,6 @@ function setupIpc(ctx) {
     }
     if (dev && pairing.list().some((p) => p.id === dev.id)) {
       // A Mac that connects to us: invited, and its hello takes the session over (Take over).
-      pairing.expect(dev.id);
       discovery.invite(dev.address);
       return report(`Connecting to ${dev.name}…`);
     }
@@ -138,7 +137,9 @@ function setupIpc(ctx) {
       ctx.server.disconnect();
     },
     connectAgain() {
-      ctx.link.connect(true);
+      // Connect again, or Take over, the selected computer (its link)
+      const l = ctx.hub.selectedId ? ctx.link.get(ctx.hub.selectedId) : null;
+      if (l) l.connect(true);
     },
     setPhone(partial) {
       setGroup('phone', partial);

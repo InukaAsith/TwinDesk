@@ -461,6 +461,19 @@ class Hub extends EventEmitter {
       },
       respondPair: (allow) => hub.respondPair(allow),
       forgetGuest: (id) => hub.forgetGuest(id),
+      // Disconnect (the device that connected to us is let go; our guest link stays until Connect) and
+      // Connect again / Take over (the guest link of the selected device dials it again).
+      disconnect: () => {
+        const s = hub.selected;
+        if (!s) return;
+        if (s.hostUp && hub.server) return hub.server.release(s.ctx);
+        const l = hub.links.get(s.id);
+        if (l) l.disconnect();
+      },
+      connect: (takeover = false) => {
+        const l = hub.selectedId ? hub.links.get(hub.selectedId) : null;
+        if (l) l.connect(!!takeover);
+      },
     };
   }
 }
