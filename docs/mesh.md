@@ -122,12 +122,52 @@ the phone on the Mac's right, every screen shows exactly that. The rules are in 
   tile and a free cell, or a tile and another tile to swap. Android stores and relays the layout and
   can end a chain; editing from the phone is not in this change.
 
+## Transports per link (Bluetooth, Wi-Fi, USB cable)
+
+Each link (one per device) has its own transport; nothing is global any more.
+
+- **Bluetooth** (`shared/blepipe.js`): a device that is near but not on this network is reached
+  through a Bluetooth pipe, which carries the same WSS over a loopback socket. A Bluetooth socket is
+  marked `ws.transport = 'ble'` on the server (`ctx.transport`) and `link.transport` on the guest side,
+  and it has a longer silence limit: `P.BLE_TIMEOUT_MS` (20 s) instead of `P.TIMEOUT_MS` (4 s) while busy
+  and `P.IDLE_TIMEOUT_MS` (15 s) when idle, and bytes still arriving through the pipe count as a sign of
+  life (a big message takes seconds). The keep-alive is the same per socket (busy ping every `PING_MS`,
+  idle every `IDLE_PING_MS`).
+- **Moving a session** (`hello {resume}`): once a device that is on Bluetooth is seen on the network,
+  the link opens a second socket, resumes the session on it (the server's `_resume`) and keeps the
+  Bluetooth one as the fallback (`ctx.alt` / `link.alt`). Each socket is checked on its own: a quiet
+  fallback is closed, the session lives on. A `transport` event tells the features.
+- **Per device, in the mesh**: `Session.transport` ('ble' | 'ip') is the transport of that device's
+  session. The kvm reads it per partner: the Over Bluetooth switch (`kvm.ble`, the same on both sides)
+  pauses cursor sharing only with the devices whose session runs through Bluetooth (`kvm._pausedFor(id)`),
+  and moves are summed and sent at most every `KVM_MOVE_BLE_MS` through Bluetooth. Pooled items
+  (clipboard, notifications, layout) go to every device as before, whatever its transport.
+- **Wi-Fi for a session through Bluetooth** (`shared/netlink.js`, Wi-Fi Direct, a hotspot or a Wi-Fi
+  network): it serves the selected device (the one-to-one features follow it). Files wait for it
+  (`hub.netHold`), and the screen waits too; `net.*` messages are read from the selected device
+  (`hub.netTap`).
+- **Disconnect, Switch and Take over** are per link: `link.disconnect()` (no reconnect until Connect),
+  `link.connect(true)` (Take over: the other computer's session with another device ends) and the
+  `stopped` state (`released` / `replaced`). The tray shows "Disconnect <name>" and "Take Over <name>"
+  for the selected device.
+- **Calls, Messages, Photos and Files** (`shared/phonehub.js`) are a feature of the phone; the phone's
+  hub is loaded once, its messages come from the phone link (`PhoneLink`), and the phone's own
+  wallpaper and screen go over Wi-Fi only (`wallpaper` is left out on Bluetooth).
+- **USB cable**: a phone on the cable is paired through it (`phone.wired`, the nonce of the plug-in)
+  and its session can be moved onto the cable the same way (`wired.toCable`).
+- **UI.via**: the status line of a link says which transport it is on (`Connected over Bluetooth`,
+  `Connected over USB`, `Connected`), per device in the device list.
+
+Limits of this change: the Android app was merged without a Kotlin build here (the CI build is its
+compile check); the Windows and Mac apps were not run as Electron apps, only their node tests.
+
 ## Tests
 
 - Unit: `shared/test/*.js` for the core (random topologies of 2–10 nodes: every item reaches every
   node exactly once, no storms, partial meshes relay, legacy peers work).
 - Integration, real sockets: `windows/test/*.js` start several real `Server` + `Pairing` +
-  `LinkManager` nodes on loopback, pair them and run the scenarios (3 and 5 nodes).
+  `LinkManager` nodes on loopback, pair them and run the scenarios (3 and 5 nodes). `mesh-transport.test.js`
+  covers a Bluetooth session's longer silence limit and a session that moves between transports.
 - Headless app: start the app with its own `--user-data-dir` and `--remote-debugging-port` and read
   the renderer console and state over CDP; no `Uncaught` errors, the state keeps updating.
 - Android cannot be compiled on the development PC: the CI build is its compile check.
