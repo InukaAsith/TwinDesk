@@ -51,6 +51,55 @@ const peers = [
   assert.strictEqual(t.find((x) => x.id === 'm').selected, true);
 }
 
+// dedupe: connected + nearby with the same id: one tile
+{
+  const t = M.buildTiles({ peers: [], phones: [{ id: 'a', name: 'Pixel', connected: true }, { id: 'a', name: 'Pixel', connected: false }] });
+  assert.deepStrictEqual(t.map((x) => x.state), ['connected']);
+}
+
+// dedupe: connected + nearby + waiting of one phone under other ids (same name + os, case/space insensitive)
+{
+  const ps = [
+    { id: 'pc', name: 'erdo-pc', os: 'win', state: 'connected', connected: true, rtt: 5, selected: true },
+    { id: 's1', name: 'Erdoğan  Yeşil-HUAWEI', os: 'android', state: 'connected', connected: true, rtt: 9, selected: false },
+    { id: 'old1', name: 'erdoğan yeşil-huawei ', os: 'android', state: 'waiting', connected: false },
+    { id: 'old2', name: 'Kişiye ait', os: 'android', state: 'waiting', connected: false },
+    { id: 'old3', name: 'Kişiye ait', os: 'android', state: 'waiting', connected: false },
+  ];
+  const t = M.buildTiles({ peers: ps, phones: [{ id: 'n1', name: 'Erdoğan Yeşil-HUAWEI', connected: false }, { id: 'n2', name: 'Kişiye ait', connected: false }, { id: 's1', name: 'Erdoğan Yeşil-HUAWEI', connected: true, sub: '9 ms · 50%' }] });
+  assert.deepStrictEqual(t.map((x) => x.id), ['s1', 'pc', 'n2'], 'one tile per device; connected data wins; stale ones of a nearby/connected device vanish');
+  assert.strictEqual(t[0].sub, '9 ms · 50%');
+  assert.strictEqual(t.filter((x) => x.name.startsWith('Erdoğan')).length, 1);
+}
+
+// stale pairings: distinct ids with the same name collapse to one tile that forgets all of them; others stay
+{
+  const ps = [
+    { id: 'x1', name: 'Old phone', os: 'android', state: 'waiting', connected: false },
+    { id: 'x2', name: 'Old phone', os: 'android', state: 'waiting', connected: false },
+    { id: 'x1', name: 'Old phone', os: 'android', state: 'waiting', connected: false },
+    { id: 'y1', name: 'Old phone', os: 'win', state: 'waiting', connected: false },
+    { id: 'z', name: 'Other', os: 'android', state: 'waiting', connected: false },
+  ];
+  const t = M.buildTiles({ peers: ps });
+  assert.deepStrictEqual(t.map((x) => x.id), ['x1', 'y1', 'z']);
+  assert.deepStrictEqual(t[0].forget, ['x1', 'x2']);
+  assert.deepStrictEqual(t[2].forget, ['z']);
+}
+
+// two connected computers with one name stay two tiles (ids differ); ordering: connected, nearby, offline, via
+{
+  const ps = [
+    { id: 'v', name: 'Far', os: 'win', state: 'via', via: ['A'], connected: false },
+    { id: 'o', name: 'Off', os: 'win', state: 'waiting', connected: false },
+    { id: 'c1', name: 'PC', os: 'win', state: 'connected', connected: true, selected: true },
+    { id: 'c2', name: 'PC', os: 'win', state: 'connected', connected: true },
+  ];
+  const t = M.buildTiles({ peers: ps, phones: [{ id: 'n', name: 'Ph', connected: false }] });
+  assert.deepStrictEqual(t.map((x) => x.id), ['c1', 'c2', 'n', 'o', 'v']);
+  assert.deepStrictEqual(t.find((x) => x.id === 'c1').forget, []);
+}
+
 // nothing: empty; one device: one selected tile
 assert.deepStrictEqual(M.buildTiles({}), []);
 {

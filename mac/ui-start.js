@@ -188,7 +188,7 @@
     };
     const phones = ph.nearby.map((d) => ({ id: d.id, name: d.name, connected: !!d.connected, connecting: !!(ph.connecting && ph.connecting.id === d.id), sub: subOf(d) }));
     const tiles = M.buildTiles({ peers: s.peers || [], phones, transport: UI.via(s) });
-    const key = JSON.stringify([tiles.map((t) => [t.id, t.kind, t.name, t.os, t.state, t.selected, t.action, t.via]), ph.held, ph.activeId, (ph.phones || []).map((x) => [x.id, x.colors]), colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
+    const key = JSON.stringify([tiles.map((t) => [t.id, t.kind, t.name, t.os, t.state, t.selected, t.action, t.via, t.forget]), ph.held, ph.activeId, (ph.phones || []).map((x) => [x.id, x.colors]), colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
     if (key === phonesKey) {
       const subs = new Map(tiles.map((t) => [t.id, t.sub]));
       for (const b of $('phones').children) {
@@ -222,6 +222,11 @@
       b.dataset.selected = t.selected ? '1' : '';
       if (t.action === 'none') b.setAttribute('aria-disabled', 'true');
       b.onclick = () => pick(t);
+      if (t.forget && t.forget.length) { // paired but offline: forget it (right-click, or the x on hover); a stale twin goes too
+        const forget = () => { for (const id of t.forget) Promise.resolve(api.forgetPeer(id)).catch(() => {}); };
+        b.appendChild(el('span', { class: 'tile-x', role: 'button', title: 'Forget ' + t.name, text: '×', onclick: (e) => { e.stopPropagation(); forget(); } }));
+        b.oncontextmenu = (e) => { e.preventDefault(); forget(); };
+      }
       return b;
     }));
     markTiles();

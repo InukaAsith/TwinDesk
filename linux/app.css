@@ -30,8 +30,17 @@ body {
 button, input, select { font: inherit; color: inherit; }
 
 /* ---------- sidebar ---------- */
-#sidebar { width: 220px; flex: none; padding: 16px 10px 12px; overflow-y: auto; border-right: 1px solid var(--line); }
-.identity { display: flex; align-items: center; gap: 14px; padding: 6px 8px 20px 4px; }
+#sidebar { width: 220px; flex: none; padding: 16px 10px 0; overflow: hidden; display: flex; flex-direction: column; height: 100%; min-height: 0; border-right: 1px solid var(--line); }
+/* The header stays put; the device tiles and the sections below it are ONE scroll area (flex: 1 with
+   min-height: 0 so it can shrink below its content; no ancestor clips it: #sidebar itself does not scroll).
+   The scroll area reaches the sidebar's edges (negative margin) so its thin scrollbar sits at the edge. */
+#side-scroll {
+  flex: 1 1 0; min-height: 0; margin: 0 -10px; padding: 0 10px 12px; overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior: contain; -webkit-app-region: no-drag; scrollbar-width: thin; scrollbar-color: transparent transparent;
+}
+#side-scroll:hover { scrollbar-color: var(--idle) transparent; }
+.identity { flex: none; }
+.identity { display: flex; align-items: center; gap: 14px; padding: 6px 8px 12px 4px; }
 .app-mark { /* the TwinDesk icon (shared/icon/teindesk-dark.png) */
   width: 60px; height: 60px; flex: none;
   /* the whole icon, rendered from the 1024 px master at the exact size for each display scale */
@@ -47,7 +56,7 @@ button, input, select { font: inherit; color: inherit; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--idle); flex: none; }
 .dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
 
-#phones { display: flex; flex-direction: column; gap: 6px; margin: -8px 0 12px; }
+#phones { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; }
 #phones:empty { display: none; }
 .phone-tile {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 9px;
@@ -246,3 +255,12 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 .phone-tile[aria-disabled="true"] { cursor: default; }
 .phone-tile[aria-disabled="true"]:hover { background: var(--nav-hover); }
 .dev-tag { margin-left: 10px; font-size: 12px; font-weight: 500; vertical-align: middle; }
+
+/* A device that is only paired (offline): a small x on hover forgets it (and its twin pairings). */
+.phone-tile { position: relative; }
+.tile-x {
+  position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%;
+  display: none; place-items: center; font-size: 13px; line-height: 1; background: rgba(0, 0, 0, 0.12); color: inherit; cursor: default;
+}
+.phone-tile:hover .tile-x, .phone-tile:focus-within .tile-x { display: grid; }
+.tile-x:hover { background: var(--bad); color: #fff; }

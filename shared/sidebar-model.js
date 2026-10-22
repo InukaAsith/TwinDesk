@@ -53,26 +53,27 @@
   // transport: how the selected device is reached ('Wi-Fi', 'Bluetooth', ...), shown on its tile.
   // Returns tiles: { id, kind, os, name, state: connected|connecting|nearby|offline|via, connected, selected,
   //   action: 'select'|'connect'|'none', sub, via: [names] }.
+  // The same physical device can reach the list under different ids (a beacon, a session and an old
+  // pairing, a reinstalled app): name + OS, lower-cased and trimmed, is the fallback key between them.
+  const nameKey = (name, os) => String(name || '').normalize('NFC').toLocaleLowerCase().replace(/\s+/g, ' ').trim() + '|' + (os || '');
+
+  // One tile per physical device: a connected device never also shows as nearby, waiting or via (matched by
+  // id first, then by name + OS); the connected entry's data wins. Offline entries are listed once per id and
+  // per name + OS (`forget`: every id behind the tile, for the Forget action).
   function buildTiles({ peers = [], phones = [], transport = '' } = {}) {
     const sel = selectedOf(peers);
     const selId = sel ? sel.id : null;
-    const out = [];
-    const seen = new Set();
-    for (const d of phones) {
-      if (!d || !d.id || seen.has(d.id)) continue;
-      seen.add(d.id);
+    const phoneT = (d) => {
       const connected = !!d.connected;
-      out.push({
-        id: d.id, kind: 'phone', os: 'android', name: d.name || 'Phone', connected, via: [],
+      return {
+        id: d.id, kind: 'phone', os: 'android', name: d.name || 'Phone', connected, via: [], forget: [],
         state: connected ? 'connected' : d.connecting ? 'connecting' : 'nearby',
         selected: connected && (!selId || selId === d.id),
         action: connected ? 'select' : 'connect',
         sub: d.sub || (connected ? 'Connected' : d.connecting ? 'Connecting…' : 'Nearby · Click to connect'),
-      });
-    }
-    for (const p of peers) {
-      if (!p || !p.id || seen.has(p.id)) continue;
-      seen.add(p.id);
+      };
+    };
+    const peerT = (p) => {
       const via = p.state === 'via';
       const connected = !via && !!p.connected;
       const connecting = !via && !connected && (p.state === 'connecting' || p.state === 'reconnecting');
@@ -84,15 +85,40 @@
       else if (p.state === 'waiting') sub = 'Waiting for it to connect';
       else if (p.state === 'identity_changed') sub = 'Identity changed';
       else sub = 'Not connected';
-      out.push({
+      const state = via ? 'via' : connected ? 'connected' : connecting ? 'connecting' : 'offline';
+      return {
         id: p.id, kind: kindOf(p.os), os: p.os || 'win', name: p.name || 'Device', connected, selected, via: via ? (p.via || []) : [],
-        state: via ? 'via' : connected ? 'connected' : connecting ? 'connecting' : 'offline',
-        action: connected ? 'select' : 'none', sub,
-      });
+        state, action: connected ? 'select' : 'none', sub, forget: state === 'offline' ? [p.id] : [],
+      };
+    };
+    const all = [
+      ...phones.filter((d) => d && d.id).map((d) => [phoneT(d), 0]),
+      ...peers.filter((p) => p && p.id).map((p) => [peerT(p), 1]),
+    ];
+    const ids = new Set();
+    const keys = new Set();
+    const out = [];
+    const take = (t) => { ids.add(t.id); keys.add(nameKey(t.name, t.os)); out.push(t); };
+    // 1. connected: by id only (two computers may share a name)
+    for (const [t] of all) if (t.connected && !ids.has(t.id)) take(t);
+    // 2. nearby / connecting: not already shown (id, then name + OS)
+    for (const [t] of all) if (!t.connected && t.state !== 'offline' && t.state !== 'via' && !ids.has(t.id) && !keys.has(nameKey(t.name, t.os))) take(t);
+    // 3. offline / waiting: once per id and per name + OS (the ids stay on the tile for Forget)
+    const offline = new Map();
+    for (const [t] of all) {
+      if (t.state !== 'offline' || ids.has(t.id)) continue;
+      const k = nameKey(t.name, t.os);
+      if (keys.has(k)) continue;
+      if (offline.has(k)) { const f = offline.get(k); if (!f.forget.includes(t.id)) f.forget.push(t.id); continue; }
+      offline.set(k, t);
+      out.push(t);
     }
-    // Connected first, then the rest, devices only known through another last; otherwise as given.
-    const rank = (t) => (t.connected ? 0 : t.state === 'via' ? 2 : 1);
-    return out.map((t, i) => [t, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map((x) => x[0]);
+    for (const t of offline.values()) { ids.add(t.id); keys.add(nameKey(t.name, t.os)); }
+    // 4. known only through another device
+    for (const [t] of all) if (t.state === 'via' && !ids.has(t.id) && !keys.has(nameKey(t.name, t.os))) take(t);
+    // Connected first, then nearby/connecting, offline, and last those only another device reaches; otherwise as given.
+    const rank = (t) => (t.connected ? 0 : t.state === 'via' ? 3 : t.state === 'offline' ? 2 : 1);
+    return out.map((t, i) => [t, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
   }
 
   // Linux has no hub: its one peer (the app's `peer` {id, name, os} and link state) as a peers list.
