@@ -22,7 +22,7 @@ UI.tab({
     // (as the Mac): wake is a switch; Send to sends files from Explorer.
     const wakeSw = UI.switch((v) => api.setWake(v), { label: 'Wake from the network' });
     const wakeRow = UI.row('Let the other computer wake {me}', '', [wakeSw]);
-    const sendToRow = UI.row('TwinDesk in Send to', '');
+    const sendToRow = UI.row('TwinDesk Mesh in Send to', '');
     const helperPill = el('span', { class: 'pill' });
     const helperRow = UI.row('Mouse and keyboard helper', '', [helperPill]);
     const vddPill = el('span', { class: 'pill' });
@@ -68,7 +68,7 @@ UI.tab({
       wakeRow.setHint(w.error ? w.error : w.busy ? 'Changing…' : !w.checked ? 'Checking…'
         : w.on == null ? 'No network adapter here can wake {me}'
           : 'Its network adapter wakes {me} on a magic packet. Asks for administrator rights to change it');
-      sendToRow.setHint(s.peer ? 'Right-click files › Send to › ' + s.peer.name + ' (TwinDesk)' : 'Shows up once a computer is paired');
+      sendToRow.setHint(s.peer ? 'Right-click files › Send to › ' + s.peer.name + ' (TwinDesk Mesh)' : 'Shows up once a computer is paired');
       const h = s.kvmState.helper;
       helperPill.textContent = h ? (h === 'starting' ? 'Starting…' : 'Not running') : 'Running';
       helperPill.className = 'pill ' + (h ? (h === 'starting' ? 'muted' : 'bad') : 'good');

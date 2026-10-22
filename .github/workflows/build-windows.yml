@@ -100,7 +100,7 @@ jobs:
       - name: Upload the x64 installer
         uses: actions/upload-artifact@v4
         with:
-          name: twindesk-windows-x64
+          name: twindesk-mesh-windows-x64
           path: |
             windows/dist/*.exe
 

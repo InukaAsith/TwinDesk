@@ -1,6 +1,6 @@
 #!/bin/sh
 # TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-# Builds dist/TwinDesk.app (npm run dist). The app code keeps its dev layout inside
+# Builds dist/TwinDesk Mesh.app (npm run dist). The app code keeps its dev layout inside
 # Contents/Resources/app (mac/, shared/, mac-helper/.build/release/) so every `../` path still works;
 # no asar, because mac-helper and scripts/*.sh are run straight from there.
 set -e
@@ -40,36 +40,36 @@ require('fs').writeFileSync('$STAGE/package.json', JSON.stringify({
 }, null, 2));"
 
 # App icon: the TwinDesk dark icon (shared/icon, drawn by make-icon.py).
-cp "$ROOT/shared/icon/teindesk-dark.icns" dist/TwinDesk.icns
+cp "$ROOT/shared/icon/teindesk-dark.icns" dist/TwinDesk-Mesh.icns
 
 cat > dist/extra.plist <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>NSLocalNetworkUsageDescription</key><string>TwinDesk finds and connects to your PC on the local network.</string>
-  <key>NSMicrophoneUsageDescription</key><string>TwinDesk sends sound between your Mac and your PC.</string>
-  <key>NSAudioCaptureUsageDescription</key><string>TwinDesk sends your Mac's sound to your PC.</string>
-  <key>NSCameraUsageDescription</key><string>TwinDesk does not use the camera.</string>
-  <key>NSBluetoothAlwaysUsageDescription</key><string>TwinDesk connects to your phone and computers over Bluetooth when they aren't on your network.</string>
-  <key>NSLocationUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
-  <key>NSLocationWhenInUseUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
-  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
-  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>TwinDesk</string><key>CFBundleURLSchemes</key><array><string>macshare</string></array></dict></array>
+  <key>NSLocalNetworkUsageDescription</key><string>TwinDesk Mesh finds and connects to your PC on the local network.</string>
+  <key>NSMicrophoneUsageDescription</key><string>TwinDesk Mesh sends sound between your Mac and your PC.</string>
+  <key>NSAudioCaptureUsageDescription</key><string>TwinDesk Mesh sends your Mac's sound to your PC.</string>
+  <key>NSCameraUsageDescription</key><string>TwinDesk Mesh does not use the camera.</string>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>TwinDesk Mesh connects to your phone and computers over Bluetooth when they aren't on your network.</string>
+  <key>NSLocationUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk Mesh joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk Mesh joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk Mesh joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
+  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>TwinDesk Mesh</string><key>CFBundleURLSchemes</key><array><string>macshare-mesh</string></array></dict></array>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSHumanReadableCopyright</key><string>Copyright (C) 2026 inukaasith. GPL-3.0.</string>
 </dict></plist>
 EOF
 
-./node_modules/.bin/electron-packager "$STAGE" TwinDesk \
+./node_modules/.bin/electron-packager "$STAGE" "TwinDesk Mesh" \
   --platform=darwin --arch="$ARCH" --electron-version="$EV" \
-  --app-bundle-id=org.macshare.mac --app-version="$(node -p "require('./package.json').version")" \
-  --icon=dist/TwinDesk.icns --extend-info=dist/extra.plist \
+  --app-bundle-id=org.macshare.mesh --app-version="$(node -p "require('./package.json').version")" \
+  --icon=dist/TwinDesk-Mesh.icns --extend-info=dist/extra.plist \
   --no-prune --asar=false --out=dist --overwrite --quiet
 
-APP="dist/TwinDesk-darwin-$ARCH/TwinDesk.app"
-rm -rf dist/TwinDesk.app && mv "$APP" dist/ && rm -rf "dist/TwinDesk-darwin-$ARCH" "$STAGE" dist/extra.plist
+APP="dist/TwinDesk Mesh-darwin-$ARCH/TwinDesk Mesh.app"
+rm -rf "dist/TwinDesk Mesh.app" && mv "$APP" dist/ && rm -rf "dist/TwinDesk Mesh-darwin-$ARCH" "$STAGE" dist/extra.plist
 # The Share menu extension (mac-helper/Sources/macshare-share), sandboxed as macOS requires.
-APPEX=dist/TwinDesk.app/Contents/PlugIns/MacShareShare.appex
+APPEX="dist/TwinDesk Mesh.app/Contents/PlugIns/MacShareShare.appex"
 VER="$(node -p "require('./package.json').version")"
 mkdir -p "$APPEX/Contents/MacOS"
 cp "$ROOT/mac-helper/.build/release/macshare-share" "$APPEX/Contents/MacOS/MacShareShare"
@@ -77,9 +77,9 @@ cat > "$APPEX/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleIdentifier</key><string>org.macshare.mac.share</string>
-  <key>CFBundleName</key><string>TwinDesk</string>
-  <key>CFBundleDisplayName</key><string>TwinDesk</string>
+  <key>CFBundleIdentifier</key><string>org.macshare.mesh.share</string>
+  <key>CFBundleName</key><string>TwinDesk Mesh</string>
+  <key>CFBundleDisplayName</key><string>TwinDesk Mesh</string>
   <key>CFBundleExecutable</key><string>MacShareShare</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
   <key>CFBundleShortVersionString</key><string>$VER</string>
@@ -116,10 +116,10 @@ else echo "note: signing ad-hoc (the requirement below still keeps permissions a
 req() { echo "=designated => identifier \"$1\""; }
 sign_all() {
   # --deep first (Electron's own frameworks and helper apps), then each of ours with its own requirement.
-  codesign --force --deep $SIGN "$ID" dist/TwinDesk.app || return 1
-  for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do n=$(basename "$b"); codesign --force $SIGN "$ID" -i "$n" -r "$(req "$n")" "$b" || return 1; done
-  codesign --force $SIGN "$ID" --entitlements dist/share.entitlements -r "$(req org.macshare.mac.share)" "$APPEX" || return 1 # --deep dropped its sandbox
-  codesign --force $SIGN "$ID" -r "$(req org.macshare.mac)" dist/TwinDesk.app || return 1
+  codesign --force --deep $SIGN "$ID" "dist/TwinDesk Mesh.app" || return 1
+  for b in "dist/TwinDesk Mesh.app"/Contents/Resources/app/mac-helper/.build/release/*; do n=org.macshare.mesh.$(basename "$b"); codesign --force $SIGN "$ID" -i "$n" -r "$(req "$n")" "$b" || return 1; done
+  codesign --force $SIGN "$ID" --entitlements dist/share.entitlements -r "$(req org.macshare.mesh.share)" "$APPEX" || return 1 # --deep dropped its sandbox
+  codesign --force $SIGN "$ID" -r "$(req org.macshare.mesh)" "dist/TwinDesk Mesh.app" || return 1
 }
 # A certificate that can't sign (a runner's keychain, say) must not stop the build: sign ad-hoc.
 if ! sign_all; then
@@ -129,5 +129,5 @@ if ! sign_all; then
   sign_all
 fi
 rm -f dist/share.entitlements
-codesign -dr - dist/TwinDesk.app 2>&1 | grep designated
-echo "built mac/dist/TwinDesk.app"
+codesign -dr - "dist/TwinDesk Mesh.app" 2>&1 | grep designated
+echo "built mac/dist/TwinDesk Mesh.app"

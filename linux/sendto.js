@@ -16,7 +16,7 @@ const ARG = '--send-files';
 const HOME = os.homedir();
 const DATA = process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share');
 const CONFIG = process.env.XDG_CONFIG_HOME || path.join(HOME, '.config');
-const UCA_ID = 'twindesk-send-files';
+const UCA_ID = 'twindesk-mesh-send-files';
 
 // Is a program on PATH?
 function installed(cmd) {
@@ -66,22 +66,22 @@ class SendTo {
     const name = peer ? String(peer).replace(/[/\\\x00-\x1f]/g, '_').replace(/^\.+/, '').slice(0, 80) : '';
     if (name === this.name) return;
     this.name = name;
-    const label = 'Send to ' + name + ' (TwinDesk)';
+    const label = 'Send to ' + name + ' (TwinDesk Mesh)';
     const exec = launcher().map(desk).join(' ') + ' ' + ARG + ' %F';
     try {
       // Scripts menus: the file name is the label.
       for (const [dir, cmd] of [[path.join(DATA, 'nautilus', 'scripts'), 'nautilus'], [path.join(CONFIG, 'caja', 'scripts'), 'caja']]) {
-        this._clear(dir, (f) => f.endsWith(' (TwinDesk)'));
+        this._clear(dir, (f) => f.endsWith(' (TwinDesk Mesh)'));
         if (name && installed(cmd)) write(path.join(dir, label), script(name), 0o755);
       }
-      const nemo = path.join(DATA, 'nemo', 'actions', 'twindesk-send.nemo_action');
+      const nemo = path.join(DATA, 'nemo', 'actions', 'twindesk-mesh-send.nemo_action');
       if (name && installed('nemo')) {
         write(nemo, `[Nemo Action]\nName=${label}\nComment=Send the selected files with TwinDesk (${ARG})\nExec=${exec}\nIcon-Name=document-send\nSelection=notnone\nExtensions=any;\n`, 0o644);
       } else rm(nemo);
       // Dolphin: KDE Frameworks 6 and 5 look in different folders; service menus must be executable.
-      const service = `[Desktop Entry]\nType=Service\nMimeType=all/all;\nActions=twindeskSend;\nX-KDE-Priority=TopLevel\n\n[Desktop Action twindeskSend]\nName=${label}\nIcon=document-send\nExec=${exec}\n`;
+      const service = `[Desktop Entry]\nType=Service\nMimeType=all/all;\nActions=twindeskMeshSend;\nX-KDE-Priority=TopLevel\n\n[Desktop Action twindeskMeshSend]\nName=${label}\nIcon=document-send\nExec=${exec}\n`;
       for (const dir of [path.join(DATA, 'kio', 'servicemenus'), path.join(DATA, 'kservices5', 'ServiceMenus')]) {
-        const f = path.join(dir, 'twindesk-send.desktop');
+        const f = path.join(dir, 'twindesk-mesh-send.desktop');
         if (name && installed('dolphin')) write(f, service, 0o755);
         else rm(f);
       }

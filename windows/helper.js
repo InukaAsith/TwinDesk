@@ -9,7 +9,7 @@ const { EventEmitter } = require('events');
 const fs = require('fs');
 const path = require('path');
 
-const EXE = path.join(__dirname, '..', 'windows-helper', 'bin', 'macshare-winhelper.exe');
+const EXE = path.join(__dirname, '..', 'windows-helper', 'bin', 'twindesk-mesh-winhelper.exe');
 const RESTART_MS = 1000;
 const REQUEST_MS = 3000;
 

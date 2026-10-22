@@ -3,7 +3,7 @@
 // the app's name, a per-app bundle id, its icon; mac-helper's macshare-dockstub as the executable,
 // ad-hoc signed) runs while that app has windows here. Its events: activate / focus <i> / quit.
 // It lives in ~/Applications so it shows in Launchpad and Spotlight and can be kept in
-// the Dock; opened on its own it asks TwinDesk (macshare://pc-app/<id>) to open the PC app.
+// the Dock; opened on its own it asks TwinDesk (macshare-mesh://pc-app/<id>) to open the PC app.
 'use strict';
 
 const fs = require('fs');
@@ -15,7 +15,7 @@ const { app } = require('electron');
 const STUB = path.join(__dirname, '..', 'mac-helper', '.build', 'release', 'macshare-dockstub');
 
 const run = (cmd, args) => new Promise((resolve) => execFile(cmd, args, (err) => resolve(!err)));
-const APPS_DIR = path.join(require('os').homedir(), 'Applications', 'MacShare Apps');
+const APPS_DIR = path.join(require('os').homedir(), 'Applications', 'TwinDesk Mesh Apps');
 const xml = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // Builds (or reuses) the bundle for one PC app; returns the executable path, or null.
@@ -51,7 +51,7 @@ async function bundle({ id, name, icon }) {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>dockstub</string>
-<key>CFBundleIdentifier</key><string>org.macshare.pcapp.${hash}</string>
+<key>CFBundleIdentifier</key><string>org.macshare.mesh.pcapp.${hash}</string>
 <key>CFBundleName</key><string>${xml(safe)}</string>
 <key>CFBundleDisplayName</key><string>${xml(safe)}</string>
 <key>CFBundlePackageType</key><string>APPL</string>

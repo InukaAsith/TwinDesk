@@ -20,7 +20,7 @@ UI.setup = (() => {
   let missingKey = '';
   const page = el('section', { class: 'setup-page', hidden: true }, [
     el('div', { class: 'app-mark', attrs: { 'aria-hidden': 'true' } }),
-    el('h1', { text: 'Set up TwinDesk' }),
+    el('h1', { text: 'Set up TwinDesk Mesh' }),
     el('p', { text: 'macOS needs your OK for a few things.' }),
     UI.card('', rows.map((r) => r.row)),
     el('div', { class: 'setup-foot' }, [

@@ -78,14 +78,14 @@ jobs:
           ./gradlew --no-daemon assembleRelease
           v=$(grep -m1 versionName app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
           mkdir -p dist
-          cp app/build/outputs/apk/standard/release/app-standard-release.apk "dist/TwinDesk-$v.apk"
-          cp app/build/outputs/apk/full/release/app-full-release.apk "dist/TwinDesk-$v-full.apk"
+          cp app/build/outputs/apk/standard/release/app-standard-release.apk "dist/TwinDesk-Mesh-$v.apk"
+          cp app/build/outputs/apk/full/release/app-full-release.apk "dist/TwinDesk-Mesh-$v-full.apk"
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: twindesk-android
-          path: android/dist/TwinDesk-*.apk
+          name: twindesk-mesh-android
+          path: android/dist/TwinDesk-Mesh-*.apk
 
       # The computers' installers carry the full APK (installed over the phone's app through wireless
       # debugging): the Windows and Mac jobs of the same run take it from here.
@@ -93,7 +93,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-full-apk
-          path: android/dist/TwinDesk-*-full.apk
+          path: android/dist/TwinDesk-Mesh-*-full.apk
 
       # Straight onto the release, no download and re-upload.
       - name: Upload to the release
@@ -103,4 +103,4 @@ jobs:
         run: |
           TAG="$RELEASE_TAG"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes --latest || true
-          gh release upload "$TAG" android/dist/TwinDesk-*.apk --clobber
+          gh release upload "$TAG" android/dist/TwinDesk-Mesh-*.apk --clobber

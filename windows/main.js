@@ -59,7 +59,7 @@ const { normalize, apply: applySettings, migrateKvm } = require('./settings');
 
 // Packaged: electron-builder's appId is the shortcut's AppUserModelID. In development Windows
 // only shows toasts for an id it knows, and electron.exe's path works.
-const AUMID = app.isPackaged ? 'org.macshare.windows' : process.execPath;
+const AUMID = app.isPackaged ? 'org.macshare.mesh.windows' : process.execPath;
 
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 // Every sent video frame says "show me now" (RTP playout delay 0/0), the lowest latency
@@ -67,9 +67,13 @@ app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 // (jitterBufferTarget). FlexFEC repairs lost packets without a resend round trip; it costs bandwidth
 // only while packets are lost. The Mac sets the same trials.
 app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/min_ms:0,max_ms:0/WebRTC-FlexFEC-03/Enabled/WebRTC-FlexFEC-03-Advertised/Enabled/');
-// Renamed MacShare → TwinDesk: settings, pairing and keys stay in the folder they've always been
-// in (Electron would follow the new product name). A dev copy's --user-data-dir still wins.
-if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'MacShare'));
+// Own data folder (installs next to upstream TwinDesk): settings, pairing and keys live in
+// "TwinDesk Mesh". First start only: a COPY of upstream's folder (never moved or deleted) so the
+// pairings survive (shared/brand.js). A dev copy's --user-data-dir still wins.
+if (!app.commandLine.hasSwitch('user-data-dir')) {
+  require('../shared/brand.js').migrateUserData(app.getPath('appData'));
+  app.setPath('userData', path.join(app.getPath('appData'), require('../shared/brand.js').DATA_DIR));
+}
 // Everything the main process prints also goes to <userData>/logs/main.log (the installed app has no console).
 // Every log line also goes to the test log server on the local network while this pre-release is being tested
 // (tools/logserver.js on 192.168.2.100). TWINDESK_LOG_SERVER=off (or a url) changes it.
@@ -82,7 +86,7 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   Menu.setApplicationMenu(null); // its accelerators would steal keys meant for the Mac
   app.setAppUserModelId(AUMID); // toasts need it; the installer's shortcut carries the same id
-  // A pinned Mac app starts "TwinDesk.exe --mac-app=<id>": open it, else show the window.
+  // A pinned Mac app starts "TwinDesk Mesh.exe --mac-app=<id>": open it, else show the window.
   app.on('second-instance', (_e, argv) => {
     if (sendTo && sendTo.handle(argv)) return; // Explorer › Send to
     if (!openMacAppArg(argv) && !openPhoneAppArg(argv)) showMain();
@@ -235,7 +239,7 @@ function start() {
   vdd = new Vdd({ helper, onChange: pushState });
   // Notifications both ways, Send files, copy/paste files with shortcuts
   notifs = new Notifs({
-    bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
+    bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows', 'org.macshare.mesh.windows'],
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
   fileClip = new FileClip({ link, helper, fileDrop, fileRecv, dragRecv, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState });
@@ -684,7 +688,7 @@ function openMacAppArg(argv) {
   return true;
 }
 
-// A pinned phone app starts "TwinDesk.exe --phone-app=<package>": open it once the phone's
+// A pinned phone app starts "TwinDesk Mesh.exe --phone-app=<package>": open it once the phone's
 // wireless debugging is ready (connecting a paired phone nearby first, if none is connected).
 let pendingPhoneApp = null; // {pkg, until}
 let pendingView = null; // a phone window waiting for wireless debugging (phoneViews.onNoAdb)
@@ -921,7 +925,7 @@ function createMainWindow() {
     y: b.y,
     minWidth: 720,
     minHeight: 480,
-    title: 'TwinDesk',
+    title: 'TwinDesk Mesh',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#2b2b2e' : '#e9e9ee',
     show: false,
@@ -983,7 +987,7 @@ function checkTaskbar() {
 
 function createTray() {
   tray = new Tray(trayIcon());
-  tray.setToolTip('TwinDesk');
+  tray.setToolTip('TwinDesk Mesh');
   tray.on('click', showMain);
   checkTaskbar();
   updateTray();
@@ -998,7 +1002,7 @@ function updateTray(s = buildState()) {
   const sharing = s.pcScreen.mode !== 'off';
   const found = s.found.filter((d) => !s.peer || d.id !== s.peer.id);
   const rtt = connected && s.link.rtt != null ? ' · ' + s.link.rtt + ' ms' : '';
-  tray.setToolTip('TwinDesk: ' + statusLine(s));
+  tray.setToolTip('TwinDesk Mesh: ' + statusLine(s));
   // Rebuild only when something in the menu changed (state pushes are frequent).
   const watching = screen.sentAccept === true;
   const host = s.paired && s.paired.macName;
@@ -1042,9 +1046,9 @@ function updateTray(s = buildState()) {
     ] },
     check('Show a Popup When Switching', settings.app.hud, (i) => set('app', { hud: i.checked })),
     { type: 'separator' },
-    ...(s.updates && s.updates.available ? [{ label: (s.updates.canInstall ? 'Update to TwinDesk ' : 'Download TwinDesk ') + s.updates.latest + '…', click: () => updates.act() }] : []),
-    { label: 'Open TwinDesk…', click: showMain },
-    { label: 'Quit TwinDesk', click: () => app.quit() },
+    ...(s.updates && s.updates.available ? [{ label: (s.updates.canInstall ? 'Update to TwinDesk Mesh ' : 'Download TwinDesk Mesh ') + s.updates.latest + '…', click: () => updates.act() }] : []),
+    { label: 'Open TwinDesk Mesh…', click: showMain },
+    { label: 'Quit TwinDesk Mesh', click: () => app.quit() },
   ]));
 }
 

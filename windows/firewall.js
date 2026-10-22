@@ -33,8 +33,8 @@ function interpret(payload) {
   let message = 'OK';
   if (!lan.length) message = 'No network connection.';
   else if (publicNets.length) message = 'The network "' + publicNets[0].alias + '" is Public, so Windows blocks {name}’s broadcasts.';
-  else if (blocked) message = 'A Windows Firewall rule blocks TwinDesk.';
-  else if (!covered) message = 'TwinDesk isn’t allowed through Windows Firewall on this network.';
+  else if (blocked) message = 'A Windows Firewall rule blocks TwinDesk Mesh.';
+  else if (!covered) message = 'TwinDesk Mesh isn’t allowed through Windows Firewall on this network.';
   return { ok: lan.length > 0 && !publicNets.length && !blocked && covered, message, publicNets, blocked, covered, admin: payload.admin !== false, unread };
 }
 

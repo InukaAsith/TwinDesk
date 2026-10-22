@@ -7,7 +7,12 @@ android {
     namespace = "com.twindesk.android"
     compileSdk = 37
     defaultConfig {
-        applicationId = "com.twindesk.android"
+        // The fork installs next to upstream TwinDesk (com.twindesk.android): its own application id.
+        // `namespace` (above) stays com.twindesk.android, so no source file moves; component class
+        // names are written <applicationId>/com.twindesk.android.<Class> (shared/appid.js).
+        applicationId = "com.twindesk.mesh"
+        // For res/xml/shortcuts.xml (a resource file can't use the manifest's ${applicationId}).
+        resValue("string", "app_package", "com.twindesk.mesh")
         minSdk = 29 // Android 10: wireless debugging needs 11, everything else works from 10
         targetSdk = 36
         versionCode = 20100

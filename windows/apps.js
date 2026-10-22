@@ -97,7 +97,7 @@ class Apps {
   // ---- pinning ----
 
   static aumid(id) {
-    return 'org.macshare.macapp.' + crypto.createHash('sha1').update(id).digest('hex').slice(0, 10);
+    return 'org.macshare.mesh.macapp.' + crypto.createHash('sha1').update(id).digest('hex').slice(0, 10);
   }
 
   // How this copy of TwinDesk opens one Mac app: "TwinDesk.exe --mac-app=<id>".
@@ -107,7 +107,7 @@ class Apps {
   }
 
   get startDir() {
-    return path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'TwinDesk Apps');
+    return path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'TwinDesk Mesh Apps');
   }
 
   _lnk(name) {
@@ -137,7 +137,7 @@ class Apps {
     try {
       fs.mkdirSync(this.startDir, { recursive: true });
       const ok = shell.writeShortcutLink(file, fs.existsSync(file) ? 'replace' : 'create', {
-        target: r.target, args: r.args, description: a.name + ' on ' + this.peerName() + ' (TwinDesk)', appUserModelId: Apps.aumid(id),
+        target: r.target, args: r.args, description: a.name + ' on ' + this.peerName() + ' (TwinDesk Mesh)', appUserModelId: Apps.aumid(id),
         ...(ico ? { icon: ico, iconIndex: 0 } : {}),
       });
       if (!ok) throw new Error('Windows refused the shortcut');
@@ -147,7 +147,7 @@ class Apps {
       return false;
     }
     if (tell) {
-      this.message = a.name + ' is in Start › TwinDesk Apps. Right-click it there to pin it to Start or the taskbar.';
+      this.message = a.name + ' is in Start › TwinDesk Mesh Apps. Right-click it there to pin it to Start or the taskbar.';
       this.onChange();
     }
     return true;

@@ -52,14 +52,27 @@ assert.strictEqual(U.pickRelease([], 'beta'), null);
   assert.strictEqual(a.digest, 'sha256:' + 'a'.repeat(64));
 }
 
+// ---- the fork's renamed assets (TwinDesk-Mesh-<ver>-...) are still found ----
+{
+  const dl = (name) => ({ name, browser_download_url: 'u/' + name, size: 1 });
+  const win = [dl('TwinDesk-Mesh-Setup-2.1.0.exe'), dl('TwinDesk-Mesh-Setup-2.1.0-arm64.exe')];
+  assert.strictEqual(U.pickAsset(win, 'win', 'x64').name, 'TwinDesk-Mesh-Setup-2.1.0.exe');
+  assert.strictEqual(U.pickAsset(win, 'win', 'arm64').name, 'TwinDesk-Mesh-Setup-2.1.0-arm64.exe');
+  const mac = [dl('TwinDesk-Mesh-2.1.0-arm64.dmg'), dl('TwinDesk-Mesh-2.1.0-x64.dmg')];
+  assert.strictEqual(U.pickAsset(mac, 'mac', 'arm64').name, 'TwinDesk-Mesh-2.1.0-arm64.dmg');
+  assert.strictEqual(U.pickAsset(mac, 'mac', 'x64').name, 'TwinDesk-Mesh-2.1.0-x64.dmg');
+  assert.strictEqual(U.pickAsset([dl('TwinDesk-Mesh-2.1.0-x86_64.AppImage'), dl('twindesk-mesh_2.1.0_amd64.deb')], 'linux', 'x64').name, 'TwinDesk-Mesh-2.1.0-x86_64.AppImage');
+  assert.strictEqual(U.pickAsset([dl('TwinDesk-Mesh-2.1.0-x86_64.AppImage'), dl('twindesk-mesh_2.1.0_amd64.deb')], 'linux', 'x64', 'deb').name, 'twindesk-mesh_2.1.0_amd64.deb');
+}
+
 // ---- installer plans ----
 {
-  const win = I.plan({ platform: 'win', file: "C:\\t\\Setup's.exe", pid: 4242, execPath: 'C:\\Program Files\\TwinDesk\\TwinDesk.exe', dir: tmp });
+  const win = I.plan({ platform: 'win', file: "C:\\t\\Setup's.exe", pid: 4242, execPath: 'C:\\Program Files\\TwinDesk Mesh\\TwinDesk Mesh.exe', dir: tmp });
   assert.strictEqual(win.kind, 'win');
   assert.ok(win.script.includes("Setup''s.exe"), 'quotes in a path are escaped');
   assert.ok(win.script.includes('-Verb RunAs') && win.script.includes("'/S'"), 'silent, with the elevation prompt');
   assert.ok(win.script.includes('Wait-Process -Id 4242'), 'waits for the app');
-  assert.ok(/Start-Process -FilePath '.*TwinDesk\.exe'/.test(win.script), 'starts the app again');
+  assert.ok(/Start-Process -FilePath '.*TwinDesk Mesh\.exe'/.test(win.script), 'starts the app again');
   assert.ok(!/userData|Roaming|MacShare/i.test(win.script), 'never touches the data folder');
 
   const dir = fs.mkdtempSync(path.join(tmp, 'Apps-'));
