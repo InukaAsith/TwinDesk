@@ -176,6 +176,8 @@ class InputService : AccessibilityService() {
 // "auto" until one is picked: ADB once wireless debugging is there, else Accessibility, whose
 // permission is asked for only then.
 class Input(core: Core) : Feature(core) {
+    // The service is only in the full build (src/full): Play Protect blocks downloaded apps with one.
+    val supported get() = BuildConfig.ACCESSIBILITY
     val on get() = InputService.running != null
     val via get() = core.store.prefsString("inputVia", "auto")
     // What the computer's mouse and keyboard go through now.
@@ -216,7 +218,7 @@ class Input(core: Core) : Feature(core) {
                     "k" -> s.key(m.optInt("d") == 1, m.optInt("k"), m.optInt("m"))
                 }
             }
-            Proto.T.PHONE_INPUT_ASK -> if (!on) Notify.input(core.ctx, core.host?.name ?: "Your computer") else changed()
+            Proto.T.PHONE_INPUT_ASK -> if (!on) Notify.input(core.ctx, core.host?.name ?: "Your computer", supported) else changed()
             Proto.T.PHONE_INPUT_VIA -> {
                 val v = m.optString("via")
                 if (v == "adb" || v == "phone" || v == "auto") { core.store.setPrefsString("inputVia", v); told = "$on/$v"; core.changed() }

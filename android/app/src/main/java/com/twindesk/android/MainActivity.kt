@@ -925,6 +925,8 @@ private fun CursorPage(core: Core, v: Int) {
     val adbMissing = !viaPhone && !adbOn
     Note(
         when {
+            viaPhone && !core.input.supported -> "This build of TwinDesk can’t use Accessibility: Android’s Play Protect blocks downloaded apps that can. " +
+                "Use wireless debugging, or once it’s set up, $name installs TwinDesk with notifications, which can (on $name, Phone page › Install)."
             viaPhone && !core.input.on -> "Allow TwinDesk in Accessibility, so $name’s pointer can tap and type here."
             adbMissing -> "$name moves the pointer here through wireless debugging, which is off. Or choose Accessibility below."
             !core.pointer.allowed -> "Allow “Show the pointer” in General › Setup to see $name’s pointer here."
@@ -934,7 +936,11 @@ private fun CursorPage(core: Core, v: Int) {
         },
         if (adbMissing || viaPhone && !core.input.on || !core.pointer.allowed) "warn" else "info",
     )
-    if (viaPhone && !core.input.on) Row(Modifier.padding(bottom = 14.dp)) { Primary("Allow") { core.input.openSettings() } }
+    if (viaPhone && !core.input.supported) Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!adbOn) Primary("Turn on wireless debugging") { core.adb.turnOn() }
+        if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true }
+    }
+    else if (viaPhone && !core.input.on) Row(Modifier.padding(bottom = 14.dp)) { Primary("Allow") { core.input.openSettings() } }
     else if (adbMissing || !viaPhone && core.adb.setupNeeded) Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (adbMissing) Primary("Turn on wireless debugging") { core.adb.turnOn() }
         if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true }
@@ -1249,7 +1255,8 @@ private fun GeneralPage(core: Core, v: Int) {
         Setup("Nearby devices", "Bluetooth and Wi-Fi Direct, for $name when it isn’t on this network", nearbyAllowed, "Allow") {
             askNearby.launch(nearbyPerms)
         }
-        Setup("Mouse and keyboard", "Accessibility: $name’s cursor on this phone without wireless debugging, on any network. Only needed when ADB isn’t used", core.input.on, "Allow") { core.input.openSettings() }
+        if (core.input.supported) Setup("Mouse and keyboard", "Accessibility: $name’s cursor on this phone without wireless debugging, on any network. Only needed when ADB isn’t used", core.input.on, "Allow") { core.input.openSettings() }
+        else MacRow("Mouse and keyboard", "Through wireless debugging. Without it: comes with TwinDesk with notifications, which $name installs (its Phone page)")
         Setup("Show the pointer", "Draws $name’s pointer over other apps", core.pointer.allowed, "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
         }

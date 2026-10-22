@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-     The full build only: notification access (the phone’s notifications on the computer) and
-     the SMS permissions (Messages on the computer).
+     The full build only: notification access (the phone’s notifications on the computer), the
+     SMS permissions (Messages on the computer) and the Accessibility service (the computer’s mouse
+     and keyboard without wireless debugging). Play Protect blocks downloaded apps with any of them.
      The computer installs this build over the standard one through wireless debugging. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Messages on the computer (Messages.kt): read the phone's texts and send them. Asked for
@@ -10,6 +11,17 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <application>
+        <!-- The computer's mouse and keyboard without wireless debugging (Input.kt): off until the person switches it on -->
+        <service
+            android:name=".InputService"
+            android:exported="false"
+            android:label="@string/input_service"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/input_service" />
+        </service>
         <service
             android:name=".NotifListener"
             android:exported="true"

@@ -133,18 +133,6 @@
             android:noHistory="true"
             android:taskAffinity="" />
 
-        <!-- The computer's mouse and keyboard without wireless debugging (Input.kt): off until the person switches it on -->
-        <service
-            android:name=".InputService"
-            android:exported="false"
-            android:label="@string/input_service"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data android:name="android.accessibilityservice" android:resource="@xml/input_service" />
-        </service>
-
         <service
             android:name=".TwinService"
             android:exported="false"

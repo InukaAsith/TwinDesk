@@ -177,10 +177,13 @@ object Notify {
     fun cancelWifiOff(ctx: Context) = nm(ctx).cancel(ID_WIFI)
 
     // The computer's mouse wants this phone without wireless debugging: the Accessibility switch.
-    fun input(ctx: Context, name: String) {
-        val open = PendingIntent.getActivity(ctx, 10, Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    // supported: this build has the Accessibility service (the full one); else the app, which says how to get it.
+    fun input(ctx: Context, name: String, supported: Boolean) {
+        val to = if (supported) Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS) else Intent(ctx, MainActivity::class.java)
+        val open = PendingIntent.getActivity(ctx, 10, to.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val text = "To use $name’s mouse and keyboard here without wireless debugging, switch on TwinDesk in Accessibility (Installed apps). Tap to open it."
+        val text = if (supported) "To use $name’s mouse and keyboard here without wireless debugging, switch on TwinDesk in Accessibility (Installed apps). Tap to open it."
+            else "This build of TwinDesk can’t take $name’s mouse and keyboard without wireless debugging. Set up wireless debugging, then $name installs TwinDesk with notifications, which can (its Phone page › Install)."
         runCatching {
             nm(ctx).notify(ID_INPUT, Notification.Builder(ctx, CH_INVITE)
                 .setSmallIcon(R.drawable.ic_stat)
