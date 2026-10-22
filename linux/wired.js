@@ -24,7 +24,7 @@ const { TurnThread } = require('../shared/turn.js');
 const P = require('../shared/protocol.js');
 const usbadb = require('../shared/usbadb.js');
 
-const APP_ID = 'com.twindesk.android';
+const { resolveAppId, comp } = require('../shared/appid.js'); // the phone app's package id (shared/appid.js)
 const TURN_PORT = 47802;
 const POLL_MS = 2000;
 const RETRY_MS = 15000; // a phone without TwinDesk (or not answering yet) is looked at again after this
@@ -186,6 +186,7 @@ class Wired extends EventEmitter {
   }
 
   async _invite(serial) {
+    const APP_ID = await resolveAppId((s, c, o) => this.adb.shell(s, c, o), serial); // Mesh app, else the upstream one
     const has = await this.adb.shell(serial, `pm path ${APP_ID}`, { timeout: 5000 });
     if (!/package:/.test(has.out)) return;
     await this._tcpip(serial);
@@ -200,7 +201,7 @@ class Wired extends EventEmitter {
     await this.adb.shell(serial, `cmd deviceidle tempwhitelist -d 30000 ${APP_ID}`, { timeout: 5000 });
     // Known before the broadcast: the phone may answer (pair.start) before adb returns.
     this.plugged.set(serial, { nonce, at: Date.now(), linked: false });
-    const r = await this.adb.shell(serial, `am broadcast -f 32 -n ${APP_ID}/.WiredReceiver --es host ${this.getId()} --ei port ${port} --es nonce ${nonce} --es name ${name}`, { timeout: 8000 });
+    const r = await this.adb.shell(serial, `am broadcast -f 32 -n ${comp(APP_ID, 'WiredReceiver')} --es host ${this.getId()} --ei port ${port} --es nonce ${nonce} --es name ${name}`, { timeout: 8000 });
     if (!/Broadcast completed/.test(r.out)) throw new Error(`broadcast: ${(r.out || r.err || '').trim()}`);
     this.plugged.set(serial, { nonce, at: Date.now(), linked: true });
     console.log(`[wired] asked ${serial} to connect through the cable`);

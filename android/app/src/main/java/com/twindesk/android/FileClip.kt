@@ -3,7 +3,7 @@
 //   The computer copied files (⌃⌥C): `fclip.offer` → a notification here, "Copy to clipboard" or
 //   "Save to Downloads". Copy fetches them (`fclip.paste`, then a 'paste' batch) and puts them on
 //   the clipboard as content: links, so they paste natively into any app that takes files; the
-//   notification also offers Share. Save puts them in Download/TwinDesk.
+//   notification also offers Share. Save puts them in Download/TwinDesk Mesh.
 //   The phone copies files ("Copy to computer" in the share sheet): our `fclip.offer`; when the
 //   computer pastes (⌃⌥V), its `fclip.paste` asks for them and they go as a 'paste' batch.
 package com.twindesk.android

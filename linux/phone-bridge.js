@@ -25,7 +25,7 @@ const { KeyState, ANDROID } = require('./android-keys');
 const { PhoneInput } = require('../shared/phoneinput.js');
 
 const T = P.T;
-const APP_ID = 'com.twindesk.android';
+const { APP_ID: MESH_APP_ID, resolveAppId, comp } = require('../shared/appid.js'); // the phone app's package id (shared/appid.js)
 const POLL_MS = 3000;
 // adb's older TCP mode: unlike wireless debugging it doesn't need a Wi-Fi network (Android switches
 // wireless debugging off on a Wi-Fi Direct link), and stays on until the phone restarts.
@@ -392,13 +392,14 @@ class PhoneBridge extends EventEmitter {
   async _setup(serial) {
     if (this.setupDone.has(serial)) return;
     this._set('connecting', 'Setting up the phone…');
+    const APP_ID = await resolveAppId((s, c, o) => this.adb.shell(s, c, o), serial); // Mesh app, else the upstream one
     const cmds = [
       `pm grant ${APP_ID} android.permission.WRITE_SECURE_SETTINGS`,
       // Android forgets a computer's pairing after 7 days without a connection; 0 keeps it.
       'settings put global adb_allowed_connection_time 0',
       `pm grant ${APP_ID} android.permission.POST_NOTIFICATIONS`,
       `appops set ${APP_ID} SYSTEM_ALERT_WINDOW allow`,
-      `cmd notification allow_listener ${APP_ID}/${APP_ID}.NotifListener`,
+      `cmd notification allow_listener ${comp(APP_ID, 'NotifListener')}`,
       `dumpsys deviceidle whitelist +${APP_ID}`,
       `appops set ${APP_ID} RUN_ANY_IN_BACKGROUND allow`,
     ];
@@ -464,8 +465,8 @@ class PhoneBridge extends EventEmitter {
         : (text.split('\n').pop() || 'no answer');
       return this._install('failed', `Couldn’t install (${why})`);
     }
-    await this.adb.shell(serial, `cmd notification allow_listener ${APP_ID}/${APP_ID}.NotifListener`, { timeout: 8000 });
-    await this.adb.shell(serial, `am start -n ${APP_ID}/.MainActivity`, { timeout: 8000 });
+    await this.adb.shell(serial, `cmd notification allow_listener ${comp(MESH_APP_ID, 'NotifListener')}`, { timeout: 8000 }); // the APK installed here is this fork's
+    await this.adb.shell(serial, `am start -n ${comp(MESH_APP_ID, 'MainActivity')}`, { timeout: 8000 });
     this._install('done', 'Installed. The phone’s notifications can show here now.');
     setTimeout(() => this.phone.connect(id), 3000); // the app restarted: ask it to come back
   }

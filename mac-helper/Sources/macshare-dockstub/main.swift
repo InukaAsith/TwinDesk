@@ -61,7 +61,7 @@ if ProcessInfo.processInfo.environment["MACSHARE_DOCKSTUB"] != "1" {
   let id = (Bundle.main.object(forInfoDictionaryKey: "MacSharePcAppId") as? String) ?? ""
   var allowed = CharacterSet.alphanumerics
   allowed.insert(charactersIn: "-._~")
-  if let enc = id.addingPercentEncoding(withAllowedCharacters: allowed), let url = URL(string: "macshare://pc-app/\(enc)") {
+  if let enc = id.addingPercentEncoding(withAllowedCharacters: allowed), let url = URL(string: "macshare-mesh://pc-app/\(enc)") {
     NSWorkspace.shared.open(url)
   }
   exit(0)

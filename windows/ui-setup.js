@@ -21,7 +21,7 @@ UI.setup = (() => {
 
   const page = el('section', { class: 'setup-page', hidden: true }, [
     el('div', { class: 'app-mark', attrs: { 'aria-hidden': 'true' } }),
-    el('h1', { text: 'Set up TwinDesk' }),
+    el('h1', { text: 'Set up TwinDesk Mesh' }),
     el('p', { text: 'A few things before {me} can share with the other computer.' }),
     UI.card('', [fwRow, helperRow, drvRow]),
     el('div', { class: 'setup-foot' }, [

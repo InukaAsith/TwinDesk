@@ -132,7 +132,7 @@ fun Tile(icon: ImageVector, colors: List<Color>, size: Int = 26) {
 }
 
 @Composable
-fun Logo(size: Int) = Image(painterResource(R.drawable.twindesk_logo), "TwinDesk", Modifier.size(size.dp))
+fun Logo(size: Int) = Image(painterResource(R.drawable.twindesk_logo), "TwinDesk Mesh", Modifier.size(size.dp))
 
 @Composable
 fun Dot(color: Color, size: Int = 8) = Box(Modifier.size(size.dp).clip(CircleShape).background(color))

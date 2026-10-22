@@ -51,7 +51,7 @@ UI.tab({
     // Bluetooth off altogether while the session is on the same Wi-Fi (blepolicy.js wifiQuiet).
     const bleWifiSw = UI.switch((v) => api.setNet({ bleWifiOff: v }), { label: 'Turn off Bluetooth on Wi-Fi connections' });
     const bleWifiRow = UI.row('Turn off Bluetooth on Wi-Fi connections', '', [bleWifiSw]);
-    const shareRow = UI.row('TwinDesk in the Share menu', 'Share › TwinDesk sends files to the other computer',
+    const shareRow = UI.row('TwinDesk Mesh in the Share menu', 'Share › TwinDesk Mesh sends files to the other computer',
       [UI.button('Extensions…', () => api.openSettings('extensions'), 'small')]);
 
     body.append(

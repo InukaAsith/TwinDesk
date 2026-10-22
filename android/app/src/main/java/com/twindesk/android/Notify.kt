@@ -257,7 +257,7 @@ object Notify {
             ID_UPDATE,
             Notification.Builder(ctx, CH_UPDATES)
                 .setSmallIcon(R.drawable.ic_stat)
-                .setContentTitle("TwinDesk $latest is available")
+                .setContentTitle("TwinDesk Mesh $latest is available")
                 .setContentText("You have $current. Tap to download the new version.")
                 .setContentIntent(open)
                 .setAutoCancel(true)

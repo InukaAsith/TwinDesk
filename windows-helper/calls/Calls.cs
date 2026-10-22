@@ -1,11 +1,11 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// macshare-calls: this PC as the phone's Bluetooth hands-free (a headset, as a car is), so a call's
+// twindesk-mesh-calls: this PC as the phone's Bluetooth hands-free (a headset, as a car is), so a call's
 // sound plays on the PC. Windows' one way is PhoneLineTransportDevice, which it lets only an app
 // with a package identity and the phone line capabilities use: this .exe gets one from a sparse
 // package (AppxManifest.xml, registered by windows/callaudio.js) that its own manifest names
-// (macshare-calls.manifest). Windows' Bluetooth then carries the call's sound itself. A process of
+// (twindesk-mesh-calls.manifest). Windows' Bluetooth then carries the call's sound itself. A process of
 // its own, run by windows/callaudio.js only while Calls and its Bluetooth option are on with a phone
-// connected: macshare-winhelper never touches the phone line.
+// connected: twindesk-mesh-winhelper never touches the phone line.
 //
 // A call's sound stays here only while Windows has it on this PC (PhoneCall.AudioDevice): it takes
 // back what the phone sends unless this app asked for it, so each call is moved here as it starts
@@ -30,8 +30,8 @@ using Windows.Devices.Bluetooth;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
 
-[assembly: AssemblyTitle("TwinDesk")]
-[assembly: AssemblyProduct("TwinDesk")]
+[assembly: AssemblyTitle("TwinDesk Mesh")]
+[assembly: AssemblyProduct("TwinDesk Mesh")]
 
 namespace MacShare
 {

@@ -57,7 +57,7 @@ class Pointer(core: Core) : Feature(core) {
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                title = "TwinDesk pointer"
+                title = "TwinDesk Mesh pointer"
             }
             lp = p
             runCatching { wm.addView(nv, p) }.onFailure { return }

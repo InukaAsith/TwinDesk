@@ -11,8 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ARG = '--send-files';
-const SUFFIX = ' (TwinDesk).lnk';
-const OLD_SUFFIX = ' (MacShare).lnk'; // the app's old name: replaced by the new one
+const SUFFIX = ' (TwinDesk Mesh).lnk';
 
 class SendTo {
   // opts: fileDrop, link, peerName() → name | '', popup(kind, text, sub)
@@ -38,14 +37,14 @@ class SendTo {
     this.name = name;
     try {
       for (const f of fs.readdirSync(this.dir)) {
-        const old = f.endsWith(OLD_SUFFIX) || (f.endsWith(SUFFIX) && f !== name + SUFFIX);
+        const old = (f.endsWith(SUFFIX) && f !== name + SUFFIX);
         if (old && this._ours(path.join(this.dir, f))) fs.rmSync(path.join(this.dir, f), { force: true });
       }
       if (!name) return;
       const args = (app.isPackaged ? [] : [app.getAppPath()]).map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).concat(ARG).join(' ');
       const file = path.join(this.dir, name + SUFFIX);
       const ok = shell.writeShortcutLink(file, fs.existsSync(file) ? 'replace' : 'create', {
-        target: process.execPath, args, description: 'Send to ' + name + ' with TwinDesk', icon: process.execPath, iconIndex: 0,
+        target: process.execPath, args, description: 'Send to ' + name + ' with TwinDesk Mesh', icon: process.execPath, iconIndex: 0,
       });
       if (!ok) console.warn('[sendto] Windows refused the Send to shortcut');
     } catch (e) {

@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const { app } = require('electron');
 
-const file = () => path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'twindesk.desktop');
+const file = () => path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'autostart', 'twindesk-mesh.desktop');
 const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : '"' + String(s).replace(/(["`$\\])/g, '\\$1') + '"');
 
 function command() {
@@ -37,10 +37,10 @@ function set(on) {
   fs.writeFileSync(f, [
     '[Desktop Entry]',
     'Type=Application',
-    'Name=TwinDesk',
+    'Name=TwinDesk Mesh',
     'Comment=Share mouse, keyboard, clipboard and screens with your other computer',
     'Exec=' + command().map(quote).join(' '),
-    'Icon=twindesk',
+    'Icon=twindesk-mesh',
     'Terminal=false',
     'X-GNOME-Autostart-enabled=true',
     '',

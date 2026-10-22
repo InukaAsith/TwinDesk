@@ -264,7 +264,7 @@ private fun Identity(core: Core, v: Int, logo: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Logo(logo)
         Column(Modifier.padding(start = 12.dp)) {
-            Text("TwinDesk", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = pal.text)
+            Text("TwinDesk Mesh", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = pal.text)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val h = core.host
                 Dot(when { h != null -> pal.good; core.pairLink.pair != null || core.link.state == "connecting" -> pal.warn; else -> pal.faint }, 7)
@@ -370,7 +370,7 @@ private fun OverviewPage(core: Core, v: Int) {
     val host = core.host
     val me = core.store.deviceName
     val ip = remember(v) { core.adb.address() } // this phone's Wi-Fi address, for pairing by address on the computer
-    if (LocalConfiguration.current.screenWidthDp >= 600) PageHead("TwinDesk", listOf(me, ip).filter { it.isNotEmpty() }.joinToString(" · "))
+    if (LocalConfiguration.current.screenWidthDp >= 600) PageHead("TwinDesk Mesh", listOf(me, ip).filter { it.isNotEmpty() }.joinToString(" · "))
     else PageHead(me, listOf("This device", ip).filter { it.isNotEmpty() }.joinToString(" · "))
 
     core.invite?.let { inv ->
@@ -1053,7 +1053,7 @@ private fun FilesPage(core: Core, v: Int) {
         ) { Text(if (over) "Drop to send to $name" else "Drag files here to send them to $name", color = pal.muted) }
     }
     MacCard("From $name") {
-        MacRow("Drag across the edge", "Files dragged onto this device land in Downloads › TwinDesk", first = true)
+        MacRow("Drag across the edge", "Files dragged onto this device land in Downloads › TwinDesk Mesh", first = true)
         MacRow("⌃⌥C on $name", "This device offers to copy them to its clipboard or save them")
         MacRow("Drop on the phone window", "Files dropped on this device’s window on $name come here")
     }
@@ -1228,7 +1228,7 @@ private fun AboutPage(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Logo(110)
-        Text("TwinDesk", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.text, modifier = Modifier.padding(top = 10.dp))
+        Text("TwinDesk Mesh", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.text, modifier = Modifier.padding(top = 10.dp))
         Text("Version ${BuildConfig.VERSION_NAME}", color = pal.muted)
         Text("Use your computer and this device as one desk.", color = pal.muted, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp))
     }
@@ -1237,7 +1237,7 @@ private fun AboutPage(core: Core, v: Int) {
     val u = core.updates
     MacCard("Updates") {
         MacRow(
-            "TwinDesk",
+            "TwinDesk Mesh",
             when {
                 u.state == "downloading" -> "Downloading… ${(u.progress * 100).toInt()}%"
                 u.checking -> "Checking…"
