@@ -234,7 +234,7 @@ class PeerApps {
     const a = this._app(w.info.id);
     const img = a && a.icon ? nativeImage.createFromDataURL(a.icon) : null;
     if (img && !img.isEmpty()) w.win.setIcon(img);
-    if (w.win.setAppDetails) w.win.setAppDetails({ appId: 'org.macshare.mesh.pcapp.' + crypto.createHash('sha1').update(w.info.id).digest('hex').slice(0, 10) });
+    if (w.win.setAppDetails) w.win.setAppDetails({ appId: 'org.macshare.pcapp.' + crypto.createHash('sha1').update(w.info.id).digest('hex').slice(0, 10) });
   }
 
   // Never bigger than the other PC's work area (1:1 pixels, nothing upscaled) nor this monitor's.

@@ -82,8 +82,8 @@ async function fixInput() {
   const rule = 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"';
   const script = [
     'modprobe uinput || true',
-    'echo uinput > /etc/modules-load.d/twindesk-mesh-uinput.conf',
-    "echo '" + rule + "' > /etc/udev/rules.d/70-twindesk-mesh-uinput.rules",
+    'echo uinput > /etc/modules-load.d/twindesk-uinput.conf',
+    "echo '" + rule + "' > /etc/udev/rules.d/70-twindesk-uinput.rules",
     'udevadm control --reload-rules && udevadm trigger --sysname-match=uinput || true',
     'usermod -aG input ' + user,
   ].join(' && ');

@@ -29,7 +29,7 @@ UI.tab({
       });
       return card;
     };
-    const nameEl = el('div', { class: 'about-name', text: 'TwinDesk Mesh' });
+    const nameEl = el('div', { class: 'about-name', text: 'TwinDesk' });
     const verEl = el('div', { class: 'about-ver' });
     const hero = el('div', { class: 'card about-hero keep-on' }, [
       el('div', { class: 'about-icon', attrs: { role: 'img', 'aria-label': 'TwinDesk icon' } }),
@@ -43,7 +43,7 @@ UI.tab({
     const updCheck = UI.button('Check now', () => api.checkUpdates(), 'small');
     let updCan = false;
     const updGet = UI.button('Update now', () => (updCan ? api.installUpdate() : api.openUpdate()), 'small primary');
-    const updRow = UI.row('TwinDesk Mesh', '', [updStatus, updGet, updCheck]);
+    const updRow = UI.row('TwinDesk', '', [updStatus, updGet, updCheck]);
     const updAuto = UI.switch((v) => api.setUpdates({ auto: v }), { label: 'Check for updates automatically' });
     const updBeta = UI.switch((v) => api.setUpdates({ channel: v ? 'beta' : 'stable' }), { label: 'Include beta releases' });
     const updSelf = UI.switch((v) => api.setUpdates({ install: v ? 'auto' : 'ask' }), { label: 'Install updates automatically' });
@@ -77,7 +77,7 @@ UI.tab({
 
     return (s) => {
       const a = s.about || { app: {}, pc: {} };
-      nameEl.textContent = a.app.name || 'TwinDesk Mesh';
+      nameEl.textContent = a.app.name || 'TwinDesk';
       verEl.textContent = 'Version ' + (a.app.version || s.version || '');
       thanksRow.setHint(a.app.thanks || '');
       thanksRow.hidden = !a.app.thanks;

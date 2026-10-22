@@ -4,6 +4,6 @@
     <string name="sc_adb_long">Turn on wireless debugging</string>
     <string name="sc_screen_short">Mac screen</string>
     <string name="sc_screen_long">Show the Mac’s screen</string>
-    <string name="input_service">TwinDesk Mesh: your computer’s mouse and keyboard</string>
-    <string name="input_service_desc">Lets the computer you paired in TwinDesk Mesh tap, scroll and type on this phone with its mouse and keyboard when wireless debugging isn’t available (for example over Bluetooth). TwinDesk Mesh only acts on what that computer sends while you share its cursor; it doesn’t read your screen.</string>
+    <string name="input_service">TwinDesk: your computer’s mouse and keyboard</string>
+    <string name="input_service_desc">Lets the computer you paired in TwinDesk tap, scroll and type on this phone with its mouse and keyboard when wireless debugging isn’t available (for example over Bluetooth). TwinDesk only acts on what that computer sends while you share its cursor; it doesn’t read your screen.</string>
 </resources>

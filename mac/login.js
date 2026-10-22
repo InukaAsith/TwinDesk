@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const { app } = require('electron');
 
-const LABEL = 'org.macshare.mesh';
+const LABEL = 'org.macshare.mac';
 const PLIST = path.join(os.homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 

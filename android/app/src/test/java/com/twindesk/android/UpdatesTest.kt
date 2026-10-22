@@ -45,12 +45,4 @@ class UpdatesTest {
         assertEquals("u2", standard!!.url)
         assertEquals("sha256:" + "a".repeat(64), Updates.pickApk(assets, true)!!.digest)
     }
-
-    @Test fun meshApkNamesAreFound() {
-        val assets = JSONArray()
-            .put(JSONObject().put("name", "TwinDesk-Mesh-2.2.0-full.apk").put("browser_download_url", "m1").put("size", 5))
-            .put(JSONObject().put("name", "TwinDesk-Mesh-2.2.0.apk").put("browser_download_url", "m2").put("size", 6))
-        assertEquals("m2", Updates.pickApk(assets, false)!!.url)
-        assertEquals("m1", Updates.pickApk(assets, true)!!.url)
-    }
 }

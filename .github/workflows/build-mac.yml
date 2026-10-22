@@ -67,7 +67,7 @@ jobs:
       # swiftc builds the helper; the app is signed with a self-signed certificate made on this runner
       # (mac/scripts/signing-identity.sh), so macOS asks for Screen Recording, Accessibility and Input
       # Monitoring again after every update from CI. adb comes from mac/scripts/fetch-adb.sh.
-      - name: Build TwinDesk Mesh.app
+      - name: Build TwinDesk.app
         working-directory: mac
         run: npm run dist
 
@@ -76,12 +76,12 @@ jobs:
         run: |
           npm run dmg
           v=$(node -p "require('./package.json').version")
-          mv dist/TwinDesk-Mesh.dmg "dist/TwinDesk-Mesh-$v-arm64.dmg"
+          mv dist/TwinDesk.dmg "dist/TwinDesk-$v-arm64.dmg"
 
       - name: Upload the disk image
         uses: actions/upload-artifact@v4
         with:
-          name: twindesk-mesh-mac-arm64
+          name: twindesk-mac-arm64
           path: mac/dist/*.dmg
 
       - name: Upload to the release

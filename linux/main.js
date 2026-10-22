@@ -70,13 +70,9 @@ app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/min_ms:0,max_ms:0/WebRTC-FlexFEC-03/Enabled/WebRTC-FlexFEC-03-Advertised/Enabled/');
 // Wayland (L6): screen capture through the desktop portal and PipeWire.
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
-// Own data folder (installs next to upstream TwinDesk): settings, pairing and keys live in
-// "TwinDesk Mesh". First start only: a COPY of upstream's folder (never moved or deleted) so the
-// pairings survive (shared/brand.js). A dev copy's --user-data-dir still wins.
-if (!app.commandLine.hasSwitch('user-data-dir')) {
-  require('../shared/brand.js').migrateUserData(app.getPath('appData'));
-  app.setPath('userData', path.join(app.getPath('appData'), require('../shared/brand.js').DATA_DIR));
-}
+// Renamed MacShare → TwinDesk: settings, pairing and keys stay in the folder they've always been
+// in (Electron would follow the new product name). A dev copy's --user-data-dir still wins.
+if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'MacShare'));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -950,7 +946,7 @@ function createMainWindow() {
     y: b.y,
     minWidth: 720,
     minHeight: 480,
-    title: 'TwinDesk Mesh',
+    title: 'TwinDesk',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#2b2b2e' : '#e9e9ee',
     show: false,
@@ -1001,7 +997,7 @@ function createTray() {
     console.error('[tray]', e.message); // no tray on this desktop: start TwinDesk again to show the window
     return;
   }
-  tray.setToolTip('TwinDesk Mesh');
+  tray.setToolTip('TwinDesk');
   tray.on('click', showMain);
   updateTray(buildState());
 }
@@ -1011,7 +1007,7 @@ function createTray() {
 let trayKey = '';
 function updateTray(s) {
   if (!tray) return;
-  tray.setToolTip('TwinDesk Mesh: ' + statusLine(s));
+  tray.setToolTip('TwinDesk: ' + statusLine(s));
   const connected = s.link.state === 'connected';
   const name = connected && s.peer ? s.peer.name : '';
   const k = settings.kvm;
@@ -1062,9 +1058,9 @@ function updateTray(s) {
     ...(again ? [{ label: (s.link.busy ? 'Take Over ' : 'Connect to ') + host, click: () => link.connect(true) }] : []),
     check('Show a Popup When Switching', settings.app.hud, (i) => set('app', { hud: i.checked })),
     { type: 'separator' },
-    ...(s.updates && s.updates.available ? [{ label: (s.updates.canInstall ? 'Update to TwinDesk Mesh ' : 'Download TwinDesk Mesh ') + s.updates.latest + '…', click: () => updates.act() }] : []),
-    { label: 'Open TwinDesk Mesh…', click: showMain },
-    { label: 'Quit TwinDesk Mesh', click: () => app.quit() },
+    ...(s.updates && s.updates.available ? [{ label: (s.updates.canInstall ? 'Update to TwinDesk ' : 'Download TwinDesk ') + s.updates.latest + '…', click: () => updates.act() }] : []),
+    { label: 'Open TwinDesk…', click: showMain },
+    { label: 'Quit TwinDesk', click: () => app.quit() },
   ]));
 }
 

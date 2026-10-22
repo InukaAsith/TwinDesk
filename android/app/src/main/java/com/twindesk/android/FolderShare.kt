@@ -46,7 +46,7 @@ class FolderShare(core: Core) : Feature(core) {
     private var lastLink = ""
 
     val on get() = core.store.flag("shareOn", false)
-    val folder: File get() = core.store.prefsString("shareFolder", "").let { if (it.isEmpty()) File(Environment.getExternalStorageDirectory(), "TwinDesk Mesh") else File(it) }
+    val folder: File get() = core.store.prefsString("shareFolder", "").let { if (it.isEmpty()) File(Environment.getExternalStorageDirectory(), "TwinDesk") else File(it) }
     val serving get() = dav != null
     val allowed get() = FsBrowse.allowed()
 

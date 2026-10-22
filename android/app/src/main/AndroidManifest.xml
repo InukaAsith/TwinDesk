@@ -59,7 +59,7 @@
 
     <application
         android:networkSecurityConfig="@xml/network_security_config"
-        android:label="TwinDesk Mesh"
+        android:label="TwinDesk"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.TwinDesk"

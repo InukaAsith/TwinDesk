@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The calls' sound on this PC over Bluetooth (shared/phonehub.js makes this only while Calls and
-// its Bluetooth option are on with a phone connected): windows-helper's twindesk-mesh-calls connects to
+// its Bluetooth option are on with a phone connected): windows-helper's macshare-calls connects to
 // the phone as its hands-free, like a headset, and Windows plays the call through the PC's speakers
 // and microphone once asked to (each call is moved here as it starts), and not at all while a
 // Bluetooth headset is connected to the PC (whatever the default devices: its hands-free link and the
@@ -20,12 +20,12 @@ const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const { script } = require('./ps');
 
-const ROOT = path.join(__dirname, '..'); // the package's external location: its exe is windows-helper\bin\twindesk-mesh-calls.exe in it
+const ROOT = path.join(__dirname, '..'); // the package's external location: its exe is windows-helper\bin\macshare-calls.exe in it
 const BIN = path.join(ROOT, 'windows-helper', 'bin');
-const EXE = path.join(BIN, 'twindesk-mesh-calls.exe');
-const MSIX = path.join(BIN, 'twindesk-mesh-calls.msix');
-const CER = path.join(BIN, 'twindesk-mesh-calls.cer');
-const PKG = 'TwinDesk.Mesh.Calls';
+const EXE = path.join(BIN, 'macshare-calls.exe');
+const MSIX = path.join(BIN, 'twindesk-calls.msix');
+const CER = path.join(BIN, 'twindesk-calls.cer');
+const PKG = 'TwinDesk.Calls';
 const PKG_VERSION = '1.0.1.0'; // as windows-helper/calls/AppxManifest.xml
 const RETRY_MS = [5000, 15000, 30000, 60000, 120000];
 const SYSTEM_ONLY = 'Windows keeps calls over Bluetooth for Phone Link on this PC. Calls still ring, answer and dial here; their sound stays on the phone';
@@ -55,7 +55,7 @@ class CallAudio extends EventEmitter {
     this.id = '';
     this.state = refused ? 'unavailable' : 'starting';
     this.error = refused;
-    this.here = false; // a call under way with its sound on this PC (twindesk-mesh-calls' call events)
+    this.here = false; // a call under way with its sound on this PC (macshare-calls' call events)
     this.local = true; // Windows can play calls here (false while this PC's call devices are Bluetooth)
     this.forced = false; // registered again once, when the exe came up without its identity
     this.denied = false; // Windows said no (its privacy settings, or another app has the line): Connect after fixing that
@@ -133,7 +133,7 @@ class CallAudio extends EventEmitter {
 
   async _launch(gen, force) {
     if (!fs.existsSync(EXE) || !fs.existsSync(MSIX)) {
-      this.error = 'twindesk-mesh-calls is missing (npm run build:helper)';
+      this.error = 'macshare-calls is missing (npm run build:helper)';
       return this._set('unavailable');
     }
     this._set('starting');
@@ -180,7 +180,7 @@ class CallAudio extends EventEmitter {
       // copy): registered again here, once.
       if (m.identity === false) {
         this._end();
-        if (this.forced) { this.error = 'Windows didn’t give twindesk-mesh-calls TwinDesk’s package identity'; return this._set('unavailable'); }
+        if (this.forced) { this.error = 'Windows didn’t give macshare-calls TwinDesk’s package identity'; return this._set('unavailable'); }
         this.forced = true;
         return this._launch(this.gen, true);
       }

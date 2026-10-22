@@ -46,10 +46,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // (jitterBufferTarget). FlexFEC repairs lost packets without waiting a round trip for a resend; it
 // costs bandwidth only while packets are being lost.
 app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/min_ms:0,max_ms:0/WebRTC-FlexFEC-03/Enabled/WebRTC-FlexFEC-03-Advertised/Enabled/');
-// Own data folder (installs next to upstream TwinDesk): "TwinDesk Mesh". First start only: a COPY of
-// upstream's folder (never moved or deleted) so pairings survive (shared/brand.js).
-if (!process.env.MACSHARE_PROFILE) require('../shared/brand.js').migrateUserData(app.getPath('appData'));
-app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), require('../shared/brand.js').DATA_DIR)); // PROFILE: a second dev copy
+// Renamed to TwinDesk: settings, pairing and the identity stay in the old folder.
+app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), 'MacShare')); // PROFILE: a second dev copy
 // Everything the main process prints also goes to <userData>/logs/main.log (a problem seen on this Mac can be read afterwards).
 // Every log line also goes to the test log server on the local network while this pre-release is being tested
 // (tools/logserver.js on 192.168.2.100). TWINDESK_LOG_SERVER=off (or a url) changes it.
@@ -146,13 +144,13 @@ function openPhoneApp(pkg) {
   openPhoneApp.timer = setTimeout(() => pendingPhoneApp && openPhoneApp(pendingPhoneApp.pkg), 2000);
 }
 
-// macshare-mesh://pc-app/<id> from a PC app's Dock icon / Launchpad entry. It can arrive
+// macshare://pc-app/<id> from a PC app's Dock icon / Launchpad entry. It can arrive
 // before the services exist, so it waits in `linkQueue`.
 let linkQueue = [];
 function handleLink(url) {
   if (!svc) return linkQueue.push(url);
-  if (/^macshare-mesh:\/\/send\b/.test(String(url))) return handleSendLink(String(url));
-  const m = /^macshare-mesh:\/\/pc-app\/(.+)$/.exec(String(url));
+  if (/^macshare:\/\/send\b/.test(String(url))) return handleSendLink(String(url));
+  const m = /^macshare:\/\/pc-app\/(.+)$/.exec(String(url));
   if (!m) return;
   const id = decodeURIComponent(m[1]).slice(0, 1024);
   if (id.startsWith('phone:')) return openPhoneApp(id.slice(6));
@@ -288,7 +286,7 @@ function onScreenCtl(m) {
   if (typeof m.share === 'boolean' && m.share !== !!settings.sharing.on) actions.setSharing(m.share, 'remote');
 }
 
-// macshare-mesh://send?p=<path>&p=… from the Share menu extension: Send files to the peer.
+// macshare://send?p=<path>&p=… from the Share menu extension: Send files to the peer.
 function handleSendLink(url) {
   let u;
   try { u = new URL(url); } catch { return; }
@@ -340,7 +338,7 @@ function clearStalePermissions() {
       !p.accessibility && 'Accessibility',
       p.inputMonitoring === false && 'ListenEvent',
     ].filter(Boolean);
-    const id = 'org.macshare.mesh';
+    const id = 'org.macshare.mac';
     let left = services.length;
     const done = () => {
       settings.app.signature = m[1];
@@ -367,7 +365,7 @@ function createWindow() {
     height: 720,
     minWidth: 760,
     minHeight: 520,
-    title: 'TwinDesk Mesh',
+    title: 'TwinDesk',
     show: false,
     titleBarStyle: 'hiddenInset', // the sidebar runs up under the traffic lights
     vibrancy: 'sidebar',
@@ -426,7 +424,7 @@ function updateTray() {
   const name = c ? c.name : 'the other computer';
   const k = settings.kvm;
   const where = state.input && state.input.where;
-  tray.setToolTip(c ? `TwinDesk Mesh: ${c.name}` : 'TwinDesk Mesh');
+  tray.setToolTip(c ? `TwinDesk: ${c.name}` : 'TwinDesk');
   const check = (label, checked, click, enabled = true) => ({ label, type: 'checkbox', checked: !!checked, enabled, click });
   const found = (state.found || []).filter((d) => !c || d.id !== c.id);
   tray.setContextMenu(
@@ -455,9 +453,9 @@ function updateTray() {
       },
       check('Show a Popup When Switching', settings.app.hud !== false, (i) => actions.setApp({ hud: i.checked })),
       { type: 'separator' },
-      ...(updates && updates.status.available ? [{ label: `${updates.canInstall ? 'Update to' : 'Download'} TwinDesk Mesh ${updates.status.latest}…`, click: () => updates.act() }] : []),
-      { label: 'Open TwinDesk Mesh…', click: showWindow },
-      { label: 'Quit TwinDesk Mesh', click: () => app.quit() },
+      ...(updates && updates.status.available ? [{ label: `${updates.canInstall ? 'Update to' : 'Download'} TwinDesk ${updates.status.latest}…`, click: () => updates.act() }] : []),
+      { label: 'Open TwinDesk…', click: showWindow },
+      { label: 'Quit TwinDesk', click: () => app.quit() },
     ]),
   );
 }
@@ -629,7 +627,7 @@ app.whenReady().then(() => {
   });
   svc.fileClip.on('popup', (kind, text) => hud.show(kind, text));
   svc.pcApps.on('popup', (kind, text) => hud.show(kind, text));
-  if (app.isPackaged) app.setAsDefaultProtocolClient('macshare-mesh');
+  if (app.isPackaged) app.setAsDefaultProtocolClient('macshare');
   for (const url of linkQueue.splice(0)) handleLink(url);
   // The hotkey's double-tap: the big card "Cursor sharing on/off" (also when the other side switched it).
   svc.kvm.on('linked', (on, here) => {

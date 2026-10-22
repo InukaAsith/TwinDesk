@@ -15,7 +15,7 @@ const LINKS = {
   licence: 'https://github.com/InukaAsith/TwinDesk/blob/main/LICENSE',
 };
 
-const NAME = { darwin: 'TwinDesk Mesh for macOS', win32: 'TwinDesk Mesh for Windows', linux: 'TwinDesk Mesh for Linux' };
+const NAME = { darwin: 'TwinDesk for macOS', win32: 'TwinDesk for Windows', linux: 'TwinDesk for Linux' };
 const THANKS = { darwin: 'DeskPad (virtual display header, MIT)' };
 const ARCH = { x64: '64-bit Intel/AMD (x64)', arm64: 'ARM 64-bit (arm64)', ia32: '32-bit (x86)' };
 
@@ -47,7 +47,7 @@ function aboutInfo(app) {
   const v = process.versions;
   return {
     app: {
-      name: NAME[process.platform] || 'TwinDesk Mesh',
+      name: NAME[process.platform] || 'TwinDesk',
       thanks: THANKS[process.platform] || '',
       version: app.getVersion(),
       electron: v.electron || '',

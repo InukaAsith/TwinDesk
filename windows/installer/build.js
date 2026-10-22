@@ -52,8 +52,8 @@ async function main() {
   if (process.platform === 'win32') {
     console.log('Building the helper…');
     execFileSync('cmd.exe', ['/c', path.join(ROOT, 'windows-helper', 'build.cmd')], { stdio: 'inherit' });
-  } else if (!fs.existsSync(path.join(ROOT, 'windows-helper', 'bin', 'twindesk-mesh-winhelper.exe'))) {
-    throw new Error('Not on Windows: put a built twindesk-mesh-winhelper.exe in windows-helper/bin/ first');
+  } else if (!fs.existsSync(path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper.exe'))) {
+    throw new Error('Not on Windows: put a built macshare-winhelper.exe in windows-helper/bin/ first');
   } else {
     console.log('Not on Windows: using the helper already in windows-helper/bin/');
   }
@@ -68,10 +68,10 @@ async function main() {
   }
   // Which repository this build came from: the updater follows that project's releases (shared/updates.js).
   fs.writeFileSync(path.join(STAGE, 'shared', 'update-source.json'), JSON.stringify({ repo: process.env.GITHUB_REPOSITORY || '' }) + '\n');
-  copy(path.join(ROOT, 'windows-helper', 'bin', 'twindesk-mesh-winhelper.exe'),
-    path.join(STAGE, 'windows-helper', 'bin', 'twindesk-mesh-winhelper.exe'));
+  copy(path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper.exe'),
+    path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper.exe'));
   // The calls' sound on this PC (callaudio.js): its .exe, its signed package and that certificate.
-  for (const f of ['twindesk-mesh-calls.exe', 'twindesk-mesh-calls.msix', 'twindesk-mesh-calls.cer']) {
+  for (const f of ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
     const from = path.join(ROOT, 'windows-helper', 'bin', f);
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
@@ -99,14 +99,14 @@ async function main() {
 }
 
 async function pack(arch) {
-  const name = 'TwinDesk-Mesh-Setup-' + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
+  const name = 'TwinDesk-Setup-' + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
   console.log('Packaging ' + arch + '…');
   await builder.build({
     targets: builder.Platform.WINDOWS.createTarget('nsis', builder.Arch[arch]),
     projectDir: WIN,
     config: {
-      appId: 'org.macshare.mesh.windows',
-      productName: 'TwinDesk Mesh',
+      appId: 'org.macshare.windows',
+      productName: 'TwinDesk',
       copyright: 'Copyright (C) 2026 inukaasith',
       electronVersion,
       directories: { app: STAGE, output: path.join(WIN, 'dist') },
@@ -114,7 +114,7 @@ async function pack(arch) {
       npmRebuild: false,
       win: {
         icon: path.join(__dirname, 'icon.ico'),
-        executableName: 'TwinDesk Mesh',
+        executableName: 'TwinDesk',
         // electron-builder signs with WIN_CSC_LINK when supplied. Don't silently release an
         // unsigned installer after the signing secret has been configured.
         forceCodeSigning: Boolean(process.env.WIN_CSC_LINK),
@@ -128,7 +128,7 @@ async function pack(arch) {
         uninstallerIcon: path.join(__dirname, 'icon.ico'),
         license: path.join(ROOT, 'LICENSE'),
         include: path.join(__dirname, 'installer.nsh'),
-        shortcutName: 'TwinDesk Mesh',
+        shortcutName: 'TwinDesk',
         createDesktopShortcut: true,
         createStartMenuShortcut: true,
         runAfterFinish: true,

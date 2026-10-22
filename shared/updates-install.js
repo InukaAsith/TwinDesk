@@ -19,7 +19,7 @@ const { spawn } = require('child_process');
 const sq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`; // POSIX single quote
 const psq = (s) => `'${String(s).replace(/'/g, "''")}'`; // PowerShell single quote
 
-// The folder name of a .app bundle from the running executable (…/TwinDesk Mesh.app/Contents/MacOS/TwinDesk Mesh).
+// The folder name of a .app bundle from the running executable (…/TwinDesk.app/Contents/MacOS/TwinDesk).
 function macAppPath(execPath) {
   const m = /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(String(execPath).replace(/\\/g, '/'));
   return m ? m[1] : '';
@@ -61,11 +61,11 @@ function macScript({ file, pid, app, log }) {
     'say() { echo "$(date +%H:%M:%S) $*" >> "$LOG"; }',
     `APP=${sq(app)}`,
     `DMG=${sq(file)}`,
-    `NEW=${sq(parent + '/.TwinDesk-Mesh-update.app')}`,
-    `OLD=${sq(parent + '/.TwinDesk-Mesh-old.app')}`,
+    `NEW=${sq(parent + '/.TwinDesk-update.app')}`,
+    `OLD=${sq(parent + '/.TwinDesk-old.app')}`,
     `PID=${Number(pid) || 0}`,
     'for i in $(seq 1 120); do kill -0 "$PID" 2>/dev/null || break; sleep 0.5; done',
-    'MNT=$(mktemp -d /tmp/twindesk-mesh-mnt.XXXXXX)',
+    'MNT=$(mktemp -d /tmp/twindesk-mnt.XXXXXX)',
     'if hdiutil attach "$DMG" -nobrowse -readonly -noverify -mountpoint "$MNT" >/dev/null 2>&1; then',
     '  SRC=$(find "$MNT" -maxdepth 1 -name "*.app" | head -1)',
     '  rm -rf "$NEW" "$OLD"',
@@ -118,7 +118,7 @@ function plan({ platform, file, pid, execPath, dir, env = {} }) {
   const log = path.join(dir, 'update.log');
   if (platform === 'win') {
     const scriptPath = path.join(dir, 'update.ps1');
-    const exe = path.join(path.dirname(execPath), 'TwinDesk Mesh.exe');
+    const exe = path.join(path.dirname(execPath), 'TwinDesk.exe');
     return { kind: 'win', scriptPath, script: winScript({ file, pid, exe, log }), cmd: 'powershell.exe',
       args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', scriptPath], log };
   }

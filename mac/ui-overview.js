@@ -8,7 +8,7 @@ UI.tab({
   id: 'overview',
   order: 0,
   title: 'Overview',
-  heading: 'TwinDesk Mesh',
+  heading: 'TwinDesk',
   desc: '',
   color: 'linear-gradient(#8e8e93, #636366)',
   badge: (s) => (s.discovery && (!s.discovery.on || !s.discovery.localNetwork) ? '!' : ''),

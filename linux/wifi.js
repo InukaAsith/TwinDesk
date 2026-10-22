@@ -27,10 +27,10 @@ const path = require('path');
 
 const P = require('../shared/protocol.js');
 
-const HOST = 'TwinDesk Mesh host';
-const JOIN = 'TwinDesk Mesh link';
+const HOST = 'TwinDesk host';
+const JOIN = 'TwinDesk link';
 const JOIN_MS = 45000;
-const TOOL = '/usr/local/libexec/twindesk-mesh-wifiap'; // installed, with CAP_NET_ADMIN
+const TOOL = '/usr/local/libexec/twindesk-wifiap'; // installed, with CAP_NET_ADMIN
 const TOOL_VERSION = '3'; // linux-helper/wifiap/wifiap.c WIFIAP_VERSION: an older one installed is replaced
 const TOOL_SRC = path.join(__dirname, '..', 'linux-helper', 'bin', 'twindesk-wifiap');
 

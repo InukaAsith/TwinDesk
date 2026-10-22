@@ -2,9 +2,7 @@
   <img src=".github/assets/icon.png" width="112" alt="TwinDesk icon">
 </p>
 
-<h1 align="center"><a href="https://twin-desk.vercel.app">TwinDesk Mesh</a></h1>
-
-> **TwinDesk Mesh** is a fork build of [TwinDesk](https://github.com/InukaAsith/TwinDesk). It has its own app identity (Android `com.twindesk.mesh`, macOS `org.macshare.mesh`, own Windows/Linux names and data folders), so it installs **next to** upstream TwinDesk and neither replaces the other. It speaks the same network protocol, so Mesh and upstream builds still pair and talk to each other. Both use the same default ports, so run only one of them at a time on one computer. On first start it copies (never moves) upstream's settings and pairings. Android data cannot move across package ids: pair the phone again.
+<h1 align="center"><a href="https://twin-desk.vercel.app">TwinDesk</a></h1>
 
 <p align="center">
   <b>All your computers and your phone, working as one desk.</b><br>
@@ -569,7 +567,7 @@ npm run dist -- arm64           :: the Windows on ARM installer (or `x64 arm64` 
 ```
 
 `npm run dist` also works on a Mac or Linux: it skips the helper build and packages the
-`twindesk-mesh-winhelper.exe` already in `windows-helper\bin\` (for example, one taken from a release).
+`macshare-winhelper.exe` already in `windows-helper\bin\` (for example, one taken from a release).
 
 The installer adds the firewall rules (for every network profile, so a standard account on a
 Public network doesn't need an administrator later). The Setup screen, shown once, offers to fix

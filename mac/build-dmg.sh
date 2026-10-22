@@ -6,9 +6,9 @@
 set -e
 cd "$(dirname "$0")"
 
-APP="dist/TwinDesk Mesh.app"
-DMG="dist/TwinDesk-Mesh.dmg"
-VOLNAME="TwinDesk Mesh"
+APP="dist/TwinDesk.app"
+DMG="dist/TwinDesk.dmg"
+VOLNAME="TwinDesk"
 VENV="dist/.dmgbuild"
 
 if [ ! -d "$APP" ]; then
@@ -25,7 +25,7 @@ fi
 echo "Creating disk image $DMG..."
 rm -f "$DMG"
 "$VENV/bin/dmgbuild" -s dmg/settings.py \
-  -D app="$APP" -D icon=dist/TwinDesk-Mesh.icns -D background=dmg/background.tiff \
+  -D app="$APP" -D icon=dist/TwinDesk.icns -D background=dmg/background.tiff \
   "$VOLNAME" "$DMG"
 
 echo "DMG created successfully: $DMG"

@@ -28,14 +28,14 @@ const { spawn, execFile } = require('child_process');
 
 const WAYLAND = process.env.XDG_SESSION_TYPE === 'wayland';
 
-const HELPER = '/usr/libexec/twindesk-mesh-connector';
-const POLICY = '/usr/share/polkit-1/actions/org.twindesk.mesh.connector.policy';
+const HELPER = '/usr/libexec/twindesk-connector';
+const POLICY = '/usr/share/polkit-1/actions/org.twindesk.linux.connector.policy';
 const HELPER_SH = String.raw`#!/bin/sh
 # TwinDesk: makes a spare display output count as connected while Extend is on, and gives it back
 # to the driver's detection after (the DRM connector's status). Run through pkexec: the polkit
-# action org.twindesk.mesh.connector lets the person at the computer do it without a password.
-# Usage: twindesk-mesh-connector on|detect <connector, e.g. HDMI-A-2 or Virtual-2>
-case "$1" in on|detect) ;; *) echo "usage: twindesk-mesh-connector on|detect <connector>" >&2; exit 2 ;; esac
+# action org.twindesk.linux.connector lets the person at the computer do it without a password.
+# Usage: twindesk-connector on|detect <connector, e.g. HDMI-A-2 or Virtual-2>
+case "$1" in on|detect) ;; *) echo "usage: twindesk-connector on|detect <connector>" >&2; exit 2 ;; esac
 case "$2" in ''|*[!A-Za-z0-9-]*) echo "bad connector name: $2" >&2; exit 2 ;; esac
 for f in /sys/class/drm/card[0-9]-"$2"/status /sys/class/drm/card[0-9][0-9]-"$2"/status; do
   [ -f "$f" ] && { echo "$1" > "$f"; exit; }
@@ -43,8 +43,8 @@ done
 echo "no connector $2" >&2
 exit 1
 `;
-const NV_CONF = '/etc/X11/xorg.conf.d/20-twindesk-mesh-nvidia.conf';
-const NV_EDID = '/etc/X11/twindesk-mesh-virtual.edid';
+const NV_CONF = '/etc/X11/xorg.conf.d/20-twindesk-nvidia.conf';
+const NV_EDID = '/etc/X11/twindesk-virtual.edid';
 const EDID_NAME = 'TwinDesk';
 const POLICY_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
@@ -52,7 +52,7 @@ const POLICY_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <policyconfig>
   <vendor>TwinDesk</vendor>
   <vendor_url>https://github.com/InukaAsith/TwinDesk</vendor_url>
-  <action id="org.twindesk.mesh.connector">
+  <action id="org.twindesk.linux.connector">
     <description>Switch a spare display output on for TwinDesk's Extend</description>
     <message>TwinDesk wants to switch a spare display output on or off</message>
     <defaults>
@@ -440,7 +440,7 @@ class Vdd {
     try {
       const { dialog } = require('electron');
       const r = await dialog.showMessageBox({
-        type: 'question', title: 'TwinDesk Mesh', buttons: ['Switch it off', 'Leave it on'], defaultId: 0, cancelId: 1,
+        type: 'question', title: 'TwinDesk', buttons: ['Switch it off', 'Leave it on'], defaultId: 0, cancelId: 1,
         message: 'Switch off TwinDesk’s extra screen?',
         detail: 'TwinDesk’s extra screen for Extend is on (' + names.join(', ') + '), so windows can end up on a screen nobody sees until Extend is on. '
           + 'Switching it off makes your monitors go black for a moment.',

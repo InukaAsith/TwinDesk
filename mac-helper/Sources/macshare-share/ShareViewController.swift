@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The "TwinDesk" entry in the macOS Share menu (Finder and any app that shares files).
 // It shows no sheet: it collects the shared file URLs and hands them to TwinDesk as
-// macshare-mesh://send?p=<path>&p=…, which sends them to the connected computer (Send files flow).
+// macshare://send?p=<path>&p=…, which sends them to the connected computer (Send files flow).
 import AppKit
 
 @objc(ShareViewController)
@@ -32,7 +32,7 @@ class ShareViewController: NSViewController {
         group.notify(queue: .main) { [weak self] in
             if !paths.isEmpty {
                 var c = URLComponents()
-                c.scheme = "macshare-mesh"
+                c.scheme = "macshare"
                 c.host = "send"
                 c.queryItems = paths.prefix(1000).map { URLQueryItem(name: "p", value: $0) }
                 if let u = c.url { NSWorkspace.shared.open(u) }

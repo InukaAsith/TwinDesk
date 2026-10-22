@@ -1,8 +1,8 @@
 {
-  "name": "macshare-mesh-win",
-  "productName": "TwinDesk Mesh",
+  "name": "macshare-win",
+  "productName": "TwinDesk",
   "version": "2.1.0",
-  "description": "TwinDesk Mesh for Windows: pair with a Mac, view its screen, share mouse, keyboard and clipboard.",
+  "description": "TwinDesk for Windows: pair with a Mac, view its screen, share mouse, keyboard and clipboard.",
   "license": "GPL-3.0",
   "private": true,
   "main": "main.js",

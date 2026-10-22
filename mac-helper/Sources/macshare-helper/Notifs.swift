@@ -11,7 +11,7 @@ final class NotifWatch {
   private var timer: Timer?
   private var last: Int64 = -1
   private var names: [String: String] = [:]
-  private let own: Set<String> = ["org.macshare.mac", "org.macshare.mesh", "com.github.Electron"]
+  private let own: Set<String> = ["org.macshare.mac", "com.github.Electron"]
 
   private var dbPath: String {
     NSHomeDirectory() + "/Library/Group Containers/group.com.apple.usernoted/db2/db"

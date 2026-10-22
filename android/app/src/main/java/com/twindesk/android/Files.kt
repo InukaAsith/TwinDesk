@@ -2,7 +2,7 @@
 // Files both ways, in the computers' batch protocol (mac/filesend.js, mac/drop.js):
 //   in:  file.offer (drop 'send' or 'paste', a batch with folders by `rel`) → file.accept →
 //        file.chunk… → file.end {sha256} → file.done; files.done when the whole batch is here.
-//        Send files land in Download/TwinDesk Mesh (folders kept); a paste we asked for lands where
+//        Send files land in Download/TwinDesk (folders kept); a paste we asked for lands where
 //        FileClip wants it (the clipboard's cache, or Downloads).
 //   out: the same, the other way: offers for every file, chunks one file at a time while the socket
 //        has little queued, so pings and input never wait behind a big file.
@@ -95,12 +95,12 @@ class Files(core: Core) : Feature(core) {
             Proto.T.FILE_DONE -> Unit
             Proto.T.FILES_DONE -> outDone(m)
             Proto.T.DRAG_POLICY -> Unit
-            // The Mac's pointer crossed onto the phone dragging files: they land in Download/TwinDesk Mesh.
+            // The Mac's pointer crossed onto the phone dragging files: they land in Download/TwinDesk.
             "drag.start" -> {
                 val id = m.optString("drag")
                 if (id.isNotEmpty()) {
                     drags[id] = m.optInt("files", 0)
-                    if (m.optInt("files", 0) == 0) core.send(msg("drag.end", "drag" to id, "result" to "dropped", "where" to "Download/TwinDesk Mesh"))
+                    if (m.optInt("files", 0) == 0) core.send(msg("drag.end", "drag" to id, "result" to "dropped", "where" to "Download/TwinDesk"))
                     else expect(id, Target(true))
                 }
             }
@@ -161,7 +161,7 @@ class Files(core: Core) : Feature(core) {
         val name = rel.last()
         try {
             val inc = if (batch.target.toDownloads) {
-                val dir = (listOf("Download", "TwinDesk Mesh") + rel.dropLast(1)).joinToString("/") + "/"
+                val dir = (listOf("Download", "TwinDesk") + rel.dropLast(1)).joinToString("/") + "/"
                 val mime = mimeOf(name)
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, name)
@@ -225,7 +225,7 @@ class Files(core: Core) : Feature(core) {
             // (only FileClip's folder is shared through the FileProvider; a folder on the storage isn't)
             runCatching { FileProvider.getUriForFile(core.ctx, "${core.ctx.packageName}.files", f.file) }.getOrNull()?.let { batch?.placed?.add(it to mimeOf(f.name)) }
         }
-        core.send(msg(Proto.T.FILE_DONE, "id" to f.id, "ok" to true, "path" to (batch?.target?.where?.ifEmpty { null } ?: "Download/TwinDesk Mesh") + "/${f.rel}"))
+        core.send(msg(Proto.T.FILE_DONE, "id" to f.id, "ok" to true, "path" to (batch?.target?.where?.ifEmpty { null } ?: "Download/TwinDesk") + "/${f.rel}"))
         batch?.let { fileFinished(it, true) }
     }
 
@@ -244,7 +244,7 @@ class Files(core: Core) : Feature(core) {
         if (!ok) b.ok = false
         if (b.done < b.count) return
         batches.remove(b.id)
-        val where = b.target.where.ifEmpty { "Download/TwinDesk Mesh" }
+        val where = b.target.where.ifEmpty { "Download/TwinDesk" }
         if (drags.remove(b.id) != null) core.send(msg("drag.end", "drag" to b.id, "result" to if (b.ok) "dropped" else "failed", "where" to where))
         else core.send(msg(Proto.T.FILES_DONE, "batch" to b.id, "ok" to b.ok, "where" to where, "files" to b.done))
         val from = core.host?.name ?: "your computer"
@@ -258,7 +258,7 @@ class Files(core: Core) : Feature(core) {
         } else {
             val open = if (b.placed.size == 1) Notify.viewIntent(b.placed[0].first, b.placed[0].second)
             else Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Not everything arrived from $from", if (b.ok) "In Downloads › TwinDesk Mesh. Tap to open." else "$what is incomplete", null, open)
+            Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Not everything arrived from $from", if (b.ok) "In Downloads › TwinDesk. Tap to open." else "$what is incomplete", null, open)
         }
         core.changed()
     }

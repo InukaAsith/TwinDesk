@@ -1,7 +1,7 @@
 # The full Android build (notification access) that the computers install over the downloaded app
 # through wireless debugging. It has to be signed with the same key as that app, so:
 #   - with the ANDROID_KEYSTORE secret (base64 of that keystore) it's built here;
-#   - without it, it's taken from the newest release that carries TwinDesk-Mesh-<version>-full.apk
+#   - without it, it's taken from the newest release that carries TwinDesk-<version>-full.apk
 #     (built and signed on the developer's machine), drafts included.
 # Either way it lands in android/dist, where the installers pick it up.
 name: Android full build
@@ -39,7 +39,7 @@ runs:
       run: |
         ./gradlew --no-daemon assembleFullRelease
         mkdir -p dist
-        cp app/build/outputs/apk/full/release/app-full-release.apk "dist/TwinDesk-Mesh-$(grep -m1 versionName app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')-full.apk"
+        cp app/build/outputs/apk/full/release/app-full-release.apk "dist/TwinDesk-$(grep -m1 versionName app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')-full.apk"
         ls -la dist
 
     - if: steps.key.outputs.have != 'true'
@@ -49,7 +49,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
       run: |
         v=$(grep -m1 versionName android/app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
-        apk="TwinDesk-Mesh-$v-full.apk"
+        apk="TwinDesk-$v-full.apk"
         for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 30 --json tagName -q '.[].tagName'); do
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -qx "$apk"; then
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" -p "$apk" -D android/dist --clobber
