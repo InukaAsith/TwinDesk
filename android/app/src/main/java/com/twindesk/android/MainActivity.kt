@@ -476,9 +476,32 @@ private fun OverviewPage(core: Core, v: Int) {
     }
 
 
+    // Everyone in the mesh: every connected computer (Use attaches the screen, files and the rest to it)
+    // and the devices only they are connected to (via …: this phone cannot dial them by tapping).
+    val known = core.known()
+    if (known.size >= 2 || (known.isNotEmpty() && known.any { !it.direct })) MacCard("Devices") {
+        val byId = known.associateBy { it.id }
+        known.forEachIndexed { i, k ->
+            val os = when (k.os) { "mac" -> "Mac"; "linux" -> "Linux"; "win" -> "PC"; "android" -> "Android"; else -> "" }
+            val name = k.name.ifEmpty { os.ifEmpty { "Device" } }
+            if (k.direct) {
+                val l = core.links.existing(k.id)
+                val attached = host?.id == k.id
+                MacRow(name, listOf(os, if (l?.wired == true) "USB" else if (l?.ble == true) "Bluetooth" else "Connected").filter { it.isNotEmpty() }.joinToString(" · "), i == 0) {
+                    if (attached) Pill("In use", "good")
+                    else Secondary("Use") { core.hosts().find { it.id == k.id }?.let { core.select(it.id) } }
+                }
+            } else {
+                MacRow(name, listOf(os, "via " + k.via.joinToString(", ") { byId[it]?.name?.takeIf { n -> n.isNotEmpty() } ?: "a computer" }).filter { it.isNotEmpty() }.joinToString(" · "), i == 0) {
+                    Pill(if (!Intro.canHost(k.os)) "Not connectable" else if (core.meshAutoJoin) "Joining" else "Not connected", "muted")
+                }
+            }
+        }
+    }
+
     // The other paired computers, while connected: Switch (Take over when nearby) lets this one go and connects that one.
     if (host != null) {
-        val others = core.hosts().filter { it.id != host.id }
+        val others = core.hosts().filter { it.id != host.id && core.links.existing(it.id)?.connected != true }
         if (others.isNotEmpty()) MacCard("Switch to") {
             others.forEachIndexed { i, h ->
                 val near = core.isNear(h.id)
@@ -1196,6 +1219,11 @@ private fun GeneralPage(core: Core, v: Int) {
         }
         if (Build.VERSION.SDK_INT >= 30) Setup("All files access", "Your wallpaper on $name, Files and shared folders", android.os.Environment.isExternalStorageManager(), "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")))
+        }
+    }
+    MacCard("Every device") {
+        SwitchRow("Join every device automatically", "When $name is connected to another computer that this device doesn’t know yet, connect to it too: pair once, the whole mesh follows", core.meshAutoJoin, first = true) {
+            core.store.setFlag("meshAutoJoin", it); core.changed()
         }
     }
     MacCard("Not on the same network") {

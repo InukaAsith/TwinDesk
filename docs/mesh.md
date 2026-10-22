@@ -175,3 +175,8 @@ compile check); the Windows and Mac apps were not run as Electron apps, only the
 ## Not in this change
 
 Transitive pairing (pair once, join everyone), editing the layout from the phone, the phone as an extra monitor, multi-monitor edges, binary file chunks.
+
+## The phone in the mesh (Android)
+
+- **Listing.** The phone keeps the `members` of every `mesh.roster` it gets (`MeshMembers`, Mesh.kt, the port of `Mesh.known()`) and sends its own (`members` next to `peers`). The Overview page lists every connected computer (Use attaches the one-to-one features to it) and every device that only a computer reports (`via <name>`, not connectable by tap).
+- **Joining everyone.** The phone is always a guest (Intro.kt, the port of `validGrant`). A `mesh.intro.grant` from a connected mesh computer is stored like a finished pairing and dialled, unless the device is known, the registry is full (`MAX_DEVICES`) or the setting *Join every device automatically* (`meshAutoJoin`, default on) is off. A phone cannot listen, so it answers `mesh.intro.ask` with `ok: false`.

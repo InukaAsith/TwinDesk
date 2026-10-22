@@ -105,3 +105,58 @@ data class KeepAlive(val intervalMs: Long, val timeoutMs: Long)
 
 fun keepalive(busy: Boolean): KeepAlive =
     if (busy) KeepAlive(Proto.PING_MS, Proto.TIMEOUT_MS) else KeepAlive(Proto.IDLE_PING_MS, Proto.IDLE_TIMEOUT_MS)
+
+// A device of the mesh as the roster messages name it (shared/mesh.js rosterMessage()).
+data class Member(val id: String, val name: String, val os: String)
+
+// Everyone this device knows of (shared/mesh.js Mesh.known()): direct = a link of ours; via = the ids of
+// the direct peers that report it (empty for a direct one).
+data class Known(val id: String, val name: String, val os: String, val direct: Boolean, val via: List<String>)
+
+// One entry of a mesh.roster `members` list as received: same limits as Mesh.handle(). null = unusable.
+fun cleanMember(id: Any?, name: Any?, os: Any?): Member? {
+    val i = id as? String ?: return null
+    if (i.isEmpty()) return null
+    return Member(i, (name?.toString() ?: "").take(64), (os?.toString() ?: "").take(16))
+}
+
+// What each direct peer says it is connected to (its mesh.roster `members`), and known() over it.
+// Thread-safe: roster messages arrive on link threads, the UI reads.
+class MeshMembers(private val selfId: String) {
+    private val members = LinkedHashMap<String, List<Member>>() // via id -> its members
+
+    @Synchronized fun set(via: String, list: List<Member>) {
+        members[via] = list
+    }
+
+    @Synchronized fun remove(via: String) {
+        members.remove(via)
+    }
+
+    // direct: our connected peers. Direct ones come first, in order; the others in the order learned.
+    @Synchronized fun known(direct: List<Member>): List<Known> {
+        class Acc(var name: String, var os: String, val direct: Boolean, val via: ArrayList<String>)
+        val out = LinkedHashMap<String, Acc>()
+        val directIds = HashSet<String>()
+        for (d in direct) {
+            if (d.id == selfId || d.id in out) continue
+            out[d.id] = Acc(d.name, d.os, true, ArrayList())
+            directIds.add(d.id)
+        }
+        for ((via, list) in members) {
+            if (via !in directIds) continue
+            for (m in list) {
+                if (m.id == selfId) continue
+                val cur = out[m.id]
+                if (cur != null) {
+                    if (!cur.direct) cur.via.add(via)
+                    if (cur.name.isEmpty() && m.name.isNotEmpty()) cur.name = m.name
+                    if (cur.os.isEmpty() && m.os.isNotEmpty()) cur.os = m.os
+                } else {
+                    out[m.id] = Acc(m.name, m.os, false, arrayListOf(via))
+                }
+            }
+        }
+        return out.map { (id, a) -> Known(id, a.name, a.os, a.direct, a.via.toList()) }
+    }
+}
