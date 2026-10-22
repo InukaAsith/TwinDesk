@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS = {
   streamMaxHeight: 1080, // 0 = capture at the display's pixel size; else scale down (GPU) to this height
   kvm: {
     pcSide: 'right',
+    edges: null,
     mouse: true, // Cursor tab
     keyboard: true, // Keyboard tab
     driveOther: true,

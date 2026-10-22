@@ -61,6 +61,8 @@ namespace MacShare
             }
         }
 
+        string activeDropSide;
+
         // Shown only while the left button is held at home with edge crossing on, along the outer
         // edge of the monitor under the pointer.
         void Follow()
@@ -72,12 +74,19 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             Rectangle m = Screen.FromPoint(new Point(p.x, p.y)).Bounds;
-            Point probe = side == "left" ? new Point(m.Left, p.y) : side == "right" ? new Point(m.Right - 1, p.y)
-                : side == "top" ? new Point(p.x, m.Top) : new Point(p.x, m.Bottom - 1);
-            if (!Screens.OnOuterEdge(probe.X, probe.Y, side)) { if (Visible) Hide(); return; }
-            Rectangle r = side == "left" ? new Rectangle(m.Left, m.Top, STRIP, m.Height)
-                : side == "right" ? new Rectangle(m.Right - STRIP, m.Top, STRIP, m.Height)
-                : side == "top" ? new Rectangle(m.Left, m.Top, m.Width, STRIP)
+            string matchSide = null;
+            string[] sides = side.Split(new char[] { ',', ';', ' ', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string s in sides)
+            {
+                Point probe = s == "left" ? new Point(m.Left, p.y) : s == "right" ? new Point(m.Right - 1, p.y)
+                    : s == "top" ? new Point(p.x, m.Top) : new Point(p.x, m.Bottom - 1);
+                if (Screens.OnOuterEdge(probe.X, probe.Y, s)) { matchSide = s; break; }
+            }
+            if (matchSide == null) { if (Visible) Hide(); return; }
+            activeDropSide = matchSide;
+            Rectangle r = matchSide == "left" ? new Rectangle(m.Left, m.Top, STRIP, m.Height)
+                : matchSide == "right" ? new Rectangle(m.Right - STRIP, m.Top, STRIP, m.Height)
+                : matchSide == "top" ? new Rectangle(m.Left, m.Top, m.Width, STRIP)
                 : new Rectangle(m.Left, m.Bottom - STRIP, m.Width, STRIP);
             if (Bounds != r) Bounds = r;
             if (!Visible) Show();
@@ -116,10 +125,13 @@ namespace MacShare
             if (paths == null || capture.Capturing) return;
             BeginInvoke((MethodInvoker)delegate
             {
-                double offset = Screens.Offset(pendingAt.X, pendingAt.Y, capture.Side);
+                string s = activeDropSide ?? capture.Side;
+                if (s != null && s.Contains(",")) s = s.Split(',')[0].Trim();
+                double offset = Screens.Offset(pendingAt.X, pendingAt.Y, s);
                 capture.Begin(true, capture.EdgeKeyboard);
                 Dictionary<string, object> d = new Dictionary<string, object>();
                 d["event"] = "edge";
+                d["side"] = s;
                 d["offset"] = Math.Round(offset, 4);
                 Dictionary<string, object> drag = new Dictionary<string, object>();
                 drag["paths"] = paths;

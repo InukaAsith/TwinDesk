@@ -297,6 +297,9 @@ function setupIpc(ctx) {
       ctx.kvm.settingsChanged(prev);
       if (partial && typeof partial.shared === 'boolean') ctx.kvm.setShared(partial.shared); // the Cursor tab's switch (Over Bluetooth through it)
     },
+    setEdge(arg) {
+      if (arg && arg.side && ctx.kvm && ctx.kvm.setEdge) ctx.kvm.setEdge(arg.side, arg.target);
+    },
     setTerminal(partial) {
       const prev = settings.terminal.connectPc;
       setGroup('terminal', partial);

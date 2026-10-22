@@ -383,27 +383,35 @@ final class Capture {
 
     if type == .leftMouseDown { dragPbCount = NSPasteboard(name: .drag).changeCount }
     // A file drag pushed through the crossing edge carries the files over.
-    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles,
-       let off = Capture.push(&edge, e.location, dx, dy, side, resistance) {
-      let paths = draggedFiles()
-      log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
-      if !paths.isEmpty {
-        startCapture(mouse: true, keyboard: cfgKeyboard)
-        DragIn.shared.swallowLocalDrag(at: e.location) // Finder's drag ends here, quietly
-        Flash.shared.leave(at: e.location, side: side)
-        emit(["event": "edge", "offset": off, "drag": ["paths": paths]])
-        return true
+    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles {
+      let sides = side.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+      for s in sides {
+        if let off = Capture.push(&edge, e.location, dx, dy, s, resistance) {
+          let paths = draggedFiles()
+          log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
+          if !paths.isEmpty {
+            startCapture(mouse: true, keyboard: cfgKeyboard)
+            DragIn.shared.swallowLocalDrag(at: e.location) // Finder's drag ends here, quietly
+            Flash.shared.leave(at: e.location, side: s)
+            emit(["event": "edge", "side": s, "offset": off, "drag": ["paths": paths]])
+            return true
+          }
+        }
       }
     }
     if type == .mouseMoved {
       // The system's own button state: counting downs and ups here stuck at 1 when the tap missed
       // an up (disabled by a timeout meanwhile), and nothing crossed again until a restart.
-      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0,
-         let off = Capture.push(&edge, e.location, dx, dy, side, resistance) {
-        startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
-        Flash.shared.leave(at: e.location, side: side)
-        emit(["event": "edge", "offset": off])
-        return true
+      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0 {
+        let sides = side.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+        for s in sides {
+          if let off = Capture.push(&edge, e.location, dx, dy, s, resistance) {
+            startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
+            Flash.shared.leave(at: e.location, side: s)
+            emit(["event": "edge", "side": s, "offset": off])
+            return true
+          }
+        }
       }
       checkReturn(e.location, dx: dx, dy: dy)
     }

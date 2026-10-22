@@ -68,8 +68,9 @@ kbd, kbd.key { font: 12px system-ui, "Ubuntu", "Cantarell", "Noto Sans", sans-se
 /* Cursor: read-only layout (the Mac sets it) */
 .layout-grid .pc-screen { background: linear-gradient(135deg, #8e8e93, #48484a); color: #fff; }
 .layout-grid .cell { border: 1.5px dashed var(--control-line); border-radius: 6px; }
-.layout-grid .cell.mac-here { border: 0; background: linear-gradient(135deg, #5ac8fa, #0a84ff); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
-.layout-grid .cell:not(.mac-here):hover { border-color: var(--accent); background: var(--accent-soft); }
+.layout-grid .cell.mac-here { border: 0; background: linear-gradient(135deg, #5ac8fa, #0a84ff); color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 600; text-align: center; padding: 2px; }
+.layout-grid .cell.phone-here { border: 0; background: linear-gradient(135deg, #34c759, #30b0c7); color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 600; text-align: center; padding: 2px; }
+.layout-grid .cell:not(.mac-here):not(.phone-here):hover { border-color: var(--accent); background: var(--accent-soft); }
 /* Apps grid */
 .app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; padding: 8px 10px; max-height: 420px; overflow-y: auto; }
 .app-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border: 0; border-radius: 8px; background: none; cursor: default; }

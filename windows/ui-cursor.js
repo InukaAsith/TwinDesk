@@ -42,12 +42,41 @@ UI.tab({
       ] },
     );
 
+    let latestState = null;
     const cells = [];
     const grid = el('div', { class: 'layout-grid' });
     const SIDE_OF = { 1: 'top', 3: 'left', 5: 'right', 7: 'bottom' };
     for (let i = 0; i < 9; i++) {
       const c = el('div', { class: i === 4 ? 'screen pc-screen' : '', text: i === 4 ? '{me}' : '' });
-      if (SIDE_OF[i]) c.onclick = () => api.setLayout(SIDE_OF[i]); // kvm.layout from either side
+      if (SIDE_OF[i]) {
+        const side = SIDE_OF[i];
+        c.onclick = () => {
+          if (!latestState) return;
+          const k = latestState.kvm || {};
+          const compSide = k.pcSide ? MAC_SIDE[k.pcSide] : 'right';
+          const edges = k.edges ? { ...k.edges } : {
+            left: compSide === 'left' ? 'computer' : null,
+            right: compSide === 'right' ? 'computer' : null,
+            top: compSide === 'top' ? 'computer' : null,
+            bottom: compSide === 'bottom' ? 'computer' : null,
+          };
+          const cur = edges[side] || null;
+          const hasPhone = !!(latestState.phone && (latestState.phone.connected || latestState.phone.bridge || latestState.phone.settings || latestState.phone.info));
+          let next = null;
+          if (!cur) {
+            const hasComp = Object.values(edges).includes('computer');
+            if (!hasComp) next = 'computer';
+            else if (hasPhone) next = 'phone';
+            else next = 'computer';
+          } else if (cur === 'computer') {
+            next = hasPhone ? 'phone' : null;
+          } else if (cur === 'phone') {
+            next = null;
+          }
+          if (api.setEdge) api.setEdge({ side, target: next });
+          else api.setLayout(side);
+        };
+      }
       cells.push(c);
       grid.append(c);
     }
@@ -59,11 +88,12 @@ UI.tab({
       UI.card('Feel', [gestureRow]),
       UI.card('Not on the same network', [bleRow]),
       UI.card('Right now', [status], { cls: 'keep-on' }),
-      el('div', { class: 'card-title', text: 'Where the other computer is' }),
+      el('div', { class: 'card-title', text: 'Screen layout (Computers & Phones)' }),
       el('div', { class: 'card layout' }, [grid, layoutHint]),
     );
 
     return (s) => {
+      latestState = s;
       const k = s.kvm;
       pair.update(s);
       viaRow.hidden = !UI.peer(s).phone;
@@ -75,17 +105,43 @@ UI.tab({
       ble.set(k.ble !== false);
       resistance.set(k.resistancePx);
       const p = UI.peer(s);
-      const side = k.pcSide ? MAC_SIDE[k.pcSide] : null;
+      const compSide = k.pcSide ? MAC_SIDE[k.pcSide] : 'right';
+      const edges = k.edges ? k.edges : {
+        left: compSide === 'left' ? 'computer' : null,
+        right: compSide === 'right' ? 'computer' : null,
+        top: compSide === 'top' ? 'computer' : null,
+        bottom: compSide === 'bottom' ? 'computer' : null,
+      };
+      const compName = p.them || (p.os === 'mac' ? 'Mac' : 'Computer');
+      const phoneName = (s.phone && (s.phone.name || (s.phone.info && s.phone.info.name))) || 'Phone';
+
       cells.forEach((c, i) => {
         if (i === 4) return;
-        const here = side && CELL[side] === i;
-        c.className = Object.values(CELL).includes(i) ? 'cell' + (here ? ' mac-here' : '') : '';
-        c.textContent = here ? p.them : '';
-        c.title = here ? '' : 'Put ' + p.them + ' here';
+        const side = SIDE_OF[i];
+        if (!side) return;
+        const target = edges[side];
+        if (target === 'computer') {
+          c.className = 'cell mac-here';
+          c.textContent = '🖥️ ' + compName;
+          c.title = compName + ' on ' + side + '. Click to change or clear.';
+        } else if (target === 'phone') {
+          c.className = 'cell phone-here';
+          c.textContent = '📱 ' + phoneName;
+          c.title = phoneName + ' on ' + side + '. Click to clear.';
+        } else {
+          c.className = 'cell';
+          c.textContent = '';
+          c.title = 'Assign ' + compName + ' or ' + phoneName + ' here';
+        }
       });
-      const who = p.os === 'mac' ? 'Your Mac' : p.them;
-      layoutHint.textContent = (side ? who + ' is ' + { left: 'to the left of', right: 'to the right of', top: 'above', bottom: 'below' }[side] + ' {me}. ' : '')
-        + 'Click a side to move it.';
+      const placed = [];
+      if (edges.left) placed.push((edges.left === 'computer' ? compName : phoneName) + ' on left');
+      if (edges.right) placed.push((edges.right === 'computer' ? compName : phoneName) + ' on right');
+      if (edges.top) placed.push((edges.top === 'computer' ? compName : phoneName) + ' on top');
+      if (edges.bottom) placed.push((edges.bottom === 'computer' ? compName : phoneName) + ' on bottom');
+      layoutHint.textContent = placed.length
+        ? placed.join(' · ') + '. Click any side to assign Computer, Phone, or None.'
+        : 'Click a side to position your computer or phone around {me}.';
     };
   },
 });

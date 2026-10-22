@@ -35,6 +35,8 @@ class Kvm extends EventEmitter {
     this.pendingMove = null; // coalesced k.mm while driving
     this.moveTimer = null; // its flush, through Bluetooth
     this.local = null; // phone-bridge.js: drives a phone itself (its input goes through adb, not the link)
+    this.drivingSide = null; // which edge was crossed
+    this.drivingTarget = null; // 'computer' | 'phone'
 
     setInterval(() => this._tick(), 250);
     // The host tells the layout on connect; after that either side sends it when its user changes it.
@@ -64,8 +66,12 @@ class Kvm extends EventEmitter {
     // kvm.layout {pcSide} = the sender's crossing side; ours is the opposite (no echo).
     on(P.T.KVM_LAYOUT, (m) => {
       const side = P.opposite(m.pcSide);
-      if (!side || side === this.cfg.pcSide) return;
+      if (!side) return;
       this.getSettings().kvm.pcSide = side;
+      const cur = { ...this.edges };
+      for (const s of P.SIDES) if (cur[s] === 'computer') cur[s] = null;
+      cur[side] = 'computer';
+      this.getSettings().kvm.edges = cur;
       store.saveSettings(this.getSettings());
       this.config();
       this.emit('change');
@@ -79,7 +85,10 @@ class Kvm extends EventEmitter {
     on(P.T.KVM_HOME, (m) => {
       if (this.mode !== 'driving' || m.route !== this.route) return;
       const k = this.cfg;
-      this.helper.send('capture', typeof m.offset === 'number' ? { on: false, side: k.pcSide, offset: m.offset } : { on: false });
+      const side = this.drivingSide || k.pcSide;
+      this.helper.send('capture', typeof m.offset === 'number' ? { on: false, side, offset: m.offset } : { on: false });
+      this.drivingSide = null;
+      this.drivingTarget = null;
       this._setMode('home', '');
     });
     on(P.T.KVM_RELEASE, (m) => {
@@ -107,17 +116,74 @@ class Kvm extends EventEmitter {
   }
 
   get view() {
-    return { where: this.mode, message: this.message, tapError: this.tapError, paused: this.paused };
+    return {
+      where: this.mode,
+      message: this.message,
+      tapError: this.tapError,
+      paused: this.paused,
+      edges: this.edges,
+      drivingTarget: this.drivingTarget,
+    };
+  }
+
+  // Edge layout map: { left: 'computer' | 'phone' | null, right: ..., top: ..., bottom: ... }
+  get edges() {
+    const k = this.cfg;
+    if (k.edges && typeof k.edges === 'object') return k.edges;
+    const compSide = k.pcSide || 'right';
+    return {
+      left: compSide === 'left' ? 'computer' : null,
+      right: compSide === 'right' ? 'computer' : null,
+      top: compSide === 'top' ? 'computer' : null,
+      bottom: compSide === 'bottom' ? 'computer' : null,
+    };
+  }
+
+  setEdge(side, target) {
+    if (!P.SIDES.includes(side)) return;
+    const k = this.cfg;
+    const cur = { ...this.edges };
+    if (target === 'computer') {
+      for (const s of P.SIDES) if (cur[s] === 'computer') cur[s] = null;
+      cur[side] = 'computer';
+      k.pcSide = side;
+      this._sendLayout();
+    } else if (target === 'phone') {
+      for (const s of P.SIDES) if (cur[s] === 'phone') cur[s] = null;
+      cur[side] = 'phone';
+    } else {
+      if (cur[side] === 'computer') k.pcSide = null;
+      cur[side] = null;
+    }
+    k.edges = cur;
+    store.saveSettings(this.getSettings());
+    this.config();
+    this.emit('change');
+  }
+
+  get activeSides() {
+    const edges = this.edges;
+    const active = [];
+    const phoneReady = !!(this.local && this.local.drives());
+    const compReady = !!this.server.current;
+    for (const [side, target] of Object.entries(edges)) {
+      if (target === 'computer' && compReady) active.push(side);
+      else if (target === 'phone' && phoneReady) active.push(side);
+    }
+    return active.join(',');
   }
 
   // Tell the helper where the crossing side is and whether edge crossing is armed.
   // Call after settings.kvm or the link changed.
   config() {
     const k = this.cfg;
+    const sides = this.activeSides;
     this.helper
       .request('kvmConfig', {
-        side: k.pcSide, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
-        driveOther: !!(this.linked && k.driveOther && k.mouse && this.server.current && !this.paused),
+        side: sides || k.pcSide,
+        resistancePx: k.resistancePx,
+        keyboard: !!k.keyboard,
+        driveOther: !!(this.linked && k.driveOther && k.mouse && sides && !this.paused),
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
         dragFiles: this.fileSend.dragOn && this.fileSend.peerDrag, // drag.policy, both sides
@@ -230,13 +296,19 @@ class Kvm extends EventEmitter {
 
   // ---- owner: this Mac drives the PC ----
 
-  _canDrive() {
-    return this.mode === 'home' && !!this.server.current && !!this.cfg.driveOther && this.linked && !this.paused;
+  _canDrive(target = null) {
+    const k = this.cfg;
+    if (this.mode !== 'home' || !k.driveOther || !this.linked || this.paused) return false;
+    if (target === 'computer') return !!this.server.current;
+    if (target === 'phone') return !!(this.local && this.local.drives());
+    return !!this.server.current || !!(this.local && this.local.drives());
   }
 
   _take(fields) {
     const k = this.cfg;
     this.route++;
+    this.drivingSide = this.drivingSide || (fields.where && fields.where.side ? P.opposite(fields.where.side) : k.pcSide);
+    this.drivingTarget = fields.target || 'computer';
     this._setMode('driving', '');
     this.input.releaseAll();
     const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!fields.mouse, keyboard: !!k.keyboard, ...fields.where };
@@ -251,7 +323,9 @@ class Kvm extends EventEmitter {
     clearTimeout(this.acceptTimer);
     const route = this.route;
     this.acceptTimer = setTimeout(() => {
-      if (this.mode === 'driving' && this.route === route) this.goHome(this._them('{them} didn’t answer'));
+      if (this.mode === 'driving' && this.route === route) {
+        this.goHome(this.drivingTarget === 'phone' ? 'Your phone didn’t answer' : this._them('{them} didn’t answer'));
+      }
     }, P.KVM_TAKE_TIMEOUT_MS);
   }
 
@@ -263,14 +337,20 @@ class Kvm extends EventEmitter {
       this.dragOut = null;
     }
     this.helper.send('capture', { on: false });
-    if (tellPeer && this.server.current) this._drive({ t: P.T.KVM_RELEASE, route: ++this.route });
+    if (this.drivingTarget === 'phone' && this.local) {
+      this.local.handle({ t: P.T.KVM_RELEASE, route: ++this.route });
+    } else if (tellPeer && this.server.current) {
+      this._drive({ t: P.T.KVM_RELEASE, route: ++this.route });
+    }
+    this.drivingSide = null;
+    this.drivingTarget = null;
     this._setMode('home', message);
   }
 
   // Through Bluetooth every message is a round trip on the radio: moves go at most every
   // KVM_MOVE_BLE_MS, and wait (still summed) while earlier bytes haven't gone out yet.
   _scheduleMove() {
-    if (!this.onBle || (this.local && this.local.drives())) return setImmediate(() => this._flushMove());
+    if (!this.onBle || this.drivingTarget === 'phone' || (this.local && this.local.drives())) return setImmediate(() => this._flushMove());
     if (this.moveTimer) return;
     this.moveTimer = setTimeout(() => {
       this.moveTimer = null;
@@ -288,22 +368,31 @@ class Kvm extends EventEmitter {
 
   // Input while driving goes to the other computer, or to the phone bridge when a phone is the peer.
   _drive(msg) {
-    if (this.local && this.local.drives()) this.local.handle(msg);
+    if (this.drivingTarget === 'phone' && this.local) this.local.handle(msg);
     else this.server.sendToClient(msg);
   }
 
   _onHelper(name, ev) {
     const k = this.cfg;
     switch (name) {
-      case 'edge':
+      case 'edge': {
         // The helper already captures (it started at the edge); undo that if we can't cross.
-        if (!this._canDrive() || !k.mouse || (this.blockEdge && this.blockEdge())) {
+        const crossedSide = ev.side || k.pcSide;
+        const target = (this.edges && this.edges[crossedSide]) || (crossedSide === k.pcSide ? 'computer' : null);
+        if (!target || !this._canDrive(target) || !k.mouse || (this.blockEdge && this.blockEdge())) {
           this.helper.send('capture', { on: false });
-          if (!this.server.current) this._setMode('home', 'Nothing connected');
+          if (!this.server.current && !this.local) this._setMode('home', 'Nothing connected');
           return;
         }
-        this._take({ mouse: true, where: { side: P.opposite(k.pcSide), offset: ev.offset }, paths: ev.drag && ev.drag.paths });
+        this.drivingSide = crossedSide;
+        this.drivingTarget = target;
+        if (target === 'computer') {
+          this._take({ mouse: true, target: 'computer', where: { side: P.opposite(crossedSide), offset: ev.offset }, paths: ev.drag && ev.drag.paths });
+        } else if (target === 'phone') {
+          this._take({ mouse: true, target: 'phone', where: { side: P.opposite(crossedSide), offset: ev.offset } });
+        }
         break;
+      }
       // Double-tap: switches mouse and keyboard sharing off (everything home)
       // and on again. In keyboard-only mode (Cursor off + "Switch the keyboard with the hotkey") it
       // moves the keyboard over and back instead.

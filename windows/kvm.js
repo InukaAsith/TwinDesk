@@ -24,6 +24,8 @@ class Kvm {
     this.moveTimer = null; // its flush, through Bluetooth
     this.local = null; // phone-bridge.js: drives a phone itself (its input goes through adb, not the link)
     this.blockEdge = () => false; // main.js: true while the edge must not cross (a phone window has focus)
+    this.drivingSide = null; // which edge was crossed to begin driving
+    this.drivingTarget = null; // 'computer' | 'phone'
 
     const link = this.link;
     // kvm.layout is "either": pcSide = the sender's crossing side, which is where this
@@ -47,7 +49,10 @@ class Kvm {
     link.on(T.KVM_HOME, (m) => {
       if (this.mode !== 'driving' || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
-      this.helper.send('capture', has ? { on: false, side: this.crossingSide, offset: m.offset } : { on: false });
+      const side = this.drivingSide || this.crossingSide;
+      this.helper.send('capture', has ? { on: false, side, offset: m.offset } : { on: false });
+      this.drivingSide = null;
+      this.drivingTarget = null;
       this._setMode('home', '');
     });
     for (const t of K_TYPES) link.on(t, (m) => this._inject(m));
@@ -85,16 +90,59 @@ class Kvm {
     helper.on('event', (name, msg) => this._onHelper(name, msg));
   }
 
+  // Edge layout map: { left: 'computer' | 'phone' | null, right: ..., top: ..., bottom: ... }
+  get edges() {
+    const k = this.settings.kvm;
+    if (k.edges && typeof k.edges === 'object') return k.edges;
+    const compSide = this.crossingSide || 'right';
+    return {
+      left: compSide === 'left' ? 'computer' : null,
+      right: compSide === 'right' ? 'computer' : null,
+      top: compSide === 'top' ? 'computer' : null,
+      bottom: compSide === 'bottom' ? 'computer' : null,
+    };
+  }
+
+  setEdge(side, target) {
+    if (!P.SIDES.includes(side)) return;
+    const k = this.settings.kvm;
+    const cur = { ...this.edges };
+    if (target === 'computer') {
+      for (const s of P.SIDES) if (cur[s] === 'computer') cur[s] = null;
+      cur[side] = 'computer';
+      this.pcSide = P.opposite(side);
+      k.pcSide = this.pcSide;
+      if (this.link && this.connected) this.link.send({ t: T.KVM_LAYOUT, pcSide: side });
+    } else if (target === 'phone') {
+      for (const s of P.SIDES) if (cur[s] === 'phone') cur[s] = null;
+      cur[side] = 'phone';
+    } else {
+      if (cur[side] === 'computer') {
+        this.pcSide = null;
+        k.pcSide = null;
+      }
+      cur[side] = null;
+    }
+    k.edges = cur;
+    if (this.save) this.save();
+    this.applyConfig();
+    this.onChange();
+  }
+
   // The user picked where the other computer is (side of this PC): tell the other side.
   setLayout(side) {
     if (!P.SIDES.includes(side)) return;
-    this._setPcSide(P.opposite(side));
-    this.link.send({ t: T.KVM_LAYOUT, pcSide: side });
+    this.setEdge(side, 'computer');
   }
 
   _setPcSide(pcSide) {
     this.pcSide = pcSide;
     this.settings.kvm.pcSide = pcSide;
+    const compSide = P.opposite(pcSide);
+    const cur = { ...this.edges };
+    for (const s of P.SIDES) if (cur[s] === 'computer') cur[s] = null;
+    cur[compSide] = 'computer';
+    this.settings.kvm.edges = cur;
     if (this.save) this.save();
     this.applyConfig();
     this.onChange();
@@ -103,6 +151,19 @@ class Kvm {
   // Side of this PC that faces the Mac.
   get crossingSide() {
     return this.pcSide ? P.opposite(this.pcSide) : null;
+  }
+
+  // Active edges to send to helper: comma-separated, e.g. "left,right"
+  get activeSides() {
+    const edges = this.edges;
+    const active = [];
+    const phoneReady = !!(this.local && this.local.drives());
+    const compReady = this.connected;
+    for (const [side, target] of Object.entries(edges)) {
+      if (target === 'computer' && compReady) active.push(side);
+      else if (target === 'phone' && phoneReady) active.push(side);
+    }
+    return active.join(',');
   }
 
   get cfg() {
@@ -122,11 +183,12 @@ class Kvm {
 
   applyConfig() {
     const k = this.cfg;
+    const sides = this.activeSides;
     this.helper.send('kvmConfig', {
-      side: this.crossingSide,
+      side: sides || this.crossingSide,
       resistancePx: k.resistancePx,
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
-      driveOther: !!(this.linked && k.driveOther && k.mouse && this.connected && this.crossingSide && !this.blockEdge() && !this.paused),
+      driveOther: !!(this.linked && k.driveOther && k.mouse && sides && !this.blockEdge() && !this.paused),
       keyboard: !!k.keyboard,
       deadmanMs: P.HELPER_DEADMAN_MS,
       doubleTapMs: P.DOUBLE_TAP_MS,
@@ -203,31 +265,51 @@ class Kvm {
   }
 
   view() {
-    return { linked: this.linked, paused: this.paused, mode: this.mode, message: this.message, pcSide: this.pcSide, helper: this.helper.running ? '' : this.helper.error || 'starting' };
+    return {
+      linked: this.linked,
+      paused: this.paused,
+      mode: this.mode,
+      message: this.message,
+      pcSide: this.pcSide,
+      edges: this.edges,
+      drivingTarget: this.drivingTarget,
+      helper: this.helper.running ? '' : this.helper.error || 'starting',
+    };
   }
 
-  // ---- owner (this PC drives the Mac) ----
+  // ---- owner (this PC drives the Mac or Phone) ----
 
-  _canDrive() {
+  _canDrive(target = null) {
     const k = this.cfg;
-    return this.connected && this.linked && !this.paused && k.driveOther && (k.mouse || k.keyboard);
+    if (!this.linked || this.paused || !k.driveOther || (!k.mouse && !k.keyboard)) return false;
+    if (target === 'computer') return this.connected;
+    if (target === 'phone') return !!(this.local && this.local.drives());
+    return this.connected || !!(this.local && this.local.drives());
   }
 
   _onHelper(name, msg) {
     switch (name) {
       case 'edge': // The helper is already capturing
-        if (this.mode !== 'home' || !this._canDrive() || !this.cfg.mouse || !this.crossingSide) {
-          this.helper.send('capture', { on: false });
-          return;
-        }
         {
-          // A file/folder drag crossed: the Mac shows it as its own drag; the data follows.
-          const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut() ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
-          const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
-          this._take({ side: P.opposite(this.crossingSide), offset: msg.offset, ...(drag ? { drag: { count: drag.count } } : {}) });
-          if (drag) { // order: kvm.take, drag.start, then the files
-            this.fileDrop.beginDrag(drag);
-            this.dragPending = true;
+          const crossedSide = msg.side || this.crossingSide;
+          const target = (this.edges && this.edges[crossedSide]) || (crossedSide === this.crossingSide ? 'computer' : null);
+          if (this.mode !== 'home' || !target || !this._canDrive(target) || !this.cfg.mouse) {
+            this.helper.send('capture', { on: false });
+            return;
+          }
+          this.drivingSide = crossedSide;
+          this.drivingTarget = target;
+          if (target === 'computer') {
+            // A file/folder drag crossed: the Mac shows it as its own drag; the data follows.
+            const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut() ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
+            const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
+            this._take({ side: P.opposite(crossedSide), offset: msg.offset, target: 'computer', ...(drag ? { drag: { count: drag.count } } : {}) });
+            if (drag) { // order: kvm.take, drag.start, then the files
+              this.fileDrop.beginDrag(drag);
+              this.dragPending = true;
+            }
+          } else if (target === 'phone') {
+            this._take({ side: P.opposite(crossedSide), offset: msg.offset, target: 'phone' });
           }
         }
         break;
@@ -298,13 +380,17 @@ class Kvm {
     this.route++;
     const k = this.cfg;
     this.keyboardOnly = !where.side; // the hotkey in keyboard-only mode (edge crossings carry a side)
+    this.drivingSide = this.drivingSide || (where.side ? P.opposite(where.side) : this.crossingSide);
+    this.drivingTarget = where.target || 'computer';
     this._drive({ t: T.KVM_TAKE, route: this.route, ...where, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard });
     this._setMode('driving', '');
     this.clip.sendIfChanged('switch');
     this._clearAccept();
     const route = this.route;
     this.acceptTimer = setTimeout(() => {
-      if (this.mode === 'driving' && this.route === route) this._goHome('Your Mac didn’t answer');
+      if (this.mode === 'driving' && this.route === route) {
+        this._goHome(this.drivingTarget === 'phone' ? 'Your phone didn’t answer' : 'Your Mac didn’t answer');
+      }
     }, P.KVM_TAKE_TIMEOUT_MS);
   }
 
@@ -313,6 +399,8 @@ class Kvm {
     this.route++;
     this._drive({ t: T.KVM_RELEASE, route: this.route });
     this.helper.send('capture', { on: false });
+    this.drivingSide = null;
+    this.drivingTarget = null;
     this._setMode('home', message);
   }
 
@@ -321,7 +409,7 @@ class Kvm {
   // round trip on the radio, so they go at most every KVM_MOVE_BLE_MS and wait (still summed)
   // while earlier bytes haven't gone out: otherwise they queue up and the cursor lags minutes.
   _scheduleMove() {
-    if (!this.onBle || (this.local && this.local.drives())) return setImmediate(() => this._flushMove());
+    if (!this.onBle || this.drivingTarget === 'phone' || (this.local && this.local.drives())) return setImmediate(() => this._flushMove());
     if (this.moveTimer) return;
     this.moveTimer = setTimeout(() => {
       this.moveTimer = null;
@@ -338,13 +426,18 @@ class Kvm {
   }
 
   _drive(msg) {
-    if (this.local && this.local.drives()) this.local.handle(msg);
+    if (this.drivingTarget === 'phone' && this.local) this.local.handle(msg);
     else this.link.send(msg);
   }
 
   // Row 9.
   _goHome(message) {
+    if (this.drivingTarget === 'phone' && this.local) {
+      this.local.handle({ t: T.KVM_RELEASE, route: this.route });
+    }
     this.helper.send('capture', { on: false });
+    this.drivingSide = null;
+    this.drivingTarget = null;
     this._setMode('home', message);
   }
 

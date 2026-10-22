@@ -56,6 +56,14 @@ function normalize(s) {
       beDriven: bool(kvm.beDriven, true),
       resistancePx: Math.round(num(kvm.resistancePx, P.RESISTANCE_PX, 0, 400)),
       pcSide: P.SIDES.includes(kvm.pcSide) ? kvm.pcSide : null, // where this PC is, seen from the other computer (kvm.layout)
+      edges: kvm.edges && typeof kvm.edges === 'object'
+        ? {
+            left: typeof kvm.edges.left === 'string' ? kvm.edges.left : null,
+            right: typeof kvm.edges.right === 'string' ? kvm.edges.right : null,
+            top: typeof kvm.edges.top === 'string' ? kvm.edges.top : null,
+            bottom: typeof kvm.edges.bottom === 'string' ? kvm.edges.bottom : null,
+          }
+        : null,
       speed: Math.round(num(kvm.speed, 1.0, 0.25, 3) * 100) / 100,
       reverseScroll: bool(kvm.reverseScroll, false),
       linked: bool(kvm.linked, true), // cursor sharing on (the hotkey's double-tap switches it, kvm.link)

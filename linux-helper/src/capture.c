@@ -18,6 +18,7 @@
 
 // config (kvmConfig)
 static int side = SIDE_NONE;          // crossing side of this computer
+static int side_mask = 0;             // bitmask of active crossing sides (1 << SIDE_*)
 static double resistancePx = 120;
 static int hotkeyEvs[2] = { 100, -1 }; // Right Alt (evdev); "Alt" = both sides
 static int driveOther;                // edge detection on
@@ -138,7 +139,15 @@ int capture_init(void) {
 }
 
 void capture_config(const JObj *c) {
-  side = side_of(jstr(c, "side", NULL));
+  const char *s_str = jstr(c, "side", NULL);
+  side = side_of(s_str);
+  side_mask = 0;
+  if (s_str) {
+    static const char *names[] = { "left", "right", "top", "bottom" };
+    for (int i = 0; i < 4; i++) {
+      if (strstr(s_str, names[i])) side_mask |= (1 << i);
+    }
+  }
   resistancePx = jnum(c, "resistancePx", 120);
   // "AltRight" / "AltLeft" / "Alt" (either side), same for Control, Shift, Meta (P.HOTKEYS)
   const char *hk = jstr(c, "hotkey", "AltRight");
@@ -509,21 +518,36 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
   unsigned mask;
   query(&x, &y, &mask);
   if (retArmed) { capture_feed_return(x, y, rdx, rdy); return; }
-  if (!driveOther || side == SIDE_NONE || (mask & (Button1Mask | Button2Mask | Button3Mask))) { push = 0; return; } // rule 6
-  double outward = screens_outward(side, rdx, rdy);
-  if (outward <= 0 || !screens_on_outer_edge(x, y, side)) { push = 0; return; }
+  int mask_to_check = side_mask ? side_mask : (side != SIDE_NONE ? (1 << side) : 0);
+  if (!driveOther || !mask_to_check || (mask & (Button1Mask | Button2Mask | Button3Mask))) { push = 0; return; } // rule 6
+  int hit_side = SIDE_NONE;
+  double outward = 0;
+  for (int i = 0; i < 4; i++) {
+    if (mask_to_check & (1 << i)) {
+      double o = screens_outward(i, rdx, rdy);
+      if (o > 0 && screens_on_outer_edge(x, y, i)) {
+        hit_side = i;
+        outward = o;
+        break;
+      }
+    }
+  }
+  if (hit_side == SIDE_NONE) { push = 0; return; }
   double now = now_ms();
   if (now - lastPush > 300) push = 0;
   lastPush = now;
   push += outward;
   if (push < resistancePx) return;
-  double offset = screens_offset(x, y, side);
+  push = 0;
+  double offset = screens_offset(x, y, hit_side);
   // Start capturing at once so no motion leaks, then tell main.
-  if (!capture_begin(1, edgeKeyboard)) { push = 0; return; }
+  if (!capture_begin(1, edgeKeyboard)) return;
   savedX = x; savedY = y;
   JOut o;
   jo_begin(&o);
   jo_str(&o, "event", "edge");
+  const char *s_name = side_name(hit_side);
+  if (s_name) jo_str(&o, "side", s_name);
   jo_num(&o, "offset", round(offset * 10000) / 10000);
   emit(jo_end(&o));
 }

@@ -35,6 +35,7 @@ namespace MacShare
 
         // edge push (home) and return edge (driven)
         double push; DateTime lastPush;
+        string activeSide;
         bool retArmed; string retSide; double retResistance, retPush; DateTime retLast;
 
         // hotkey double-tap
@@ -159,7 +160,7 @@ namespace MacShare
                 saved = new Point(p.x, p.y);
                 // Leaving: the animation where it goes, then the pointer hides and stays put for
                 // the eye (it is parked in the middle only to measure motion).
-                if (Flash != null) Flash.Play(saved, Side != null && Screens.OnOuterEdge(p.x, p.y, Side) ? Side : null, true);
+                if (Flash != null) Flash.Play(saved, activeSide != null ? activeSide : (Side != null && Screens.OnOuterEdge(p.x, p.y, Side) ? Side : null), true);
                 HideCursor.Hide();
                 // Park in the middle so outward motion isn't clamped by the screen edge.
                 parked = Screens.Center();
@@ -185,9 +186,10 @@ namespace MacShare
                 parkPad.Uncover();
                 Native.SetCursorPos(p.X, p.Y);
                 HideCursor.Show();
-                if (Flash != null) Flash.Play(p, side ?? (Side != null && Screens.OnOuterEdge(p.X, p.Y, Side) ? Side : null), false); // arriving
+                if (Flash != null) Flash.Play(p, side ?? (activeSide != null ? activeSide : (Side != null && Screens.OnOuterEdge(p.X, p.Y, Side) ? Side : null)), false); // arriving
             }
             push = 0;
+            activeSide = null;
         }
 
         public bool Capturing { get { return capturing; } }
@@ -411,18 +413,35 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
-            if (!DriveOther || Side == null || AnyButtonDown()) { push = 0; return; } // Rule 6: no crossing mid-drag
-            double outward = Screens.Outward(Side, dx, dy);
-            if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, Side)) { push = 0; return; }
+            if (!DriveOther || Side == null || AnyButtonDown()) { push = 0; activeSide = null; return; } // Rule 6: no crossing mid-drag
+
+            string candSide = null;
+            double outward = 0;
+            string[] sides = Side.Split(new char[] { ',', ';', ' ', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string s in sides)
+            {
+                double o = Screens.Outward(s, dx, dy);
+                if (o > 0 && Screens.OnOuterEdge(p.x, p.y, s))
+                {
+                    candSide = s;
+                    outward = o;
+                    break;
+                }
+            }
+            if (candSide == null) { push = 0; activeSide = null; return; }
+            if (candSide != activeSide) { push = 0; activeSide = candSide; }
+
             DateTime now = DateTime.UtcNow;
             if ((now - lastPush).TotalMilliseconds > 300) push = 0;
             lastPush = now;
             push += outward;
             if (push < ResistancePx) return;
-            double offset = Screens.Offset(p.x, p.y, Side);
+            push = 0;
+            double offset = Screens.Offset(p.x, p.y, candSide);
             Begin(true, EdgeKeyboard); // start capturing at once so no motion leaks, then tell main
             saved = new Point(p.x, p.y);
             Dictionary<string, object> d = Ev("edge");
+            d["side"] = candSide;
             d["offset"] = Math.Round(offset, 4);
             emit(d);
         }

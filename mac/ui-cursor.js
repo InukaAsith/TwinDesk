@@ -17,13 +17,39 @@ UI.tab({
     const { el, api } = UI;
     const status = UI.note('info', '');
 
-    // Layout picker: the Mac in the middle, a slot on each side for the PC.
+    let latestState = null;
+    // Layout picker: the Mac in the middle, a slot on each side for the PC or Phone.
     const slots = {};
     let meLabel = null;
     const grid = el('div', { class: 'layout-grid' });
     const cell = (side) => {
-      const b = el('button', { class: 'slot', title: `Put it ${side === 'top' ? 'above' : side === 'bottom' ? 'below' : `on the ${side}`}`, attrs: { 'aria-label': `Other computer ${side}` } });
-      b.onclick = () => api.setKvm({ pcSide: side });
+      const b = el('button', { class: 'slot', title: `Put it ${side === 'top' ? 'above' : side === 'bottom' ? 'below' : `on the ${side}`}`, attrs: { 'aria-label': `Device ${side}` } });
+      b.onclick = () => {
+        if (!latestState) return;
+        const k = latestState.kvm || {};
+        const compSide = k.pcSide || 'right';
+        const edges = k.edges ? { ...k.edges } : {
+          left: compSide === 'left' ? 'computer' : null,
+          right: compSide === 'right' ? 'computer' : null,
+          top: compSide === 'top' ? 'computer' : null,
+          bottom: compSide === 'bottom' ? 'computer' : null,
+        };
+        const cur = edges[side] || null;
+        const hasPhone = !!(latestState.phone && (latestState.phone.connected || latestState.phone.bridge || latestState.phone.settings || latestState.phone.info));
+        let next = null;
+        if (!cur) {
+          const hasComp = Object.values(edges).includes('computer');
+          if (!hasComp) next = 'computer';
+          else if (hasPhone) next = 'phone';
+          else next = 'computer';
+        } else if (cur === 'computer') {
+          next = hasPhone ? 'phone' : null;
+        } else if (cur === 'phone') {
+          next = null;
+        }
+        if (api.setEdge) api.setEdge({ side, target: next });
+        else api.setKvm({ pcSide: side });
+      };
       slots[side] = b;
       return b;
     };
@@ -60,7 +86,7 @@ UI.tab({
         UI.dir('m2w', [peerRow('Use {me}’s mouse and keyboard on {name}', 'Push the pointer past the edge', [drive]), viaRow]),
         UI.dir('w2m', [driven2 = peerRow('Use {name}’s mouse and keyboard on {me}', '', [driven])]),
       ),
-      UI.card('Where the other computer is', [el('div', { class: 'layout' }, [grid, layoutHint])]),
+      UI.card('Screen layout (Computers & Phones)', [el('div', { class: 'layout' }, [grid, layoutHint])]),
       UI.card('Feel', [
         UI.row('Edge resistance', 'Push a little further to cross', [resistance]),
         peerRow('Pointer speed on {name}', '', [speed]),
@@ -71,19 +97,41 @@ UI.tab({
     );
 
     return (s) => {
+      latestState = s;
       const k = s.kvm;
       if (!k) return;
       const p = UI.peer(s);
       const [kind, text] = UI.kvmStatus(s);
       status.className = `note ${kind}`;
       status.set(text);
+      const compSide = k.pcSide || 'right';
+      const edges = k.edges ? k.edges : {
+        left: compSide === 'left' ? 'computer' : null,
+        right: compSide === 'right' ? 'computer' : null,
+        top: compSide === 'top' ? 'computer' : null,
+        bottom: compSide === 'bottom' ? 'computer' : null,
+      };
+      const compName = p.name || 'Computer';
+      const phoneName = (s.phone && (s.phone.name || (s.phone.info && s.phone.info.name))) || 'Phone';
+
       for (const [side, b] of Object.entries(slots)) {
-        b.classList.toggle('on', k.pcSide === side);
-        b.textContent = k.pcSide === side ? p.name : '';
+        const target = edges[side];
+        b.classList.toggle('on', target === 'computer');
+        b.classList.toggle('phone-here', target === 'phone');
+        b.textContent = target === 'computer' ? ('🖥️ ' + compName) : target === 'phone' ? ('📱 ' + phoneName) : '';
+        b.title = target === 'computer' ? `${compName} on ${side}. Click to change or clear.`
+          : target === 'phone' ? `${phoneName} on ${side}. Click to clear.`
+          : `Assign ${compName} or ${phoneName} here`;
         meLabel.textContent = p.me;
       }
-      const where = { left: 'to the left of', right: 'to the right of', top: 'above', bottom: 'below' }[k.pcSide];
-      layoutHint.textContent = `${p.Name} is ${where} ${p.me}. Click a side to move it.`;
+      const placed = [];
+      if (edges.left) placed.push((edges.left === 'computer' ? compName : phoneName) + ' on left');
+      if (edges.right) placed.push((edges.right === 'computer' ? compName : phoneName) + ' on right');
+      if (edges.top) placed.push((edges.top === 'computer' ? compName : phoneName) + ' on top');
+      if (edges.bottom) placed.push((edges.bottom === 'computer' ? compName : phoneName) + ' on bottom');
+      layoutHint.textContent = placed.length
+        ? placed.join(' · ') + '. Click any side to assign Computer, Phone, or None.'
+        : 'Click a side to position your computer or phone around ' + p.me + '.';
       driven2.setHint('Double-tap the hotkey to take everything back');
       drive.set(k.driveOther);
       driven.set(k.beDriven);

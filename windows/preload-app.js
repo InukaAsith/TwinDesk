@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('macshare', {
   remoteScreen: call('remoteScreen'),
   setKvm: call('setKvm'),
   setLayout: call('setLayout'),
+  setEdge: call('setEdge'),
   setKeys: call('setKeys'),
   setApp: call('setApp'),
   setUpdates: call('setUpdates'),
