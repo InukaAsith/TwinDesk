@@ -63,6 +63,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
     private val since = ConcurrentHashMap<String, Long>()
     // What each computer says it is connected to (mesh.roster).
     private val rosters = ConcurrentHashMap<String, List<String>>()
+    // … and who they are (mesh.roster `members`), so the phone can list the whole mesh (known()).
+    private val members = MeshMembers(store.deviceId)
+    // Join every device the mesh introduces (mesh.intro.grant), Settings: Join every device automatically.
+    val meshAutoJoin get() = store.flag("meshAutoJoin", true)
     @Volatile private var wiredNonce = ""
 
     val sync = PairSync(this)
@@ -165,6 +169,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     fun hosts(): List<Host> = store.hosts()
+
+    // Everyone in the mesh this phone knows of: the connected computers (direct) and the devices they
+    // report (indirect, with the ids of the computers that report them). Mesh.kt MeshMembers.known().
+    fun known(): List<Known> = members.known(links.connectedLinks().mapNotNull { l -> l.host?.let { Member(it.id, it.name, it.os) } })
 
     // The pool's view of the connected computers (Clip and Notifs): each gets the items where accept says so.
     fun poolPeers(accept: (String) -> Boolean): List<PoolPeer> = links.connectedLinks().map { l ->
@@ -307,6 +315,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         links.forget(id)
         store.forgetHost(id)
         rosters.remove(id)
+        members.remove(id)
         attach()
         changed()
     }
@@ -394,6 +403,19 @@ class Core private constructor(val ctx: Context) : Link.Events {
         val t = m.optString("t")
         if (t == Proto.T.MESH_ROSTER) {
             rosters[host.id] = m.optJSONArray("peers")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+            if (from.connected) members.set(host.id, m.rosterMembers())
+            changed()
+            return
+        }
+        if (t == Intro.ASK) {
+            // A phone cannot listen, so it cannot host a pairing for anyone: say so (docs/mesh.md).
+            if (from.connected && from.mesh && Intro.validAsk(m.toPlainMap())) {
+                from.send(msg(Intro.REPLY, "req" to m.optString("req"), "for" to m.optString("for"), "ok" to false, "error" to "cannot host"))
+            }
+            return
+        }
+        if (t == Intro.GRANT) {
+            onGrant(from, m)
             return
         }
         // A computer taking or letting go of the phone's mouse and keyboard, from any computer.
@@ -414,6 +436,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     override fun onClosed(from: Link, host: Host, code: String?) {
         links.closed(host.id, code, System.currentTimeMillis())
         rosters.remove(host.id)
+        members.remove(host.id)
         for (f in features) runCatching { f.onPeerClosed(host) }
         attach()
         broadcastRoster()
@@ -423,9 +446,27 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // Our direct links, to every connected computer that takes the mesh (docs/mesh.md).
     private fun broadcastRoster() {
         val ids = links.connectedLinks().map { it.hostId }
+        val own = links.connectedLinks().mapNotNull { l -> l.host?.let { Member(it.id, it.name, it.os).toJson() } }
         for (l in links.connectedLinks()) {
-            if (l.mesh) l.send(msg(Proto.T.MESH_ROSTER, "peers" to jsonArray(ids)))
+            if (l.mesh) l.send(msg(Proto.T.MESH_ROSTER, "peers" to jsonArray(ids), "members" to jsonArray(own)))
         }
+    }
+
+    // mesh.intro.grant (shared/intro.js): a connected computer introduces another one. Stored like a
+    // finished pairing (Link.onPairOk), then dialled; ignored when it is a duplicate, when the registry
+    // is full, or when Join every device automatically is off.
+    private fun onGrant(from: Link, m: JSONObject) {
+        if (!from.connected || !from.mesh || !meshAutoJoin) return
+        val g = Intro.granted(m.toPlainMap()) ?: return
+        if (g.id == store.deviceId) return
+        val have = store.hosts()
+        if (have.any { it.id == g.id } || have.size >= Proto.MAX_DEVICES) return
+        RemoteLog.i("TwinDesk", "${from.host?.name} introduced ${g.name}: joining it")
+        val h = Host(g.id, g.name, g.os, g.address, g.port, g.fp, g.token, System.currentTimeMillis())
+        store.putHost(h)
+        links.resume(h.id)
+        dial(h)
+        changed()
     }
 
     companion object {
