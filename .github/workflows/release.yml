@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  actions: read # the called Windows workflow's optional VirusTotal job reads run artifacts
 
 concurrency:
   group: release-${{ github.event.pull_request.number || github.ref }}
