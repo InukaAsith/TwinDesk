@@ -24,7 +24,9 @@ for (const f of required) assert.ok(shared.includes(f), `shared/${f} is required
 // 2. the installers stage the WHOLE shared folder, not a list
 for (const f of ['windows/installer/build.js', 'linux/installer/build.js']) {
   const s = read(f);
-  assert.ok(/readdirSync\(path\.join\(ROOT, 'shared'\)\)/.test(s) && /endsWith\('\.js'\)/.test(s), `${f} copies every shared/*.js`);
+  const perFile = /readdirSync\(path\.join\(ROOT, 'shared'\)\)/.test(s) && /\.\(js\|css\|html\)/.test(s);
+  const wholeDir = /copy\(path\.join\(ROOT, 'shared'\), path\.join\(STAGE, 'shared'\)/.test(s) && /\.\(js\|css\|html\)/.test(s);
+  assert.ok(perFile || wholeDir, `${f} copies every shared/*.js`);
   assert.ok(!/copy\(path\.join\(ROOT, 'shared', '(?!protocol)[a-z-]+\.js'\)/.test(s), `${f} has no hand-kept list of shared files`);
 }
 assert.ok(/cp "\$ROOT"\/shared\/\*\.js/.test(read('mac/build-app.sh')), 'mac/build-app.sh copies every shared/*.js');

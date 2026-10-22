@@ -33,7 +33,7 @@ class SendTo {
     // A dev copy on its own ports (MACSHARE_DEV_PORT, see server.js) leaves the user's Send to shortcuts
     // alone: they are the installed TwinDesk's, and this would replace or delete them.
     if (process.env.MACSHARE_DEV_PORT) return;
-    const name = peer ?String(peer).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) : '';
+    const name = peer ? String(peer).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) : '';
     if (name === this.name) return;
     this.name = name;
     try {
