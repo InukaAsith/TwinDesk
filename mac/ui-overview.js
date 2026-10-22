@@ -212,11 +212,12 @@ UI.tab({
       wifiBtn.hidden = !c || !(wifiOn || c.transport === 'ble');
       hotspotBtn.hidden = !c || wifiOn || n.state === 'hotspot' || c.transport !== 'ble' || !UI.isPhone(s);
 
-      // the phone's wireless debugging: only while it needs something
+      // the phone's wireless debugging: only while it needs something and Accessibility mode is not chosen
       const ph = s.phone || {};
       const br = (ph.connected && ph.bridge) || { state: 'off' };
       const pairable = br.state === 'needsPair' || !!br.canPair;
-      adbCard.hidden = !ph.connected || !(pairable || ['waitingWifi', 'missing', 'error'].includes(br.state));
+      const noAdb = ph.settings && ph.settings.input === 'phone';
+      adbCard.hidden = noAdb || !ph.connected || !(pairable || ['waitingWifi', 'missing', 'error'].includes(br.state));
       if (!adbCard.hidden) {
         const [cls, label] = ADB[br.state] || ADB.error;
         adbPill.className = `pill ${cls}`;
