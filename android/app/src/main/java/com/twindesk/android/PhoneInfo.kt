@@ -311,6 +311,9 @@ class Adb(core: Core) : Feature(core) {
 
     override fun onClosed() {
         viewed = false
+        // The computer's side of wireless debugging belongs to the computer that left: the next one
+        // starts clean (it reports adb.bridge itself).
+        bridge = ""; bridgeMessage = ""; canPair = false; inputBlocked = false; pairing = false
         stopConnectWatch()
         main.post { check() }
     }

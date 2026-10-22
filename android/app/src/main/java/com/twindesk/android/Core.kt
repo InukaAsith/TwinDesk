@@ -59,6 +59,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     @Volatile private var selectedId: String? = null
     // The computer the one-to-one features are attached to right now (null: none connected).
     @Volatile private var attachedId: String? = null
+    // A computer the user picked in the selector while it was not connected: selected when it comes up.
+    @Volatile private var pendingUse: String? = null
     // When each computer's session started: the most recent one is the fallback.
     private val since = ConcurrentHashMap<String, Long>()
     // What each computer says it is connected to (mesh.roster).
@@ -344,12 +346,35 @@ class Core private constructor(val ctx: Context) : Link.Events {
         attach()
     }
 
+    // The header's computer selector (Selector.kt): every paired computer with its session state.
+    fun pcEntries(): List<PcEntry> = store.hosts().map { h ->
+        val l = links.existing(h.id)
+        val up = l != null && l.connected
+        PcEntry(
+            h.id, h.name, h.os,
+            when { up -> "connected"; l != null && l.state == "connecting" -> "connecting"; else -> "offline" },
+            if (!up) "" else if (l?.wired == true) "usb" else if (l?.ble == true) "ble" else "ip",
+            isNear(h.id),
+        )
+    }
+
+    fun pcSelector(): PcSelector = PcSelect.build(pcEntries(), host?.id)
+
+    // The selector's choice: a connected computer is selected at once; a paired one that is not
+    // connected is dialled and selected as soon as its session is up.
+    fun choose(c: PcChoice) {
+        when (c.action) {
+            PcAction.USE -> select(c.id)
+            PcAction.CONNECT -> store.hosts().find { it.id == c.id }?.let { pendingUse = it.id; connect(it) }
+            PcAction.NONE -> Unit
+        }
+    }
+
     // The attached computer: the selected one while it is connected, else the most recently connected.
     // When it changes, the one-to-one features get onClosed for the old one and onWelcome for the new
     // one, on the main thread.
     @Synchronized private fun attach() {
-        val want = selectedId?.takeIf { links.existing(it)?.connected == true }
-            ?: links.connectedLinks().maxByOrNull { since[it.hostId] ?: 0L }?.hostId
+        val want = PcSelect.pickAttached(selectedId, links.connectedLinks().map { it.hostId }, since)
         refreshBusy(want)
         if (want == attachedId) return
         val old = attachedId
@@ -385,7 +410,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
         // Tells the computer which of its USB devices this is (its screen and input use that one).
         if (from.wired) from.send(JSONObject().put("t", "phone.wired").put("nonce", wiredNonce))
         for (f in features) runCatching { f.onPeerWelcome(host) }.onFailure { RemoteLog.e("TwinDesk", "peer welcome", it) }
-        if (selectedId?.let { links.existing(it)?.connected == true } != true) selectedId = host.id
+        if (pendingUse == host.id) { selectedId = host.id; pendingUse = null }
+        else if (selectedId?.let { links.existing(it)?.connected == true } != true) selectedId = host.id
         attach()
         broadcastRoster()
         changed()
