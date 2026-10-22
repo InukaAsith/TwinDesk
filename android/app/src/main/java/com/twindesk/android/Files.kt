@@ -186,7 +186,7 @@ class Files(core: Core) : Feature(core) {
             core.send(msg(Proto.T.FILE_ACCEPT, "id" to id))
             note(batch, true)
         } catch (e: Exception) {
-            RemoteLog.w("TwinDesk", "offer $name: ${e.message}")
+            Log.w("TwinDesk", "offer $name: ${e.message}")
             refuse(id, "not_allowed")
             fileFinished(batch, false)
         }
@@ -235,7 +235,7 @@ class Files(core: Core) : Feature(core) {
         f.uri?.let { runCatching { core.ctx.contentResolver.delete(it, null, null) } }
         f.file?.delete()
         if (tell) core.send(msg(Proto.T.FILE_CANCEL, "id" to id))
-        RemoteLog.w("TwinDesk", "file ${f.name}: $why")
+        Log.w("TwinDesk", "file ${f.name}: $why")
         batches[f.batch]?.let { fileFinished(it, false) }
     }
 
@@ -338,7 +338,7 @@ class Files(core: Core) : Feature(core) {
                 }
                 core.send(msg(Proto.T.FILE_END, "id" to f.id, "sha256" to md.digest().hex()))
             } catch (e: Exception) {
-                RemoteLog.w("TwinDesk", "send ${f.name}: ${e.message}")
+                Log.w("TwinDesk", "send ${f.name}: ${e.message}")
                 core.send(msg(Proto.T.FILE_CANCEL, "id" to f.id))
             }
             outgoing.remove(f)

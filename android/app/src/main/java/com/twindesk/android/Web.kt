@@ -37,7 +37,7 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
                 android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.BLACK) }
 
             override fun onConsoleMessage(m: ConsoleMessage): Boolean {
-                RemoteLog.i("TwinDesk", "web: ${m.message()}")
+                Log.i("TwinDesk", "web: ${m.message()}")
                 return true
             }
         }
@@ -302,6 +302,6 @@ class WifiFast(ctx: Context) {
         if (on == held) return
         held = on
         for (l in locks) runCatching { if (on) l.acquire() else l.release() }
-        RemoteLog.i("TwinDesk", "wifi low latency ${if (on) "on" else "off"}")
+        Log.i("TwinDesk", "wifi low latency ${if (on) "on" else "off"}")
     }
 }

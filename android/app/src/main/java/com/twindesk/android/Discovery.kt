@@ -126,7 +126,7 @@ class Discovery(
             } catch (e: Exception) {
                 if (!running) return
                 error = "Can’t listen (${e.message})"
-                RemoteLog.w("TwinDesk", "discovery: ${e.message}")
+                Log.w("TwinDesk", "discovery: ${e.message}")
                 onChange()
                 Thread.sleep(5000)
             }

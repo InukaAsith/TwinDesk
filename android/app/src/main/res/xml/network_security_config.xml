@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Plain http only to the test log server on the local network (RemoteLog); everything else stays encrypted. -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">192.168.2.100</domain>
-    </domain-config>
-</network-security-config>

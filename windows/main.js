@@ -72,12 +72,7 @@ app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/
 // in (Electron would follow the new product name). A dev copy's --user-data-dir still wins.
 if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'MacShare'));
 // Everything the main process prints also goes to <userData>/logs/main.log (the installed app has no console).
-// Every log line also goes to the test log server on the local network while this pre-release is being tested
-// (tools/logserver.js on 192.168.2.100). TWINDESK_LOG_SERVER=off (or a url) changes it.
-const { LogShip } = require('../shared/logship.js');
-require('../shared/logfile.js').install(path.join(app.getPath('userData'), 'logs'), {
-  ship: new LogShip({ url: process.env.TWINDESK_LOG_SERVER || 'http://192.168.2.100:47900/log', device: require('os').hostname() }),
-});
+require('../shared/logfile.js').install(path.join(app.getPath('userData'), 'logs'));
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
