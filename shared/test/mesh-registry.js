@@ -39,7 +39,9 @@ function sink(log, id) {
   assert.strictEqual(m.get('C').pool, true, 'pool defaults to on');
   assert.strictEqual(m.get('Z'), null);
   assert.strictEqual(m.peers().length, 2);
-  assert.deepStrictEqual(m.rosterMessage(), { t: 'mesh.roster', peers: ['B', 'C'] });
+  const rm = m.rosterMessage();
+  assert.deepStrictEqual({ t: rm.t, peers: rm.peers }, { t: 'mesh.roster', peers: ['B', 'C'] });
+  assert.deepStrictEqual(rm.members.map((x) => x.id), ['B', 'C'], 'the roster also names its members (older readers ignore it)');
   assert.deepStrictEqual(m.roster.direct('A'), ['B', 'C'], 'our own roster follows our links');
 
   assert.strictEqual(m.removePeer('C'), true);

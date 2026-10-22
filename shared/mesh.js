@@ -205,6 +205,7 @@ class Mesh extends EventEmitter {
     this.roster = new Roster({ selfId });
     this._peers = new Map();
     this._pools = new Map();
+    this._members = new Map(); // via id -> [{id, name, os}] from that peer's mesh.roster
   }
 
   // p: { id, name, os, send(msg) -> boolean, mesh (default false), pool (default true) }.
@@ -232,6 +233,7 @@ class Mesh extends EventEmitter {
     const entry = this._peers.get(id);
     if (!entry) return false;
     this._peers.delete(id);
+    this._members.delete(id);
     this.roster.remove(id);
     this.roster.setSelf(this.directIds());
     this.emit('peerRemoved', entry);
@@ -265,8 +267,36 @@ class Mesh extends EventEmitter {
     return Array.from(this._peers.keys());
   }
 
+  // peers: the direct links; members: their names and systems, so a device that is not linked to
+  // them can still list them ("everyone in the mesh", see known()).
   rosterMessage() {
-    return { t: 'mesh.roster', peers: this.directIds() };
+    return {
+      t: 'mesh.roster',
+      peers: this.directIds(),
+      members: this.peers().map((e) => ({ id: e.id, name: e.name || '', os: e.os || '' })),
+    };
+  }
+
+  // Everyone this device knows of: the direct peers and the peers of its peers (from their
+  // mesh.roster `members`), each {id, name, os, direct, via: [ids that report it]}.
+  known() {
+    const out = new Map();
+    for (const e of this._peers.values()) out.set(e.id, { id: e.id, name: e.name || '', os: e.os || '', direct: true, via: [] });
+    for (const [via, list] of this._members) {
+      if (!this._peers.has(via)) continue;
+      for (const m of list) {
+        if (m.id === this.selfId) continue;
+        const cur = out.get(m.id);
+        if (cur) {
+          if (!cur.direct) cur.via.push(via);
+          if (!cur.name && m.name) cur.name = m.name;
+          if (!cur.os && m.os) cur.os = m.os;
+        } else {
+          out.set(m.id, { id: m.id, name: m.name || '', os: m.os || '', direct: false, via: [via] });
+        }
+      }
+    }
+    return Array.from(out.values());
   }
 
   // Consume a mesh.roster message from fromId. Returns true for any mesh.roster message (so the
@@ -276,6 +306,11 @@ class Mesh extends EventEmitter {
     if (this._peers.has(fromId)) {
       const ids = Array.isArray(msg.peers) ? msg.peers.filter((x) => typeof x === 'string') : [];
       this.roster.setPeer(fromId, ids);
+      const members = [];
+      for (const m of Array.isArray(msg.members) ? msg.members : []) {
+        if (m && typeof m.id === 'string' && m.id) members.push({ id: m.id, name: String(m.name || '').slice(0, 64), os: String(m.os || '').slice(0, 16) });
+      }
+      this._members.set(fromId, members);
       this.emit('roster', fromId, ids);
     }
     return true;
