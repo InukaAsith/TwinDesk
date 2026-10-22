@@ -45,6 +45,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -265,17 +267,51 @@ private fun Identity(core: Core, v: Int, logo: Int) {
         Logo(logo)
         Column(Modifier.padding(start = 12.dp)) {
             Text("TwinDesk Mesh", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = pal.text)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val h = core.host
-                Dot(when { h != null -> pal.good; core.pairLink.pair != null || core.link.state == "connecting" -> pal.warn; else -> pal.faint }, 7)
-                Text(
-                    when {
-                        h != null -> h.name + (if (core.link.wired) " · USB" else if (core.link.ble) " · Bluetooth" else "") + (core.link.rttMs?.let { " · $it ms" } ?: "")
-                        core.pairLink.pair != null -> "Pairing…"
-                        core.link.state == "connecting" -> "Connecting…"
-                        else -> "Not connected"
+            PcPicker(core, v)
+        }
+    }
+}
+
+// The computer selector in the header (Selector.kt): the computer every page works with. One paired
+// computer: plain text. Several: tap to list them all (connected first, then the paired ones that are
+// not connected, which a tap dials and then selects); the choice is Core.choose, the same select()
+// the Devices card's Use button calls.
+@Composable
+private fun PcPicker(core: Core, v: Int) {
+    @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
+    val sel = core.pcSelector()
+    var open by remember { mutableStateOf(false) }
+    val h = core.host
+    val base = when {
+        sel.current == null && core.pairLink.pair != null -> "Pairing…"
+        sel.current == null && sel.dot == "warn" -> sel.label + " · Connecting…"
+        sel.current == null && sel.choices.isNotEmpty() -> PcSelect.IDLE
+        else -> sel.label
+    }
+    val label = base + (if (h == null) "" else (if (core.link.wired) " · USB" else if (core.link.ble) " · Bluetooth" else "") + (core.link.rttMs?.let { " · $it ms" } ?: ""))
+    val dot = when { core.pairLink.pair != null && sel.current == null -> pal.warn; sel.dot == "good" -> pal.good; sel.dot == "warn" -> pal.warn; else -> pal.faint }
+    Box {
+        Row(
+            Modifier.clip(RoundedCornerShape(6.dp)).then(if (sel.expandable) Modifier.clickable { open = true } else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Dot(dot, 7)
+            Text(label, color = pal.muted, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp).widthIn(max = 220.dp))
+            if (sel.expandable) Text("▾", color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+        }
+        DropdownMenu(expanded = open && sel.expandable, onDismissRequest = { open = false }, modifier = Modifier.background(pal.card)) {
+            for (c in sel.choices) {
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(c.name, color = if (c.state == "offline") pal.faint else pal.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (c.detail.isNotEmpty()) Text(c.detail, color = pal.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     },
-                    color = pal.muted, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp),
+                    onClick = { open = false; core.choose(c) },
+                    enabled = c.action != PcAction.NONE,
+                    leadingIcon = { Dot(when (c.state) { "connected" -> pal.good; "connecting" -> pal.warn; else -> pal.faint }, 8) },
+                    trailingIcon = { if (c.selected) Text("✓", color = pal.accent, fontSize = 14.sp) },
                 )
             }
         }
@@ -489,7 +525,7 @@ private fun OverviewPage(core: Core, v: Int) {
                 val attached = host?.id == k.id
                 MacRow(name, listOf(os, if (l?.wired == true) "USB" else if (l?.ble == true) "Bluetooth" else "Connected").filter { it.isNotEmpty() }.joinToString(" · "), i == 0) {
                     if (attached) Pill("In use", "good")
-                    else Secondary("Use") { core.hosts().find { it.id == k.id }?.let { core.select(it.id) } }
+                    else Secondary("Use") { core.select(k.id) }
                 }
             } else {
                 MacRow(name, listOf(os, "via " + k.via.joinToString(", ") { byId[it]?.name?.takeIf { n -> n.isNotEmpty() } ?: "a computer" }).filter { it.isNotEmpty() }.joinToString(" · "), i == 0) {
