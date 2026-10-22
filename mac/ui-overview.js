@@ -158,13 +158,18 @@ UI.tab({
       discRow.setHint(!d.localNetwork ? 'Allow Local Network for TwinDesk, or connect by address.' : d.error);
       discFix.hidden = d.localNetwork;
       const pairedIds = new Set([...s.paired.map((x) => x.id), ...g.hosts.map((x) => x.id)]);
-      const fk = JSON.stringify([s.found, [...pairedIds], c && c.id, blocked]);
+      const phoneId = (s.phone && s.phone.connected && s.phone.connected.id) || '';
+      const phoneConnected = !!phoneId;
+      const compId = (c && c.id) || '';
+      const compConnected = !!c;
+      const fk = JSON.stringify([s.found, [...pairedIds], compId, phoneId, blocked]);
       if (fk !== foundKey) {
         foundKey = fk;
         const rows = s.found.map((dev) => {
-          const online = c && c.id === dev.id;
+          const isPhoneDev = dev.os === 'android';
+          const online = isPhoneDev ? (phoneConnected && dev.id === phoneId) : (compConnected && dev.id === compId);
           const known = pairedIds.has(dev.id);
-          const label = online ? null : known ? 'Take over' : dev.os === 'mac' ? 'Pair' : 'Connect';
+          const label = online ? null : known ? (isPhoneDev ? (phoneConnected ? 'Switch' : 'Connect') : (compConnected ? 'Take over' : 'Connect')) : dev.os === 'mac' ? 'Pair' : 'Connect';
           const btn = label && UI.button(label, () => api.pairWith(dev.id), `small${dev.invited ? ' primary' : ''}`);
           const r = UI.row(dev.name, `${dev.address}${dev.invited ? ' · wants to connect' : ''}`,
             [online ? el('span', { class: 'pill good', text: 'Connected' }) : known ? el('span', { class: 'pill muted', text: 'Paired' }) : null, btn]);
@@ -229,19 +234,21 @@ UI.tab({
       // paired: guests (they connect to us) and hosts (we connect to them)
       const wk = (s.wake && s.wake.peers) || {};
       const near = new Set(s.found.map((dev) => dev.id));
-      const pk = JSON.stringify([s.paired, g.hosts, c && c.id, Object.keys(wk), s.wake && s.wake.last, [...near]]);
+      const pk = JSON.stringify([s.paired, g.hosts, compId, phoneId, Object.keys(wk), s.wake && s.wake.last, [...near]]);
       if (pk === pairedKey) return;
       pairedKey = pk;
       const all = [...s.paired, ...g.hosts.map((h) => ({ ...h, host: true }))];
       pairedList.replaceChildren(...(all.length
         ? all.map((x) => {
-          const online = c && c.id === x.id;
+          const isPhoneDev = x.os === 'android';
+          const online = isPhoneDev ? (phoneConnected && x.id === phoneId) : (compConnected && x.id === compId);
+          const connectLabel = isPhoneDev ? (phoneConnected ? 'Switch' : 'Connect') : (compConnected ? 'Switch' : 'Connect');
           const r = UI.row(x.name, online ? 'Connected' : `Last seen ${UI.ago(x.lastSeen)}`,
             [online ? el('span', { class: 'pill good', text: 'Online' }) : null,
               // Wake it over the network (it told us how while connected).
               !online && wk[x.id] ? UI.button(s.wake.last && s.wake.last.id === x.id && Date.now() - s.wake.last.at < 20000 ? 'Waking…' : 'Wake', () => api.wakePeer(x.id), 'small') : null,
               // Switch to it (nearby): whatever the session is now, it ends.
-              !online && near.has(x.id) ? UI.button(c ? 'Switch' : 'Connect', () => api.pairWith(x.id), 'small') : null,
+              !online && near.has(x.id) ? UI.button(connectLabel, () => api.pairWith(x.id), 'small') : null,
               UI.button('Forget', () => api.forget(x.id), 'small')]);
           r.querySelector('.text').prepend(UI.osIcon(x.os));
           r.classList.add('with-ico');

@@ -724,7 +724,7 @@ function connectPhoneDev(d) {
   else discovery.invite(d.address);
 }
 function phoneInviteView(s) {
-  if (phoneInvite && (Date.now() > phoneInvite.until || s.pairing || (s.peer && s.peer.id === phoneInvite.id))) phoneInvite = null;
+  if (phoneInvite && (Date.now() > phoneInvite.until || s.pairing || (s.peer && s.peer.id === phoneInvite.id) || (s.phone && s.phone.connected && s.phone.connected.id === phoneInvite.id))) phoneInvite = null;
   return phoneInvite && { name: phoneInvite.name };
 }
 function cancelPhoneInvite() {

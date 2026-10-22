@@ -235,20 +235,25 @@ UI.tab({
       // Paired both ways: the computer we connect to (s.paired) and the ones that connect to us (s.guests).
       const known = new Set([...(s.paired ? [s.paired.macId] : []), ...s.guests.map((g) => g.id)]);
       const live = s.peer && connected ? s.peer.id : '';
-      const fk = JSON.stringify([s.found, [...known], live, busy, blocked]);
+      const phoneId = (s.phone && s.phone.connected && s.phone.connected.id) || '';
+      const phoneConnected = !!phoneId;
+      const fk = JSON.stringify([s.found, [...known], live, phoneId, busy, blocked]);
       if (fk !== foundKey) {
         foundKey = fk;
         let focus = null;
         const rows = s.found.map((dev) => {
           const isKnown = known.has(dev.id);
-          const online = dev.id === live;
+          const isPhoneDev = dev.os === 'android';
+          const online = isPhoneDev ? (phoneConnected && dev.id === phoneId) : (connected && dev.id === live);
           // A Mac hosts; with a PC or another Linux computer the one who clicks is the guest (L4).
           // A phone is asked to pair.
           const btn = online || isKnown ? null : UI.button(dev.os === 'mac' || dev.os === 'android' ? 'Pair' : 'Connect', () => api.pair(dev.id), 'small' + (dev.invited ? ' primary' : ''));
-          if (btn) btn.disabled = busy || connected;
+          if (btn) btn.disabled = busy || (isPhoneDev ? phoneConnected : connected);
           // Paired: Take over (the computer we're a guest of: a takeover hello; one that connects to us:
-          // invited, and its hello takes the session from whoever has it).
-          const take = !online && isKnown ? UI.button('Take over', () => (s.paired && dev.id === s.paired.macId ? api.connectAgain() : api.connectGuest(dev.id)), 'small') : null;
+          // invited, and its hello takes the session from whoever has it). For companion phone sessions,
+          // connecting alongside an existing computer does not take over.
+          const takeLabel = isPhoneDev ? (phoneConnected ? 'Switch' : 'Connect') : (connected ? 'Take over' : 'Connect');
+          const take = !online && isKnown ? UI.button(takeLabel, () => (s.paired && dev.id === s.paired.macId ? api.connectAgain() : api.connectGuest(dev.id)), 'small') : null;
           if (take) take.disabled = busy;
           if (btn && dev.invited && !busy) focus = btn;
           const r = UI.row(dev.name, dev.address + (dev.invited ? ' · wants to connect' : ''), [
@@ -265,7 +270,7 @@ UI.tab({
       // paired
       const wk = s.wake || { peers: {} };
       const near = new Set(s.found.map((dev) => dev.id));
-      const pk = JSON.stringify([s.paired, s.guests, live, [...near], l.state, Object.keys(wk.peers), wk.waking]);
+      const pk = JSON.stringify([s.paired, s.guests, live, phoneId, [...near], l.state, Object.keys(wk.peers), wk.waking]);
       if (pk === pairedKey) return;
       pairedKey = pk;
       const all = [
@@ -274,16 +279,18 @@ UI.tab({
           connect: near.has(g.id) ? () => api.connectGuest(g.id) : null })),
       ];
       pairedList.replaceChildren(...(all.length ? all.map((x) => {
-        const online = x.id === live;
+        const isPhoneDev = x.os === 'android';
+        const online = isPhoneDev ? (phoneConnected && x.id === phoneId) : (connected && x.id === live);
         const waking = !online && wk.waking === x.id;
         // An offline computer that told us how to wake it gets Wake.
         const wakeBtn = !online && wk.peers[x.id] ? UI.button(waking ? 'Waking…' : 'Wake', () => api.wakePeer(x.id), 'small') : null;
         if (wakeBtn) wakeBtn.disabled = waking;
+        const connectLabel = isPhoneDev ? (phoneConnected ? 'Switch' : 'Connect') : (connected ? 'Switch' : 'Connect');
         const r = UI.row(x.name, online ? 'Connected' : waking ? 'Waking ' + x.name + '…' : x.hint, [
           online ? el('span', { class: 'pill good', text: 'Online' }) : null,
           wakeBtn,
           // Switch to it: whatever the session is now, it ends (paired, and nearby to be reached).
-          !online && x.connect ? UI.button(live ? 'Switch' : 'Connect', x.connect, 'small') : null,
+          !online && x.connect ? UI.button(connectLabel, x.connect, 'small') : null,
           UI.button('Forget', x.forget, 'small'),
         ]);
         r.querySelector('.text').prepend(UI.osIcon(x.os));

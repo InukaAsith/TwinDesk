@@ -171,7 +171,7 @@
     const p = s.pairing;
     const g = s.guest && s.guest.pairing;
     // This Mac asked a phone to pair: it goes on there (Cancel only hides this).
-    const inv = !p && !g && s.connect && s.connect.inviting && !(s.client && s.client.id === s.connect.inviting.id) ? s.connect.inviting : null;
+    const inv = !p && !g && s.connect && s.connect.inviting && !(s.client && s.client.id === s.connect.inviting.id) && !(s.phone && s.phone.connected && s.phone.connected.id === s.connect.inviting.id) ? s.connect.inviting : null;
     bannerMode = p ? 'host' : g ? 'guest' : inv ? 'guest' : null;
     $('banner').hidden = !bannerMode;
     if (!bannerMode) return;
