@@ -29,8 +29,20 @@ function copyTree(from, to) {
   }
 }
 
+// Phones are NOT carried over: the Mesh phone app has its own package id and so its own device id,
+// so a copied phone pairing is only ever used by the upstream phone app, which would then connect to
+// this app next to the Mesh one (every phone listed twice). Computers keep their pairings.
+function dropPhonePairings(dir) {
+  try {
+    const f = path.join(dir, 'paired.json');
+    if (!fs.existsSync(f)) return;
+    const list = JSON.parse(fs.readFileSync(f, 'utf8'));
+    if (Array.isArray(list)) fs.writeFileSync(f, JSON.stringify(list.filter((e) => !e || e.os !== 'android'), null, 2));
+  } catch (e) { /* unreadable: leave it */ }
+}
+
 // One-time, safe migration: if the Mesh data folder has no settings/identity yet and an upstream
-// folder exists, COPY it (never move or delete) so pairings and settings survive.
+// folder exists, COPY it (never move or delete) so computer pairings and settings survive (phone pairings are left behind, see dropPhonePairings).
 // Returns the source folder used, or '' when nothing was copied.
 function migrateUserData(appDataDir, { dataDir = DATA_DIR, legacy = LEGACY_DATA_DIRS } = {}) {
   try {
@@ -40,6 +52,7 @@ function migrateUserData(appDataDir, { dataDir = DATA_DIR, legacy = LEGACY_DATA_
       const src = path.join(appDataDir, name);
       if (src === target || !fs.existsSync(src) || !hasState(src)) continue;
       copyTree(src, target);
+      dropPhonePairings(target);
       return src;
     }
   } catch (e) { /* a failed copy just means a fresh start; never block startup */ }
