@@ -228,6 +228,14 @@ UI.tab({
       if (shown && UI.hubReady(UI.state, 'files') && !UI.onBle(UI.state) && !loaded) { loaded = true; open(cwd); }
     });
     paint();
+    UI.onDeviceChange(() => { // another device: its folders, from the top
+      cwd = '';
+      items = [];
+      chosen.clear();
+      loaded = false;
+      paint();
+      if (!page.hidden && UI.hubReady(UI.state, 'files') && !UI.onBle(UI.state)) { loaded = true; open(cwd); }
+    });
 
     return (s) => {
       top.render(s);

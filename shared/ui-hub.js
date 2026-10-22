@@ -72,6 +72,10 @@
     return `Over Wi-Fi: through wireless debugging, or captured by ${ph}`;
   };
 
+  // The selected device changed (the sidebar's device list): a page that loaded data of the previous
+  // device drops it and loads the new one's (fn runs after UI.state is the new device's).
+  UI.onDeviceChange = (fn) => window.addEventListener('twindesk-device', fn);
+
   // page shown / hidden (the shells toggle `hidden`).
   UI.onShown = (page, fn) => {
     new MutationObserver(() => fn(!page.hidden)).observe(page, { attributes: true, attributeFilter: ['hidden'] });

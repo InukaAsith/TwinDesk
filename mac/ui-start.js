@@ -4,6 +4,7 @@
 
 (() => {
   const { el, api } = UI;
+  const M = window.SidebarModel; // shared/sidebar-model.js: device tiles and the sections per kind
   const $ = (id) => document.getElementById(id);
   const nav = $('nav');
   const pages = $('pages');
@@ -40,10 +41,11 @@
     const page = el('section', { class: 'page', id: `page-${def.id}`, hidden: true, attrs: { role: 'tabpanel' } });
     const h1Text = el('span', { text: def.heading || def.title });
     const descEl = el('p', { text: def.desc || '' });
+    const devTag = el('span', { class: 'pill muted dev-tag', hidden: true }); // names the selected device on its own sections
     if ((def.heading || def.title).includes('{')) h1Text.dataset.peer = def.heading || def.title;
     if ((def.desc || '').includes('{')) descEl.dataset.peer = def.desc;
     const titles = el('div', { class: 'titles' }, [
-      el('h1', {}, [h1Text, def.phase ? el('span', { class: 'pill muted', text: `Phase ${def.phase}` }) : null]),
+      el('h1', {}, [h1Text, def.phase ? el('span', { class: 'pill muted', text: `Phase ${def.phase}` }) : null, devTag]),
       descEl,
     ]);
     let master = null;
@@ -59,7 +61,7 @@
     page.append(body);
     pages.append(page);
     const render = def.build(body, page) || (() => {});
-    return { page, body, master, render, wifiNote };
+    return { page, body, master, render, wifiNote, devTag };
   }
 
   // The session is through Bluetooth (pages that need Wi-Fi say so).
@@ -78,7 +80,7 @@
     v.navBtn.classList.add('active');
     v.navBtn.setAttribute('aria-selected', 'true');
     $('content').scrollTop = 0;
-    for (const t of $('phones').children) t.classList.toggle('active', v.def.id === 'phone' && t.dataset.connected === '1');
+    markTiles();
     if (user) api.setTab(v.def.id);
     if (UI.state) renderPage(v, UI.state);
   }
@@ -94,6 +96,11 @@
       v.master.set(on);
       v.master.disable(!!v.def.master.disabled);
       v.page.classList.toggle('off', !on);
+    }
+    if (v.devTag) { // the selected device's name on the sections that show its settings and data
+      const n = M.isScoped(v.def.id) && s.client ? s.client.name : '';
+      v.devTag.hidden = !n;
+      v.devTag.textContent = n || '';
     }
     try {
       v.render(s);
@@ -113,7 +120,7 @@
     for (const v of views.values()) {
       const hide = !!(v.def.hidden && v.def.hidden(s));
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
-      if (hide && current === v) show(s.phone && s.phone.connected ? 'phone' : 'overview', false);
+      if (hide && current === v) show(M.firstSection(kindOfState(s), availableFor(kindOfState(s))), false);
     }
     // A group with every tab hidden takes its gap with it.
     for (const v of views.values()) if (v.gap) v.gap.hidden = [...views.values()].every((x) => x.gap !== v.gap || !x.navBtn.parentElement || x.navBtn.parentElement.hidden);
@@ -124,8 +131,36 @@
     }
   }
 
-  // Paired phones nearby, above Overview: the phone's wallpaper, its name and the link. Clicking
-  // one connects it (the computer steps aside); the connected one opens its page.
+  // The kind of the selected device: its sections follow it (shared/sidebar-model.js).
+  const kindOfState = (s) => (UI.isPhone(s) ? 'phone' : M.selectedKind(s.peers) === 'none' ? 'none' : 'computer');
+  // Sections that exist for a kind of device.
+  const availableFor = (kind) => [...views.keys()].filter((id) => M.sectionVisible(id, kind));
+
+  // Tiles of the selected device's sections: lit while one of its own sections is open.
+  function markTiles() {
+    const scoped = !!(current && M.isScoped(current.def.id));
+    for (const t of $('phones').children) t.classList.toggle('active', scoped && t.dataset.selected === '1');
+  }
+
+  // A tile was clicked: a connected device becomes the selected one (hub.select) and its sections
+  // open (the open one when it exists for it, else its first); a phone nearby connects.
+  let goAfter = null; // { id, kind, timer }: open the sections once the new selection reached this window
+  function pick(t) {
+    if (t.action === 'connect') return api.connectPhone(t.id);
+    if (t.action !== 'select') return;
+    const go = () => {
+      if (goAfter) clearTimeout(goAfter.timer);
+      goAfter = null;
+      show(M.targetSection(current && current.def.id, t.kind, availableFor(t.kind)), true);
+    };
+    if (t.selected) return go();
+    if (goAfter) clearTimeout(goAfter.timer);
+    goAfter = { id: t.id, go, timer: setTimeout(go, 1500) }; // the state push with the new selection runs it (render)
+    Promise.resolve(api.selectPeer(t.id)).catch(() => go());
+  }
+
+  // Every known device above the sections: paired phones (wallpaper, name, link) and computers (OS icon,
+  // name, ping/transport), devices only another one reaches with a "via" line (not clickable).
   let phonesKey = '';
   let assetsSeen = -1;
   function renderPhones(s) {
@@ -134,34 +169,62 @@
       assetsSeen = ph.assets;
       api.phoneAssets().then((a) => {
         UI.phoneAssets = a;
-        UI.phoneWall = a.wallpaper ? `url("${a.wallpaper}")` : '';
+        UI.phoneWall = a.wallpaper ? 'url("' + a.wallpaper + '")' : '';
         phonesKey = '';
         if (UI.state) render(UI.state);
       }, () => {});
     }
     const info = ph.info || {};
     const colors = info.colors && info.colors.length ? info.colors : null;
-    const key = JSON.stringify([ph.nearby, ph.connecting, ph.connected && ph.connected.rttMs, ph.held, info.battery, info.charging, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
-    if (key === phonesKey) return;
+    // The connected phone's line (ping, battery) changes often: written in place, the tiles (and
+    // their wallpaper) built again only when something else changed, else they flicker.
+    const subOf = (d) => {
+      const mine = (ph.phones || []).find((x) => x.id === d.id) || null; // this phone's own numbers, not the active one's
+      if (!d.connected) return ph.connecting && ph.connecting.id === d.id ? 'Connecting…' : 'Nearby · Click to connect';
+      const rtt = mine ? mine.rttMs : ph.connected && ph.connected.rttMs;
+      const bat = mine ? mine.battery : info.battery;
+      const chg = mine ? mine.charging : info.charging;
+      return (rtt != null ? rtt + ' ms' : 'Connected') + (bat != null ? ' · ' + bat + '%' + (chg ? ' ⚡' : '') : '');
+    };
+    const phones = ph.nearby.map((d) => ({ id: d.id, name: d.name, connected: !!d.connected, connecting: !!(ph.connecting && ph.connecting.id === d.id), sub: subOf(d) }));
+    const tiles = M.buildTiles({ peers: s.peers || [], phones, transport: UI.via(s) });
+    const key = JSON.stringify([tiles.map((t) => [t.id, t.kind, t.name, t.os, t.state, t.selected, t.action, t.via]), ph.held, ph.activeId, (ph.phones || []).map((x) => [x.id, x.colors]), colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
+    if (key === phonesKey) {
+      const subs = new Map(tiles.map((t) => [t.id, t.sub]));
+      for (const b of $('phones').children) {
+        const sub = b.querySelector('.phone-sub');
+        if (sub && subs.has(b.dataset.id) && sub.textContent !== subs.get(b.dataset.id)) sub.textContent = subs.get(b.dataset.id);
+      }
+      return;
+    }
     phonesKey = key;
-    $('phones').replaceChildren(...ph.nearby.map((d) => {
-      const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
-      if (d.connected && UI.phoneWall) wall.style.backgroundImage = UI.phoneWall;
-      else if (d.connected && colors) wall.style.backgroundImage = `linear-gradient(160deg, ${colors.join(', ')}${colors.length === 1 ? `, ${colors[0]}` : ''})`;
-      const connecting = ph.connecting && ph.connecting.id === d.id;
-      const sub = d.connected
-        ? `${ph.connected.rttMs != null ? `${ph.connected.rttMs} ms` : 'Connected'}${info.battery != null ? ` · ${info.battery}%${info.charging ? ' ⚡' : ''}` : ''}`
-        : connecting ? 'Connecting…' : 'Nearby · Click to connect';
-      const b = el('button', { class: `phone-tile${d.connected ? ' connected' : ''}`, title: d.connected ? `${d.name}` : `Connect to ${d.name}` }, [
+    $('phones').replaceChildren(...tiles.map((t) => {
+      let wall;
+      if (t.kind === 'phone') {
+        const mine = (ph.phones || []).find((x) => x.id === t.id) || null;
+        const dcolors = mine && mine.colors ? mine.colors : colors;
+        wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
+        if (t.connected && UI.phoneWall && (!ph.activeId || ph.activeId === t.id)) wall.style.backgroundImage = UI.phoneWall;
+        else if (t.connected && dcolors) wall.style.backgroundImage = 'linear-gradient(160deg, ' + dcolors.join(', ') + (dcolors.length === 1 ? ', ' + dcolors[0] : '') + ')';
+      } else {
+        wall = el('span', { class: 'phone-wall computer-wall' }, [UI.osIcon(t.os)]);
+      }
+      const b = el('button', {
+        class: 'phone-tile' + (t.kind === 'computer' ? ' computer' : '') + (t.connected ? ' connected' : '') + (t.selected ? ' selected' : '') + (t.state === 'via' ? ' via' : ''),
+        title: t.state === 'via' ? t.name + ' is reached through ' + t.via.join(', ') : t.action === 'connect' ? 'Connect to ' + t.name : t.name,
+      }, [
         wall,
-        el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: d.name }), el('span', { class: 'phone-sub', text: sub })]),
-        d.connected ? el('span', { class: 'dot good' }) : null,
+        el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: t.name }), el('span', { class: 'phone-sub', text: t.sub })]),
+        t.connected ? el('span', { class: 'dot good' }) : t.state === 'via' ? el('span', { class: 'pill muted', text: 'via ' + (t.via[0] || '…') }) : null,
       ]);
-      b.dataset.connected = d.connected ? '1' : '';
-      b.classList.toggle('active', d.connected && current && current.def.id === 'phone');
-      b.onclick = () => (d.connected ? show('phone', true) : api.connectPhone(d.id));
+      b.dataset.id = t.id;
+      b.dataset.connected = t.connected ? '1' : '';
+      b.dataset.selected = t.selected ? '1' : '';
+      if (t.action === 'none') b.setAttribute('aria-disabled', 'true');
+      b.onclick = () => pick(t);
       return b;
     }));
+    markTiles();
   }
 
   // Two kinds of pairing request: someone pairs with this Mac (Allow / Deny), or this Mac pairs
@@ -249,8 +312,23 @@
   $('net-pass').onkeydown = $('net-ssid').onkeydown = (e) => { if (e.key === 'Enter') $('net-join').click(); };
   $('net-cancel').onclick = () => api.netCancel();
 
+  // The selected device changed: the sections show the new device (no data of the previous one stays), and
+  // the section a clicked tile asked for opens.
+  let selKey = null;
+  function selectionChanged(s) {
+    const sel = M.selectedOf(s.peers);
+    const k = sel ? sel.id : '';
+    if (selKey === null) { selKey = k; return; }
+    if (k !== selKey) {
+      selKey = k;
+      window.dispatchEvent(new CustomEvent('twindesk-device', { detail: k }));
+    }
+    if (goAfter && k === goAfter.id) goAfter.go();
+  }
+
   function render(s) {
     UI.state = s;
+    selectionChanged(s);
     UI.names(s);
     if (UI.setup.render(s)) {
       renderBanner(s);

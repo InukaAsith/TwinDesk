@@ -191,6 +191,11 @@ UI.tab({
       else if (UI.hubReady(UI.state, 'media') && !UI.onBle(UI.state) && !loaded) { loaded = true; reset(); }
     });
     paint();
+    UI.onDeviceChange(() => { // another device: its photos, not the previous one's
+      loaded = false;
+      view(null);
+      if (!page.hidden && UI.hubReady(UI.state, 'media') && !UI.onBle(UI.state)) { loaded = true; reset(); }
+    });
 
     return (s) => {
       top.render(s);

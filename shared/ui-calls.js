@@ -187,6 +187,15 @@ UI.tab({
       if (!contactsLoaded && canContacts(UI.state)) loadContacts();
     };
     UI.onShown(page, (shown) => { if (shown && UI.hubReady(UI.state, 'calls')) load(); });
+    UI.onDeviceChange(() => { // another device: its call log and contacts, not the previous one's
+      loaded = false;
+      loadedAt = 0;
+      contactsLoaded = false;
+      contacts = [];
+      showContacts();
+      typed();
+      if (!page.hidden && UI.hubReady(UI.state, 'calls')) load();
+    });
 
     return (s) => {
       const h = s.hub || {};

@@ -217,6 +217,18 @@ UI.tab({
     });
     renderList();
     renderConv();
+    UI.onDeviceChange(() => { // another device: its conversations, not the previous one's
+      threads = [];
+      openId = null;
+      items = [];
+      hasMore = false;
+      pending = [];
+      loaded = false;
+      loadedAt = 0;
+      renderList();
+      renderConv();
+      if (!page.hidden && UI.hubReady(UI.state, 'messages')) load();
+    });
 
     return (s) => {
       top.render(s);
