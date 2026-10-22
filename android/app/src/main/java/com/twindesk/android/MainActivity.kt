@@ -172,10 +172,10 @@ fun App(core: Core, resumed: Int) {
     var tab by rememberSaveable { mutableStateOf(Tab.Overview) }
     var more by rememberSaveable { mutableStateOf(false) }
     val wide = LocalConfiguration.current.screenWidthDp >= 600
-    // Wireless debugging went off (MIUI / HyperOS): ask once per time it happens.
+    // Wireless debugging went off (MIUI / HyperOS): ask once per time it happens (only if ADB mode is used).
     var adbAsked by rememberSaveable { mutableStateOf(false) }
     if (!core.adb.off) adbAsked = false
-    if (core.adb.off && !adbAsked && !core.link.ble) { // over Bluetooth it can't be used anyway
+    if (core.input.via != "phone" && core.adb.devOptions && core.adb.off && !adbAsked && !core.link.ble) { // over Bluetooth it can't be used anyway
         val name = them(core)
         AlertDialog(
             onDismissRequest = { adbAsked = true },
@@ -436,7 +436,8 @@ private fun OverviewPage(core: Core, v: Int) {
         // Reached anyway (adb's TCP mode, on a direct Wi-Fi link): nothing to fix.
         // Over Bluetooth: greyed out, it only works over Wi-Fi.
         val adbBle = core.link.ble
-        if (host != null && !core.adb.paired && (adbBle || core.adb.setupNeeded || !core.adb.wifiDebugging)) Row(
+        val wantsAdb = core.input.via != "phone" && (core.input.via == "adb" || core.adb.devOptions)
+        if (host != null && wantsAdb && !core.adb.paired && (adbBle || core.adb.setupNeeded || !core.adb.wifiDebugging)) Row(
             Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp).clip(RoundedCornerShape(8.dp)).background(if (adbBle) pal.line.copy(alpha = 0.35f) else pal.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -881,7 +882,7 @@ private fun CursorPage(core: Core, v: Int) {
         if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true }
     }
     else if (viaPhone && !core.input.on) Row(Modifier.padding(bottom = 14.dp)) { Primary("Allow") { core.input.openSettings() } }
-    else if (adbMissing || !viaPhone && core.adb.setupNeeded) Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    else if (!viaPhone && (adbMissing || core.adb.setupNeeded) && (core.input.via == "adb" || core.adb.devOptions)) Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (adbMissing) Primary("Turn on wireless debugging") { core.adb.turnOn() }
         if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true }
     }

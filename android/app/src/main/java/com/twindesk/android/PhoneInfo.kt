@@ -273,15 +273,17 @@ class Adb(core: Core) : Feature(core) {
     // MIUI may switch it off again just after an unlock), and if it is still off, ask (the app's
     // dialog and a notification, both open the setting). Locked: wait for the unlock. Without a
     // Wi-Fi network nobody can switch it on: nothing to ask (the computer says so).
+    // If Accessibility mode is chosen or Developer options are off, don't nag or force ADB.
     fun check(tries: Int = 3) {
         main.removeCallbacksAndMessages(null)
         trying = false
+        if (core.input.via == "phone" || !devOptions) return settle(false)
         if (!core.link.connected || wifiDebugging || !onWifiNetwork) return settle(false)
         if (!unlocked) return
         trying = enable(true)
         main.postDelayed({
             trying = false
-            if (!core.link.connected || wifiDebugging) settle(false)
+            if (core.input.via == "phone" || !devOptions || !core.link.connected || wifiDebugging) settle(false)
             else if (canEnable && tries > 1) check(tries - 1)
             else settle(true)
         }, 2000)
@@ -290,7 +292,7 @@ class Adb(core: Core) : Feature(core) {
     private fun settle(isOff: Boolean) {
         if (isOff == off) return
         off = isOff
-        if (isOff) Notify.adbOff(core.ctx, core.host?.name ?: "your computer") else Notify.cancelAdbOff(core.ctx)
+        if (isOff && core.input.via != "phone" && devOptions) Notify.adbOff(core.ctx, core.host?.name ?: "your computer") else Notify.cancelAdbOff(core.ctx)
         core.changed()
     }
 

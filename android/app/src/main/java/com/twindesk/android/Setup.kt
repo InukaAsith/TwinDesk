@@ -56,7 +56,7 @@ object SetupCheck {
         if (core.notifs.supported) list += Item("listener", "Notification access", "This device’s notifications on your computer", Ico.bell, c(0xFFFFB340, 0xFFFF9500), true, core.notifs.hasAccess)
         list += Item("battery", "Run in the background", "So your computer can reach this device any time", Ico.general, c(0xFFAEAEB2, 0xFF636366), true, pm.isIgnoringBatteryOptimizations(ctx.packageName))
         list += Item("overlay", "Show the pointer", "Your computer’s pointer over other apps when its mouse is here", Ico.cursor, c(0xFFFFB340, 0xFFFF9500), true, core.pointer.allowed)
-        list += Item("adb", "Wireless debugging", "This screen on your computer, its mouse and keyboard here, and sound. Your Mac pairs with it once", Ico.display, c(0xFF5AC8FA, 0xFF0A84FF), false, core.adb.wifiDebugging)
+        if (core.input.via != "phone" && (core.input.via == "adb" || core.adb.devOptions)) list += Item("adb", "Wireless debugging", "This screen on your computer, its mouse and keyboard here, and sound. Your Mac pairs with it once", Ico.display, c(0xFF5AC8FA, 0xFF0A84FF), false, core.adb.wifiDebugging)
         if (Build.VERSION.SDK_INT >= 30) list += Item("wallpaper", "Wallpaper on your computer", "Optional: Android shares the wallpaper only with All files access", Ico.files, c(0xFF64D2FF, 0xFF0A84FF), false, android.os.Environment.isExternalStorageManager())
         return list
     }

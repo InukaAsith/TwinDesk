@@ -139,8 +139,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // skipNet: the network just failed to reach it (a stale address after the Wi-Fi went): Bluetooth first.
     private fun connect(h: Host, skipNet: Boolean) {
         resumeUntil = 0
-        // The Mac's screen, input and sound need wireless debugging: switch it on as we connect.
-        if (adb.canEnable && !adb.wifiDebugging) adb.enable(true)
+        // The Mac's screen, input and sound need wireless debugging: switch it on as we connect (if Accessibility mode isn't chosen).
+        if (input.via != "phone" && adb.canEnable && !adb.wifiDebugging) adb.enable(true)
         val seen = if (skipNet) null else discovery.found[h.id]
         if (seen != null && (seen.address != h.address || seen.port != h.port)) {
             h.address = seen.address
