@@ -12,7 +12,7 @@ const ACTIONS = [
   'connectAddress', 'pairWith', 'selectPeer', 'forgetPeer', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost',
   'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup', 'connectPhone', 'disconnectPhone', 'setPhone',
   'phonePair', 'phoneScreen', 'phoneOpenApp', 'phoneCloseView', 'phoneRetry', 'phoneInstallFull', 'phoneMount',
-  'phoneUnmount', 'setMount', 'phoneAppMenu', 'setUpdates', 'checkUpdates', 'openUpdate', 'installUpdate',
+  'phoneUnmount', 'setMount', 'phoneAppMenu', 'setUpdates', 'checkUpdates', 'openUpdate',
   'openLink', 'setLayoutCell', 'removeFromLayout', 'disconnect', 'connectAgain', 'setNet', 'netJoinHotspot',
   'netCancel', 'netWifi', 'hub',
 ];

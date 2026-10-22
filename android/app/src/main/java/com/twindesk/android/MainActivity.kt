@@ -1310,23 +1310,19 @@ private fun AboutPage(core: Core, v: Int) {
         MacRow(
             "TwinDesk",
             when {
-                u.state == "downloading" -> "Downloading… ${(u.progress * 100).toInt()}%"
                 u.checking -> "Checking…"
-                u.error.isNotEmpty() -> "Couldn’t update: ${u.error}"
-                u.available -> "${u.latest}${if (u.prerelease) " (beta)" else ""} is available. You have ${u.current}. " +
-                    (u.download?.let { "Updates in place; your settings and permissions stay (Android asks you to confirm)" } ?: "Opens the release page")
+                u.error.isNotEmpty() -> "Couldn’t check: ${u.error}"
+                u.available -> "${u.latest} is available. You have ${u.current}. " + (u.download?.let { "Download ${it.name}" } ?: "Opens the release page")
                 u.noReleases -> "Version ${u.current}. No releases published yet"
                 u.checkedAt > 0 -> "Up to date · checked " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(u.checkedAt))
                 else -> "Version ${u.current}"
             },
             first = true,
         ) {
-            if (u.available && u.state != "downloading") Primary(if (u.download != null) "Update now" else "Download") { u.install() }
-            if (!u.checking && u.state != "downloading") Secondary("Check now") { u.checkNow() }
+            if (u.available) Primary("Download") { u.open() }
+            if (!u.checking) Secondary("Check now") { u.checkNow() }
         }
         SwitchRow("Check automatically", "Looks for new releases on GitHub every few hours", u.auto) { u.auto = it }
-        SwitchRow("Beta releases", "Pre-releases from the same project, to try changes early", u.channel == "beta") { u.setBeta(it) }
-        MacRow("Update source", "github.com/${u.repo} · ${u.channel} channel")
     }
     MacCard("Made by") {
         MacRow("Inuka Asith", "inukaasith.vercel.app", first = true) { Secondary("Portfolio") { open("https://inukaasith.vercel.app") } }

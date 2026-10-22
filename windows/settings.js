@@ -74,7 +74,7 @@ function normalize(s) {
     keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN },
     app: { hud: bool(appS.hud, true) }, // popup when switching computers
     // New releases on GitHub (shared/updates.js); notified = the last version announced
-    updates: { auto: bool(up.auto, true), channel: up.channel === 'beta' || up.channel === 'stable' ? up.channel : '', install: up.install === 'auto' ? 'auto' : 'ask', notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '' },
+    updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '' },
     clipboard: {
       enabled: bool(c.enabled, true),
       send: bool(c.send, true),

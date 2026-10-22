@@ -52,10 +52,8 @@ async function main() {
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
   for (const name of fs.readdirSync(path.join(ROOT, 'shared'))) {
-    if (name.endsWith('.js') || /\.(css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
+    if (/\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
   }
-  // Which repository this build came from: the updater follows that project's releases (shared/updates.js).
-  fs.writeFileSync(path.join(STAGE, 'shared', 'update-source.json'), JSON.stringify({ repo: process.env.GITHUB_REPOSITORY || '' }) + '\n');
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper'));
   copy(path.join(ROOT, 'linux-helper', 'bin', 'twindesk-wifiap'), path.join(STAGE, 'linux-helper', 'bin', 'twindesk-wifiap'));
   // A phone: its screen, apps and input go through adb and scrcpy-server (phone-bridge.js).
