@@ -46,10 +46,18 @@ class Peer extends EventEmitter {
     });
   }
 
+  get computer() {
+    return this.server.computer || this.link.ctx || null;
+  }
+
+  get phone() {
+    return this.server.phone || null;
+  }
+
   // The authenticated session: {deviceId, name, os, role ('guest' = they connected to us,
   // 'host' = we connected to them), address, rttMs, lastRx, ws}.
   get current() {
-    return this.server.current || this.link.ctx || null;
+    return this.computer || this.phone || null;
   }
 
   // Disconnect, whichever side opened the session: a device connected to us doesn't come back by
@@ -91,12 +99,21 @@ class Peer extends EventEmitter {
   }
 
   sendToClient(msg) {
-    this.send(this.current, msg);
+    if (!msg) return;
+    if (P.isPhoneType(msg.t)) {
+      if (this.phone) this.send(this.phone, msg);
+    } else if (P.isComputerType(msg.t)) {
+      if (this.computer) this.send(this.computer, msg);
+    } else {
+      if (this.computer) this.send(this.computer, msg);
+      if (this.phone) this.send(this.phone, msg);
+    }
   }
 
   // A message as if the peer had sent it (the phone bridge answers for the phone's input).
   inject(msg) {
-    const c = this.current;
+    const isPhone = P.isPhoneType(msg && msg.t);
+    const c = isPhone ? (this.phone || this.current) : (this.computer || this.current);
     if (c) this._deliver(msg, c);
   }
 

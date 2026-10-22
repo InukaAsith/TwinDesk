@@ -29,14 +29,14 @@ class Phone extends EventEmitter {
     this.wired = null; // wired.js: phones on a USB cable
 
     server.on('client', (ctx) => {
-      if (!isPhone(ctx)) return this._reset();
+      if (!isPhone(ctx)) return;
       this._doneConnecting('');
       this.server.sendToClient({ t: T.PHONE_APPS_LIST });
       this.emit('change');
     });
-    server.on('closed', () => {
-      if (isPhone(server.current)) return;
-      this._reset();
+    server.on('closed', (ctx) => {
+      if (ctx && isPhone(ctx)) this._reset();
+      else if (!this.connected) this._reset();
     });
     const on = (t, fn) => server.on(`t:${t}`, (m, ctx) => isPhone(ctx) && fn(m, ctx));
     on(T.PHONE_INFO, (m) => {
@@ -73,14 +73,14 @@ class Phone extends EventEmitter {
   }
 
   get connected() {
-    return isPhone(this.server.current);
+    return isPhone(this.server.phone || this.server.current);
   }
 
   // Paired phones that discovery sees right now, plus the connected one.
   nearby() {
     const paired = new Map(this.pairing.list().filter((p) => p.os === P.OS.ANDROID).map((p) => [p.id, p]));
     const out = [];
-    const c = this.server.current;
+    const c = this.server.phone || (isPhone(this.server.current) ? this.server.current : null);
     if (isPhone(c)) out.push({ id: c.deviceId, name: c.name, connected: true, usb: !!c.ice });
     // On the cable (it connected through it before): no Wi-Fi needed to show it.
     for (const id of this.wired ? this.wired.byDevice.keys() : []) {
@@ -147,7 +147,7 @@ class Phone extends EventEmitter {
   }
 
   get view() {
-    const c = this.server.current;
+    const c = this.server.phone || (isPhone(this.server.current) ? this.server.current : null);
     return {
       nearby: this.nearby(),
       connected: isPhone(c) ? { id: c.deviceId, name: c.name, rttMs: c.rttMs, usb: !!c.ice } : null,

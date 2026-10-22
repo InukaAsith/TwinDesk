@@ -27,7 +27,8 @@ const LISTEN_PORT = Number(process.env.MACSHARE_DEV_PORT) || P.PORT;
 class Server extends EventEmitter {
   constructor({ pfx, passphrase }) {
     super();
-    this.current = null; // ctx of the authenticated client
+    this.computer = null; // ctx of the authenticated computer
+    this.phone = null; // ctx of the authenticated phone
     this.phoneGrace = null; // {id, until}: a phone's session just dropped, it may come back (P.PHONE_GRACE_MS)
     this.sockets = new Set();
     this.blePorts = new Map(); // local ports of our own connections that carry a Bluetooth pipe (blepipe.js) -> last bytes
@@ -40,6 +41,10 @@ class Server extends EventEmitter {
     this.port = LISTEN_PORT;
     this.https.listen(LISTEN_PORT, '0.0.0.0', () => this.emit('listening'));
     this.tick = setInterval(() => this._liveness(), P.PING_MS);
+  }
+
+  get current() {
+    return this.computer || this.phone || null;
   }
 
   _onConnection(ws, req) {
@@ -82,9 +87,10 @@ class Server extends EventEmitter {
       return this.emit('transport', ctx);
     }
     this.sockets.delete(ctx);
-    if (this.current === ctx) {
-      this.current = null;
-      if (ctx.os === P.OS.ANDROID && !ctx.released) this._phoneGrace(ctx.deviceId);
+    if (this.computer === ctx) this.computer = null;
+    if (this.phone === ctx) {
+      this.phone = null;
+      if (!ctx.released) this._phoneGrace(ctx.deviceId);
     }
     this.emit('closed', ctx);
   }
@@ -92,7 +98,8 @@ class Server extends EventEmitter {
   // hello {resume}: the session's guest reached us another way (the network, once both are on one).
   // The new socket becomes the session's, the old one stays as the fallback.
   _resume(tmp, msg) {
-    const c = this.current;
+    const isPhone = msg.os === P.OS.ANDROID;
+    const c = isPhone ? this.phone : (this.computer || this.current);
     if (!c || !c.resumeKey || msg.resume !== c.resumeKey || msg.id !== c.deviceId) {
       return this.fail(tmp, P.E.BAD_MESSAGE, 'Nothing to resume');
     }
@@ -178,9 +185,19 @@ class Server extends EventEmitter {
     ctx.ws.send(JSON.stringify(msg));
   }
 
-  // Send to the authenticated client, if any.
+  // Send to the authenticated client(s).
   sendToClient(msg) {
-    this.send(this.current, msg);
+    if (!msg) return;
+    const isPhone = P.isPhoneType(msg.t);
+    const isComp = P.isComputerType(msg.t);
+    if (isPhone) {
+      if (this.phone) this.send(this.phone, msg);
+    } else if (isComp) {
+      if (this.computer) this.send(this.computer, msg);
+    } else {
+      if (this.computer) this.send(this.computer, msg);
+      if (this.phone) this.send(this.phone, msg);
+    }
   }
 
   // Send an error and close the socket.
@@ -195,16 +212,15 @@ class Server extends EventEmitter {
     ctx.ws.close();
   }
 
-  // Mark ctx authenticated; a newer client replaces the older one.
+  // Mark ctx authenticated; a newer client replaces the older one in its respective slot (computer or phone).
   authenticate(ctx, { deviceId, name, os }, welcome) {
-    if (this.current && this.current !== ctx) {
-      const old = this.current;
-      this.current = null;
-      old.released = true; // taken over: a phone gets no grace
-      // A computer a phone took over from waits and comes back when the phone lets go (busy);
-      // one a computer took over from stays away until someone connects it again (replaced).
-      if (os === P.OS.ANDROID && old.os !== P.OS.ANDROID) this.fail(old, P.E.BUSY, `In use by ${name}`);
-      else this.fail(old, P.E.REPLACED, old.deviceId === deviceId ? 'Another connection from this device replaced this one' : `${name} took over`);
+    const isPhone = os === P.OS.ANDROID;
+    const slot = isPhone ? 'phone' : 'computer';
+    const old = this[slot];
+    if (old && old !== ctx) {
+      this[slot] = null;
+      old.released = true;
+      this.fail(old, P.E.REPLACED, old.deviceId === deviceId ? 'Another connection from this device replaced this one' : `${name} took over`);
     }
     ctx.authed = true;
     ctx.deviceId = deviceId;
@@ -212,15 +228,16 @@ class Server extends EventEmitter {
     ctx.os = os;
     ctx.ice = this.iceFor ? this.iceFor(ctx) : null; // a phone through adb reverse: the relay's RTCConfiguration
     ctx.resumeKey = P.randomHex(16);
-    this.current = ctx;
+    this[slot] = ctx;
     this.send(ctx, { ...welcome, resume: ctx.resumeKey });
     this.emit('client', ctx);
+    if (isPhone) this.emit('phoneClient', ctx);
+    else this.emit('computerClient', ctx);
   }
 
-  // A phone holds the session (or just dropped it and may resume): computers are refused.
+  // Multi-device: computers are never refused because of an active phone.
   phoneHolds() {
-    if (this.current && this.current.os === P.OS.ANDROID) return true;
-    return !!this.phoneGrace && Date.now() < this.phoneGrace.until;
+    return false;
   }
 
   _phoneGrace(id) {
@@ -237,15 +254,18 @@ class Server extends EventEmitter {
     this.emit('phoneFree');
   }
 
-  // Disconnect on purpose (a phone or a computer): it doesn't resume or reconnect by itself, and
-  // a computer may connect at once.
-  release() {
-    const c = this.current;
-    if (c) {
-      c.released = true;
-      this.fail(c, P.E.RELEASED, 'The PC disconnected');
-      setTimeout(() => c.ws.terminate(), 1000); // an older app never answers the close
+  // Disconnect on purpose (a phone, a computer, or both): it doesn't resume or reconnect by itself.
+  release(target) {
+    const list = target === 'phone' ? [this.phone] : target === 'computer' ? [this.computer] : [this.computer, this.phone];
+    for (const c of list) {
+      if (c) {
+        c.released = true;
+        this.fail(c, P.E.RELEASED, 'The PC disconnected');
+        setTimeout(() => c.ws.terminate(), 1000); // an older app never answers the close
+      }
     }
+    if (list.includes(this.computer)) this.computer = null;
+    if (list.includes(this.phone)) this.phone = null;
     this.endPhoneGrace();
   }
 

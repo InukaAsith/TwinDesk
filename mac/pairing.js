@@ -150,21 +150,24 @@ class Pairing extends EventEmitter {
     if (!e || !P.tokenMatches(msg.token, e.tokenHash)) {
       return this.server.fail(ctx, P.E.BAD_TOKEN, 'Not paired with this Mac');
     }
-    // A phone only says hello when someone asked for it (or to resume): it takes the session.
-    // A computer waits while a phone holds it.
+    // Multi-device: phone and computer sessions run independently without kicking each other.
     const phone = (Object.values(P.OS).includes(msg.os) ? msg.os : e.os) === P.OS.ANDROID;
-    // Take over (the person asked for it there, or here: Connect on it in this computer's list):
-    // whoever holds the session is let go. Else a computer waits while another device holds it.
     const takeover = msg.takeover === true || (this.expected && this.expected.id === e.id && Date.now() < this.expected.until);
-    const held = this.server.current && this.server.current.authed && this.server.current.deviceId !== e.id ? this.server.current : null;
-    if (phone || takeover) {
+    const held = phone
+      ? (this.server.phone && this.server.phone.authed && this.server.phone.deviceId !== e.id ? this.server.phone : null)
+      : (this.server.computer && this.server.computer.authed && this.server.computer.deviceId !== e.id ? this.server.computer : null);
+
+    if (takeover) {
       this.expected = null;
-      if (this.busy()) this.yieldTo();
+      if (!phone && this.busy()) this.yieldTo();
+    } else if (phone) {
+      this.expected = null;
       if (this.server.phoneGrace && this.server.phoneGrace.id !== e.id) this.server.endPhoneGrace();
-    } else if (this.server.phoneHolds()) {
-      return this.server.fail(ctx, P.E.BUSY, `In use by ${this._phoneName()}`);
-    } else if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
-    else if (held) return this.server.fail(ctx, P.E.BUSY, `In use by ${held.name || 'another device'}`);
+      if (held) return this.server.fail(ctx, P.E.BUSY, `In use by ${held.name || 'another phone'}`);
+    } else {
+      if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
+      if (held) return this.server.fail(ctx, P.E.BUSY, `In use by ${held.name || 'another device'}`);
+    }
     if (typeof msg.name === 'string' && msg.name && msg.name !== e.name) e.name = msg.name.slice(0, 64);
     if (Object.values(P.OS).includes(msg.os)) e.os = msg.os;
     e.lastSeen = Date.now();

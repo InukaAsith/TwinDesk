@@ -120,10 +120,10 @@ class PhoneBridge extends EventEmitter {
         this._tellPhone();
         return this._kick();
       }
-      this._stopAll('');
     });
-    server.on('closed', () => {
-      if (!isPhone(server.current)) this._stopAll('');
+    server.on('closed', (ctx) => {
+      if (ctx && isPhone(ctx)) this._stopAll('');
+      else if (!server.phone && !isPhone(server.current)) this._stopAll('');
     });
     // The phone's sound without wireless debugging (Sound.kt there): asked for while adb can't carry
     // it; what comes plays in a hidden window (phoneview.js netSound).
@@ -135,8 +135,8 @@ class PhoneBridge extends EventEmitter {
       this.emit('change');
     });
     server.on(`t:${T.PHONE_SOUND}`, (m, ctx) => isPhone(ctx) && this.netSound.asked && this.views && this.views.netAudio(m));
-    server.on('client', () => { soundReset(); this._sound(); });
-    server.on('closed', () => { if (!isPhone(server.current)) soundReset(); this._sound(); });
+    server.on('client', (ctx) => { if (!ctx || isPhone(ctx)) { soundReset(); this._sound(); } });
+    server.on('closed', (ctx) => { if (!ctx || isPhone(ctx) || (!server.phone && !isPhone(server.current))) soundReset(); this._sound(); });
     server.on('transport', () => this._sound());
     setInterval(() => this._poll(), POLL_MS);
   }

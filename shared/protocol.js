@@ -15,10 +15,8 @@
     PROBE_REPLY_MS: 1500, // a unicast probe without a reply by then = nobody there
     DEVICE_STALE_MS: 10000, // found device dropped after this much silence
     OS: { MAC: 'mac', WIN: 'win', LINUX: 'linux', ANDROID: 'android' },
-    // A phone is a full peer in the one session: it connects only when asked (the Mac's phone
-    // tile, its own Connect button, an invite) or to resume a session that just dropped, and it
-    // replaces the computer. Computers are refused (busy) while it holds the session and for
-    // PHONE_GRACE_MS after it drops, so a Wi-Fi blip doesn't hand the session back.
+    // Multi-device coexistence: a computer session (PC/Mac KVM) and a phone session (Android Hub)
+    // can run concurrently. A Wi-Fi blip on the phone preserves its slot for PHONE_GRACE_MS.
     PHONE_GRACE_MS: 30000,
     PING_MS: 1000,
     TIMEOUT_MS: 4000, // close the session after this much silence
@@ -348,6 +346,47 @@
         MetaRight: 'ControlRight',
       };
       return swap[code] || code;
+    },
+
+    isPhoneType(t) {
+      if (!t || typeof t !== 'string') return false;
+      return (
+        t.startsWith('phone.') ||
+        t.startsWith('hub.') ||
+        t.startsWith('call.') ||
+        t.startsWith('sms.') ||
+        t.startsWith('media.') ||
+        t.startsWith('fs.') ||
+        t.startsWith('share.') ||
+        t.startsWith('adb.') ||
+        t === 'contacts'
+      );
+    },
+
+    isComputerType(t) {
+      if (!t || typeof t !== 'string') return false;
+      return (
+        t.startsWith('kvm.') ||
+        t.startsWith('k.') ||
+        t.startsWith('in.') ||
+        t.startsWith('stream.') ||
+        t.startsWith('rtc.') ||
+        t.startsWith('rtc2.') ||
+        t.startsWith('audio.') ||
+        t.startsWith('screen.') ||
+        t.startsWith('ssh.') ||
+        t.startsWith('drag.') ||
+        t.startsWith('fclip.') ||
+        t.startsWith('app.') ||
+        t.startsWith('papp.') ||
+        t === 'files.done' ||
+        t === 'pair.sync'
+      );
+    },
+
+    isBroadcastType(t) {
+      if (!t || typeof t !== 'string') return false;
+      return t === 'clip' || t.startsWith('clip.') || t.startsWith('file.') || t === 'notif' || t.startsWith('notif.');
     },
   };
 
