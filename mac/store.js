@@ -98,6 +98,7 @@ const DEFAULT_SETTINGS = {
   receive: { on: true, fullScreen: false, input: true, framegen: false },
   wake: { peers: {} }, // {deviceId: {name, macs, address, at}} from wol.info, for Wake
   pairSync: {}, // {deviceId: {feature: {out, in}}} two-way switches per pair (pairsync.js)
+  mesh: { autoJoin: true }, // join every device of the mesh without pairing each one (mac/autojoin.js)
   smb: { connectPc: true, sharing: false, folder: '', secret: '' }, // secret = safeStorage
 };
 
@@ -105,7 +106,7 @@ function loadSettings() {
   const s = read('settings.json', {});
   if (s.sharing) s.sharing.on = false; // screen sharing never starts by itself
   const out = { ...DEFAULT_SETTINGS, ...s };
-  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
+  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub', 'mesh']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
   if (s.ui && s.ui.setupSkipped && s.ui.setupDone === undefined) out.ui.setupDone = true;
   if ((s.rev || 0) < 7) { // Clipboard instant by default
     out.clipboard.mode = 'instant';

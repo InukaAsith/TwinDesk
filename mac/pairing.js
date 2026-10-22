@@ -49,6 +49,22 @@ class Pairing extends EventEmitter {
     this.emit('change');
   }
 
+  // A pairing without the 6-digit flow, for a device the mesh introduces (shared/intro.js): the same
+  // entry as a finished pairing. Returns the credential for the guest, or null (bad id, list full).
+  grantFor({ id, name, os } = {}) {
+    if (typeof id !== 'string' || !id || id.length > 128 || id === this.id.macId) return null;
+    if (!this.paired.some((x) => x.id === id) && this.paired.length >= P.MAX_DEVICES) return null;
+    const token = P.randomHex(32);
+    const now = Date.now();
+    const entry = { id, name: String(name || 'Device').slice(0, 64), os: Object.values(P.OS).includes(os) ? os : P.OS.WIN, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now };
+    this.paired = this.paired.filter((x) => x.id !== id);
+    this.paired.push(entry);
+    this._save();
+    console.log(`[pairing] introduced ${entry.name} (${id}) by the mesh`);
+    this.emit('change');
+    return { token, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC, fp: this.id.fp };
+  }
+
   // Local Allow / Deny.
   respond(allow) {
     const p = this.pending;

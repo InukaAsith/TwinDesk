@@ -147,13 +147,13 @@ UI.tab({
         devicesList.replaceChildren(...(devs.length
           ? devs.map((dv) => {
             const direct = Array.isArray(dv.direct) ? dv.direct.length : 0;
-            const state = dv.connected ? (dv.rtt != null ? `${dv.rtt} ms` : 'Connected')
+            const state = dv.state === 'via' ? `via ${(dv.via || []).join(', ') || 'another device'}` : dv.connected ? (dv.rtt != null ? `${dv.rtt} ms` : 'Connected')
               : dv.state === 'waiting' ? 'Waiting for it to connect' : dv.state === 'connecting' || dv.state === 'reconnecting' ? 'Connecting…' : 'Not connected';
             const hint = [state, dv.connected && direct ? `${direct} direct link${direct === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
             const r = UI.row(dv.name || 'Device', hint, [
               dv.selected ? el('span', { class: 'pill good', text: 'In use' }) : null,
               dv.connected && !dv.selected ? UI.button('Use', () => api.selectPeer(dv.id), 'small') : null,
-              UI.button('Forget', () => api.forgetPeer(dv.id), 'small'),
+              dv.state === 'via' ? el('span', { class: 'pill muted', text: `via ${(dv.via || [])[0] || 'device'}` }) : UI.button('Forget', () => api.forgetPeer(dv.id), 'small'),
             ]);
             r.querySelector('.text').prepend(UI.osIcon(dv.os));
             r.classList.add('with-ico');

@@ -157,6 +157,7 @@ class Hub extends EventEmitter {
     this.bus = this._makeBus();
     this._busHandlers = new Map(); // type -> [fn(msg, fromId)]
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
+    this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];
     this.facade = this.route(() => this.selectedId);
     this._addFacadeApi(this.facade);
@@ -244,6 +245,7 @@ class Hub extends EventEmitter {
 
   // Forget a device: its guest link (we dialled it) and its host entry (it dialled us), both.
   forgetPeer(id) {
+    this.forgotten.add(id);
     if (this.links.get(id)) this.links.forget(id);
     if (this.pairing && this.pairing.list().some((x) => x.id === id)) this.pairing.forget(id);
   }
@@ -276,6 +278,9 @@ class Hub extends EventEmitter {
     for (const s of this.sessions.list()) if (s.connected) add(s.id);
 
     const out = [];
+    const indirect = new Map();
+    if (this.mesh) for (const k of this.mesh.known()) if (!k.direct && !this.forgotten.has(k.id)) indirect.set(k.id, k);
+    const viaNames = (k) => k.via.map((v) => (this.mesh.get(v) && this.mesh.get(v).name) || v);
     for (const id of ids) {
       const s = this.sessions.get(id);
       const up = !!s && s.connected;
@@ -294,7 +299,20 @@ class Hub extends EventEmitter {
         selected: id === this.selectedId,
         connected: up,
         direct: up && this.mesh ? this.mesh.roster.direct(id) : null,
+        ...(!up && !link && indirect.has(id) ? { state: 'via', via: viaNames(indirect.get(id)) } : {}),
       });
+    }
+    // Everyone else of the mesh: devices only a connected device reaches (their roster `members`).
+    if (this.mesh) {
+      const shown = new Set(out.map((x) => x.id));
+      for (const k of this.mesh.known()) {
+        if (k.direct || k.id === this.device.id || shown.has(k.id) || this.forgotten.has(k.id)) continue;
+        const via = viaNames(k);
+        out.push({
+          id: k.id, name: k.name, os: k.os || P.OS.WIN, state: 'via', rtt: null, address: '', role: 'guest',
+          selected: false, connected: false, direct: null, via,
+        });
+      }
     }
     return out;
   }
@@ -366,6 +384,7 @@ class Hub extends EventEmitter {
   }
 
   _up(s) {
+    this.forgotten.delete(s.id);
     if (this.mesh) this.mesh.addPeer({ id: s.id, name: s.displayName(), os: s.peerOs, send: (m) => s.send(m), mesh: s.meshCapable });
     this._rosterAll();
     this._peerEvent('welcome', s.id, this._welcomeInfo(s));

@@ -66,6 +66,7 @@ const identity = require('./identity');
 const { Discovery, interfaces } = require('./discovery');
 const { LinkManager } = require('./links');
 const { Hub } = require('./hub');
+const { AutoJoin } = require('./autojoin');
 const { Peer } = require('./peer');
 const { Server } = require('./server');
 const { Pairing } = require('./pairing');
@@ -96,7 +97,7 @@ let quitting = false;
 let startHidden = process.argv.includes('--hidden');
 // server: this Mac's server (many clients); links: the hosts we dial; hub: the mesh (hub.js);
 // peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
-let settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
+let autoJoin, settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 
 const state = {
@@ -231,6 +232,7 @@ function publishState() {
     state.keys = settings.keys;
     state.clipboard = clip ? { ...settings.clipboard, ...clip.view } : null;
     state.ui = settings.ui;
+    state.mesh = settings.mesh;
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
@@ -504,6 +506,12 @@ app.whenReady().then(() => {
   links.on('request', showWindow);
   hub = new Hub({ device: { id: id.macId, name: id.macName }, links, mesh, server, pairing });
   hub.on('change', pushState);
+  // Joining everyone (autojoin.js, shared/intro.js): the devices a connected device knows are linked by themselves.
+  autoJoin = new AutoJoin({
+    hub, mesh, pairing, links, identity: id, server,
+    enabled: () => settings.mesh.autoJoin !== false,
+    onJoin: () => pushState(),
+  });
   // The shared layout (docs/mesh.md, "Shared layout"): where every device sits. The cursor's edges come from it.
   // A Mac from before the layout: its one PC on pcSide becomes the layout once (legacyEdges).
   layoutSync = new LayoutSync({
@@ -515,7 +523,7 @@ app.whenReady().then(() => {
     legacyEdges: () => {
       const k = settings.kvm || {};
       if (k.edges && Object.values(k.edges).some(Boolean)) return k.edges;
-      const pcs = hub.peers().filter((p) => p.os !== P.OS.ANDROID);
+      const pcs = hub.peers().filter((p) => p.state !== 'via' && p.os !== P.OS.ANDROID);
       return pcs.length === 1 && k.pcSide ? { [k.pcSide]: pcs[0].id } : null;
     },
     onChange: () => {
@@ -608,7 +616,7 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, hub, layoutSync, ...svc, phoneHub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {

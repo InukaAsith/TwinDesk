@@ -38,6 +38,7 @@ const SCHEMA = {
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight') },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool },
+  mesh: { autoJoin: bool },
   updates: { auto: bool, channel: oneOf(['', 'stable', 'beta'], ''), install: oneOf(['ask', 'auto'], 'ask') },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1) },
   terminal: { allowPc: bool, connectPc: bool },
@@ -103,16 +104,18 @@ function setupIpc(ctx) {
       discovery.invite(dev.address);
       return report(`Connecting to ${dev.name}…`);
     }
-    if (dev && link.hosts.some((h) => h.id === dev.id)) {
-      // Switching from a device connected to us: it goes first (this Mac stands by while it hosts).
-      if (ctx.server.server.current) {
-        ctx.server.server.release();
-        setTimeout(() => link.connect(true), 800);
-      } else link.connect(true);
+    if (dev && link.get(dev.id)) {
+      // A host we dial: if it is also connected to us (it dials us), that socket goes first, then we dial.
+      const l = link.get(dev.id);
+      const inbound = ctx.server.server.clients.get(dev.id);
+      if (inbound) {
+        ctx.server.server.release(inbound);
+        setTimeout(() => l.connect(true), 800);
+      } else l.connect(true);
       return report(`Connecting to ${dev.name}…`);
     }
     report('');
-    link.startPairing({ address: dev ? dev.address : address, port: dev ? dev.port : P.PORT, name: dev ? dev.name : address });
+    link.startPairing({ address: dev ? dev.address : address, port: dev ? dev.port : P.PORT, macName: dev ? dev.name : address });
   }
 
   const actions = {
@@ -472,6 +475,11 @@ function setupIpc(ctx) {
       settings.sharing.audio = !!on;
       save();
       ctx.stream.restart('screen sound');
+    },
+    // "Join every device automatically" (autojoin.js): off = no introductions asked, granted or accepted.
+    setMesh(partial) {
+      setGroup('mesh', partial);
+      if (settings.mesh.autoJoin !== false && ctx.autoJoin) ctx.autoJoin.schedule();
     },
     setApp(partial) {
       setGroup('app', partial);
