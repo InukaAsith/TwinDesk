@@ -49,6 +49,7 @@ function normalize(s) {
   const mt = s.mount || {};
   const hub = s.hub || {};
   const nt = s.net || {};
+  const ms = s.mesh || {};
   return {
     rev: 8, // settings revision (upgrades in normalize, like the Mac's store.js)
     kvm: {
@@ -146,6 +147,8 @@ function normalize(s) {
     // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);
     // bleWifiOff: none at all while the session is on the same Wi-Fi (blepolicy.js wifiQuiet)
     net: { ble: bool(nt.ble, true), blePc: bool(nt.blePc, false), bleWifiOff: bool(nt.bleWifiOff, true), hotspots: hotspots(nt.hotspots) },
+    // The mesh (docs/mesh.md "Joining everyone"): introduce devices to each other and accept introductions.
+    mesh: { autoJoin: bool(ms.autoJoin, true) },
     mount: { on: bool(mt.on, false) }, // the phone as a drive (phonedrive.js), only when Mount is clicked
     // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
     // callAudio: the calls' sound here over Bluetooth; btDevices: which paired Bluetooth device each

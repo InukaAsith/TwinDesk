@@ -140,6 +140,22 @@ class Pairing extends EventEmitter {
     this._clear();
   }
 
+  // Pairing without the 6-digit flow, for a device an already trusted device vouches for
+  // (mesh.intro.ask, autojoin.js). Stores the entry like _maybeFinish and returns the credential
+  // the device needs to dial this PC: {id, name, os, token}. The caller checks who may ask.
+  grantFor({ id, name, os }) {
+    if (typeof id !== 'string' || !id || id === this.id.id) return null;
+    const token = P.randomHex(32);
+    const now = Date.now();
+    const entry = { id, name: String(name || 'Device').slice(0, 64), os: Object.values(P.OS).includes(os) ? os : P.OS.WIN, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now };
+    this.paired = this.paired.filter((x) => x.id !== id);
+    this.paired.push(entry);
+    this._save();
+    console.log(`[pairing] granted ${entry.name} (${id}) through an introduction`);
+    this.emit('change');
+    return { id, name: entry.name, os: entry.os, token };
+  }
+
   _hello(ctx, msg) {
     if (msg.v !== P.PROTOCOL_VERSION) {
       return this.server.fail(ctx, P.E.VERSION_MISMATCH, `This PC speaks protocol v${P.PROTOCOL_VERSION}`);

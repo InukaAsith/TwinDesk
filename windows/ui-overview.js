@@ -314,19 +314,21 @@ UI.tab({
         devicesKey = dk;
         const sorted = peers.slice().sort((a, b) => (b.selected - a.selected) || (b.connected - a.connected));
         const drows = sorted.map((d) => {
-          const hint = d.connected
+          const hint = d.state === 'via' ? 'Via ' + (d.via || []).join(', ') + ' · not linked to this PC'
+            : d.connected
             ? (d.rtt != null ? d.rtt + ' ms' : 'Connected') + (Array.isArray(d.direct) && d.direct.length ? ' · linked to ' + d.direct.length : '')
             : d.state === 'waiting' ? 'Waiting for it to connect'
               : d.state === 'identity_changed' ? 'Looks different now. Forget it and pair again.'
                 : d.state === 'connecting' || d.state === 'reconnecting' ? 'Connecting…' : 'Not connected';
           const pill = d.selected ? el('span', { class: 'pill good', text: 'Selected' }) : d.connected ? el('span', { class: 'pill muted', text: 'Connected' }) : null;
           const use = d.connected && !d.selected ? UI.button('Use', () => api.setActivePeer(d.id), 'small') : null;
-          const forget = UI.button('Forget', () => api.forgetPeer(d.id), 'small');
+          const viaPill = d.state === 'via' ? el('span', { class: 'pill muted', text: 'via ' + (d.via || []).join(', ') }) : null;
+          const forget = d.state === 'via' ? null : UI.button('Forget', () => api.forgetPeer(d.id), 'small');
           // Cursor sharing with this device (off when the hotkey was double-tapped while it was selected, or the device said so).
           const on = d.selected ? !!(s.kvm && s.kvm.linked) : linkedMap[d.id] !== false;
           const cursor = d.connected ? UI.switch((v) => api.setLinkedFor(d.id, v), { label: 'Cursor' }) : null;
           if (cursor) cursor.set(on);
-          const r = UI.row(d.name || 'Device', hint + (d.connected && !on ? ' · Cursor sharing is off for it' : ''), [pill, cursor, use, forget]);
+          const r = UI.row(d.name || 'Device', hint + (d.connected && !on ? ' · Cursor sharing is off for it' : ''), [pill || viaPill, cursor, use, forget]);
           r.querySelector('.text').prepend(UI.osIcon(d.os));
           r.classList.add('with-ico');
           return r;

@@ -43,6 +43,7 @@ class LinkManager extends EventEmitter {
     this.started = false;
     this.closed = false;
     this.server = null;
+    this.alts = new Map(); // id -> {addrs, port, i}: the other addresses of an introduced host, tried until it answers
     this.entries = this._load();
     for (const entry of this.entries) this.links.set(entry.macId, this._newLink(entry));
   }
@@ -94,6 +95,51 @@ class LinkManager extends EventEmitter {
     if (!link) return;
     link.forget(); // store.clear() → _drop(): removes the entry, the link, emits 'remove'
     link.destroy();
+  }
+
+  // A host an already trusted device introduced us to (autojoin.js, mesh.intro.grant): the same entry
+  // a pairing writes. grant {macId, macName, os, fp, port, addrs, token}. Returns 'added', 'updated'
+  // (the host was a link that is not up: new credential) or '' (ignored).
+  addGrant(grant) {
+    if (this.closed || !grant || typeof grant.macId !== 'string' || grant.macId === this.device.id) return '';
+    const addrs = Array.isArray(grant.addrs) ? grant.addrs.filter((a) => typeof a === 'string' && a) : [];
+    if (!addrs.length) return '';
+    const p = {
+      macId: grant.macId, macName: String(grant.macName || 'Device').slice(0, 64), address: addrs[0], port: grant.port,
+      fp: P.normFingerprint(grant.fp), token: grant.token, os: Object.values(P.OS).includes(grant.os) ? grant.os : P.OS.WIN,
+    };
+    if (!valid(p)) return '';
+    const old = this.links.get(p.macId);
+    if (old) {
+      if (old.authed || this.inbound.has(p.macId)) return ''; // already linked: nothing to do
+      Object.assign(old.pairing, p);
+      old.store.save(old.pairing);
+      this.alts.set(p.macId, { addrs, port: p.port, i: 0 });
+      if (this.started) old.poke();
+      return 'updated';
+    }
+    if (this.links.size >= P.MAX_DEVICES) return '';
+    const entry = { ...p };
+    this.entries = this.entries.filter((e) => e.macId !== p.macId);
+    this.entries.push(entry);
+    this._write();
+    const link = this._newLink(entry);
+    this.links.set(p.macId, link);
+    if (addrs.length > 1) this.alts.set(p.macId, { addrs, port: p.port, i: 0 });
+    link.on('welcome', () => this.alts.delete(p.macId));
+    this.emit('add', link);
+    if (this.started) link.start();
+    return 'added';
+  }
+
+  // Discovery first; else the other addresses of an introduced host, one per attempt.
+  _resolve(id) {
+    const seen = this.resolveAddress ? this.resolveAddress(id) : null;
+    if (seen) return seen;
+    const a = this.alts.get(id);
+    if (!a) return null;
+    a.i = (a.i + 1) % a.addrs.length;
+    return { address: a.addrs[a.i], port: a.port };
   }
 
   // Dial every host. Links that must wait (tie-break, inbound link present) wait by themselves.
@@ -158,7 +204,7 @@ class LinkManager extends EventEmitter {
       ble: this.ble,
       blocked: () => this._blocked(link),
       busy: () => this._busy(link),
-      resolveAddress: (id) => (this.resolveAddress ? this.resolveAddress(id) : null),
+      resolveAddress: (id) => this._resolve(id),
       store: {
         load: () => entry,
         save: (p) => this._save(link, p),

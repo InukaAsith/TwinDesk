@@ -36,6 +36,9 @@ UI.tab({
     // Bluetooth off altogether while the session is on the same Wi-Fi (blepolicy.js wifiQuiet).
     const bleWifiSw = UI.switch((v) => api.setNet({ bleWifiOff: v }), { label: 'Turn off Bluetooth on Wi-Fi connections' });
     const bleWifiRow = UI.row('Turn off Bluetooth on Wi-Fi connections', '', [bleWifiSw]);
+    // The mesh: introduce devices to each other and accept introductions (docs/mesh.md "Joining everyone").
+    const joinSw = UI.switch((v) => api.setMesh({ autoJoin: v }), { label: 'Join every device automatically' });
+    const joinRow = UI.row('Join every device automatically', '', [joinSw]);
     // What Windows has to allow, in one place (each is also asked for where a feature needs it).
     const btPill = el('span', { class: 'pill' });
     const btRow = UI.row('Bluetooth', 'For a phone or computer that isn’t on this network', [btPill, UI.button('Open', () => api.openBluetoothSettings(), 'small')]);
@@ -49,7 +52,7 @@ UI.tab({
         UI.row('Show a popup when switching', 'When the mouse and keyboard move between computers', [hudSw]),
       ]),
       UI.card('Permissions', [fwRow, btRow, locRow]),
-      UI.card('Network and sharing', [wakeRow, sendToRow, bleRow, blePcRow, bleWifiRow]),
+      UI.card('Network and sharing', [wakeRow, sendToRow, joinRow, bleRow, blePcRow, bleWifiRow]),
       UI.card('This computer', [deviceRow, helperRow, vddRow]),
     );
 
@@ -80,6 +83,10 @@ UI.tab({
       vddInstall.disabled = !!v.busy;
       vddRow.setHint(v.message ? v.message : v.installed ? 'Adds the extra screen for Share screen › Extend'
         : 'Needed for Share screen › Extend. Asks for administrator rights once');
+      const jn = (s.mesh || {}).autoJoin !== false;
+      joinSw.set(jn);
+      joinRow.setHint(jn ? 'Pair with one device and the rest of the mesh connects to this one by itself. Devices you pair with can introduce others'
+        : 'Off: this PC neither introduces devices to each other nor accepts an introduction');
       const n = s.net || {};
       const radio = n.radio === 'off' ? 'Bluetooth is off in Windows settings'
         : n.radio === 'unsupported' ? 'This PC’s Bluetooth can’t do it (needs Bluetooth LE)' : '';

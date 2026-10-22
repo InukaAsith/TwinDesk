@@ -220,6 +220,7 @@ function setupIpc(ctx) {
   handle('setStartup', (on) => ctx.setStartup(on === true));
   // Not on the same network: Bluetooth on/off, and giving up on moving to Wi-Fi (netlink.js).
   handle('setNet', (partial) => change('net', partial, () => ctx.applyNet()));
+  handle('setMesh', (partial) => change('mesh', partial, () => ctx.applyMesh && ctx.applyMesh()));
   handle('netCancel', () => ctx.net && ctx.net.cancel());
   handle('netJoinHotspot', (arg) => ctx.joinHotspot(arg));
   handle('netLocation', () => shell.openExternal('ms-settings:privacy-location')); // netsh's Wi-Fi commands need it (wifi.js)

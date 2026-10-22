@@ -143,7 +143,8 @@ class Hub extends EventEmitter {
   // Every paired device, connected or not. state: 'connected' | the guest link's state (connecting,
   // reconnecting, ...) | 'waiting' (a device that dials us and is not connected now).
   // direct: its direct links from its roster (null when connected but not known, or not connected).
-  peers() {
+  // indirect: also the devices only a peer is linked to (state 'via'), for what the UI lists.
+  peers({ indirect = false } = {}) {
     const ids = [];
     const add = (id) => {
       if (id && id !== this.device.id && !ids.includes(id)) ids.push(id);
@@ -172,6 +173,15 @@ class Hub extends EventEmitter {
         selected: id === this.selectedId,
         connected: up,
         direct: up ? this.mesh.roster.direct(id) : null,
+      });
+    }
+    // Devices only a peer is linked to (Mesh.known(), from the peers' rosters): listed too, not connected here.
+    if (indirect) for (const k of this.mesh.known()) {
+      if (k.direct || k.id === this.device.id || ids.includes(k.id)) continue;
+      const via = k.via.map((v) => (this.mesh.get(v) || {}).name || v);
+      out.push({
+        id: k.id, name: k.name, os: k.os || P.OS.WIN, state: 'via', rtt: null, address: '', role: '',
+        selected: false, connected: false, direct: null, via,
       });
     }
     return out;
@@ -206,7 +216,7 @@ class Hub extends EventEmitter {
       guests: this.pairing ? this.pairing.list() : [],
       session: s ? { role: s.role, id: s.id, name: s.displayName(), os: s.peerOs } : null,
       host: { ...this._host },
-      peers: this.peers(),
+      peers: this.peers({ indirect: true }),
     };
   }
 

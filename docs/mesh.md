@@ -161,6 +161,33 @@ Each link (one per device) has its own transport; nothing is global any more.
 Limits of this change: the Android app was merged without a Kotlin build here (the CI build is its
 compile check); the Windows and Mac apps were not run as Electron apps, only their node tests.
 
+## Joining everyone
+
+Pair a device once and the mesh pairs the rest (`shared/intro.js` is the protocol, `windows/autojoin.js`
+the Windows side). A device I that is connected to two devices H and G that are not connected to each
+other introduces them. H is the computer (it listens); between two computers the smaller device id, or
+the side that already dials the other; two phones cannot be linked directly.
+
+```
+I -> H  mesh.intro.ask    {req, for: G, name, os}
+H -> I  mesh.intro.reply  {req, for, ok, macId, macName, os, fp, port, addrs, token}   (ok:false + error otherwise)
+I -> G  mesh.intro.grant  {req, macId, macName, os, fp, port, addrs, token}
+```
+
+H makes a pairing entry for G without the 6-digit code (`Pairing.grantFor`) and G stores the grant like
+a finished pairing (`LinkManager.addGrant`), then dials H. `addrs` are H's IPv4 addresses, LAN first;
+G tries the next one when the first fails. The introducer plans again whenever a link or a roster
+(`mesh.roster` now carries `members`) changes; the same pair is not asked again within 60 s. Devices
+only known through another device are listed (`Mesh.known()`, state `via` in `hub.peers()`).
+
+Security: the introducer is a trusted device. Anyone you paired with can make this PC accept a new
+device (H side) or add a host (G side), so pair only devices you trust. The introducer only forwards a
+reply for a request it made, from the host it asked, once; a host never grants for the asker or itself,
+nor for a device that is connected now, and at most once per device in 10 s. The token goes through the
+authenticated TLS links only. Setting `mesh.autoJoin` (default on, General › "Join every device
+automatically"): when off, the PC neither introduces nor accepts. Old apps ignore the `mesh.intro.*`
+messages.
+
 ## Tests
 
 - Unit: `shared/test/*.js` for the core (random topologies of 2–10 nodes: every item reaches every
@@ -174,4 +201,4 @@ compile check); the Windows and Mac apps were not run as Electron apps, only the
 
 ## Not in this change
 
-Transitive pairing (pair once, join everyone), editing the layout from the phone, the phone as an extra monitor, multi-monitor edges, binary file chunks.
+Editing the layout from the phone, the phone as an extra monitor, multi-monitor edges, binary file chunks.

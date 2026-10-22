@@ -21,6 +21,7 @@ const Clip = require('./clip');
 const setupIpc = require('./ipc');
 const Helper = require('./helper');
 const Kvm = require('./kvm');
+const { AutoJoin } = require('./autojoin');
 const LayoutSync = require('./layout-sync'); // the mesh's shared layout (docs/mesh.md)
 const firewall = require('./firewall');
 const Terminal = require('./terminal');
@@ -98,6 +99,7 @@ let hud = null;
 let about = null; // shared/about.js, read once for the About page
 let quitting = false;
 let discovery = null;
+let autoJoin = null; // autojoin.js: introduces devices to each other (docs/mesh.md)
 let hub = null; // hub.js: every paired device (pooled features use its bus and mesh)
 let links = null; // links.js: our guest links, one per host
 let mesh = null; // shared/mesh.js: the device registry and roster
@@ -177,6 +179,7 @@ function start() {
     pushState();
   });
   startHost();
+  autoJoin = new AutoJoin({ hub, enabled: () => settings.mesh.autoJoin !== false, addrs: () => ownAddresses() });
   clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState });
   screen = new Screen({
     link,
@@ -323,7 +326,7 @@ function start() {
   updates.start();
   const ipc = setupIpc({ hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub,
-    get net() { return net; }, applyNet, joinHotspot,
+    get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
@@ -803,8 +806,8 @@ function buildState() {
     ...link.snapshot(),
     peer: peerView(),
     // Every paired device (connected or not), and the mesh's selection and live links.
-    peers: hub.peers(),
-    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds() },
+    peers: hub.peers({ indirect: true }),
+    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin !== false },
     found: discovery.list(),
     discovery: { ...discovery.status },
     addresses: ownAddresses(),

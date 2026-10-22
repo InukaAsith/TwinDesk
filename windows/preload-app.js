@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld('macshare', {
   fixFirewall: call('fixFirewall'),
   setStartup: call('setStartup'),
   setNet: call('setNet'),
+  setMesh: call('setMesh'),
   netCancel: call('netCancel'),
   netLocation: call('netLocation'),
   openBluetoothSettings: call('openBluetoothSettings'),
