@@ -38,6 +38,7 @@ UI.tab({
     const deviceRow = UI.row('Computer name', 'How other computers see this one', [deviceName]);
     const loginSw = UI.switch((v) => api.setApp({ openAtLogin: v }), { label: 'Open at login' });
     const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: 'Keep the display awake' });
+    const joinSw = UI.switch((v) => api.setMesh({ autoJoin: v }), { label: 'Join every device automatically' });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: 'Show a popup when switching' });
     // Wake this Mac from the other computer; the Share menu entry.
     const wakeSw = UI.switch((v) => api.setWakeOnLan(v), { label: 'Wake from the network' });
@@ -61,6 +62,7 @@ UI.tab({
       UI.card('App', [
         UI.row('Open at login', '', [loginSw]),
         UI.row('Keep the display awake', 'While connected', [awakeSw]),
+        UI.row('Join every device automatically', 'Pair with one device and this Mac connects to all the others by itself', [joinSw]),
         UI.row('Show a popup when switching', 'When the mouse and keyboard move between computers', [hudSw]),
       ]),
       UI.card('Network and sharing', [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
@@ -84,6 +86,7 @@ UI.tab({
         awakeSw.set(s.app.keepAwake);
         hudSw.set(s.app.hud !== false);
       }
+      joinSw.set(!s.mesh || s.mesh.autoJoin !== false);
       const w = s.wake || {};
       wakeSw.set(w.womp === true);
       wakeSw.disable(w.womp == null);

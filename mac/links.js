@@ -115,6 +115,24 @@ class LinkManager extends EventEmitter {
     link.destroy();
   }
 
+  // A host the mesh introduced (shared/intro.js grant {macId, macName, os, address, port, fp, token}):
+  // stored like a finished pairing, a Link created (and started when we are). False when it is not
+  // valid, already a link, or the list is full.
+  addGrant(g) {
+    if (this.closed || !g) return false;
+    const entry = fromStored({ ...g, fp: P.normFingerprint(g.fp), lastSeen: Date.now() });
+    if (!valid(entry) || entry.macId === this.device.id) return false;
+    if (this.links.has(entry.macId) || this.links.size >= P.MAX_DEVICES) return false;
+    this.entries = this.entries.filter((e) => e.macId !== entry.macId);
+    this.entries.push(entry);
+    this._write();
+    const link = this._newLink(entry);
+    this.links.set(entry.macId, link);
+    this.emit('add', link);
+    if (this.started) link.start();
+    return true;
+  }
+
   // Forget a host: its link stops and its pairing is removed.
   forget(id) {
     const link = this.links.get(id);
