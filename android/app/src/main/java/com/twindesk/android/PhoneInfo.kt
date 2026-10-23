@@ -162,6 +162,7 @@ class Apps(core: Core) : Feature(core) {
 // this app WRITE_SECURE_SETTINGS over adb, so after that we can switch it on by ourselves when
 // the Mac asks (adb.enable) — after a reboot or on a new network — without anyone opening Settings.
 class Adb(core: Core) : Feature(core) {
+    companion object { const val AUTO_OFF_MS = 2 * 60 * 1000L }
     private val cr get() = core.ctx.contentResolver
     private val main = Handler(Looper.getMainLooper())
 
@@ -197,6 +198,25 @@ class Adb(core: Core) : Feature(core) {
     // off on a network it doesn't trust: starting over on that change would switch it on again at
     // once, on and off without end.
     private var trying = false
+
+    // Auto-off: wireless debugging is the phone's widest door, so once the computer has been gone
+    // for AUTO_OFF_MS (not a brief drop: the Mac's restarts reconnect within seconds) it's switched
+    // off here. Connecting switches it back on (Core.connect, check()), so nobody has to remember.
+    // Its own Handler: check() clears everything posted on `main`.
+    private val autoOff = Handler(Looper.getMainLooper())
+    val autoOffEnabled get() = core.store.flag("adb.autoOff", true)
+    fun setAutoOff(on: Boolean) {
+        core.store.setFlag("adb.autoOff", on)
+        if (!on) autoOff.removeCallbacksAndMessages(null)
+        core.changed()
+    }
+    private fun scheduleAutoOff() {
+        autoOff.removeCallbacksAndMessages(null)
+        if (!autoOffEnabled || !canEnable) return
+        autoOff.postDelayed({
+            if (!core.link.connected && wifiDebugging && enable(false)) sendState()
+        }, AUTO_OFF_MS)
+    }
 
     init {
         val obs = object : ContentObserver(main) {
@@ -295,6 +315,7 @@ class Adb(core: Core) : Feature(core) {
     }
 
     override fun onWelcome(host: Host) {
+        autoOff.removeCallbacksAndMessages(null)
         // Wireless debugging only works on Wi-Fi; switch it on for the Mac if we may, else ask.
         sendState()
         main.post { check() }
@@ -304,6 +325,7 @@ class Adb(core: Core) : Feature(core) {
         viewed = false
         stopConnectWatch()
         main.post { check() }
+        scheduleAutoOff()
     }
 
     override fun onMessage(t: String, m: JSONObject): Boolean {
