@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>org.macshare.mac.calls</string>
+  <key>CFBundleName</key><string>TwinDesk Calls</string>
+  <key>CFBundleShortVersionString</key><string>2.1.0</string>
+  <key>CFBundleVersion</key><string>2.1.0</string>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>TwinDesk plays your phone's calls through your Mac over Bluetooth.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key><string>TwinDesk plays your phone's calls through your Mac over Bluetooth.</string>
+  <key>NSMicrophoneUsageDescription</key><string>TwinDesk sends your voice to the phone during a call.</string>
+</dict></plist>

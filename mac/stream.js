@@ -193,7 +193,7 @@ class Stream extends EventEmitter {
         fps: Math.min(120, Math.max(30, Math.round(target.hz || 60))),
       });
     } catch (e) {
-      console.error(`[stream] start failed: ${e.message}`);
+      console.error(`[stream] start failed: ${e && e.message} | raw=${require('util').inspect(e)} | screen=${require('electron').systemPreferences.getMediaAccessStatus('screen')}`);
       this._setStatus(`error: ${e.message}`);
       this._scheduleRetry();
     }

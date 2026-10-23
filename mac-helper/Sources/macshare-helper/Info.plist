@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>org.macshare.mac.helper</string>
+  <key>CFBundleName</key><string>TwinDesk Helper</string>
+  <key>CFBundleShortVersionString</key><string>2.1.0</string>
+  <key>CFBundleVersion</key><string>2.1.0</string>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>TwinDesk connects to your phone and computers over Bluetooth when they aren't on your network.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key><string>TwinDesk connects to your phone and computers over Bluetooth when they aren't on your network.</string>
+  <key>NSLocationUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>macOS shows Wi-Fi networks only to apps with Location. TwinDesk joins your phone's or PC's Wi-Fi to send files when they aren't on your network.</string>
+  <key>NSLocalNetworkUsageDescription</key><string>TwinDesk finds and connects to your phone and PC on the local network.</string>
+  <key>NSMicrophoneUsageDescription</key><string>TwinDesk sends sound between your Mac and your devices.</string>
+  <key>NSAudioCaptureUsageDescription</key><string>TwinDesk sends your Mac's sound to your devices.</string>
+</dict></plist>
