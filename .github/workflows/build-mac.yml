@@ -1,0 +1,119 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to put the files on (e.g. v2.0.1; made as a draft if it isn't there). Empty = run artifacts only.
+        required: false
+        default: ''
+      ref:
+        description: Branch to build (a test branch; releases come from main).
+        required: false
+        default: main
+
+# Write: draft releases and release asset uploads require write permissions.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      # main unless another branch is asked for (ref), whichever branch the run was started from.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - uses: ./.github/actions/android-full
+        with:
+          keystore: ${{ secrets.ANDROID_KEYSTORE }}
+
+      - name: Configure Developer ID certificate (if secret provided)
+        id: signing-setup
+        env:
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -n "$DEVELOPER_ID_CERTIFICATE_BASE64" ]; then
+            KEYCHAIN_PATH="${RUNNER_TEMP}/twindesk-signing.keychain-db"
+            KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+            CERT_PATH="${RUNNER_TEMP}/certificate.p12"
+
+            echo "$DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+            existing_keychains=()
+            while IFS= read -r kc; do
+              existing_keychains+=("${kc//\"/}")
+            done < <(security list-keychains -d user)
+            security list-keychains -d user -s "$KEYCHAIN_PATH" "${existing_keychains[@]}"
+
+            security import "$CERT_PATH" \
+              -k "$KEYCHAIN_PATH" \
+              -P "${DEVELOPER_ID_CERTIFICATE_PASSWORD:-}" \
+              -T /usr/bin/codesign \
+              -T /usr/bin/security
+            security set-key-partition-list \
+              -S apple-tool:,apple:,codesign: \
+              -s \
+              -k "$KEYCHAIN_PASSWORD" \
+              "$KEYCHAIN_PATH"
+
+            ID="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/Developer ID Application/ && !id {id=$2} END {print id}')"
+            rm -f "$CERT_PATH"
+            if [ -n "$ID" ]; then
+              echo "MAC_IDENTITY=$ID" >> "$GITHUB_ENV"
+              echo "SIGNING_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+              echo "Configured Developer ID signing identity: $ID"
+            fi
+          fi
+
+      - name: Install dependencies
+        working-directory: mac
+        run: npm install
+
+      - name: Build macOS app and disk image
+        working-directory: mac
+        run: |
+          npm run dist
+          npm run dmg
+        env:
+          MAC_IDENTITY: ${{ env.MAC_IDENTITY || secrets.MAC_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Cleanup signing keychain
+        if: always()
+        run: |
+          if [ -n "$SIGNING_KEYCHAIN_PATH" ] && [ -f "$SIGNING_KEYCHAIN_PATH" ]; then
+            security delete-keychain "$SIGNING_KEYCHAIN_PATH" || true
+          fi
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: twindesk-macos-dmg
+          path: mac/dist/*.dmg
+
+      # Straight onto the release, no download and re-upload.
+      - name: Upload to the release
+        if: inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes "" || true
+          gh release upload "${{ inputs.tag }}" mac/dist/*.dmg --clobber

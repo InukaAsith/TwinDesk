@@ -28,7 +28,7 @@ if [ -n "$FULL_APK" ]; then cp "$FULL_APK" vendor/twindesk-android-full.apk; els
 sh scripts/fetch-adb.sh
 
 rm -rf "$STAGE" && mkdir -p "$STAGE/mac" "$STAGE/shared" "$STAGE/mac-helper/.build/release" "$STAGE/node_modules"
-rsync -a --exclude node_modules --exclude dist --exclude dev --exclude test --exclude dmg --exclude build-app.sh --exclude build-dmg.sh --exclude scripts/signing-identity.sh ./ "$STAGE/mac/"
+rsync -a --exclude node_modules --exclude dist --exclude dev --exclude test --exclude dmg --exclude build-app.sh --exclude build-dmg.sh --exclude scripts/signing-identity.sh --exclude entitlements.plist ./ "$STAGE/mac/"
 cp "$ROOT"/shared/*.js "$ROOT"/shared/*.css "$ROOT"/shared/*.html "$STAGE/shared/"
 cp "$ROOT"/mac-helper/.build/release/macshare-helper "$ROOT"/mac-helper/.build/release/macshare-helper-multi "$ROOT"/mac-helper/.build/release/macshare-dockstub "$ROOT"/mac-helper/.build/release/macshare-calls "$STAGE/mac-helper/.build/release/"
 cp -R node_modules/ws "$STAGE/node_modules/"
@@ -109,14 +109,37 @@ cat > dist/share.entitlements <<'PLIST'
 </dict></plist>
 PLIST
 
-# One signature over the whole bundle (helpers first), so the edited Info.plist is sealed. With
-# TwinDesk's own certificate (scripts/signing-identity.sh) macOS keeps its permissions across
-# updates; ad-hoc (no certificate made) works, but each update asks for them again.
-if KC=$(scripts/signing-identity.sh); then SIGN="--keychain $KC --sign"; ID="TwinDesk Self-Signed"
-else echo "note: signing ad-hoc: permissions won't carry over to the next update"; SIGN="--sign"; ID="-"; fi
-for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do codesign --force $SIGN "$ID" "$b"; done
-codesign --force --deep $SIGN "$ID" dist/TwinDesk.app
-codesign --force $SIGN "$ID" --entitlements dist/share.entitlements "$APPEX" # --deep dropped its sandbox
-codesign --force $SIGN "$ID" dist/TwinDesk.app && rm -f dist/share.entitlements
+# Signing: with Developer ID (MAC_IDENTITY) for releases, with TwinDesk's self-signed certificate
+# (scripts/signing-identity.sh) for local dev so permissions carry across updates, or ad-hoc.
+ENTITLEMENTS="entitlements.plist"
+OPTIONS=""
+
+if [ -n "$MAC_IDENTITY" ]; then
+  SIGN="--sign"
+  ID="$MAC_IDENTITY"
+  OPTIONS="--options runtime --timestamp"
+  echo "Signing with Developer ID: $ID"
+elif KC=$(scripts/signing-identity.sh 2>/dev/null); then
+  SIGN="--keychain $KC --sign"
+  ID="TwinDesk Self-Signed"
+  OPTIONS=""
+  echo "Signing with local self-signed certificate"
+else
+  echo "note: signing ad-hoc: permissions won't carry over to the next update"
+  SIGN="--sign"
+  ID="-"
+  OPTIONS=""
+fi
+for b in dist/TwinDesk.app/Contents/Resources/app/mac-helper/.build/release/*; do
+  [ -f "$b" ] && codesign --force $OPTIONS $SIGN "$ID" "$b"
+done
+codesign --force --deep $OPTIONS $SIGN "$ID" dist/TwinDesk.app
+codesign --force $OPTIONS $SIGN "$ID" --entitlements dist/share.entitlements "$APPEX" # --deep dropped its sandbox
+if [ -f "$ENTITLEMENTS" ]; then
+  codesign --force $OPTIONS --entitlements "$ENTITLEMENTS" $SIGN "$ID" dist/TwinDesk.app
+else
+  codesign --force $OPTIONS $SIGN "$ID" dist/TwinDesk.app
+fi
+rm -f dist/share.entitlements
 codesign -dr - dist/TwinDesk.app 2>&1 | grep designated
 echo "built mac/dist/TwinDesk.app"
