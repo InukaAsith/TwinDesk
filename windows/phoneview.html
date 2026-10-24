@@ -11,18 +11,15 @@
   <header id="bar">
     <span id="title"></span>
     <span id="via" hidden></span>
-    <span class="tools">
-      <button id="b-back" title="Back (Esc)" aria-label="Back"><svg viewBox="0 0 20 20"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg></button>
-      <button id="b-home" title="Home" aria-label="Home"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="5.5"/></svg></button>
-      <button id="b-recents" title="Recent apps" aria-label="Recent apps"><svg viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1.5"/></svg></button>
-      <button id="b-notifs" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 20 20"><path d="M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0"/></svg></button>
-      <button id="b-rotate" title="Rotate" aria-label="Rotate"><svg viewBox="0 0 20 20"><path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/></svg></button>
-    </span>
+    <span class="tools"></span>
   </header>
   <main id="stage">
     <canvas id="screen" tabindex="0"></canvas>
     <div id="status">Connecting to the phone…</div>
   </main>
+  <!-- The controls: phoneview-renderer.js puts them here, in the title bar's tools, or in the bottom bar -->
+  <nav id="panel" aria-label="Phone controls"></nav>
+  <nav id="navbar" aria-label="Phone navigation"></nav>
   <script src="phoneview-renderer.js"></script>
 </body>
 </html>

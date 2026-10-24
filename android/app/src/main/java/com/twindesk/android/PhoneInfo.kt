@@ -339,6 +339,12 @@ class Adb(core: Core) : Feature(core) {
         Notify.pairCode(core.ctx, core.host?.name ?: "your computer")
     }
 
+    // The Screen page's Show and Close: this phone's screen in a window on the computer (it opens
+    // it over wireless debugging, moving to Wi-Fi first when on Bluetooth), or its windows there closed.
+    fun showOnComputer(open: Boolean) {
+        core.send(msg(Proto.T.PHONE_MIRROR, "open" to open))
+    }
+
     fun sendPairCode(code: String) {
         val digits = code.filter { it.isDigit() }
         if (digits.length != 6) return Notify.pairResult(core.ctx, "The pairing code has six digits", "Type the code Settings shows.", true)

@@ -179,7 +179,11 @@ function setupIpc(ctx) {
   const phone = (name, fn) => handle(name, (...args) => (ctx.phone ? fn(...args) : undefined));
   phone('connectPhone', (id) => ctx.phone.connect(String(id)));
   phone('disconnectPhone', () => ctx.phone.disconnect());
-  handle('setPhone', (partial) => change('phone', partial, () => partial && 'input' in partial && ctx.phone && ctx.phone.bridge.tellVia()));
+  handle('setPhone', (partial) => change('phone', partial, () => {
+    if (partial && 'input' in partial && ctx.phone) ctx.phone.bridge.tellVia();
+    // Every phone's open windows move their controls (phones.js: a stack per phone).
+    if (partial && 'controls' in partial && ctx.phone) for (const u of ctx.phone.all || []) if (u.views) u.views.applyControls();
+  }));
   // The phone as a drive (phonedrive.js). The Mount page's switch: off unmounts and stops
   // everything (nothing runs until Mount anyway).
   phone('phoneMount', () => settings.mount.on && ctx.phoneDrive.mount());

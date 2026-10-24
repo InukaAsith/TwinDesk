@@ -84,9 +84,13 @@ UI.tab({
       { value: '16', label: 'Sharp (16 Mb/s)' }, { value: '24', label: 'Sharpest (24 Mb/s)' },
     ], (v) => api.setPhone({ bitrateMbps: Number(v) }));
     const wall = UI.switch((v) => api.setPhone({ wallpaper: v }), { label: 'Wallpaper' });
+    const controls = UI.select([
+      { value: 'side', label: 'Side panel' }, { value: 'top', label: 'Title bar' }, { value: 'bottom', label: 'Bottom bar' },
+    ], (v) => api.setPhone({ controls: v }));
     const optsCard = UI.card('Settings', [
       UI.row('Phone sound in the screen window', 'Android 11 or later', [sound]),
       UI.row('Picture', 'For the screen window and app windows', [quality]),
+      UI.row('Window controls', 'Side panel: Back, Home, Recents, volume, rotate, screenshot and more down the right of each phone window. Title bar: the main ones up top. Bottom bar: Back, Home and Recents under the picture', [controls]),
       UI.row('Show the phone’s wallpaper here', 'Lets TwinDesk on the phone read it (set up over wireless debugging)', [wall]),
       UI.row('Mouse and keyboard', 'Push the pointer off the edge of the screen to use the phone. Double-tap the hotkey to come back.', [UI.button('Cursor Settings', () => UI.go('cursor'), 'small')]),
     ]);
@@ -155,6 +159,7 @@ UI.tab({
       sound.set(!!settings.sound);
       quality.set(String(settings.bitrateMbps || 8));
       wall.set(settings.wallpaper !== false);
+      controls.set(settings.controls || 'side');
       via.set(br.input || (settings.input === 'phone' ? 'phone' : 'adb'));
       viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? 'Automatic: ADB, wireless debugging is ready' : 'Automatic: Accessibility until wireless debugging is ready')
         : br.input === 'phone' ? 'TwinDesk on the phone taps and types itself. The phone asks once to allow it in Accessibility' : 'Wireless debugging: full control');

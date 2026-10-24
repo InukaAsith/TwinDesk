@@ -283,8 +283,85 @@
     if (e.dataTransfer && e.dataTransfer.files.length) api.drop(e.dataTransfer.files);
   });
 
-  for (const k of ['back', 'home', 'recents', 'notifs', 'rotate']) {
-    document.getElementById(`b-${k}`).onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
+  // ---- controls ----
+  // In a side panel down the right (the default), the title bar, or Back/Home/Recents in a bar
+  // under the picture (Phone page › Settings › Window controls). An app window runs on a display
+  // of its own, so what acts on the phone's main screen (Recents, the shade, Power) isn't there,
+  // and its Rotate turns the window round.
+  const ICONS = {
+    back: '<path d="M12.5 4.5 7 10l5.5 5.5"/>',
+    home: '<circle cx="10" cy="10" r="5.5"/>',
+    recents: '<rect x="5" y="5" width="10" height="10" rx="1.5"/>',
+    notifications: '<path d="M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0"/>',
+    settings: '<path d="M4 6h12 M4 10h12 M4 14h12"/><circle cx="7.5" cy="6" r="1.6"/><circle cx="12.5" cy="10" r="1.6"/><circle cx="8.5" cy="14" r="1.6"/>',
+    rotate: '<path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/>',
+    volumeUp: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M14 7.5v5 M11.5 10h5"/>',
+    volumeDown: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M11.5 10h5"/>',
+    mute: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M12 8l4 4 M16 8l-4 4"/>',
+    power: '<path d="M10 3.5v6 M6.2 6a5.5 5.5 0 1 0 7.6 0"/>',
+    shot: '<path d="M3.5 6.5h3l1.5-2h4l1.5 2h3v9h-13z"/><circle cx="10" cy="11" r="2.8"/>',
+    pin: '<path d="M8 3.5h4l-.5 5 2.5 2.5h-8l2.5-2.5z M10 11v5.5"/>',
+  };
+  // nav: Back, Home and Recents (the side panel's foot, or the bottom bar); screen: not in app windows.
+  const CONTROLS = [
+    { k: 'volumeUp', title: 'Volume up' },
+    { k: 'volumeDown', title: 'Volume down' },
+    { k: 'mute', title: 'Mute' },
+    { k: 'rotate', title: kind === 'app' ? 'Rotate the window' : 'Rotate' },
+    { k: 'shot', title: 'Screenshot (copies it: paste with Ctrl+V)' },
+    { k: 'notifications', title: 'Notifications', screen: true },
+    { k: 'settings', title: 'Quick settings', screen: true },
+    { k: 'power', title: 'Power (lock or wake the phone)', screen: true },
+    { k: 'pin', title: 'Keep on top' },
+    { k: 'back', title: 'Back (right click, Esc)', nav: true },
+    { k: 'home', title: 'Home (middle click)', nav: true },
+    { k: 'recents', title: 'Recent apps', nav: true, screen: true },
+  ].filter((c) => kind !== 'app' || !c.screen);
+  // The title bar layouts carry what the title bar always had: Back, Home, Recents, Notifications, Rotate.
+  const TOP = ['notifications', 'rotate'];
+  for (const c of CONTROLS) {
+    c.el = document.createElement('button');
+    c.el.className = 'ctl';
+    c.el.title = c.title;
+    c.el.setAttribute('aria-label', c.title);
+    c.el.innerHTML = `<svg viewBox="0 0 20 20">${ICONS[c.k]}</svg>`;
+    c.el.onclick = () => {
+      if (c.k === 'shot') return shot();
+      if (c.k === 'pin') return api.send({ t: 'pin' });
+      api.send({ t: 'nav', key: c.k });
+      canvas.focus();
+    };
   }
+  const els = (list) => list.map((c) => c.el);
+  function layout(mode) {
+    mode = ['side', 'top', 'bottom'].includes(mode) ? mode : 'side';
+    document.body.dataset.controls = mode;
+    const panel = document.getElementById('panel');
+    const navbar = document.getElementById('navbar');
+    const tools = document.querySelector('#bar .tools');
+    for (const box of [panel, navbar, tools]) box.replaceChildren();
+    const nav = els(CONTROLS.filter((c) => c.nav));
+    if (mode === 'side') {
+      const gap = document.createElement('div');
+      gap.className = 'gap';
+      panel.append(...els(CONTROLS.filter((c) => !c.nav)), gap, ...nav);
+    } else {
+      const top = els(TOP.map((k) => CONTROLS.find((c) => c.k === k)).filter(Boolean));
+      if (mode === 'bottom') { tools.append(...top); navbar.append(...nav); } else tools.append(...nav, ...top);
+    }
+  }
+  layout(q.get('controls'));
+  api.on('opts', (m) => {
+    if (!m) return;
+    if (m.controls) layout(m.controls);
+    if (typeof m.pinned === 'boolean') CONTROLS.find((c) => c.k === 'pin').el.classList.toggle('on', m.pinned);
+  });
+
+  // The picture as it is now, as a PNG (phoneview.js puts it on the clipboard).
+  function shot() {
+    if (!canvas.width || !canvas.height) return;
+    canvas.toBlob((blob) => { if (blob) blob.arrayBuffer().then((b) => api.send({ t: 'shot', png: new Uint8Array(b) })); }, 'image/png');
+  }
+
   canvas.focus();
 })();

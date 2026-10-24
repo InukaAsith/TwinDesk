@@ -138,6 +138,9 @@ function normalize(s) {
       wallpaper: bool(ph.wallpaper, true),
       input: ph.input === 'phone' ? 'phone' : 'adb', // the mouse and keyboard through adb, or the phone's Accessibility service
       inputPicked: bool(ph.inputPicked, false), // not picked: automatic (phone-bridge.js inputMode)
+      // Where a phone window's controls sit (phoneview.js): 'side' (a panel down the right), 'top'
+      // (the title bar), 'bottom' (Back, Home and Recents under the picture).
+      controls: ['side', 'top', 'bottom'].includes(ph.controls) ? ph.controls : 'side',
     },
     // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);
     // bleWifiOff: none at all while the session is on the same Wi-Fi (blepolicy.js wifiQuiet)

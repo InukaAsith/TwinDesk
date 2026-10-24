@@ -4,6 +4,8 @@
 // resizing the window resizes the app). One scrcpy session per window (scrcpy.js); the window
 // decodes the H.264 itself (phoneview-renderer.js) and sends touches, keys and scrolls back.
 // Port of mac/phoneview.js: Windows title bar (its own buttons drawn over ours), no Ctrl/Cmd swap.
+// The window's controls sit in a side panel (the default), the title bar or a bar under the picture
+// (settings.phone.controls), and the window is sized for the picture plus those bars.
 // A phone app's windows have a taskbar identity of their own (its icon, Pin to taskbar starts it),
 // and pin() puts it in Start › TwinDesk Apps: both start "TwinDesk.exe --phone-app=<package>".
 //
@@ -13,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { app, BrowserWindow, ipcMain, screen, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, nativeImage, clipboard } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { Session, ACTION, TYPE } = require('./scrcpy');
@@ -21,6 +23,9 @@ const { KeyState, ANDROID } = require('./android-keys');
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
+// The window's own bars around the picture (phoneview.css): the title bar, the side panel, the bottom bar.
+const TITLE_H = 32, PANEL_W = 44, NAVBAR_H = 40;
+const HIDDEN = ['sound', 'netsound']; // windows that only play the phone's sound: no picture, no bars
 let nextId = 1;
 
 class PhoneViews extends EventEmitter {
@@ -31,6 +36,14 @@ class PhoneViews extends EventEmitter {
     bridge.views = this;
     this.notified = null; // {pkg, name, at, unlocked}: a clicked notification's app, waiting to open (openNotified)
     server.on(`t:${T.PHONE_AWAKE}`, (m) => this._awake(m));
+    // The phone's own Show and Close (its Screen page): its screen in a window here (openScreen
+    // decides how: wireless debugging, Wi-Fi first when on Bluetooth, or a popup saying what's
+    // missing), or its windows here closed (not the hidden ones playing its sound).
+    server.on(`t:${T.PHONE_MIRROR}`, (m) => {
+      if (m && m.open === false) {
+        for (const v of this.list()) this.close(v.id);
+      } else this.openScreen();
+    });
     bridge.on('change', () => this._openNotified());
     server.on('closed', () => { this.notified = null; });
     this.on('change', () => bridge._tellPhone());
@@ -81,8 +94,9 @@ class PhoneViews extends EventEmitter {
     const info = this.phone.info || {};
     const d = info.display || { w: 1080, h: 2400 };
     const work = screen.getPrimaryDisplay().workAreaSize;
+    const c = this._chrome();
     const h = Math.min(860, work.height - 80);
-    const w = Math.round(h * Math.min(d.w, d.h) / Math.max(d.w, d.h));
+    const w = Math.round((h - c.h) * Math.min(d.w, d.h) / Math.max(d.w, d.h)) + c.w;
     const name = (this.server.current && this.server.current.name) || 'Phone';
     this._open({ kind: 'screen', title: name, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
   }
@@ -90,13 +104,14 @@ class PhoneViews extends EventEmitter {
   openApp(pkg, name) {
     const open = [...this.views.values()].find((v) => v.kind === 'app' && v.app === pkg);
     if (open) return open.win.show(), open.win.focus();
-    const w = 412;
-    const h = 860;
+    const c = this._chrome();
+    const w = 412; // the app's own area; the window adds its bars
+    const h = 860 - c.h;
     // At least 2 pixels per point (sharp at 100% scaling); the dpi keeps 1 dp = 1 point, so the
     // app's text is as big as this computer's. The window's resizes use the same rule.
     const scale = Math.max(2, screen.getPrimaryDisplay().scaleFactor || 1);
-    const newDisplay = `${Math.round(w * scale)}x${Math.round((h - 32) * scale)}/${Math.round(160 * scale)}`;
-    this._open({ kind: 'app', app: pkg, title: name || pkg, width: w, height: h, opts: this.bridge.sessionOpts('app', { newDisplay }) });
+    const newDisplay = `${Math.round(w * scale)}x${Math.round(h * scale)}/${Math.round(160 * scale)}`;
+    this._open({ kind: 'app', app: pkg, title: name || pkg, width: w + c.w, height: h + c.h, opts: this.bridge.sessionOpts('app', { newDisplay }) });
   }
 
   // A notification from the phone was clicked: wake it (unlocked: it answers at once), then open
@@ -165,9 +180,12 @@ class PhoneViews extends EventEmitter {
       // click never comes: without this its AudioContext stays suspended and silent).
       webPreferences: { preload: path.join(__dirname, 'preload-phoneview.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
     });
-    const v = { id, kind, app, title, win, session: null, keys: new KeyState(), size: null, ready: false, queue: [] };
+    const v = { id, kind, app, title, win, session: null, keys: new KeyState(), size: null, ready: false, queue: [], chrome: this._chrome() };
     this.views.set(id, v);
-    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title } });
+    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, controls: this._controls() } });
+    // The phone's screen: the window keeps the picture's shape, its bars added (snapped exact
+    // when a resize ends: with the bars in, the right ratio changes a little with the size).
+    if (kind === 'screen') win.on('resized', () => this._fit(v, 'height'));
     if (kind === 'app') this._details(win, app, title);
     if (!hidden) win.once('ready-to-show', () => win.show());
     win.webContents.once('did-finish-load', () => {
@@ -188,6 +206,75 @@ class PhoneViews extends EventEmitter {
     });
   }
 
+  // Where the window's controls sit (Phone page › Settings › Window controls): 'side' (a panel
+  // down the right, the default), 'top' (the title bar) or 'bottom' (Back, Home and Recents in a
+  // bar under the picture, the rest in the title bar).
+  _controls() {
+    const ph = this.getSettings().phone;
+    return ph && ['side', 'top', 'bottom'].includes(ph.controls) ? ph.controls : 'side';
+  }
+
+  // The size of a window's bars around the picture.
+  _chrome(controls = this._controls()) {
+    return { w: controls === 'side' ? PANEL_W : 0, h: TITLE_H + (controls === 'bottom' ? NAVBAR_H : 0) };
+  }
+
+  // The setting changed: the open windows move their controls, and grow or shrink by the bars so
+  // the picture keeps its size.
+  applyControls() {
+    const controls = this._controls();
+    const c = this._chrome(controls);
+    for (const v of this.views.values()) {
+      if (HIDDEN.includes(v.kind) || !v.win || v.win.isDestroyed()) continue;
+      this._send(v, 'phoneview:opts', { controls });
+      const b = v.win.getBounds();
+      v.win.setBounds({ x: b.x, y: b.y, width: b.width + c.w - v.chrome.w, height: b.height + c.h - v.chrome.h });
+      v.chrome = c;
+      if (v.kind === 'screen') this._fit(v, 'height');
+    }
+  }
+
+  // A screen window sized to its picture plus its bars. keep: 'height' (after a resize), or
+  // 'long' (the picture's long side stays, so the phone turning round turns the window too).
+  _fit(v, keep) {
+    if (!v.size || !v.win || v.win.isDestroyed() || v.win.isMaximized() || v.win.isFullScreen()) return;
+    const b = v.win.getBounds();
+    const c = v.chrome;
+    const a = v.size.width / v.size.height;
+    let cw, ch;
+    if (keep === 'height') {
+      ch = b.height - c.h;
+      cw = Math.round(ch * a);
+    } else {
+      const long = Math.max(b.width - c.w, b.height - c.h);
+      cw = a >= 1 ? long : Math.round(long * a);
+      ch = a >= 1 ? Math.round(long / a) : long;
+    }
+    v.win.setBounds({ x: b.x, y: b.y, width: cw + c.w, height: ch + c.h });
+    // For the next drag: the whole window's ratio at this size (setAspectRatio counts the bars too).
+    v.win.setAspectRatio((cw + c.w) / (ch + c.h));
+  }
+
+  // An app window's Rotate: its area's width and height swap (its virtual display follows the
+  // window, so the app gets the other orientation).
+  _rotateApp(v) {
+    const b = v.win.getBounds();
+    const c = v.chrome;
+    v.win.setBounds({ x: b.x, y: b.y, width: b.height - c.h + c.w, height: b.width - c.w + c.h });
+  }
+
+  // The side panel's screenshot button: the window's picture (a PNG from phoneview-renderer.js)
+  // onto this PC's clipboard.
+  _shot(v, png) {
+    if (!(png instanceof Uint8Array) || png.length < 64 || png.length > 64 * 1024 * 1024) return;
+    const buf = Buffer.from(png);
+    if (buf.readUInt32BE(0) !== 0x89504e47) return; // not a PNG
+    const img = nativeImage.createFromBuffer(buf);
+    if (img.isEmpty()) return;
+    clipboard.writeImage(img);
+    this.bridge.emit('popup', 'away', 'Screenshot copied: paste it with Ctrl+V');
+  }
+
   _send(v, ch, m) {
     if (!v.win || v.win.isDestroyed()) return;
     if (!v.ready) return v.queue.push([ch, m]);
@@ -201,7 +288,7 @@ class PhoneViews extends EventEmitter {
     s.on('size', (size) => {
       v.size = size;
       this._send(v, 'phoneview:size', size);
-      if (v.kind === 'screen' && v.win && !v.win.isDestroyed()) v.win.setAspectRatio(size.width / size.height);
+      if (v.kind === 'screen') this._fit(v, 'long');
     });
     s.on('video', (p) => this._send(v, 'phoneview:video', p));
     s.on('audio', (p) => !p.config && this._send(v, 'phoneview:audio', p.data));
@@ -212,6 +299,14 @@ class PhoneViews extends EventEmitter {
   }
 
   _input(v, m) {
+    // The window's own: no phone needed.
+    if (m.t === 'shot') return this._shot(v, m.png);
+    if (m.t === 'pin') {
+      const on = !v.win.isAlwaysOnTop();
+      v.win.setAlwaysOnTop(on);
+      return this._send(v, 'phoneview:opts', { pinned: on });
+    }
+    if (m.t === 'nav' && m.key === 'rotate' && v.kind === 'app') return this._rotateApp(v);
     const s = v.session;
     const size = v.size;
     if (!s || s.closed) return;
@@ -234,9 +329,13 @@ class PhoneViews extends EventEmitter {
         break;
       }
       case 'nav': {
-        const k = { back: ANDROID.BACK, home: ANDROID.HOME, recents: ANDROID.APP_SWITCH, power: ANDROID.POWER }[m.key];
+        const k = {
+          back: ANDROID.BACK, home: ANDROID.HOME, recents: ANDROID.APP_SWITCH, power: ANDROID.POWER,
+          volumeUp: ANDROID.VOLUME_UP, volumeDown: ANDROID.VOLUME_DOWN, mute: ANDROID.VOLUME_MUTE,
+        }[m.key];
         if (m.key === 'back') { s.backOrScreenOn(ACTION.DOWN); s.backOrScreenOn(ACTION.UP); } else if (k) s.tap(k);
         if (m.key === 'notifications') s.simple(TYPE.EXPAND_NOTIFICATIONS);
+        if (m.key === 'settings') s.simple(TYPE.EXPAND_SETTINGS);
         if (m.key === 'rotate') s.simple(TYPE.ROTATE);
         break;
       }

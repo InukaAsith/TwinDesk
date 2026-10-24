@@ -196,6 +196,7 @@
       PHONE_INPUT_VIA: 'phone.input.via', // computer->phone {via: 'adb'|'phone'}: the input choice changed here (phone.input carries the phone's)
       PHONE_WAKE: 'phone.wake', // computer->phone: screen on and ask for the unlock (on the phone), e.g. to open an app from a notification clicked here
       PHONE_AWAKE: 'phone.awake', // phone->computer {unlocked, waiting?}: unlocked (now, or once the person unlocked it); waiting = it's asking for the unlock
+      PHONE_MIRROR: 'phone.mirror', // phone->computer {open}: asked on the phone (its Screen page), its screen in a window on the computer (open, or brought to the front), or open false: the phone's windows there closed
       PHONE_SOUND_WANT: 'phone.sound.want', // computer->phone {on}: its sound here without wireless debugging (playback capture, Start on the phone), while adb can't carry it
       PHONE_SOUND: 'phone.sound', // phone->computer {codec: 'opus'|'pcm', p: [base64]}: 20 ms each (Opus packets, or 48 kHz stereo s16le)
       PHONE_SOUND_STATE: 'phone.sound.state', // phone->computer {on, waiting (for Start on the phone), error, codec}

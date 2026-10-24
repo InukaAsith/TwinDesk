@@ -34,6 +34,14 @@ class PhoneViews extends EventEmitter {
     this.on('change', () => bridge._tellPhone());
     this.notified = null; // {pkg, name, at, unlocked}: a clicked notification's app, waiting to open
     server.on(`t:${T.PHONE_AWAKE}`, (m) => this._awake(m));
+    // The phone's own Show and Close (its Screen page): its screen in a window here (openScreen
+    // decides how: wireless debugging, Wi-Fi first when on Bluetooth, or a popup saying what's
+    // missing), or its windows here closed (not the hidden ones playing its sound).
+    server.on(`t:${T.PHONE_MIRROR}`, (m) => {
+      if (m && m.open === false) {
+        for (const v of this.list()) this.close(v.id);
+      } else this.openScreen();
+    });
     bridge.on('change', () => this._openNotified());
     server.on('closed', () => { this.notified = null; });
     ipcMain.on('phoneview:in', (e, m) => {

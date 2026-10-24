@@ -803,6 +803,24 @@ private fun ScreenPage(core: Core, v: Int) {
     val name = them(core)
     PageHead("Screen", "Use this device as a screen for $name: its own screen (Mirror), or a second one (Extend).")
     if (host == null) return NotConnected(core, v)
+    // The other way round: this device's screen in a window on the computer, over wireless debugging.
+    // Paired now or before: the computer brings it back by itself (on Bluetooth, onto Wi-Fi first).
+    val adb = core.adb
+    val canShow = adb.paired || adb.known
+    MacCard("This screen on $name") {
+        MacRow(
+            "Show this screen on $name",
+            when {
+                !canShow -> "Needs wireless debugging: set it up from Overview"
+                adb.viewed -> "This device’s windows are open on $name. Close shuts them"
+                else -> "In a window there, with its mouse and keyboard"
+            },
+            first = true,
+        ) {
+            if (adb.viewed) Secondary("Close") { adb.showOnComputer(false) }
+            Button(onClick = { adb.showOnComputer(true) }, enabled = canShow, colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White), shape = RoundedCornerShape(8.dp)) { Text("Show") }
+        }
+    }
     Note(
         when {
             !s.sharing -> "$name isn’t sharing its screen."
@@ -815,7 +833,8 @@ private fun ScreenPage(core: Core, v: Int) {
             Primary("Open") { ctx.startActivity(Intent(ctx, ViewerActivity::class.java)) }
         }
         if (s.remote) MacRow("Mode", "Extend makes $name a second screen the size of this one") {
-            SingleChoiceSegmentedButtonRow {
+            // A phone: Mirror and Extend across the row's width, under the label.
+            SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
                 val modes = listOf("mirror" to "Mirror", "extend" to "Extend")
                 modes.forEachIndexed { i, (m, label) ->
                     SegmentedButton(selected = s.sharing && s.mode == m, onClick = { s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
