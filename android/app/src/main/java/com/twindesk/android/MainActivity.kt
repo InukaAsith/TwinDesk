@@ -358,7 +358,10 @@ private fun Primary(label: String, onClick: () -> Unit) = Button(onClick = onCli
 private fun Secondary(label: String, onClick: () -> Unit) = OutlinedButton(onClick = onClick, shape = RoundedCornerShape(8.dp)) { Text(label, color = pal.text) }
 
 @Composable
-private fun NotConnected(core: Core, v: Int) = Note("Not connected. Connect to ${them(core)} on the Overview page.".also { v }, "warn")
+private fun NotConnected(core: Core, v: Int) {
+    @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
+    Note("Not connected. Connect to ${them(core)} on the Overview page.", "warn")
+}
 
 // ---- Overview ----
 

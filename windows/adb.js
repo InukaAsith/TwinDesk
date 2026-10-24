@@ -2,7 +2,7 @@
 // The bundled adb (Android platform-tools), for the phone's wireless debugging: pairing with
 // its code, connecting, shell commands, pushing scrcpy-server and port forwards. Port of
 // mac/adb.js. The installer has adb.exe in windows/vendor/adb (installer/build.js fetches it,
-// scripts/fetch-adb.js for a dev run); else the Android SDK's or one on PATH.
+// scripts/fetch-adb.js for a dev run).
 'use strict';
 
 const fs = require('fs');
@@ -10,14 +10,22 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 const adbmdns = require('../shared/adbmdns.js');
 
+// A developer's own adb comes first: the one named by ADB (scrcpy's setting), else the Android
+// SDK's platform-tools, which Flutter, Android Studio and a terminal use. Two different adb
+// builds on one machine keep killing each other's server on port 5037, dropping every device on
+// both sides. The bundled one is for everyone else; any other adb on PATH comes last.
 function findAdb() {
   const local = process.env.LOCALAPPDATA || '';
+  const onPath = String(process.env.PATH || '').split(path.delimiter).filter(Boolean).map((d) => path.join(d, 'adb.exe'));
+  const sdk = (p) => path.basename(path.dirname(p)).toLowerCase() === 'platform-tools';
   const candidates = [
-    path.join(__dirname, 'vendor', 'adb', 'adb.exe'),
-    local && path.join(local, 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
+    process.env.ADB,
     process.env.ANDROID_HOME && path.join(process.env.ANDROID_HOME, 'platform-tools', 'adb.exe'),
     process.env.ANDROID_SDK_ROOT && path.join(process.env.ANDROID_SDK_ROOT, 'platform-tools', 'adb.exe'),
-    ...String(process.env.PATH || '').split(path.delimiter).filter(Boolean).map((d) => path.join(d, 'adb.exe')),
+    local && path.join(local, 'Android', 'Sdk', 'platform-tools', 'adb.exe'),
+    ...onPath.filter(sdk),
+    path.join(__dirname, 'vendor', 'adb', 'adb.exe'),
+    ...onPath.filter((p) => !sdk(p)),
   ];
   return candidates.find((p) => p && fs.existsSync(p)) || null;
 }

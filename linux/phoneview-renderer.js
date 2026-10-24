@@ -281,7 +281,8 @@
   document.addEventListener('drop', (e) => {
     e.preventDefault();
     document.body.classList.remove('drop');
-    if (e.dataTransfer && e.dataTransfer.files.length) api.drop(e.dataTransfer.files);
+    // As an array: a FileList reaches the preload as a plain object, which can't be iterated.
+    if (e.dataTransfer && e.dataTransfer.files.length) api.drop([...e.dataTransfer.files]);
   });
 
   for (const k of ['back', 'home', 'recents', 'notifs', 'rotate']) {

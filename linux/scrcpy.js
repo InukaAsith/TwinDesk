@@ -35,7 +35,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class Session extends EventEmitter {
   // opts: {video, audio, control, maxSize, maxFps, videoBitRate, newDisplay ('WxH/dpi'), flex, displayId,
-  //        clipboardAutosync, audioSource ('output'|'playback'), stayAwake, keepActive}
+  //        clipboardAutosync, audioSource ('output'|'playback'), powerOn, stayAwake, keepActive}
   constructor(adb, serial, opts = {}) {
     super();
     this.adb = adb;
@@ -82,6 +82,7 @@ class Session extends EventEmitter {
     if (opts.newDisplay != null) args.push(`new_display=${opts.newDisplay}`);
     if (opts.flex) args.push('flex_display=true');
     if (opts.displayId != null) args.push(`display_id=${opts.displayId | 0}`);
+    if (opts.powerOn === false) args.push('power_on=false');
     if (opts.stayAwake) args.push('stay_awake=true');
     if (opts.keepActive) args.push('keep_active=true');
     const cmd = `CLASSPATH=${this.jar} app_process / com.genymobile.scrcpy.Server ${VERSION} ${args.join(' ')}`;

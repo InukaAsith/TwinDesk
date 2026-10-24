@@ -30,7 +30,7 @@ const META = {
   MetaLeft: 0x10000 | 0x20000, MetaRight: 0x10000 | 0x40000,
 };
 
-const ANDROID = { BACK: 4, HOME: 3, APP_SWITCH: 187, ALL_APPS: 284, POWER: 26, MENU: 82, NOTIFICATION: 83 };
+const ANDROID = { BACK: 4, HOME: 3, APP_SWITCH: 187, ALL_APPS: 284, POWER: 26, WAKEUP: 224, MENU: 82, NOTIFICATION: 83 };
 
 // Keeps the held modifiers, so every key goes with the right meta state.
 class KeyState {

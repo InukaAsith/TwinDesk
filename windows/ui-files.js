@@ -45,7 +45,8 @@ UI.tab({
     zone.ondrop = (e) => {
       e.preventDefault();
       zone.classList.remove('over');
-      if (canSend) api.sendFiles(api.pathsOf(e.dataTransfer.files));
+      // As an array: a FileList reaches the preload as a plain object, which can't be iterated.
+      if (canSend) api.sendFiles(api.pathsOf([...e.dataTransfer.files]));
     };
     // Dropping anywhere else in the window must not open the file.
     window.addEventListener('dragover', (e) => e.preventDefault());

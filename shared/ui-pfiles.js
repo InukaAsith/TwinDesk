@@ -216,7 +216,8 @@ UI.tab({
       wrap.classList.remove('over');
       if (!UI.hubReady(UI.state, 'files')) return;
       e.preventDefault();
-      const paths = api.pathsOf ? api.pathsOf(e.dataTransfer.files) : [];
+      // As an array: a FileList reaches the preload as a plain object, which can't be iterated.
+      const paths = api.pathsOf ? api.pathsOf([...e.dataTransfer.files]) : [];
       if (paths.length) {
         api.hub({ do: 'upload', path: cwd, paths });
         status.textContent = `Sending ${paths.length === 1 ? 'a file' : `${paths.length} items`} to ${cwd || 'Storage'}…`;

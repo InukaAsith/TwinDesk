@@ -2,10 +2,18 @@
 // Discovery on UDP DISCOVERY_PORT, as on the computers: beacons to every broadcast address (we are a
 // guest: role 'guest'), answers probes, and keeps the computers nearby. A Mac's invite (its phone
 // tile was clicked, or Pair) arrives here too.
+//
+// With the screen off the multicast lock goes and beacons slow down: held, it lets every
+// broadcast on the Wi-Fi (ARP, mDNS, SSDP…) wake the phone, all day. Invites and probes sent to
+// our own address are unicast and still arrive; the computers' broadcasts wait for the screen.
 package com.twindesk.android
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.wifi.WifiManager
+import android.os.PowerManager
 import android.util.Log
 import org.json.JSONObject
 import java.net.DatagramPacket
@@ -16,6 +24,9 @@ import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
+
+// Screen off: two beacons per DEVICE_STALE_MS, so a computer keeps listing us while we're awake.
+private const val BEACON_SCREEN_OFF_MS = 5000L
 
 data class Found(
     val id: String,
@@ -39,28 +50,45 @@ class Discovery(
     @Volatile private var sock: DatagramSocket? = null
     @Volatile private var running = false
     private var lock: WifiManager.MulticastLock? = null
+    @Volatile private var screenOn = true
+    private var screenWatch: BroadcastReceiver? = null
 
     fun start() {
         if (running) return
         running = true
-        // Some phones drop broadcast packets for apps without this.
+        // Some phones drop broadcast packets for apps without this (held only while the screen is on).
         lock = (ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-            .createMulticastLock("twindesk").apply { setReferenceCounted(false); acquire() }
+            .createMulticastLock("twindesk").apply { setReferenceCounted(false) }
+        screen(ctx.getSystemService(PowerManager::class.java)?.isInteractive != false)
+        screenWatch = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                screen(i.action == Intent.ACTION_SCREEN_ON)
+                // Back in every computer's list at once, and theirs in ours (off the main thread).
+                if (screenOn) thread(name = "td-wake", isDaemon = true) { beacon(); probe() }
+            }
+        }.also { ctx.registerReceiver(it, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) }) }
         thread(name = "td-discovery", isDaemon = true) { receiveLoop() }
         thread(name = "td-beacon", isDaemon = true) {
             while (running) {
                 beacon()
                 prune()
-                Thread.sleep(Proto.BEACON_MS)
+                Thread.sleep(if (screenOn) Proto.BEACON_MS else BEACON_SCREEN_OFF_MS)
             }
         }
     }
 
     fun stop() {
         running = false
+        screenWatch?.let { runCatching { ctx.unregisterReceiver(it) } }
+        screenWatch = null
         sock?.close()
         sock = null
         runCatching { lock?.release() }
+    }
+
+    @Synchronized private fun screen(on: Boolean) {
+        screenOn = on
+        runCatching { if (on) lock?.acquire() else lock?.release() }
     }
 
     fun list(): List<Found> = found.values.sortedWith(compareByDescending<Found> { it.invited }.thenBy { it.name })

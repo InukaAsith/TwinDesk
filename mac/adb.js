@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The bundled adb (Android platform-tools), for the phone's wireless debugging: pairing with
 // its code, connecting, shell commands, pushing scrcpy-server and port forwards. The built app has
-// it in Resources/adb (build-app.sh); a dev run uses the Android SDK's or Homebrew's.
+// it in Resources/adb (build-app.sh).
 'use strict';
 
 const fs = require('fs');
@@ -10,13 +10,21 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 const adbmdns = require('../shared/adbmdns.js');
 
+// A developer's own adb comes first: the one named by ADB (scrcpy's setting), else the Android
+// SDK's platform-tools, which Flutter and Android Studio use, else Homebrew's (the
+// android-platform-tools cask, as scrcpy's install notes have it). Two different adb builds on
+// one machine keep killing each other's server on port 5037, dropping every device on both
+// sides. The bundled one is for everyone else.
 function findAdb() {
   const candidates = [
-    process.resourcesPath && path.join(process.resourcesPath, 'adb', 'adb'),
-    path.join(__dirname, 'vendor', 'adb', 'adb'),
+    process.env.ADB,
+    process.env.ANDROID_HOME && path.join(process.env.ANDROID_HOME, 'platform-tools', 'adb'),
+    process.env.ANDROID_SDK_ROOT && path.join(process.env.ANDROID_SDK_ROOT, 'platform-tools', 'adb'),
     path.join(os.homedir(), 'Library', 'Android', 'sdk', 'platform-tools', 'adb'),
     '/opt/homebrew/bin/adb',
     '/usr/local/bin/adb',
+    process.resourcesPath && path.join(process.resourcesPath, 'adb', 'adb'),
+    path.join(__dirname, 'vendor', 'adb', 'adb'),
   ];
   return candidates.find((p) => p && fs.existsSync(p)) || null;
 }

@@ -443,7 +443,9 @@ class PhoneBridge extends EventEmitter {
   async _startControl() {
     if (this.control && !this.control.closed) return this._set('ready');
     this._set('connecting', 'Connecting to the phone’s screen…');
-    const s = new Session(this.adb, this.serial, { video: false, audio: false, control: true, clipboardAutosync: true });
+    // powerOn false: scrcpy presses the power key as it starts, and this session restarts whenever
+    // the phone's adb drops (adb tcpip too), so a phone lying locked kept lighting up its lock screen.
+    const s = new Session(this.adb, this.serial, { video: false, audio: false, control: true, clipboardAutosync: true, powerOn: false });
     s.on('clipboard', (text) => this._phoneCopied(text));
     s.on('closed', (why) => {
       if (this.control !== s) return;
@@ -596,6 +598,9 @@ class PhoneBridge extends EventEmitter {
     if (this.inputBlocked) this.emit('popup', 'home', INPUT_BLOCKED);
     // Answer after Kvm's _take returns: it starts its "no answer" timer right after sending kvm.take.
     setImmediate(() => this._toKvm({ t: T.KVM_ACCEPT, route: m.route }));
+    // The screen on for the pointer (WAKEUP does nothing when it's on already). Through scrcpy only:
+    // the phone's own input (Accessibility) can't press it.
+    if (this.control && this.ctl === this.control) this.control.tap(ANDROID.WAKEUP);
     this._hover();
     this.emit('change');
   }
