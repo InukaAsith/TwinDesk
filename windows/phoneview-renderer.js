@@ -19,6 +19,7 @@
   const ACTION = { DOWN: 0, UP: 1, MOVE: 2, HOVER_MOVE: 7 };
   const FINGER = -2; // scrcpy's generic finger
   let size = null; // video size
+  let enterIsSend = true;
   let decoder = null;
   let config = null; // SPS/PPS, sent in front of the next key frame
   let waitingKey = true;
@@ -211,27 +212,76 @@
     const h = (size && size.height) || canvas.height;
     return { x: Math.max(0, Math.min(w - 1, ((e.clientX - r.left) / r.width) * w)), y: Math.max(0, Math.min(h - 1, ((e.clientY - r.top) / r.height) * h)) };
   };
+
   let down = false;
+  let rightDown = false;
+  let rightDragging = false;
+  let rightStart = null;
+
   canvas.addEventListener('pointerdown', (e) => {
     canvas.focus();
-    if (e.button === 2) return api.send({ t: 'nav', key: 'back' });
     if (e.button === 1) return api.send({ t: 'nav', key: 'home' });
+    if (e.button === 2) {
+      canvas.setPointerCapture(e.pointerId);
+      rightDown = true;
+      rightDragging = false;
+      rightStart = { ...at(e), clientX: e.clientX, clientY: e.clientY };
+      return;
+    }
     if (e.button !== 0) return;
     canvas.setPointerCapture(e.pointerId);
     down = true;
     api.send({ t: 'touch', action: ACTION.DOWN, pointer: FINGER, ...at(e) });
   });
+
   canvas.addEventListener('pointermove', (e) => {
+    if (rightDown && rightStart) {
+      const dist = Math.hypot(e.clientX - rightStart.clientX, e.clientY - rightStart.clientY);
+      if (!rightDragging && dist > 5) {
+        rightDragging = true;
+        api.send({ t: 'touch', action: ACTION.DOWN, pointer: FINGER, x: rightStart.x, y: rightStart.y });
+      }
+      if (rightDragging) {
+        api.send({ t: 'touch', action: ACTION.MOVE, pointer: FINGER, ...at(e) });
+      }
+      return;
+    }
     if (down) api.send({ t: 'touch', action: ACTION.MOVE, pointer: FINGER, ...at(e) });
     else api.send({ t: 'touch', action: ACTION.HOVER_MOVE, pointer: -1, ...at(e) });
   });
+
   const up = (e) => {
+    try { if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); } catch {}
+    if (e.button === 2 && rightDown) {
+      if (rightDragging) {
+        api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, ...at(e) });
+      } else {
+        // Simple right-click tap without dragging: standard Back action
+        api.send({ t: 'nav', key: 'back' });
+      }
+      rightDown = false;
+      rightDragging = false;
+      rightStart = null;
+      return;
+    }
     if (!down) return;
     down = false;
     api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, ...at(e) });
   };
   canvas.addEventListener('pointerup', up);
-  canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('pointercancel', (e) => {
+    try { if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId); } catch {}
+    if (rightDown) {
+      if (rightDragging) api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, ...at(e) });
+      rightDown = false;
+      rightDragging = false;
+      rightStart = null;
+    }
+    if (down) {
+      down = false;
+      api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, ...at(e) });
+    }
+  });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // Scroll, and pinch (Chromium turns a touchpad pinch into ctrl+wheel): two fingers around the
@@ -265,12 +315,49 @@
   // Keys go to the phone; Alt+F4 closes the window like any other.
   const onKey = (e) => {
     if (e.altKey && e.code === 'F4') return;
+    // Arrow keys: full direction swipe across the phone screen (unless Ctrl/Alt/Shift held)
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      if (e.type === 'keydown') {
+        const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[e.code];
+        if (dir) api.send({ t: 'swipe', dir });
+      }
+      return;
+    }
+    // Enter / NumpadEnter: send message or newline
+    if (['Enter', 'NumpadEnter'].includes(e.code)) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Shift+Enter: always insert newline
+        if (e.type === 'keydown' && !e.repeat) {
+          api.send({ t: 'newline' });
+        }
+        return;
+      }
+      if (enterIsSend) {
+        // Enter without Shift: trigger Send button
+        if (e.type === 'keydown' && !e.repeat) {
+          api.send({ t: 'sendMsg' });
+        }
+        return;
+      }
+    }
     e.preventDefault();
     api.send({ t: 'key', code: e.code, down: e.type === 'keydown', repeat: e.repeat });
   };
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);
   window.addEventListener('blur', () => {
+    if (rightDown) {
+      if (rightDragging) api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, x: 0, y: 0 });
+      rightDown = false;
+      rightDragging = false;
+      rightStart = null;
+    }
+    if (down) {
+      down = false;
+      api.send({ t: 'touch', action: ACTION.UP, pointer: FINGER, x: 0, y: 0 });
+    }
     for (const code of ['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']) api.send({ t: 'key', code, down: false });
   });
 
@@ -286,5 +373,34 @@
   for (const k of ['back', 'home', 'recents', 'notifs', 'rotate']) {
     document.getElementById(`b-${k}`).onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
   }
+
+  const powerBtn = document.getElementById('b-power');
+  if (powerBtn) {
+    powerBtn.onclick = () => api.send({ t: 'nav', key: 'screenPower' });
+    powerBtn.oncontextmenu = (e) => {
+      e.preventDefault();
+      api.send({ t: 'nav', key: 'power' });
+    };
+  }
+
+  const enterSendBtn = document.getElementById('b-enter-send');
+  if (enterSendBtn) {
+    enterSendBtn.onclick = () => {
+      enterIsSend = !enterIsSend;
+      enterSendBtn.classList.toggle('active', enterIsSend);
+      enterSendBtn.title = enterIsSend
+        ? 'Enter sends message (Shift+Enter for new line)'
+        : 'Enter inserts new line (Enter sends message is OFF)';
+    };
+  }
+
+  api.on('screenPower', (state) => {
+    if (!powerBtn) return;
+    const off = !!(state && state.off);
+    powerBtn.classList.toggle('active', off);
+    powerBtn.title = off
+      ? 'Phone display is OFF (saving battery). Click to turn back on.'
+      : 'Turn phone screen off (saves battery) · Right-click for power key';
+  });
   canvas.focus();
 })();

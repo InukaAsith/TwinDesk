@@ -76,6 +76,8 @@ object Proto {
         const val PHONE_SOUND_WANT = "phone.sound.want"
         const val PHONE_SOUND = "phone.sound"
         const val PHONE_SOUND_STATE = "phone.sound.state"
+        const val PHONE_SEND = "phone.send"
+        const val PHONE_ACTIVE_APP = "phone.activeApp"
         const val ADB_STATE = "adb.state"
         const val ADB_ENABLE = "adb.enable"
         const val ADB_PAIR = "adb.pair"

@@ -199,6 +199,8 @@
       PHONE_SOUND_WANT: 'phone.sound.want', // computer->phone {on}: its sound here without wireless debugging (playback capture, Start on the phone), while adb can't carry it
       PHONE_SOUND: 'phone.sound', // phone->computer {codec: 'opus'|'pcm', p: [base64]}: 20 ms each (Opus packets, or 48 kHz stereo s16le)
       PHONE_SOUND_STATE: 'phone.sound.state', // phone->computer {on, waiting (for Start on the phone), error, codec}
+      PHONE_SEND: 'phone.send', // computer->phone: clicks the active app's Send button
+      PHONE_ACTIVE_APP: 'phone.activeApp', // phone->computer {pkg}: current foreground package
       // Wireless debugging (adb), which the Mac uses for the screen, touch, mouse and keyboard,
       // the clipboard in the background and apps in their own windows (scrcpy):
       ADB_STATE: 'adb.state', // phone->Mac {devOptions, wifi (wireless debugging on), canEnable (WRITE_SECURE_SETTINGS granted), address, full, port (its wireless debugging port from its own mDNS, 0 if not known yet), net (on a Wi-Fi network: wireless debugging can't be on without one)}

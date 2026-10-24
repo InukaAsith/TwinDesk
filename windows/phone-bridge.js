@@ -268,10 +268,15 @@ class PhoneBridge extends EventEmitter {
     // port 5555 is this computer's Android emulator, and the phone's Wi-Fi address is out of reach.
     const c = this.server.current;
     const sessionIp = c && c.transport !== 'ble' && c.address && !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(c.address) ? c.address.replace(/^::ffff:/, '') : '';
-    if (sessionIp && sessionIp === address) {
-      const serial = `${address}:${TCPIP_PORT}`;
-      const r = await this.adb.connect(address, TCPIP_PORT);
-      if (r.ok && await this._findDevice(address)) return this._kick();
+    const connectIp = sessionIp && sessionIp === address ? address : (address && a.hotspot ? address : (sessionIp || address));
+    if (connectIp && !/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/.test(connectIp)) {
+      const serial = `${connectIp}:${TCPIP_PORT}`;
+      const r = await this.adb.connect(connectIp, TCPIP_PORT);
+      if (r.ok && await this._findDevice(connectIp)) {
+        this.lastPort.set(connectIp, TCPIP_PORT);
+        this.misses = 0;
+        return this._kick();
+      }
       // Not allowed yet ("failed to authenticate", kept as unauthorized): the phone asks; keep that connection.
       if ((await this.adb.devices()).some((d) => d.serial === serial && d.state === 'unauthorized')) {
         return this._set('waitingWifi', 'Tap Allow on the phone (“Allow USB debugging?”).');
@@ -280,12 +285,12 @@ class PhoneBridge extends EventEmitter {
     }
     // A direct Wi-Fi link without a Wi-Fi network on the phone: wireless debugging can’t come on. (On
     // its own Wi-Fi as well it can, reached at the session's address; older apps don't say: the address.)
-    const direct = a.net === false || (!a.wifi && /^192\.168\.(49|137)\./.test(address));
+    const direct = a.net === false || a.hotspot || (!a.wifi && /^192\.168\.(43|49|137)\./.test(address));
     if (!a.wifi || direct) {
       if (a.canEnable) this.server.sendToClient({ t: T.ADB_ENABLE, on: true }); // also refreshes adb.state
       if (a.canEnable && !direct) return this._set('connecting', 'Turning on wireless debugging…');
-      // Android keeps wireless debugging off without a Wi-Fi network: a Wi-Fi Direct group isn't one.
-      if (direct) return this._set('waitingWifi', 'On a direct Wi-Fi link the phone can’t turn wireless debugging on (it needs a Wi-Fi network). Connect it once by USB cable or on the same Wi-Fi, and it works here too until the phone restarts. Meanwhile the mouse and keyboard work through Accessibility.');
+      // Android keeps wireless debugging off without a Wi-Fi network: a Wi-Fi Direct group or hotspot isn't one.
+      if (direct) return this._set('waitingWifi', 'On a direct Wi-Fi link or hotspot the phone can’t turn wireless debugging on (it needs a Wi-Fi network). Connect it once by USB cable or on the same Wi-Fi, and it works here too until the phone restarts. Meanwhile the mouse and keyboard work through Accessibility.');
       return this._set('waitingWifi', a.devOptions ? 'Turn on USB debugging and Wireless debugging on the phone (both).' : 'Turn on Developer options, then USB debugging and Wireless debugging on the phone (both).');
     }
     // Wireless debugging is on: connect where it listens. The phone tells us its port (it finds
@@ -296,7 +301,7 @@ class PhoneBridge extends EventEmitter {
     await this._dropStale(address);
     const services = await this.adb.mdns();
     const seen = services.filter((s) => s.type === 'connect' && s.address === address).map((s) => s.port);
-    const ports = [...new Set([a.port, ...seen, this.lastPort.get(address)])].filter((n) => n > 0 && n < 65536);
+    const ports = [...new Set([5555, a.port, ...seen, this.lastPort.get(address)])].filter((n) => n > 0 && n < 65536);
     let unpaired = false;
     for (const port of ports) {
       const r = await this.adb.connect(address, port);
@@ -659,6 +664,32 @@ class PhoneBridge extends EventEmitter {
     const swap = this.server.keySwap(this.getSettings());
     const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
+
+    if (['Enter', 'NumpadEnter'].includes(code)) {
+      const shiftHeld = this.keys.held.has('ShiftLeft') || this.keys.held.has('ShiftRight');
+      if (down) {
+        if (shiftHeld) {
+          this.ctl.text('\n');
+          return;
+        } else {
+          if (this.server) {
+            try { this.server.sendToClient({ t: T.PHONE_SEND }); } catch {}
+          }
+          this.ctl.tap(66);
+          setTimeout(() => {
+            if (this.ctl && !this.closed) {
+              this.ctl.tap(61);
+              setTimeout(() => {
+                if (this.ctl && !this.closed) this.ctl.tap(66);
+              }, 35);
+            }
+          }, 50);
+          return;
+        }
+      }
+      return;
+    }
+
     const e = this.keys.event(code, down);
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }

@@ -9,8 +9,11 @@ import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import android.util.Base64
+import android.util.Log
 import java.io.ByteArrayOutputStream
 import android.service.notification.StatusBarNotification
 import org.json.JSONObject
@@ -25,6 +28,9 @@ class Notifs(core: Core) : Feature(core) {
     private val iconsSent = HashSet<String>()
     private val iconsIn = object : LinkedHashMap<String, Bitmap>(16, 0.75f, true) {
         override fun removeEldestEntry(e: MutableMap.MutableEntry<String, Bitmap>?) = size > 100
+    }
+    private val recentSent = object : LinkedHashMap<String, Long>(32, 0.75f, true) {
+        override fun removeEldestEntry(e: MutableMap.MutableEntry<String, Long>?) = size > 64
     }
 
     // The standard build (what people download) has no notification listener: Play Protect blocks
@@ -53,26 +59,101 @@ class Notifs(core: Core) : Feature(core) {
         synchronized(iconsSent) { iconsSent.clear() }
     }
 
+    // Extract title from standard, big title, conversation title, etc.
+    private fun extractTitle(x: Bundle): String {
+        return (x.getCharSequence(Notification.EXTRA_TITLE)
+            ?: x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
+            ?: x.getCharSequence(Notification.EXTRA_TITLE_BIG))?.toString()?.trim() ?: ""
+    }
+
+    // Extract text from MessagingStyle (WhatsApp, etc.), InboxStyle, BigText, Text, or SubText
+    private fun extractText(x: Bundle): String {
+        // 1. Direct big text or standard text
+        val bigText = x.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim()
+        if (!bigText.isNullOrEmpty()) return bigText
+
+        val text = x.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim()
+        if (!text.isNullOrEmpty()) return text
+
+        // 2. MessagingStyle (used by WhatsApp, Telegram, Google Messages)
+        val msgs = x.getParcelableArray(Notification.EXTRA_MESSAGES)
+        if (!msgs.isNullOrEmpty()) {
+            val lastMsg = msgs.lastOrNull()
+            if (lastMsg is Bundle) {
+                val senderPerson = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    (lastMsg.getParcelable<android.app.Person>("sender_person"))?.name?.toString()?.trim() ?: ""
+                } else ""
+                val sender = senderPerson.ifEmpty { lastMsg.getCharSequence("sender")?.toString()?.trim() ?: "" }
+                val msgText = lastMsg.getCharSequence("text")?.toString()?.trim() ?: ""
+                if (msgText.isNotEmpty()) {
+                    return if (sender.isNotEmpty()) "$sender: $msgText" else msgText
+                }
+            }
+        }
+
+        // 3. InboxStyle (used by Instagram and WhatsApp multi-message summaries)
+        val lines = x.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        if (!lines.isNullOrEmpty()) {
+            val valid = lines.mapNotNull { it?.toString()?.trim() }.filter { it.isNotEmpty() }
+            if (valid.isNotEmpty()) return valid.joinToString("\n")
+        }
+
+        // 4. Fallback to sub text or summary text
+        val subText = x.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim()
+        if (!subText.isNullOrEmpty()) return subText
+
+        val summaryText = x.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()?.trim()
+        if (!summaryText.isNullOrEmpty()) return summaryText
+
+        val infoText = x.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString()?.trim()
+        if (!infoText.isNullOrEmpty()) return infoText
+
+        return ""
+    }
+
     // From NotifListener: a new notification on this phone.
     fun posted(sbn: StatusBarNotification) {
         if (!peerAccepts || !core.sync.get("notifs", "out") || !core.link.connected) return
         val n = sbn.notification ?: return
-        if (sbn.packageName == core.ctx.packageName || sbn.isOngoing) return
-        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return // the group's children come too
+        val pkg = sbn.packageName
+        if (pkg == core.ctx.packageName || sbn.isOngoing) return
+
+        val isMessaging = pkg == "com.whatsapp" || pkg == "com.whatsapp.w4b" || pkg == "com.instagram.android" || pkg == "org.telegram.messenger"
+        // Don't drop group summaries for messaging apps if they contain message text
+        if (!isMessaging && (n.flags and Notification.FLAG_GROUP_SUMMARY != 0)) return
         if (n.category == Notification.CATEGORY_TRANSPORT || n.category == Notification.CATEGORY_PROGRESS || n.category == Notification.CATEGORY_SERVICE) return
         if (n.category == Notification.CATEGORY_CALL && core.hub.callsOn) return // the computer shows the call itself
-        if (sbn.packageName in muted) return
+        if (pkg in muted) return
+
         val x = n.extras
-        val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
-        val text = (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString() ?: ""
+        val title = extractTitle(x)
+        val text = extractText(x)
         if (title.isEmpty() && text.isEmpty()) return
+
+        // Deduplicate rapid duplicate notifications (e.g. summary + child sent at same instant)
+        val hash = "$pkg|$title|$text"
+        val now = System.currentTimeMillis()
+        synchronized(recentSent) {
+            val last = recentSent[hash] ?: 0L
+            if (now - last < 2000L) return
+            recentSent[hash] = now
+        }
+
         val pm = core.ctx.packageManager
-        val appName = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(sbn.packageName, 0)).toString() }.getOrDefault(sbn.packageName)
+        val appName = when (pkg) {
+            "com.whatsapp" -> "WhatsApp"
+            "com.whatsapp.w4b" -> "WhatsApp Business"
+            "com.instagram.android" -> "Instagram"
+            "org.telegram.messenger" -> "Telegram"
+            else -> runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        }
+
         val hide = core.store.flag("notifs.hideText", false)
-        val icon = if (synchronized(iconsSent) { iconsSent.add(sbn.packageName) }) appIcon(sbn.packageName) else null
+        val icon = if (synchronized(iconsSent) { iconsSent.add(pkg) }) appIcon(pkg) else null
+        Log.d("TwinDeskNotifs", "Sending notif from $appName: $title -> $text")
         core.send(
             msg(
-                Proto.T.NOTIF, "id" to sbn.key.take(200), "app" to sbn.packageName, "appName" to appName,
+                Proto.T.NOTIF, "id" to sbn.key.take(200), "app" to pkg, "appName" to appName,
                 "title" to title.take(300), "subtitle" to (x.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString() ?: "").take(200),
                 "body" to if (hide) "" else text.take(1000), "at" to sbn.postTime,
             ).apply { if (icon != null) put("icon", icon) },

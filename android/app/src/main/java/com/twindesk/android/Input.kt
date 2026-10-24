@@ -46,7 +46,17 @@ class InputService : AccessibilityService() {
         return super.onUnbind(intent)
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    var activePackage: String = ""
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString() ?: ""
+            if (pkg.isNotEmpty() && pkg != activePackage) {
+                activePackage = pkg
+                Core.get(this).link.send(JSONObject().put("t", Proto.T.PHONE_ACTIVE_APP).put("pkg", pkg))
+            }
+        }
+    }
     override fun onInterrupt() {}
 
     // ---- touch ----
@@ -136,6 +146,8 @@ class InputService : AccessibilityService() {
             KeyEvent.KEYCODE_MOVE_HOME, KeyEvent.KEYCODE_DPAD_UP -> select(node, 0, 0)
             KeyEvent.KEYCODE_MOVE_END, KeyEvent.KEYCODE_DPAD_DOWN -> select(node, t.length, t.length)
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                val shift = meta and KeyEvent.META_SHIFT_MASK != 0
+                if (!shift && clickSendButton()) return
                 val ime = Build.VERSION.SDK_INT >= 30 && node.actionList.any { it.id == android.R.id.accessibilityActionImeEnter }
                 if (ime) node.performAction(android.R.id.accessibilityActionImeEnter)
                 else if (node.isMultiLine) insert(node, t, s, e, "\n")
@@ -145,6 +157,58 @@ class InputService : AccessibilityService() {
                 if (ch > 0 && ch and KeyCharacterMap.COMBINING_ACCENT == 0) insert(node, t, s, e, ch.toChar().toString())
             }
         }
+    }
+
+    fun clickSendButton(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val pkg = root.packageName?.toString() ?: activePackage
+
+        // Specific IDs for WhatsApp and Instagram
+        if (pkg.contains("whatsapp")) {
+            val list = root.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")
+            if (!list.isNullOrEmpty()) {
+                val btn = list.firstOrNull { it.isClickable || it.isEnabled } ?: list[0]
+                if (btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+            }
+        }
+        if (pkg.contains("instagram")) {
+            for (id in listOf("com.instagram.android:id/row_thread_composer_button_send", "com.instagram.android:id/button_send")) {
+                val list = root.findAccessibilityNodeInfosByViewId(id)
+                if (!list.isNullOrEmpty()) {
+                    val btn = list.firstOrNull { it.isClickable || it.isEnabled } ?: list[0]
+                    if (btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                }
+            }
+        }
+
+        // Generic search by text or content description
+        for (q in listOf("Send", "send", "Send message")) {
+            val list = root.findAccessibilityNodeInfosByText(q)
+            for (n in list) {
+                if (n.isClickable && n.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                val p = n.parent
+                if (p != null && p.isClickable && p.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+            }
+        }
+
+        return findAndClickSendNode(root)
+    }
+
+    private fun findAndClickSendNode(n: AccessibilityNodeInfo?): Boolean {
+        if (n == null) return false
+        val id = n.viewIdResourceName?.lowercase() ?: ""
+        val desc = n.contentDescription?.toString()?.lowercase() ?: ""
+        val text = n.text?.toString()?.lowercase() ?: ""
+        if (n.isClickable) {
+            if (id.endsWith(":id/send") || id.contains("button_send") || id.contains("send_button") ||
+                desc == "send" || desc == "send message" || text == "send") {
+                return n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+        }
+        for (i in 0 until n.childCount) {
+            if (findAndClickSendNode(n.getChild(i))) return true
+        }
+        return false
     }
 
     // The field's text (not its hint, which some fields report as their text while empty).
@@ -222,6 +286,10 @@ class Input(core: Core) : Feature(core) {
             Proto.T.PHONE_INPUT_VIA -> {
                 val v = m.optString("via")
                 if (v == "adb" || v == "phone" || v == "auto") { core.store.setPrefsString("inputVia", v); told = "$on/$v"; core.changed() }
+            }
+            Proto.T.PHONE_SEND -> {
+                val s = InputService.running ?: return true
+                s.clickSendButton()
             }
             else -> return false
         }

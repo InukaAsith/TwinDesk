@@ -125,6 +125,8 @@ function setupIpc(ctx) {
     change('notifs', p, () => notifs.applySettings());
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));
+  handle('clearNotifHistory', () => notifs.clearHistory && notifs.clearHistory());
+  handle('openNotifiedApp', (arg) => arg && typeof arg.app === 'string' && phoneViews.openNotified(arg.app, arg.appName));
   handle('setShareOn', (on) => smb.setShareOn(on === true));
   handle('chooseShareFolder', async () => {
     const win = BrowserWindow.getFocusedWindow();

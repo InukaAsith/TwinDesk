@@ -14,6 +14,8 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
   -webkit-app-region: no-drag; width: 26px; height: 24px; border: 0; border-radius: 6px; background: none; display: grid; place-items: center; padding: 0;
 }
 .tools button:hover { background: var(--hover); }
+.tools button.active { background: rgba(48, 209, 88, 0.25); }
+.tools button.active svg { stroke: #30d158; }
 .tools svg { width: 15px; height: 15px; fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 #stage { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; display: grid; place-items: center; }
 #screen { max-width: 100%; max-height: 100%; outline: none; cursor: default; }

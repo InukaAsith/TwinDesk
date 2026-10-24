@@ -25,11 +25,15 @@ UI.tab({
       { on: { get: (s) => s.notifs.send, set: (v) => api.setNotifs({ send: v }) }, label: 'Show {me}’s notifications on {name}', rows: [hideRow] },
     );
     const recvRow = pair.a.main, sendRow = pair.b.main;
+    const histList = el('div');
+    const clearBtn = UI.button('Clear', () => api.clearNotifHistory(), 'small');
+    const histCard = UI.card('Recent Notifications', [histList], clearBtn);
     const apps = el('div');
 
-    body.append(note, pair.el, UI.card('Apps', [apps]));
+    body.append(note, pair.el, histCard, UI.card('Apps', [apps]));
 
     let key = '';
+    let histKey = '';
     return (s) => {
       const n = s.notifs;
       const p = UI.peer(s);
@@ -40,6 +44,32 @@ UI.tab({
       recvRow.setHint(n.receive && n.shown ? n.shown + ' shown' : 'As Windows notifications, from TwinDesk');
       sendRow.setHint(n.readable === false ? 'Windows’ notification list can’t be read'
         : !n.send ? '' : !connected ? 'Also switches it on the other computer' : n.sent ? n.sent + ' sent' : 'As native notifications there');
+
+      // Recent notifications
+      const history = n.history || [];
+      const hk = JSON.stringify(history.map((h) => [h.id, h.at]));
+      if (hk !== histKey) {
+        histKey = hk;
+        if (history.length) {
+          histList.replaceChildren(...history.map((item) => {
+            const appName = item.appName || item.app;
+            const isPhone = UI.isPhone(s);
+            const openBtn = isPhone && item.app ? UI.button('Open', () => api.openNotifiedApp({ app: item.app, appName }), 'small') : null;
+            const time = UI.ago(item.at);
+            const topText = [appName, item.title].filter(Boolean).join(' · ');
+            const subText = [item.subtitle, item.body].filter(Boolean).join(' — ') || 'Notification';
+            const r = UI.row(topText, `${subText} · ${time}`, [openBtn]);
+            if (item.icon) {
+              const img = el('img', { src: item.icon, style: 'width: 20px; height: 20px; border-radius: 4px; margin-right: 8px; vertical-align: middle; flex-shrink: 0;' });
+              r.querySelector('.text').prepend(img);
+              r.classList.add('with-ico');
+            }
+            return r;
+          }));
+        } else {
+          histList.replaceChildren(UI.row('No notifications yet', 'Incoming notifications from WhatsApp, Instagram, and other apps will appear here in real-time.'));
+        }
+      }
 
       const k = JSON.stringify([n.apps.map((a) => a.app), n.muted]);
       if (k === key) return;

@@ -127,7 +127,7 @@ UI.tab({
     }, 'small');
 
     // ---- a connected phone's wireless debugging, until it works (the Phone page has it too) ----
-    const ADB = { needsPair: ['bad', 'Pair once'], waitingWifi: ['bad', 'Off'], connecting: ['muted', 'Looking…'], missing: ['bad', 'Missing'], error: ['bad', 'Problem'] };
+    const ADB = { needsPair: ['bad', 'Pair once'], waitingWifi: ['bad', 'Off'], connecting: ['muted', 'Looking…'], missing: ['bad', 'Missing'], error: ['bad', 'Problem'], hotspotReady: ['good', 'Hotspot Ready'] };
     const adbPill = el('span', { class: 'pill bad' });
     const adbRow = UI.row('Wireless debugging', '', [adbPill, UI.button('Try Again', () => api.phoneRetry(), 'small')]);
     const adbCode = el('input', { type: 'text', placeholder: '123456', maxLength: 6, inputMode: 'numeric', autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': 'Pairing code' } });

@@ -102,6 +102,7 @@ UI.tab({
     const STATES = {
       ready: ['good', 'Ready'], connecting: ['muted', 'Connecting…'], needsPair: ['bad', 'Pair once'],
       waitingWifi: ['bad', 'Off'], missing: ['bad', 'Missing'], error: ['bad', 'Problem'], off: ['muted', '—'],
+      hotspotReady: ['good', 'Hotspot Ready'],
     };
 
     function render(s) {

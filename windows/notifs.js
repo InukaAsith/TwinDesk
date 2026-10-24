@@ -23,6 +23,7 @@ class Notifs {
     this.shown = 0;
     this.live = new Set(); // shown toasts, kept alive until closed
     this.echoes = []; // {title, body, until}: shown here from the other side, never sent back
+    this.history = []; // received notifications history from peer
 
     const link = this.link;
     link.on('welcome', () => {
@@ -105,23 +106,42 @@ class Notifs {
 
   // Windows toasts have no subtitle: the first line is "<appName> · <peer>".
   _show(m) {
-    if (!this.cfg.receive || !Notification.isSupported()) return;
+    if (!this.cfg.receive) return;
     const peer = this.peerName();
     const appName = str(m.appName, 100);
     const title = str(m.title, 200) || appName || peer;
-    this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
-    const n = new Notification({
+    const item = {
+      id: str(m.id, 64) || String(Date.now()),
+      app: str(m.app, 200),
+      appName,
       title,
-      icon: this.iconsIn.for(m),
-      body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
-    });
-    this.live.add(n);
-    const drop = () => this.live.delete(n);
-    n.on('close', drop);
-    n.on('click', () => this.onClick && this.onClick({ app: str(m.app, 200), appName }));
-    setTimeout(drop, 60000);
-    n.show();
+      subtitle: str(m.subtitle, 200),
+      body: str(m.body, 1000),
+      at: Math.round(Number(m.at)) || Date.now(),
+      icon: (typeof m.icon === 'string' && m.icon.startsWith('data:image/')) ? m.icon : '',
+    };
+    this.history = [item, ...(this.history || []).filter((x) => x.id !== item.id)].slice(0, 50);
+
+    if (Notification.isSupported()) {
+      this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
+      const n = new Notification({
+        title,
+        icon: this.iconsIn.for(m),
+        body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
+      });
+      this.live.add(n);
+      const drop = () => this.live.delete(n);
+      n.on('close', drop);
+      n.on('click', () => this.onClick && this.onClick({ app: str(m.app, 200), appName }));
+      setTimeout(drop, 60000);
+      n.show();
+    }
     this.shown++;
+    this.onChange();
+  }
+
+  clearHistory() {
+    this.history = [];
     this.onChange();
   }
 
@@ -132,6 +152,7 @@ class Notifs {
       sent: this.sent,
       shown: this.shown,
       apps: [...this.apps.values()].sort((a, b) => b.at - a.at).slice(0, 40),
+      history: this.history || [],
     };
   }
 }

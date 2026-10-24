@@ -8,6 +8,7 @@
 
 const dgram = require('dgram');
 const os = require('os');
+const { execSync } = require('child_process');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 
@@ -38,6 +39,26 @@ function interfaces() {
 const isIPv4 = (s) => /^(\d{1,3})(\.\d{1,3}){3}$/.test(s) && s.split('.').every((o) => Number(o) < 256);
 
 const DEFAULT_NAME = { mac: 'Mac', win: 'PC', linux: 'Linux' };
+
+let cachedGateways = [];
+let lastGwCheck = 0;
+function defaultGateways() {
+  const now = Date.now();
+  if (now - lastGwCheck < 10000 && cachedGateways.length) return cachedGateways;
+  lastGwCheck = now;
+  const gws = [];
+  try {
+    const txt = execSync('route print 0.0.0.0', { windowsHide: true, timeout: 2000 }).toString();
+    const matches = txt.matchAll(/0\.0\.0\.0\s+0\.0\.0\.0\s+([0-9.]+)/g);
+    for (const m of matches) {
+      if (m[1] && isIPv4(m[1]) && !m[1].startsWith('127.') && !m[1].startsWith('0.')) {
+        if (!gws.includes(m[1])) gws.push(m[1]);
+      }
+    }
+    cachedGateways = gws;
+  } catch {}
+  return cachedGateways;
+}
 
 class Discovery extends EventEmitter {
   // self: {id, name, fp?, port?}
@@ -174,6 +195,7 @@ class Discovery extends EventEmitter {
 
   _targets() {
     const t = new Set(interfaces().map((i) => i.broadcast));
+    for (const gw of defaultGateways()) t.add(gw);
     t.add('255.255.255.255');
     return t;
   }

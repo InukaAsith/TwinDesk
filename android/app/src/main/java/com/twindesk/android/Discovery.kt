@@ -44,8 +44,10 @@ class Discovery(
         if (running) return
         running = true
         // Some phones drop broadcast packets for apps without this.
-        lock = (ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-            .createMulticastLock("twindesk").apply { setReferenceCounted(false); acquire() }
+        runCatching {
+            lock = (ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+                ?.createMulticastLock("twindesk")?.apply { setReferenceCounted(false); acquire() }
+        }
         thread(name = "td-discovery", isDaemon = true) { receiveLoop() }
         thread(name = "td-beacon", isDaemon = true) {
             while (running) {
@@ -90,6 +92,21 @@ class Discovery(
                 for (ia in ni.interfaceAddresses) {
                     val b = ia.broadcast
                     if (ia.address is Inet4Address && b != null) out.add(b.hostAddress!!)
+                }
+            }
+        }
+        // Inspect ARP table (/proc/net/arp) to reach connected hotspot clients directly
+        runCatching {
+            val arp = java.io.File("/proc/net/arp")
+            if (arp.exists() && arp.canRead()) {
+                arp.forEachLine { line ->
+                    val parts = line.trim().split("\\s+".toRegex())
+                    if (parts.size >= 4 && parts[0] != "IP" && parts[2] != "0x0") {
+                        val ip = parts[0]
+                        if (ip.matches(Regex("^\\d+\\.\\d+\\.\\d+\\.\\d+$"))) {
+                            out.add(ip)
+                        }
+                    }
                 }
             }
         }

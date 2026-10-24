@@ -665,6 +665,32 @@ class PhoneBridge extends EventEmitter {
     const swap = this.server.keySwap(this.getSettings());
     const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
+
+    if (['Enter', 'NumpadEnter'].includes(code)) {
+      const shiftHeld = this.keys.held.has('ShiftLeft') || this.keys.held.has('ShiftRight');
+      if (down) {
+        if (shiftHeld) {
+          this.ctl.text('\n');
+          return;
+        } else {
+          if (this.server) {
+            try { this.server.sendToClient({ t: T.PHONE_SEND }); } catch {}
+          }
+          this.ctl.tap(66);
+          setTimeout(() => {
+            if (this.ctl && !this.closed) {
+              this.ctl.tap(61);
+              setTimeout(() => {
+                if (this.ctl && !this.closed) this.ctl.tap(66);
+              }, 35);
+            }
+          }, 50);
+          return;
+        }
+      }
+      return;
+    }
+
     const e = this.keys.event(code, down);
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
