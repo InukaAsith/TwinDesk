@@ -3,5 +3,12 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; color: #9a9fa8; font: 17px/1.45 system-ui, sans-serif; pointer-events: none; }
 #overlay.hidden { display: none; }
+/* Touchpad mode's left click (hold it and slide on the screen to drag). */
+#click {
+  display: none; position: fixed; right: 18px; bottom: 18px; width: 72px; height: 72px; border-radius: 50%; border: 0;
+  background: rgba(255, 255, 255, 0.18); color: #fff; font: 600 14px system-ui, sans-serif; touch-action: none;
+}
+body.pad #click { display: block; }
+#click.down { background: rgba(10, 132, 255, 0.75); }
 /* The soft keyboard types into this (off screen); what is typed goes to the Mac as keys. */
 #kbd { position: fixed; left: -1000px; top: 0; width: 10px; height: 10px; opacity: 0; }

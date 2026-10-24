@@ -199,6 +199,17 @@
       PHONE_SOUND_WANT: 'phone.sound.want', // computer->phone {on}: its sound here without wireless debugging (playback capture, Start on the phone), while adb can't carry it
       PHONE_SOUND: 'phone.sound', // phone->computer {codec: 'opus'|'pcm', p: [base64]}: 20 ms each (Opus packets, or 48 kHz stereo s16le)
       PHONE_SOUND_STATE: 'phone.sound.state', // phone->computer {on, waiting (for Start on the phone), error, codec}
+      // The phone as the computer's remote (its Remote page: touchpad, keyboard, gamepad), phone->computer.
+      // Relative like k.*, applied only while the computer lets the phone control it (Windows for now):
+      REMOTE_HELLO: 'remote.hello', // phone->computer: the Remote page opened (the computer answers remote.state)
+      REMOTE_STATE: 'remote.state', // computer->phone {allowed}: whether it takes the remote's input now
+      REMOTE_MOVE: 'remote.mm', // {dx, dy, smooth?} pixels; smooth: eased out over about a frame on the computer
+      REMOTE_DOWN: 'remote.md', // {b}
+      REMOTE_UP: 'remote.mu', // {b}
+      REMOTE_WHEEL: 'remote.wh', // {dx, dy} pixels
+      REMOTE_KEY_DOWN: 'remote.kd', // {code} (KeyboardEvent.code)
+      REMOTE_KEY_UP: 'remote.ku', // {code}
+      REMOTE_RELEASE: 'remote.release', // let go of every key and button the remote holds
       // Wireless debugging (adb), which the Mac uses for the screen, touch, mouse and keyboard,
       // the clipboard in the background and apps in their own windows (scrcpy):
       ADB_STATE: 'adb.state', // phone->Mac {devOptions, wifi (wireless debugging on), canEnable (WRITE_SECURE_SETTINGS granted), address, full, port (its wireless debugging port from its own mDNS, 0 if not known yet), net (on a Wi-Fi network: wireless debugging can't be on without one)}

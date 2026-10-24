@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Remote</title>
+  <link rel="stylesheet" href="remote.css">
+</head>
+<body>
+  <header id="top">
+    <span id="name">Remote</span>
+    <button id="b-kbd" class="pad-only" aria-label="Keyboard">Keyboard</button>
+    <button id="b-close" aria-label="Close">✕</button>
+  </header>
+  <div id="note" hidden></div>
+
+  <!-- Touchpad and keyboard -->
+  <section id="pad-view" class="pad-only">
+    <div id="keys"></div>
+    <div id="pad"><span>Slide to move · tap to click · hold to right click<br>two fingers to scroll · two-finger tap to right click</span></div>
+    <div id="clicks">
+      <button id="b-left">Left click</button>
+      <button id="b-right">Right click</button>
+    </div>
+  </section>
+
+  <!-- Gamepad: each button presses the key the Remote page set for it -->
+  <section id="game" class="game-only">
+    <button class="g shoulder" id="g-lt" data-id="lt">LT</button>
+    <button class="g shoulder" id="g-lb" data-id="lb">LB</button>
+    <button class="g shoulder" id="g-rb" data-id="rb">RB</button>
+    <button class="g shoulder" id="g-rt" data-id="rt">RT</button>
+    <button class="g small" id="g-back" data-id="back">Back</button>
+    <button class="g small" id="g-start" data-id="start">Start</button>
+    <div class="stick" id="ls"><div class="knob"></div></div>
+    <div class="stick" id="rs"><div class="knob"></div></div>
+    <div id="dpad">
+      <button class="g" data-id="up" aria-label="Up">▲</button>
+      <button class="g" data-id="left" aria-label="Left">◀</button>
+      <button class="g" data-id="right" aria-label="Right">▶</button>
+      <button class="g" data-id="down" aria-label="Down">▼</button>
+    </div>
+    <div id="abxy">
+      <button class="g face y" data-id="y">Y</button>
+      <button class="g face x" data-id="x">X</button>
+      <button class="g face b" data-id="b">B</button>
+      <button class="g face a" data-id="a">A</button>
+    </div>
+    <button class="g small" id="g-l3" data-id="l3">L3</button>
+    <button class="g small" id="g-r3" data-id="r3">R3</button>
+  </section>
+
+  <textarea id="kbd" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+  <script src="remote.js"></script>
+</body>
+</html>

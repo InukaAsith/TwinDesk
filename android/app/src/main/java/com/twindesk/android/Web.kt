@@ -57,6 +57,10 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
         }.let { }
         @JavascriptInterface fun playing(w: Int, h: Int) = main.post { onEvent("playing", JSONObject().put("w", w).put("h", h)) }.let { }
         @JavascriptInterface fun haptic() = main.post { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }.let { }
+        // A light tap (a gamepad or touchpad button going down).
+        @JavascriptInterface fun tick() = main.post { view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY) }.let { }
+        // Something for the activity around the page (remote.html: "close", "keyboard", "keyboardOff").
+        @JavascriptInterface fun event(name: String) = main.post { onEvent(name, null) }.let { }
     }
 
     // A message to the page (any thread).
@@ -179,8 +183,14 @@ class Screen(core: Core) : Feature(core) {
 
     // name: the computer we're connected to, for the viewer's messages (stream.info's is the
     // display it shares, e.g. the Mac's "TwinDesk (virtual)"; a PC or Linux sends none).
+    // touch: "pad" (slide moves the pointer, no click; the Click button clicks) or "direct" (the
+    // pointer goes where the finger is, tap = click); speed and tap are the Remote page's touchpad settings.
     fun opts(): JSONObject = msg("opts", "sound" to core.store.flag("screen.sound", false), "pacing" to (core.store.flag("screen.smooth", false).let { if (it) "smooth" else "fast" }),
-        "name" to (core.host?.name ?: "the computer"))
+        "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
+        "speed" to core.remote.speed.toDouble(), "tap" to core.remote.tapClick)
+
+    // The touchpad settings changed on the Remote page: an open viewer follows.
+    fun repost() { host?.post(opts()) }
 
     fun setOpt(key: String, on: Boolean) {
         core.store.setFlag(key, on)

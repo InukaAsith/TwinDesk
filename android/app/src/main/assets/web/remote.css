@@ -1,0 +1,61 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+:root { color-scheme: dark; --bg: #0b0b0d; --card: #1c1c1e; --pad: #151517; --line: #2c2c2e; --text: #f5f5f7; --muted: #98989d; --accent: #0a84ff; }
+html, body {
+  margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 15px system-ui, sans-serif;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0; touch-action: none; }
+button.down, button.on { background: var(--accent); border-color: var(--accent); }
+body:not(.pad) .pad-only, body:not(.gamepad) .game-only { display: none !important; }
+
+#top { position: fixed; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; box-sizing: border-box; background: var(--card); z-index: 2; }
+#name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#top button { height: 34px; padding: 0 12px; font-size: 14px; }
+#b-close { width: 40px; padding: 0; }
+#note { position: fixed; top: 56px; left: 12px; right: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 159, 10, 0.18); font-size: 13.5px; line-height: 1.4; z-index: 3; pointer-events: none; }
+
+/* ---- touchpad ---- */
+#pad-view { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 14px; box-sizing: border-box; }
+#keys { flex: none; display: flex; gap: 6px; overflow-x: auto; touch-action: pan-x; scrollbar-width: none; }
+#keys::-webkit-scrollbar { display: none; }
+#keys button { flex: none; min-width: 46px; height: 40px; padding: 0 10px; font-size: 14px; }
+#pad { flex: 1; min-height: 120px; border-radius: 16px; background: var(--pad); border: 1px solid var(--line); display: grid; place-items: center; text-align: center; color: #55555a; font-size: 13px; line-height: 1.6; padding: 16px; }
+#clicks { flex: none; display: flex; gap: 10px; height: 64px; }
+#clicks button { flex: 1; font-size: 15px; }
+/* The soft keyboard types into this (off screen); what is typed goes to the computer as keys. */
+#kbd { position: fixed; left: -1000px; top: 0; width: 10px; height: 10px; opacity: 0; }
+
+/* ---- gamepad (held sideways) ---- */
+body.gamepad #top { left: 50%; right: auto; transform: translateX(-50%); width: 46vw; height: 40px; border-radius: 0 0 14px 14px; }
+body.gamepad #note { top: 96px; left: 25vw; right: 25vw; }
+#game { position: fixed; inset: 0; }
+.g { position: absolute; display: grid; place-items: center; font-weight: 600; }
+.shoulder { top: 10px; width: 22vmin; height: 11vmin; }
+#g-lt { left: 12px; }
+#g-lb { left: calc(12px + 24vmin); }
+#g-rt { right: 12px; }
+#g-rb { right: calc(12px + 24vmin); }
+.small { width: 17vmin; height: 9vmin; font-size: 13px; border-radius: 9vmin; }
+#g-back { top: 54px; left: calc(50% - 17vmin - 6px); }
+#g-start { top: 54px; left: calc(50% + 6px); }
+#g-l3 { left: 7vw; bottom: 4vh; }
+#g-r3 { right: 7vw; bottom: 4vh; }
+.stick { position: absolute; width: 42vmin; height: 42vmin; border-radius: 50%; background: var(--pad); border: 1px solid var(--line); }
+#ls { left: 7vw; top: 22vh; }
+#rs { right: 30vw; bottom: 4vh; width: 34vmin; height: 34vmin; }
+.knob { position: absolute; left: 30%; top: 30%; width: 40%; height: 40%; border-radius: 50%; background: #3a3a3c; pointer-events: none; }
+.stick.active .knob { background: var(--accent); }
+#dpad, #abxy { position: absolute; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 4px; }
+#dpad { left: 30vw; bottom: 4vh; width: 34vmin; height: 34vmin; }
+#abxy { right: 7vw; top: 20vh; width: 42vmin; height: 42vmin; }
+#dpad .g, #abxy .g { position: static; }
+#dpad [data-id="up"] { grid-area: 1 / 2; }
+#dpad [data-id="left"] { grid-area: 2 / 1; }
+#dpad [data-id="right"] { grid-area: 2 / 3; }
+#dpad [data-id="down"] { grid-area: 3 / 2; }
+.face { border-radius: 50%; font-size: 18px; }
+.face.y { grid-area: 1 / 2; color: #ffd60a; }
+.face.x { grid-area: 2 / 1; color: #64d2ff; }
+.face.b { grid-area: 2 / 3; color: #ff6961; }
+.face.a { grid-area: 3 / 2; color: #30d158; }
+.face.down { color: #fff; }

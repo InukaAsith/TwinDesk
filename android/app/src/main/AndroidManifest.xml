@@ -85,6 +85,16 @@
             android:windowSoftInputMode="adjustNothing"
             android:launchMode="singleTask" />
 
+        <!-- The Remote page: this device as the computer's touchpad and keyboard, or gamepad. -->
+        <activity
+            android:name=".RemoteActivity"
+            android:exported="false"
+            android:label="Remote"
+            android:theme="@style/Theme.TwinDesk"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask" />
+
         <activity
             android:name=".ShareActivity"
             android:exported="true"

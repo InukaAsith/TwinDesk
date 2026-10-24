@@ -46,6 +46,7 @@ const { PhoneDrive } = require('./phonedrive');
 const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneViews } = require('./phoneview');
+const { PhoneRemote } = require('./phone-remote');
 const { BleHost, BleGuest, BlePhones } = require('../shared/blepipe.js');
 const { wifiQuiet } = require('../shared/blepolicy.js');
 const { NetLink } = require('../shared/netlink.js');
@@ -117,6 +118,7 @@ let wired = null; // wired.js, with the phone
 let hostServer = null; // server.js, once the certificate exists
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
 let phoneViews = null; // its screen and apps in windows here (phoneview.js)
+let phoneRemote = null; // its Remote page: touchpad, keyboard and gamepad here (phone-remote.js)
 let phoneDrive = null; // its storage as a drive here (phonedrive.js)
 let bleHost = null; // Bluetooth, for devices not on this network: we host (blepipe.js)
 let bleGuest = null; // … we connect to a host
@@ -382,6 +384,7 @@ function startPhone(server, pairing) {
   phone.bridge.on('popup', (kind, text) => hud.show(kind, text));
   phoneViews = new PhoneViews({ bridge: phone.bridge, phone, getSettings: () => settings, server: pl, fileSend: fileDrop });
   phoneViews.on('change', pushState);
+  phoneRemote = new PhoneRemote({ server: pl, helper, getSettings: () => settings, atHome: () => !kvm || kvm.mode === 'home' });
   viaWifi(phoneViews, 'openScreen', 'phone');
   viaWifi(phoneViews, 'openApp', 'phone');
   // On Wi-Fi after Bluetooth, wireless debugging takes a moment more: the window opens once it's up.

@@ -1,7 +1,10 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The Mac's screen on the phone (like windows/monitor.js): answers the Mac's WebRTC offer and
 // plays the picture (and its sound), and sends input back as in.* (normalized 0–1):
-//   touch   tap = click · hold = right click · drag = drag · two fingers = scroll
+//   touch   touchpad (opts.touch 'pad', the default): slide = move the pointer (never clicks) ·
+//           tap = left click ("Tap to click", on unless switched off) · hold = right click ·
+//           the Click button = left click (hold it and slide to drag) · two fingers = scroll
+//           direct ('direct'): tap = click · hold = right click · drag = drag · two fingers = scroll
 //           (the Mac's pointer follows the finger, so it is a touch screen for the Mac)
 //   mouse   and a hardware keyboard work as on a computer
 //   soft keyboard: what is typed goes as keys (the app's Keyboard button shows it)
@@ -24,6 +27,9 @@
   let streamAudio = false;
   let sound = true;
   let pacing = 'fast';
+  let touchMode = 'pad'; // 'pad' | 'direct' (opts.touch)
+  let speed = 1; // the touchpad's pointer speed (opts.speed)
+  let tapClick = true; // a quick tap left-clicks (opts.tap)
 
   function setOverlay(t) {
     overlay.textContent = t || '';
@@ -121,6 +127,10 @@
         if (msg.name) name = msg.name;
         sound = msg.sound !== false;
         pacing = msg.pacing === 'smooth' ? 'smooth' : 'fast';
+        touchMode = msg.touch === 'direct' ? 'direct' : 'pad';
+        if (Number(msg.speed) > 0) speed = Number(msg.speed);
+        tapClick = msg.tap === true;
+        document.body.classList.toggle('pad', touchMode === 'pad');
         applyAudio();
         if (pc) for (const r of pc.getReceivers()) if (r.track.kind === 'video') pace(r);
         break;
@@ -158,6 +168,7 @@
 
   function fingerDown(e) {
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touchMode === 'pad') return padDown(e);
     if (touches.size === 1) {
       const p = norm(e.clientX, e.clientY, false);
       if (!p) return;
@@ -195,6 +206,7 @@
       return;
     }
     if (!one) return;
+    if (touchMode === 'pad') return padMove(e);
     const p = norm(e.clientX, e.clientY, true);
     if (!p) return;
     if (!one.moved && Math.hypot(e.clientX - one.sx, e.clientY - one.sy) > SLOP) {
@@ -213,6 +225,7 @@
     touches.delete(e.pointerId);
     if (touches.size === 0) two = null;
     if (!one) return;
+    if (touchMode === 'pad') return padUp(e);
     clearTimeout(one.timer);
     if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
     else if (!one.right && !one.moved) {
@@ -221,6 +234,79 @@
     }
     one = null;
   }
+
+  // Touchpad: the pointer moves by how far the finger slides (faster flicks go further) and the
+  // finger never clicks; held still it right-clicks. cur is the pointer, normalized like in.mm.
+  const cur = { x: 0.5, y: 0.5 };
+  function padDown(e) {
+    if (touches.size === 1) {
+      one = { id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, t0: performance.now(), moved: false, right: false };
+      one.timer = setTimeout(() => { // held still: a right click
+        if (!one || one.moved) return;
+        one.right = true;
+        send({ t: 'in.md', x: cur.x, y: cur.y, b: B.RIGHT });
+        send({ t: 'in.mu', x: cur.x, y: cur.y, b: B.RIGHT });
+        TD.haptic();
+      }, 550);
+    } else if (touches.size === 2) {
+      if (one) { clearTimeout(one.timer); one = null; }
+      const [a, b] = [...touches.values()];
+      two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+  }
+  function padMove(e) {
+    if (e.pointerId !== one.id) return;
+    const r = drawn();
+    if (!r) return;
+    if (!one.moved) {
+      if (Math.hypot(e.clientX - one.sx, e.clientY - one.sy) <= SLOP) return;
+      one.moved = true;
+      clearTimeout(one.timer);
+      one.lx = one.sx; // the slide counts from where the finger came down
+      one.ly = one.sy;
+    }
+    const dx = e.clientX - one.lx, dy = e.clientY - one.ly;
+    one.lx = e.clientX;
+    one.ly = e.clientY;
+    const g = speed * (1 + Math.min(1, Math.hypot(dx, dy) / 30));
+    cur.x = Math.min(1, Math.max(0, cur.x + (dx * g) / r.w));
+    cur.y = Math.min(1, Math.max(0, cur.y + (dy * g) / r.h));
+    send({ t: 'in.mm', x: cur.x, y: cur.y });
+  }
+  function padUp(e) {
+    if (e.pointerId !== one.id) return;
+    clearTimeout(one.timer);
+    if (tapClick && !one.moved && !one.right && performance.now() - one.t0 < 300) {
+      send({ t: 'in.md', x: cur.x, y: cur.y, b: B.LEFT });
+      send({ t: 'in.mu', x: cur.x, y: cur.y, b: B.LEFT });
+    }
+    one = null;
+  }
+
+  // The touchpad's Click button: left button down for as long as it's touched, so holding it and
+  // sliding another finger drags. Its touches stay out of the ones above.
+  const clickBtn = document.getElementById('click');
+  let clickDown = false;
+  clickBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    clickBtn.setPointerCapture(e.pointerId);
+    if (clickDown) return;
+    clickDown = true;
+    clickBtn.classList.add('down');
+    send({ t: 'in.md', x: cur.x, y: cur.y, b: B.LEFT });
+    if (TD.tick) TD.tick();
+  });
+  const clickUp = (e) => {
+    e.stopPropagation();
+    if (!clickDown) return;
+    clickDown = false;
+    clickBtn.classList.remove('down');
+    send({ t: 'in.mu', x: cur.x, y: cur.y, b: B.LEFT });
+  };
+  clickBtn.addEventListener('pointerup', clickUp);
+  clickBtn.addEventListener('pointercancel', clickUp);
+  clickBtn.addEventListener('pointermove', (e) => e.stopPropagation());
 
   // A mouse (or trackpad) on the phone: as on a computer.
   const BUTTONS = { 0: B.LEFT, 1: B.MIDDLE, 2: B.RIGHT, 3: 3, 4: 4 };

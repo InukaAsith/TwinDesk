@@ -23,6 +23,7 @@ namespace MacShare
         static Control invoker;
         static Capture capture;
         static Injector injector;
+        static Smoother smoother; // the phone Remote's moves, eased out (k.mm with smooth)
         static DropEdge dropEdge;
         static DragSession drag; // the drag from the Mac on this PC
 
@@ -45,6 +46,7 @@ namespace MacShare
             capture = new Capture(Emit);
             injector = new Injector();
             injector.Moved = capture.FeedReturn;
+            smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             HideCursor.Restore(); // in case a crash left the cursors blank
             capture.Start();
             capture.Flash = new Flash();
@@ -209,9 +211,12 @@ namespace MacShare
                         break;
                     case "inject":
                         Dictionary<string, object> ev = Json.Obj(c, "ev");
-                        if (ev != null) injector.Apply(ev);
+                        if (ev == null) break;
+                        if (Json.Str(ev, "t", "") == "k.mm" && Json.Bool(ev, "smooth", false)) { smoother.Add(Json.Num(ev, "dx", 0), Json.Num(ev, "dy", 0)); break; }
+                        smoother.Flush(injector.Move); // a click or key lands where the pointer ends up
+                        injector.Apply(ev);
                         break;
-                    case "releaseAll": injector.ReleaseAll(); break;
+                    case "releaseAll": smoother.Clear(); injector.ReleaseAll(); break;
                     case "toastProgress": // a live toast with a progress bar (Toast.cs)
                         Toast.Progress(Json.Str(c, "aumid", ""), Json.Str(c, "tag", "files"), Json.Str(c, "title", ""), Json.Str(c, "status", ""), Json.Num(c, "value", -1), Json.Str(c, "label", ""));
                         break;

@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -45,6 +46,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -133,6 +136,7 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     Screen("Screen", Ico.display, grad(0xFF5AC8FA, 0xFF0A84FF), "Display"),
     Cursor("Cursor", Ico.cursor, grad(0xFFFFB340, 0xFFFF9500), "Input"),
     Keyboard("Keyboard", Ico.keyboard, grad(0xFFD1D1D6, 0xFF8E8E93), "Input"),
+    Remote("Remote", Ico.remote, grad(0xFFBF5AF2, 0xFF8944AB), "Input"),
     Clipboard("Clipboard", Ico.clipboard, grad(0xFF64D2FF, 0xFF30B0C7), "Share"),
     Notifications("Notifications", Ico.bell, grad(0xFFFF6961, 0xFFFF3B30), "Share"),
     Files("Files", Ico.files, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
@@ -148,6 +152,7 @@ private fun isOn(core: Core, t: Tab): Boolean = when (t) {
     Tab.Screen -> core.screen.viewing
     Tab.Cursor -> core.kvm.linked && core.sync.get("cursor", "in")
     Tab.Keyboard -> core.sync.value("keyboard") == "true"
+    Tab.Remote -> core.remote.active
     Tab.Clipboard -> core.sync.get("clipboard", "in") || core.sync.get("clipboard", "out")
     Tab.Notifications -> core.sync.get("notifs", "in") || core.sync.get("notifs", "out")
     Tab.Sound -> core.sync.get("audio", "in") || core.sync.get("audio", "out")
@@ -339,6 +344,7 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
                 Tab.Screen -> ScreenPage(core, v)
                 Tab.Cursor -> CursorPage(core, v)
                 Tab.Keyboard -> KeyboardPage(core, v)
+                Tab.Remote -> RemotePage(core, v)
                 Tab.Clipboard -> ClipboardPage(core, v)
                 Tab.Notifications -> NotificationsPage(core, v)
                 Tab.Files -> FilesPage(core, v)
@@ -825,10 +831,20 @@ private fun ScreenPage(core: Core, v: Int) {
         if (s.sharing && s.remote) MacRow("Sharing", "") { Secondary("Stop") { s.control(share = false) } }
     }
     MacCard("Touch") {
-        MacRow("Tap", "Click", first = true)
-        MacRow("Hold", "Right click")
-        MacRow("Drag", "Drag (select, move windows)")
-        MacRow("Two fingers", "Scroll")
+        val pad = core.store.flag("screen.touchpad", true)
+        SwitchRow("Touchpad", "Slide to move the pointer; sliding never clicks. Off: the pointer goes where you touch", pad, first = true) { s.setOpt("screen.touchpad", it) }
+        if (pad) {
+            MacRow("Slide", "Move the pointer")
+            MacRow("Tap", if (core.remote.tapClick) "Left click" else "Nothing (Remote › Tap to click is off)")
+            MacRow("Hold", "Right click")
+            MacRow("Click button", "Left click. Hold it and slide to drag")
+            MacRow("Two fingers", "Scroll")
+        } else {
+            MacRow("Tap", "Click")
+            MacRow("Hold", "Right click")
+            MacRow("Drag", "Drag (select, move windows)")
+            MacRow("Two fingers", "Scroll")
+        }
         if (!s.inputOn) MacRow("Input is off", "$name doesn’t take input from here (its Share screen › Receive input)")
     }
     MacCard("Playback") {
@@ -944,6 +960,62 @@ private fun KeyboardPage(core: Core, v: Int) {
     }
     MacCard("In the screen view") {
         MacRow("$name’s screen here", "A keyboard on this device types on $name. The Keyboard button opens the soft keyboard", first = true)
+    }
+}
+
+// ---- Remote ----
+
+@Composable
+private fun RemotePage(core: Core, v: Int) {
+    @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
+    val r = core.remote
+    val ctx = LocalContext.current
+    val name = them(core)
+    val me = core.store.deviceName
+    PageHead("Remote", "Use this device as $name’s touchpad and keyboard, or as a gamepad.")
+    if (core.host == null) return NotConnected(core, v)
+    if (r.unsupported) Note("$name doesn’t take the remote yet: for now only TwinDesk on Windows does.", "warn")
+    else if (r.allowed == false) Note("$name doesn’t take input from here. On $name, turn on Cursor › “Use $me’s mouse and keyboard on $name”, or “Let $me Control $name” in its tray menu.", "warn")
+    val open = { mode: String -> ctx.startActivity(Intent(ctx, RemoteActivity::class.java).putExtra("mode", mode)) }
+    MacCard {
+        MacRow("Touchpad and keyboard", "Slide to move $name’s pointer, tap to click, hold to right click, two fingers to scroll. Keys and media keys too", first = true) {
+            Primary("Open") { open("pad") }
+        }
+        MacRow("Gamepad", "Held sideways. The left stick is WASD, the right stick is the mouse, the buttons press the keys set below") {
+            Primary("Open") { open("gamepad") }
+        }
+    }
+    MacCard("Touchpad") {
+        MacRow("Pointer speed", "Also the gamepad’s right stick and the Screen page’s touchpad", first = true) {
+            MacSlider(r.speed, 0.3f..3f, 0, { "%.1f×".format(java.util.Locale.ROOT, it) }) { r.setSpeed(it) }
+        }
+        SwitchRow("Tap to click", "A quick tap left-clicks; a slide never clicks. Off: only the click buttons click", r.tapClick) { r.setTapClick(it) }
+        SwitchRow("Smooth", "Even pointer motion on $name, about a frame later. Off: each move the moment it arrives", r.smooth) { r.setSmooth(it) }
+    }
+    MacCard("Gamepad buttons") {
+        Remote.CONTROLS.forEachIndexed { i, (id, label) ->
+            MacRow(label, "", first = i == 0) { KeyPicker(r.padKey(id)) { r.setPad(id, it) } }
+        }
+        MacRow("Reset", "WASD on the left stick, Space on A, the mouse buttons on the triggers…") { Secondary("Reset") { r.resetPad() } }
+    }
+    Note(
+        when {
+            core.link.wired -> "On the USB cable: the quickest way for games."
+            core.link.ble -> "Through Bluetooth the pointer moves about 30 times a second. On Wi-Fi or a USB cable it’s quicker."
+            else -> "Over Wi-Fi it’s as quick as the delay at the top of the app. For games, a USB cable is quickest."
+        },
+    )
+}
+
+// A gamepad control's key: tap for the list (keys, mouse buttons, or nothing).
+@Composable
+private fun KeyPicker(code: String, pick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { open = true }, shape = RoundedCornerShape(8.dp)) { Text(Remote.keyName(code), color = pal.text) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 360.dp)) {
+            for ((c, label) in Remote.KEYS) DropdownMenuItem(text = { Text(label) }, onClick = { open = false; pick(c) })
+        }
     }
 }
 
