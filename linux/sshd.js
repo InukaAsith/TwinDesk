@@ -22,6 +22,8 @@ function run(cmd, args, timeout = 10000) {
   });
 }
 
+const which = (cmd) => (process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin').split(':').some((d) => d && fs.existsSync(path.join(d, cmd)));
+
 // The port sshd listens on (sshd_config Port, else 22).
 function sshPort() {
   try {
@@ -74,7 +76,7 @@ class Sshd {
   async refresh() {
     const port = sshPort();
     if (await listening(port)) this.service = 'running';
-    else this.service = fs.existsSync('/usr/sbin/sshd') ? 'stopped' : 'missing';
+    else this.service = (which('sshd') || fs.existsSync('/usr/sbin/sshd')) ? 'stopped' : 'missing';
     this.onChange();
   }
 
@@ -146,8 +148,9 @@ class Sshd {
     this.message = '';
     this.onChange();
     const script = [
-      'if ! [ -x /usr/sbin/sshd ]; then',
-      '  if command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server;',
+      'if ! command -v sshd >/dev/null 2>&1 && ! [ -x /usr/sbin/sshd ]; then',
+      '  if [ -e /etc/NIXOS ]; then echo "On NixOS, enable services.openssh.enable = true; in configuration.nix" >&2; exit 3;',
+      '  elif command -v apt-get >/dev/null; then DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server;',
       '  elif command -v dnf >/dev/null; then dnf install -y openssh-server;',
       '  elif command -v zypper >/dev/null; then zypper --non-interactive install openssh-server;',
       '  elif command -v pacman >/dev/null; then pacman -S --noconfirm openssh; fi',

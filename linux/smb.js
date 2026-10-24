@@ -134,7 +134,8 @@ class Smb {
 set -e
 PW=$(cat ${q(pwFile)}); rm -f ${q(pwFile)}
 if ! command -v smbd >/dev/null 2>&1; then
-  if command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q samba >/dev/null
+  if [ -e /etc/NIXOS ]; then echo "On NixOS, enable services.samba.enable = true; in configuration.nix" >&2; exit 3;
+  elif command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get install -y -q samba >/dev/null
   elif command -v dnf >/dev/null 2>&1; then dnf install -y -q samba >/dev/null
   elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive -q install samba >/dev/null
   elif command -v pacman >/dev/null 2>&1; then pacman -S --noconfirm --needed samba >/dev/null

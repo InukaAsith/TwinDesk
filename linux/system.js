@@ -49,6 +49,9 @@ async function checkFirewall(fixed) {
 
 // Also mDNS (5353/udp): adb finds a phone's wireless debugging with it (phone-bridge.js).
 async function fixFirewall(tool) {
+  if (fs.existsSync('/etc/NIXOS')) {
+    throw new Error('On NixOS, add networking.firewall.allowedTCPPorts = [ 47800 ]; and networking.firewall.allowedUDPPorts = [ 47801 5353 ]; in configuration.nix (or enable services.twindesk.enable).');
+  }
   const script = tool === 'firewalld'
     ? 'firewall-cmd --permanent --add-port=' + PORTS.tcp + '/tcp --add-port=' + PORTS.udp + '/udp --add-service=mdns && firewall-cmd --reload'
     : 'ufw allow ' + PORTS.tcp + '/tcp && ufw allow ' + PORTS.udp + '/udp && ufw allow 5353/udp';
@@ -77,6 +80,9 @@ function inputAccess() {
 // Once, as root: load uinput at boot, let the input group use it, put this user in that group.
 // The group counts from the next login.
 async function fixInput() {
+  if (fs.existsSync('/etc/NIXOS')) {
+    throw new Error('On NixOS, enable hardware.uinput.enable = true; and add your user to the "input" and "uinput" groups in configuration.nix (or enable services.twindesk.enable).');
+  }
   const user = require('os').userInfo().username;
   if (!/^[a-z_][a-z0-9_.-]*\$?$/i.test(user)) throw new Error('unexpected user name');
   const rule = 'KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"';

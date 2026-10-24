@@ -13,6 +13,7 @@ const file = () => path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir
 const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : '"' + String(s).replace(/(["`$\\])/g, '\\$1') + '"');
 
 function command() {
+  if (process.env.TWINDESK_BIN) return [process.env.TWINDESK_BIN, '--hidden'];
   if (process.env.APPIMAGE) return [process.env.APPIMAGE, '--hidden'];
   if (app.isPackaged) return [process.execPath, '--hidden'];
   return [process.execPath, app.getAppPath(), '--hidden'];

@@ -30,9 +30,10 @@ const P = require('../shared/protocol.js');
 const HOST = 'TwinDesk host';
 const JOIN = 'TwinDesk link';
 const JOIN_MS = 45000;
-const TOOL = '/usr/local/libexec/twindesk-wifiap'; // installed, with CAP_NET_ADMIN
+const TOOL = process.env.TWINDESK_WIFIAP
+  || (fs.existsSync('/run/wrappers/bin/twindesk-wifiap') ? '/run/wrappers/bin/twindesk-wifiap' : '/usr/local/libexec/twindesk-wifiap');
 const TOOL_VERSION = '3'; // linux-helper/wifiap/wifiap.c WIFIAP_VERSION: an older one installed is replaced
-const TOOL_SRC = path.join(__dirname, '..', 'linux-helper', 'bin', 'twindesk-wifiap');
+const TOOL_SRC = process.env.TWINDESK_WIFIAP_SRC || path.join(__dirname, '..', 'linux-helper', 'bin', 'twindesk-wifiap');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

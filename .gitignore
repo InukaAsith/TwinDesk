@@ -21,9 +21,12 @@ linux-helper/bin/
 linux/dist/
 # editor settings
 .vscode/
+.idea/
 
 # adb for the Mac build (mac/scripts/fetch-adb.sh, run by mac/build-app.sh)
 mac/vendor/adb/
 # The full Android build, copied in at build time (mac/build-app.sh)
 mac/vendor/twindesk-android-full.apk
 .env
+result
+result-*

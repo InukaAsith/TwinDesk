@@ -653,6 +653,31 @@ prompt, then log out and back in once). It can also install OpenSSH for the term
 GNOME Wayland uses Python 3 with GObject and GStreamer's PipeWire plugin (`python3-gi`,
 `gstreamer1.0-pipewire`), which GNOME desktops already have.
 
+#### NixOS & Nix Flakes
+
+TwinDesk includes a `flake.nix` with package, dev shell, and NixOS module support:
+
+```sh
+# Run directly with flakes
+nix run github:InukaAsith/TwinDesk
+
+# Or enter development environment
+nix develop
+```
+
+On NixOS, enable the module in your system configuration:
+
+```nix
+{
+  programs.twindesk = {
+    enable = true;
+    user = "yourusername"; # adds to input/uinput groups for Wayland KVM
+  };
+}
+```
+
+See [docs/nixos.md](docs/nixos.md) for full options (firewall, Wi-Fi Direct capability wrappers, virtual displays, and more).
+
 
 #### Testing the Linux app from a Mac
 

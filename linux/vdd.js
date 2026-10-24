@@ -28,8 +28,10 @@ const { spawn, execFile } = require('child_process');
 
 const WAYLAND = process.env.XDG_SESSION_TYPE === 'wayland';
 
-const HELPER = '/usr/libexec/twindesk-connector';
-const POLICY = '/usr/share/polkit-1/actions/org.twindesk.linux.connector.policy';
+const HELPER = process.env.TWINDESK_CONNECTOR
+  || (fs.existsSync('/run/current-system/sw/libexec/twindesk-connector') ? '/run/current-system/sw/libexec/twindesk-connector' : '/usr/libexec/twindesk-connector');
+const POLICY = process.env.TWINDESK_CONNECTOR_POLICY
+  || (fs.existsSync('/run/current-system/sw/share/polkit-1/actions/org.twindesk.linux.connector.policy') ? '/run/current-system/sw/share/polkit-1/actions/org.twindesk.linux.connector.policy' : '/usr/share/polkit-1/actions/org.twindesk.linux.connector.policy');
 const HELPER_SH = String.raw`#!/bin/sh
 # TwinDesk: makes a spare display output count as connected while Extend is on, and gives it back
 # to the driver's detection after (the DRM connector's status). Run through pkexec: the polkit
@@ -228,7 +230,9 @@ const markFile = () => path.join(require('electron').app.getPath('userData'), 'e
 // The helper's files are there (and the same as this version's).
 function helperReady() {
   try {
-    return fs.readFileSync(HELPER, 'utf8') === HELPER_SH && fs.existsSync(POLICY);
+    if (!fs.existsSync(HELPER) || !fs.existsSync(POLICY)) return false;
+    const norm = (s) => String(s || '').replace(/^#!.*sh/m, '').replace(/["']/g, "'").replace(/\s+/g, ' ').trim();
+    return norm(fs.readFileSync(HELPER, 'utf8')) === norm(HELPER_SH);
   } catch (_) {
     return false;
   }
