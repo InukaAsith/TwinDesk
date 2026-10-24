@@ -39,8 +39,12 @@ class Clip(core: Core) : Feature(core) {
     // What is on the clipboard now goes to the computer (works while we are in front, or from
     // the share sheet / tile, which bring us to the front for a moment).
     fun sendCurrent(force: Boolean): Boolean {
-        val text = runCatching { cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(core.ctx)?.toString() }.getOrNull()
-            ?: return false
+        val item = runCatching { cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0) }.getOrNull() ?: return false
+        // A picture or files on the clipboard (files copied from the computer, a screenshot): no
+        // text to send. coerceToText would make one of their content:// address, which would
+        // replace the computer's clipboard.
+        if (item.text == null && item.htmlText == null) return false
+        val text = runCatching { item.coerceToText(core.ctx)?.toString() }.getOrNull() ?: return false
         return sendText(text, force)
     }
 

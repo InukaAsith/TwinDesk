@@ -20,6 +20,7 @@ object Proto {
     const val BLE_TIMEOUT_MS = 20000L // through Bluetooth, where one big message takes seconds
     const val PHONE_GRACE_MS = 30000L
     const val CLIP_MAX_BYTES = 256 * 1024
+    const val CLIP_IMAGE_MAX_BYTES = 8 * 1024 * 1024 // clipboard image limit (PNG bytes, before base64)
     const val FILE_CHUNK_BYTES = 64 * 1024
     const val MAX_PAYLOAD = 16 * 1024 * 1024
     const val OS = "android"
@@ -44,6 +45,7 @@ object Proto {
         const val BYE = "bye" // Disconnect on purpose: the computer doesn't wait for us to come back
         const val CLIP = "clip"
         const val CLIP_POLICY = "clip.policy"
+        const val CLIP_IMAGE = "clip.image" // either way {id, ts, w, h, png (base64)}: a screenshot, onto the other clipboard (Screenshots.kt)
         const val NOTIF = "notif"
         const val NOTIF_POLICY = "notif.policy"
         const val FILE_OFFER = "file.offer"

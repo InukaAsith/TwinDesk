@@ -75,6 +75,10 @@ function normalize(s) {
       enabled: bool(c.enabled, true),
       send: bool(c.send, true),
       receive: bool(c.receive, true),
+      // A phone as the peer (phone-shots.js): this PC's screenshots onto its clipboard; its
+      // screenshots also saved in Pictures › TwinDesk (else on the clipboard only)
+      screenshots: bool(c.screenshots, true),
+      saveScreenshots: bool(c.saveScreenshots, false),
       // Instant by default; files from before it (no rev) are upgraded once
       mode: c.mode === 'switch' && (s.rev || 0) >= 7 ? 'switch' : 'instant',
       skipConcealed: bool(c.skipConcealed, true),

@@ -68,7 +68,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val hub = Hub(this) // Calls, Messages and Photos on the computer: nothing runs until one is on
     val share = FolderShare(this) // shared folders with the computer, both ways
     val sound = PhoneSound(this) // this phone's sound there without wireless debugging
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, hub, share, sound)
+    val shots = Screenshots(this) // screenshots both ways, onto the other clipboard
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, hub, share, sound, shots)
 
     val host: Host? get() = if (link.connected) link.host else null
 

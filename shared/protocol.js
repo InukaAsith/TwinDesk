@@ -121,6 +121,7 @@
       // The latest copy wins (shared/clipsync.js; Multi-device's clipboard for now): `clip` carries {ts, o}:
       // when the copy happened (a hybrid logical clock, ms) and on which device. An older item never replaces a newer one.
       CLIP_IMAGE: 'clip.image', // either way: {id, ts, o, w, h, png: base64} an image on the clipboard
+      // … also one-to-one, without o (a phone's and a PC's screenshots both ways: windows/phone-shots.js, Screenshots.kt; never through Bluetooth)
       CLIP_LATEST: 'clip.latest', // either way, after welcome: {ts, o, kind: 'text'|'image'|'files'} what this side holds as the newest copy
       // roadmap,
       AUDIO_POLICY: 'audio.policy', // W->M {accept}: the PC plays the Mac's sound

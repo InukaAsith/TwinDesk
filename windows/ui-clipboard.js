@@ -30,9 +30,14 @@ UI.tab({
       { value: 0, label: 'Off' }, { value: 10, label: '10 items' }, { value: 20, label: '20 items' },
       { value: 50, label: '50 items' }, { value: 100, label: '100 items' },
     ], (v) => set({ historySize: Number(v) }));
+    // A phone as the peer: screenshots both ways, onto the other clipboard (phone-shots.js).
+    const saveShots = UI.switch((v) => set({ saveScreenshots: v }), { label: 'Also save its screenshots' });
+    const saveShotsRow = UI.row('Also save {name}’s screenshots', 'Each screenshot taken on {name} lands on this clipboard; this also saves it in Pictures › TwinDesk', [saveShots]);
+    const sendShots = UI.switch((v) => set({ screenshots: v }), { label: 'Screenshots go to the phone' });
+    const sendShotsRow = UI.row('Screenshots go to {name}', 'Win+Shift+S, PrtScn and the Snipping Tool save in Pictures › Screenshots: each new one lands on {name}’s clipboard. Not over Bluetooth', [sendShots]);
     const pair = UI.dirCards(
-      { on: { get: (s) => s.clipboard.receive, set: (v) => set({ receive: v }) }, label: 'Copy on {name}, paste on {me}', rows: [] },
-      { on: { get: (s) => s.clipboard.send, set: (v) => set({ send: v }) }, label: 'Copy on {me}, paste on {name}', rows: [peerRow] },
+      { on: { get: (s) => s.clipboard.receive, set: (v) => set({ receive: v }) }, label: 'Copy on {name}, paste on {me}', rows: [saveShotsRow] },
+      { on: { get: (s) => s.clipboard.send, set: (v) => set({ send: v }) }, label: 'Copy on {me}, paste on {name}', rows: [peerRow, sendShotsRow] },
     );
 
     const list = el('div', { class: 'history' });
@@ -54,6 +59,10 @@ UI.tab({
     return (s) => {
       const c = s.clipboard;
       pair.update(s);
+      const phone = !!(c.phoneShots && s.phone && s.phone.connected);
+      saveShotsRow.hidden = sendShotsRow.hidden = !phone;
+      saveShots.set(!!c.saveScreenshots);
+      sendShots.set(c.screenshots !== false);
       mode.set(c.mode);
       modeRow.setHint(c.mode === 'instant' ? 'As soon as you copy' : 'When you move to the other computer');
       concealed.set(c.skipConcealed);

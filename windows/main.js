@@ -46,6 +46,7 @@ const { PhoneDrive } = require('./phonedrive');
 const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneViews } = require('./phoneview');
+const { PhoneShots } = require('./phone-shots');
 const { BleHost, BleGuest, BlePhones } = require('../shared/blepipe.js');
 const { wifiQuiet } = require('../shared/blepolicy.js');
 const { NetLink } = require('../shared/netlink.js');
@@ -118,6 +119,7 @@ let hostServer = null; // server.js, once the certificate exists
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
 let phoneViews = null; // its screen and apps in windows here (phoneview.js)
 let phoneDrive = null; // its storage as a drive here (phonedrive.js)
+let phoneShots = null; // screenshots both ways with it, onto the other clipboard (phone-shots.js)
 let bleHost = null; // Bluetooth, for devices not on this network: we host (blepipe.js)
 let bleGuest = null; // … we connect to a host
 let blePhones = null; // phones that advertise: we connect to them (a PC's Bluetooth often can't advertise)
@@ -366,6 +368,8 @@ function startPhone(server, pairing) {
   phone.wired = wired;
   phoneDrive = new PhoneDrive({ adb: phone.bridge.adb, bridge: phone.bridge, phone });
   phoneDrive.on('change', pushState);
+  // Screenshots both ways, onto the other clipboard (Clipboard › Screenshots go to / Also save).
+  phoneShots = new PhoneShots({ server: pl, clip, getSettings: () => settings, popup: (kind, text) => hud.show(kind, text) });
   phone.bridge.on('change', () => {
     pushState();
     if (pendingView && phone.bridge.serial) {
@@ -768,7 +772,7 @@ function buildState() {
     kvm: { ...settings.kvm, pcSide: kvm.pcSide },
     keys: settings.keys,
     monitor: settings.monitor,
-    clipboard: { ...settings.clipboard, ...clip.view },
+    clipboard: { ...settings.clipboard, ...clip.view, phoneShots: !!phoneShots }, // phoneShots: its rows (not in Multi-device yet)
     ui: settings.ui,
     app: settings.app,
     version: app.getVersion(),
