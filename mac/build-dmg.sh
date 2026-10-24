@@ -7,7 +7,15 @@ set -e
 cd "$(dirname "$0")"
 
 APP="dist/TwinDesk.app"
-DMG_NAME=${1:-TwinDesk.dmg}
+VER="$(node -p "require('./package.json').version" 2>/dev/null || echo "")"
+if [ -n "$1" ]; then
+  DMG_NAME="$1"
+elif [ -n "$VER" ]; then
+  DMG_NAME="TwinDesk-${VER}.dmg"
+else
+  DMG_NAME="TwinDesk.dmg"
+fi
+
 case "$DMG_NAME" in
   */*) DMG="$DMG_NAME" ;;
   *) DMG="dist/$DMG_NAME" ;;
@@ -34,3 +42,8 @@ rm -f "$DMG"
 
 echo "DMG created successfully: $DMG"
 ls -lh "$DMG"
+
+# Keep dist/TwinDesk.dmg symlink for scripts or tooling expecting the unversioned path
+if [ "$DMG" != "dist/TwinDesk.dmg" ]; then
+  ln -sf "$(basename "$DMG")" dist/TwinDesk.dmg 2>/dev/null || true
+fi

@@ -114,7 +114,8 @@ class Updates {
     if (this.status.checking) return;
     this._set({ checking: true, error: '' });
     try {
-      const res = await this.fetch(API, {
+      const url = `${API}?_=${Date.now()}`;
+      const res = await this.fetch(url, {
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': `TwinDesk/${this.current}` },
         cache: 'no-store',
       });
