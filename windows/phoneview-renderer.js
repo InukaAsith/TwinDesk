@@ -284,7 +284,30 @@
   });
 
   for (const k of ['back', 'home', 'recents', 'notifs', 'rotate']) {
-    document.getElementById(`b-${k}`).onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
+    const el = document.getElementById(`b-${k}`);
+    if (el) el.onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
   }
+
+  let torchOn = false;
+  let currentFacing = 'back';
+  const bTorch = document.getElementById('b-torch');
+  if (bTorch) {
+    bTorch.onclick = () => {
+      torchOn = !torchOn;
+      bTorch.classList.toggle('active', torchOn);
+      api.send({ t: 'cameraTorch', on: torchOn });
+    };
+  }
+  const bFlip = document.getElementById('b-flip');
+  if (bFlip) {
+    bFlip.onclick = () => {
+      currentFacing = currentFacing === 'front' ? 'back' : 'front';
+      api.send({ t: 'cameraSwitch', facing: currentFacing });
+    };
+  }
+  const bZoomIn = document.getElementById('b-zoomin');
+  if (bZoomIn) bZoomIn.onclick = () => api.send({ t: 'cameraZoomIn' });
+  const bZoomOut = document.getElementById('b-zoomout');
+  if (bZoomOut) bZoomOut.onclick = () => api.send({ t: 'cameraZoomOut' });
   canvas.focus();
 })();

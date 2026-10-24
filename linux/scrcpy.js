@@ -3,7 +3,7 @@
 // directly: push the server, forward its abstract socket, start it, then up to three sockets in
 // order — video, audio, control. Several sessions may run at once (each its own scid): one
 // control-only session for the mouse, keyboard and clipboard, the mirror, and one per app window
-// (each on its own virtual display). Copy of windows/scrcpy.js.
+// (each on its own virtual display). Copy of mac/scrcpy.js.
 //
 // Video: 64-byte device name, the codec id (u32), then 12-byte headers: a session packet
 // (top bit set: flags u32, width u32, height u32) or a frame (pts+flags u64, size u32) + data.
@@ -25,6 +25,7 @@ const TYPE = {
   INJECT_KEYCODE: 0, INJECT_TEXT: 1, INJECT_TOUCH: 2, INJECT_SCROLL: 3, BACK_OR_SCREEN_ON: 4,
   EXPAND_NOTIFICATIONS: 5, EXPAND_SETTINGS: 6, COLLAPSE_PANELS: 7, GET_CLIPBOARD: 8, SET_CLIPBOARD: 9,
   SET_DISPLAY_POWER: 10, ROTATE: 11, START_APP: 16, RESET_VIDEO: 17, RESIZE_DISPLAY: 21, SCAN_FILE: 22,
+  CAMERA_SET_TORCH: 23, CAMERA_ZOOM_IN: 24, CAMERA_ZOOM_OUT: 25,
 };
 // MotionEvent / KeyEvent actions
 const ACTION = { DOWN: 0, UP: 1, MOVE: 2, HOVER_MOVE: 7 };
@@ -84,6 +85,14 @@ class Session extends EventEmitter {
     if (opts.displayId != null) args.push(`display_id=${opts.displayId | 0}`);
     if (opts.stayAwake) args.push('stay_awake=true');
     if (opts.keepActive) args.push('keep_active=true');
+    if (opts.videoSource && opts.videoSource !== 'display') args.push(`video_source=${opts.videoSource}`);
+    if (opts.cameraFacing) args.push(`camera_facing=${opts.cameraFacing}`);
+    if (opts.cameraId != null) args.push(`camera_id=${opts.cameraId}`);
+    if (opts.cameraSize) args.push(`camera_size=${opts.cameraSize}`);
+    if (opts.cameraFps) args.push(`camera_fps=${opts.cameraFps | 0}`);
+    if (opts.cameraHighSpeed) args.push('camera_high_speed=true');
+    if (opts.cameraAspectRatio) args.push(`camera_ar=${opts.cameraAspectRatio}`);
+    if (opts.cameraTorch) args.push('camera_torch=true');
     const cmd = `CLASSPATH=${this.jar} app_process / com.genymobile.scrcpy.Server ${VERSION} ${args.join(' ')}`;
     this.proc = adb.spawnShell(serial, cmd);
     const keep = (d) => {
@@ -361,6 +370,46 @@ class Session extends EventEmitter {
     b.writeUInt32BE(t.length, 1);
     t.copy(b, 5);
     this._send(b);
+  }
+
+  setTorch(on) {
+    this._send(Buffer.from([TYPE.CAMERA_SET_TORCH, on ? 1 : 0]));
+  }
+
+  zoomIn() {
+    this.simple(TYPE.CAMERA_ZOOM_IN);
+  }
+
+  zoomOut() {
+    this.simple(TYPE.CAMERA_ZOOM_OUT);
+  }
+
+  // Discovers all available cameras and supported sizes on the phone.
+  static async listCameras(adb, serial) {
+    if (!pushed.has(serial)) pushed.set(serial, adb.push(serial, adb.server, DEVICE_JAR));
+    await pushed.get(serial);
+    const r = await adb.shell(serial, `CLASSPATH=${DEVICE_JAR} app_process / com.genymobile.scrcpy.Server ${VERSION} list_cameras=true`, { timeout: 10000 });
+    const text = (r.out || '') + '\n' + (r.err || '');
+    return Session.parseCameras(text);
+  }
+
+  static parseCameras(text) {
+    const list = [];
+    const lines = String(text || '').split('\n');
+    for (const l of lines) {
+      const facingMatch = l.match(/--camera-facing=([a-z0-9_-]+)/i);
+      const idMatch = l.match(/--camera-id=([a-z0-9_-]+)/i);
+      if (facingMatch || idMatch) {
+        const sizesMatch = l.match(/\(([^)]+)\)/);
+        const sizes = sizesMatch ? sizesMatch[1].split(',').map((s) => s.trim()).filter((s) => /^\d+x\d+$/.test(s)) : [];
+        list.push({
+          facing: facingMatch ? facingMatch[1].toLowerCase() : 'back',
+          id: idMatch ? idMatch[1] : '0',
+          sizes,
+        });
+      }
+    }
+    return list;
   }
 }
 

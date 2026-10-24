@@ -1,8 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The phone window: decodes the phone's H.264 (WebCodecs, Annex B with SPS/PPS in band) onto a
-// canvas, plays its sound (raw 48 kHz stereo PCM through pcm-worklet.js), and turns this
-// computer's mouse, touchpad and keyboard into the phone's touches, scrolls and keys (port of
-// windows/phoneview-renderer.js):
+// canvas, plays its sound (raw 48 kHz stereo PCM through pcm-worklet.js), and turns this PC's
+// mouse, touchpad and keyboard into the phone's touches, scrolls and keys (port of
+// mac/phoneview-renderer.js):
 //   click / drag = a finger · hover = the mouse · right click = Back · middle click = Home
 //   wheel / two-finger scroll = scroll · pinch = two fingers pinching · keys = keys
 'use strict';
@@ -69,8 +69,7 @@
         needKey();
       },
     });
-    // No preference: many Linux setups have no hardware H.264 decoding (VA-API) for Chromium.
-    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: 'no-preference' });
+    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
   }
 
   api.on('video', (p) => {
@@ -285,7 +284,30 @@
   });
 
   for (const k of ['back', 'home', 'recents', 'notifs', 'rotate']) {
-    document.getElementById(`b-${k}`).onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
+    const el = document.getElementById(`b-${k}`);
+    if (el) el.onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
   }
+
+  let torchOn = false;
+  let currentFacing = 'back';
+  const bTorch = document.getElementById('b-torch');
+  if (bTorch) {
+    bTorch.onclick = () => {
+      torchOn = !torchOn;
+      bTorch.classList.toggle('active', torchOn);
+      api.send({ t: 'cameraTorch', on: torchOn });
+    };
+  }
+  const bFlip = document.getElementById('b-flip');
+  if (bFlip) {
+    bFlip.onclick = () => {
+      currentFacing = currentFacing === 'front' ? 'back' : 'front';
+      api.send({ t: 'cameraSwitch', facing: currentFacing });
+    };
+  }
+  const bZoomIn = document.getElementById('b-zoomin');
+  if (bZoomIn) bZoomIn.onclick = () => api.send({ t: 'cameraZoomIn' });
+  const bZoomOut = document.getElementById('b-zoomout');
+  if (bZoomOut) bZoomOut.onclick = () => api.send({ t: 'cameraZoomOut' });
   canvas.focus();
 })();

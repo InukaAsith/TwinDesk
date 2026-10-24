@@ -22,6 +22,7 @@ UI.tab({
     const name = el('div', { class: 'hero-name' });
     const sub = el('div', { class: 'hero-status' });
     const showBtn = UI.button('Show Phone Screen', () => api.phoneScreen(true), 'primary');
+    const camBtn = UI.button('Use as Webcam', () => api.phoneCamera(true), 'secondary');
     const discBtn = UI.button('Disconnect', () => api.disconnectPhone());
     // On Bluetooth: onto a direct Wi-Fi link on request, until Back to Bluetooth (netlink.js 'user').
     let wifiOn = false;
@@ -36,7 +37,7 @@ UI.tab({
       dev,
       el('div', { class: 'phone-hero-text' }, [
         name, sub,
-        el('div', { class: 'phone-hero-actions' }, [showBtn, wifiBtn, hotspotBtn, discBtn]),
+        el('div', { class: 'phone-hero-actions' }, [showBtn, camBtn, wifiBtn, hotspotBtn, discBtn]),
       ]),
     ]);
 

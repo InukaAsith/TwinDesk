@@ -87,6 +87,31 @@ class PhoneViews extends EventEmitter {
     this._open({ kind: 'screen', title: name, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
   }
 
+  // Opens the phone camera as a high-definition webcam feed using scrcpy camera mode.
+  openCamera(opts = {}) {
+    const open = [...this.views.values()].find((v) => v.kind === 'camera');
+    if (open) return open.win.show(), open.win.focus();
+    const name = ((this.server.current && this.server.current.name) || 'Phone') + ' Camera';
+    const cameraOpts = {
+      videoSource: 'camera',
+      cameraFacing: opts.facing || 'back',
+      cameraSize: opts.size || '1920x1080',
+      cameraFps: opts.fps || 30,
+      control: true,
+      stayAwake: true,
+      ...opts,
+    };
+    const w = 960;
+    const h = 540;
+    this._open({
+      kind: 'camera',
+      title: name,
+      width: w,
+      height: h,
+      opts: this.bridge.sessionOpts('camera', cameraOpts),
+    });
+  }
+
   openApp(pkg, name) {
     const open = [...this.views.values()].find((v) => v.kind === 'app' && v.app === pkg);
     if (open) return open.win.show(), open.win.focus();
@@ -201,7 +226,7 @@ class PhoneViews extends EventEmitter {
     s.on('size', (size) => {
       v.size = size;
       this._send(v, 'phoneview:size', size);
-      if (v.kind === 'screen' && v.win && !v.win.isDestroyed()) v.win.setAspectRatio(size.width / size.height);
+      if ((v.kind === 'screen' || v.kind === 'camera') && v.win && !v.win.isDestroyed()) v.win.setAspectRatio(size.width / size.height);
     });
     s.on('video', (p) => this._send(v, 'phoneview:video', p));
     s.on('audio', (p) => !p.config && this._send(v, 'phoneview:audio', p.data));
@@ -243,6 +268,21 @@ class PhoneViews extends EventEmitter {
       case 'resetVideo': // the window skipped frames: a keyframe now
         s.simple(TYPE.RESET_VIDEO);
         break;
+      case 'cameraTorch':
+        if (s && s.setTorch) s.setTorch(!!m.on);
+        break;
+      case 'cameraZoomIn':
+        if (s && s.zoomIn) s.zoomIn();
+        break;
+      case 'cameraZoomOut':
+        if (s && s.zoomOut) s.zoomOut();
+        break;
+      case 'cameraSwitch': {
+        const newFacing = m.facing === 'front' ? 'back' : 'front';
+        this.close(v.id);
+        this.openCamera({ facing: newFacing });
+        break;
+      }
       case 'resize': // an app window changed size: its virtual display follows (flex)
         if (v.kind === 'app' && m.w > 50 && m.h > 50) s.resizeDisplay(Math.round(m.w), Math.round(m.h));
         break;

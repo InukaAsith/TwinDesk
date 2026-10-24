@@ -1,9 +1,10 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The phone window: decodes the phone's H.264 (WebCodecs, Annex B with SPS/PPS in band) onto a
-// canvas, plays its sound (raw 48 kHz stereo PCM through pcm-worklet.js), and turns the Mac's
-// mouse, trackpad and keyboard into the phone's touches, scrolls and keys:
+// canvas, plays its sound (raw 48 kHz stereo PCM through pcm-worklet.js), and turns this PC's
+// mouse, touchpad and keyboard into the phone's touches, scrolls and keys (port of
+// mac/phoneview-renderer.js):
 //   click / drag = a finger · hover = the mouse · right click = Back · middle click = Home
-//   two-finger scroll = scroll · pinch = two fingers pinching · keys = keys (⌘ works as Ctrl)
+//   wheel / two-finger scroll = scroll · pinch = two fingers pinching · keys = keys
 'use strict';
 
 (() => {
@@ -233,7 +234,7 @@
   canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // Scroll, and pinch (Chromium turns a trackpad pinch into ctrl+wheel): two fingers around the
+  // Scroll, and pinch (Chromium turns a touchpad pinch into ctrl+wheel): two fingers around the
   // pointer, moving apart or together, lifted when the pinch stops.
   let pinch = null;
   canvas.addEventListener('wheel', (e) => {
@@ -257,13 +258,13 @@
       }, 160);
       return;
     }
-    const k = e.deltaMode === 1 ? 1 : 1 / 40; // lines, or pixels from a trackpad
+    const k = e.deltaMode === 1 ? 1 : 1 / 100; // lines, or pixels (100 a wheel notch)
     api.send({ t: 'scroll', ...p, hs: -e.deltaX * k, vs: -e.deltaY * k });
   }, { passive: false });
 
-  // Keys go to the phone; ⌘W closes the window like any other.
+  // Keys go to the phone; Alt+F4 closes the window like any other.
   const onKey = (e) => {
-    if (e.metaKey && (e.code === 'KeyW' || e.code === 'KeyQ') && e.type === 'keydown') return;
+    if (e.altKey && e.code === 'F4') return;
     e.preventDefault();
     api.send({ t: 'key', code: e.code, down: e.type === 'keydown', repeat: e.repeat });
   };
@@ -283,7 +284,30 @@
   });
 
   for (const k of ['back', 'home', 'recents', 'notifs', 'rotate']) {
-    document.getElementById(`b-${k}`).onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
+    const el = document.getElementById(`b-${k}`);
+    if (el) el.onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
   }
+
+  let torchOn = false;
+  let currentFacing = 'back';
+  const bTorch = document.getElementById('b-torch');
+  if (bTorch) {
+    bTorch.onclick = () => {
+      torchOn = !torchOn;
+      bTorch.classList.toggle('active', torchOn);
+      api.send({ t: 'cameraTorch', on: torchOn });
+    };
+  }
+  const bFlip = document.getElementById('b-flip');
+  if (bFlip) {
+    bFlip.onclick = () => {
+      currentFacing = currentFacing === 'front' ? 'back' : 'front';
+      api.send({ t: 'cameraSwitch', facing: currentFacing });
+    };
+  }
+  const bZoomIn = document.getElementById('b-zoomin');
+  if (bZoomIn) bZoomIn.onclick = () => api.send({ t: 'cameraZoomIn' });
+  const bZoomOut = document.getElementById('b-zoomout');
+  if (bZoomOut) bZoomOut.onclick = () => api.send({ t: 'cameraZoomOut' });
   canvas.focus();
 })();

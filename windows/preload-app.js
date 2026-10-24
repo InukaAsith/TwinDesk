@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('macshare', {
   phoneUnmount: call('phoneUnmount'),
   phonePair: call('phonePair'),
   phoneScreen: call('phoneScreen'),
+  phoneCamera: call('phoneCamera'),
+  phoneListCameras: call('phoneListCameras'),
   phoneOpenApp: call('phoneOpenApp'),
   phoneCloseView: call('phoneCloseView'),
   phoneRetry: call('phoneRetry'),

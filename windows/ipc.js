@@ -162,6 +162,12 @@ function setupIpc(ctx) {
       for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
     } else ctx.phoneViews.openScreen();
   });
+  phone('phoneCamera', (open, opts) => {
+    if (open === false) {
+      for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
+    } else ctx.phoneViews.openCamera(opts);
+  });
+  phone('phoneListCameras', () => ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : []);
   phone('phoneOpenApp', (arg) => arg && typeof arg.id === 'string' && ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100)));
   phone('phoneCloseView', (id) => ctx.phoneViews.close(Number(id)));
   // Right-click on a phone app: open it, or pin it to Start (phoneview.js).

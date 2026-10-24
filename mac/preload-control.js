@@ -10,7 +10,7 @@ const ACTIONS = [
   'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost', 'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup',
-  'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneOpenApp', 'phoneCloseView', 'phoneRetry', 'phoneInstallFull', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
+  'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneCamera', 'phoneListCameras', 'phoneOpenApp', 'phoneCloseView', 'phoneRetry', 'phoneInstallFull', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
   'setUpdates', 'checkUpdates', 'openUpdate', 'openLink', 'setNet', 'netJoinHotspot', 'netCancel', 'netWifi', 'hub',
 ];
 
