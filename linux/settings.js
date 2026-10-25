@@ -54,6 +54,7 @@ function normalize(s) {
       keyboard: bool(kvm.keyboard, true),
       driveOther: bool(kvm.driveOther, true),
       beDriven: bool(kvm.beDriven, true),
+      lockScreen: bool(kvm.lockScreen, true), // control at login screen (Display Manager)
       resistancePx: Math.round(num(kvm.resistancePx, P.RESISTANCE_PX, 0, 400)),
       pcSide: P.SIDES.includes(kvm.pcSide) ? kvm.pcSide : null, // where this PC is, seen from the other computer (kvm.layout)
       speed: Math.round(num(kvm.speed, 1.0, 0.25, 3) * 100) / 100,

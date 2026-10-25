@@ -181,6 +181,7 @@ namespace MacShare
                         capture.DeadmanMs = (int)Json.Num(c, "deadmanMs", 1500);
                         capture.DoubleTapMs = (int)Json.Num(c, "doubleTapMs", 400);
                         capture.Gestures = Json.Bool(c, "gestures", true);
+                        capture.AllowSecureDesktop = Json.Bool(c, "lockScreen", true);
                         break;
                     case "capture":
                         if (Json.Bool(c, "on", false)) capture.Begin(Json.Bool(c, "mouse", true), Json.Bool(c, "keyboard", true));

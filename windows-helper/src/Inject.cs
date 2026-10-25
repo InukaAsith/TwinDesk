@@ -32,6 +32,7 @@ namespace MacShare
 
         static void Send(Native.INPUT input)
         {
+            Native.SyncInputDesktop();
             Native.SendInput(1, new Native.INPUT[] { input }, Size);
         }
 

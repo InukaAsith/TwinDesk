@@ -83,10 +83,35 @@ namespace MacShare
         [DllImport("user32.dll")] public static extern IntPtr CallNextHookEx(IntPtr hook, int nCode, IntPtr wParam, IntPtr lParam);
         [DllImport("kernel32.dll")] public static extern IntPtr GetModuleHandle(string name);
 
-        // The input desktop: none we may open while a UAC prompt (the secure desktop) or the lock
-        // screen is showing. Input can't be injected there, nor hooked.
+        // The input desktop: when a UAC prompt (the secure desktop) or the lock screen is active,
+        // attaching the injection thread to it allows remote input into the login screen and prompts.
         [DllImport("user32.dll")] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
         [DllImport("user32.dll")] public static extern bool CloseDesktop(IntPtr desktop);
+        [DllImport("user32.dll", SetLastError = true)] public static extern bool SetThreadDesktop(IntPtr hDesktop);
+        [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr GetThreadDesktop(uint dwThreadId);
+        [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+
+        static IntPtr lastAttachedDesktop = IntPtr.Zero;
+
+        public static bool SyncInputDesktop()
+        {
+            IntPtr d = OpenInputDesktop(0, false, 0x01FF /* DESKTOP_ALL_ACCESS */);
+            if (d == IntPtr.Zero)
+            {
+                d = OpenInputDesktop(0, false, 0x0001 /* DESKTOP_READOBJECTS */ | 0x0040 /* DESKTOP_WRITEOBJECTS */);
+            }
+            if (d != IntPtr.Zero)
+            {
+                if (d != lastAttachedDesktop)
+                {
+                    if (SetThreadDesktop(d)) lastAttachedDesktop = d;
+                }
+                CloseDesktop(d);
+                return true;
+            }
+            return false;
+        }
+
         public static bool SecureDesktop()
         {
             IntPtr d = OpenInputDesktop(0, false, 0x0001 /* DESKTOP_READOBJECTS */);

@@ -27,6 +27,7 @@ namespace MacShare
         public bool DragFiles = true; // file drags at the edge go to the Mac (drag.policy + the Files switches)
         public int DeadmanMs = 1500, DoubleTapMs = 400;
         public bool Gestures = true; // Touchpad gestures go over as k.ge (Touchpad.cs)
+        public bool AllowSecureDesktop = true; // Control on lock screen and UAC prompts
         Touchpad pad;
         readonly HashSet<uint> padCtrl = new HashSet<uint>(); // Ctrl that Windows made from a pinch, swallowed
 
@@ -228,6 +229,7 @@ namespace MacShare
                 }
                 Dictionary<string, object> e = Ev("secureDesktop");
                 e["on"] = secure;
+                e["allow"] = AllowSecureDesktop;
                 emit(e);
             }
             if (capturing && (DateTime.UtcNow - lastCmd).TotalMilliseconds > DeadmanMs)

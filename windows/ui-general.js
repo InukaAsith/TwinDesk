@@ -14,6 +14,7 @@ UI.tab({
   build(body) {
     const { el, api } = UI;
     const startup = UI.switch((v) => api.setStartup(v), { label: 'Start with Windows' });
+    const lockScreenSw = UI.switch((v) => api.setKvm({ lockScreen: v }), { label: 'Control on lock screen & UAC prompts' });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: 'Show a popup when switching' });
     const fwPill = el('span', { class: 'pill' });
     const fwCheck = UI.button('Check again', () => api.checkFirewall(), 'small');
@@ -46,6 +47,7 @@ UI.tab({
     body.append(
       UI.card('App', [
         UI.row('Start with Windows', '', [startup]),
+        UI.row('Control on lock screen & UAC prompts', 'Allow mouse and keyboard control on the lock screen and administrator prompts', [lockScreenSw]),
         UI.row('Show a popup when switching', 'When the mouse and keyboard move between computers', [hudSw]),
       ]),
       UI.card('Permissions', [fwRow, btRow, locRow]),
@@ -55,6 +57,7 @@ UI.tab({
 
     return (s) => {
       startup.set(s.startup);
+      lockScreenSw.set(s.kvm && s.kvm.lockScreen !== false);
       hudSw.set(s.app.hud);
       const fw = s.firewall || {};
       fwPill.textContent = fw.checking ? 'Checking…' : fw.ok ? 'OK' : fw.ok === false ? 'Needs a fix' : '';

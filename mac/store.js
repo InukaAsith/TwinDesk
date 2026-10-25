@@ -53,6 +53,7 @@ const DEFAULT_SETTINGS = {
     keyboard: true, // Keyboard tab
     driveOther: true,
     beDriven: true,
+    lockScreen: true, // control on lock screen / login window
     resistancePx: 120,
     speed: 1.0,
     reverseScroll: false,

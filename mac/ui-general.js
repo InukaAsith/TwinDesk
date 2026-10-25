@@ -37,6 +37,7 @@ UI.tab({
     const deviceName = el('span', { class: 'value' });
     const deviceRow = UI.row('Computer name', 'How other computers see this one', [deviceName]);
     const loginSw = UI.switch((v) => api.setApp({ openAtLogin: v }), { label: 'Open at login' });
+    const lockScreenSw = UI.switch((v) => api.setKvm({ lockScreen: v }), { label: 'Control on lock screen & login window' });
     const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: 'Keep the display awake' });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: 'Show a popup when switching' });
     // Wake this Mac from the other computer; the Share menu entry.
@@ -60,6 +61,7 @@ UI.tab({
       ]),
       UI.card('App', [
         UI.row('Open at login', '', [loginSw]),
+        UI.row('Control on lock screen & login window', 'Allow mouse and keyboard control on the macOS login window and lock screen', [lockScreenSw]),
         UI.row('Keep the display awake', 'While connected', [awakeSw]),
         UI.row('Show a popup when switching', 'When the mouse and keyboard move between computers', [hudSw]),
       ]),
@@ -81,6 +83,7 @@ UI.tab({
       }
       if (s.app) {
         loginSw.set(s.app.openAtLogin);
+        lockScreenSw.set(s.kvm && s.kvm.lockScreen !== false);
         awakeSw.set(s.app.keepAwake);
         hudSw.set(s.app.hud !== false);
       }

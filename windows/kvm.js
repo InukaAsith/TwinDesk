@@ -132,6 +132,7 @@ class Kvm {
       doubleTapMs: P.DOUBLE_TAP_MS,
       dragFiles: this._dragsOut(), // the edge strip that picks up file drags
       gestures: k.gestures !== false, // Touchpad gestures go over as k.ge while capturing
+      lockScreen: k.lockScreen !== false, // control on lock screen and UAC prompts
     });
     // Our switch, for the Mac (it doesn't pick up drags towards us while it's off).
     const accept = !!this.settings.files.edgeDrag;
@@ -286,10 +287,11 @@ class Kvm {
       case 'captureEnded': // dead-man or a local stop: input is back here
         if (this.mode === 'driving') this._release(msg.reason === 'secureDesktop' ? 'Back here for the administrator prompt or lock screen' : '');
         break;
-      // A UAC prompt or the lock screen here: the other computer's input can't reach it, so it
-      // goes home (else its pointer stays hidden there while nothing moves here).
+      // A UAC prompt or the lock screen here: send home only when lockScreen control is disabled
       case 'secureDesktop':
-        if (msg.on && this.mode === 'driven') this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');
+        if (msg.on && this.mode === 'driven' && this.cfg.lockScreen === false) {
+          this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');
+        }
         break;
     }
   }

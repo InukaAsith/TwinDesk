@@ -1,0 +1,21 @@
+[Unit]
+Description=TwinDesk Login Screen and Display Manager Helper Service
+Documentation=https://github.com/InukaAsith/TwinDesk
+After=network.target systemd-udevd.service
+Before=display-manager.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/macshare-linuxhelper --login-daemon
+Restart=on-failure
+RestartSec=3
+Environment=DISPLAY=:0
+
+# Kernel uinput and evdev access
+DeviceAllow=/dev/uinput rw
+DeviceAllow=char-input rw
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETUID CAP_SETGID
+
+[Install]
+WantedBy=graphical.target
