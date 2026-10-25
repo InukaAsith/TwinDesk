@@ -300,6 +300,9 @@ function start() {
     checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', pushState);
+  if (settings.app && typeof settings.app.openAtLogin === 'boolean' && settings.app.openAtLogin !== autostart.get()) {
+    autostart.set(settings.app.openAtLogin);
+  }
   link.start();
   link.on('welcome', () => { // a Mac app's launcher was used while the Mac wasn't connected
     if (pendingMacApp && Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
@@ -918,6 +921,10 @@ let inputNote = '';
 
 function setStartup(on) {
   autostart.set(!!on);
+  if (settings.app) {
+    settings.app.openAtLogin = !!on;
+    saveSettings();
+  }
   pushState();
 }
 

@@ -319,6 +319,9 @@ function start() {
     checkFirewall, fixFirewall, setStartup, onApp: updateTray });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
+  if (settings.app && typeof settings.app.openAtLogin === 'boolean' && settings.app.openAtLogin !== getStartup()) {
+    setStartup(settings.app.openAtLogin);
+  }
   link.start();
 
   link.on('welcome', () => { // a pinned Mac app started while the Mac wasn't connected
@@ -878,10 +881,22 @@ async function fixFirewall() {
 // In development the login item starts electron.exe with this app's folder.
 const loginItem = () => ({ path: process.execPath, args: app.isPackaged ? ['--hidden'] : [app.getAppPath(), '--hidden'] });
 function getStartup() {
-  return app.getLoginItemSettings(loginItem()).openAtLogin;
+  try {
+    return app.getLoginItemSettings(loginItem()).openAtLogin;
+  } catch (_) {
+    return false;
+  }
 }
 function setStartup(on) {
-  app.setLoginItemSettings({ openAtLogin: !!on, ...loginItem() });
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!on, ...loginItem() });
+  } catch (e) {
+    console.error('Failed to set login item settings:', e);
+  }
+  if (settings.app) {
+    settings.app.openAtLogin = !!on;
+    saveSettings();
+  }
   pushState();
 }
 

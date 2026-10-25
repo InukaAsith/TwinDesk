@@ -68,7 +68,7 @@ function normalize(s) {
     },
     // hotkey: double-tap = mouse and keyboard home
     keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN },
-    app: { hud: bool(appS.hud, true) }, // popup when switching computers
+    app: { openAtLogin: bool(appS.openAtLogin, false), hud: bool(appS.hud, true) }, // open at login & popup when switching
     // New releases on GitHub (shared/updates.js); notified = the last version announced
     updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '' },
     clipboard: {

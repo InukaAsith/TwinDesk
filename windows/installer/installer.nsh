@@ -63,6 +63,9 @@
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk" program="$INSTDIR\TwinDesk.exe"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (TCP 47800)"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (adb)"'
+  ; Remove startup entry in the current user's Run key
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "org.macshare.windows"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "TwinDesk"
   ; The pinned Mac apps' Start menu folder is per user (the app makes it in Roaming).
   SetShellVarContext current
   RMDir /r "$APPDATA\Microsoft\Windows\Start Menu\Programs\TwinDesk Apps"

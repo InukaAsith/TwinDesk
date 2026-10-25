@@ -14,16 +14,26 @@ const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 function apply(on) {
   if (app.isPackaged) {
-    app.setLoginItemSettings({ openAtLogin: !!on, openAsHidden: true, args: ['--hidden'] });
-    return;
+    // macOS 13+ (Ventura, Sonoma, Sequoia) uses SMAppService via serviceManagement: true.
+    // Fall back to legacy LSSharedFileList if serviceManagement is unavailable or fails.
+    try {
+      app.setLoginItemSettings({ openAtLogin: !!on, serviceManagement: true, args: ['--hidden'] });
+    } catch (_) {
+      try {
+        app.setLoginItemSettings({ openAtLogin: !!on, openAsHidden: true, args: ['--hidden'] });
+      } catch (_) {}
+    }
   }
+
+  // Also maintain the user LaunchAgent as a reliable fallback across macOS versions and ad-hoc builds
   if (!on) {
-    fs.rmSync(PLIST, { force: true });
+    try { fs.rmSync(PLIST, { force: true }); } catch (_) {}
     return;
   }
-  const args = [process.execPath, app.getAppPath(), '--hidden'];
-  fs.mkdirSync(path.dirname(PLIST), { recursive: true });
-  fs.writeFileSync(PLIST, `<?xml version="1.0" encoding="UTF-8"?>
+  const args = app.isPackaged ? [process.execPath, '--hidden'] : [process.execPath, app.getAppPath(), '--hidden'];
+  try {
+    fs.mkdirSync(path.dirname(PLIST), { recursive: true });
+    fs.writeFileSync(PLIST, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>${LABEL}</string>
@@ -32,10 +42,21 @@ function apply(on) {
   <key>ProcessType</key><string>Interactive</string>
 </dict></plist>
 `);
+  } catch (_) {}
 }
 
 function isOn() {
-  return app.isPackaged ? app.getLoginItemSettings().openAtLogin : fs.existsSync(PLIST);
+  if (app.isPackaged) {
+    try {
+      const s = app.getLoginItemSettings({ serviceManagement: true });
+      if (s && s.openAtLogin) return true;
+    } catch (_) {}
+    try {
+      const s = app.getLoginItemSettings();
+      if (s && s.openAtLogin) return true;
+    } catch (_) {}
+  }
+  return fs.existsSync(PLIST);
 }
 
 module.exports = { apply, isOn };
