@@ -9,7 +9,7 @@ const { Mesh, keepalive } = require('../mesh.js');
 
 // The documented values (docs/mesh.md, protocol.js on feature/mesh). Written out here on purpose:
 // the tests check the numbers the design promises, not whatever a constant file says.
-const DOC = { MAX_DEVICES: 10, PING_MS: 1000, TIMEOUT_MS: 4000, IDLE_PING_MS: 5000, IDLE_TIMEOUT_MS: 15000 };
+const DOC = { MAX_DEVICES: 10, PING_MS: 1000, TIMEOUT_MS: 12000, IDLE_PING_MS: 5000, IDLE_TIMEOUT_MS: 15000 };
 
 // Fake send: records what was sent to a peer and reports success.
 function sink(log, id) {

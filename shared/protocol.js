@@ -21,7 +21,7 @@
     // PHONE_GRACE_MS after it drops, so a Wi-Fi blip doesn't hand the session back.
     PHONE_GRACE_MS: 30000,
     PING_MS: 1000,
-    TIMEOUT_MS: 4000, // close the session after this much silence
+    TIMEOUT_MS: 12000, // close the session after this much silence (resilient to swap thrashing and GC pauses under memory pressure)
     // Multi-device only (docs/mesh.md): many devices at once. A link that is selected, driving or being
     // driven keeps PING_MS/TIMEOUT_MS; the others are checked more rarely so ten links cost little.
     MAX_DEVICES: 10,
@@ -39,13 +39,15 @@
 
     // Mouse & keyboard sharing
     KVM_TAKE_TIMEOUT_MS: 1000, // owner goes home if no kvm.accept by then
-    KVM_SILENCE_MS: 2000, // while driving/driven: no message from the peer for this long = link lost
+    KVM_SILENCE_MS: 6000, // while driving/driven: no message from the peer for this long = link lost
     KVM_SILENCE_BLE_MS: 6000, // the same through Bluetooth (a slower, burstier link)
     KVM_MOVE_BLE_MS: 16, // through Bluetooth: cursor moves summed and sent at most this often
     KVM_BLE_BACKLOG: 512, // … and held (still summed) while this many bytes wait for the radio
     KVM_IP_BACKLOG: 64 * 1024, // on the network: moves held (still summed) while this many bytes wait on the socket
     KVM_MOVE_MAX_WAIT_MS: 16, // … but one goes at least this often (behind a big message the pointer still moves)
     KVM_CROSS_COOLDOWN_MS: 250, // no new crossing this soon after the last one, either way (the helpers' edges)
+    KVM_MAX_BACKLOG: 64 * 1024, // backward-compatibility alias for KVM_IP_BACKLOG
+    KVM_BACKLOG_DELAY_MS: 10, // delay between checks while socket send buffer drains
     HELPER_KEEPALIVE_MS: 500, // main -> helper keepalive while capturing
     HELPER_DEADMAN_MS: 1500, // helper stops capturing by itself after this much keepalive silence
     RESISTANCE_PX: 120, // default push through an edge before crossing

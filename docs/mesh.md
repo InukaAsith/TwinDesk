@@ -33,7 +33,7 @@ place of it: see [multi-device.md](multi-device.md). The Windows files named bel
   not refused with `busy` because another link is up.
 - Keep-alive costs scale with the number of links, so the policy depends on use:
   a link that is driving or being driven (or the selected one) pings every `PING_MS` (1 s) from each end (so both ends can show the round trip) and times
-  out after `TIMEOUT_MS` (4 s), as today; every other link pings every `IDLE_PING_MS` (5 s) and times
+  out after `TIMEOUT_MS` (12 s, tolerant to garbage-collection pauses and swap thrashing under high memory pressure); every other link pings every `IDLE_PING_MS` (5 s) and times
   out after `IDLE_TIMEOUT_MS` (15 s). Any received message counts as a sign of life; a ping is only
   sent when nothing was sent on that link for the interval.
 
@@ -159,7 +159,7 @@ Each link (one per device) has its own transport; nothing is global any more.
 - **Bluetooth** (`shared/blepipe.js`): a device that is near but not on this network is reached
   through a Bluetooth pipe, which carries the same WSS over a loopback socket. A Bluetooth socket is
   marked `ws.transport = 'ble'` on the server (`ctx.transport`) and `link.transport` on the guest side,
-  and it has a longer silence limit: `P.BLE_TIMEOUT_MS` (20 s) instead of `P.TIMEOUT_MS` (4 s) while busy
+  and it has a longer silence limit: `P.BLE_TIMEOUT_MS` (20 s) instead of `P.TIMEOUT_MS` (12 s) while busy
   and `P.IDLE_TIMEOUT_MS` (15 s) when idle, and bytes still arriving through the pipe count as a sign of
   life (a big message takes seconds). The keep-alive is the same per socket (busy ping every `PING_MS`,
   idle every `IDLE_PING_MS`).
