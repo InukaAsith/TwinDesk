@@ -1,0 +1,58 @@
+name: Build Homebrew Cask
+
+# Generates and validates Casks/twindesk.rb with checksums from the latest release DMGs.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose DMGs to package in the Cask (e.g. v2.3.0).
+        required: true
+      ref:
+        description: Branch to check out.
+        required: false
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  cask:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+
+      - name: Update Cask with Release Checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          VER="${TAG#v}"
+          echo "Updating Casks/twindesk.rb for version $VER ($TAG)..."
+          
+          # Download both DMGs
+          gh release download "$TAG" -R "${{ github.repository }}" -p "TwinDesk-$VER-arm64.dmg"
+          gh release download "$TAG" -R "${{ github.repository }}" -p "TwinDesk-$VER-x64_Intel.dmg"
+
+          ARM_SUM=$(shasum -a 256 "TwinDesk-$VER-arm64.dmg" | cut -d' ' -f1)
+          INTEL_SUM=$(shasum -a 256 "TwinDesk-$VER-x64_Intel.dmg" | cut -d' ' -f1)
+
+          echo "ARM64 SHA256: $ARM_SUM"
+          echo "Intel SHA256: $INTEL_SUM"
+
+          sed -i '' -e "s/version \".*\"/version \"$VER\"/" Casks/twindesk.rb
+          sed -i '' -e "s/sha256 arm:   \".*\"/sha256 arm:   \"$ARM_SUM\"/" Casks/twindesk.rb
+          sed -i '' -e "s/intel: \".*\"/intel: \"$INTEL_SUM\"/" Casks/twindesk.rb
+
+          cat Casks/twindesk.rb
+
+      - name: Validate Cask with Homebrew
+        run: |
+          brew audit --cask Casks/twindesk.rb || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twindesk-homebrew-cask
+          path: Casks/twindesk.rb

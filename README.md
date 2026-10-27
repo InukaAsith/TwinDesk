@@ -97,7 +97,8 @@ X11 and Wayland · shared folders through Samba · the phone app page by page ·
 **🍎 macOS**<br><sub>13 Ventura or later</sub>
 
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
+<sub>Homebrew: <code>brew install --cask InukaAsith/twindesk/twindesk</code> (<a href="#macos-homebrew--terminal-install">more</a>)</sub>
 
 </td>
 <td width="25%" align="center" valign="top">
@@ -635,6 +636,22 @@ Monitoring** (once; after that the General tab shows each permission's status).
 certificate they carry over when an update is dragged into Applications. An app built without it is
 signed ad-hoc, and macOS treats every update as a new app; TwinDesk then clears the stale entries so
 Allow works again.
+
+<a name="macos-homebrew--terminal-install"></a>
+
+### macOS Homebrew & Headless-Safe Installer
+
+To install without Gatekeeper "Move to Bin" warnings, or to upgrade a headless Mac without losing remote mouse control:
+
+```sh
+# Option 1: Install via Homebrew
+brew install --cask InukaAsith/twindesk/twindesk
+
+# Option 2: 1-line Terminal installer (bypasses quarantine, hot-swaps running instance)
+curl -fsSL https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/mac/scripts/install.sh | bash
+```
+
+> **Headless & Mouse-less Upgrade**: If you control your Mac solely through TwinDesk without a physical mouse plugged into it, upgrading via Homebrew (`brew upgrade --cask twindesk`) or the installer script gracefully stops the running instance, updates `/Applications/TwinDesk.app`, clears quarantine, and relaunches it automatically in ~1 second so your remote cursor reconnects immediately.
 
 ### Windows 10 / 11
 
