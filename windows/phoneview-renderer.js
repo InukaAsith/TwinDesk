@@ -409,8 +409,8 @@
     { k: 'recents', title: 'Recent apps', nav: true, in: ['screen'] },
   ].filter((c) => (c.in || PHONE).includes(kind));
   // The title bar layouts carry what the title bar always had: Back, Home, Recents, Notifications,
-  // Rotate; the screen-off and Enter switches, and a camera's own, too.
-  const TOP = ['notifications', 'rotate', 'screenOff', 'enterSends', ...CAMERA];
+  // Rotate; the screen-off, Enter and Arrow keys swipe switches, and a camera's own, too.
+  const TOP = ['notifications', 'rotate', 'screenOff', 'enterSends', 'arrowSwipe', ...CAMERA];
   const OPT = { pin: 'pinned', screenOff: 'screenOff', enterSends: 'enterSends', arrowSwipe: 'arrowSwipe', torch: 'torch' };
   for (const c of CONTROLS) {
     c.el = document.createElement('button');

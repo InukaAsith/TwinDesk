@@ -13,6 +13,7 @@ const path = require('path');
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const chat = require('../shared/phonechat');
 const { Session, ACTION, TYPE } = require('./scrcpy');
 const { KeyState, ANDROID } = require('./android-keys');
 
@@ -30,6 +31,19 @@ class PhoneViews extends EventEmitter {
     bridge.views = this;
     this.on('change', () => bridge._tellPhone()); // its Screen and Camera pages follow the windows here
     this.notified = null; // {pkg, name, at, unlocked}: a clicked notification's app, waiting to open (openNotified)
+    // The app in front on the phone, which its Accessibility says (the full app): Enter in a chat
+    // app sends (shared/phonechat.js); a11y: the phone clicks Send itself.
+    this.activeApp = '';
+    this.a11y = false;
+    server.on(`t:${T.PHONE_ACTIVE_APP}`, (m) => {
+      if (!m || typeof m.pkg !== 'string') return;
+      this.activeApp = m.pkg.slice(0, 200);
+      this.a11y = true;
+    });
+    server.on('closed', () => {
+      this.activeApp = '';
+      this.a11y = false;
+    });
     server.on(`t:${T.PHONE_AWAKE}`, (m) => this._awake(m));
     // The phone's own Show and Close (its Screen page): its screen in a window here (openScreen
     // decides how: wireless debugging, Wi-Fi first when on Bluetooth, or a popup saying what's
@@ -251,7 +265,7 @@ class PhoneViews extends EventEmitter {
       // click never comes: without this its AudioContext stays suspended and silent).
       webPreferences: { preload: path.join(__dirname, 'preload-phoneview.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
     });
-    const v = { id, kind, app, title, win, session: null, keys: new KeyState(), size: null, ready: false, queue: [] };
+    const v = { id, kind, app, title, win, session: null, keys: new KeyState(), eaten: new Set(), size: null, ready: false, queue: [] };
     this.views.set(id, v);
     win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title } });
     if (!hidden) win.once('ready-to-show', () => win.show());
@@ -312,9 +326,55 @@ class PhoneViews extends EventEmitter {
     await s.start();
     if (v.app) setTimeout(() => s.startApp(v.app), 300);
     this._send(v, 'phoneview:status', { ready: true, via });
+    this._send(v, 'phoneview:opts', this._opts(v));
+  }
+
+  // The window's switches as they are now (its controls light up).
+  _opts(v) {
+    const ph = this.getSettings().phone || {};
+    return { enterSends: ph.enterSends !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff };
+  }
+
+  // Enter sends / Arrow keys swipe changed (here, or on the Phone page): every window shows it.
+  applyOpts() {
+    for (const v of this.views.values()) if (v.kind !== 'sound' && v.kind !== 'netsound') this._send(v, 'phoneview:opts', this._opts(v));
+  }
+
+  // Enter in a chat app, an arrow that swipes (shared/phonechat.js): done here, the key (and its
+  // release) left out. True when the key was used up.
+  _special(v, code, down) {
+    if (!down) return v.eaten.delete(code);
+    if (v.eaten.has(code)) return true; // held: once
+    const ph = this.getSettings().phone || {};
+    const s = v.session;
+    let done = false;
+    const dir = chat.swipeOf(code, ph.arrowSwipe === true, v.keys.held);
+    if (dir) {
+      this._swipe(v, dir);
+      done = true;
+    } else if (chat.isEnter(code)) {
+      done = chat.enter({
+        on: ph.enterSends !== false,
+        pkg: v.app || this.activeApp,
+        shift: v.keys.held.has('ShiftLeft') || v.keys.held.has('ShiftRight'),
+        a11y: this.a11y,
+        phoneSend: () => this.server.sendToClient({ t: T.PHONE_SEND }),
+        tap: (k) => !s.closed && s.tap(k),
+        text: (t) => s.text(t),
+      });
+    }
+    if (done) v.eaten.add(code);
+    return done;
   }
 
   _input(v, m) {
+    if (m.t === 'toggle' && (m.what === 'enterSends' || m.what === 'arrowSwipe')) {
+      const ph = this.getSettings().phone;
+      ph[m.what] = m.what === 'enterSends' ? ph.enterSends === false : ph.arrowSwipe !== true;
+      this.bridge.emit('save');
+      this.applyOpts();
+      return this.emit('change');
+    }
     const s = v.session;
     const size = v.size;
     if (!s || s.closed) return;
@@ -334,7 +394,9 @@ class PhoneViews extends EventEmitter {
       case 'key': {
         if (typeof m.code !== 'string') return;
         const swap = P.keySwapNeeded(P.OS.LINUX, P.OS.ANDROID) && this.getSettings().keys.swapCtrlCmd !== false;
-        const e = v.keys.event(swap ? P.mapKeyFromOtherPlatform(m.code) : m.code, !!m.down);
+        const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
+        if (this._special(v, code, !!m.down)) break;
+        const e = v.keys.event(code, !!m.down);
         if (e) s.key(m.down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta, m.repeat ? 1 : 0);
         break;
       }
@@ -343,6 +405,12 @@ class PhoneViews extends EventEmitter {
         if (m.key === 'back') { s.backOrScreenOn(ACTION.DOWN); s.backOrScreenOn(ACTION.UP); } else if (k) s.tap(k);
         if (m.key === 'notifications') s.simple(TYPE.EXPAND_NOTIFICATIONS);
         if (m.key === 'rotate') s.simple(TYPE.ROTATE);
+        // The phone's own screen off, its picture still here (scrcpy's display power).
+        if (m.key === 'screenPower' && v.kind === 'screen') {
+          v.screenOff = !v.screenOff;
+          s.setDisplayPower(!v.screenOff);
+          this._send(v, 'phoneview:opts', { screenOff: v.screenOff });
+        }
         break;
       }
       case 'resetVideo': // the window skipped frames: a keyframe now
@@ -365,8 +433,107 @@ class PhoneViews extends EventEmitter {
       case 'resize': // an app window changed size: its virtual display follows (flex)
         if (v.kind === 'app' && m.w > 50 && m.h > 50) s.resizeDisplay(Math.round(m.w), Math.round(m.h));
         break;
+      case 'swipe':
+        if (typeof m.dir === 'string') this._swipe(v, m.dir);
+        break;
       default: break;
     }
+  }
+
+  _swipe(v, dir) {
+    const s = v.session;
+    const size = v.size;
+    if (!s || s.closed || !size) return;
+    if (v.swiping) {
+      // Buffer at most 1 subsequent swipe so rapid taps are never dropped
+      v.pendingSwipe = dir;
+      return;
+    }
+    v.swiping = true;
+
+    const w = size.width;
+    const h = size.height;
+    let startX, startY, endX, endY;
+
+    // Inverted directional swipe for natural navigation:
+    // ArrowDown -> content moves down (finger swipes UP from bottom to top)
+    // ArrowUp -> content moves up (finger swipes DOWN from top to bottom)
+    // ArrowRight -> content moves right (finger swipes LEFT from right to left)
+    // ArrowLeft -> content moves left (finger swipes RIGHT from left to right)
+    switch (dir) {
+      case 'down':
+        startX = Math.round(w * 0.5);
+        startY = Math.round(h * 0.78);
+        endX = Math.round(w * 0.5);
+        endY = Math.round(h * 0.22);
+        break;
+      case 'up':
+        startX = Math.round(w * 0.5);
+        startY = Math.round(h * 0.22);
+        endX = Math.round(w * 0.5);
+        endY = Math.round(h * 0.78);
+        break;
+      case 'right':
+        startX = Math.round(w * 0.82);
+        startY = Math.round(h * 0.5);
+        endX = Math.round(w * 0.18);
+        endY = Math.round(h * 0.5);
+        break;
+      case 'left':
+        startX = Math.round(w * 0.18);
+        startY = Math.round(h * 0.5);
+        endX = Math.round(w * 0.82);
+        endY = Math.round(h * 0.5);
+        break;
+      default:
+        v.swiping = false;
+        return;
+    }
+
+    const duration = 160; // ms: natural flick duration
+    const startTime = Date.now();
+    const dx = endX - startX;
+    const dy = endY - startY;
+
+    // Send touch down directly over control socket (pointer: -2 = FINGER)
+    s.touch(ACTION.DOWN, -2, startX, startY, w, h, 1, 0, 0);
+
+    const timer = setInterval(() => {
+      if (s.closed) {
+        clearInterval(timer);
+        v.swiping = false;
+        v.swipeTimer = null;
+        v.pendingSwipe = null;
+        return;
+      }
+
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / duration);
+
+      if (progress < 1) {
+        // Mild ease-in curve (t^1.15): starts cleanly without jerk and maintains brisk velocity
+        // right through release (ACTION.UP), ensuring Android's VelocityTracker detects a
+        // natural fling and triggers a smooth inertia scroll.
+        const ease = Math.pow(progress, 1.15);
+        const curX = Math.round(startX + dx * ease);
+        const curY = Math.round(startY + dy * ease);
+        s.touch(ACTION.MOVE, -2, curX, curY, w, h, 1, 0, 0);
+      } else {
+        clearInterval(timer);
+        v.swipeTimer = null;
+        // Liftoff at terminal position with authentic release velocity
+        s.touch(ACTION.UP, -2, endX, endY, w, h, 0, 0, 0);
+        setTimeout(() => {
+          v.swiping = false;
+          if (v.pendingSwipe) {
+            const next = v.pendingSwipe;
+            v.pendingSwipe = null;
+            this._swipe(v, next);
+          }
+        }, 30);
+      }
+    }, 10);
+    v.swipeTimer = timer;
   }
 
   shutdown() {

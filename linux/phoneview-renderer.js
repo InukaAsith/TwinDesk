@@ -302,6 +302,27 @@
     const el = document.getElementById(`b-${k}`);
     if (el) el.onclick = () => api.send({ t: 'nav', key: k === 'notifs' ? 'notifications' : k });
   }
+
+  // The phone's screen off (its picture stays here; right click: the power key), Enter sends in
+  // chat apps, the arrows swipe: lit while on (phoneview.js says, 'opts').
+  const powerBtn = document.getElementById('b-power');
+  if (powerBtn) {
+    powerBtn.onclick = () => api.send({ t: 'nav', key: 'screenPower' });
+    powerBtn.oncontextmenu = (e) => {
+      e.preventDefault();
+      api.send({ t: 'nav', key: 'power' });
+    };
+  }
+  const enterBtn = document.getElementById('b-enter-send');
+  if (enterBtn) enterBtn.onclick = () => api.send({ t: 'toggle', what: 'enterSends' });
+  const swipeBtn = document.getElementById('b-swipe');
+  if (swipeBtn) swipeBtn.onclick = () => api.send({ t: 'toggle', what: 'arrowSwipe' });
+  api.on('opts', (m) => {
+    if (!m) return;
+    if (powerBtn && typeof m.screenOff === 'boolean') powerBtn.classList.toggle('active', m.screenOff);
+    if (enterBtn && typeof m.enterSends === 'boolean') enterBtn.classList.toggle('active', m.enterSends);
+    if (swipeBtn && typeof m.arrowSwipe === 'boolean') swipeBtn.classList.toggle('active', m.arrowSwipe);
+  });
   // A camera window (openCamera): torch, front/back and zoom.
   let torchOn = false;
   const bTorch = document.getElementById('b-torch');

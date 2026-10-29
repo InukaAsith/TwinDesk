@@ -168,6 +168,10 @@ function normalize(s) {
       wallpaper: bool(ph.wallpaper, true),
       input: ph.input === 'phone' ? 'phone' : 'adb', // the mouse and keyboard through adb, or the phone's Accessibility service
       inputPicked: bool(ph.inputPicked, false), // not picked: automatic (phone-bridge.js inputMode)
+      // Keys in a phone window and on the phone (shared/phonechat.js): Enter sends in WhatsApp,
+      // Instagram and Telegram (Shift+Enter a new line); the arrow keys swipe the screen.
+      enterSends: bool(ph.enterSends, true),
+      arrowSwipe: bool(ph.arrowSwipe, false),
     },
     // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);
     // bleWifiOff: none at all while the session is on the same Wi-Fi (blepolicy.js wifiQuiet)
