@@ -62,6 +62,11 @@ class FileRecv {
     if (!f || f.done || m.seq !== f.seq || (typeof m.data !== 'string' && !Buffer.isBuffer(m.data))) return;
     if (!f.out) openOut(f);
     const buf = (typeof m.data === 'string' ? Buffer.from(m.data, 'base64') : m.data); // a Buffer from fast files (shared/fastfile.js)
+    if (f.got + buf.length > f.size) { // more than it offered: not written (it could fill the disk)
+      if (f.batch) return this._batchFail(f, 'size mismatch');
+      this._drop(f.id);
+      return this.link.send({ t: T.FILE_DONE, id: f.id, ok: false, error: 'size mismatch' });
+    }
     f.seq++;
     f.got += buf.length;
     f.hash.update(buf);
