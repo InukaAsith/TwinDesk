@@ -24,7 +24,12 @@ class Sound {
     const link = this.link;
     link.on('welcome', () => { this.macAccepts = false; this.apply(); });
     link.on('closed', () => { this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); });
-    link.on(T.AUDIO_POLICY, (m) => { this.macAccepts = m.accept === true; this.apply(); });
+    link.on(T.AUDIO_POLICY, (m) => {
+      const accept = m.accept === true;
+      if (accept === this.macAccepts) return; // apply() answers with our policy: only on a change, or the two sides echo forever
+      this.macAccepts = accept;
+      this.apply();
+    });
     link.on(T.AUDIO_OFFER, (m) => {
       if (m.dir === 'm2w' && this.cfg.receive && typeof m.sdp === 'string') this._toWin({ ...m, ice: this._ice() });
     });
