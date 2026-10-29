@@ -1,0 +1,36 @@
+[package]
+name = "twindesk-tauri"
+version = "2.3.0"
+description = "TwinDesk — Tauri v2 + Rust Proof of Concept (Ultra-low RAM, zero-GC latency, native service)"
+authors = ["Inuka Asith", "Benson K B"]
+license = "GPL-3.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["tray-icon"] }
+tauri-plugin-shell = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+tokio-tungstenite = "0.23"
+futures-util = "0.3"
+parking_lot = "0.12"
+log = "0.4"
+env_logger = "0.11"
+chrono = { version = "0.4", features = ["serde"] }
+arboard = "3.4"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

@@ -1,0 +1,13 @@
+{
+  "name": "twindesk-workspace",
+  "private": true,
+  "scripts": {
+    "stage": "node scripts/stage-tauri-ui.js",
+    "tauri": "tauri",
+    "tauri:dev": "node scripts/stage-tauri-ui.js && tauri dev",
+    "tauri:build": "node scripts/stage-tauri-ui.js && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

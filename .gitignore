@@ -30,3 +30,5 @@ mac/vendor/twindesk-android-full.apk
 .env
 result
 result-*
+dist-tauri/
+src-tauri/target/

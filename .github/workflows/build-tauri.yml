@@ -1,0 +1,120 @@
+name: Build Tauri v2 Test Artifacts
+
+on:
+  push:
+    branches:
+      - 'feat/tauri*'
+      - 'main'
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/build-tauri.yml'
+      - 'scripts/stage-tauri-ui.js'
+      - 'shared/tauri-bridge.js'
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/build-tauri.yml'
+      - 'scripts/stage-tauri-ui.js'
+      - 'shared/tauri-bridge.js'
+  workflow_dispatch:
+
+jobs:
+  build-tauri:
+    name: Build Tauri on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            os: 'Windows'
+            artifact_name: 'twindesk-tauri-windows'
+          - platform: 'macos-latest'
+            os: 'macOS'
+            artifact_name: 'twindesk-tauri-macos'
+          - platform: 'ubuntu-22.04'
+            os: 'Linux'
+            artifact_name: 'twindesk-tauri-linux'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Stage frontend assets
+        run: node scripts/stage-tauri-ui.js
+
+      - name: Run Cargo Check & Test
+        run: |
+          cargo check --manifest-path src-tauri/Cargo.toml
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Tauri Package
+        run: npx @tauri-apps/cli build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ""
+
+      - name: Upload Test Artifacts (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/release/twindesk-tauri.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: warn
+
+      - name: Upload Test Artifacts (macOS)
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/release/twindesk-tauri
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+          if-no-files-found: warn
+
+      - name: Upload Test Artifacts (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/release/twindesk-tauri
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
