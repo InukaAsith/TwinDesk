@@ -49,7 +49,7 @@ class FileRecv {
     if (!(m.size >= 0) || m.size > P.FILE_MAX_BYTES) return refuse('too_big');
     const name = safeName(m.name);
     fs.mkdirSync(this.dir, { recursive: true });
-    const tmp = path.join(this.dir, m.id + '.part');
+    const tmp = path.join(this.dir, P.randomHex(16) + '.part'); // not m.id: the other computer's string
     const f = { id: m.id, name, size: m.size, got: 0, seq: 0, hash: crypto.createHash('sha256'), out: fs.createWriteStream(tmp), tmp, done: false };
     if (this.files.size === 0) this.target = null; // a new drag
     this.files.set(m.id, f);
