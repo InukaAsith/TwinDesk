@@ -377,6 +377,18 @@ function nvPorts() {
   return { connected, pick: free[0] || '' };
 }
 
+// Our screen must never be the main monitor (#22): the desktop (KDE's KScreen, the login layout
+// with NVIDIA's forced output) can make a new monitor primary, which moves the panel and new
+// windows onto a screen only the other device shows. Primary back on the monitor that was (was),
+// else the leftmost other one that's on. Not on GNOME: Mutter's layout keeps its primary itself.
+async function keepPrimary(ours, was) {
+  const outs = await outputs(false).catch(() => []);
+  if (!outs.some((o) => o.name === ours && o.primary)) return;
+  const others = outs.filter((o) => o.active && o.name !== ours);
+  const back = others.find((o) => o.name === was) || others.sort((a, b) => a.x - b.x || a.y - b.y)[0];
+  if (back) await run('xrandr', ['--output', back.name, '--primary']).catch((e) => console.warn('[vdd] primary', e.message));
+}
+
 const spareOf = (outs) => outs.filter((o) => !o.connected && o.crtcs > 0 && hasConnector(o));
 const SWITCHED_OFF = 'something on this computer switched it off again (in a virtual machine, its guest tools do that)';
 const modeName = (w, h) => 'TwinDesk_' + cvtRB(w, h).width + 'x' + h;
@@ -470,7 +482,10 @@ class Vdd {
   async _nvCheck(outs) {
     const ours = nvOurs(outs);
     const conf = fs.existsSync(NV_CONF);
-    if (ours && ours.active && !this.state.on) this._offAsked([ours.name]); // the desktop's login layout
+    if (ours && ours.active && !this.state.on) {
+      await keepPrimary(ours.name); // the desktop's login layout may have made it the main monitor
+      this._offAsked([ours.name]);
+    }
     const ports = conf || ours ? null : nvPorts();
     this._set({
       checked: true, kind: 'nvidia', installed: !!ours, setup: !conf && !ours && !!(ports && ports.pick), removable: conf,
@@ -496,6 +511,7 @@ class Vdd {
     await run('xrandr', ['--output', ours.name, '--mode', pick[0] + 'x' + pick[1], ...(main ? ['--right-of', main.name] : [])]);
     const mon = await waitFor(() => this.find(), 5000);
     if (!mon) throw new Error('the desktop didn’t switch it on');
+    await keepPrimary(ours.name, main && main.name);
     return mon;
   }
 
@@ -622,6 +638,7 @@ class Vdd {
     const outs = await outputs();
     const main = outs.find((o) => o.primary && o.active && o.name !== this.output) || outs.find((o) => o.connected && o.active && o.name !== this.output);
     await run('xrandr', ['--output', this.output, '--mode', this.mode, ...(main ? ['--right-of', main.name] : [])]);
+    await keepPrimary(this.output, main && main.name);
   }
 
   // Our output off, back to the driver's detection (disconnected) and our mode gone.
