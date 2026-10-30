@@ -40,6 +40,7 @@ class Link extends EventEmitter {
     // until connect(). {why: 'local' | released | replaced, message}
     this.stopped = null;
     this.takeover = false; // the next hello takes the session from whoever has it (Take over)
+    this.preferId = null; // connect(takeover, {id}) dials this host, not whichever discovery sees first
     this.busyBy = ''; // the host is in use by someone else: tried again now and then
     this.timers = {};
     this.pairLimit = new PairLimit((why) => this._pairFailed(why)); // shared/pairlimit.js
@@ -113,10 +114,20 @@ class Link extends EventEmitter {
   }
 
   // Connect again, or Take over (takeover: the host's session with another device ends).
-  connect(takeover = false) {
+  // prefer: a host id, or {id, address, port} from Connect by address, so that host is the one dialled.
+  connect(takeover = false, prefer = null) {
     if (!this.hosts.length || this.pairState) return;
+    const preferId = prefer && typeof prefer === 'object' ? prefer.id : prefer || null;
+    if (prefer && typeof prefer === 'object' && prefer.address) {
+      const h = this.hosts.find((x) => x.id === preferId);
+      if (h && (h.address !== prefer.address || (prefer.port && h.port !== prefer.port))) {
+        Object.assign(h, { address: prefer.address, port: prefer.port || h.port });
+        this._save();
+      }
+    }
     this.stopped = null;
     this.takeover = !!takeover;
+    this.preferId = preferId;
     this.attempt = 0;
     this._scheduleReconnect(0);
   }
@@ -333,9 +344,11 @@ class Link extends EventEmitter {
     this.attempt++;
     if (this.status.state === 'connected') this._setStatus('reconnecting', this.lastError || '');
     this.timers.reconnect = setTimeout(() => {
+      const preferred = this.preferId && this.hosts.find((h) => h.id === this.preferId);
+      this.preferId = null;
       if (this.pairState || this.ws) return;
       if (!this.canConnect()) return this._setStatus('standby', '');
-      const seen = this.hosts.find((h) => this.resolve(h.id)) || this.hosts[0];
+      const seen = preferred || this.hosts.find((h) => this.resolve(h.id)) || this.hosts[0];
       const at = this.resolve(seen.id);
       if (at && (at.address !== seen.address || at.port !== seen.port)) {
         Object.assign(seen, { address: at.address, port: at.port });
