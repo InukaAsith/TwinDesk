@@ -38,6 +38,8 @@ namespace MacShare
         // screen at once, which put the drag past the middle of the other screen. Dropped.
         DateTime parkedAt;
         const int StaleMs = 200, StalePx = 150;
+        uint mouseCaptureStoppedAt;
+        bool mouseArrivalGuard;
         public bool HoldReturn; // DropEdge.cs is catching a file drag on the way back: it goes home with it
         readonly HashSet<uint> heldVks = new HashSet<uint>(), swallowVks = new HashSet<uint>();
         readonly HashSet<int> heldButtons = new HashSet<int>(), swallowButtons = new HashSet<int>();
@@ -202,6 +204,7 @@ namespace MacShare
         public void Begin(bool mouse, bool keys)
         {
             if (capturing) { capMouse = mouse; capKeys = keys; return; }
+            mouseArrivalGuard = false;
             capturing = true; capMouse = mouse; capKeys = keys;
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear();
@@ -239,6 +242,8 @@ namespace MacShare
             {
                 Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
                 parkPad.Uncover();
+                mouseCaptureStoppedAt = unchecked((uint)Environment.TickCount);
+                mouseArrivalGuard = true;
                 Native.SetCursorPos(p.X, p.Y);
                 HideCursor.Show();
                 if (Flash != null) Flash.Play(p, side ?? (Side != null && Screens.OnOuterEdge(p.X, p.Y, Side) ? Side : null), false); // arriving
@@ -363,6 +368,12 @@ namespace MacShare
             if ((m.flags & Native.LLMHF_INJECTED) != 0 && m.dwExtraInfo == Native.MARK)
                 return Native.CallNextHookEx(mouseHook, nCode, wParam, lParam); // Rule 4: our own
             int msg = wParam.ToInt32();
+            if (!capturing && mouseArrivalGuard && msg == Native.WM_MOUSEMOVE && (m.flags & Native.LLMHF_INJECTED) == 0)
+            {
+                uint now = unchecked((uint)Environment.TickCount);
+                if (MouseArrivalGuard.IsStale(m.time, mouseCaptureStoppedAt, now)) return (IntPtr)1;
+                mouseArrivalGuard = false;
+            }
             int button = ButtonOf(msg, m.mouseData);
             bool down = msg == Native.WM_LBUTTONDOWN || msg == Native.WM_RBUTTONDOWN || msg == Native.WM_MBUTTONDOWN || msg == Native.WM_XBUTTONDOWN;
             bool up = msg == Native.WM_LBUTTONUP || msg == Native.WM_RBUTTONUP || msg == Native.WM_MBUTTONUP || msg == Native.WM_XBUTTONUP;
