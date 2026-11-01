@@ -234,7 +234,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         Log.i("TwinDesk", "QR: pairing with ${name.ifEmpty { id }} at $address")
         invite?.let { discovery.clearInvite(it.id) }
         invite = null
-        link.startPairing(address, port, name.ifEmpty { "Computer" }, nonce)
+        link.startPairing(address, port, name.ifEmpty { "Computer" }, nonce, qr = true)
         return true
     }
 

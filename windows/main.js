@@ -437,6 +437,7 @@ function startPhone(server, pairing) {
   // A phone on a USB cable: pairing, the session, screen and sound through it (no Wi-Fi needed).
   wired = new Wired({ adb: phone.bridge.adb, raw: server, peer: pl, getId: () => device.id, getName: () => device.name });
   pairing.isWired = (nonce) => wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
+  pairing.isQr = qrKnows;
   wired.on('change', pushState);
   phone.bridge.wired = wired;
   phone.wired = wired;

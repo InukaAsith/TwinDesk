@@ -225,7 +225,7 @@ fun App(core: Core, resumed: Int) {
             dismissButton = { TextButton(onClick = { core.dismissInvite() }) { Text("Not now", color = pal.muted) } },
         )
     }
-    core.link.pair?.takeIf { it.phase == "code" && !it.wired }?.let { p ->
+    core.link.pair?.takeIf { it.phase == "code" && !it.wired && !it.qr }?.let { p ->
         AlertDialog(
             onDismissRequest = {},
             containerColor = pal.card,
@@ -412,8 +412,8 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
         MacCard("Pairing with ${p.name}") {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 when (p.phase) {
-                    "code", "waiting" -> if (p.wired) {
-                        Text("On the USB cable. Click Allow on ${p.name}.", color = pal.text)
+                    "code", "waiting" -> if (p.wired || p.qr) {
+                        Text(if (p.qr) "Click Allow on ${p.name}." else "On the USB cable. Click Allow on ${p.name}.", color = pal.text)
                         Secondary("Cancel") { link.cancelPairing() }
                     } else {
                         Text("Check that ${p.name} shows the same code.", color = pal.text)

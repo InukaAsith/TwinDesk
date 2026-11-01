@@ -13,7 +13,7 @@ class PairSync(core: Core) : Feature(core) {
         "notifs" to ("notifs.send" to "notifs.receive"),
         "audio" to ("audio.send" to "audio.receive"), // out: the phone's sound on the Mac (the Mac plays it over adb)
         "cursor" to ("cursor.out" to "cursor.in"), // in: the Mac's mouse and keyboard used here
-        "rezume" to ("rezume.send" to "rezume.receive"), // read and set through Rezume (its own on switch with them)
+        "rezume" to ("rezume.send" to "rezume.receive"), // read and set through Rezume; its own switch is the shared value "rezume"
     )
 
     // Shared values, the same on both sides (the Mac's VALUES): stored as strings.
@@ -30,12 +30,18 @@ class PairSync(core: Core) : Feature(core) {
     }
 
     private fun adoptValue(key: String, v: Any?) {
+        if (key == "rezume") {
+            if (v !is Boolean) return
+            sent["rezume.on"] = v
+            if (v != core.rezume.on) core.rezume.set("on", v, sync = false)
+            return
+        }
         if (key !in valueDefaults || v == null || v == org.json.JSONObject.NULL) return
         core.store.setPrefsString("value.$key", v.toString())
     }
 
     fun get(feature: String, dir: String): Boolean {
-        if (feature == "rezume") return core.rezume.on && core.rezume.opt(if (dir == "out") "send" else "receive")
+        if (feature == "rezume") return core.rezume.opt(if (dir == "out") "send" else "receive")
         val (o, i) = keys.getValue(feature)
         return core.store.flag(if (dir == "out") o else i, core.store.was && feature != "audio" && !(feature == "cursor" && dir == "out"))
     }
@@ -52,10 +58,8 @@ class PairSync(core: Core) : Feature(core) {
         val key = if (dir == "out") o else i
         if (get(feature, dir) == on) return
         if (feature == "rezume") {
-            if (on && !core.rezume.on) core.rezume.set("on", true, sync = false)
             core.rezume.set(if (dir == "out") "send" else "receive", on, sync = false)
             sent["rezume.$dir"] = on
-            rezumeChanged() // its on switch may have turned the other way on too: the computer hears that
             return
         }
         core.store.setFlag(key, on)
@@ -69,7 +73,8 @@ class PairSync(core: Core) : Feature(core) {
 
     override fun onWelcome(host: Host) {
         core.store.pairSync(host.id)?.let { saved ->
-            for (f in keys.keys) saved.optJSONObject(f)?.let { v ->
+            // ReZume isn't restored: the computer hosts, and its values come right after this.
+            for (f in keys.keys - "rezume") saved.optJSONObject(f)?.let { v ->
                 if (v.has("out")) apply(f, "out", v.optBoolean("out"))
                 if (v.has("in")) apply(f, "in", v.optBoolean("in"))
             }
@@ -101,6 +106,11 @@ class PairSync(core: Core) : Feature(core) {
     // ReZume's switches were flipped here (its page): the computer follows what changed.
     private val sent = HashMap<String, Boolean>()
     fun rezumeChanged() {
+        val on = core.rezume.on
+        if (sent["rezume.on"] != on) {
+            sent["rezume.on"] = on
+            core.send(msg(Proto.T.PAIR_SYNC, "key" to "rezume", "value" to on))
+        }
         for (dir in listOf("out", "in")) {
             val on = get("rezume", dir)
             if (sent["rezume.$dir"] == on) continue

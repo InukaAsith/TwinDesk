@@ -175,7 +175,7 @@ class Peer {
     const req = this.pairing && this.pairing.pendingView();
     return {
       link: c ? { state: 'connected', rtt: c.rttMs, message: '', macName: c.name, address: c.address } : g.link,
-      pairing: req ? { phase: 'request', role: 'host', macName: req.name, os: req.os, code: req.code || '', allowed: req.allowed, wired: !!req.wired, address: '' } : g.pairing,
+      pairing: req ? { phase: 'request', role: 'host', macName: req.name, os: req.os, code: req.code || '', allowed: req.allowed, wired: !!req.wired, qr: !!req.qr, address: '' } : g.pairing,
       paired: g.paired,
       guests: this.pairing ? this.pairing.list() : [],
       session: c ? { role: 'host', id: c.deviceId, name: c.name, os: c.os || P.OS.WIN }

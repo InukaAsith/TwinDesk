@@ -8,7 +8,7 @@
 //
 // A feature may have one direction only (Remote: the phone's Remote page moving this Mac; the phone
 // has no switch of its own, its page sends `pair.sync` to turn it on here; Files: the Mac has no
-// switch for sending). `on` names the section's own switch that a direction turns on with it (ReZume's).
+// switch for sending). ReZume's own switch is a shared value, its directions the two ways under it.
 //
 // Call check() after any settings change (main's pushState does): it sends what changed.
 'use strict';
@@ -22,13 +22,14 @@ const FEATURES = {
   apps: { out: ['apps', 'offer'], in: ['papps', 'on'] },
   audio: { out: ['audio', 'send'], in: ['audio', 'receive'] },
   cursor: { out: ['kvm', 'driveOther'], in: ['kvm', 'beDriven'] },
-  rezume: { out: ['rezume', 'send'], in: ['rezume', 'receive'], on: 'on' },
+  rezume: { out: ['rezume', 'send'], in: ['rezume', 'receive'] },
   remote: { in: ['remote', 'allow'] },
   terminal: { out: ['terminal', 'allowPc'], in: ['terminal', 'connectPc'] },
   files: { in: ['files', 'acceptDrops'] },
 };
 // Shared values, the same on both computers (no direction): key -> settings path + allowed values.
 const VALUES = {
+  rezume: { path: ['rezume', 'on'], allowed: [true, false], feature: 'rezume' }, // only where the app has ReZume
   pace: { path: ['sharing', 'pace'], allowed: ['fast', 'smooth'] },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
   ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)
@@ -50,7 +51,7 @@ class PairSync {
     server.on('client', (ctx) => {
       this.peerId = ctx.deviceId;
       const saved = this._byPeer()[ctx.deviceId];
-      if (saved) this._adopt(saved);
+      if (saved) this._adopt(this._restorable(saved));
       this.last = this.values();
       if (ctx.role !== 'host') server.send(ctx, { t: P.T.PAIR_SYNC, all: this.last }); // we are the host
     });
@@ -80,11 +81,29 @@ class PairSync {
     return s.pairSync;
   }
 
+  // ReZume isn't restored per pair: its settings stay as they are, and the host's win on connect, so
+  // turning it on while not connected holds. An entry from before its switch was shared may have
+  // both ways stuck off (turning it off on the other side did that): they come back on, once.
+  _restorable(saved) {
+    const { rezume, ...rest } = saved;
+    if (rest.values) {
+      const { rezume: on, ...values } = rest.values;
+      rest.values = values;
+      if (on !== undefined) return rest;
+    }
+    const r = this.getSettings().rezume;
+    if (this.features.rezume && r && !r.send && !r.receive) {
+      this.apply('rezume', 'out', true);
+      this.apply('rezume', 'in', true);
+    }
+    return rest;
+  }
+
   // The shared values with this peer: the phone-only ones only with a phone.
   _values() {
     const c = this.server.current;
     const phone = !!c && c.os === P.OS.ANDROID;
-    return Object.fromEntries(Object.entries(VALUES).filter(([, d]) => phone || !d.phone));
+    return Object.fromEntries(Object.entries(VALUES).filter(([, d]) => (phone || !d.phone) && (!d.feature || this.features[d.feature])));
   }
 
   // A direction's value: undefined where this side has no such switch.
@@ -92,7 +111,7 @@ class PairSync {
     const p = d[dir];
     const sec = p && s[p[0]];
     if (!sec || typeof sec !== 'object') return undefined;
-    return !!sec[p[1]] && (!d.on || !!sec[d.on]);
+    return !!sec[p[1]];
   }
 
   values() {
@@ -123,7 +142,6 @@ class PairSync {
         if (typeof v[dir] !== 'boolean' || typeof now[f][dir] !== 'boolean' || now[f][dir] === v[dir]) continue;
         const [g, k] = d[dir];
         s[g][k] = v[dir];
-        if (v[dir] && d.on) s[g][d.on] = true;
         now[f][dir] = v[dir];
         this.apply(f, dir, v[dir]);
       }

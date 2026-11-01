@@ -31,6 +31,7 @@ data class PairState(
     val error: String = "",
     val wired: Boolean = false, // through the USB cable: no code to compare, only Allow on the computer
     val ble: Boolean = false, // through Bluetooth: the address is the pipe's, not the computer's
+    val qr: Boolean = false, // the computer's QR code, on the network: no code to compare either
 )
 
 class Link(
@@ -119,13 +120,14 @@ class Link(
     // nonce: through the USB cable (WiredReceiver): pair.start carries it, which tells the computer
     // the request is from the phone on its cable, and the code is confirmed here without asking
     // (only the computer the phone allowed USB debugging for could have sent the nonce).
-    fun startPairing(address: String, port: Int, name: String, nonce: String = "", viaBle: Boolean = false) = run {
+    // qr: the nonce came in the computer's QR code instead: the same, over the network.
+    fun startPairing(address: String, port: Int, name: String, nonce: String = "", viaBle: Boolean = false, qr: Boolean = false) = run {
         closeSocket()
         host = null
         wired = false
         ble = viaBle
         pairNonce = nonce
-        pair = PairState("connecting", address, port, name, wired = nonce.isNotEmpty(), ble = viaBle)
+        pair = PairState("connecting", address, port, name, wired = nonce.isNotEmpty() && !qr, ble = viaBle, qr = qr)
         open("pair", address, port, null)
         events.onChange()
     }
@@ -327,7 +329,7 @@ class Link(
         }
         raw(msg(Proto.T.PAIR_REVEAL, "nonce" to nw))
         pair = p.copy(phase = "code", code = Proto.sasCode(seenFp, nw, nonce))
-        if (p.wired) {
+        if (p.wired || p.qr) {
             raw(msg(Proto.T.PAIR_CONFIRM))
             pair = pair?.copy(phase = "waiting")
         }

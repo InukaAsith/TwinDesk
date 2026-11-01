@@ -233,7 +233,7 @@
       $('pair-allow').disabled = !p.code || p.allowed;
       const other = p.name;
       let hint = `Check that ${other} shows the same code.`;
-      if (p.wired) hint = p.allowed ? 'Pairing…' : `${other} is on the USB cable. Click Allow to pair.`;
+      if (p.wired) hint = p.allowed ? 'Pairing…' : p.qr ? `${other} scanned the QR code. Click Allow to pair.` : `${other} is on the USB cable. Click Allow to pair.`;
       else if (!p.code) hint = 'Waiting for the code…';
       else if (p.allowed && !p.confirmed) hint = `Allowed. Waiting for “Codes match” on ${other}…`;
       else if (p.confirmed && !p.allowed) hint = `${other[0].toUpperCase()}${other.slice(1)} confirmed the code. Click Allow if it matches.`;

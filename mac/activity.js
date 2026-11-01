@@ -80,7 +80,7 @@ function create({ cfg }) {
       const p = paths.get(app);
       if (!p) return '';
       const { app: eApp } = require('electron');
-      const img = await eApp.getFileIcon(p, { size: 'large' });
+      const img = await eApp.getFileIcon(p, { size: 'normal' }); // 'large' aborts the whole app on macOS (Chromium's NOTREACHED)
       return img && !img.isEmpty() ? img.resize({ width: 64, height: 64 }).toDataURL() : '';
     },
     stop() {},

@@ -576,6 +576,7 @@ app.whenReady().then(() => {
   // A phone on a USB cable: pairing, the session, screen and sound through it (no Wi-Fi needed).
   svc.wired = new Wired({ adb: svc.phone.bridge.adb, raw: server, peer, getId: () => id.macId, getName: () => id.macName });
   pairing.isWired = (nonce) => svc.wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
+  pairing.isQr = qrKnows;
   // Overview's controls of the other device, and this Mac's for it (shared/devctl.js): the session
   // is peer.js here, its 'client' the start.
   const { DevCtl } = require('../shared/devctl.js');
@@ -779,7 +780,8 @@ app.whenReady().then(() => {
   };
   pairSync = new PairSync({ server: peer, getSettings: () => settings, saveSettings: () => store.saveSettings(settings),
     apply: (f, dir, on) => (f !== 'value' ? SYNC_ACTIONS[f](dir, on)
-      : ['gestures', 'ble', 'keyboard', 'speed', 'reverseScroll'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
+      : dir === 'rezume' ? actions.setRezume({ on })
+        : ['gestures', 'ble', 'keyboard', 'speed', 'reverseScroll'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
     current: app.getVersion(), platform: 'mac', getSettings: () => settings,

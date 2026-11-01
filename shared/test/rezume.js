@@ -275,6 +275,23 @@ const start = (p, a, b) => {
   assert.strictEqual(tabs.firefoxTab([dir], 'Something else'), null);
   fs.rmSync(dir, { recursive: true, force: true });
 
+  // A computer loads ReZume when it's turned on: the policy sent before that was lost, and comes again.
+  {
+    const p = pair();
+    p.bus.up = true;
+    const a = side(p.link.a);
+    a.apply(); // b isn't listening yet
+    const b = side(p.link.b);
+    assert.strictEqual(b.view.peerKnows, false);
+    b.apply();
+    assert.strictEqual(a.view.peerOn, true);
+    assert.strictEqual(b.view.peerOn, true, 'answered with its policy');
+    const n = p.sent.a.length + p.sent.b.length;
+    b.apply();
+    a.apply();
+    assert.strictEqual(p.sent.a.length + p.sent.b.length, n + 2, 'answered once, no back and forth');
+  }
+
   console.log('rezume ok');
   process.exit(0); // the sides' 10-minute timers
 })().catch((e) => { console.error(e); process.exit(1); });

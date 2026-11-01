@@ -236,8 +236,10 @@ class Rezume(core: Core) : Feature(core) {
         when (t) {
             Proto.T.RZ_POLICY -> {
                 val was = peer?.optBoolean("on") == true
+                val first = peer == null
                 if (peer?.optBoolean("on") != m.optBoolean("on")) Log.i("TwinDesk", "rezume: ${if (m.optBoolean("on")) "on" else "off"} on the computer")
                 peer = m
+                if (first) sendPolicy() // ours may have come before ReZume loaded there (when it's turned on)
                 if (!m.optBoolean("on")) clearOut()
                 else if (!was) again(m)
                 timers()

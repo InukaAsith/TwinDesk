@@ -249,7 +249,7 @@
       code: 'Check that ' + p.macName + ' shows the same code, then click Codes match.',
       waiting: 'Waiting for Allow on ' + p.macName + '…',
       failed: p.error,
-      request: p.wired ? (p.allowed ? 'Pairing…' : p.macName + ' is on the USB cable. Click Allow to pair.') : !p.code ? 'Waiting for the code…' : p.allowed ? 'Waiting for ' + p.macName + '…' : 'Check that ' + p.macName + ' shows the same code, then click Allow.',
+      request: p.wired ? (p.allowed ? 'Pairing…' : p.qr ? p.macName + ' scanned the QR code. Click Allow to pair.' : p.macName + ' is on the USB cable. Click Allow to pair.') : !p.code ? 'Waiting for the code…' : p.allowed ? 'Waiting for ' + p.macName + '…' : 'Check that ' + p.macName + ' shows the same code, then click Allow.',
     };
     $('pair-hint').textContent = hints[p.phase] || '';
   }

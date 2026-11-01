@@ -5,7 +5,8 @@ in use there. It works between two computers (Mac, Windows, Linux) and between a
 phone, one-to-one (Multi-device doesn't have it yet).
 
 Off until it's turned on (the ReZume tab on a computer, the ReZume page on the phone). Until then
-nothing is read and no permission is asked. Both sides must have it on.
+nothing is read and no permission is asked. It's one switch for the pair: turned on or off on either
+side, the other follows while they're connected (`pair.sync`, key `rezume`).
 
 ## What goes
 

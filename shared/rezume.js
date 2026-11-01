@@ -101,12 +101,15 @@ class ReZume extends EventEmitter {
     if (this.incoming) this._drop(true);
   }
 
+  _policyMsg() {
+    const c = this.cfg();
+    return { t: T.RZ_POLICY, on: !!(c.on && c.receive), web: !!c.web, docs: !!c.docs, apps: !!(c.apps && c.mirror), push: !!c.push };
+  }
+
   // The settings changed, or a session began: the other side hears what we take, and we look or stop.
   apply() {
     const c = this.cfg();
-    if (this.link.peer()) {
-      this.link.send({ t: T.RZ_POLICY, on: !!(c.on && c.receive), web: !!c.web, docs: !!c.docs, apps: !!(c.apps && c.mirror), push: !!c.push });
-    }
+    if (this.link.peer()) this.link.send(this._policyMsg());
     if (!c.on || !c.receive) this._drop(true);
     else if (this.incoming && !this._shows(this.incoming)) this._drop(true);
     if (this.out && !(c.on && c.send)) this._clearOut();
@@ -255,10 +258,13 @@ class ReZume extends EventEmitter {
 
   _policy(m) {
     const was = !!(this.peerPolicy && this.peerPolicy.on);
+    const first = !this.peerPolicy;
     if (!this.peerPolicy || this.peerPolicy.on !== (m.on === true)) console.log(`[rezume] ${m.on === true ? 'on' : 'off'} on the other side`);
     this.peerPolicy = { on: m.on === true, web: m.web !== false, docs: m.docs !== false, apps: m.apps === true, push: m.push !== false, detect: m.detect !== false };
     if (!this.peerPolicy.on) this._clearOut();
     else if (!was) this._again();
+    // Ours may have come before this side loaded there (a computer loads ReZume when it's turned on).
+    if (first) this.link.send(this._policyMsg());
     this._timers();
     this.emit('change');
   }

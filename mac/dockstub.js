@@ -78,6 +78,7 @@ class DockStub {
       if (!exe || this.gone) return;
       this.proc = spawn(exe, [], { stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, MACSHARE_DOCKSTUB: '1' } });
       this.proc.on('error', () => {});
+      this.proc.stdin.on('error', () => {}); // EPIPE: it quit from the Dock as we wrote
       this.proc.on('exit', () => { this.proc = null; });
       let buf = '';
       this.proc.stdout.on('data', (d) => {
