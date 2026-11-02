@@ -3,6 +3,8 @@
 # GPL-3.0 (win_app/firewall_win.py's status script). firewall.js: the inbound rules for Exe, the
 # networks and their categories, and whether this account is an administrator, as JSON.
 param([Parameter(Mandatory = $true)][string]$Exe)
+# Node reads stdout as UTF-8; Windows PowerShell otherwise uses the console's legacy code page.
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $ErrorActionPreference = 'SilentlyContinue'
 $rules = @()
 $readable = $true
