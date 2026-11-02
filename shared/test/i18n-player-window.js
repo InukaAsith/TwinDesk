@@ -18,7 +18,7 @@ app.on('window-all-closed', () => {});
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const literal = 'Mirror {name} $& <script>raw</script>';
 const cases = [
-  { file: 'windows/monitor.html', preload: 'windows/preload-monitor.js', status: '#overlay', initial: 'Mac is not sharing', button: '#b-full', label: 'Full screen', channel: 'rtc', offer: { t: 'rtc.offer', session: 7, sdp: 'test' } },
+  { file: 'windows/monitor.html', preload: 'windows/preload-monitor.js', status: '#overlay', initial: 'Waiting for the other computer…', button: '#b-full', label: 'Full screen', channel: 'rtc', offer: { t: 'rtc.offer', session: 7, sdp: 'test' } },
   { file: 'windows/appview.html', preload: 'windows/preload-appview.js', status: '#overlay', initial: 'Connecting…', channel: 'appview', offer: { t: 'offer', session: 7, sdp: 'test' } },
   { file: 'mac/pcview.html', preload: 'mac/preload-pcview.js', status: '#overlay', initial: 'Connecting to the PC…', button: '#b-full', label: 'Full screen', channel: 'pcview', offer: { t: 'offer', session: 7, sdp: 'test', volume: 1 } },
   { file: 'windows/phoneview.html', preload: 'windows/preload-phoneview.js', status: '#status', initial: 'Connecting to the phone…', phone: true },
@@ -135,7 +135,7 @@ async function run(c, locale) {
       }
       win.webContents.send('rtc', { t: 'stream.stop' });
       await delay(40);
-      assert.equal(await text('#overlay'), I18n.create(other).t('Mac is not sharing'));
+      assert.equal(await text('#overlay'), I18n.create(other).t('The other computer stopped sharing')); // no stream name sent here (#81: not "Mac")
     }
     if (c.file === 'windows/appview.html' || c.file === 'mac/pcview.html') {
       const fallback = c.file.includes('appview') ? 'App' : 'PC app';

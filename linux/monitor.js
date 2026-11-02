@@ -288,7 +288,7 @@ if (new URLSearchParams(location.search).get('test') === '1') {
       case T.RTC_ICE: onIce(msg); break;
       case T.STREAM_STOP:
         closePc();
-        setOverlay('Mac is not sharing');
+        setOverlay(streamName ? '{name} stopped sharing' : 'The other computer stopped sharing', { name: streamName }); // not "Mac": a PC or Linux too (#81)
         break;
     }
   });
