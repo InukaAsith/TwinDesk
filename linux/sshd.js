@@ -14,6 +14,7 @@ const P = require('../shared/protocol.js');
 
 const T = P.T;
 const OPTIONS = 'no-agent-forwarding,no-X11-forwarding';
+const OURS = / macshare:[A-Za-z0-9._-]*$/; // the marker at the end of each line we add
 const KEYS = path.join(os.homedir(), '.ssh', 'authorized_keys');
 
 function run(cmd, args, timeout = 10000) {
@@ -94,8 +95,11 @@ class Sshd {
 
   // Called on a key from the other side and when the switch changes.
   async apply() {
+    if (!this.cfg.allowMac) { // off: no key of ours stays authorized, even one added before a restart
+      this._removeAll();
+      return this.pendingKey ? this._info(false, 'not_allowed') : this.onChange();
+    }
     if (!this.pendingKey) return this.onChange();
-    if (!this.cfg.allowMac) return this._info(false, 'not_allowed');
     await this.refresh();
     if (this.service !== 'running') return this._info(false, 'remote_login_off');
     const line = OPTIONS + ' ' + this.pendingKey + ' macshare:' + this.peerId();
@@ -125,6 +129,27 @@ class Sshd {
     const keep = fs.existsSync(KEYS) ? fs.readFileSync(KEYS, 'utf8').split(/\r?\n/).filter((l) => l && !l.endsWith(marker)) : [];
     fs.writeFileSync(KEYS, keep.concat(line).join('\n') + '\n', { mode: 0o600 });
     fs.chmodSync(KEYS, 0o600);
+  }
+
+  // Terminal switched off: every line we added comes out (any computer's marker, so it doesn't
+  // matter which session is open now). The other side's key stays in memory: switching on again adds it.
+  // Unpaired: the key is dropped from memory too.
+  revokeAll() {
+    this.pendingKey = null;
+    this._removeAll();
+    this.onChange();
+  }
+
+  _removeAll() {
+    if (!this.cfg.installedKey) return;
+    try {
+      if (fs.existsSync(KEYS)) fs.writeFileSync(KEYS, fs.readFileSync(KEYS, 'utf8').split(/\r?\n/).filter((l) => l && !OURS.test(l)).join('\n') + '\n');
+      this.cfg.installedKey = '';
+      this.save();
+      this.message = '';
+    } catch (e) {
+      this.message = '{Name}’s key is still installed: ' + e.message;
+    }
   }
 
   _forget() {

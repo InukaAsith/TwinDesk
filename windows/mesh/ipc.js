@@ -59,6 +59,7 @@ function setupIpc(ctx) {
   handle('forget', () => {
     const id = hub.selectedId;
     link.forget();
+    sshd.revokeAll(); // forgotten: it may not log in any more
     if (id) kvm.forgetDevice(id);
   });
   // Disconnect (either side of the session); Connect again / Take over the computer we're a guest of.
