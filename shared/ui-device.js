@@ -356,7 +356,7 @@
 
         // most used apps: the phone's own order (Usage access), else what was opened from here
         const apps = (UI.phoneAssets && UI.phoneAssets.apps) || [];
-        const top = (phone && (ph.top || [])).map((id) => apps.find((a) => a.id === id)).filter(Boolean).slice(0, 8);
+        const top = (phone ? ph.top || [] : []).map((id) => apps.find((a) => a.id === id)).filter(Boolean).slice(0, 8);
         appsCard.hidden = !top.length || ov.apps === false;
         const ak = JSON.stringify([top.map((a) => a.id), ready]);
         if (ak !== appsKey) {
