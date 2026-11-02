@@ -9,6 +9,7 @@
 (function (root) {
   'use strict';
 
+  const tr = (text, vars) => root.I18n ? root.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
   const G = root.KvmGeom;
   const NS = 'http://www.w3.org/2000/svg';
   const PLACEHOLDER = [{ id: '?', x: 0, y: 0, w: 1600, h: 1000 }];
@@ -31,6 +32,7 @@
   // opts: onMove(side, along) when a drag ends somewhere new; onIdentify().
   function create(opts) {
     const el = div('kvm-map');
+    el.setAttribute('data-literal', '');
     const box = svg('svg', { class: 'kvm-map-svg', role: 'img' });
     el.appendChild(box);
     const legend = div('kvm-map-legend');
@@ -40,8 +42,8 @@
     const hint = div('kvm-map-hint');
     const identify = document.createElement('button');
     identify.className = 'btn small kvm-map-identify';
-    identify.textContent = 'Identify';
-    identify.title = 'Show each monitor’s number on it, on both computers';
+    identify.textContent = tr('Identify');
+    identify.title = tr('Show each monitor’s number on it, on both computers');
     identify.onclick = () => opts.onIdentify();
     foot.append(hint, identify);
     el.append(legend, foot);
@@ -154,15 +156,15 @@
     // d: {mine, theirs, side, along, me, them}. along null: centred.
     function update(d) {
       const side = d.side || 'right';
-      data = { mine: d.mine || [], theirs: d.theirs || [], side, along: 0, me: d.me || 'This computer', them: d.them || 'The other computer' };
+      data = { mine: d.mine || [], theirs: d.theirs || [], side, along: 0, me: d.me || tr('This computer'), them: d.them || tr('The other computer') };
       const { mine, theirs } = lists();
       data.along = typeof d.along === 'number' ? d.along : G.centred(mine, theirs, side);
       meKey.textContent = data.me;
       themKey.textContent = data.them;
       hint.textContent = data.theirs.length
-        ? `Drag ${data.them} to where it is on your desk. The pointer crosses only where the screens touch (highlighted).`
-        : `Drag ${data.them} to the side it is on. Its screens show here once it’s connected (with an up-to-date TwinDesk).`;
-      box.setAttribute('aria-label', `${data.them} is ${{ left: 'to the left of', right: 'to the right of', top: 'above', bottom: 'below' }[side]} ${data.me}`);
+        ? tr('Drag {name} to where it is on your desk. The pointer crosses only where the screens touch (highlighted).', { name: data.them })
+        : tr('Drag {name} to the side it is on. Its screens show here once it’s connected (with an up-to-date TwinDesk).', { name: data.them });
+      box.setAttribute('aria-label', tr('{name} is {side} {me}', { name: data.them, side: tr({ left: 'to the left of', right: 'to the right of', top: 'above', bottom: 'below' }[side]), me: data.me }));
       identify.hidden = !data.mine.length;
       if (!drag) render(side, data.along);
     }

@@ -85,7 +85,7 @@ const phone = { id: 'ph', name: 'Pixel', os: 'android', address: '192.168.1.40',
   };
   assert.strictEqual(settleConnect(connect, { deviceId: 'other' }), null);
   assert.deepStrictEqual(settleConnect(connect, { deviceId: 'pc', name: 'Desk' }), {
-    busy: false, message: '', error: false, pending: null, inviting: null,
+    busy: false, message: '', messageKey: '', messageVars: {}, error: false, pending: null, inviting: null, // the translated hint goes too
   });
   const phoneWait = { ...connect, pending: null, inviting: { id: 'ph', name: 'Pixel' } };
   assert.strictEqual(settleConnect(phoneWait, { id: 'ph' }).message, '');

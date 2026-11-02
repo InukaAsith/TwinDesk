@@ -5,11 +5,14 @@
 'use strict';
 
 const api = window.cam;
+const I = window.PlayerI18n;
+I.translate();
 const video = document.getElementById('video');
 const status = document.getElementById('status');
 const again = document.getElementById('again');
 const mirror = document.getElementById('mirror');
-const name = new URLSearchParams(location.search).get('name') || 'the other computer';
+const name = new URLSearchParams(location.search).get('name');
+I.text(document.querySelector('title'), name ? '{name}’s camera' : 'Camera', { name });
 const feed = window.CamOut ? window.CamOut() : null;
 let pc = null;
 let pending = [];
@@ -46,9 +49,22 @@ async function feedTrack(track) {
   }, 1000 / 30);
 }
 
-function say(text, retry = false) {
-  status.textContent = text;
-  status.hidden = !text;
+let message = null;
+function renderMessage() {
+  if (!message) return;
+  const vars = message.vars || {};
+  I.text(status, message.key, {
+    ...vars,
+    name: vars.name || I.t('the other computer'),
+    error: vars.error || I.t('unknown'),
+  });
+}
+I.onChange(renderMessage);
+
+function say(key, retry = false, vars) {
+  message = { key, vars };
+  renderMessage();
+  status.hidden = !key;
   again.hidden = !retry;
 }
 
@@ -73,7 +89,7 @@ async function offer(sdp) {
   me.onconnectionstatechange = () => {
     if (pc !== me) return;
     if (me.connectionState === 'connected') { say(''); api.send({ t: 'live' }); }
-    else if (me.connectionState === 'failed') say(`The picture can’t get through from ${name}: are both on the same network?`, true);
+    else if (me.connectionState === 'failed') say('The picture can’t get through from {name}: are both on the same network?', true, { name });
   };
   try {
     await me.setRemoteDescription({ type: 'offer', sdp });
@@ -82,7 +98,7 @@ async function offer(sdp) {
     for (const c of pending.splice(0)) await me.addIceCandidate(c).catch(() => {});
     pending = null;
   } catch (e) {
-    say('The camera didn’t start: ' + e.message, true);
+    say('The camera didn’t start: {error}', true, { error: e.message });
   }
 }
 
@@ -96,10 +112,10 @@ api.on((m) => {
     reset();
   } else if (m.t === 'status') {
     const n = m.name || name;
-    if (m.status === 'starting') say(`Asking ${n} for its camera…`);
-    else if (m.status === 'refused') { reset(); say(`${n} doesn’t share its camera: turn on Camera › “Let this computer see the camera” there.`, true); }
-    else if (m.status === 'failed') { reset(); say(`${n}’s camera didn’t start: ${m.error || 'unknown'}`, true); }
-    else if (m.status === 'ended') { reset(); say(`${n} stopped its camera.`, true); }
+    if (m.status === 'starting') say('Asking {name} for its camera…', false, { name: n });
+    else if (m.status === 'refused') { reset(); say('{name} doesn’t share its camera: turn on Camera › “Let this computer see the camera” there.', true, { name: n }); }
+    else if (m.status === 'failed') { reset(); say('{name}’s camera didn’t start: {error}', true, { name: n, error: m.error }); }
+    else if (m.status === 'ended') { reset(); say('{name} stopped its camera.', true, { name: n }); }
   }
 });
 again.onclick = () => api.send({ t: 'again' });

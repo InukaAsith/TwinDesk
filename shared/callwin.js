@@ -47,7 +47,7 @@ function open() {
   });
   win.setAlwaysOnTop(true, 'pop-up-menu');
   if (process.platform === 'darwin') win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.loadFile(path.join(__dirname, 'callpop.html'));
+  win.loadFile(path.join(__dirname, 'callpop.html'), { query: { language: opts.getLanguage ? opts.getLanguage() : 'en' } });
   win.once('ready-to-show', () => win && !win.isDestroyed() && win.showInactive()); // never takes the keyboard from what you're typing in
   win.on('closed', () => { win = null; });
 }

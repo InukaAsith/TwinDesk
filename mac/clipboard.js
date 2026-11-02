@@ -37,7 +37,7 @@ class Clipboard extends EventEmitter {
       ble: () => !!(this.server.current && this.server.current.transport === 'ble'),
       peerName: () => (this.server.current && this.server.current.name) || 'the other device',
       remember: (dir, item) => this._remember(dir, item),
-      popup: (kind, text) => this.emit('popup', kind, text),
+      popup: (kind, text, presentation) => this.emit('popup', kind, presentation || text),
       onChange: () => this.emit('change'),
       pasteKeys: '⌘V',
     });

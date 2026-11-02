@@ -16,12 +16,13 @@
 
 const path = require('path');
 const P = require('./protocol.js');
+const I18n = require('./i18n.js');
 
 const T = P.T;
 
 class CamShare {
-  constructor({ link, cfg, save, popup, peerName, onChange }) {
-    Object.assign(this, { link, cfg, save, popup, peerName, onChange });
+  constructor({ link, cfg, save, popup, peerName, onChange, getLanguage = () => 'en' }) {
+    Object.assign(this, { link, cfg, save, popup, peerName, onChange, getLanguage });
     const { app, BrowserWindow, ipcMain } = require('electron');
     this.BrowserWindow = BrowserWindow;
     this.quitting = false; // the window's close hides it, but not on quit
@@ -111,7 +112,7 @@ class CamShare {
     this._toSender({ t: 'start', deviceId: this.cfg().device || '' }, true);
     this.sender.status = 'starting';
     this.link.send({ t: T.CAM_STATE, status: 'starting' });
-    this.popup('driven', `${this.peerName()} is viewing this computer’s camera`);
+    this.popup('driven', `${this.peerName()} is viewing this computer’s camera`, { key: '{name} is viewing this computer’s camera', vars: { name: this.peerName() } });
     this.onChange();
   }
 
@@ -146,7 +147,7 @@ class CamShare {
     } else if (m.t === 'status') {
       s.status = m.status === 'live' ? 'live' : m.status === 'failed' ? '' : s.status;
       this.link.send({ t: T.CAM_STATE, status: String(m.status || ''), error: String(m.error || '').slice(0, 200) });
-      if (m.status === 'failed') this.popup('home', `The camera didn’t start: ${String(m.error || '').slice(0, 120)}`);
+      if (m.status === 'failed') this.popup('home', `The camera didn’t start: ${String(m.error || '').slice(0, 120)}`, { key: 'The camera didn’t start: {error}', vars: { error: String(m.error || '').slice(0, 120) } });
       this.onChange();
     }
   }
@@ -160,7 +161,7 @@ class CamShare {
         webPreferences: { preload: path.join(__dirname, 'preload-camera.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
       });
       s = this.sender = { win, ready: false, queue: [], status: '' };
-      win.loadFile(path.join(__dirname, 'camera-send.html'));
+      win.loadFile(path.join(__dirname, 'camera-send.html'), { query: { language: this.getLanguage() } });
       win.on('closed', () => {
         if (this.sender === s) this.sender = null;
       });
@@ -176,7 +177,7 @@ class CamShare {
   // Closing that window only hides it: the camera stops with the switch.
   view(show = false) {
     if (this.cfg().on === false) return; // Camera's switch is off
-    if (!this.link.connected()) return this.popup('home', 'Not connected');
+    if (!this.link.connected()) return this.popup('home', 'Not connected', { key: 'Not connected' });
     const old = this.viewer;
     if (old && !old.win.isDestroyed()) {
       if (show) {
@@ -188,11 +189,11 @@ class CamShare {
     }
     const name = this.peerName();
     const win = new this.BrowserWindow({
-      width: 854, height: 520, minWidth: 240, minHeight: 160, title: `${name}’s camera`, backgroundColor: '#000000', autoHideMenuBar: true, show: false,
+      width: 854, height: 520, minWidth: 240, minHeight: 160, title: I18n.create(this.getLanguage()).t('{name}’s camera', { name }), backgroundColor: '#000000', autoHideMenuBar: true, show: false,
       webPreferences: { preload: path.join(__dirname, 'preload-camera.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
     const v = this.viewer = { win, ready: false, queue: [], status: '', error: '', ending: false };
-    win.loadFile(path.join(__dirname, 'camera-view.html'), { query: { name } });
+    win.loadFile(path.join(__dirname, 'camera-view.html'), { query: { name, language: this.getLanguage() } });
     if (show) win.once('ready-to-show', () => win.show());
     win.on('close', (e) => {
       if (v.ending || this.quitting) return;

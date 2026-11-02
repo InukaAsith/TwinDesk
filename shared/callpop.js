@@ -5,6 +5,7 @@
 
 (() => {
   const $ = (id) => document.getElementById(id);
+  const i18n = window.PlayerI18n;
   const SVG = 'http://www.w3.org/2000/svg';
   const ICONS = {
     answer: 'M6 3l2.5 0 1.2 3.2-1.7 1.3a9 9 0 0 0 4.5 4.5l1.3-1.7L17 13.5V16a1 1 0 0 1-1 1A13 13 0 0 1 3 4a1 1 0 0 1 1-1z',
@@ -24,8 +25,8 @@
   };
   const set = (b, name, title) => {
     if (b.dataset.icon !== name) { b.replaceChildren(icon(name)); b.dataset.icon = name; }
-    b.title = title;
-    b.setAttribute('aria-label', title);
+    b.title = i18n.t(title);
+    b.setAttribute('aria-label', i18n.t(title));
   };
   set($('answer'), 'answer', 'Answer');
   set($('decline'), 'end', 'Decline');
@@ -42,16 +43,16 @@
     const e = st && st.ended;
     const show = c || e;
     if (!show) return;
-    const who = show.name || show.number || 'Unknown number';
-    $('who').textContent = who;
+    if (show.name || show.number) i18n.literal($('who'), show.name || show.number);
+    else i18n.text($('who'), 'Unknown number');
     const a = $('avatar');
     if (show.photo) { a.style.backgroundImage = `url("${show.photo}")`; a.textContent = ''; } else { a.style.backgroundImage = ''; a.textContent = (show.name || '#').trim().charAt(0).toUpperCase(); }
     const bt = st.audio && st.audio.state === 'ready';
-    let sub;
-    if (!c) sub = e.missed ? 'Missed call' : 'Call ended';
-    else if (c.state === 'ringing') sub = show.name && show.number ? `Incoming · ${show.number}` : `Incoming call${st.phone ? ` on ${st.phone}` : ''}`;
-    else sub = `${c.dir === 'out' ? 'Calling' : 'On a call'} · ${time(Date.now() - c.since)}`; // where the sound is: the button says
-    $('sub').textContent = sub;
+    if (!c) i18n.text($('sub'), e.missed ? 'Missed call' : 'Call ended');
+    else if (c.state === 'ringing') {
+      if (show.name && show.number) i18n.text($('sub'), 'Incoming · {number}', { number: show.number });
+      else i18n.text($('sub'), st.phone ? 'Incoming call on {phone}' : 'Incoming call', { phone: st.phone });
+    } else i18n.text($('sub'), c.dir === 'out' ? 'Calling · {time}' : 'On a call · {time}', { time: time(Date.now() - c.since) }); // where the sound is: the button says
     document.body.classList.toggle('missed', !c && !!e.missed);
     $('answer').hidden = !c || c.state !== 'ringing';
     $('decline').hidden = !c || c.state !== 'ringing';
@@ -73,5 +74,6 @@
 
   window.callpop.onState((s) => { st = s; render(); });
   window.callpop.state().then((s) => { st = s; render(); });
+  i18n.onChange(render);
   setInterval(() => st && st.call && st.call.state !== 'ringing' && render(), 1000); // the timer
 })();

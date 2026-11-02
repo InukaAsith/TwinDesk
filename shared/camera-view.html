@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. -->
 <!-- The other computer's camera (camshare.js): hidden, its picture to the Camera tab and the virtual camera; Camera › Window shows it. -->
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
@@ -22,11 +22,15 @@
 </head>
 <body>
   <video id="video" autoplay playsinline muted></video>
-  <div id="status">Asking for the camera…</div>
+  <div id="status" data-i18n="Asking for the camera…">Asking for the camera…</div>
   <div id="tools">
-    <button id="again" hidden>Try again</button>
-    <button id="mirror" title="Show it as in a mirror">Mirror</button>
+    <button id="again" data-i18n="Try again" hidden>Try again</button>
+    <button id="mirror" data-i18n="Mirror" title="Show it as in a mirror" data-i18n-title="Show it as in a mirror">Mirror</button>
   </div>
+  <script src="lang/en.js"></script>
+  <script src="lang/zh-CN.js"></script>
+  <script src="i18n.js"></script>
+  <script src="player-i18n.js"></script>
   <script src="vcam-feed.js"></script>
   <script src="camera-view.js"></script>
 </body>

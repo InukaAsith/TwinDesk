@@ -33,6 +33,9 @@ const POINTER_MOUSE = -1n;
 const pushed = new Map(); // serial -> the push of the jar (one per run, shared by every session)
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const localError = (messageKey, messageVars = {}) => Object.assign(
+  new Error(messageKey.replace(/\{(\w+)\}/g, (match, key) => Object.prototype.hasOwnProperty.call(messageVars, key) ? String(messageVars[key]) : match)),
+  { messageKey, messageVars });
 
 class Session extends EventEmitter {
   // opts: {video, audio, control, maxSize, maxFps, videoBitRate, newDisplay ('WxH/dpi'), flex, displayId,
@@ -58,12 +61,12 @@ class Session extends EventEmitter {
     const r = await pushed.get(serial);
     if (r.code !== 0) {
       pushed.delete(serial);
-      throw new Error(`Couldn’t copy the screen helper to the phone (${r.err.trim() || r.out.trim()})`);
+      throw localError('Couldn’t copy the screen helper to the phone ({error})', { error: r.err.trim() || r.out.trim() });
     }
     // Each session runs its own copy: a second app_process on a jar another one is running aborts.
     this.jar = `/data/local/tmp/twindesk-scrcpy-${this.scid}.jar`;
     const cp = await adb.shell(serial, `cp ${DEVICE_JAR} ${this.jar}`, { timeout: 8000 });
-    if (cp.code !== 0) throw new Error(`Couldn’t prepare the screen helper (${cp.err.trim() || cp.out.trim()})`);
+    if (cp.code !== 0) throw localError('Couldn’t prepare the screen helper ({error})', { error: cp.err.trim() || cp.out.trim() });
     this.port = await adb.forward(serial, `scrcpy_${this.scid}`);
     // Only what differs from the server's defaults (video, audio, control, cleanup, power_on,
     // send_dummy_byte, clipboard_autosync and vd_destroy_content on; h264; audio from the output):
@@ -106,7 +109,7 @@ class Session extends EventEmitter {
     };
     this.proc.stdout.on('data', keep);
     this.proc.stderr.on('data', keep);
-    this.proc.on('exit', () => this._close('the screen helper stopped'));
+    this.proc.on('exit', () => this._close('the screen helper stopped', { messageKey: 'the screen helper stopped', messageVars: {} }));
 
     const kinds = [opts.video && 'video', opts.audio && 'audio', opts.control && 'control'].filter(Boolean);
     let first = true;
@@ -116,8 +119,8 @@ class Session extends EventEmitter {
       this.sockets.push(sock);
       this[kind] = sock;
     }
-    if (this.closed) throw new Error(this.why || 'closed');
-    for (const s of this.sockets) s.on('close', () => this._close('the connection closed'));
+    if (this.closed) throw this.why ? Object.assign(new Error(this.why), this.closeMeta) : localError('closed');
+    for (const s of this.sockets) s.on('close', () => this._close('the connection closed', { messageKey: 'the connection closed', messageVars: {} }));
     this._readStreams(kinds[0]);
     this.emit('ready');
   }
@@ -141,7 +144,8 @@ class Session extends EventEmitter {
       }
       await sleep(100);
     }
-    throw new Error(this.why || `The phone’s screen helper didn’t start${this.log.length ? ` (${this.log[this.log.length - 1]})` : ''}`);
+    if (this.why) throw Object.assign(new Error(this.why), this.closeMeta);
+    throw this.log.length ? localError('The phone’s screen helper didn’t start ({error})', { error: this.log[this.log.length - 1] }) : localError('The phone’s screen helper didn’t start');
   }
 
   _connect() {
@@ -167,7 +171,7 @@ class Session extends EventEmitter {
         w.resolve(out);
       }
     });
-    sock.on('close', () => want && want.reject(new Error('closed')));
+    sock.on('close', () => want && want.reject(localError('closed')));
     sock.resume();
     return (n) => new Promise((resolve, reject) => {
       if (buf.length >= n) {
@@ -186,7 +190,7 @@ class Session extends EventEmitter {
       loops.push((async () => {
         if (firstKind === 'video') this.emit('name', (await read(64)).toString('utf8').replace(/\0.*$/s, ''));
         const codec = (await read(4)).readUInt32BE(0);
-        if (codec !== CODEC.h264) throw new Error(codec <= 1 ? 'The phone can’t share its screen' : `Unexpected video codec ${codec.toString(16)}`);
+        if (codec !== CODEC.h264) throw codec <= 1 ? localError('The phone can’t share its screen') : localError('Unexpected video codec {codec}', { codec: codec.toString(16) });
         for (;;) {
           const h = await read(12);
           if (h[0] & 0x80) {
@@ -236,26 +240,27 @@ class Session extends EventEmitter {
             await read(2);
             const len = (await read(2)).readUInt16BE(0);
             await read(len);
-          } else throw new Error(`Unknown device message ${type}`);
+          } else throw localError('Unknown device message {type}', { type });
         }
       })());
     }
-    for (const l of loops) l.catch((e) => this._close(e.message));
+    for (const l of loops) l.catch((e) => this._close(e.message, e.messageKey ? { messageKey: e.messageKey, messageVars: e.messageVars } : undefined));
   }
 
-  _close(why) {
+  _close(why, metadata) {
     if (this.closed) return;
     this.closed = true;
     this.why = why;
+    this.closeMeta = metadata;
     for (const s of this.sockets) s.destroy();
     if (this.proc) try { this.proc.kill(); } catch {}
     if (this.port) this.adb.unforward(this.serial, this.port);
     if (this.jar) this.adb.shell(this.serial, `rm -f ${this.jar}`, { timeout: 5000 });
-    this.emit('closed', why);
+    this.emit('closed', why, metadata);
   }
 
   stop() {
-    this._close('stopped');
+    this._close('stopped', { messageKey: 'stopped', messageVars: {} });
   }
 
   // ---- control messages ----

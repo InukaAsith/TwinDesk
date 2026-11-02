@@ -8,14 +8,18 @@
 // it can't and points to the phone's As a Bluetooth gamepad.
 'use strict';
 
+(() => {
+  const tr = (text, vars) => window.I18n ? window.I18n.t(text, vars)
+    : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
+
 UI.tab({
   id: 'remote',
   group: 'Input',
   order: 28,
-  title: 'Remote',
+  title: tr('Remote'),
   icon: 'remote',
   color: 'linear-gradient(#bf5af2, #8944ab)',
-  desc: 'Use the phone as this computer’s touchpad, keyboard or gamepad.',
+  desc: tr('Use the phone as this computer’s touchpad, keyboard or gamepad.'),
   hidden: (s) => !UI.isPhone(s), // only while a phone is connected
   badge: (s) => (s.remote && s.remote.using ? 'on' : ''),
   master: {
@@ -24,33 +28,35 @@ UI.tab({
     disabled: (s) => !s.remote,
   },
   build(body) {
-    const status = UI.row('Now', '');
-    const how = UI.row('On {name}', 'Open TwinDesk › Remote there, then Touchpad and keyboard or Gamepad. Its speed, tap to click and the gamepad’s keys are set there');
-    const card = UI.card('{name} as a remote', [status, how]);
+    const status = UI.row(tr('Now'), '');
+    const how = UI.row(tr('On {name}'), tr('Open TwinDesk › Remote there, then Touchpad and keyboard or Gamepad. Its speed, tap to click and the gamepad’s keys are set there'));
+    const card = UI.card(tr('{name} as a remote'), [status, how]);
     const note = UI.note('warn', '');
-    const padSwitch = UI.switch((v) => UI.api.setRemote({ pad: v }), { label: 'Real gamepad' });
-    const padRow = UI.row('Real gamepad', '', [padSwitch]);
+    const padSwitch = UI.switch((v) => UI.api.setRemote({ pad: v }), { label: tr('Real gamepad') });
+    const padRow = UI.row(tr('Real gamepad'), '', [padSwitch]);
     const padNote = UI.note('info', '');
-    const padCard = UI.card('Gamepad', [padRow, padNote]);
+    const padCard = UI.card(tr('Gamepad'), [padRow, padNote]);
     body.append(note, card, padCard);
     return (s) => {
       const r = s.remote || {};
       const p = r.pad || {};
       padSwitch.set(p.on);
       padSwitch.disable(!p.supported || !!p.busy);
-      padRow.setHint(!p.supported ? 'Not on this computer'
-        : p.busy ? p.busy
-          : !p.on ? 'Off: the gamepad page’s sticks and buttons press keys (WASD, the mouse), as set on {name}'
-            : p.live ? `On: {name}’s gamepad page is a game controller here${p.name ? ` (${p.name})` : ''}`
-              : 'On: ready when {name} is connected');
-      padNote.set(p.message || '');
-      status.setHint(!r.allow ? 'Off: {name}’s Remote page can’t move or type here'
-        : r.why ? r.why
-          : r.using ? 'In use: {name} is moving the pointer or typing here'
-            : r.opened ? '{name}’s Remote page is open and ready'
-              : 'Ready: open the Remote page on {name}');
+      padRow.setHint(!p.supported ? tr('Not on this computer')
+        : p.busy ? tr(p.busy)
+          : !p.on ? tr('Off: the gamepad page’s sticks and buttons press keys (WASD, the mouse), as set on {name}')
+            : p.live ? p.name ? tr('On: {name}’s gamepad page is a game controller here ({controller})', { controller: p.name }) : tr('On: {name}’s gamepad page is a game controller here')
+              : tr('On: ready when {name} is connected'));
+      padNote.set(tr(p.message || ''));
+      status.setHint(!r.allow ? tr('Off: {name}’s Remote page can’t move or type here')
+        : r.why ? tr(r.why)
+          : r.using ? tr('In use: {name} is moving the pointer or typing here')
+            : r.opened ? tr('{name}’s Remote page is open and ready')
+              : tr('Ready: open the Remote page on {name}'));
       // On, but not taken now (the mouse is on another device).
-      note.set(r.allow && r.why ? r.why : '');
+      note.set(r.allow && r.why ? tr(r.why) : '');
     };
   },
 });
+
+})();

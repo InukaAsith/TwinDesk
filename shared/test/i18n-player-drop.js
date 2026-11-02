@@ -1,0 +1,68 @@
+// TwinDesk — GPL-3.0, see LICENSE.
+'use strict';
+const assert = require('assert');
+const { EventEmitter } = require('events');
+const FileDrop = require('../../windows/filedrop');
+const P = require('../protocol');
+const link = new EventEmitter();
+link.send = () => {};
+const drop = new FileDrop({ link, settings: {}, onProgress() {} });
+const name = 'Mirror {name} $&.txt';
+const folder = '/Downloads/{me}/Ready $&';
+drop.batches.set('batch', { name });
+drop._batchDone({ batch: 'batch', ok: true, where: folder });
+assert.equal(drop.last.name, name);
+assert.equal(drop.last.messageKey, 'Sent to {folder}');
+assert.deepEqual(drop.last.messageVars, { folder });
+drop.drag = { drag: 'drag', name };
+drop._dragEnd({ drag: 'drag', result: 'dropped', where: folder });
+assert.equal(drop.last.messageKey, 'Dropped on {name} in {folder}');
+assert.deepEqual(drop.last.messageVars, { folder });
+drop._report(name, false, 'Mirror {name} $& <native>');
+assert.equal(drop.last.text, 'Mirror {name} $& <native>');
+assert.equal(drop.last.messageKey, undefined, 'native diagnostics are not translation keys');
+console.log('i18n-player-drop: structured local status retains literal names, paths and native diagnostics');
+
+(async () => {
+  drop.settings = { files: { dropToMac: false } };
+  drop.drop([]);
+  assert.equal(drop.last.messageKey, 'Dropping files onto Monitor 2 is off (Files tab)');
+  drop.settings.files.dropToMac = true;
+  drop.drop([]);
+  assert.equal(drop.last.messageKey, 'Only files can be sent (not folders)');
+  link.status = { state: 'disconnected' };
+  await drop._run({ path: name, size: 0 });
+  assert.equal(drop.last.messageKey, 'Not connected to {name}');
+  link.status.state = 'connected';
+  await drop._run({ path: name, size: P.FILE_MAX_BYTES + 1 });
+  assert.equal(drop.last.messageKey, 'Too big');
+  const job = { path: name, size: 0 };
+  drop._wait = async () => ({ t: P.T.FILE_REFUSE, why: 'not_allowed' });
+  await drop._run(job);
+  assert.equal(drop.last.messageKey, '{Name} doesn’t accept dropped files (its Files tab)');
+  drop._fast = async () => 'sha';
+  let answers;
+  drop._wait = async () => answers.shift();
+  for (const error of [undefined, 'Mirror {name} $& <native>']) {
+    answers = [{ t: P.T.FILE_ACCEPT }, { t: P.T.FILE_DONE, ok: false, error }];
+    await drop._run(job);
+    assert.equal(drop.last.text, error || '{Name} couldn’t save it');
+    assert.equal(drop.last.messageKey, error ? undefined : '{Name} couldn’t save it', 'remote diagnostics stay literal');
+  }
+  const timeoutDrop = new FileDrop({ link, settings: {}, onProgress() {} });
+  await assert.rejects(timeoutDrop._wait('timeout', [], 0), (error) => error.messageKey === '{Name} didn’t answer');
+  const aborted = timeoutDrop._wait('disconnect', [], 1000);
+  link.emit('closed');
+  await assert.rejects(aborted, (error) => error.message === '{Name} disconnected' && error.messageKey === error.message);
+  const batchDrop = new FileDrop({ link, settings: {}, onProgress() {} });
+  batchDrop._next = () => {};
+  const files = [__filename, require.resolve('../i18n')];
+  const batch = batchDrop.sendBatch(files, 'send');
+  batchDrop._batchDone({ batch: batch.batch, ok: true });
+  assert.equal(batchDrop.last.itemCount, 2, 'generated batch count is local metadata');
+  const plan = batchDrop.plan(files);
+  batchDrop.beginDrag({ ...plan, drag: 'count-drag' });
+  batchDrop._dragEnd({ drag: 'count-drag', result: 'dropped' });
+  assert.equal(batchDrop.last.itemCount, 2, 'generated drag count is local metadata');
+  console.log('i18n-player-drop: owned failures are tagged; native/remote details retain original text');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -11,3 +11,7 @@ contextBridge.exposeInMainWorld('callpop', {
   open: () => ipcRenderer.send('callpop:open'),
   close: () => ipcRenderer.send('callpop:close'),
 });
+
+contextBridge.exposeInMainWorld('playerLanguage', {
+  onChange: (fn) => ipcRenderer.on('ui-language', (_e, language) => fn(language)),
+});

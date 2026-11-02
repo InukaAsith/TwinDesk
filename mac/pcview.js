@@ -16,9 +16,10 @@
 'use strict';
 
 const path = require('path');
-const { BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const I18n = require('../shared/i18n.js');
 const { attachKeys } = require('./viewer-keys');
 
 const T = P.T;
@@ -59,7 +60,7 @@ class PcView extends EventEmitter {
     server.on(`t:${T.RTC2_OFFER}`, (m) => this._onOffer(m));
     // App-window sessions carry `win` (pcapps.js / appsend.js): never the screen's.
     server.on(`t:${T.RTC2_ICE}`, (m) => !m.win && m.session === this.session && this._toWin({ ...m }));
-    server.on(`t:${T.RTC2_STOP}`, (m) => !m.win && (m.session === undefined || m.session === this.session) && this._end(`${this.server.current ? this.server.current.name : 'It'} stopped sharing`));
+    server.on(`t:${T.RTC2_STOP}`, (m) => !m.win && (m.session === undefined || m.session === this.session) && this._end(`${this.server.current ? this.server.current.name : 'It'} stopped sharing`, this.server.current ? '{name} stopped sharing' : 'The other computer stopped sharing', this.server.current ? { name: this.server.current.name } : undefined));
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(ev, () => this._policy());
 
     ipcMain.on('pcview:out', (e, m) => {
@@ -136,12 +137,12 @@ class PcView extends EventEmitter {
 
   // Session over (the other side stopped or went away): the window stays (only the person closes
   // it) and says so; it fills in again when a new offer comes.
-  _end(why) {
+  _end(why, whyKey, whyVars) {
     this._releaseKeys();
     this.session = null;
     this.status = why ? 'stopped' : 'off';
     this.stats = null;
-    this._toWin({ t: 'stop', why: why || 'Waiting for the other computer…' });
+    this._toWin({ t: 'stop', why: why || 'Waiting for the other computer…', whyKey: whyKey || (!why ? 'Waiting for the other computer…' : undefined), whyVars });
     this.emit('change');
   }
 
@@ -154,12 +155,18 @@ class PcView extends EventEmitter {
     if (this.isOpen) this.win.close();
   }
 
+  _i18n() {
+    const settings = this.getSettings();
+    return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
+  }
+
   _open() {
     if (this.win && !this.win.isDestroyed()) {
       this.win.show();
       return;
     }
-    const pcName = this.server.current ? this.server.current.name : 'PC';
+    const name = this.server.current && this.server.current.name;
+    const pcName = name || this._i18n().t('PC');
     const wa = screen.getPrimaryDisplay().workArea;
     this.ready = false;
     this.queue = [];
@@ -216,7 +223,7 @@ class PcView extends EventEmitter {
         this.emit('change');
       }
     });
-    win.loadFile(path.join(__dirname, 'pcview.html'));
+    win.loadFile(path.join(__dirname, 'pcview.html'), { query: { language: this._i18n().locale, title: pcName, titleKey: name ? '' : 'PC' } });
   }
 
   // First picture (or a new size): fit the window to the PC's aspect ratio, ≤ 80 % of the screen.

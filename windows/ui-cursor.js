@@ -17,30 +17,31 @@ UI.tab({
   badge: (s) => (s.kvm.mouse && s.kvm.linked && !s.kvmState.paused ? 'on' : ''),
   build(body) {
     const { el, api } = UI;
+    const t = (...args) => I18n.t(...args);
     const set = (partial) => api.setKvm(partial);
     // kvm.layout says where the PC is seen from the Mac; the Mac is on the opposite side of the PC.
     const MAC_SIDE = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
 
     const speed = UI.slider({ min: 0.25, max: 3, step: 0.05, format: (v) => v.toFixed(2) + '×' }, (v) => set({ speed: v }));
-    const reverse = UI.switch((v) => set({ reverseScroll: v }), { label: 'Reverse scrolling' });
-    const gestures = UI.switch((v) => set({ gestures: v }), { label: 'Trackpad gestures' });
-    const gestureRow = UI.row('Trackpad gestures', 'Pinch to zoom, swipe between desktops, Task View / Mission Control, back and forward — done the native way on {name}. The same on both', [gestures]);
-    const ble = UI.switch((v) => set({ ble: v }), { label: 'Over Bluetooth' });
-    const bleRow = UI.row('Over Bluetooth', 'When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both', [ble]);
-    const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : 'None') }, (v) => set({ resistancePx: v }));
+    const reverse = UI.switch((v) => set({ reverseScroll: v }), { label: t('Reverse scrolling') });
+    const gestures = UI.switch((v) => set({ gestures: v }), { label: t('Trackpad gestures') });
+    const gestureRow = UI.row(t('Trackpad gestures'), t('Pinch to zoom, swipe between desktops, Task View / Mission Control, back and forward — done the native way on {name}. The same on both'), [gestures]);
+    const ble = UI.switch((v) => set({ ble: v }), { label: t('Over Bluetooth') });
+    const bleRow = UI.row(t('Over Bluetooth'), t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
+    const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : t('None')) }, (v) => set({ resistancePx: v }));
     // A phone as the peer: how the pointer and keys reach it (settings.phone.input, the phone's own toggle too).
-    const via = UI.segmented([{ value: 'adb', label: 'ADB' }, { value: 'phone', label: 'Accessibility' }], (v) => api.setPhone({ input: v, inputPicked: true }));
+    const via = UI.segmented([{ value: 'adb', label: 'ADB' }, { value: 'phone', label: t('Accessibility') }], (v) => api.setPhone({ input: v, inputPicked: true }));
     // With a phone: its own card on top, with the way to its wireless debugging (Connection).
-    const adbBtn = UI.button('Wireless Debugging', () => UI.go('connection'), 'small');
-    const viaRow = UI.row('Control the phone with', '', [via.el, adbBtn]);
-    const viaCard = UI.card('Phone', [viaRow]);
+    const adbBtn = UI.button(t('Wireless Debugging'), () => UI.go('connection'), 'small');
+    const viaRow = UI.row(t('Control the phone with'), '', [via.el, adbBtn]);
+    const viaCard = UI.card(t('Phone'), [viaRow]);
     const pair = UI.dirCards(
-      { on: { get: (s) => s.kvm.beDriven, set: (v) => set({ beDriven: v }) }, label: 'Use {name}’s mouse and keyboard on {me}', hint: 'Push the pointer past the edge there', rows: [
-        UI.row('Pointer speed here', '', [speed]),
-        UI.row('Reverse scrolling', '', [reverse]),
+      { on: { get: (s) => s.kvm.beDriven, set: (v) => set({ beDriven: v }) }, label: t('Use {name}’s mouse and keyboard on {me}'), hint: t('Push the pointer past the edge there'), rows: [
+        UI.row(t('Pointer speed here'), '', [speed]),
+        UI.row(t('Reverse scrolling'), '', [reverse]),
       ] },
-      { on: { get: (s) => s.kvm.driveOther, set: (v) => set({ driveOther: v }) }, label: 'Use {me}’s mouse and keyboard on {name}', hint: 'Push the pointer past the edge', rows: [
-        UI.row('Edge resistance', 'Push a little further to cross', [resistance]),
+      { on: { get: (s) => s.kvm.driveOther, set: (v) => set({ driveOther: v }) }, label: t('Use {me}’s mouse and keyboard on {name}'), hint: t('Push the pointer past the edge'), rows: [
+        UI.row(t('Edge resistance'), t('Push a little further to cross'), [resistance]),
       ] },
     );
 
@@ -53,10 +54,10 @@ UI.tab({
       viaCard,
       pair.el,
       lock.el,
-      UI.card('Feel', [gestureRow]),
-      UI.card('Not on the same network', [bleRow]),
-      UI.card('Right now', [status], { cls: 'keep-on' }),
-      el('div', { class: 'card-title', text: 'Where the other computer is' }),
+      UI.card(t('Feel'), [gestureRow]),
+      UI.card(t('Not on the same network'), [bleRow]),
+      UI.card(t('Right now'), [status], { cls: 'keep-on' }),
+      el('div', { class: 'card-title', text: t('Where the other computer is') }),
       el('div', { class: 'card layout' }, [map.el]),
     );
 
@@ -68,9 +69,9 @@ UI.tab({
       const pset = (s.phone || {}).settings || {};
       via.set(br.input || (pset.input === 'phone' ? 'phone' : 'adb'));
       adbBtn.hidden = br.state === 'ready';
-      viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? 'Automatic: ADB, wireless debugging is ready' : 'Automatic: Accessibility until wireless debugging is set up')
-        : br.input === 'phone' ? 'Accessibility: TwinDesk on the phone taps and types. Works over Wi-Fi, Wi-Fi Direct and Bluetooth, no developer options'
-          : 'ADB: full control through wireless debugging' + (br.state === 'ready' ? '' : ' (not set up yet)'));
+      viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? t('Automatic: ADB, wireless debugging is ready') : t('Automatic: Accessibility until wireless debugging is set up'))
+        : br.input === 'phone' ? t('Accessibility: TwinDesk on the phone taps and types. Works over Wi-Fi, Wi-Fi Direct and Bluetooth, no developer options')
+          : br.state === 'ready' ? t('ADB: full control through wireless debugging') : t('ADB: full control through wireless debugging (not set up yet)'));
       status.update(s);
       lock.update(s);
       speed.set(k.speed);

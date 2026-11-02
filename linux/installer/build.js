@@ -52,7 +52,7 @@ async function main() {
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
   for (const name of fs.readdirSync(path.join(ROOT, 'shared'))) {
-    if (/\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
+    if (name === 'lang' || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
   }
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper'));
   // Multi-device's helper (several watched edges, docs/multi-device.md): the same sources built with -DMULTI.

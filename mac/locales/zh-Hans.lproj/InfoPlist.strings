@@ -1,0 +1,10 @@
+/* TwinDesk — GPL-3.0, see LICENSE. macOS owns the surrounding permission dialog. */
+"NSLocalNetworkUsageDescription" = "TwinDesk 需要在局域网中发现并连接你的其他电脑。";
+"NSMicrophoneUsageDescription" = "TwinDesk 需要在 Mac 与其他电脑之间传输声音。";
+"NSAudioCaptureUsageDescription" = "TwinDesk 需要将这台 Mac 的声音传输到其他电脑。";
+"NSCameraUsageDescription" = "共享摄像头时，TwinDesk 需要将这台 Mac 的摄像头画面显示在其他电脑上。";
+"NSAppleEventsUsageDescription" = "TwinDesk 需要向 Finder 查询当前文件夹，以便在该文件夹中复制和粘贴文件。";
+"NSBluetoothAlwaysUsageDescription" = "手机或电脑不在同一网络时，TwinDesk 需要通过蓝牙连接这些设备。";
+"NSLocationUsageDescription" = "macOS 仅向获准访问位置的应用显示 Wi-Fi 网络。手机或电脑不在同一网络时，TwinDesk 需要加入其 Wi-Fi 网络以传输文件。";
+"NSLocationWhenInUseUsageDescription" = "macOS 仅向获准访问位置的应用显示 Wi-Fi 网络。手机或电脑不在同一网络时，TwinDesk 需要加入其 Wi-Fi 网络以传输文件。";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "macOS 仅向获准访问位置的应用显示 Wi-Fi 网络。手机或电脑不在同一网络时，TwinDesk 需要加入其 Wi-Fi 网络以传输文件。";

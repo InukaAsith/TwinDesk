@@ -11,6 +11,16 @@
 const P = window.MacShareProtocol;
 const T = P.T;
 const api = window.pcview;
+const I = window.PlayerI18n;
+I.translate();
+function setTitle(title, key) {
+  const element = document.querySelector('title');
+  if (key === 'PC' || key === 'PC app') I.text(element, key);
+  else if (title) I.literal(element, title);
+  else I.text(element, 'PC');
+}
+const query = new URLSearchParams(location.search);
+setTitle(query.get('title'), query.get('titleKey'));
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
 
@@ -89,9 +99,9 @@ bar.addEventListener('mouseleave', () => pokeBar(0));
 // Clicks on the toolbar stay here (never sent to the other computer).
 for (const ev of ['mousedown', 'mouseup', 'wheel']) bar.addEventListener(ev, (e) => e.stopPropagation());
 
-function setOverlay(text) {
-  overlay.textContent = text || '';
-  overlay.classList.toggle('hidden', !text);
+function setOverlay(key, vars) {
+  I.text(overlay, key, vars);
+  overlay.classList.toggle('hidden', !key);
 }
 
 function report(status, extra) {
@@ -155,7 +165,7 @@ async function onOffer(m) {
     statsTimer = setInterval(() => stats(my).catch(() => {}), 1000);
   } catch (e) {
     if (my === pc) {
-      setOverlay('Could not show the screen: ' + e.message);
+      setOverlay('Could not show the screen: {error}', { error: e.message });
       report('failed');
     }
   }
@@ -276,6 +286,7 @@ window.addEventListener('blur', releaseButtons);
 
 api.on((m) => {
   switch (m.t) {
+    case 'title': setTitle(m.title, m.titleKey); break;
     case 'offer': onOffer(m); break;
     case T.RTC2_ICE: onIce(m); break;
     case 'blur': releaseButtons(); break;
@@ -283,7 +294,11 @@ api.on((m) => {
       releaseButtons();
       closePc();
       session = null;
-      setOverlay(m.why || '');
+      if (m.whyKey) setOverlay(m.whyKey, m.whyVars);
+      else {
+        I.literal(overlay, m.why || '');
+        overlay.classList.toggle('hidden', !m.why);
+      }
       break;
     case 'input':
       if (!m.on) releaseButtons();

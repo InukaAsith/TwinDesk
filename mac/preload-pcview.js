@@ -11,3 +11,7 @@ contextBridge.exposeInMainWorld('pcview', {
   ready: () => ipcRenderer.send('pcview:ready'),
   ctl: (m) => ipcRenderer.send('pcview:ctl', m), // Toolbar: {share?, mode?, framegen?, fullScreen?}
 });
+
+contextBridge.exposeInMainWorld('playerLanguage', {
+  onChange: (fn) => ipcRenderer.on('ui-language', (_e, language) => fn(language)),
+});

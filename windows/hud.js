@@ -4,7 +4,8 @@
 // capture (setContentProtection = WDA_EXCLUDEFROMCAPTURE), off with General › "Show a popup".
 // Port of mac/hud.js; also used for the file popups.
 const path = require('path');
-const { BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen } = require('electron');
+const I18n = require('../shared/i18n.js');
 
 const W = 380, H = 64, SHOW_MS = 1400;
 const BIG_W = 460, BIG_H = 230, BIG_MS = 2200; // the cursor sharing on/off card
@@ -28,7 +29,7 @@ class Hud {
     this.win.setAlwaysOnTop(true, 'screen-saver'); // over full-screen apps too
     this.win.setVisibleOnAllWorkspaces(true);
     this.win.setContentProtection(true); // never in Share screen or the Mac's view of this PC
-    this.ready = this.win.loadFile(path.join(__dirname, 'hud.html'));
+    this.ready = this.win.loadFile(path.join(__dirname, 'hud.html'), { query: { language: I18n.resolveLanguage((this.getSettings().ui || {}).language, app.getLocale()) } });
     return this.ready;
   }
 

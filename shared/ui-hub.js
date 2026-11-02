@@ -6,6 +6,7 @@
 'use strict';
 
 (() => {
+  const tr = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
   const handlers = new Map(); // type -> [fn]
   let listening = false;
 
@@ -30,7 +31,7 @@
   UI.receivedName = (s) => {
     const f = (s && s.files) || {};
     const dir = f.received || f.folder || '';
-    return dir ? dir.split(/[\\/]/).filter(Boolean).pop() || dir : 'Downloads';
+    return dir ? dir.split(/[\\/]/).filter(Boolean).pop() || dir : tr('Downloads');
   };
 
   // That page can show the phone's things now.
@@ -44,12 +45,13 @@
   // Wireless debugging reaches the phone over Wi-Fi only: over Bluetooth its card is greyed out and
   // says so (the Phone page, the Overview). True while it is.
   UI.adbBle = (s, card, row, pill) => {
+    const t = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
     const ble = UI.onBle(s);
     card.classList.toggle('wifi-only', ble);
     if (!ble) return false;
     pill.className = 'pill muted';
-    pill.textContent = 'Wi-Fi only';
-    row.setHint('Only available over Wi-Fi: you’re connected over Bluetooth. Connect with Wi-Fi Direct, or join the same Wi-Fi network.');
+    pill.textContent = t('Wi-Fi only');
+    row.setHint(t('Only available over Wi-Fi: you’re connected over Bluetooth. Connect with Wi-Fi Direct, or join the same Wi-Fi network.'));
     return true;
   };
   UI.onBle = (s) => !!(s && ((s.client && s.client.transport === 'ble') || (s.net && s.net.transport === 'ble')));
@@ -57,27 +59,28 @@
   // hotspot) made for a file or a screen, which goes again by itself ("Temporary"), or asked for
   // with Connect with Wi-Fi Direct on either side; else the same network.
   UI.via = (s) => {
-    if (UI.onBle(s)) return 'Bluetooth';
+    const t = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
+    if (UI.onBle(s)) return t('Bluetooth');
     const n = (s && s.net) || {};
     if (!['hosting', 'joined'].includes(n.state) || n.onGroup === false) return 'Wi-Fi'; // a group up beside a session on the real network is still Wi-Fi
-    const name = n.kind === 'hotspot' ? 'Hotspot' : 'Wi-Fi Direct';
+    const name = n.kind === 'hotspot' ? t('Hotspot') : 'Wi-Fi Direct';
     const asked = ['user', 'hotspot'].some((w) => (n.why || []).includes(w) || (n.peerWhy || []).includes(w));
-    return asked ? name : 'Temporary ' + name;
+    return asked ? name : t('Temporary {transport}', { transport: name });
   };
 
-  UI.phoneName = (s) => (s && s.hub && s.hub.name) || 'your phone';
+  UI.phoneName = (s) => (s && s.hub && s.hub.name) || tr('your phone');
   // How a connected phone's sound gets here (phone-bridge.js _sound), for the Audio page; null: no phone.
   UI.phoneSound = (s) => {
     const b = s && s.phone && s.phone.connected && s.phone.bridge;
     if (!b) return null;
     const ph = s.phone.connected.name;
     const n = b.sound || {};
-    if (n.on) return `Playing. ${ph} captures it, so it plays there too (wireless debugging moves it off the phone)`;
+    if (n.on) return tr('Playing. {phone} captures it, so it plays there too (wireless debugging moves it off the phone)', { phone: ph });
     if (n.error) return n.error;
-    if (n.waiting) return `Tap Start on ${ph} (its notification, or Sound in TwinDesk there)`;
-    if (n.net) return `Asking ${ph}…`;
-    if (b.state === 'ready') return 'Through wireless debugging';
-    return `Over Wi-Fi: through wireless debugging, or captured by ${ph}`;
+    if (n.waiting) return tr('Tap Start on {phone} (its notification, or Sound in TwinDesk there)', { phone: ph });
+    if (n.net) return tr('Asking {phone}…', { phone: ph });
+    if (b.state === 'ready') return tr('Through wireless debugging');
+    return tr('Over Wi-Fi: through wireless debugging, or captured by {phone}', { phone: ph });
   };
 
   // The selected device changed (the sidebar's device list): a page that loaded data of the previous
@@ -98,13 +101,13 @@
   // The top of a page: { el, render(s) }.
   UI.hubTop = (what) => {
     const { el, api } = UI;
-    const text = el('div', { class: 'hub-top-text' });
-    const asked = el('div', { class: 'hint' });
-    const allow = UI.button('Allow on the phone', () => {
+    const text = el('div', { class: 'hub-top-text', attrs: { 'data-literal': '' } });
+    const asked = el('div', { class: 'hint', attrs: { 'data-literal': '' } });
+    const allow = UI.button(tr('Allow on the phone'), () => {
       api.hub({ do: 'ask', what });
       allow.dataset.at = String(Date.now());
     }, 'primary');
-    const install = UI.button('Install', () => UI.api.phoneInstallFull && UI.api.phoneInstallFull());
+    const install = UI.button(tr('Install'), () => UI.api.phoneInstallFull && UI.api.phoneInstallFull());
     const box = el('div', { class: 'note hub-top' }, [el('div', { class: 'hub-top-body' }, [text, asked]), el('div', { class: 'hub-top-actions' }, [install, allow])]);
     box.hidden = true;
     const render = (s) => {
@@ -112,23 +115,23 @@
       const phone = UI.phoneName(s);
       const st = h.perm && h.perm[what];
       let msg = '', kind = 'info', canAllow = false, canInstall = false;
-      if (!h[what]) msg = `Off. When you switch it on, ${phone} asks for what it needs.`;
-      else if (!h.connected) msg = `Connect ${phone} to use ${LABEL[what]}: click it at the top of the sidebar.`;
-      else if (!h.supported) msg = `Waiting for ${phone}… TwinDesk on it needs to be up to date for ${LABEL[what]}.`;
-      else if (st.perm === 'none' && what === 'files') { msg = `Files needs Android 11 or later on ${phone}. Mount works through ADB instead.`; kind = 'warn'; }
+      if (!h[what]) msg = tr('Off. When you switch it on, {phone} asks for what it needs.', { phone });
+      else if (!h.connected) msg = tr('Connect {phone} to use {feature}: click it at the top of the sidebar.', { phone, feature: tr(LABEL[what]) });
+      else if (!h.supported) msg = tr('Waiting for {phone}… TwinDesk on it needs to be up to date for {feature}.', { phone, feature: tr(LABEL[what]) });
+      else if (st.perm === 'none' && what === 'files') { msg = tr('Files needs Android 11 or later on {phone}. Mount works through ADB instead.', { phone }); kind = 'warn'; }
       else if (st.perm === 'none') {
-        msg = `${LABEL[what]} need TwinDesk with notifications on ${phone} (Android doesn’t let downloaded apps read texts). ${s.phone && s.phone.adb && s.phone.adb.address ? 'Install puts it on the phone through wireless debugging; your settings stay.' : 'Set up wireless debugging on the Phone page, then Install.'}`;
+        msg = tr('{feature} need TwinDesk with notifications on {phone} (Android doesn’t let downloaded apps read texts). {install}', { feature: tr(LABEL[what]), phone, install: tr(s.phone && s.phone.adb && s.phone.adb.address ? 'Install puts it on the phone through wireless debugging; your settings stay.' : 'Set up wireless debugging on the Phone page, then Install.') });
         kind = 'warn';
         canInstall = !!UI.api.phoneInstallFull;
       } else if (st.perm === 'ask') {
-        msg = what === 'media' ? `Allow ${phone} to share its photos and videos with TwinDesk.`
-          : what === 'files' ? `Allow All files access for TwinDesk on ${phone}: it reads and writes the phone’s storage itself, no ADB. Android opens the setting there.`
-            : `Allow ${LABEL[what]} on ${phone}: TwinDesk asks for ${Object.values(NEEDS[what]).join(', ')}.`;
+        msg = what === 'media' ? tr('Allow {phone} to share its photos and videos with TwinDesk.', { phone })
+          : what === 'files' ? tr('Allow All files access for TwinDesk on {phone}: it reads and writes the phone’s storage itself, no ADB. Android opens the setting there.', { phone })
+            : tr('Allow {feature} on {phone}: TwinDesk asks for {permissions}.', { feature: tr(LABEL[what]), phone, permissions: Object.values(NEEDS[what]).map(v => tr(v)).join(', ') });
         kind = 'warn';
         canAllow = true;
       } else if (st.perm === 'partial') {
-        msg = what === 'media' ? `Only the photos you chose on ${phone} show here.`
-          : `Some of ${LABEL[what]} needs more on ${phone}: ${(st.missing || []).map((m) => NEEDS[what][m]).filter(Boolean).join(', ')}.`;
+        msg = what === 'media' ? tr('Only the photos you chose on {phone} show here.', { phone })
+          : tr('Some of {feature} needs more on {phone}: {permissions}.', { feature: tr(LABEL[what]), phone, permissions: (st.missing || []).map((m) => NEEDS[what][m]).filter(Boolean).map(v => tr(v)).join(', ') });
         canAllow = true;
       }
       box.hidden = !msg;
@@ -137,7 +140,7 @@
       allow.hidden = !canAllow;
       install.hidden = !canInstall;
       const recently = Number(allow.dataset.at || 0) > Date.now() - 60000;
-      asked.textContent = canAllow && recently ? (h.perm && h.perm.opens ? `Check ${phone}: Android asks there.` : `Tap the notification on ${phone}.`) : '';
+      asked.textContent = canAllow && recently ? (h.perm && h.perm.opens ? tr('Check {phone}: Android asks there.', { phone }) : tr('Tap the notification on {phone}.', { phone })) : '';
       asked.hidden = !asked.textContent;
     };
     return { el: box, render };
@@ -148,8 +151,8 @@
   // there (netlink.js; Linux has none: join the same network). { el, render(s, off) }.
   UI.wifiGate = () => {
     const { el, api } = UI;
-    const text = el('div', { class: 'hub-top-text' });
-    const go = UI.button('Connect with Wi-Fi Direct', () => api.netWifi(true), 'primary');
+    const text = el('div', { class: 'hub-top-text', attrs: { 'data-literal': '' } });
+    const go = UI.button(tr('Connect with Wi-Fi Direct'), () => api.netWifi(true), 'primary');
     const box = el('div', { class: 'note warn hub-top wifi-note' }, [el('div', { class: 'hub-top-body' }, [text]), el('div', { class: 'hub-top-actions' }, [go])]);
     box.hidden = true;
     const render = (s, off) => {
@@ -158,12 +161,12 @@
       const n = s.net || {};
       const moving = ['asking', 'hosting', 'joining'].includes(n.state);
       const can = !!api.netWifi;
-      text.textContent = moving ? 'Only available over Wi-Fi Direct. Connecting…'
-        : n.state === 'failed' ? `Only available over Wi-Fi Direct. ${n.error || 'Wi-Fi Direct didn’t come up'}.`
-          : `Only available over Wi-Fi Direct${can ? '' : ' or the same Wi-Fi network'}: you’re connected over Bluetooth.${can ? ' Or join the same Wi-Fi network.' : ''}`;
+      text.textContent = moving ? tr('Only available over Wi-Fi Direct. Connecting…')
+        : n.state === 'failed' ? tr('Only available over Wi-Fi Direct. {error}.', { error: tr(n.error || 'Wi-Fi Direct didn’t come up') })
+          : tr(can ? 'Only available over Wi-Fi Direct: you’re connected over Bluetooth. Or join the same Wi-Fi network.' : 'Only available over Wi-Fi Direct or the same Wi-Fi network: you’re connected over Bluetooth.');
       go.hidden = !can;
       go.disabled = moving;
-      go.textContent = moving ? 'Connecting…' : n.state === 'failed' ? 'Try again' : 'Connect with Wi-Fi Direct';
+      go.textContent = tr(moving ? 'Connecting…' : n.state === 'failed' ? 'Try again' : 'Connect with Wi-Fi Direct');
     };
     return { el: box, render };
   };
@@ -182,9 +185,9 @@
   UI.clock = (ts) => {
     const d = new Date(ts);
     const now = new Date();
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (now - d < 6 * 86400000) return d.toLocaleDateString([], { weekday: 'short' });
-    return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(window.I18n ? window.I18n.locale : [], { hour: 'numeric', minute: '2-digit' });
+    if (now - d < 6 * 86400000) return d.toLocaleDateString(window.I18n ? window.I18n.locale : [], { weekday: 'short' });
+    return d.toLocaleDateString(window.I18n ? window.I18n.locale : [], { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
   };
 
   UI.duration = (s) => {

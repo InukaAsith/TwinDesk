@@ -10,6 +10,15 @@ const T = P.T;
 const api = window.appview;
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
+const playerI18n = window.PlayerI18n;
+const title = document.querySelector('title');
+const query = new URLSearchParams(location.search);
+
+function setTitle(value, key) {
+  if (key === 'App' || !value) playerI18n.text(title, 'App');
+  else playerI18n.literal(title, value);
+}
+setTitle(query.get('title'), query.get('titleKey'));
 
 const BUTTONS = { 0: P.BUTTON.LEFT, 1: P.BUTTON.MIDDLE, 2: P.BUTTON.RIGHT, 3: P.BUTTON.BACK, 4: P.BUTTON.FORWARD };
 const LINE_PX = 40;
@@ -21,9 +30,9 @@ const heldButtons = new Set();
 let lastPos = { x: 0.5, y: 0.5 };
 let pacing = 'fast';
 
-function setOverlay(text) {
-  overlay.textContent = text || '';
-  overlay.classList.toggle('hidden', !text);
+function setOverlay(key, vars) {
+  playerI18n.text(overlay, key, vars);
+  overlay.classList.toggle('hidden', !key);
 }
 
 function closePc() {
@@ -70,7 +79,7 @@ async function onOffer(m) {
     for (const c of queue) await my.addIceCandidate(c).catch(() => {});
     if (my === pc) pending = null;
   } catch (e) {
-    if (my === pc) setOverlay('Could not show the window: ' + e.message);
+    if (my === pc) setOverlay('Could not show the window: {error}', { error: e.message });
   }
 }
 
@@ -154,6 +163,7 @@ window.addEventListener('blur', releaseButtons);
 
 api.on((m) => {
   switch (m.t) {
+    case 'title': setTitle(m.title, m.titleKey); break;
     case 'offer': onOffer(m); break;
     case T.RTC2_ICE: onIce(m); break;
     case 'blur': releaseButtons(); break;
@@ -161,7 +171,8 @@ api.on((m) => {
       releaseButtons();
       closePc();
       session = null;
-      setOverlay(m.why || '');
+      playerI18n.literal(overlay, m.why || '');
+      overlay.classList.toggle('hidden', !m.why);
       break;
   }
 });
