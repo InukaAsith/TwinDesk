@@ -187,7 +187,7 @@ async function check(rx, id, p) {
     close();
   }
 
-  fs.rmSync(dir, { recursive: true, force: true });
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* Windows: a cancelled stream may still hold a file */ }
   console.log('fastfile: ok');
 })().catch((e) => {
   console.error(e);

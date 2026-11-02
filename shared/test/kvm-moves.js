@@ -59,13 +59,15 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const out = [];
     const m = new KvmMoves({ send: (x) => out.push(x), backlog: () => 1e6, limit: () => 16384, maxWait: () => 16 });
     const end = Date.now() + 200;
+    let added = 0; // Windows' timers tick every ~15.6 ms, so how many went in depends on the OS
     while (Date.now() < end) {
       m.add(1, 0);
+      added++;
       await wait(1);
     }
     await wait(30);
-    assert.ok(out.length >= 6 && out.length <= 16, `about one per 16 ms (${out.length})`);
-    assert.ok(out.reduce((s, x) => s + x.dx, 0) > 100, 'nothing lost');
+    assert.ok(out.length >= 4 && out.length <= 16, `about one per 16 ms (${out.length})`); // 4: a 16 ms timer is two of Windows ~15.6 ms ticks
+    assert.strictEqual(out.reduce((s, x) => s + x.dx, 0), added, 'nothing lost');
   }
 
   // Through Bluetooth: every delay ms, and held (no maxWait) while the radio is behind.
