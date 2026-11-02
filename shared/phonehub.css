@@ -53,8 +53,8 @@
 .hub-list .row select { max-width: 250px; }
 
 /* ---------- Messages ---------- */
-.hub-msgs { display: flex; height: min(640px, calc(100vh - 170px)); min-height: 360px; }
-.hub-side { width: 260px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
+.hub-msgs { display: flex; height: calc(100vh - 170px); min-height: 360px; } /* the window's height, maximized or not */
+.hub-side { width: clamp(260px, 26%, 360px); flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); min-height: 0; }
 .hub-side-head { display: flex; justify-content: flex-end; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .hub-threads { flex: 1; overflow-y: auto; padding: 4px; }
 .hub-thread {
@@ -81,7 +81,7 @@
 .hub-bubbles { display: flex; flex-direction: column; gap: 4px; }
 .hub-day { align-self: center; font-size: 11px; color: var(--faint); margin: 10px 0 4px; }
 .hub-bubble {
-  max-width: 72%; padding: 7px 11px; border-radius: 16px; line-height: 1.35; user-select: text;
+  max-width: min(72%, 680px); padding: 7px 11px; border-radius: 16px; line-height: 1.35; user-select: text;
   white-space: pre-wrap; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 4px;
 }
 .hub-bubble.in { align-self: flex-start; background: var(--track-off); border-bottom-left-radius: 5px; }
@@ -99,6 +99,17 @@
 }
 .hub-compose:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
 @media (max-width: 760px) { .hub-side { width: 200px; } }
+
+/* Messages and Calls use the whole window (the app's other pages keep their reading width: #pages
+   in app.css / control.css). Calls' cards flow into as many columns as fit, its lists as tall as the window. */
+#pages:has(> #page-messages:not([hidden])), #pages:has(> #page-calls:not([hidden])) { max-width: none; }
+/* Messages: the conversation fills what's left of the window below the notes, its compose row always in view. */
+#pages:has(> #page-messages:not([hidden])) { min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+#page-messages:not([hidden]), #page-messages .page-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#page-messages .hub-msgs { flex: 1 0 360px; height: auto; min-height: 360px; }
+#page-calls .page-body { column-width: 400px; column-gap: 16px; }
+#page-calls .page-body > * { break-inside: avoid; }
+#page-calls .hub-scroll { max-height: max(380px, calc(100vh - 330px)); }
 
 /* ---------- Photos ---------- */
 .hub-media[hidden] { display: none; }
