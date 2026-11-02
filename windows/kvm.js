@@ -19,6 +19,7 @@ class Kvm {
     this.mode = 'home'; // 'home' | 'driving' | 'driven'
     this.route = 0;
     this.peerRoute = 0;
+    this.keyCodes = new Map();
     this.pcSide = this.settings.kvm.pcSide; // from kvm.layout: where this PC is, seen from the other computer (saved)
     this.message = '';
     this.acceptTimer = null;
@@ -485,6 +486,7 @@ class Kvm {
     }
     if (this.mode === 'driven') {
       if (route <= this.peerRoute) return;
+      this.injectMoves.drop();
       this.peerRoute = route;
       this.link.send({ t: T.KVM_ACCEPT, route });
       if (m.side && m.mouse !== false) this.helper.send('place', { side: m.side, offset: m.offset });
@@ -512,7 +514,10 @@ class Kvm {
     const ev = { ...m };
     if (ev.t === T.K_KEY_DOWN || ev.t === T.K_KEY_UP) {
       if (typeof ev.code !== 'string') return;
-      if (this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this.link.peerOs)) ev.code = P.mapKeyFromOtherPlatform(ev.code);
+      const original = ev.code;
+      ev.code = this.keyCodes.get(original) || (this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this.link.peerOs) ? P.mapKeyFromOtherPlatform(original) : original);
+      if (ev.t === T.K_KEY_DOWN) this.keyCodes.set(original, ev.code);
+      else this.keyCodes.delete(original);
       if (this._lockKeyHere(ev)) return;
       ev.code = this.keys.code(ev.t === T.K_KEY_DOWN, ev.code, ev.ch, ev.tx, ev.im); // a shortcut's letter: our key for it
       if (!ev.code) return; // another alphabet's letter: typed as it is
@@ -522,9 +527,12 @@ class Kvm {
     } else if (ev.t === T.K_MOVE) {
       ev.dx = (Number(ev.dx) || 0) * k.speed;
       ev.dy = (Number(ev.dy) || 0) * k.speed;
-    } else if (ev.t === T.K_WHEEL && k.reverseScroll) {
-      ev.dx = -(Number(ev.dx) || 0);
-      ev.dy = -(Number(ev.dy) || 0);
+      if (!Number.isFinite(ev.dx) || !Number.isFinite(ev.dy)) return;
+    } else if (ev.t === T.K_WHEEL) {
+      const direction = k.reverseScroll ? -1 : 1;
+      ev.dx = (Number(ev.dx) || 0) * direction;
+      ev.dy = (Number(ev.dy) || 0) * direction;
+      if (!Number.isFinite(ev.dx) || !Number.isFinite(ev.dy)) return;
     }
     if (ev.t === T.K_KEY_DOWN && ev.code === 'Escape' && this.dragRecv && this.dragRecv.dragging) this.dragRecv.cancel('cancelled', false);
     this._injectEv(ev);
@@ -550,10 +558,10 @@ class Kvm {
     switch (m.g) {
       case 'zoom': { // pinch: Ctrl + one wheel notch for every 0.15 of magnification
         if (m.phase === 'begin') this.zoomAcc = 0;
-        this.zoomAcc = (this.zoomAcc || 0) + (Number.isFinite(m.v) ? m.v : 0);
-        let notches = 0;
-        while (this.zoomAcc >= 0.15) { notches--; this.zoomAcc -= 0.15; } // wheel up = zoom in
-        while (this.zoomAcc <= -0.15) { notches++; this.zoomAcc += 0.15; }
+        this.zoomAcc = (this.zoomAcc || 0) + (Number.isFinite(m.v) ? Math.max(-10, Math.min(10, m.v)) : 0);
+        const steps = Math.trunc(this.zoomAcc / 0.15);
+        this.zoomAcc -= steps * 0.15;
+        const notches = -steps; // wheel up = zoom in
         if (!notches) break;
         inj({ t: T.K_KEY_DOWN, code: 'ControlLeft' });
         inj({ t: T.K_WHEEL, dx: 0, dy: notches, mode: 'line' });
@@ -632,6 +640,8 @@ class Kvm {
     }
     if (was !== mode) this.lockKey.reset();
     if (was !== mode) { // crossing either way: what our keys type (the layout may have changed)
+      this.keyCodes.clear();
+      this.zoomAcc = 0;
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();
     }
@@ -643,6 +653,7 @@ class Kvm {
     this.message = message || '';
     if (mode !== 'driving' && this.fileClip) this.fileClip.resetKeys();
     if (mode !== 'driving') this.moves.drop();
+    if (mode !== 'driven') this.injectMoves.drop();
     if (mode === 'driving' && was !== 'driving') {
       clearInterval(this.keepalive);
       this.keepalive = setInterval(() => this.helper.send('keepalive'), P.HELPER_KEEPALIVE_MS);

@@ -32,6 +32,8 @@ class Clip {
     this.seen = null; // last clipboard text the instant poll saw
     this.formats = ''; // … and the formats on it, for a new picture
     this.copied = false; // the helper saw a copy since the last look
+    this.generation = 0;
+    this.readSequence = 0;
 
     this.images = new ClipImages({
       cfg: () => this.cfg,
@@ -56,12 +58,15 @@ class Clip {
       this.onChange();
     });
     link.on('welcome', () => {
+      ++this.generation;
+      this.lastSync = { sent: null, received: null };
       this.peerAccepts = true;
       this.images.reset();
       this.applySettings(); // sends clip.policy, starts the instant poll if on
     });
     link.on(P.T.CLIP_REQUEST, () => this.sendIfChanged());
     link.on('closed', () => {
+      ++this.generation;
       this._stopPoll();
       this.images.reset();
     });
@@ -74,6 +79,7 @@ class Clip {
   // Windows' helper says when anything is copied (pictures too: ClipWatch.cs); without it the
   // poll looks for a new picture now and then.
   useHelper(helper) {
+    helper.on('exit', () => { this.watched = false; });
     helper.on('event', (name) => {
       if (name !== 'clipboard') return;
       this.watched = true;
@@ -83,6 +89,7 @@ class Clip {
 
   // Call after settings.clipboard changed.
   applySettings() {
+    ++this.readSequence;
     const c = this.cfg;
     if (c.historySize < this.history.length) this.history.length = c.historySize;
     if (c.enabled && c.send && c.mode === 'instant' && this.link.status.state === 'connected') this._startPoll();
@@ -98,28 +105,40 @@ class Clip {
 
   _startPoll() {
     if (this.poll) return;
+    const token = this.pollToken = {};
+    let reading = true;
     // New copies only: what is already on the clipboard when instant mode starts stays here.
-    readText().then((t) => { this.seen = t; });
-    eclip.formats(clipboard).then((f) => { this.formats = f.join(); });
+    readText().then((t) => { if (this.pollToken === token) this.seen = t; }).catch(() => {}).finally(() => { reading = false; });
+    eclip.formats(clipboard).then((f) => { if (this.pollToken === token) this.formats = f.join(); }).catch(() => {});
     this.copied = false;
     this.poll = setInterval(async () => {
-      const t = await readText();
-      const list = await eclip.formats(clipboard);
-      const formats = list.join();
-      // A new picture: the helper saw a copy, the formats changed, or (no helper) now and then.
-      const picture = !t && this.images.canSend && list.some((f) => /^image\//.test(f)) &&
-        (this.copied || formats !== this.formats || (!this.watched && ++this.ticks % IMAGE_POLL_EVERY === 0));
-      this.copied = false;
-      this.formats = formats;
-      if (t === this.seen && !picture) return;
-      this.seen = t;
-      this.sendIfChanged('instant');
+      if (reading || this.pollToken !== token) return;
+      reading = true;
+      try {
+        const t = await readText();
+        if (this.pollToken !== token) return;
+        const list = await eclip.formats(clipboard);
+        if (this.pollToken !== token) return;
+        const formats = list.join();
+        // A new picture: the helper saw a copy, the formats changed, or (no helper) now and then.
+        const picture = !t && this.images.canSend && list.some((f) => /^image\//.test(f)) &&
+          (this.copied || formats !== this.formats || (!this.watched && ++this.ticks % IMAGE_POLL_EVERY === 0));
+        this.copied = false;
+        this.formats = formats;
+        if (t === this.seen && !picture) return;
+        const seen = this.seen;
+        if (!t) this.seen = t;
+        const handled = await this.sendIfChanged('instant');
+        if (handled && this.pollToken === token && this.seen === seen) this.seen = t;
+      } catch (_) { /* clipboard temporarily unavailable */ }
+      finally { reading = false; }
     }, POLL_MS);
   }
 
   _stopPoll() {
     clearInterval(this.poll);
     this.poll = null;
+    this.pollToken = null;
   }
 
   _remember(dir, item) {
@@ -137,10 +156,11 @@ class Clip {
   async _onClip(m) {
     const c = this.cfg;
     if (!c.enabled || !c.receive || !P.clipAllowed(m.text)) return;
+    ++this.readSequence;
+    try { clipboard.writeText(m.text); } catch (_) { return; }
     this.images.text();
     this.lastSync.received = m.text;
     this.seen = m.text; // so instant mode doesn't bounce it back
-    if ((await readText()) !== m.text) clipboard.writeText(m.text);
     this._remember('in', m.text);
     this.onChange();
   }
@@ -148,20 +168,27 @@ class Clip {
   // Send this PC's clipboard if allowed and changed since it was last sent or received: its text,
   // else its picture (Clipboard › Pictures).
   async sendIfChanged(why) {
-    const c = this.cfg;
+    let c = this.cfg;
     if (!c.enabled || !c.send || this.link.status.state !== 'connected') return;
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
-    const text = await readText();
-    if (!text) return this._result(await this.images.offerClipboard(c.skipConcealed && (await isConcealed())));
-    if (text === this.lastSync.sent || text === this.lastSync.received) return;
-    if (c.skipConcealed && (await isConcealed())) {
+    const generation = this.generation, sequence = ++this.readSequence;
+    let text, concealed;
+    // Read together: one await before the checks below (shared/eclip.js reads the formats).
+    try { [text, concealed] = await Promise.all([readText(), c.skipConcealed && isConcealed()]); } catch (_) { return; }
+    c = this.cfg;
+    if (generation !== this.generation || sequence !== this.readSequence || !c.enabled || !c.send || !this.peerAccepts || this.link.status.state !== 'connected') return;
+    if (!text) return this._result(await this.images.offerClipboard(c.skipConcealed && concealed));
+    if (text === this.lastSync.sent || text === this.lastSync.received) return true;
+    if (c.skipConcealed && concealed) {
       this.lastSync.sent = text; // don't retry this item
-      return this._skip('skipped a password (concealed item)');
+      this._skip('skipped a password (concealed item)');
+      return true;
     }
     const size = Buffer.byteLength(text, 'utf8');
     if (size > c.maxKB * 1024 || !P.clipAllowed(text)) {
       this.lastSync.sent = text;
-      return this._skip('skipped ' + Math.round(size / 1024) + ' KB (over ' + c.maxKB + ' KB)');
+      this._skip('skipped ' + Math.round(size / 1024) + ' KB (over ' + c.maxKB + ' KB)');
+      return true;
     }
     this.images.text();
     if (!this.link.send({ t: P.T.CLIP, text })) return;
@@ -169,6 +196,7 @@ class Clip {
     this._remember('out', text);
     this.lastSkip = '';
     this.onChange();
+    return true;
   }
 
   // What the picture side did: sent (the note goes), or why not.
@@ -202,8 +230,10 @@ class Clip {
       return;
     }
     clipboard.writeText(h.text);
-    this.seen = h.text;
-    if (h.dir === 'out') this.lastSync.sent = null;
+    ++this.readSequence;
+    this.seen = null;
+    if (this.lastSync.sent === h.text) this.lastSync.sent = null;
+    if (this.lastSync.received === h.text) this.lastSync.received = null;
   }
 
   clearHistory() {

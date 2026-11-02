@@ -179,6 +179,7 @@
       if (this.on) return;
       if (!this.gl) this._init();
       this.on = true;
+      const token = this.token = {};
       this.count = 0;
       this.frameMs = 16.7; // stream frame interval (EMA)
       this.vsyncMs = 16.7; // screen refresh interval (EMA)
@@ -186,13 +187,13 @@
       this.lastRaf = 0;
       this.drawn = -1;
       const onFrame = (now, meta) => {
-        if (!this.on) return;
+        if (!this.on || this.token !== token) return;
         this._upload(meta.expectedDisplayTime || now);
-        this.video.requestVideoFrameCallback(onFrame);
+        this.vfc = this.video.requestVideoFrameCallback(onFrame);
       };
-      this.video.requestVideoFrameCallback(onFrame);
+      this.vfc = this.video.requestVideoFrameCallback(onFrame);
       const loop = (t) => {
-        if (!this.on) return;
+        if (!this.on || this.token !== token) return;
         if (this.lastRaf) this.vsyncMs += (Math.min(50, t - this.lastRaf) - this.vsyncMs) * 0.05;
         this.lastRaf = t;
         this._present(t);
@@ -203,8 +204,11 @@
 
     stop() {
       this.on = false;
+      this.token = null;
       this.active = false;
       cancelAnimationFrame(this.raf);
+      if (this.vfc != null && this.video.cancelVideoFrameCallback) this.video.cancelVideoFrameCallback(this.vfc);
+      this.vfc = null;
     }
 
     // A new decoded frame: it becomes "newer", the old newer becomes "older", and the motion

@@ -101,6 +101,14 @@ function png(size) {
   }
 
   assert.ok(isPng(png(9)) && !isPng(Buffer.alloc(9)));
+  {
+    const rejected = new ImageOut({ send: (m) => m.t !== T.CLIP_IMAGE_PART });
+    assert.strictEqual(await rejected.send(png(100)), false, 'a rejected final piece is a failed send');
+    assert.strictEqual(rejected.busy, false);
+    const failed = new ImageOut({ send: () => { throw new Error('socket closed'); } });
+    assert.strictEqual(await failed.send(png(100)), false, 'a closed transport fails without leaving a busy sender');
+    assert.strictEqual(failed.busy, false);
+  }
   console.log('clipimage: ok');
 })().catch((e) => {
   console.error(e);

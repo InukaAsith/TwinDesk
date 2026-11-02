@@ -62,6 +62,9 @@ class Wifi {
     this.holds = new Set(); // 'host', 'join': who needs Wi-Fi on
     this.wasOff = false; // … and it was off before
     this.radioQueue = Promise.resolve();
+    this.joinQueue = Promise.resolve();
+    this.joinGeneration = 0;
+    this.hostQueue = Promise.resolve();
     netsh(['show', 'interfaces'])
       .then((out) => { this.ok = this.ok || /[0-9a-f]{8}-[0-9a-f]{4}-/i.test(out); })
       .catch(() => {});
@@ -84,20 +87,50 @@ class Wifi {
     return was !== `${this.ok} ${this.hostOk}`;
   }
 
-  async host(ssid, pass) {
-    await this._hold('host');
-    await this.helper.request('wfdHost', { ssid, pass }, 20000);
+  host(ssid, pass) {
+    const task = this.hostQueue.then(async () => {
+      try {
+        await this._hold('host');
+        await this.helper.request('wfdHost', { ssid, pass }, 20000);
+      } catch (e) {
+        await this.helper.request('wfdStop', {}, 5000).catch(() => {});
+        await this._release('host');
+        throw e;
+      }
+    });
+    this.hostQueue = task.catch(() => {});
+    return task;
   }
 
-  async unhost() {
-    await this.helper.request('wfdStop', {}, 5000).catch(() => {});
-    await this._release('host');
+  unhost() {
+    const task = this.hostQueue.then(async () => {
+      await this.helper.request('wfdStop', {}, 5000).catch(() => {});
+      await this._release('host');
+    });
+    this.hostQueue = task.catch(() => {});
+    return task;
   }
 
-  async join(ssid, pass) {
+  join(ssid, pass) {
+    const generation = ++this.joinGeneration;
+    const check = () => {
+      if (generation !== this.joinGeneration) throw new Error('Wi-Fi join cancelled');
+    };
+    const task = this.joinQueue.then(async () => {
+      check();
+      try { await this._join(ssid, pass, check); }
+      catch (e) { await this._leave(); throw e; }
+    });
+    this.joinQueue = task.catch(() => {});
+    return task;
+  }
+
+  async _join(ssid, pass, check) {
     this.refusedLocation = false;
     await this._hold('join');
+    check();
     const now = await this._current();
+    check();
     this.previous = now === ssid ? '' : now || '';
     const before = new Set(addresses());
     const xml = `<?xml version="1.0"?>
@@ -113,33 +146,37 @@ class Wifi {
 </WLANProfile>`;
     const file = path.join(os.tmpdir(), `twindesk-wifi-${process.pid}.xml`);
     fs.writeFileSync(file, xml, { mode: 0o600 });
+    this.joined = ssid;
     try {
       await this._netsh(['add', 'profile', `filename=${file}`, 'user=current']);
     } finally {
       fs.rmSync(file, { force: true });
     }
-    this.joined = ssid;
+    check();
     const until = Date.now() + JOIN_MS;
     let tries = 0;
     while (Date.now() < until) {
+      check();
       // The network may not be in the scan list yet (a group that just came up): ask again.
       if (tries++ % 5 === 0) {
         const err = await this._netsh(['connect', `name=${ssid}`, `ssid=${ssid}`]).then(() => null, (e) => e);
+        check();
         if (err && err.location) {
-          await this.leave();
           throw err;
         }
       }
       await sleep(1000);
+      check();
       const on = await this._current();
+      check();
       // Nobody says which network: an address it didn't have before is the new one.
       const there = on === null ? addresses().some((a) => !before.has(a)) : on === ssid && this._hasAddress();
       if (there) {
         await sleep(1500); // DHCP done; let the route settle before discovery looks
+        check();
         return;
       }
     }
-    await this.leave();
     throw new Error('Windows didn’t connect to it');
   }
 
@@ -153,7 +190,14 @@ class Wifi {
     return !wifi; // a renamed adapter: connected is enough
   }
 
-  async leave() {
+  leave() {
+    ++this.joinGeneration;
+    const task = this.joinQueue.then(() => this._leave());
+    this.joinQueue = task.catch(() => {});
+    return task;
+  }
+
+  async _leave() {
     const ssid = this.joined;
     this.joined = '';
     if (ssid) {

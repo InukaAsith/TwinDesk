@@ -14,6 +14,7 @@ const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES = `https://github.com/${REPO}/releases`;
 const FIRST_DELAY = 15 * 1000;
 const EVERY = 6 * 60 * 60 * 1000;
+const CHECK_MS = 15000;
 
 // Escape HTML entities to prevent any injection in release notes.
 function escapeHtml(str) {
@@ -97,9 +98,11 @@ function formatReleaseNotes(raw) {
 
 // "v1.2.3" / "1.2" / "1.2.3-beta.1" -> {nums: [1,2,3], pre: 'beta.1'}; null when it isn't a version.
 function parse(v) {
-  const m = /^v?(\d+(?:\.\d+){0,3})(?:-([0-9A-Za-z.-]+))?/.exec(String(v || '').trim());
+  const m = /^v?(\d+(?:\.\d+){0,3})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/i.exec(String(v || '').trim());
   if (!m) return null;
-  return { nums: m[1].split('.').map(Number), pre: m[2] || '' };
+  const nums = m[1].split('.').map(Number);
+  if (!nums.every(Number.isSafeInteger) || (m[2] || '').split('.').some((p) => /^0\d+$/.test(p))) return null;
+  return { nums, pre: m[2] || '' };
 }
 
 // > 0 when a is newer than b. A pre-release is older than the same version without one.
@@ -114,7 +117,19 @@ function compare(a, b) {
   if (x.pre === y.pre) return 0;
   if (!x.pre) return 1;
   if (!y.pre) return -1;
-  return x.pre < y.pre ? -1 : 1;
+  const aParts = x.pre.split('.');
+  const bParts = y.pre.split('.');
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const a = aParts[i], b = bParts[i];
+    if (a === undefined) return -1;
+    if (b === undefined) return 1;
+    if (a === b) continue;
+    const an = /^\d+$/.test(a), bn = /^\d+$/.test(b);
+    if (an && bn) return BigInt(a) < BigInt(b) ? -1 : 1;
+    if (an !== bn) return an ? -1 : 1;
+    return a < b ? -1 : 1;
+  }
+  return 0;
 }
 
 const ARCH_WORDS = {
@@ -167,6 +182,7 @@ class Updates {
     this.getLanguage = opts.getLanguage || (() => 'en');
     this.onChange = opts.onChange || (() => {});
     this.fetch = opts.fetch || defaultFetch();
+    this.timeoutMs = opts.timeoutMs || CHECK_MS;
     this.openUrl = opts.openUrl || ((url) => require('electron').shell.openExternal(url));
     this.onShowModal = opts.onShowModal || (() => this.open());
     this.status = {
@@ -236,6 +252,7 @@ class Updates {
       const res = await this.fetch(url, {
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': `TwinDesk/${this.current}` },
         cache: 'no-store',
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (res.status === 404) {
         return this._set({

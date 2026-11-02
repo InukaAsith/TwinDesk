@@ -41,6 +41,10 @@ class PcApps {
   // opts: link, helper, sender, settings (shared), inputAllowed(), onChange()
   constructor(opts) {
     Object.assign(this, opts);
+    this.generation = 0;
+    this.syncGeneration = 0;
+    this.pendingLaunches = new Set();
+    this.stopped = false;
     this.macAccepts = false; // papp.policy
     this.apps = null; // [{id, name, exe}] from Get-StartApps (cached)
     this.icons = new Map(); // id → data URL
@@ -54,8 +58,8 @@ class PcApps {
     this.input = new RemoteInput(opts);
 
     const link = this.link;
-    link.on('welcome', () => { this.macAccepts = false; this.sentKey = ''; });
-    link.on('closed', () => { this.macAccepts = false; this.launched.clear(); this._sync([]); });
+    link.on('welcome', () => { this.generation++; this.macAccepts = false; this.sentKey = ''; });
+    link.on('closed', () => { this.generation++; clearTimeout(this.timer); this.timer = null; this.macAccepts = false; this.launched.clear(); this._sync([]); });
     link.on(T.PAPP_POLICY, (m) => {
       this.macAccepts = m.accept === true;
       if (this.macAccepts && this.allowed) this._build().catch(() => {}); // icons ready before the Mac asks
@@ -90,6 +94,7 @@ class PcApps {
 
   // The switch changed. Off: nothing is followed or streamed any more (the apps keep running).
   apply() {
+    this.generation++;
     if (!this.allowed) {
       this.launched.clear();
       this._sync([]);
@@ -142,22 +147,37 @@ class PcApps {
   }
 
   async _list() {
+    const generation = this.generation;
     if (!this.allowed) return this.link.send({ t: T.PAPPS_RESULT, apps: [] });
     try {
       const apps = await this._build();
+      if (!this._current(generation)) return;
       this.message = '';
       this.link.send({ t: T.PAPPS_RESULT, apps });
     } catch (e) {
+      if (!this._current(generation)) return;
       this.message = 'Couldn’t list this PC’s apps: ' + e.message;
       this.link.send({ t: T.PAPPS_RESULT, apps: [] });
     }
     this.onChange();
   }
 
+  _current(generation) {
+    return !this.stopped && this.allowed && this.generation === generation && this.link.status.state === 'connected';
+  }
+
   async _launch(id) {
+    if (this.pendingLaunches.has(id)) return;
+    const generation = this.generation;
+    this.pendingLaunches.add(id);
+    try { await this._launchOne(id, generation); } finally { this.pendingLaunches.delete(id); }
+  }
+
+  async _launchOne(id, generation) {
     const reply = (ok, why) => this.link.send(why ? { t: T.PAPP_LAUNCHED, id, ok, why } : { t: T.PAPP_LAUNCHED, id, ok });
     if (!this.allowed) return reply(false, 'This computer doesn’t let you open its apps (its Apps tab)');
     const app = (await this._apps().catch(() => [])).find((a) => a.id === id);
+    if (!this._current(generation)) return;
     if (!app) return reply(false, 'No such app on this PC');
     const open = this.windows.find((w) => w.id === id);
     if (open) {
@@ -165,14 +185,21 @@ class PcApps {
       return reply(true);
     }
     const now = await this.helper.request('windows').catch(() => ({ windows: [] }));
+    if (!this._current(generation)) return;
     this.launched.set(id, {
       id, exe: app.exe, pids: new Set(), since: Date.now(), had: false, lastSeen: 0,
       before: new Set((now.windows || []).map((w) => w.wid)), beforePids: new Set((now.windows || []).map((w) => w.pid)),
     });
     try {
-      spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'explorer.exe'), ['shell:AppsFolder\\' + id], { detached: true, stdio: 'ignore' }).unref();
+      await new Promise((resolve, reject) => {
+        const child = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'explorer.exe'), ['shell:AppsFolder\\' + id], { detached: true, stdio: 'ignore' });
+        child.once('error', reject);
+        child.once('spawn', () => { child.unref(); resolve(); });
+      });
+      if (!this._current(generation)) return;
       reply(true);
     } catch (e) {
+      if (!this._current(generation)) return;
       this.launched.delete(id);
       return reply(false, e.message);
     }
@@ -190,14 +217,16 @@ class PcApps {
       try {
         do {
           this.again = false;
-          if (!this.launched.size || this.link.status.state !== 'connected') return this._sync([]);
+          if (!this.launched.size || !this._current(this.generation)) return this._sync([]);
+          const generation = this.generation;
           const r = await this.helper.request('windows').catch(() => null);
+          if (!this._current(generation)) return;
           if (r && Array.isArray(r.windows)) this._match(r.windows);
         } while (this.again);
       } finally {
         this.ticking = false;
       }
-      if (this.launched.size && !this.timer) this.timer = setTimeout(tick, POLL_MS);
+      if (this._current(this.generation) && this.launched.size && !this.timer) this.timer = setTimeout(tick, POLL_MS);
     };
     this.timer = setTimeout(tick, 0);
   }
@@ -240,27 +269,34 @@ class PcApps {
       // Closed (no windows for 3 s), or never showed one in 30 s: stop following it.
       if ((a.had && now - a.lastSeen > 3000) || (!a.had && now - a.since > 30000)) this.launched.delete(a.id);
     }
-    this._sync(out.concat(pops)); // owners before their pop-ups
+    this._sync(out.concat(pops)).catch(() => {}); // owners before their pop-ups
   }
 
   // Send the window list on change; start/stop one stream per window.
   async _sync(list) {
+    const syncGeneration = ++this.syncGeneration;
     const key = JSON.stringify(list);
     if (key !== this.sentKey && this.link.status.state === 'connected') this.link.send({ t: T.PAPP_WINDOWS, windows: list });
     const changed = key !== this.sentKey;
     this.sentKey = key;
     this.windows = list;
     for (const wid of this.failed) if (!list.some((w) => w.wid === wid)) this.failed.delete(wid);
-    const want = this.macAccepts && this.allowed ? new Set(list.map((w) => w.wid)) : new Set();
+    const want = this.macAccepts && this._current(this.generation) ? new Set(list.map((w) => w.wid)) : new Set();
     for (const [wid, session] of this.streams) {
       if (!want.has(wid)) {
         this.streams.delete(wid);
         this.sender.stop(session);
       }
     }
+    if (!want.size) this.input.release();
     const start = [...want].filter((wid) => !this.streams.has(wid) && !this.failed.has(wid));
     if (start.length) {
-      const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }).catch(() => []);
+      if (!this.sourceLookup) {
+        this.sourceLookup = desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } })
+          .catch(() => []).finally(() => { this.sourceLookup = null; });
+      }
+      const sources = await this.sourceLookup;
+      if (syncGeneration !== this.syncGeneration || !this.macAccepts || !this._current(this.generation)) return;
       for (const wid of start) {
         if (this.streams.has(wid) || !this.windows.some((w) => w.wid === wid)) continue;
         const src = sources.find((s) => s.id.startsWith('window:' + wid + ':'));
@@ -272,7 +308,6 @@ class PcApps {
         this.streams.set(wid, session);
       }
     }
-    if (!list.length) this.input.release();
     if (changed) this.onChange();
   }
 
@@ -285,6 +320,13 @@ class PcApps {
 
   // Quit: stop the window streams (the apps keep running on the PC).
   shutdown() {
+    this.stopped = true;
+    this.generation++;
+    this.syncGeneration++;
+    clearTimeout(this.timer);
+    this.timer = null;
+    this.windows = [];
+    this.input.release();
     this.launched.clear();
     for (const session of this.streams.values()) this.sender.stop(session);
     this.streams.clear();

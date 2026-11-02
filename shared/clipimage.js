@@ -42,16 +42,20 @@ class ImageOut {
     const live = () => this.current === me && this.open();
     const head = { t: T.CLIP_IMAGE, id: me.id, w: dim(w), h: dim(h), bytes: png.length, parts };
     if (shot) head.shot = true;
-    if (!live() || this.sendFn(head) === false) return this._done(me, false);
-    for (let i = 0; i < parts; i++) {
-      while (this.backlog() > HIGH_WATER) {
+    try {
+      if (!live() || this.sendFn(head) === false) return this._done(me, false);
+      for (let i = 0; i < parts; i++) {
+        while (this.backlog() > HIGH_WATER) {
+          if (!live()) return this._done(me, false);
+          await sleep(15);
+        }
         if (!live()) return this._done(me, false);
-        await sleep(15);
+        if (this.sendFn({ t: T.CLIP_IMAGE_PART, id: me.id, i, data: png.subarray(i * PART, (i + 1) * PART).toString('base64') }) === false) return this._done(me, false);
       }
-      if (!live()) return this._done(me, false);
-      this.sendFn({ t: T.CLIP_IMAGE_PART, id: me.id, i, data: png.subarray(i * PART, (i + 1) * PART).toString('base64') });
+      return this._done(me, true);
+    } catch (_) {
+      return this._done(me, false);
     }
-    return this._done(me, true);
   }
 
   // A newer copy (or the session ended): what is still going stops.

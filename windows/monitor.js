@@ -46,24 +46,24 @@ api.onPacing((p) => {
 // Frame generation (optional, off by default): in-between frames when the stream is slower than
 // this screen, about one refresh of extra delay. Without WebGL2 it stays off.
 function frameGen(on) {
-  if (on && !fgOn) {
-    try {
-      if (!fg) fg = new window.FrameGen(video, fgCanvas);
-      fg.start();
-      fgOn = true;
-    } catch (err) {
-      console.warn('[monitor] frame generation unavailable:', err.message);
-    }
-  } else if (!on && fgOn) {
-    fg.stop();
-    fgOn = false;
-  }
+  fgOn = on;
   showFrameGen();
 }
 
-// The canvas keeps its last picture, so it shows only while there is video.
+// Keep the preference across reconnects; run the GPU loops only while there is video.
 function showFrameGen() {
-  const show = fgOn && !!video.srcObject;
+  let show = fgOn && !!video.srcObject;
+  if (show) {
+    try {
+      if (!fg) fg = new window.FrameGen(video, fgCanvas);
+      if (!fg.on) fg.start();
+    } catch (err) {
+      console.warn('[monitor] frame generation unavailable:', err.message);
+      if (fg) fg.stop();
+      fgOn = false;
+      show = false;
+    }
+  } else if (fg && fg.on) fg.stop();
   fgCanvas.classList.toggle('hidden', !show);
   document.body.classList.toggle('framegen', show);
 }
@@ -78,6 +78,8 @@ function closePc() {
   pc = null;
   session = null;
   pending = null;
+  lastIn = null;
+  lastSum = null;
   video.srcObject = null;
   audio.srcObject = null;
   showFrameGen();
@@ -98,6 +100,7 @@ async function onOffer(msg) {
   setOverlay(streamName ? 'Connecting to {name}…' : 'Connecting to the other computer…', { name: streamName });
 
   my.ontrack = (e) => {
+    if (my !== pc) return;
     if (e.track.kind === 'video') pace(e.receiver);
     else if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0; // sound: lowest latency
     if (e.track.kind === 'audio') { // the Mac's sound, played next to the muted video
@@ -120,10 +123,16 @@ async function onOffer(msg) {
 
   try {
     await my.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
-    for (const c of queue) await my.addIceCandidate(c).catch((err) => console.warn('ice', err.message));
     if (my !== pc) return;
     pending = null;
-    await my.setLocalDescription(await my.createAnswer());
+    for (const c of queue) {
+      if (my !== pc) return;
+      await my.addIceCandidate(c).catch((err) => console.warn('ice', err.message));
+    }
+    if (my !== pc) return;
+    const answer = await my.createAnswer();
+    if (my !== pc) return;
+    await my.setLocalDescription(answer);
     if (my !== pc) return;
     api.send({ t: T.RTC_ANSWER, session: msg.session, sdp: my.localDescription.sdp });
   } catch (err) {
@@ -161,7 +170,9 @@ playerI18n.onChange(renderStats);
 
 async function updateStats() {
   if (!pc) { statsSnapshot = null; playerI18n.text(statsBox, 'no video session'); return; }
-  const rep = await pc.getStats();
+  const my = pc;
+  const rep = await my.getStats();
+  if (my !== pc) return;
   let inb = null, pair = null;
   const byId = new Map();
   rep.forEach((r) => {
@@ -208,7 +219,9 @@ api.onToggleStats(toggleStats);
 let lastSum = null;
 async function reportStats() {
   if (!pc) { lastSum = null; return; }
-  const rep = await pc.getStats();
+  const my = pc;
+  const rep = await my.getStats();
+  if (my !== pc) return;
   let inb = null, pair = null;
   const byId = new Map();
   rep.forEach((r) => {

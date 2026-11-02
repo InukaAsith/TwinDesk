@@ -30,7 +30,7 @@ async function start(deviceId) {
     cur.stream = stream;
     const track = stream.getVideoTracks()[0];
     track.contentHint = 'motion';
-    track.onended = () => alive() && status('failed', 'the camera went away');
+    track.onended = () => { if (alive()) { status('failed', 'the camera went away'); stop(); } };
     const pc = (cur.pc = new RTCPeerConnection({ iceServers: [] }));
     const tr = pc.addTransceiver(track, { direction: 'sendonly', streams: [stream] });
     pc.onicecandidate = (e) => e.candidate && alive() && api.send({ t: 'ice', candidate: e.candidate.toJSON() });
@@ -39,7 +39,9 @@ async function start(deviceId) {
       if (pc.connectionState === 'connected') status('live');
       else if (pc.connectionState === 'failed') status('failed', 'no network path to the other computer');
     };
-    await pc.setLocalDescription(await pc.createOffer());
+    const offer = await pc.createOffer();
+    if (!alive()) return;
+    await pc.setLocalDescription(offer);
     if (!alive()) return;
     api.send({ t: 'offer', sdp: pc.localDescription.sdp }); // before its candidates
     const p = tr.sender.getParameters();
@@ -63,8 +65,13 @@ async function answer(sdp) {
   if (!cur || !cur.pc) return;
   try {
     await cur.pc.setRemoteDescription({ type: 'answer', sdp });
-    for (const c of cur.pending.splice(0)) await cur.pc.addIceCandidate(c).catch(() => {});
+    if (me !== cur || !cur.pending) return;
+    const queue = cur.pending;
     cur.pending = null;
+    for (const c of queue) {
+      if (me !== cur) return;
+      await cur.pc.addIceCandidate(c).catch(() => {});
+    }
   } catch (e) {
     if (me === cur) status('failed', e.message);
   }

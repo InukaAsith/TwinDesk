@@ -67,13 +67,16 @@ class KeyLayout {
     this.inShift = new Set(); // Shift held (receiving)
     this.outMods = new Set(); // Ctrl / Cmd / Alt held (sending)
     this.timer = null;
+    this.generation = 0;
   }
 
   // Ask the helper again (the layout may have changed): on every crossing, either way.
   refresh() {
+    const generation = ++this.generation;
     return Promise.resolve()
       .then(() => this.request('keyLayout', {}))
       .then((r) => {
+        if (generation !== this.generation) return;
         this.set(r && r.layout, r && r.shift);
         this.canType = !!(r && r.type === true);
         this.canSelect = !!(r && r.selectInput === true);
@@ -184,6 +187,7 @@ class KeyLayout {
 
   // Driven no more (or the helper released everything): nothing held.
   reset() {
+    ++this.generation;
     if (this.imHere) this.send('selectInput', { restore: true });
     this.imHere = null;
     this.mods.clear();

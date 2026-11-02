@@ -4,7 +4,15 @@
 'use strict';
 
 const assert = require('assert');
-const { Updates, pickAsset, formatReleaseNotes } = require('../updates.js');
+const { Updates, pickAsset, formatReleaseNotes, compare, parse } = require('../updates.js');
+
+const ordered = ['2.5.0-alpha', '2.5.0-alpha.1', '2.5.0-alpha.beta', '2.5.0-beta', '2.5.0-beta.2', '2.5.0-beta.10', '2.5.0-rc.1', '2.5.0'];
+for (let i = 1; i < ordered.length; i++) {
+  assert(compare(ordered[i], ordered[i - 1]) > 0, `${ordered[i]} follows ${ordered[i - 1]}`);
+  assert(compare(ordered[i - 1], ordered[i]) < 0);
+}
+assert.strictEqual(compare('v2.4.0+build.10', '2.4.0+build.2'), 0);
+for (const invalid of ['2.4.0junk', '2.4.0-beta..1', '2.4.0-', '2.4.0.1.2', '2.4.0-beta.01']) assert.strictEqual(parse(invalid), null, invalid);
 
 const files = (...names) => names.map((name) => ({ name, browser_download_url: 'https://example.invalid/' + name, size: 1 }));
 const pick = (assets, platform, arch, prefer) => (pickAsset(assets, platform, arch, prefer) || {}).name || null;
@@ -122,6 +130,17 @@ const u = new Updates({
   u.unskip();
   assert.strictEqual(savedSettings.updates.skipped, '');
   assert.strictEqual(u.status.skipped, false);
+
+  const stalled = new Updates({
+    current: '2.4.0', platform: 'win', getSettings: () => savedSettings, timeoutMs: 10,
+    fetch: (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('request timed out')), { once: true })),
+  });
+  const keepAlive = setTimeout(() => {}, 1000);
+  try {
+    await stalled.check(true);
+    assert.strictEqual(stalled.status.checking, false);
+    assert.match(stalled.status.error, /timed out/);
+  } finally { clearTimeout(keepAlive); }
 
   console.log('updates: ok');
 })();
