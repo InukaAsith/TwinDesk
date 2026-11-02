@@ -4,31 +4,35 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self'">
-  <title>Phone</title>
+  <title data-i18n="Phone">Phone</title>
   <link rel="stylesheet" href="phoneview.css">
 </head>
 <body>
   <header id="bar">
-    <button id="panelBtn" class="on" title="Show or hide the phone controls" aria-label="Show or hide the phone controls"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M12.5 4v12"/></svg></button>
+    <button id="panelBtn" class="on" data-i18n-title="Show or hide the phone controls" data-i18n-label="Show or hide the phone controls" title="Show or hide the phone controls" aria-label="Show or hide the phone controls"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M12.5 4v12"/></svg></button>
     <span id="title"></span>
     <span id="via" hidden></span>
     <span class="tools">
-      <button id="b-back" title="Back (Esc)" aria-label="Back"><svg viewBox="0 0 20 20"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg></button>
-      <button id="b-home" title="Home" aria-label="Home"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="5.5"/></svg></button>
-      <button id="b-recents" title="Recent apps" aria-label="Recent apps"><svg viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1.5"/></svg></button>
-      <button id="b-notifs" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 20 20"><path d="M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0"/></svg></button>
-      <button id="b-rotate" title="Rotate" aria-label="Rotate"><svg viewBox="0 0 20 20"><path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/></svg></button>
-      <button id="b-torch" title="Flashlight / Torch" aria-label="Torch"><svg viewBox="0 0 20 20"><path d="M7 3h6v4l-2 3v7H9v-7L7 7z"/></svg></button>
-      <button id="b-flip" title="Switch Camera" aria-label="Switch Camera"><svg viewBox="0 0 20 20"><path d="M3 7h14 M14 4l3 3-3 3 M17 13H3 M6 10l-3 3 3 3"/></svg></button>
-      <button id="b-zoomin" title="Zoom In" aria-label="Zoom In"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><line x1="13.5" y1="13.5" x2="18" y2="18"/><line x1="9" y1="6" x2="9" y2="12"/><line x1="6" y1="9" x2="12" y2="9"/></svg></button>
-      <button id="b-zoomout" title="Zoom Out" aria-label="Zoom Out"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><line x1="13.5" y1="13.5" x2="18" y2="18"/><line x1="6" y1="9" x2="12" y2="9"/></svg></button>
+      <button id="b-back" data-i18n-title="Back (Esc)" data-i18n-label="Back" title="Back (Esc)" aria-label="Back"><svg viewBox="0 0 20 20"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg></button>
+      <button id="b-home" data-i18n-title="Home" data-i18n-label="Home" title="Home" aria-label="Home"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="5.5"/></svg></button>
+      <button id="b-recents" data-i18n-title="Recent apps" data-i18n-label="Recent apps" title="Recent apps" aria-label="Recent apps"><svg viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1.5"/></svg></button>
+      <button id="b-notifs" data-i18n-title="Notifications" data-i18n-label="Notifications" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 20 20"><path d="M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0"/></svg></button>
+      <button id="b-rotate" data-i18n-title="Rotate" data-i18n-label="Rotate" title="Rotate" aria-label="Rotate"><svg viewBox="0 0 20 20"><path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/></svg></button>
+      <button id="b-torch" data-i18n-title="Light" data-i18n-label="Light" title="Flashlight / Torch" aria-label="Torch"><svg viewBox="0 0 20 20"><path d="M7 3h6v4l-2 3v7H9v-7L7 7z"/></svg></button>
+      <button id="b-flip" data-i18n-title="Front or back camera" data-i18n-label="Front or back camera" title="Switch Camera" aria-label="Switch Camera"><svg viewBox="0 0 20 20"><path d="M3 7h14 M14 4l3 3-3 3 M17 13H3 M6 10l-3 3 3 3"/></svg></button>
+      <button id="b-zoomin" data-i18n-title="Zoom in" data-i18n-label="Zoom in" title="Zoom In" aria-label="Zoom In"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><line x1="13.5" y1="13.5" x2="18" y2="18"/><line x1="9" y1="6" x2="9" y2="12"/><line x1="6" y1="9" x2="12" y2="9"/></svg></button>
+      <button id="b-zoomout" data-i18n-title="Zoom out" data-i18n-label="Zoom out" title="Zoom Out" aria-label="Zoom Out"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><line x1="13.5" y1="13.5" x2="18" y2="18"/><line x1="6" y1="9" x2="12" y2="9"/></svg></button>
     </span>
-    <button id="fullBtn" title="Fullscreen (F11)" aria-label="Fullscreen"><svg viewBox="0 0 20 20"><path d="M4 8V4h4 M12 4h4v4 M16 12v4h-4 M8 16H4v-4"/></svg></button>
+    <button id="fullBtn" data-i18n-title="Fullscreen (F11)" data-i18n-label="Fullscreen" title="Fullscreen (F11)" aria-label="Fullscreen"><svg viewBox="0 0 20 20"><path d="M4 8V4h4 M12 4h4v4 M16 12v4h-4 M8 16H4v-4"/></svg></button>
   </header>
   <main id="stage">
     <canvas id="screen" tabindex="0"></canvas>
-    <div id="status">Connecting to the phone…</div>
+    <div id="status" data-i18n="Connecting to the phone…">Connecting to the phone…</div>
   </main>
+  <script src="../shared/lang/en.js"></script>
+  <script src="../shared/lang/zh-CN.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="../shared/player-i18n.js"></script>
   <script src="../shared/vcam-feed.js"></script>
   <script src="phoneview-renderer.js"></script>
 </body>

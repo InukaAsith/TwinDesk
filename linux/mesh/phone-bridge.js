@@ -181,7 +181,7 @@ class PhoneBridge extends EventEmitter {
     const blocked = /xiaomi|redmi|poco/i.test(maker || '') && on === '0';
     if (blocked === this.inputBlocked) return;
     this.inputBlocked = blocked;
-    if (blocked) this.emit('popup', 'home', INPUT_BLOCKED);
+    if (blocked) this.emit('popup', 'home', { key: INPUT_BLOCKED });
     this._tellPhone();
     this.emit('change');
   }
@@ -480,8 +480,8 @@ class PhoneBridge extends EventEmitter {
   async installFull() {
     const apk = fullApk();
     const c = this.server.current;
-    if (!this.serial || !isPhone(c)) return this._install('failed', 'Set up wireless debugging first.');
-    if (!apk) return this._install('failed', 'This build of TwinDesk doesn’t carry the Android app.');
+    if (!this.serial || !isPhone(c)) return this._install('failed', 'Set up wireless debugging first.', { key: 'Set up wireless debugging first.' });
+    if (!apk) return this._install('failed', 'This build of TwinDesk doesn’t carry the Android app.', { key: 'This build of TwinDesk doesn’t carry the Android app.' });
     const id = c.deviceId;
     const serial = this.serial;
     this._install('installing', `Installing on ${c.name}…`);
@@ -490,18 +490,18 @@ class PhoneBridge extends EventEmitter {
     if (!/Success/.test(text)) {
       const why = /INSTALL_FAILED_USER_RESTRICTED/.test(text) ? 'The phone refused: allow “Install via USB” in Developer options (Xiaomi), then try again.'
         : (text.split('\n').pop() || 'no answer');
-      return this._install('failed', `Couldn’t install (${why})`);
+      return this._install('failed', `Couldn’t install (${why})`, { key: 'Couldn’t install ({error})', vars: { error: /INSTALL_FAILED_USER_RESTRICTED/.test(text) ? { key: why } : text.split('\n').pop() || { key: 'no answer' } } });
     }
     await this.adb.shell(serial, `cmd notification allow_listener ${APP_ID}/${APP_ID}.NotifListener`, { timeout: 8000 });
     await this.adb.shell(serial, `am start -n ${APP_ID}/.MainActivity`, { timeout: 8000 });
-    this._install('done', 'Installed. The phone’s notifications can show here now.');
+    this._install('done', 'Installed. The phone’s notifications can show here now.', { key: 'Installed. The phone’s notifications can show here now.' });
     setTimeout(() => this.phone.connect(id), 3000); // the app restarted: ask it to come back
   }
 
-  _install(state, message) {
+  _install(state, message, presentation) {
     this.install = { state, message };
     this.emit('change');
-    if (state !== 'installing') this.emit('popup', state === 'done' ? 'driven' : 'home', message);
+    if (state !== 'installing') this.emit('popup', state === 'done' ? 'driven' : 'home', presentation || message);
   }
 
   // ---- this computer's mouse and keyboard on the phone (Kvm drives us) ----
@@ -587,9 +587,9 @@ class PhoneBridge extends EventEmitter {
       setImmediate(() => this.server.inject({ t: T.KVM_REFUSE, route: m.route, why: P.REFUSE.NOT_ALLOWED }));
       if (d && (this.viaPhone || (this.state !== 'ready' && this.inputMode !== 'adb'))) { // no wireless debugging (Bluetooth), or chosen: the phone does it itself, once allowed
         this.server.sendToClient({ t: T.PHONE_INPUT_ASK });
-        this.emit('popup', 'home', 'On the phone, allow TwinDesk to control it (the notification there)');
+        this.emit('popup', 'home', { key: 'On the phone, allow TwinDesk to control it (the notification there)' });
       } else {
-        this.emit('popup', 'home', this.state === 'ready' ? 'The phone isn’t ready yet' : 'Set up wireless debugging on the Phone page first');
+        this.emit('popup', 'home', { key: this.state === 'ready' ? 'The phone isn’t ready yet' : 'Set up wireless debugging on the Phone page first' });
       }
       return;
     }
@@ -608,7 +608,7 @@ class PhoneBridge extends EventEmitter {
     this.kvm = { route: m.route, x, y, side, push: 0, buttons: 0, mouse: m.mouse !== false };
     console.log(`[phone] driving starts: entered at ${side} (${Math.round(x)},${Math.round(y)}) of ${d.w}x${d.h}`);
     this.keys.clear();
-    if (this.inputBlocked) this.emit('popup', 'home', INPUT_BLOCKED);
+    if (this.inputBlocked) this.emit('popup', 'home', { key: INPUT_BLOCKED });
     // Answer after Kvm's _take returns: it starts its "no answer" timer right after sending kvm.take.
     setImmediate(() => this.server.inject({ t: T.KVM_ACCEPT, route: m.route }));
     // The screen on for the pointer (WAKEUP does nothing when it's on already). Through scrcpy only:

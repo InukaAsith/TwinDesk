@@ -11,12 +11,13 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const I18n = require('../shared/i18n.js');
 
 const T = P.T;
 
 class Apps {
   // opts: link, allowed() (macApps.on), getMonitor() → BrowserWindow|null, popup(kind, text), peerName(), onChange(),
-  // onWatch() (an app window opened or closed: screen.policy may change)
+  // onWatch() (an app window opened or closed: screen.policy may change), getLanguage()
   constructor(opts) {
     Object.assign(this, opts);
     this.opening = new Map(); // id → placeholder window: the app's taskbar button until its first window
@@ -63,21 +64,24 @@ class Apps {
     this.message = '';
     if (!this.link.send({ t: T.APP_LAUNCH, id })) return;
     const a = this.list.find((x) => x.id === id);
-    const name = a ? a.name : this._shortcutName(id) || 'the app';
-    this.popup('away', 'Opening ' + name + ' on ' + this.peerName() + '…');
-    if (!this.windows.some((w) => w.id === id)) this._placeholder(id, name, a);
+    const appName = a ? a.name : this._shortcutName(id);
+    this.popup('away', { key: 'Opening {app} on {name}…', vars: { app: appName || { key: 'the app' }, name: this.peerName() } });
+    if (!this.windows.some((w) => w.id === id)) this._placeholder(id, appName, a);
     this.onChange();
   }
 
   // The app's taskbar button right away, busy until its first window arrives.
   _placeholder(id, name, a) {
     if (this.opening.has(id)) return;
+    const i18n = I18n.create(this.getLanguage ? this.getLanguage() : I18n.resolveLanguage('', app.getLocale()));
+    const text = i18n.t('Opening {app}…', { app: name || i18n.t('the app') });
+    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const win = new BrowserWindow({
-      width: 320, height: 120, show: false, title: 'Opening ' + name + '…', fullscreenable: false, backgroundColor: '#1e1e1f',
+      width: 320, height: 120, show: false, title: text, fullscreenable: false, backgroundColor: '#1e1e1f',
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
     });
     win.setMenu(null);
-    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<body style="margin:0;font:13px system-ui,Ubuntu,Cantarell,sans-serif;color:#aaa;background:#1e1e1f;display:grid;place-items:center;height:100vh">Opening ' + name.replace(/[<&]/g, '') + '…</body>'));
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<body style="margin:0;font:13px system-ui,Ubuntu,Cantarell,sans-serif;color:#aaa;background:#1e1e1f;display:grid;place-items:center;height:100vh">' + escaped + '</body>'));
     this._details(win, id, a);
     win.setProgressBar(2, { mode: 'indeterminate' });
     win.minimize(); // only its taskbar button shows

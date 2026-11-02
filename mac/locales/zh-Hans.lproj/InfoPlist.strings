@@ -1,4 +1,4 @@
-/* TwinDesk — GPL-3.0, see LICENSE. macOS owns the surrounding permission dialog. */
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. macOS owns the surrounding permission dialog. */
 "NSLocalNetworkUsageDescription" = "TwinDesk 需要在局域网中发现并连接你的其他电脑。";
 "NSMicrophoneUsageDescription" = "TwinDesk 需要在 Mac 与其他电脑之间传输声音。";
 "NSAudioCaptureUsageDescription" = "TwinDesk 需要将这台 Mac 的声音传输到其他电脑。";

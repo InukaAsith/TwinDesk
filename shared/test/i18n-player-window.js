@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Actual sandboxed standalone players with fake media events; no devices or native helpers.
 'use strict';
 if (!process.versions.electron) {

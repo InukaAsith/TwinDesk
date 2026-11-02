@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. Release data is local; no network or installed app is used.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. Release data is local; no network or installed app is used.
 'use strict';
 const assert = require('assert');
 const { Updates } = require('../updates');

@@ -9,3 +9,7 @@ contextBridge.exposeInMainWorld('appview', {
   send: (msg) => ipcRenderer.send('appview:out', msg),
   ready: () => ipcRenderer.send('appview:ready'),
 });
+
+contextBridge.exposeInMainWorld('playerLanguage', {
+  onChange: (fn) => ipcRenderer.on('ui-language', (_e, language) => fn(language)),
+});

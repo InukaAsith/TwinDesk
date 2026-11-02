@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. Fake call state only; no phone or native call operations.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. Fake call state only; no phone or native call operations.
 'use strict';
 if (!process.versions.electron) {
   console.log('i18n-callpop-window: run with Electron');

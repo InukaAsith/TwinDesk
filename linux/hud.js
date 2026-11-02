@@ -4,7 +4,8 @@
 // capture where the desktop supports it (not on X11), off with General › "Show a popup".
 // Copy of windows/hud.js. Transparent corners need a compositing window manager.
 const path = require('path');
-const { BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen } = require('electron');
+const I18n = require('../shared/i18n.js');
 
 const W = 380, H = 64, SHOW_MS = 1400;
 const BIG_W = 460, BIG_H = 230, BIG_MS = 2200; // the cursor sharing on/off card
@@ -28,7 +29,7 @@ class Hud {
     this.win.setAlwaysOnTop(true, 'screen-saver'); // over full-screen apps too
     this.win.setVisibleOnAllWorkspaces(true);
     this.win.setContentProtection(true); // where supported: never in the Mac's view of this screen
-    this.ready = this.win.loadFile(path.join(__dirname, 'hud.html'));
+    this.ready = this.win.loadFile(path.join(__dirname, 'hud.html'), { query: { language: I18n.resolveLanguage((this.getSettings().ui || {}).language, app.getLocale()) } });
     return this.ready;
   }
 

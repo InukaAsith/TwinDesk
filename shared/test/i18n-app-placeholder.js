@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. No application is launched or pinned.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. No application is launched or pinned.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');

@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. No native Bluetooth or call operations are performed.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. No native Bluetooth or call operations are performed.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');

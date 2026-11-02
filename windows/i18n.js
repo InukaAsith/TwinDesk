@@ -1,4 +1,4 @@
-// TwinDesk — Copyright (C) 2026. GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The main process resolves the system/saved preference before loading this window.
 'use strict';
 const I18n = TwinDeskI18n.create(new URLSearchParams(window.location.search).get('language'));
