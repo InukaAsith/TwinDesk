@@ -165,7 +165,8 @@ UI.tab({
       const cn = s.connect || {};
       const gp = g.pairing;
       ipBtn.disabled = !!cn.busy || !!(gp && gp.phase !== 'failed');
-      ipRow.setHint(gp && gp.phase === 'failed' ? gp.error : cn.message);
+      const staleHint = c && ((cn.pending && cn.pending.id === c.id) || (cn.inviting && cn.inviting.id === c.id));
+      ipRow.setHint(gp && gp.phase === 'failed' ? gp.error : staleHint ? '' : cn.message);
       ipRow.hint.classList.toggle('bad', !!(cn.error || (gp && gp.phase === 'failed')));
 
       // permissions
