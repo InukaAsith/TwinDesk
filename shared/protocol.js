@@ -216,6 +216,7 @@
       PAPP_FOCUS: 'papp.focus', // M->W {wid}
       PAPP_CLOSE: 'papp.close', // M->W {wid}
       PAPP_SIZE: 'papp.size', // M->W {wid, w, h} physical px
+      PAPP_RETURN: 'papp.return', // M->W {wid}: a window moved here (papp.windows moved: true) goes back, dragged past the edge home
       // A phone (os 'android') as the peer
       PHONE_INFO: 'phone.info', // phone->Mac {model, maker, sdk, release, battery?, charging?, colors: ['#rrggbb'], wallpaper?: data URL (small JPEG)}
       PHONE_APPS_LIST: 'phone.apps.list', // Mac->phone

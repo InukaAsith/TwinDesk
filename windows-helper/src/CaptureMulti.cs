@@ -136,6 +136,7 @@ namespace MacShare
                 Begin(true, EdgeKeyboard, side); // start capturing at once so no motion leaks, then tell main
                 saved = new Point(p.x, p.y);
                 Dictionary<string, object> d = Ev("edge");
+                AppWindows.AddMoving(d); // a window dragged with the move key goes over with the pointer (pcapps.js)
                 d["offset"] = Math.Round(offset, 4);
                 d["side"] = side;
                 emit(d);
@@ -167,6 +168,7 @@ namespace MacShare
                 lastCross = now;
                 if (Flash != null) Flash.Play(new Point(x, y), side, true); // leaving this PC for another device
                 Dictionary<string, object> d = Ev("return");
+                AppWindows.AddMoving(d); // a window dragged with the move key goes over with the pointer (pcapps.js)
                 d["offset"] = Math.Round(Screens.Offset(x, y, side), 4);
                 d["side"] = side;
                 emit(d);
