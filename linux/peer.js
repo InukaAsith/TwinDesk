@@ -98,6 +98,12 @@ class Peer {
     return !!(this.server && this.server.current);
   }
 
+  // link.js's authentication gate for features that use this adapter in either role (kvm.js's
+  // `connected`: without it the cursor never crossed).
+  get authed() {
+    return !!(this.hosting ? this.server.current.authed : this.link.authed);
+  }
+
   // The other computer's OS while a session runs (else the stored pairing's).
   get peerOs() {
     if (this.hosting) return this.server.current.os || P.OS.WIN;
