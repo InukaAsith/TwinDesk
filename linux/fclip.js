@@ -18,6 +18,7 @@ const fs = require('fs');
 const P = require('../shared/protocol.js');
 const fm = require('./fm');
 const pastefiles = require('../shared/pastefiles.js');
+const eclip = require('../shared/eclip.js');
 const { receivedDir } = require('../shared/received.js');
 
 const T = P.T;
@@ -155,7 +156,7 @@ class FileClip {
   async _clipboard() {
     const r = await this.helper.request('clipFiles').catch(() => null);
     const list = r ? filesIn(r.text) : [];
-    return list.length ? list : filesIn(electronClipboard());
+    return list.length ? list : filesIn(await electronClipboard());
   }
 
   async copy() {
@@ -218,14 +219,14 @@ class FileClip {
 }
 
 // The clipboard as Electron sees it (when TwinDesk is in front on Wayland, or on X11).
-function electronClipboard() {
+async function electronClipboard() {
   try {
-    const formats = clipboard.availableFormats();
+    const s = await eclip.snapshot(clipboard);
     for (const f of ['x-special/gnome-copied-files', 'text/uri-list']) {
-      const text = formats.includes(f) ? clipboard.readBuffer(f).toString('utf8') : '';
+      const text = s.formats.includes(f) ? (await s.raw(f)).toString('utf8') : '';
       if (text) return text;
     }
-    return clipboard.readText();
+    return String((await clipboard.readText()) || '');
   } catch (_) { return ''; }
 }
 

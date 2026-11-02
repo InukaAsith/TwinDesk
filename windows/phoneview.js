@@ -21,6 +21,7 @@ const P = require('../shared/protocol.js');
 const { Session, ACTION, TYPE } = require('./scrcpy');
 const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
+const { writeClipImage } = require('../shared/clipimage.js');
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
@@ -424,7 +425,7 @@ class PhoneViews extends EventEmitter {
     if (buf.readUInt32BE(0) !== 0x89504e47) return; // not a PNG
     const img = nativeImage.createFromBuffer(buf);
     if (img.isEmpty()) return;
-    clipboard.writeImage(img);
+    writeClipImage(clipboard, img, buf).catch(() => {}); // Electron 44: write(), shared/clipimage.js
     this.bridge.emit('popup', 'away', 'Screenshot copied: paste it with Ctrl+V');
   }
 

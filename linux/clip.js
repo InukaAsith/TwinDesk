@@ -5,25 +5,16 @@
 const { clipboard } = require('electron');
 const P = require('../shared/protocol.js');
 const { ClipImages, trimPictures, itemView } = require('../shared/clipimage.js');
+const eclip = require('../shared/eclip.js');
 
 // Newer Electron returns a Promise from clipboard.readText() in main; await works for both.
 const readText = async () => String((await clipboard.readText()) || '');
 const POLL_MS = 500; // instant mode: how often the clipboard is checked for a new copy
 const IMAGE_POLL_EVERY = 6; // … and, without the helper's word on a copy, for a new picture (every 3 s)
 const PREVIEW = 300; // characters kept per history item for the UI
-const hasImage = () => clipboard.availableFormats().some((f) => /^image\//.test(f));
-
-// Password managers mark secrets so clipboard tools leave them alone. clipboard.has() doesn't see
-// these registered formats; readBuffer() does (empty buffer = format absent).
-function isConcealed() {
-  try {
-    if (clipboard.readBuffer('ExcludeClipboardContentFromMonitorProcessing').length) return true;
-    if (clipboard.readBuffer('Clipboard Viewer Ignore').length) return true;
-    const b = clipboard.readBuffer('CanIncludeInClipboardHistory');
-    if (b && b.length >= 4 && b.readUInt32LE(0) === 0) return true;
-  } catch (_) { /* unknown format: not concealed */ }
-  return false;
-}
+// The clipboard's formats, a picture on it, a password manager's secret: shared/eclip.js (Electron 44
+// has no availableFormats/readBuffer).
+const isConcealed = () => eclip.isConcealed(clipboard);
 
 class Clip {
   // getSettings() → settings.clipboard; onChange() → the view changed;
@@ -109,13 +100,14 @@ class Clip {
     if (this.poll) return;
     // New copies only: what is already on the clipboard when instant mode starts stays here.
     readText().then((t) => { this.seen = t; });
-    this.formats = clipboard.availableFormats().join();
+    eclip.formats(clipboard).then((f) => { this.formats = f.join(); });
     this.copied = false;
     this.poll = setInterval(async () => {
       const t = await readText();
-      const formats = clipboard.availableFormats().join();
+      const list = await eclip.formats(clipboard);
+      const formats = list.join();
       // A new picture: the helper saw a copy, the formats changed, or (no helper) now and then.
-      const picture = !t && this.images.canSend && hasImage() &&
+      const picture = !t && this.images.canSend && list.some((f) => /^image\//.test(f)) &&
         (this.copied || formats !== this.formats || (!this.watched && ++this.ticks % IMAGE_POLL_EVERY === 0));
       this.copied = false;
       this.formats = formats;
@@ -160,9 +152,9 @@ class Clip {
     if (!c.enabled || !c.send || this.link.status.state !== 'connected') return;
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
     const text = await readText();
-    if (!text) return this._result(await this.images.offerClipboard(c.skipConcealed && isConcealed()));
+    if (!text) return this._result(await this.images.offerClipboard(c.skipConcealed && (await isConcealed())));
     if (text === this.lastSync.sent || text === this.lastSync.received) return;
-    if (c.skipConcealed && isConcealed()) {
+    if (c.skipConcealed && (await isConcealed())) {
       this.lastSync.sent = text; // don't retry this item
       return this._skip('skipped a password (concealed item)');
     }

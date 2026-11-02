@@ -168,7 +168,7 @@ class PeerApps {
   _createPopup(info) {
     const owner = this.wins.get(info.owner);
     const win = new BrowserWindow({
-      ...this._popupBounds(info), parent: owner.win, frame: false, focusable: false, resizable: false, movable: false,
+      ...this._popupBounds(info), parent: owner.win, frame: false, roundedCorners: false, focusable: false, resizable: false, movable: false,
       minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, show: false, hasShadow: true,
       backgroundColor: '#000000', webPreferences: this._webPrefs(),
     });

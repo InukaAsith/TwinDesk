@@ -20,7 +20,7 @@ class Hud {
   _ensure() {
     if (this.win && !this.win.isDestroyed()) return this.ready;
     this.win = new BrowserWindow({
-      width: W, height: H, show: false, frame: false, transparent: true, resizable: false, movable: false,
+      width: W, height: H, show: false, frame: false, roundedCorners: false, transparent: true, resizable: false, movable: false,
       focusable: false, skipTaskbar: true, hasShadow: false, alwaysOnTop: true, type: 'notification',
       webPreferences: { preload: path.join(__dirname, 'preload-hud.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
