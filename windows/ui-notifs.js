@@ -7,30 +7,30 @@
 UI.tab({
   id: 'notifications',
   order: 45,
-  title: 'Notifications',
+  title: I18n.t('Notifications'),
   icon: 'bell',
   color: 'linear-gradient(#ff6961, #ff3b30)',
-  desc: 'See one computer’s notifications on the other.',
+  desc: I18n.t('See one computer’s notifications on the other.'),
   // One switch for the whole tab (both directions); each direction is shared with the
   // other computer per pair (pair.sync), so flipping it there flips it here.
   master: { get: (s) => s.notifs.send || s.notifs.receive, set: (v) => UI.api.setNotifs({ send: v, receive: v }) },
   badge: (s) => (s.notifs.send || s.notifs.receive ? 'on' : ''),
   build(body) {
     const { el, api } = UI;
-    const hideSw = UI.switch((v) => api.setNotifs({ hideText: v }), { label: 'Hide message text' });
-    const hideRow = UI.row('Hide message text', 'Only the app and the title', [hideSw]);
+    const hideSw = UI.switch((v) => api.setNotifs({ hideText: v }), { label: I18n.t('Hide message text') });
+    const hideRow = UI.row(I18n.t('Hide message text'), I18n.t('Only the app and the title'), [hideSw]);
     const note = UI.note('info', '');
     const pair = UI.dirCards(
-      { on: { get: (s) => s.notifs.receive, set: (v) => api.setNotifs({ receive: v }) }, label: 'Show {name}’s notifications on {me}', rows: [] },
-      { on: { get: (s) => s.notifs.send, set: (v) => api.setNotifs({ send: v }) }, label: 'Show {me}’s notifications on {name}', rows: [hideRow] },
+      { on: { get: (s) => s.notifs.receive, set: (v) => api.setNotifs({ receive: v }) }, label: I18n.t('Show {name}’s notifications on {me}'), rows: [] },
+      { on: { get: (s) => s.notifs.send, set: (v) => api.setNotifs({ send: v }) }, label: I18n.t('Show {me}’s notifications on {name}'), rows: [hideRow] },
     );
     const recvRow = pair.a.main, sendRow = pair.b.main;
     const histList = el('div');
-    const clearBtn = UI.button('Clear', () => api.clearNotifHistory(), 'small');
-    const histCard = UI.card('Recent Notifications', [histList], clearBtn);
+    const clearBtn = UI.button(I18n.t('Clear'), () => api.clearNotifHistory(), 'small');
+    const histCard = UI.card(I18n.t('Recent Notifications'), [histList], clearBtn);
     const apps = el('div');
 
-    body.append(note, pair.el, histCard, UI.card('Apps', [apps]));
+    body.append(note, pair.el, histCard, UI.card(I18n.t('Apps'), [apps]));
 
     let key = '';
     let histKey = '';
@@ -41,9 +41,9 @@ UI.tab({
       pair.update(s);
       note.set('');
       hideSw.set(n.hideText);
-      recvRow.setHint(n.receive && n.shown ? n.shown + ' shown' : 'As Windows notifications, from TwinDesk');
-      sendRow.setHint(n.readable === false ? 'Windows’ notification list can’t be read'
-        : !n.send ? '' : !connected ? 'Also switches it on the other computer' : n.sent ? n.sent + ' sent' : 'As native notifications there');
+      recvRow.setHint(n.receive && n.shown ? I18n.t('{count} shown', { count: n.shown }) : I18n.t('As Windows notifications, from TwinDesk'));
+      sendRow.setHint(n.readable === false ? I18n.t('Windows’ notification list can’t be read')
+        : !n.send ? '' : !connected ? I18n.t('Also switches it on the other computer') : n.sent ? I18n.t('{count} sent', { count: n.sent }) : I18n.t('As native notifications there'));
 
       // Recent notifications
       const history = n.history || [];
@@ -55,11 +55,11 @@ UI.tab({
           histList.replaceChildren(...history.map((item) => {
             const appName = item.appName || item.app;
             const isPhone = UI.isPhone(s);
-            const openBtn = isPhone && item.app ? UI.button('Open', () => api.openNotifiedApp({ app: item.app, appName }), 'small') : null;
+            const openBtn = isPhone && item.app ? UI.button(I18n.t('Open'), () => api.openNotifiedApp({ app: item.app, appName }), 'small') : null;
             const time = UI.ago(item.at);
             const topText = [appName, item.title].filter(Boolean).join(' · ');
-            const subText = [item.subtitle, item.body].filter(Boolean).join(' — ') || 'Notification';
-            const r = UI.row(topText, `${subText} · ${time}`, [openBtn]);
+            const subText = [item.subtitle, item.body].filter(Boolean).join(' — ') || I18n.t('Notification');
+            const r = UI.row(topText, `${subText} · ${time}`, [openBtn], { literal: true });
             if (icons[item.app]) {
               const img = el('img', { src: icons[item.app], style: 'width: 20px; height: 20px; border-radius: 4px; margin-right: 8px; vertical-align: middle; flex-shrink: 0;' });
               r.querySelector('.text').prepend(img);
@@ -68,7 +68,7 @@ UI.tab({
             return r;
           }));
         } else {
-          histList.replaceChildren(UI.row('No notifications yet', 'Incoming notifications from WhatsApp, Instagram, and other apps will appear here in real-time.'));
+          histList.replaceChildren(UI.row(I18n.t('No notifications yet'), I18n.t('Incoming notifications from WhatsApp, Instagram, and other apps will appear here in real-time.')));
         }
       }
 
@@ -77,11 +77,11 @@ UI.tab({
       key = k;
       apps.replaceChildren(...(n.apps.length
         ? n.apps.map((a) => {
-          const sw = UI.switch((v) => api.muteNotifApp({ app: a.app, muted: !v }), { label: 'Send ' + a.appName });
+          const sw = UI.switch((v) => api.muteNotifApp({ app: a.app, muted: !v }), { label: I18n.t('Send {app}', { app: a.appName }) });
           sw.set(!n.muted.includes(a.app));
-          return UI.row(a.appName, '', [sw]);
+          return UI.row(a.appName, '', [sw], { literal: true });
         })
-        : [UI.row('No notifications yet', 'Apps show up here after their first notification while sending is on')]));
+        : [UI.row(I18n.t('No notifications yet'), I18n.t('Apps show up here after their first notification while sending is on'))]));
     };
   },
 });

@@ -70,7 +70,7 @@ class SendTo {
     if (!paths.length) return true;
     if (this.link.status.state !== 'connected') {
       this.pending = { paths, until: Date.now() + 30000 }; // sent once the link is up
-      this.popup('away', 'Not connected yet', 'Sending once ' + (this.peerName() || 'the other computer') + ' is connected');
+      this.popup('away', { key: 'Not connected yet' }, { key: 'Sending once {name} is connected', vars: { name: this.peerName() || { key: 'the other computer' } } });
       return true;
     }
     this._send(paths);
@@ -79,10 +79,10 @@ class SendTo {
 
   _send(paths) {
     const r = this.fileDrop.sendBatch(paths, 'send');
-    const who = this.peerName() || 'the other computer';
-    if (!r) return this.popup('away', 'Nothing to send', 'Couldn’t read ' + (paths.length === 1 ? path.basename(paths[0]) : 'those items'));
+    const who = this.peerName() || { key: 'the other computer' };
+    if (!r) return this.popup('away', { key: 'Nothing to send' }, { key: paths.length === 1 ? 'Couldn’t read {file}' : 'Couldn’t read those items', vars: { file: path.basename(paths[0]) } });
     const n = r.items.length;
-    this.popup('away', 'Sending ' + (n === 1 ? r.name : n + ' items') + ' to ' + who);
+    this.popup('away', { key: 'Sending {item} to {name}', vars: { item: n === 1 ? r.name : { key: '{count} items', vars: { count: n } }, name: who } });
   }
 }
 

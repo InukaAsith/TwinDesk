@@ -8,9 +8,12 @@
 'use strict';
 
 (function () {
+  const tr = (text, vars) => window.I18n ? window.I18n.t(text, vars)
+    : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
+
   const mac = /Mac/.test(navigator.platform);
   const linux = /Linux/.test(navigator.platform);
-  const kindWord = (o) => (o.kind === 'web' ? 'Page' : o.kind === 'doc' ? 'Document' : 'App');
+  const kindWord = (o) => (o.kind === 'web' ? tr('Page') : o.kind === 'doc' ? tr('Document') : tr('App'));
   const hostOf = (u) => { try { return new URL(u).host; } catch (_) { return ''; } };
   const size = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 
@@ -19,11 +22,11 @@
   UI.rezumeCard = function () {
     const { el, api } = UI;
     const icon = el('span', { class: 'rezume-icon' });
-    const open = UI.button('Open', () => api.rezumeDo({ a: 'take' }), 'small primary');
-    const dismiss = UI.button('Dismiss', () => api.rezumeDo({ a: 'dismiss' }), 'small');
-    const row = UI.row('', '', [open, dismiss]);
+    const open = UI.button(tr('Open'), () => api.rezumeDo({ a: 'take' }), 'small primary');
+    const dismiss = UI.button(tr('Dismiss'), () => api.rezumeDo({ a: 'dismiss' }), 'small');
+    const row = UI.row('', '', [open, dismiss], { literal: true });
     row.prepend(icon);
-    const wrap = UI.card('Continue from {name}', [row]);
+    const wrap = UI.card(tr('Continue from {name}'), [row]);
     wrap.hidden = true;
     let key = '';
     return {
@@ -39,7 +42,7 @@
           icon.replaceChildren(UI.appIcon(i.icon));
         }
         row.label.textContent = i.title || i.name || i.appName;
-        row.setHint(kindWord(i) + ' · ' + (i.kind === 'web' ? hostOf(i.url) : i.kind === 'doc' ? i.name + (i.size ? ', ' + size(i.size) : '') : (i.appName || i.app) + (h.mirrorReady ? ', in a window here' : ''))
+        row.setHint(kindWord(i) + ' · ' + (i.kind === 'web' ? hostOf(i.url) : i.kind === 'doc' ? i.name + (i.size ? ', ' + size(i.size) : '') : (h.mirrorReady ? tr('{app}, in a window here', { app: i.appName || i.app }) : (i.appName || i.app)))
           + (i.appName && i.kind !== 'app' ? ' · ' + i.appName : ''));
       },
     };
@@ -51,7 +54,7 @@
     title: 'ReZume',
     icon: 'rezume',
     color: 'linear-gradient(#64d2ff, #0a84ff)',
-    desc: 'Like Handoff on Apple devices: go on here with what you were doing on the other device, and the other way round.',
+    desc: tr('Like Handoff on Apple devices: go on here with what you were doing on the other device, and the other way round.'),
     badge: (s) => (s.rezume && s.rezume.on && s.rezume.incoming ? '1' : ''),
     master: {
       get: (s) => !!(s.rezume && s.rezume.on),
@@ -60,41 +63,49 @@
     },
     build(body) {
       const { api } = UI;
-      const set = (k) => UI.switch((v) => api.setReZume({ [k]: v }), { label: k });
+      const labels = {
+        web: 'Web pages', video: 'Videos', docs: 'Documents', apps: 'Phone apps', mirror: 'Mirror apps',
+        send: 'Send to {name}', receive: 'Take {name}’s', push: 'Open what’s sent at once', notify: 'Notification',
+        taskbar: mac ? 'Dock' : linux ? 'Taskbar or dock' : 'Taskbar', tray: mac ? 'Menu bar' : 'Tray', tab: 'Apps tab and Phone page',
+      };
+      const set = (k) => UI.switch((v) => api.setReZume({ [k]: v }), { label: tr(labels[k]) });
       const note = UI.note('warn', '');
       const info = UI.note('info', '');
+      info.setAttribute('data-literal', '');
       const offer = UI.rezumeCard();
 
       const status = UI.row('{name}', '');
-      const out = UI.row('Offered to {name}', '');
-      const push = UI.button('Send to {name}', () => api.rezumeDo({ a: 'push' }), 'small');
-      const outRow = UI.row('Send to {name}', 'Opens there now what was last in front here', [push]);
-      const now = UI.card('Now', [status, out, outRow]);
+      const out = UI.row('', '', [], { literal: true });
+      const push = UI.button(tr('Send to {name}'), () => api.rezumeDo({ a: 'push' }), 'small');
+      const outRow = UI.row('', tr('Opens there now what was last in front here'), [push], { literal: true });
+      const now = UI.card(tr('Now'), [status, out, outRow]);
 
       const sw = {};
       for (const k of ['web', 'video', 'docs', 'apps', 'mirror', 'send', 'receive', 'push', 'notify', 'taskbar', 'tray', 'tab']) sw[k] = set(k);
-      const webRow = UI.row('Web pages', 'The tab in front in Chrome, Edge, Firefox, Safari, Brave, Vivaldi, Opera or Arc', [sw.web.el]);
-      const videoRow = UI.row('Videos', 'A YouTube video playing here opens there at the same second', [sw.video.el]);
-      const docRow = UI.row('Documents', 'The file open in front (Word, Pages, Preview, a text editor…): it comes across and opens here', [sw.docs.el]);
-      const appRow = UI.row('Phone apps', 'The app in front on the phone', [sw.apps.el]);
-      const mirrorRow = UI.row('Mirror apps', 'A phone app opens here in a window of its own, as it was (wireless debugging)', [sw.mirror.el]);
-      const what = UI.card('What goes', [webRow, videoRow, docRow, appRow, mirrorRow]);
+      const webRow = UI.row(tr('Web pages'), tr('The tab in front in Chrome, Edge, Firefox, Safari, Brave, Vivaldi, Opera or Arc'), [sw.web.el]);
+      const videoRow = UI.row(tr('Videos'), tr('A YouTube video playing here opens there at the same second'), [sw.video.el]);
+      const docRow = UI.row(tr('Documents'), tr('The file open in front (Word, Pages, Preview, a text editor…): it comes across and opens here'), [sw.docs.el]);
+      const appRow = UI.row(tr('Phone apps'), tr('The app in front on the phone'), [sw.apps.el]);
+      const mirrorRow = UI.row(tr('Mirror apps'), tr('A phone app opens here in a window of its own, as it was (wireless debugging)'), [sw.mirror.el]);
+      const what = UI.card(tr('What goes'), [webRow, videoRow, docRow, appRow, mirrorRow]);
 
-      const sendRow = UI.row('Offer what’s in use on {me}', '{name} can go on with it', [sw.send.el]);
-      const recvRow = UI.row('Take {name}’s', 'What’s in use there shows here', [sw.receive.el]);
-      const pushRow = UI.row('Open what’s sent at once', 'Send to on {name} (its tray, the share sheet’s Open on computer) opens it here without asking', [sw.push.el]);
-      const ways = UI.card('Which ways', [sendRow, recvRow, pushRow]);
+      const sendRow = UI.row(tr('Offer what’s in use on {me}'), tr('{name} can go on with it'), [sw.send.el]);
+      const recvRow = UI.row(tr('Take {name}’s'), tr('What’s in use there shows here'), [sw.receive.el]);
+      const pushRow = UI.row(tr('Open what’s sent at once'), tr('Send to on {name} (its tray, the share sheet’s Open on computer) opens it here without asking'), [sw.push.el]);
+      const ways = UI.card(tr('Which ways'), [sendRow, recvRow, pushRow]);
 
-      const notifyRow = UI.row('Notification', 'A quiet one, replaced by the next', [sw.notify.el]);
-      const barRow = UI.row(mac ? 'Dock' : linux ? 'Taskbar or dock' : 'Taskbar', 'A button with the app’s icon: click it to go on', [sw.taskbar.el]);
-      const trayRow = UI.row(mac ? 'Menu bar' : 'Tray', 'Continue and Send to in its menu', [sw.tray.el]);
-      const tabRow = UI.row('Apps tab and Phone page', 'The card above, there too', [sw.tab.el]);
-      const where = UI.card('Where {name}’s shows', [notifyRow, barRow, trayRow, tabRow]);
+      const notifyRow = UI.row(tr('Notification'), tr('A quiet one, replaced by the next'), [sw.notify.el]);
+      const barRow = UI.row(mac ? tr('Dock') : linux ? tr('Taskbar or dock') : tr('Taskbar'), tr('A button with the app’s icon: click it to go on'), [sw.taskbar.el]);
+      const trayRow = UI.row(mac ? tr('Menu bar') : tr('Tray'), tr('Continue and Send to in its menu'), [sw.tray.el]);
+      const tabRow = UI.row(tr('Apps tab and Phone page'), tr('The card above, there too'), [sw.tab.el]);
+      const where = UI.card(tr('Where {name}’s shows'), [notifyRow, barRow, trayRow, tabRow]);
 
       body.append(note, offer.el, now, info, what, ways, where);
 
       return (s) => {
         const h = s.rezume || {};
+        out.label.textContent = UI.fill(tr('Offered to {name}'));
+        outRow.label.textContent = UI.fill(tr('Send to {name}'));
         for (const k of Object.keys(sw)) {
           sw[k].set(h[k]);
           sw[k].disable(!h.on);
@@ -103,25 +114,28 @@
         offer.update(s, true);
         const phone = !!h.phone;
         appRow.hidden = mirrorRow.hidden = !phone;
-        docRow.setHint(phone ? 'The file open in front here goes to the phone and opens there; the phone has none to send'
-          : 'The file open in front (Word, Pages, Preview, a text editor…): it comes across and opens on the other side');
-        mirrorRow.setHint(!h.mirrorReady ? 'Needs wireless debugging (Phone page): until then phone apps aren’t offered here'
-          : 'A phone app opens here in a window of its own, as it was');
-        status.setHint(!h.connected ? 'Not connected'
-          : !h.on ? 'Off here'
-            : !h.peerKnows ? 'No ReZume there yet: update TwinDesk on {name}'
-              : !h.peerOn ? 'Off on {name}: turn it on there too'
-                : phone && !h.peerDetects ? (h.mirrorReady ? 'Ready: the phone’s apps through wireless debugging (its pages need TwinDesk’s Accessibility there)' : 'Ready for pages and documents. For what’s in use on the phone, turn on TwinDesk’s Accessibility there, or wireless debugging')
-                  : h.incoming ? 'Ready: something to go on with, above' : 'Ready');
+        docRow.setHint(phone ? tr('The file open in front here goes to the phone and opens there; the phone has none to send')
+          : tr('The file open in front (Word, Pages, Preview, a text editor…): it comes across and opens on the other side'));
+        mirrorRow.setHint(!h.mirrorReady ? tr('Needs wireless debugging (Phone page): until then phone apps aren’t offered here')
+          : tr('A phone app opens here in a window of its own, as it was'));
+        status.setHint(!h.connected ? tr('Not connected')
+          : !h.on ? tr('Off here')
+            : !h.peerKnows ? tr('No ReZume there yet: update TwinDesk on {name}')
+              : !h.peerOn ? tr('Off on {name}: turn it on there too')
+                : phone && !h.peerDetects ? (h.mirrorReady ? tr('Ready: the phone’s apps through wireless debugging (its pages need TwinDesk’s Accessibility there)') : tr('Ready for pages and documents. For what’s in use on the phone, turn on TwinDesk’s Accessibility there, or wireless debugging'))
+                  : h.incoming ? tr('Ready: something to go on with, above') : tr('Ready'));
         out.hidden = !h.out;
         if (h.out) {
           out.setHint(h.out.title + (h.out.kind === 'web' ? ' · ' + hostOf(h.out.url) : h.out.kind === 'doc' ? ' · ' + h.out.name : ''));
         }
         outRow.hidden = !h.on || !h.connected;
         push.disabled = !h.last;
-        outRow.setHint(h.last ? 'Opens there now: ' + h.last.title : 'Nothing in front here to send yet');
-        note.set(h.on ? h.why : '');
-        info.set(h.on ? (h.waiting ? 'Getting ' + h.waiting + '…' : h.message) : '');
+        outRow.setHint(h.last ? tr('Opens there now: {title}', { title: h.last.title }) : tr('Nothing in front here to send yet'));
+        note.set(h.on ? tr(h.why || '') : '');
+        const template = h.message === '{name} has no ReZume yet: update TwinDesk there' || h.message === 'ReZume is off on {name}';
+        const message = h.on ? (h.waiting ? tr('Getting {item}…', { item: h.waiting }) : template ? tr(h.message, { name: UI.peer(s).name }) : tr(h.message || '')) : '';
+        info.textContent = message;
+        info.hidden = !message;
       };
     },
   });

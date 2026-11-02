@@ -30,6 +30,8 @@ function planConnect({ dev = null, address = '', pairedIds = [], hosts = [] } = 
       inviting: false,
       pending: pendingOf(dev.id, dev.name, dev.address),
       message: `Connecting to ${dev.name}…`,
+      messageKey: 'Connecting to {name}…',
+      messageVars: { name: dev.name },
     };
   }
 
@@ -46,6 +48,8 @@ function planConnect({ dev = null, address = '', pairedIds = [], hosts = [] } = 
       name,
       pending: pendingOf(host.id, name, addr),
       message: `Connecting to ${name}…`,
+      messageKey: 'Connecting to {name}…',
+      messageVars: { name },
     };
   }
 
@@ -59,6 +63,8 @@ function planConnect({ dev = null, address = '', pairedIds = [], hosts = [] } = 
       inviting: dev.os === P.OS.ANDROID,
       pending: pendingOf(dev.id, dev.name, dev.address),
       message: `Asked ${dev.name} to connect. Confirm on ${dev.name}.`,
+      messageKey: 'Asked {name} to connect. Confirm on {name}.',
+      messageVars: { name: dev.name },
     };
   }
 
@@ -78,7 +84,7 @@ function settleConnect(connect, client) {
   const pendingHit = !!(connect.pending && connect.pending.id === id);
   const inviteHit = !!(connect.inviting && connect.inviting.id === id);
   if (!pendingHit && !inviteHit) return null;
-  return { busy: false, message: '', error: false, pending: null, inviting: null };
+  return { busy: false, message: '', messageKey: '', messageVars: {}, error: false, pending: null, inviting: null };
 }
 
 // True when `id` already has a live session, so Connect by address must not cover it with a pending hint.

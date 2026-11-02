@@ -13,12 +13,12 @@
   <link rel="stylesheet" href="../shared/ui-device.css">
 </head>
 <body>
-  <nav id="sidebar" aria-label="Sections">
+  <nav id="sidebar" aria-label="Sections" data-i18n-label="Sections">
     <div class="identity">
       <div class="app-mark" aria-hidden="true"></div>
       <div class="who">
-        <div class="app-name">TwinDesk<span class="mesh-pill" title="Multi-device is on: Mesh mode, in beta">MESH <span>beta</span></span></div>
-        <div class="peer"><span id="peer-dot" class="dot"></span><span id="peer-text">Not paired</span></div>
+        <div class="app-name">TwinDesk<span class="mesh-pill" title="Multi-device is on: Mesh mode, in beta" data-i18n-title="Multi-device is on: Mesh mode, in beta">MESH <span>beta</span></span></div>
+        <div class="peer"><span id="peer-dot" class="dot"></span><span id="peer-text" data-i18n>Not paired</span></div>
       </div>
     </div>
     <div id="side-scroll">
@@ -30,18 +30,22 @@
   <main id="content">
     <section id="banner" class="banner" hidden>
       <div class="banner-text">
-        <div><strong id="pair-title">Pairing</strong></div>
-        <div id="pair-code-wrap"><span class="code-label">Code</span> <span id="pair-code" class="code"></span></div>
+        <div><strong id="pair-title" data-i18n>Pairing</strong></div>
+        <div id="pair-code-wrap"><span class="code-label" data-i18n>Code</span> <span id="pair-code" class="code"></span></div>
         <div id="pair-hint" class="hint"></div>
       </div>
       <div class="banner-actions">
-        <button id="pair-match" class="btn primary">Codes match</button>
-        <button id="pair-cancel" class="btn">Cancel</button>
+        <button id="pair-match" class="btn primary" data-i18n>Codes match</button>
+        <button id="pair-cancel" class="btn" data-i18n>Cancel</button>
       </div>
     </section>
     <div id="pages"></div>
   </main>
 
+  <script src="../shared/lang/en.js"></script>
+  <script src="../shared/lang/zh-CN.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="i18n.js"></script>
   <script src="../shared/protocol.js"></script>
   <script src="ui-kit.js"></script>
   <script src="../shared/otp.js"></script>

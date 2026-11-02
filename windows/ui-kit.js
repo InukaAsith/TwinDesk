@@ -142,22 +142,24 @@ const UI = {
   // A row: label (+ hint) on the left, controls on the right. Returns the row with .hint/.label.
   // Labels and hints may name the computers: {me} (this PC's name), {name} / {Name} (the other
   // one's, or "the other computer"); app.js fills them in again whenever a name changes.
-  row(label, hint, controls = [], { onClick } = {}) {
-    const lab = UI.el('span', { class: 'label', text: UI.fill(label) });
-    if (String(label).includes('{')) lab.dataset.peer = label;
-    const hintEl = UI.el('span', { class: 'hint', text: UI.fill(hint || '') });
-    if (String(hint || '').includes('{')) hintEl.dataset.peer = hint;
+  row(label, hint, controls = [], { onClick, literal = false } = {}) {
+    const fill = (text) => literal ? text || '' : UI.fill(text);
+    const lab = UI.el('span', { class: 'label', text: fill(label) });
+    if (!literal && String(label).includes('{')) lab.dataset.peer = label;
+    const hintEl = UI.el('span', { class: 'hint', text: fill(hint || '') });
+    if (!literal && String(hint || '').includes('{')) hintEl.dataset.peer = hint;
     if (!hint) hintEl.hidden = true;
     const row = UI.el('div', { class: 'row' }, [
       UI.el('div', { class: 'text' }, [lab, hintEl]),
       UI.el('div', { class: 'controls' }, [].concat(controls).map((c) => (c && c.el) || c)),
     ]);
+    if (literal) row.dataset.literal = '';
     row.label = lab;
     row.hint = hintEl;
     row.setHint = (t) => {
-      if (String(t || '').includes('{')) hintEl.dataset.peer = t;
+      if (!literal && String(t || '').includes('{')) hintEl.dataset.peer = t;
       else delete hintEl.dataset.peer;
-      hintEl.textContent = UI.fill(t || '');
+      hintEl.textContent = fill(t || '');
       hintEl.hidden = !t;
     };
     if (onClick) {
@@ -178,20 +180,22 @@ const UI = {
     return wrap;
   },
 
-  note(kind, text) {
-    const n = UI.el('div', { class: `note ${kind}`, text: UI.fill(text) });
-    n.set = (t) => { n.textContent = UI.fill(t || ''); n.hidden = !t; };
+  note(kind, text, { literal = false } = {}) {
+    const fill = (value) => literal ? value || '' : UI.fill(value);
+    const n = UI.el('div', { class: `note ${kind}`, text: fill(text) });
+    if (literal) n.dataset.literal = '';
+    n.set = (t) => { n.textContent = fill(t || ''); n.hidden = !t; };
     return n;
   },
 
   ago(ts) {
-    if (!ts) return 'never';
+    if (!ts) return I18n.t('never');
     const s = Math.round((Date.now() - ts) / 1000);
-    if (s < 10) return 'just now';
-    if (s < 60) return `${s} s ago`;
-    if (s < 3600) return `${Math.round(s / 60)} min ago`;
-    if (s < 86400) return `${Math.round(s / 3600)} h ago`;
-    return new Date(ts).toLocaleDateString();
+    if (s < 10) return I18n.t('just now');
+    if (s < 60) return I18n.t('{count} s ago', { count: s });
+    if (s < 3600) return I18n.t('{count} min ago', { count: Math.round(s / 60) });
+    if (s < 86400) return I18n.t('{count} h ago', { count: Math.round(s / 3600) });
+    return new Date(ts).toLocaleDateString(I18n.locale);
   },
 
   bytes(n) {
@@ -224,11 +228,11 @@ const UI = {
         const { el } = UI;
         body.append(
           el('div', { class: 'card soon keep-on' }, [
-            el('div', { class: 'soon-head' }, [el('span', { class: 'pill', text: 'Coming in phase ' + r.phase })]),
-            ...r.what.map(([t, d]) => el('div', { class: 'soon-item' }, [el('strong', { text: t }), el('div', { class: 'hint', text: d })])),
+            el('div', { class: 'soon-head' }, [el('span', { class: 'pill', text: I18n.t('Coming in phase {phase}', { phase: r.phase }) })]),
+            ...r.what.map(([t, d]) => el('div', { class: 'soon-item' }, [el('strong', { text: I18n.t(t) }), el('div', { class: 'hint', text: I18n.t(d) })])),
           ]),
-          UI.card('How it will work', [UI.row(r.how, '')], { cls: 'keep-on' }),
-          UI.card('Settings it will have', r.settings.map((label) => UI.row(label, '', [UI.switch(() => {}, { disabled: true, label })]))),
+          UI.card(I18n.t('How it will work'), [UI.row(I18n.t(r.how), '')], { cls: 'keep-on' }),
+          UI.card(I18n.t('Settings it will have'), r.settings.map((label) => UI.row(I18n.t(label), '', [UI.switch(() => {}, { disabled: true, label: I18n.t(label) })]))),
         );
       },
     });
@@ -239,12 +243,12 @@ const UI = {
   details(labels) {
     const vals = {};
     const rows = labels.map((label) => {
-      const r = UI.row(label, '');
-      vals[label] = UI.el('span', { class: 'value' });
+      const r = UI.row(I18n.t(label), '');
+      vals[label] = UI.el('span', { class: 'value', attrs: { 'data-literal': '' } });
       r.querySelector('.controls').append(vals[label]);
       return r;
     });
-    const card = UI.card('Details', rows);
+    const card = UI.card(I18n.t('Details'), rows);
     card.set = (map) => labels.forEach((label, i) => {
       const t = map[label];
       vals[label].textContent = t == null ? '' : String(t);
@@ -255,7 +259,29 @@ const UI = {
 
   // "Hardware" / "Software" from getStats' powerEfficient flag, with the implementation name.
   codecImpl(name, hw) {
-    return (hw ? 'Hardware' : 'Software') + (name ? ' (' + name + ')' : '');
+    return I18n.t(hw ? 'Hardware' : 'Software') + (name ? ' (' + name + ')' : '');
+  },
+
+  // The status message embeds the interface name; translate its template using structured data.
+  firewallHint(fw) {
+    if (fw.publicNets && fw.publicNets.length) {
+      return I18n.t('The network "{network}" is Public, so Windows blocks {name}’s broadcasts.', {
+        network: fw.publicNets[0].alias, name: UI.peer(UI.state).name,
+      });
+    }
+    return I18n.t(fw.message || '');
+  },
+
+  // Localize only the generated parts; keep monitor names, sizes and selection keys intact.
+  monitorLabel(value) {
+    const raw = String(value || '');
+    const main = raw.endsWith(' (main)');
+    const label = main ? raw.slice(0, -7) : raw;
+    const parts = /^(.*?)(, \d+ × \d+)?$/.exec(label);
+    const name = parts[1];
+    const monitor = /^Monitor (\d+)$/.exec(name);
+    const text = (name === 'Built-in screen' ? I18n.t('Built-in screen') : monitor ? I18n.t('Monitor {number}', { number: monitor[1] }) : name) + (parts[2] || '');
+    return main ? I18n.t('{display} (main)', { display: text }) : text;
   },
 
   // Who the other computer is: titles name what is connected. With a
@@ -265,12 +291,12 @@ const UI = {
   peer(s) {
     const p = s && s.peer;
     const os = p ? p.os : 'win';
-    const KIND = { mac: 'Mac', win: 'PC', linux: 'Linux', android: 'Phone' };
+    const KIND = { mac: 'Mac', win: 'PC', linux: 'Linux', android: I18n.t('Phone') };
     const same = os === 'win';
     // Device names everywhere: this PC by its own name,
     // the other computer by its name (or "the other computer" before anything was paired).
-    const me = (s && s.device && s.device.name) || 'This PC';
-    const name = (p && p.name) || 'the other computer';
+    const me = (s && s.device && s.device.name) || I18n.t('This PC');
+    const name = (p && p.name) || I18n.t('the other computer');
     const Name = name.charAt(0).toUpperCase() + name.slice(1);
     return {
       os, same, me, name, Name, phone: os === 'android',
@@ -292,10 +318,12 @@ const UI = {
     for (let n = w.nextNode(); n; n = w.nextNode()) if (re.test(n.nodeValue)) nodes.push(n);
     for (const n of nodes) {
       const el = n.parentElement;
+      if (el && el.closest('[data-literal]')) continue;
       if (el && el.childNodes.length === 1 && !el.dataset.peer) el.dataset.peer = n.nodeValue;
       n.nodeValue = UI.fill(n.nodeValue);
     }
     for (const el of root.querySelectorAll('[title*="{"], [aria-label*="{"]')) {
+      if (el.closest('[data-literal]')) continue;
       for (const a of ['title', 'aria-label']) if (el.hasAttribute(a)) el.setAttribute(a, UI.fill(el.getAttribute(a)));
     }
   },
@@ -304,15 +332,15 @@ const UI = {
   // pair.sync): one row used by Share and Receive. Returns the row with .render(state).
   paceRow() {
     const seg = UI.segmented([
-      { value: 'fast', label: 'Fastest' },
-      { value: 'smooth', label: 'Smooth' },
+      { value: 'fast', label: I18n.t('Fastest') },
+      { value: 'smooth', label: I18n.t('Smooth') },
     ], (v) => UI.api.setMonitor({ pacing: v }));
-    const row = UI.row('Playback', '', [seg]);
+    const row = UI.row(I18n.t('Playback'), '', [seg]);
     row.render = (s) => {
       const pace = (s.monitor && s.monitor.pacing) || 'fast';
       seg.set(pace);
-      row.setHint(pace === 'smooth' ? 'Even motion, about one frame later. The same on {name}'
-        : 'Each frame the moment it arrives. The same on {name}');
+      row.setHint(pace === 'smooth' ? I18n.t('Even motion, about one frame later. The same on {name}')
+        : I18n.t('Each frame the moment it arrives. The same on {name}'));
     };
     return row;
   },
@@ -356,10 +384,10 @@ const UI = {
     const make = (dir, def) => {
       const toMe = dir === 'm2p';
       const route = UI.el('span', { class: 'route', attrs: { role: 'img' } }, [node(!toMe), UI.el('span', { class: 'flow' }), node(toMe)]);
-      const head = UI.el('div', { class: 'dir-head' }, [route, def.soon ? UI.el('span', { class: 'pill muted', text: 'Coming in phase ' + def.soon }) : null]);
+      const head = UI.el('div', { class: 'dir-head' }, [route, def.soon ? UI.el('span', { class: 'pill muted', text: I18n.t('Coming in phase {phase}', { phase: def.soon }) }) : null]);
       let sw = null, main = null;
       if (def.on) {
-        const label = def.label || (toMe ? '{name} on {me}' : '{me} on {name}');
+        const label = def.label || I18n.t(toMe ? '{name} on {me}' : '{me} on {name}');
         sw = UI.switch((v) => def.on.set(v), { label: UI.fill(label), disabled: !!def.on.disabled || !!def.soon });
         main = UI.row(label, def.hint || '', [sw.el]);
         main.classList.add('dir-main');
@@ -388,7 +416,7 @@ const UI = {
   keyRecorder(onChange, opts = {}) {
     const b = UI.el('button', { class: 'btn small keyrec' });
     let value = '', recording = false;
-    const show = () => { b.textContent = recording ? 'Press keys…' : UI.keysLabel(value) || 'None'; b.classList.toggle('on', recording); };
+    const show = () => { b.textContent = recording ? I18n.t('Press keys…') : UI.keysLabel(value) || I18n.t('None'); b.classList.toggle('on', recording); };
     const keyOf = (e) => {
       if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
       if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
@@ -421,20 +449,20 @@ const UI = {
 
   // The hotkey choices (P.HOTKEYS) as this PC names them.
   // Right, left or either side (P.HOTKEYS), in this PC's words ("Left Ctrl", "Alt (either side)").
-  HOTKEYS: Object.fromEntries(window.MacShareProtocol.HOTKEYS.map((c) => [c, window.MacShareProtocol.hotkeyName(c, 'win')])),
+  HOTKEYS: Object.fromEntries(window.MacShareProtocol.HOTKEYS.map((c) => [c, I18n.t(window.MacShareProtocol.hotkeyName(c, 'win'))])),
   hotkeyName(s) {
-    return UI.P.hotkeyName((s && s.keys && s.keys.hotkey) || 'AltRight', 'win');
+    return I18n.t(UI.P.hotkeyName((s && s.keys && s.keys.hotkey) || 'AltRight', 'win'));
   },
 
   // Cursor tab › Cursor lock (shared/cursorlock.js): the switch is not a setting, it lasts until the
   // pointer is moved some other way; the lock key is (settings.keys.lockKeys).
   cursorLock() {
-    const lock = UI.switch((v) => UI.api.setKvm({ locked: v }), { label: 'Lock the cursor' });
-    const lockRow = UI.row('Lock the cursor', '', [lock]);
+    const lock = UI.switch((v) => UI.api.setKvm({ locked: v }), { label: I18n.t('Lock the cursor') });
+    const lockRow = UI.row(I18n.t('Lock the cursor'), '', [lock], { literal: true });
     const key = UI.keyRecorder((v) => UI.api.setKeys({ lockKeys: v }), { bare: true });
-    const keyRow = UI.row('Lock key', 'Scroll Lock or F13–F24 on its own, or a combination with Ctrl, Alt or Win', [key.el]);
+    const keyRow = UI.row(I18n.t('Lock key'), I18n.t('Scroll Lock or F13–F24 on its own, or a combination with Ctrl, Alt or Win'), [key.el]);
     return {
-      el: UI.card('Cursor lock', [lockRow, keyRow]),
+      el: UI.card(I18n.t('Cursor lock'), [lockRow, keyRow]),
       update(s) {
         const k = s.kvmState;
         const connected = s.link.state === 'connected';
@@ -443,10 +471,10 @@ const UI = {
         lock.disable(!connected);
         key.set(s.keys.lockKeys);
         const where = k.mode === 'driving' ? p.name : p.me;
-        const press = s.keys.lockKeys ? ' While the pointer is on ' + p.me + ', ' + UI.keysLabel(s.keys.lockKeys) + ' on either keyboard locks or unlocks it (each computer has its own key).' : '';
-        lockRow.setHint(k.lockError ? k.lockError : !connected ? 'Keeps the pointer on one computer, even when the mouse is plugged into another.' + press
-          : k.locked ? 'The pointer stays on ' + where + ': the screen edges don’t cross.' + press
-            : 'Keeps the pointer on ' + where + ', where it is now, even when the mouse is plugged into another computer.' + press);
+        const press = s.keys.lockKeys ? I18n.t(' While the pointer is on {me}, {keys} on either keyboard locks or unlocks it (each computer has its own key).', { me: p.me, keys: UI.keysLabel(s.keys.lockKeys) }) : '';
+        lockRow.setHint(k.lockError ? k.lockError : !connected ? I18n.t('Keeps the pointer on one computer, even when the mouse is plugged into another.') + press
+          : k.locked ? I18n.t('The pointer stays on {where}: the screen edges don’t cross.', { where }) + press
+            : I18n.t('Keeps the pointer on {where}, where it is now, even when the mouse is plugged into another computer.', { where }) + press);
       },
     };
   },
@@ -454,20 +482,20 @@ const UI = {
   // "Right now" row for the Cursor/Keyboard tabs: where input is + the last KVM event.
   inputStatus() {
     const pill = UI.el('span', { class: 'pill' });
-    const row = UI.row('Keyboard and mouse', '', [pill]);
+    const row = UI.row(I18n.t('Keyboard and mouse'), '', [pill], { literal: true });
     row.update = (s) => {
       const k = s.kvmState;
       const p = UI.peer(s);
-      const WHERE = { home: 'On ' + p.me, driving: 'On ' + p.name, driven: p.Name + ' is using ' + p.me };
+      const WHERE = { home: I18n.t('On {name}', { name: p.me }), driving: I18n.t('On {name}', { name: p.name }), driven: I18n.t('{name} is using {me}', { name: p.Name, me: p.me }) };
       const off = k.linked === false || k.paused;
-      pill.textContent = off ? 'Sharing off' : (k.locked ? 'Locked · ' : '') + (WHERE[k.mode] || WHERE.home);
+      pill.textContent = off ? I18n.t('Sharing off') : k.locked ? I18n.t('Locked · {status}', { status: WHERE[k.mode] || WHERE.home }) : (WHERE[k.mode] || WHERE.home);
       pill.className = 'pill ' + (off ? 'bad' : k.mode === 'home' ? 'muted' : 'good');
       row.setHint(k.helper && k.helper !== 'starting' ? k.helper
-        : k.linked === false ? 'Cursor sharing is off. Double-tap ' + UI.hotkeyName(s) + ' to turn it on.'
-        : k.paused ? 'Cursor sharing is off over Bluetooth. It comes back on Wi-Fi, or double-tap ' + UI.hotkeyName(s) + ' to turn it on.'
-        : s.link.state !== 'connected' ? 'Waiting for ' + p.the
-          : k.mode === 'home' && !k.message ? 'Connected to ' + p.name + '. Double-tap ' + UI.hotkeyName(s) + ' to turn cursor sharing off.'
-          : k.message || 'Double-tap ' + UI.hotkeyName(s) + ({ home: ' to turn cursor sharing off', driving: ' to come back and turn cursor sharing off', driven: ' to take it back' }[k.mode] || ''));
+        : k.linked === false ? I18n.t('Cursor sharing is off. Double-tap {key} to turn it on.', { key: UI.hotkeyName(s) })
+        : k.paused ? I18n.t('Cursor sharing is off over Bluetooth. It comes back on Wi-Fi, or double-tap {key} to turn it on.', { key: UI.hotkeyName(s) })
+        : s.link.state !== 'connected' ? I18n.t('Waiting for {name}', { name: p.the })
+          : k.mode === 'home' && !k.message ? I18n.t('Connected to {name}. Double-tap {key} to turn cursor sharing off.', { name: p.name, key: UI.hotkeyName(s) })
+          : k.message ? I18n.t(k.message, p) : I18n.t('Double-tap {key}{action}', { key: UI.hotkeyName(s), action: I18n.t({ home: ' to turn cursor sharing off', driving: ' to come back and turn cursor sharing off', driven: ' to take it back' }[k.mode] || '') }));
     };
     return row;
   },

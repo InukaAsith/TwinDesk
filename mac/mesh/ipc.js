@@ -61,6 +61,7 @@ const SCHEMA = {
 
 function setupIpc(ctx) {
   const { settings, pushState } = ctx;
+  const t = ctx.t || ((text) => text);
 
   function save() {
     store.saveSettings(settings);
@@ -76,8 +77,8 @@ function setupIpc(ctx) {
   // "Connect by address" / Pair on a found device: a computer that dials us is invited,
   // a computer this Mac dials (a Mac, Windows or Linux host) is dialled.
   const connect = ctx.state.connect;
-  const report = (message, error = false, pending = null) => {
-    Object.assign(connect, { busy: false, message, error, pending });
+  const report = (message, error = false, pending = null, messageKey = '', messageVars = {}) => {
+    Object.assign(connect, { busy: false, message, error, pending, messageKey, messageVars });
     pushState();
   };
   const up = (id) => {
@@ -117,7 +118,7 @@ function setupIpc(ctx) {
         connect.inviting = inv;
         setTimeout(() => { if (connect.inviting === inv) { connect.inviting = null; pushState(); } }, 60 * 1000);
       }
-      return report(plan.message, false, plan.pending);
+      return report(plan.message, false, plan.pending, plan.messageKey, plan.messageVars);
     }
     if (plan.action === 'dial') {
       const l = link.get(plan.id);
@@ -133,7 +134,7 @@ function setupIpc(ctx) {
           ctx.server.server.release(inbound);
           setTimeout(() => l.connect(true), 800);
         } else l.connect(true);
-        return report(plan.message, false, plan.pending);
+        return report(plan.message, false, plan.pending, plan.messageKey, plan.messageVars);
       }
     }
     report('');
@@ -145,7 +146,7 @@ function setupIpc(ctx) {
       const address = String(text || '').trim();
       if (!/^(\d{1,3})(\.\d{1,3}){3}$/.test(address)) return report('Type an address like 192.168.1.20.', true);
       if (ctx.state.addresses.includes(address)) return report('That’s this Mac.', true);
-      Object.assign(connect, { busy: true, message: `Looking at ${address}…`, error: false });
+      Object.assign(connect, { busy: true, message: `Looking at ${address}…`, error: false, messageKey: 'Looking at {address}…', messageVars: { address } });
       pushState();
       const dev = await ctx.discovery.ask(address);
       connectTo(dev, address); // no answer: try the WSS port directly (a Mac host answers there)
@@ -189,8 +190,8 @@ function setupIpc(ctx) {
       if (!arg || typeof arg.id !== 'string' || !/^[\w.]{1,200}$/.test(arg.id)) return;
       const name = String(arg.name || arg.id).slice(0, 100);
       Menu.buildFromTemplate([
-        { label: 'Open in a Window', click: () => ctx.phoneViews.openApp(arg.id, name) },
-        { label: 'Add to Dock', click: () => ctx.phoneViews.pin(arg.id, name) },
+        { label: t('Open in a Window'), click: () => ctx.phoneViews.openApp(arg.id, name) },
+        { label: t('Add to Dock'), click: () => ctx.phoneViews.pin(arg.id, name) },
       ]).popup();
     },
     phoneInstallFull() {
@@ -374,7 +375,7 @@ function setupIpc(ctx) {
       if (list.length && ctx.server.current) ctx.fileSend.sendBatch(list, 'send');
     },
     async chooseSendFiles() {
-      const r = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: 'Send' });
+      const r = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: t('Send') });
       if (!r.canceled) actions.sendFiles(r.filePaths);
     },
     setNotifs(partial) {
@@ -391,7 +392,7 @@ function setupIpc(ctx) {
       if (bundle.endsWith('.app')) shell.showItemInFolder(bundle);
     },
     async pickDropFolder() {
-      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Use This Folder' });
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Use This Folder') });
       if (r.canceled || !r.filePaths[0]) return;
       settings.files.folder = r.filePaths[0];
       save();
@@ -414,7 +415,7 @@ function setupIpc(ctx) {
       else ctx.smb.stopSharing();
     },
     async chooseShareFolder() {
-      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Share This Folder' });
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Share This Folder') });
       if (r.canceled || !r.filePaths[0]) return;
       if (settings.smb.sharing) await ctx.smb.stopSharing();
       settings.smb.folder = r.filePaths[0];
@@ -571,6 +572,12 @@ function setupIpc(ctx) {
     notifReply(r) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text)); // a chat app's conversation (shared/chats.js)
       if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
+    },
+    setLanguage(language) {
+      if (!['en', 'zh-CN'].includes(language) || settings.ui.language === language) return;
+      settings.ui.language = language;
+      save();
+      if (ctx.onLanguage) ctx.onLanguage();
     },
     setTab(tab) {
       if (!TABS.includes(tab)) return;

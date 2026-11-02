@@ -6,9 +6,9 @@ UI.tab({
   id: 'files',
   group: 'Share',
   order: 50,
-  title: 'File Sharing',
+  title: I18n.t('File Sharing'),
   icon: 'globe',
-  desc: 'Drag files between your computers, or share a folder.',
+  desc: I18n.t('Drag files between your computers, or share a folder.'),
   color: 'linear-gradient(#64d2ff, #0a84ff)',
   badge: (s) => (s.files && s.files.acceptDrops ? 'on' : ''),
   build(body) {
@@ -16,28 +16,28 @@ UI.tab({
     const tilde = (p) => String(p || '').replace(/^\/Users\/[^/]+/, '~');
 
     // Mac -> PC
-        const shareSw = UI.switch((v) => api.setShareMac(v), { label: 'Share a folder' });
-    const chooseBtn = UI.button('Choose…', () => api.chooseShareFolder(), 'small');
-    const shareRow = UI.row('Share a folder with {name}', '', [chooseBtn, shareSw]);
+        const shareSw = UI.switch((v) => api.setShareMac(v), { label: I18n.t('Share a folder') });
+    const chooseBtn = UI.button(I18n.t('Choose…'), () => api.chooseShareFolder(), 'small');
+    const shareRow = UI.row(I18n.t('Share a folder with {name}'), '', [chooseBtn, shareSw], { literalHint: true });
     // PC -> Mac
-    const acceptSw = UI.switch((v) => api.setFiles({ acceptDrops: v }), { label: 'Accept files' });
-    const acceptRow = UI.row('Accept files from {name}', '', [acceptSw]);
-    const pcSw = UI.switch((v) => api.setSmb({ connectPc: v }), { label: 'Connect the shared folder' });
-    const openBtn = UI.button('Open', () => api.openPcShare(), 'small');
-    const pcRow = UI.row('Open {name}’s shared folder', '', [openBtn, pcSw]);
+    const acceptSw = UI.switch((v) => api.setFiles({ acceptDrops: v }), { label: I18n.t('Accept files') });
+    const acceptRow = UI.row(I18n.t('Accept files from {name}'), '', [acceptSw]);
+    const pcSw = UI.switch((v) => api.setSmb({ connectPc: v }), { label: I18n.t('Connect the shared folder') });
+    const openBtn = UI.button(I18n.t('Open'), () => api.openPcShare(), 'small');
+    const pcRow = UI.row(I18n.t('Open {name}’s shared folder'), '', [openBtn, pcSw], { literalHint: true });
     // shared
-    const dragSw = UI.switch((v) => api.setFiles({ dragEdge: v }), { label: 'Drag files across the screen edge' });
-    const dragRow = UI.row('Drag files between computers', 'Drag through the screen edge and drop anywhere', [dragSw]);
-    const reveal = UI.switch((v) => api.setFiles({ reveal: v }), { label: 'Show in Finder' });
-    const folderRow = UI.row('Save to', '', [UI.button('Choose…', () => api.pickDropFolder(), 'small'), UI.button('Downloads', () => api.resetDropFolder(), 'small')]);
+    const dragSw = UI.switch((v) => api.setFiles({ dragEdge: v }), { label: I18n.t('Drag files across the screen edge') });
+    const dragRow = UI.row(I18n.t('Drag files between computers'), I18n.t('Drag through the screen edge and drop anywhere'), [dragSw], { literalHint: true });
+    const reveal = UI.switch((v) => api.setFiles({ reveal: v }), { label: I18n.t('Show in Finder') });
+    const folderRow = UI.row(I18n.t('Save to'), '', [UI.button(I18n.t('Choose…'), () => api.pickDropFolder(), 'small'), UI.button(I18n.t('Downloads'), () => api.resetDropFolder(), 'small')], { literalHint: true });
     const progress = el('div');
     const list = el('div', { class: 'history' });
 
     // Send files: drop zone + Choose…
-    const zoneText = el('div', { class: 'big', text: 'Drop files or folders here' });
-    const zone = el('div', { class: 'dropzone' }, [el('div', {}, [zoneText, el('div', { class: 'hint', text: 'They go to the other computer’s Downloads' })])]);
-    const sendBtn = UI.button('Choose…', () => api.chooseSendFiles(), 'small');
-    const sendRow = UI.row('Send files', '', [sendBtn]);
+    const zoneText = el('div', { class: 'big', text: I18n.t('Drop files or folders here') });
+    const zone = el('div', { class: 'dropzone' }, [el('div', {}, [zoneText, el('div', { class: 'hint', text: I18n.t('They go to the other computer’s Downloads') })])]);
+    const sendBtn = UI.button(I18n.t('Choose…'), () => api.chooseSendFiles(), 'small');
+    const sendRow = UI.row(I18n.t('Send files'), '', [sendBtn], { literalHint: true });
     const sendBar = el('div', { class: 'bar' }, [el('span')]);
     sendBar.hidden = true;
     sendRow.querySelector('.text').append(sendBar);
@@ -55,12 +55,12 @@ UI.tab({
     window.addEventListener('drop', (e) => e.preventDefault());
 
     // Copy and paste files with shortcuts
-    const keysSw = UI.switch((v) => api.setFiles({ shortcuts: v }), { label: 'Copy and paste files with shortcuts' });
+    const keysSw = UI.switch((v) => api.setFiles({ shortcuts: v }), { label: I18n.t('Copy and paste files with shortcuts') });
     const copyRec = UI.keyRecorder((v) => api.setFiles({ copyKeys: v }));
     const pasteRec = UI.keyRecorder((v) => api.setFiles({ pasteKeys: v }));
-    const keysRow = UI.row('Copy and paste files', '', [keysSw]);
-    const copyRow = UI.row('Copy', 'Select files in Finder first', [copyRec]);
-    const pasteRow = UI.row('Paste', '', [pasteRec]);
+    const keysRow = UI.row(I18n.t('Copy and paste files'), '', [keysSw], { literalHint: true });
+    const copyRow = UI.row(I18n.t('Copy'), I18n.t('Select files in Finder first'), [copyRec]);
+    const pasteRow = UI.row(I18n.t('Paste'), '', [pasteRec], { literalHint: true });
 
     body.append(
       UI.card('', [sendRow, zone], { cls: 'keep-on' }),
@@ -71,11 +71,11 @@ UI.tab({
       ),
       UI.card('', [dragRow], { cls: 'keep-on' }),
       progress,
-      UI.card('Arriving files', [
+      UI.card(I18n.t('Arriving files'), [
         folderRow,
-        UI.row('Show in Finder', '', [reveal]),
+        UI.row(I18n.t('Show in Finder'), '', [reveal]),
       ]),
-      UI.card('Recent', [list]),
+      UI.card(I18n.t('Recent'), [list]),
     );
 
     let key = '';
@@ -87,44 +87,44 @@ UI.tab({
       // Send files
       canSend = !!s.client;
       zone.classList.toggle('off', !canSend);
-      zoneText.textContent = canSend ? 'Drop files or folders here' : 'Connect to send files';
+      zoneText.textContent = canSend ? I18n.t('Drop files or folders here') : I18n.t('Connect to send files');
       sendBtn.disabled = !canSend;
       const out = f.sending.reduce((a, r) => [a[0] + r.sent, a[1] + r.size], [0, 0]);
       sendBar.hidden = !f.sending.length;
       sendBar.firstChild.style.width = `${Math.floor((100 * out[0]) / Math.max(1, out[1]))}%`;
-      sendRow.setHint(f.sending.length ? `Sending ${f.sending.length} file${f.sending.length === 1 ? '' : 's'} to ${pc}` : canSend ? `To ${pc}` : '');
+      sendRow.setHint(f.sending.length ? I18n.t(f.sending.length === 1 ? 'Sending {count} file to {device}' : 'Sending {count} files to {device}', { count: f.sending.length, device: pc }) : canSend ? I18n.t('To {device}', { device: pc }) : '');
       // Shortcuts
       const ck = f.clip || {};
       keysSw.set(f.shortcuts !== false);
       copyRec.set(f.copyKeys);
       pasteRec.set(f.pasteKeys);
-      keysRow.setHint(ck.error || `Select files, press ${UI.keysLabel(f.copyKeys)}, then ${UI.keysLabel(f.pasteKeys)} on ${pc}`);
+      keysRow.setHint(ck.error || I18n.t('Select files, press {copy}, then {paste} on {device}', { copy: UI.keysLabel(f.copyKeys), paste: UI.keysLabel(f.pasteKeys), device: pc }));
       keysRow.hint.classList.toggle('bad', !!ck.error);
-      pasteRow.setHint(ck.pasting ? 'Pasting…'
-        : ck.incoming ? `${pc} copied ${ck.incoming.name || `${ck.incoming.items} items`} · press ${UI.keysLabel(f.pasteKeys)}`
-          : 'Into the app in front (a chat, a mail…), or the Finder folder in front, else the Desktop');
+      pasteRow.setHint(ck.pasting ? I18n.t('Pasting…')
+        : ck.incoming ? I18n.t('{device} copied {items} · press {keys}', { device: pc, items: ck.incoming.name || I18n.t('{count} items', { count: ck.incoming.items }), keys: UI.keysLabel(f.pasteKeys) })
+          : I18n.t('Into the app in front (a chat, a mail…), or the Finder folder in front, else the Desktop'));
       dragSw.set(f.dragEdge !== false);
-      dragRow.setHint(f.dragEdge !== false && !f.peerDrag ? `Turned off on ${pc}` : 'Drag through the screen edge and drop anywhere');
+      dragRow.setHint(f.dragEdge !== false && !f.peerDrag ? I18n.t('Turned off on {device}', { device: pc }) : I18n.t('Drag through the screen edge and drop anywhere'));
       shareSw.set(m.sharing);
       shareSw.disable(m.shareBusy);
       chooseBtn.disabled = m.shareBusy;
-      shareRow.setHint(m.shareBusy ? 'Waiting for your password…'
-        : m.shareError ? `Couldn’t share: ${m.shareError}`
+      shareRow.setHint(m.shareBusy ? I18n.t('Waiting for your password…')
+        : m.shareError ? I18n.t('Couldn’t share: {error}', { error: m.shareError })
           : tilde(m.folder || m.defaultFolder));
       acceptSw.set(f.acceptDrops);
       pcSw.set(m.connectPc);
       openBtn.hidden = !m.mounted && !m.wifi;
       pcRow.setHint(!m.connectPc ? ''
-        : m.mounted ? 'In Finder’s sidebar'
-          : m.mounting ? 'Connecting…'
-            : m.wifi ? 'Over Bluetooth: Open connects it with Wi-Fi Direct'
-            : m.mountError ? `Couldn’t connect: ${m.mountError}`
-              : `Waiting for ${pc} to share a folder`);
+        : m.mounted ? I18n.t('In Finder’s sidebar')
+          : m.mounting ? I18n.t('Connecting…')
+            : m.wifi ? I18n.t('Over Bluetooth: Open connects it with Wi-Fi Direct')
+            : m.mountError ? I18n.t('Couldn’t connect: {error}', { error: m.mountError })
+              : I18n.t('Waiting for {device} to share a folder', { device: pc }));
       reveal.set(f.reveal);
       folderRow.setHint(tilde(f.folder || f.defaultFolder));
       progress.replaceChildren(
-        ...f.receiving.map((r) => UI.note('info', `Receiving ${r.name}  ${Math.floor((100 * r.got) / Math.max(1, r.size))}%`)),
-        ...f.sending.map((r) => UI.note('info', `Sending ${r.name}  ${Math.floor((100 * r.sent) / Math.max(1, r.size))}%`)),
+        ...f.receiving.map((r) => UI.note('info', I18n.t('Receiving {file}  {progress}%', { file: r.name, progress: Math.floor((100 * r.got) / Math.max(1, r.size)) }), { literal: true })),
+        ...f.sending.map((r) => UI.note('info', I18n.t('Sending {file}  {progress}%', { file: r.name, progress: Math.floor((100 * r.sent) / Math.max(1, r.size)) }), { literal: true })),
       );
       const items = [...f.recent.map((r) => ({ ...r, dir: 'in' })), ...f.sent.map((r) => ({ ...r, dir: 'out' }))].sort((a, b) => b.at - a.at).slice(0, 30);
       const k = JSON.stringify(items.map((r) => r.at)) + Math.floor(Date.now() / 15000);
@@ -132,14 +132,14 @@ UI.tab({
       key = k;
       list.replaceChildren(...(items.length
         ? items.map((r) => el('div', { class: 'hist-item' }, [
-          el('span', { class: `hist-dir ${r.dir}`, title: UI.fill(r.dir === 'out' ? 'Sent to {name}' : 'From {name}') }, [UI.icon(r.dir === 'out' ? 'up' : 'down')]),
+          el('span', { class: `hist-dir ${r.dir}`, title: UI.fill(r.dir === 'out' ? I18n.t('Sent to {name}') : I18n.t('From {name}')) }, [UI.icon(r.dir === 'out' ? 'up' : 'down')]),
           el('div', { class: 'hist-text' }, [
             el('div', { class: 'hist-preview', text: r.name }),
-            el('div', { class: 'hint', text: `${r.ok ? (r.dir === 'in' ? tilde(r.path) : r.where || pc) : `Failed: ${r.error}`} · ${UI.ago(r.at)}` }),
+            el('div', { class: 'hint', text: `${r.ok ? (r.dir === 'in' ? tilde(r.path) : r.where || pc) : I18n.t('Failed: {error}', { error: r.error })} · ${UI.ago(r.at)}` }),
           ]),
-          r.dir === 'in' && r.ok ? UI.button('Show', () => api.revealDrop(f.recent.indexOf(f.recent.find((x) => x.at === r.at))), 'small') : null,
+          r.dir === 'in' && r.ok ? UI.button(I18n.t('Show'), () => api.revealDrop(f.recent.indexOf(f.recent.find((x) => x.at === r.at))), 'small') : null,
         ]))
-        : [UI.row('Nothing yet', '')]));
+        : [UI.row(I18n.t('Nothing yet'), '')]));
     };
   },
 });

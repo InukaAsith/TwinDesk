@@ -55,7 +55,7 @@ class FileClip extends EventEmitter {
       if (this.incoming && this.incoming.id === m.id) this.incoming = null;
       if (this.pasting && this.pasting.id === m.id) {
         this.pasting = null;
-        this.emit('popup', 'home', 'Those files aren’t there any more');
+        this.emit('popup', 'home', { key: 'Those files aren’t there any more' });
       }
       this.emit('change');
     });
@@ -75,11 +75,11 @@ class FileClip extends EventEmitter {
       if (b.kind !== 'paste') return;
       const p = this.pasting;
       this.pasting = null;
-      const done = b.ok ? `Pasted ${plural(b.files, 'file')}` : `Pasted ${b.files} of ${b.count} files`;
+      const done = { key: b.ok ? (b.files === 1 ? 'Pasted {count} file' : 'Pasted {count} files') : 'Pasted {count} of {total} files', vars: { count: b.files, ...(b.ok ? {} : { total: b.count }) } };
       if (p && p.into && b.files && b.placed && b.placed.length) {
         pastefiles.pasteInto(this.helper, b.placed)
           .then(() => this.emit('popup', 'home', done))
-          .catch(() => this.emit('popup', 'home', `${done}: they’re on the clipboard, paste them with ⌘V`));
+          .catch(() => this.emit('popup', 'home', { key: '{result}: they’re on the clipboard, paste them with {keys}', vars: { result: done, keys: '⌘V' } }));
       } else {
         this.emit('popup', 'home', done);
       }
@@ -162,7 +162,7 @@ class FileClip extends EventEmitter {
   }
 
   async copy() {
-    if (!this.server.current) return this.emit('popup', 'home', 'Not connected');
+    if (!this.server.current) return this.emit('popup', 'home', { key: 'Not connected' });
     let paths = [];
     try {
       const src = await this.helper.request('fileSource');
@@ -170,9 +170,9 @@ class FileClip extends EventEmitter {
       if (!paths.length) paths = src.files || [];
     } catch { /* no helper: nothing to copy */ }
     paths = paths.filter((p) => fs.existsSync(p));
-    if (!paths.length) return this.emit('popup', 'home', 'Select files in Finder first');
+    if (!paths.length) return this.emit('popup', 'home', { key: 'Select files in Finder first' });
     const plan = this.fileSend.planDrag(paths);
-    if (!plan) return this.emit('popup', 'home', 'Nothing to copy there');
+    if (!plan) return this.emit('popup', 'home', { key: 'Nothing to copy there' });
     if (this.offer) this.server.sendToClient({ t: T.FCLIP_GONE, id: this.offer.id }); // newest copy wins
     this.offer = { id: crypto.randomUUID(), paths, items: plan.items, files: plan.files, bytes: plan.bytes };
     // list / dirs: the whole tree, so a PC pastes it with Windows' own copy dialog.
@@ -180,14 +180,14 @@ class FileClip extends EventEmitter {
       t: T.FCLIP_OFFER, id: this.offer.id, items: plan.items, files: plan.files, bytes: plan.bytes,
       list: plan.list.map((f) => ({ rel: f.rel, size: f.size })), dirs: plan.dirs,
     });
-    this.emit('popup', 'away', `Copied ${plan.items.length === 1 ? plan.items[0].name : plural(plan.items.length, 'item')} for ${this.peerName}`);
+    this.emit('popup', 'away', { key: 'Copied {item} for {name}', vars: { item: plan.items.length === 1 ? plan.items[0].name : { key: '{count} items', vars: { count: plan.items.length } }, name: this.peerName } });
     this.emit('change');
   }
 
   async paste() {
     const inc = this.incoming;
-    if (!this.server.current) return this.emit('popup', 'home', 'Not connected');
-    if (!inc) return this.emit('popup', 'home', `Nothing copied on ${this.peerName}`);
+    if (!this.server.current) return this.emit('popup', 'home', { key: 'Not connected' });
+    if (!inc) return this.emit('popup', 'home', { key: 'Nothing copied on {name}', vars: { name: this.peerName } });
     let dir = '';
     let into = null;
     try {
@@ -202,7 +202,7 @@ class FileClip extends EventEmitter {
     this.drop.expectBatch(inc.id, dir, !!into);
     this.pasting = { id: inc.id, files: inc.files, into };
     this.server.sendToClient({ t: T.FCLIP_PASTE, id: inc.id });
-    this.emit('popup', 'driven', `Pasting ${plural(inc.files, 'file')}…`);
+    this.emit('popup', 'driven', { key: inc.files === 1 ? 'Pasting {count} file…' : 'Pasting {count} files…', vars: { count: inc.files } });
     this.emit('change');
   }
 
@@ -227,8 +227,5 @@ class FileClip extends EventEmitter {
   }
 }
 
-function plural(n, word) {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
 
 module.exports = { FileClip };

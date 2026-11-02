@@ -4,6 +4,7 @@
 //   MeshIntro.art()                 -> an element: devices, each one linked to every other
 //   MeshIntro.confirm(onTurnOn)     -> the popup (styled as pairpop.js's .pair-pop); Turn on calls onTurnOn
 (function () {
+  const t = (text) => window.I18n ? window.I18n.t(text) : text;
   // Each device: [kind, x, y]. Lines join every pair, as the mesh does.
   const NODES = [['monitor', 110, 78], ['laptop', 320, 46], ['monitor', 530, 84], ['phone', 214, 196], ['laptop', 430, 200]];
 
@@ -28,7 +29,10 @@
     wrap.className = 'mesh-art';
     wrap.setAttribute('aria-hidden', 'true');
     wrap.innerHTML = `<svg viewBox="0 0 640 250" role="img">${lines.join('')}${dots.join('')}${NODES.map((n) => device(...n)).join('')}</svg>`
-      + '<p>Every device linked to every other: one clipboard and one set of notifications for all, and the mouse and keyboard across all of them.</p>';
+;
+    const caption = document.createElement('p');
+    caption.textContent = t('Every device linked to every other: one clipboard and one set of notifications for all, and the mouse and keyboard across all of them.');
+    wrap.append(caption);
     return wrap;
   }
 
@@ -45,16 +49,16 @@
     pop.setAttribute('role', 'dialog');
     pop.setAttribute('aria-modal', 'true');
     const body = el('div', 'pop-body');
-    const title = el('strong', '', 'Turn on Multi-device? ');
-    title.append(el('span', 'pill beta', 'Mesh · Beta'));
+    const title = el('strong', '', t("Turn on Multi-device? "));
+    title.append(el('span', 'pill beta', t("Mesh · Beta")));
     body.append(
       title,
-      el('p', '', 'Mesh mode is still in beta, and you may run into some issues with it.'),
-      el('p', '', 'If you connect only two devices, keep it off.'),
-      el('div', 'hint', 'TwinDesk restarts when you turn it on or off.'),
+      el('p', '', t("Mesh mode is still in beta, and you may run into some issues with it.")),
+      el('p', '', t("If you connect only two devices, keep it off.")),
+      el('div', 'hint', t("TwinDesk restarts when you turn it on or off.")),
     );
-    const cancel = el('button', 'btn', 'Cancel');
-    const ok = el('button', 'btn primary', 'Turn on');
+    const cancel = el('button', 'btn', t("Cancel"));
+    const ok = el('button', 'btn primary', t("Turn on"));
     const actions = el('div', 'banner-actions');
     actions.append(cancel, ok);
     pop.append(body, actions);

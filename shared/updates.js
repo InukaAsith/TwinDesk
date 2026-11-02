@@ -3,11 +3,12 @@
 // tag with this app's version and picks the download for this platform and CPU. Nothing is
 // installed here; the app opens the download (or the release page) in the browser.
 //
-// new Updates({ current, platform: 'mac'|'win'|'linux', getSettings, save, notify, onChange })
+// new Updates({ current, platform: 'mac'|'win'|'linux', getSettings, save, notify, onChange, getLanguage })
 //   settings.updates = { auto, notified }: check on start and every 6 hours when auto is on;
 //   notify(title, body, onClick) once per new version; open() shows the download in the browser.
 'use strict';
 
+const I18n = require('./i18n.js');
 const REPO = 'InukaAsith/TwinDesk';
 const API = `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES = `https://github.com/${REPO}/releases`;
@@ -163,6 +164,7 @@ class Updates {
     this.getSettings = opts.getSettings;
     this.save = opts.save || (() => {});
     this.notify = opts.notify || (() => {});
+    this.getLanguage = opts.getLanguage || (() => 'en');
     this.onChange = opts.onChange || (() => {});
     this.fetch = opts.fetch || defaultFetch();
     this.openUrl = opts.openUrl || ((url) => require('electron').shell.openExternal(url));
@@ -271,9 +273,10 @@ class Updates {
         this.cfg.notified = latest;
         this.save();
         if (!skipped) {
+          const i18n = I18n.create(this.getLanguage());
           this.notify(
-            `TwinDesk ${latest} is available`,
-            manual ? 'Click to view update details.' : `You have ${this.current}. Click to view update details and release notes.`,
+            i18n.t('TwinDesk {version} is available', { version: latest }),
+            manual ? i18n.t('Click to view update details.') : i18n.t('You have {version}. Click to view update details and release notes.', { version: this.current }),
             () => this.onShowModal(),
           );
         }

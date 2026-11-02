@@ -8,6 +8,7 @@ const api = window.monitor;
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
 const statsBox = document.getElementById('stats');
+const playerI18n = window.PlayerI18n;
 const audio = document.getElementById('audio');
 let audioCfg = { on: true, volume: 1 };
 let streamAudio = false; // stream.info.audio: the Mac shares sound with the screen
@@ -32,7 +33,8 @@ function pace(receiver) {
 // The peer's screen.state: while we wait for its picture, say what is happening.
 api.onRemote((r) => {
   if (pc || !r) return;
-  setOverlay(r.on ? 'Waiting for ' + (streamName || 'the picture') + '…' : r.remote ? 'Starting the screen over there…' : 'Not sharing. Turn on sharing over there.');
+  if (r.on) setOverlay(streamName ? 'Waiting for {name}…' : 'Waiting for the picture…', { name: streamName });
+  else setOverlay(r.remote ? 'Starting the screen over there…' : 'Not sharing. Turn on sharing over there.');
 });
 api.onPacing((p) => {
   const was = pacing;
@@ -66,9 +68,9 @@ function showFrameGen() {
   document.body.classList.toggle('framegen', show);
 }
 
-function setOverlay(text) {
-  overlay.textContent = text || '';
-  overlay.classList.toggle('hidden', !text);
+function setOverlay(key, vars) {
+  playerI18n.text(overlay, key, vars);
+  overlay.classList.toggle('hidden', !key);
 }
 
 function closePc() {
@@ -93,7 +95,7 @@ async function onOffer(msg) {
   const my = (pc = new RTCPeerConnection({ iceServers: [] }));
   session = msg.session;
   const queue = (pending = []);
-  setOverlay('Connecting to ' + (streamName || 'the other computer') + '…');
+  setOverlay(streamName ? 'Connecting to {name}…' : 'Connecting to the other computer…', { name: streamName });
 
   my.ontrack = (e) => {
     if (e.track.kind === 'video') pace(e.receiver);
@@ -126,7 +128,7 @@ async function onOffer(msg) {
     api.send({ t: T.RTC_ANSWER, session: msg.session, sdp: my.localDescription.sdp });
   } catch (err) {
     console.error('[monitor] offer failed', err);
-    if (my === pc) setOverlay('Could not start the video: ' + err.message);
+    if (my === pc) setOverlay('Could not start the video: {error}', { error: err.message });
   }
 }
 
@@ -142,9 +144,23 @@ video.addEventListener('playing', () => { setOverlay(''); showFrameGen(); });
 
 let statsTimer = null;
 let lastIn = null;
+let statsSnapshot = null;
+
+function renderStats() {
+  if (!statsSnapshot) return;
+  const { vars, hardware } = statsSnapshot;
+  statsBox.textContent = [
+    playerI18n.t('{width}×{height}  {fps} fps  {mbps} Mbps', vars),
+    playerI18n.t('{codec}  decoder {decoder}{hardware}', { ...vars, hardware: hardware ? playerI18n.t(' (hw)') : '' }),
+    playerI18n.t('jitter buffer {buffer} ms  decode {decode} ms  rx→decoded {processing} ms', vars),
+    playerI18n.t('network RTT {rtt} ms  lost {lost}  nack {nack}  pli {pli}', vars),
+    playerI18n.t('dropped {dropped}  freezes {freezes}  keyframes {keyframes}', vars),
+  ].join('\n');
+}
+playerI18n.onChange(renderStats);
 
 async function updateStats() {
-  if (!pc) { statsBox.textContent = 'no video session'; return; }
+  if (!pc) { statsSnapshot = null; playerI18n.text(statsBox, 'no video session'); return; }
   const rep = await pc.getStats();
   let inb = null, pair = null;
   const byId = new Map();
@@ -153,24 +169,29 @@ async function updateStats() {
     if (r.type === 'inbound-rtp' && r.kind === 'video') inb = r;
     if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r;
   });
-  if (!inb) { statsBox.textContent = 'waiting for video…'; return; }
+  if (!inb) { statsSnapshot = null; playerI18n.text(statsBox, 'waiting for video…'); return; }
   const now = performance.now();
   const d = (k) => (lastIn ? inb[k] - (lastIn[k] || 0) : 0);
   const mbps = lastIn ? (d('bytesReceived') * 8) / ((now - lastIn.at) * 1000) : 0;
   const per = (num, den) => { const n = d(num), dn = d(den); return dn > 0 ? (n / dn) * 1000 : 0; };
   const codec = byId.get(inb.codecId);
-  const lines = [
-    (inb.frameWidth || 0) + '×' + (inb.frameHeight || 0) + '  ' + Math.round(inb.framesPerSecond || 0) + ' fps  ' + mbps.toFixed(1) + ' Mbps',
-    (codec ? codec.mimeType.replace('video/', '') : '?') + '  decoder ' + (inb.decoderImplementation || '?') + (inb.powerEfficientDecoder ? ' (hw)' : ''),
-    'jitter buffer ' + per('jitterBufferDelay', 'jitterBufferEmittedCount').toFixed(0) + ' ms' +
-      '  decode ' + per('totalDecodeTime', 'framesDecoded').toFixed(1) + ' ms' +
-      '  rx→decoded ' + per('totalProcessingDelay', 'framesDecoded').toFixed(0) + ' ms',
-    'network RTT ' + (pair && pair.currentRoundTripTime != null ? (pair.currentRoundTripTime * 1000).toFixed(0) : '?') + ' ms' +
-      '  lost ' + (inb.packetsLost || 0) + '  nack ' + (inb.nackCount || 0) + '  pli ' + (inb.pliCount || 0),
-    'dropped ' + (inb.framesDropped || 0) + '  freezes ' + (inb.freezeCount || 0) + '  keyframes ' + (inb.keyFramesDecoded || 0),
-  ];
+  statsSnapshot = {
+    hardware: inb.powerEfficientDecoder,
+    vars: {
+      width: inb.frameWidth || 0, height: inb.frameHeight || 0,
+      fps: Math.round(inb.framesPerSecond || 0), mbps: mbps.toFixed(1),
+      codec: codec ? codec.mimeType.replace('video/', '') : '?', decoder: inb.decoderImplementation || '?',
+      buffer: per('jitterBufferDelay', 'jitterBufferEmittedCount').toFixed(0),
+      decode: per('totalDecodeTime', 'framesDecoded').toFixed(1),
+      processing: per('totalProcessingDelay', 'framesDecoded').toFixed(0),
+      rtt: pair && pair.currentRoundTripTime != null ? (pair.currentRoundTripTime * 1000).toFixed(0) : '?',
+      lost: inb.packetsLost || 0, nack: inb.nackCount || 0, pli: inb.pliCount || 0,
+      dropped: inb.framesDropped || 0, freezes: inb.freezeCount || 0, keyframes: inb.keyFramesDecoded || 0,
+    },
+  };
   lastIn = Object.assign({ at: now }, inb);
-  statsBox.textContent = lines.join('\n');
+  playerI18n.literal(statsBox, '');
+  renderStats();
 }
 
 function toggleStats() {
@@ -241,9 +262,9 @@ function startTestPattern() {
     g.fillRect(x, h / 2 - 100, 200, 200);
     g.fillStyle = '#ffffff';
     g.font = '48px Segoe UI, sans-serif';
-    g.fillText('TwinDesk test pattern, 1920×1080, frame ' + frame, 60, 100);
+    g.fillText(playerI18n.t('TwinDesk test pattern, 1920×1080, frame {frame}', { frame }), 60, 100);
     g.font = '20px Consolas, monospace';
-    g.fillText('The quick brown fox jumps over the lazy dog 0123456789', 60, 150);
+    g.fillText(playerI18n.t('The quick brown fox jumps over the lazy dog 0123456789'), 60, 150);
     frame++;
     requestAnimationFrame(draw);
   }
@@ -261,7 +282,7 @@ if (new URLSearchParams(location.search).get('test') === '1') {
         streamName = msg.name;
         streamAudio = msg.audio === true;
         applyAudio();
-        if (!pc) setOverlay('Waiting for ' + (streamName || 'the other computer') + '…');
+        if (!pc) setOverlay(streamName ? 'Waiting for {name}…' : 'Waiting for the other computer…', { name: streamName });
         break;
       case T.RTC_OFFER: onOffer(msg); break;
       case T.RTC_ICE: onIce(msg); break;
