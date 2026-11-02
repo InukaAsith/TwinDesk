@@ -178,11 +178,11 @@ async function writeClipImage(clipboard, img, png) {
 // picture; a phone's own screenshots come marked `shot` (Screenshots.kt).
 class ClipImages {
   // o: {cfg() → settings.clipboard, send(msg), backlog(), connected(), ble(), peerName(),
-  //     remember(dir, item), popup(kind, text), onChange(), pasteKeys ('Ctrl+V' | '⌘V')}
+  //     remember(dir, item), popup(kind, text), onChange(), pasteKeys ('Ctrl+V' | '⌘V'), clipboard (default Electron's)}
   constructor(o) {
     this.o = o;
     const { clipboard, nativeImage } = require('electron');
-    this.clipboard = clipboard;
+    this.clipboard = o.clipboard || clipboard;
     this.nativeImage = nativeImage;
     this.peerImages = false; // the other side's clip.policy: it takes pictures
     this.sig = { sent: '', received: '' }; // the last picture each way (sigOf)

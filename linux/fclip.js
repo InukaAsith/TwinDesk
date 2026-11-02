@@ -12,7 +12,8 @@
 // the folder of the file manager window in front, else Downloads (filerecv.js); with an app in
 // front instead (a chat, a mail, a document) it goes into it (shared/pastefiles.js: on the
 // clipboard as files, then Ctrl+V there).
-const { app, clipboard } = require('electron');
+const { app } = require('electron');
+const clipboard = require('./wlclip').clipboard(); // the copied files' list too (#97)
 const crypto = require('crypto');
 const fs = require('fs');
 const P = require('../shared/protocol.js');

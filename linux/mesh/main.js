@@ -197,7 +197,7 @@ function start() {
   });
   startHost();
   autoJoin = new AutoJoin({ hub, enabled: () => settings.mesh.autoJoin !== false, addrs: () => ownAddresses() });
-  clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState });
+  clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState, clipboard: require('../wlclip').clipboard() }); // wl-clipboard where Wayland needs it (#97)
   screen = new Screen({
     link,
     clip,

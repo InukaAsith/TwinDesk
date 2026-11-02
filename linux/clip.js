@@ -2,7 +2,7 @@
 // Clipboard sharing: directions, switch/instant mode, concealed filter, size limit, clip.policy
 // both ways, and the in-memory Recent list (never on disk). Text here; pictures, screenshots put
 // on the clipboard among them (Clipboard › Pictures, up to 10 MB), through shared/clipimage.js.
-const { clipboard } = require('electron');
+const clipboard = require('./wlclip').clipboard(); // wl-clipboard on Wayland desktops that need it (#97)
 const P = require('../shared/protocol.js');
 const { ClipImages, trimPictures, itemView } = require('../shared/clipimage.js');
 const eclip = require('../shared/eclip.js');
@@ -34,6 +34,7 @@ class Clip {
     this.copied = false; // the helper saw a copy since the last look
 
     this.images = new ClipImages({
+      clipboard,
       cfg: () => this.cfg,
       send: (m) => this.link.send(m),
       backlog: () => this.link.bufferedAmount || 0,
