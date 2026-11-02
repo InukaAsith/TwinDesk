@@ -216,7 +216,7 @@ class Link extends EventEmitter {
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
-    }, P.TIMEOUT_MS);
+    }, P.HELLO_TIMEOUT_MS);
   }
 
   _onMessage(text) {
