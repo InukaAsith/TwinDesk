@@ -387,6 +387,9 @@ namespace MacShare
                         break;
                     case "winRaise": AppWindows.Raise(Json.Num(c, "wid", 0)); break;
                     case "winClose": AppWindows.Close(Json.Num(c, "wid", 0)); break;
+                    case "winEndMove": AppWindows.EndMove(Json.Num(c, "wid", 0)); break;
+                    case "winPark": AppWindows.Park(Json.Num(c, "wid", 0)); break;
+                    case "winPlace": AppWindows.Place(Json.Num(c, "wid", 0), (int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0)); break;
                     case "winSize": AppWindows.Resize(Json.Num(c, "wid", 0), (int)Json.Num(c, "w", 0), (int)Json.Num(c, "h", 0)); break;
                     case "winMove":
                         Point wp = AppWindows.PointIn(Json.Num(c, "wid", 0), Json.Num(c, "x", 0), Json.Num(c, "y", 0));

@@ -271,6 +271,65 @@ namespace MacShare
             PostMessage(Handle(wid), WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
 
+        // ---- moving a window to the other computer (pcapps.js) ----
+
+        const int GUI_INMOVESIZE = 2;
+        const uint WM_CANCELMODE = 0x1F, SWP_NOSIZE = 1;
+
+        // The window being dragged by its title bar right now (Windows' move loop), else 0.
+        public static long Moving()
+        {
+            IntPtr fg = GetForegroundWindow();
+            if (fg == IntPtr.Zero) return 0;
+            uint pid;
+            uint tid = GetWindowThreadProcessId(fg, out pid);
+            GUITHREADINFO g = new GUITHREADINFO();
+            g.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
+            if (!GetGUIThreadInfo(tid, ref g) || (g.flags & GUI_INMOVESIZE) == 0 || g.hwndMoveSize == IntPtr.Zero) return 0;
+            return GetAncestor(g.hwndMoveSize, GA_ROOT).ToInt64();
+        }
+
+        static readonly int[] ModVks = { 0xA2, 0xA3, 0xA0, 0xA1, 0xA4, 0xA5, 0x5B, 0x5C };
+        static readonly string[] ModNames = { "ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight" };
+
+        // On an edge or return event: the window being dragged and the modifier keys held (main
+        // moves it to the other computer when its key is one of them).
+        public static void AddMoving(Dictionary<string, object> d)
+        {
+            long w = Moving();
+            if (w == 0) return;
+            List<object> held = new List<object>();
+            for (int i = 0; i < ModVks.Length; i++) if ((Native.GetAsyncKeyState(ModVks[i]) & 0x8000) != 0) held.Add(ModNames[i]);
+            d["moving"] = w;
+            d["mods"] = held;
+        }
+
+        // That drag ends where it is (the move loop leaves on WM_CANCELMODE).
+        public static void EndMove(double wid)
+        {
+            PostMessage(Handle(wid), WM_CANCELMODE, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        // Out of sight past every screen, still shown: a minimized window has no picture to send.
+        public static void Park(double wid)
+        {
+            IntPtr h = Handle(wid);
+            if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+            Rectangle vs = System.Windows.Forms.SystemInformation.VirtualScreen;
+            SetWindowPos(h, IntPtr.Zero, vs.Right + 200, vs.Top + 40, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+
+        // Back with its visible frame's top left at x, y (physical px, as List gives them), in front.
+        public static void Place(double wid, int x, int y)
+        {
+            IntPtr h = Handle(wid);
+            RECT outer, vis;
+            GetWindowRect(h, out outer);
+            if (!Frame(h, out vis)) vis = outer;
+            SetWindowPos(h, IntPtr.Zero, x - (vis.left - outer.left), y - (vis.top - outer.top), 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            Raise(wid);
+        }
+
         // w × h = the visible frame (as in List); the invisible resize borders are added back.
         public static void Resize(double wid, int w, int h)
         {

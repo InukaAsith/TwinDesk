@@ -289,6 +289,7 @@ namespace MacShare
             lastCross = DateTime.UtcNow;
             if (Flash != null) Flash.Play(p, side, true);
             Dictionary<string, object> d = Ev("return");
+            AppWindows.AddMoving(d); // a window dragged with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(Screens.Offset(p.X, p.Y, side), 4);
 #if MULTI
             d["side"] = side;
@@ -626,6 +627,7 @@ namespace MacShare
             Begin(true, EdgeKeyboard); // start capturing at once so no motion leaks, then tell main
             saved = new Point(p.x, p.y);
             Dictionary<string, object> d = Ev("edge");
+            AppWindows.AddMoving(d); // a window dragged with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(offset, 4);
             emit(d);
         }
@@ -647,6 +649,7 @@ namespace MacShare
             lastCross = now;
             if (Flash != null) Flash.Play(new Point(x, y), retSide, true); // leaving this PC for the Mac
             Dictionary<string, object> d = Ev("return");
+            AppWindows.AddMoving(d); // a window dragged with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(Screens.Offset(x, y, retSide), 4);
             emit(d);
         }
