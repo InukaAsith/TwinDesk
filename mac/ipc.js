@@ -59,6 +59,7 @@ const SCHEMA = {
 
 function setupIpc(ctx) {
   const { settings, pushState } = ctx;
+  const t = ctx.t || ((text) => text);
 
   function save() {
     store.saveSettings(settings);
@@ -74,8 +75,8 @@ function setupIpc(ctx) {
   // "Connect by address" / Pair on a found device: a Mac host is
   // paired as its guest, a PC gets an invite (it pairs with this Mac, which stays the host).
   const connect = ctx.state.connect;
-  const report = (message, error = false) => {
-    Object.assign(connect, { busy: false, message, error });
+  const report = (message, error = false, messageKey = '', messageVars = {}) => {
+    Object.assign(connect, { busy: false, message, error, messageKey, messageVars });
     pushState();
   };
   async function connectTo(dev, address) {
@@ -89,7 +90,7 @@ function setupIpc(ctx) {
       if (pairing.list().some((p) => p.id === dev.id)) {
         pairing.expect(dev.id);
         discovery.invite(dev.address);
-        return report(`Connecting to ${dev.name}…`);
+        return report(`Connecting to ${dev.name}…`, false, 'Connecting to {name}…', { name: dev.name });
       }
       discovery.invite(dev.address);
       if (dev.os === P.OS.ANDROID) { // the popup says Pair has to be pressed on the phone, for a minute at most
@@ -97,13 +98,13 @@ function setupIpc(ctx) {
         connect.inviting = inv;
         setTimeout(() => { if (connect.inviting === inv) { connect.inviting = null; pushState(); } }, 60 * 1000);
       }
-      return report(`Asked ${dev.name} to connect. Confirm on ${dev.name}.`);
+      return report(`Asked ${dev.name} to connect. Confirm on ${dev.name}.`, false, 'Asked {name} to connect. Confirm on {name}.', { name: dev.name });
     }
     if (dev && pairing.list().some((p) => p.id === dev.id)) {
       // A Mac that connects to us: invited, and its hello takes the session over (Take over).
       pairing.expect(dev.id);
       discovery.invite(dev.address);
-      return report(`Connecting to ${dev.name}…`);
+      return report(`Connecting to ${dev.name}…`, false, 'Connecting to {name}…', { name: dev.name });
     }
     if (dev && link.hosts.some((h) => h.id === dev.id)) {
       // Switching from a device connected to us: it goes first (this Mac stands by while it hosts).
@@ -111,7 +112,7 @@ function setupIpc(ctx) {
         ctx.server.server.release();
         setTimeout(() => link.connect(true), 800);
       } else link.connect(true);
-      return report(`Connecting to ${dev.name}…`);
+      return report(`Connecting to ${dev.name}…`, false, 'Connecting to {name}…', { name: dev.name });
     }
     report('');
     link.startPairing({ address: dev ? dev.address : address, port: dev ? dev.port : P.PORT, name: dev ? dev.name : address });
@@ -122,7 +123,7 @@ function setupIpc(ctx) {
       const address = String(text || '').trim();
       if (!/^(\d{1,3})(\.\d{1,3}){3}$/.test(address)) return report('Type an address like 192.168.1.20.', true);
       if (ctx.state.addresses.includes(address)) return report('That’s this Mac.', true);
-      Object.assign(connect, { busy: true, message: `Looking at ${address}…`, error: false });
+      Object.assign(connect, { busy: true, message: `Looking at ${address}…`, error: false, messageKey: 'Looking at {address}…', messageVars: { address } });
       pushState();
       const dev = await ctx.discovery.ask(address);
       connectTo(dev, address); // no answer: try the WSS port directly (a Mac host answers there)
@@ -174,8 +175,8 @@ function setupIpc(ctx) {
       if (!arg || typeof arg.id !== 'string' || !/^[\w.]{1,200}$/.test(arg.id)) return;
       const name = String(arg.name || arg.id).slice(0, 100);
       Menu.buildFromTemplate([
-        { label: 'Open in a Window', click: () => ctx.phoneViews.openApp(arg.id, name) },
-        { label: 'Add to Dock', click: () => ctx.phoneViews.pin(arg.id, name) },
+        { label: t('Open in a Window'), click: () => ctx.phoneViews.openApp(arg.id, name) },
+        { label: t('Add to Dock'), click: () => ctx.phoneViews.pin(arg.id, name) },
       ]).popup();
     },
     phoneInstallFull() {
@@ -339,7 +340,7 @@ function setupIpc(ctx) {
       if (list.length && ctx.server.current) ctx.fileSend.sendBatch(list, 'send');
     },
     async chooseSendFiles() {
-      const r = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: 'Send' });
+      const r = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: t('Send') });
       if (!r.canceled) actions.sendFiles(r.filePaths);
     },
     setNotifs(partial) {
@@ -356,7 +357,7 @@ function setupIpc(ctx) {
       if (bundle.endsWith('.app')) shell.showItemInFolder(bundle);
     },
     async pickDropFolder() {
-      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Use This Folder' });
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Use This Folder') });
       if (r.canceled || !r.filePaths[0]) return;
       settings.files.folder = r.filePaths[0];
       save();
@@ -379,7 +380,7 @@ function setupIpc(ctx) {
       else ctx.smb.stopSharing();
     },
     async chooseShareFolder() {
-      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Share This Folder' });
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Share This Folder') });
       if (r.canceled || !r.filePaths[0]) return;
       if (settings.smb.sharing) await ctx.smb.stopSharing();
       settings.smb.folder = r.filePaths[0];
@@ -592,6 +593,12 @@ function setupIpc(ctx) {
     // Connection › Wireless debugging › Pair with a QR code: on while shown.
     adbQr(on) {
       if (ctx.adbQr) ctx.adbQr(on === true);
+    },
+    setLanguage(language) {
+      if (!['en', 'zh-CN'].includes(language) || settings.ui.language === language) return;
+      settings.ui.language = language;
+      save();
+      if (ctx.onLanguage) ctx.onLanguage();
     },
     setTab(tab) {
       if (!TABS.includes(tab)) return;

@@ -7,16 +7,17 @@
 
 UI.adbQr = () => {
   const { el, api } = UI;
+  const t = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
   if (!api.adbQr || !window.Qr) return null;
   let open = false;
   let drawn = '';
-  const btn = UI.button('Show QR Code', () => { open = !open; api.adbQr(open); paint(UI.state); }, 'small');
-  const row = UI.row('Pair with a QR code', 'On the phone: Wireless debugging › Pair device with QR code', [btn]);
-  const img = el('div', { class: 'qr-img', attrs: { role: 'img', 'aria-label': 'Wireless debugging QR code' } });
-  const note = el('div', { class: 'hint' });
+  const btn = UI.button(t('Show QR Code'), () => { open = !open; api.adbQr(open); paint(UI.state); }, 'small');
+  const row = UI.row(t('Pair with a QR code'), t('On the phone: Wireless debugging › Pair device with QR code'), [btn], { literal: true });
+  const img = el('div', { class: 'qr-img', attrs: { role: 'img', 'aria-label': t('Wireless debugging QR code') } });
+  const note = el('div', { class: 'hint', attrs: { 'data-literal': '' } });
   const box = el('div', { class: 'qr-box' }, [img, el('div', { class: 'qr-text' }, [
-    el('strong', { text: 'Scan with the phone' }),
-    el('ol', {}, ['Settings › Developer options › Wireless debugging.', 'Tap Pair device with QR code.', 'Scan this code. TwinDesk connects by itself.'].map((t) => el('li', { text: t }))),
+    el('strong', { text: t('Scan with the phone') }),
+    el('ol', {}, [t('Settings › Developer options › Wireless debugging.'), t('Tap Pair device with QR code.'), t('Scan this code. TwinDesk connects by itself.')].map((t) => el('li', { text: t }))),
     note,
   ])]);
   box.hidden = true;
@@ -24,7 +25,7 @@ UI.adbQr = () => {
 
   function paint(s) {
     const q = s && s.adbQr;
-    btn.textContent = open ? 'Hide' : 'Show QR Code';
+    btn.textContent = open ? t('Hide') : t('Show QR Code');
     box.hidden = !open;
     if (!open) return;
     if (q && q.text && q.text !== drawn) {
@@ -35,11 +36,11 @@ UI.adbQr = () => {
       open = false;
       drawn = '';
       box.hidden = true;
-      btn.textContent = 'Show QR Code';
-      row.setHint(q.done === 'paired' ? 'Paired. Connecting…' : q.done === 'timeout' ? 'The QR code timed out. Show it again to retry.' : q.done.replace(/^failed: /, 'Didn’t pair: '));
+      btn.textContent = t('Show QR Code');
+      row.setHint(q.done === 'paired' ? t('Paired. Connecting…') : q.done === 'timeout' ? t('The QR code timed out. Show it again to retry.') : q.done.startsWith('failed: ') ? t('Didn’t pair: {error}', { error: t(q.done.slice(8)) }) : t(q.done));
       return;
     }
-    note.textContent = q && q.text ? 'Waiting for the phone…' : 'Wireless debugging isn’t available here.';
+    note.textContent = q && q.text ? t('Waiting for the phone…') : t('Wireless debugging isn’t available here.');
   }
 
   return {

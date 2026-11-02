@@ -50,7 +50,7 @@ class Clip {
       ble: () => !!(this.link.current && this.link.current.transport === 'ble'),
       peerName: () => (opts.peerName ? opts.peerName() : 'the other device'),
       remember: (dir, item) => this._remember(dir, item),
-      popup: (kind, text) => opts.popup && opts.popup(kind, text),
+      popup: (kind, text, presentation) => opts.popup && opts.popup(kind, presentation || text),
       onChange: () => this.onChange(),
       pasteKeys: process.platform === 'darwin' ? '⌘V' : 'Ctrl+V',
     });

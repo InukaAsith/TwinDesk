@@ -11,6 +11,7 @@ const path = require('path');
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const I18n = require('../shared/i18n.js');
 const { attachKeys } = require('./viewer-keys');
 const { DockStub, addToDock } = require('./dockstub');
 
@@ -103,8 +104,8 @@ class PcApps extends EventEmitter {
 
   open(id) {
     if (!this.server.current || !this.cfg.on) return;
-    const name = this._appName(String(id)) || 'the app';
-    this.emit('popup', 'away', `Opening ${name} on ${this.server.current.name}…`);
+    const name = this._appName(String(id)) || { key: 'the app' };
+    this.emit('popup', 'away', { key: 'Opening {app} on {name}…', vars: { app: name, name: this.server.current.name } });
     this.launch[String(id)] = '';
     this.server.sendToClient({ t: T.PAPP_LAUNCH, id: String(id) });
     this.emit('change');
@@ -192,7 +193,7 @@ class PcApps extends EventEmitter {
       this.emit('change');
     });
     this.wins.set(info.wid, w);
-    win.loadFile(path.join(__dirname, 'pcview.html'));
+    win.loadFile(path.join(__dirname, 'pcview.html'), { query: { language: this._i18n().locale, ...this._playerTitle(info) } });
   }
 
   _create(info) {
@@ -216,6 +217,10 @@ class PcApps extends EventEmitter {
       },
     });
     const w = { info, win, session: null, ready: false, queue: [], closing: false, focusedAt: Date.now(), sizedAt: 0 };
+    win.on('page-title-updated', (e) => {
+      e.preventDefault();
+      win.setTitle(this._title(w.info));
+    });
     this._limit(w);
     w.keys = attachKeys(win, {
       send: (m) => this.server.current && this.server.sendToClient({ ...m, wid: w.info.wid }),
@@ -249,7 +254,7 @@ class PcApps extends EventEmitter {
       this.emit('change');
     });
     this.wins.set(info.wid, w);
-    win.loadFile(path.join(__dirname, 'pcview.html'));
+    win.loadFile(path.join(__dirname, 'pcview.html'), { query: { language: this._i18n().locale, ...this._playerTitle(info) } });
   }
 
   // Never bigger than the PC's screen (1:1 pixels, nothing upscaled) nor this Mac's work area.
@@ -262,9 +267,18 @@ class PcApps extends EventEmitter {
     w.win.setMaximumSize(Math.max(200, mw), Math.max(150, mh + bar));
   }
 
+  _i18n() {
+    const settings = this.getSettings();
+    return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
+  }
+
   _title(info) {
     const app = this._appName(info.id);
-    return info.title && app && !info.title.includes(app) ? `${info.title} · ${app}` : info.title || app || 'PC app';
+    return info.title && app && !info.title.includes(app) ? `${info.title} · ${app}` : info.title || app || this._i18n().t('PC app');
+  }
+
+  _playerTitle(info) {
+    return { title: this._title(info), titleKey: info.title || this._appName(info.id) ? '' : 'PC app' };
   }
 
   _update(w, info) {
@@ -276,6 +290,7 @@ class PcApps extends EventEmitter {
       return;
     }
     w.win.setTitle(this._title(info));
+    this._toWin(w, { t: 'title', ...this._playerTitle(info) });
     if (old.maxW !== info.maxW || old.maxH !== info.maxH || old.scale !== info.scale) this._limit(w);
     // Resized on the PC (not by us a moment ago): follow it.
     if ((old.w !== info.w || old.h !== info.h) && Date.now() - w.sizedAt > 1500) {
@@ -348,7 +363,7 @@ class PcApps extends EventEmitter {
   openFromLink(id) {
     if (this.server.current && this.cfg.on) return this.open(id);
     this.pendingLink = { id, at: Date.now() };
-    this.emit('popup', 'driven', 'Opening it when the other computer connects…');
+    this.emit('popup', 'driven', { key: 'Opening it when the other computer connects…' });
   }
 
   // Apps tab: put a PC app in the Dock (and in ~/Applications/MacShare Apps for Launchpad).
@@ -356,7 +371,7 @@ class PcApps extends EventEmitter {
     const a = this.apps.find((x) => x.id === id);
     if (!a) return;
     const ok = await addToDock(a);
-    this.emit('popup', ok ? 'home' : 'driven', ok ? `${a.name} is in the Dock` : `Couldn’t add ${a.name} to the Dock`);
+    this.emit('popup', ok ? 'home' : 'driven', { key: ok ? '{app} is in the Dock' : 'Couldn’t add {app} to the Dock', vars: { app: a.name } });
   }
 
   // Is one of the PC app windows focused? (kvm.js doesn't cross the edge while it is.)

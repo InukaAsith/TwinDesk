@@ -59,6 +59,7 @@ class CallAudio extends EventEmitter {
     this.local = true; // Windows can play calls here (false while this PC's call devices are Bluetooth)
     this.forced = false; // registered again once, when the exe came up without its identity
     this.denied = false; // Windows said no (its privacy settings, or another app has the line): Connect after fixing that
+    this.denial = '';
     this.tries = 0;
     this.timer = null;
     this.gen = 0;
@@ -206,11 +207,13 @@ class CallAudio extends EventEmitter {
     if (m.ev === 'state') {
       this._log(`hands-free ${m.state}${m.access ? ` (access ${m.access})` : ''}${m.error ? ` (${m.error})` : ''}`);
       this.denied = false;
+      this.denial = '';
       if (m.state !== 'connected') this.here = false;
       if (m.state === 'connected') { this.tries = 0; this.error = ''; return this._set('ready'); }
       if (m.state === 'connecting') return this._set('connecting');
       if (m.access === 'DeniedByUser') {
         this.denied = true;
+        this.denial = 'privacy';
         this.error = 'Windows’ privacy settings keep calls from TwinDesk: allow it in Settings › Privacy & security › Phone calls, then Connect';
         this.tries = RETRY_MS.length + 1;
         return this._set('failed');
@@ -219,6 +222,7 @@ class CallAudio extends EventEmitter {
       // say): it's TwinDesk's once the phone is paired again.
       if (m.error === 'unregistered') {
         this.denied = true;
+        this.denial = 'unregistered';
         this.error = `Windows keeps ${this.phoneName || 'the phone'}’s calls for another app: Forget it below and pair it again`;
         this.tries = RETRY_MS.length + 1;
         return this._set('failed');
@@ -282,6 +286,8 @@ class CallAudio extends EventEmitter {
     };
     return {
       state: this.state, message: MESSAGES[this.state] || '', device: this.id,
+      ui: { targetName: (dev && dev.name) || this.phoneName, phoneName: this.phoneName, local: this.local,
+        denied: this.denied, denial: this.denial, error: this.error, retrying: this.tries <= RETRY_MS.length },
       devices: this.devices, here: this.here, address: this.address, canMute: this.here, canMove: this.local, canUnpair: true,
       pairHow: `In Settings › Bluetooth & devices: Add device › Bluetooth, then pick ${this.phoneName || 'the phone'} (the one with a phone icon)`,
     };

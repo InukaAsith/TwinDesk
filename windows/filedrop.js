@@ -45,7 +45,7 @@ class FileDrop {
   // paths from the Monitor 2 drop (x/y normalized over the video, or null), or from a drag across
   // the edge (release = true: the Mac places them where its pointer is when the button comes up).
   drop(paths, x, y, release) {
-    if (!this.settings.files.dropToMac) return this._report(null, false, 'Dropping files onto Monitor 2 is off (Files tab)');
+    if (!this.settings.files.dropToMac) return this._report(null, false, 'Dropping files onto Monitor 2 is off (Files tab)', 'Dropping files onto Monitor 2 is off (Files tab)');
     const files = [];
     for (const p of paths) {
       try {
@@ -53,7 +53,7 @@ class FileDrop {
         if (st.isFile()) files.push({ path: p, size: st.size });
       } catch (_) { /* gone */ }
     }
-    if (!files.length) return this._report(null, false, 'Only files can be sent (not folders)');
+    if (!files.length) return this._report(null, false, 'Only files can be sent (not folders)', 'Only files can be sent (not folders)');
     files.forEach((f, i) => this.queue.push({ ...f, x, y, release: !!release, index: i, count: files.length }));
     this._next();
   }
@@ -73,7 +73,7 @@ class FileDrop {
     const d = plan(paths);
     if (!d || !d.jobs.length) return null;
     const name = d.items.length === 1 ? d.items[0].name : d.items.length + ' items';
-    this.batches.set(batch, { kind, name, files: d.jobs.length, bytes: d.bytes, sent: 0 });
+    this.batches.set(batch, { kind, name, itemCount: d.items.length, files: d.jobs.length, bytes: d.bytes, sent: 0 });
     d.jobs.forEach((j, i) => this.queue.push({ ...j, batch, kind, index: i, count: d.jobs.length }));
     this._progress();
     this._next();
@@ -91,14 +91,16 @@ class FileDrop {
     this.batches.delete(m.batch);
     this.queue = this.queue.filter((j) => j.batch !== m.batch);
     if (this.onBatchProgress) this.onBatchProgress({ ...b, done: true, ok: !!m.ok });
-    this._report(b.name, !!m.ok, m.ok ? 'Sent' + (typeof m.where === 'string' && m.where ? ' to ' + m.where.slice(0, 300) : '') : 'Not everything arrived');
+    const folder = typeof m.where === 'string' ? m.where.slice(0, 300) : '';
+    this._report(b.name, !!m.ok, m.ok ? 'Sent' + (folder ? ' to ' + folder : '') : 'Not everything arrived',
+      m.ok ? (folder ? 'Sent to {folder}' : 'Sent') : 'Not everything arrived', folder ? { folder } : {}, b.itemCount);
   }
 
   // Right after kvm.take: describe everything in `drag.start`, then send the files.
   beginDrag(d) {
     this.cancelRelease(); // one drag at a time
     const { drag, items, dirs, list, jobs, bytes } = d;
-    this.drag = { drag, name: items.length > 1 ? items.length + ' items' : items[0].name };
+    this.drag = { drag, name: items.length > 1 ? items.length + ' items' : items[0].name, itemCount: items.length };
     this.link.send({ t: T.DRAG_START, drag, items, dirs, list, files: list.length, bytes });
     jobs.forEach((j, i) => this.queue.push({ ...j, drag, index: i, count: jobs.length }));
     this._next();
@@ -109,10 +111,15 @@ class FileDrop {
     if (!this.drag || m.drag !== this.drag.drag) return;
     const d = this.drag;
     this.drag = null;
-    if (m.result === 'dropped') this._report(d.name, true, 'Dropped on {name}' + (typeof m.where === 'string' && m.where ? ' in ' + m.where : ''));
+    if (m.result === 'dropped') {
+      const folder = typeof m.where === 'string' ? m.where : '';
+      this._report(d.name, true, 'Dropped on {name}' + (folder ? ' in ' + folder : ''),
+        folder ? 'Dropped on {name} in {folder}' : 'Dropped on {name}', folder ? { folder } : {}, d.itemCount);
+    }
     else {
       this._stopDrag(d.drag, false);
-      this._report(d.name, false, m.result === 'failed' ? '{Name} couldn’t take the drag' : 'Drag cancelled');
+      const message = m.result === 'failed' ? '{Name} couldn’t take the drag' : 'Drag cancelled';
+      this._report(d.name, false, message, message, {}, d.itemCount);
     }
   }
 
@@ -138,20 +145,20 @@ class FileDrop {
     try {
       await this._send(job);
     } catch (e) {
-      if (!job.batch) this._report(path.basename(job.path), false, e.message);
+      if (!job.batch) this._report(path.basename(job.path), false, e.message, e.messageKey, e.messageVars);
       else if (e.refused === 'not_allowed' && this.batches.has(job.batch)) { // turned off over there: the rest won't go either
         const b = this.batches.get(job.batch);
         this.batches.delete(job.batch);
         this.queue = this.queue.filter((j) => j.batch !== job.batch);
-        this._report(b.name, false, e.message);
+        this._report(b.name, false, e.message, e.messageKey, e.messageVars, b.itemCount);
       } // other failures: files.done says how the batch went
     }
   }
 
   async _send(job) {
     const name = path.basename(job.path);
-    if (this.link.status.state !== 'connected') throw new Error('Not connected to {name}');
-    if (job.size > P.FILE_MAX_BYTES) throw new Error('Too big');
+    if (this.link.status.state !== 'connected') throw localError('Not connected to {name}');
+    if (job.size > P.FILE_MAX_BYTES) throw localError('Too big');
     const id = crypto.randomBytes(8).toString('hex');
     const cur = { id, name, size: job.size, sent: 0, index: job.index, count: job.count, release: job.release, drag: job.drag, batch: job.batch };
     this.current = cur;
@@ -176,7 +183,7 @@ class FileDrop {
     const c = this.link.current;
     const a = await this._wait(id, [T.FILE_ACCEPT, T.FILE_REFUSE, T.FILE_CANCEL], c && c.transport === 'ble' ? ANSWER_BLE_MS : ANSWER_MS);
     if (a.t !== T.FILE_ACCEPT) {
-      const e = new Error(a.t === T.FILE_REFUSE ? refuseText(a.why) : 'Cancelled');
+      const e = localError(a.t === T.FILE_REFUSE ? refuseText(a.why) : 'Cancelled');
       e.refused = a.t === T.FILE_REFUSE ? a.why : '';
       throw e;
     }
@@ -185,9 +192,10 @@ class FileDrop {
     this.link.send({ t: T.FILE_END, id, sha256 });
     if (job.drag) return; // the Mac answers file.done when the drop target has it; drag.end says how it went
     const d = await this._wait(id, [T.FILE_DONE, T.FILE_CANCEL], DONE_MS);
-    if (d.t !== T.FILE_DONE || !d.ok) throw new Error(d.error || '{Name} couldn’t save it');
+    if (d.t !== T.FILE_DONE || !d.ok) throw d.error ? new Error(d.error) : localError('{Name} couldn’t save it');
     if (job.batch) return; // listed once, on files.done
-    this._report(name, true, d.path ? 'Saved on {name}: ' + d.path : 'Saved on {name}');
+    this._report(name, true, d.path ? 'Saved on {name}: ' + d.path : 'Saved on {name}',
+      d.path ? 'Saved on {name}: {path}' : 'Saved on {name}', d.path ? { path: d.path } : {});
   }
 
   // Fast files: the SHA-256 once it went, or null to send it the old way (an older app, Bluetooth, a
@@ -203,7 +211,7 @@ class FileDrop {
         if (now - shown >= 100) shown = now;
       });
     } catch (e) {
-      if (this.active.get(cur.id) !== cur) throw new Error('Cancelled');
+      if (this.active.get(cur.id) !== cur) throw localError('Cancelled');
       if (!e.early) {
         this.link.send({ t: T.FILE_CANCEL, id: cur.id });
         throw e;
@@ -221,9 +229,9 @@ class FileDrop {
     const stream = fs.createReadStream(job.path, { highWaterMark: P.FILE_CHUNK_BYTES });
     try {
       for await (const chunk of stream) {
-        if (this.active.get(id) !== cur) throw new Error('Cancelled');
+        if (this.active.get(id) !== cur) throw localError('Cancelled');
         while (this.link.bufferedAmount > HIGH_WATER) await sleep(15);
-        if (this.link.status.state !== 'connected') throw new Error('{Name} disconnected');
+        if (this.link.status.state !== 'connected') throw localError('{Name} disconnected');
         hash.update(chunk);
         this.link.send({ t: T.FILE_CHUNK, id, seq: seq++, data: chunk.toString('base64') });
         this._sent(job, cur, chunk.length, true);
@@ -245,7 +253,7 @@ class FileDrop {
 
   _wait(id, types, ms) {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.waiters.delete(id); reject(new Error('{Name} didn’t answer')); }, ms);
+      const timer = setTimeout(() => { this.waiters.delete(id); reject(localError('{Name} didn’t answer')); }, ms);
       this.waiters.set(id, { types, resolve: (m) => { clearTimeout(timer); this.waiters.delete(id); resolve(m); }, reject: (e) => { clearTimeout(timer); this.waiters.delete(id); reject(e); } });
     });
   }
@@ -279,12 +287,12 @@ class FileDrop {
       const b = c.batch && this.batches.get(c.batch);
       if (b) {
         this.batches.delete(c.batch);
-        this._report(b.name, false, 'Cancelled');
+        this._report(b.name, false, 'Cancelled', 'Cancelled', {}, b.itemCount);
       }
       if (!c.drag) all = true;
       this.active.delete(c.id); // the chunk loop stops at its next check
       if (this.link.fx) this.link.fx.cancel(c.id);
-      if (w) w.reject(new Error('Cancelled'));
+      if (w) w.reject(localError('Cancelled'));
     }
     if (all) this.queue = [];
     this.current = null;
@@ -292,15 +300,15 @@ class FileDrop {
 
   _abortAll(why) {
     this.queue = [];
-    for (const w of [...this.waiters.values()]) w.reject(new Error(why));
+    for (const w of [...this.waiters.values()]) w.reject(localError(why));
   }
 
   _progress() {
     this.onProgress(this.view());
   }
 
-  _report(name, ok, text) {
-    this.last = { name, ok, text, at: Date.now() };
+  _report(name, ok, text, messageKey, messageVars = {}, itemCount) {
+    this.last = { name, ok, text, at: Date.now(), ...(messageKey ? { messageKey, messageVars } : {}), ...(itemCount > 1 ? { itemCount } : {}) };
     this.onProgress(this.view());
   }
 
@@ -350,6 +358,11 @@ function plan(paths) {
 
 function refuseText(why) {
   return { not_allowed: '{Name} doesn’t accept dropped files (its Files tab)', too_big: 'Too big for {name}', busy: '{Name} is busy with another file' }[why] || '{Name} refused it';
+}
+
+// Local presentation metadata; the legacy message and file protocol stay unchanged.
+function localError(message) {
+  return Object.assign(new Error(message), { messageKey: message });
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

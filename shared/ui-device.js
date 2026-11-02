@@ -14,18 +14,20 @@
 'use strict';
 
 (function () {
+  const t = (text, vars) => window.I18n ? window.I18n.t(text, vars)
+    : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
   const PHONE_QS = [
     // id, label, icon (20×20 strokes)
-    ['wifi', 'Wi-Fi', 'M2.5 7.5a11 11 0 0 1 15 0 M5 10.3a7.3 7.3 0 0 1 10 0 M7.6 13a3.5 3.5 0 0 1 4.8 0 M10 15.8v.1'],
-    ['bluetooth', 'Bluetooth', 'M6 6.5l8 7-4 3.5V3l4 3.5-8 7'],
-    ['data', 'Mobile data', 'M6.5 16V5 M4 7.5l2.5-2.5L9 7.5 M13.5 4v11 M11 12.5l2.5 2.5 2.5-2.5'],
-    ['hotspot', 'Hotspot', 'M10 10.5v.1 M7.3 13a3.8 3.8 0 0 1 0-5.2 M12.7 7.8a3.8 3.8 0 0 1 0 5.2 M4.8 15.4a7.3 7.3 0 0 1 0-10.2 M15.2 5.2a7.3 7.3 0 0 1 0 10.2'],
-    ['torch', 'Torch', 'M7 2.5h6v4l-1.5 2.5V17.5h-3V9L7 6.5z'],
-    ['dnd', 'Do not disturb', 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M6 10h8'],
-    ['rotate', 'Auto-rotate', 'M3.5 10a6.5 6.5 0 0 1 11.3-4.4L16.5 7 M16.5 3v4h-4 M16.5 10a6.5 6.5 0 0 1-11.3 4.4L3.5 13 M3.5 17v-4h4'],
-    ['saver', 'Battery saver', 'M3.5 6.5h11v7h-11z M14.5 8.5h2v3h-2 M9 8v4 M7 10h4'],
+    ['wifi', t('Wi-Fi'), 'M2.5 7.5a11 11 0 0 1 15 0 M5 10.3a7.3 7.3 0 0 1 10 0 M7.6 13a3.5 3.5 0 0 1 4.8 0 M10 15.8v.1'],
+    ['bluetooth', t('Bluetooth'), 'M6 6.5l8 7-4 3.5V3l4 3.5-8 7'],
+    ['data', t('Mobile data'), 'M6.5 16V5 M4 7.5l2.5-2.5L9 7.5 M13.5 4v11 M11 12.5l2.5 2.5 2.5-2.5'],
+    ['hotspot', t('Hotspot'), 'M10 10.5v.1 M7.3 13a3.8 3.8 0 0 1 0-5.2 M12.7 7.8a3.8 3.8 0 0 1 0 5.2 M4.8 15.4a7.3 7.3 0 0 1 0-10.2 M15.2 5.2a7.3 7.3 0 0 1 0 10.2'],
+    ['torch', t('Torch'), 'M7 2.5h6v4l-1.5 2.5V17.5h-3V9L7 6.5z'],
+    ['dnd', t('Do not disturb'), 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M6 10h8'],
+    ['rotate', t('Auto-rotate'), 'M3.5 10a6.5 6.5 0 0 1 11.3-4.4L16.5 7 M16.5 3v4h-4 M16.5 10a6.5 6.5 0 0 1-11.3 4.4L3.5 13 M3.5 17v-4h4'],
+    ['saver', t('Battery saver'), 'M3.5 6.5h11v7h-11z M14.5 8.5h2v3h-2 M9 8v4 M7 10h4'],
   ];
-  const RINGER = [{ value: 'ring', label: 'Ring' }, { value: 'vibrate', label: 'Vibrate' }, { value: 'silent', label: 'Silent' }];
+  const RINGER = [{ value: 'ring', label: t('Ring') }, { value: 'vibrate', label: t('Vibrate') }, { value: 'silent', label: t('Silent') }];
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const glyph = (d) => {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -39,7 +41,7 @@
   const otpOf = (t) => (window.Otp ? window.Otp.otpOf(t) : '');
   // The PC and Linux say the session in s.link, the Mac in s.client.
   const linked = (s) => !!(s && ((s.link && s.link.state === 'connected') || s.client || (s.phone && s.phone.connected)));
-  const viaOf = (s) => (UI.via ? UI.via(s) : s.client && s.client.transport === 'ble' ? 'Bluetooth' : 'Wi-Fi');
+  const viaOf = (s) => (UI.via ? UI.via(s) : s.client && s.client.transport === 'ble' ? t('Bluetooth') : t('Wi-Fi'));
 
   UI.tab({
     id: 'overview',
@@ -55,6 +57,9 @@
       page.classList.add('device-page');
       const h1 = page.querySelector('h1 span');
       const desc = page.querySelector('.page-head p');
+      // This page interpolates its own messages; braces in device data stay literal.
+      for (const node of [body, h1, desc]) node.setAttribute('data-literal', '');
+      const row = (label, hint, controls = []) => UI.row(label, hint, controls, { literal: true });
       const doIt = (c) => (api.deviceDo ? api.deviceDo(c) : Promise.resolve());
 
       // ---- hero ----
@@ -64,15 +69,15 @@
       const batt = el('div', { class: 'dv-batt' }, [el('div', { class: 'dv-batt-fill' })]);
       const battText = el('span', { class: 'dv-batt-text' });
       const battRow = el('div', { class: 'dv-batt-row' }, [batt, battText]);
-      const showBtn = UI.button('Show screen', () => api.phoneScreen(true), 'primary');
+      const showBtn = UI.button(t('Show screen'), () => api.phoneScreen(true), 'primary');
       let ringing = false;
-      const ringBtn = UI.button('Ring', () => { ringing = !ringing; doIt({ do: ringing ? 'ring' : 'ringStop' }); paint(); });
-      const lockBtn = UI.button('Lock', () => doIt({ do: 'lock' }));
-      const sleepBtn = UI.button('Sleep', () => doIt({ do: 'sleep' }));
+      const ringBtn = UI.button(t('Ring'), () => { ringing = !ringing; doIt({ do: ringing ? 'ring' : 'ringStop' }); paint(); });
+      const lockBtn = UI.button(t('Lock'), () => doIt({ do: 'lock' }));
+      const sleepBtn = UI.button(t('Sleep'), () => doIt({ do: 'sleep' }));
       let wifiOn = false;
-      const wifiBtn = UI.button('Use Wi-Fi Direct', () => api.netWifi(!wifiOn));
-      const hotspotBtn = UI.button('Use hotspot', () => { api.netWifi('hotspot'); UI.go('connection'); });
-      const discBtn = UI.button('Disconnect', () => (UI.isPhone(UI.state) && api.disconnectPhone ? api.disconnectPhone() : api.disconnect()));
+      const wifiBtn = UI.button(t('Use Wi-Fi Direct'), () => api.netWifi(!wifiOn));
+      const hotspotBtn = UI.button(t('Use hotspot'), () => { api.netWifi('hotspot'); UI.go('connection'); });
+      const discBtn = UI.button(t('Disconnect'), () => (UI.isPhone(UI.state) && api.disconnectPhone ? api.disconnectPhone() : api.disconnect()));
       // Each button with its icon (20×20 strokes, the colour of its text).
       const ICO = {
         show: 'M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2',
@@ -125,28 +130,28 @@
       new ResizeObserver(cols).observe(grid);
       const vol = UI.slider({ min: 0, max: 100, step: 1, format: (v) => v + '%' }, (v) => doIt({ do: 'volume', stream: 'media', level: v / 100 }));
       const ringer = UI.segmented(RINGER, (v) => doIt({ do: 'ringer', mode: v }));
-      const soundRow = UI.row('Media volume', '', [vol, ringer]);
-      const qsCard = UI.card('Quick actions', [grid, soundRow], { actions: [UI.button('Customize', () => UI.go('general'), 'small link')] });
+      const soundRow = row(t('Media volume'), '', [vol, ringer]);
+      const qsCard = UI.card(t('Quick actions'), [grid, soundRow], { actions: [UI.button(t('Customize'), () => UI.go('general'), 'small link')] });
 
       // ---- computer controls ----
-      const pcBt = UI.switch((v) => doIt({ do: 'bluetooth', on: v }), { label: 'Bluetooth' });
-      const pcDnd = UI.switch((v) => doIt({ do: 'dnd', on: v }), { label: 'Do not disturb' });
-      const pcBtRow = UI.row('Bluetooth', '', [pcBt]);
-      const pcDndRow = UI.row('Do not disturb', '', [pcDnd]);
+      const pcBt = UI.switch((v) => doIt({ do: 'bluetooth', on: v }), { label: t('Bluetooth') });
+      const pcDnd = UI.switch((v) => doIt({ do: 'dnd', on: v }), { label: t('Do not disturb') });
+      const pcBtRow = row(t('Bluetooth'), '', [pcBt]);
+      const pcDndRow = row(t('Do not disturb'), '', [pcDnd]);
       const pcVol = UI.slider({ min: 0, max: 100, step: 1, format: (v) => v + '%' }, (v) => doIt({ do: 'volume', level: v / 100 }));
-      const pcVolRow = UI.row('Volume', '', [pcVol]);
-      const pcCard = UI.card('Controls', [pcBtRow, pcDndRow, pcVolRow]);
+      const pcVolRow = row(t('Volume'), '', [pcVol]);
+      const pcCard = UI.card(t('Controls'), [pcBtRow, pcDndRow, pcVolRow]);
 
       // ---- what's on: notifications on the left; clipboard, most used apps and send files on the right ----
       const notifList = el('div');
-      const notifCard = UI.card('Latest notifications', [notifList], { actions: [UI.button('See all', () => UI.go('notifications'), 'small link')] });
+      const notifCard = UI.card(t('Latest notifications'), [notifList], { actions: [UI.button(t('See all'), () => UI.go('notifications'), 'small link')] });
       const clipList = el('div', { class: 'history' });
-      const clipCard = UI.card('Clipboard', [clipList], { actions: [UI.button('See all', () => UI.go('clipboard'), 'small link')] });
+      const clipCard = UI.card(t('Clipboard'), [clipList], { actions: [UI.button(t('See all'), () => UI.go('clipboard'), 'small link')] });
       const appsGrid = el('div', { class: 'app-grid dv-apps' });
-      const appsCard = UI.card('Most used', [appsGrid], { actions: [UI.button('All apps', () => UI.go('papps'), 'small link')] });
+      const appsCard = UI.card(t('Most used'), [appsGrid], { actions: [UI.button(t('All apps'), () => UI.go('papps'), 'small link')] });
       const dropHint = el('div', { class: 'hint' });
-      const zone = el('div', { class: 'dropzone dv-drop' }, [el('div', {}, [el('div', { class: 'big', text: 'Drop files here' }), dropHint])]);
-      const dropCard = UI.card('Send files', [zone], { actions: [UI.button('Choose…', () => api.chooseSendFiles(), 'small link')] });
+      const zone = el('div', { class: 'dropzone dv-drop' }, [el('div', {}, [el('div', { class: 'big', text: t('Drop files here') }), dropHint])]);
+      const dropCard = UI.card(t('Send files'), [zone], { actions: [UI.button(t('Choose…'), () => api.chooseSendFiles(), 'small link')] });
       let canSend = false;
       zone.ondragover = (e) => { e.preventDefault(); if (canSend) zone.classList.add('over'); };
       zone.ondragleave = () => zone.classList.remove('over');
@@ -188,6 +193,7 @@
       const lower = el('div', { class: 'dv-two' }, [left, right]);
 
       const rezume = UI.rezumeCard ? UI.rezumeCard() : null;
+      const rezumeTitle = rezume && rezume.el.querySelector('[data-peer]');
 
       body.append(notConnected, hero, mediaCard, qsCard, pcCard, ...(rezume ? [rezume.el] : []), lower);
 
@@ -197,9 +203,9 @@
       // A button's words, its icon kept.
       const label = (b, t) => { const n = [...b.childNodes].find((x) => x.nodeType === 3); if (n) n.nodeValue = t; else b.append(t); };
       function paint() {
-        label(ringBtn, ringing ? 'Stop ringing' : 'Ring');
+        label(ringBtn, ringing ? t('Stop ringing') : t('Ring'));
         ringBtn.classList.toggle('danger', ringing);
-        ringNote.textContent = ringing ? 'Rings at full volume, even on silent, until you stop it here or there.' : '';
+        ringNote.textContent = ringing ? t('Rings at full volume, even on silent, until you stop it here or there.') : '';
         ringNote.hidden = !ringing;
       }
 
@@ -208,7 +214,7 @@
         const ph = s.phone || {};
         const c = ph.connected;
         const on = linked(s);
-        notConnected.set(on ? '' : 'Nothing is connected. Connect a phone or computer on the Connection page.');
+        notConnected.set(on ? '' : t('Nothing is connected. Connect a phone or computer on the Connection page.'));
         for (const x of [hero, mediaCard, qsCard, pcCard, lower]) x.hidden = !on;
         if (!on) return;
         const p = UI.peer(s);
@@ -226,19 +232,19 @@
         const rtt = phone ? c && c.rttMs : s.link ? s.link.rtt : s.client && s.client.rttMs;
         const via = phone && c && c.usb ? 'USB' : viaOf(s);
         desc.textContent = phone ? [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `Android ${info.release}`].filter(Boolean).join(' · ')
-          : { mac: 'Mac', win: 'Windows PC', linux: 'Linux computer' }[p.os] || '';
-        sub.textContent = ['Connected', via, rtt != null ? rtt + ' ms' : ''].filter(Boolean).join(' · ');
+          : { mac: 'Mac', win: t('Windows PC'), linux: t('Linux computer') }[p.os] || '';
+        sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(' · ');
         const level = phone ? info.battery : s.peerInfo && s.peerInfo.battery;
         battRow.hidden = level == null;
         if (level != null) {
           batt.firstChild.style.width = Math.max(2, Math.min(100, level)) + '%';
           batt.classList.toggle('low', level <= 20);
-          battText.textContent = level + '%' + ((phone ? info.charging : s.peerInfo && s.peerInfo.charging) ? ' · Charging' : '');
+          battText.textContent = t('{level}%{charging}', { level, charging: (phone ? info.charging : s.peerInfo && s.peerInfo.charging) ? ' · ' + t('Charging') : '' });
         }
         const ready = !!(ph.bridge && ph.bridge.state === 'ready');
         showBtn.hidden = !phone;
         showBtn.disabled = !ready;
-        showBtn.title = ready ? '' : 'Needs wireless debugging (Connection)';
+        showBtn.title = ready ? '' : t('Needs wireless debugging (Connection)');
         const can = (k) => !!(ctl && ctl.can && ctl.can[k]);
         ringBtn.hidden = !can('ring');
         if (ctl && typeof ctl.ringing === 'boolean' && ctl.ringing !== ringing) ringing = ctl.ringing;
@@ -247,7 +253,7 @@
         sleepBtn.hidden = phone || !can('sleep');
         const n = s.net || {};
         wifiOn = (n.why || []).includes('user') || !!n.linked;
-        label(wifiBtn, wifiOn ? 'Back to Bluetooth' : 'Use Wi-Fi Direct');
+        label(wifiBtn, wifiOn ? t('Back to Bluetooth') : t('Use Wi-Fi Direct'));
         const ble = n.transport === 'ble' || !!(s.client && s.client.transport === 'ble'); // the Mac says it on s.client
         wifiBtn.hidden = !(wifiOn || ble);
         hotspotBtn.hidden = !phone || wifiOn || n.state === 'hotspot' || !ble;
@@ -255,18 +261,18 @@
         const fact = (k, v) => (v ? [el('dt', { text: k }), el('dd', { text: v })] : []);
         const br = ph.bridge || {};
         const pi = (ctl && ctl.info) || {};
-        const control = br.input === 'phone' ? 'Accessibility'
-          : br.state === 'ready' ? 'ADB · ready' : br.state === 'connecting' ? 'ADB · connecting' : br.state === 'needsPair' ? 'ADB · not paired' : br.state === 'waitingWifi' ? 'ADB · off' : 'Not set up';
+        const control = br.input === 'phone' ? t('Accessibility')
+          : br.state === 'ready' ? t('ADB · ready') : br.state === 'connecting' ? t('ADB · connecting') : br.state === 'needsPair' ? t('ADB · not paired') : br.state === 'waitingWifi' ? t('ADB · off') : t('Not set up');
         facts.replaceChildren(...(phone ? [
-          ...fact('Storage', pi.storageTotal ? `${pi.storageUsed} of ${pi.storageTotal} GB` : info.storage ? `${info.storage.used} of ${info.storage.total} GB` : ''),
-          ...fact('Network', [pi.wifi, pi.cell].filter(Boolean).join(' · ')),
-          ...fact('Control', control),
-          ...fact('Signal', pi.signal),
-          ...fact('Link', via),
+          ...fact(t('Storage'), pi.storageTotal ? t('{used} of {total} GB', { used: pi.storageUsed, total: pi.storageTotal }) : info.storage ? t('{used} of {total} GB', { used: info.storage.used, total: info.storage.total }) : ''),
+          ...fact(t('Network'), [pi.wifi, pi.cell].filter(Boolean).join(' · ')),
+          ...fact(t('Control'), control),
+          ...fact(t('Signal'), pi.signal),
+          ...fact(t('Link'), via),
         ] : [
-          ...fact('System', s.peer && s.peer.osVersion),
-          ...fact('Address', (s.paired && s.paired.address) || (s.client && s.client.address)),
-          ...fact('Link', via),
+          ...fact(t('System'), s.peer && s.peer.osVersion),
+          ...fact(t('Address'), (s.paired && s.paired.address) || (s.client && s.client.address)),
+          ...fact(t('Link'), via),
         ]));
         facts.hidden = !facts.childElementCount;
 
@@ -279,15 +285,15 @@
         qsCard.hidden = !qs;
         if (qs) {
           for (const [id] of PHONE_QS) {
-            const t = tiles[id];
+            const tile = tiles[id];
             const has = id in qs;
-            t.b.hidden = !has;
+            tile.b.hidden = !has;
             if (!has) continue;
-            t.b.classList.toggle('on', !!qs[id]);
-            t.b.setAttribute('aria-pressed', String(!!qs[id]));
+            tile.b.classList.toggle('on', !!qs[id]);
+            tile.b.setAttribute('aria-pressed', String(!!qs[id]));
             const detail = qs.detail && qs.detail[id];
-            t.state.textContent = qs[id] ? detail || 'On' : 'Off';
-            t.b.title = qs.panel && qs.panel[id] ? 'Opens the setting on the phone' : '';
+            tile.state.textContent = qs[id] ? detail || t('On') : t('Off');
+            tile.b.title = qs.panel && qs.panel[id] ? t('Opens the setting on the phone') : '';
           }
           cols();
           soundRow.hidden = qs.volume == null;
@@ -319,15 +325,15 @@
           notifList.replaceChildren(...(history.length ? history.map((item) => {
             const text = [item.subtitle, item.body].filter(Boolean).join(' · ');
             const code = otpOf([item.title, item.body].join(' '));
-            const copy = code ? UI.button('Copy ' + code, () => api.copyText(code), 'small') : null;
-            const r = UI.row([item.appName || item.app, item.title].filter(Boolean).join(' · '), (text || 'Notification') + ' · ' + UI.ago(item.at), [copy]);
+            const copy = code ? UI.button(t('Copy {code}', { code }), () => api.copyText(code), 'small') : null;
+            const r = row([item.appName || item.app, item.title].filter(Boolean).join(' · '), (text || t('Notification')) + ' · ' + UI.ago(item.at), [copy]);
             const icon = (nf.historyIcons || {})[item.app];
             if (icon) {
               r.querySelector('.text').prepend(el('img', { class: 'dv-nicon', src: icon, alt: '' }));
               r.classList.add('with-ico');
             }
             return r;
-          }) : [UI.row('Nothing yet', 'New notifications from ' + devName + ' show here')]));
+          }) : [row(t('Nothing yet'), t('New notifications from {name} show here', { name: devName }))]));
         }
 
         // the clipboard's recent items: while Clipboard is on
@@ -338,21 +344,21 @@
         if (!clipCard.hidden && ck !== clipKey) {
           clipKey = ck;
           clipList.replaceChildren(...(recent.length ? recent.map((h, i) => el('div', { class: 'hist-item' }, [
-            el('span', { class: 'hist-dir ' + h.dir, title: (h.dir === 'out' ? 'Sent to ' : 'From ') + devName }, [UI.icon(h.dir === 'out' ? 'up' : 'down')]),
+            el('span', { class: 'hist-dir ' + h.dir, title: t(h.dir === 'out' ? 'Sent to {name}' : 'From {name}', { name: devName }) }, [UI.icon(h.dir === 'out' ? 'up' : 'down')]),
             h.image && h.image.thumb ? el('img', { class: 'hist-thumb', src: h.image.thumb, alt: '' }) : null,
             el('div', { class: 'hist-text' }, [
-              el('div', { class: 'hist-preview', text: h.image ? (h.image.shot ? 'Screenshot' : 'Picture') + ' · ' + h.image.w + ' × ' + h.image.h : String(h.text || '').replace(/\s+/g, ' ').trim() || '(whitespace)' }),
-              el('div', { class: 'hint', text: (h.dir === 'out' ? 'To ' : 'From ') + devName + ' · ' + UI.ago(h.at) }),
+              el('div', { class: 'hist-preview', text: h.image ? (h.image.shot ? t('Screenshot') : t('Picture')) + ' · ' + h.image.w + ' × ' + h.image.h : String(h.text || '').replace(/\s+/g, ' ').trim() || t('(whitespace)') }),
+              el('div', { class: 'hint', text: t(h.dir === 'out' ? 'To {name}' : 'From {name}', { name: devName }) + ' · ' + UI.ago(h.at) }),
             ]),
-            !h.image || h.image.copy ? UI.button('Copy', () => api.copyHistory(i), 'small') : null,
-          ])) : [UI.row(cb.historySize === 0 ? 'Recent items are off' : 'Nothing yet', cb.historySize === 0 ? 'Turn them on in Clipboard' : 'What’s copied on either side shows here')]));
+            !h.image || h.image.copy ? UI.button(t('Copy'), () => api.copyHistory(i), 'small') : null,
+          ])) : [row(cb.historySize === 0 ? t('Recent items are off') : t('Nothing yet'), cb.historySize === 0 ? t('Turn them on in Clipboard') : t('What’s copied on either side shows here'))]));
         }
 
         // send files: while sending files is on (the Mac has no switch for it: always)
         const fl = s.files || {};
         canSend = fl.dropToMac !== false;
         dropCard.hidden = !canSend || ov.files === false;
-        dropHint.textContent = 'They go to ' + devName + '’s Downloads';
+        dropHint.textContent = t('They go to {name}’s Downloads', { name: devName });
 
         // most used apps: the phone's own order (Usage access), else what was opened from here
         const apps = (UI.phoneAssets && UI.phoneAssets.apps) || [];
@@ -362,7 +368,7 @@
         if (ak !== appsKey) {
           appsKey = ak;
           appsGrid.replaceChildren(...top.map((a) => {
-            const b = el('button', { class: 'app-tile', title: 'Open ' + a.name, disabled: !ready }, [UI.appIcon(a.icon), el('span', { text: a.name })]);
+            const b = el('button', { class: 'app-tile', title: t('Open {app}', { app: a.name }), disabled: !ready }, [UI.appIcon(a.icon), el('span', { text: a.name })]);
             b.onclick = () => api.phoneOpenApp({ id: a.id, name: a.name });
             return b;
           }));
@@ -371,7 +377,10 @@
         if (ov.qs === false) qsCard.hidden = true;
 
         flow();
-        if (rezume) rezume.update(s, true);
+        if (rezume) {
+          if (rezumeTitle) rezumeTitle.textContent = t('Continue from {name}', { name: devName });
+          rezume.update(s, true);
+        }
       };
     },
   });

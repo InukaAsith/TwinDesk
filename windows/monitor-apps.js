@@ -9,6 +9,14 @@
   const mainVideo = document.getElementById('video');
   const BUTTONS = { 0: P.BUTTON.LEFT, 1: P.BUTTON.MIDDLE, 2: P.BUTTON.RIGHT, 3: P.BUTTON.BACK, 4: P.BUTTON.FORWARD };
   const open = new Map(); // wid → entry
+  const playerI18n = window.PlayerI18n;
+
+  function title(e) {
+    if (e.win.closed) return;
+    playerI18n.literal(e.win.document.querySelector('title'), e.rect.title || playerI18n.t('Mac app'));
+    e.win.document.documentElement.lang = playerI18n.locale;
+  }
+  playerI18n.onChange(() => { for (const e of open.values()) title(e); });
 
   const enabled = () => !window.monitorInputEnabled || window.monitorInputEnabled();
   const clamp = (v) => Math.min(1, Math.max(0, v));
@@ -21,7 +29,7 @@
       if (!e || e.win.closed) e = create(w);
       if (!e) continue;
       e.rect = w;
-      if (e.win.document.title !== w.title) e.win.document.title = w.title || 'Mac app';
+      title(e);
       layout(e);
     }
     for (const [wid, e] of open) {
@@ -42,7 +50,7 @@
     const win = window.open('about:blank', 'app-' + w.wid, 'width=800,height=600');
     if (!win) return null;
     const doc = win.document;
-    doc.title = w.title || 'Mac app';
+    doc.title = w.title || playerI18n.t('Mac app');
     const s = doc.body.style; // CSSOM only: the inherited CSP has no inline styles
     s.margin = '0'; s.overflow = 'hidden'; s.background = '#000'; s.cursor = 'none';
     doc.documentElement.style.height = '100%';

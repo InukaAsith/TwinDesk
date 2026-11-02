@@ -7,61 +7,64 @@
 'use strict';
 
 (function () {
+  const tr = (text, vars) => window.I18n ? window.I18n.t(text, vars)
+    : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
+
   const mac = /Mac/.test(navigator.platform);
   const linux = /Linux/.test(navigator.platform);
-  const here = mac ? 'this Mac' : linux ? 'this computer' : 'this PC';
+  const here = mac ? tr('this Mac') : linux ? tr('this computer') : tr('this PC');
   const isPhone = (s) => !!(s && s.phone && s.phone.connected);
 
   // Wireless debugging isn't ready: one line, with the way to Connection.
   const needAdb = () => {
-    const row = UI.row('Wireless debugging isn’t set up', 'Mirroring and phone apps need it. Set it up once on the Connection page.', [UI.button('Set Up', () => UI.go('connection'), 'small primary')]);
+    const row = UI.row(tr('Wireless debugging isn’t set up'), tr('Mirroring and phone apps need it. Set it up once on the Connection page.'), [UI.button(tr('Set Up'), () => UI.go('connection'), 'small primary')]);
     const card = UI.card('', [row]);
-    return { el: card, update(s) { const br = (s.phone || {}).bridge || {}; card.hidden = br.state === 'ready'; row.setHint(br.state === 'connecting' ? 'Connecting to the phone’s wireless debugging…' : 'Mirroring and phone apps need it. Set it up once on the Connection page.'); } };
+    return { el: card, update(s) { const br = (s.phone || {}).bridge || {}; card.hidden = br.state === 'ready'; row.setHint(br.state === 'connecting' ? tr('Connecting to the phone’s wireless debugging…') : tr('Mirroring and phone apps need it. Set it up once on the Connection page.')); } };
   };
 
   UI.tab({
     id: 'mirror',
     order: 9,
-    title: 'Mirroring',
+    title: tr('Mirroring'),
     icon: 'phone',
     color: 'linear-gradient(#64d2ff, #0a84ff)',
-    desc: 'The phone’s screen in a window, with touch, mouse and keyboard.',
+    desc: tr('The phone’s screen in a window, with touch, mouse and keyboard.'),
     hidden: (s) => !isPhone(s),
     build(body) {
       const { el, api } = UI;
       const adb = needAdb();
-      const showBtn = UI.button('Show Phone Screen', () => api.phoneScreen(true), 'primary');
-      const showRow = UI.row('Phone screen', 'Opens in its own window. Close it any time; the phone keeps running.', [showBtn]);
+      const showBtn = UI.button(tr('Show Phone Screen'), () => api.phoneScreen(true), 'primary');
+      const showRow = UI.row(tr('Phone screen'), tr('Opens in its own window. Close it any time; the phone keeps running.'), [showBtn]);
       const winList = el('div');
-      const winCard = UI.card('Open on ' + here, [winList]);
+      const winCard = UI.card(tr('Open on {computer}', { computer: here }), [winList]);
 
-      const sound = UI.switch((v) => api.setPhone({ sound: v }), { label: 'Phone sound' });
+      const sound = UI.switch((v) => api.setPhone({ sound: v }), { label: tr('Phone sound') });
       const quality = UI.select([
-        { value: '4', label: 'Data saver · 4 Mb/s' }, { value: '8', label: 'Balanced · 8 Mb/s' },
-        { value: '16', label: 'Sharp · 16 Mb/s' }, { value: '24', label: 'Sharpest · 24 Mb/s' },
+        { value: '4', label: tr('Data saver · 4 Mb/s') }, { value: '8', label: tr('Balanced · 8 Mb/s') },
+        { value: '16', label: tr('Sharp · 16 Mb/s') }, { value: '24', label: tr('Sharpest · 24 Mb/s') },
       ], (v) => api.setPhone({ bitrateMbps: Number(v) }));
       const rows = [
-        UI.row('Play phone sound here', 'Android 11 or later', [sound]),
-        UI.row('Picture quality', 'For the phone screen and app windows', [quality]),
+        UI.row(tr('Play phone sound here'), tr('Android 11 or later'), [sound]),
+        UI.row(tr('Picture quality'), tr('For the phone screen and app windows'), [quality]),
       ];
       // Windows: where the buttons sit (settings.phone.controls); the panel itself opens and closes
       // from each window's title bar and stays as it was left (settings.phone.panel).
       let controls = null;
       if (!mac && !linux) {
         controls = UI.select([
-          { value: 'top', label: 'Title bar' }, { value: 'side', label: 'Side panel' }, { value: 'bottom', label: 'Bottom bar' },
+          { value: 'top', label: tr('Title bar') }, { value: 'side', label: tr('Side panel') }, { value: 'bottom', label: tr('Bottom bar') },
         ], (v) => api.setPhone({ controls: v }));
-        rows.push(UI.row('Phone controls', 'Where Back, Home, Recents and the other buttons sit. The panel button in each window’s title bar shows or hides them.', [controls]));
+        rows.push(UI.row(tr('Phone controls'), tr('Where Back, Home, Recents and the other buttons sit. The panel button in each window’s title bar shows or hides them.'), [controls]));
       }
       let enterSends = null, arrowSwipe = null;
       if (!linux) {
-        enterSends = UI.switch((v) => api.setPhone({ enterSends: v }), { label: (mac ? 'Return' : 'Enter') + ' sends messages' });
-        rows.push(UI.row((mac ? 'Return' : 'Enter') + ' sends messages', 'In WhatsApp, Instagram and Telegram. ' + (mac ? '⇧Return' : 'Shift+Enter') + ' adds a new line.', [enterSends]));
-        arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: 'Arrow keys swipe' });
-        rows.push(UI.row('Arrow keys swipe', 'Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.', [arrowSwipe]));
+        enterSends = UI.switch((v) => api.setPhone({ enterSends: v }), { label: tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }) });
+        rows.push(UI.row(tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }), tr('In WhatsApp, Instagram and Telegram. {shortcut} adds a new line.', { shortcut: mac ? '⇧Return' : 'Shift+Enter' }), [enterSends]));
+        arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: tr('Arrow keys swipe') });
+        rows.push(UI.row(tr('Arrow keys swipe'), tr('Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.'), [arrowSwipe]));
       }
-      const optsCard = UI.card('Phone windows', rows);
-      const kbRow = UI.row('Mouse and keyboard', 'Push the pointer past the screen edge to use the phone.', [UI.button('Mouse Settings', () => UI.go('cursor'), 'small')]);
+      const optsCard = UI.card(tr('Phone windows'), rows);
+      const kbRow = UI.row(tr('Mouse and keyboard'), tr('Push the pointer past the screen edge to use the phone.'), [UI.button(tr('Mouse Settings'), () => UI.go('cursor'), 'small')]);
 
       body.append(adb.el, UI.card('', [showRow]), winCard, optsCard, UI.card('', [kbRow]));
 
@@ -82,7 +85,7 @@
         const wk = JSON.stringify(wins);
         if (wk !== winKey) {
           winKey = wk;
-          winList.replaceChildren(...wins.map((w) => UI.row(w.kind === 'screen' ? 'Phone screen' : w.title, w.kind === 'screen' ? 'Mirror' : w.app, [UI.button('Close', () => api.phoneCloseView(w.id), 'small')])));
+          winList.replaceChildren(...wins.map((w) => UI.row(w.kind === 'screen' ? tr('Phone screen') : w.title, w.kind === 'screen' ? tr('Mirror') : w.app, [UI.button(tr('Close'), () => api.phoneCloseView(w.id), 'small')], { literal: true })));
         }
       };
     },
@@ -91,16 +94,16 @@
   UI.tab({
     id: 'papps',
     order: 7.5,
-    title: 'Apps',
-    heading: 'Phone apps',
+    title: tr('Apps'),
+    heading: tr('Phone apps'),
     icon: 'apps',
     color: 'linear-gradient(#5ac8fa, #007aff)',
-    desc: 'Open any phone app in its own window.',
+    desc: tr('Open any phone app in its own window.'),
     hidden: (s) => !isPhone(s),
     build(body) {
       const { el, api } = UI;
       const adb = needAdb();
-      const search = el('input', { type: 'search', placeholder: 'Search apps', autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': 'Search apps' } });
+      const search = el('input', { type: 'search', placeholder: tr('Search apps'), autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': tr('Search apps') } });
       const count = el('span', { class: 'hint' });
       const grid = el('div', { class: 'app-grid' });
       const note = UI.note('info', '');
@@ -116,13 +119,13 @@
         const apps = (UI.phoneAssets && UI.phoneAssets.apps) || [];
         const term = search.value.trim().toLowerCase();
         const shown = term ? apps.filter((a) => a.name.toLowerCase().includes(term)) : apps;
-        count.textContent = apps.length ? (term ? `${shown.length} of ${apps.length}` : `${apps.length} apps`) : '';
-        note.set(ready && !apps.length ? 'Loading the phone’s apps…' : '');
+        count.textContent = apps.length ? tr(term ? '{shown} of {total}' : '{total} apps', { shown: shown.length, total: apps.length }) : '';
+        note.set(ready && !apps.length ? tr('Loading the phone’s apps…') : '');
         const k = JSON.stringify([shown.length, term, ph.assets, ready]);
         if (k === key) return;
         key = k;
         grid.replaceChildren(...shown.slice(0, 400).map((a) => {
-          const b = el('button', { class: 'app-tile', title: `Open ${a.name}` + (menuWord ? ` · Right-click to ${menuWord}` : ''), disabled: !ready }, [UI.appIcon(a.icon), el('span', { text: a.name })]);
+          const b = el('button', { class: 'app-tile', attrs: { 'data-literal': '' }, title: tr(mac ? 'Open {app} · Right-click to add it to the Dock' : menuWord ? 'Open {app} · Right-click to pin it to Start' : 'Open {app}', { app: a.name }), disabled: !ready }, [UI.appIcon(a.icon), el('span', { text: a.name })]);
           b.onclick = () => api.phoneOpenApp({ id: a.id, name: a.name });
           if (api.phoneAppMenu && menuWord) b.oncontextmenu = (e) => { e.preventDefault(); api.phoneAppMenu({ id: a.id, name: a.name }); };
           return b;

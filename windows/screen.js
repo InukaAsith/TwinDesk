@@ -7,9 +7,10 @@
 // its sharing and closing it stops it again (`screen.ctl`); the Receive tab switches Extend/Mirror.
 // Monitor 2 never opens by itself (no "Open automatically"): only the Receive tab, the
 // tray or a Mac-app window open it, and nothing is sent before that.
-const { BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const I18n = require('../shared/i18n.js');
 
 const T = P.T;
 const FROM_RENDERER = new Set([T.RTC_ANSWER, T.RTC_ICE, T.APP_FOCUS, T.APP_CLOSE]);
@@ -243,7 +244,12 @@ class Screen {
       : macName);
   }
 
+  _i18n() {
+    return I18n.create(I18n.resolveLanguage(this.settings.ui && this.settings.ui.language, app.getLocale()));
+  }
+
   _create() {
+    const i18n = this._i18n();
     const b = this.settings.windows.monitor || {};
     const aspect = this.state.width && this.state.height ? this.state.width / this.state.height : 16 / 9;
     const win = new BrowserWindow({
@@ -254,7 +260,7 @@ class Screen {
       minWidth: 320,
       minHeight: 200,
       backgroundColor: '#000000',
-      title: 'Monitor 2',
+      title: i18n.t('Monitor 2'),
       icon: path.join(__dirname, 'assets', 'tray@2x.png'),
       show: false,
       webPreferences: {
@@ -270,7 +276,7 @@ class Screen {
     this.ready = false;
     win.streamSize = { width: this.state.width || 1920, height: this.state.height || 1080 };
     if (this.apps) this.apps.attach(win); // Mac app windows open from this renderer
-    win.loadFile(path.join(__dirname, 'monitor.html'), { query: this.test ? { test: '1' } : {} });
+    win.loadFile(path.join(__dirname, 'monitor.html'), { query: { ...(this.test ? { test: '1' } : {}), language: i18n.locale } });
     win.once('ready-to-show', () => { if (!this.startHidden) win.show(); this.startHidden = false; });
     for (const ev of ['show', 'hide', 'minimize', 'restore', 'closed']) win.on(ev, () => this.policy());
     win.on('page-title-updated', (e) => e.preventDefault());

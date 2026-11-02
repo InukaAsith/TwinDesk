@@ -62,6 +62,9 @@ if (!app.requestSingleInstanceLock()) {
 const P = require('../shared/protocol.js');
 const CL = require('../shared/cursorlock.js');
 const trayMenu = require('../shared/traymenu.js');
+const I18n = require('../shared/i18n.js');
+let i18n = I18n.create('en');
+const t = (...args) => i18n.t(...args);
 const store = require('./store');
 const identity = require('./identity');
 const { Discovery, interfaces } = require('./discovery');
@@ -125,7 +128,7 @@ function openPhoneApp(pkg) {
     pendingPhoneApp = null;
     return svc.phoneViews.openApp(pkg, (phone.apps.find((a) => a.id === pkg) || {}).name);
   }
-  if (!pendingPhoneApp) hud.show('home', 'Opening it when the phone is ready…');
+  if (!pendingPhoneApp) hud.show('home', { key: 'Opening it when the phone is ready…' });
   pendingPhoneApp = { pkg, until: (pendingPhoneApp && pendingPhoneApp.until) || Date.now() + 2 * 60 * 1000 };
   clearTimeout(openPhoneApp.timer);
   if (Date.now() > pendingPhoneApp.until) return (pendingPhoneApp = null);
@@ -290,9 +293,9 @@ function handleSendLink(url) {
   try { u = new URL(url); } catch { return; }
   const paths = u.searchParams.getAll('p').filter((x) => x.startsWith('/')).slice(0, 1000);
   if (!paths.length) return;
-  if (!peer.current) return hud && hud.show('away', 'Not connected', 'Open TwinDesk on the other computer first');
+  if (!peer.current) return hud && hud.show('away', { key: 'Not connected' }, { key: 'Open TwinDesk on the other computer first' });
   actions.sendFiles(paths);
-  hud && hud.show('away', `Sending ${paths.length} item${paths.length === 1 ? '' : 's'} to ${peer.current.name}`);
+  hud && hud.show('away', { key: paths.length === 1 ? 'Sending {count} item to {name}' : 'Sending {count} items to {name}', vars: { count: paths.length, name: peer.current.name } });
 }
 
 function displayMode() {
@@ -359,6 +362,16 @@ function setupSeen() {
 
 // The window exists only while it's open: closing it (to the menu bar) frees its page, about
 // 50-100 MB; opening it again makes it anew (showWindow).
+function changeLanguage() {
+  i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
+  for (const player of BrowserWindow.getAllWindows()) {
+    if (!player.isDestroyed()) player.webContents.send('ui-language', i18n.locale);
+  }
+  trayKey = '';
+  updateTray();
+  if (win && !win.isDestroyed()) win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale } });
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1060,
@@ -380,7 +393,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'warning' || e.level === 'error') console.log(`[window] ${e.level}: ${e.message}`);
   });
-  win.loadFile(path.join(__dirname, 'control.html'));
+  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale } });
   win.once('ready-to-show', showWindow);
   // In the Dock and ⌘-Tab only while the window is open; menu bar only otherwise.
   const w = win;
@@ -423,11 +436,11 @@ function showUpdateWindow() {
 function rezumeItems() {
   const h = svc && svc.rz && settings.rezume.tray ? svc.rz.view : null;
   if (!h || !h.connected) return [];
-  const name = (peer.current && peer.current.name) || 'the other device';
+  const name = (peer.current && peer.current.name) || t('the other device');
   const cut = (t) => (t.length > 48 ? t.slice(0, 47) + '…' : t);
   const items = [];
-  if (h.incoming) items.push({ label: `Continue ${cut(h.incoming.title || h.incoming.name || h.incoming.appName)} from ${name}`, click: () => svc.rz.take() });
-  if (h.last && h.send) items.push({ label: `Send ${cut(h.last.title)} to ${name}`, click: () => svc.rz.push() });
+  if (h.incoming) items.push({ label: t('Continue {title} from {name}', { title: cut(h.incoming.title || h.incoming.name || h.incoming.appName), name }), click: () => svc.rz.take() });
+  if (h.last && h.send) items.push({ label: t('Send {title} to {name}', { title: cut(h.last.title), name }), click: () => svc.rz.push() });
   return items;
 }
 
@@ -453,12 +466,12 @@ function updateTray() {
   if (!tray) return;
   const c = state.client;
   const phone = !!(c && c.os === P.OS.ANDROID);
-  const name = c ? c.name : 'Other Computer';
+  const name = c ? c.name : t('Other Computer');
   const k = settings.kvm;
   const where = state.input && state.input.where;
   const found = (state.found || []).filter((d) => !c || d.id !== c.id);
   const phoneView = !!(phone && svc && svc.phoneViews.list().some((v) => v.kind === 'screen'));
-  const OS = { mac: 'Mac', linux: 'Linux', android: 'Phone' };
+  const OS = { mac: 'Mac', linux: 'Linux', android: t('Phone') };
   const g = (svc && link && link.view()) || { status: {}, hosts: [] };
   const again = !c && g.hosts.length && (g.status.state === 'stopped' || !!g.status.busy);
   const key = JSON.stringify([c && c.name, c && c.transport, phone, again, where, k.linked, k.ble, svc && svc.kvm.locked, settings.keys.lockKeys, k.driveOther, k.beDriven, settings.sharing.on,
@@ -468,31 +481,32 @@ function updateTray() {
   trayKey = key;
   tray.setToolTip(c ? `TwinDesk: ${c.name}` : 'TwinDesk');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    t,
     connected: !!c,
-    status: c ? `Connected to ${c.name}${c.transport === 'ble' ? ' · Bluetooth' : ''}` : 'Not connected',
+    status: c ? t('Connected to {name}', { name: c.name }) + (c.transport === 'ble' ? ' · ' + t('Bluetooth') : '') : t('Not connected'),
     home: where === 'driving' || where === 'driven' ? () => svc.kvm.home() : null,
     shared: { checked: k.linked !== false && !(svc && svc.kvm.paused), set: (on) => actions.setKvm({ shared: on }) },
-    lock: c ? { label: `Lock Cursor on ${where === 'driving' ? name : id.macName} (${CL.keysLabel(settings.keys.lockKeys, 'mac')})`, checked: svc && svc.kvm.locked, set: (on) => svc.kvm.setLocked(on) } : null,
+    lock: c ? { label: t('Lock Cursor on {name} ({key})', { name: where === 'driving' ? name : id.macName, key: CL.keysLabel(settings.keys.lockKeys, 'mac') }), checked: svc && svc.kvm.locked, set: (on) => svc.kvm.setLocked(on) } : null,
     keyboard: { checked: k.keyboard, set: (on) => actions.setKvm({ keyboard: on }) },
-    drive: { label: `Use Mouse and Keyboard on ${name}`, checked: k.driveOther, set: (on) => actions.setKvm({ driveOther: on }) },
-    driven: phone ? null : { label: `Let ${name} Control ${id.macName}`, checked: k.beDriven, set: (on) => actions.setKvm({ beDriven: on }) },
+    drive: { label: t('Use Mouse and Keyboard on {name}', { name }), checked: k.driveOther, set: (on) => actions.setKvm({ driveOther: on }) },
+    driven: phone ? null : { label: t('Let {name} Control {me}', { name, me: id.macName }), checked: k.beDriven, set: (on) => actions.setKvm({ beDriven: on }) },
     popup: { checked: settings.app.hud !== false, set: (on) => actions.setApp({ hud: on }) },
     screen: [
-      { label: 'Share Screen', checked: settings.sharing.on, set: (on) => actions.setSharing(on) },
+      { label: t('Share Screen'), checked: settings.sharing.on, set: (on) => actions.setSharing(on) },
       phone
-        ? { label: 'Show Phone Screen', checked: phoneView, set: (on) => actions.phoneScreen(on) }
-        : { label: 'Receive Screen', checked: svc && svc.pcView.isOpen, set: (on) => (on ? actions.showPcView() : actions.closePcView()) },
+        ? { label: t('Show Phone Screen'), checked: phoneView, set: (on) => actions.phoneScreen(on) }
+        : { label: t('Receive Screen'), checked: svc && svc.pcView.isOpen, set: (on) => (on ? actions.showPcView() : actions.closePcView()) },
     ],
     clipboard: { checked: settings.clipboard.enabled, set: (on) => actions.setClipboard({ enabled: on }) },
     sound: { checked: settings.audio.send, set: (on) => actions.setAudio({ send: on }) },
     drag: { checked: settings.files.dragEdge !== false, set: (on) => actions.setFiles({ dragEdge: on }) },
-    shortcuts: { label: `Copy and Paste Files (${CL.keysLabel(settings.files.copyKeys, 'mac')}, ${CL.keysLabel(settings.files.pasteKeys, 'mac')})`, checked: settings.files.shortcuts !== false, set: (on) => actions.setFiles({ shortcuts: on }) },
+    shortcuts: { label: t('Copy and Paste Files ({copy}, {paste})', { copy: CL.keysLabel(settings.files.copyKeys, 'mac'), paste: CL.keysLabel(settings.files.pasteKeys, 'mac') }), checked: settings.files.shortcuts !== false, set: (on) => actions.setFiles({ shortcuts: on }) },
     found: found.map((d) => ({ label: `${d.name} (${OS[d.os] || 'PC'})`, click: () => actions.pairWith(d.id) })),
     byAddress: () => { actions.setTab('overview'); showWindow(); },
     lookAgain: () => actions.refreshDiscovery(),
-    again: again ? { label: `${g.status.busy ? 'Take Over' : 'Connect to'} ${g.hosts[0].name}`, click: () => actions.connectAgain() } : null,
-    disconnect: c ? { label: phone ? 'Disconnect Phone' : `Disconnect ${name}`, click: () => actions.disconnect() } : null,
-    update: updates && updates.status.available ? { label: `TwinDesk ${updates.status.latest} available…`, click: showUpdateWindow } : null,
+    again: again ? { label: t(g.status.busy ? 'Take Over {name}' : 'Connect to {name}', { name: g.hosts[0].name }), click: () => actions.connectAgain() } : null,
+    disconnect: c ? { label: phone ? t('Disconnect Phone') : t('Disconnect {name}', { name }), click: () => actions.disconnect() } : null,
+    update: updates && updates.status.available ? { label: t('TwinDesk {version} available…', { version: updates.status.latest }), click: showUpdateWindow } : null,
     rezume: rezumeItems(),
     open: showWindow,
     log: () => require('../shared/applog.js').open(),
@@ -506,6 +520,7 @@ app.whenReady().then(() => {
   if (app.dock && !app.isPackaged) app.dock.setIcon(path.join(__dirname, '..', 'shared', 'icon', 'teindesk-dark-mac.png'));
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
+  i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
   id = identity.load(settings);
   Object.assign(state, { macName: id.macName, macId: id.macId, fp: id.fp, version: app.getVersion(), about: aboutInfo(app) });
   console.log(`[main] ${id.macName} (${id.macId}) fp ${id.fp}`);
@@ -657,6 +672,7 @@ app.whenReady().then(() => {
     });
     svc.phoneViews.vcam = svc.vcam;
     svc.camShare = new CamShare({
+      getLanguage: () => i18n.locale,
       link: {
         on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => ctx.os !== P.OS.ANDROID && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
         send: (m) => peer.sendToClient(m),
@@ -666,7 +682,7 @@ app.whenReady().then(() => {
       },
       cfg: () => settings.camera,
       save: () => store.saveSettings(settings),
-      popup: (kind, text) => hud && hud.show(kind, text),
+      popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
       peerName: () => (peer.current && peer.current.name) || 'the other computer',
       onChange: pushState,
     });
@@ -745,7 +761,7 @@ app.whenReady().then(() => {
       phoneApps: () => (svc.phone && svc.phone.apps) || [],
     });
     svc.rz.on('change', pushState);
-    svc.rz.on('opened', (o) => hud && hud.show('home', (o.how === 'sent' ? 'Sent to {name}: ' : 'From {name}: ') + o.title));
+    svc.rz.on('opened', (o) => hud && hud.show('home', { key: o.how === 'sent' ? 'Sent to {name}: {title}' : 'From {name}: {title}', vars: { name: peer.current ? peer.current.name : { key: 'the other computer' }, title: o.title } }));
     let stub = null;
     const dock = {
       show(o, take, dismiss) {
@@ -784,7 +800,7 @@ app.whenReady().then(() => {
         : ['gestures', 'ble', 'keyboard', 'speed', 'reverseScroll'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
-    current: app.getVersion(), platform: 'mac', getSettings: () => settings,
+    current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,
     save: () => store.saveSettings(settings), onChange: pushState,
     onShowModal: showUpdateWindow,
     notify: (title, body, onClick) => {
@@ -795,20 +811,20 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ state, settings, pushState, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
-    const name = peer.current ? peer.current.name : 'the other computer';
-    if (mode === 'driving') hud.show('away', settings.kvm.mouse ? `Using ${name}` : `Typing on ${name}`);
-    else if (mode === 'driven') hud.show('driven', `${name} is using ${id.macName}`);
-    else hud.show('home', `Back on ${id.macName}`);
+    const name = peer.current ? peer.current.name : { key: 'the other computer' };
+    if (mode === 'driving') hud.show('away', { key: settings.kvm.mouse ? 'Using {name}' : 'Typing on {name}', vars: { name } });
+    else if (mode === 'driven') hud.show('driven', { key: '{name} is using {me}', vars: { name, me: id.macName } });
+    else hud.show('home', { key: 'Back on {me}', vars: { me: id.macName } });
   });
   // Cursor lock: the popup goes where the pointer is (the other computer shows its own while we drive it).
   svc.kvm.on('lock', (on, mode) => {
     if (mode === 'driving' && !(svc.kvm.local && svc.kvm.local.drives())) return;
-    const where = mode === 'driving' ? (peer.current ? peer.current.name : 'the other computer') : id.macName;
-    hud.show('lock', on ? `Cursor locked on ${where}` : 'Cursor unlocked');
+    const where = mode === 'driving' ? (peer.current ? peer.current.name : { key: 'the other computer' }) : id.macName;
+    hud.show('lock', { key: on ? 'Cursor locked on {name}' : 'Cursor unlocked', vars: { name: where } });
   });
   // The lock key at home: a global shortcut, held while connected (pushState syncs it).
   lockKey = new CL.GlobalLockKey(globalShortcut, () => svc.kvm.toggleLock());
@@ -824,13 +840,14 @@ app.whenReady().then(() => {
   svc.kvm.on('linked', (on, here, ble) => {
     const name = peer.current ? peer.current.name : '';
     const key = P.hotkeyName(settings.keys.hotkey);
-    const sub = !here && name ? `Turned ${on ? 'on' : 'off'} on ${name}`
-      : on ? `${name ? `With ${name}. ` : ''}Double-tap ${key} to turn it off` : `${ble ? 'It comes back on Wi-Fi. ' : ''}Double-tap ${key} to turn it on`;
-    hud.show(on ? 'linkOn' : 'linkOff', `Cursor sharing ${on ? 'on' : 'off'}${!on && ble ? ' over Bluetooth' : ''}`, sub);
+    const sub = !here && name ? { key: on ? 'Turned on on {name}' : 'Turned off on {name}', vars: { name } }
+      : on ? { key: name ? 'With {name}. Double-tap {key} to turn it off' : 'Double-tap {key} to turn it off', vars: { name, key } }
+        : { key: ble ? 'It comes back on Wi-Fi. Double-tap {key} to turn it on' : 'Double-tap {key} to turn it on', vars: { key } };
+    hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : ble ? 'Cursor sharing off over Bluetooth' : 'Cursor sharing off' }, sub);
   });
   svc.drop.on('batch', (b) => {
     if (svc.rz && svc.rz.received(b)) return; // a document taken here: it opens
-    if (b.kind === 'send') hud.show('driven', `Received ${b.files} file${b.files === 1 ? '' : 's'} from ${peer.current ? peer.current.name : 'the other computer'}`);
+    if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
   });
   // Files on their way, live: the percentage beside the menu bar icon, ↓ coming in, ↑ going out
   // (macOS notifications have no progress bar, and TwinDesk has no Dock icon to put one on).
@@ -1013,7 +1030,7 @@ function loadHub() {
   const popup = () => {
     if (!callwin && !hub.call) return;
     callwin = callwin || require('../shared/callwin.js');
-    callwin.update(hub, { corner: 'top', open: goTab });
+    callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
   hub.on('change', popup);

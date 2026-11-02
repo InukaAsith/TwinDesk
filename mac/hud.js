@@ -5,7 +5,8 @@
 'use strict';
 
 const path = require('path');
-const { BrowserWindow, screen } = require('electron');
+const { app, BrowserWindow, screen } = require('electron');
+const I18n = require('../shared/i18n.js');
 
 const W = 360, H = 64, SHOW_MS = 1400;
 const BIG_W = 460, BIG_H = 230, BIG_MS = 2200; // the sharing on/off card
@@ -29,7 +30,7 @@ class Hud {
     this.win.setAlwaysOnTop(true, 'screen-saver');
     this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     this.win.setContentProtection(true); // never in a screen share or Monitor 2
-    this.ready = this.win.loadFile(path.join(__dirname, 'hud.html'));
+    this.ready = this.win.loadFile(path.join(__dirname, 'hud.html'), { query: { language: I18n.resolveLanguage((this.getSettings().ui || {}).language, app.getLocale()) } });
     return this.ready;
   }
 

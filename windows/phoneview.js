@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const { app, BrowserWindow, ipcMain, screen, shell, nativeImage, clipboard } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const I18n = require('../shared/i18n.js');
 const { Session, ACTION, TYPE } = require('./scrcpy');
 const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
@@ -87,7 +88,7 @@ class PhoneViews extends EventEmitter {
   sound(on) {
     const open = [...this.views.values()].find((v) => v.kind === 'sound');
     if (on && !open && this.bridge.serial) {
-      this._open({ kind: 'sound', title: 'Phone sound', width: 200, height: 100, hidden: true, opts: { video: false, audio: true, control: false, audioSource: 'output' } });
+      this._open({ kind: 'sound', title: this._i18n().t('Phone sound'), titleKey: 'Phone sound', width: 200, height: 100, hidden: true, opts: { video: false, audio: true, control: false, audioSource: 'output' } });
     } else if (!on && open) this.close(open.id);
   }
 
@@ -95,7 +96,7 @@ class PhoneViews extends EventEmitter {
   // hidden window with no adb session, fed what comes through the session.
   netSound(on) {
     const open = [...this.views.values()].find((v) => v.kind === 'netsound');
-    if (on && !open) this._open({ kind: 'netsound', title: 'Phone sound', width: 200, height: 100, hidden: true });
+    if (on && !open) this._open({ kind: 'netsound', title: this._i18n().t('Phone sound'), titleKey: 'Phone sound', width: 200, height: 100, hidden: true });
     else if (!on && open) this.close(open.id);
   }
 
@@ -121,8 +122,9 @@ class PhoneViews extends EventEmitter {
     const c = this._chrome();
     const h = Math.min(860, work.height - 80);
     const w = Math.round((h - c.h) * Math.min(d.w, d.h) / Math.max(d.w, d.h)) + c.w;
-    const name = (this.server.current && this.server.current.name) || 'Phone';
-    this._open({ kind: 'screen', title: name, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
+    const name = (this.server.current && this.server.current.name) || this._i18n().t('Phone');
+    const titleKey = (this.server.current && this.server.current.name) ? '' : 'Phone';
+    this._open({ kind: 'screen', title: name, titleKey, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
   }
 
   // The phone's camera (Camera's switch, or the phone's Camera page; scrcpy's camera source, Android
@@ -145,9 +147,11 @@ class PhoneViews extends EventEmitter {
       return;
     }
     const facing = want || 'back';
-    const name = ((this.server.current && this.server.current.name) || 'Phone') + ' Camera';
+    const titleName = (this.server.current && this.server.current.name) || '';
+    const titleKey = titleName ? '{name} Camera' : 'Phone Camera';
+    const name = this._i18n().t(titleKey, { name: titleName });
     const c = this._chrome();
-    const v = this._open({ kind: 'camera', title: name, width: 854 + c.w, height: 480 + c.h, opts: this._cameraOpts(facing, opts.size), hidden: !opts.show });
+    const v = this._open({ kind: 'camera', title: name, titleKey, titleName, width: 854 + c.w, height: 480 + c.h, opts: this._cameraOpts(facing, opts.size), hidden: !opts.show });
     if (!v) return;
     v.facing = facing;
     this.emit('change'); // with its facing, for the tab and the phone
@@ -262,10 +266,15 @@ class PhoneViews extends EventEmitter {
     return [...this.views.values()].some((v) => v.kind === 'screen' && v.session && v.session.opts.audio);
   }
 
-  _open({ kind, app, title, width, height, opts, hidden = false }) {
+  _i18n() {
+    const settings = this.getSettings();
+    return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
+  }
+
+  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false }) {
     if (!this.bridge.serial && kind !== 'netsound') {
       // Wireless debugging not up yet (just on Wi-Fi after Bluetooth): main.js opens it once it is.
-      if (this.onNoAdb && this.onNoAdb({ kind, app, title, width, height, opts, hidden })) return;
+      if (this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
       return this.bridge.emit('popup', 'home', 'Set up wireless debugging on the Phone page first');
     }
     const id = nextId++;
@@ -280,7 +289,7 @@ class PhoneViews extends EventEmitter {
     const v = { id, kind, app, title, win, session: null, keys: new KeyState(), size: null, ready: false, queue: [], chrome: this._chrome(), screenOff: false, torch: false, eaten: new Set() };
     this.views.set(id, v);
     this._send(v, 'phoneview:opts', this._opts(v));
-    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, controls: this._controls() } });
+    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, titleKey, titleName, controls: this._controls(), language: this._i18n().locale } });
     // The phone's screen: the window keeps the picture's shape, its bars added (snapped exact
     // when a resize ends: with the bars in, the right ratio changes a little with the size).
     if (kind === 'screen') win.on('resized', () => this._fit(v, 'height'));
@@ -314,7 +323,7 @@ class PhoneViews extends EventEmitter {
     this.emit('change');
     if (kind !== 'netsound') this._start(v, opts).catch((e) => {
       console.log(`[phone] ${kind} window: ${e.message}`);
-      this._send(v, 'phoneview:status', { error: e.message });
+      this._send(v, 'phoneview:status', { error: e.message, errorKey: e.messageKey, errorVars: e.messageVars });
     });
     return v;
   }
@@ -445,9 +454,9 @@ class PhoneViews extends EventEmitter {
     });
     s.on('video', (p) => this._send(v, 'phoneview:video', p));
     s.on('audio', (p) => !p.config && this._send(v, 'phoneview:audio', p.data));
-    s.on('closed', (why) => {
+    s.on('closed', (why, metadata) => {
       if (v.session !== s) return; // one a flip replaced
-      this._send(v, 'phoneview:status', { closed: why });
+      this._send(v, 'phoneview:status', { closed: why, closedKey: metadata && metadata.messageKey, closedVars: metadata && metadata.messageVars });
       if (v.kind === 'camera' && why !== 'stopped') {
         v.error = why;
         this.emit('change');

@@ -21,6 +21,11 @@ function setupIpc(ctx) {
   };
 
   handle('getState', () => ctx.buildState());
+  // A local UI preference: never synchronized to another device.
+  handle('setLanguage', (language) => {
+    if (language !== 'en' && language !== 'zh-CN') return;
+    change('ui', { language }, () => ctx.onLanguage());
+  });
   // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
   handle('hub', (r) => ctx.phoneHub().act(r));
 

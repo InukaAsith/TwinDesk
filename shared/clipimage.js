@@ -265,7 +265,7 @@ class ClipImages {
     // As the clipboard holds it now (it may re-encode it): never sent back.
     this.sig.received = sigOf(await this._read()) || sigOf(img);
     this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot));
-    this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${this.o.peerName()} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`);
+    this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${this.o.peerName()} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name: this.o.peerName(), keys: this.o.pasteKeys || 'Ctrl+V' } });
     this.o.onChange();
   }
 

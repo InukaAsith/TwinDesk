@@ -5,14 +5,18 @@
 // so and loads nothing (thumbnails there slowed everything else down).
 'use strict';
 
+(() => {
+  const tr = (text, vars) => window.I18n ? window.I18n.t(text, vars)
+    : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
+
 UI.tab({
   id: 'media',
   group: 'Phone',
   order: 7,
-  title: 'Photos',
+  title: tr('Photos'),
   icon: 'photo',
   color: 'linear-gradient(#ffd60a, #ff9f0a)',
-  desc: 'See your phone’s photos and videos and copy them here.',
+  desc: tr('See your phone’s photos and videos and copy them here.'),
   hidden: (s) => !UI.isPhone(s), // only while a phone is connected
   wifiOnly: true, // pictures are too big for Bluetooth: Connect with Wi-Fi Direct on top, nothing loads
   master: { get: (s) => !!(s.hub && s.hub.media), set: (v) => UI.api.hub({ do: 'set', what: 'media', on: v }) },
@@ -22,12 +26,12 @@ UI.tab({
     const top = UI.hubTop('media');
     let kind = 'all';
     const filter = UI.segmented([
-      { value: 'all', label: 'All' }, { value: 'photos', label: 'Photos' }, { value: 'videos', label: 'Videos' }, { value: 'screenshots', label: 'Screenshots' },
+      { value: 'all', label: tr('All') }, { value: 'photos', label: tr('Photos') }, { value: 'videos', label: tr('Videos') }, { value: 'screenshots', label: tr('Screenshots') },
     ], (v) => { kind = v; filter.set(v); reset(); });
     filter.set(kind);
-    const selectBtn = UI.button('Select', () => { selecting = !selecting; if (!selecting) chosen.clear(); paint(); }, 'small');
-    const saveBtn = UI.button('Save', () => save([...chosen]), 'primary small');
-    const status = el('span', { class: 'hint hub-media-status' });
+    const selectBtn = UI.button(tr('Select'), () => { selecting = !selecting; if (!selecting) chosen.clear(); paint(); }, 'small');
+    const saveBtn = UI.button(tr('Save'), () => save([...chosen]), 'primary small');
+    const status = el('span', { class: 'hint hub-media-status', attrs: { 'data-literal': '' } });
     const bar = el('div', { class: 'hub-media-bar' }, [filter.el, el('span', { class: 'hub-grow' }), status, saveBtn, selectBtn]);
     const grid = el('div', { class: 'hub-grid' });
     const sentinel = el('div', { class: 'hub-sentinel' });
@@ -35,12 +39,12 @@ UI.tab({
 
     // The viewer: one big, with its name and Save.
     const bigImg = el('img', { class: 'hub-big', alt: '' });
-    const bigName = el('div', { class: 'hub-big-name' });
-    const bigSub = el('div', { class: 'hint' });
+    const bigName = el('div', { class: 'hub-big-name', attrs: { 'data-literal': '' } });
+    const bigSub = el('div', { class: 'hint', attrs: { 'data-literal': '' } });
     const prev = UI.button('‹', () => step(-1));
     const next = UI.button('›', () => step(1));
-    const bigSave = UI.button('Save', () => viewing && save([viewing.id]), 'primary');
-    const closeBtn = UI.button('Close', () => view(null));
+    const bigSave = UI.button(tr('Save'), () => viewing && save([viewing.id]), 'primary');
+    const closeBtn = UI.button(tr('Close'), () => view(null));
     const viewer = el('div', { class: 'hub-viewer', hidden: true }, [
       el('div', { class: 'hub-viewer-stage' }, [prev, bigImg, next]),
       el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigSave, closeBtn]),
@@ -60,8 +64,8 @@ UI.tab({
     function tile(it) {
       const img = el('img', { alt: '', draggable: false });
       if (thumbs.get(it.id)) img.src = thumbs.get(it.id);
-      const t = el('button', { class: 'hub-tile', title: `${it.name}\n${new Date(it.at).toLocaleString()}` }, [img,
-        it.video ? el('span', { class: 'hub-dur', text: it.dur ? UI.duration(it.dur / 1000) : 'Video' }) : null,
+      const t = el('button', { class: 'hub-tile', attrs: { 'data-literal': '' }, title: `${it.name}\n${new Date(it.at).toLocaleString()}` }, [img,
+        it.video ? el('span', { class: 'hub-dur', text: it.dur ? UI.duration(it.dur / 1000) : tr('Video') }) : null,
         el('span', { class: 'hub-check' })]);
       t.dataset.id = it.id;
       t.onclick = () => {
@@ -76,12 +80,12 @@ UI.tab({
 
     function paint() {
       wrap.classList.toggle('selecting', selecting);
-      selectBtn.textContent = selecting ? 'Done' : 'Select';
+      selectBtn.textContent = selecting ? tr('Done') : tr('Select');
       saveBtn.hidden = !selecting;
       saveBtn.disabled = !chosen.size;
-      saveBtn.textContent = chosen.size ? `Save ${chosen.size} to ${UI.fill('{me}')}` : 'Save';
+      saveBtn.textContent = chosen.size ? tr('Save {count} to {me}', { count: chosen.size, me: UI.fill('{me}') }) : tr('Save');
       for (const [id, t] of tiles) t.classList.toggle('chosen', chosen.has(id));
-      status.textContent = items.length ? `${items.length}${more ? '+' : ''} ${kind === 'videos' ? 'videos' : kind === 'all' ? 'items' : kind}` : '';
+      status.textContent = items.length ? tr(kind === 'videos' ? '{count} videos' : kind === 'photos' ? '{count} photos' : kind === 'screenshots' ? '{count} screenshots' : '{count} items', { count: `${items.length}${more ? '+' : ''}` }) : '';
     }
 
     // The tiles on screen get their pictures, those first (what scrolled past is dropped).
@@ -130,7 +134,7 @@ UI.tab({
     function save(ids) {
       if (!ids.length) return;
       UI.hubAsk({ t: 'media.save', ids });
-      status.textContent = `Saving ${ids.length} to ${UI.fill('{me}')}’s ${UI.receivedName(UI.state)}…`;
+      status.textContent = tr('Saving {count} to {me}’s {folder}…', { count: ids.length, me: UI.fill('{me}'), folder: UI.receivedName(UI.state) });
       if (selecting) { selecting = false; chosen.clear(); }
       paint();
     }
@@ -170,7 +174,7 @@ UI.tab({
       more = !!m.more;
       nextKey = m.next || nextKey;
       grid.append(...fresh.map(tile));
-      if (!items.length) grid.replaceChildren(el('div', { class: 'hub-empty', text: kind === 'all' ? 'No photos or videos' : `No ${kind}` }));
+      if (!items.length) grid.replaceChildren(el('div', { class: 'hub-empty', text: tr(kind === 'all' ? 'No photos or videos' : kind === 'videos' ? 'No videos' : kind === 'screenshots' ? 'No screenshots' : 'No photos') }));
       paint();
     });
     UI.hubOn('media.thumb', (m) => {
@@ -199,7 +203,7 @@ UI.tab({
 
     return (s) => {
       top.render(s);
-      bigSave.textContent = `Save to ${UI.fill('{me}')}`;
+      bigSave.textContent = tr('Save to {me}', { me: UI.fill('{me}') });
       const ready = UI.hubReady(s, 'media') && !UI.onBle(s); // over Bluetooth: the Wi-Fi Direct note only
       wrap.hidden = !ready;
       if (!ready) { loaded = false; view(null); return; }
@@ -207,3 +211,5 @@ UI.tab({
     };
   },
 });
+
+})();

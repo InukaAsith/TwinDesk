@@ -33,7 +33,7 @@ body { display: grid; place-items: center; }
 body.big .card { display: flex; } body.big .pill { display: none; }
 .card.on { opacity: 1; transform: none; filter: none; }
 .card-text { font-size: 22px; font-weight: 700; letter-spacing: -0.2px; margin-top: 18px; }
-.card-sub { font-size: 13px; opacity: 0.6; margin-top: 6px; padding: 0 30px; text-align: center; line-height: 1.35; }
+.card-sub { max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; font-size: 13px; opacity: 0.6; margin-top: 6px; padding: 0 30px; text-align: center; line-height: 1.35; }
 .link-art { display: flex; align-items: center; gap: 0; height: 56px; }
 .screen { width: 58px; height: 40px; border-radius: 7px; border: 3px solid currentColor; box-sizing: border-box; position: relative; transition: transform 0.6s cubic-bezier(0.34, 1.45, 0.64, 1); }
 .screen::after { content: ""; position: absolute; left: 50%; bottom: -10px; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: currentColor; }

@@ -30,7 +30,9 @@ for (const f of ['windows/installer/build.js', 'linux/installer/build.js']) {
   const wholeDir = /copy\(path\.join\(ROOT, 'shared'\), path\.join\(STAGE, 'shared'\)/.test(s) && /\.\(js\|css\|html\)/.test(s);
   assert.ok(perFile || wholeDir, `${f} copies every shared/*.js`);
   assert.ok(!/copy\(path\.join\(ROOT, 'shared', '(?!protocol)[a-z-]+\.js'\)/.test(s), `${f} has no hand-kept list of shared files`);
+  assert.ok(/name === 'lang'/.test(s), `${f} stages shared/lang for shared player imports`);
 }
 assert.ok(/cp "\$ROOT"\/shared\/\*\.js/.test(read('mac/build-app.sh')), 'mac/build-app.sh copies every shared/*.js');
+assert.ok(/cp -R "\$ROOT\/shared\/lang"/.test(read('mac/build-app.sh')), 'mac/build-app.sh stages shared/lang');
 
 console.log(`packaging: passed (${required.size} shared modules required, all staged)`);

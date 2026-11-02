@@ -8,8 +8,9 @@
 // windows itself, and sends its own apps (apps.js).
 const path = require('path');
 const crypto = require('crypto');
-const { BrowserWindow, ipcMain, nativeImage, screen: displays } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
+const I18n = require('../shared/i18n.js');
 
 const T = P.T;
 const POINTER = new Set([T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL]);
@@ -108,7 +109,7 @@ class PeerApps {
     if (!this.active || !this.cfg.on || typeof id !== 'string') return;
     const a = this.list.find((x) => x.id === id);
     this.message = '';
-    this.popup('away', 'Opening ' + (a ? a.name : 'the app') + ' on ' + this.peerName() + '…');
+    this.popup('away', { key: 'Opening {app} on {name}…', vars: { app: a ? a.name : { key: 'the app' }, name: this.peerName() } });
     this.link.send({ t: T.PAPP_LAUNCH, id });
     this.onChange();
   }
@@ -147,10 +148,19 @@ class PeerApps {
     return this.list.find((x) => x.id === id) || null;
   }
 
+  _i18n() {
+    return I18n.create(I18n.resolveLanguage(this.settings.ui && this.settings.ui.language, app.getLocale()));
+  }
+
   _title(info) {
     const a = this._app(info.id);
     const name = a ? a.name : '';
-    return info.title && name && !info.title.includes(name) ? info.title + ' · ' + name : info.title || name || 'App';
+    return info.title && name && !info.title.includes(name) ? info.title + ' · ' + name : info.title || name || this._i18n().t('App');
+  }
+
+  _playerTitle(info) {
+    const a = this._app(info.id);
+    return { title: this._title(info), titleKey: info.title || (a && a.name) ? '' : 'App' };
   }
 
   _webPrefs() {
@@ -178,7 +188,7 @@ class PeerApps {
     win.once('ready-to-show', () => !win.isDestroyed() && win.showInactive());
     win.on('closed', () => { if (this.wins.get(w.info.wid) === w) this.wins.delete(w.info.wid); });
     this.wins.set(info.wid, w);
-    win.loadFile(path.join(__dirname, 'appview.html'));
+    win.loadFile(path.join(__dirname, 'appview.html'), { query: { language: this._i18n().locale, ...this._playerTitle(info) } });
   }
 
   _create(info) {
@@ -202,7 +212,10 @@ class PeerApps {
       send: (m) => this.active && this.link.send({ ...m, wid: w.info.wid }),
       enabled: () => w.session !== null && this.active,
     });
-    win.on('page-title-updated', (e) => e.preventDefault());
+    win.on('page-title-updated', (e) => {
+      e.preventDefault();
+      win.setTitle(this._title(w.info));
+    });
     win.on('focus', () => this.active && this.link.send({ t: T.PAPP_FOCUS, wid: w.info.wid }));
     win.on('blur', () => {
       w.keys.release();
@@ -226,7 +239,7 @@ class PeerApps {
       this.onChange();
     });
     this.wins.set(info.wid, w);
-    win.loadFile(path.join(__dirname, 'appview.html'));
+    win.loadFile(path.join(__dirname, 'appview.html'), { query: { language: this._i18n().locale, ...this._playerTitle(info) } });
   }
 
   // Its own taskbar button per app (AppUserModelID per app id) with the app's icon.
@@ -256,6 +269,7 @@ class PeerApps {
       return;
     }
     w.win.setTitle(this._title(info));
+    this._toWin(w, { t: 'title', ...this._playerTitle(info) });
     if (old.id !== info.id) this._dress(w);
     if (old.maxW !== info.maxW || old.maxH !== info.maxH || old.scale !== info.scale) this._limit(w);
     // Resized over there (not by us a moment ago): follow it.

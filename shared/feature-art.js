@@ -12,6 +12,7 @@
 //   FeatureArt.create(id, { color, keep, onDismiss }) -> { el, set(show) }; color: the tab's (a CSS gradient),
 //     keep: Dismiss is remembered
 (function () {
+  const t = (text) => window.I18n ? window.I18n.t(text) : text;
   const FREE = ['overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles'];
 
   // Nothing connected: a switch of a feature can't be turned on or off (it shows dimmed, styled from
@@ -101,7 +102,7 @@
     },
     // A big keyboard, keys going down one after another, the word appearing above.
     keyboard: () => {
-      const word = 'Hello!';
+      const word = t('Hello!');
       const keys = [[2, 5], [0, 2], [1, 8], [1, 8], [0, 8], [0, 9]]; // row, key: where each letter is
       let out = '<circle class="fa-bg" cx="200" cy="112" r="104"/>'
         + '<rect class="fa-paper fa-out" x="98" y="26" width="204" height="64" rx="16"/>'
@@ -123,7 +124,7 @@
     },
     // A clipboard board in the middle: Copy on one side, the page goes across, Paste on the other.
     clipboard: (id) => {
-      const pill = (x, label, vals, times) => `<g transform="translate(${x} 92)"><g>${grow(4, vals, times)}<rect class="fa-paper fa-out" x="-34" y="-13" width="68" height="26" rx="13"/><text class="fa-pill" y="4.5">${label}</text></g></g>`;
+      const pill = (x, label, vals, times) => `<g transform="translate(${x} 92)"><g>${grow(4, vals, times)}<rect class="fa-paper fa-out" x="-34" y="-13" width="68" height="26" rx="13"/><text class="fa-pill" y="4.5">${t(label)}</text></g></g>`;
       return '<ellipse class="fa-bg" cx="200" cy="124" rx="160" ry="100"/>'
         + laptop(30, 130, 76, 50) + laptop(294, 130, 76, 50)
         + `<rect fill="url(#fa-g-${id})" x="146" y="42" width="108" height="154" rx="16"/>`
@@ -229,7 +230,7 @@
       [...cmd].forEach((ch, i) => {
         out += `<text class="fa-mono" x="${92 + i * 9}" y="86" opacity="0">${ch === ' ' ? '&#160;' : ch}${from(6, (0.05 + i * 0.035).toFixed(3))}</text>`;
       });
-      out += `<text class="fa-mono dim" x="76" y="112" opacity="0">Connected to the other computer${from(6, '0.55')}</text>`
+      out += `<text class="fa-mono dim" x="76" y="112" opacity="0">${t('Connected to the other computer')}${from(6, '0.55')}</text>`
         + `<text class="fa-mono dim" x="76" y="138" opacity="0">~ $${from(6, '0.66')}</text>`;
       const xs = ['92', ...[...cmd].map((_, i) => 101 + i * 9), '112'];
       const ys = ['74', ...[...cmd].map(() => 74), '126'];
@@ -416,13 +417,13 @@
       }
       const [head, text] = TEXT[id];
       const h = document.createElement('h2');
-      h.textContent = head;
+      h.textContent = t(head);
       const p = document.createElement('p');
-      p.textContent = text;
+      p.textContent = t(text);
       const ok = document.createElement('button');
       ok.className = 'btn';
-      ok.textContent = 'Dismiss';
-      ok.title = 'Show the settings';
+      ok.textContent = t('Dismiss');
+      ok.title = t('Show the settings');
       ok.onclick = () => {
         gone = true;
         if (keep) dismiss(id);

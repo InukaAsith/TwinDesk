@@ -16,50 +16,51 @@
 const check = (label, o) => ({ label, type: 'checkbox', checked: !!o.checked, click: (i) => o.set(i.checked) });
 const sep = { type: 'separator' };
 
-function connectTo(m) {
+function connectTo(m, t) {
   return {
-    label: 'Connect To',
+    label: t('Connect To'),
     submenu: [
-      ...(m.found.length ? m.found : [{ label: 'Nobody nearby', enabled: false }]),
+      ...(m.found.length ? m.found : [{ label: t('Nobody nearby'), enabled: false }]),
       sep,
-      { label: 'Connect by Address…', click: m.byAddress },
-      { label: 'Look Again', click: m.lookAgain },
+      { label: t('Connect by Address…'), click: m.byAddress },
+      { label: t('Look Again'), click: m.lookAgain },
     ],
   };
 }
 
 function template(m) {
+  const t = m.t || ((text) => text); // platforms opt in without changing their existing menus
   const status = { label: m.status, enabled: false };
   if (!m.connected) {
-    return [status, ...(m.again ? [m.again] : []), connectTo(m), sep, { label: 'Open TwinDesk…', click: m.open }, { label: 'Quit TwinDesk', click: m.quit }];
+    return [status, ...(m.again ? [m.again] : []), connectTo(m, t), sep, { label: t('Open TwinDesk…'), click: m.open }, { label: t('Quit TwinDesk'), click: m.quit }];
   }
   return [
     status,
-    ...(m.home ? [{ label: 'Bring Mouse and Keyboard Back', click: m.home }] : []),
+    ...(m.home ? [{ label: t('Bring Mouse and Keyboard Back'), click: m.home }] : []),
     ...(m.rezume && m.rezume.length ? [...m.rezume, sep] : []),
-    check('Cursor Sharing', m.shared),
+    check(t('Cursor Sharing'), m.shared),
     sep,
     {
-      label: 'Mouse and Keyboard',
+      label: t('Mouse and Keyboard'),
       submenu: [
-        check('Share Keyboard', m.keyboard),
+        check(t('Share Keyboard'), m.keyboard),
         ...(m.lock ? [check(m.lock.label, m.lock)] : []),
         sep,
         check(m.drive.label, m.drive),
         ...(m.driven ? [check(m.driven.label, m.driven)] : []),
         sep,
-        check('Show a Popup When Switching', m.popup),
+        check(t('Show a Popup When Switching'), m.popup),
       ],
     },
-    { label: 'Screen', submenu: m.screen.map((x) => check(x.label, x)) },
-    { label: 'Clipboard and Sound', submenu: [check('Share Clipboard', m.clipboard), check('Send Sound', m.sound)] },
-    { label: 'Files', submenu: [check('Drag Files Across the Screen Edge', m.drag), check(m.shortcuts.label, m.shortcuts)] },
-    { label: 'Connection', submenu: [...(m.disconnect ? [m.disconnect, sep] : []), connectTo(m)] },
+    { label: t('Screen'), submenu: m.screen.map((x) => check(x.label, x)) },
+    { label: t('Clipboard and Sound'), submenu: [check(t('Share Clipboard'), m.clipboard), check(t('Send Sound'), m.sound)] },
+    { label: t('Files'), submenu: [check(t('Drag Files Across the Screen Edge'), m.drag), check(m.shortcuts.label, m.shortcuts)] },
+    { label: t('Connection'), submenu: [...(m.disconnect ? [m.disconnect, sep] : []), connectTo(m, t)] },
     sep,
     ...(m.update ? [m.update] : []),
-    { label: 'Open TwinDesk…', click: m.open },
-    { label: 'Open Log Folder', click: m.log },
-    { label: 'Quit TwinDesk', click: m.quit },
+    { label: t('Open TwinDesk…'), click: m.open },
+    { label: t('Open Log Folder'), click: m.log },
+    { label: t('Quit TwinDesk'), click: m.quit },
   ];
 }
 

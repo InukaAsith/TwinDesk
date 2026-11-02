@@ -13,12 +13,12 @@
   <link rel="stylesheet" href="../shared/ui-device.css">
 </head>
 <body>
-  <nav id="sidebar" aria-label="Sections">
+  <nav id="sidebar" aria-label="Sections" data-i18n-label="Sections">
     <div class="identity">
       <div class="app-mark" aria-hidden="true"></div>
       <div class="who">
-        <div class="app-name">TwinDesk<span class="mesh-pill" title="Multi-device is on: Mesh mode, in beta">MESH <span>beta</span></span></div>
-        <div class="peer"><span id="peer-dot" class="dot"></span><span id="peer-text">Not connected</span></div>
+        <div class="app-name">TwinDesk<span class="mesh-pill" title="Multi-device is on: Mesh mode, in beta" data-i18n-title="Multi-device is on: Mesh mode, in beta">MESH <span>beta</span></span></div>
+        <div class="peer"><span id="peer-dot" class="dot"></span><span id="peer-text" data-i18n>Not connected</span></div>
       </div>
     </div>
     <div id="side-scroll">
@@ -32,12 +32,12 @@
     <section id="banner" class="banner" hidden>
       <div class="banner-text">
         <span id="pair-title"><strong id="pair-name"></strong> wants to pair</span>
-        <span id="pair-code-label" class="code-label">Code</span> <span id="pair-code" class="code"></span>
+        <span id="pair-code-label" class="code-label" data-i18n>Code</span> <span id="pair-code" class="code"></span>
         <div id="pair-hint" class="hint"></div>
       </div>
       <div class="banner-actions">
-        <button id="pair-deny" class="btn">Deny</button>
-        <button id="pair-allow" class="btn primary">Allow</button>
+        <button id="pair-deny" class="btn" data-i18n>Deny</button>
+        <button id="pair-allow" class="btn primary" data-i18n>Allow</button>
       </div>
     </section>
     <section id="net-banner" class="banner" hidden>
@@ -45,18 +45,22 @@
         <span id="net-title"></span>
         <div id="net-hint" class="hint"></div>
         <div id="net-form" class="net-form" hidden>
-          <input id="net-ssid" type="text" placeholder="Hotspot name" autocomplete="off" spellcheck="false" aria-label="Hotspot name">
-          <input id="net-pass" type="password" placeholder="Password" autocomplete="off" aria-label="Hotspot password">
+          <input id="net-ssid" type="text" placeholder="Hotspot name" data-i18n-placeholder="Hotspot name" autocomplete="off" spellcheck="false" aria-label="Hotspot name" data-i18n-label="Hotspot name">
+          <input id="net-pass" type="password" placeholder="Password" data-i18n-placeholder="Password" autocomplete="off" aria-label="Hotspot password" data-i18n-label="Hotspot password">
         </div>
       </div>
       <div class="banner-actions">
-        <button id="net-cancel" class="btn">Cancel</button>
-        <button id="net-join" class="btn primary">Join</button>
+        <button id="net-cancel" class="btn" data-i18n>Cancel</button>
+        <button id="net-join" class="btn primary" data-i18n>Join</button>
       </div>
     </section>
     <div id="pages"></div>
   </main>
 
+  <script src="../shared/lang/en.js"></script>
+  <script src="../shared/lang/zh-CN.js"></script>
+  <script src="../shared/i18n.js"></script>
+  <script src="i18n.js"></script>
   <script src="../shared/protocol.js"></script>
   <script src="control.js"></script>
   <script src="../shared/otp.js"></script>
@@ -73,6 +77,7 @@
   <script src="ui-files.js"></script>
   <script src="ui-mount.js"></script>
   <script src="ui-apps.js"></script>
+  <script src="../shared/ui-adb.js"></script>
   <script src="ui-phone.js"></script>
   <script src="../shared/ui-device.js"></script>
   <script src="../shared/ui-mirror.js"></script>

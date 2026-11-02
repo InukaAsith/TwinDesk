@@ -6,6 +6,9 @@
 (function () {
   'use strict';
 
+  const t = (key, vars) => window.I18n ? window.I18n.t(key, vars)
+    : String(key).replace(/\{(\w+)\}/g, (match, name) => vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match);
+
   let overlay = null;
   let banner = null;
   let lastUpdates = null;
@@ -33,7 +36,7 @@
     try {
       const d = new Date(isoStr);
       if (isNaN(d.getTime())) return '';
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      return d.toLocaleDateString(window.I18n ? window.I18n.locale : undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     } catch (_) {
       return '';
     }
@@ -41,7 +44,7 @@
 
   function parseMarkdownNotes(raw) {
     if (!raw || typeof raw !== 'string' || !raw.trim()) {
-      return '<p class="updater-empty-notes">No release notes provided for this version.</p>';
+      return `<p class="updater-empty-notes">${escapeHtml(t('No release notes provided for this version.'))}</p>`;
     }
 
     const lines = raw.split(/\r?\n/);
@@ -109,7 +112,7 @@
     overlay.hidden = true;
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', 'Software Update');
+    overlay.setAttribute('aria-label', t('Software Update'));
 
     const modal = document.createElement('div');
     modal.className = 'updater-pop';
@@ -121,14 +124,14 @@
     const icon = document.createElement('div');
     icon.className = 'updater-icon';
     icon.setAttribute('role', 'img');
-    icon.setAttribute('aria-label', 'TwinDesk icon');
+    icon.setAttribute('aria-label', t('TwinDesk icon'));
 
     const titleBox = document.createElement('div');
     titleBox.className = 'updater-title-box';
 
     const title = document.createElement('h2');
     title.className = 'updater-title';
-    title.textContent = 'A new version of TwinDesk is available!';
+    title.textContent = t('A new version of TwinDesk is available!');
 
     const subtitle = document.createElement('p');
     subtitle.className = 'updater-subtitle';
@@ -154,6 +157,7 @@
     assetBar.className = 'updater-asset';
     const assetName = document.createElement('span');
     assetName.className = 'updater-asset-name';
+    assetName.setAttribute('data-literal', '');
     const assetSize = document.createElement('span');
     assetSize.className = 'updater-asset-size';
     assetBar.append(assetName, assetSize);
@@ -163,9 +167,10 @@
     notesWrap.className = 'updater-notes-wrap';
     const notesLabel = document.createElement('div');
     notesLabel.className = 'updater-notes-label';
-    notesLabel.textContent = 'Release Notes';
+    notesLabel.textContent = t('Release Notes');
     const notesBox = document.createElement('div');
     notesBox.className = 'updater-notes selectable';
+    notesBox.setAttribute('data-literal', '');
     notesWrap.append(notesLabel, notesBox);
 
     // Actions Footer
@@ -177,11 +182,11 @@
 
     const skipBtn = document.createElement('button');
     skipBtn.className = 'btn updater-btn-skip';
-    skipBtn.textContent = 'Skip This Version';
+    skipBtn.textContent = t('Skip This Version');
 
     const linkBtn = document.createElement('button');
     linkBtn.className = 'btn updater-btn-link';
-    linkBtn.textContent = 'View on GitHub ↗';
+    linkBtn.textContent = t('View on GitHub ↗');
 
     leftActions.append(skipBtn, linkBtn);
 
@@ -190,11 +195,11 @@
 
     const laterBtn = document.createElement('button');
     laterBtn.className = 'btn updater-btn-later';
-    laterBtn.textContent = 'Remind Me Later';
+    laterBtn.textContent = t('Remind Me Later');
 
     const updateBtn = document.createElement('button');
     updateBtn.className = 'btn primary updater-btn-update';
-    updateBtn.textContent = 'Update Now';
+    updateBtn.textContent = t('Update Now');
 
     rightActions.append(laterBtn, updateBtn);
     actions.append(leftActions, rightActions);
@@ -267,7 +272,7 @@
     banner.className = 'updater-banner';
     banner.hidden = true;
     banner.setAttribute('role', 'region');
-    banner.setAttribute('aria-label', 'Software update notification');
+    banner.setAttribute('aria-label', t('Software update notification'));
 
     const text = document.createElement('div');
     text.className = 'updater-banner-text';
@@ -289,12 +294,12 @@
 
     const viewBtn = document.createElement('button');
     viewBtn.className = 'btn small';
-    viewBtn.textContent = 'Release notes';
+    viewBtn.textContent = t('Release notes');
     viewBtn.onclick = () => show();
 
     const getBtn = document.createElement('button');
     getBtn.className = 'btn small primary';
-    getBtn.textContent = 'Download';
+    getBtn.textContent = t('Download');
     getBtn.onclick = () => {
       if (window.macshare && window.macshare.openUpdate) {
         window.macshare.openUpdate();
@@ -304,8 +309,8 @@
     const closeBtn = document.createElement('button');
     closeBtn.className = 'updater-banner-close';
     closeBtn.textContent = '✕';
-    closeBtn.title = 'Dismiss banner';
-    closeBtn.setAttribute('aria-label', 'Dismiss banner');
+    closeBtn.title = t('Dismiss banner');
+    closeBtn.setAttribute('aria-label', t('Dismiss banner'));
     closeBtn.onclick = () => {
       banner.hidden = true;
       if (lastUpdates && lastUpdates.latest) {
@@ -332,18 +337,19 @@
       assetBar, assetName, assetSize, notesBox, updateBtn,
     } = overlay._refs;
 
-    const latest = u.latest ? `v${u.latest}` : 'New Version';
+    const latest = u.latest ? `v${u.latest}` : t('New Version');
     const current = u.current ? `v${u.current}` : '';
 
-    title.textContent = `TwinDesk ${u.latest || ''} is available`;
-    subtitle.textContent = `A new version of TwinDesk is ready to download and install${current ? ` (you have ${current})` : ''}.`;
+    title.textContent = t('TwinDesk {version} is available', { version: u.latest || '' });
+    subtitle.textContent = current ? t('A new version of TwinDesk is ready to download and install (you have {version}).', { version: current })
+      : t('A new version of TwinDesk is ready to download and install.');
 
     pillNew.textContent = latest;
-    pillCur.textContent = current ? `Current: ${current}` : '';
+    pillCur.textContent = current ? t('Current: {version}', { version: current }) : '';
     pillCur.hidden = !current;
 
     const dateStr = formatDate(u.publishedAt);
-    pillDate.textContent = dateStr ? `Released: ${dateStr}` : '';
+    pillDate.textContent = dateStr ? t('Released: {date}', { date: dateStr }) : '';
     pillDate.hidden = !dateStr;
 
     // Asset
@@ -351,10 +357,10 @@
       assetBar.hidden = false;
       assetName.innerHTML = `📦 <span>${escapeHtml(u.download.name)}</span>`;
       assetSize.textContent = formatBytes(u.download.size);
-      updateBtn.textContent = 'Download & Install';
+      updateBtn.textContent = t('Download & Install');
     } else {
       assetBar.hidden = true;
-      updateBtn.textContent = 'Update Now';
+      updateBtn.textContent = t('Update Now');
     }
 
     // Release Notes
@@ -380,9 +386,9 @@
       const showBanner = u.available && !u.skipped && bannerDismissedFor !== u.latest;
       banner.hidden = !showBanner;
       if (showBanner) {
-        banner._refs.lead.textContent = `TwinDesk ${u.latest} is available.`;
-        banner._refs.sub.textContent = u.current ? `(current: v${u.current})` : '';
-        banner._refs.getBtn.textContent = u.download ? 'Download' : 'Update';
+        banner._refs.lead.textContent = t('TwinDesk {version} is available.', { version: u.latest });
+        banner._refs.sub.textContent = u.current ? t('(current: v{version})', { version: u.current }) : '';
+        banner._refs.getBtn.textContent = u.download ? t('Download') : t('Update');
       }
     }
 

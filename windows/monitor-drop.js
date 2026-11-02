@@ -4,6 +4,7 @@
 (function () {
   const api = window.monitor;
   const status = document.getElementById('drop-status');
+  const playerI18n = window.PlayerI18n;
   const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
 
   window.addEventListener('dragover', (e) => {
@@ -25,19 +26,30 @@
   });
 
   let hideTimer = null;
+  let lastProgress = null;
   const mb = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
-  api.onDropProgress((v) => {
-    clearTimeout(hideTimer);
+  function renderProgress(v) {
     if (v.current) {
       const c = v.current;
       const pct = c.size ? Math.floor((c.sent / c.size) * 100) : 100;
-      status.textContent = 'Sending ' + c.name + (c.count > 1 ? ' (' + (c.index + 1) + ' of ' + c.count + ')' : '') +
-        ', ' + pct + '%  ' + mb(c.sent) + ' / ' + mb(c.size);
+      playerI18n.text(status, c.count > 1 ? 'Sending {name} ({index} of {count}), {percent}%  {sent} / {size}' : 'Sending {name}, {percent}%  {sent} / {size}', {
+        name: c.name, index: c.index + 1, count: c.count, percent: pct, sent: mb(c.sent), size: mb(c.size),
+      });
       status.className = '';
     } else if (v.last) {
-      status.textContent = (v.last.name ? v.last.name + ': ' : '') + v.last.text;
+      const text = v.last.messageKey ? playerI18n.t(v.last.messageKey, { name: v.peerName, Name: v.peerName, ...v.last.messageVars }) : v.last.text;
+      const name = v.last.itemCount > 1 ? playerI18n.t('{count} items', { count: v.last.itemCount }) : v.last.name;
+      playerI18n.literal(status, (name ? name + ': ' : '') + text);
       status.className = v.last.ok ? 'ok' : 'bad';
-      hideTimer = setTimeout(() => { status.className = 'hidden'; }, 6000);
     }
+  }
+  playerI18n.onChange(() => {
+    if (lastProgress && !status.classList.contains('hidden')) renderProgress(lastProgress);
+  });
+  api.onDropProgress((v) => {
+    clearTimeout(hideTimer);
+    lastProgress = v;
+    renderProgress(v);
+    if (!v.current && v.last) hideTimer = setTimeout(() => { status.className = 'hidden'; }, 6000);
   });
 })();
