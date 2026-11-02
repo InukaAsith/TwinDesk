@@ -81,4 +81,20 @@ const dev = (id, t0) => { let t = t0; const clk = new Clock(() => t); return { i
   assert.strictEqual(imageMessage({ id: 'i', w: 1, h: 1, png: Buffer.alloc(P.CLIP_IMAGE_MAX_BYTES + 1) }, { ts: 1, o: 'a' }), null, 'too big to send');
   assert.strictEqual(readImage({ id: 'i', png: 'A'.repeat(P.CLIP_IMAGE_MAX_BYTES * 2) }), null, 'too big to take');
 }
+// An older app's item (no time) relayed to B, then A copies: A's clock never saw B's arrival time,
+// so A's copy can carry the same millisecond or a little less. It came after, so it wins. A copy
+// from long before the untimed item is still a late repeat.
+{
+  const A = dev('A', 899);
+  const B = dev('B', 900);
+  assert.ok(B.latest.accept({ t: 'clip', text: 'from old', o: 'L' }, 'text'), 'untimed: copied on arrival');
+  const mine = A.latest.copied('text');
+  assert.strictEqual(mine.ts, 899, "A's clock is behind B's");
+  assert.ok(B.latest.accept({ ...mine }, 'text'), 'a copy made after the untimed one wins');
+  const C = dev('C', 100000);
+  C.latest.accept({ t: 'clip', text: 'old app' }, 'text');
+  assert.ok(!C.latest.accept({ ts: 100000 - 60000, o: 'A' }, 'text'), 'a minute before it: a late repeat, not applied');
+  // Two untimed items in a row: the order they arrived in.
+  assert.ok(C.latest.accept({ t: 'clip', text: 'again' }, 'text'));
+}
 console.log('clipsync: passed');

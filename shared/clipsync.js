@@ -14,6 +14,7 @@
 const P = require('./protocol.js');
 
 const MAX_ID = 128;
+const ARRIVAL_SKEW_MS = 5000; // how far behind our clock a copy made after an untimed item may be
 
 // Hybrid logical clock.
 class Clock {
@@ -70,12 +71,20 @@ class Latest {
       stamp = { ts: Math.min(msg.ts, this.clock.now() + P.CLIP_SKEW_MS), o: msg.o };
       this.clock.observe(msg.ts);
     } else {
-      stamp = { ts: this.clock.tick(), o: msg && typeof msg.from === 'string' ? msg.from : '~peer' };
+      stamp = { ts: this.clock.tick(), o: msg && typeof msg.from === 'string' ? msg.from : '~peer', arrival: true };
     }
     if (stamp.o === this.selfId) return false; // our own copy coming back
-    if (this.cur && compare(stamp, this.cur) <= 0) return false;
+    if (this.cur && compare(stamp, this.cur) <= 0 && !this._afterArrival(stamp)) return false;
     this.cur = { ...stamp, kind, ...(id ? { id } : {}) };
     return true;
+  }
+
+  // The newest we know is an item without a time (an older app's, or relayed from one): its time is
+  // only when it got here, on this clock. A copy made on another device after it can carry a time a
+  // little behind that (its clock is a few ms or seconds behind ours, and it never saw ours): newer
+  // all the same, as it came after. One far older than that is still a late repeat, and loses.
+  _afterArrival(stamp) {
+    return !!(this.cur && this.cur.arrival && !stamp.arrival && stamp.ts >= this.cur.ts - ARRIVAL_SKEW_MS);
   }
 
   // What to say after welcome (`clip.latest`): null when nothing was copied yet.

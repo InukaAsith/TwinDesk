@@ -186,9 +186,10 @@ class Clip {
     const c = this.cfg;
     if (!c.enabled || !c.send || !this.bus.connectedIds().length) return;
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
-    const text = await this._readText();
+    // Read together: one await before the checks below, so no other copy or clip runs in between.
+    const [text, concealed] = await Promise.all([this._readText(), c.skipConcealed && isConcealed(this.clipboard)]);
     if (!text || text === this.lastSync.sent || text === this.lastSync.received) return;
-    if (c.skipConcealed && (await isConcealed(this.clipboard))) {
+    if (concealed) {
       this.lastSync.sent = text; // don't retry this item
       return this._skip('skipped a password (concealed item)');
     }
