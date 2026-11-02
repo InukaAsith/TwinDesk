@@ -43,6 +43,7 @@ class PcScreen {
     this.stateKey = ''; // the last screen.state sent on this connection
     this.retries = 0;
     this.retryTimer = null;
+    this.live = false; // the capture reached 'live' (a start that never does is not retried on Wayland)
 
     const link = this.link;
     link.on('welcome', () => {
@@ -74,8 +75,12 @@ class PcScreen {
     this.sender.on('state', (session, s) => {
       if (!this.sending || session !== this.sending.session) return;
       Object.assign(this.status, s);
-      if (s.status === 'ended' || s.status === 'failed') { this._stopSend(true); this._retryLater(); }
-      if (s.status === 'live') { this.retries = 0; if (this.retryTimer) clearTimeout(this.retryTimer); }
+      if (s.status === 'ended' || s.status === 'failed') {
+        const live = this.live; // a start that never reached 'live' failed the capture itself
+        this._stopSend(true);
+        if (live) this._retryLater(); else this._failedBeforeLive('The screen couldn’t be captured. Start sharing again.');
+      }
+      if (s.status === 'live') { this.live = true; this.retries = 0; if (this.retryTimer) clearTimeout(this.retryTimer); }
       this.onChange();
     });
     this.sender.on('stats', (session, st) => {
@@ -99,6 +104,27 @@ class PcScreen {
     if (!(connected && this.mode !== 'off' && !this.busy && this.mac.accept && transport !== 'ble')) return;
     const ms = Math.min(30000, RETRY_MS * 2 ** Math.min(this.retries++, 4));
     this.retryTimer = setTimeout(() => { if (!this.sending) this.apply(); }, ms);
+  }
+
+  // On Wayland a capture that never reached 'live' (the picker was dismissed, or the portal refused
+  // the stream) is not retried: every attempt reopens the desktop's screen picker, so retrying looks
+  // like a picker that never goes away. Stop sharing and keep the reason; the person starts again.
+  _failedBeforeLive(message) {
+    if (!WAYLAND) return this._retryLater();
+    this._gaveUp(message);
+  }
+
+  // Off, without a retry, keeping the reason in the status (the Share screen tab shows it).
+  _gaveUp(message) {
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    this.retries = 0;
+    const was = this.mode;
+    this.mode = 'off';
+    if (was === 'extend') this.vdd.setOn(false).catch(() => {});
+    this.stateKey = ''; // the next push tells the viewer it is off (sendState)
+    this.status.status = 'off';
+    this.status.error = message;
+    this.onChange();
   }
   get cfg() {
     return this.settings.pcScreen;
@@ -225,8 +251,11 @@ class PcScreen {
     // Wayland: the portal hands back the one screen the person picked (no display ids).
     const src = sources.find((s) => s.display_id === String(d.id)) || (WAYLAND || sources.length === 1 ? sources[0] : null);
     if (!src) {
-      this.status.error = WAYLAND ? 'No screen was picked to share' : 'The desktop didn’t offer that monitor for capture';
-      return this._stopSend(true);
+      const why = WAYLAND ? 'No screen was picked to share' : 'The desktop didn’t offer that monitor for capture';
+      this.status.error = why;
+      this._stopSend(true);
+      if (WAYLAND) this._failedBeforeLive(why);
+      return;
     }
     let audio = '';
     if (this.cfg.sound) audio = await loopback.acquire().catch((e) => { this.status.error = 'Sound: ' + e.message; return ''; });
@@ -235,6 +264,7 @@ class PcScreen {
     // A phone over Wi-Fi: a high rate only fills the radio's queues (latency), it isn't sharper there.
     const mbps = this.link.peerOs === P.OS.ANDROID ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
     const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, audio: false, audioLabel: audio, offer: { kind: 'screen' } });
+    this.live = false;
     this.sending = { session, displayId: d.id, rect, key, loop: !!audio };
     this.stats = null;
     Object.assign(this.status, { status: 'starting', error: '', name: d.label || src.name, width: rect.width, height: rect.height });
@@ -278,6 +308,7 @@ class PcScreen {
 
   _stopSend(tellMac) {
     this.input.release();
+    this.live = false;
     if (!this.sending) return;
     const { session, loop } = this.sending;
     if (loop) loopback.release();
