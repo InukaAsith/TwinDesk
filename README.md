@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="#download"><b>⬇️ Download 2.4</b></a> ·
+  <a href="#download"><b>⬇️ Download 2.3</b></a> ·
   <a href="https://twin-desk.vercel.app"><b>Website</b></a> ·
   <a href="#-new-in-23"><b>What's new</b></a> ·
   <a href="#-get-started"><b>Get started</b></a> ·
@@ -96,25 +96,25 @@ X11 and Wayland · shared folders through Samba · the phone app page by page ·
 
 **🍎 macOS**<br><sub>13 Ventura or later</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-2.4.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-2.4.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a>
 
 </td>
 <td width="25%" align="center" valign="top">
 
 **🪟 Windows**<br><sub>10 and 11</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-Setup-2.4.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-Setup-2.4.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-Setup-2.3.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-Setup-2.3.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
 
 </td>
 <td width="25%" align="center" valign="top">
 
 **🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-2.4.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-2.4.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/twindesk-bin-2.4.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/twindesk-bin-2.3.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
 <sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
 
 </td>
@@ -122,68 +122,12 @@ X11 and Wayland · shared folders through Samba · the phone app page by page ·
 
 **🤖 Android**<br><sub>10 or later, phones and tablets</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-2.4.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.4.0/TwinDesk-2.4.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
-<sub>The full app adds notifications, texts and Accessibility; the computer can install it for you over wireless debugging</sub>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.3.0/TwinDesk-2.3.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
+<sub>The full app (notifications, texts, Accessibility) is installed by the computer over wireless debugging</sub>
 
 </td>
 </tr>
 </table>
-
-<p align="center">🍺 <b>Homebrew</b> on macOS: <code>brew install --cask inukaasith/twindesk/twindesk</code><br>
-<sub>Update with <code>brew upgrade --cask twindesk</code>: TwinDesk opens again by itself if it was running, so a Mac you drive only through it gets its mouse back. The <a href="https://github.com/InukaAsith/homebrew-twindesk">tap</a> follows every release.</sub></p>
-
-<a name="first-launch"></a>
-
-<details>
-<summary><b>⚠️ First launch: the apps aren't code-signed</b> <sub>how to allow them on macOS, Windows and Android</sub></summary>
-
-TwinDesk is free and has no paid Apple Developer ID or Windows code-signing certificate, so
-macOS and Windows don't know who made it and ask once before opening it. The source is all here.
-
-**🍎 macOS**
-
-The easiest way is **Homebrew**, which installs it ready to open:
-`brew install --cask inukaasith/twindesk/twindesk`
-
-From the .dmg instead:
-
-1. Drag TwinDesk into Applications and open it. macOS says it can't verify TwinDesk: click **Done**
-   (not Move to Bin).
-2. Open **System Settings › Privacy & Security**, scroll down to Security and click **Open Anyway**
-   next to "TwinDesk was blocked". Enter your password, then click **Open Anyway** again.
-
-You do this once; updates open normally. If macOS says TwinDesk **is damaged and can't be
-opened**, it isn't: run this in Terminal, then open it again:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/TwinDesk.app
-```
-
-**🪟 Windows**
-
-1. If the browser warns that the file isn't commonly downloaded, choose **Keep** (in Edge: **⋯ ›
-   Keep › Show more › Keep anyway**).
-2. When the installer shows **Windows protected your PC** (SmartScreen), click **More info**, then
-   **Run anyway**.
-
-On Windows 11 with **Smart App Control** on, unsigned apps are blocked with no Run anyway button.
-The only way past it is turning it off (Windows Security › App & browser control › Smart App Control
-settings), and on many Windows 11 versions it can't be turned back on without reinstalling Windows.
-
-**🤖 Android**
-
-1. Open the downloaded .apk. Android asks to allow your browser or Files app to **install unknown
-   apps**: tap **Settings**, turn on **Allow from this source**, go back and tap **Install**.
-2. If Play Protect warns about an unrecognised developer, tap **More details › Install anyway**.
-
-The **full app** (notifications, texts and Accessibility) is easiest installed by the computer over
-[wireless debugging](#wireless-debugging) (Phone page › Notifications from the phone): Android then
-lets you turn those on. Installed by hand, Play Protect may block it, and Android 13 and later grey
-out notification access and Accessibility as a **restricted setting**: open **Settings › Apps ›
-TwinDesk**, tap **⋮ › Allow restricted settings**, then turn them on.
-
-</details>
 
 <p align="center"><sub>Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
 
@@ -670,8 +614,8 @@ npm start                       # run from source
 npm run dist && npm run dmg     # build TwinDesk.app and TwinDesk-<version>-<arch>.dmg in mac/dist/
 ```
 
-The disk image is named after the app inside it: `TwinDesk-2.4.0-arm64.dmg` for Apple Silicon,
-`TwinDesk-2.4.0-x64.dmg` for Intel. Keep those names on a release: the in-app updater picks the
+The disk image is named after the app inside it: `TwinDesk-2.3.0-arm64.dmg` for Apple Silicon,
+`TwinDesk-2.3.0-x64.dmg` for Intel. Keep those names on a release: the in-app updater picks the
 one for each Mac by them.
 
 By default, `npm run dist` targets the Mac's current architecture. To build an Intel
