@@ -970,7 +970,16 @@ function createMainWindow() {
     },
   });
   mainWin.loadFile(path.join(__dirname, 'app.html'));
-  mainWin.once('ready-to-show', () => { if (!startHidden) mainWin.show(); });
+  const win = mainWin;
+  let shown = false;
+  const show = () => {
+    if (shown || win.isDestroyed()) return;
+    shown = true;
+    if (!startHidden) win.show();
+  };
+  win.once('ready-to-show', show);
+  // Match the ordinary window's fallback without revealing a start-to-tray launch.
+  win.webContents.once('did-finish-load', show);
   mainWin.on('close', (e) => {
     saveBounds();
     if (!quitting) {

@@ -1177,11 +1177,17 @@ function createMainWindow(tab) {
   });
   mainWin.loadFile(path.join(__dirname, 'app.html'));
   const win = mainWin;
-  win.once('ready-to-show', () => {
+  let shown = false;
+  const show = () => {
+    if (shown || win.isDestroyed()) return;
+    shown = true;
     if (tab) win.webContents.send('go', tab);
     win.show();
     win.focus();
-  });
+  };
+  win.once('ready-to-show', show);
+  // Hidden-window painting can stall; a loaded page can already be shown on our background.
+  win.webContents.once('did-finish-load', show);
   win.on('close', () => saveBounds());
   win.on('closed', () => { if (mainWin === win) mainWin = null; });
 }
