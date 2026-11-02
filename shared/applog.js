@@ -22,7 +22,7 @@ const LEVELS = ['log', 'info', 'warn', 'error', 'debug'];
 const STATS_MS = 30000;
 
 let folder = '';
-let stream = null;
+let fd = null; // TwinDesk.log, written in order with crash()'s lines (a stream's end() is too late to rename on Windows)
 let size = 0;
 let started = false;
 let terminal = console.error.bind(console); // the console before start(): the terminal only
@@ -40,31 +40,39 @@ function openStream() {
   } catch (_) {
     size = 0;
   }
-  // Opened now (not on a later turn), so a burst that fills it rotates a file that's there.
-  stream = fs.createWriteStream(null, { fd: fs.openSync(file(0), 'a') });
-  stream.on('error', () => { stream = null; }); // a full or read-only disk: console only
+  fd = fs.openSync(file(0), 'a');
+}
+
+function closeFd() {
+  if (fd === null) return;
+  try { fs.closeSync(fd); } catch (_) { /* gone */ }
+  fd = null;
 }
 
 // TwinDesk.log -> .1.log -> .2.log; the oldest goes.
 function rotate() {
-  if (stream) stream.end(); // what it still has goes to the renamed file
+  closeFd(); // closed before the rename: Windows doesn't rename an open file
   for (let i = KEEP - 1; i > 0; i--) {
     try { fs.renameSync(file(i - 1), file(i)); } catch (_) { /* not there yet */ }
   }
   try {
     openStream();
   } catch (_) {
-    stream = null;
+    fd = null;
   }
 }
 
 function write(line) {
-  if (!stream) return;
+  if (fd === null) return;
   const bytes = Buffer.byteLength(line);
   if (size + bytes > maxBytes) rotate();
-  if (!stream) return;
-  size += bytes;
-  stream.write(line);
+  if (fd === null) return;
+  try {
+    fs.writeSync(fd, line);
+    size += bytes;
+  } catch (_) {
+    closeFd(); // a full or read-only disk: console only
+  }
 }
 
 // What went wrong, at once and whatever happens next (crash.log and TwinDesk.log).
@@ -72,7 +80,7 @@ function crash(kind, detail) {
   const text = detail instanceof Error ? detail.stack || String(detail) : typeof detail === 'string' ? detail : util.inspect(detail);
   const line = `${stamp()} [crash] ${kind}: ${text}\n`;
   try { fs.appendFileSync(path.join(folder, 'crash.log'), line); } catch (_) { /* no folder */ }
-  try { if (stream) fs.appendFileSync(file(0), line); } catch (_) { /* best effort */ }
+  try { if (fd !== null) fs.writeSync(fd, line); } catch (_) { /* best effort */ }
   try { terminal(line.trimEnd()); } catch (_) { /* no terminal */ }
 }
 
@@ -90,7 +98,7 @@ function start(app, opts = {}) {
     fs.mkdirSync(folder, { recursive: true });
     openStream();
   } catch (_) {
-    stream = null;
+    fd = null;
   }
   terminal = console.error.bind(console);
   for (const level of LEVELS) {

@@ -73,7 +73,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     process.stdout.write = realOut;
     process.stderr.write = realErr;
   }
-  fs.rmSync(dir, { recursive: true, force: true });
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* Windows: TwinDesk.log is still open */ }
   console.log('applog: ok');
   process.exit(0);
 })().catch((e) => {
