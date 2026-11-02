@@ -11,9 +11,9 @@ const RAW_RE = /^electron application\/osclipboard;format="(.*)"$/;
 // One look at the clipboard: its formats (bare names, as availableFormats gave them) and a format's
 // bytes. One read() for all of them, where the old API needed none.
 async function snapshot(clipboard) {
-  if (typeof clipboard.readBuffer === 'function') { // before 44
-    const formats = typeof clipboard.availableFormats === 'function' ? clipboard.availableFormats() : [];
-    return { formats, raw: async (f) => clipboard.readBuffer(f) };
+  if (typeof clipboard.readBuffer === 'function') { // before 44, and linux/wlclip.js (each a Promise there)
+    const formats = typeof clipboard.availableFormats === 'function' ? (await clipboard.availableFormats()) || [] : [];
+    return { formats, raw: async (f) => Buffer.from((await clipboard.readBuffer(f)) || []) };
   }
   let items = [];
   try { items = await clipboard.read(); } catch (_) { /* nothing readable on it */ }
@@ -46,6 +46,8 @@ async function isConcealed(clipboard) {
     if ((await s.raw('Clipboard Viewer Ignore')).length) return true;
     const b = await s.raw('CanIncludeInClipboardHistory');
     if (b && b.length >= 4 && b.readUInt32LE(0) === 0) return true;
+    // KDE's, which KeePassXC and other Linux password managers set to "secret"
+    if (s.formats.includes('x-kde-passwordManagerHint') && /secret/i.test((await s.raw('x-kde-passwordManagerHint')).toString('utf8'))) return true;
   } catch (_) { /* unknown format: not concealed */ }
   return false;
 }
