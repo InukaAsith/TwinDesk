@@ -11,7 +11,7 @@ const { PairLimit, versionMessage } = require('../shared/pairlimit.js');
 const T = P.T;
 // A host without `os` is an older Mac.
 const osOf = (o) => (Object.values(P.OS).includes(o) ? o : P.OS.MAC);
-const HELLO_TIMEOUT_MS = P.TIMEOUT_MS; // no `welcome` this long after hello = retry
+const HELLO_TIMEOUT_MS = P.HELLO_TIMEOUT_MS; // no `welcome` this long after hello = retry
 const RESUME_RETRY_MS = 5000; // a failed move to the network: try again after this
 const isBle = (a) => String(a || '').startsWith('ble:');
 

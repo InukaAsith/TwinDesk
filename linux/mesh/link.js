@@ -11,7 +11,7 @@ const P = require('../../shared/protocol.js');
 const T = P.T;
 // A host without `os` is an older Mac.
 const osOf = (o) => (Object.values(P.OS).includes(o) ? o : P.OS.MAC);
-const HELLO_TIMEOUT_MS = P.TIMEOUT_MS; // no `welcome` this long after hello = retry
+const HELLO_TIMEOUT_MS = P.HELLO_TIMEOUT_MS; // no `welcome` this long after hello = retry
 const KEEPALIVE_TICK_MS = 250; // how often the keep-alive decides whether to ping
 const RESUME_RETRY_MS = 5000; // a failed move to the network: try again after this
 const RESUME_LASTED_MS = 60000; // a move that held this long worked: the next one is tried at once

@@ -21,7 +21,8 @@
     // PHONE_GRACE_MS after it drops, so a Wi-Fi blip doesn't hand the session back.
     PHONE_GRACE_MS: 30000,
     PING_MS: 1000,
-    TIMEOUT_MS: 4000, // close the session after this much silence
+    TIMEOUT_MS: 8000, // close the session after this much silence (8 s: a busy or throttled computer can miss a ping or two, #74)
+    HELLO_TIMEOUT_MS: 4000, // no `welcome` this long after hello = try again (an answer comes at once; not the silence limit)
     // Multi-device only (docs/mesh.md): many devices at once. A link that is selected, driving or being
     // driven keeps PING_MS/TIMEOUT_MS; the others are checked more rarely so ten links cost little.
     MAX_DEVICES: 10,
