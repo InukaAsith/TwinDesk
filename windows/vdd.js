@@ -57,6 +57,7 @@ class Vdd {
     this._set({ busy: 'install', message: '' });
     const log = path.join(app.getPath('userData'), 'vdd-result.txt');
     let cpu = '';
+    let done = false; // the installer said ok
     try {
       try { fs.unlinkSync(log); } catch (_) { /* none */ }
       // The driver must match Windows, not this app (the x64 app also runs on ARM, emulated), so
@@ -69,6 +70,7 @@ class Vdd {
       const r = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim() : 'error: the setup didn’t finish';
       if (r !== 'ok') throw new Error(r.replace(/^error: /, ''));
       this.state.message = '';
+      done = true;
     } catch (e) {
       if (/cancel/i.test(e.message)) this.state.message = 'The administrator prompt was declined';
       // Windows on ARM takes only Microsoft-signed drivers; the ARM64 build is signed by SignPath
@@ -80,6 +82,8 @@ class Vdd {
       this.state.busy = '';
       await this.check();
     }
+    // Installed, yet Windows doesn't report the device and its tasks (#116): say so, not just "Not installed".
+    if (done && !this.state.installed) this._set({ message: 'The display driver was installed, but Windows doesn’t report it back yet. Restart TwinDesk, or this PC, and check again' });
   }
 
   async remove() {

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
@@ -162,6 +163,26 @@ static int known(const char *path) {
   return 0;
 }
 
+// Nodes scan() looked at and left (power button, lid, jacks, our own devices…), by path and device
+// number: not opened again. Closing an evdev node waits for an RCU grace period, so reopening some
+// twenty of them every scan stalled input for up to half a second every 3 s (#84). A node whose
+// device number changed (another device on that path after a hotplug) is looked at again.
+#define MAX_SKIP 128
+static struct { char path[64]; dev_t rdev; } skip[MAX_SKIP];
+static int nskip;
+
+static int skipped(const char *path, dev_t rdev) {
+  for (int i = 0; i < nskip; i++) if (skip[i].rdev == rdev && !strcmp(skip[i].path, path)) return 1;
+  return 0;
+}
+
+static void reject(const char *path, dev_t rdev) {
+  for (int i = 0; i < nskip; i++) if (!strcmp(skip[i].path, path)) { skip[i].rdev = rdev; return; }
+  if (nskip == MAX_SKIP) return; // full: such a node is only looked at again (as before)
+  snprintf(skip[nskip].path, sizeof skip[nskip].path, "%s", path);
+  skip[nskip++].rdev = rdev;
+}
+
 static void scan(void) {
   lastScan = now_ms();
   DIR *d = opendir("/dev/input");
@@ -172,11 +193,14 @@ static void scan(void) {
     char path[300];
     snprintf(path, sizeof path, "/dev/input/%s", e->d_name);
     if (known(path)) continue;
+    struct stat st;
+    const int seen = stat(path, &st) == 0; // its device number, to know it again
+    if (seen && skipped(path, st.st_rdev)) continue;
     int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0) continue;
+    if (fd < 0) continue; // no permission yet (it can come after the node): tried again next scan
     char name[256] = "";
     ioctl(fd, EVIOCGNAME(sizeof name), name);
-    if (!strncmp(name, NAME_PREFIX, strlen(NAME_PREFIX))) { close(fd); continue; } // ours (rule 4)
+    if (!strncmp(name, NAME_PREFIX, strlen(NAME_PREFIX))) { if (seen) reject(path, st.st_rdev); close(fd); continue; } // ours (rule 4)
     unsigned long ev[(EV_CNT + 63) / 64] = { 0 }, key[(KEY_CNT + 63) / 64] = { 0 }, rel[(REL_CNT + 63) / 64] = { 0 }, abs[(ABS_CNT + 63) / 64] = { 0 };
     ioctl(fd, EVIOCGBIT(0, sizeof ev), ev);
     ioctl(fd, EVIOCGBIT(EV_KEY, sizeof key), key);
@@ -186,7 +210,7 @@ static void scan(void) {
     if (test_bit(ev, EV_REL) && test_bit(rel, REL_X) && test_bit(rel, REL_Y)) kind |= K_MOUSE;
     if (test_bit(ev, EV_ABS) && test_bit(abs, ABS_X) && test_bit(key, BTN_TOOL_FINGER) && !test_bit(key, BTN_TOOL_PEN)) kind |= K_PAD;
     if (test_bit(ev, EV_KEY) && test_bit(key, KEY_A) && test_bit(key, KEY_Z) && test_bit(key, KEY_SPACE)) kind |= K_KBD;
-    if (!kind) { close(fd); continue; }
+    if (!kind) { if (seen) reject(path, st.st_rdev); close(fd); continue; }
     In *in = &ins[nin++];
     memset(in, 0, sizeof *in);
     in->fd = fd;
