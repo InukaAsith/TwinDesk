@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 'use strict';
 const assert = require('assert');
 const Peer = require('../../windows/peer');
@@ -41,3 +41,14 @@ assert.strictEqual(configured().driveOther, false, 'sharing off still prevents c
 kvm.settings.kvm.linked = true; kvm.locked = true;
 assert.strictEqual(configured().driveOther, false, 'cursor lock still prevents crossing');
 console.log('peer-kvm-auth: authenticated guest/host sessions enable crossing; stale, off and locked states block it');
+
+// Linux's Peer has the same gate (linux/kvm.js reads link.authed the same way).
+const LinuxPeer = require('../../linux/peer');
+const lg = { authed: true, status: { state: 'connected' }, transport: 'ip', onState() {}, on() {}, send() {}, snapshot: () => ({}) };
+const lp = new LinuxPeer(lg);
+assert.strictEqual(lp.authed, true, 'Linux: an authenticated guest session');
+lg.authed = false;
+assert.strictEqual(lp.authed, false);
+lp.server = { current: { authed: true }, send() {} };
+assert.strictEqual(lp.authed, true, 'Linux: an authenticated host session');
+console.log('peer-kvm-auth: Linux Peer too');

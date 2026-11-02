@@ -1,4 +1,5 @@
-// TwinDesk — GPL-3.0, see LICENSE. Read-only script with mocked network data.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+// Read-only script with mocked network data.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
