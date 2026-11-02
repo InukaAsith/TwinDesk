@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Player text updates are independent of the running media session.
 (function () {
   'use strict';

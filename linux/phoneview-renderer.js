@@ -9,6 +9,7 @@
 
 (() => {
   const api = window.phoneview;
+  const playerI18n = window.PlayerI18n;
   const q = new URLSearchParams(location.search);
   const kind = q.get('kind') || 'screen';
   // A camera's window opens hidden: its picture goes to the Camera tab, and to the virtual camera
@@ -16,10 +17,18 @@
   const vcam = kind === 'camera' && window.CamOut ? window.CamOut() : null;
   let turn = 0;
   document.body.classList.add(kind);
-  document.getElementById('title').textContent = q.get('title') || 'Phone';
+  const titleKey = q.get('titleKey');
+  const localTitle = ['Phone', 'Phone Camera', 'Phone sound', '{name} Camera'].includes(titleKey);
+  for (const el of [document.getElementById('title'), document.querySelector('title')]) {
+    if (localTitle) playerI18n.text(el, titleKey, { name: q.get('titleName') || '' });
+    else if (q.get('title')) playerI18n.literal(el, q.get('title'));
+    else playerI18n.text(el, 'Phone');
+  }
   const canvas = document.getElementById('screen');
   const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
   const status = document.getElementById('status');
+  const localStatuses = new Set(['The phone can’t share its screen', 'The phone’s screen helper didn’t start', 'the screen helper stopped', 'the connection closed', 'closed', 'stopped']);
+  let closedStatus = null;
   const ACTION = { DOWN: 0, UP: 1, MOVE: 2, HOVER_MOVE: 7, HOVER_EXIT: 10 };
   const FINGER = -2; // scrcpy's generic finger
   let size = null; // video size
@@ -37,10 +46,18 @@
     api.send({ t: 'resetVideo' });
   }
 
-  const setStatus = (t) => {
-    status.textContent = t || '';
-    status.hidden = !t;
+  const setStatus = (key, vars) => {
+    closedStatus = null;
+    playerI18n.text(status, key, vars);
+    status.hidden = !key;
   };
+
+  function renderClosedStatus(s) {
+    const key = s.closedKey || (localStatuses.has(s.closed) ? s.closed : '');
+    setStatus('The phone stopped sharing ({reason}).', { reason: key ? playerI18n.t(key, s.closedVars) : s.closed });
+    closedStatus = s;
+  }
+  playerI18n.onChange(() => { if (closedStatus) renderClosedStatus(closedStatus); });
 
   // ---- video ----
 
@@ -110,11 +127,16 @@
       const el = document.getElementById('via');
       el.textContent = s.via === 'usb' ? 'USB' : 'Wi-Fi';
       el.className = s.via;
-      el.title = s.via === 'usb' ? 'Through the USB cable' : 'Through wireless debugging';
+      el.dataset.i18nTitle = s.via === 'usb' ? 'Through the USB cable' : 'Through wireless debugging';
+      playerI18n.translate(el);
       el.hidden = false;
     }
-    if (s.error) setStatus(s.error);
-    else if (s.closed) setStatus(`The phone stopped sharing (${s.closed}).`);
+    if (s.error) {
+      closedStatus = null;
+      if (s.errorKey) setStatus(s.errorKey, s.errorVars);
+      else if (localStatuses.has(s.error)) setStatus(s.error);
+      else { playerI18n.literal(status, s.error); status.hidden = false; }
+    } else if (s.closed) renderClosedStatus(s);
     else if (s.ready && !size) setStatus('Waiting for the picture…');
   });
 

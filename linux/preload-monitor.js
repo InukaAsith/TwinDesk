@@ -18,3 +18,7 @@ contextBridge.exposeInMainWorld('monitor', {
   onAppWindows: (fn) => ipcRenderer.on('app-windows', (_e, list) => fn(list)),
   onToggleStats: (fn) => ipcRenderer.on('toggle-stats', () => fn()),
 });
+
+contextBridge.exposeInMainWorld('playerLanguage', {
+  onChange: (fn) => ipcRenderer.on('ui-language', (_e, language) => fn(language)),
+});

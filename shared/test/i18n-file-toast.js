@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. Executes real transfer UI callbacks, no files or native calls.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. Executes real transfer UI callbacks, no files or native calls.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');

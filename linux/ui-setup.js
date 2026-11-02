@@ -8,28 +8,34 @@
 
 UI.setup = (() => {
   const { el, api } = UI;
-  const done = () => el('span', { class: 'pill good', text: 'Done' });
+  const t = (...args) => I18n.t(...args);
+  const language = UI.select([
+    { value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' },
+  ], (v) => api.setLanguage(v));
+  language.set(I18n.locale);
+  const done = () => el('span', { class: 'pill good', text: t('Done') });
 
   const sessPill = el('span', { class: 'pill muted' });
-  const sessRow = UI.row('Desktop session', '', [sessPill]);
-  const inFix = UI.button('Fix', () => api.fixInput(), 'small primary');
+  const sessRow = UI.row(t('Desktop session'), '', [sessPill]);
+  const inFix = UI.button(t('Fix'), () => api.fixInput(), 'small primary');
   const inDone = done();
-  const inRow = UI.row('Input access', '', [inFix, inDone]);
-  const fwFix = UI.button('Fix', () => api.fixFirewall(), 'small primary');
+  const inRow = UI.row(t('Input access'), '', [inFix, inDone]);
+  const fwFix = UI.button(t('Fix'), () => api.fixFirewall(), 'small primary');
   const fwDone = done();
-  const fwRow = UI.row('Firewall', '', [fwFix, fwDone]);
-  const helperPill = el('span', { class: 'pill bad', text: 'Not running' });
+  const fwRow = UI.row(t('Firewall'), '', [fwFix, fwDone]);
+  const helperPill = el('span', { class: 'pill bad', text: t('Not running') });
   const helperDone = done();
-  const helperRow = UI.row('Mouse and keyboard helper', '', [helperPill, helperDone]);
+  const helperRow = UI.row(t('Mouse and keyboard helper'), '', [helperPill, helperDone]);
 
   const page = el('section', { class: 'setup-page', hidden: true }, [
     el('div', { class: 'app-mark', attrs: { 'aria-hidden': 'true' } }),
-    el('h1', { text: 'Set up TwinDesk' }),
-    el('p', { text: 'A few things before {me} can share with the other computer.' }),
+    el('h1', { text: t('Set up TwinDesk') }),
+    el('p', { text: t('A few things before {me} can share with the other computer.') }),
+    UI.card('', [UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language])]),
     UI.card('', [sessRow, inRow, fwRow, helperRow]),
     el('div', { class: 'setup-foot' }, [
-      el('span', { class: 'hint', text: 'You can change these later in General.' }),
-      UI.button('Skip for now', () => api.skipSetup(), ''),
+      el('span', { class: 'hint', text: t('You can change these later in General.') }),
+      UI.button(t('Skip for now'), () => api.skipSetup(), ''),
     ]),
   ]);
 
@@ -56,14 +62,14 @@ UI.setup = (() => {
     const fw = s.firewall || {};
     const fwBad = s.setup.missing.includes('firewall');
     fwRow.hidden = !shown.has('firewall');
-    fwRow.setHint(fw.checking ? 'Checking…' : fwBad ? (fw.message || '') + ' Fix lets ports ' + UI.P.PORT + ' and ' + UI.P.DISCOVERY_PORT + ' in (asks for your password).' : '');
+    fwRow.setHint(fw.checking ? t('Checking…') : fwBad ? t('{message} Fix lets ports {port} and {discovery} in (asks for your password).', { message: fw.message || '', port: UI.P.PORT, discovery: UI.P.DISCOVERY_PORT }) : '');
     fwFix.hidden = !fwBad || fw.checking;
     fwDone.hidden = fwBad || fw.checking;
 
     const h = s.kvmState.helper;
     const helperBad = s.setup.missing.includes('helper');
     helperRow.hidden = !shown.has('helper');
-    helperRow.setHint(helperBad ? h + '. Restart TwinDesk if it stays like this.' : '');
+    helperRow.setHint(helperBad ? t('{message}. Restart TwinDesk if it stays like this.', { message: t(h) }) : '');
     helperPill.hidden = !helperBad;
     helperDone.hidden = helperBad;
   }

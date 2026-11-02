@@ -20,3 +20,7 @@ contextBridge.exposeInMainWorld('camout', {
   preview: (buf) => ipcRenderer.send('vcam:preview', buf),
   on: (fn) => ipcRenderer.on('vcam:set', (_e, m) => fn(m)),
 });
+
+contextBridge.exposeInMainWorld('playerLanguage', {
+  onChange: (fn) => ipcRenderer.on('ui-language', (_e, language) => fn(language)),
+});

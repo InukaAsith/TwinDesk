@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. Only the window owner is run; calls and native windows are faked.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. Only the window owner is run; calls and native windows are faked.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');

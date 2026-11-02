@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 'use strict';
 const I18n = TwinDeskI18n.create(new URLSearchParams(window.location.search).get('language'));
 window.I18n = I18n;

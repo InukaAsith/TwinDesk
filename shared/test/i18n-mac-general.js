@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE. Renderer-only: no native permission or update calls.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. Renderer-only: no native permission or update calls.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');

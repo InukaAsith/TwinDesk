@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Real Mac renderer/preload/IPC with simulated devices, no native helpers or network discovery.
 'use strict';
 if (!process.versions.electron) {
@@ -63,6 +63,7 @@ async function testMode(mode) {
   require(path.join(dir, 'ipc')).setupIpc({ settings, state, pushState: push,
     onLanguage: () => vm.runInContext('"use strict";\n' + reloadCode + '\nchangeLanguage();', reload),
     phone: { assetsView: () => ({ apps: [], wallpaper: '' }) },
+    server: Object.assign(new (require('events').EventEmitter)(), { current: null, server: { current: null } }), // #76's Connect by address
     hub: () => ({ act() {} }),
     phoneHub: () => ({ act() {} }),
   });

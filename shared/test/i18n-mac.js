@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
@@ -30,7 +30,8 @@ try {
     const device = { id: 'peer', name: 'Work $& {me}', os: 'win', address: '192.0.2.11' };
     const actions = mod.exports.setupIpc({ settings, state: connection, pushState() { pushes++; }, onLanguage() { reloads++; },
       t: (...args) => require('../i18n').create('zh-CN').t(...args),
-      discovery: { get: () => device, invite() {} }, pairing: { list: () => [] },
+      discovery: { get: () => device, invite() {} }, pairing: { list: () => [], expect() {} },
+      server: Object.assign(new (require('events').EventEmitter)(), { current: null, server: { current: null } }), link: { hosts: [] }, // #76's Connect by address
       phoneViews: { openApp: (...args) => opened.push(args), pin() {} },
     });
     assert.ok(events.has('setLanguage'), `${mode} exposes a validated language action`);

@@ -1,6 +1,7 @@
-// TwinDesk — Copyright (C) 2026. GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Real sandboxed Electron pages, isolated from native helpers and network/device discovery.
 // Run: windows/node_modules/electron/dist/electron.exe shared/test/i18n-window.js
+// Linux's pages (the same renderer code, run here): TWINDESK_PLATFORM=linux before it.
 'use strict';
 if (!process.versions.electron) {
   console.log('i18n-window: run with Electron to verify the actual Windows pages');
@@ -14,6 +15,7 @@ const path = require('path');
 const vm = require('vm');
 const I18n = require('../i18n.js');
 const ROOT = path.resolve(__dirname, '../..');
+const PLATFORM = process.env.TWINDESK_PLATFORM === 'linux' ? 'linux' : 'windows';
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'twindesk-i18n-window-'));
 app.setPath('userData', temp);
 app.commandLine.appendSwitch('disable-gpu');
@@ -120,12 +122,15 @@ async function testMode(mode) {
     assert.strictEqual(await read('document.querySelector("#page-general h1").textContent'), I18n.create('zh-CN').t('General'));
     assert.ok(await read('document.querySelector("#page-general").textContent.includes("简体中文")'));
     const networkName = '以太网 $& {name} <tag>';
+    const winFirewall = PLATFORM === 'windows'; // the Windows firewall's networks and categories
     const firewallHint = `网络“${networkName}”被设为“公用”，因此 Windows 会阻止 另一台电脑 的广播。`;
-    state.firewall = require('../../windows/firewall').interpret({ rules: [], networks: [
-      { alias: networkName, index: 9, category: 'Public', ipv4: 'Internet' },
-    ] });
-    push(); await delay(60);
-    assert.ok(await read(`document.querySelector('#page-general').textContent.includes(${JSON.stringify(firewallHint)})`), `${mode}: firewall hint is translated without replacing braces in network names`);
+    if (winFirewall) {
+      state.firewall = require('../../windows/firewall').interpret({ rules: [], networks: [
+        { alias: networkName, index: 9, category: 'Public', ipv4: 'Internet' },
+      ] });
+      push(); await delay(60);
+      assert.ok(await read(`document.querySelector('#page-general').textContent.includes(${JSON.stringify(firewallHint)})`), `${mode}: firewall hint is translated without replacing braces in network names`);
+    }
     await shot(mode.replace('/', '-') + '-general-zh-CN');
 
     // Trigger the real selector -> sandboxed preload -> actual IPC -> settings-window reload.
@@ -158,11 +163,13 @@ async function testMode(mode) {
     state.firewall = { checking: true };
     push(); await delay(60);
     assert.ok(await read('document.querySelector(".setup-page").textContent.includes("设置 TwinDesk")'));
-    state.firewall = require('../../windows/firewall').interpret({ rules: [], networks: [
-      { alias: networkName, index: 9, category: 'Public', ipv4: 'Internet' },
-    ] });
-    push(); await delay(60);
-    assert.ok(await read(`document.querySelector('.setup-page').textContent.includes(${JSON.stringify(firewallHint)})`), `${mode}: setup preserves the translated firewall hint too`);
+    if (winFirewall) {
+      state.firewall = require('../../windows/firewall').interpret({ rules: [], networks: [
+        { alias: networkName, index: 9, category: 'Public', ipv4: 'Internet' },
+      ] });
+      push(); await delay(60);
+      assert.ok(await read(`document.querySelector('.setup-page').textContent.includes(${JSON.stringify(firewallHint)})`), `${mode}: setup preserves the translated firewall hint too`);
+    }
     await shot(mode.replace('/', '-') + '-setup-zh-CN');
     state.setup = { missing: [], show: false };
     state.pairing = { phase: 'code', role: 'guest', macName: '<b>手机 & PC</b>', code: '123456' };
@@ -172,7 +179,7 @@ async function testMode(mode) {
     assert.ok((await read('document.getElementById("pair-hint").textContent')).includes('配对码'));
     assert.strictEqual(await read('document.querySelector(".pair-pop .btn:not(.primary)").textContent'), I18n.create('zh-CN').t('Later'));
 
-    if (mode === 'windows') {
+    if (mode === 'windows') { // QR pairing over the network (Windows' host pairing)
       state.pairing = { phase: 'request', role: 'host', macName: '<b>QR $& {name}</b>', code: '123456', wired: true, qr: true };
       push(); await delay(60);
       assert.strictEqual(await read('document.getElementById("pair-hint").textContent'), state.pairing.macName + ' 已扫描二维码。点击“允许”进行配对。', 'QR pairing keeps its network-specific Chinese instructions');
@@ -227,7 +234,7 @@ async function testMode(mode) {
     assert.ok(await read('document.querySelector("#page-overview h1").textContent.includes("Work {me} $&")'));
     await inspectPages('phone');
     assert.deepStrictEqual(errors, [], 'actual renderer must not throw');
-    assert.ok(introductions.size >= 8, 'the test inspects feature introductions as well as settings');
+    assert.ok(introductions.size >= (mode === 'linux/mesh' ? 7 : 8), 'the test inspects feature introductions as well as settings'); // Linux's Multi-device has fewer pages
     console.log(`i18n-window ${mode}: ${inspected.size} pages, ${introductions.size} introductions, computer/phone settings inspected`);
   } finally {
     win.destroy();
@@ -239,8 +246,8 @@ async function testMode(mode) {
 
 app.whenReady().then(async () => {
   try {
-    await testMode('windows');
-    await testMode('windows/mesh');
+    await testMode(PLATFORM);
+    await testMode(PLATFORM + '/mesh');
     console.log('i18n-window: ordinary/Mesh actual pages, startup locale, language switch, persistence, setup, pairing and Overview passed');
     clearTimeout(watchdog);
     app.exit(0);

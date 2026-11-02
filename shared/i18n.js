@@ -1,4 +1,4 @@
-// TwinDesk — Copyright (C) 2026. GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // English source messages are keys; untranslated pages and platforms keep their English text.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {

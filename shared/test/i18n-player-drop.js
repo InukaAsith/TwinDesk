@@ -1,4 +1,4 @@
-// TwinDesk — GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 'use strict';
 const assert = require('assert');
 const { EventEmitter } = require('events');
