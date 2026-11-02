@@ -65,8 +65,10 @@ class DragRecv {
     // Folders first (parents before children: Explorer creates them in order), then the files.
     const dirs = new Set();
     const addParents = (rel) => { const s = rel.split('/'); for (let i = 1; i < s.length; i++) dirs.add(s.slice(0, i).join('/')); };
+    if (Array.isArray(m.dirs) && m.dirs.length > MAX_FILES) return end('failed');
     for (const d of Array.isArray(m.dirs) ? m.dirs : []) { const r = safeRel(d); if (!r) return end('failed'); dirs.add(r); addParents(r); }
-    const built = this._build(list, dirs, addParents, m.items);
+    let built;
+    try { built = this._build(list, dirs, addParents, m.items); } catch (_) { built = null; }
     if (!built) return end('failed');
     const { dir, files, entries, names, count } = built;
     this.cur = { drag: m.drag, dir, files, byId: new Map(), where: '', state: 'dragging', count, name: names[0] ? names[0].replace(/\/$/, '') : '' };
@@ -83,24 +85,38 @@ class DragRecv {
   // The temp files and the helper's entries for a tree (folders first, then the files), or null.
   _build(list, dirs, addParents, givenItems) {
     const dir = path.join(this.root, crypto.randomBytes(6).toString('hex'));
-    fs.mkdirSync(dir, { recursive: true });
     const files = new Map();
     const fileEntries = [];
+    const used = new Set();
     for (const f of list) {
       const rel = f && safeRel(f.rel);
-      if (!rel || !(f.size >= 0) || f.size > P.FILE_MAX_BYTES || files.has(rel)) return null;
+      if (!rel || !Number.isSafeInteger(f.size) || f.size < 0 || f.size > P.FILE_MAX_BYTES || used.has(rel.toLowerCase())) return null;
+      used.add(rel.toLowerCase());
       addParents(rel);
       const tmp = path.join(dir, files.size + '.part');
-      fs.writeFileSync(tmp, '');
       const file = { rel, size: f.size, tmp, index: -1, id: null, got: 0, seq: 0, hash: null, out: null, state: 'waiting' };
       files.set(rel, file);
       fileEntries.push(file);
+    }
+    if (dirs.size + files.size > MAX_FILES) return null;
+    const dirKeys = new Set();
+    for (const d of dirs) {
+      const key = d.toLowerCase();
+      if (used.has(key) || dirKeys.has(key)) return null;
+      dirKeys.add(key);
     }
     const dirList = [...dirs].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));
     const entries = dirList.map((d) => ({ rel: d, dir: true, size: 0 }));
     for (const f of fileEntries) { f.index = entries.length; entries.push({ rel: f.rel, size: f.size, temp: f.tmp }); }
     const items = Array.isArray(givenItems) && givenItems.length ? givenItems : [...new Set(fileEntries.map((f) => f.rel.split('/')[0]))].map((n) => ({ name: n, dir: dirs.has(n) }));
-    const names = items.slice(0, 50).map((it) => (safeRel(String(it.name)) || 'item').split('/').pop() + (it.dir ? '/' : ''));
+    const names = items.slice(0, 50).map((it) => (safeRel(String(it && it.name || 'item')) || 'item').split('/').pop() + (it && it.dir ? '/' : ''));
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      for (const f of fileEntries) fs.writeFileSync(f.tmp, '');
+    } catch (e) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+      throw e;
+    }
     return { dir, files, entries, names, count: items.length };
   }
 
@@ -109,6 +125,7 @@ class DragRecv {
   startPaste({ batch, list, dirs, items, dir }) {
     if (typeof batch !== 'string' || !Array.isArray(list) || list.length > MAX_FILES || !(list.length || (dirs && dirs.length))) return false;
     if (this.cur) this.cancel('cancelled', false);
+    if (Array.isArray(dirs) && dirs.length > MAX_FILES) return false;
     const set = new Set();
     const addParents = (rel) => { const s = rel.split('/'); for (let i = 1; i < s.length; i++) set.add(s.slice(0, i).join('/')); };
     for (const d of Array.isArray(dirs) ? dirs : []) { const r = safeRel(d); if (!r) return false; set.add(r); addParents(r); }
@@ -131,15 +148,18 @@ class DragRecv {
   _offer(m) {
     const refuse = (why) => this.link.send({ t: T.FILE_REFUSE, id: m.id, why });
     const c = this.cur;
-    if (typeof m.id !== 'string') return;
+    if (typeof m.id !== 'string' || !m.id || m.id.length > 256) return;
     if (!c || (c.batch ? m.batch !== c.batch : m.drag !== c.drag)) return refuse('not_allowed');
     const f = c.files.get(safeRel(m.rel));
-    if (!f || f.id || m.size !== f.size) return refuse('not_allowed');
+    if (!f || f.id || c.byId.has(m.id) || m.size !== f.size) return refuse('not_allowed');
     f.id = m.id;
     f.hash = crypto.createHash('sha256');
-    f.out = fs.createWriteStream(f.tmp, { flags: 'w' });
     f.state = 'arriving';
     c.byId.set(m.id, f);
+    try {
+      f.out = fs.createWriteStream(f.tmp, { flags: 'w' });
+      f.out.on('error', () => this._fail(f, c));
+    } catch (_) { return this._fail(f, c); }
     this.link.send({ t: T.FILE_ACCEPT, id: m.id });
   }
 
@@ -147,10 +167,13 @@ class DragRecv {
     const f = this.cur && this.cur.byId.get(m.id);
     if (!f || f.state !== 'arriving' || m.seq !== f.seq || (typeof m.data !== 'string' && !Buffer.isBuffer(m.data))) return;
     const buf = (typeof m.data === 'string' ? Buffer.from(m.data, 'base64') : m.data); // a Buffer from fast files (shared/fastfile.js)
-    f.seq++;
-    f.got += buf.length;
-    f.hash.update(buf);
-    f.out.write(buf);
+    if (buf.length > f.size - f.got) return this._fail(f);
+    try {
+      f.seq++;
+      f.got += buf.length;
+      f.hash.update(buf);
+      f.out.write(buf);
+    } catch (_) { this._fail(f); }
   }
 
   _end(m) {
@@ -158,8 +181,8 @@ class DragRecv {
     const f = c && c.byId.get(m.id);
     if (!f || f.state !== 'arriving') return;
     f.state = 'closing';
-    f.out.end(() => {
-      if (this.cur !== c) return;
+    f.out.once('close', () => {
+      if (this.cur !== c || f.state !== 'closing') return;
       const ok = f.got === f.size && f.hash.digest('hex') === m.sha256;
       f.state = ok ? 'ok' : 'failed';
       this.helper.send('dragFile', { drag: c.drag, index: f.index, state: ok ? 'ok' : 'failed' });
@@ -170,12 +193,18 @@ class DragRecv {
         this.link.send(ok ? { t: T.FILE_DONE, id: f.id, ok: true } : { t: T.FILE_DONE, id: f.id, ok: false, error: 'checksum mismatch' });
       }
     });
+    try { f.out.end(); } catch (_) { this._fail(f, c); }
   }
 
-  _fail(f) {
-    if (f.out) f.out.destroy();
+  _fail(f, c = this.cur) {
+    if (this.cur !== c || !c || f.state === 'failed' || f.state === 'ok') return;
     f.state = 'failed';
-    this.helper.send('dragFile', { drag: this.cur.drag, index: f.index, state: 'failed' });
+    if (f.out) f.out.destroy();
+    this.helper.send('dragFile', { drag: c.drag, index: f.index, state: 'failed' });
+    if (c.batch && f.id && !f.acked) {
+      f.acked = true;
+      this.link.send({ t: T.FILE_DONE, id: f.id, ok: false, error: 'transfer failed' });
+    }
   }
 
   // The Mac's left button came up here (kvm.js injects it, which drops the drag): remember the
@@ -231,7 +260,7 @@ class DragRecv {
     if (c.batch) { // a paste: the sender's batch ends with files.done; fclip.js shows the popup
       const all = ok === c.files.size && result === 'dropped';
       this.link.send({ t: T.FILES_DONE, batch: c.batch, ok: all, where: c.where, files: ok });
-      if (this.onPasted) this.onPasted({ kind: 'paste', files: ok, count: c.files.size, ok: all });
+      if (this.onPasted) this.onPasted({ batch: c.batch, kind: 'paste', files: ok, count: c.files.size, ok: all });
     }
     const label = c.count > 1 ? c.count + ' items' : c.name;
     this.last = { ok: result === 'dropped', text: result === 'dropped' ? label + ' dropped' + (where ? ' in ' + where : '') : label + ': ' + result, at: Date.now() };

@@ -112,7 +112,8 @@ class Peer {
     }
     if (!this.link.authed) return null;
     const p = this.link.snapshot().paired;
-    return p && { deviceId: p.macId, os: p.os, role: 'host', transport: this.link.transport === 'ble' ? 'ble' : 'ip', address: p.address };
+    const address = this.link.transport !== 'ble' && this.link.ws ? this.link.ws.address : p && p.address;
+    return p && { deviceId: p.macId, os: p.os, role: 'host', transport: this.link.transport === 'ble' ? 'ble' : 'ip', address };
   }
 
   send(obj) {

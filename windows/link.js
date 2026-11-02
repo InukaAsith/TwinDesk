@@ -13,6 +13,7 @@ const T = P.T;
 const osOf = (o) => (Object.values(P.OS).includes(o) ? o : P.OS.MAC);
 const HELLO_TIMEOUT_MS = P.TIMEOUT_MS; // no `welcome` this long after hello = retry
 const RESUME_RETRY_MS = 5000; // a failed move to the network: try again after this
+const NETWORK_RETRY_MS = 15000;
 const isBle = (a) => String(a || '').startsWith('ble:');
 
 const PAIR_ERRORS = {
@@ -37,6 +38,7 @@ class Link {
     this.alt = null; // its other socket after a move (the fallback)
     this.pending = null; // a socket moving the session (hello {resume})
     this.resumeKey = '';
+    this.networkRetryAt = 0;
     this.seq = 0; // connection attempts: a Bluetooth pipe that opens late is dropped
     this.pairing = this.store.load(); // {macId, macName, address, port, fp, token} or null
     this.pairState = null; // pairing in progress: {phase, address, port, macName, code, error}
@@ -129,10 +131,11 @@ class Link {
 
   // Connect again, or Take over (takeover: the host's session with another device ends).
   connect(takeover = false) {
-    if (!this.pairing || this.pairState) return;
+    if (!this.pairing || this.pairingActive) return;
     this.stopped = null;
     this.takeover = !!takeover;
     this.attempt = 0;
+    this.networkRetryAt = 0;
     this._connect('session');
   }
 
@@ -154,26 +157,35 @@ class Link {
   }
 
   poke() {
-    if (!this.pairing || this.pairState || this.ws || this.stopped || this.status.state === 'identity_changed') return;
+    if (!this.pairing || this.pairingActive || this.ws || this.stopped || this.status.state === 'identity_changed') return;
     this.attempt = 0;
     clearTimeout(this.timers.reconnect);
-    this.timers.reconnect = setTimeout(() => !this.ws && !this.pairState && this._connect('session'), 300);
+    this.timers.reconnect = setTimeout(() => !this.ws && !this.pairingActive && this._connect('session'), 300);
+  }
+
+  get pairingActive() {
+    return !!this.pairState && this.pairState.phase !== 'failed';
   }
 
   // ---- connection ----
 
   _connect(mode) {
+    if (mode === 'session' && !this.pairingActive) this.pairState = null;
     this._closeSocket();
     clearTimeout(this.timers.reconnect);
     if (mode === 'session' && this.blocked()) return this._scheduleReconnect(); // hosting: try again later
     this.mode = mode;
     this.nw = this.nm = null;
-    const target = mode === 'pair' ? this.pairState : this.pairing;
+    let target = mode === 'pair' ? this.pairState : this.pairing;
+    if (mode === 'session') {
+      const seen = this.resolveAddress(target.macId);
+      if (seen && !isBle(seen.address)) target = { ...target, address: seen.address, port: seen.port };
+    }
     const seq = ++this.seq;
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
     const hostId = mode === 'pair' ? target.id : target.macId;
     const near = this.ble && hostId && this.ble.get(hostId);
-    const viaBle = isBle(target.address) || (mode === 'session' && near && !this.resolveAddress(hostId));
+    const viaBle = isBle(target.address) || (mode === 'session' && near && (!this.resolveAddress(hostId) || Date.now() < this.networkRetryAt));
     if (!viaBle) return this._open(target.address, target.port, 'ip');
     if (!near) {
       this.lastError = '{Name} isn’t nearby';
@@ -215,6 +227,7 @@ class Link {
     });
     ws.on('error', (err) => {
       if (ws === this.ws) this.lastError = err.code || err.message;
+      if (transport === 'ip' && ((ws === this.ws && !this.authed) || ws === this.pending)) this.networkRetryAt = Date.now() + NETWORK_RETRY_MS;
     });
     return ws;
   }
@@ -243,7 +256,7 @@ class Link {
 
   // On Bluetooth and the host is on the network now: move the session there.
   _tryResume() {
-    if (!this.authed || this.transport !== 'ble' || this.pending || !this.resumeKey || Date.now() < (this.resumeAt || 0)) return;
+    if (!this.authed || this.transport !== 'ble' || this.pending || !this.resumeKey || Date.now() < Math.max(this.resumeAt || 0, this.networkRetryAt)) return;
     const seen = this.resolveAddress(this.pairing.macId);
     if (!seen || isBle(seen.address)) return;
     const ws = this._socket(seen.address, seen.port, 'ip');
@@ -275,6 +288,11 @@ class Link {
     }
     this.ws = ws;
     this.transport = ws.transport;
+    this.networkRetryAt = 0;
+    this.pairing.address = ws.address;
+    this.pairing.port = ws.port;
+    this.store.save(this.pairing);
+    this.status.rtt = null;
     console.log('[link] moved to the network');
     this._emit('transport', {});
   }
@@ -330,7 +348,7 @@ class Link {
       case T.ERROR: return this._onError(msg);
       case T.PING: return this.authed && ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ t: T.PONG, ts: msg.ts }));
       case T.PONG:
-        if (typeof msg.ts === 'number') this.status.rtt = Math.max(0, Date.now() - msg.ts);
+        if (ws === this.ws && typeof msg.ts === 'number') this.status.rtt = Math.max(0, Date.now() - msg.ts);
         return this._changed();
     }
     if (!this.authed) return;
@@ -383,13 +401,16 @@ class Link {
     clearTimeout(this.timers.hello);
     this.authed = true;
     this.attempt = 0;
+    if (this.transport === 'ip') this.networkRetryAt = 0;
     this.resumeKey = typeof msg.resume === 'string' ? msg.resume : ''; // older hosts: none, no moving
     this.fxToken = typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : ''; // fast files (shared/fastfile.js); older hosts: none
     this.resumeAt = 0;
     const os = osOf(msg.os || this.pairing.os);
-    if ((typeof msg.macName === 'string' && msg.macName && msg.macName !== this.pairing.macName) || os !== this.pairing.os) {
+    const moved = this.transport === 'ip' && (this.pairing.address !== this.ws.address || this.pairing.port !== this.ws.port);
+    if ((typeof msg.macName === 'string' && msg.macName && msg.macName !== this.pairing.macName) || os !== this.pairing.os || moved) {
       if (typeof msg.macName === 'string' && msg.macName) this.pairing.macName = msg.macName;
       this.pairing.os = os;
+      if (moved) { this.pairing.address = this.ws.address; this.pairing.port = this.ws.port; }
       this.store.save(this.pairing);
     }
     this.status.rtt = null;
@@ -488,7 +509,7 @@ class Link {
     this.attempt++;
     this._setStatus('reconnecting', this.lastError || '');
     this.timers.reconnect = setTimeout(() => {
-      if (!this.pairing || this.pairState) return;
+      if (!this.pairing || this.pairingActive) return;
       const seen = this.resolveAddress(this.pairing.macId);
       if (seen && (seen.address !== this.pairing.address || seen.port !== this.pairing.port)) {
         this.pairing.address = seen.address;

@@ -28,6 +28,7 @@ class FileDrop {
     this.queue = [];
     this.sending = 0; // jobs being sent (one, or a few with fast files)
     this.active = new Map(); // id → {id, name, size, sent, index, count, …} being sent
+    this.progressAt = -Infinity;
     this.current = null; // the newest of them, for the view
     this.last = null; // {name, ok, text}
     this.waiters = new Map(); // id → {resolve, types}
@@ -69,7 +70,7 @@ class FileDrop {
   // Send files (kind 'send') or a paste the other side asked for (kind 'paste', batch =
   // the fclip id): every file offered in order with its folder path. Returns the plan, or null.
   sendBatch(paths, kind, batch = crypto.randomUUID()) {
-    if (this.link.status.state !== 'connected') return null;
+    if (this.link.status.state !== 'connected' || this.batches.has(batch)) return null;
     const d = plan(paths);
     if (!d || !d.jobs.length) return null;
     const name = d.items.length === 1 ? d.items[0].name : d.items.length + ' items';
@@ -119,7 +120,7 @@ class FileDrop {
   _stopDrag(drag, tellMac) {
     if (tellMac) this.link.send({ t: T.DRAG_CANCEL, drag });
     this.queue = this.queue.filter((j) => j.drag !== drag);
-    if ([...this.active.values()].some((c) => c.drag === drag)) this.cancel();
+    this._cancelWhere((c) => c.drag === drag);
   }
 
   _next() {
@@ -158,6 +159,9 @@ class FileDrop {
     this.active.set(id, cur);
     try {
       await this._sendFile(job, cur);
+    } catch (e) {
+      if (this.active.get(id) === cur && !cur.cancelled && this.link.status.state === 'connected') this.link.send({ t: T.FILE_CANCEL, id });
+      throw e;
     } finally {
       this.active.delete(id);
       if (this.current === cur) this.current = [...this.active.values()].pop() || null;
@@ -172,9 +176,8 @@ class FileDrop {
     else if (job.batch) Object.assign(offer, { drop: job.kind, batch: job.batch, rel: job.rel, bytes: (this.batches.get(job.batch) || {}).bytes }); // bytes: the batch, for the receiver's progress
     else if (job.release) offer.drop = 'release';
     else { offer.drop = 'point'; if (typeof job.x === 'number') { offer.x = job.x; offer.y = job.y; } }
-    this.link.send(offer);
     const c = this.link.current;
-    const a = await this._wait(id, [T.FILE_ACCEPT, T.FILE_REFUSE, T.FILE_CANCEL], c && c.transport === 'ble' ? ANSWER_BLE_MS : ANSWER_MS);
+    const a = await this._request(offer, [T.FILE_ACCEPT, T.FILE_REFUSE, T.FILE_CANCEL], c && c.transport === 'ble' ? ANSWER_BLE_MS : ANSWER_MS);
     if (a.t !== T.FILE_ACCEPT) {
       const e = new Error(a.t === T.FILE_REFUSE ? refuseText(a.why) : 'Cancelled');
       e.refused = a.t === T.FILE_REFUSE ? a.why : '';
@@ -182,9 +185,12 @@ class FileDrop {
     }
 
     const sha256 = (await this._fast(job, cur)) || (await this._chunks(job, cur));
-    this.link.send({ t: T.FILE_END, id, sha256 });
-    if (job.drag) return; // the Mac answers file.done when the drop target has it; drag.end says how it went
-    const d = await this._wait(id, [T.FILE_DONE, T.FILE_CANCEL], DONE_MS);
+    this._check(cur);
+    if (job.drag) {
+      this.link.send({ t: T.FILE_END, id, sha256 });
+      return; // the Mac answers file.done when the drop target has it; drag.end says how it went
+    }
+    const d = await this._request({ t: T.FILE_END, id, sha256 }, [T.FILE_DONE, T.FILE_CANCEL], DONE_MS);
     if (d.t !== T.FILE_DONE || !d.ok) throw new Error(d.error || '{Name} couldn’t save it');
     if (job.batch) return; // listed once, on files.done
     this._report(name, true, d.path ? 'Saved on {name}: ' + d.path : 'Saved on {name}');
@@ -215,17 +221,21 @@ class FileDrop {
 
   // The usual way: base64 file.chunk messages on the session's socket. Returns the SHA-256.
   async _chunks(job, cur) {
+    this._check(cur);
     const id = cur.id;
     const hash = crypto.createHash('sha256');
     let seq = 0;
     const stream = fs.createReadStream(job.path, { highWaterMark: P.FILE_CHUNK_BYTES });
     try {
       for await (const chunk of stream) {
-        if (this.active.get(id) !== cur) throw new Error('Cancelled');
-        while (this.link.bufferedAmount > HIGH_WATER) await sleep(15);
-        if (this.link.status.state !== 'connected') throw new Error('{Name} disconnected');
+        this._check(cur);
+        while (this.link.bufferedAmount > HIGH_WATER) {
+          await sleep(15);
+          this._check(cur);
+        }
+        this._check(cur);
         hash.update(chunk);
-        this.link.send({ t: T.FILE_CHUNK, id, seq: seq++, data: chunk.toString('base64') });
+        if (!this.link.send({ t: T.FILE_CHUNK, id, seq: seq++, data: chunk.toString('base64') })) throw new Error('{Name} disconnected');
         this._sent(job, cur, chunk.length, true);
       }
     } finally {
@@ -234,11 +244,29 @@ class FileDrop {
     return hash.digest('hex');
   }
 
+  _check(cur) {
+    if (this.active.get(cur.id) !== cur || cur.cancelled) throw new Error('Cancelled');
+    if (cur.error) throw new Error(cur.error);
+    if (this.link.status.state !== 'connected') throw new Error('{Name} disconnected');
+  }
+
+  _request(message, types, ms) {
+    const answer = this._wait(message.id, types, ms);
+    try {
+      if (!this.link.send(message)) this.waiters.get(message.id)?.reject(new Error('{Name} disconnected'));
+    } catch (e) {
+      this.waiters.get(message.id)?.reject(e);
+    }
+    return answer;
+  }
+
   _sent(job, cur, n, show) {
     cur.sent += n;
     const b = job.batch && this.batches.get(job.batch);
     if (b) b.sent += n;
-    if (!show) return;
+    const now = Date.now();
+    if (!show || now - this.progressAt < 100) return;
+    this.progressAt = now;
     if (b && this.onBatchProgress) this.onBatchProgress(b); // The popup for big batches
     this._progress();
   }
@@ -253,6 +281,7 @@ class FileDrop {
   _answer(m) {
     const c = this.active.get(m.id);
     if (m.t === T.FILE_CANCEL && c) c.cancelled = true;
+    if (m.t === T.FILE_DONE && c && !m.ok) c.error = m.error || '{Name} couldn’t save it';
     const w = this.waiters.get(m.id);
     if (w && w.types.includes(m.t)) w.resolve(m);
   }
@@ -261,7 +290,7 @@ class FileDrop {
   // Drag is cancelled on the Mac.
   cancelRelease() {
     this.queue = this.queue.filter((j) => !j.release);
-    if ([...this.active.values()].some((c) => c.release)) this.cancel();
+    this._cancelWhere((c) => c.release);
     if (this.drag) {
       const d = this.drag;
       this.drag = null;
@@ -271,27 +300,34 @@ class FileDrop {
 
   // Stop what's being sent (with fast files, every file in flight).
   cancel() {
-    if (!this.active.size) return;
-    let all = false;
+    this.queue = [];
+    this._cancelWhere(() => true);
+  }
+
+  _cancelWhere(matches) {
     for (const c of [...this.active.values()]) {
+      if (!matches(c)) continue;
       this.link.send({ t: T.FILE_CANCEL, id: c.id });
       const w = this.waiters.get(c.id);
       const b = c.batch && this.batches.get(c.batch);
       if (b) {
         this.batches.delete(c.batch);
+        this.queue = this.queue.filter((j) => j.batch !== c.batch);
         this._report(b.name, false, 'Cancelled');
       }
-      if (!c.drag) all = true;
       this.active.delete(c.id); // the chunk loop stops at its next check
       if (this.link.fx) this.link.fx.cancel(c.id);
       if (w) w.reject(new Error('Cancelled'));
     }
-    if (all) this.queue = [];
-    this.current = null;
+    this.current = [...this.active.values()].pop() || null;
+    this._progress();
   }
 
   _abortAll(why) {
     this.queue = [];
+    for (const c of this.active.values()) if (this.link.fx) this.link.fx.cancel(c.id);
+    this.active.clear();
+    this.current = null;
     for (const w of [...this.waiters.values()]) w.reject(new Error(why));
   }
 

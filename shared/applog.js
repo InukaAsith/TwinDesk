@@ -24,6 +24,8 @@ const STATS_MS = 30000;
 let folder = '';
 let stream = null;
 let size = 0;
+let rotating = false;
+const pending = [];
 let started = false;
 let terminal = console.error.bind(console); // the console before start(): the terminal only
 
@@ -42,29 +44,43 @@ function openStream() {
   }
   // Opened now (not on a later turn), so a burst that fills it rotates a file that's there.
   stream = fs.createWriteStream(null, { fd: fs.openSync(file(0), 'a') });
-  stream.on('error', () => { stream = null; }); // a full or read-only disk: console only
+  const opened = stream;
+  stream.on('error', () => { if (stream === opened) stream = null; }); // a full or read-only disk: console only
 }
 
 // TwinDesk.log -> .1.log -> .2.log; the oldest goes.
 function rotate() {
-  if (stream) stream.end(); // what it still has goes to the renamed file
-  for (let i = KEEP - 1; i > 0; i--) {
-    try { fs.renameSync(file(i - 1), file(i)); } catch (_) { /* not there yet */ }
-  }
-  try {
-    openStream();
-  } catch (_) {
-    stream = null;
-  }
+  rotating = true;
+  const closing = stream;
+  stream = null;
+  closing.once('close', () => {
+    for (let i = KEEP - 1; i > 0; i--) {
+      try { fs.renameSync(file(i - 1), file(i)); } catch (_) { /* not there yet */ }
+    }
+    try { openStream(); } catch (_) { stream = null; }
+    rotating = false;
+    drain();
+  });
+  closing.end();
 }
 
 function write(line) {
-  if (!stream) return;
-  const bytes = Buffer.byteLength(line);
-  if (size + bytes > maxBytes) rotate();
-  if (!stream) return;
-  size += bytes;
-  stream.write(line);
+  if (!stream && !rotating) return;
+  pending.push(line);
+  drain();
+}
+
+function drain() {
+  if (rotating) return;
+  if (!stream) { pending.length = 0; return; }
+  while (pending.length) {
+    const line = pending[0];
+    const bytes = Buffer.byteLength(line);
+    if (size && size + bytes > maxBytes) return rotate();
+    pending.shift();
+    size += bytes;
+    stream.write(line);
+  }
 }
 
 // What went wrong, at once and whatever happens next (crash.log and TwinDesk.log).

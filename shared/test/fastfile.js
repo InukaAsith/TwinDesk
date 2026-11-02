@@ -187,6 +187,25 @@ async function check(rx, id, p) {
     close();
   }
 
+  // Host-to-guest cancellation must stop the host's disk reader too.
+  {
+    const { host, guest, close } = await pair();
+    const p = file('host-cancel.bin', 64 * 1024 * 1024);
+    const sending = host.fx.send('host-cancel', p, 64 * 1024 * 1024, () => {});
+    const rejected = assert.rejects(sending, (e) => !e.early);
+    await until(() => guest.rx.got.get('host-cancel') && guest.rx.got.get('host-cancel').bytes > 0);
+    const active = host.fx.outgoing.get('host-cancel');
+    guest.send({ t: T.FILE_CANCEL, id: 'host-cancel' });
+    guest.fx.cancel('host-cancel');
+    await rejected;
+    const at = guest.rx.got.get('host-cancel').bytes;
+    await new Promise((r) => setTimeout(r, 200));
+    assert.strictEqual(guest.rx.got.get('host-cancel').bytes, at);
+    assert.ok(active.rs.destroyed, 'canceled GET stops reading the disk');
+    assert.strictEqual(host.fx.usable(), true);
+    close();
+  }
+
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('fastfile: ok');
 })().catch((e) => {

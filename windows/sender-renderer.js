@@ -79,7 +79,9 @@ async function start(m) {
     pc.onconnectionstatechange = () => alive(me) && report(me, pc.connectionState === 'connected' ? 'live' : pc.connectionState);
 
     const offer = await pc.createOffer();
+    if (!alive(me)) return;
     await pc.setLocalDescription({ type: 'offer', sdp: withOpus(withBitrate(offer.sdp, m.mbps)) });
+    if (!alive(me)) return;
     const p = tr.sender.getParameters();
     if (!p.encodings || !p.encodings.length) p.encodings = [{}];
     Object.assign(p.encodings[0], {
@@ -92,9 +94,12 @@ async function start(m) {
     const kind = m.offer.kind === 'screen' && audio ? 'screen+audio' : m.offer.kind;
     api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp: pc.localDescription.sdp, kind });
     report(me, 'connecting');
-    me.statsTimer = setInterval(() => stats(me), 1000);
+    me.statsTimer = setInterval(() => stats(me).catch(() => {}), 1000);
   } catch (e) {
-    if (alive(me)) report(me, 'failed', 'Capturing: ' + e.message);
+    if (alive(me)) {
+      report(me, 'failed', 'Capturing: ' + e.message);
+      stop(me.session);
+    }
   }
 }
 
@@ -146,10 +151,15 @@ async function onAnswer(m) {
   if (!me || !me.pc || m.session !== me.session) return;
   try {
     await me.pc.setRemoteDescription({ type: 'answer', sdp: withOpus(withBitrate(m.sdp, me.mbps)) });
-    for (const c of me.pending.splice(0)) await me.pc.addIceCandidate(c).catch(() => {});
+    if (!alive(me) || !me.pending) return;
+    const pending = me.pending;
     me.pending = null;
+    for (const c of pending) {
+      if (!alive(me)) return;
+      await me.pc.addIceCandidate(c).catch(() => {});
+    }
   } catch (e) {
-    report(me, 'failed', '{Name}’s answer: ' + e.message);
+    if (alive(me)) report(me, 'failed', '{Name}’s answer: ' + e.message);
   }
 }
 

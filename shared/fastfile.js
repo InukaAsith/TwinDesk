@@ -33,7 +33,11 @@ const IDLE_MS = 30000; // no bytes this long: the transfer failed
 
 // No TLS session resumption: a resumed connection has no peer certificate to pin.
 const agent = () => new https.Agent({ keepAlive: true, maxSockets: PARALLEL + 2, rejectUnauthorized: false, maxCachedSessions: 0 });
-const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const same = (a, b) => {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const left = Buffer.from(a), right = Buffer.from(b);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+};
 
 function early(message) {
   const e = new Error(message);
@@ -67,7 +71,7 @@ class FastFiles {
   // The session ended or another one started.
   reset() {
     this.broken = false;
-    for (const id of [...this.arriving.keys()]) this._drop(id, false);
+    for (const id of [...this.arriving.keys()]) this._drop(id, true, false);
     for (const id of [...this.outgoing.keys()]) this._fail(id, new Error('the other computer disconnected'));
     this.agent.destroy();
     this.agent = agent();
@@ -78,6 +82,7 @@ class FastFiles {
   // Sends an accepted file; resolves with its SHA-256 (send file.end then). Rejects with e.early
   // when nothing went. onBytes(n) as bytes go.
   send(id, path, size, onBytes) {
+    if (this.outgoing.has(id)) return Promise.reject(new Error('file is already transferring'));
     const s = this.o.session();
     if (!s || !s.token) return Promise.reject(early('no fast files'));
     return s.host ? this._offerPull(id, path, size, onBytes) : this._put(s, id, path, size, onBytes);
@@ -86,7 +91,7 @@ class FastFiles {
   // Stop sending or receiving this file (cancelled on either side).
   cancel(id) {
     this._fail(id, new Error('Cancelled'));
-    this._drop(id, true);
+    this._drop(id, true, false);
   }
 
   // As guest: PUT it to the host.
@@ -94,10 +99,12 @@ class FastFiles {
     return new Promise((resolve, reject) => {
       const hash = crypto.createHash('sha256');
       let sent = 0, done = false;
+      const w = {};
       const finish = (err, sha) => {
         if (done) return;
         done = true;
-        this.outgoing.delete(id);
+        if (this.outgoing.get(id) === w) this.outgoing.delete(id);
+        if (w.rs) w.rs.destroy();
         if (!err) return resolve(sha);
         if (err.early) this.broken = true;
         reject(err);
@@ -106,20 +113,30 @@ class FastFiles {
         host: s.address, port: s.port, method: 'PUT', path: PATH + encodeURIComponent(id), agent: this.agent,
         headers: { [HEADER]: s.token, 'content-type': 'application/octet-stream', 'content-length': size },
       });
-      this.outgoing.set(id, { req, fail: (e) => { req.destroy(); finish(e); } });
+      w.req = req;
+      w.fail = (e) => { req.destroy(); if (w.res) w.res.destroy(); finish(e); };
+      this.outgoing.set(id, w);
       req.setTimeout(IDLE_MS, () => req.destroy(new Error('stalled')));
       req.on('error', (e) => finish(sent ? e : early(e.message)));
       req.on('response', (res) => {
+        if (done) return res.destroy();
+        w.res = res;
+        res.on('error', (e) => finish(e));
+        res.on('aborted', () => finish(new Error('the transfer stopped')));
+        res.on('close', () => { if (!res.complete) finish(new Error('the transfer stopped')); });
         res.resume();
         res.on('end', () => {
+          if (done) return;
           if (res.statusCode === 200) return finish(null, hash.digest('hex'));
           req.destroy(); // refused before it took any of it
           finish(early(`HTTP ${res.statusCode}`));
         });
       });
       this._pinned(req, s.fp, () => {
+        if (done) return;
         const rs = fs.createReadStream(path, { highWaterMark: READ_BYTES });
-        rs.on('data', (b) => { hash.update(b); sent += b.length; onBytes(b.length); });
+        w.rs = rs;
+        rs.on('data', (b) => { if (done) return; hash.update(b); sent += b.length; onBytes(b.length); });
         rs.on('error', (e) => { req.destroy(); finish(e); });
         rs.pipe(req);
       });
@@ -132,7 +149,9 @@ class FastFiles {
       const w = { path, size, onBytes, resolve, reject, sent: 0 };
       w.timer = setTimeout(() => this._fail(id, early('no pull')), PULL_MS);
       this.outgoing.set(id, w);
-      this.o.send({ t: T.FILE_PULL, id });
+      try {
+        if (this.o.send({ t: T.FILE_PULL, id }) === false) this._fail(id, early('control connection unavailable'));
+      } catch (e) { this._fail(id, early(e.message)); }
     });
   }
 
@@ -146,16 +165,19 @@ class FastFiles {
     w.res = res;
     const hash = crypto.createHash('sha256');
     const rs = fs.createReadStream(w.path, { highWaterMark: READ_BYTES });
+    w.rs = rs;
     res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': w.size });
     req.setTimeout(IDLE_MS, () => res.destroy());
-    rs.on('data', (b) => { hash.update(b); w.sent += b.length; w.onBytes(b.length); });
-    rs.on('error', (e) => { res.destroy(); this._fail(id, e); });
+    rs.on('data', (b) => { if (this.outgoing.get(id) !== w) return; hash.update(b); w.sent += b.length; w.onBytes(b.length); });
+    rs.on('error', (e) => { if (this.outgoing.get(id) === w) this._fail(id, e); });
+    res.on('error', (e) => { if (this.outgoing.get(id) === w) this._fail(id, e); });
     res.on('finish', () => {
       if (this.outgoing.get(id) !== w) return;
       this.outgoing.delete(id);
+      rs.destroy();
       w.resolve(hash.digest('hex'));
     });
-    res.on('close', () => !res.writableFinished && this._fail(id, new Error('the transfer stopped')));
+    res.on('close', () => this.outgoing.get(id) === w && !res.writableFinished && this._fail(id, new Error('the transfer stopped')));
     rs.pipe(res);
   }
 
@@ -165,6 +187,7 @@ class FastFiles {
     if (w.fail) return w.fail(err); // a PUT
     this.outgoing.delete(id);
     clearTimeout(w.timer);
+    if (w.rs) w.rs.destroy();
     if (w.res) w.res.destroy();
     if (err.early && !w.sent) this.broken = true;
     else delete err.early;
@@ -231,14 +254,15 @@ class FastFiles {
     const fail = () => {
       if (this.arriving.get(id) !== r) return;
       if (r.seq === 0 && !r.size) { // nothing arrived: the host sends it the old way
-        this.arriving.delete(id);
+        this._drop(id, true, false);
         return failed();
       }
-      this._drop(id, false);
+      this._drop(id, true);
     };
     req.setTimeout(IDLE_MS, () => req.destroy(new Error('stalled')));
     req.on('error', fail);
     req.on('response', (res) => {
+      if (this.arriving.get(id) !== r) return res.destroy();
       if (res.statusCode !== 200) {
         res.resume();
         return fail();
@@ -247,11 +271,11 @@ class FastFiles {
       this._receive(id, res, null, r);
       res.on('close', () => !res.complete && fail());
     });
-    this._pinned(req, s.fp, () => req.end());
+    this._pinned(req, s.fp, () => { if (this.arriving.get(id) === r) req.end(); });
   }
 
   _track(id, stream) {
-    this._drop(id, false);
+    this._drop(id, true, false);
     const r = { seq: 0, parts: [], size: 0, held: null, stream };
     this.arriving.set(id, r);
     return r;
@@ -268,10 +292,12 @@ class FastFiles {
     stream.on('end', () => {
       if (this.arriving.get(id) !== r) return;
       this._flush(id, r);
+      if (this.arriving.get(id) !== r) return;
       if (ok) ok();
-      this._drop(id, false);
+      if (this.arriving.get(id) === r) this._drop(id, false);
     });
-    stream.on('close', () => !stream.complete && this._drop(id, false));
+    stream.on('error', () => { if (this.arriving.get(id) === r) this._drop(id, true); });
+    stream.on('close', () => this.arriving.get(id) === r && !stream.complete && this._drop(id, false));
   }
 
   _flush(id, r) {
@@ -283,12 +309,12 @@ class FastFiles {
   }
 
   // Done with an incoming file: a waiting file.end goes on (complete or not: the receiver checks).
-  _drop(id, destroy) {
+  _drop(id, destroy, deliverEnd = true) {
     const r = this.arriving.get(id);
     if (!r) return;
     this.arriving.delete(id);
     if (destroy && r.stream) r.stream.destroy();
-    if (r.held) this.o.deliver(r.held);
+    if (deliverEnd && r.held) this.o.deliver(r.held);
   }
 
   // Go on once the socket is the host's (its certificate's fingerprint is the one paired with).
