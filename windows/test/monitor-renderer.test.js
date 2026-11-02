@@ -12,7 +12,7 @@ function inputFixture() {
   let enable;
   const video = { videoWidth: 100, videoHeight: 100, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../monitor-input.js'), 'utf8'), {
-    window: { MacShareProtocol: P, monitor: { send: m => sent.push(m), onInputEnabled: fn => { enable = fn; } }, addEventListener: (n, fn) => { events[n] = fn; } },
+    window: { PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, monitor: { send: m => sent.push(m), onInputEnabled: fn => { enable = fn; } }, addEventListener: (n, fn) => { events[n] = fn; } },
     document: { getElementById: () => video, body: { classList: { toggle() {} } } }, location: { search: '' }, URLSearchParams,
     requestAnimationFrame: fn => frames.push(fn),
   });
@@ -43,7 +43,7 @@ function rtcFixture(file) {
   }
   const api = { send: m => sent.push(m), stats: s => sent.push(s), state: s => states.push(s), ready() {} };
   for (const name of ['onRtc', 'onRemote', 'onPacing', 'onAudio', 'onToggleStats', 'on']) api[name] = fn => { callbacks[name] = fn; };
-  const context = vm.createContext({ window: { MacShareProtocol: P, monitor: api, sender: api }, document: { getElementById: n => elements.get(n), body: { classList: { toggle() {} } } },
+  const context = vm.createContext({ window: { PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, monitor: api, sender: api }, document: { getElementById: n => elements.get(n), body: { classList: { toggle() {} } } },
     navigator: { mediaDevices: {} }, RTCPeerConnection: Peer, MediaStream: class { constructor(tracks) { this.tracks = tracks; } },
     location: { search: '' }, URLSearchParams, console, performance, setInterval: fn => { timers.push(fn); return timers.length; }, clearInterval() {} });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../' + file), 'utf8'), context);

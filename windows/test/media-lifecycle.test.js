@@ -23,8 +23,8 @@ function fixture(file, processor = false) {
   const api = { on: fn => { handler = fn; }, send: m => sent.push(m), state: m => states.push(m), ready() {} };
   const capture = deferred();
   const context = vm.createContext({
-    window: { sound: api, cam: api, MacShareProtocol: P, CamOut: () => ({ onRotate() {}, push() {} }) },
-    document: { getElementById: n => { if (!elements.has(n)) elements.set(n, { style: {}, srcObject: null, play: async () => {}, classList: { contains() {} } }); return elements.get(n); }, body: { classList: { contains() {} } } },
+    window: { PlayerI18n: require('./support/player-i18n.js'), sound: api, cam: api, MacShareProtocol: P, CamOut: () => ({ onRotate() {}, push() {} }) },
+    document: { querySelector: () => ({}), getElementById: n => { if (!elements.has(n)) elements.set(n, { style: {}, srcObject: null, play: async () => {}, classList: { contains() {} } }); return elements.get(n); }, body: { classList: { contains() {} } } },
     location: { search: '' }, URLSearchParams, addEventListener() {}, console,
     navigator: { mediaDevices: { getDisplayMedia: () => capture.promise, getUserMedia: () => capture.promise, addEventListener() {}, enumerateDevices: async () => [] } },
     RTCPeerConnection: Peer, MediaStream: class { constructor(tracks) { this.tracks = tracks; } },

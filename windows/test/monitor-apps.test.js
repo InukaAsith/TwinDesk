@@ -13,11 +13,11 @@ function fixture() {
     const win = { innerWidth: 100, innerHeight: 100, closed: false, frames, events,
       addEventListener: (n, fn) => { events[n] = fn; }, requestAnimationFrame: fn => frames.push(fn),
       setTimeout() {}, close() { this.closed = true; events.unload(); },
-      document: { title: '', body: { style: {}, append() {} }, documentElement: { style: {} }, createElement: () => ({ style: {}, play: async () => {} }) },
+      document: { title: '', querySelector: () => ({}), body: { style: {}, append() {} }, documentElement: { style: {} }, createElement: () => ({ style: {}, play: async () => {} }) },
     }; wins.push(win); return win;
   }
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../monitor-apps.js'), 'utf8'), {
-    window: { MacShareProtocol: P, monitorInputEnabled: () => enabled, open: createWindow,
+    window: { PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, monitorInputEnabled: () => enabled, open: createWindow,
       monitor: { send: m => sent.push(m), onAppWindows: fn => { callbacks.list = fn; }, onInputEnabled: fn => { callbacks.input = fn; } } },
     document: { getElementById: () => video },
   });
