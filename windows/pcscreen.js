@@ -8,11 +8,12 @@
 // while it is false. A peer that never sends one (an older app) counts as watching, after a moment
 // for its first policy to arrive. We tell the viewer what we share (`screen.state`) and, when
 // "Let <peer> start and switch this screen" is on (pcScreen.remote), obey its `screen.ctl`.
-const { desktopCapturer, screen: displays } = require('electron');
+const { desktopCapturer, powerMonitor, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
 const RemoteInput = require('./remote-input');
 
 const T = P.T;
+const RETRY_MS = 2000; // a capture that ended by itself (the desktop locked): tried again, doubling up to 30 s
 
 class PcScreen {
   // opts: link, helper, sender, vdd, settings (shared), inputAllowed() (KVM at home), onChange()
@@ -25,6 +26,8 @@ class PcScreen {
     this.input = new RemoteInput(opts);
     this.busy = false;
     this.revision = 0;
+    this.retries = 0;
+    this.retryTimer = null;
     this.modeRequest = 0;
     this.lastMode = 'mirror'; // what screen.ctl {share:true} starts (the last mode used)
     this.stateKey = ''; // the last screen.state sent on this connection
@@ -58,7 +61,8 @@ class PcScreen {
 
     this.sender.on('state', (session, s) => {
       if (!this.sending || session !== this.sending.session) return;
-      if (s.status === 'ended' || s.status === 'failed') this._stopSend(true); // apply() retries on the next change
+      if (s.status === 'ended' || s.status === 'failed') { this._stopSend(true); this._retryLater(); }
+      if (s.status === 'live') { this.retries = 0; if (this.retryTimer) clearTimeout(this.retryTimer); }
       Object.assign(this.status, s);
       this.onChange();
     });
@@ -69,6 +73,18 @@ class PcScreen {
     });
     // A monitor came or went (or changed size): the shared one may be different now.
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) displays.on(ev, () => this.apply());
+    // Win+L hands the desktop to the logon screen, which can't be captured: the picture ends there and
+    // nothing else changes when it's unlocked (#81). Unlocked or awake: at once, and again a moment
+    // later (the desktop may not be capturable yet).
+    for (const ev of ['unlock-screen', 'resume']) powerMonitor.on(ev, () => { this.retries = 0; this.apply(); this._retryLater(); });
+  }
+
+  // The capture ended by itself: try again while it's still wanted.
+  _retryLater() {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (!this._wanted()) return;
+    const ms = Math.min(30000, RETRY_MS * 2 ** Math.min(this.retries++, 4));
+    this.retryTimer = setTimeout(() => { if (!this.sending) this.apply(); }, ms);
   }
 
   get cfg() {

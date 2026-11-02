@@ -5,6 +5,7 @@ const { EventEmitter } = require('node:events');
 const Module = require('node:module');
 const P = require('../../shared/protocol');
 const ipcMain = new EventEmitter();
+const powerMonitor = new EventEmitter(); // unlock-screen / resume (#81)
 const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 } };
 let sources;
 class BrowserWindow extends EventEmitter {
@@ -20,7 +21,7 @@ class BrowserWindow extends EventEmitter {
 }
 const load = Module._load;
 Module._load = function (id, ...args) {
-  if (id === 'electron') return { app: { getLocale: () => 'en' }, ipcMain, BrowserWindow, desktopCapturer: { getSources: () => sources() }, screen: Object.assign(new EventEmitter(), { getAllDisplays: () => [display], getPrimaryDisplay: () => display, dipToScreenRect: (_, r) => r }) };
+  if (id === 'electron') return { app: { getLocale: () => 'en' }, powerMonitor, ipcMain, BrowserWindow, desktopCapturer: { getSources: () => sources() }, screen: Object.assign(new EventEmitter(), { getAllDisplays: () => [display], getPrimaryDisplay: () => display, dipToScreenRect: (_, r) => r }) };
   return load.call(this, id, ...args);
 };
 const PcScreen = require('../pcscreen');
@@ -31,6 +32,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const tick = () => new Promise(r => setImmediate(r));
 function fixture() {
   ipcMain.removeAllListeners();
+  powerMonitor.removeAllListeners();
   const sent = [], starts = [], stops = [];
   const link = Object.assign(new EventEmitter(), { status: { state: 'connected' }, current: { transport: 'ip' }, send: m => { sent.push(m); return true; }, snapshot: () => ({ link: {} }) });
   const sender = Object.assign(new EventEmitter(), { start: o => { starts.push(o); return starts.length; }, stop: s => stops.push(s) });
@@ -91,6 +93,32 @@ test('sender failure remains visible after stopping capture', () => {
   pc.sending = { session: 1 };
   f.sender.emit('state', 1, { status: 'failed', error: 'encoder stopped' });
   assert.equal(pc.sending, null); assert.equal(pc.status.status, 'failed');
+});
+test('a capture that ended by itself (the desktop locked) starts again a moment later (#81)', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(), pc = new PcScreen(f.opts); pc.mac.accept = true;
+  await pc.setMode('mirror'); await tick();
+  assert.equal(f.starts.length, 1);
+  f.sender.emit('state', 1, { status: 'ended', error: 'The captured monitor went away' });
+  assert.equal(pc.sending, null);
+  t.mock.timers.tick(1999); await tick();
+  assert.equal(f.starts.length, 1, 'not at once: the desktop is still locked');
+  t.mock.timers.tick(1); await tick(); await tick();
+  assert.equal(f.starts.length, 2, 'tried again');
+  f.sender.emit('state', 2, { status: 'live' });
+  assert.equal(pc.retries, 0, 'live: the next end waits 2 s again');
+});
+test('unlocking the screen starts the picture again at once, and not when sharing is off', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(), pc = new PcScreen(f.opts); pc.mac.accept = true;
+  await pc.setMode('mirror'); await tick();
+  f.sender.emit('state', 1, { status: 'ended' });
+  powerMonitor.emit('unlock-screen'); await tick(); await tick();
+  assert.equal(f.starts.length, 2, 'unlocked: again now');
+  await pc.setMode('off');
+  powerMonitor.emit('resume'); await tick();
+  t.mock.timers.tick(30000); await tick();
+  assert.equal(f.starts.length, 2, 'off: nothing starts');
 });
 test('partial viewer dimensions use a valid Extend fallback', () => {
   const f = fixture(), pc = new PcScreen(f.opts);
