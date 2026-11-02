@@ -17,7 +17,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^38.0.0",
+    "electron": "^44.10.1",
     "electron-builder": "26.0.12"
   },
   "allowScripts": {

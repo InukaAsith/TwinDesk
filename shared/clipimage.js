@@ -302,4 +302,4 @@ function itemView(h, preview) {
   return { dir: h.dir, at: h.at, size: h.size, text: h.text.slice(0, preview) };
 }
 
-module.exports = { ImageOut, ImageIn, ClipImages, pngOf, sigOf, isPng, trimPictures, itemView };
+module.exports = { ImageOut, ImageIn, ClipImages, pngOf, sigOf, isPng, trimPictures, itemView, readClipImage, writeClipImage };

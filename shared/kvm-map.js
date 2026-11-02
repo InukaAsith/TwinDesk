@@ -99,7 +99,7 @@ class KvmMap extends EventEmitter {
       const size = 200;
       const w = new BrowserWindow({
         x: Math.round(d.bounds.x + (d.bounds.width - size) / 2), y: Math.round(d.bounds.y + (d.bounds.height - size) / 2),
-        width: size, height: size, frame: false, transparent: true, resizable: false, movable: false, focusable: false,
+        width: size, height: size, frame: false, ...(process.platform === 'linux' ? { roundedCorners: false } : {}), transparent: true, resizable: false, movable: false, focusable: false,
         skipTaskbar: true, hasShadow: false, alwaysOnTop: true, show: false, backgroundColor: '#00000000', webPreferences: { javascript: false },
       });
       w.setIgnoreMouseEvents(true);
