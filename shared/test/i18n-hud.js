@@ -58,7 +58,7 @@ for (const platform of ['windows', 'mac']) {
   vm.runInNewContext(source, { require: customRequire, module, process, console, Buffer, setTimeout, clearTimeout });
   const FileClip = platform === 'windows' ? module.exports : module.exports.FileClip;
   if (platform === 'windows') {
-    FileClip.prototype.pasted.call({ pasting: null, popup: (kind, text) => captures.push(text), onChange() {} }, { ok: true, files: 2, count: 2 });
+    FileClip.prototype.pasted.call({ pasting: { id: 'b' }, popup: (kind, text) => captures.push(text), onChange() {} }, { batch: 'b', ok: true, files: 2, count: 2 }); // #117: only the batch being pasted
     assert.deepEqual(JSON.parse(JSON.stringify(captures[0])), { key: 'Pasted {count} files', vars: { count: 2 } }, 'file completion carries local metadata');
   } else {
     const server = new EventEmitter();

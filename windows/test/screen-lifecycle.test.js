@@ -20,7 +20,7 @@ class BrowserWindow extends EventEmitter {
 }
 const load = Module._load;
 Module._load = function (id, ...args) {
-  if (id === 'electron') return { ipcMain, BrowserWindow, desktopCapturer: { getSources: () => sources() }, screen: Object.assign(new EventEmitter(), { getAllDisplays: () => [display], getPrimaryDisplay: () => display, dipToScreenRect: (_, r) => r }) };
+  if (id === 'electron') return { app: { getLocale: () => 'en' }, ipcMain, BrowserWindow, desktopCapturer: { getSources: () => sources() }, screen: Object.assign(new EventEmitter(), { getAllDisplays: () => [display], getPrimaryDisplay: () => display, dipToScreenRect: (_, r) => r }) };
   return load.call(this, id, ...args);
 };
 const PcScreen = require('../pcscreen');

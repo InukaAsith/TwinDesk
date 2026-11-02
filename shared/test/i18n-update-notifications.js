@@ -2,7 +2,7 @@
 'use strict';
 const assert = require('assert');
 const { Updates } = require('../updates');
-const current = '2.3.0 {version} $& <current>', latest = '2.4.0 {version} $& <latest>';
+const current = '2.3.0', latest = '2.4.0-rc.1'; // real versions (#117: a tag that isn't one is ignored); the notes stay literal below
 const notes = 'Remote release notes {version} $& <raw> stay literal.';
 
 async function run() {

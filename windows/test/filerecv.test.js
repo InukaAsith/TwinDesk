@@ -20,6 +20,8 @@ Module._load = function (id, ...args) {
 const FileRecv = require('../filerecv.js');
 Module._load = load;
 const tick = () => new Promise((resolve) => setTimeout(resolve, 15));
+// Real files: their close, link and rename can take longer than a tick on a busy machine.
+const until = async (done, ms = 2000) => { for (const end = Date.now() + ms; !done() && Date.now() < end;) await tick(); };
 const digest = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
 function fixture(t) {
@@ -112,7 +114,7 @@ test('empty files and nested files finish with correct contents', async (t) => {
   f.end('empty', Buffer.alloc(0));
   f.chunk('text', 'aGVsbG8=');
   f.end('text', Buffer.from('hello'));
-  await tick();
+  await until(() => f.sent.some((m) => m.t === P.T.FILES_DONE));
   assert.equal(fs.readFileSync(path.join(f.dir, 'folder', 'text.txt'), 'utf8'), 'hello');
   assert.equal(fs.statSync(path.join(f.dir, 'folder', 'empty.txt')).size, 0);
   assert.ok(f.sent.some((m) => m.t === P.T.FILES_DONE && m.ok && m.files === 2));
@@ -136,7 +138,7 @@ test('a direct drag completes after its destination is chosen', async (t) => {
   await f.recv.onRelease();
   f.chunk('drag', Buffer.from('drop'));
   f.end('drag', Buffer.from('drop'));
-  await tick();
+  await until(() => f.recv.files.size === 0);
   assert.equal(fs.readFileSync(path.join(f.dir, 'drop.txt'), 'utf8'), 'drop');
   assert.equal(f.recv.files.size, 0);
 });
