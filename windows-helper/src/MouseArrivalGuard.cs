@@ -1,3 +1,4 @@
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Ignore mouse moves generated before a capture ended: their coordinates were computed while
 // the local pointer was parked and must not overwrite the arrival position.
 namespace MacShare

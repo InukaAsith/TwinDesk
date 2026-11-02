@@ -1,3 +1,4 @@
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 using System;
 using MacShare;
 
