@@ -115,6 +115,7 @@ class DragRecv {
     const f = this.cur && this.cur.byId.get(m.id);
     if (!f || f.state !== 'arriving' || m.seq !== f.seq || (typeof m.data !== 'string' && !Buffer.isBuffer(m.data))) return;
     const buf = (typeof m.data === 'string' ? Buffer.from(m.data, 'base64') : m.data); // a Buffer from fast files (shared/fastfile.js)
+    if (f.got + buf.length > f.size) return this._fail(f, 'size mismatch'); // more than it offered: not written (it could fill the disk)
     f.seq++;
     f.got += buf.length;
     f.hash.update(buf);

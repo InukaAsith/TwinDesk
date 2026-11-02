@@ -130,7 +130,7 @@ class Drop extends EventEmitter {
     const release = m.drop === 'release';
     if (release && !this.drag) this.drag = { dest: null, waiting: [] }; // offer before kvm.take: fine
     const dir = release ? INCOMING : await this._destination(m);
-    const tmp = path.join(dir, `.${name}.${m.id.slice(0, 8)}.macshare-part`);
+    const tmp = path.join(dir, `.${name}.${P.randomHex(4)}.macshare-part`); // not m.id: the PC's string
     let fd;
     try {
       fs.mkdirSync(dir, { recursive: true });

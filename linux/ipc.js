@@ -59,7 +59,7 @@ function setupIpc(ctx) {
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
-  handle('forget', () => link.forget());
+  handle('forget', () => { link.forget(); sshd.revokeAll(); }); // forgotten: it may not log in any more
   // Disconnect (either side of the session); Connect again / Take over the computer we're a guest of.
   handle('disconnect', () => link.disconnect());
   handle('connectAgain', () => link.connect(true));

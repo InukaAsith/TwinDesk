@@ -86,11 +86,12 @@ class Smb {
   }
 
   // One switch: on → share the folder (default ~/MacShare); the password prompt only comes the
-  // first time or after the folder changed. Off → the other computer disconnects it; the share and
-  // the account stay, so switching on again needs no prompt.
+  // first time or after the folder changed. Off → the other computer disconnects it, and the share and
+  // its account are removed (password prompt), so no password is left that opens the folder.
   async setShareOn(on) {
     if (this.busy) return;
-    if (!on) {
+    if (!on) { // off: the share and its account go too (no password left that opens the folder)
+      if (this._creds() || this.sharePath) return this.unshare();
       this.cfg.shareOn = false;
       this.save();
       this.link.send({ t: T.SMB_REVOKE, share: SHARE });
@@ -185,10 +186,10 @@ userdel ${USER} 2>/dev/null || true
 smbcontrol all reload-config 2>/dev/null || true
 `], { timeout: 120000 });
       this.message = '';
-    } catch (e) {
+      try { fs.unlinkSync(this.credFile); } catch (_) { /* none */ }
+    } catch (e) { // declined: the share is still there, so its password stays known (Remove can try again)
       this.message = e.code === 126 ? 'Cancelled. The folder is still shared.' : e.message;
     }
-    try { fs.unlinkSync(this.credFile); } catch (_) { /* none */ }
     this.cfg.shareOn = false;
     this.save();
     this.peerState = null;

@@ -54,11 +54,12 @@ class Smb {
   }
 
   // One switch: on → share the folder (default %USERPROFILE%\TwinDesk); the admin
-  // prompt only comes the first time or after the folder changed. Off → the Mac unmounts; the share
-  // and account stay, so switching on again needs no prompt.
+  // prompt only comes the first time or after the folder changed. Off → the Mac unmounts, and the share
+  // and its account are removed (admin prompt), so no password is left that opens the folder.
   async setShareOn(on) {
     if (this.busy) return;
-    if (!on) {
+    if (!on) { // off: the share and its account go too (no password left that opens the folder)
+      if (this._creds() || this.sharePath) return this.unshare();
       this.cfg.shareOn = false;
       this.save();
       this.link.send({ t: T.SMB_REVOKE, share: SHARE });
@@ -127,10 +128,10 @@ class Smb {
     try {
       await scriptElevated('smb-unshare', { Share: SHARE, User: USER });
       this.message = '';
-    } catch (e) {
+      try { fs.unlinkSync(this.credFile); } catch (_) { /* none */ }
+    } catch (e) { // declined: the share is still there, so its password stays known (Remove can try again)
       this.message = /cancel/i.test(e.message) ? 'Cancelled. The folder is still shared.' : e.message;
     }
-    try { fs.unlinkSync(this.credFile); } catch (_) { /* none */ }
     this.cfg.shareOn = false;
     this.save();
     this.peerState = null;
