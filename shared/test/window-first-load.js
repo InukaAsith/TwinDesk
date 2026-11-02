@@ -1,4 +1,4 @@
-// TwinDesk — Copyright (C) 2026. GPL-3.0, see LICENSE.
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Exercise the actual window factories without timing-dependent compositor events.
 'use strict';
 const assert = require('assert');
