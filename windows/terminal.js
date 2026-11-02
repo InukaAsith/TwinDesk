@@ -32,11 +32,13 @@ class Terminal {
     this.info = null; // last ssh.info
     this.status = 'off';
     this.message = '';
+    this.generation = 0;
+    this.keyTask = null;
     // Older versions wrote a `macshare` command; `ssh twindesk` replaces it.
     try { fs.rmSync(path.join(app.getPath('userData'), 'bin', 'macshare.cmd'), { force: true }); } catch (_) { /* gone */ }
 
     this.link.on('welcome', () => this.apply());
-    this.link.on('closed', () => { this.info = null; this._set(this.cfg.enabled ? 'no_mac' : 'off', ''); });
+    this.link.on('closed', () => { ++this.generation; this.info = null; this._set(this.cfg.enabled ? 'no_mac' : 'off', ''); });
     this.link.on(T.SSH_INFO, (m) => this._onInfo(m));
   }
 
@@ -50,6 +52,7 @@ class Terminal {
 
   // Call on welcome and after the Terminal switch changed.
   async apply() {
+    const generation = ++this.generation;
     if (!this.cfg.enabled) {
       if (this.info) this.link.send({ t: T.SSH_FORGET });
       this.info = null;
@@ -60,14 +63,24 @@ class Terminal {
     if (this.link.status.state !== 'connected') return this._set('no_mac', '');
     try {
       const pub = await this._ensureKey();
+      if (generation !== this.generation || !this.cfg.enabled || this.link.status.state !== 'connected') return;
       this._set('waiting', '');
       this.link.send({ t: T.SSH_KEY, pub });
     } catch (e) {
+      if (generation !== this.generation) return;
       this._set('error', 'Couldn’t make an SSH key: ' + e.message);
     }
   }
 
   async _ensureKey() {
+    if (this.keyTask) return this.keyTask;
+    const task = this._makeKey();
+    this.keyTask = task;
+    try { return await task; }
+    finally { if (this.keyTask === task) this.keyTask = null; }
+  }
+
+  async _makeKey() {
     if (!fs.existsSync(this.key + '.pub')) {
       fs.mkdirSync(this.dir, { recursive: true });
       await run(KEYGEN, ['-q', '-t', 'ed25519', '-N', '', '-C', 'macshare@' + os.hostname(), '-f', this.key]);

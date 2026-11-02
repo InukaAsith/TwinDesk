@@ -62,6 +62,7 @@ class Sender extends EventEmitter {
   stop(session, tellMac = true) {
     if (!this.live.delete(session)) return;
     const win = this.windows.delete(session);
+    this.queue = this.queue.filter((m) => m.session !== session);
     this._toWin({ t: 'stop', session });
     if (tellMac && this.link.status.state === 'connected') this.link.send(win ? { t: T.RTC2_STOP, session, win: 'send' } : { t: T.RTC2_STOP, session });
   }
@@ -82,7 +83,7 @@ class Sender extends EventEmitter {
   _create() {
     this.ready = false;
     this.queue = [];
-    this.win = new BrowserWindow({
+    const win = this.win = new BrowserWindow({
       show: false,
       webPreferences: {
         preload: path.join(__dirname, 'preload-sender.js'),
@@ -92,8 +93,22 @@ class Sender extends EventEmitter {
         backgroundThrottling: false,
       },
     });
-    this.win.loadFile(path.join(__dirname, 'sender.html'));
-    this.win.on('closed', () => { this.win = null; this.ready = false; });
+    const failed = (error) => {
+      if (this.win !== win) return;
+      this.win = null;
+      this.ready = false;
+      this.queue = [];
+      const sessions = [...this.live];
+      for (const session of sessions) this.stop(session);
+      for (const session of sessions) this.emit('state', session, { status: 'failed', error });
+      if (!win.isDestroyed()) win.destroy();
+    };
+    win.webContents.on('render-process-gone', (_e, detail) => failed('Screen capture stopped: ' + detail.reason));
+    win.webContents.on('did-fail-load', (_e, _code, description, _url, mainFrame) => {
+      if (mainFrame !== false) failed('Screen capture could not load: ' + description);
+    });
+    win.on('closed', () => failed('The screen capture window closed'));
+    win.loadFile(path.join(__dirname, 'sender.html')).catch((e) => failed('Screen capture could not load: ' + e.message));
   }
 }
 

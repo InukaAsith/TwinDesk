@@ -11,6 +11,7 @@ class RemoteInput {
   // opts: link (peer.js), helper, settings (shared), inputAllowed() (KVM at home)
   constructor(opts) {
     Object.assign(this, opts);
+    this.keyCodes = new Map();
     this.held = false; // keys/buttons may be held down by the Mac
   }
 
@@ -39,15 +40,19 @@ class RemoteInput {
         if (m.t === T.IN_DOWN && before) before();
         move(Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y)));
       }
-      if (m.t !== T.IN_MOVE && Number.isInteger(m.b)) {
+      if (m.t !== T.IN_MOVE && Number.isInteger(m.b) && m.b >= 0 && m.b <= 4) {
         ev({ t: m.t === T.IN_DOWN ? T.K_DOWN : T.K_UP, b: m.b });
         this.held = true;
       }
     } else if (m.t === T.IN_WHEEL) {
-      ev({ t: T.K_WHEEL, dx: Number(m.dx) || 0, dy: Number(m.dy) || 0, mode: 'pixel' });
-    } else if (typeof m.code === 'string') {
+      const dx = Number(m.dx) || 0, dy = Number(m.dy) || 0;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      ev({ t: T.K_WHEEL, dx, dy, mode: 'pixel' });
+    } else if ((m.t === T.IN_KEY_DOWN || m.t === T.IN_KEY_UP) && typeof m.code === 'string') {
       if (m.t === T.IN_KEY_DOWN && before) before();
-      const code = this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this.link.peerOs) ? P.mapKeyFromOtherPlatform(m.code) : m.code;
+      const code = this.keyCodes.get(m.code) || (this.settings.keys.swapCtrlCmd && P.keySwapNeeded(P.OS.WIN, this.link.peerOs) ? P.mapKeyFromOtherPlatform(m.code) : m.code);
+      if (m.t === T.IN_KEY_DOWN) this.keyCodes.set(m.code, code);
+      else this.keyCodes.delete(m.code);
       ev({ t: m.t === T.IN_KEY_DOWN ? T.K_KEY_DOWN : T.K_KEY_UP, code });
       this.held = true;
     }
@@ -55,6 +60,7 @@ class RemoteInput {
 
   // Let go of anything the Mac still holds (a session ended, input switched off).
   release() {
+    this.keyCodes.clear();
     if (!this.held) return;
     this.held = false;
     if (this.inputAllowed()) this.helper.send('releaseAll');

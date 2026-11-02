@@ -775,7 +775,7 @@ function setupNet(guest) {
     waitWifi('screen', () => { screenWait = false; policy(); }, () => { screenWait = false; });
   };
   const setMode = pcScreen.setMode.bind(pcScreen);
-  pcScreen.setMode = (mode) => (mode !== 'off' && net.onBle ? waitWifi('share', () => setMode(mode)) : setMode(mode));
+  pcScreen.setMode = (mode) => setMode(mode, mode !== 'off' && net.onBle ? () => waitWifi('share', () => true) : null);
   viaWifi(peerApps, 'launch', 'apps');
   viaWifi(apps, 'launch', 'apps');
   setInterval(() => {
@@ -842,12 +842,12 @@ function joinHotspot(arg) {
 // fn once the session is on Wi-Fi (now, if it isn't on Bluetooth); a popup if it can't be.
 function waitWifi(why, fn, failed) {
   if (!net || (!net.onBle && !net.linked)) return fn();
-  if (!net.onBle) return void net.need(why).then(fn); // on a link made for something else: kept up for this too
-  hud.show('home', { key: 'Moving to Wi-Fi with {name}…', vars: { name: peerName() } });
-  net.need(why).then((ok) => {
+  if (net.onBle) hud.show('home', { key: 'Moving to Wi-Fi with {name}…', vars: { name: peerName() } });
+  return net.need(why).then((ok) => {
     if (ok) return fn();
     hud.show('home', net.error || { key: 'Wi-Fi with {name} didn’t come up', vars: { name: peerName() } });
     if (failed) failed();
+    return false;
   });
 }
 

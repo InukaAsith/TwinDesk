@@ -55,6 +55,8 @@ class NetLink extends EventEmitter {
     this.held = [];
     this.waiters = [];
     this.timers = {};
+    this.generation = 0;
+    this.hostReady = false;
     setInterval(() => this._tick(), 1000).unref();
   }
 
@@ -96,7 +98,9 @@ class NetLink extends EventEmitter {
     this.needs.clear();
     this.peerNeeds.clear();
     this.peerCaps = null;
-    this._flush();
+    this.held = [];
+    this.sendRaw = null;
+    this._settle(false);
     this._down();
     this.error = '';
     this._set('idle');
@@ -137,6 +141,7 @@ class NetLink extends EventEmitter {
 
   // Resolves true once the session is on Wi-Fi (or already was), false when it can't be.
   need(why, idleMs = 0) {
+    if (!this.o.current()) return Promise.resolve(false);
     if (this.o.cable && this.o.cable()) return Promise.resolve(!this.onBle);
     if (!this.onBle) {
       // Already on a link made for something else: kept up for this too (on both sides), else
@@ -149,11 +154,10 @@ class NetLink extends EventEmitter {
       }
       return Promise.resolve(true);
     }
-    const n = this.needs.get(why);
     this.needs.set(why, { idleMs, last: Date.now() });
     clearTimeout(this.timers.linger);
     const done = new Promise((resolve) => this.waiters.push(resolve)); // first: _ensure can fail at once
-    if (!n || ['idle', 'failed'].includes(this.state)) this._ensure(why);
+    if (['idle', 'failed'].includes(this.state)) this._ensure(why);
     this.emit('change');
     return done;
   }
@@ -212,7 +216,10 @@ class NetLink extends EventEmitter {
     if (!this.onBle || !this.possible) return false;
     this.held.push(msg);
     this.sendRaw = sendRaw;
-    if (this.held.length === 1) this.need('files', FILES_IDLE_MS).then(() => this._flush());
+    if (this.held.length === 1) {
+      const held = this.held;
+      this.need('files', FILES_IDLE_MS).then(() => { if (this.held === held) this._flush(); });
+    }
     return true;
   }
 
@@ -260,11 +267,13 @@ class NetLink extends EventEmitter {
 
   _deadline(ms = ASK_TIMEOUT_MS) {
     clearTimeout(this.timers.ask);
-    // 'asking' without waiters: hosting went to the other side for its need (_swapped)
-    this.timers.ask = setTimeout(() => this.onBle && (this.waiters.length || this.state === 'asking') && this._fail('Wi-Fi didn’t come up in time'), ms);
+    this.timers.ask = setTimeout(() => this.onBle && ['asking', 'hosting', 'joining', 'joined', 'hotspot'].includes(this.state) && this._fail('Wi-Fi didn’t come up in time'), ms);
   }
 
   async _startHost() {
+    if (this.state === 'hosting') return;
+    const generation = ++this.generation;
+    this.hostReady = false;
     this.kind = 'direct';
     this.ssid = `DIRECT-TD-${crypto.randomBytes(3).toString('hex')}`;
     this.pass = crypto.randomBytes(12).toString('base64').replace(/[+/=]/g, 'x');
@@ -273,8 +282,11 @@ class NetLink extends EventEmitter {
     try {
       await this.o.host.start(this.ssid, this.pass);
     } catch (e) {
+      if (generation !== this.generation) return;
       return this._cantHost(`Couldn’t host Wi-Fi: ${e.message}`, e.message);
     }
+    if (generation !== this.generation) return;
+    this.hostReady = true;
     if (this.state === 'hosting') this._joinMsg();
   }
 
@@ -320,16 +332,26 @@ class NetLink extends EventEmitter {
   }
 
   _joinMsg() {
+    if (!this.hostReady || this.state !== 'hosting') return;
     this.o.send({ t: T.NET_JOIN, ssid: this.ssid, pass: this.pass });
   }
 
   async _join(ssid, pass, hotspot = false) {
+    if (this.ssid === ssid && ['joining', 'joined'].includes(this.state)) return this.state === 'joined';
+    if (this.linked) this._down();
+    else {
+      this.generation++;
+      clearTimeout(this.timers.ask);
+      clearTimeout(this.timers.linger);
+    }
+    const generation = this.generation;
     this.ssid = ssid;
     this._set('joining');
     this._deadline();
     try {
       await this.o.join.start(ssid, pass);
     } catch (e) {
+      if (generation !== this.generation) return false;
       // Its network doesn't work here: ours, when we can (it can't host again: noHost there).
       const swap = !hotspot && this._canHost() && !!this.peerCaps && this.peerCaps.join;
       if (!hotspot) this.o.send({ t: T.NET_JOINED, ok: false, error: e.message, retry: swap || undefined });
@@ -342,6 +364,7 @@ class NetLink extends EventEmitter {
       this._fail(`Couldn’t join ${ssid}: ${e.message}`);
       return false;
     }
+    if (generation !== this.generation) return false;
     if (!hotspot) this.o.send({ t: T.NET_JOINED, ok: true });
     this._set('joined');
     return true;
@@ -368,17 +391,24 @@ class NetLink extends EventEmitter {
   }
 
   _down() {
+    this.generation++;
+    this.hostReady = false;
     clearTimeout(this.timers.ask);
+    clearTimeout(this.timers.linger);
     const was = this.state;
     if ((was === 'joining' || was === 'joined') && this.o.join) this.o.join.stop().catch(() => {});
     if (was === 'hosting' && this.o.host) this.o.host.stop().catch(() => {});
     if (was === 'hotspot' && this.o.current()) this.o.send({ t: T.NET_HOTSPOT, on: false });
     this.ssid = '';
+    this.pass = '';
   }
 
   _flush() {
-    const held = this.held.splice(0);
-    if (held.length && this.sendRaw) for (const m of held) this.sendRaw(m);
+    const held = this.held;
+    const sendRaw = this.sendRaw;
+    this.held = [];
+    this.sendRaw = null;
+    if (held.length && sendRaw) for (const m of held) sendRaw(m);
   }
 
   _settle(ok) {

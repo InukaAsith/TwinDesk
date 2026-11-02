@@ -68,10 +68,10 @@
 
   window.addEventListener('mousedown', (e) => {
     if (!enabled) return;
-    e.preventDefault();
     const b = BUTTONS[e.button];
     const p = norm(e, false);
     if (b === undefined || !p) return;
+    e.preventDefault();
     flushMove();
     heldButtons.add(b);
     lastPos = p;
@@ -81,11 +81,10 @@
 
   window.addEventListener('mouseup', (e) => {
     if (!enabled) return;
-    e.preventDefault();
     const b = BUTTONS[e.button];
     if (b === undefined || !heldButtons.has(b)) return;
-    const p = norm(e, true);
-    if (!p) return;
+    e.preventDefault();
+    const p = norm(e, true) || lastPos;
     flushMove();
     heldButtons.delete(b);
     lastPos = p;
@@ -98,8 +97,8 @@
 
   window.addEventListener('wheel', (e) => {
     if (!enabled) return;
-    e.preventDefault();
     if (!norm(e, false)) return;
+    e.preventDefault();
     const k = e.deltaMode === 1 ? LINE_PX : e.deltaMode === 2 ? window.innerHeight : 1;
     const dx = e.deltaX * k, dy = e.deltaY * k;
     if (dx || dy) send({ t: T.IN_WHEEL, dx, dy });

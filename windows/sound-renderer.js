@@ -38,6 +38,7 @@ async function onOffer(m) {
   const pc = new RTCPeerConnection(m.ice || { iceServers: [] });
   const me = (recv = { pc, session: m.session, pending: [], playing: false });
   pc.ontrack = (e) => {
+    if (recv !== me) return;
     lowLatency(e.receiver);
     player.srcObject = new MediaStream([e.track]);
     player.play().catch(() => {});
@@ -48,11 +49,21 @@ async function onOffer(m) {
   pc.onconnectionstatechange = () => { if (recv === me && /failed|closed/.test(pc.connectionState)) { me.playing = false; report(); } };
   try {
     await pc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
-    for (const c of me.pending.splice(0)) await pc.addIceCandidate(c).catch(() => {});
+    if (recv !== me) return;
+    const queue = me.pending;
     me.pending = null;
-    await pc.setLocalDescription(await pc.createAnswer());
+    for (const c of queue) {
+      if (recv !== me) return;
+      await pc.addIceCandidate(c).catch(() => {});
+    }
+    if (recv !== me) return;
+    const answer = await pc.createAnswer();
+    if (recv !== me) return;
+    await pc.setLocalDescription(answer);
     if (recv === me) api.send({ t: T.AUDIO_ANSWER, dir: 'm2w', session: m.session, sdp: pc.localDescription.sdp });
   } catch (e) {
+    if (recv !== me) return;
+    closeRecv();
     error = 'Mac sound: ' + e.message;
     report();
   }
@@ -85,10 +96,15 @@ async function startSend(session, ice) {
     pc.addTransceiver(track, { direction: 'sendonly' });
     pc.onicecandidate = (e) => e.candidate && send === me && api.send({ t: T.AUDIO_ICE, dir: 'w2m', session, candidate: e.candidate.toJSON() });
     pc.onconnectionstatechange = () => { if (send === me) { me.connected = pc.connectionState === 'connected'; report(); } };
-    await pc.setLocalDescription(await pc.createOffer());
+    const offer = await pc.createOffer();
+    if (send !== me) return;
+    await pc.setLocalDescription(offer);
+    if (send !== me) return;
     api.send({ t: T.AUDIO_OFFER, dir: 'w2m', session, sdp: pc.localDescription.sdp });
     error = '';
   } catch (e) {
+    if (send !== me) return;
+    stopSend();
     error = 'Sending this PC’s sound: ' + e.message;
   }
   report();
@@ -99,9 +115,15 @@ async function onAnswer(m) {
   if (!me || !me.pc || m.session !== me.session) return;
   try {
     await me.pc.setRemoteDescription({ type: 'answer', sdp: opusStereo(m.sdp) });
-    for (const c of me.pending.splice(0)) await me.pc.addIceCandidate(c).catch(() => {});
+    if (send !== me || !me.pending) return;
+    const queue = me.pending;
     me.pending = null;
+    for (const c of queue) {
+      if (send !== me) return;
+      await me.pc.addIceCandidate(c).catch(() => {});
+    }
   } catch (e) {
+    if (send !== me) return;
     error = 'Sending this PC’s sound: ' + e.message;
     report();
   }
