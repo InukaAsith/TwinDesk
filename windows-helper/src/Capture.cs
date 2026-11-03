@@ -311,12 +311,19 @@ namespace MacShare
         }
 
         // The sides where an injected move stops at the edge rather than jump onto a monitor past it.
+        // Called for every injected move (Injector.Stops): the same lists, never a new one.
+        static readonly List<string> noStops = new List<string>();
+#if !MULTI
+        readonly List<string> oneStop = new List<string>(1);
+#endif
         public List<string> ReturnStops()
         {
 #if MULTI
-            return retArmed ? retSides : new List<string>();
+            return retArmed ? retSides : noStops;
 #else
-            return retArmed ? new List<string> { retSide } : new List<string>();
+            if (!retArmed) return noStops;
+            if (oneStop.Count != 1 || oneStop[0] != retSide) { oneStop.Clear(); oneStop.Add(retSide); }
+            return oneStop;
 #endif
         }
 
@@ -365,7 +372,7 @@ namespace MacShare
         {
             rawSinceHook = DateTime.MinValue;
             if (nCode < 0) return Native.CallNextHookEx(mouseHook, nCode, wParam, lParam);
-            Native.MSLLHOOKSTRUCT m = (Native.MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(Native.MSLLHOOKSTRUCT));
+            Native.MSLLHOOKSTRUCT m = Native.ReadMouse(lParam); // no allocation per event
             if ((m.flags & Native.LLMHF_INJECTED) != 0 && m.dwExtraInfo == Native.MARK)
                 return Native.CallNextHookEx(mouseHook, nCode, wParam, lParam); // Rule 4: our own
             int msg = wParam.ToInt32();
@@ -390,10 +397,18 @@ namespace MacShare
                 if (dx != 0 || dy != 0)
                 {
                     double s = Screens.Scale(parked.X, parked.Y);
-                    Dictionary<string, object> k = K("k.mm");
-                    k["dx"] = Math.Round(dx / s, 2);
-                    k["dy"] = Math.Round(dy / s, 2);
-                    if (!Lane.Move(dx / s, dy / s, k)) Forward(k); // true: it went on the input lane (Lane.cs)
+                    // The input lane first (Lane.cs): on it, nothing is built or written for this move.
+                    uint lr, lmn;
+                    double lcx, lcy;
+                    int lane = Lane.Move(dx / s, dy / s, out lr, out lmn, out lcx, out lcy);
+                    if (lane != 1)
+                    {
+                        Dictionary<string, object> k = K("k.mm");
+                        k["dx"] = Math.Round(dx / s, 2);
+                        k["dy"] = Math.Round(dy / s, 2);
+                        if (lane == 0) Lane.Totals(k, lr, lmn, lcx, lcy); // the lane is down: its totals go with the move
+                        Forward(k);
+                    }
                 }
             }
             else if (button >= 0 && (down || up))
@@ -436,7 +451,7 @@ namespace MacShare
         IntPtr KeyHook(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode < 0) return Native.CallNextHookEx(keyHook, nCode, wParam, lParam);
-            Native.KBDLLHOOKSTRUCT k = (Native.KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(Native.KBDLLHOOKSTRUCT));
+            Native.KBDLLHOOKSTRUCT k = Native.ReadKey(lParam);
             if ((k.flags & Native.LLKHF_INJECTED) != 0 && k.dwExtraInfo == Native.MARK)
                 return Native.CallNextHookEx(keyHook, nCode, wParam, lParam); // Rule 4: our own
             int msg = wParam.ToInt32();

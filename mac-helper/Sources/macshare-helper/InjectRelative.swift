@@ -10,26 +10,7 @@ extension Injector {
     let here = { CGEvent(source: nil)?.location ?? .zero }
     switch t {
     case "k.mm":
-      let dx = num("dx"), dy = num("dy")
-      let cur = here()
-      let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops)
-      var type = CGEventType.mouseMoved
-      var b = 0
-      if let held = heldButtons.min() {
-        b = held
-        type = held == 0 ? .leftMouseDragged : held == 1 ? .rightMouseDragged : .otherMouseDragged
-      }
-      let e = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: to,
-                      mouseButton: b == 0 ? .left : b == 1 ? .right : .center)
-      e?.setIntegerValueField(.mouseEventDeltaX, value: Int64(dx.rounded()))
-      e?.setIntegerValueField(.mouseEventDeltaY, value: Int64(dy.rounded()))
-      if type != .mouseMoved {
-        e?.setIntegerValueField(.mouseEventButtonNumber, value: Int64(b))
-        e?.setIntegerValueField(.mouseEventClickState, value: clickCount[b] ?? 1)
-      }
-      e?.flags = flags
-      post(e)
-      Capture.shared.checkReturn(to, dx: dx, dy: dy)
+      moveRel(num("dx"), num("dy"))
     case "k.md", "k.mu":
       if t == "k.mu", num("b") == 0, DragIn.shared.buttonUp() { return } // drop before the drag began
       if t == "k.md", num("b") == 0 { Capture.shared.injectedLeftDown() }
@@ -41,5 +22,28 @@ extension Injector {
     default:
       log("inject: unknown \(t)")
     }
+  }
+
+  /// A relative move (the input lane's, Lane.swift, and `inject` k.mm): no dictionary per move.
+  func moveRel(_ dx: Double, _ dy: Double) {
+    let cur = CGEvent(source: nil)?.location ?? .zero
+    let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops)
+    var type = CGEventType.mouseMoved
+    var b = 0
+    if let held = heldButtons.min() {
+      b = held
+      type = held == 0 ? .leftMouseDragged : held == 1 ? .rightMouseDragged : .otherMouseDragged
+    }
+    let e = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: to,
+                    mouseButton: b == 0 ? .left : b == 1 ? .right : .center)
+    e?.setIntegerValueField(.mouseEventDeltaX, value: Int64(dx.rounded()))
+    e?.setIntegerValueField(.mouseEventDeltaY, value: Int64(dy.rounded()))
+    if type != .mouseMoved {
+      e?.setIntegerValueField(.mouseEventButtonNumber, value: Int64(b))
+      e?.setIntegerValueField(.mouseEventClickState, value: clickCount[b] ?? 1)
+    }
+    e?.flags = flags
+    post(e)
+    Capture.shared.checkReturn(to, dx: dx, dy: dy)
   }
 }

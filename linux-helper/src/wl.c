@@ -336,6 +336,11 @@ void wl_release_all(void) {
   vrem = hrem = 0;
 }
 
+// A relative move from the input lane (lane.c): no JSON per move.
+void wl_move_rel(double dx, double dy) {
+  inj_move(dx, dy);
+}
+
 void wl_inject(const JObj *ev) {
   const char *t = jstr(ev, "t", "");
   if (!strcmp(t, "k.mm")) inj_move(jnum(ev, "dx", 0), jnum(ev, "dy", 0));

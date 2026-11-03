@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
@@ -41,7 +42,6 @@ namespace MacShare
         static readonly Callback callback = OnLane; // kept alive: the lane's thread calls it
         static readonly JavaScriptSerializer json = new JavaScriptSerializer();
         static readonly HashSet<string> fenced = new HashSet<string> { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" };
-        static Control invoker;
         static Action<double, double> inject;
         static Action<Dictionary<string, object>> emit;
         static volatile bool driving;
@@ -49,11 +49,12 @@ namespace MacShare
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
 
-        public static void Init(Control ui, Action<double, double> move, Action<Dictionary<string, object>> emitter)
+        // On the UI thread, before Application.Run: the window that receives the lane's moves is its.
+        public static void Init(Action<double, double> move, Action<Dictionary<string, object>> emitter)
         {
-            invoker = ui;
             inject = move;
             emit = emitter;
+            sink = new Sink();
             if (Environment.GetEnvironmentVariable("TWINDESK_NO_TDFAST") != null) return;
             // bin\<arch>\tdfast.dll, loaded by its path: the DllImports below then find it by name.
             // PROCESSOR_ARCHITECTURE is this process's (AnyCPU: ARM64 on Windows on ARM).
@@ -112,24 +113,23 @@ namespace MacShare
             }
         }
 
-        // A move from the hook while capturing: true when it went on the lane (write nothing); else
-        // false, with the totals added to k while the lane is down.
-        public static bool Move(double dx, double dy, Dictionary<string, object> k)
+        // A move from the hook while capturing, before anything is built for it: 1 when it went on the
+        // lane (write nothing), 0 when the lane is down (route/mn/cx/cy are its totals: Totals), -1 when
+        // this side isn't driving on the lane (the move goes as before).
+        public static int Move(double dx, double dy, out uint route, out uint mn, out double cx, out double cy)
         {
-            if (!driving) return false;
-            uint r, mn;
-            double cx, cy;
-            int got;
-            try { got = td_move(dx, dy, out r, out mn, out cx, out cy); }
-            catch (Exception) { driving = false; return false; }
-            if (got == 1) return true;
-            if (got == 0)
-            {
-                k["route"] = (double)r;
-                k["mn"] = (double)mn;
-                k["mc"] = new double[] { cx, cy };
-            }
-            return false;
+            route = mn = 0;
+            cx = cy = 0;
+            if (!driving) return -1;
+            try { return td_move(dx, dy, out route, out mn, out cx, out cy) == 1 ? 1 : 0; }
+            catch (Exception) { driving = false; return -1; }
+        }
+
+        public static void Totals(Dictionary<string, object> k, uint route, uint mn, double cx, double cy)
+        {
+            k["route"] = (double)route;
+            k["mn"] = (double)mn;
+            k["mc"] = new double[] { cx, cy };
         }
 
         // A click, key, wheel or gesture: numbered, with where the moves before it took the pointer.
@@ -157,7 +157,7 @@ namespace MacShare
                 switch (kind)
                 {
                     case TD_MOVE:
-                        if (invoker != null) invoker.BeginInvoke((MethodInvoker)delegate { inject(dx, dy); });
+                        Queue(dx, dy);
                         break;
                     case TD_EVENT:
                         int n = (int)len.ToUInt32();
@@ -184,6 +184,72 @@ namespace MacShare
                 }
             }
             catch (Exception) { /* never throw into the lane's thread */ }
+        }
+
+        // The lane's moves to the UI thread without allocating: a fixed ring, and one posted message
+        // to a message-only window per batch (not a delegate per move, as BeginInvoke would be).
+        const int RING = 1024;
+        const uint WM_LANE = 0x8000 + 0x4C; // WM_APP + 'L'
+        static readonly double[] ring = new double[RING * 2];
+        static readonly object ringGate = new object();
+        static int head, tail, posted;
+        static Sink sink;
+        static readonly IntPtr HWND_MESSAGE = new IntPtr(-3);
+
+        [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+
+        class Sink : NativeWindow
+        {
+            public Sink()
+            {
+                CreateParams cp = new CreateParams();
+                cp.Parent = HWND_MESSAGE;
+                CreateHandle(cp);
+            }
+            protected override void WndProc(ref Message m)
+            {
+                if (m.Msg == (int)WM_LANE) { Drain(); return; }
+                base.WndProc(ref m);
+            }
+        }
+
+        static void Queue(double dx, double dy)
+        {
+            lock (ringGate)
+            {
+                if (head - tail < RING)
+                {
+                    int i = (head % RING) * 2;
+                    ring[i] = dx;
+                    ring[i + 1] = dy;
+                    head++;
+                }
+                else // full (the UI thread is stuck): add to the newest, nothing is lost
+                {
+                    int i = ((head - 1) % RING) * 2;
+                    ring[i] += dx;
+                    ring[i + 1] += dy;
+                }
+            }
+            if (sink != null && Interlocked.Exchange(ref posted, 1) == 0) PostMessage(sink.Handle, WM_LANE, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        static void Drain()
+        {
+            Interlocked.Exchange(ref posted, 0); // a move from now on posts again
+            for (;;)
+            {
+                double dx, dy;
+                lock (ringGate)
+                {
+                    if (tail == head) return;
+                    int i = (tail % RING) * 2;
+                    dx = ring[i];
+                    dy = ring[i + 1];
+                    tail++;
+                }
+                inject(dx, dy);
+            }
         }
     }
 }

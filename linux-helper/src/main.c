@@ -47,15 +47,10 @@ static void reply(const JObj *c, const char *error, const char *extra) {
 }
 
 #ifdef TDFAST
-// A move from the lane (lane.c), on this thread like every injection.
+// A move from the lane (lane.c), on this thread like every injection: straight to the move.
 static void lane_inject(double dx, double dy) {
-  char b[128];
-  snprintf(b, sizeof b, "{\"t\":\"k.mm\",\"dx\":%.17g,\"dy\":%.17g}", dx, dy);
-  JObj *e = json_parse(b);
-  if (!e) return;
-  if (wl) wl_inject(e);
-  else inject_apply(e);
-  json_free(e);
+  if (wl) wl_move_rel(dx, dy);
+  else inject_move(dx, dy);
 }
 #endif
 

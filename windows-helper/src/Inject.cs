@@ -43,9 +43,14 @@ namespace MacShare
             Native.SetThreadExecutionState(Native.ES_DISPLAY_REQUIRED | Native.ES_SYSTEM_REQUIRED);
         }
 
+        static readonly Native.INPUT[] one = new Native.INPUT[1]; // reused: no array per injected event
         static void Send(Native.INPUT input)
         {
-            Native.SendInput(1, new Native.INPUT[] { input }, Size);
+            lock (one)
+            {
+                one[0] = input;
+                Native.SendInput(1, one, Size);
+            }
         }
 
         static Native.INPUT Mouse(int dx, int dy, uint data, uint flags)

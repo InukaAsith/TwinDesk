@@ -55,7 +55,7 @@ final class NativeLane {
     case "fence":
       var dx = 0.0, dy = 0.0
       if td_fence_apply(u32("route"), u32("mn"), num("cx"), num("cy"), &dx, &dy) == 1 {
-        injector.injectRel(["t": "k.mm", "dx": dx, "dy": dy])
+        injector.moveRel(dx, dy)
       }
     case "done":
       td_done(u32("es"))
@@ -91,11 +91,36 @@ final class NativeLane {
   }
 }
 
-/// The lane's thread: moves are injected on the main queue, in order with stdin's `inject` and `fence`.
+/// The lane's moves to the main queue without a dictionary or a block per move: they add up under a
+/// lock, and one main-queue drain per batch injects them (in order with stdin's `inject` and `fence`,
+/// which are on the main queue too).
+private let pendLock = NSLock()
+private var pendX = 0.0, pendY = 0.0
+private var pendPosted = false
+
+private func drainMoves() {
+  pendLock.lock()
+  let dx = pendX, dy = pendY
+  pendX = 0
+  pendY = 0
+  pendPosted = false
+  pendLock.unlock()
+  if dx != 0 || dy != 0 { injector.moveRel(dx, dy) }
+}
+
+private let drainItem: @convention(block) () -> Void = { drainMoves() }
+
+/// The lane's thread.
 private let laneCallback: td_callback = { _, kind, dx, dy, json, len in
   switch kind {
   case Int32(TD_MOVE):
-    DispatchQueue.main.async { injector.injectRel(["t": "k.mm", "dx": dx, "dy": dy]) }
+    pendLock.lock()
+    pendX += dx
+    pendY += dy
+    let post = !pendPosted
+    pendPosted = true
+    pendLock.unlock()
+    if post { DispatchQueue.main.async(execute: drainItem) }
   case Int32(TD_EVENT):
     guard let json = json,
           let obj = try? JSONSerialization.jsonObject(with: Data(bytes: json, count: len)) as? [String: Any] else { return }
