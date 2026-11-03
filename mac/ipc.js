@@ -48,7 +48,7 @@ const SCHEMA = {
   smb: { connectPc: bool },
   apps: { offer: bool },
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
-  sharing: { remote: bool, pace: oneOf(['fast', 'smooth'], 'fast') },
+  sharing: { remote: bool, pace: oneOf(['fast', 'smooth'], 'fast'), codec: oneOf(['h264', 'auto', 'h265'], 'h264') },
   papps: { on: bool },
   phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, enterSends: bool, arrowSwipe: bool },
   mount: { on: bool },

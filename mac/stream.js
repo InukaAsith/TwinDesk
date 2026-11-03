@@ -8,6 +8,7 @@
 'use strict';
 
 const path = require('path');
+const ScreenCodec = require('../shared/screencodec.js');
 const util = require('util');
 const { BrowserWindow, ipcMain, session, desktopCapturer, systemPreferences } = require('electron');
 const { EventEmitter } = require('events');
@@ -192,6 +193,7 @@ class Stream extends EventEmitter {
         session: s, bitrateMbps: phone ? Math.min(PHONE_MBPS, set.bitrateMbps) : set.bitrateMbps, sourceId: src.id, width, height, audio,
         ice: (this.server.current && this.server.current.ice) || null, // a phone on the USB cable: through the relay
         fps: Math.min(120, Math.max(30, Math.round(target.hz || 60))),
+        codec: ScreenCodec.mode(set.sharing && set.sharing.codec), // Share screen › Encoder
       });
     } catch (e) {
       // The rejection isn't always an Error (Screen Recording not allowed): say what it was.

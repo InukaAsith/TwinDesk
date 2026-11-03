@@ -14,6 +14,7 @@ const path = require('path');
 const { BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const ScreenCodec = require('../shared/screencodec.js');
 
 const T = P.T;
 const POLL_MS = 250;
@@ -212,6 +213,7 @@ class AppSend extends EventEmitter {
         this._toWin({
           t: 'start', session, sourceId: src ? src.id : `window:${wid}:0`, width: MAX_W, height: MAX_H, follow: true,
           mbps: this.getSettings().bitrateMbps, fps, offer: { kind: 'window', wid },
+          codec: ScreenCodec.mode((this.getSettings().sharing || {}).codec), // Share screen › Encoder
         });
       }
     }

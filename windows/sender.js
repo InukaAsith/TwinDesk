@@ -7,6 +7,7 @@ const { BrowserWindow, ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const ScreenCodec = require('../shared/screencodec.js');
 
 const T = P.T;
 
@@ -49,7 +50,8 @@ class Sender extends EventEmitter {
     const session = ++this.counter;
     this.live.add(session);
     if (opts.offer && opts.offer.kind === 'window') this.windows.add(session);
-    this._toWin({ ...opts, ice: this._ice(), t: 'start', session });
+    // codec: Share screen › Encoder (settings.pcScreen.codec, shared/screencodec.js), for every session.
+    this._toWin({ ...opts, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), t: 'start', session });
     return session;
   }
 

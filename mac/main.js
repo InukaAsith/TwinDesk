@@ -52,11 +52,11 @@ app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/
 // Renamed to TwinDesk: settings, pairing and the identity stay in the old folder.
 app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), 'MacShare')); // PROFILE: a second dev copy
 require('../shared/applog.js').start(app); // console.* and crashes into the log folder, both apps
-// Screen share codec (shared/screencodec.js, docs/perf-plan.md P5): H.265 in WebRTC when the hidden
-// setting says auto. One enable-features switch for the app: Chromium keeps only the last one.
+// Screen share codec (shared/screencodec.js, docs/perf-plan.md P5): H.265 available in WebRTC, so the
+// Encoder setting works on the next share. One enable-features switch for the app: Chromium keeps only the last one.
 {
   const codec = require('../shared/screencodec.js');
-  const on = codec.enableFeatures(codec.pref(app.getPath('userData')), []);
+  const on = codec.features([]);
   if (on) app.commandLine.appendSwitch('enable-features', on);
 }
 // Multi-device switched on (multi.js, docs/multi-device.md): mesh/main.js runs instead of everything below.
@@ -208,6 +208,9 @@ function pushState() {
       state.sharing = {
         on: !!settings.sharing.on,
         audio: !!settings.sharing.audio,
+        remote: settings.sharing.remote !== false,
+        pace: settings.sharing.pace || 'fast',
+        codec: settings.sharing.codec || 'h264', // Encoder (shared/screencodec.js)
         displayId: settings.sharing.displayId,
         bitrateMbps: settings.bitrateMbps,
         streamMaxHeight: settings.streamMaxHeight,

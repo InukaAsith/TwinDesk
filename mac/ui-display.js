@@ -63,6 +63,7 @@ UI.tab({
     ], (v) => api.setBitrate(Number(v)));
 
     const paceRow = UI.paceRow();
+    const codecRow = UI.codecRow((v) => api.setSharingOpts({ codec: v }));
     const remoteSw = UI.switch((v) => api.setSharingOpts({ remote: v }), { label: I18n.t('Remote start') });
     const remoteRow = UI.row(I18n.t('Let {name} start and switch this screen'), I18n.t('Open it on {name} — no need to touch {me}'), [remoteSw]);
 
@@ -95,6 +96,7 @@ UI.tab({
         UI.row(I18n.t('Resolution'), '', [streamSize]),
         UI.row(I18n.t('Quality'), '', [quality]),
         paceRow,
+        codecRow,
       ]),
       UI.card(I18n.t('Sound and control'), [remoteRow, soundRow, inputRow], { cls: 'keep-on' }),
       UI.card(I18n.t('Details'), Object.values(stats), { cls: 'keep-on' }),
@@ -130,6 +132,7 @@ UI.tab({
       soundSw.set(sh.audio);
       remoteSw.set(sh.remote !== false);
       paceRow.render(s);
+      codecRow.render(sh.codec);
       inputSw.set(s.streamInput);
       const c = s.client;
 

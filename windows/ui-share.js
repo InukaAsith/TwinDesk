@@ -47,6 +47,7 @@ UI.tab({
       { value: 50, label: t('Best, 50 Mbps (wired)') },
     ], (v) => set({ mbps: Number(v) }));
     const paceRow = UI.paceRow(); // One Playback setting, synced with the other computer
+    const codecRow = UI.codecRow((v) => set({ codec: v })); // Encoder (shared/screencodec.js)
     const sound = UI.switch((v) => set({ sound: v }), { label: t('Include sound') });
     const input = UI.switch((v) => set({ input: v }), { label: t('Receive input') });
     const inputRow = UI.row(t('Receive input'), '', [input], { literal: true }); // "Receive input from Mac" / "from PC2"
@@ -70,7 +71,7 @@ UI.tab({
     body.append(
       missing,
       UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow]),
-      UI.card(t('screen.picture'), [UI.row(t('Resolution'), '', [streamSize]), UI.row(t('Quality'), '', [quality]), paceRow], { cls: 'keep-on' }),
+      UI.card(t('screen.picture'), [UI.row(t('Resolution'), '', [streamSize]), UI.row(t('Quality'), '', [quality]), paceRow, codecRow], { cls: 'keep-on' }),
       UI.card(t('Sound and control'), [UI.row(t('Include sound'), '', [sound]), inputRow], { cls: 'keep-on' }),
       UI.card(t('Remote'), [remoteRow], { cls: 'keep-on' }),
       details,
@@ -92,6 +93,7 @@ UI.tab({
       streamSize.set(p.maxHeight);
       quality.set(p.mbps);
       paceRow.render(s);
+      codecRow.render(p.codec);
       sound.set(p.sound);
       input.set(p.input);
       remote.set(p.remote);
