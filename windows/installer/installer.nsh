@@ -46,6 +46,9 @@
   ; A phone: adb finds its wireless debugging over mDNS (phone-bridge.js).
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (adb)"'
   nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (adb)" dir=in action=allow program="$INSTDIR\resources\app\windows\vendor\adb\adb.exe" profile=any enable=yes'
+  ; The input lane in the helper (native/tdfast, Lane.cs): its UDP socket is the helper's.
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (input lane)"'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (input lane)" dir=in action=allow protocol=UDP program="$INSTDIR\resources\app\windows-helper\bin\macshare-winhelper.exe" profile=any enable=yes'
   ; The phone as a drive goes through Windows' WebDAV client (phonedrive.js), which refuses files
   ; over 50 MB unless this says otherwise: 4 GB, its maximum (read when WebClient next starts).
   nsExec::Exec 'reg add HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters /v FileSizeLimitInBytes /t REG_DWORD /d 4294967295 /f'
@@ -72,6 +75,7 @@
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk" program="$INSTDIR\TwinDesk.exe"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (TCP 47800)"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (adb)"'
+  nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (input lane)"'
   ; The pinned Mac apps' Start menu folder is per user (the app makes it in Roaming).
   SetShellVarContext current
   RMDir /r "$APPDATA\Microsoft\Windows\Start Menu\Programs\TwinDesk Apps"

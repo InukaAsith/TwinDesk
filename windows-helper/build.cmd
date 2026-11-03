@@ -52,6 +52,8 @@ ren "%BIN%\macshare-calls.new.exe" macshare-calls.exe
 rem Without PowerShell 7's module path (a pwsh terminal, CI): Windows PowerShell then loads its own PKI.
 set PSModulePath=
 powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0calls\pack.ps1" -Bin "%BIN%" || exit /b 1
+rem The input lane in the helper (native/tdfast, Lane.cs): tdfast.dll per architecture, with cargo.
+call "%~dp0tdfast.cmd"
 rem The virtual camera (windows/vcam.js), C++: built when Visual Studio's C++ tools are there.
 call "%~dp0vcam\build.cmd" || exit /b 1
 rem Real gamepad (windows/gamepad.js: Remote), C++ likewise.

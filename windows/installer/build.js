@@ -83,6 +83,13 @@ async function main() {
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — no virtual camera there (build the helper with Visual Studio’s C++ tools)');
   }
+  // The input lane in the helper (native/tdfast, Lane.cs): tdfast.dll for each Windows architecture
+  // (Lane.cs loads its own); without it the helper says so and Node keeps its own lane.
+  for (const a of ['x64', 'arm64']) {
+    const from = path.join(ROOT, 'windows-helper', 'bin', a, 'tdfast.dll');
+    if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', a, 'tdfast.dll'));
+    else console.log('note: no windows-helper/bin/' + a + '/tdfast.dll — the input lane stays in Node there (build the helper with cargo)');
+  }
   // Remote › Real gamepad (gamepad.js): the Xbox 360 controller's feeder, likewise C++.
   const pad = path.join(ROOT, 'windows-helper', 'bin', 'twindesk-pad.exe');
   if (fs.existsSync(pad)) copy(pad, path.join(STAGE, 'windows-helper', 'bin', 'twindesk-pad.exe'));

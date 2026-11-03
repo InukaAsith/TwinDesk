@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { streamPressure, receiverHook } = require('../shared/fastfile.js');
 const fm = require('./fm');
 const { receivedDir } = require('../shared/received.js');
 
@@ -46,6 +47,15 @@ class DragRecv {
   constructor(opts) {
     Object.assign(this, opts);
     this.root = path.join(app.getPath('userData'), 'drag');
+    if (this.link && this.link.fx) this.link.fx.pressure((id) => { const f = this.cur && this.cur.byId.get(id); return streamPressure(f && f.out); });
+    // Fast files v2 (shared/fx2.js): the files engine writes the file into its tmp; we finish it.
+    if (this.link && this.link.fx && this.link.fx.receiver) {
+      this.link.fx.receiver(receiverHook({
+        find: (id) => { const f = this.cur && this.cur.byId.get(id); return f && f.state === 'arriving' ? f : null; },
+        end: (f) => this._end({ t: T.FILE_END, id: f.id, sha256: '' }),
+        fail: (f, why) => this._fail(f, why),
+      }));
+    }
     this.cur = null; // {drag, tmp, files: Map(rel → file), byId, dirs, items, count, name, state, dest, tops, placed}
     this.last = null; // {text, ok, at}
     this.homeUntil = 0; // kvm.home said the other computer's files follow as a drag here at home (expectHome)
@@ -129,7 +139,7 @@ class DragRecv {
     f.state = 'closing';
     f.out.end(() => {
       if (this.cur !== c) return;
-      if (f.got !== f.size || f.hash.digest('hex') !== m.sha256) return this._fail(f, 'checksum mismatch');
+      if (f.got !== f.size || (!f.verified && f.hash.digest('hex') !== m.sha256)) return this._fail(f, 'checksum mismatch');
       f.state = 'ok';
       if (c.dest) this._place(f);
     });

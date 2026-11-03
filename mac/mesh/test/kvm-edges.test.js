@@ -8,6 +8,9 @@
 // Run with: node mac/test/kvm-edges.test.js  (NODE_PATH as in CI; electron is stubbed here)
 'use strict';
 
+// These record the k.mm each device's bus gets: input stays on the WSS (the input lane has its own test, kvm-lane.test.js).
+process.env.TWINDESK_NO_IL = '1';
+
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');

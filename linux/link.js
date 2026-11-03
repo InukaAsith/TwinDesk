@@ -318,7 +318,7 @@ class Link {
 
   _hello() {
     const p = this.pairing;
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.LINUX, token: p.token, fx: 1, ...(this.takeover ? { takeover: true } : {}) });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.LINUX, token: p.token, fx: 1, ...(this.fx2Hello && this.fx2Hello() ? { fx2: 1 } : {}), ...(this.ilHello && this.transport === 'ip' && this.ilHello() ? { il: this.ilHello() } : {}), ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No welcome from {name}';
       if (this.ws) this.ws.terminate();
@@ -397,6 +397,8 @@ class Link {
     this.attempt = 0;
     this.resumeKey = typeof msg.resume === 'string' ? msg.resume : ''; // older hosts: none, no moving
     this.fxToken = typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : ''; // fast files (shared/fastfile.js); older hosts: none
+    this.fx2Port = msg.fx2 && typeof msg.fx2 === 'object' && Number.isInteger(msg.fx2.port) && msg.fx2.port > 0 && msg.fx2.port < 65536 ? msg.fx2.port : 0; // fast files v2 (shared/fx2.js); older hosts: none
+    this.il = msg.il && typeof msg.il === 'object' ? msg.il : null; // the input lane (shared/inputlane.js); older hosts: none
     this.resumeAt = this.resumeBackoff ? Date.now() + this.resumeBackoff : 0; // a move that didn't last waits, even after a reconnect
     const os = osOf(msg.os || this.pairing.os);
     if ((typeof msg.macName === 'string' && msg.macName && msg.macName !== this.pairing.macName) || os !== this.pairing.os) {

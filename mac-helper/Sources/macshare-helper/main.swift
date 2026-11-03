@@ -116,6 +116,10 @@ func handle(_ line: String) {
     reply(id)
   case "inject":
     if let ev = msg["ev"] as? [String: Any] { injector.injectRel(ev) }
+#if TDFAST
+  case "lane": // the input lane (Lane.swift, native/tdfast)
+    NativeLane.shared.handle(msg, id: id)
+#endif
   case "ping":
     reply(id)
   case "keyLayout": // what each key types alone and with Shift in the current layout (shared/keylayout.js); type: it takes "type"

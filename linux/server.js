@@ -221,8 +221,12 @@ class Server extends EventEmitter {
     ctx.resumeKey = P.randomHex(16);
     // Fast files (shared/fastfile.js): when its hello asked and this app serves them, a token for them.
     ctx.fx = ctx.fxWanted && this.fxOn ? P.randomHex(16) : '';
+    // … and fast files v2 (shared/fx2.js) when it asked too and our files engine is listening.
+    ctx.fx2 = ctx.fx && ctx.fx2Wanted && this.fx2Port ? this.fx2Port() || 0 : 0;
     this.current = ctx;
-    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(ctx.fx ? { fx: ctx.fx } : {}) });
+    // The input lane (shared/inputlane.js): when its hello asked, over the network only.
+    const il = ctx.ilWanted && ctx.transport === 'ip' && this.ilOffer ? this.ilOffer(ctx) : null;
+    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(ctx.fx ? { fx: ctx.fx } : {}), ...(ctx.fx2 ? { fx2: { port: ctx.fx2 } } : {}), ...(il ? { il } : {}) });
     this.emit('client', ctx);
   }
 

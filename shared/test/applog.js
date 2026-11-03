@@ -54,7 +54,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     // The link line: only while connected, rtt p50/p95, moves a second, the most queued.
     let connected = true;
     let rtt = 0;
-    const stop = applog.linkStats(() => (connected ? { rtt: (rtt = (rtt % 10) + 1), queued: rtt * 100 } : null), 200, 10);
+    const stop = applog.linkStats(() => (connected ? { rtt: (rtt = (rtt % 10) + 1), lane: 1.5, queued: rtt * 100 } : null), 200, 10);
     const moves = new KvmMoves({ send: () => {} });
     for (let i = 0; i < 100; i++) moves.add(1, 0);
     const linkLines = () => read('TwinDesk.log').split('\n').filter((l) => l.includes('[link]'));
@@ -68,7 +68,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     const lines = linkLines();
     assert.ok(lines.length >= 1, 'a line while connected');
     assert.strictEqual(lines.length, after, 'none once not connected');
-    assert.ok(/\[link\] rtt p50 \d+ ms \/ p95 (9|10) ms, kvm moves (4\d\d|5\d\d)\/s, queued max (900|1000) bytes/.test(lines[0]), lines[0]);
+    assert.ok(/\[link\] rtt p50 \d+ ms \/ p95 (9|10) ms \/ p99 (9|10) ms \/ max 10 ms, lane p50 1\.5 ms \/ max 1\.5 ms, kvm moves (4\d\d|5\d\d)\/s, queued max (900|1000) bytes, loop p99 [\d.]+ ms \/ max [\d.]+ ms/.test(lines[0]), lines[0]);
   } finally {
     process.stdout.write = realOut;
     process.stderr.write = realErr;

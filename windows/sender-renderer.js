@@ -23,7 +23,7 @@ function withBitrate(sdp, mbps) {
   let inVideo = false;
   for (const l of lines) {
     if (l.startsWith('m=')) inVideo = l.startsWith('m=video');
-    const m = inVideo && /^a=rtpmap:(\d+) (H264|VP8|VP9|AV1)\//i.exec(l);
+    const m = inVideo && window.TwinDeskScreenCodec.RTPMAP.exec(l);
     if (m) pts.add(m[1]);
   }
   return lines.map((l) => {
@@ -68,13 +68,9 @@ async function start(m) {
     const tr = pc.addTransceiver(track, { direction: 'sendonly', streams: [stream] });
     const audio = stream.getAudioTracks()[0];
     if (audio) pc.addTransceiver(audio, { direction: 'sendonly', streams: [stream] });
-    // H.264 first (hardware encode here, VideoToolbox decode on the Mac), High before Main before Baseline.
-    const rank = (c) => {
-      if (!/h264/i.test(c.mimeType)) return 9;
-      const p = /profile-level-id=(..)/i.exec(c.sdpFmtpLine || '');
-      return { 64: 0, '4d': 1, '42': 2 }[p ? p[1].toLowerCase() : ''] ?? 3;
-    };
-    tr.setCodecPreferences(RTCRtpSender.getCapabilities('video').codecs.slice().sort((a, b) => rank(a) - rank(b)));
+    // H.265 when both have it (shared/screencodec.js), then H.264 High, Main, Baseline: better quality per
+    // bit, in hardware. Everything else stays as a fallback.
+    tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs));
     pc.onicecandidate = (e) => e.candidate && alive(me) && api.send({ t: T.RTC2_ICE, session: me.session, candidate: e.candidate.toJSON() });
     pc.onconnectionstatechange = () => alive(me) && report(me, pc.connectionState === 'connected' ? 'live' : pc.connectionState);
 

@@ -368,7 +368,13 @@ final class Capture {
   }
 
   private func ev(_ fields: [String: Any]) {
+#if TDFAST
+    var f = fields
+    NativeLane.shared.fence(&f) // a click, key, wheel or gesture: its event number and fence (Lane.swift)
+    emit(["event": "ev", "ev": f])
+#else
     emit(["event": "ev", "ev": fields])
+#endif
   }
 
   /// Returns true to swallow.
@@ -529,7 +535,11 @@ final class Capture {
               "dy": -e.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1)])
         }
       } else if dx != 0 || dy != 0 {
+#if TDFAST
+        if let m = NativeLane.shared.move(dx, dy) { ev(m) } // nil: it went on the input lane (Lane.swift)
+#else
         ev(["t": "k.mm", "dx": dx, "dy": dy])
+#endif
       }
       return true
     }

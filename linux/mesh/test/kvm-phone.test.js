@@ -7,6 +7,9 @@
 // Run with: node linux/mesh/test/kvm-chain.test.js  (NODE_PATH and ELECTRON_OVERRIDE_DIST_PATH as in CI)
 'use strict';
 
+// These record the k.mm each device's bus gets: input stays on the WSS (the input lane has its own test, kvm-lane.test.js).
+process.env.TWINDESK_NO_IL = '1';
+
 const assert = require('assert');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');

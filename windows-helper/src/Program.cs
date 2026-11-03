@@ -53,6 +53,7 @@ namespace MacShare
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
+            Lane.Init(invoker, delegate (double x, double y) { smoother.Flush(injector.Move); injector.Move(x, y); }, Emit); // the input lane (Lane.cs)
             HideCursor.Restore(); // in case a crash left the cursors blank
             capture.Start();
             capture.Flash = new Flash();
@@ -263,6 +264,7 @@ namespace MacShare
                         smoother.Flush(injector.Move); // a click or key lands where the pointer ends up
                         injector.Apply(ev);
                         break;
+                    case "lane": Lane.Handle(c); break; // the input lane in the helper (Lane.cs)
                     case "releaseAll": smoother.Clear(); stylus.Leave(); injector.ReleaseAll(); break;
                     case "toastProgress": // a live toast with a progress bar (Toast.cs)
                         Toast.Progress(Json.Str(c, "aumid", ""), Json.Str(c, "tag", "files"), Json.Str(c, "title", ""), Json.Str(c, "status", ""), Json.Num(c, "value", -1), Json.Str(c, "label", ""));
@@ -276,6 +278,7 @@ namespace MacShare
                         if (st != null) stylus.At((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0), st);
                         break;
                     case "displays": c["displays"] = Display.List(); break;
+                    case "wifiLowLatency": c["applied"] = Wlan.Set(Json.Bool(c, "on", false)); break; // Wlan.cs: media streaming mode, no background scans
                     case "displayExtend": c["changed"] = Display.ExtendIfDuplicated(Json.Str(c, "monitor", "")); break;
                     // PC apps on the Mac
                     case "windows": Async(c, delegate (Dictionary<string, object> r) { r["windows"] = AppWindows.List(); }); return;
@@ -441,6 +444,7 @@ namespace MacShare
             if (error != null) reply["error"] = error;
             if (cmd == "info") { reply["cursor"] = c["cursor"]; reply["capturing"] = c["capturing"]; }
             if (cmd == "displays") reply["displays"] = c["displays"];
+            if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];
             if (cmd == "folderAt") { reply["path"] = c["path"]; reply["desktop"] = c["desktop"]; }
             if (cmd == "keyLayout")

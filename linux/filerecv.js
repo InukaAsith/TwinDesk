@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { streamPressure, receiverHook } = require('../shared/fastfile.js');
 const { receivedDir } = require('../shared/received.js');
 
 const T = P.T;
@@ -19,6 +20,23 @@ class FileRecv {
   constructor(opts) {
     Object.assign(this, opts);
     this.dir = path.join(app.getPath('userData'), 'incoming');
+    // Fast files (shared/fastfile.js) wait while a file's bytes wait for the disk.
+    if (this.link && this.link.fx) this.link.fx.pressure((id) => { const f = this.files.get(id) || (this.bfiles && this.bfiles.get(id)); return streamPressure(f && f.out); });
+    // Fast files v2 (shared/fx2.js): the files engine writes the file into its tmp; we finish it.
+    if (this.link && this.link.fx && this.link.fx.receiver) {
+      this.link.fx.receiver(receiverHook({
+        find: (id) => { const f = this.files.get(id) || this.bfiles.get(id); return f && !f.done ? f : null; },
+        open: (f) => !!f.out || (openOut(f), true),
+        progress: (f, n) => {
+          const b = f.batch && this.batches.get(f.batch);
+          if (!b) return;
+          b.got += n;
+          if (this.onBatchProgress) this.onBatchProgress(b);
+        },
+        end: (f) => this._end({ t: T.FILE_END, id: f.id, sha256: '' }),
+        fail: (f, why) => (f.batch ? this._batchFail(f, why) : this._finish(f, false, why)),
+      }));
+    }
     this.files = new Map(); // id → {name, size, got, seq, hash, out, tmp, done, released}
     this.target = null;     // folder chosen at release time for this drag
     this.last = null;       // {name, ok, text, at} for the Files tab
@@ -85,7 +103,7 @@ class FileRecv {
     f.done = true;
     f.out.end((err) => {
       if (f.error || err) return this._finish(f, false, (f.error || err).message); // a full disk: part of it is missing
-      const ok = f.got === f.size && f.hash.digest('hex') === m.sha256;
+      const ok = f.got === f.size && (f.verified || f.hash.digest('hex') === m.sha256);
       if (!ok) {
         this._finish(f, false, 'checksum mismatch');
         return;
@@ -189,7 +207,7 @@ class FileRecv {
     if (!f.out) openOut(f); // an empty file
     f.out.end((err) => {
       if (f.error || err) return this._batchFail(f, (f.error || err).message); // a full disk: part of it is missing
-      if (f.got !== f.size || f.hash.digest('hex') !== m.sha256) return this._batchFail(f, f.got !== f.size ? 'size mismatch' : 'checksum mismatch');
+      if (f.got !== f.size || (!f.verified && f.hash.digest('hex') !== m.sha256)) return this._batchFail(f, f.got !== f.size ? 'size mismatch' : 'checksum mismatch');
       try {
         fs.renameSync(f.tmp, f.final);
       } catch (e) {

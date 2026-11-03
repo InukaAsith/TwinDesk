@@ -28,7 +28,7 @@ function withBitrate(sdp, mbps) {
   let inVideo = false;
   for (const l of lines) {
     if (l.startsWith('m=')) inVideo = l.startsWith('m=video');
-    const m = inVideo && /^a=rtpmap:(\d+) (H264|VP8|VP9|AV1)\//i.exec(l);
+    const m = inVideo && window.TwinDeskScreenCodec.RTPMAP.exec(l);
     if (m) videoPts.add(m[1]);
   }
   return lines.map((l) => {
@@ -95,15 +95,9 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     me.pc = pc;
     const tr = pc.addTransceiver(track, { direction: 'sendonly', streams: [me.stream] });
     if (audio) pc.addTransceiver(await audioTrack(me), { direction: 'sendonly', streams: [me.stream] });
-    const codecs = RTCRtpSender.getCapabilities('video').codecs;
-    // H.264 first (VideoToolbox hardware), High profile before Main before Baseline: better
-    // quality per bit. Everything else stays as a fallback.
-    const rank = (c) => {
-      if (!/h264/i.test(c.mimeType)) return 9;
-      const p = /profile-level-id=(..)/i.exec(c.sdpFmtpLine || '');
-      return { 64: 0, '4d': 1, '42': 2 }[p ? p[1].toLowerCase() : ''] ?? 3;
-    };
-    tr.setCodecPreferences(codecs.slice().sort((a, b) => rank(a) - rank(b)));
+    // H.265 when both have it (shared/screencodec.js), then H.264 High, Main, Baseline: better quality per
+    // bit, in hardware. Everything else stays as a fallback.
+    tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs));
 
     pc.onicecandidate = (e) => {
       if (e.candidate && cur === me) api.send({ t: P.T.RTC_ICE, session, candidate: e.candidate.toJSON() });
