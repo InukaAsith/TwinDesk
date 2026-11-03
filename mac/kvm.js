@@ -11,6 +11,7 @@ const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const blepipe = require('../shared/blepipe.js');
 const { KvmMoves } = require('../shared/kvm-moves.js');
+const { LaneDrive, LaneDriven } = require('../shared/inputlane.js');
 const { KeyLayout } = require('../shared/keylayout.js');
 const CL = require('../shared/cursorlock.js');
 const store = require('./store');
@@ -19,6 +20,8 @@ const { KvmMap } = require('../shared/kvm-map.js');
 // {them} = the other computer's name (Kvm._them).
 const REFUSED = { busy: '{them} is using this computer right now', not_allowed: '{them} doesn’t accept input from here' };
 const OFF_BLE = 'Cursor sharing is off over Bluetooth';
+// Input that goes numbered (es) and fenced when there's an input lane (shared/inputlane.js).
+const LANE_EVENTS = new Set([P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP, P.T.K_GESTURE]);
 
 class Kvm extends EventEmitter {
   constructor({ server, helper, getSettings, clipboard, input, drop, fileSend }) {
@@ -42,12 +45,30 @@ class Kvm extends EventEmitter {
     // k.mm summed while driving, sent as one (shared/kvm-moves.js): paced for Bluetooth, and held
     // (still summed) while the socket is backed up, so the pointer never replays old moves.
     this.moves = new KvmMoves({
-      send: (m) => this.mode === 'driving' && this._drive({ t: P.T.K_MOVE, dx: m.dx, dy: m.dy }),
+      send: (m) => this.mode === 'driving' && this._driveMove(m),
       delay: () => (this._movesBle() ? P.KVM_MOVE_BLE_MS : 0),
-      backlog: () => (this._movesBle() ? blepipe.backlog() : this._movesQueued()),
+      backlog: () => (this.lane.quiet ? 0 : this._movesBle() ? blepipe.backlog() : this._movesQueued()),
       limit: () => (this._movesBle() ? P.KVM_BLE_BACKLOG : P.KVM_IP_BACKLOG),
       maxWait: () => (this._movesBle() ? Infinity : P.KVM_MOVE_MAX_WAIT_MS),
     });
+    // The input lane (shared/inputlane.js), with an app that has one: moves over UDP, events on both.
+    this.lane = new LaneDrive(() => this._lane());
+    this.laneIn = new LaneDriven({
+      route: () => this.peerRoute,
+      move: (dx, dy) => this._onK({ t: P.T.K_MOVE, dx, dy }),
+      deliver: (m) => (m.t === P.T.K_GESTURE ? this._onGesture(m) : this._onK(m)),
+      native: () => { const l = this._lane(); return l && l.native ? l : null; }, // P3: the helper's lane
+      speed: () => this.cfg.speed,
+    });
+    const il = server.il;
+    if (il) {
+      // The helper's own lane (native/tdfast, P3) when it has one: an older helper answers "unknown cmd".
+      helper.on('ready', () => il.useNative(helper));
+      if (helper.running) il.useNative(helper);
+      il.on('start', () => this.laneIn.reset());
+      il.on('move', (s) => this.laneIn.move(s));
+      il.on('event', (m) => LANE_EVENTS.has(m.t) && this.laneIn.event(m, true));
+    }
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
       send: (m) => this.mode === 'driven' && this.helper.send('inject', { ev: { t: P.T.K_MOVE, dx: m.dx, dy: m.dy } }),
@@ -147,8 +168,8 @@ class Kvm extends EventEmitter {
     on(P.T.KVM_RELEASE, (m) => {
       if (this.mode === 'driven' && m.route >= this.peerRoute) this._drivenHome('');
     });
-    for (const t of [P.T.K_MOVE, P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP]) on(t, (m) => this._onK(m));
-    on(P.T.K_GESTURE, (m) => this._onGesture(m));
+    for (const t of [P.T.K_MOVE, P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP]) on(t, (m) => this._onWire(m));
+    on(P.T.K_GESTURE, (m) => this._onWire(m));
     on(P.T.KVM_LOCK, (m) => {
       if (this.mode !== 'home') this.setLocked(m.on === true, false);
     });
@@ -343,6 +364,9 @@ class Kvm extends EventEmitter {
       if (mode !== 'home') this.keys.refresh();
     }
     if (prev !== mode) this.emit('where', mode, prev); // hud.js shows it
+    if (this.server.il) this.server.il.active(mode !== 'home');
+    if (prev === 'driving' && mode !== 'driving') this.lane.idle(); // the helper's lane: no more moves from the tap
+    if (prev === 'driven' && mode !== 'driven') this.laneIn.home(); // … and none injected
     this.message = message || '';
     if (mode !== 'driving') {
       clearTimeout(this.acceptTimer);
@@ -370,6 +394,7 @@ class Kvm extends EventEmitter {
   _take(fields) {
     const k = this.cfg;
     this.route++;
+    this.lane.reset(this.route);
     this._setMode('driving', '');
     this.input.releaseAll();
     const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!fields.mouse, keyboard: !!k.keyboard, ...fields.where };
@@ -416,7 +441,8 @@ class Kvm extends EventEmitter {
   // The link now, for the log's line every 30 s (shared/applog.js): null when not connected.
   linkSample() {
     const c = this.server.current;
-    return c ? { rtt: c.rttMs, queued: c.ws ? c.ws.bufferedAmount || 0 : 0 } : null;
+    const lane = this._lane();
+    return c ? { rtt: c.rttMs, lane: lane && lane.up ? lane.rttMs : null, queued: c.ws ? c.ws.bufferedAmount || 0 : 0 } : null;
   }
 
   _flushMove() {
@@ -429,6 +455,35 @@ class Kvm extends EventEmitter {
     if (ev.t === P.T.K_MOVE && !ev.smooth) return this.injectMoves.add(ev.dx, ev.dy);
     this.injectMoves.flush();
     this.helper.send('inject', { ev });
+  }
+
+  // The input lane, when this session has one and the peer is a computer (not the phone bridge).
+  _lane() {
+    if (this.local && this.local.drives()) return null;
+    return this.server.lane ? this.server.lane() : null;
+  }
+
+  // A summed move while driving: on the input lane when there is one, else as always.
+  _driveMove(m) {
+    if (!this.lane.move(m.dx, m.dy, (x) => this.server.sendToClient(x))) this._drive({ t: P.T.K_MOVE, dx: m.dx, dy: m.dy });
+  }
+
+  // A click, key, wheel or gesture while driving: numbered for the lane when there is one.
+  _driveEvent(msg) {
+    if (!LANE_EVENTS.has(msg.t) || !this._lane()) return this._drive(msg);
+    this.lane.event(msg, (x) => this.server.sendToClient(x));
+  }
+
+  // Input from the other computer on WSS: numbered or with totals (an app with the input lane)
+  // through the lane's order, the rest as always.
+  _onWire(m) {
+    const il = this.server.il;
+    if (il && il.started) {
+      if (m.t === P.T.K_MOVE && Number.isInteger(m.mn)) return this.laneIn.wssMove(m);
+      if (Number.isInteger(m.es)) return this.laneIn.event(m);
+    }
+    if (m.t === P.T.K_GESTURE) this._onGesture(m);
+    else this._onK(m);
   }
 
   // Input while driving goes to the other computer, or to the phone bridge when a phone is the peer.
@@ -488,12 +543,13 @@ class Kvm extends EventEmitter {
         if (this.local && this.local.drives() && this._lockKeyHere(e)) return; // a phone has no lock key: ours counts there
         if (this.fileClip && this.fileClip.intercept(e)) return; // copy/paste shortcut: done over there
         if (e.t === P.T.K_MOVE) {
+          this.lane.nativeTotals(e); // the helper's lane is down: its totals go with the move
           this.moves.add(e.dx, e.dy);
           return;
         }
         this._flushMove();
         if (this.dragOut && e.t === P.T.K_UP && e.b === 0) this.dragOut = null; // dropped on the PC (drag.end follows)
-        this._drive(this.keys.tag(e)); // keys with the letter they type here (shared/keylayout.js)
+        this._driveEvent(this.keys.tag(e)); // keys with the letter they type here (shared/keylayout.js)
         break;
       }
       case 'captureEnded':
@@ -526,6 +582,8 @@ class Kvm extends EventEmitter {
       if (!this.locked) this.helper.send('armReturn', this._returnCfg());
     }
     this.drop.dragIn.onDriven(); // after 'place': the native drag starts where the pointer came in
+    this.laneIn.take(m.route); // the lane's totals start again (a move that came ahead goes now)
+    if (this.drop.dragIn.arming) this.laneIn.hold(true); // the helper's lane holds its moves too
   }
 
   _onK(m) {
@@ -656,6 +714,7 @@ class Kvm extends EventEmitter {
   _flushHeldMove() {
     const h = this.heldMove;
     this.heldMove = null;
+    this.laneIn.hold(false);
     if (h && this.mode === 'driven') this._injectEv({ t: P.T.K_MOVE, dx: h.dx, dy: h.dy });
   }
 

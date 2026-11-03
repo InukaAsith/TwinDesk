@@ -484,6 +484,10 @@
       typeof text === 'string' && Buffer.byteLength(text, 'utf8') <= P.CLIP_MAX_BYTES;
   }
 
+  // Dev (docs/perf-plan.md P0): TWINDESK_PING_MS pings the session more often, for finer RTT numbers
+  // in the log's [link] line. Only the ping interval changes; the silence limits stay.
+  if (typeof process !== 'undefined' && process.env && Number(process.env.TWINDESK_PING_MS) >= 50) P.PING_MS = Math.min(P.PING_MS, Number(process.env.TWINDESK_PING_MS));
+
   if (typeof module !== 'undefined' && module.exports) module.exports = P;
   else root.MacShareProtocol = P;
 })(typeof self !== 'undefined' ? self : this);

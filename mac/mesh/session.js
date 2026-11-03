@@ -74,6 +74,19 @@ class Session extends EventEmitter {
     return this.linkUp || this.hostUp;
   }
 
+  // The input lane of the live connection (shared/inputlane.js), started or not; null: none.
+  get il() {
+    if (this.linkUp) return this.link.ilLane || null;
+    if (this.hostUp) return this.ctx.ilLane || null;
+    return null;
+  }
+
+  // … while it can carry input: started with this session, and not through Bluetooth.
+  lane() {
+    const l = this.il;
+    return l && l.started && this.transport === 'ip' ? l : null;
+  }
+
   // 'ble' while the session's socket runs through Bluetooth (blepipe.js), else 'ip'.
   get transport() {
     if (this.linkUp) return this.link.transport === 'ble' ? 'ble' : 'ip';

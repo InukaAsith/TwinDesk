@@ -39,7 +39,7 @@ ENV='pid=$(pgrep -u $(id -u) -n "gnome-shell|plasmashell|xfce4-session|cinnamon|
 
 case "$1" in
   sync)
-    as "mkdir -p ~/twindesk && rsync -a --delete --exclude .git --exclude node_modules --exclude 'dist/' --exclude 'android/build' --exclude 'android/app/build' --exclude 'android/.gradle' --exclude 'mac-helper/.build' --exclude 'windows/vendor/adb' --exclude 'linux-helper/bin' --exclude 'linux/vendor/adb' '$SHARED/' ~/twindesk/"
+    as "mkdir -p ~/twindesk && rsync -a --delete --exclude .git --exclude node_modules --exclude 'dist/' --exclude 'android/build' --exclude 'android/app/build' --exclude 'android/.gradle' --exclude 'mac-helper/.build' --exclude 'windows/vendor/adb' --exclude 'linux-helper/bin' --exclude 'linux-helper/lib' --exclude 'native/tdfast/target' --exclude 'mac-helper/lib' --exclude 'linux/vendor/adb' '$SHARED/' ~/twindesk/"
     as "cd ~/twindesk/linux && { [ -d node_modules/electron/dist ] || npm install --no-audit --no-fund; } && sh ../linux-helper/build.sh"
     ;;
   start)

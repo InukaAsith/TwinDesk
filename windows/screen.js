@@ -184,6 +184,7 @@ class Screen {
     const width = Number(m.width) || 0;
     const height = Number(m.height) || 0;
     // audio: the Mac's "Share sound with the screen" — only then is there a sound track.
+    if (this.helper && this.helper.lowLatency) this.helper.lowLatency('screen', true); // Wlan.cs
     this.state = { state: 'on', name: typeof m.name === 'string' ? m.name : 'Shared screen', width, height, audio: m.audio === true };
     this.replay = []; // a fresh offer follows every stream.info
     this._relay({ t: T.STREAM_INFO, name: this.state.name, width, height, audio: this.state.audio });
@@ -251,6 +252,7 @@ class Screen {
 
   _stop() {
     if (this.state.state === 'off' && !this.replay.length) return;
+    if (this.helper && this.helper.lowLatency) this.helper.lowLatency('screen', false);
     this.state = { state: 'off', name: '', width: 0, height: 0 };
     this.replay = [];
     this._pushInput();

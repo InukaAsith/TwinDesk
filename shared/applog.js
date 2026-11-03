@@ -6,10 +6,13 @@
 // .2.log). Crashes
 // (an uncaught exception or rejection here, a window's renderer or another Electron process gone)
 // go to crash.log as well, and the app goes on as before. While connected, once every 30 s, one
-// line on the link: round trip p50/p95, pointer moves a second, bytes queued on the socket.
+// line on the link: round trip p50/p95/p99/max, the input lane's (shared/inputlane.js) when it's
+// up, pointer moves a second, bytes queued on the socket, and how long the main thread's event loop
+// was held up (p99 and max: garbage collection, sync writes, IPC).
 //
 // start(app) as early as possible; dir(); open() (Open log folder); linkStats(sample): sample() ->
-// null when not connected, else {rtt: ms | null, queued: bytes}, asked every second; returns stop().
+// null when not connected, else {rtt: ms | null, lane?: ms | null, queued: bytes}, asked every
+// second; returns stop().
 'use strict';
 
 const fs = require('fs');
@@ -137,7 +140,13 @@ function pct(sorted, p) {
 // The link line every 30 s while connected (sample: see above). Moves: shared/kvm-moves.js counts them.
 function linkStats(sample, everyMs = STATS_MS, sampleMs = 1000) {
   const { KvmMoves } = require('./kvm-moves.js');
+  let loop = null; // the event loop's delay, reset after each line
+  try {
+    loop = require('perf_hooks').monitorEventLoopDelay({ resolution: 10 });
+    loop.enable();
+  } catch (_) { loop = null; }
   let rtts = [];
+  let lanes = [];
   let queuedMax = 0;
   let seen = 0;
   let moves = KvmMoves.count;
@@ -148,24 +157,33 @@ function linkStats(sample, everyMs = STATS_MS, sampleMs = 1000) {
     if (s) {
       seen++;
       if (typeof s.rtt === 'number' && s.rtt >= 0) rtts.push(s.rtt);
+      if (typeof s.lane === 'number' && s.lane >= 0) lanes.push(s.lane);
       queuedMax = Math.max(queuedMax, Number(s.queued) || 0);
     }
     const now = Date.now();
     if (now - since < everyMs) return;
     if (seen) {
       const sorted = rtts.slice().sort((a, b) => a - b);
-      const rtt = sorted.length ? `rtt p50 ${pct(sorted, 0.5)} ms / p95 ${pct(sorted, 0.95)} ms` : 'rtt –';
+      const rtt = sorted.length ? `rtt p50 ${pct(sorted, 0.5)} ms / p95 ${pct(sorted, 0.95)} ms / p99 ${pct(sorted, 0.99)} ms / max ${sorted[sorted.length - 1]} ms` : 'rtt –';
+      const ls = lanes.slice().sort((a, b) => a - b);
+      const lane = ls.length ? `, lane p50 ${ls[Math.floor((ls.length - 1) / 2)].toFixed(1)} ms / max ${ls[ls.length - 1].toFixed(1)} ms` : '';
       const perSec = Math.round((KvmMoves.count - moves) / ((now - since) / 1000));
-      console.log(`[link] ${rtt}, kvm moves ${perSec}/s, queued max ${queuedMax} bytes`);
+      const lp = loop && loop.count ? `, loop p99 ${(loop.percentile(99) / 1e6).toFixed(1)} ms / max ${(loop.max / 1e6).toFixed(1)} ms` : '';
+      console.log(`[link] ${rtt}${lane}, kvm moves ${perSec}/s, queued max ${queuedMax} bytes${lp}`);
     }
+    if (loop) loop.reset();
     rtts = [];
+    lanes = [];
     queuedMax = 0;
     seen = 0;
     moves = KvmMoves.count;
     since = now;
   }, sampleMs);
   if (tick.unref) tick.unref();
-  return () => clearInterval(tick);
+  return () => {
+    clearInterval(tick);
+    if (loop) loop.disable();
+  };
 }
 
 module.exports = { start, dir, open, linkStats, crash };

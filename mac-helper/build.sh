@@ -14,7 +14,27 @@ case "$ARCH" in
 esac
 TARGET="$SWIFT_ARCH-apple-macos13.0"
 
-swiftc -O -swift-version 5 -target "$TARGET" \
+# The input lane (native/tdfast, docs/perf-plan.md P3), when cargo is there: libtdfast.a for this arch,
+# and the helpers built with -D TDFAST. Without cargo they build as before and Node keeps its own lane.
+TDFAST=""
+if [ -z "$TWINDESK_NO_TDFAST" ] && command -v cargo >/dev/null 2>&1; then
+  RUST_TARGET="$SWIFT_ARCH-apple-darwin"
+  [ "$SWIFT_ARCH" = arm64 ] && RUST_TARGET=aarch64-apple-darwin
+  rustup target add "$RUST_TARGET" >/dev/null 2>&1 || true
+  if MACOSX_DEPLOYMENT_TARGET=13.0 cargo build --release --manifest-path ../native/tdfast/Cargo.toml --target "$RUST_TARGET" --lib; then
+    mkdir -p lib
+    cp "../native/tdfast/target/$RUST_TARGET/release/libtdfast.a" lib/libtdfast.a
+    TDFAST="-D TDFAST -I ../native/tdfast/include -L lib -ltdfast"
+    echo "the input lane: native (lib/libtdfast.a, $RUST_TARGET)"
+  else
+    echo "tdfast didn't build: the helpers go without the native lane" >&2
+  fi
+else
+  echo "no cargo: the helpers go without the native lane (Node's lane is used)" >&2
+fi
+
+# shellcheck disable=SC2086
+swiftc -O -swift-version 5 -target "$TARGET" $TDFAST \
   -I Sources/VirtualDisplayBridge/include \
   -framework CoreGraphics -framework AppKit -framework ApplicationServices -framework IOKit -framework ScreenCaptureKit -framework CoreMedia -framework NetFS -framework CoreBluetooth -framework CoreWLAN -framework CoreLocation -lsqlite3 \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Sources/macshare-helper/Info.plist \
@@ -22,7 +42,8 @@ swiftc -O -swift-version 5 -target "$TARGET" \
 echo "built .build/release/macshare-helper"
 # Multi-device's helper (docs/multi-device.md): the same sources with -D MULTI, several watched edges
 # (the #if MULTI parts of Capture.swift and main.swift); only mac/mesh starts it.
-swiftc -O -swift-version 5 -target "$TARGET" -D MULTI \
+# shellcheck disable=SC2086
+swiftc -O -swift-version 5 -target "$TARGET" -D MULTI $TDFAST \
   -I Sources/VirtualDisplayBridge/include \
   -framework CoreGraphics -framework AppKit -framework ApplicationServices -framework IOKit -framework ScreenCaptureKit -framework CoreMedia -framework NetFS -framework CoreBluetooth -framework CoreWLAN -framework CoreLocation -lsqlite3 \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Sources/macshare-helper/Info.plist \

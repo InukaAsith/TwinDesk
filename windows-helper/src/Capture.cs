@@ -175,6 +175,7 @@ namespace MacShare
 
         void Forward(Dictionary<string, object> k)
         {
+            Lane.Fence(k); // a click, key, wheel or gesture: its event number and fence (Lane.cs)
             Dictionary<string, object> d = Ev("ev");
             d["ev"] = k;
             emit(d);
@@ -392,7 +393,7 @@ namespace MacShare
                     Dictionary<string, object> k = K("k.mm");
                     k["dx"] = Math.Round(dx / s, 2);
                     k["dy"] = Math.Round(dy / s, 2);
-                    Forward(k);
+                    if (!Lane.Move(dx / s, dy / s, k)) Forward(k); // true: it went on the input lane (Lane.cs)
                 }
             }
             else if (button >= 0 && (down || up))

@@ -11,6 +11,7 @@
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { linkLane, peerIp } = require('../../shared/inputlane.js');
 
 const T = P.T;
 // A host without `os` is an older Mac.
@@ -43,6 +44,7 @@ class Link extends EventEmitter {
     this.mode = null; // 'session' | 'pair'
     this.authed = false;
     this.destroyed = false;
+    this.ilLane = linkLane(); // the input lane (shared/inputlane.js) of this device's sessions; null: none
     // Disconnect here, or the host let us go / another device took over: no reconnecting by itself
     // until connect(). {why: 'local' | released | replaced, message}
     this.stopped = null;
@@ -153,6 +155,7 @@ class Link extends EventEmitter {
   // Stop for good: no socket, no reconnect (the manager closes its links this way).
   destroy() {
     this.destroyed = true;
+    if (this.ilLane) this.ilLane.close();
     clearTimeout(this.timers.reconnect);
     this._closeSocket();
   }
@@ -210,9 +213,15 @@ class Link extends EventEmitter {
     this._hello();
   }
 
+  // The input lane's hello field (its port), over the network only.
+  _ilHello() {
+    const f = this.ilLane && this.transport !== 'ble' ? this.ilLane.helloField() : null;
+    return f ? { il: f } : {};
+  }
+
   _hello() {
     const p = this.pairing;
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, ...(this.takeover ? { takeover: true } : {}) });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
@@ -298,6 +307,8 @@ class Link extends EventEmitter {
     this.takeover = false;
     this.busyBy = '';
     this._setStatus('connected', '');
+    // The input lane, when the host offered it (older hosts: none): started for this session.
+    if (this.ilLane && !(msg.il && typeof msg.il === 'object' && this.transport !== 'ble' && this.ilLane.accept(msg.il, peerIp(this.ws, this.pairing.address)))) this.ilLane.stop();
     this.emit('welcome', msg);
   }
 
@@ -331,6 +342,7 @@ class Link extends EventEmitter {
     this._clearSocketTimers();
     this.ws = null;
     this.authed = false;
+    if (wasAuthed && this.ilLane) this.ilLane.stop();
     if (wasAuthed) this._emit('closed', {});
     if (this.mode === 'pair') {
       const ps = this.pairState;
@@ -382,6 +394,7 @@ class Link extends EventEmitter {
     this.ws = null;
     const wasAuthed = this.authed;
     this.authed = false;
+    if (wasAuthed && this.ilLane) this.ilLane.stop();
     if (wasAuthed) this._emit('closed', {});
     if (!ws) return;
     if (ws.readyState === WebSocket.OPEN) ws.close();

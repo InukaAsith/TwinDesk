@@ -1,0 +1,5 @@
+module TdFast {
+  header "../tdfast.h"
+  link "tdfast"
+  export *
+}

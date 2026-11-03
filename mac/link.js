@@ -178,11 +178,17 @@ class Link extends EventEmitter {
   }
 
   _hello() {
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.id.macId, name: this.id.macName, os: P.OS.MAC, token: this.host.token, fx: 1, ...(this.takeover ? { takeover: true } : {}) });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.id.macId, name: this.id.macName, os: P.OS.MAC, token: this.host.token, fx: 1, ...(this.fx2Hello && this.fx2Hello() ? { fx2: 1 } : {}), ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
     }, P.HELLO_TIMEOUT_MS);
+  }
+
+  // The input lane (shared/inputlane.js): its port, when this app has one (peer.js sets ilHello).
+  _ilHello() {
+    const il = this.ilHello ? this.ilHello() : null;
+    return il ? { il } : {};
   }
 
   _onMessage(text) {
@@ -265,6 +271,8 @@ class Link extends EventEmitter {
       ws: this.ws, authed: true, deviceId: h.id, name: h.name, os: msg.os || P.OS.MAC, role: 'host',
       address: this.address, lastRx: Date.now(), rttMs: null,
       fx: typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : '', // fast files (shared/fastfile.js); older hosts: none
+      il: msg.il && typeof msg.il === 'object' ? msg.il : null, // the input lane (shared/inputlane.js); older hosts: none
+      fx2Port: msg.fx2 && typeof msg.fx2 === 'object' && Number.isInteger(msg.fx2.port) && msg.fx2.port > 0 && msg.fx2.port < 65536 ? msg.fx2.port : 0, // fast files v2 (shared/fx2.js); older hosts: none
     };
     this.timers.ping = setInterval(() => {
       if (Date.now() - this.lastRx > P.TIMEOUT_MS) {

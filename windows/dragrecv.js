@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { streamPressure, receiverHook } = require('../shared/fastfile.js');
 
 const T = P.T;
 const MAX_FILES = 10000, MAX_DEPTH = 32;
@@ -37,6 +38,15 @@ class DragRecv {
   constructor(opts) {
     Object.assign(this, opts);
     this.root = path.join(app.getPath('userData'), 'drag');
+    if (this.link && this.link.fx) this.link.fx.pressure((id) => { const f = this.cur && this.cur.byId.get(id); return streamPressure(f && f.out); });
+    // Fast files v2 (shared/fx2.js): the files engine writes the file into its tmp; we finish it.
+    if (this.link && this.link.fx && this.link.fx.receiver) {
+      this.link.fx.receiver(receiverHook({
+        find: (id) => { const f = this.cur && this.cur.byId.get(id); return f && f.state === 'arriving' ? f : null; },
+        end: (f) => this._end({ t: T.FILE_END, id: f.id, sha256: '' }),
+        fail: (f, why) => this._fail(f),
+      }));
+    }
     this.cur = null; // {drag, dir, entries, files: Map(rel → file), byId: Map(id → file), where, state}
     this.last = null; // {text, ok, at}
     this.homeUntil = 0; // kvm.home said the Mac's files follow as a drag here at home (expectHome)
@@ -183,7 +193,7 @@ class DragRecv {
     f.state = 'closing';
     f.out.once('close', () => {
       if (this.cur !== c || f.state !== 'closing') return;
-      const ok = f.got === f.size && f.hash.digest('hex') === m.sha256;
+      const ok = f.got === f.size && (f.verified || f.hash.digest('hex') === m.sha256);
       f.state = ok ? 'ok' : 'failed';
       this.helper.send('dragFile', { drag: c.drag, index: f.index, state: ok ? 'ok' : 'failed' });
       // A paste batch's sender waits for each file's file.done before the next one (filedrop.js),

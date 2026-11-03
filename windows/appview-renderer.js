@@ -66,12 +66,12 @@ async function onOffer(m) {
 
   try {
     await my.setRemoteDescription({ type: 'offer', sdp: m.sdp });
-    // H.264 first (hardware decode), as the sender offers it.
+    // H.265 when both have it, else H.264 first (hardware decode), as the sender offers it.
     for (const tr of my.getTransceivers()) {
       tr.direction = 'recvonly';
       if (tr.receiver.track.kind !== 'video' || !RTCRtpReceiver.getCapabilities) continue;
       const codecs = RTCRtpReceiver.getCapabilities('video').codecs;
-      tr.setCodecPreferences([...codecs.filter((c) => /h264/i.test(c.mimeType)), ...codecs.filter((c) => !/h264/i.test(c.mimeType))]);
+      tr.setCodecPreferences(window.TwinDeskScreenCodec.order(codecs)); // H.265 when listed, then H.264 (shared/screencodec.js)
     }
     await my.setLocalDescription(await my.createAnswer());
     if (my !== pc) return;

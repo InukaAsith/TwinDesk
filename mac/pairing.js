@@ -171,6 +171,8 @@ class Pairing extends EventEmitter {
     e.lastSeen = Date.now();
     this._save();
     ctx.fxWanted = msg.fx === 1;
+    ctx.fx2Wanted = msg.fx2 === 1; // fast files v2 (shared/fx2.js)
+    ctx.ilWanted = msg.il && typeof msg.il === 'object' ? msg.il : null; // the input lane (shared/inputlane.js)
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC,
     });

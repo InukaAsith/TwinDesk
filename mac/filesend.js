@@ -86,9 +86,13 @@ class FileSend extends EventEmitter {
     this.drags = new Map(); // drag id -> { name, bytes }
     this.batches = new Map(); // Batch id -> { kind: 'send'|'paste', name, files, bytes }
     this.pumping = 0; // files being sent
+    this.ready = []; // ids accepted and not sending yet, in the order they were accepted (= offered)
     server.on(`t:${P.T.FILE_ACCEPT}`, (m) => {
       const f = this.outgoing.get(m.id);
-      if (f && f.state === 'offered') f.state = 'accepted';
+      if (f && f.state === 'offered') {
+        f.state = 'accepted';
+        this.ready.push(f.id);
+      }
       this._next();
     });
     server.on(`t:${P.T.DRAG_END}`, (m) => this._dragEnd(m));
@@ -204,9 +208,15 @@ class FileSend extends EventEmitter {
   // few at once with fast files.
   _next() {
     const fx = this.server.fx;
-    while (this.pumping < (fx ? fx.parallel : 1)) {
-      const f = [...this.outgoing.values()].find((x) => x.state === 'accepted');
-      if (!f) return;
+    for (;;) {
+      let f = null;
+      while (this.ready.length && !f) { // a queue, not a scan of every file (10,000 files took seconds)
+        const x = this.outgoing.get(this.ready[0]);
+        if (x && x.state === 'accepted') f = x;
+        else this.ready.shift(); // gone (cancelled, finished): skipped
+      }
+      if (!f || this.pumping >= (fx ? fx.parallelFor(f.size) : 1)) return;
+      this.ready.shift();
       this.pumping++;
       this._pump(f.id).catch(() => {}).finally(() => {
         this.pumping--;
@@ -229,7 +239,7 @@ class FileSend extends EventEmitter {
           this.emit('change');
         }
       });
-      if (this.outgoing.has(id)) this.server.sendToClient({ t: P.T.FILE_END, id, sha256 });
+      if (this.outgoing.has(id)) this.server.sendToClient({ t: P.T.FILE_END, id, sha256, ...fx.endFields(id) }); // fx2: the ranges' hashes
     } catch (e) {
       if (!this.outgoing.has(id)) return true; // cancelled
       if (e.early) {

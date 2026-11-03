@@ -126,6 +126,43 @@ async function check(rx, id, p) {
     for (let i = 0; i < small.length; i += 4) await Promise.all(small.slice(i, i + 4).map((p, j) => send(guest, `s${i + j}`, p)));
     for (let i = 0; i < small.length; i++) await check(host.rx, `s${i}`, small[i]);
     console.log(`  300 small files: ${Date.now() - t0} ms`);
+    // … as many at once as parallelFor says (16 while they're small).
+    assert.strictEqual(guest.fx.parallelFor(100), 16);
+    assert.strictEqual(guest.fx.parallelFor(5 * 1024 * 1024), 4);
+    const small2 = Array.from({ length: 300 }, (_, i) => file(`t${i}.bin`, 100 + i));
+    const t1 = Date.now();
+    for (let i = 0; i < small2.length; i += 16) await Promise.all(small2.slice(i, i + 16).map((p, j) => send(guest, `t${i + j}`, p)));
+    for (let i = 0; i < small2.length; i++) await check(host.rx, `t${i}`, small2[i]);
+    console.log(`  300 small files, 16 at once: ${Date.now() - t1} ms`);
+    close();
+  }
+
+  // Backpressure: while the receiver's disk is behind (pressure() gives a promise) the transfer
+  // waits, with the bytes left in the socket; then it goes on, every byte in order.
+  {
+    const { host, guest, close } = await pair();
+    let stalled = null;
+    let pauses = 0;
+    host.fx.pressure((id) => {
+      if (id !== 'bp' || stalled || pauses >= 2) return null;
+      const r = host.rx.got.get('bp');
+      if (!r || r.bytes < (pauses + 1) * 4 * 1024 * 1024) return null;
+      pauses++;
+      if (pauses === 2) return new Promise((resolve) => setTimeout(resolve, 100)); // the second: a short one
+      return new Promise((resolve) => { stalled = resolve; });
+    });
+    const big = file('bp.bin', 20 * 1024 * 1024);
+    const sent = send(guest, 'bp', big);
+    await until(() => stalled);
+    const at = host.rx.got.get('bp').bytes;
+    await new Promise((r) => setTimeout(r, 200));
+    assert.ok(host.rx.got.get('bp').bytes - at <= 1024 * 1024, 'paused: (almost) nothing more came');
+    const go = stalled;
+    stalled = null;
+    go();
+    await sent;
+    await check(host.rx, 'bp', big);
+    assert.strictEqual(pauses, 2, 'paused twice, went on both times');
     close();
   }
 

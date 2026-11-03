@@ -131,7 +131,7 @@ class FileDrop {
 
   _next() {
     const fx = this.link.fx;
-    while (this.sending < (fx ? fx.parallel : 1) && this.queue.length) {
+    while (this.queue.length && this.sending < (fx ? fx.parallelFor(this.queue[0].size) : 1)) {
       const job = this.queue.shift();
       this.sending++;
       this._run(job).finally(() => {
@@ -189,7 +189,7 @@ class FileDrop {
     }
 
     const sha256 = (await this._fast(job, cur)) || (await this._chunks(job, cur));
-    this.link.send({ t: T.FILE_END, id, sha256 });
+    this.link.send({ t: T.FILE_END, id, sha256, ...(this.link.fx ? this.link.fx.endFields(id) : {}) }); // fx2: the ranges' hashes
     if (job.drag) return; // the Mac answers file.done when the drop target has it; drag.end says how it went
     const d = await this._wait(id, [T.FILE_DONE, T.FILE_CANCEL], DONE_MS);
     if (d.t !== T.FILE_DONE || !d.ok) throw d.error ? new Error(d.error) : localError('{Name} couldn’t save it');

@@ -20,11 +20,28 @@ const { execFile } = require('child_process');
 const { shell, screen } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { receiverHook } = require('../shared/fastfile.js');
 const { DragIn } = require('./dragin');
 
 const DESKTOP = path.join(os.homedir(), 'Desktop');
 const DOWNLOADS = path.join(os.homedir(), 'Downloads');
 const MAX_RECENT = 20;
+// Received bytes are written in order but off the main thread's way (a write chain per file);
+// fast files (shared/fastfile.js) pause the transfer while more than this waits for the disk.
+const HIGH_WATER = 8 * 1024 * 1024;
+const writes = () => ({ q: Promise.resolve(), pending: 0, err: null, wake: null });
+
+// All of buf at the file's current end.
+function writeAll(fd, buf) {
+  return new Promise((resolve, reject) => {
+    const go = (off) => fs.write(fd, buf, off, buf.length - off, null, (err, n) => {
+      if (err) return reject(err);
+      if (off + n < buf.length) return go(off + n);
+      resolve();
+    });
+    go(0);
+  });
+}
 const INCOMING = path.join(os.tmpdir(), 'macshare-incoming');
 
 function cleanName(name) {
@@ -73,6 +90,20 @@ class Drop extends EventEmitter {
     this.recent = []; // newest first: {name, size, path, at, ok, error}
     this.drag = null; // { dest: null|dir, waiting: [transfer] } while files are dragged in (drop:'release')
     this.batches = new Map(); // Batch -> { kind, dir, count, done, ok, tops: Map, placed: [] }
+    if (server.fx) server.fx.pressure((id) => this.pressure(id)); // fast files wait for our disk
+    // Fast files v2 (shared/fx2.js): the files engine writes the file into its tmp; we finish it.
+    if (server.fx && server.fx.receiver) {
+      server.fx.receiver(receiverHook({
+        find: (id) => { const t = this.active.get(id); return t && !t.ending ? t : null; },
+        progress: (t) => {
+          if (t.got - (t.shown || 0) < 4 * 1024 * 1024) return;
+          t.shown = t.got;
+          this.emit('change');
+        },
+        end: (t) => this._end({ id: t.id, sha256: '' }),
+        fail: (t, why) => this._abort(t.id, why, true),
+      }));
+    }
     this.expected = new Map(); // batch (fclip id) -> dir chosen when this Mac pasted
     this.dragIn = new DragIn({ server, helper, getSettings, remember: (r) => this._remember(r) });
     this.dragIn.replayOffer = (m) => this._offer(m);
@@ -139,7 +170,7 @@ class Drop extends EventEmitter {
       console.error(`[drop] ${tmp}: ${e.message}`);
       return refuse('not_allowed');
     }
-    this.active.set(m.id, { id: m.id, name, size, dir, tmp, fd, release, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now() });
+    this.active.set(m.id, { id: m.id, name, size, dir, tmp, fd, release, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now(), ...writes() });
     this.server.sendToClient({ t: P.T.FILE_ACCEPT, id: m.id });
     this.emit('change');
   }
@@ -184,7 +215,7 @@ class Drop extends EventEmitter {
       this._batchStep(m.batch, false);
       return refuse('not_allowed');
     }
-    this.active.set(m.id, { id: m.id, name: segs[segs.length - 1], size, tmp, final, fd, batch: m.batch, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now() });
+    this.active.set(m.id, { id: m.id, name: segs[segs.length - 1], size, tmp, final, fd, batch: m.batch, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now(), ...writes() });
     this.server.sendToClient({ t: P.T.FILE_ACCEPT, id: m.id });
     this.emit('change');
   }
@@ -220,7 +251,7 @@ class Drop extends EventEmitter {
       this.dragIn.arrived({ drag: m.drag, rel: m.rel, id: m.id }, false);
       return this.server.sendToClient({ t: P.T.FILE_REFUSE, id: m.id, why: 'not_allowed' });
     }
-    this.active.set(m.id, { id: m.id, name, size, tmp, final, fd, drag: m.drag, rel: m.rel, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now() });
+    this.active.set(m.id, { id: m.id, name, size, tmp, final, fd, drag: m.drag, rel: m.rel, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now(), ...writes() });
     this.server.sendToClient({ t: P.T.FILE_ACCEPT, id: m.id });
     this.emit('change');
   }
@@ -231,7 +262,7 @@ class Drop extends EventEmitter {
     if (m.seq !== t.seq || (typeof m.data !== 'string' && !Buffer.isBuffer(m.data))) return this._abort(m.id, 'chunks out of order', true);
     const buf = (typeof m.data === 'string' ? Buffer.from(m.data, 'base64') : m.data); // a Buffer from fast files (shared/fastfile.js)
     if (t.got + buf.length > t.size) return this._abort(m.id, 'more data than offered', true);
-    fs.writeSync(t.fd, buf);
+    this._write(t, buf);
     t.hash.update(buf);
     t.got += buf.length;
     t.seq++;
@@ -241,16 +272,50 @@ class Drop extends EventEmitter {
     }
   }
 
+  // Queued after the writes before it; a failed write fails the file at its end.
+  _write(t, buf) {
+    t.pending += buf.length;
+    t.q = t.q.then(() => (t.err || t.fd === null ? null : writeAll(t.fd, buf).catch((e) => { t.err = e; }))).then(() => {
+      t.pending -= buf.length;
+      if (t.pending <= HIGH_WATER / 2) this._wake(t);
+    });
+  }
+
+  _wake(t) {
+    const w = t.wake;
+    t.wake = null;
+    if (w) w();
+  }
+
+  // shared/fastfile.js asks after each chunk: a promise while the disk is behind (the transfer
+  // waits for it), else null.
+  pressure(id) {
+    const t = this.active.get(id);
+    if (!t || t.pending <= HIGH_WATER) return null;
+    return new Promise((resolve) => {
+      const prev = t.wake;
+      t.wake = () => { if (prev) prev(); resolve(); };
+    });
+  }
+
+  // file.end: once every byte before it is on the disk.
   _end(m) {
     const t = this.active.get(m.id);
-    if (!t) return;
+    if (!t || t.ending) return;
+    t.ending = true;
+    t.q.then(() => this._ended(t, m));
+  }
+
+  _ended(t, m) {
+    if (this.active.get(t.id) !== t) return; // aborted meanwhile
     const digest = t.hash.digest('hex');
-    fs.closeSync(t.fd);
+    try { fs.closeSync(t.fd); } catch (e) { t.err = t.err || e; }
     t.fd = null;
-    if (t.got !== t.size || String(m.sha256).toLowerCase() !== digest) {
-      return this._abort(m.id, t.got !== t.size ? 'size mismatch' : 'checksum mismatch', true);
+    if (t.err) return this._abort(t.id, t.err.message, true);
+    if (t.got !== t.size || (!t.verified && String(m.sha256).toLowerCase() !== digest)) {
+      return this._abort(t.id, t.got !== t.size ? 'size mismatch' : 'checksum mismatch', true);
     }
-    this.active.delete(m.id);
+    this.active.delete(t.id);
     if (t.batch) {
       try {
         fs.renameSync(t.tmp, t.final);
@@ -266,7 +331,7 @@ class Drop extends EventEmitter {
       try {
         fs.renameSync(t.tmp, t.final);
       } catch (e) {
-        return this._abort(m.id, e.message, true);
+        return this._abort(t.id, e.message, true);
       }
       this.dragIn.arrived(t, true);
       return this.emit('change');
@@ -337,8 +402,13 @@ class Drop extends EventEmitter {
     const t = this.active.get(id);
     if (!t) return;
     this.active.delete(id);
-    if (t.fd !== null) try { fs.closeSync(t.fd); } catch { /* already closed */ }
-    fs.rmSync(t.tmp, { force: true });
+    this._wake(t);
+    // After the writes in flight: closing the fd under them could hand its number to another file.
+    t.q.then(() => {
+      if (t.fd !== null) try { fs.closeSync(t.fd); } catch { /* already closed */ }
+      t.fd = null;
+      fs.rmSync(t.tmp, { force: true });
+    });
     if (tell) this.server.sendToClient({ t: P.T.FILE_DONE, id, ok: false, error });
     if (t.batch) return this._batchStep(t.batch, false);
     if (t.drag) {

@@ -24,6 +24,7 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const { WebSocketServer } = require('ws');
 const P = require('../../shared/protocol.js');
+const { LanePool } = require('../../shared/inputlane.js');
 
 const ICE_OFFERS = new Set([P.T.RTC_OFFER, P.T.AUDIO_OFFER]);
 const isLoopback = (a) => a === '127.0.0.1' || a === '::1';
@@ -39,6 +40,7 @@ class Server extends EventEmitter {
   //   now () -> ms (tests inject a fake clock); tick (false: no timer, call liveness() yourself).
   constructor({ pfx, passphrase, port, now, tick = true } = {}) {
     super();
+    this.ilPool = new LanePool(); // the input lanes of the clients (shared/inputlane.js)
     this.clients = new Map(); // deviceId -> ctx, authenticated and connected
     this.sockets = new Set(); // every ctx, authed or not
     this.primaryId = null; // setPrimary()
@@ -138,6 +140,7 @@ class Server extends EventEmitter {
     }
     this.sockets.delete(ctx);
     if (ctx.authed && this.clients.get(ctx.deviceId) === ctx) this.clients.delete(ctx.deviceId);
+    this.ilPool.drop(ctx); // its input lane (shared/inputlane.js)
     this.emit('closed', ctx);
   }
 
@@ -282,7 +285,9 @@ class Server extends EventEmitter {
     ctx.ice = this.iceFor ? this.iceFor(ctx) : null; // a phone through adb reverse: the relay's RTCConfiguration
     ctx.resumeKey = P.randomHex(16);
     this.clients.set(deviceId, ctx);
-    this.send(ctx, { ...welcome, resume: ctx.resumeKey });
+    // The input lane (shared/inputlane.js): a lane of its own, when its hello asked, over the network only.
+    const il = ctx.ilWanted && ctx.transport !== 'ble' ? this.ilPool.offer(ctx, ctx.ilWanted, ctx.address) : null;
+    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}) });
     this.emit('client', ctx);
   }
 
@@ -329,6 +334,7 @@ class Server extends EventEmitter {
 
   close() {
     clearInterval(this.tick);
+    this.ilPool.close();
     clearTimeout(this.graceTimer);
     for (const ctx of this.sockets) {
       if (ctx.alt) ctx.alt.terminate();

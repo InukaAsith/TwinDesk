@@ -22,6 +22,18 @@ class Helper extends EventEmitter {
     this.pending = new Map();
     this.stopped = false;
     this.error = '';
+    this.lowLat = new Set(); // why Wi-Fi low-latency mode is on (Wlan.cs): 'kvm', 'screen'
+    this.on('ready', () => { if (this.lowLat.size) this.send('wifiLowLatency', { on: true }); }); // a restarted helper forgot it
+  }
+
+  // Wi-Fi low-latency mode (Wlan.cs: media streaming on, background scans off) while any reason
+  // wants it: the cursor shared, a screen shown.
+  lowLatency(reason, on) {
+    const was = this.lowLat.size > 0;
+    if (on) this.lowLat.add(reason);
+    else this.lowLat.delete(reason);
+    const now = this.lowLat.size > 0;
+    if (now !== was) this.send('wifiLowLatency', { on: now });
   }
 
   start() {

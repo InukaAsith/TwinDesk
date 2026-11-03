@@ -82,6 +82,10 @@ static unsigned char injKeys[256], injButtons[8];
 static double vrem, hrem, lastMoveAt;
 
 static void forward(const char *k) {
+#ifdef TDFAST
+  char fbuf[4200];
+  k = lane_fence(k, fbuf, sizeof fbuf); // a click, key or wheel: its event number and fence (lane.c)
+#endif
   JOut o;
   jo_begin(&o);
   jo_str(&o, "event", "ev");
@@ -586,6 +590,9 @@ static void on_motion(double rdx, double rdy, double tMs) {
     jo_str(&k, "t", "k.mm");
     jo_num(&k, "dx", round(dx * 100) / 100);
     jo_num(&k, "dy", round(dy * 100) / 100);
+#ifdef TDFAST
+    if (lane_move(dx, dy, &k)) return; // it went on the input lane (lane.c)
+#endif
     forward(jo_end(&k));
     return;
   }
