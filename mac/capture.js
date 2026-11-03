@@ -80,7 +80,7 @@ async function getStream(sourceId, width, height, fps) {
 
 // Every frame matters more than the last bit of sharpness: under pressure the encoder lowers
 // quality, never the frame rate (dropped frames are what feels jagged and what adds lag).
-async function start({ session, bitrateMbps, sourceId, width, height, audio, fps = 60, ice }) {
+async function start({ session, bitrateMbps, sourceId, width, height, audio, fps = 60, ice, codec }) {
   close();
   const me = { session, pendingIce: [], remoteSet: false, last: null };
   cur = me;
@@ -97,7 +97,7 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     if (audio) pc.addTransceiver(await audioTrack(me), { direction: 'sendonly', streams: [me.stream] });
     // H.265 when both have it (shared/screencodec.js), then H.264 High, Main, Baseline: better quality per
     // bit, in hardware. Everything else stays as a fallback.
-    tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs));
+    tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs, codec)); // the Encoder setting
 
     pc.onicecandidate = (e) => {
       if (e.candidate && cur === me) api.send({ t: P.T.RTC_ICE, session, candidate: e.candidate.toJSON() });
@@ -111,6 +111,7 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     const offer = await pc.createOffer();
     await pc.setLocalDescription({ type: 'offer', sdp: withOpus(withBitrate(offer.sdp, bitrateMbps)) });
     me.bitrateMbps = bitrateMbps;
+    me.codec = codec;
     const p = tr.sender.getParameters();
     if (!p.encodings || !p.encodings.length) p.encodings = [{}];
     Object.assign(p.encodings[0], {
@@ -137,6 +138,7 @@ async function onRemote(msg) {
   try {
     if (msg.t === P.T.RTC_ANSWER) {
       await me.pc.setRemoteDescription({ type: 'answer', sdp: withOpus(withBitrate(msg.sdp, me.bitrateMbps)) });
+      if (window.TwinDeskScreenCodec) console.log(`sending ${window.TwinDeskScreenCodec.negotiated(msg.sdp) || 'no video'} (Encoder: ${me.codec || 'h264'})`);
       me.remoteSet = true;
       for (const c of me.pendingIce.splice(0)) await me.pc.addIceCandidate(c);
     } else if (msg.t === P.T.RTC_ICE && msg.candidate) {

@@ -1,10 +1,9 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// shared/screencodec.js (docs/perf-plan.md P5): the codec order, the hidden setting, the one switch.
+// shared/screencodec.js (docs/perf-plan.md P5): the codec order, the Encoder setting, the one switch.
 'use strict';
 
 const assert = require('assert');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const C = require('../screencodec.js');
 
@@ -23,22 +22,35 @@ assert.strictEqual(C.order(noHevc)[0].sdpFmtpLine, 'profile-level-id=640c1f');
 
 assert.ok(C.RTPMAP.test('a=rtpmap:96 H265/90000') && C.RTPMAP.test('a=rtpmap:102 H264/90000') && !C.RTPMAP.test('a=rtpmap:111 opus/48000/2'));
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-codec-'));
-delete process.env.TWINDESK_SCREEN_CODEC;
-assert.strictEqual(C.pref(dir), 'h264', 'default: H.264 until P5 is measured');
-fs.writeFileSync(path.join(dir, 'perf.json'), JSON.stringify({ screenCodec: 'auto' }));
-assert.strictEqual(C.pref(dir), 'auto', 'perf.json');
-process.env.TWINDESK_SCREEN_CODEC = 'h264';
-assert.strictEqual(C.pref(dir), 'h264', 'the env wins');
-delete process.env.TWINDESK_SCREEN_CODEC;
-fs.writeFileSync(path.join(dir, 'perf.json'), '{"screenCodec":"vp9"}');
-assert.strictEqual(C.pref(dir), 'h264', 'an unknown value: the default');
-fs.rmSync(dir, { recursive: true });
+// The Encoder setting, on the sender: h264 drops H.265; auto puts it first; h265 keeps only H.265 (and
+// rtx/red/fec) when there is one, else it's auto.
+const names = (l) => l.map((c) => c.mimeType);
+assert.ok(!names(C.order(caps, 'h264')).includes('video/H265'), 'h264: no H.265 in the offer');
+assert.strictEqual(C.order(caps, 'h264')[0].sdpFmtpLine, 'profile-level-id=640c1f');
+assert.strictEqual(C.order(caps, 'auto')[0].mimeType, 'video/H265');
+assert.deepStrictEqual(names(C.order(caps, 'h265')), ['video/H265', 'video/rtx'], 'h265: H.265 only');
+assert.strictEqual(C.order(noHevc, 'h265')[0].sdpFmtpLine, 'profile-level-id=640c1f', 'h265 without an H.265 encoder: H.264');
 
-assert.strictEqual(C.enableFeatures('h264'), '', 'h264: no switch at all');
-assert.strictEqual(C.enableFeatures('auto'), 'WebRtcAllowH265Send,WebRtcAllowH265Receive');
-assert.strictEqual(C.enableFeatures('auto', ['WebRTCPipeWireCapturer']), 'WebRTCPipeWireCapturer,WebRtcAllowH265Send,WebRtcAllowH265Receive', 'merged into one switch');
-assert.strictEqual(C.enableFeatures('h264', ['WebRTCPipeWireCapturer']), 'WebRTCPipeWireCapturer');
+delete process.env.TWINDESK_SCREEN_CODEC;
+assert.strictEqual(C.mode(undefined), 'h264', 'default: H.264 until P5 is measured');
+assert.strictEqual(C.mode('auto'), 'auto');
+assert.strictEqual(C.mode('h265'), 'h265');
+assert.strictEqual(C.mode('vp9'), 'h264', 'an unknown value: the default');
+process.env.TWINDESK_SCREEN_CODEC = 'auto';
+assert.strictEqual(C.mode('h264'), 'auto', 'the env wins');
+delete process.env.TWINDESK_SCREEN_CODEC;
+
+delete process.env.TWINDESK_NO_H265;
+assert.strictEqual(C.features(), 'WebRtcAllowH265Send,WebRtcAllowH265Receive', 'always on: the setting works without a restart');
+assert.strictEqual(C.features(['WebRTCPipeWireCapturer']), 'WebRTCPipeWireCapturer,WebRtcAllowH265Send,WebRtcAllowH265Receive', 'merged into one switch');
+process.env.TWINDESK_NO_H265 = '1';
+assert.strictEqual(C.features(), '', 'the kill switch');
+assert.strictEqual(C.features(['WebRTCPipeWireCapturer']), 'WebRTCPipeWireCapturer');
+delete process.env.TWINDESK_NO_H265;
+
+const answer = 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\nm=video 9 UDP/TLS/RTP/SAVPF 49 102 97\r\na=rtpmap:49 H265/90000\r\na=rtpmap:102 H264/90000\r\n';
+assert.strictEqual(C.negotiated(answer), 'H265', 'the first video payload type of the answer');
+assert.strictEqual(C.negotiated('v=0\r\n'), '');
 
 // Each app has one enable-features switch (Chromium keeps only the last), and every sender and viewer
 // loads the module before its renderer.

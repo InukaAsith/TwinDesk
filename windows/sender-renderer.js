@@ -49,7 +49,7 @@ function withOpus(sdp) {
 // lowers quality, never the frame rate (dropped frames are what feels jagged and adds lag).
 async function start(m) {
   stop(m.session);
-  const me = { session: m.session, pending: [], mbps: m.mbps };
+  const me = { session: m.session, pending: [], mbps: m.mbps, codec: m.codec };
   const fps = m.fps || 60;
   sessions.set(me.session, me);
   try {
@@ -70,7 +70,7 @@ async function start(m) {
     if (audio) pc.addTransceiver(audio, { direction: 'sendonly', streams: [stream] });
     // H.265 when both have it (shared/screencodec.js), then H.264 High, Main, Baseline: better quality per
     // bit, in hardware. Everything else stays as a fallback.
-    tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs));
+    tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs, m.codec)); // the Encoder setting
     pc.onicecandidate = (e) => e.candidate && alive(me) && api.send({ t: T.RTC2_ICE, session: me.session, candidate: e.candidate.toJSON() });
     pc.onconnectionstatechange = () => alive(me) && report(me, pc.connectionState === 'connected' ? 'live' : pc.connectionState);
 
@@ -147,6 +147,7 @@ async function onAnswer(m) {
   if (!me || !me.pc || m.session !== me.session) return;
   try {
     await me.pc.setRemoteDescription({ type: 'answer', sdp: withOpus(withBitrate(m.sdp, me.mbps)) });
+    if (window.TwinDeskScreenCodec) console.log(`[sender] sending ${window.TwinDeskScreenCodec.negotiated(m.sdp) || 'no video'} (Encoder: ${me.codec || 'h264'})`);
     if (!alive(me) || !me.pending) return;
     const pending = me.pending;
     me.pending = null;

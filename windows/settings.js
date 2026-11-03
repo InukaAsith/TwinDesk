@@ -158,6 +158,7 @@ function normalize(s) {
       extendSize: ['mac', '1920x1080', '2560x1440', '3840x2160'].includes(pcs.extendSize) ? pcs.extendSize : 'mac', // the virtual monitor
       sound: bool(pcs.sound, false), // the screen's sound in the same session
       input: bool(pcs.input, true), // the Mac's mouse and keyboard drive this PC
+      codec: ['h264', 'auto', 'h265'].includes(pcs.codec) ? pcs.codec : 'h264', // Encoder (shared/screencodec.js)
       remote: bool(pcs.remote, true), // The viewer may start/stop and switch it (screen.ctl)
     },
     pairSync: pairSync(s.pairSync), // {deviceId: {feature: {out, in}}} (pairsync.js)
