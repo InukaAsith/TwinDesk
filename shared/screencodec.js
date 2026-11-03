@@ -9,6 +9,9 @@
 // The hidden setting: `screenCodec` in perf.json in the app's data folder ('auto' | 'h264'), or env
 // TWINDESK_SCREEN_CODEC. Default: h264, until the glass-to-glass numbers of P5 say HEVC is no slower
 // and sharper at the same Mbps.
+// A plain <script> in the pages too: everything in its own scope, so nothing collides with the
+// page's own top-level names (`api`, `RTPMAP`…).
+(function () {
 'use strict';
 
 const H265_FEATURES = ['WebRtcAllowH265Send', 'WebRtcAllowH265Receive'];
@@ -52,3 +55,4 @@ const RTPMAP = /^a=rtpmap:(\d+) (H264|H265|VP8|VP9|AV1)\//i;
 const api = { pref, enableFeatures, rank, order, RTPMAP, H265_FEATURES, DEFAULT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.TwinDeskScreenCodec = api;
+})();

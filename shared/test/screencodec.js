@@ -50,4 +50,18 @@ for (const f of ['mac/main.js', 'windows/main.js', 'linux/main.js']) {
 for (const f of ['mac/capture.html', 'mac/appsend.html', 'mac/pcview.html', 'windows/sender.html', 'windows/appview.html', 'linux/sender.html', 'linux/appview.html']) {
   assert.ok(/<script src="\.\.\/shared\/screencodec\.js"><\/script>/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')), `${f} loads screencodec.js`);
 }
+// As the pages load it: a plain script in one global scope with the renderer after it. Its names must
+// not collide with the renderer's top-level ones (a SyntaxError there stops the share).
+const vm = require('vm');
+const codecSrc = fs.readFileSync(path.join(ROOT, 'shared', 'screencodec.js'), 'utf8');
+for (const f of ['mac/capture.js', 'mac/appsend-renderer.js', 'mac/pcview-renderer.js', 'windows/sender-renderer.js', 'windows/appview-renderer.js', 'linux/sender-renderer.js', 'linux/appview-renderer.js']) {
+  const ctx = vm.createContext({});
+  ctx.window = ctx;
+  vm.runInContext(codecSrc, ctx);
+  assert.strictEqual(typeof ctx.TwinDeskScreenCodec.order, 'function');
+  // The renderer's top-level declarations only: compile it in the same global scope (no run).
+  const decls = (fs.readFileSync(path.join(ROOT, f), 'utf8').match(/^(?:const|let|class) [A-Za-z_$][\w$]*/gm) || [])
+    .map((d) => `${d.replace(/^class /, 'let ')} = 0;`).join('\n');
+  assert.doesNotThrow(() => vm.runInContext(decls, ctx), `${f}: no top-level name clashes with screencodec.js`);
+}
 console.log('screencodec: passed');
