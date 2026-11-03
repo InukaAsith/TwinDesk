@@ -81,6 +81,31 @@ namespace MacShare
         [StructLayout(LayoutKind.Sequential)]
         public struct KBDLLHOOKSTRUCT { public uint vkCode, scanCode, flags, time; public IntPtr dwExtraInfo; }
 
+        // The hooks' structs read field by field: Marshal.PtrToStructure boxes one object per event,
+        // and the hooks run for every mouse move (docs/perf-plan.md: nothing allocated per move).
+        static readonly int MsExtra = Marshal.OffsetOf(typeof(MSLLHOOKSTRUCT), "dwExtraInfo").ToInt32();
+        static readonly int KbExtra = Marshal.OffsetOf(typeof(KBDLLHOOKSTRUCT), "dwExtraInfo").ToInt32();
+        public static MSLLHOOKSTRUCT ReadMouse(IntPtr p)
+        {
+            MSLLHOOKSTRUCT m;
+            m.pt = new POINT(Marshal.ReadInt32(p, 0), Marshal.ReadInt32(p, 4));
+            m.mouseData = (uint)Marshal.ReadInt32(p, 8);
+            m.flags = (uint)Marshal.ReadInt32(p, 12);
+            m.time = (uint)Marshal.ReadInt32(p, 16);
+            m.dwExtraInfo = Marshal.ReadIntPtr(p, MsExtra);
+            return m;
+        }
+        public static KBDLLHOOKSTRUCT ReadKey(IntPtr p)
+        {
+            KBDLLHOOKSTRUCT k;
+            k.vkCode = (uint)Marshal.ReadInt32(p, 0);
+            k.scanCode = (uint)Marshal.ReadInt32(p, 4);
+            k.flags = (uint)Marshal.ReadInt32(p, 8);
+            k.time = (uint)Marshal.ReadInt32(p, 12);
+            k.dwExtraInfo = Marshal.ReadIntPtr(p, KbExtra);
+            return k;
+        }
+
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr SetWindowsHookEx(int idHook, HookProc fn, IntPtr hMod, uint threadId);
         [DllImport("user32.dll")] public static extern bool UnhookWindowsHookEx(IntPtr hook);

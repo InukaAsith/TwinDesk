@@ -53,7 +53,8 @@ namespace MacShare
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
-            Lane.Init(invoker, delegate (double x, double y) { smoother.Flush(injector.Move); injector.Move(x, y); }, Emit); // the input lane (Lane.cs)
+            Action<double, double> laneMove = injector.Move; // one delegate, not one per move
+            Lane.Init(delegate (double x, double y) { smoother.Flush(laneMove); laneMove(x, y); }, Emit); // the input lane (Lane.cs)
             HideCursor.Restore(); // in case a crash left the cursors blank
             capture.Start();
             capture.Flash = new Flash();

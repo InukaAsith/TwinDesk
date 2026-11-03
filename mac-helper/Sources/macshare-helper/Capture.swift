@@ -227,11 +227,22 @@ final class Capture {
   }
 
   /// The sides where an injected move must stop at the edge rather than jump onto a display past it.
+  /// Read for every injected move: the same array until the side changes, never a new one per move.
+#if !MULTI
+  private var stopsSide: String?
+  private var stopsKnown = false
+  private var stopsList: [String] = []
+#endif
   var returnStops: [String] {
 #if MULTI
     return returnSides
 #else
-    return returnSide.map { [$0] } ?? []
+    if !stopsKnown || stopsSide != returnSide {
+      stopsKnown = true
+      stopsSide = returnSide
+      stopsList = returnSide.map { [$0] } ?? []
+    }
+    return stopsList
 #endif
   }
 

@@ -99,6 +99,12 @@ static void wake(void) {
   XFlush(dpy_in);
 }
 
+// A relative move from the input lane (lane.c): straight to the move, no JSON per move.
+void inject_move(double dx, double dy) {
+  wake();
+  move(dx, dy);
+}
+
 // A k.* event from the owner (main already applied speed, key mapping and reverse scroll).
 void inject_apply(const JObj *ev) {
   wake();
