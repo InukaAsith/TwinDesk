@@ -38,6 +38,7 @@ class Kvm {
     pointerAccel.watch(() => this.applyConfig()); // the desktop's mouse acceleration, for the Wayland helper
     this.subRoute = 0;
     this.partner = null; // the device our input goes to (driving) or comes from (driven); null at home
+    this._busyId = null; // the partner link marked busy while driving/driven (see _markBusy)
     this.message = '';
     this.acceptTimer = null;
     this.keepalive = null;
@@ -874,10 +875,21 @@ class Kvm {
 
   // ---- shared ----
 
+  // Keep-alive: the active partner link (driving or driven) pings every PING_MS so the other end's
+  // silence watch (KVM_SILENCE_MS) never trips because that link has gone idle with two or more
+  // devices. The old partner is marked idle, the new one busy (docs/mesh.md "Keep-alive").
+  _markBusy(partner) {
+    if (this._busyId && this._busyId !== partner) this.hub.setBusy(this._busyId, false);
+    if (partner) this.hub.setBusy(partner, true);
+    this._busyId = partner || null;
+  }
+
   _setMode(mode, message) {
     const was = this.mode;
     this.mode = mode;
     this.lanes.active(mode !== 'home'); // the partner's lane pinged more often
+    // The partner link is busy while input is shared; idle at home.
+    this._markBusy(mode === 'home' ? null : this.partner);
     if (was !== mode && this.locked) { // moved by the hotkey, the tray or a disconnect: the lock was for where it was
       this.locked = false;
       if (was === 'home') this.applyConfig();

@@ -262,6 +262,15 @@ class Hub extends EventEmitter {
     return true;
   }
 
+  // Mark a link busy (driving, driven, or selected) on whichever end holds it: a host we dial is in
+  // `links`, one that dials us is in `server`. A busy link pings every PING_MS; the others every
+  // IDLE_PING_MS (docs/mesh.md "Keep-alive"). The Kvm calls this on every mode change.
+  setBusy(id, flag) {
+    if (!id) return;
+    this.links.setBusy(id, !!flag);
+    if (this.server) this.server.setBusy(id, !!flag);
+  }
+
   // ---- what the UI shows ----
 
   // Every paired device, connected or not. state: 'connected' | the guest link's state (connecting,
