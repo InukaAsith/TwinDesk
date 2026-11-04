@@ -32,9 +32,6 @@
   <img src=".github/assets/v25-hero-desks.jpg" alt="TwinDesk on a Mac over its desktop wallpaper, on a Windows PC over its wallpaper, and on an Android phone, all connected" width="100%">
 </p>
 
-<p align="center">
-  <img src=".github/assets/v25-hero.jpg" alt="TwinDesk on a Mac in light and dark, connected to a Windows PC and an Android phone, with the phone app in light and dark" width="100%">
-</p>
 
 ## What is TwinDesk?
 
@@ -201,6 +198,11 @@ TwinDesk**, tap **⋮ › Allow restricted settings**, then turn them on.
 </details>
 
 <p align="center"><sub>Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
+
+
+<p align="center">
+  <img src=".github/assets/v25-hero.jpg" alt="TwinDesk on a Mac in light and dark, connected to a Windows PC and an Android phone, with the phone app in light and dark" width="100%">
+</p>
 
 ---
 
