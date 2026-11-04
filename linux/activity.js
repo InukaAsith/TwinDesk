@@ -4,7 +4,9 @@
 // by default on GNOME and KDE) says which window is active. A browser's address comes from its
 // address bar through AT-SPI (Firefox; Chromium browsers when their accessibility is on), else from
 // the browser's own files (shared/browsertabs.js); a document is the recently used file
-// (recently-used.xbel, which GTK and KDE apps keep) whose name the title shows. One Python process
+// (recently-used.xbel, which GTK apps keep, and KDE's RecentDocuments) whose name the title shows,
+// else VLC's own list, else a file of that name next to the recent ones (a viewer's next picture,
+// a player's next file: shared/docfind.js). A browser showing a local file (a PDF) offers that file. One Python process
 // (GObject introspection, as linux/fm.js) answers while ReZume looks, started the first time.
 // Anything else is at least the app itself (kind 'app', its WM_CLASS), whose window ReZume may send
 // to another computer (X11 only).
@@ -15,6 +17,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const tabs = require('../shared/browsertabs.js');
+const docfind = require('../shared/docfind.js');
 
 const BROWSER = /firefox|navigator|librewolf|waterfox|chrom|brave|vivaldi|opera|msedge|microsoft-edge|zen/i;
 const SELF = /twindesk|macshare|electron/i;
@@ -32,6 +35,8 @@ HOST = re.compile(r'^([\w-]+\.)+[a-z]{2,}(:\d+)?([/?#]|$)|^localhost(:\d+)?([/?#
 BROWSER = re.compile(sys.argv[1], re.I)
 def norm(v):
     v = (v or '').strip()
+    if v.lower().startswith('file://'):
+        return v
     if not v or ' ' in v:
         return ''
     if re.match(r'^https?://', v, re.I):
@@ -160,14 +165,33 @@ function recentFiles() {
   return recent.list;
 }
 
-function docOf(title) {
-  for (const r of recentFiles()) {
-    const name = path.basename(r.path);
-    const stem = name.replace(/\.[^.]+$/, '');
-    if (stem === name) continue;
-    if ((tabs.titleShows(title, name) || tabs.titleShows(title, stem)) && fs.existsSync(r.path)) return r.path;
+// KDE's own list (Dolphin, Okular, Gwenview): one .desktop file per document, URL=file:///….
+let kde = { at: 0, list: [] };
+function kdeRecent() {
+  const d = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'RecentDocuments');
+  let st;
+  try { st = fs.statSync(d); } catch (_) { return []; }
+  if (st.mtimeMs === kde.at) return kde.list;
+  const rows = [];
+  let names = [];
+  try { names = fs.readdirSync(d).filter((n) => n.endsWith('.desktop')); } catch (_) { names = []; }
+  for (const n of names) {
+    try {
+      const f = path.join(d, n);
+      const m = /^URL(?:\[\$e\])?=(.+)$/m.exec(fs.readFileSync(f, 'utf8'));
+      const p = m && docfind.fileUrlPath(m[1].trim(), 'linux');
+      if (p) rows.push({ path: p, at: fs.statSync(f).mtimeMs });
+    } catch (_) { /* gone meanwhile */ }
   }
-  return null;
+  kde = { at: st.mtimeMs, list: rows.sort((a, b) => b.at - a.at).slice(0, 80) };
+  return kde.list;
+}
+
+function docOf(title, app) {
+  const t = docfind.clean(title);
+  const recents = recentFiles().concat(kdeRecent()).sort((a, b) => b.at - a.at).map((r) => r.path);
+  return docfind.nameMatch(t, recents) || docfind.playerFile(app, t, 'linux')
+    || docfind.inFolders(t, recents.slice(0, 16).map((p) => path.dirname(p)));
 }
 
 // An app's icon: its .desktop file's Icon, a PNG of the icon theme.
@@ -239,9 +263,11 @@ function create({ helper }) {
       const appName = t.app || app;
       if (BROWSER.test(app)) {
         url = url || (tabs.tabOf(app, title) || {}).url || '';
+        const local = docfind.fileUrlPath(url, 'linux');
+        if (local) return fs.existsSync(local) ? { kind: 'doc', path: local, title: path.basename(local), app, appName } : null; // a PDF in the browser
         return url ? { kind: 'web', url, title: t.page, app, appName } : null; // a browser: its link only
       }
-      const doc = docOf(title);
+      const doc = docOf(title, app);
       return doc ? { kind: 'doc', path: doc, title: path.basename(doc), app, appName } : { kind: 'app', title: title || appName, app, appName };
     },
     async appIcon(app) {
