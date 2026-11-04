@@ -158,7 +158,8 @@ class LinkManager extends EventEmitter {
   // Liveness: a busy link (driving, driven, or selected) pings every PING_MS. Default: a manager
   // with exactly one link treats it as busy (the one-device behaviour); with more, idle.
   setBusy(id, flag) {
-    this.busyFlags.set(id, !!flag);
+    if (flag == null) this.busyFlags.delete(id); // null: back to the default (one link, or the selected one)
+    else this.busyFlags.set(id, !!flag);
   }
 
   // Connect the server (server.js) so that its authenticated clients count as inbound links.

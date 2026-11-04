@@ -897,7 +897,7 @@ class Kvm {
   // silence watch (KVM_SILENCE_MS) never trips because that link has gone idle with two or more
   // devices. The old partner is marked idle, the new one busy (docs/mesh.md "Keep-alive").
   _markBusy(partner) {
-    if (this._busyId && this._busyId !== partner) this.hub.setBusy(this._busyId, false);
+    if (this._busyId && this._busyId !== partner) this.hub.setBusy(this._busyId, null); // not forced idle: a single link or the selected device stays busy by default
     if (partner) this.hub.setBusy(partner, true);
     this._busyId = partner || null;
   }

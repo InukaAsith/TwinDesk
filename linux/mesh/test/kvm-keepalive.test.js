@@ -119,7 +119,7 @@ async function row(N, cells = { A: [0, 0], B: [1, 0], C: [2, 0] }) {
 }
 
 const busyOn = (n, id) => n.links.busyFlags.get(id) === true && n.server.busyFlags.get(id) === true;
-const idleOn = (n, id) => n.links.busyFlags.get(id) === false && n.server.busyFlags.get(id) === false;
+const idleOn = (n, id) => !n.links.busyFlags.has(id) && !n.server.busyFlags.has(id); // back to the default
 
 test('three devices: the link being driven stays busy (pings every PING_MS), and goes idle at home', async () => {
   const N = await world(['A', 'B', 'C'], TRIANGLE);

@@ -88,7 +88,8 @@ class Server extends EventEmitter {
   // A busy client (driving, driven, or selected) is pinged every PING_MS; the others every
   // IDLE_PING_MS. Default: the primary client is busy.
   setBusy(deviceId, flag) {
-    this.busyFlags.set(deviceId, !!flag);
+    if (flag == null) this.busyFlags.delete(deviceId); // null: back to the default (the primary client)
+    else this.busyFlags.set(deviceId, !!flag);
   }
 
   _isBusy(ctx) {
