@@ -61,9 +61,10 @@ class Displays extends EventEmitter {
       const v = this.getSettings().virtual;
       this.virtualError = null;
       try {
-        // The virtual display exists only while this Mac's screen is shared (no empty extra monitor),
-        // or while something holds it (app windows streamed to another computer wait there).
-        if (!v.enabled || !(this.getSettings().sharing.on || this.holds.size)) {
+        // The virtual display exists only while this Mac's screen is shared in Extend mode (no empty
+        // extra monitor), or while something holds it, in Mirror mode too: this Mac's apps open on
+        // the other computer ('apps-open'), windows moved there ('apps').
+        if (!this.holds.size && !(v.enabled && this.getSettings().sharing.on)) {
           if (this.virtualId !== null) await this.helper.request('destroyDisplay');
           this.virtualId = null;
           this.virtualKey = '';
@@ -144,6 +145,12 @@ class Displays extends EventEmitter {
   // The display to share right now (an entry of list()), or null.
   target() {
     const all = this.list();
+    // This Mac's apps open on the other computer: they live on the virtual display, so it is the one
+    // shared, in Mirror mode too (back to mirroring once they are closed).
+    if (this.holds.has('apps-open')) {
+      const v = all.find((d) => d.virtual);
+      if (v) return v;
+    }
     const want = this.getSettings().sharing.displayId;
     return (
       (want != null && all.find((d) => d.id === want)) ||

@@ -36,6 +36,7 @@ class Apps extends EventEmitter {
       if (!server.current) {
         this.unadopt(); // ReZume's windows back where they were here
         this._stopPolling();
+        this._holdVirtual(false);
         if (this.autoShare && this.setSharing) this.setSharing(false, 'apps');
         this.autoShare = false;
       }
@@ -166,7 +167,17 @@ class Apps extends EventEmitter {
   }
 
   _startPolling() {
+    this._holdVirtual(true); // an app is opening: onto the virtual display, in Mirror mode too
     if (!this.timer) this.timer = setInterval(() => this._poll(), POLL_MS);
+  }
+
+  // Mirror mode (no virtual display of its own): the virtual display held, and shared, while this
+  // Mac's apps are open there (displays.js 'apps-open'). Extend mode is as it always was.
+  _holdVirtual(on) {
+    if (on && this.getSettings().virtual.enabled) return;
+    if (!!this.holdingVirtual === on || !this.displays.hold) return;
+    this.holdingVirtual = on;
+    this.displays.hold('apps-open', on).catch(() => {});
   }
 
   _stopPolling() {
@@ -181,12 +192,16 @@ class Apps extends EventEmitter {
       return;
     }
     if (!this.emptySince) this.emptySince = Date.now();
+    if (Date.now() - this.emptySince > IDLE_OFF_MS) this._holdVirtual(false); // Mirror mode mirrors again
     if (this.autoShare && Date.now() - this.emptySince > IDLE_OFF_MS) {
       this.autoShare = false;
       if (this.setSharing) this.setSharing(false, 'apps');
       console.log('[apps] no app windows left: screen sharing off again');
     }
-    if (!this.launched.size && !this.autoShare) this._stopPolling();
+    if (!this.launched.size && !this.autoShare) {
+      this._holdVirtual(false);
+      this._stopPolling();
+    }
   }
 
   async _poll() {
