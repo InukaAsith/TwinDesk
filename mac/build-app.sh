@@ -62,7 +62,7 @@ cat > dist/extra.plist <<'EOF'
   <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>TwinDesk</string><key>CFBundleURLSchemes</key><array><string>macshare</string></array></dict></array>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>ru</string><string>tr</string></array>
   <key>NSHumanReadableCopyright</key><string>Copyright (C) 2026 inukaasith. GPL-3.0.</string>
 </dict></plist>
 EOF
@@ -74,7 +74,7 @@ EOF
   --no-prune --asar=false --out=dist --overwrite --quiet
 
 APP="dist/TwinDesk-darwin-$ARCH/TwinDesk.app"
-cp -R locales/zh-Hans.lproj "$APP/Contents/Resources/"
+cp -R locales/zh-Hans.lproj locales/ru.lproj locales/tr.lproj "$APP/Contents/Resources/"
 rm -rf dist/TwinDesk.app && mv "$APP" dist/ && rm -rf "dist/TwinDesk-darwin-$ARCH" "$STAGE" dist/extra.plist
 # The Share menu extension (mac-helper/Sources/macshare-share), sandboxed as macOS requires.
 APPEX=dist/TwinDesk.app/Contents/PlugIns/MacShareShare.appex

@@ -574,7 +574,7 @@ function setupIpc(ctx) {
       if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
     },
     setLanguage(language) {
-      if (!['en', 'zh-CN'].includes(language) || settings.ui.language === language) return;
+      if (!require('../../shared/i18n.js').savedLanguage(language) || settings.ui.language === language) return;
       settings.ui.language = language;
       save();
       if (ctx.onLanguage) ctx.onLanguage();

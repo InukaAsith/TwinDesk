@@ -615,7 +615,7 @@ function setupIpc(ctx) {
       ctx.pushState();
     },
     setLanguage(language) {
-      if (!['en', 'zh-CN'].includes(language) || settings.ui.language === language) return;
+      if (!require('../shared/i18n.js').savedLanguage(language) || settings.ui.language === language) return;
       settings.ui.language = language;
       save();
       if (ctx.onLanguage) ctx.onLanguage();

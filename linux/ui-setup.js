@@ -10,7 +10,7 @@ UI.setup = (() => {
   const { el, api } = UI;
   const t = (...args) => I18n.t(...args);
   const language = UI.select([
-    { value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' },
+    { value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }, { value: 'ru', label: 'Русский' }, { value: 'tr', label: 'Türkçe' },
   ], (v) => api.setLanguage(v));
   language.set(I18n.locale);
   const done = () => el('span', { class: 'pill good', text: t('Done') });

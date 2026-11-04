@@ -2,22 +2,29 @@
 // English source messages are keys; untranslated pages and platforms keep their English text.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory(require('./lang/en.js'), require('./lang/zh-CN.js'));
+    module.exports = factory({
+      en: require('./lang/en.js'), 'zh-CN': require('./lang/zh-CN.js'),
+      ru: require('./lang/ru.js'), tr: require('./lang/tr.js'),
+    });
   } else {
-    root.TwinDeskI18n = factory(root.TwinDeskLanguages.en, root.TwinDeskLanguages['zh-CN']);
+    root.TwinDeskI18n = factory(root.TwinDeskLanguages || {});
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (en, zh) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (bundled) {
   'use strict';
+  const LANGUAGES = ['en', 'zh-CN', 'ru', 'tr'];
   const own = (obj, key) => obj && Object.prototype.hasOwnProperty.call(obj, key);
-  const savedLanguage = (value) => value === 'en' || value === 'zh-CN' ? value : '';
+  const savedLanguage = (value) => LANGUAGES.includes(value) ? value : '';
 
   function resolveLanguage(preference, systemLanguage) {
     if (savedLanguage(preference)) return preference;
     const system = typeof systemLanguage === 'string' ? systemLanguage.replace(/_/g, '-').toLowerCase() : '';
-    return /^(zh|zh-cn|zh-sg|zh-hans(?:-[a-z]+)?)$/.test(system) ? 'zh-CN' : 'en';
+    if (/^(zh|zh-cn|zh-sg|zh-hans(?:-[a-z]+)?)$/.test(system)) return 'zh-CN';
+    if (/^ru(-|$)/.test(system)) return 'ru';
+    if (/^tr(-|$)/.test(system)) return 'tr';
+    return 'en';
   }
 
-  function create(language, catalogs = { en, 'zh-CN': zh }) {
+  function create(language, catalogs = bundled) {
     const locale = savedLanguage(language) || 'en';
     const messages = catalogs[locale] || {};
     const english = catalogs.en || {};
@@ -32,5 +39,5 @@
     };
   }
 
-  return { savedLanguage, resolveLanguage, create };
+  return { LANGUAGES, savedLanguage, resolveLanguage, create };
 });

@@ -24,7 +24,7 @@ function setupIpc(ctx) {
   handle('getState', () => ctx.buildState());
   // A local UI preference: never synchronized to another device.
   handle('setLanguage', (language) => {
-    if (language !== 'en' && language !== 'zh-CN') return;
+    if (!require('../shared/i18n.js').savedLanguage(language)) return;
     change('ui', { language }, () => ctx.onLanguage());
   });
   // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.

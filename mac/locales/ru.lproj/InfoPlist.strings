@@ -1,0 +1,10 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. macOS owns the surrounding permission dialog. */
+"NSLocalNetworkUsageDescription" = "TwinDesk нужно находить другие ваши компьютеры в локальной сети и подключаться к ним.";
+"NSMicrophoneUsageDescription" = "TwinDesk нужно передавать звук между Mac и другими компьютерами.";
+"NSAudioCaptureUsageDescription" = "TwinDesk нужно передавать звук этого Mac на другие компьютеры.";
+"NSCameraUsageDescription" = "При общем доступе к камере TwinDesk нужно показывать изображение с камеры этого Mac на других компьютерах.";
+"NSAppleEventsUsageDescription" = "TwinDesk нужно узнавать у Finder текущую папку, чтобы копировать и вставлять в неё файлы.";
+"NSBluetoothAlwaysUsageDescription" = "TwinDesk нужно подключаться к телефонам и компьютерам по Bluetooth, когда они не в одной сети.";
+"NSLocationUsageDescription" = "macOS показывает сети Wi-Fi только приложениям с доступом к геолокации. TwinDesk нужно подключаться к Wi-Fi телефона или компьютера не в той же сети, чтобы передавать файлы.";
+"NSLocationWhenInUseUsageDescription" = "macOS показывает сети Wi-Fi только приложениям с доступом к геолокации. TwinDesk нужно подключаться к Wi-Fi телефона или компьютера не в той же сети, чтобы передавать файлы.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "macOS показывает сети Wi-Fi только приложениям с доступом к геолокации. TwinDesk нужно подключаться к Wi-Fi телефона или компьютера не в той же сети, чтобы передавать файлы.";
