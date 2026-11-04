@@ -588,7 +588,7 @@ final class Capture {
     let grab = WindowGrab.shared
     if type == .leftMouseUp && grab.upPending { _ = grab.up(); return true }
     if !capturing {
-      if type == .leftMouseDown && grab.tryGrab(at: e.location) { return true }
+      if type == .leftMouseDown && grab.tryGrab(at: e.location, flags: e.flags.rawValue) { return true }
       if grab.grabbing && type == .leftMouseDragged { e.type = .mouseMoved; type = .mouseMoved } // the system never saw the press
       if grab.grabbing && type == .mouseMoved { grab.move(to: e.location) }
     }

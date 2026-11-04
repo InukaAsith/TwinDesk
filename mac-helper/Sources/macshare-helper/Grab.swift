@@ -15,7 +15,7 @@ final class WindowGrab {
     "AltRight": 0x3D, "AltLeft": 0x3A, "MetaRight": 0x36, "MetaLeft": 0x37,
   ]
 
-  private var key: CGKeyCode? // nil: moving is off
+  private var keys: [(code: CGKeyCode, device: UInt64)] = [] // the move key and its Ctrl/Cmd partner; empty: moving is off
   private var win: AXUIElement?
   private var wid = 0
   private(set) var pid = 0 // the grabbed window's process (kept after take: the event names it)
@@ -24,24 +24,43 @@ final class WindowGrab {
   private let queue = DispatchQueue(label: "twindesk.grab")
   private let lock = NSLock()
   private var pending: (AXUIElement, CGPoint)?
+  private var lastWhy = ""
+  private var keyName: String?
 
   var grabbing: Bool { win != nil }
 
+  // The key's partner under Ctrl/Cmd swapping: the other computer's Right Ctrl arrives here as Right
+  // Command (or not), and a Mac's Right Command arrives on a PC as Right Ctrl (or the Windows key).
+  static let partner = ["ControlRight": "MetaRight", "MetaRight": "ControlRight", "ControlLeft": "MetaLeft", "MetaLeft": "ControlLeft"]
+
   /// `moveWin {key}`: "ControlRight" … "MetaLeft", "" = off.
   func setKey(_ name: String) {
-    key = WindowGrab.codes[name]
-    if key == nil { win = nil; upPending = false }
+    if name == keyName { return }
+    keyName = name
+    keys = [name, WindowGrab.partner[name] ?? ""].compactMap { n in
+      guard let c = WindowGrab.codes[n], let m = KeyCodes.modifiers[n] else { return nil }
+      return (c, m.device)
+    }
+    if keys.isEmpty { win = nil; upPending = false }
+    log("move windows: \(keys.isEmpty ? "off" : "hold \(name)")")
   }
 
-  private func held() -> Bool {
-    guard let k = key else { return false }
-    return CGEventSource.keyState(.combinedSessionState, key: k)
+  // Held, by the click's own flags (they carry each side's bit; a key TwinDesk injected is only
+  // there: macOS's key state never sees it), else by the keyboard's state.
+  private func held(_ flags: UInt64) -> Bool {
+    for k in keys where flags & k.device != 0 || CGEventSource.keyState(.combinedSessionState, key: k.code) { return true }
+    return false
   }
 
-  /// The left button went down at p (global points, top-left origin). True: a window was grabbed
-  /// and the click must not go on.
-  func tryGrab(at p: CGPoint) -> Bool {
-    guard key != nil, win == nil, held() else { return false }
+  private func why(_ text: String) -> Bool {
+    if text != lastWhy { lastWhy = text; log("move windows: \(text)") }
+    return false
+  }
+
+  /// The left button went down at p (global points, top-left origin) with these flags. True: a
+  /// window was grabbed and the click must not go on.
+  func tryGrab(at p: CGPoint, flags: UInt64) -> Bool {
+    guard !keys.isEmpty, win == nil, held(flags) else { return false }
     let me = Int(getpid())
     let list = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]) ?? []
     for w in list { // front to back: the first app window under the pointer
@@ -50,18 +69,20 @@ final class WindowGrab {
       let r = CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0)
       guard r.contains(p) else { continue }
       let owner = w[kCGWindowOwnerName as String] as? String ?? ""
-      if pid == me || owner == "Dock" || owner == "Window Server" { return false }
-      guard let ax = Apps.axWindow(pid: pid, frame: r) else { return false }
+      if pid == me || owner == "Dock" || owner == "Window Server" { return why("not a window to move (\(owner))") }
+      guard let ax = Apps.axWindow(pid: pid, frame: r) else { return why("no Accessibility window for \(owner) (is Accessibility on?)") }
       win = ax
       wid = w[kCGWindowNumber as String] as? Int ?? 0
       self.pid = pid
       off = CGPoint(x: p.x - r.minX, y: p.y - r.minY)
       upPending = true
+      lastWhy = ""
       AXUIElementPerformAction(ax, kAXRaiseAction as CFString)
       NSRunningApplication(processIdentifier: pid_t(pid))?.activate()
+      log("move windows: grabbed \(owner)'s window \(wid)")
       return true
     }
-    return false
+    return why("no window under the pointer")
   }
 
   /// The pointer moved to p: the window follows, off the tap's thread (AX calls wait on the app);

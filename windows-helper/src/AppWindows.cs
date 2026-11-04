@@ -332,6 +332,13 @@ namespace MacShare
             }
             grab = h;
             grabUp = true;
+            // A Windows key held for it (a Mac's Command): an unassigned key tapped now keeps its
+            // release from opening Start.
+            if ((Native.GetAsyncKeyState(0x5B) & 0x8000) != 0 || (Native.GetAsyncKeyState(0x5C) & 0x8000) != 0)
+            {
+                keybd_event(0xE8, 0, 0, Native.MARK);
+                keybd_event(0xE8, 0, 2, Native.MARK);
+            }
             SetForegroundWindow(h);
             GrabMove(x, y);
             return true;
