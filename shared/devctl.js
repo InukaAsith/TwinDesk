@@ -15,6 +15,7 @@
 
 const { EventEmitter } = require('events');
 const { viaAdb } = require('./devadb.js');
+const AppInfo = require('./appinfo.js');
 
 const T = { DO: 'dev.do', STATE: 'dev.state' };
 const DOS = ['ring', 'ringStop', 'lock', 'sleep', 'bluetooth', 'dnd', 'volume', 'qs', 'ringer', 'mediaHere'];
@@ -46,14 +47,18 @@ function clean(m) {
     const n = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : undefined);
     out.info = { storageUsed: n(i.storageUsed), storageTotal: n(i.storageTotal), wifi: str(i.wifi, 64), cell: str(i.cell, 64), signal: str(i.signal, 20) };
   }
+  out.app = AppInfo.clean(m.app); // which TwinDesk it runs (null: older than 2.5)
   if (Array.isArray(m.top)) out.top = m.top.filter((x) => typeof x === 'string').slice(0, 12).map((x) => x.slice(0, 200));
   return out;
 }
 
 class DevCtl extends EventEmitter {
-  constructor({ link, local, adb }) {
+  // version: this app's (sent as dev.state's app, checked against the other side's: 'outdated').
+  // peerName(): the other side's name for that message (else link.current.name).
+  constructor({ link, local, adb, version = '', peerName = null }) {
     super();
-    Object.assign(this, { link, local, adb: adb || (() => null) });
+    Object.assign(this, { link, local, adb: adb || (() => null), version, peerName });
+    this.told = new Set(); // device|version already told about this run
     this.remote = null; // the other side's dev.state (null: nothing said yet)
     this.mine = null; // this computer's last state, sent with it
     this.sessionUp = false;
@@ -76,6 +81,7 @@ class DevCtl extends EventEmitter {
       // The other side's first word in a session: ours again, so the two always have each other's
       // (one sent before the other side listened is otherwise never sent again: only changes are).
       if (first) this._sendState(true);
+      if (first) this._checkApp();
     });
     link.on(T.DO, (m) => this._asked(m || {}));
     if (local) local.onStop = () => this._sendState(true); // ringing stopped by itself
@@ -122,16 +128,35 @@ class DevCtl extends EventEmitter {
   async _sendState(force) {
     if (!this.local || !this.sessionUp) return;
     const st = await this.local.state();
-    const msg = { t: T.STATE, can: this.local.can(), ...st };
+    const msg = { t: T.STATE, can: this.local.can(), ...st, ...(this.version ? { app: { v: this.version, f: AppInfo.mine() } } : {}) };
     const k = JSON.stringify(msg);
     if (!force && k === this.mine) return;
     this.mine = k;
     if (this.sessionUp) this.link.send(msg);
   }
 
-  // For the state: the other side's (null until it says).
+  // The other side's TwinDesk against this one ({version, older, newer, missing}), null until it says.
+  get app() {
+    if (!this.remote || !this.version) return null;
+    const cur = this.link.current;
+    return AppInfo.check(this.version, this.remote.app, { phone: !!(cur && cur.os === 'android') });
+  }
+
+  // Once a session (and once per device and version while the app runs): 'outdated' {name, version,
+  // missing, phone} when the other side is older than this one.
+  _checkApp() {
+    const a = this.app;
+    if (!a || !a.older) return;
+    const cur = this.link.current || {};
+    const k = (cur.deviceId || cur.name || '') + '|' + a.version;
+    if (this.told.has(k)) return;
+    this.told.add(k);
+    this.emit('outdated', { name: (this.peerName && this.peerName()) || cur.name || '', version: a.version, missing: a.missing, phone: cur.os === 'android' });
+  }
+
+  // For the state: the other side's (null until it says), with app: the version check.
   get view() {
-    return this.remote;
+    return this.remote ? { ...this.remote, appCheck: this.app } : null;
   }
 
   stop() {

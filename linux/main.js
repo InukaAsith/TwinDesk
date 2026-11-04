@@ -49,6 +49,7 @@ const { DevLocal } = require('../shared/devlocal.js');
 const { startAdbQr } = require('../shared/adbqr.js');
 const Wake = require('./wake');
 const theme = require('./theme');
+const Look = require('../shared/look.js');
 const Sshd = require('./sshd');
 const Apps = require('./apps');
 const PcApps = require('./pcapps');
@@ -181,6 +182,7 @@ function start() {
   theme.start();
   device = loadDevice();
   settings = normalize(store.read('settings.json', {}));
+  theme.setPref(settings.ui.theme);
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
 
   discovery = new Discovery(device);
@@ -223,11 +225,20 @@ function start() {
     pushState();
   });
   clip = new Clip(link, () => settings.clipboard, pushState, { popup: (kind, text) => hud && hud.show(kind, text), peerName });
-  devctl = new DevCtl({ link, local: new DevLocal(), adb: () => {
+  devctl = new DevCtl({ link, local: new DevLocal(), version: app.getVersion(), peerName, adb: () => {
     const br = phone && phone.bridge;
     return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
   } });
   devctl.on('change', pushState);
+  // The other side runs an older TwinDesk (shared/appinfo.js): say so once.
+  devctl.on('outdated', (o) => {
+    const { FEATURES } = require('../shared/appinfo.js');
+    const title = o.version ? t('{name} has an older TwinDesk ({version})', { name: o.name || t('The other device'), version: o.version })
+      : t('{name} has an older TwinDesk', { name: o.name || t('The other device') });
+    const body = o.missing.length ? t('Update it there for: {features}', { features: o.missing.map((k) => t(FEATURES[k])).join(', ') })
+      : t('Update it there: some features need the same version on both');
+    try { new Notification({ title, body }).show(); } catch {}
+  });
   const { Chats } = require('../shared/chats.js');
   chats = new Chats({ link, dir: app.getPath('userData'), want: () => settings.ui.chats === true, onChange: pushState });
   loadCamera(); // only while it's on
@@ -361,7 +372,7 @@ function start() {
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
-    checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage });
+    checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', pushState);
   loadReZume(); // only while it's on
@@ -1064,6 +1075,7 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     rezume: rezume ? rezume.view : { ...settings.rezume, connected: false }, // ReZume tab (shared/rezume.js)
     ui: settings.ui,
+    look: Look.view(settings.ui, null), // Linux has no system accent colour to read
     app: settings.app,
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer

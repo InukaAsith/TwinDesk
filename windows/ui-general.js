@@ -69,26 +69,36 @@ UI.tab({
       return UI.row(label, hint, [partSw[k]]);
     });
 
-    body.append(
+    // Theme and accent colour (shared/look.js, shared/ui-look.js).
+    const themeRow = UI.themeRow((v) => api.setLook({ theme: v }));
+    const accentRow = UI.accentRow((v) => api.setLook({ accent: v }));
+    // One page that scrolls, its sections listed beside it; Permissions first.
+    const sections = UI.sections([
+      UI.card(t('Permissions'), [fwRow, btRow, locRow]),
       UI.card(t('Startup'), [
         UI.row(t('Start with Windows'), t('TwinDesk waits in the tray'), [startup]),
         recvRow,
       ]),
-      UI.card(t('Language'), [
-        UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language]),
-      ]),
       UI.card(t('Appearance'), [
+        themeRow,
+        accentRow,
         UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
         wallRow,
         media.el,
       ]),
+      UI.card(t('Language'), [
+        UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language]),
+      ]),
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, sendToRow]),
-      UI.card(t('Permissions'), [fwRow, btRow, locRow]),
       UI.card(t('This computer'), [deviceRow, helperRow, vddRow]),
-    );
+    ]);
+    body.append(sections);
 
     return (s) => {
+      themeRow.render(s.look && s.look.theme);
+      accentRow.render(s.look);
+      sections.spy();
       media.update(s);
       wallSw.set(!s.phone || !s.phone.settings || s.phone.settings.wallpaper !== false);
       const ov = (s.ui && s.ui.overview) || {};

@@ -37,6 +37,7 @@ object Notify {
     const val ID_HUB_ASK = 11
     const val ID_REZUME = 13 // ReZume: the computer's tab or document (the last one only)
     const val ID_REZUME_READY = 14 // … a document that came, to open
+    const val ID_RING = 15 // the computer rang this phone: Stop
     const val ID_SOUND = 12 // the sound capture: asking for Start, then its service's own
     private const val ID_FILES_BASE = 1000
     private const val ID_COMPUTER_BASE = 100000
@@ -251,6 +252,25 @@ object Notify {
                 .build())
         }
     }
+
+    // The computer rang this phone (Overview › Ring there): Stop here, or swipe it away.
+    fun ringing(ctx: Context, name: String) = runCatching {
+        val stop = action(ctx, ActionReceiver.RING_STOP, 15)
+        val open = PendingIntent.getActivity(ctx, 15, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        nm(ctx).notify(ID_RING, Notification.Builder(ctx, CH_INVITE)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle("Ringing")
+            .setContentText(if (name.isNotEmpty()) "$name is ringing this phone" else "Your computer is ringing this phone")
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setContentIntent(open)
+            .setDeleteIntent(stop)
+            .setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+            .build())
+    }.let { }
+
+    fun cancelRinging(ctx: Context) = runCatching { nm(ctx).cancel(ID_RING) }.let { }
 
     fun cancelHubAsk(ctx: Context) = runCatching { nm(ctx).cancel(ID_HUB_ASK) }.let { }
 

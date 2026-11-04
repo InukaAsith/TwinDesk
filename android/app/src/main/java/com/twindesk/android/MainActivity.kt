@@ -374,11 +374,17 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
     }
 }
 
-@Composable
-private fun Primary(label: String, onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White), shape = RoundedCornerShape(8.dp)) { Text(label) }
+// The buttons in a row: one size everywhere, small enough that two fit beside a row's label
+// (larger ones went onto a line of their own under it).
+private val ROW_PAD = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 0.dp)
 
 @Composable
-private fun Secondary(label: String, onClick: () -> Unit) = OutlinedButton(onClick = onClick, shape = RoundedCornerShape(8.dp)) { Text(label, color = pal.text) }
+private fun Primary(label: String, onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White),
+    shape = RoundedCornerShape(8.dp), contentPadding = ROW_PAD, modifier = Modifier.height(36.dp)) { Text(label, fontSize = 14.sp, maxLines = 1) }
+
+@Composable
+private fun Secondary(label: String, color: Color = pal.text, onClick: () -> Unit) = OutlinedButton(onClick = onClick, shape = RoundedCornerShape(8.dp),
+    contentPadding = ROW_PAD, modifier = Modifier.height(36.dp)) { Text(label, color = color, fontSize = 14.sp, maxLines = 1) }
 
 @Composable
 private fun NotConnected(core: Core, v: Int) {
@@ -401,6 +407,14 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
     else if (LocalConfiguration.current.screenWidthDp >= 600) PageHead("Connection", listOf(me, ip).filter { it.isNotEmpty() }.joinToString(" · "))
     else PageHead("Connection", listOf(me, ip).filter { it.isNotEmpty() }.joinToString(" · "))
 
+    // The computer rang this phone: Stop here too (and on its notification).
+    if (core.dev.ringing) Row(
+        Modifier.fillMaxWidth().padding(bottom = 16.dp).clip(RoundedCornerShape(12.dp)).background(pal.bad.copy(alpha = 0.12f)).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("${host?.name ?: "Your computer"} is ringing this phone", color = pal.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Button(onClick = { core.dev.stopRing() }, colors = ButtonDefaults.buttonColors(containerColor = pal.bad, contentColor = Color.White), shape = RoundedCornerShape(8.dp)) { Text("Stop") }
+    }
     if (connection) core.invite?.let { inv ->
         Note("${inv.name} wants to pair with this device.")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 16.dp)) {
@@ -521,54 +535,8 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
         MacCard { BleSwitch(core, "Allow Nearby devices on the General page", first = true) }
     }
 
-    if (!connection && host != null) {
-        val wide = LocalConfiguration.current.screenWidthDp >= 840
-        val m2p = @Composable { mod: Modifier ->
-            MacCard(modifier = mod) {
-                DirHead(host.name, false, me, true)
-                SwitchRow("Screen", "Open it on the Screen page", core.screen.viewing, first = true) { if (it) core.ctx.startActivity(Intent(core.ctx, ViewerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                SwitchRow("Sound", "", core.sync.get("audio", "in")) { core.sync.set("audio", "in", it) }
-                SwitchRow("Mouse and keyboard", "", core.sync.get("cursor", "in")) { core.sync.set("cursor", "in", it) }
-                SwitchRow("Clipboard", "", core.sync.get("clipboard", "in")) { core.sync.set("clipboard", "in", it) }
-                SwitchRow("Notifications", "", core.sync.get("notifs", "in")) { core.sync.set("notifs", "in", it) }
-            }
-        }
-        val p2m = @Composable { mod: Modifier ->
-            MacCard(modifier = mod) {
-                DirHead(me, true, host.name, false)
-                SwitchRow("Sound", soundHint(core), core.sync.get("audio", "out"), first = true) { core.sync.set("audio", "out", it) }
-                SoundStart(core)
-                SwitchRow("Clipboard", "", core.sync.get("clipboard", "out")) { core.sync.set("clipboard", "out", it) }
-                SwitchRow("Notifications", if (core.notifs.hasAccess) "" else if (!core.notifs.supported) "Needs TwinDesk with notifications (Notifications page)" else "Needs Notification access (General)", core.sync.get("notifs", "out")) { core.sync.set("notifs", "out", it) }
-                // Calls, Messages and Photos, when the computer has them: what each needs is asked for as it's switched on.
-                if (core.hub.peer) for (what in listOf("calls", "messages", "media", "files")) {
-                    val perm = core.hub.perm(what)
-                    val on = core.hub.on(what)
-                    SwitchRow(
-                        Hub.label(what),
-                        when {
-                            perm == "none" && what == "files" -> "Needs Android 11 or later"
-                            perm == "none" -> "Needs TwinDesk with notifications (Notifications page)"
-                            on && perm == "ask" && what == "files" -> "Allow All files access: switch it on again"
-                            on && perm == "ask" -> "Tap Allow on the prompt, or switch it on again"
-                            on && perm == "partial" && what == "media" -> "Only the photos you chose"
-                            on && perm == "partial" -> "Some access is missing: switch it on again to allow it"
-                            what == "calls" -> "Answer and make calls on ${host.name}"
-                            what == "messages" -> "Read and send texts on ${host.name}"
-                            what == "files" -> "Browse this phone’s storage on ${host.name}, no ADB"
-                            else -> "See and save them on ${host.name}"
-                        },
-                        on, enabled = perm != "none",
-                    ) {
-                        core.hub.set(what, it)
-                        if (it && perm != "ok") core.ctx.startActivity(Intent(core.ctx, PermActivity::class.java).putExtra("what", what).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    }
-                }
-            }
-        }
-        if (wide) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { m2p(Modifier.weight(1f)); p2m(Modifier.weight(1f)) }
-        else { m2p(Modifier); p2m(Modifier) }
-    }
+    // What each feature does in each direction is on its own page (the switches are shared with the
+    // computer): Overview keeps to the link, the computer's controls and the way to its screen.
 
     if (host == null) MacCard("Nearby") {
         val hosts = core.hosts()
@@ -579,7 +547,7 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
         for (h in hosts) {
             val near = core.isNear(h.id)
             MacRow(h.name, if (link.state == "connecting" && link.host?.id == h.id) "Connecting…" else if (near && !core.discovery.found.containsKey(h.id)) "Nearby over Bluetooth · paired" else if (near) "Nearby · paired" else "Paired · not nearby", first) {
-                TextButton(onClick = { core.forget(h.id) }) { Text("Forget", color = pal.bad) }
+                Secondary("Forget", pal.bad) { core.forget(h.id) }
                 // Nearby: Take over (a phone's hello takes the computer from whoever has it).
                 Primary(if (near) "Take over" else "Connect") { core.connect(h) }
             }
@@ -609,9 +577,15 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
 @Composable
 private fun ComputerCard(core: Core, name: String) {
     val c = core.dev.computer ?: return
+    // Which TwinDesk the computer runs (its dev.state's app; none: older than 2.5): red when older than this one.
+    val theirs = c.optJSONObject("app")?.optString("v").orEmpty()
+    val older = theirs.isEmpty() || Updates.compare(theirs, BuildConfig.VERSION_NAME) < 0
+    if (older) Note(if (theirs.isEmpty()) "$name has an older TwinDesk. Update it there: some features need the same version on both."
+        else "$name has TwinDesk $theirs, this phone ${BuildConfig.VERSION_NAME}. Update it there: some features need the same version on both.", "warn")
     val can = c.optJSONObject("can") ?: return
     if (can.length() == 0) return
     MacCard(name) {
+        MacRow("TwinDesk", "On $name", true) { Text(theirs.ifEmpty { "Older" }, color = if (older) pal.bad else pal.muted, fontSize = 14.sp) }
         val ringing = c.optBoolean("ringing")
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (can.optBoolean("ring")) OutlinedButton(onClick = { core.dev.ask(if (ringing) "ringStop" else "ring") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {

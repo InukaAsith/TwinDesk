@@ -66,7 +66,7 @@
       const optsCard = UI.card(tr('Phone windows'), rows);
       const kbRow = UI.row(tr('Mouse and keyboard'), tr('Push the pointer past the screen edge to use the phone.'), [UI.button(tr('Mouse Settings'), () => UI.go('cursor'), 'small')]);
 
-      body.append(adb.el, UI.card('', [showRow]), winCard, optsCard, UI.card('', [kbRow]));
+      body.append(adb.el, UI.card('', [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
 
       let winKey = '';
       return (s) => {

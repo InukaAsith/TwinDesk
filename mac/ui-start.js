@@ -296,6 +296,7 @@
   let wasLinked = null;
   function render(s) {
     UI.state = s;
+    UI.look(s.look); // the accent colour (shared/ui-look.js)
     // Something just connected while Connection is open: its Overview.
     const now = linked(s);
     if (wasLinked === false && now && current && current.def.id === 'connection' && !s.pairing) show('overview', false);

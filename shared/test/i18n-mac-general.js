@@ -28,6 +28,10 @@ function render(locale) {
     switch: (change, options) => ({ change, ...options, set(value) { this.value = value; }, disable() {} }),
     select: (options, change) => el('select', { options, change, set(value) { this.value = value; } }),
     mediaControlsRow: () => ({ el: el('media'), update() {} }),
+    // shared/ui-look.js
+    themeRow: () => Object.assign(el('row'), { render() {} }),
+    accentRow: () => Object.assign(el('row'), { render() {} }),
+    sections: (cards) => Object.assign(el('sections', {}, cards), { spy() {} }),
   };
   const ids = { content: el('content'), pages: el('pages') };
   const context = { UI: ui, I18n: { locale, t }, window: {}, document: { body: el('body'), getElementById: (id) => ids[id] } };

@@ -72,29 +72,39 @@ UI.tab({
       return UI.row(label, hint, [partSw[k]]);
     });
 
-    body.append(
-      UI.card(t('Startup'), [
-        UI.row(t('Open at login'), '', [loginSw]),
-        UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
-      ]),
-      UI.card(t('Language'), [
-        UI.row(t('Language'), t('Changing the language reloads this window.'), [language]),
-      ]),
-      UI.card(t('Appearance'), [
-        UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
-        wallRow,
-        media.el,
-      ]),
-      UI.card(t('Overview'), partRows),
-      UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
+    // Theme and accent colour (shared/look.js, shared/ui-look.js).
+    const themeRow = UI.themeRow((v) => api.setLook({ theme: v }));
+    const accentRow = UI.accentRow((v) => api.setLook({ accent: v }));
+    // One page that scrolls, its sections listed beside it; Permissions first.
+    const sections = UI.sections([
       UI.card(t('Permissions'), [
         ...perms.map((x) => x.row),
         UI.row(t('Changed a permission?'), t('Restart to apply it'), [UI.button(t('Restart'), () => api.relaunch(), 'small')]),
       ]),
+      UI.card(t('Startup'), [
+        UI.row(t('Open at login'), '', [loginSw]),
+        UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
+      ]),
+      UI.card(t('Appearance'), [
+        themeRow,
+        accentRow,
+        UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
+        wallRow,
+        media.el,
+      ]),
+      UI.card(t('Language'), [
+        UI.row(t('Language'), t('Changing the language reloads this window.'), [language]),
+      ]),
+      UI.card(t('Overview'), partRows),
+      UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
       UI.card(t('This computer'), [deviceRow, helperRow]),
-    );
+    ]);
+    body.append(sections);
 
     return (s) => {
+      themeRow.render(s.look && s.look.theme);
+      accentRow.render(s.look);
+      sections.spy();
       media.update(s);
       wallSw.set(!s.phone || !s.phone.settings || s.phone.settings.wallpaper !== false);
       const ov = (s.ui && s.ui.overview) || {};

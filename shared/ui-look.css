@@ -1,0 +1,23 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* shared/ui-look.js: the section list beside a long page, the accent swatches. Each app's own variables. */
+.sections { display: flex; align-items: flex-start; gap: 22px; }
+.sec-nav { position: sticky; top: 16px; width: 168px; flex: none; display: flex; flex-direction: column; gap: 2px; padding-top: 22px; }
+.sec-body { flex: 1; min-width: 0; }
+.sec-link {
+  height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: none; text-align: left; color: var(--muted);
+  cursor: default; outline: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none;
+}
+.sec-link:hover { background: var(--nav-hover); color: var(--text); }
+.sec-link.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.sec-link:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (max-width: 760px) { .sec-nav { display: none; } }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 330px; }
+.swatch {
+  width: 20px; height: 20px; border-radius: 50%; border: 0; padding: 0; background: var(--sw); cursor: default; outline: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15); position: relative;
+}
+/* System: the system's colour, marked with a ring of its own */
+.swatch.sys { background: conic-gradient(var(--sw) 0 50%, color-mix(in srgb, var(--sw) 45%, #fff) 50% 100%); }
+.swatch.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--sw); }
+.swatch:focus-visible { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent-soft); }
