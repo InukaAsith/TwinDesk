@@ -10,6 +10,8 @@
 #define TD_EVENT 2 /* json, len: an event from the lane, {"es":N,...} */
 #define TD_UP 3    /* dx: the RTT in ms */
 #define TD_DOWN 4
+#define TD_BUTTON 5 /* dx: the button (0..4), dy: 1 down / 0 up (driven, direct: inject; its fence's move came first) */
+#define TD_WHEEL 6  /* dx, dy (direction applied), len: 1 in line mode (driven, direct: inject) */
 
 typedef void (*td_callback)(void *ctx, int32_t kind, double dx, double dy, const uint8_t *json, size_t len);
 
@@ -30,5 +32,7 @@ void td_driven(uint32_t route, double speed);
 void td_hold(int32_t on);
 int32_t td_fence_apply(uint32_t route, uint32_t mn, double cx, double cy, double *dx, double *dy);
 void td_done(uint32_t es);
+int32_t td_claim(uint32_t es); /* 1: new, inject it; 0: the lane injected it already */
+void td_direct(int32_t on, int32_t reverse); /* clicks and wheel from the lane injected as they come */
 
 #endif

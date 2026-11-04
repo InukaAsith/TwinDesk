@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Hidden capture window: one WebRTC session at a time (we are the offerer, video only).
+// Hidden capture window: one WebRTC session at a time (we are the offerer; video, and sound if asked).
 'use strict';
 
 const P = window.MacShareProtocol;
@@ -63,12 +63,21 @@ async function audioTrack(me) {
   return dest.stream.getAudioTracks()[0];
 }
 
-async function getStream(sourceId, width, height, fps) {
+// Chromium's loopback (audio 'loopback', stream.js): stereo as it is, no voice processing, and
+// TwinDesk's own playback left out (restrictOwnAudio), so the other computer's sound doesn't echo back.
+const LOOPBACK = { channelCount: 2, sampleRate: 48000, echoCancellation: false, noiseSuppression: false, autoGainControl: false, restrictOwnAudio: true, suppressLocalAudioPlayback: false };
+
+async function getStream(sourceId, width, height, fps, audio) {
+  const video = { frameRate: { ideal: fps, max: fps }, width: { max: width }, height: { max: height } };
+  if (audio === 'loopback') {
+    try {
+      return await navigator.mediaDevices.getDisplayMedia({ video, audio: LOOPBACK });
+    } catch (e) {
+      console.warn('getDisplayMedia with sound failed, without it:', e.message);
+    }
+  }
   try {
-    return await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: fps, max: fps }, width: { max: width }, height: { max: height } },
-      audio: false,
-    });
+    return await navigator.mediaDevices.getDisplayMedia({ video, audio: false });
   } catch (e) {
     console.warn('getDisplayMedia failed, falling back to getUserMedia:', e.message);
     return navigator.mediaDevices.getUserMedia({
@@ -85,7 +94,7 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
   const me = { session, pendingIce: [], remoteSet: false, last: null };
   cur = me;
   try {
-    me.stream = await getStream(sourceId, width, height, fps);
+    me.stream = await getStream(sourceId, width, height, fps, audio);
     if (cur !== me) return me.stream.getTracks().forEach((t) => t.stop());
     const track = me.stream.getVideoTracks()[0];
     track.contentHint = 'motion';
@@ -94,7 +103,11 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     const pc = new RTCPeerConnection(ice || { iceServers: [] });
     me.pc = pc;
     const tr = pc.addTransceiver(track, { direction: 'sendonly', streams: [me.stream] });
-    if (audio) pc.addTransceiver(await audioTrack(me), { direction: 'sendonly', streams: [me.stream] });
+    let sound = audio === 'loopback' ? me.stream.getAudioTracks()[0] : null;
+    if (audio === 'loopback') console.log(`sound: ${sound ? "Chromium's loopback" : "the helper's (no loopback)"}`);
+    if (audio && !sound && (audio !== 'loopback' || await api.helperAudio())) sound = await audioTrack(me);
+    if (cur !== me) return void (me.actx && me.actx.close());
+    if (sound) pc.addTransceiver(sound, { direction: 'sendonly', streams: [me.stream] });
     // H.265 when both have it (shared/screencodec.js), then H.264 High, Main, Baseline: better quality per
     // bit, in hardware. Everything else stays as a fallback.
     tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs, codec)); // the Encoder setting

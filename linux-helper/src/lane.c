@@ -2,9 +2,13 @@
 // The input lane in the helper (native/tdfast, docs/perf-plan.md P3), as mac-helper's Lane.swift:
 // Node out of the move path on both ends. Driving: the capture's moves go straight onto the lane
 // (td_move) and nothing is written to stdout; clicks, keys and wheel carry their event number and
-// fence for Node. Driven: the lane's moves are injected here (deduplicated, speed applied, after the
-// event they wait for); its events go to Node as {"event":"laneEv"} and come back as `inject` in order.
-// Command `lane {op: bind | start | stop | active | route | event | driven | hold | fence | done}`.
+// fence for Node, and clicks and wheel go onto the lane from here too ("sent"). Driven: the lane's
+// moves are injected here (deduplicated, speed applied, after the event they wait for), and so are its
+// clicks and wheel when they're next in order (`direct`); every event also goes to Node as
+// {"event":"laneEv"}, and what Node injects comes back as `lane inject`, injected only if the lane
+// didn't already (td_claim).
+// Command `lane {op: bind | start | stop | active | route | event | driven | direct | hold | fence |
+// done | inject}`.
 // Built only when build.sh found cargo (-DTDFAST); without it, `lane` is an unknown command and Node
 // keeps its own lane (shared/inputlane.js), which speaks the same wire.
 #include "helper.h"
@@ -17,13 +21,15 @@
 #include <unistd.h>
 
 static int driving, started;
-// The lane's thread hands moves to the main loop (where all injection happens) through a pipe.
+// The lane's thread hands moves, clicks and wheel to the main loop (where all injection happens)
+// through a pipe, in order: {kind, a, b}, kind TD_MOVE, TD_BUTTON, TD_WHEEL or WHEEL_LINE.
 static int qpipe[2] = { -1, -1 };
+#define WHEEL_LINE 7
 
 static void callback(void *ctx, int32_t kind, double dx, double dy, const uint8_t *json, size_t len) {
   (void)ctx;
-  if (kind == TD_MOVE) {
-    double m[2] = { dx, dy };
+  if (kind == TD_MOVE || kind == TD_BUTTON || kind == TD_WHEEL) {
+    double m[3] = { kind == TD_WHEEL && len == 1 ? WHEEL_LINE : kind, dx, dy };
     if (qpipe[1] >= 0 && write(qpipe[1], m, sizeof m) != (ssize_t)sizeof m) { /* full: the next total catches up */ }
   } else if (kind == TD_EVENT) {
     if (!json || len == 0 || len > 3000) return;
@@ -47,10 +53,18 @@ int lane_fd(void) {
   return qpipe[0];
 }
 
-void lane_drain(void (*inject)(double dx, double dy)) {
+void lane_drain(void (*inject)(double dx, double dy), void (*inject_ev)(const JObj *ev)) {
   if (qpipe[0] < 0) return;
-  double m[2];
-  while (read(qpipe[0], m, sizeof m) == (ssize_t)sizeof m) inject(m[0], m[1]);
+  double m[3];
+  char s[160];
+  while (read(qpipe[0], m, sizeof m) == (ssize_t)sizeof m) {
+    int kind = (int)m[0];
+    if (kind == TD_MOVE) { inject(m[1], m[2]); continue; }
+    if (kind == TD_BUTTON) snprintf(s, sizeof s, "{\"t\":\"%s\",\"b\":%d}", m[2] != 0 ? "k.md" : "k.mu", (int)m[1]);
+    else snprintf(s, sizeof s, "{\"t\":\"k.wh\",\"dx\":%.17g,\"dy\":%.17g,\"mode\":\"%s\"}", m[1], m[2], kind == WHEEL_LINE ? "line" : "pixel");
+    JObj *ev = json_parse(s);
+    if (ev) { inject_ev(ev); json_free(ev); }
+  }
 }
 
 static uint32_t u32(const JObj *c, const char *k) {
@@ -60,14 +74,15 @@ static uint32_t u32(const JObj *c, const char *k) {
   return (uint32_t)(v + 0.5);
 }
 
-// error: set on a bad op; extra: reply fields. inject: a fence's move, on this (main) thread.
-void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void (*inject)(double dx, double dy)) {
+// error: set on a bad op; extra: reply fields. inject: a fence's move, inject_ev: an event Node
+// delivers, on this (main) thread.
+void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void (*inject)(double dx, double dy), void (*inject_ev)(const JObj *ev)) {
   const char *op = jstr(c, "op", "");
   if (!strcmp(op, "bind")) {
     lane_fd();
     uint16_t port = td_bind();
     if (!port) { *error = "no lane socket"; return; }
-    snprintf(extra, n, "\"port\":%u", (unsigned)port);
+    snprintf(extra, n, "\"port\":%u,\"events\":1", (unsigned)port); // events: `direct` and `inject`
   } else if (!strcmp(op, "start")) {
     const char *key = jstr(c, "key", NULL), *ip = jstr(c, "ip", NULL);
     if (!key || !ip) { *error = "bad lane start"; return; }
@@ -90,6 +105,11 @@ void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void 
     if (json) td_send_event((const uint8_t *)json, strlen(json), u32(c, "es"));
   } else if (!strcmp(op, "driven")) {
     td_driven(u32(c, "route"), jnum(c, "speed", 1));
+  } else if (!strcmp(op, "direct")) {
+    td_direct(jbool(c, "on", 0), jbool(c, "reverse", 0));
+  } else if (!strcmp(op, "inject")) { // once, unless the lane injected it already
+    const JObj *ev = jobj(c, "ev");
+    if (ev && td_claim(u32(c, "es")) == 1) inject_ev(ev);
   } else if (!strcmp(op, "hold")) {
     td_hold(jbool(c, "on", 0));
   } else if (!strcmp(op, "fence")) {
@@ -121,20 +141,27 @@ int lane_move(double dx, double dy, JOut *k) {
 }
 
 // A click, key or wheel (k: a built k.* object, "t" first): numbered, with where the moves before it
-// took the pointer. Returns k, or buf with the fence added.
+// took the pointer. Returns k, or buf with the fence added. A click or wheel goes onto the lane from
+// here too, without waiting for Node (no layout to apply): "sent", Node sends only its WSS copy.
 const char *lane_fence(const char *k, char *buf, size_t n) {
   static const char *fenced[] = { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" };
   if (!driving || strncmp(k, "{\"t\":\"", 6)) return k;
-  int hit = 0;
-  for (size_t i = 0; i < sizeof fenced / sizeof *fenced; i++)
-    if (!strncmp(k + 6, fenced[i], 4) && k[10] == '"') hit = 1;
+  int hit = -1;
+  for (int i = 0; i < (int)(sizeof fenced / sizeof *fenced); i++)
+    if (!strncmp(k + 6, fenced[i], 4) && k[10] == '"') hit = i;
   size_t len = strlen(k);
-  if (!hit || len < 2 || k[len - 1] != '}') return k;
+  if (hit < 0 || len < 2 || k[len - 1] != '}') return k;
   uint32_t r = 0, mn = 0;
   double cx = 0, cy = 0;
   uint32_t es = td_fence(&r, &mn, &cx, &cy);
   if (!es) return k;
-  int w = snprintf(buf, n, "%.*s,\"es\":%u,\"route\":%u,\"mn\":%u,\"mc\":[%.17g,%.17g]}", (int)(len - 1), k, es, r, mn, cx, cy);
+  int direct = hit <= 2; // k.md, k.mu, k.wh
+  if (direct) { // the lane's copy: the fence without es (td_send_event adds it)
+    int w = snprintf(buf, n, "%.*s,\"route\":%u,\"mn\":%u,\"mc\":[%.17g,%.17g]}", (int)(len - 1), k, r, mn, cx, cy);
+    if (w > 0 && (size_t)w < n) td_send_event((const uint8_t *)buf, (size_t)w, es);
+    else direct = 0;
+  }
+  int w = snprintf(buf, n, "%.*s,\"es\":%u,\"route\":%u,\"mn\":%u,\"mc\":[%.17g,%.17g]%s}", (int)(len - 1), k, es, r, mn, cx, cy, direct ? ",\"sent\":true" : "");
   return w > 0 && (size_t)w < n ? buf : k;
 }
 #endif

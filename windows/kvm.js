@@ -47,6 +47,7 @@ class Kvm {
       deliver: (m) => (m.t === T.K_GESTURE ? this._onGesture(m) : this._inject(m)),
       native: () => { const l = this._lane(); return l && l.native ? l : null; }, // P3: the helper's lane
       speed: () => this.cfg.speed,
+      reverse: () => !!this.cfg.reverseScroll,
     });
     const il = this.link.il;
     let laneSettled;
@@ -229,6 +230,7 @@ class Kvm {
 
   applyConfig() {
     const k = this.cfg;
+    if (this.laneIn) this.laneIn.config(); // the scroll direction for the clicks and wheel the helper's lane injects
     this.helper.send('kvmConfig', {
       side: this.crossingSide,
       resistancePx: k.resistancePx,
@@ -413,7 +415,7 @@ class Kvm {
       case 'ev':
         if (this.mode === 'driving' && msg.ev && (K_TYPES.has(msg.ev.t) || (msg.ev.t === T.K_GESTURE && this.cfg.gestures !== false))) {
           if (this.local && this.local.drives() && this._lockKeyHere(msg.ev)) break; // a phone has no lock key: ours counts there
-          if (this.fileClip && this.fileClip.intercept(msg.ev)) break; // copy/paste shortcut: done over there
+          if (this.fileClip && this.fileClip.intercept(msg.ev)) { this.lane.skip(msg.ev, (x) => this.link.send(x)); break; } // copy/paste shortcut: done over there
           if (msg.ev.t === T.K_MOVE) {
             this.lane.nativeTotals(msg.ev); // the helper's lane is down: its totals go with the move
             this.moves.add(Number(msg.ev.dx) || 0, Number(msg.ev.dy) || 0);
@@ -422,7 +424,7 @@ class Kvm {
           this._flushMove(); // a click goes where the moves before it took the pointer
           this._driveEvent(this.keys.tag(msg.ev)); // keys with the letter they type here (shared/keylayout.js)
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released on the Mac
-        }
+        } else if (msg.ev) this.lane.skip(msg.ev, (x) => this.link.send(x)); // numbered by the helper but not sent: its number goes all the same
         break;
       case 'captureEnded': // dead-man or a local stop: input is back here
         if (this.mode === 'driving') this._release(msg.reason === 'secureDesktop' ? 'Back here for the administrator prompt or lock screen' : '');
@@ -512,7 +514,7 @@ class Kvm {
   _injectEv(ev) {
     if (ev.t === P.T.K_MOVE && !ev.smooth) return this.injectMoves.add(ev.dx, ev.dy);
     this.injectMoves.flush();
-    this.helper.send('inject', { ev });
+    if (!this.laneIn.inject(ev)) this.helper.send('inject', { ev }); // the lane's events: once, whichever copy came first
   }
 
   _drive(msg) {
@@ -545,7 +547,7 @@ class Kvm {
       this.peerRoute = route;
       this.link.send({ t: T.KVM_ACCEPT, route });
       if (m.side && m.mouse !== false) this.helper.send('place', { side: m.side, offset: m.offset });
-      this.laneIn.take(route); // the lane's totals start again (a move that came ahead goes now)
+      this.laneIn.take(route, { drag: !!m.drag }); // the lane's totals start again (a move that came ahead goes now)
       return;
     }
     if (!this.cfg.beDriven || !this.linked || this.paused) { // cursor sharing off
@@ -561,7 +563,7 @@ class Kvm {
       this.helper.send('place', P.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
       if (this.crossingSide) this.helper.send('armReturn', this._returnCfg());
     }
-    this.laneIn.take(route);
+    this.laneIn.take(route, { drag: !!m.drag });
   }
 
   // Row 8.

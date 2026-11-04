@@ -23,7 +23,8 @@ const isLoopback = (a) => a === '127.0.0.1' || a === '::1';
 const LISTEN_PORT = Number(process.env.MACSHARE_DEV_PORT) || P.PORT;
 
 class Server extends EventEmitter {
-  constructor({ keyPem, certPem }) {
+  // opts: hold — don't listen yet, listen() does (main.js: the first session waits for the input lane).
+  constructor({ keyPem, certPem }, opts = {}) {
     super();
     this.current = null; // ctx of the authenticated client
     this.phoneGrace = null; // {id, until}: a phone's session just dropped, it may come back (P.PHONE_GRACE_MS)
@@ -36,8 +37,14 @@ class Server extends EventEmitter {
     this.wss.on('error', () => {}); // ws repeats the server's errors here; listenError below reports them
     this.https.on('error', (err) => this.emit('listenError', err));
     this.port = LISTEN_PORT;
-    this.https.listen(LISTEN_PORT, '0.0.0.0', () => this.emit('listening'));
+    if (!opts.hold) this.listen();
     this.tick = setInterval(() => this._liveness(), P.PING_MS);
+  }
+
+  listen() {
+    if (this.https.listening || this._listenAsked) return;
+    this._listenAsked = true;
+    this.https.listen(LISTEN_PORT, '0.0.0.0', () => this.emit('listening'));
   }
 
   _onConnection(ws, req) {

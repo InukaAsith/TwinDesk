@@ -11,6 +11,7 @@ const path = require('path');
 const { BrowserWindow, ipcMain, session, desktopCapturer, webContents } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { loopback } = require('../audiohub.js');
 
 const RETRY_MS = 2000;
 // A phone over Wi-Fi: a high rate only fills the radio's queues (latency) without looking sharper
@@ -28,11 +29,17 @@ function setHandler() {
     try {
       const wc = req.frame ? webContents.fromFrame(req.frame) : null;
       const st = (wc && byCapture.get(wc.id)) || byCapture.values().next().value;
-      cb({ video: await st._source() });
+      // The sound, when asked for: Chromium's loopback (audiohub.js loopback()).
+      cb({ video: await st._source(), ...(req.audioRequested ? { audio: 'loopback' } : {}) });
     } catch (e) {
       console.error(`[stream] no capture source: ${e.message}`);
       cb({});
     }
+  });
+  // Chromium gave no sound (capture.js): that window's Stream takes the helper's capture instead.
+  ipcMain.handle('capture:helperAudio', (e) => {
+    const st = byCapture.get(e.sender.id);
+    return st ? st._helperAudio(e) : false;
   });
 }
 
@@ -128,6 +135,21 @@ class Stream extends EventEmitter {
     return this.displays.target();
   }
 
+  _releaseAudio() {
+    this.hub.release('screen');
+    this.hub.loopback('screen', false);
+  }
+
+  async _helperAudio(e) {
+    if (!this._fromCapture(e) || !this.active) return false;
+    this.hub.loopback('screen', false);
+    const ok = await this.hub.acquire('screen', this.win.webContents);
+    this.audio.error = ok ? null : this.hub.error;
+    this.audio.on = ok;
+    this.emit('change');
+    return ok;
+  }
+
   _fromCapture(e) {
     return this.win && !this.win.isDestroyed() && e.sender === this.win.webContents;
   }
@@ -189,22 +211,28 @@ class Stream extends EventEmitter {
 
     const s = ++this.session;
     const { width, height } = this._outSize(target);
-    // Sound goes with the screen only when "Share sound with the screen" is on (else: none, for latency).
+    // Sound goes with the screen only when "Share sound with the screen" is on (else: none, for latency):
+    // 'loopback' (Chromium captures it; the helper's if it can't), else the helper's capture.
     let audio = false;
-    if (this.getSettings().sharing.audio && this.audioOk()) {
+    if (this.getSettings().sharing.audio && this.audioOk() && loopback()) {
+      this.hub.release('screen');
+      this.hub.loopback('screen', true);
+      this.audio.error = null;
+      audio = 'loopback';
+    } else if (this.getSettings().sharing.audio && this.audioOk()) {
       await this._ensureWindow();
       audio = await this.hub.acquire('screen', this.win.webContents);
       this.audio.error = audio ? null : this.hub.error;
     } else {
-      this.hub.release('screen');
+      this._releaseAudio();
     }
-    this.audio.on = audio;
+    this.audio.on = !!audio;
     if (this.session !== s) return;
     this.active = { session: s, displayId: target.id, width: target.pixelWidth, height: target.pixelHeight, transport: this.server.current.transport };
     Object.assign(this.view, { display: target.label, width, height, fps: 0, mbps: 0 });
     this._setStatus('starting');
     console.log(`[stream] session ${s} (${reason}): ${target.label} ${target.pixelWidth}x${target.pixelHeight} -> ${width}x${height}`);
-    this.server.sendToClient({ t: P.T.STREAM_INFO, name: target.label, width, height, audio });
+    this.server.sendToClient({ t: P.T.STREAM_INFO, name: target.label, width, height, audio: !!audio });
     try {
       await this._ensureWindow();
       if (!this.active || this.active.session !== s) return;
@@ -249,7 +277,7 @@ class Stream extends EventEmitter {
 
   _stopWindow(status) {
     clearTimeout(this.retryTimer);
-    this.hub.release('screen');
+    this._releaseAudio();
     this.audio.on = false;
     this.active = null;
     this._toWindow('stop', {});

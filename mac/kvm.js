@@ -59,16 +59,20 @@ class Kvm extends EventEmitter {
       deliver: (m) => (m.t === P.T.K_GESTURE ? this._onGesture(m) : this._onK(m)),
       native: () => { const l = this._lane(); return l && l.native ? l : null; }, // P3: the helper's lane
       speed: () => this.cfg.speed,
+      reverse: () => !!this.cfg.reverseScroll,
     });
     const il = server.il;
+    let laneSettled;
+    this.laneReady = new Promise((r) => (laneSettled = r)); // the helper's lane asked for: main.js starts the first session after
     if (il) {
       // The helper's own lane (native/tdfast, P3) when it has one: an older helper answers "unknown cmd".
-      helper.on('ready', () => il.useNative(helper));
-      if (helper.running) il.useNative(helper);
+      const native = () => il.useNative(helper).then(laneSettled, laneSettled);
+      helper.on('ready', native);
+      if (helper.running) native();
       il.on('start', () => this.laneIn.reset());
       il.on('move', (s) => this.laneIn.move(s));
       il.on('event', (m) => LANE_EVENTS.has(m.t) && this.laneIn.event(m, true));
-    }
+    } else laneSettled();
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
       send: (m) => this.mode === 'driven' && this.helper.send('inject', { ev: { t: P.T.K_MOVE, dx: m.dx, dy: m.dy } }),
@@ -232,6 +236,7 @@ class Kvm extends EventEmitter {
   // Call after settings.kvm or the link changed.
   config() {
     const k = this.cfg;
+    if (this.laneIn) this.laneIn.config(); // the scroll direction for the clicks and wheel the helper's lane injects
     this.helper
       .request('kvmConfig', {
         side: k.pcSide, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
@@ -454,7 +459,7 @@ class Kvm extends EventEmitter {
   _injectEv(ev) {
     if (ev.t === P.T.K_MOVE && !ev.smooth) return this.injectMoves.add(ev.dx, ev.dy);
     this.injectMoves.flush();
-    this.helper.send('inject', { ev });
+    if (!this.laneIn.inject(ev)) this.helper.send('inject', { ev }); // the lane's events: once, whichever copy came first
   }
 
   // The input lane, when this session has one and the peer is a computer (not the phone bridge).
@@ -538,10 +543,12 @@ class Kvm extends EventEmitter {
         }
         break;
       case 'ev': {
-        if (this.mode !== 'driving' || !ev.ev) return;
+        if (!ev.ev) return;
         const e = ev.ev;
+        const wss = (x) => this.server.sendToClient(x);
+        if (this.mode !== 'driving') return this.lane.skip(e, wss); // numbered by the helper: its number goes all the same
         if (this.local && this.local.drives() && this._lockKeyHere(e)) return; // a phone has no lock key: ours counts there
-        if (this.fileClip && this.fileClip.intercept(e)) return; // copy/paste shortcut: done over there
+        if (this.fileClip && this.fileClip.intercept(e)) return this.lane.skip(e, wss); // copy/paste shortcut: done over there
         if (e.t === P.T.K_MOVE) {
           this.lane.nativeTotals(e); // the helper's lane is down: its totals go with the move
           this.moves.add(e.dx, e.dy);
@@ -582,7 +589,7 @@ class Kvm extends EventEmitter {
       if (!this.locked) this.helper.send('armReturn', this._returnCfg());
     }
     this.drop.dragIn.onDriven(); // after 'place': the native drag starts where the pointer came in
-    this.laneIn.take(m.route); // the lane's totals start again (a move that came ahead goes now)
+    this.laneIn.take(m.route, { drag: !!m.drag }); // the lane's totals start again (a move that came ahead goes now)
     if (this.drop.dragIn.arming) this.laneIn.hold(true); // the helper's lane holds its moves too
   }
 

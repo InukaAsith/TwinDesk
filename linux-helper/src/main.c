@@ -52,6 +52,12 @@ static void lane_inject(double dx, double dy) {
   if (wl) wl_move_rel(dx, dy);
   else inject_move(dx, dy);
 }
+
+// A click or wheel from the lane, or an event Node delivers (lane inject): as the `inject` command.
+static void lane_inject_ev(const JObj *ev) {
+  if (wl) wl_inject(ev);
+  else inject_apply(ev);
+}
 #endif
 
 static void dispatch(const char *line) {
@@ -74,7 +80,7 @@ static void dispatch(const char *line) {
   }
 #ifdef TDFAST
   if (!strcmp(cmd, "lane")) { // both backends (lane.c)
-    lane_handle(c, &error, extra, sizeof extra, lane_inject);
+    lane_handle(c, &error, extra, sizeof extra, lane_inject, lane_inject_ev);
     reply(c, error, extra[0] ? extra : NULL);
     json_free(c);
     return;
@@ -276,7 +282,7 @@ static int run_wayland(void) {
     if (p[0].revents & (POLLIN | POLLHUP | POLLERR)) read_stdin();
 #ifdef TDFAST
     wl_read(p + 1, lf - 1);
-    lane_drain(lane_inject);
+    lane_drain(lane_inject, lane_inject_ev);
 #else
     wl_read(p + 1, n - 1);
 #endif
@@ -328,7 +334,7 @@ int main(void) {
     poll(p, 4, 20);
     if (p[0].revents & (POLLIN | POLLHUP | POLLERR)) read_stdin();
 #ifdef TDFAST
-    lane_drain(lane_inject);
+    lane_drain(lane_inject, lane_inject_ev);
 #endif
     capture_tick();
   }
