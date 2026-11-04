@@ -1317,7 +1317,7 @@ function changeLanguage() {
     if (!player.isDestroyed()) player.webContents.send('ui-language', i18n.locale);
   }
   trayKey = '';
-  updateTray();
+  updateTray(buildState());
   if (mainWin && !mainWin.isDestroyed()) {
     mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale } });
   }
@@ -1364,11 +1364,15 @@ function createTray() {
 }
 
 // The tray menu, by kind (shared/traymenu.js) like the PC's. Rebuilt when what it shows
-// changes (some Linux trays only take a new menu, not changes to the old one).
+// changes (some Linux trays only take a new menu, not changes to the old one). A new menu redraws
+// an open one (GNOME's top bar flickered, #100), so nothing that changes by itself is in it: the
+// round trip (ms) is only in the tooltip, and that too is set only when it changes.
 let trayKey = '';
+let trayTip = '';
 function updateTray(s) {
   if (!tray) return;
-  tray.setToolTip('TwinDesk: ' + statusLine(s));
+  const tip = 'TwinDesk: ' + statusLine(s);
+  if (tip !== trayTip) { trayTip = tip; tray.setToolTip(tip); }
   const connected = s.link.state === 'connected';
   const name = connected && s.peer ? s.peer.name : '';
   const k = settings.kvm;
@@ -1376,10 +1380,9 @@ function updateTray(s) {
   const sharing = s.pcScreen.mode !== 'off';
   const watching = screen.sentAccept === true;
   const found = s.found.filter((d) => !s.peer || d.id !== s.peer.id);
-  const rtt = connected && s.link.rtt != null ? ' · ' + s.link.rtt + ' ms' : '';
   const host = s.paired && s.paired.macName;
   const again = !connected && host && (s.link.state === 'stopped' || !!s.link.busy);
-  const key = JSON.stringify([name, rtt, again, away, pcApps ? pcApps.moved.size : 0, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
+  const key = JSON.stringify([name, again, away, pcApps ? pcApps.moved.size : 0, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
     settings.audio.send, settings.app.hud, k.keyboard, settings.files.edgeDrag, settings.files.shortcuts, settings.files.copyKeys, rezumeItems().map((i) => i.label), found.map((d) => [d.id, d.name, d.os]), s.updates && s.updates.available && s.updates.latest]);
   if (key === trayKey) return;
   trayKey = key;
@@ -1394,7 +1397,7 @@ function updateTray(s) {
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
     t,
     connected,
-    status: connected ? t('Connected to {name}', { name }) + rtt : t('Not connected'),
+    status: connected ? t('Connected to {name}', { name }) : t('Not connected'),
     home: away ? () => kvm.home() : null,
     windowsBack: pcApps && pcApps.moved.size ? { label: t(pcApps.moved.size === 1 ? 'Bring the Window Back from {name}' : 'Bring {count} Windows Back from {name}', { count: pcApps.moved.size, name: other }), click: () => pcApps.bringBack() } : null,
     shared: { checked: kvm.linked && !kvm.paused, set: (on) => kvm.setShared(on) },
