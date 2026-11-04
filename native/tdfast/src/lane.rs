@@ -17,6 +17,7 @@ const PING_ACTIVE: u64 = 250;
 const PING_IDLE: u64 = 1000;
 const DOWN_AFTER: u64 = 3;
 const RESEND_FOR: Duration = Duration::from_secs(3);
+const RTT_EVERY: Duration = Duration::from_secs(5);
 
 /// What the lane tells the helper (outside the lock).
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +26,7 @@ pub enum Out {
     Move(f64, f64),
     /// An event from the lane: its JSON with "es" in it.
     Event(Vec<u8>),
+    /// Up, with the rtt (ms): when it comes up, then again every RTT_EVERY with the latest.
     Up(f64),
     Down,
 }
@@ -34,10 +36,12 @@ pub type Sink = Box<dyn Fn(Out) + Send + Sync>;
 struct Session {
     keys: Keys,
     peer: SocketAddr,
+    qos: Option<crate::qos::Flow>, // Windows: the voice flow to peer (qos.rs)
     seq: u64,
     win: ReplayWindow,
     up: bool,
     rtt_ms: f64,
+    rtt_told: Option<Instant>,
     last_pong: Option<Instant>,
     ping_every: u64,
     next_ping: Instant,
@@ -68,6 +72,7 @@ struct Session {
 
 pub struct Lane {
     sock: Option<Arc<UdpSocket>>,
+    sock4: Option<Arc<UdpSocket>>, // Windows: IPv4 on the same port (qWAVE can't flow a dual-stack socket's IPv4)
     v6: bool,
     port: u16,
     active: bool,
@@ -88,7 +93,7 @@ impl Lane {
     fn new() -> Self {
         let loss = std::env::var("TWINDESK_LANE_LOSS").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
         Lane {
-            sock: None, v6: true, port: 0, active: false, sess: None, sink: None, loss,
+            sock: None, sock4: None, v6: true, port: 0, active: false, sess: None, sink: None, loss,
             rng: 0x9E3779B97F4A7C15 ^ (std::process::id() as u64), epoch: Instant::now(), sent: 0, received: 0,
         }
     }
@@ -104,19 +109,27 @@ impl Lane {
         let ip = ip.trim_start_matches("::ffff:");
         let ip = ip.split('%').next().unwrap_or(ip);
         match ip.parse::<IpAddr>().ok()? {
-            IpAddr::V4(v4) => Some(if self.v6 { IpAddr::V6(v4.to_ipv6_mapped()) } else { IpAddr::V4(v4) }),
+            IpAddr::V4(v4) => Some(if self.v6 && self.sock4.is_none() { IpAddr::V6(v4.to_ipv6_mapped()) } else { IpAddr::V4(v4) }),
             IpAddr::V6(v6) => if self.v6 { Some(IpAddr::V6(v6)) } else { None },
         }
     }
 
+    // The socket that reaches peer: the IPv4 one for an IPv4 peer when there are two.
+    fn sock_for(&self, peer: SocketAddr) -> Option<Arc<UdpSocket>> {
+        match &self.sock4 {
+            Some(s4) if peer.is_ipv4() => Some(s4.clone()),
+            _ => self.sock.clone(),
+        }
+    }
+
     fn send(&mut self, typ: u8, body: &[u8]) {
-        let (sock, s) = match (&self.sock, &mut self.sess) {
-            (Some(sock), Some(s)) => (sock.clone(), s),
+        let peer = match &self.sess { Some(s) => s.peer, None => return };
+        let (sock, s) = match (self.sock_for(peer), &mut self.sess) {
+            (Some(sock), Some(s)) => (sock, s),
             _ => return,
         };
         s.seq += 1;
         let pkt = seal(&s.keys.tx, typ, s.seq, body);
-        let peer = s.peer;
         if self.loss > 0.0 && self.rand() < self.loss {
             return;
         }
@@ -127,12 +140,21 @@ impl Lane {
     fn set_up(&mut self, up: bool, out: &mut Vec<Out>) {
         let active = self.active;
         let s = match &mut self.sess { Some(s) => s, None => return };
+        let now = Instant::now();
         if s.up == up {
+            // Up again every RTT_EVERY with the latest rtt: the helpers pass it on, and Node's [link] line has it.
+            if up && s.rtt_told.map_or(true, |t| now.duration_since(t) >= RTT_EVERY) {
+                s.rtt_told = Some(now);
+                out.push(Out::Up(s.rtt_ms));
+            }
             return;
         }
         s.up = up;
         s.ping_every = if up { if active { PING_ACTIVE } else { PING_IDLE } } else { PING_UP };
-        s.next_ping = Instant::now(); // a ping at once, as the JS _pingLoop
+        s.next_ping = now; // a ping at once, as the JS _pingLoop
+        if up {
+            s.rtt_told = Some(now);
+        }
         out.push(if up { Out::Up(s.rtt_ms) } else { Out::Down });
     }
 
@@ -213,6 +235,7 @@ impl Lane {
     }
 
     fn packet(&mut self, pkt: &[u8], from: SocketAddr, out: &mut Vec<Out>) {
+        let reply = self.sock_for(from);
         let (typ, body) = {
             let s = match &mut self.sess { Some(s) => s, None => return };
             let (typ, seq, body) = match open(&s.keys.rx, pkt) { Some(p) => p, None => return };
@@ -220,7 +243,13 @@ impl Lane {
                 return;
             }
             s.win.mark(seq);
-            s.peer = from; // the lane follows a switch between Wi-Fi and cable
+            if s.peer != from {
+                s.peer = from; // the lane follows a switch between Wi-Fi and cable
+                if let Some(sock) = &reply {
+                    s.qos = None;
+                    s.qos = crate::qos::Flow::add(sock, from);
+                }
+            }
             (typ, body)
         };
         self.received += 1;
@@ -335,8 +364,22 @@ fn with<R>(f: impl FnOnce(&mut Lane, &mut Vec<Out>) -> R) -> R {
     r
 }
 
-fn make_socket() -> Option<(UdpSocket, bool)> {
+// The lane's socket: dual-stack where it can be, IPv4 otherwise. On Windows, an IPv6-only socket and
+// an IPv4 one on the same port instead, as qWAVE (qos.rs) can't put a dual-stack socket's IPv4 in a flow.
+fn make_socket() -> Option<(UdpSocket, bool, Option<UdpSocket>)> {
     use socket2::{Domain, Protocol, Socket, Type};
+    #[cfg(windows)]
+    for _ in 0..8 {
+        let v6 = match Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP)) { Ok(s) => s, Err(_) => break };
+        if v6.set_only_v6(true).is_err() || v6.bind(&SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0).into()).is_err() {
+            break;
+        }
+        let port = match v6.local_addr().ok().and_then(|a| a.as_socket()) { Some(a) => a.port(), None => break };
+        let v4 = match Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)) { Ok(s) => s, Err(_) => break };
+        if v4.bind(&SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port).into()).is_ok() {
+            return Some((tune(v6, true), true, Some(tune(v4, false))));
+        } // that port is taken on IPv4: another one
+    }
     let v6 = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP)).ok().and_then(|s| {
         s.set_only_v6(false).ok()?;
         s.bind(&SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0).into()).ok()?;
@@ -350,6 +393,10 @@ fn make_socket() -> Option<(UdpSocket, bool)> {
             (s, false)
         }
     };
+    Some((tune(s, is6), is6, None))
+}
+
+fn tune(s: socket2::Socket, is6: bool) -> UdpSocket {
     let _ = s.set_send_buffer_size(256 * 1024);
     // DSCP EF (voice): Wi-Fi's WMM voice queue sends input ahead of screen video and files. Best effort.
     let _ = s.set_tos(0xB8);
@@ -357,8 +404,9 @@ fn make_socket() -> Option<(UdpSocket, bool)> {
     if is6 {
         let _ = s.set_tclass_v6(0xB8);
     }
+    let _ = is6; // Windows: qWAVE instead (qos.rs)
     let _ = s.set_read_timeout(Some(Duration::from_millis(1)));
-    Some((s.into(), is6))
+    s.into()
 }
 
 fn run(sock: Arc<UdpSocket>) {
@@ -384,13 +432,18 @@ pub fn bind() -> u16 {
         if l.port != 0 {
             return l.port;
         }
-        let (s, v6) = match make_socket() { Some(x) => x, None => return 0 };
+        let (s, v6, s4) = match make_socket() { Some(x) => x, None => return 0 };
         let port = s.local_addr().map(|a| a.port()).unwrap_or(0);
         let s = Arc::new(s);
         l.sock = Some(s.clone());
         l.v6 = v6;
         l.port = port;
         std::thread::Builder::new().name("tdfast-lane".into()).spawn(move || run(s)).ok();
+        if let Some(s4) = s4 {
+            let s4 = Arc::new(s4);
+            l.sock4 = Some(s4.clone());
+            std::thread::Builder::new().name("tdfast-lane4".into()).spawn(move || run(s4)).ok();
+        }
         port
     })
 }
@@ -409,9 +462,11 @@ pub fn start(role: &str, key_hex: &str, ip: &str, port: u16) -> bool {
         }
         stop_in(l, out);
         let now = Instant::now();
+        let peer = SocketAddr::new(addr, port);
+        let qos = l.sock_for(peer).and_then(|sock| crate::qos::Flow::add(&sock, peer));
         l.sess = Some(Session {
             keys: derive_keys(&key, if role == "host" { "host" } else { "guest" }),
-            peer: SocketAddr::new(addr, port), seq: 0, win: ReplayWindow::new(), up: false, rtt_ms: -1.0, last_pong: None,
+            peer, qos, seq: 0, win: ReplayWindow::new(), up: false, rtt_ms: -1.0, rtt_told: None, last_pong: None,
             ping_every: PING_UP, next_ping: now,
             drive_route: 0, mn: 0, cx: 0.0, cy: 0.0, es: 0, mv: None, move_at: None, move_due: None, move_tails: vec![],
             events: VecDeque::new(), event_tails: vec![],

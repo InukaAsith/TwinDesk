@@ -49,14 +49,17 @@ class Kvm {
       speed: () => this.cfg.speed,
     });
     const il = this.link.il;
+    let laneSettled;
+    this.laneReady = new Promise((r) => (laneSettled = r)); // the helper's lane asked for: main.js starts the first session after
     if (il) {
       // The helper's own lane (native/tdfast, P3) when it has one: an older helper answers "unknown cmd".
-      this.helper.on('ready', () => il.useNative(this.helper));
-      if (this.helper.running) il.useNative(this.helper);
+      const native = () => il.useNative(this.helper).then(laneSettled, laneSettled);
+      this.helper.on('ready', native);
+      if (this.helper.running) native();
       il.on('start', () => this.laneIn.reset());
       il.on('move', (s) => this.laneIn.move(s));
       il.on('event', (m) => LANE_EVENTS.has(m.t) && this.laneIn.event(m, true));
-    }
+    } else laneSettled();
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
       send: (m) => this.mode === 'driven' && this.helper.send('inject', { ev: { t: P.T.K_MOVE, dx: m.dx, dy: m.dy } }),
