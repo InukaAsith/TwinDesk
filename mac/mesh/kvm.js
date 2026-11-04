@@ -43,6 +43,7 @@ class Kvm extends EventEmitter {
     this.route = 0;
     this.peerRoute = 0;
     this.partner = null; // the device our input goes to (driving) or comes from (driven); null at home
+    this._busyId = null; // the partner link marked busy while driving/driven (see _markBusy)
     this.keyboardOnly = false; // the hotkey moved the keyboard only (no edge, no mouse)
     this.lastName = '';
     this.message = '';
@@ -395,11 +396,22 @@ class Kvm extends EventEmitter {
     this.emit('change');
   }
 
+  // Keep-alive: the active partner link (driving or driven) pings every PING_MS so the other end's
+  // silence watch (KVM_SILENCE_MS) never trips because that link has gone idle with two or more
+  // devices. The old partner is marked idle, the new one busy (docs/mesh.md "Keep-alive").
+  _markBusy(partner) {
+    if (this._busyId && this._busyId !== partner) this.hub.setBusy(this._busyId, false);
+    if (partner) this.hub.setBusy(partner, true);
+    this._busyId = partner || null;
+  }
+
   _setMode(mode, message) {
     const prev = this.mode;
     if (prev !== mode) console.log(`[kvm] ${prev} -> ${mode}${message ? ` (${message})` : ''}`);
     this.mode = mode;
     this.lanes.active(mode !== 'home'); // the partner's lane pinged more often
+    // The partner link is busy while input is shared; idle at home.
+    this._markBusy(mode === 'home' ? null : this.partner);
     if (prev !== mode && this.locked) { // moved by the hotkey, the menu bar or a disconnect: the lock was for where it was
       this.locked = false;
       if (prev === 'home') this.config();
