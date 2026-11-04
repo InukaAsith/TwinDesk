@@ -79,7 +79,7 @@ class FileSend extends EventEmitter {
     server.on(`t:${P.T.DRAG_POLICY}`, (m) => {
       this.peerDrag = m.accept !== false;
       this.emit('policy');
-      this.emit('change');
+      this._changed();
     });
     this.outgoing = new Map(); // id -> { id, name, size, path, sent, state, drag? } in sending order
     this.recent = []; // newest first: { name, size, at, ok, where|error }
@@ -137,7 +137,7 @@ class FileSend extends EventEmitter {
       this.outgoing.set(id, { id, name, size: f.size, path: f.path, sent: 0, state: 'offered', drag });
       this.server.sendToClient({ t: P.T.FILE_OFFER, id, name, size: f.size, drop: 'drag', drag, rel: f.rel, index, count: plan.files });
     });
-    this.emit('change');
+    this._changed();
     return drag;
   }
 
@@ -147,14 +147,14 @@ class FileSend extends EventEmitter {
     const plan = planDrag(paths);
     if (!plan || !plan.files) return null;
     const one = plan.items.length === 1;
-    this.batches.set(batch, { kind, name: one ? plan.items[0].name : `${plan.items.length} items`, files: plan.files, bytes: plan.bytes });
+    this.batches.set(batch, { kind, name: one ? plan.items[0].name : `${plan.items.length} items`, items: plan.items.length, files: plan.files, bytes: plan.bytes, at: Date.now() });
     plan.list.forEach((f, index) => {
       const id = crypto.randomUUID();
       const name = f.rel.slice(f.rel.lastIndexOf('/') + 1);
       this.outgoing.set(id, { id, name, size: f.size, path: f.path, sent: 0, state: 'offered', batch });
       this.server.sendToClient({ t: P.T.FILE_OFFER, id, name, size: f.size, drop: kind, batch, rel: f.rel, index, count: plan.files, bytes: plan.bytes }); // bytes: batch total, for the receiver's progress
     });
-    this.emit('change');
+    this._changed();
     return { batch, files: plan.files, bytes: plan.bytes, name: this.batches.get(batch).name };
   }
 
@@ -167,7 +167,7 @@ class FileSend extends EventEmitter {
     this.recent.unshift({ name: b.name, size: b.bytes, at: Date.now(), ok: !!m.ok, ...(m.ok ? { where } : { error: 'not everything arrived' }) });
     this.recent.length = Math.min(this.recent.length, 20);
     this.emit('batchDone', { ...b, batch: m.batch, ok: !!m.ok });
-    this.emit('change');
+    this._changed();
   }
 
   // Went home before the drop (tell: send drag.cancel), or the PC ended the drag.
@@ -187,7 +187,7 @@ class FileSend extends EventEmitter {
   forgetDrag(drag) {
     this.cancelDrag(drag, false);
     this.drags.delete(drag);
-    this.emit('change');
+    this._changed();
   }
 
   _dragEnd(m) {
@@ -201,7 +201,7 @@ class FileSend extends EventEmitter {
     this.recent.unshift({ name: d.name, size: d.bytes, at: Date.now(), ok, ...(ok ? { where } : { error: m.result === 'failed' ? `${this.server.current ? this.server.current.name : 'the other computer'} couldn’t take it` : 'cancelled' }) });
     this.recent.length = Math.min(this.recent.length, 20);
     this.emit('dragEnd', m.drag);
-    this.emit('change');
+    this._changed();
   }
 
   // In offer order (a drag's files arrive in the order the PC listed them): one at a time, or a
@@ -236,7 +236,7 @@ class FileSend extends EventEmitter {
         f.sent += n;
         if (f.sent - shown >= 4 * 1024 * 1024) {
           shown = f.sent;
-          this.emit('change');
+          this._changed();
         }
       });
       if (this.outgoing.has(id)) this.server.sendToClient({ t: P.T.FILE_END, id, sha256, ...fx.endFields(id) }); // fx2: the ranges' hashes
@@ -268,7 +268,7 @@ class FileSend extends EventEmitter {
         hash.update(chunk);
         this.server.sendToClient({ t: P.T.FILE_CHUNK, id, seq: seq++, data: chunk.toString('base64') });
         f.sent += chunk.length;
-        if (seq % 64 === 0) this.emit('change');
+        if (seq % 64 === 0) this._changed();
       }
       if (this.outgoing.has(id)) this.server.sendToClient({ t: P.T.FILE_END, id, sha256: hash.digest('hex') });
     } catch (e) {
@@ -281,16 +281,41 @@ class FileSend extends EventEmitter {
     const f = this.outgoing.get(id);
     if (!f) return;
     this.outgoing.delete(id);
-    if (f.drag || f.batch) return this.emit('change'); // listed once, on drag.end / files.done
+    if (f.drag || f.batch) return this._changed(); // listed once, on drag.end / files.done
     this.recent.unshift({ name: f.name, size: f.size, at: Date.now(), ok, ...(ok ? { where: info } : { error: info }) });
     this.recent.length = Math.min(this.recent.length, 20);
-    this.emit('change');
+    this._changed();
   }
 
+  // 'change', at most every 250 ms (the last one always goes): 10,000 small files redrew the window
+  // for each one.
+  _changed() {
+    if (this._changeTimer) return void (this._changeLater = true);
+    this.emit('change');
+    this._changeTimer = setTimeout(() => {
+      this._changeTimer = null;
+      if (this._changeLater) { this._changeLater = false; this._changed(); }
+    }, 250);
+    if (this._changeTimer.unref) this._changeTimer.unref();
+  }
+
+  // Files on their way: a batch as one entry {name, items, files, left, bytes, sent, at}; the others
+  // one by one (the first few).
   get view() {
+    const batches = new Map([...this.batches].map(([id, b]) => [id, { kind: b.kind, name: b.name, items: b.items, files: b.files, left: 0, bytes: b.bytes, sent: b.bytes, at: b.at }]));
+    const sending = [];
+    let more = 0;
+    for (const f of this.outgoing.values()) {
+      const b = f.batch && batches.get(f.batch);
+      if (b) { b.left++; b.sent -= f.size - f.sent; }
+      else if (sending.length < 5) sending.push({ name: f.name, size: f.size, sent: f.sent });
+      else more++;
+    }
     return {
       peerDrag: this.peerDrag,
-      sending: [...this.outgoing.values()].map((f) => ({ name: f.name, size: f.size, sent: f.sent })),
+      sending,
+      sendingMore: more,
+      outBatches: [...batches.values()],
       sent: this.recent,
     };
   }

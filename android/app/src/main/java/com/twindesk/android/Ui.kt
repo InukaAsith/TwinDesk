@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,9 +46,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,6 +69,8 @@ import androidx.compose.ui.unit.sp
 data class Palette(
     val accent: Color, val accentSoft: Color, val content: Color, val sidebar: Color, val card: Color, val line: Color,
     val text: Color, val muted: Color, val faint: Color, val good: Color, val warn: Color, val bad: Color, val trackOff: Color, val hover: Color,
+    val chip: Color = Color.Transparent, // inner containers and tonal buttons (the phone's look)
+    val sheet: Color = Color.Transparent, // the phone: the big rounded container the pages sit in
 )
 
 private val Light = Palette(
@@ -82,10 +87,60 @@ private val Dark = Palette(
 val LocalPalette = staticCompositionLocalOf { Light }
 val pal: Palette @Composable get() = LocalPalette.current
 
+// The look (General › Appearance, as on the computers: shared/look.js): the theme (system, light,
+// dark) and the accent colour, "" following the phone's own (Material You, Android 12+; else blue).
+// A local preference, never synchronized.
+// The phone's look (set by App: not on a tablet, which keeps the Mac-like one): bigger soft cards
+// without borders, a faint shadow, pill buttons.
+object Modern { var on = false }
+
+object Look {
+    val THEMES = listOf("system", "light", "dark")
+    val ACCENTS = listOf(0xFF0A84FF, 0xFF5E5CE6, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF453A, 0xFFFF9F0A, 0xFF30D158, 0xFF00C7BE, 0xFF8E8E93)
+    private const val FALLBACK = 0xFF0A84FF
+    var theme by androidx.compose.runtime.mutableStateOf("system")
+    var accent by androidx.compose.runtime.mutableStateOf(0L) // 0: the system's
+    private var prefs: android.content.SharedPreferences? = null
+
+    fun load(ctx: android.content.Context) {
+        if (prefs != null) return
+        val p = ctx.applicationContext.getSharedPreferences("look", android.content.Context.MODE_PRIVATE)
+        prefs = p
+        theme = p.getString("theme", "system").takeIf { it in THEMES } ?: "system"
+        accent = p.getLong("accent", 0L)
+    }
+    fun pickTheme(v: String) { theme = if (v in THEMES) v else "system"; prefs?.edit()?.putString("theme", theme)?.apply() }
+    fun pickAccent(v: Long) { accent = v; prefs?.edit()?.putLong("accent", v)?.apply() }
+
+    // The phone's accent colour, for "System".
+    fun system(ctx: android.content.Context, dark: Boolean): Color =
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            (if (dark) androidx.compose.material3.dynamicDarkColorScheme(ctx) else androidx.compose.material3.dynamicLightColorScheme(ctx)).primary
+        } else Color(FALLBACK)
+}
+
 @Composable
 fun Theme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val p = if (dark) Dark else Light
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Look.load(ctx)
+    Modern.on = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600
+    val dark = when (Look.theme) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
+    val a = if (Look.accent != 0L) Color(Look.accent) else Look.system(ctx, dark)
+    val base = (if (dark) Dark else Light)
+    // The phone: neutral greys, no accent in the backgrounds. The branding on the grey, the page in a
+    // big rounded off-white sheet under it, white cards on that, light grey inner containers.
+    // The phone: the background behind the branding a touch of the accent; the sheet a lighter
+    // version of it, the cards lighter again (in dark mode too), the inner parts a step above those.
+    val outer = androidx.compose.ui.graphics.lerp(if (dark) Color(0xFF0B0B0E) else Color(0xFFEDEDF2), a, if (dark) 0.10f else 0.09f)
+    val up = { c: Color, f: Float -> androidx.compose.ui.graphics.lerp(c, Color.White, f) }
+    val sheet = if (dark) up(outer, 0.05f) else up(outer, 0.65f)
+    val card = if (dark) up(sheet, 0.06f) else Color.White
+    val p = if (Modern.on) base.copy(
+        accent = a, accentSoft = a.copy(alpha = if (dark) 0.22f else 0.12f),
+        content = outer, sheet = sheet, card = card,
+        chip = if (dark) up(card, 0.07f) else androidx.compose.ui.graphics.lerp(sheet, Color.Black, 0.03f),
+        line = if (dark) Color(0x14FFFFFF) else Color(0x0F000000),
+    ) else base.copy(accent = a, accentSoft = a.copy(alpha = if (dark) 0.22f else 0.12f), chip = if (dark) Color(0xFF333336) else Color(0xFFF3F3F7))
     val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
         primary = p.accent, onPrimary = Color.White, surface = p.content, background = p.content,
         onSurface = p.text, onSurfaceVariant = p.muted, outline = p.faint, surfaceContainer = p.card,
@@ -136,7 +191,8 @@ fun Tile(icon: ImageVector, colors: List<Color>, size: Int = 26) {
 }
 
 @Composable
-fun Logo(size: Int) = Image(painterResource(R.drawable.twindesk_logo), "TwinDesk", Modifier.size(size.dp))
+// The dark icon in the dark theme, the colourful one in the light theme.
+fun Logo(size: Int) = Image(painterResource(if (pal.text.luminance() > 0.5f) R.drawable.twindesk_logo_dark else R.drawable.twindesk_logo_light), "TwinDesk", Modifier.size(size.dp))
 
 @Composable
 fun Dot(color: Color, size: Int = 8) = Box(Modifier.size(size.dp).clip(CircleShape).background(color))
@@ -157,6 +213,41 @@ fun NavItem(icon: ImageVector, colors: List<Color>, label: String, selected: Boo
 }
 
 // ---- page parts ----
+
+// General › Appearance: Theme (System, Light, Dark) and the accent swatches, System first.
+@Composable
+fun AppearanceCard() {
+    MacCard("Appearance") {
+        MacRow("Theme", "System follows this phone’s light or dark setting", first = true) {
+            Row(Modifier.clip(RoundedCornerShape(8.dp)).background(pal.trackOff).padding(2.dp)) {
+                for ((v, label) in listOf("system" to "System", "light" to "Light", "dark" to "Dark")) {
+                    val on = Look.theme == v
+                    Text(label, color = if (on) pal.text else pal.muted, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(if (on) pal.card else Color.Transparent)
+                            .clickable { Look.pickTheme(v) }.padding(horizontal = 12.dp, vertical = 6.dp))
+                }
+            }
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text("Accent colour", color = pal.text, fontSize = 15.sp)
+            Text("System uses this phone’s wallpaper colours", color = pal.muted, fontSize = 12.5.sp)
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val sys = Look.system(ctx, isSystemInDarkTheme())
+            Row(Modifier.padding(top = 10.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                for (c in listOf(0L) + Look.ACCENTS) {
+                    val color = if (c == 0L) sys else Color(c)
+                    val on = Look.accent == c
+                    Box(
+                        Modifier.size(26.dp).clip(CircleShape)
+                            .border(BorderStroke(2.dp, if (on) color else Color.Transparent), CircleShape).padding(4.dp).clip(CircleShape)
+                            .background(if (c == 0L) Brush.sweepGradient(listOf(color, color, color.copy(alpha = 0.45f), color.copy(alpha = 0.45f))) else SolidColor(color))
+                            .clickable { Look.pickAccent(c) },
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun PageHead(title: String, desc: String, master: Boolean? = null, onMaster: (Boolean) -> Unit = {}) {
@@ -180,11 +271,17 @@ fun MacSwitch(on: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true)
 
 // A card with an optional title above it (the Mac's `.card-wrap`).
 @Composable
-fun MacCard(title: String = "", modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun MacCard(title: String = "", modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.padding(bottom = 16.dp)) {
-        if (title.isNotEmpty()) Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = pal.text, modifier = Modifier.padding(start = 2.dp, bottom = 6.dp))
+        if (action != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = if (Modern.on) 15.sp else 14.sp, color = pal.text, modifier = Modifier.weight(1f).padding(start = if (Modern.on) 6.dp else 2.dp, bottom = 6.dp))
+            Box(Modifier.padding(bottom = 6.dp)) { action() }
+        } else if (title.isNotEmpty()) Text(title, fontWeight = FontWeight.SemiBold, fontSize = if (Modern.on) 15.sp else 14.sp, color = pal.text, modifier = Modifier.padding(start = if (Modern.on) 6.dp else 2.dp, bottom = if (Modern.on) 8.dp else 6.dp))
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(pal.card).border(BorderStroke(1.dp, pal.line), RoundedCornerShape(12.dp)),
+            if (Modern.on) Modifier.fillMaxWidth()
+                .shadow(6.dp, RoundedCornerShape(22.dp), ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.06f))
+                .clip(RoundedCornerShape(22.dp)).background(pal.card)
+            else Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(pal.card).border(BorderStroke(1.dp, pal.line), RoundedCornerShape(12.dp)),
             content = content,
         )
     }
@@ -195,7 +292,7 @@ fun MacCard(title: String = "", modifier: Modifier = Modifier, content: @Composa
 @Composable
 fun MacRow(label: String, hint: String = "", first: Boolean = false, onClick: (() -> Unit)? = null, controls: @Composable RowScope.() -> Unit = {}) {
     Column {
-        if (!first) Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(pal.line))
+        if (!first) Box(Modifier.padding(start = if (Modern.on) 20.dp else 16.dp, end = if (Modern.on) 20.dp else 0.dp).fillMaxWidth().height(if (Modern.on) 0.5.dp else 1.dp).background(pal.line))
         Layout(
             content = {
                 Column {
@@ -204,7 +301,7 @@ fun MacRow(label: String, hint: String = "", first: Boolean = false, onClick: ((
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = controls)
             },
-            modifier = Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = if (Modern.on) 20.dp else 16.dp, vertical = if (Modern.on) 14.dp else 12.dp),
         ) { ms, c ->
             val w = c.maxWidth
             val ctl = ms[1].measure(Constraints(maxWidth = w))

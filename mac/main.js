@@ -798,7 +798,7 @@ app.whenReady().then(() => {
       },
       hide() { if (stub) { stub.stop(); stub = null; } },
     };
-    svc.rzShelf = new ReZumeShelf({ rezume: svc.rz, cfg: () => settings.rezume, peerName: name, dock });
+    svc.rzShelf = new ReZumeShelf({ rezume: svc.rz, cfg: () => settings.rezume, peerName: name, dock, badge: path.join(__dirname, 'assets', 'sidebar-icon@4x.png') });
     svc.rz.apply();
     return svc.rz;
   };
@@ -876,7 +876,34 @@ app.whenReady().then(() => {
         : { key: ble ? 'It comes back on Wi-Fi. Double-tap {key} to turn it on' : 'Double-tap {key} to turn it on', vars: { key } };
     hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : ble ? 'Cursor sharing off over Bluetooth' : 'Cursor sharing off' }, sub);
   });
+  // Files on their way, live (as on the PC): the popup with the percentage while a batch takes more
+  // than a moment, and a notification for it, replaced by how it ended (macOS notifications can't
+  // show a bar, so it isn't re-posted for every step).
+  const peerLabel = () => (peer.current ? peer.current.name : t('the other computer'));
+  const liveNote = { recv: null, send: null };
+  const liveShow = (tag, title, body) => {
+    if (liveNote[tag] || !Notification.isSupported()) return;
+    try {
+      liveNote[tag] = new Notification({ title, body, silent: true });
+      liveNote[tag].show();
+    } catch { liveNote[tag] = null; }
+  };
+  const liveDone = (tag, title, body) => {
+    const n = liveNote[tag];
+    if (!n) return;
+    liveNote[tag] = null;
+    try { n.close(); new Notification({ title, body, silent: true }).show(); } catch {}
+  };
+  svc.fileSend.on('batchDone', (b) => {
+    const label = b.items > 1 ? t('{count} items', { count: b.items }) : b.name;
+    liveDone('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t(b.ok ? 'On {name}' : 'On {name}: some files didn’t make it', { name: peerLabel() }));
+  });
+  peer.on('closed', () => {
+    liveDone('recv', t('Files stopped'), t('{name} disconnected', { name: peerLabel() }));
+    liveDone('send', t('Files stopped'), t('{name} disconnected', { name: peerLabel() }));
+  });
   svc.drop.on('batch', (b) => {
+    liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerLabel() }) : '');
     if (svc.rz && svc.rz.received(b)) return; // a document taken here: it opens
     if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
   });
@@ -884,14 +911,33 @@ app.whenReady().then(() => {
   // (macOS notifications have no progress bar, and TwinDesk has no Dock icon to put one on).
   let trayPct = '';
   setInterval(() => {
+    const dv = svc.drop.view;
+    const sv = svc.fileSend.view;
     const sum = (list, k) => list.reduce((a, f) => [a[0] + (f[k] || 0), a[1] + (f.size || 0)], [0, 0]);
-    const [got, gotOf] = sum(svc.drop.view.receiving, 'got');
-    const [sent, sentOf] = sum(svc.fileSend.view.sending, 'sent');
-    const pct = (n, of) => Math.min(99, Math.floor((100 * n) / of));
-    const t = (gotOf ? ` ↓${pct(got, gotOf)}%` : '') + (sentOf ? ` ↑${pct(sent, sentOf)}%` : '');
-    if (t === trayPct || !tray) return;
-    trayPct = t;
-    tray.setTitle(t, { fontType: 'monospacedDigit' });
+    const [got, gotOf] = dv.inBatches.reduce((a, b) => (b.bytes ? [a[0] + b.got, a[1] + b.bytes] : a), sum(dv.receiving, 'got'));
+    const [sent, sentOf] = sv.outBatches.reduce((a, b) => [a[0] + b.sent, a[1] + b.bytes], sum(sv.sending, 'sent'));
+    const pct = (n, of) => Math.min(99, Math.floor((100 * n) / Math.max(1, of)));
+    // The popup and the notification: batches that have taken more than a moment.
+    const now = Date.now();
+    const rb = dv.inBatches.find((b) => now - b.at >= 400);
+    if (rb) {
+      const key = rb.kind === 'paste'
+        ? rb.count === 1 ? 'Pasting {count} file from {name}' : 'Pasting {count} files from {name}'
+        : rb.count === 1 ? 'Receiving {count} file from {name}' : 'Receiving {count} files from {name}';
+      const vars = { count: rb.count, name: peerLabel(), percent: rb.bytes ? pct(rb.got, rb.bytes) : pct(rb.done, rb.count) };
+      hud.show('driven', { key: `${key} · {percent} %`, vars });
+      liveShow('recv', t(key, vars), t('From {name}', { name: peerLabel() }));
+    }
+    const sb = sv.outBatches.find((b) => now - b.at >= 400 && b.bytes > 5 * 1024 * 1024);
+    if (sb && !rb) {
+      const file = sb.items > 1 ? { key: '{count} items', vars: { count: sb.items } } : sb.name;
+      hud.show('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name: peerLabel(), percent: pct(sb.sent, sb.bytes) } });
+    }
+    if (sb) liveShow('send', t('Sending {file}', { file: sb.items > 1 ? t('{count} items', { count: sb.items }) : sb.name }), t('To {name}', { name: peerLabel() }));
+    const title = (gotOf ? ` ↓${pct(got, gotOf)}%` : '') + (sentOf ? ` ↑${pct(sent, sentOf)}%` : '');
+    if (title === trayPct || !tray) return;
+    trayPct = title;
+    tray.setTitle(title, { fontType: 'monospacedDigit' });
   }, 500).unref();
   // Started at login: in the menu bar only; the window is made when it's first opened.
   if (startHidden) startHidden = false;

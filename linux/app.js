@@ -109,7 +109,7 @@
     v.navBtn.classList.add('active');
     v.navBtn.setAttribute('aria-selected', 'true');
     $('content').scrollTop = 0;
-    for (const t of $('phones').children) t.classList.toggle('active', v.def.id === 'overview' && t.dataset.connected === '1');
+    for (const t of $('phones').children) t.classList.toggle('active', t.dataset.connected === '1');
     if (user) api.setTab(v.def.id);
     if (UI.state) renderPage(v, UI.state);
   }
@@ -197,7 +197,7 @@
       const rtt = s.link && s.link.rtt;
       list.push({ ...x, connected, sub: connected ? (rtt != null ? t('{value} ms', { value: rtt }) : t('Connected')) : t('Nearby · Click to connect') });
     }
-    UI.renderPcs($('pcs'), list, { open: () => show('overview', true), active: !!(current && current.def.id === 'overview') });
+    UI.renderPcs($('pcs'), list, { open: () => show('overview', true), active: true });
   }
 
   function renderPhones(s) {
@@ -238,7 +238,7 @@
         d.connected ? el('span', { class: 'dot good' }) : ph.connecting && ph.connecting.id === d.id ? el('span', { class: 'spin', attrs: { 'aria-hidden': 'true' } }) : null,
       ]);
       b.dataset.connected = d.connected ? '1' : '';
-      b.classList.toggle('active', d.connected && current && current.def.id === 'overview');
+      b.classList.toggle('active', !!d.connected);
       b.onclick = () => (d.connected ? show('overview', true) : api.connectPhone(d.id));
       return b;
     }));

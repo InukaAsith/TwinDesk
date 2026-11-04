@@ -29,10 +29,11 @@ function connectTo(m, t) {
 }
 
 // The menus by kind, the same in the tray and the Mac's own menu bar (appMenu).
-function kinds(m, t) {
+// short: the Mac's menu bar, where the names sit side by side ("Mouse & Keyboard").
+function kinds(m, t, short = false) {
   return [
     {
-      label: t('Mouse and Keyboard'),
+      label: t(short ? 'Mouse & Keyboard' : 'Mouse and Keyboard'),
       submenu: [
         check(t('Share Keyboard'), m.keyboard),
         ...(m.lock ? [check(m.lock.label, m.lock)] : []),
@@ -44,7 +45,7 @@ function kinds(m, t) {
       ],
     },
     { label: t('Screen'), submenu: m.screen.map((x) => check(x.label, x)) },
-    { label: t('Clipboard and Sound'), submenu: [check(t('Share Clipboard'), m.clipboard), check(t('Send Sound'), m.sound)] },
+    { label: t(short ? 'Clipboard & Sound' : 'Clipboard and Sound'), submenu: [check(t('Share Clipboard'), m.clipboard), check(t('Send Sound'), m.sound)] },
     { label: t('Files'), submenu: [check(t('Drag Files Across the Screen Edge'), m.drag), check(m.shortcuts.label, m.shortcuts)] },
     { label: t('Connection'), submenu: [...(m.disconnect ? [m.disconnect, sep] : []), connectTo(m, t)] },
   ];
@@ -70,8 +71,9 @@ function template(m) {
   ];
 }
 
-// The Mac's menu bar while TwinDesk's window is in front: the app menu, Edit, the tray's menus by
-// kind (only Connection while nothing is connected) and Window.
+// The Mac's menu bar while TwinDesk's window is in front: the app menu, the tray's menus by kind
+// with short names (only Connection while nothing is connected) and Window. No Edit menu: its
+// shortcuts (copy, paste, undo, select all…) are hidden items of the app menu, which still work.
 function appMenu(m) {
   const t = m.t || ((text) => text);
   const app = {
@@ -88,11 +90,12 @@ function appMenu(m) {
       { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
       sep,
       { label: t('Quit TwinDesk'), accelerator: 'CmdOrCtrl+Q', click: m.quit },
+      ...['undo', 'redo', 'cut', 'copy', 'paste', 'pasteAndMatchStyle', 'delete', 'selectAll'].map((role) => ({ role, visible: false, acceleratorWorksWhenHidden: true })),
     ],
   };
-  const menus = m.connected ? kinds(m, t) : [{ label: t('Connection'), submenu: [connectTo(m, t)] }];
+  const menus = m.connected ? kinds(m, t, true) : [{ label: t('Connection'), submenu: [connectTo(m, t)] }];
   const rezume = m.connected && m.rezume && m.rezume.length ? [{ label: 'ReZume', submenu: m.rezume }] : [];
-  return [app, { role: 'editMenu' }, ...menus, ...rezume, { role: 'windowMenu' }];
+  return [app, ...menus, ...rezume, { role: 'windowMenu' }];
 }
 
 module.exports = { template, appMenu };

@@ -68,6 +68,7 @@ UI.tab({
       UI.card(I18n.t('Licence'), [
         UI.row(I18n.t('GNU General Public License v3'), I18n.t('Free and open source. Copyright © 2026 inukaasith'), [link(I18n.t('Read'), 'licence')]),
         thanksRow,
+        UI.row('Crafted with ☕ and ❤️ in Sri Lanka 🇱🇰', '', [], { literal: true }),
       ], { cls: 'keep-on' }),
     );
 

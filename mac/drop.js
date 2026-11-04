@@ -9,7 +9,8 @@
 //   drop:'send' / 'paste' a batch with folders by `rel`: Send files goes to the Files
 //                  folder, a paste to the folder chosen when the paste shortcut was pressed.
 //
-// Events: 'change' — this.view changed.
+// Events: 'change' — this.view changed (at most 4 times a second: 10,000 small files are 20,000
+//   changes, and each one redrew the window), 'batch' — a Send files / paste batch ended.
 'use strict';
 
 const fs = require('fs');
@@ -98,7 +99,7 @@ class Drop extends EventEmitter {
         progress: (t) => {
           if (t.got - (t.shown || 0) < 4 * 1024 * 1024) return;
           t.shown = t.got;
-          this.emit('change');
+          this._changed();
         },
         end: (t) => this._end({ id: t.id, sha256: '' }),
         fail: (t, why) => this._abort(t.id, why, true),
@@ -172,7 +173,7 @@ class Drop extends EventEmitter {
     }
     this.active.set(m.id, { id: m.id, name, size, dir, tmp, fd, release, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now(), ...writes() });
     this.server.sendToClient({ t: P.T.FILE_ACCEPT, id: m.id });
-    this.emit('change');
+    this._changed();
   }
 
   // This Mac pressed paste: files of that batch go to `dir`. app: they're for an app in front
@@ -193,7 +194,8 @@ class Drop extends EventEmitter {
       const pasted = this.expected.get(m.batch);
       if ((m.drop === 'paste' || m.drop === 'rezume') && !pasted) return refuse('not_allowed'); // we never asked for it
       if (m.drop === 'send' && !this.cfg.acceptDrops) return refuse('not_allowed');
-      b = { kind: m.drop, dir: (pasted && pasted.dir) || this.cfg.folder || DOWNLOADS, app: !!(pasted && pasted.app), count, done: 0, ok: 0, tops: new Map(), placed: [] };
+      b = { kind: m.drop, dir: (pasted && pasted.dir) || this.cfg.folder || DOWNLOADS, app: !!(pasted && pasted.app), count, done: 0, ok: 0, tops: new Map(), placed: [],
+        bytes: Number(m.bytes) > 0 ? Number(m.bytes) : 0, doneBytes: 0, at: Date.now() }; // bytes: the batch's total, when the sender says
       this.batches.set(m.batch, b);
       this.expected.delete(m.batch);
     }
@@ -217,7 +219,7 @@ class Drop extends EventEmitter {
     }
     this.active.set(m.id, { id: m.id, name: segs[segs.length - 1], size, tmp, final, fd, batch: m.batch, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now(), ...writes() });
     this.server.sendToClient({ t: P.T.FILE_ACCEPT, id: m.id });
-    this.emit('change');
+    this._changed();
   }
 
   // A batch file finished (or failed); after the last one: files.done, reveal, popup.
@@ -226,7 +228,7 @@ class Drop extends EventEmitter {
     if (!b) return;
     b.done++;
     if (ok) b.ok++;
-    if (b.done < b.count) return this.emit('change');
+    if (b.done < b.count) return this._changed();
     this.batches.delete(batch);
     const where = b.dir.replace(os.homedir(), '~');
     this.server.sendToClient({ t: P.T.FILES_DONE, batch, ok: b.ok === b.count, where, files: b.ok });
@@ -253,7 +255,7 @@ class Drop extends EventEmitter {
     }
     this.active.set(m.id, { id: m.id, name, size, tmp, final, fd, drag: m.drag, rel: m.rel, got: 0, seq: 0, hash: crypto.createHash('sha256'), at: Date.now(), ...writes() });
     this.server.sendToClient({ t: P.T.FILE_ACCEPT, id: m.id });
-    this.emit('change');
+    this._changed();
   }
 
   _chunk(m) {
@@ -268,7 +270,7 @@ class Drop extends EventEmitter {
     t.seq++;
     if (t.got - (t.shown || 0) >= 4 * 1024 * 1024) { // progress, every 4 MB
       t.shown = t.got;
-      this.emit('change');
+      this._changed();
     }
   }
 
@@ -317,6 +319,8 @@ class Drop extends EventEmitter {
     }
     this.active.delete(t.id);
     if (t.batch) {
+      const b = this.batches.get(t.batch);
+      if (b) b.doneBytes += t.size;
       try {
         fs.renameSync(t.tmp, t.final);
         this.server.sendToClient({ t: P.T.FILE_DONE, id: t.id, ok: true, path: t.final.replace(os.homedir(), '~') });
@@ -334,13 +338,13 @@ class Drop extends EventEmitter {
         return this._abort(t.id, e.message, true);
       }
       this.dragIn.arrived(t, true);
-      return this.emit('change');
+      return this._changed();
     }
     if (t.release && !(this.drag && this.drag.dest)) {
       // Not dropped yet: wait for the release (kept complete in the temp folder).
       if (!this.drag) this.drag = { dest: null, waiting: [] };
       this.drag.waiting.push(t);
-      return this.emit('change');
+      return this._changed();
     }
     this._place(t, t.release ? this.drag.dest : t.dir);
   }
@@ -395,7 +399,7 @@ class Drop extends EventEmitter {
     if (!this.drag || this.drag.dest) return;
     for (const t of this.drag.waiting.splice(0)) fs.rmSync(t.tmp, { force: true });
     this.drag = null;
-    this.emit('change');
+    this._changed();
   }
 
   _abort(id, error, tell) {
@@ -413,15 +417,26 @@ class Drop extends EventEmitter {
     if (t.batch) return this._batchStep(t.batch, false);
     if (t.drag) {
       this.dragIn.arrived(t, false);
-      return this.emit('change');
+      return this._changed();
     }
     this._remember({ name: t.name, size: t.size, path: null, ok: false, error });
+  }
+
+  // 'change', at most every 250 ms (the last one always goes).
+  _changed() {
+    if (this._changeTimer) return void (this._changeLater = true);
+    this.emit('change');
+    this._changeTimer = setTimeout(() => {
+      this._changeTimer = null;
+      if (this._changeLater) { this._changeLater = false; this._changed(); }
+    }, 250);
+    if (this._changeTimer.unref) this._changeTimer.unref();
   }
 
   _remember(r) {
     this.recent.unshift({ ...r, at: Date.now() });
     this.recent.length = Math.min(this.recent.length, MAX_RECENT);
-    this.emit('change');
+    this._changed();
   }
 
   reveal(index) {
@@ -429,9 +444,22 @@ class Drop extends EventEmitter {
     if (r && r.path && fs.existsSync(r.path)) shell.showItemInFolder(r.path);
   }
 
+  // Files on their way: a batch (Send files, a paste) as one entry, {count, done, bytes, got, at}; the
+  // others one by one (the first few: a drag of 10,000 files isn't 10,000 lines).
   get view() {
+    const batches = new Map([...this.batches].map(([id, b]) => [id, { kind: b.kind, count: b.count, done: b.done, bytes: b.bytes, got: b.doneBytes, at: b.at }]));
+    const receiving = [];
+    let more = 0;
+    for (const t of this.active.values()) {
+      const b = t.batch && batches.get(t.batch);
+      if (b) b.got += t.got;
+      else if (receiving.length < 5) receiving.push({ name: t.name, size: t.size, got: t.got });
+      else more++;
+    }
     return {
-      receiving: [...this.active.values()].map((t) => ({ name: t.name, size: t.size, got: t.got })),
+      receiving,
+      receivingMore: more,
+      inBatches: [...batches.values()],
       recent: this.recent,
       defaultFolder: DOWNLOADS,
     };
