@@ -1304,6 +1304,14 @@ private fun NotificationsPage(core: Core, v: Int) {
         DirHead(name, false, me, true)
         SwitchRow("Show $name’s notifications here", "${core.notifs.shown} shown", core.sync.get("notifs", "in"), first = true) { core.sync.set("notifs", "in", it) }
     }
+    // Each app on its own (#102): switched off, its notifications stay on this device.
+    if (core.notifs.supported) MacCard("Apps") {
+        val apps = core.notifs.apps()
+        if (apps.isEmpty()) MacRow("No notifications yet", "Apps show up here after their first notification", first = true)
+        apps.forEachIndexed { i, (pkg, label) ->
+            SwitchRow(label, "", !core.notifs.isMuted(pkg), first = i == 0) { core.notifs.setMuted(pkg, !it) }
+        }
+    }
 }
 
 // ---- Files ----

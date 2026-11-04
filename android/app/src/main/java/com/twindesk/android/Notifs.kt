@@ -23,6 +23,29 @@ class Notifs(core: Core) : Feature(core) {
     @Volatile var sent = 0; private set
     @Volatile var shown = 0; private set
     private val muted get() = core.store.prefsSet("notifs.muted")
+
+    // Per app (#102): the apps that had a notification to send, each with its own switch on the
+    // Notifications page (on unless muted). Kept across restarts, up to 200.
+    fun apps(): List<Pair<String, String>> {
+        val pm = core.ctx.packageManager
+        return core.store.prefsSet("notifs.apps").mapNotNull { pkg ->
+            val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrNull() ?: return@mapNotNull null
+            pkg to label
+        }.sortedBy { it.second.lowercase() }
+    }
+
+    fun isMuted(pkg: String) = pkg in muted
+
+    fun setMuted(pkg: String, on: Boolean) {
+        core.store.setPrefsSet("notifs.muted", if (on) muted + pkg else muted - pkg)
+        core.changed()
+    }
+
+    private fun seen(pkg: String) {
+        val all = core.store.prefsSet("notifs.apps")
+        if (pkg in all) return
+        core.store.setPrefsSet("notifs.apps", if (all.size >= 200) all else all + pkg)
+    }
     // App icons with notifications (shared/notificon.js): ours go with an app's first one in a
     // session; the computer's are kept by app (the computer sends each only once).
     private val iconsSent = HashSet<String>()
@@ -221,6 +244,7 @@ class Notifs(core: Core) : Feature(core) {
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return // the group's children come too (a summary is "3 messages from 2 chats")
         if (n.category == Notification.CATEGORY_TRANSPORT || n.category == Notification.CATEGORY_PROGRESS || n.category == Notification.CATEGORY_SERVICE) return
         if (n.category == Notification.CATEGORY_CALL && core.hub.callsOn) return // the computer shows the call itself
+        seen(pkg)
         if (pkg in muted) return
 
         val x = n.extras
