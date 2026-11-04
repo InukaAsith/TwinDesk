@@ -9,8 +9,6 @@ pub const TD_MOVE: i32 = 1; // dx, dy: inject (driven)
 pub const TD_EVENT: i32 = 2; // json, len: an event from the lane ({"es":N,…})
 pub const TD_UP: i32 = 3; // dx = the RTT in ms
 pub const TD_DOWN: i32 = 4;
-pub const TD_BUTTON: i32 = 5; // dx = the button (0..4), dy = 1 down / 0 up: inject (driven, direct)
-pub const TD_WHEEL: i32 = 6; // dx, dy (direction applied), len = 1 in line mode: inject (driven, direct)
 
 pub type TdCallback = extern "C" fn(ctx: *mut c_void, kind: i32, dx: f64, dy: f64, json: *const u8, len: usize);
 
@@ -45,8 +43,6 @@ pub extern "C" fn td_start(role: i32, key_hex: *const c_char, ip: *const c_char,
                 match o {
                     Out::Move(dx, dy) => cb(c.0, TD_MOVE, dx, dy, std::ptr::null(), 0),
                     Out::Event(j) => cb(c.0, TD_EVENT, 0.0, 0.0, j.as_ptr(), j.len()),
-                    Out::Button(b, down) => cb(c.0, TD_BUTTON, b as f64, if down { 1.0 } else { 0.0 }, std::ptr::null(), 0),
-                    Out::Wheel(dx, dy, line) => cb(c.0, TD_WHEEL, dx, dy, std::ptr::null(), line as usize),
                     Out::Up(rtt) => cb(c.0, TD_UP, rtt, 0.0, std::ptr::null(), 0),
                     Out::Down => cb(c.0, TD_DOWN, 0.0, 0.0, std::ptr::null(), 0),
                 }
@@ -160,15 +156,4 @@ pub extern "C" fn td_fence_apply(route: u32, mn: u32, cx: f64, cy: f64, dx: *mut
 #[no_mangle]
 pub extern "C" fn td_done(es: u32) {
     lane::done(es);
-}
-
-/// 1: es is new, inject it (Node's `inject` for an event in order); 0: the lane injected it already.
-#[no_mangle]
-pub extern "C" fn td_claim(es: u32) -> i32 {
-    lane::claim(es) as i32
-}
-
-#[no_mangle]
-pub extern "C" fn td_direct(on: i32, reverse: i32) {
-    lane::direct(on != 0, reverse != 0);
 }

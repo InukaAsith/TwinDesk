@@ -14,10 +14,12 @@ aes-gcm = "0.10"
 hkdf = "0.12"
 sha2 = "0.10"
 socket2 = { version = "0.5", features = ["all"] }
-serde_json = "1" # an event's fields, for the clicks and wheel injected straight from the lane
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Networking_WinSock", "Win32_NetworkManagement_QoS", "Win32_Foundation"] }
+
+[dev-dependencies]
+serde_json = "1"
 
 [profile.release]
 opt-level = 3

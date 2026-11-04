@@ -14,57 +14,75 @@ const RETRY_MS = 2; // backed up: look again this often
 class KvmMoves {
   // opts: send({dx, dy}); delay() -> ms (0: next turn); backlog() -> bytes waiting; limit() -> bytes;
   //   maxWait() -> ms backed up before one goes anyway (Infinity: wait for room). All but send optional.
+  // Nothing is allocated per move: the sum is two numbers, send() gets the same object each time (it
+  // reads dx and dy, or copies it to keep it), and the callback the timers run is bound once.
   constructor(opts) {
     this.o = opts;
-    this.pending = null;
-    this.timer = null;
+    this.has = false; // something summed (px, py)
+    this.px = 0;
+    this.py = 0;
+    this.out = { dx: 0, dy: 0 };
+    this.timer = null; // a Timeout or an Immediate (timerIsTimeout says which), or null
+    this.timerIsTimeout = false;
     this.since = 0; // first held back at (backed up)
+    this._go = () => {
+      this.timer = null;
+      this._try();
+    };
+  }
+
+  // What's summed and not yet sent ({dx, dy}), or null.
+  get pending() {
+    return this.has ? { dx: this.px, dy: this.py } : null;
   }
 
   add(dx, dy) {
     KvmMoves.count++;
-    if (!this.pending) {
-      this.pending = { dx: 0, dy: 0 };
+    if (!this.has) {
+      this.has = true;
+      this.px = 0;
+      this.py = 0;
       this._schedule(this.o.delay ? this.o.delay() : 0);
     }
-    this.pending.dx += dx;
-    this.pending.dy += dy;
+    this.px += dx;
+    this.py += dy;
   }
 
   // Send what's summed now.
   flush() {
     this._clear();
-    const m = this.pending;
-    this.pending = null;
+    const had = this.has;
+    this.has = false;
     this.since = 0;
-    if (m) this.o.send(m);
+    if (!had) return;
+    const m = this.out;
+    m.dx = this.px;
+    m.dy = this.py;
+    this.o.send(m);
   }
 
   // Forget what's summed (driving ended).
   drop() {
     this._clear();
-    this.pending = null;
+    this.has = false;
     this.since = 0;
   }
 
   _schedule(ms) {
     if (this.timer) return;
-    const go = () => {
-      this.timer = null;
-      this._try();
-    };
-    this.timer = ms > 0 ? { t: setTimeout(go, ms) } : { i: setImmediate(go) };
+    this.timerIsTimeout = ms > 0;
+    this.timer = ms > 0 ? setTimeout(this._go, ms) : setImmediate(this._go);
   }
 
   _clear() {
     if (!this.timer) return;
-    if (this.timer.t) clearTimeout(this.timer.t);
-    else clearImmediate(this.timer.i);
+    if (this.timerIsTimeout) clearTimeout(this.timer);
+    else clearImmediate(this.timer);
     this.timer = null;
   }
 
   _try() {
-    if (!this.pending) return;
+    if (!this.has) return;
     const backlog = this.o.backlog ? this.o.backlog() : 0;
     const limit = this.o.limit ? this.o.limit() : Infinity;
     if (backlog > limit) {

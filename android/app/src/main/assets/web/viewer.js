@@ -20,6 +20,8 @@
   const kbd = document.getElementById('kbd');
   const TD = window.TD;
   const send = (m) => TD.send(JSON.stringify(m));
+  // in.mm straight to the socket (WebHost's TD.move): no object or JSON per pointer event.
+  const sendAt = typeof TD.move === 'function' ? (x, y) => TD.move(2, x, y, false) : (x, y) => send({ t: 'in.mm', x, y });
   const B = { LEFT: 0, RIGHT: 1, MIDDLE: 2 };
 
   let pc = null;
@@ -179,7 +181,7 @@
       const p = norm(e.clientX, e.clientY, false);
       if (!p) return;
       one = { sx: e.clientX, sy: e.clientY, p, moved: false, dragging: false, right: false };
-      send({ t: 'in.mm', x: p.x, y: p.y });
+      sendAt(p.x, p.y);
       one.timer = setTimeout(() => { // held still: a right click
         if (!one || one.moved) return;
         one.right = true;
@@ -224,7 +226,7 @@
       }
     }
     one.p = p;
-    if (one.moved) send({ t: 'in.mm', x: p.x, y: p.y });
+    if (one.moved) sendAt(p.x, p.y);
   }
 
   function fingerUp(e) {
@@ -277,7 +279,7 @@
     const g = speed * (1 + Math.min(1, Math.hypot(dx, dy) / 30));
     cur.x = Math.min(1, Math.max(0, cur.x + (dx * g) / r.w));
     cur.y = Math.min(1, Math.max(0, cur.y + (dy * g) / r.h));
-    send({ t: 'in.mm', x: cur.x, y: cur.y });
+    sendAt(cur.x, cur.y);
   }
   function padUp(e) {
     if (e.pointerId !== one.id) return;
@@ -380,7 +382,7 @@
     if (e.pointerType === 'pen' && penOn) return penMove(e);
     if (e.pointerType === 'touch') return fingerMove(e);
     const p = norm(e.clientX, e.clientY, held.size > 0);
-    if (p) send({ t: 'in.mm', x: p.x, y: p.y });
+    if (p) sendAt(p.x, p.y);
   });
   window.addEventListener('pointerup', (e) => {
     if (e.pointerType === 'pen' && penOn) return penUp(e);

@@ -131,63 +131,6 @@ async function pairUp(loss) {
     await until(() => !js.up, 'down after 3 intervals', 5000);
     js.close();
   }
-
-  // 3. Direct: the driven helper injects clicks and wheel from the lane itself, in order, once.
-  {
-    const { L, js, rust } = await pairUp(0);
-    rust.cmd({ op: 'driven', route: 5, speed: 1 });
-    rust.cmd({ op: 'direct', on: true, reverse: true });
-    await sleep(20);
-    const t = new L.MoveTotals();
-    t.reset(5);
-    const fenced = (msg) => {
-      const c = t.current();
-      const es = js.nextEs();
-      t.es = es;
-      return { ...msg, es, route: c.route, mn: c.mn, mc: [c.cx, c.cy] };
-    };
-    js.sendMove(t.add(4, 0));
-    await until(() => rust.got.some((x) => x.ev === 'move' && x.dx === 4), 'the first move');
-    t.add(3, 0); // a move whose packet never went: the click's fence takes the pointer there first
-    js.sendEvent(fenced({ t: 'k.md', b: 0 }));
-    await until(() => rust.last('button'), 'the click, injected by the lane');
-    const i = rust.got.findIndex((x) => x.ev === 'button');
-    assert.deepStrictEqual(rust.got[i - 1], { ev: 'move', dx: 3, dy: 0 }, 'its fence moves first');
-    assert.deepStrictEqual(rust.got[i], { ev: 'button', b: 0, down: true });
-    await until(() => rust.last('event') && rust.last('event').msg.es === 1, 'Node still hears of it');
-    rust.cmd({ op: 'claim', es: 1 });
-    await until(() => rust.last('claim'), 'claim 1');
-    assert.strictEqual(rust.last('claim').new, false, 'the WSS copy finds it taken');
-    js.sendEvent(fenced({ t: 'k.wh', dx: 0, dy: 2, mode: 'line' }));
-    await until(() => rust.last('wheel'), 'the wheel step');
-    assert.deepStrictEqual(rust.last('wheel'), { ev: 'wheel', dx: -0, dy: -2, line: true }, 'reversed');
-    // A key goes through Node (its layout): not injected here; Node's inject claims it.
-    js.sendEvent(fenced({ t: 'k.kd', code: 'KeyA' }));
-    await until(() => rust.last('event').msg.es === 3, 'the key, to Node');
-    rust.cmd({ op: 'claim', es: 3 });
-    await until(() => rust.last('claim').es === 3, 'claim 3');
-    assert.strictEqual(rust.last('claim').new, true);
-    // A click behind a gap (es 5 before 4) waits for Node, which keeps the order.
-    const e4 = fenced({ t: 'k.kd', code: 'KeyB' });
-    js.sendEvent(fenced({ t: 'k.mu', b: 0 })); // es 5, sent before es 4
-    await until(() => rust.last('event').msg.es === 5, 'the early click, to Node');
-    assert.strictEqual(rust.got.filter((x) => x.ev === 'button').length, 1, 'not injected out of order');
-    js.sendEvent(e4);
-    await until(() => rust.last('event').msg.es === 4, 'the key before it');
-    rust.cmd({ op: 'claim', es: 4 });
-    rust.cmd({ op: 'claim', es: 5 });
-    await until(() => rust.last('claim').es === 5, 'claim 5');
-    assert.strictEqual(rust.last('claim').new, true, 'Node injects the click, in order');
-    // Off (a drag from the other computer, or Node said so): everything goes to Node.
-    rust.cmd({ op: 'direct', on: false, reverse: false });
-    await sleep(20);
-    js.sendEvent(fenced({ t: 'k.md', b: 1 }));
-    await until(() => rust.last('event').msg.es === 6, 'the click, to Node');
-    await sleep(30);
-    assert.strictEqual(rust.got.filter((x) => x.ev === 'button').length, 1, 'not injected while off');
-    rust.p.kill();
-    js.close();
-  }
   console.log('tdfast-interop: ok');
   process.exit(0);
 })().catch((e) => {

@@ -102,7 +102,7 @@ const keepAlive = setInterval(() => {}, 1000); // the lane's own timers don't ho
 
   // ---- LaneDrive + LaneDriven, end to end without sockets ----
   {
-    const lane = { up: true, es: 0, moves: [], evs: [], nextEs() { return ++this.es; }, sendMove(s) { this.moves.push(s); }, sendEvent(m) { this.evs.push(m); } };
+    const lane = { up: true, es: 0, moves: [], evs: [], nextEs() { return ++this.es; }, sendMove(s) { this.moves.push({ ...s }); }, sendEvent(m) { this.evs.push(m); } };
     const wss = [];
     const drive = new L.LaneDrive(() => lane);
     drive.reset(9);
@@ -177,7 +177,7 @@ const keepAlive = setInterval(() => {}, 1000); // the lane's own timers don't ho
 
     const moves = [];
     const evs = [];
-    h.on('move', (s) => moves.push(s));
+    h.on('move', (s) => moves.push({ ...s })); // the lane reuses its move object
     h.on('event', (m) => evs.push(m));
     g.active(true);
     const mt2 = new L.MoveTotals();
