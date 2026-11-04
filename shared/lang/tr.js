@@ -1416,6 +1416,8 @@
   "Too big for {name}": "{name} için çok büyük",
   "Torch": "El feneri",
   "Touch blocked": "Dokunma engellendi",
+  "Sync touchpads": "Dokunmatik yüzeyleri eşitle",
+  "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both": "Açık: her bilgisayarın faresi ve dokunmatik yüzeyi, nerede olursa olsun tek işaretçiyi hareket ettirir. Kapalı: bir bilgisayarın kendi dokunmatik yüzeyini kullanmak işaretçisini geri alır. İkisinde de aynı",
   "Trackpad gestures": "Dokunmatik yüzey hareketleri",
   "Tray": "Tepsi",
   "Try Again": "Tekrar Dene",

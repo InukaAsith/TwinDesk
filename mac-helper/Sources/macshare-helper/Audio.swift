@@ -32,7 +32,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
       return done(nil)
     }
     if stream != nil { return done(nil) }
-    SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { content, error in
+    SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { content, error in
       DispatchQueue.main.async {
         guard let display = content?.displays.first else {
           return done("no display to capture audio from: \(error?.localizedDescription ?? "Screen Recording?")")
@@ -45,7 +45,13 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         cfg.width = 2 // ScreenCaptureKit always captures video too: keep it tiny and slow
         cfg.height = 2
         cfg.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // TwinDesk's own processes left out (the app and its Electron helpers, which play the other
+        // computer's sound): sharing sound both ways would otherwise send that sound straight back.
+        let me = NSRunningApplication(processIdentifier: getppid())?.bundleIdentifier
+        let ours = (content?.applications ?? []).filter { a in
+          a.processID == getppid() || (me != nil && (a.bundleIdentifier == me! || a.bundleIdentifier.hasPrefix(me! + ".")))
+        }
+        let filter = SCContentFilter(display: display, excludingApplications: ours, exceptingWindows: [])
         let s = SCStream(filter: filter, configuration: cfg, delegate: self)
         do {
           try s.addStreamOutput(self, type: .audio, sampleHandlerQueue: self.queue)
@@ -56,7 +62,7 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
           DispatchQueue.main.async {
             if let err = err { return done("audio capture: \(err.localizedDescription)") }
             self.stream = s
-            log("audio capture on")
+            log("audio capture on, leaving out \(ours.map { "\($0.bundleIdentifier) (\($0.processID))" })")
             done(nil)
           }
         }

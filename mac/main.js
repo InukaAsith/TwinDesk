@@ -836,7 +836,7 @@ app.whenReady().then(() => {
   pairSync = new PairSync({ server: peer, getSettings: () => settings, saveSettings: () => store.saveSettings(settings),
     apply: (f, dir, on) => (f !== 'value' ? SYNC_ACTIONS[f](dir, on)
       : dir === 'rezume' ? actions.setRezume({ on })
-        : ['gestures', 'ble', 'keyboard', 'speed', 'reverseScroll'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
+        : ['gestures', 'ble', 'keyboard', 'speed', 'reverseScroll', 'syncPads'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
     current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,

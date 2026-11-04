@@ -617,6 +617,13 @@ class Kvm extends EventEmitter {
       case 'captureEnded':
         if (this.mode === 'driving') this.goHome(ev.reason === 'deadman' ? 'Input came back by itself (safety timeout)' : '');
         break;
+      // This computer's own mouse or trackpad moved or clicked while driven (the helper's return
+      // watch): it takes the computer back. The driver's pointer comes back where it left, ours stays
+      // where the driver left it, and the two pointers work apart again: either one crosses over.
+      // Sync touchpads on (kvm.syncPads): every mouse moves the one pointer, nobody takes it back.
+      case 'local':
+        if (this.mode === 'driven' && !this.locked && !this.cfg.syncPads) this._sendHome(undefined, '');
+        break;
       case 'return':
         if (this.mode === 'driven' && !this.locked) this._onReturn(ev);
         break;

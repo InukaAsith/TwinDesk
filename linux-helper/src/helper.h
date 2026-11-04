@@ -153,6 +153,10 @@ void ble_shutdown(void);
 
 double now_ms(void);
 
+// ---- localwatch.c: driven, this computer's own mouse or touchpad takes it back (`local`) ----
+void local_watch(int on);
+int local_note(double dx, double dy, int click); // 1: it took it back (the return watch stops)
+
 // ---- lane.c: the input lane in the helper (native/tdfast; only with -DTDFAST) ----
 #ifdef TDFAST
 int lane_fd(void); // the main loop polls it: moves from the lane's thread

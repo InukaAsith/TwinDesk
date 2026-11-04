@@ -24,6 +24,8 @@ UI.tab({
     const reverse = UI.switch((v) => set({ reverseScroll: v }), { label: t('Reverse scrolling') });
     const gestures = UI.switch((v) => set({ gestures: v }), { label: t('Trackpad gestures') });
     const gestureRow = UI.row(t('Trackpad gestures'), t('Pinch to zoom, swipe between desktops, Task View / Mission Control, back and forward — done the native way on {name}. The same on both'), [gestures]);
+    const syncPads = UI.switch((v) => set({ syncPads: v }), { label: t('Sync touchpads') });
+    const syncRow = UI.row(t('Sync touchpads'), t('On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both'), [syncPads]);
     const ble = UI.switch((v) => set({ ble: v }), { label: t('Over Bluetooth') });
     const bleRow = UI.row(t('Over Bluetooth'), t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : t('None')) }, (v) => set({ resistancePx: v }));
@@ -47,7 +49,7 @@ UI.tab({
     body.append(
       pair.el,
       lock.el,
-      UI.card(t('Feel'), [gestureRow]),
+      UI.card(t('Feel'), [gestureRow, syncRow]),
       UI.card(t('Not on the same network'), [bleRow]),
       UI.card(t('Right now'), [status], { cls: 'keep-on' }),
       UI.note('info', t('Which device each edge of the screen leads to: Multi-device › Layout.')),
@@ -62,6 +64,7 @@ UI.tab({
       speed.set(s.kvm.speed);
       reverse.set(s.kvm.reverseScroll);
       gestures.set(s.kvm.gestures !== false);
+      syncPads.set(s.kvm.syncPads === true);
       ble.set(s.kvm.ble !== false);
       resistance.set(s.kvm.resistancePx);
     }

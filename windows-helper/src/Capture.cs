@@ -44,6 +44,15 @@ namespace MacShare
         readonly HashSet<uint> heldVks = new HashSet<uint>(), swallowVks = new HashSet<uint>();
         readonly HashSet<int> heldButtons = new HashSet<int>(), swallowButtons = new HashSet<int>();
         DateTime lastCmd = DateTime.UtcNow;
+        // Driven (armReturn on): the first input from this PC's own mouse or touchpad takes the PC back
+        // (`local`): main sends the input home, so the driver gets its own pointer again where it left
+        // and the two pointers stay apart. A move counts once it went LocalPx (not a resting palm), and
+        // nothing counts in the first LocalGraceMs after the watch began.
+        bool localWatch;
+        DateTime localSince, localAt;
+        double localAcc;
+        const double LocalPx = 6;
+        const int LocalGraceMs = 300;
 
         // edge push (home) and return edge (driven)
 #if !MULTI
@@ -327,9 +336,37 @@ namespace MacShare
 #endif
         }
 
+        void WatchLocal(bool on)
+        {
+            localWatch = on;
+            localSince = DateTime.UtcNow;
+            localAcc = 0;
+        }
+
+        // This PC's own mouse or touchpad while driven (our injected input never gets here): true once
+        // it takes the PC back. The return watch stops with it, so this same motion can't send a `return`.
+        bool NoteLocal(int dx, int dy, bool click)
+        {
+            if (!localWatch || capturing) return false;
+            DateTime now = DateTime.UtcNow;
+            if ((now - localSince).TotalMilliseconds < LocalGraceMs) return false;
+            if (!click)
+            {
+                if ((now - localAt).TotalMilliseconds > 300) localAcc = 0;
+                localAt = now;
+                localAcc += Math.Abs(dx) + Math.Abs(dy);
+                if (localAcc < LocalPx) return false;
+            }
+            localWatch = false;
+            retArmed = false;
+            emit(Ev("local"));
+            return true;
+        }
+
 #if !MULTI
         public void ArmReturn(bool on, string side, double resistance)
         {
+            WatchLocal(on);
             retArmed = on && side != null;
             retSide = side;
             retResistance = resistance;
@@ -387,6 +424,7 @@ namespace MacShare
             bool up = msg == Native.WM_LBUTTONUP || msg == Native.WM_RBUTTONUP || msg == Native.WM_MBUTTONUP || msg == Native.WM_XBUTTONUP;
 
             if (up && button >= 0 && swallowButtons.Remove(button)) return (IntPtr)1;
+            if (down && !capturing && (m.flags & Native.LLMHF_INJECTED) == 0) NoteLocal(0, 0, true); // a click here while driven
             if (!capturing || !capMouse) return Native.CallNextHookEx(mouseHook, nCode, wParam, lParam);
 
             if (msg == Native.WM_MOUSEMOVE)
@@ -562,6 +600,7 @@ namespace MacShare
         {
             Watchdog();
             if (capturing) return;
+            if (NoteLocal(dx, dy, false)) return;
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
