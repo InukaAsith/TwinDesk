@@ -107,6 +107,14 @@ class Helper extends EventEmitter {
     return true;
   }
 
+  // send('inject', {ev: {t: 'k.mm', dx, dy}}) as one string: no objects to build and walk for each
+  // summed move. The same line JSON.stringify makes (shared/test/helper-move.js).
+  sendMove(dx, dy) {
+    if (!this.proc) return false;
+    this.proc.stdin.write('{"ev":{"t":"k.mm","dx":' + (Number.isFinite(dx) ? dx : 0) + ',"dy":' + (Number.isFinite(dy) ? dy : 0) + '},"cmd":"inject"}\n');
+    return true;
+  }
+
   send(cmd, args = {}) {
     return this._write({ ...args, cmd });
   }

@@ -49,6 +49,13 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
         @JavascriptInterface fun send(json: String) {
             runCatching { core.send(JSONObject(json)) }
         }
+        // A pointer move or a wheel step (remote.js, viewer.js), many a second: written straight to the
+        // socket (Link.sendMove), with no JSON string from the page and no JSONObject to parse and
+        // write out again for each one. kind: 0 remote.mm {dx: a, dy: b, smooth}, 1 remote.wh {dx, dy},
+        // 2 in.mm {x: a, y: b}.
+        @JavascriptInterface fun move(kind: Int, a: Double, b: Double, smooth: Boolean) {
+            core.link.sendMove(kind, a, b, smooth)
+        }
         @JavascriptInterface fun ready() = main.post {
             ready = true
             for (m in queue) deliver(m)

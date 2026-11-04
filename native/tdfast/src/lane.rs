@@ -26,10 +26,6 @@ pub enum Out {
     Move(f64, f64),
     /// An event from the lane: its JSON with "es" in it.
     Event(Vec<u8>),
-    /// Driven, direct: a click from the lane to inject now (button 0..4, down), its fence's move first.
-    Button(u8, bool),
-    /// Driven, direct: a wheel step (dx, dy with the scroll direction applied, line mode).
-    Wheel(f64, f64, bool),
     /// Up, with the rtt (ms): when it comes up, then again every RTT_EVERY with the latest.
     Up(f64),
     Down,
@@ -72,8 +68,6 @@ struct Session {
     done: u32,
     held: Option<Move>,
     early: Option<Move>,
-    direct: bool,    // Node said clicks and wheel may be injected here, without waiting for it
-    wheel_sign: f64, // -1: reverse scrolling
 }
 
 pub struct Lane {
@@ -281,9 +275,6 @@ impl Lane {
             }
             EVENTS => {
                 for (es, json) in decode_events(&body) {
-                    if let Some(s) = &mut self.sess {
-                        s.direct_event(es, &json, out);
-                    }
                     if let Some(j) = with_es(&json, es) {
                         out.push(Out::Event(j));
                     }
@@ -338,54 +329,6 @@ impl Session {
         self.ma_cx = m.cx;
         self.ma_cy = m.cy;
         if d.0 == 0.0 && d.1 == 0.0 { None } else { Some(d) }
-    }
-
-    // A click or wheel from the lane, the next in order and for this crossing: injected here (its fence
-    // first) and counted as done, so the WSS copy and Node's own `inject` for it find it taken
-    // (claim). Anything else, or a gap, goes the usual way: to Node, which keeps the order.
-    fn direct_event(&mut self, es: u32, json: &[u8], out: &mut Vec<Out>) {
-        if !self.direct || self.hold || self.d_route == 0 || es != self.done.wrapping_add(1) {
-            return;
-        }
-        let v: serde_json::Value = match serde_json::from_slice(json) {
-            Ok(v) => v,
-            Err(_) => return,
-        };
-        let t = v.get("t").and_then(|x| x.as_str()).unwrap_or("");
-        if !matches!(t, "k.md" | "k.mu" | "k.wh") || v.get("route").and_then(|x| x.as_u64()) != Some(self.d_route as u64) {
-            return;
-        }
-        let num = |k: &str| v.get(k).and_then(|x| x.as_f64()).filter(|x| x.is_finite()).unwrap_or(0.0);
-        let ev = if t == "k.wh" {
-            Out::Wheel(num("dx") * self.wheel_sign, num("dy") * self.wheel_sign, v.get("mode").and_then(|x| x.as_str()) == Some("line"))
-        } else {
-            Out::Button(num("b").trunc().clamp(0.0, 4.0) as u8, t == "k.md")
-        };
-        let mn = v.get("mn").and_then(|x| x.as_u64());
-        let mc = v.get("mc").and_then(|x| x.as_array()).map(|a| (a.first().and_then(|x| x.as_f64()), a.get(1).and_then(|x| x.as_f64())));
-        if let (Some(mn), Some((Some(cx), Some(cy)))) = (mn, mc) {
-            if let Some((dx, dy)) = self.take(Move { route: self.d_route, mn: mn as u32, es: 0, cx, cy }) {
-                out.push(Out::Move(dx, dy));
-            }
-        }
-        out.push(ev);
-        self.claim(es, out);
-    }
-
-    // Every event up to es is through: true when es is new (the caller injects it); a move that
-    // waited for it goes now.
-    fn claim(&mut self, es: u32, out: &mut Vec<Out>) -> bool {
-        let new = es > self.done;
-        if new {
-            self.done = es;
-        }
-        if let Some(h) = self.held {
-            if h.es <= self.done {
-                self.held = None;
-                self.driven_move(h, out);
-            }
-        }
-        new
     }
 
     fn inject(&mut self, dx: f64, dy: f64, out: &mut Vec<Out>) {
@@ -528,7 +471,6 @@ pub fn start(role: &str, key_hex: &str, ip: &str, port: u16) -> bool {
             drive_route: 0, mn: 0, cx: 0.0, cy: 0.0, es: 0, mv: None, move_at: None, move_due: None, move_tails: vec![],
             events: VecDeque::new(), event_tails: vec![],
             d_route: 0, speed: 1.0, hold: false, held_d: (0.0, 0.0), ma_mn: 0, ma_cx: 0.0, ma_cy: 0.0, done: 0, held: None, early: None,
-            direct: false, wheel_sign: 1.0,
         });
         l.ping(now, out);
         true
@@ -662,7 +604,6 @@ pub fn driven(route: u32, speed: f64) {
             s.held = None;
             s.hold = false;
             s.held_d = (0.0, 0.0);
-            s.direct = false; // until Node says this crossing may (direct())
             if let Some(e) = s.early.take() {
                 if e.route == route {
                     s.driven_move(e, out);
@@ -704,27 +645,15 @@ pub fn fence_apply(route: u32, mn: u32, cx: f64, cy: f64) -> Option<(f64, f64)> 
 pub fn done(es: u32) {
     with(|l, out| {
         if let Some(s) = &mut l.sess {
-            s.claim(es, out);
-        }
-    })
-}
-
-/// An event Node delivers in order: true when it's new (inject it), false when the lane already
-/// injected it (direct) or it was done before.
-pub fn claim(es: u32) -> bool {
-    with(|l, out| match &mut l.sess {
-        Some(s) => s.claim(es, out),
-        None => true,
-    })
-}
-
-/// Driven: clicks and wheel from the lane may be injected here as they come (not while a drag from
-/// the other computer is on: Node handles those); reverse: the scroll direction flipped.
-pub fn direct(on: bool, reverse: bool) {
-    with(|l, _| {
-        if let Some(s) = &mut l.sess {
-            s.direct = on;
-            s.wheel_sign = if reverse { -1.0 } else { 1.0 };
+            if es > s.done {
+                s.done = es;
+            }
+            if let Some(h) = s.held {
+                if h.es <= s.done {
+                    s.held = None;
+                    s.driven_move(h, out);
+                }
+            }
         }
     })
 }
