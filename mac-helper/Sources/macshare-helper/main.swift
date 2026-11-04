@@ -300,9 +300,14 @@ DispatchQueue.global().async {
   }
 }
 
-signal(SIGTERM) { _ in
-  PointerVisibility.show() // never leave the pointer hidden
-  exit(0)
+// Killed or hung up: never leave the pointer hidden or frozen. (A crash ends our WindowServer
+// connection, which shows the pointer and frees it by itself; main's helper.on('exit') goes home.)
+for sig in [SIGTERM, SIGINT, SIGHUP] {
+  signal(sig) { _ in
+    CGAssociateMouseAndMouseCursorPosition(1)
+    PointerVisibility.show()
+    exit(0)
+  }
 }
 signal(SIGPIPE, SIG_IGN) // main closed a pipe (e.g. the audio fd): just stop writing
 NSApplication.shared.setActivationPolicy(.prohibited)

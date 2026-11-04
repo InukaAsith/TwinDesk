@@ -33,6 +33,8 @@ UI.tab({
     const reverse = UI.switch((v) => api.setKvm({ reverseScroll: v }), { label: I18n.t('Reverse scrolling') });
     const gestures = UI.switch((v) => api.setKvm({ gestures: v }), { label: I18n.t('Trackpad gestures') });
     const gestureRow = UI.row(I18n.t('Trackpad gestures'), I18n.t('Pinch to zoom, swipe between desktops, Mission Control / Task View, back and forward — done the native way on {name}. The same on both'), [gestures]);
+    const syncPads = UI.switch((v) => api.setKvm({ syncPads: v }), { label: I18n.t('Sync touchpads') });
+    const syncRow = UI.row(I18n.t('Sync touchpads'), I18n.t('On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both'), [syncPads]);
     const ble = UI.switch((v) => api.setKvm({ ble: v }), { label: I18n.t('Over Bluetooth') });
     const bleRow = UI.row(I18n.t('Over Bluetooth'), I18n.t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
 
@@ -53,6 +55,7 @@ UI.tab({
         UI.row(I18n.t('Pointer speed here'), I18n.t('Another computer’s mouse on this Mac, and this Mac’s on a phone'), [speed]),
         peerRow(I18n.t('Reverse scrolling from {name}'), '', [reverse]),
         gestureRow,
+        syncRow,
       ]),
       UI.card(I18n.t('Not on the same network'), [bleRow]),
     );
@@ -71,6 +74,7 @@ UI.tab({
       speed.set(k.speed);
       reverse.set(k.reverseScroll);
       gestures.set(k.gestures !== false);
+      syncPads.set(k.syncPads === true);
       ble.set(k.ble !== false);
       viaRow.hidden = !UI.peer(s).phone;
       via.set(((s.phone || {}).bridge || {}).input || (((s.phone || {}).settings || {}).input === 'phone' ? 'phone' : 'adb'));

@@ -361,6 +361,7 @@ void capture_stop(int toSide, double offset, int hasSide) {
 void capture_return_zones(const char *text) { nRetZ = zones_parse(text, retZ, 8); }
 
 void capture_arm_return(int on, int s, double resistance) {
+  local_watch(on);
   retArmed = on && s != SIDE_NONE;
   retSide = s;
   retResistance = resistance;
@@ -370,6 +371,7 @@ void capture_arm_return(int on, int s, double resistance) {
 #ifdef MULTI
 // armReturn with sideList: every edge with a device behind it (fallback: the one side).
 void capture_arm_return_list(int on, const char *list, int fallback, double resistance) {
+  local_watch(on);
   nret = on ? parse_sides(list, fallback, retSides) : 0;
   retArmed = nret > 0;
   retSide = nret ? retSides[0] : SIDE_NONE;
@@ -594,6 +596,7 @@ static void on_button(int xb, int down) {
   if (xb == 1) { leftDown = down; if (!down && soft) softUp = 1; }
   if (xb == 1 && !down && watchRel && !capturing) { watchRel = 0; emit("{\"event\":\"released\"}"); }
   if (!down && swallowButtons[xb]) { swallowButtons[xb] = 0; release_grabs(); return; }
+  if (down && !capturing && xb >= 1 && xb <= 3 && local_note(0, 0, 1)) retArmed = 0; // a click here while driven
   if (!capturing || !capMouse) return;
   if (xb >= 4 && xb <= 7) {
     if (!down) return;
@@ -712,6 +715,7 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
   }
   int x, y;
   unsigned mask;
+  if (local_note(rdx, rdy, 0)) { retArmed = 0; return; }
   query(&x, &y, &mask);
   if (retArmed) { capture_feed_return(x, y, rdx, rdy); return; }
 #ifdef MULTI

@@ -10,10 +10,12 @@
 const { execFile, execFileSync } = require('child_process');
 
 // Chromium captures the system sound itself (getDisplayMedia's loopback, ScreenCaptureKit): macOS
-// 14.2+, unless TWINDESK_HELPER_AUDIO=1. Its features go in main.js's one enable-features switch.
+// 14.2+, only with TWINDESK_LOOPBACK_AUDIO=1. Off by default: it captures after the system mute (so
+// "Mute this Mac" sent silence) and keeps the other computer's sound in (Electron plays it from
+// another process), which loops when both share sound. Its features go in main.js's enable-features.
 const LOOPBACK_FEATURES = ['MacLoopbackAudioForScreenShare', 'MacSckSystemAudioLoopbackOverride'];
 function loopback() {
-  if (process.platform !== 'darwin' || process.env.TWINDESK_HELPER_AUDIO) return false;
+  if (process.platform !== 'darwin' || !process.env.TWINDESK_LOOPBACK_AUDIO) return false;
   const [major, minor] = String(process.getSystemVersion ? process.getSystemVersion() : '0').split('.').map(Number);
   return major > 14 || (major === 14 && minor >= 2);
 }

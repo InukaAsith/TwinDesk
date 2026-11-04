@@ -290,6 +290,35 @@ test('driven: locked, the edges are not watched and a return is ignored; the dri
   }
 });
 
+test('driven: this computer’s own mouse takes it back (local): the driver goes home with no offset, its pointer where it left; not while locked', async () => {
+  const N = await world(['A', 'B'], [['A', 'B']]);
+  try {
+    const { A, B } = N;
+    record(B);
+    const kvm = kvmOn(A);
+    lay(A, { top: B });
+    B.hub.bus.send(A.id, { t: T.KVM_TAKE, route: 1, side: 'top', offset: 0.5, mouse: true, keyboard: true });
+    await waitFor(() => kvm.mode === 'driven', 'A is driven by B');
+
+    kvm.setLocked(true);
+    A.helper.emit('event', 'local', {}); // one already on its way
+    await sleep(150);
+    assert.strictEqual(kvm.mode, 'driven', 'locked: still driven');
+    kvm.setLocked(false);
+
+    A.helper.emit('event', 'local', {});
+    await waitFor(() => got(B, T.KVM_HOME).length === 1, 'B is sent home');
+    assert.strictEqual(kvm.mode, 'home', 'A is ours again');
+    assert.strictEqual(typeof got(B, T.KVM_HOME)[0].m.offset, 'undefined', 'no offset: B’s pointer comes back where it left');
+    assert.strictEqual(A.helper.last('armReturn').on, false, 'nothing watched at home');
+    A.helper.emit('event', 'local', {}); // late: ignored at home
+    await sleep(100);
+    assert.strictEqual(got(B, T.KVM_HOME).length, 1);
+  } finally {
+    closeAll(N);
+  }
+});
+
 test('nothing connected: the lock is refused and the helper is not given the lock key', async () => {
   const N = await world(['A'], []);
   try {

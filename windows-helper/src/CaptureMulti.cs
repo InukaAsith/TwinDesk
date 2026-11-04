@@ -98,6 +98,7 @@ namespace MacShare
         // given: nothing is watched.
         public void ArmReturn(bool on, IEnumerable<string> sides, double resistance)
         {
+            WatchLocal(on);
             retSides.Clear();
             retPushes.Clear();
             if (on && sides != null)
@@ -113,6 +114,7 @@ namespace MacShare
         {
             Watchdog();
             if (capturing) return;
+            if (NoteLocal(dx, dy, false)) return;
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }

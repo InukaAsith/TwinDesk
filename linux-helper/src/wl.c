@@ -400,6 +400,7 @@ void wl_capture_stop(int toSide, double offset, int hasSide) {
 void wl_return_zones(const char *text) { nRetZ = zones_parse(text, retZ, 8); }
 
 void wl_arm_return(int on, int s, double resistance) {
+  local_watch(on);
   retArmed = on && s != SIDE_NONE;
   retSide = s;
   retResistance = resistance;
@@ -531,6 +532,7 @@ static void on_button(int code, int down) {
   if (b < 0) return;
   localButtons[b] = (unsigned char)down;
   if (b == 0 && !down && watchRel && !capturing) { watchRel = 0; emit("{\"event\":\"released\"}"); }
+  if (down && !capturing && b <= 2 && local_note(0, 0, 1)) retArmed = 0; // a click here while driven
   if (!capturing || !capMouse) return;
   if (!down && !sentButtons[b]) return;
   if (down) flush_hotkey();
@@ -605,6 +607,7 @@ static void on_motion(double rdx, double rdy, double tMs) {
   int ix = (int)lround(px + dx), iy = (int)lround(py + dy), cx, cy;
   screens_clamp(ix, iy, (int)px, (int)py, &cx, &cy);
   px = cx; py = cy;
+  if (local_note(rdx, rdy, 0)) { retArmed = 0; return; }
   if (retArmed) { feed_return(rdx, rdy); return; }
   if (!driveOther || side == SIDE_NONE || any(localButtons, 8)) { push = 0; return; } // rule 6
   double outward = screens_outward(side, rdx, rdy);

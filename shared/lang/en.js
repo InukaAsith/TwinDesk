@@ -1416,6 +1416,8 @@
   "Too big for {name}": "Too big for {name}",
   "Torch": "Torch",
   "Touch blocked": "Touch blocked",
+  "Sync touchpads": "Sync touchpads",
+  "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both": "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both",
   "Trackpad gestures": "Trackpad gestures",
   "Tray": "Tray",
   "Try Again": "Try Again",

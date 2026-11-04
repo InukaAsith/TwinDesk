@@ -41,6 +41,7 @@ namespace MacShare
         // Reloading can fail (a UAC prompt on the secure desktop, an elevated window in front): it
         // is tried again every tick (Retry) until it works, so a pointer is never left blank.
         static bool restorePending;
+        public static bool Pending { get { return restorePending; } }
 
         public static void Restore()
         {

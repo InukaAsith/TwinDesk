@@ -34,6 +34,7 @@ const VALUES = {
   rezume: { path: ['rezume', 'on'], allowed: [true, false], feature: 'rezume' }, // only where the app has ReZume
   pace: { path: ['monitor', 'pacing'], allowed: ['fast', 'smooth'] },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
+  syncPads: { path: ['kvm', 'syncPads'], allowed: [true, false] }, // one pointer for every mouse (kvm.js 'local')
   ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)
   // Share Keyboard: one switch for both sides (a computer, or a phone's Keyboard page). Set on
   // either side for the speed and scrolling of this computer's mouse on a phone (its Cursor page).
