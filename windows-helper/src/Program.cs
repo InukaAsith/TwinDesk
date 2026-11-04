@@ -245,6 +245,7 @@ namespace MacShare
                 {
                     case "ping": case "keepalive": break;
                     case "kvmConfig":
+                        capture.TakeBack = Json.Bool(c, "takeBack", true);
 #if MULTI
                         // sides: every side that leads to a connected device (CaptureMulti.cs); without it, the one side.
                         List<string> sides = Json.Strs(c, "sides");

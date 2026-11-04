@@ -30,6 +30,7 @@ class PcApps extends EventEmitter {
 
     this.pendingLink = null; // {id, at}: a kept Dock icon was clicked before the PC was connected
     server.on('client', () => {
+      this.rz = false;
       this.apps = [];
       this.launch = {};
       this._policy();
@@ -54,7 +55,7 @@ class PcApps extends EventEmitter {
       this.launch[String(m.id)] = m.ok ? 'ok' : String(m.why || 'didn’t start');
       this.emit('change');
     });
-    server.on(`t:${T.PAPP_WINDOWS}`, (m) => this.cfg.on && Array.isArray(m.windows) && this._sync(m.windows));
+    server.on(`t:${T.PAPP_WINDOWS}`, (m) => this.accepting && Array.isArray(m.windows) && this._sync(m.windows));
     server.on(`t:${T.RTC2_OFFER}`, (m) => this._onOffer(m));
     // `win: 'view'` is another Mac's viewer talking to our own sender (appsend.js), not for us.
     server.on(`t:${T.RTC2_ICE}`, (m) => {
@@ -91,8 +92,20 @@ class PcApps extends EventEmitter {
     return this.getSettings().papps;
   }
 
+  // Windows ReZume took from the other computer come too, with this tab's switch off (rezume.js take).
+  acceptReZume(on) {
+    if (this.rz === (on === true)) return;
+    this.rz = on === true;
+    if (this.server.current) this._policy();
+    if (!this.accepting) this._sync([]);
+  }
+
+  get accepting() {
+    return !!this.cfg.on || this.rz === true;
+  }
+
   _policy() {
-    this.server.sendToClient({ t: T.PAPP_POLICY, accept: !!this.cfg.on });
+    this.server.sendToClient({ t: T.PAPP_POLICY, accept: this.accepting });
   }
 
   list() {
@@ -306,7 +319,7 @@ class PcApps extends EventEmitter {
   }
 
   _onOffer(m) {
-    if (m.kind !== 'window' || m.win === 'view' || typeof m.sdp !== 'string' || !this.cfg.on) return;
+    if (m.kind !== 'window' || m.win === 'view' || typeof m.sdp !== 'string' || !this.accepting) return;
     const w = this.wins.get(Number(m.wid));
     if (!w || w.win.isDestroyed()) return; // not listed (yet): the PC lists before it offers
     w.session = m.session;
@@ -381,7 +394,7 @@ class PcApps extends EventEmitter {
 
   applySettings() {
     this._policy();
-    if (!this.cfg.on) this._sync([]);
+    if (!this.accepting) this._sync([]);
     else if (!this.apps.length) this.list();
     this.emit('change');
   }

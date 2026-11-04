@@ -165,6 +165,7 @@ body.setup #sidebar { display: none; }
 /* ReZume (shared/ui-rezume.js): the other device's app icon beside what it is */
 .rezume-icon { display: flex; flex: none; margin-right: 12px; }
 .rezume-icon img { width: 36px; height: 36px; border-radius: 8px; }
+.rezume-list .rezume-icon img { width: 28px; height: 28px; border-radius: 6px; } /* ReZume's allowlists */
 
 /* About: the last line, under the Licence card */
 

@@ -515,6 +515,9 @@ function setupIpc(ctx) {
       if (m.a === 'take') r.take();
       else if (m.a === 'dismiss') r.dismiss();
       else if (m.a === 'push') r.push();
+      // ReZume › Allowed apps: one app let through or not, or forgotten (no app: the whole list).
+      else if (m.a === 'allow' && typeof m.app === 'string') r.allow(m.list, m.app, m.on === true);
+      else if (m.a === 'forget') r.forget(m.list, typeof m.app === 'string' ? m.app : '');
     },
     // Remote tab: the phone's Remote page here (shared/phone-remote.js).
     setRemote(m) {

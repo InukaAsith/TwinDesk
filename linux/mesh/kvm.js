@@ -337,6 +337,7 @@ class Kvm {
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
       driveOther: sides.length > 0,
       keyboard: !!k.keyboard,
+      takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
       deadmanMs: P.HELPER_DEADMAN_MS,
       doubleTapMs: P.DOUBLE_TAP_MS,
       cooldownMs: P.KVM_CROSS_COOLDOWN_MS,

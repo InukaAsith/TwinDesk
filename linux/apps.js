@@ -61,6 +61,9 @@ class Apps {
 
   launch(id) {
     if (typeof id !== 'string' || !this.allowed()) return;
+    // Each window on its own (peerapps.js, papp.*), never through the shared display: the app stays
+    // off the Mac's own screen.
+    if (this.launchWindows) return this.launchWindows(id);
     this.message = '';
     if (!this.link.send({ t: T.APP_LAUNCH, id })) return;
     const a = this.list.find((x) => x.id === id);

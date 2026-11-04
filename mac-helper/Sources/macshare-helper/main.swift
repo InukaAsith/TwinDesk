@@ -66,6 +66,7 @@ func handle(_ line: String) {
   switch cmd {
   case "kvmConfig":
     Capture.shared.edgeZones = zones(msg["zones"])
+    Capture.shared.takeBack = (msg["takeBack"] as? Bool) ?? true
     guard Capture.shared.startTap() else { return replyError(id, "event tap failed (Accessibility / Input Monitoring)") }
     Flash.shared.prepare()
 #if MULTI

@@ -244,6 +244,7 @@ class Kvm {
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
       driveOther: !!(this.linked && k.driveOther && k.mouse && this.connected && this.crossingSide && !this.blockEdge() && !this.paused && !(this.locked && this.mode === 'home')),
       keyboard: !!k.keyboard,
+      takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
       deadmanMs: P.HELPER_DEADMAN_MS,
       doubleTapMs: P.DOUBLE_TAP_MS,
       cooldownMs: P.KVM_CROSS_COOLDOWN_MS,

@@ -354,6 +354,9 @@ function start() {
   screen.apps = apps;
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
+  // A Mac's apps: listed and pinned through apps.js, opened window by window through peerapps.js.
+  peerApps.otherApps = () => apps.list;
+  apps.launchWindows = (id) => peerApps.launch(id);
   helper.on('exit', pushState);
   helper.on('ready', () => { sendScreens(); pushState(); });
   const { screen: displays } = require('electron');
@@ -622,15 +625,43 @@ function loadReZumeNow() {
     appIcon: (a) => rezumeAct.appIcon(a),
     open: { url: (u) => shell.openExternal(u), file: (p) => shell.openPath(p), phoneApp: (pkg, name) => phoneViews && phoneViews.openApp(pkg, name) },
     sendFile: (p, batch) => !!fileDrop.sendBatch([p], 'rezume', batch),
-    expectFile: (batch) => fileRecv.expectBatch(batch, receivedDir(settings, app.getPath('downloads')), 0, false),
+    expectFile: (batch, dir) => fileRecv.expectBatch(batch, dir || receivedDir(settings, app.getPath('downloads')), 0, false),
+    // Documents opened in place (shared/rzlive.js), the chooser (shared/rzpick.js), and where copies go.
+    cacheDir: path.join(app.getPath('temp'), 'TwinDesk ReZume'),
+    live: liveDocs(),
+    pick: (o, ways) => require('../shared/rzpick.js').pick(o, ways, { peer: peerName(), language: i18n.locale }),
     adb: () => phoneAdb(phone && phone.bridge),
     phoneApps: () => (phone && phone.apps) || [],
+    save: saveSettings,
+    // An app's window between two computers: ours streamed there as the Apps tab's are (pcapps.js),
+    // theirs shown here (peerapps.js; a Mac's come through apps.js, which takes them as they come).
+    window: {
+      canSend: () => !!(pcApps && pcApps.canAdopt),
+      send: (app) => !!(pcApps && pcApps.adopt(app)),
+      accept: (on) => {
+        const set = () => { if (peerApps) peerApps.acceptReZume(on); return true; };
+        return on ? waitWifi('apps', set) : set();
+      },
+      stop: (app) => pcApps && pcApps.unadopt(app),
+    },
   });
   rezume.on('change', pushState);
   rezume.on('opened', (o) => hud && hud.show('home', { key: o.how === 'sent' ? 'Sent to {name}: {title}' : 'From {name}: {title}', vars: { name: peerName(), title: o.title } }));
   rezumeShelf = new ReZumeShelf({ rezume, cfg: () => settings.rezume, peerName, appIcon: path.join(__dirname, 'assets', 'icon.png') });
   rezume.apply();
   return rezume;
+}
+
+// ReZume's live documents: shared with the session's certificate, mounted as the phone drive is.
+function liveDocs() {
+  const { LiveShare } = require('../shared/rzlive.js');
+  const ls = new LiveShare({ tls: () => hostServer && hostServer.tls, mounter: require('./phonedrive').mounter });
+  return {
+    share: (p) => ls.share(p),
+    mount: (info) => waitWifi('folder', () => ls.mount(info), () => { throw new Error('The other computer could not be reached over Wi-Fi'); }),
+    stop: () => ls.stop(),
+    shutdown: () => ls.shutdown(),
+  };
 }
 
 // The phone through wireless debugging, for ReZume: its app in front, and a tab opened there at once.

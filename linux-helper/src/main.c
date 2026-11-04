@@ -84,6 +84,7 @@ static void dispatch(const char *line) {
     wl_touch();
     if (!strcmp(cmd, "ping") || !strcmp(cmd, "keepalive")) {
     } else if (!strcmp(cmd, "kvmConfig")) {
+      local_allow(jbool(c, "takeBack", 1));
       wl_config(c);
     } else if (!strcmp(cmd, "screens")) {
       screens_set(jstr(c, "list", ""));
@@ -126,6 +127,7 @@ static void dispatch(const char *line) {
 
   if (!strcmp(cmd, "ping") || !strcmp(cmd, "keepalive")) {
   } else if (!strcmp(cmd, "kvmConfig")) {
+    local_allow(jbool(c, "takeBack", 1));
     capture_config(c);
   } else if (!strcmp(cmd, "screens")) {
     // X11: XRandR knows better

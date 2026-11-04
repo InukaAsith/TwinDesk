@@ -316,6 +316,7 @@ class Kvm extends EventEmitter {
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
         dwellMs: P.KVM_EDGE_DWELL_MS,
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
+        takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
         dragFiles: this.fileSend.dragOn && this.fileSend.peerDrag, // drag.policy, both sides
       })
       .then(() => this._setTapError(null), (e) => this._setTapError(e.message));

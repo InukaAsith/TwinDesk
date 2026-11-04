@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>ReZume</title>
+  <link rel="stylesheet" href="rzpick.css">
+</head>
+<body>
+  <main class="rp">
+    <header class="rp-head">
+      <img id="icon" class="rp-icon" alt="" hidden>
+      <div class="rp-text">
+        <h1 id="question"></h1>
+        <p id="item"></p>
+      </div>
+      <button id="close" class="rp-x" data-i18n-title="Cancel" data-i18n-label="Cancel" title="Cancel" aria-label="Cancel">×</button>
+    </header>
+    <div id="ways" class="rp-ways"></div>
+  </main>
+  <script src="lang/en.js"></script>
+  <script src="lang/zh-CN.js"></script>
+  <script src="lang/ru.js"></script>
+  <script src="lang/tr.js"></script>
+  <script src="i18n.js"></script>
+  <script src="player-i18n.js"></script>
+  <script src="rzpick-renderer.js"></script>
+</body>
+</html>
