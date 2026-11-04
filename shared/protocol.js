@@ -316,6 +316,7 @@
       MEDIA_THUMB: 'media.thumb', // computer->phone {ids}: these next (the ones still waiting are dropped) | phone->computer {id, data}
       MEDIA_VIEW: 'media.view', // computer->phone {id} | phone->computer {id, data}: a big preview
       MEDIA_SAVE: 'media.save', // computer->phone {ids}: send these files here (they come as file.offer, drop 'send')
+      MEDIA_DELETE: 'media.delete', // computer->phone {ids}: remove them (phones that say media.remove) | phone->computer {ids: gone, failed, confirm: waiting for Delete tapped on the phone}
       // Files: the phone's storage, through TwinDesk on it with All files access (no ADB). Paths are
       // relative to the phone's shared storage ('' its top, 'DCIM/Camera'), never '..'.
       FS_LIST: 'fs.list', // computer->phone {path, hidden?} | phone->computer {path, items: [{name, dir, size, at, n? (a folder's items)}], free, total, error?}

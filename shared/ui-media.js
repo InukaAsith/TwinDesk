@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Photos page (Mac, PC and Linux): the phone's photos and videos, newest first, a page at a
 // time; small pictures only for the tiles on screen; click one to see it big; Save copies the
-// files here (into Downloads, as Send does). On USB, Wi-Fi or Wi-Fi Direct; over Bluetooth it says
+// files here (into Downloads, as Send does); Remove deletes them from the phone (asks once more
+// here; without All files access the phone shows Android's own confirmation too). On USB, Wi-Fi or Wi-Fi Direct; over Bluetooth it says
 // so and loads nothing (thumbnails there slowed everything else down).
 'use strict';
 
@@ -31,8 +32,15 @@ UI.tab({
     filter.set(kind);
     const selectBtn = UI.button(tr('Select'), () => { selecting = !selecting; if (!selecting) chosen.clear(); paint(); }, 'small');
     const saveBtn = UI.button(tr('Save'), () => save([...chosen]), 'primary small');
+    // Remove asks once more (its label turns into the question), as Files' Delete does.
+    let confirmRemove = false;
+    const removeBtn = UI.button(tr('Remove'), () => {
+      if (!confirmRemove) { confirmRemove = true; return paint(); }
+      remove([...chosen]);
+    }, 'small');
+    const canRemove = () => !!(UI.state && UI.state.hub && UI.state.hub.perm && UI.state.hub.perm.media && UI.state.hub.perm.media.remove);
     const status = el('span', { class: 'hint hub-media-status', attrs: { 'data-literal': '' } });
-    const bar = el('div', { class: 'hub-media-bar' }, [filter.el, el('span', { class: 'hub-grow' }), status, saveBtn, selectBtn]);
+    const bar = el('div', { class: 'hub-media-bar' }, [filter.el, el('span', { class: 'hub-grow' }), status, removeBtn, saveBtn, selectBtn]);
     const grid = el('div', { class: 'hub-grid' });
     const sentinel = el('div', { class: 'hub-sentinel' });
     const wrap = el('div', { class: 'hub-media' }, [bar, grid, sentinel]);
@@ -44,10 +52,16 @@ UI.tab({
     const prev = UI.button('‹', () => step(-1));
     const next = UI.button('›', () => step(1));
     const bigSave = UI.button(tr('Save'), () => viewing && save([viewing.id]), 'primary');
+    let confirmBig = false;
+    const bigRemove = UI.button(tr('Remove'), () => {
+      if (!viewing) return;
+      if (!confirmBig) { confirmBig = true; bigRemove.textContent = tr('Remove from the phone?'); bigRemove.classList.add('danger'); return; }
+      remove([viewing.id]);
+    });
     const closeBtn = UI.button(tr('Close'), () => view(null));
     const viewer = el('div', { class: 'hub-viewer', hidden: true }, [
       el('div', { class: 'hub-viewer-stage' }, [prev, bigImg, next]),
-      el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigSave, closeBtn]),
+      el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigRemove, bigSave, closeBtn]),
     ]);
     body.append(top.el, wrap, viewer);
 
@@ -71,6 +85,7 @@ UI.tab({
       t.onclick = () => {
         if (!selecting) return view(it);
         if (chosen.has(it.id)) chosen.delete(it.id); else chosen.add(it.id);
+        confirmRemove = false;
         paint();
       };
       tiles.set(it.id, t);
@@ -80,6 +95,11 @@ UI.tab({
 
     function paint() {
       wrap.classList.toggle('selecting', selecting);
+      if (!selecting || !chosen.size) confirmRemove = false;
+      removeBtn.hidden = !selecting || !canRemove();
+      removeBtn.disabled = !chosen.size;
+      removeBtn.textContent = confirmRemove ? tr(chosen.size === 1 ? 'Remove 1 item from the phone?' : 'Remove {count} items from the phone?', { count: chosen.size }) : tr('Remove');
+      removeBtn.classList.toggle('danger', confirmRemove);
       selectBtn.textContent = selecting ? tr('Done') : tr('Select');
       saveBtn.hidden = !selecting;
       saveBtn.disabled = !chosen.size;
@@ -139,9 +159,44 @@ UI.tab({
       paint();
     }
 
+    // Off the phone: the ones gone leave the grid when it answers (media.delete).
+    function remove(ids) {
+      if (!ids.length || !canRemove()) return;
+      UI.hubAsk({ t: 'media.delete', ids });
+      confirmRemove = false;
+      if (selecting) { selecting = false; chosen.clear(); }
+      paint();
+      status.textContent = tr('Removing {count}…', { count: ids.length });
+    }
+
+    function drop(ids) {
+      const gone = new Set(ids);
+      if (!gone.size) return;
+      if (viewing && gone.has(viewing.id)) {
+        const i = items.indexOf(viewing);
+        const nextIt = items.slice(i + 1).find((x) => !gone.has(x.id)) || items.slice(0, i).reverse().find((x) => !gone.has(x.id));
+        view(nextIt || null);
+      }
+      items = items.filter((x) => !gone.has(x.id));
+      for (const id of gone) {
+        const t = tiles.get(id);
+        if (t) { seen.unobserve(t); t.remove(); }
+        tiles.delete(id);
+        thumbs.delete(id);
+        visible.delete(id);
+        chosen.delete(id);
+      }
+      if (!items.length && !more) grid.replaceChildren(el('div', { class: 'hub-empty', text: tr(kind === 'all' ? 'No photos or videos' : kind === 'videos' ? 'No videos' : kind === 'screenshots' ? 'No screenshots' : 'No photos') }));
+      if (viewing) view(viewing); // its ‹ › again
+    }
+
     function view(it) {
       viewing = it;
       viewer.hidden = !it;
+      confirmBig = false;
+      bigRemove.textContent = tr('Remove');
+      bigRemove.classList.remove('danger');
+      bigRemove.hidden = !canRemove();
       if (!it) return;
       if (thumbs.get(it.id)) bigImg.src = thumbs.get(it.id); else bigImg.removeAttribute('src');
       bigName.textContent = it.name;
@@ -183,6 +238,14 @@ UI.tab({
       const t = tiles.get(m.id);
       if (t) t.querySelector('img').src = m.data;
       if (viewing && viewing.id === m.id && !bigImg.getAttribute('src')) bigImg.src = m.data;
+    });
+    UI.hubOn('media.delete', (m) => {
+      drop(Array.isArray(m.ids) ? m.ids.filter((x) => typeof x === 'string') : []);
+      paint();
+      const notes = [];
+      if (m.confirm > 0) notes.push(tr('Tap the notification on the phone to remove {count} more', { count: m.confirm }));
+      if (m.failed > 0) notes.push(tr('{count} couldn’t be removed', { count: m.failed }));
+      if (notes.length) status.textContent = notes.join(' · ');
     });
     UI.hubOn('media.view', (m) => {
       if (!viewing || viewing.id !== m.id || !m.data) return;

@@ -1,7 +1,9 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Photos and videos on the computer (Hub.kt): the phone's gallery a page at a time (media.list),
 // small pictures for the grid (media.thumb, the ones on screen first), a big one to look at
-// (media.view), and the files themselves to the computer's Downloads (media.save, as Send).
+// (media.view), the files themselves to the computer's Downloads (media.save, as Send), and
+// removing them (media.delete: right away with All files access, else Android's confirmation,
+// tapped from a notification here).
 // Nothing runs on its own: it answers what the computer asks while its page is open.
 package com.twindesk.android
 
@@ -9,6 +11,8 @@ import android.content.ContentUris
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.BaseColumns
 import android.provider.MediaStore
 import android.provider.MediaStore.Files.FileColumns as F
@@ -127,6 +131,29 @@ class Media(private val hub: Hub, private val core: Core) {
     fun save(ids: JSONArray?) {
         val uris = (0 until (ids?.length() ?: 0)).mapNotNull { uri(ids!!.optString(it)) }.take(500)
         if (uris.isNotEmpty()) core.files.send(core.files.describe(uris), "send")
+    }
+
+    // Remove these from the phone. Answers media.delete {ids: the ones gone, failed, confirm: how many
+    // wait for Delete to be tapped here}.
+    fun delete(ids: JSONArray?): JSONObject {
+        val asked = (0 until (ids?.length() ?: 0)).map { ids!!.optString(it).take(40) }.filter { uri(it) != null }.distinct().take(300)
+        val gone = JSONArray()
+        val left = ArrayList<Pair<String, Uri>>()
+        val direct = Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()
+        for (id in asked) {
+            val u = uri(id)!!
+            val ok = direct && runCatching { cr.delete(u, null, null) > 0 }.getOrDefault(false)
+            if (ok) gone.put(id) else left += id to u
+        }
+        var confirm = 0
+        if (left.isNotEmpty() && Build.VERSION.SDK_INT >= 30) {
+            runCatching {
+                val pi = MediaStore.createDeleteRequest(cr, left.map { it.second })
+                Notify.mediaDelete(core.ctx, core.host?.name ?: "Your computer", left.size, pi)
+                confirm = left.size
+            }
+        }
+        return msg(Proto.T.MEDIA_DELETE, "ids" to gone, "failed" to left.size - confirm, "confirm" to confirm)
     }
 
     private fun jpeg(b: Bitmap, q: Int): String {

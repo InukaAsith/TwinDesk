@@ -2024,4 +2024,10 @@
   "That app doesn't take pictures": "That app doesn't take pictures",
   "No service": "No service",
   "Airplane mode is on": "Airplane mode is on",
+  "Remove from the phone?": "Remove from the phone?",
+  "Remove 1 item from the phone?": "Remove 1 item from the phone?",
+  "Remove {count} items from the phone?": "Remove {count} items from the phone?",
+  "Removing {count}…": "Removing {count}…",
+  "Tap the notification on the phone to remove {count} more": "Tap the notification on the phone to remove {count} more",
+  "{count} couldn’t be removed": "{count} couldn’t be removed",
 });
