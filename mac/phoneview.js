@@ -89,6 +89,18 @@ class PhoneViews extends EventEmitter {
     } else if (!on && open) this.close(open.id);
   }
 
+  // The phone's microphone as a microphone here (Audio › Microphone, Android 11 or later): an
+  // audio-only session capturing the phone's mic, in a hidden window that plays it into the
+  // TwinDesk Microphone (Linux) or a virtual audio cable (phoneview-renderer.js picks it).
+  mic(on, out = '') {
+    const open = [...this.views.values()].find((v) => v.kind === 'mic');
+    if (open && on && open.sink !== out) this.close(open.id); // another output picked: start again
+    else if (open && on) return;
+    if (on && this.bridge.serial) {
+      this._open({ kind: 'mic', title: this._i18n().t('Phone microphone'), titleKey: 'Phone microphone', width: 200, height: 100, hidden: true, sink: out, opts: { video: false, audio: true, control: false, audioSource: 'mic' } });
+    } else if (!on && open) this.close(open.id);
+  }
+
   // The phone's sound captured by the phone itself (no wireless debugging, phone-bridge.js): a
   // hidden window with no adb session, fed what comes through the session.
   netSound(on) {
@@ -103,7 +115,7 @@ class PhoneViews extends EventEmitter {
   }
 
   list() {
-    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
+    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
   }
 
   get focused() {
@@ -264,10 +276,10 @@ class PhoneViews extends EventEmitter {
     return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
   }
 
-  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false }) {
+  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false, sink = '' }) {
     if (!this.bridge.serial && kind !== 'netsound') {
       // Through Bluetooth: the phone's hotspot first (main.js), then this window.
-      if (this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
+      if (kind !== 'mic' && this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
       return this.bridge.emit('popup', 'home', 'Set up wireless debugging on the Phone page first');
     }
     const id = nextId++;
@@ -276,11 +288,11 @@ class PhoneViews extends EventEmitter {
       titleBarStyle: 'hiddenInset', backgroundColor: '#000000',
       webPreferences: { preload: path.join(__dirname, 'preload-phoneview.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
     });
-    const v = { id, kind, app, title, win, session: null, keys: new KeyState(), size: null, ready: false, queue: [], screenOff: false, eaten: new Set() };
+    const v = { id, kind, app, title, win, sink, session: null, keys: new KeyState(), size: null, ready: false, queue: [], screenOff: false, eaten: new Set() };
     this._send(v, 'phoneview:opts', this._opts(v));
     this.views.set(id, v);
     if (kind === 'app') setImmediate(() => this._stubs());
-    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, titleKey, titleName, language: this._i18n().locale } });
+    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, titleKey, titleName, ...(kind === 'mic' ? { sink, virtual: process.platform === 'linux' ? '1' : '' } : {}), language: this._i18n().locale } });
     if (!hidden) win.once('ready-to-show', () => win.show());
     win.webContents.once('did-finish-load', () => {
       v.ready = true;
@@ -352,7 +364,7 @@ class PhoneViews extends EventEmitter {
 
   // Return sends / Arrow keys swipe changed (here, or on the Phone page): every window shows it.
   applyOpts() {
-    for (const v of this.views.values()) if (v.kind !== 'sound' && v.kind !== 'netsound') this._send(v, 'phoneview:opts', this._opts(v));
+    for (const v of this.views.values()) if (v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic') this._send(v, 'phoneview:opts', this._opts(v));
   }
 
   // Return in a chat app, an arrow that swipes (shared/phonechat.js): done here, the key (and its

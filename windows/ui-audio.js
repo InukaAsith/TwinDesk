@@ -38,7 +38,7 @@ UI.tab({
     );
     return (s) => {
       phoneCard.update(s);
-      if (micCard) { micCard.el.hidden = UI.isPhone && UI.isPhone(s); micCard.update(s); }
+      if (micCard) { micCard.update(s); }
       const a = s.audio;
       const connected = s.link.state === 'connected';
       pair.update(s);

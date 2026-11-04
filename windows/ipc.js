@@ -121,6 +121,7 @@ function setupIpc(ctx) {
     sound.apply();
     const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
     if (mic) mic.apply();
+    if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
     // Loaded when first turned on (applied then); off, the loaded one stops.
     if (partial && 'phoneMedia' in partial && ctx.nowPlaying) ctx.nowPlaying.apply(); else if (partial && 'phoneMedia' in partial) ctx.loadNowPlaying();
     if (partial && 'phoneBt' in partial && ctx.btAudio) ctx.btAudio.apply(); else if (partial && 'phoneBt' in partial) ctx.loadBtAudio();

@@ -35,7 +35,7 @@ UI.tab({
       const a = s.audio;
       if (!a) return;
       phoneCard.update(s);
-      if (micCard) { micCard.el.hidden = UI.isPhone && UI.isPhone(s); micCard.update(s); }
+      if (micCard) { micCard.update(s); }
       sendSw.set(a.send);
       mute.set(a.muteLocal);
       recvSw.set(a.receive);
