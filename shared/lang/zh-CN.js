@@ -1968,5 +1968,10 @@
   "Apps pick “TwinDesk Microphone”. Waiting for {device}": "应用可选择“TwinDesk Microphone”。正在等待 {device}",
   "Live into {output}: apps pick its other end as the microphone": "正在播放到 {output}：应用选择它的另一端作为麦克风",
   "Into {output}. Waiting for {device}": "播放到 {output}。正在等待 {device}",
-  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "未找到虚拟音频线：将在扬声器上播放。安装 VB-CABLE（Windows）或 BlackHole（macOS）后，应用即可将其选为麦克风"
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "未找到虚拟音频线：将在扬声器上播放。安装 VB-CABLE（Windows）或 BlackHole（macOS）后，应用即可将其选为麦克风",
+  "Hardware encoder": "硬件编码器",
+  "Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart": "由显卡编码屏幕和应用窗口。关闭：使用软件编码（OpenH264），适用于画面卡住或变黑的情况。重启后生效",
+  "Turned off by itself: the hardware encoder stopped sending. Software encoding (OpenH264) is in use": "已自动关闭：硬件编码器停止发送。正在使用软件编码（OpenH264）",
+  "Turned off by itself: the hardware encoder stopped sending. Restart to use the software encoder (OpenH264)": "已自动关闭：硬件编码器停止发送。重启以使用软件编码器（OpenH264）",
+  "The hardware encoder stopped sending. Restart TwinDesk to use the software encoder (General › Advanced)": "硬件编码器停止发送。重启 TwinDesk 以使用软件编码器（通用 › 高级）",
 });
