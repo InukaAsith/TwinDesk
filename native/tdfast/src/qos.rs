@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Windows: the lane's socket in a qWAVE voice flow (docs/perf-plan.md P3, DSCP). Windows ignores
+// Windows: the lane's socket in a qWAVE voice flow (docs/protocol.md, DSCP). Windows ignores
 // IP_TOS from programs, so this is what puts input in Wi-Fi's WMM voice queue there: qWAVE tags the
 // flow's packets (802.1p, and DSCP where Windows allows it). A flow is per destination, so a new one
 // when the peer moves. Best effort: no qWAVE (Server without it), or a refusal, and the lane is as before.

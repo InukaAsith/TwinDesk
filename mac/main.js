@@ -54,7 +54,7 @@ app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/
 // Renamed to TwinDesk: settings, pairing and the identity stay in the old folder.
 app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), 'MacShare')); // PROFILE: a second dev copy
 require('../shared/applog.js').start(app); // console.* and crashes into the log folder, both apps
-// Screen share codec (shared/screencodec.js, docs/perf-plan.md P5): H.265 available in WebRTC, so the
+// Screen share codec (shared/screencodec.js): H.265 available in WebRTC, so the
 // Encoder setting works on the next share. One enable-features switch for the app: Chromium keeps only the last one.
 {
   const codec = require('../shared/screencodec.js');

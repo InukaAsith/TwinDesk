@@ -14,7 +14,7 @@ case "$ARCH" in
 esac
 TARGET="$SWIFT_ARCH-apple-macos13.0"
 
-# The input lane (native/tdfast, docs/perf-plan.md P3), when cargo is there: libtdfast.a for this arch,
+# The input lane (native/tdfast, docs/protocol.md), when cargo is there: libtdfast.a for this arch,
 # and the helpers built with -D TDFAST. Without cargo they build as before and Node keeps its own lane.
 TDFAST=""
 if [ -z "$TWINDESK_NO_TDFAST" ] && command -v cargo >/dev/null 2>&1; then

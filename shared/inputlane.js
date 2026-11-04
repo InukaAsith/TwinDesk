@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The input lane (docs/perf-plan.md P2, capability `il`): pointer moves and input events over an
+// The input lane (docs/protocol.md, capability `il`): pointer moves and input events over an
 // encrypted UDP socket next to the session's WSS, so a lost packet on Wi-Fi never holds the cursor
 // back the way TCP's head-of-line blocking does.
 //

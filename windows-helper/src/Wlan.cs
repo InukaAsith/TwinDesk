@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Wi-Fi low-latency mode (docs/perf-plan.md P1): while the cursor is shared or a screen is shown,
+// Wi-Fi low-latency mode: while the cursor is shared or a screen is shown,
 // Windows' media streaming mode is on and its background scans are off on every connected Wi-Fi
 // adapter. A background scan takes the radio off the channel for tens of milliseconds, which is
 // the lag spike every few seconds that Wi-Fi input has.

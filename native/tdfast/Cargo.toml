@@ -3,7 +3,7 @@ name = "tdfast"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
-description = "TwinDesk's input lane (docs/perf-plan.md P3): the wire of shared/inputlane.js, in the helpers"
+description = "TwinDesk's input lane (docs/protocol.md): the wire of shared/inputlane.js, in the helpers"
 publish = false
 
 [lib]

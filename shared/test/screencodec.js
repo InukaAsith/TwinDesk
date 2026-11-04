@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// shared/screencodec.js (docs/perf-plan.md P5): the codec order, the Encoder setting, the one switch.
+// shared/screencodec.js: the codec order, the Encoder setting, the one switch.
 'use strict';
 
 const assert = require('assert');

@@ -15,7 +15,7 @@
 // Something wrong before any byte went (no answer, refused): the sender sends that file the old
 // way and the rest of the session uses file.chunk.
 //
-// Fast files v2 (docs/perf-plan.md P4, `fx2`: hello {fx2: 1}, welcome {fx2: {port}}): with an app that
+// Fast files v2 (docs/protocol.md, `fx2`: hello {fx2: 1}, welcome {fx2: {port}}): with an app that
 // can, the bytes go through the files engine (shared/fx2.js, a utility process) instead, big files as
 // parallel ranges, and file.end carries the hashes of the ranges ({fx2: [hex]}). The receiving app
 // checks them itself and hands the finished file to its receiver (receiver() hooks: target, adopt,

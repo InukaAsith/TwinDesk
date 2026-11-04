@@ -84,7 +84,7 @@ app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/
 // in (Electron would follow the new product name). A dev copy's --user-data-dir still wins.
 if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'MacShare'));
 require('../shared/applog.js').start(app); // console.* and crashes into the log folder, both apps
-// Screen share codec (shared/screencodec.js, docs/perf-plan.md P5): H.265 available in WebRTC, so the
+// Screen share codec (shared/screencodec.js): H.265 available in WebRTC, so the
 // Encoder setting works on the next share. One enable-features switch for the app: Chromium keeps only the last one.
 {
   const codec = require('../shared/screencodec.js');

@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Fast files v2 (docs/perf-plan.md P4), the app's side: starts the engine (shared/fx2-engine.js) in
+// Fast files v2 (docs/protocol.md), the app's side: starts the engine (shared/fx2-engine.js) in
 // an Electron utility process, or in this process where there is none (plain node, the tests), and
 // gives shared/fastfile.js promises for it. Kill switch: env TWINDESK_NO_FX2=1.
 'use strict';

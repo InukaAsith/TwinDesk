@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The input lane (shared/inputlane.js, docs/perf-plan.md P2) in the multi-device app: two computers with
+// The input lane (shared/inputlane.js, docs/protocol.md) in the multi-device app: two computers with
 // real Server, Pairing, LinkManager, Mesh, Hub, LayoutSync and Kvm (fake helpers), paired on real
 // sockets. A drives B: moves go over B's lane (not the bus), clicks and keys come in order and once,
 // and a B without a lane (an older app) gets everything on the WSS as before.
