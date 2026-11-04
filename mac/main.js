@@ -1150,7 +1150,9 @@ function loadHub() {
   const { PhoneHub } = require('../shared/phonehub.js');
   const hub = new PhoneHub({
     server: peer, getSettings: () => settings, save: () => store.saveSettings(settings),
-    audio: (opts) => require('./callaudio.js').create({ helper: svc.helper, ...opts }), // the calls' sound over Bluetooth
+    // No calls' sound on the Mac: macOS refuses an app the hands-free voice link (SCO, kIOReturnUnsupported
+    // on Apple silicon), so the Calls page has no Sound or Bluetooth setup here and the sound stays on the
+    // phone (answer, end, mute, hold and the keypad still work). mac/callaudio.js is kept, unused.
     send: (paths, batch) => !!(svc.fileSend && svc.fileSend.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
     choose: () => dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, { properties: ['openFile', 'openDirectory', 'multiSelections'] })
       .then((r) => (r.canceled ? [] : r.filePaths)),

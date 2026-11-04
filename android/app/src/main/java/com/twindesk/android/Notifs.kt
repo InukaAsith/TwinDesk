@@ -41,6 +41,11 @@ class Notifs(core: Core) : Feature(core) {
         "com.whatsapp", "com.whatsapp.w4b", "com.instagram.android", "org.telegram.messenger", "org.telegram.messenger.web",
         "org.thunderdog.challegram", "com.facebook.orca", "org.thoughtcrime.securesms",
     )
+    // Each sent notification's other buttons (Mark as read, Archive…), by key, for notif.act; and the
+    // keys the computer has, so it hears when they go from here (notif.gone).
+    private val actions = object : LinkedHashMap<String, List<Notification.Action>>(32, 0.75f, true) {
+        override fun removeEldestEntry(e: MutableMap.MutableEntry<String, List<Notification.Action>>?) = size > 80
+    }
     private val recentSent = object : LinkedHashMap<String, Long>(32, 0.75f, true) {
         override fun removeEldestEntry(e: MutableMap.MutableEntry<String, Long>?) = size > 64
     }
@@ -149,8 +154,9 @@ class Notifs(core: Core) : Feature(core) {
     // A chat app's conversation for the computer's Messages: its MessagingStyle messages (sender,
     // text, time; the user's own have no sender), else the notification's text as one message.
     private fun chatPosted(sbn: StatusBarNotification) {
-        if (!chatsWanted || !core.link.connected || sbn.packageName !in chatApps) return
+        if (!chatsWanted || !core.link.connected) return
         val n = sbn.notification ?: return
+        if (sbn.packageName !in chatApps && !otherChat(sbn, n)) return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         if (core.store.flag("notifs.hideText", false)) return
         val x = n.extras
@@ -184,8 +190,18 @@ class Notifs(core: Core) : Feature(core) {
             msg(
                 "chat.conv", "key" to key.take(300), "app" to sbn.packageName, "appName" to appNameOf(sbn.packageName),
                 "name" to name.take(200), "group" to group, "id" to sbn.key.take(200), "reply" to (reply != null), "items" to items,
+                "pic" to true, // takes a picture from the computer (chat.pic)
             ),
         )
+    }
+
+    // Another app's conversation (Viber, LINE, Discord, Slack…): a message notification in Android's
+    // conversation style, from anything but a texting app (those are Messages' texts).
+    private fun otherChat(sbn: StatusBarNotification, n: Notification): Boolean {
+        if (sbn.packageName == core.ctx.packageName || sbn.isOngoing) return false
+        if (n.category != Notification.CATEGORY_MESSAGE || messages(n.extras).isNullOrEmpty()) return false
+        val sms = runCatching { android.provider.Telephony.Sms.getDefaultSmsPackage(core.ctx) }.getOrNull()
+        return sbn.packageName != sms && sbn.packageName !in SMS_APPS
     }
 
     // The conversations open on the phone now (the computer just asked).
@@ -232,6 +248,9 @@ class Notifs(core: Core) : Feature(core) {
 
         val reply = n.actions?.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true }
         if (reply != null) synchronized(replies) { replies[sbn.key] = reply }
+        // Its other buttons (no typing): the computer shows them, and taps them here (notif.act).
+        val buttons = n.actions.orEmpty().filter { a -> a !== reply && a.actionIntent != null && a.title?.isNotBlank() == true && a.remoteInputs.isNullOrEmpty() }.take(3)
+        synchronized(actions) { actions[sbn.key] = buttons }
         val hide = core.store.flag("notifs.hideText", false)
         val icon = if (synchronized(iconsSent) { iconsSent.add(pkg) }) appIcon(pkg) else null
         core.send(
@@ -242,14 +261,33 @@ class Notifs(core: Core) : Feature(core) {
             ).apply {
                 if (icon != null) put("icon", icon)
                 if (reply != null) put("reply", true) // the computer may answer it (notif.reply)
+                if (buttons.isNotEmpty()) put("actions", jsonArray(buttons.map { it.title.toString().take(40) }))
             },
         )
         sent++
         core.changed()
     }
 
+    // From NotifListener: gone from this phone (swiped, opened, or the app took it back): from the
+    // computer's list too.
+    fun removed(sbn: StatusBarNotification) {
+        val had = synchronized(actions) { actions.remove(sbn.key) } != null
+        synchronized(replies) { replies.remove(sbn.key) }
+        if (had && peerAccepts && core.link.connected) core.send(msg("notif.gone", "id" to sbn.key.take(200)))
+    }
+
     override fun onMessage(t: String, m: JSONObject): Boolean {
         when (t) {
+            // Dismissed on the computer: from this phone too.
+            "notif.dismiss" -> {
+                val key = m.str("id", 200)
+                if (key.isNotEmpty() && synchronized(actions) { actions.containsKey(key) }) runCatching { NotifListener.running?.cancelNotification(key) }
+            }
+            // One of its buttons, clicked on the computer.
+            "notif.act" -> {
+                val a = synchronized(actions) { actions[m.str("id", 200)] }?.getOrNull(m.optInt("i", -1)) ?: return true
+                runCatching { a.actionIntent.send() }
+            }
             Proto.T.NOTIF_POLICY -> peerAccepts = m.optBoolean("accept")
             "chat.want" -> {
                 chatsWanted = m.optBoolean("on") && hasAccess
@@ -276,10 +314,60 @@ class Notifs(core: Core) : Feature(core) {
                     a.actionIntent.send(core.ctx, 0, intent)
                 }
             }
+            // A picture from Messages' chat apps: through the app's Reply where it takes pictures,
+            // else the app opens on that conversation with it attached, to send on the phone.
+            "chat.pic" -> chatPicture(m)
             else -> return false
         }
         core.changed()
         return true
+    }
+
+    private fun chatPicture(m: JSONObject) {
+        val ref = m.str("ref", 60)
+        val app = m.str("app", 200)
+        val chat = m.str("chat", 300)
+        val text = m.str("text", 5000).trim()
+        val done = { ok: Boolean, opened: Boolean, error: String? -> core.send(msg("chat.picd", "ref" to ref, "ok" to ok, "opened" to opened, "error" to error)); Unit }
+        val raw = runCatching { Base64.decode(m.str("image", 6_000_000).substringAfter("base64,", ""), Base64.DEFAULT) }.getOrNull()
+        if (raw == null || raw.isEmpty() || !Regex("^[A-Za-z][\\w]*(\\.[\\w]+)+$").matches(app)) return done(false, false, "That picture can't be read")
+        val ctx = core.ctx
+        val dir = java.io.File(ctx.cacheDir, "mms").apply { mkdirs() }
+        dir.listFiles()?.forEach { if (it.name.startsWith("chat-") && System.currentTimeMillis() - it.lastModified() > 3_600_000) it.delete() }
+        val file = java.io.File(dir, "chat-" + System.currentTimeMillis() + ".jpg").apply { writeBytes(raw) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
+        // 1. The Reply takes pictures (RemoteInput's data types): sent from here, like a typed answer.
+        val a = synchronized(replies) { replies[m.str("id", 200)] }
+        val takes = a?.remoteInputs.orEmpty().firstOrNull { ri -> ri.allowedDataTypes.orEmpty().any { it == "image/*" || it == "image/jpeg" } }
+        if (a != null && takes != null) {
+            val sent = runCatching {
+                ctx.grantUriPermission(app, uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val intent = android.content.Intent()
+                android.app.RemoteInput.addDataResultToIntent(takes, intent, mapOf("image/jpeg" to uri))
+                if (text.isNotEmpty()) a.remoteInputs.filter { it.allowFreeFormInput && it !== takes }.forEach { ri ->
+                    android.app.RemoteInput.addResultsToIntent(arrayOf(ri), intent, Bundle().apply { putCharSequence(ri.resultKey, text) })
+                }
+                a.actionIntent.send(ctx, 0, intent)
+            }.isSuccess
+            if (sent) return done(true, false, null)
+        }
+        // 2. The app's own share screen, on that conversation (its shortcut), the picture and text in it.
+        if (!(Settings.canDrawOverlays(ctx) || MainActivity.shown)) return done(false, false, "Allow TwinDesk to display over other apps on the phone")
+        val share = android.content.Intent(android.content.Intent.ACTION_SEND).setPackage(app).setType("image/jpeg")
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        share.clipData = android.content.ClipData.newRawUri("", uri)
+        if (text.isNotEmpty()) share.putExtra(android.content.Intent.EXTRA_TEXT, text)
+        if (chat.isNotEmpty()) {
+            share.putExtra(android.content.Intent.EXTRA_SHORTCUT_ID, chat) // Android's direct share: that conversation
+            if ('@' in chat) share.putExtra("jid", chat) // WhatsApp's own
+        }
+        if (runCatching { ctx.startActivity(share) }.isSuccess) done(true, true, null)
+        else done(false, false, "That app doesn't take pictures")
+    }
+
+    companion object {
+        private val SMS_APPS = setOf("com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging")
     }
 
     // A 64 px PNG of the app's icon as a data: URL, or null.

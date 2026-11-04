@@ -35,7 +35,10 @@ UI.phoneAudioCard = () => {
   const pickRow = UI.row(t('The phone'), t('Paired with this computer over Bluetooth'), [pick]);
   const media = UI.switch((v) => api.setAudio({ phoneMedia: v }), { label: t('Media controls on the Phone page') });
   const mediaRow = UI.row(t('Media controls on the Phone page'), '', [media]);
-  const card = UI.card('{name}', [btRow, pickRow, mediaRow]);
+  // Play phone sound here (Audio's switch): Auto, Full (ADB) or Limited (Native, shared/phonemodes.js).
+  const soundVia = UI.segmented([{ value: 'auto', label: t('Auto') }, { value: 'adb', label: t('Full (ADB)') }, { value: 'native', label: t('Limited') }], (v) => api.setPhone({ soundVia: v }));
+  const viaRow = UI.row(t('Phone sound goes through'), '', [soundVia.el]);
+  const card = UI.card('{name}', [viaRow, btRow, pickRow, mediaRow]);
   return {
     el: card,
     update(s) {
@@ -43,6 +46,16 @@ UI.phoneAudioCard = () => {
       if (card.hidden) return;
       const a = s.audio || {};
       const b = s.btAudio;
+      const br = (s.phone && s.phone.bridge) || {};
+      const phone = (s.phone && s.phone.connected && s.phone.connected.name) || t('the phone');
+      viaRow.hidden = !br.soundMode; // a computer from before the choice
+      if (!viaRow.hidden) {
+        soundVia.set(br.soundMode || br.soundVia || 'native');
+        const ready = br.state === 'ready';
+        viaRow.setHint(br.soundMode === 'auto' ? (ready ? t('Auto: Full (ADB), wireless debugging is ready') : t('Auto: Limited until wireless debugging is set up'))
+          : br.soundVia === 'native' ? t('Limited: {phone} captures its own sound (Android 10 or later). It keeps playing there too, and some apps don’t allow it', { phone })
+            : t('Full (ADB): through wireless debugging, which moves the sound off {phone}', { phone }) + (ready ? '' : t(' (not set up yet)')));
+      }
       bt.set(!!(b ? b.on : false));
       bt.disable(!b);
       btRow.setHint(!b ? t('This computer can’t take a phone’s sound over Bluetooth (macOS has no Bluetooth speaker mode)')

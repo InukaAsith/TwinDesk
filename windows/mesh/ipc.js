@@ -57,7 +57,7 @@ function setupIpc(ctx) {
   handle('refreshFound', () => discovery.refresh());
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text)) : ctx.notifs && ctx.notifs.reply && ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image)) : ctx.notifs && ctx.notifs.reply && ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });

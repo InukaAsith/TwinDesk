@@ -569,8 +569,10 @@ app.whenReady().then(() => {
       link: {
         on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
         send: (m) => peer.sendToClient(m),
+        get current() { return peer.current; },
       },
       local: new DevLocal(),
+      version: app.getVersion(),
       adb: () => {
         const br = svc && svc.phone && svc.phone.bridge;
         return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;

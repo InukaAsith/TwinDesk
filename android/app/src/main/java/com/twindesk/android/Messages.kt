@@ -1,8 +1,9 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Messages on the computer (Hub.kt): the phone's conversations (SMS and MMS) read from Android's
 // message store, new ones as they come (sms.new), and texts sent from the computer through this
-// phone (sms.send). Made only while Messages is on: the store's observer and the "sent" receiver
-// are registered then and gone with it. Needs TwinDesk with notifications (the SMS permissions).
+// phone (sms.send), pictures and group texts as MMS (MmsPdu.kt). Made only while Messages is on:
+// the store's observer and the "sent" receiver are registered then and gone with it. Needs
+// TwinDesk with notifications (the SMS permissions).
 package com.twindesk.android
 
 import android.Manifest
@@ -53,6 +54,19 @@ class Messages(private val hub: Hub, private val core: Core) {
         cr.registerContentObserver(Uri.parse("content://mms-sms/"), true, o)
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
+                if (i.action == MMS_SENT) {
+                    i.getStringExtra("file")?.let { f -> runCatching { java.io.File(mmsDir(), f).delete() } }
+                    val error = when (resultCode) {
+                        Activity.RESULT_OK -> null
+                        SmsManager.MMS_ERROR_NO_DATA_NETWORK -> "Mobile data is off"
+                        SmsManager.MMS_ERROR_INVALID_APN, SmsManager.MMS_ERROR_CONFIGURATION_ERROR -> "The phone isn't set up for MMS"
+                        SmsManager.MMS_ERROR_HTTP_FAILURE -> "The carrier refused it"
+                        SmsManager.MMS_ERROR_UNABLE_CONNECT_MMS, SmsManager.MMS_ERROR_IO_ERROR, SmsManager.MMS_ERROR_RETRY -> "Couldn't reach the carrier"
+                        else -> "Not sent"
+                    }
+                    core.send(msg(Proto.T.SMS_SENT, "ref" to i.getStringExtra("ref"), "ok" to (error == null), "error" to error))
+                    return
+                }
                 if (!i.getBooleanExtra("last", false) && resultCode == Activity.RESULT_OK) return
                 val error = when (resultCode) {
                     Activity.RESULT_OK -> null
@@ -64,7 +78,7 @@ class Messages(private val hub: Hub, private val core: Core) {
             }
         }
         receiver = r
-        ContextCompat.registerReceiver(ctx, r, IntentFilter(SENT), ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(ctx, r, IntentFilter(SENT).apply { addAction(MMS_SENT) }, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     fun stop() {
@@ -233,17 +247,34 @@ class Messages(private val hub: Hub, private val core: Core) {
         }.getOrNull()
     }
 
-    // A text from the computer, sent by this phone (Android adds it to the conversation).
+    private fun address(v: String) = v.filter { it.isDigit() || it in "+*#" }.ifEmpty { v.trim() }
+
+    // A SIM picked on the computer (sims()), else the phone's default for texts.
+    private fun manager(m: JSONObject): SmsManager {
+        val sub = m.optInt("sim", -1).takeIf { id -> id >= 0 && sims().let { l -> (0 until l.length()).any { l.getJSONObject(it).optInt("id") == id } } }
+        @Suppress("DEPRECATION")
+        return when {
+            sub != null && Build.VERSION.SDK_INT >= 31 -> ctx.getSystemService(SmsManager::class.java).createForSubscriptionId(sub)
+            sub != null -> SmsManager.getSmsManagerForSubscriptionId(sub)
+            Build.VERSION.SDK_INT >= 31 -> ctx.getSystemService(SmsManager::class.java)
+            else -> SmsManager.getDefault()
+        }
+    }
+
+    // A text from the computer, sent by this phone (Android adds it to the conversation). With a
+    // picture, or to a group (addrs: everyone in it), an MMS instead (sendMms).
     fun send(m: JSONObject) {
         val ref = m.str("ref", 60)
-        val to = m.str("to", 60).filter { it.isDigit() || it in "+*#" }.ifEmpty { m.str("to", 60).trim() }
+        val to = address(m.str("to", 60))
         val body = m.str("body", 5000)
         val fail = { why: String -> core.send(msg(Proto.T.SMS_SENT, "ref" to ref, "ok" to false, "error" to why)); Unit }
         if (!hub.granted(Manifest.permission.SEND_SMS)) return fail("Allow sending messages on the phone")
+        val group = m.optJSONArray("addrs")?.let { a -> (0 until a.length()).map { address(a.optString(it).take(60)) }.filter { it.isNotEmpty() }.distinct().take(20) }.orEmpty()
+        val image = m.str("image", 6_000_000)
+        if (image.isNotEmpty() || group.size > 1) return hub.run { runCatching { sendMms(m, ref, group.ifEmpty { listOf(to) }.filter { it.isNotEmpty() }, body, image) }.onFailure { fail(it.message ?: "Not sent") } }
         if (to.isEmpty() || body.isBlank()) return fail("Nothing to send")
         runCatching {
-            @Suppress("DEPRECATION")
-            val sm = if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java) else SmsManager.getDefault()
+            val sm = manager(m)
             val parts = sm.divideMessage(body)
             val sent = ArrayList(parts.indices.map { i ->
                 PendingIntent.getBroadcast(
@@ -253,6 +284,49 @@ class Messages(private val hub: Hub, private val core: Core) {
             })
             sm.sendMultipartTextMessage(to, null, parts, sent, null)
         }.onFailure { fail(it.message ?: "Not sent") }
+    }
+
+    private fun mmsDir() = java.io.File(ctx.cacheDir, "mms").apply { mkdirs() }
+
+    // One MMS to everyone in `to`: the text and the picture (a data: URL), the picture shrunk to fit
+    // the carrier's limit. Android's result comes to the receiver (MMS_SENT).
+    private fun sendMms(m: JSONObject, ref: String, to: List<String>, body: String, image: String) {
+        val fail = { why: String -> core.send(msg(Proto.T.SMS_SENT, "ref" to ref, "ok" to false, "error" to why)); Unit }
+        if (to.isEmpty() || (body.isBlank() && image.isEmpty())) return fail("Nothing to send")
+        val sm = manager(m)
+        val text = body.trim()
+        var pic: ByteArray? = null
+        if (image.isNotEmpty()) {
+            val raw = runCatching { Base64.decode(image.substringAfter("base64,", ""), Base64.DEFAULT) }.getOrNull()
+            if (raw == null || raw.isEmpty()) return fail("That picture can't be read")
+            val budget = (MmsPdu.limit(sm) * 0.9).toInt() - text.toByteArray().size - 2048
+            pic = MmsPdu.fit(raw, budget) ?: return fail("That picture is too big for MMS")
+        }
+        val dir = mmsDir()
+        dir.listFiles()?.forEach { if (System.currentTimeMillis() - it.lastModified() > 3_600_000) it.delete() } // left from earlier sends
+        val name = "send-" + System.currentTimeMillis() + "-" + (req % 1000) + ".pdu"
+        val file = java.io.File(dir, name)
+        file.writeBytes(MmsPdu.sendReq(to, text, pic, "T" + java.lang.Long.toHexString(System.nanoTime())))
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
+        val sent = PendingIntent.getBroadcast(
+            ctx, 8000 + (req++ % 1000), Intent(MMS_SENT).setPackage(ctx.packageName).putExtra("ref", ref).putExtra("file", name),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT,
+        )
+        sm.sendMultimediaMessage(ctx, uri, null, null, sent)
+    }
+
+    // The SIMs a text can go out on, when there's more than one: [{id (subscription), label}].
+    @android.annotation.SuppressLint("MissingPermission")
+    fun sims(): JSONArray {
+        val out = JSONArray()
+        if (!hub.granted(Manifest.permission.READ_PHONE_STATE)) return out
+        val all = runCatching { ctx.getSystemService(android.telephony.SubscriptionManager::class.java).activeSubscriptionInfoList }.getOrNull().orEmpty()
+        if (all.size < 2) return out
+        all.forEach { s ->
+            val label = listOf(s.displayName?.toString().orEmpty(), "SIM ${s.simSlotIndex + 1}").first { it.isNotBlank() }
+            out.put(JSONObject().put("id", s.subscriptionId).put("label", label.take(40)))
+        }
+        return out
     }
 
     // An address's contact name ("" when none), remembered while Messages is on.
@@ -269,6 +343,7 @@ class Messages(private val hub: Hub, private val core: Core) {
 
     companion object {
         private const val SENT = "com.twindesk.android.SMS_SENT"
+        private const val MMS_SENT = "com.twindesk.android.MMS_SENT"
         private val SMS_COLS = arrayOf("_id", "address", "body", "date", "type", "thread_id")
         private val MMS_COLS = arrayOf("_id", "date", "msg_box", "thread_id")
     }

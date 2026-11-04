@@ -218,6 +218,19 @@ fun App(core: Core, resumed: Int) {
         )
     }
 
+    // Another device rang this phone (its Overview › Ring): Stop over whatever page is open, not
+    // only on the notification and the Connection page.
+    if (core.dev.ringing) {
+        val who = core.host?.name ?: "Your computer"
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = pal.card,
+            title = { Text("Ringing", color = pal.text) },
+            text = { Text("$who is ringing this phone.", color = pal.muted) },
+            confirmButton = { TextButton(onClick = { core.dev.stopRing() }) { Text("Stop", color = pal.bad) } },
+        )
+    }
+
     // A computer wants to pair, or its code is up: over whatever page is open, not only the
     // notification and the Overview.
     core.invite?.let { inv ->
@@ -1009,7 +1022,7 @@ private fun CursorPage(core: Core, v: Int) {
             viaPhone && !core.input.supported -> "This version of TwinDesk can’t use Accessibility, as Play Protect restricts downloaded apps. " +
                 "Use wireless debugging instead, or install the full version of TwinDesk from the Phone page on $name."
             viaPhone && !core.input.on -> "Allow TwinDesk in Accessibility settings so $name can tap and type on this device."
-            adbMissing -> "$name controls this device through wireless debugging, which is off. You can also choose Accessibility below."
+            adbMissing -> "$name controls this device through wireless debugging, which is off. You can also choose Limited below."
             !core.pointer.allowed -> "Allow “Show the pointer” in General to see the pointer from $name."
             !core.kvm.linked -> "Cursor sharing is off. Double-tap ${core.kvm.hotkey} on $name to turn it on."
             paused -> "Cursor sharing is paused over Bluetooth. It resumes on Wi-Fi, or double-tap ${core.kvm.hotkey} on $name to turn it on."
@@ -1030,15 +1043,15 @@ private fun CursorPage(core: Core, v: Int) {
         DirHead(name, false, me, true)
         SwitchRow("Use $name’s mouse and keyboard on $me", "Move the pointer past the edge of the screen", core.sync.get("cursor", "in"), first = true) { core.sync.set("cursor", "in", it) }
         MacRow("Control method", when {
-            core.input.via == "auto" && core.input.effective == "adb" -> "Automatic (using ADB)"
-            core.input.via == "auto" -> "Automatic (using Accessibility until wireless debugging is on)"
-            core.input.via == "phone" -> "Accessibility works over Wi-Fi, Wi-Fi Direct and Bluetooth, without developer options"
-            else -> "ADB gives full control through wireless debugging. Accessibility is used over Bluetooth."
+            core.input.via == "auto" && core.input.effective == "adb" -> "Auto: Full (ADB), wireless debugging is on"
+            core.input.via == "auto" -> "Auto: Limited until wireless debugging is on"
+            core.input.via == "phone" -> "Limited: taps and types through Accessibility, over Wi-Fi, Wi-Fi Direct and Bluetooth, without developer options"
+            else -> "Full (ADB): full control through wireless debugging. Limited is used over Bluetooth."
         }) {
             SingleChoiceSegmentedButtonRow {
-                val ways = listOf("adb" to "ADB", "phone" to "Accessibility")
+                val ways = listOf("auto" to "Auto", "adb" to "Full (ADB)", "phone" to "Limited")
                 ways.forEachIndexed { i, (w, label) ->
-                    SegmentedButton(selected = core.input.effective == w, onClick = { core.input.setVia(w); core.changed() }, shape = SegmentedButtonDefaults.itemShape(i, ways.size)) { Text(label, maxLines = 1) }
+                    SegmentedButton(selected = core.input.via == w, onClick = { core.input.setVia(w); core.changed() }, shape = SegmentedButtonDefaults.itemShape(i, ways.size)) { Text(label, maxLines = 1) }
                 }
             }
         }
@@ -1408,6 +1421,8 @@ private fun soundHint(core: Core) = when {
 private fun SoundStart(core: Core) {
     @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
     val ctx = LocalContext.current
+    if (core.mirror.wanted && !core.mirror.on) MacRow("Show this screen", core.mirror.error.ifEmpty { "Android asks once to share the screen" }) { Primary("Start") { core.sound.start(ctx) } }
+    else if (core.mirror.on) MacRow("Screen shared", "Close its window on the computer, or Stop, to end it.") { Secondary("Stop") { core.sound.stop() } }
     if (core.sound.wanted && !core.sound.on) MacRow("Start the sound", "Android asks for permission to capture audio") { Primary("Start") { core.sound.start(ctx) } }
     else if (core.sound.on) MacRow("Captured sound", "Audio also plays on this phone. Use wireless debugging to play it only on the computer.") { Secondary("Stop") { core.sound.stop() } }
 }
@@ -1589,6 +1604,7 @@ private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, li
         ) {
             Text(
                 if (adbBle) "Wireless debugging requires Wi-Fi. You’re connected to ${host.name} over Bluetooth."
+                else if (!core.adb.needed) "Wireless debugging isn’t in use. ${host.name} shows and controls this screen through TwinDesk; set it up for phone apps in windows and the camera."
                 else if (core.adb.setupNeeded) "Wireless debugging isn’t set up. ${host.name} uses it to show and control this screen."
                 else "Wireless debugging is off. ${host.name} uses it to show and control this screen.",
                 color = if (adbBle) pal.muted else pal.text, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f).padding(end = 8.dp),

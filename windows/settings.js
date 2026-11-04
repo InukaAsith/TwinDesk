@@ -186,6 +186,9 @@ function normalize(s) {
       wallpaper: bool(ph.wallpaper, true),
       input: ph.input === 'phone' ? 'phone' : 'adb', // the mouse and keyboard through adb, or the phone's Accessibility service
       inputPicked: bool(ph.inputPicked, false), // not picked: automatic (phone-bridge.js inputMode)
+      // The screen and the sound: through wireless debugging or the phone itself (shared/phonemodes.js)
+      mirror: ['adb', 'native'].includes(ph.mirror) ? ph.mirror : 'auto',
+      soundVia: ['adb', 'native'].includes(ph.soundVia) ? ph.soundVia : 'auto',
       // Where a phone window's controls sit (phoneview.js): 'top' (the title bar, the default), 'side'
       // (a panel down the right), 'bottom' (Back, Home and Recents under the picture). rev 10: the title bar once.
       controls: (s.rev || 0) >= 10 && ['side', 'top', 'bottom'].includes(ph.controls) ? ph.controls : 'top',

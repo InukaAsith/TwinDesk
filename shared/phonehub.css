@@ -97,6 +97,17 @@
   flex: 1; resize: none; padding: 6px 10px; border-radius: 16px; border: 1px solid var(--control-line);
   background: var(--control); color: var(--text); font: inherit; line-height: 1.35; max-height: 140px; user-select: text;
 }
+.hub-compose-col { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hub-compose-col > .hub-compose { flex: none; }
+.hub-attach { position: relative; align-self: flex-start; }
+.hub-attach[hidden], .hub-attach-btn[hidden] { display: none; }
+.hub-attach-img { display: block; max-width: 120px; max-height: 90px; border-radius: 8px; border: 1px solid var(--line); }
+.hub-attach-x {
+  position: absolute; top: -7px; right: -7px; width: 20px; height: 20px; border-radius: 50%; border: none; padding: 0;
+  background: var(--text); color: var(--bg, #fff); font-size: 14px; line-height: 20px; cursor: pointer;
+}
+.hub-attach-btn { font-size: 18px; line-height: 1; min-width: 32px; }
+.hub-conv.hub-drop { box-shadow: inset 0 0 0 2px var(--accent); }
 .hub-compose:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
 @media (max-width: 760px) { .hub-side { width: 200px; } }
 

@@ -1,7 +1,10 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Calls on the computer (Hub.kt): the phone's call state as it changes (call.state), Answer,
 // Decline, End and Call from there (call.do), the call history and contacts. Made only while
-// Calls is on; the one receiver it has is registered then and gone with it.
+// Calls is on; the one receiver it has is registered then and gone with it. Hold and the keypad go
+// through CallCompanion.kt (allowed over wireless debugging once); Silence mutes the ringer for
+// this call only. A number with * or # (a code: *#06#, call forwarding) is never dialed from the
+// computer: the phone's dialer opens with it, to be tapped there.
 package com.twindesk.android
 
 import android.Manifest
@@ -37,6 +40,8 @@ class Calls(private val hub: Hub, private val core: Core) {
     // Dialed from the computer: its number, for the call that follows.
     private var dialed = ""
     private var dialedAt = 0L
+    // Silence: the ringer muted for this ringing call (put back when it stops ringing).
+    private var silenced = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -50,6 +55,7 @@ class Calls(private val hub: Hub, private val core: Core) {
     fun start() {
         if (registered || !hub.granted(Manifest.permission.READ_PHONE_STATE)) return
         registered = true
+        CallCompanion.onChange = { report() }
         ctx.registerReceiver(receiver, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
         // A call already going: the computer shows it too.
         @Suppress("DEPRECATION")
@@ -65,6 +71,8 @@ class Calls(private val hub: Hub, private val core: Core) {
     fun stop() {
         if (registered) runCatching { ctx.unregisterReceiver(receiver) }
         registered = false
+        CallCompanion.onChange = null
+        unsilence()
         state = "idle"
     }
 
@@ -82,16 +90,26 @@ class Calls(private val hub: Hub, private val core: Core) {
                     since = now
                 }
             }
+            if (state == "ringing") unsilence()
             state = st
         }
         report()
     }
 
     private fun report() {
-        val st = state; val n = number; val d = dir; val at = since
+        val st = state; val d = dir; val at = since
+        // Without the call log Android leaves the number out; the companion has it.
+        val n = number.ifEmpty { if (st != "idle") CallCompanion.number().also { number = it } else "" }
+        val companion = st != "idle" && CallCompanion.current() != null
+        val can = mutableListOf<String>()
+        if (st == "ringing") can += "silence"
+        if (st == "offhook" && companion) { can += "dtmf"; if (CallCompanion.canHold()) can += "hold" }
+        val held = st == "offhook" && companion && CallCompanion.held()
+        val sil = silenced
         hub.run {
             val who = if (n.isNotEmpty()) lookup(n) else null
-            core.send(msg(Proto.T.CALL_STATE, "state" to st, "number" to n, "name" to (who?.first ?: ""), "photo" to who?.second, "dir" to d, "since" to at))
+            core.send(msg(Proto.T.CALL_STATE, "state" to st, "number" to n, "name" to (who?.first ?: ""), "photo" to who?.second, "dir" to d, "since" to at,
+                "held" to held, "silenced" to sil, "can" to jsonArray(can)))
         }
     }
 
@@ -103,20 +121,42 @@ class Calls(private val hub: Hub, private val core: Core) {
         val r = runCatching {
             when (a) {
                 "dial" -> {
-                    if (!hub.granted(Manifest.permission.CALL_PHONE)) error("dial")
                     val n = m.str("number", 60).filter { it.isDigit() || it in "+*#,;" }
                     if (n.isEmpty()) error("number")
+                    // A code, not a number: the dialer opens with it and it's tapped on the phone.
+                    if (n.any { it == '*' || it == '#' }) { openDialer(n); core.send(msg(Proto.T.CALL_DONE, "a" to a, "ok" to true, "onPhone" to true)); return }
+                    if (!hub.granted(Manifest.permission.CALL_PHONE)) error("dial")
                     dialed = n
                     dialedAt = System.currentTimeMillis()
-                    telecom.placeCall(Uri.fromParts("tel", n, null), Bundle())
+                    val extras = Bundle()
+                    sim(m.str("sim", 200))?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
+                    telecom.placeCall(Uri.fromParts("tel", n, null), extras)
                 }
                 "answer" -> {
-                    if (!hub.granted(Manifest.permission.ANSWER_PHONE_CALLS)) error("answer")
-                    @Suppress("DEPRECATION") telecom.acceptRingingCall()
+                    if (!CallCompanion.answer()) {
+                        if (!hub.granted(Manifest.permission.ANSWER_PHONE_CALLS)) error("answer")
+                        @Suppress("DEPRECATION") telecom.acceptRingingCall()
+                    }
                 }
                 "end" -> {
-                    if (!hub.granted(Manifest.permission.ANSWER_PHONE_CALLS)) error("answer")
-                    @Suppress("DEPRECATION") if (!telecom.endCall()) error("end")
+                    if (!CallCompanion.end()) {
+                        if (!hub.granted(Manifest.permission.ANSWER_PHONE_CALLS)) error("answer")
+                        @Suppress("DEPRECATION") if (!telecom.endCall()) error("end")
+                    }
+                }
+                "hold" -> if (!CallCompanion.hold(m.optBoolean("on"))) error("hold")
+                "dtmf" -> {
+                    val k = m.str("key", 1).firstOrNull()?.takeIf { it.isDigit() || it == '*' || it == '#' } ?: error("key")
+                    if (!CallCompanion.dtmf(k)) error("dtmf")
+                }
+                "silence" -> {
+                    if (state != "ringing") error("silence")
+                    // The dialer's own when Android allows it; else the ringer muted until the call stops ringing.
+                    if (runCatching { telecom.silenceRinger() }.isFailure && !silenced) {
+                        ctx.getSystemService(AudioManager::class.java).adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
+                    }
+                    silenced = true
+                    report()
                 }
                 // The phone's microphone (its sound stays on the phone); over Bluetooth the computer mutes its own.
                 "mute" -> ctx.getSystemService(AudioManager::class.java).isMicrophoneMute = m.optBoolean("on")
@@ -124,6 +164,43 @@ class Calls(private val hub: Hub, private val core: Core) {
             }
         }
         core.send(msg(Proto.T.CALL_DONE, "a" to a, "ok" to r.isSuccess, "error" to r.exceptionOrNull()?.message))
+    }
+
+    private fun unsilence() {
+        if (!silenced) return
+        silenced = false
+        runCatching { ctx.getSystemService(AudioManager::class.java).adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0) }
+    }
+
+    // The phone's dialer with a code in it, to tap there: straight away when Android lets this open
+    // a screen (TwinDesk on screen, or allowed over other apps), else a notification that opens it.
+    private fun openDialer(n: String) {
+        val i = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", n, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (android.provider.Settings.canDrawOverlays(ctx) || MainActivity.shown) {
+            if (runCatching { ctx.startActivity(i) }.isSuccess) return
+        }
+        Notify.dial(ctx, n, i)
+    }
+
+    // The SIMs calls can go out on, when there's more than one: [{id, label}] for the computer's Call.
+    @SuppressLint("MissingPermission")
+    fun sims(): JSONArray {
+        val out = JSONArray()
+        if (!hub.granted(Manifest.permission.READ_PHONE_STATE)) return out
+        val telecom = ctx.getSystemService(TelecomManager::class.java)
+        val all = runCatching { telecom.callCapablePhoneAccounts }.getOrNull().orEmpty()
+        if (all.size < 2) return out
+        all.forEachIndexed { i, h ->
+            val label = runCatching { telecom.getPhoneAccount(h)?.label?.toString() }.getOrNull().orEmpty().ifBlank { "SIM ${i + 1}" }
+            out.put(JSONObject().put("id", h.id).put("label", label.take(40)))
+        }
+        return out
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun sim(id: String): android.telecom.PhoneAccountHandle? {
+        if (id.isEmpty() || !hub.granted(Manifest.permission.READ_PHONE_STATE)) return null
+        return runCatching { ctx.getSystemService(TelecomManager::class.java).callCapablePhoneAccounts.firstOrNull { it.id == id } }.getOrNull()
     }
 
     // The newest calls (needs the call log).

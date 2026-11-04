@@ -60,14 +60,28 @@ UI.tab({
     const mute = UI.button(tr('Mute'), () => act('mute', { on: !(UI.state.hub && UI.state.hub.muted) }));
     const where = UI.button(tr('Sound here'), () => api.hub({ do: 'audio', a: UI.state.hub.audio && UI.state.hub.audio.here ? 'phone' : 'here' }));
     const end = UI.button(tr('End'), () => act('end'), 'danger');
-    const nowRow = el('div', { class: 'row hub-call' }, [avatarSlot, el('div', { class: 'text' }, [who, sub]), el('div', { class: 'controls' }, [mute, where, decline, end, answer])]);
-    const nowCard = UI.card(tr('Now'), [nowRow]);
+    // What the phone app can do on the call (call.state can): Silence while it rings; Hold and the
+    // keypad once the phone allowed TwinDesk the calls themselves (over wireless debugging, once).
+    const silence = UI.button(tr('Silence'), () => act('silence'));
+    const hold = UI.button(tr('Hold'), () => act('hold', { on: !(UI.state.hub && UI.state.hub.call && UI.state.hub.call.held) }));
+    const tonesBtn = UI.button(tr('Keypad'), () => { tones.hidden = !tones.hidden; tonesBtn.classList.toggle('on', !tones.hidden); });
+    const KEYS = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['*', ''], ['0', '+'], ['#', '']];
+    const sent = el('div', { class: 'hint hub-tones-sent', attrs: { 'data-literal': '' } });
+    const tones = el('div', { hidden: true }, [sent, el('div', { class: 'hub-keypad' }, KEYS.map(([k, s]) => {
+      const b = el('button', { class: 'hub-key', attrs: { 'aria-label': k } }, [el('span', { text: k }), el('small', { text: s })]);
+      b.onclick = () => { act('dtmf', { key: k }); sent.textContent = (sent.textContent + k).slice(-24); };
+      return b;
+    }))]);
+    const nowRow = el('div', { class: 'row hub-call' }, [avatarSlot, el('div', { class: 'text' }, [who, sub]), el('div', { class: 'controls' }, [silence, mute, hold, tonesBtn, where, decline, end, answer])]);
+    const nowCard = UI.card(tr('Now'), [nowRow, tones]);
 
     // Call a number: typed, or on the keypad; the contacts it matches show under it.
     const number = el('input', { type: 'tel', class: 'hub-input hub-number', placeholder: tr('Enter a number'), spellcheck: false, autocomplete: 'off', attrs: { 'aria-label': tr('Number') } });
     const callBtn = UI.button(tr('Call'), () => dial(number.value), 'primary');
     const padBtn = UI.button(tr('Keypad'), () => { pad.hidden = !pad.hidden; padBtn.classList.toggle('on', !pad.hidden); number.focus(); });
-    const KEYS = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['*', ''], ['0', '+'], ['#', '']];
+    // Two SIMs or more: which one the call goes out on ('' is the phone's default).
+    const simPick = UI.select([{ value: '', label: tr('Default SIM') }], () => {});
+    simPick.el.setAttribute('aria-label', tr('SIM'));
     const pad = el('div', { class: 'hub-keypad', hidden: true }, [
       ...KEYS.map(([k, sub]) => {
         const b = el('button', { class: 'hub-key', attrs: { 'aria-label': k } }, [el('span', { text: k }), el('small', { text: sub })]);
@@ -81,7 +95,14 @@ UI.tab({
       }),
     ]);
     const matches = el('div', { class: 'hub-list' });
-    const dialCard = UI.card(tr('Call'), [el('div', { class: 'row hub-dial' }, [number, padBtn, callBtn]), pad, matches]);
+    // A code (*#06#, call forwarding…) isn't dialed from here: the phone's dialer opens with it.
+    const onPhone = el('div', { class: 'hint', hidden: true, text: tr('The code is in the phone’s dialer: tap Call there to run it.') });
+    const dialCard = UI.card(tr('Call'), [el('div', { class: 'row hub-dial' }, [number, simPick.el, padBtn, callBtn]), onPhone, pad, matches]);
+    UI.hubOn('call.done', (m) => {
+      if (m.a !== 'dial') return;
+      onPhone.hidden = !m.onPhone;
+      if (m.onPhone) setTimeout(() => { onPhone.hidden = true; }, 15000);
+    });
     const digits = (v) => String(v || '').replace(/[^\d+]/g, '');
     // Typed digits in a saved number, the trunk 0 aside (0771… finds +94 771…).
     const has = (n, d) => { const x = digits(n); const local = d.replace(/^0+/, ''); return x.includes(d) || (local.length >= 3 && x.includes(local)); };
@@ -89,7 +110,7 @@ UI.tab({
     const dial = (n) => {
       const v = String(n || '').trim();
       if (!isNumber(v)) return;
-      act('dial', { number: v });
+      act('dial', { number: v, sim: simPick.el.value || undefined });
       number.value = '';
       typed();
     };
@@ -258,7 +279,22 @@ UI.tab({
         mute.textContent = h.muted ? tr('Unmute') : tr('Mute');
         where.hidden = ringing || !bt || h.audio.canMove === false;
         where.textContent = bt && h.audio.here ? tr('Sound on the phone') : tr('Sound here');
+        const can = c.can || [];
+        silence.hidden = !ringing || !can.includes('silence');
+        silence.disabled = !!c.silenced;
+        silence.textContent = c.silenced ? tr('Silenced') : tr('Silence');
+        hold.hidden = ringing || !can.includes('hold');
+        hold.textContent = c.held ? tr('Resume') : tr('Hold');
+        tonesBtn.hidden = ringing || !can.includes('dtmf');
+        if (tonesBtn.hidden) { tones.hidden = true; tonesBtn.classList.remove('on'); }
+      } else {
+        tones.hidden = true;
+        tonesBtn.classList.remove('on');
+        sent.textContent = '';
       }
+      const sims = (h.perm && h.perm.calls && h.perm.calls.sims) || [];
+      simPick.options([{ value: '', label: tr('Default SIM') }, ...sims.map((x) => ({ value: x.id, label: x.label }))]);
+      simPick.el.hidden = sims.length < 2;
       dialCard.hidden = !ready;
       contactsCard.hidden = !canContacts(s);
       recentCard.hidden = !ready || !(h.perm && !(h.perm.calls.missing || []).includes('numbers'));

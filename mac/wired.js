@@ -29,7 +29,9 @@ const POLL_MS = 2000;
 const RETRY_MS = 15000; // a phone without TwinDesk (or not answering yet) is looked at again after this
 const TCPIP_PORT = 5555; // adb's TCP mode, where phone-bridge.js reaches the phone on a direct Wi-Fi link
 
-const isUsb = (serial) => !/[:]/.test(serial) && !serial.startsWith('emulator-') && !serial.includes('._adb-tls');
+// TWINDESK_EMULATOR=1 (development): this computer's Android emulator counts as a phone on a cable.
+const EMU = process.env.TWINDESK_EMULATOR === '1';
+const isUsb = (serial) => !/[:]/.test(serial) && (EMU || !serial.startsWith('emulator-')) && !serial.includes('._adb-tls');
 const isLoopback = (a) => a === '127.0.0.1' || a === '::1';
 
 class Wired extends EventEmitter {
@@ -108,7 +110,7 @@ class Wired extends EventEmitter {
       // adb only for a phone that's here: linked now, or one with USB debugging on the cable
       // (asked of the system, not adb). Until then no adb server runs.
       const linked = !!(this.raw.current && this.raw.current.os === P.OS.ANDROID);
-      const here = linked || await usbadb.present();
+      const here = linked || EMU || await usbadb.present();
       const usb = !here ? [] : (await this.adb.devices()).filter((d) => d.state === 'device' && isUsb(d.serial)).map((d) => d.serial);
       for (const s of [...this.plugged.keys()]) {
         if (usb.includes(s)) continue;

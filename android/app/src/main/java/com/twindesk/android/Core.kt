@@ -73,11 +73,12 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val hub = Hub(this) // Calls, Messages and Photos on the computer: nothing runs until one is on
     val share = FolderShare(this) // shared folders with the computer, both ways
     val sound = PhoneSound(this) // this phone's sound there without wireless debugging
+    val mirror = PhoneMirror(this) // this phone's screen there without wireless debugging
     val shots = Screenshots(this) // screenshots both ways, onto the other clipboard
     val nowPlaying = NowPlaying(this) // what plays here, for the computer's media controls
     val rezume = Rezume(this) // ReZume: go on with what's in use on the other device (off until turned on)
     val dev = DevCtl(this) // this phone's controls on the computer's Overview, the computer's on the Computer page
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, shots, nowPlaying, rezume, dev)
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev)
 
     val host: Host? get() = if (link.connected) link.host else null
 
@@ -156,8 +157,9 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // skipNet: the network just failed to reach it (a stale address after the Wi-Fi went): Bluetooth first.
     private fun connect(h: Host, skipNet: Boolean) {
         resumeUntil = 0
-        // The Mac's screen, input and sound need wireless debugging: switch it on as we connect.
-        if (adb.canEnable && !adb.wifiDebugging) adb.enable(true)
+        // The computer's screen, input and sound through ADB need wireless debugging: switch it on as
+        // we connect (unless that computer said it doesn't use it: all through Native there).
+        if (adb.canEnable && !adb.wifiDebugging && adb.neededBy(h)) adb.enable(true)
         val seen = if (skipNet) null else discovery.found[h.id]
         if (seen != null && (seen.address != h.address || seen.port != h.port)) {
             h.address = seen.address

@@ -330,14 +330,18 @@
         const nf = s.notifs || {};
         const history = (nf.history || []).slice(0, 6);
         notifCard.hidden = !nf.receive || ov.notifs === false;
-        const nk = JSON.stringify([history.map((h) => [h.id, h.at]), Object.keys(nf.historyIcons || {}).length, devName]);
+        const nk = JSON.stringify([history.map((h) => [h.id, h.at, h.actions]), Object.keys(nf.historyIcons || {}).length, devName, phone]);
         if (nk !== notifKey) {
           notifKey = nk;
           notifList.replaceChildren(...(history.length ? history.map((item) => {
             const text = [item.subtitle, item.body].filter(Boolean).join(' · ');
             const code = otpOf([item.title, item.body].join(' '));
             const copy = code ? UI.button(t('Copy {code}', { code }), () => api.copyText(code), 'small') : null;
-            const r = row([item.appName || item.app, item.title].filter(Boolean).join(' · '), (text || t('Notification')) + ' · ' + UI.ago(item.at), [copy]);
+            // A phone's: its own buttons (Mark as read…), and × dismisses it there too (shared/notifacts.js).
+            const acts = phone && api.notifReply ? (item.actions || []).map((a, i) => UI.button(a, () => api.notifReply({ id: item.id, act: i }), 'small')) : [];
+            const x = phone && api.notifReply ? UI.button('×', () => api.notifReply({ id: item.id, dismiss: true }), 'small') : null;
+            if (x) { x.title = t('Dismiss'); x.setAttribute('aria-label', t('Dismiss')); }
+            const r = row([item.appName || item.app, item.title].filter(Boolean).join(' · '), (text || t('Notification')) + ' · ' + UI.ago(item.at), [copy, ...acts, x]);
             const icon = (nf.historyIcons || {})[item.app];
             if (icon) {
               r.querySelector('.text').prepend(el('img', { class: 'dv-nicon', src: icon, alt: '' }));

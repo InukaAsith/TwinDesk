@@ -241,7 +241,7 @@ class Input(core: Core) : Feature(core) {
     private var told: String? = null
 
     fun setVia(v: String) {
-        if (v != "adb" && v != "phone" || v == via) return
+        if (v != "adb" && v != "phone" && v != "auto" || v == via) return
         core.store.setPrefsString("inputVia", v)
         changed()
     }

@@ -119,6 +119,8 @@ class PhoneInfo(core: Core) : Feature(core) {
                 Proto.T.PHONE_INFO, "model" to Build.MODEL, "maker" to Build.MANUFACTURER.replaceFirstChar { it.uppercase() },
                 "release" to Build.VERSION.RELEASE, "sdk" to Build.VERSION.SDK_INT, "battery" to battery, "charging" to charging,
                 "colors" to jsonArray(colors()), "display" to display(),
+                // This app's version and what it can do that older ones can't (the computer picks by them).
+                "app" to BuildConfig.VERSION_NAME, "caps" to jsonArray(listOf("mirror.native")),
             )
             val key = m.toString()
             if (withWallpaper && !core.link.ble) wallpaperImage()?.let { m.put("wallpaper", it) } // too big for Bluetooth
@@ -189,6 +191,13 @@ class Adb(core: Core) : Feature(core) {
     // a while (canPair), asks again.
     private fun knownKey() = core.host?.let { "adb.known.${it.id}" }
     val known get() = knownKey()?.let { core.store.flag(it, false) } ?: false
+    // Whether the computer uses wireless debugging now (adb.bridge need): its screen, mouse, keyboard
+    // and sound may all go through Native instead. A computer from before it never says: needed, as
+    // it always was. Kept for each computer, so connecting switches it on only for one that uses it.
+    @Volatile private var need: Boolean? = null
+    private fun needKey(id: String) = "adb.need.$id"
+    fun neededBy(h: Host) = core.store.flag(needKey(h.id), true)
+    val needed get() = need ?: core.host?.let { neededBy(it) } ?: true
     val setupNeeded get() = (!paired && (!known || bridge == "needsPair" || canPair)) || inputBlocked
     @Volatile var pairing = false; private set // a code went to the computer, waiting for the answer
     private var nsd: android.net.nsd.NsdManager.DiscoveryListener? = null
@@ -342,7 +351,7 @@ class Adb(core: Core) : Feature(core) {
     fun check(tries: Int = 3) {
         main.removeCallbacksAndMessages(null)
         trying = false
-        if (!core.link.connected || wifiDebugging || !onWifiNetwork) return settle(false)
+        if (!core.link.connected || wifiDebugging || !onWifiNetwork || !needed) return settle(false) // not used there: nothing to ask
         if (!unlocked) return
         trying = enable(true)
         main.postDelayed({
@@ -361,6 +370,7 @@ class Adb(core: Core) : Feature(core) {
     }
 
     override fun onWelcome(host: Host) {
+        need = null
         autoOff.removeCallbacksAndMessages(null)
         // Wireless debugging only works on Wi-Fi; switch it on for the Mac if we may, else ask.
         sendState()
@@ -394,6 +404,14 @@ class Adb(core: Core) : Feature(core) {
                     else if (bridge == "needsPair") Notify.pairResult(core.ctx, "Pairing didn’t work", bridgeMessage.ifEmpty { "Try a new code." }, true)
                 }
                 if (bridge == "ready" && was != "ready") stopPortSearch()
+                if (m.has("need")) {
+                    val n = m.optBoolean("need", true)
+                    val before = needed
+                    need = n
+                    core.host?.let { core.store.setFlag(needKey(it.id), n) }
+                    if (n && !before) main.post { check() } // wanted now (an ADB pick, Set Up): switch it on
+                    else if (!n && off) settle(false)
+                }
                 knownKey()?.let { k -> if (bridge == "ready") core.store.setFlag(k, true) else if (bridge == "needsPair") core.store.setFlag(k, false) }
                 core.changed()
             }

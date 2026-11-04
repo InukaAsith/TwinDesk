@@ -5,6 +5,8 @@
 // "Play this device's sound" is on and adb can't carry it; when adb can, it says off again.
 // Apps that don't allow capture (some streaming apps, calls) stay silent there, and the sound keeps
 // playing on the phone as well: only adb can move it off the phone.
+// The same grant shows the screen there (Mirror.kt): SoundService holds it for either or both, and
+// one Start covers both when they're asked for together.
 package com.twindesk.android
 
 import android.Manifest
@@ -34,7 +36,7 @@ private const val MAX_QUEUED = 96 * 1024L // bytes waiting on the socket: past t
 
 class PhoneSound(core: Core) : Feature(core) {
     @Volatile var wanted = false; private set // the computer asks for it
-    val on get() = SoundService.running != null
+    val on get() = SoundService.running?.soundOn == true
     @Volatile var error = ""; private set
 
     override fun onClosed() = want(false)
@@ -49,8 +51,7 @@ class PhoneSound(core: Core) : Feature(core) {
         if (v == wanted) return
         wanted = v
         error = ""
-        if (v) Notify.sound(core.ctx, core.host?.name ?: "your computer")
-        else { Notify.cancelSound(core.ctx); SoundService.stop(core.ctx) }
+        Capture.changed(core)
         tell()
         core.changed()
     }
@@ -64,6 +65,9 @@ class PhoneSound(core: Core) : Feature(core) {
         SoundService.stop(core.ctx)
     }
 
+    // Asked for and not yet playing (the grant is held for the screen alone, or not yet given).
+    val waiting get() = wanted && !on
+
     fun ok() = failed("") // started: an earlier error is gone
 
     fun failed(why: String) {
@@ -75,7 +79,7 @@ class PhoneSound(core: Core) : Feature(core) {
     // phone.sound.state {on, waiting (for Start here), error, codec}
     fun tell() {
         if (!core.link.connected) return
-        core.send(msg(Proto.T.PHONE_SOUND_STATE, "on" to on, "waiting" to (wanted && !on), "error" to error, "codec" to (SoundService.running?.codec ?: "")))
+        core.send(msg(Proto.T.PHONE_SOUND_STATE, "on" to on, "waiting" to (wanted && SoundService.running == null), "error" to error, "codec" to (SoundService.running?.codec ?: "")))
     }
 }
 
@@ -85,14 +89,22 @@ class SoundActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Notify.cancelSound(this)
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+        val core = Core.get(this)
+        val s = SoundService.running
+        if (s != null) { s.update(); finish(); return } // already held: it takes what's wanted now
+        // The microphone permission only for the sound (Android wants it for any sound capture).
+        if (core.sound.wanted && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
         else ask()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) ask()
-        else { Core.get(this).sound.failed("Allow the microphone permission for TwinDesk on the phone (Android asks it for any sound capture)"); finish() }
+        else {
+            val core = Core.get(this)
+            core.sound.failed("Allow the microphone permission for TwinDesk on the phone (Android asks it for any sound capture)")
+            if (core.mirror.wanted) ask() else finish() // the screen goes on without it
+        }
     }
 
     private fun ask() {
@@ -107,13 +119,21 @@ class SoundActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 2 && resultCode == RESULT_OK && data != null) {
             runCatching { startForegroundService(Intent(this, SoundService::class.java).putExtra("code", resultCode).putExtra("data", data)) }
-                .onFailure { Core.get(this).sound.failed(it.message ?: "couldn’t start") }
-        } else if (requestCode == 2) Core.get(this).sound.failed("Not started on the phone")
+                .onFailure { failed(it.message ?: "couldn’t start") }
+        } else if (requestCode == 2) failed("Not started on the phone")
         finish()
+    }
+
+    private fun failed(why: String) {
+        val core = Core.get(this)
+        if (core.sound.wanted) core.sound.failed(why)
+        if (core.mirror.wanted) core.mirror.failed(why)
     }
 }
 
-// Holds the capture (Android wants a foreground service of type mediaProjection for it).
+// Holds the capture (Android wants a foreground service of type mediaProjection for it): the sound,
+// the screen (ScreenStreamer, Mirror.kt), or both, each while the computer wants it; when neither is
+// wanted any more, the grant ends with the service.
 class SoundService : Service() {
     private var projection: MediaProjection? = null
     private var record: AudioRecord? = null
@@ -121,41 +141,79 @@ class SoundService : Service() {
     @Volatile private var capturing = false
     @Volatile var codec = ""; private set
     private var thread: Thread? = null
+    private var screen: ScreenStreamer? = null
+    private lateinit var core: Core
+
+    val soundOn get() = capturing
+    val screenOn get() = screen?.running == true
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val core = Core.get(this)
+        core = Core.get(this)
         val name = core.host?.name ?: "your computer"
         try {
-            startForeground(Notify.ID_SOUND, Notify.soundOn(this, name), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            startForeground(Notify.ID_SOUND, Notify.soundOn(this, name, core.mirror.wanted, core.sound.wanted), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } catch (e: Exception) {
-            core.sound.failed(e.message ?: "couldn’t start"); stopSelf(); return START_NOT_STICKY
+            failed(e.message ?: "couldn’t start"); stopSelf(); return START_NOT_STICKY
         }
         if (running != null) return START_NOT_STICKY
         @Suppress("DEPRECATION")
         val data: Intent? = intent?.getParcelableExtra("data")
         val code = intent?.getIntExtra("code", 0) ?: 0
-        if (data == null || !core.sound.wanted) { stopSelf(); return START_NOT_STICKY }
+        if (data == null || (!core.sound.wanted && !core.mirror.wanted)) { stopSelf(); return START_NOT_STICKY }
         try {
-            begin(core, code, data)
+            val p = getSystemService(MediaProjectionManager::class.java).getMediaProjection(code, data) ?: throw IllegalStateException("no capture grant")
+            projection = p
+            p.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() { stopSelf() } // stopped from the status bar or the lock screen
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
         } catch (e: Exception) {
-            Log.w("TwinDesk", "sound: ${e.message}")
-            core.sound.failed(e.message ?: "couldn’t capture"); end(); stopSelf()
+            Log.w("TwinDesk", "capture: ${e.message}")
+            failed(e.message ?: "couldn’t capture"); end(); stopSelf()
             return START_NOT_STICKY
         }
         running = this
-        core.sound.ok()
+        update()
         return START_NOT_STICKY
     }
 
+    private fun failed(why: String) {
+        if (core.sound.wanted) core.sound.failed(why)
+        if (core.mirror.wanted) core.mirror.failed(why)
+    }
+
+    // What the computer wants now: the sound and the screen start or stop; nothing wanted ends it.
+    fun update() {
+        val p = projection ?: return
+        if (!core.sound.wanted && !core.mirror.wanted) { stopSelf(); return }
+        if (core.sound.wanted && !capturing) {
+            try { beginSound(p); core.sound.ok() } catch (e: Exception) {
+                Log.w("TwinDesk", "sound: ${e.message}"); endSound(); core.sound.failed(e.message ?: "couldn’t capture")
+            }
+        } else if (!core.sound.wanted && capturing) endSound()
+        val sc = screen ?: ScreenStreamer(this, p, core).also { screen = it }
+        if (core.mirror.wanted && !sc.running) sc.start()
+        else if (!core.mirror.wanted && sc.running) sc.stop()
+        runCatching { Notify.nm(this).notify(Notify.ID_SOUND, Notify.soundOn(this, core.host?.name ?: "your computer", screenOn, capturing)) }
+        core.sound.tell()
+        core.mirror.tell()
+        core.changed()
+    }
+
+    fun syncFrame() { screen?.sync() }
+
+    // A new window there (its own key): the stream again, to it.
+    fun restartScreen() {
+        val sc = screen ?: return
+        sc.stop()
+        if (core.mirror.wanted) sc.start()
+    }
+
     @Suppress("MissingPermission") // asked for in SoundActivity
-    private fun begin(core: Core, code: Int, data: Intent) {
-        val p = getSystemService(MediaProjectionManager::class.java).getMediaProjection(code, data) ?: throw IllegalStateException("no capture grant")
-        projection = p
-        p.registerCallback(object : MediaProjection.Callback() {
-            override fun onStop() { stopSelf() } // stopped from the status bar or the lock screen
-        }, null)
+    private fun beginSound(p: MediaProjection) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+            throw IllegalStateException("Allow the microphone permission for TwinDesk on the phone (Android asks it for any sound capture)")
         val cfg = AudioPlaybackCaptureConfiguration.Builder(p)
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
             .addMatchingUsage(AudioAttributes.USAGE_GAME)
@@ -178,11 +236,10 @@ class SoundService : Service() {
         codec = if (codecs != null) "opus" else "pcm"
         r.startRecording()
         capturing = true
-        thread = Thread({ loop(core) }, "td-sound").apply { start() }
+        thread = Thread({ loop(r) }, "td-sound").apply { start() }
     }
 
-    private fun loop(core: Core) {
-        val r = record ?: return
+    private fun loop(r: AudioRecord) {
         val pcm = ByteArray(FRAME * 4)
         val info = MediaCodec.BufferInfo()
         val out = JSONArray()
@@ -222,23 +279,32 @@ class SoundService : Service() {
         }
     }
 
-    private fun end() {
+    private fun endSound() {
         capturing = false
         runCatching { thread?.join(500) }
+        thread = null
         runCatching { record?.stop() }
         runCatching { record?.release() }
         runCatching { codecs?.stop() }
         runCatching { codecs?.release() }
+        record = null; codecs = null
+    }
+
+    private fun end() {
+        endSound()
+        runCatching { screen?.release() }
+        screen = null
         runCatching { projection?.stop() }
-        record = null; codecs = null; projection = null
+        projection = null
     }
 
     override fun onDestroy() {
         end()
         if (running === this) running = null
         val core = Core.get(this)
-        if (core.sound.wanted && core.link.connected) Notify.sound(this, core.host?.name ?: "your computer") // stopped here: Start again from there
+        if ((core.sound.wanted || core.mirror.wanted) && core.link.connected) Notify.sound(this, core.host?.name ?: "your computer", core.mirror.wanted) // stopped here: Start again from there
         core.sound.tell()
+        core.mirror.tell()
         core.changed()
         super.onDestroy()
     }

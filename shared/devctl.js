@@ -80,7 +80,7 @@ class DevCtl extends EventEmitter {
       this.emit('change');
       // The other side's first word in a session: ours again, so the two always have each other's
       // (one sent before the other side listened is otherwise never sent again: only changes are).
-      if (first) this._sendState(true);
+      if (first || (m && m.ask === true)) this._sendState(true); // asked: it hasn't got ours
       if (first) this._checkApp();
     });
     link.on(T.DO, (m) => this._asked(m || {}));
@@ -115,8 +115,18 @@ class DevCtl extends EventEmitter {
     this.emit('change');
   }
 
+  _name(m) {
+    try {
+      const n = this.peerName && this.peerName(m);
+      if (n) return String(n);
+    } catch (_) { /* fall back */ }
+    const cur = this.link.current;
+    return (cur && cur.name) || '';
+  }
+
   async _asked(m) {
     if (!this.local || !DOS.includes(m.do)) return;
+    if (m.do === 'ring') this.local.ringFrom = this._name(m);
     try {
       await this.local.do(m);
     } catch (e) {

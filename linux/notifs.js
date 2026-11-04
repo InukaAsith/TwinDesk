@@ -9,6 +9,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const P = require('../shared/protocol.js');
 const { IconsIn } = require('../shared/notificon.js');
+const { actionsOf, withPhoneActions } = require('../shared/notifacts.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -42,6 +43,7 @@ class Notifs {
       this.onChange();
     });
     link.on(T.NOTIF, (m) => this._show(m));
+    link.on('notif.gone', (m) => this.gone(m.id)); // gone from the phone (shared/notifacts.js)
     this.mon = null; // the dbus-monitor process while watching
   }
 
@@ -165,7 +167,7 @@ class Notifs {
     const appName = str(m.appName, 100);
     const title = str(m.title, 200) || appName || peer;
     // The recent ones, for Overview and Messages' chat apps (as Windows keeps them).
-    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true };
+    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true, actions: actionsOf(m) };
     if (!this.historyIcons) this.historyIcons = new Map();
     if (item.app && typeof m.icon === 'string' && m.icon.startsWith('data:image/') && m.icon.length < 200000) {
       this.historyIcons.delete(item.app);
@@ -180,6 +182,7 @@ class Notifs {
       icon: this.iconsIn.for(m),
       body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
     });
+    n.tdId = item.id;
     this.live.add(n);
     const drop = () => this.live.delete(n);
     n.on('close', drop);
@@ -199,6 +202,9 @@ class Notifs {
     this.onChange();
     return true;
   }
+
+  send(m) { this.link.send(m); }
+  changed() { this.onChange(); }
 
   clearHistory() {
     this.history = [];
@@ -223,5 +229,7 @@ class Notifs {
     };
   }
 }
+
+withPhoneActions(Notifs);
 
 module.exports = Notifs;

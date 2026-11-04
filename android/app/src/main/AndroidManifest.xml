@@ -39,6 +39,7 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.MANAGE_ONGOING_CALLS" tools:ignore="ProtectedPermissions" /> <!-- Hold and the keypad from the computer (CallCompanion.kt): allowed over wireless debugging -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" /> <!-- Do not disturb and Silent from the computer's Overview (DevCtl.kt) -->
@@ -201,6 +202,16 @@
             android:name=".SoundService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- The calls themselves for the computer (CallCompanion.kt): no screen, the dialer stays the dialer -->
+        <service
+            android:name=".CallCompanion"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".SoundActivity"

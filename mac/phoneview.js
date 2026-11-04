@@ -18,6 +18,7 @@ const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const I18n = require('../shared/i18n.js');
 const { Session, ACTION, TYPE } = require('./scrcpy');
+const { NativeScreen } = require('../shared/nativescreen.js');
 const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
 const { DockStub, addToDock } = require('./dockstub');
@@ -36,7 +37,7 @@ class PhoneViews extends EventEmitter {
     this.stubs = new Map(); // package -> DockStub, while that app has a window here
     bridge.views = this;
     this.on('change', () => bridge._tellPhone()); // its Screen and Camera pages follow the windows here
-    this.on('change', () => bridge._tellPhone());
+    this.on('change', () => bridge._sound()); // a Native screen window with its sound takes the phone's own capture
     this.notified = null; // {pkg, name, at, unlocked}: a clicked notification's app, waiting to open
     // The app in front on the phone, which its Accessibility says (the full app): Return in a chat
     // app sends (shared/phonechat.js); a11y: the phone clicks Send itself.
@@ -110,12 +111,18 @@ class PhoneViews extends EventEmitter {
   }
 
   netAudio(m) {
-    const v = [...this.views.values()].find((x) => x.kind === 'netsound');
-    if (v) this._send(v, 'phoneview:netaudio', { codec: m.codec === 'pcm' ? 'pcm' : 'opus', p: Array.isArray(m.p) ? m.p.filter((x) => typeof x === 'string').slice(0, 10) : [] });
+    const p = { codec: m.codec === 'pcm' ? 'pcm' : 'opus', p: Array.isArray(m.p) ? m.p.filter((x) => typeof x === 'string').slice(0, 10) : [] };
+    for (const v of this.views.values()) if (v.kind === 'netsound' || (v.native && v.session && v.session.opts.audio)) this._send(v, 'phoneview:netaudio', p);
+  }
+
+  // A Native screen window (Mirroring › Native) that plays the phone's sound: phone-bridge.js asks
+  // the phone for it (phone.sound.want).
+  get nativeScreenSound() {
+    return [...this.views.values()].some((v) => v.kind === 'screen' && v.native && v.session && !v.session.closed && v.session.opts.audio);
   }
 
   list() {
-    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
+    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, screenOff: !!v.screenOff, native: !!v.native, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
   }
 
   get focused() {
@@ -132,7 +139,9 @@ class PhoneViews extends EventEmitter {
     const w = Math.round(h * Math.min(d.w, d.h) / Math.max(d.w, d.h));
     const name = (this.server.current && this.server.current.name) || this._i18n().t('Phone');
     const titleKey = (this.server.current && this.server.current.name) ? '' : 'Phone';
-    this._open({ kind: 'screen', title: name, titleKey, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
+    // Mirroring › Native (or Automatic without wireless debugging): the phone shares it itself.
+    const native = this.bridge.mirrorVia === 'native';
+    this._open({ kind: 'screen', native, title: name, titleKey, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
   }
 
   // The phone's camera (Camera's switch, or the phone's Camera page; scrcpy's camera source, Android
@@ -256,6 +265,15 @@ class PhoneViews extends EventEmitter {
     this.openApp(n.pkg, this._info(n.pkg, n.name).name);
   }
 
+  // Mirroring's settings: the open phone screen window's Rotate and screen off ('rotate' | 'screenPower').
+  screenAct(key) {
+    if (key !== 'rotate' && key !== 'screenPower') return;
+    const v = [...this.views.values()].find((x) => x.kind === 'screen' && !x.ending);
+    if (!v) return;
+    this._input(v, { t: 'nav', key });
+    this.emit('change');
+  }
+
   close(id) {
     const v = this.views.get(id);
     if (!v || !v.win || v.win.isDestroyed()) return;
@@ -276,8 +294,8 @@ class PhoneViews extends EventEmitter {
     return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
   }
 
-  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false, sink = '' }) {
-    if (!this.bridge.serial && kind !== 'netsound') {
+  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false, sink = '', native = false }) {
+    if (!this.bridge.serial && kind !== 'netsound' && !native) {
       // Through Bluetooth: the phone's hotspot first (main.js), then this window.
       if (kind !== 'mic' && this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
       return this.bridge.emit('popup', 'home', 'Set up wireless debugging on the Phone page first');
@@ -288,7 +306,7 @@ class PhoneViews extends EventEmitter {
       titleBarStyle: 'hiddenInset', backgroundColor: '#000000',
       webPreferences: { preload: path.join(__dirname, 'preload-phoneview.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
     });
-    const v = { id, kind, app, title, win, sink, session: null, keys: new KeyState(), size: null, ready: false, queue: [], screenOff: false, eaten: new Set() };
+    const v = { id, kind, app, title, win, sink, native, session: null, keys: new KeyState(), size: null, ready: false, queue: [], screenOff: false, eaten: new Set() };
     this._send(v, 'phoneview:opts', this._opts(v));
     this.views.set(id, v);
     if (kind === 'app') setImmediate(() => this._stubs());
@@ -333,8 +351,10 @@ class PhoneViews extends EventEmitter {
   }
 
   async _start(v, opts) {
-    const s = new Session(this.bridge.adb, this.bridge.serial, opts);
-    const via = this.bridge.via;
+    const s = v.native ? new NativeScreen(this.server, opts) : new Session(this.bridge.adb, this.bridge.serial, opts);
+    const via = v.native ? null : this.bridge.via;
+    if (v.native) setImmediate(() => this.bridge._sound()); // its sound, when it plays it
+    if (v.native) s.on('waiting', () => this._send(v, 'phoneview:status', { error: 'Tap Start on the phone to share its screen', errorKey: 'Tap Start on the phone to share its screen' }));
     v.session = s;
     s.on('size', (size) => {
       v.size = size;
@@ -433,7 +453,7 @@ class PhoneViews extends EventEmitter {
         if (m.key === 'notifications') s.simple(TYPE.EXPAND_NOTIFICATIONS);
         if (m.key === 'rotate') s.simple(TYPE.ROTATE);
         // The phone's own screen off, its picture still here (scrcpy's display power).
-        if (m.key === 'screenPower' && v.kind === 'screen') {
+        if (m.key === 'screenPower' && v.kind === 'screen' && !v.native) {
           v.screenOff = !v.screenOff;
           s.setDisplayPower(!v.screenOff);
           this._send(v, 'phoneview:opts', { screenOff: v.screenOff });

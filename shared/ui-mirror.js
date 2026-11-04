@@ -3,7 +3,8 @@
 //   Mirroring: the phone's screen in a window, what's open here, and how phone windows look and
 //   behave (sound, picture, controls, keys).
 //   Apps: the phone's apps, each opened in a window of its own.
-// Only while a phone is connected; both need wireless debugging (Connection).
+// Only while a phone is connected. Mirroring goes through ADB (wireless debugging) or Native (the
+// phone shares its screen itself: shared/nativescreen.js); phone apps in windows need ADB.
 'use strict';
 
 (function () {
@@ -15,11 +16,11 @@
   const here = mac ? tr('this Mac') : linux ? tr('this computer') : tr('this PC');
   const isPhone = (s) => !!(s && s.phone && s.phone.connected);
 
-  // Wireless debugging isn't ready: one line, with the way to Connection.
-  const needAdb = () => {
-    const row = UI.row(tr('Wireless debugging isn’t set up'), tr('Mirroring and phone apps need it. Set it up once on the Connection page.'), [UI.button(tr('Set Up'), () => UI.go('connection'), 'small primary')]);
+  // Wireless debugging isn't ready: one line, with the way to Connection. used(s): it's needed here.
+  const needAdb = (hint, used = () => true) => {
+    const row = UI.row(tr('Wireless debugging isn’t set up'), hint, [UI.button(tr('Set Up'), () => UI.go('connection'), 'small primary')]);
     const card = UI.card('', [row]);
-    return { el: card, update(s) { const br = (s.phone || {}).bridge || {}; card.hidden = br.state === 'ready'; row.setHint(br.state === 'connecting' ? tr('Connecting to the phone’s wireless debugging…') : tr('Mirroring and phone apps need it. Set it up once on the Connection page.')); } };
+    return { el: card, update(s) { const br = (s.phone || {}).bridge || {}; card.hidden = br.state === 'ready' || !used(s); row.setHint(br.state === 'connecting' ? tr('Connecting to the phone’s wireless debugging…') : hint); } };
   };
 
   UI.tab({
@@ -32,7 +33,10 @@
     hidden: (s) => !isPhone(s),
     build(body) {
       const { el, api } = UI;
-      const adb = needAdb();
+      // Auto, Full (ADB) or Limited (Native: settings.phone.mirror 'auto' | 'adb' | 'native'): the bridge says which it is now.
+      const adb = needAdb(tr('Mirroring in Full (ADB) needs it. Set it up once on the Connection page, or choose Limited.'), (s) => ((s.phone || {}).bridge || {}).mirror !== 'native');
+      const mode = UI.segmented([{ value: 'auto', label: tr('Auto') }, { value: 'adb', label: tr('Full (ADB)') }, { value: 'native', label: tr('Limited') }], (v) => api.setPhone({ mirror: v }));
+      const modeRow = UI.row(tr('Show the screen through'), '', [mode.el]);
       const showBtn = UI.button(tr('Show Phone Screen'), () => api.phoneScreen(true), 'primary');
       const showRow = UI.row(tr('Phone screen'), tr('Opens in its own window. Close it any time; the phone keeps running.'), [showBtn]);
       const winList = el('div');
@@ -57,23 +61,43 @@
         rows.push(UI.row(tr('Phone controls'), tr('Where Back, Home, Recents and the other buttons sit. The panel button in each window’s title bar shows or hides them.'), [controls]));
       }
       let enterSends = null, arrowSwipe = null;
-      if (!linux) {
+      {
         enterSends = UI.switch((v) => api.setPhone({ enterSends: v }), { label: tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }) });
         rows.push(UI.row(tr('{key} sends messages', { key: mac ? 'Return' : 'Enter' }), tr('In WhatsApp, Instagram and Telegram. {shortcut} adds a new line.', { shortcut: mac ? '⇧Return' : 'Shift+Enter' }), [enterSends]));
         arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: tr('Arrow keys swipe') });
         rows.push(UI.row(tr('Arrow keys swipe'), tr('Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.'), [arrowSwipe]));
       }
+      // Mac and Linux: the phone screen window's Rotate and screen off, here rather than in its title
+      // bar (Windows keeps them in the window's panel).
+      let rotateBtn = null, screenOff = null, rotateRow = null, offRow = null;
+      if ((mac || linux) && api.phoneScreenAct) {
+        rotateBtn = UI.button(tr('Rotate'), () => api.phoneScreenAct('rotate'), 'small');
+        rotateRow = UI.row(tr('Rotate the phone screen'), '', [rotateBtn]);
+        screenOff = UI.switch(() => api.phoneScreenAct('screenPower'), { label: tr('Phone screen off') });
+        offRow = UI.row(tr('Phone screen off'), '', [screenOff]);
+        rows.push(rotateRow, offRow);
+      }
       const optsCard = UI.card(tr('Phone windows'), rows);
       const kbRow = UI.row(tr('Mouse and keyboard'), tr('Push the pointer past the screen edge to use the phone.'), [UI.button(tr('Mouse Settings'), () => UI.go('cursor'), 'small')]);
 
-      body.append(adb.el, UI.card('', [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
+      body.append(UI.card('', [modeRow]), adb.el, UI.card('', [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
 
       let winKey = '';
       return (s) => {
         adb.update(s);
         const ph = s.phone || {};
         const br = ph.bridge || {};
-        showBtn.disabled = br.state !== 'ready';
+        const native = br.mirror === 'native';
+        mode.set(br.mirrorMode || (native ? 'native' : 'adb'));
+        const ready = br.state === 'ready';
+        const name = (ph.connected && ph.connected.name) || tr('the phone');
+        modeRow.setHint(br.mirrorMode === 'native' && !br.nativeMirror ? tr('Update TwinDesk on {phone} to share its screen without wireless debugging', { phone: name })
+          : br.mirrorMode === 'auto' ? (native ? tr('Auto: Limited until wireless debugging is set up') : tr('Auto: Full (ADB), wireless debugging is ready'))
+            : native ? tr('Limited: {phone} shares its screen itself. Tap Start there each time. Touch and typing need the full app’s Accessibility; no dragging in steps, hover or pinch', { phone: name })
+              : tr('Full (ADB): through wireless debugging, with full touch, keys and sound') + (ready ? '' : tr(' (not set up yet)')));
+        showBtn.disabled = native ? !br.nativeMirror || UI.onBle(s) : !ready;
+        showRow.setHint(native && UI.onBle(s) ? tr('Screens need Wi-Fi: {phone} is connected through Bluetooth', { phone: name })
+          : tr('Opens in its own window. Close it any time; the phone keeps running.'));
         const st = ph.settings || {};
         sound.set(!!st.sound);
         quality.set(String(st.bitrateMbps || 8));
@@ -81,6 +105,16 @@
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);
         const wins = br.windows || [];
+        if (rotateBtn) {
+          const scr = wins.find((w) => w.kind === 'screen');
+          rotateBtn.disabled = !scr;
+          rotateRow.setHint(scr ? tr('Turns the open phone screen window') : tr('Show the phone screen first'));
+          screenOff.set(!!(scr && scr.screenOff));
+          screenOff.disable(!scr || !!scr.native);
+          offRow.setHint(!scr ? tr('Show the phone screen first')
+            : scr.native ? tr('Needs Full (ADB)')
+              : tr('The phone’s own screen goes dark; it keeps showing here, and saves the battery'));
+        }
         winCard.hidden = !wins.length;
         const wk = JSON.stringify(wins);
         if (wk !== winKey) {
@@ -102,7 +136,7 @@
     hidden: (s) => !isPhone(s),
     build(body) {
       const { el, api } = UI;
-      const adb = needAdb();
+      const adb = needAdb(tr('Phone apps in windows need it. Set it up once on the Connection page.'));
       const search = el('input', { type: 'search', placeholder: tr('Search apps'), autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': tr('Search apps') } });
       const count = el('span', { class: 'hint' });
       const grid = el('div', { class: 'app-grid' });

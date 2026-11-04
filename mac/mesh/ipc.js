@@ -186,6 +186,9 @@ function setupIpc(ctx) {
     phoneCloseView(id) {
       ctx.phoneViews.close(Number(id));
     },
+    phoneScreenAct(key) {
+      if (key === 'rotate' || key === 'screenPower') ctx.phoneViews.screenAct(key);
+    },
     // Right-click on a phone app: open it, or keep it in the Dock (phoneview.js).
     phoneAppMenu(arg) {
       if (!arg || typeof arg.id !== 'string' || !/^[\w.]{1,200}$/.test(arg.id)) return;
@@ -575,7 +578,7 @@ function setupIpc(ctx) {
     },
     // A phone chat's notification answered here (its own Reply).
     notifReply(r) {
-      if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text)); // a chat app's conversation (shared/chats.js)
+      if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
       if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
     },
     setLanguage(language) {

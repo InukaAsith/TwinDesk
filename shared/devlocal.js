@@ -166,6 +166,7 @@ $o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '
       this.ringer = null;
       clearTimeout(this.ringTimer);
     }
+    this._pop(false);
     if (!on) return;
     let p;
     if (this.os === 'win32') {
@@ -181,7 +182,8 @@ $o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '
       p = spawn('/bin/sh', ['-c', `while :; do ${line}; sleep 0.3; done`], { stdio: 'ignore', detached: true });
     }
     this.ringer = p;
-    p.on('exit', () => { if (this.ringer === p) { this.ringer = null; if (this.onStop) this.onStop(); } });
+    p.on('exit', () => { if (this.ringer === p) { this.ringer = null; this._pop(false); if (this.onStop) this.onStop(); } });
+    this._pop(true);
     this.ringTimer = setTimeout(() => this._ring(false), 120000);
     // The shell loops on Mac and Linux: the whole group goes when it's stopped.
     if (this.os !== 'win32') {
@@ -192,6 +194,29 @@ $o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '
 
   stop() {
     this._ring(false);
+  }
+
+  // While it rings: a notification that stays, Stop on it (or a click), so it can be stopped here
+  // too, not only from the device that rang. ringFrom: that device's name (DevCtl sets it).
+  _pop(on) {
+    if (this.note) { const n = this.note; this.note = null; try { n.close(); } catch (_) { /* gone */ } }
+    if (!on) return;
+    let Notification;
+    try { ({ Notification } = require('electron')); } catch (_) { return; } // not in Electron (tests)
+    if (!Notification || !Notification.isSupported()) return;
+    const stop = () => { this._ring(false); if (this.onStop) this.onStop(); };
+    const n = new Notification({
+      title: 'Ringing',
+      body: (this.ringFrom ? this.ringFrom : 'Another device') + ' is ringing this computer. Click to stop.',
+      silent: true,
+      timeoutType: 'never',
+      urgency: 'critical',
+      actions: [{ type: 'button', text: 'Stop' }],
+    });
+    n.on('click', stop);
+    n.on('action', stop);
+    this.note = n;
+    n.show();
   }
 }
 

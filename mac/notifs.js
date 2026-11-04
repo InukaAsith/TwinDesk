@@ -10,6 +10,7 @@ const { Notification, nativeImage } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { IconsOut, IconsIn } = require('../shared/notificon.js');
+const { actionsOf, withPhoneActions } = require('../shared/notifacts.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -43,6 +44,7 @@ class Notifs extends EventEmitter {
       this.emit('change');
     });
     server.on(`t:${T.NOTIF}`, (m) => this._show(m));
+    server.on('t:notif.gone', (m) => this.gone(m.id)); // gone from the phone (shared/notifacts.js)
     helper.on('ready', () => this._watch());
     helper.on('event', (name, ev) => {
       if (name === 'notif') this._local(ev);
@@ -104,7 +106,7 @@ class Notifs extends EventEmitter {
     const peer = this.server.current ? this.server.current.name : '';
     const appName = str(m.appName, 100);
     // The recent ones, for Overview and Messages' chat apps (as the PC keeps them).
-    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title: str(m.title, 200) || appName || peer, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true };
+    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title: str(m.title, 200) || appName || peer, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true, actions: actionsOf(m) };
     if (!this.historyIcons) this.historyIcons = new Map();
     if (item.app && typeof m.icon === 'string' && m.icon.startsWith('data:image/') && m.icon.length < 200000) {
       this.historyIcons.delete(item.app);
@@ -120,9 +122,14 @@ class Notifs extends EventEmitter {
       subtitle: [appName, peer].filter(Boolean).join(' · '),
       body: [str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
       icon: this.iconsIn.for(m),
-      actions: code ? [{ type: 'button', text: 'Copy ' + code }] : [],
+      // A one-time code's Copy, then the phone's own buttons (Mark as read…), tapped there.
+      actions: [...(code ? ['Copy ' + code] : []), ...item.actions].map((text) => ({ type: 'button', text })),
     });
-    if (code) n.on('action', () => require('electron').clipboard.writeText(code));
+    n.tdId = item.id;
+    n.on('action', (_e, i) => {
+      if (code && i === 0) return require('electron').clipboard.writeText(code);
+      this.act(item.id, i - (code ? 1 : 0));
+    });
     this.live.push(n);
     const drop = () => { this.live = this.live.filter((x) => x !== n); };
     n.on('close', drop);
@@ -143,6 +150,9 @@ class Notifs extends EventEmitter {
     return true;
   }
 
+  send(m) { if (this.server.current) this.server.sendToClient(m); }
+  changed() { this.emit('change'); }
+
   get view() {
     return {
       access: this.access,
@@ -156,5 +166,7 @@ class Notifs extends EventEmitter {
     };
   }
 }
+
+withPhoneActions(Notifs);
 
 module.exports = { Notifs };

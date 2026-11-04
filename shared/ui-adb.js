@@ -25,6 +25,7 @@ UI.adbCard = () => {
   const STATES = {
     ready: ['good', t('Ready')], connecting: ['muted', t('Connecting…')], needsPair: ['bad', t('Not paired')],
     waitingWifi: ['bad', t('Off')], missing: ['bad', t('Missing')], error: ['bad', t('Problem')], off: ['muted', '—'],
+    idle: ['muted', t('Not in use')], // everything is set to Limited (Native, shared/phonemodes.js): nothing switches it on or asks
   };
   const pill = el('span', { class: 'pill muted' });
   const retry = UI.button(t('Try Again'), () => api.phoneRetry(), 'small');
@@ -66,9 +67,12 @@ UI.adbCard = () => {
     pill.className = 'pill ' + (ready && br.inputBlocked ? 'bad' : cls);
     pill.textContent = ready && br.inputBlocked ? t('Touch blocked') : label;
     retry.hidden = ready;
+    retry.textContent = br.state === 'idle' ? t('Set Up') : t('Try Again');
     row.setHint(off ? (/direct Wi-Fi/.test(br.message) ? t(br.message) : t('Off on the phone. Mirroring and ADB control need it; Accessibility control doesn’t.'))
       : ready && br.inputBlocked ? t('The screen works, but this Xiaomi blocks input. On the phone: Developer options › USB debugging (Security settings).')
-        : ready ? t('Screen, apps, touch and keyboard, and the clipboard in the background') : UI.adbMessage(br.message));
+        : ready ? t('Screen, apps, touch and keyboard, and the clipboard in the background')
+          : br.state === 'idle' ? t('Not needed now: the mouse and keyboard, the screen and the sound are set to Limited. Set it up for Full (ADB), phone apps in windows and the camera.')
+            : UI.adbMessage(br.message));
     const pairable = br.state === 'needsPair' || !!br.canPair;
     howBtn.hidden = ready;
     howBtn.textContent = howOpen ? t('Hide steps') : t('Show steps');

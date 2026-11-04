@@ -35,7 +35,8 @@ UI.tab({
     const bleRow = UI.row(I18n.t('Over Bluetooth'), I18n.t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
 
     // A phone as the peer: how the pointer and keys reach it (settings.phone.input, the phone's own toggle too).
-    const via = UI.segmented([{ value: 'adb', label: 'ADB' }, { value: 'phone', label: I18n.t('Accessibility') }], (v) => api.setPhone({ input: v, inputPicked: true }));
+    const via = UI.segmented([{ value: 'auto', label: I18n.t('Auto') }, { value: 'adb', label: I18n.t('Full (ADB)') }, { value: 'phone', label: I18n.t('Limited (Accessibility)') }],
+      (v) => api.setPhone(v === 'auto' ? { input: 'adb', inputPicked: false } : { input: v, inputPicked: true }));
     // With a phone: its own card on top, with the way to its wireless debugging (Connection).
     const adbBtn = UI.button(I18n.t('Wireless Debugging'), () => UI.go('connection'), 'small');
     const viaRow = UI.row(I18n.t('Control the phone with'), '', [via.el, adbBtn]);
@@ -91,11 +92,11 @@ UI.tab({
       ble.set(k.ble !== false);
       viaCard.hidden = !p.phone;
       const br = (s.phone || {}).bridge || {};
-      via.set(br.input || (((s.phone || {}).settings || {}).input === 'phone' ? 'phone' : 'adb'));
+      via.set(br.inputMode || (((s.phone || {}).settings || {}).input === 'phone' ? 'phone' : 'adb'));
       adbBtn.hidden = br.state === 'ready';
-      viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? I18n.t('Automatic: ADB, wireless debugging is ready') : I18n.t('Automatic: Accessibility until wireless debugging is set up'))
-        : br.input === 'phone' ? I18n.t('Accessibility: TwinDesk on the phone taps and types. Works over Wi-Fi, Wi-Fi Direct and Bluetooth, no developer options')
-          : I18n.t('ADB: full control through wireless debugging') + (br.state === 'ready' ? '' : I18n.t(' (not set up yet)')));
+      viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? I18n.t('Auto: Full (ADB), wireless debugging is ready') : I18n.t('Auto: Limited until wireless debugging is set up'))
+        : br.input === 'phone' ? I18n.t('Limited: TwinDesk on the phone taps and types (its Accessibility service). Works over Wi-Fi, Wi-Fi Direct and Bluetooth, no developer options')
+          : I18n.t('Full (ADB): full control through wireless debugging') + (br.state === 'ready' ? '' : I18n.t(' (not set up yet)')));
     };
   },
 });
