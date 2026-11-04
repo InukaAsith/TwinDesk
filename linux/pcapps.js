@@ -164,12 +164,14 @@ class PcApps {
     if (any) this._poll(true);
   }
 
-  // A window ReZume sent, closed there: only its copy goes (the window stays open here).
+  // A window ReZume sent, closed there: only its copy goes. The window stays open here and comes
+  // back to the front (it never left this screen).
   _unfollow(wid) {
     const w = this.windows.find((x) => x.wid === wid);
     const a = w && this.launched.get(w.id);
     if (!a || !a.rz) return false;
     a.skip.add(wid);
+    this._raise(wid);
     this._poll(true);
     return true;
   }
