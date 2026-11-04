@@ -11,6 +11,8 @@
 const { desktopCapturer, powerMonitor, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
 const RemoteInput = require('./remote-input');
+const encoder = require('./encoder');
+const { StallWatch } = encoder;
 
 const T = P.T;
 const RETRY_MS = 2000; // a capture that ended by itself (the desktop locked): tried again, doubling up to 30 s
@@ -69,6 +71,12 @@ class PcScreen {
     this.sender.on('stats', (session, st) => {
       if (!this.sending || session !== this.sending.session) return;
       this.stats = st;
+      // The hardware encoder stalled (#133): the software one (OpenH264) from the next start.
+      if (!this.stall || this.stall.session !== session) this.stall = Object.assign(new StallWatch(), { session });
+      if (this.stall.feed(st) && encoder.fallBack('stalled')) {
+        console.warn(`[pcscreen] the hardware encoder (${st.encoder || '?'}) stalled: software encoding (OpenH264) after a restart`);
+        this.status.error = 'The hardware encoder stopped sending. Restart TwinDesk to use the software encoder (General › Advanced)';
+      }
       this.onChange();
     });
     // A monitor came or went (or changed size): the shared one may be different now.

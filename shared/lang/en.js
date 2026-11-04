@@ -1968,5 +1968,10 @@
   "Apps pick “TwinDesk Microphone”. Waiting for {device}": "Apps pick “TwinDesk Microphone”. Waiting for {device}",
   "Live into {output}: apps pick its other end as the microphone": "Live into {output}: apps pick its other end as the microphone",
   "Into {output}. Waiting for {device}": "Into {output}. Waiting for {device}",
-  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone"
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone",
+  "Hardware encoder": "Hardware encoder",
+  "Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart": "Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart",
+  "Turned off by itself: the hardware encoder stopped sending. Software encoding (OpenH264) is in use": "Turned off by itself: the hardware encoder stopped sending. Software encoding (OpenH264) is in use",
+  "Turned off by itself: the hardware encoder stopped sending. Restart to use the software encoder (OpenH264)": "Turned off by itself: the hardware encoder stopped sending. Restart to use the software encoder (OpenH264)",
+  "The hardware encoder stopped sending. Restart TwinDesk to use the software encoder (General › Advanced)": "The hardware encoder stopped sending. Restart TwinDesk to use the software encoder (General › Advanced)",
 });
