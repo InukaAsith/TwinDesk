@@ -1967,5 +1967,10 @@
   "Apps pick “TwinDesk Microphone”. Waiting for {device}": "Uygulamalar “TwinDesk Microphone” seçer. {device} bekleniyor",
   "Live into {output}: apps pick its other end as the microphone": "{output} içine canlı: uygulamalar diğer ucunu mikrofon olarak seçer",
   "Into {output}. Waiting for {device}": "{output} içine. {device} bekleniyor",
-  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "Sanal ses kablosu bulunamadı: hoparlörlerde çalar. VB-CABLE (Windows) veya BlackHole (macOS) kurun, uygulamalar onu mikrofon olarak seçebilir"
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "Sanal ses kablosu bulunamadı: hoparlörlerde çalar. VB-CABLE (Windows) veya BlackHole (macOS) kurun, uygulamalar onu mikrofon olarak seçebilir",
+  "Hardware encoder": "Donanım kodlayıcı",
+  "Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart": "Ekranı ve uygulama pencerelerini ekran kartı kodlar. Kapalı: yazılımla (OpenH264), görüntü takılıyor veya kararıyorsa. Yeniden başlatınca uygulanır",
+  "Turned off by itself: the hardware encoder stopped sending. Software encoding (OpenH264) is in use": "Kendiliğinden kapatıldı: donanım kodlayıcı göndermeyi bıraktı. Yazılım kodlama (OpenH264) kullanılıyor",
+  "Turned off by itself: the hardware encoder stopped sending. Restart to use the software encoder (OpenH264)": "Kendiliğinden kapatıldı: donanım kodlayıcı göndermeyi bıraktı. Yazılım kodlayıcıyı (OpenH264) kullanmak için yeniden başlatın",
+  "The hardware encoder stopped sending. Restart TwinDesk to use the software encoder (General › Advanced)": "Donanım kodlayıcı göndermeyi bıraktı. Yazılım kodlayıcıyı kullanmak için TwinDesk’i yeniden başlatın (Genel › Gelişmiş)",
 });

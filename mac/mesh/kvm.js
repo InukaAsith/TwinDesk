@@ -14,6 +14,7 @@
 
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
 const { KvmMoves } = require('../../shared/kvm-moves.js');
@@ -108,6 +109,13 @@ class Kvm extends EventEmitter {
       },
     };
     for (const t of K) this.handlers[t] = (m, from) => this._onWire(m, from);
+    // Caps Lock follows the input (shared/capsync.js, #131): after kvm.take / kvm.home are handled.
+    this.caps = new CapsSync({ helper: this.helper, platform: 'mac' });
+    for (const [t, mode] of [[P.T.KVM_TAKE, 'driven'], [P.T.KVM_HOME, 'home']]) {
+      const h = this.handlers[t];
+      this.handlers[t] = (m, from) => { const r = h(m, from); if (this.mode === mode) this.caps.expect(); return r; };
+    }
+    this.handlers[P.T.KVM_CAPS] = (m, from) => { if (this.mode === 'home' || from === this.partner) this.caps.onPeer(m); };
     for (const t of Object.keys(this.handlers)) this.hub.bus.on(t, (m, from) => this.handlers[t](m, from));
 
     this.hub.bus.onPeer('welcome', (id) => { this.lanes.attach(id); this._onPeerUp(id); });
@@ -483,6 +491,8 @@ class Kvm extends EventEmitter {
     const plan = fields.paths && fields.paths.length ? this.fileSend.planDrag(fields.paths) : null;
     if (plan) take.drag = { count: plan.items.length };
     this._drive(take);
+    const to = this.partner;
+    if (to && !(this.local && this.local.drives(to))) this.caps.handOver((m) => this._send(to, m)); // our Caps Lock, there
     if (plan) {
       this.dragOut = this.fileSend.startDrag(plan); // drag.start right after kvm.take
       console.log(`[drag] out ${this.dragOut}: ${plan.items.length} item(s), ${plan.files} file(s), ${plan.bytes} bytes`);
@@ -843,7 +853,9 @@ class Kvm extends EventEmitter {
     if (this.mode !== 'driven') return;
     const msg = { t: P.T.KVM_HOME, route: this.peerRoute };
     if (typeof offset === 'number') msg.offset = offset;
-    this._send(this.partner, msg);
+    const to = this.partner;
+    this._send(to, msg);
+    this.caps.handOver((c) => this._send(to, c)); // our Caps Lock, home
     this._drivenHome(message);
   }
 

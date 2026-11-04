@@ -115,6 +115,7 @@
       KVM_LOCK: 'kvm.lock', // either {on}: the cursor is locked on the device it is on (shared/cursorlock.js); sent only while one drives the other
       KVM_DISPLAYS: 'kvm.displays', // either {displays: [{id, x, y, w, h, scale, primary, name}]}: our monitors (shared/kvm-geom.js), on connect and when they change
       KVM_IDENTIFY: 'kvm.identify', // either {}: show each monitor's number on it for a moment (the Cursor tab's Identify)
+      KVM_CAPS: 'kvm.caps', // either {on}: my Caps Lock as I hand my input over (take, or home); the other side turns its own that way (shared/capsync.js, #131)
       KVM_NEXT: 'kvm.next', // multi-device: {route, to, side, offset}: a device we drive reached an edge that leads to device `to` (docs/mesh.md)
       K_MOVE: 'k.mm',
       K_DOWN: 'k.md',
