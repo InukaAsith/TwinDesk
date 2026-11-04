@@ -29,6 +29,10 @@
 </p>
 
 <p align="center">
+  <img src=".github/assets/v25-hero-desks.jpg" alt="TwinDesk on a Mac over its desktop wallpaper, on a Windows PC over its wallpaper, and on an Android phone, all connected" width="100%">
+</p>
+
+<p align="center">
   <img src=".github/assets/v25-hero.jpg" alt="TwinDesk on a Mac in light and dark, connected to a Windows PC and an Android phone, with the phone app in light and dark" width="100%">
 </p>
 
@@ -75,6 +79,23 @@ No account, no cloud, no telemetry. Devices talk only to each other, end-to-end 
 
 **⚡ Built for speed**<br>
 A native Rust input lane over UDP, a parallel file engine, hardware video. [How](#speed).
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%" align="center" valign="top">
+
+**💻 Computer to computer**<br>
+<img src=".github/assets/v25-overview-pc.gif" alt="The Mac switching to a connected Linux PC: its Overview with Ring, Lock, Sleep, volume, clipboard and a drop zone for files, then the File Sharing and Clipboard pages" width="100%">
+
+</td>
+<td width="50%" align="center" valign="top">
+
+**📱 Computer to phone**<br>
+<img src=".github/assets/v25-overview-phone.gif" alt="An Android phone taking over the Mac's link: the phone's Overview with its battery, network and quick actions, then its Photos" width="100%">
 
 </td>
 </tr>
