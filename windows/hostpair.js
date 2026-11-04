@@ -8,6 +8,7 @@
 
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { PairFails } = require('../shared/pairfail.js');
 const store = require('./store');
 
 const HEX = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
@@ -23,6 +24,7 @@ class Pairing extends EventEmitter {
     this.id = identity;
     this.paired = store.read('paired.json', []);
     this.pending = null; // {ctx, id, name, commit, nm, nw, code, confirmed, allowed, timer}
+    this.fails = new PairFails();
     server.on('preauth', (ctx, msg) => this._onMessage(ctx, msg));
     server.on('closed', (ctx) => this._onClosed(ctx));
   }
@@ -71,6 +73,9 @@ class Pairing extends EventEmitter {
 
     const p = this.pending;
     if (msg.t === P.T.PAIR_START) {
+      if (this.fails.locked(ctx.address)) {
+        return this.server.fail(ctx, P.E.PAIR_REFUSED, 'Too many failed pairing attempts from this address; wait a few minutes and try again');
+      }
       if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
       if (p && p.ctx !== ctx) return this.server.fail(ctx, P.E.BUSY, 'Another pairing is in progress');
       if (p) return this.server.fail(ctx, P.E.BAD_MESSAGE, 'Pairing already started');
@@ -78,6 +83,7 @@ class Pairing extends EventEmitter {
         return this.server.fail(ctx, P.E.VERSION_MISMATCH, `This PC speaks protocol v${P.PROTOCOL_VERSION}`);
       }
       if (typeof msg.id !== 'string' || !msg.id || typeof msg.commit !== 'string' || !HEX(64).test(msg.commit)) {
+        this.fails.fail(ctx.address);
         return this.server.fail(ctx, P.E.BAD_MESSAGE, 'pair.start needs id and commit');
       }
       const nm = P.randomHex(16);
@@ -139,6 +145,7 @@ class Pairing extends EventEmitter {
     this.paired = this.paired.filter((x) => x.id !== p.id);
     this.paired.push({ id: p.id, name: p.name, os: p.os, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now });
     this._save();
+    this.fails.clear(p.ctx.address);
     this.server.send(p.ctx, { t: P.T.PAIR_OK, token, macId: this.id.id, macName: this.id.name, os: P.OS.WIN });
     console.log(`[pairing] paired with ${p.name} (${p.id})`);
     this._clear();
@@ -195,6 +202,7 @@ class Pairing extends EventEmitter {
   _abort(code, message) {
     const p = this.pending;
     if (!p) return;
+    this.fails.fail(p.ctx.address); // a denial, a wrong code, a timeout: all count toward the lockout
     this._clear();
     this.server.fail(p.ctx, code, message);
   }
