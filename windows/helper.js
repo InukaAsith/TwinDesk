@@ -44,7 +44,19 @@ class Helper extends EventEmitter {
       this.emit('exit', -1);
       return;
     }
-    const proc = spawn(EXE, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    // Windows can refuse to start it at all (Smart App Control blocks an unsigned helper: spawn
+    // throws UNKNOWN). The rest of the app goes on without it; asking again only brings the block back.
+    let proc;
+    try {
+      proc = spawn(EXE, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    } catch (e) {
+      this._blocked(e);
+      return;
+    }
+    if (!proc.pid) { // failed: 'error' follows, and no 'exit'
+      proc.on('error', (e) => this._blocked(e));
+      return;
+    }
     this.proc = proc;
     this.buf = '';
     proc.stdout.setEncoding('utf8');
@@ -60,6 +72,12 @@ class Helper extends EventEmitter {
       this.emit('exit', code);
       if (!this.stopped) setTimeout(() => !this.stopped && this.start(), RESTART_MS);
     });
+  }
+
+  _blocked(e) {
+    this.error = 'Windows blocked the helper (' + (e.code || e.message) + '). Smart App Control blocks unsigned builds.';
+    console.warn('[helper] not started:', e.message);
+    this.emit('exit', -1);
   }
 
   stop() {
