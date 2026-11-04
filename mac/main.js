@@ -38,6 +38,7 @@ let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
 let adbQr = null; // wireless debugging's pairing QR code while shown (shared/adbqr.js)
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
+const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const path = require('path');
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
 const Look = require('../shared/look.js');
@@ -201,7 +202,7 @@ function pushState() {
     state.client = c ? { id: c.deviceId, name: c.name, os: c.os, role: c.role, address: c.address, rttMs: c.rttMs, transport: c.transport || 'ip' } : null;
     if (svc && svc.net) {
       const hs = c && settings.net.hotspots[c.deviceId];
-      state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass) };
+      state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass), lan: lanType(c && c.address) };
     }
     const { helper, displays, stream, clipboard: clip, kvm } = svc || {};
     state.helper.running = !!(helper && helper.running);

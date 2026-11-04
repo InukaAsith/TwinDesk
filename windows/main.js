@@ -1,5 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Main process: lifecycle, windows, tray, IPC and the state pushed to the main window.
+const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, Notification, shell, globalShortcut, systemPreferences } = require('electron');
 const Look = require('../shared/look.js');
 const { Updates } = require('../shared/updates.js');
@@ -1126,7 +1127,7 @@ function buildState() {
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },
-    net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '' },
+    net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address) },
   };
 }
 

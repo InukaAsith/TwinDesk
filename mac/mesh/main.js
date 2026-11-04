@@ -38,6 +38,7 @@
 // }
 'use strict';
 
+const { lanType } = require('../../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const path = require('path');
 const { app, BrowserWindow, Tray, Menu, nativeImage, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
 
@@ -254,7 +255,7 @@ function publishState() {
     if (svc && svc.net) {
       const c = peer && peer.current;
       const hs = c && settings.net.hotspots[c.deviceId];
-      state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass) };
+      state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass), lan: lanType(c && c.address) };
     }
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };

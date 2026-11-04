@@ -62,7 +62,9 @@
     const t = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
     if (UI.onBle(s)) return t('Bluetooth');
     const n = (s && s.net) || {};
-    if (!['hosting', 'joined'].includes(n.state) || n.onGroup === false) return 'Wi-Fi'; // a group up beside a session on the real network is still Wi-Fi
+    // A group up beside a session on the real network is still that network: Ethernet when this
+    // computer reaches the other one through a cable (state.net.lan, shared/lantype.js, #140).
+    if (!['hosting', 'joined'].includes(n.state) || n.onGroup === false) return n.lan === 'Ethernet' ? t('Ethernet') : 'Wi-Fi';
     const name = n.kind === 'hotspot' ? t('Hotspot') : 'Wi-Fi Direct';
     const asked = ['user', 'hotspot'].some((w) => (n.why || []).includes(w) || (n.peerWhy || []).includes(w));
     return asked ? name : t('Temporary {transport}', { transport: name });
