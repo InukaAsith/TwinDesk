@@ -2029,4 +2029,5 @@
   "Removing {count}…": "{count} öğe kaldırılıyor…",
   "Tap the notification on the phone to remove {count} more": "{count} öğe daha kaldırmak için telefondaki bildirime dokunun",
   "{count} couldn’t be removed": "{count} öğe kaldırılamadı",
+  "All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.": "Her telefon penceresinin sağında tüm düğmeler: ses, döndürme, ekran görüntüsü ve daha fazlası. Kapalı: Geri, Ana ekran, Son uygulamalar ve Bildirimler başlık çubuğunda.",
 });

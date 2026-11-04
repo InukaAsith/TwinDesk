@@ -17,9 +17,8 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
 .ctl.on { background: rgba(10, 132, 255, 0.4); }
 .ctl svg { width: 15px; height: 15px; fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 #stage { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; display: grid; place-items: center; }
-/* Where the controls sit (Phone page › Settings › Window controls; phoneview.js sizes the window
-   for these bars: PANEL_W, NAVBAR_H). Side panel, the default: all of them down the right, Back,
-   Home and Recents at its foot, like an emulator's. */
+/* Where the controls sit: the title bar (the default) or, with Phone page › Side panel, all of them
+   down the right, Back, Home and Recents at its foot (phoneview.js sizes the window for it: PANEL_W). */
 #panel {
   display: none; position: absolute; top: 32px; right: 0; bottom: 0; width: 44px; box-sizing: border-box; padding: 8px 0;
   flex-direction: column; align-items: center; gap: 4px; background: var(--bar); overflow-y: auto; scrollbar-width: none;
@@ -30,21 +29,13 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
 #panel .gap { flex: 1; min-height: 10px; }
 body[data-controls="side"] #panel { display: flex; }
 body[data-controls="side"] #stage { right: 44px; }
-/* Bottom bar: Back, Home and Recents under the picture, like the phone's own; the rest up top. */
-#navbar { display: none; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; align-items: center; justify-content: center; gap: 40px; background: var(--bar); }
-#navbar .ctl { width: 48px; height: 30px; }
-#navbar .ctl svg { width: 17px; height: 17px; }
-body[data-controls="bottom"] #navbar { display: flex; }
-body[data-controls="bottom"] #stage { bottom: 40px; }
 #screen { max-width: 100%; max-height: 100%; outline: none; cursor: default; }
 #status { position: absolute; color: var(--muted); text-align: center; padding: 0 24px; }
 body.drop #stage { outline: 3px solid #0a84ff; outline-offset: -3px; }
-body.sound #bar, body.sound #panel, body.sound #navbar, body.netsound #bar, body.netsound #panel, body.netsound #navbar { display: none !important; }
-/* The panel button, first in the title bar: the controls on (lit) or off (only the title). */
-#panelBtn { margin-right: 6px; flex: none; }
+body.sound #bar, body.sound #panel, body.netsound #bar, body.netsound #panel { display: none !important; }
 #bar { justify-content: flex-start; }
 #bar .tools { margin-left: auto; }
 #fullBtn { flex: none; margin-left: 2px; }
 /* Fullscreen: only the picture, as large as it fits, black around it. */
-body.full #bar, body.full #panel, body.full #navbar { display: none !important; }
+body.full #bar, body.full #panel { display: none !important; }
 body.full #stage { top: 0; right: 0; bottom: 0; }

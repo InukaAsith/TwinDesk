@@ -4,8 +4,8 @@
 // resizing the window resizes the app). One scrcpy session per window (scrcpy.js); the window
 // decodes the H.264 itself (phoneview-renderer.js) and sends touches, keys and scrolls back.
 // Port of mac/phoneview.js: Windows title bar (its own buttons drawn over ours), no Ctrl/Cmd swap.
-// The window's controls sit in the title bar (the default), a side panel or a bar under the picture
-// (settings.phone.controls), and the window is sized for the picture plus those bars.
+// The window's controls sit in the title bar, as on the Mac (the default), or a side panel
+// (settings.phone.controls 'side'), and the window is sized for the picture plus those bars.
 // A phone app's windows have a taskbar identity of their own (its icon, Pin to taskbar starts it),
 // and pin() puts it in Start › TwinDesk Apps: both start "TwinDesk.exe --phone-app=<package>".
 //
@@ -27,8 +27,8 @@ const { writeClipImage } = require('../shared/clipimage.js');
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
-// The window's own bars around the picture (phoneview.css): the title bar, the side panel, the bottom bar.
-const TITLE_H = 32, PANEL_W = 44, NAVBAR_H = 40;
+// The window's own bars around the picture (phoneview.css): the title bar and the side panel.
+const TITLE_H = 32, PANEL_W = 44;
 const HIDDEN = ['sound', 'netsound', 'mic']; // windows that only play the phone's sound: no picture, no bars
 let nextId = 1;
 let quitting = false; // a camera's window hides on close, but not on quit
@@ -126,7 +126,7 @@ class PhoneViews extends EventEmitter {
   }
 
   list() {
-    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
+    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, screenOff: !!v.screenOff, native: !!v.native, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
   }
 
   get focused() {
@@ -350,19 +350,26 @@ class PhoneViews extends EventEmitter {
     return v;
   }
 
-  // Where the window's controls sit (Phone page › Settings › Window controls): 'top' (the title
-  // bar, the default), 'side' (a panel down the right) or 'bottom' (Back, Home and Recents in a
-  // bar under the picture, the rest in the title bar).
-  // 'none': the panel button in the title bar hid them (settings.phone.panel, kept for every window).
+  // Where the window's controls sit: 'top' (Back, Home, Recents and Notifications in the title bar,
+  // as on the Mac: the default; Rotate and Phone screen off are on the Phone page) or 'side' (Phone
+  // page › Side panel: all of them in a panel down the right).
   _controls() {
     const ph = this.getSettings().phone;
-    if (ph && ph.panel === false) return 'none';
-    return ph && ['side', 'top', 'bottom'].includes(ph.controls) ? ph.controls : 'top';
+    return ph && ph.controls === 'side' ? 'side' : 'top';
+  }
+
+  // The Phone page's Rotate and Phone screen off, for the phone screen window (as on the Mac).
+  screenAct(key) {
+    if (key !== 'rotate' && key !== 'screenPower') return;
+    const v = [...this.views.values()].find((x) => x.kind === 'screen' && !x.ending);
+    if (!v) return;
+    this._input(v, { t: 'nav', key });
+    this.emit('change');
   }
 
   // The size of a window's bars around the picture.
   _chrome(controls = this._controls()) {
-    return { w: controls === 'side' ? PANEL_W : 0, h: TITLE_H + (controls === 'bottom' ? NAVBAR_H : 0) };
+    return { w: controls === 'side' ? PANEL_W : 0, h: TITLE_H };
   }
 
   // The window's switches as they are now (its controls light up).
@@ -505,14 +512,6 @@ class PhoneViews extends EventEmitter {
       const on = !v.win.isFullScreen();
       v.win.setFullScreen(on);
       return this._send(v, 'phoneview:opts', { full: on });
-    }
-    // The title bar's panel button: the controls shown or hidden in every phone window, remembered.
-    if (m.t === 'panel') {
-      const ph = this.getSettings().phone;
-      ph.panel = ph.panel === false;
-      this.bridge.emit('save');
-      this.applyControls();
-      return this.emit('change');
     }
     if (m.t === 'toggle' && (m.what === 'enterSends' || m.what === 'arrowSwipe')) {
       const ph = this.getSettings().phone;

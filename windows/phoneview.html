@@ -9,7 +9,6 @@
 </head>
 <body>
   <header id="bar">
-    <button id="panelBtn" class="ctl" data-i18n-title="Show or hide the phone controls" data-i18n-label="Show or hide the phone controls" title="Show or hide the phone controls" aria-label="Show or hide the phone controls"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M12.5 4v12"/></svg></button>
     <span id="title"></span>
     <span id="via" hidden></span>
     <span class="tools"></span>
@@ -19,9 +18,8 @@
     <canvas id="screen" tabindex="0"></canvas>
     <div id="status" data-i18n="Connecting to the phone…">Connecting to the phone…</div>
   </main>
-  <!-- The controls: phoneview-renderer.js puts them here, in the title bar's tools, or in the bottom bar -->
+  <!-- The controls: phoneview-renderer.js puts them in the title bar's tools, or here (Side panel) -->
   <nav id="panel" data-i18n-label="Phone controls" aria-label="Phone controls"></nav>
-  <nav id="navbar" data-i18n-label="Phone navigation" aria-label="Phone navigation"></nav>
   <script src="../shared/lang/en.js"></script>
   <script src="../shared/lang/zh-CN.js"></script>
   <script src="../shared/lang/ru.js"></script>

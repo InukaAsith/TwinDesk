@@ -51,14 +51,12 @@
         UI.row(tr('Play phone sound here'), tr('Android 11 or later'), [sound]),
         UI.row(tr('Picture quality'), tr('For the phone screen and app windows'), [quality]),
       ];
-      // Windows: where the buttons sit (settings.phone.controls); the panel itself opens and closes
-      // from each window's title bar and stays as it was left (settings.phone.panel).
+      // Windows: Back, Home, Recents and Notifications in the title bar, as on the Mac; Side panel
+      // (off) puts all the buttons down the right of each phone window instead (settings.phone.controls).
       let controls = null;
       if (!mac && !linux) {
-        controls = UI.select([
-          { value: 'top', label: tr('Title bar') }, { value: 'side', label: tr('Side panel') }, { value: 'bottom', label: tr('Bottom bar') },
-        ], (v) => api.setPhone({ controls: v }));
-        rows.push(UI.row(tr('Phone controls'), tr('Where Back, Home, Recents and the other buttons sit. The panel button in each window’s title bar shows or hides them.'), [controls]));
+        controls = UI.switch((v) => api.setPhone({ controls: v ? 'side' : 'top' }), { label: tr('Side panel') });
+        rows.push(UI.row(tr('Side panel'), tr('All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.'), [controls]));
       }
       let enterSends = null, arrowSwipe = null;
       {
@@ -67,10 +65,10 @@
         arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: tr('Arrow keys swipe') });
         rows.push(UI.row(tr('Arrow keys swipe'), tr('Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.'), [arrowSwipe]));
       }
-      // Mac and Linux: the phone screen window's Rotate and screen off, here rather than in its title
-      // bar (Windows keeps them in the window's panel).
+      // The phone screen window's Rotate and screen off, here rather than in its title bar (Windows'
+      // side panel has them too).
       let rotateBtn = null, screenOff = null, rotateRow = null, offRow = null;
-      if ((mac || linux) && api.phoneScreenAct) {
+      if (api.phoneScreenAct) {
         rotateBtn = UI.button(tr('Rotate'), () => api.phoneScreenAct('rotate'), 'small');
         rotateRow = UI.row(tr('Rotate the phone screen'), '', [rotateBtn]);
         screenOff = UI.switch(() => api.phoneScreenAct('screenPower'), { label: tr('Phone screen off') });
@@ -101,7 +99,7 @@
         const st = ph.settings || {};
         sound.set(!!st.sound);
         quality.set(String(st.bitrateMbps || 8));
-        if (controls) controls.set(st.controls || 'top');
+        if (controls) controls.set(st.controls === 'side');
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);
         const wins = br.windows || [];

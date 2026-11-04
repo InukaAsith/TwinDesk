@@ -397,8 +397,8 @@
   });
 
   // ---- controls ----
-  // In a side panel down the right (the default), the title bar, or Back/Home/Recents in a bar
-  // under the picture (Phone page › Settings › Window controls). An app window runs on a display
+  // In the title bar, as on the Mac (the default), or a side panel down the right (Phone page ›
+  // Side panel). An app window runs on a display
   // of its own, so what acts on the phone's main screen (Recents, the shade, Power) isn't there,
   // and its Rotate turns the window round. A camera window has the camera's own.
   const ICONS = {
@@ -423,7 +423,7 @@
     zoomOut: '<circle cx="9" cy="9" r="5.5"/><path d="M13 13l3.5 3.5 M6.5 9h5"/>',
   };
   // in: the windows it shows in (default the screen and app windows); nav: Back, Home and Recents
-  // (the side panel's foot, or the bottom bar); toggle: lit while on (phoneview.js says, 'opts').
+  // (the side panel's foot, or first in the title bar); toggle: lit while on (phoneview.js says, 'opts').
   const PHONE = ['screen', 'app'];
   const CAMERA = ['torch', 'flip', 'zoomIn', 'zoomOut'];
   const CONTROLS = [
@@ -447,9 +447,9 @@
     { k: 'home', title: 'Home (middle click)', nav: true },
     { k: 'recents', title: 'Recent apps', nav: true, in: ['screen'] },
   ].filter((c) => (c.in || PHONE).includes(kind));
-  // The title bar layouts carry what the title bar always had: Back, Home, Recents, Notifications,
-  // Rotate; the screen-off, Enter and Arrow keys swipe switches, and a camera's own, too.
-  const TOP = ['notifications', 'rotate', 'screenOff', 'enterSends', 'arrowSwipe', ...CAMERA];
+  // The title bar has what the Mac's has: Back, Home, Recents, Notifications, and a camera's own.
+  // Rotate, Phone screen off, Enter sends and Arrow keys swipe are on the Phone page.
+  const TOP = ['notifications', ...CAMERA];
   const OPT = { pin: 'pinned', screenOff: 'screenOff', enterSends: 'enterSends', arrowSwipe: 'arrowSwipe', torch: 'torch' };
   for (const c of CONTROLS) {
     c.el = document.createElement('button');
@@ -470,30 +470,21 @@
   }
   playerI18n.onChange(() => { for (const c of CONTROLS) playerI18n.translate(c.el); });
   const els = (list) => list.map((c) => c.el);
-  // The panel button: every phone window's controls on or off (phoneview.js keeps it).
-  const panelBtn = document.getElementById('panelBtn');
   const fullBtn = document.getElementById('fullBtn');
   fullBtn.onclick = () => { api.send({ t: 'full' }); canvas.focus(); };
   window.addEventListener('keydown', (e) => { if (e.key === 'F11') { e.preventDefault(); e.stopPropagation(); api.send({ t: 'full' }); } }, true);
-  panelBtn.onclick = () => { api.send({ t: 'panel' }); canvas.focus(); };
   function layout(mode) {
-    mode = ['side', 'top', 'bottom', 'none'].includes(mode) ? mode : 'top';
-    panelBtn.classList.toggle('on', mode !== 'none');
+    mode = mode === 'side' ? 'side' : 'top';
     document.body.dataset.controls = mode;
     const panel = document.getElementById('panel');
-    const navbar = document.getElementById('navbar');
     const tools = document.querySelector('#bar .tools');
-    for (const box of [panel, navbar, tools]) box.replaceChildren();
+    for (const box of [panel, tools]) box.replaceChildren();
     const nav = els(CONTROLS.filter((c) => c.nav));
-    if (mode === 'none') return; // only the title: a clean window
     if (mode === 'side') {
       const gap = document.createElement('div');
       gap.className = 'gap';
       panel.append(...els(CONTROLS.filter((c) => !c.nav)), gap, ...nav);
-    } else {
-      const top = els(TOP.map((k) => CONTROLS.find((c) => c.k === k)).filter(Boolean));
-      if (mode === 'bottom') { tools.append(...top); navbar.append(...nav); } else tools.append(...nav, ...top);
-    }
+    } else tools.append(...nav, ...els(TOP.map((k) => CONTROLS.find((c) => c.k === k)).filter(Boolean)));
   }
   layout(q.get('controls'));
   api.on('opts', (m) => {

@@ -2030,4 +2030,5 @@
   "Removing {count}…": "正在移除 {count} 项…",
   "Tap the notification on the phone to remove {count} more": "点按手机上的通知以再移除 {count} 项",
   "{count} couldn’t be removed": "{count} 项无法移除",
+  "All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.": "所有按钮显示在每个手机窗口右侧：音量、旋转、截图等。关闭时：返回、主屏幕、最近应用和通知显示在标题栏中。",
 });
