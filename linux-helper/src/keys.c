@@ -40,6 +40,8 @@ static const Key KEYS[] = {
   { "Lang1", 122 }, { "Lang2", 123 }, { "IntlYen", 124 },
   { "MetaLeft", 125 }, { "MetaRight", 126 }, { "ContextMenu", 127 },
   { "MediaTrackNext", 163 }, { "MediaPlayPause", 164 }, { "MediaTrackPrevious", 165 }, { "MediaStop", 166 },
+  { "MediaRewind", 168 }, { "MediaFastForward", 208 }, { "BrightnessDown", 224 }, { "BrightnessUp", 225 },
+  { "KbdIllumToggle", 228 }, { "KbdIllumDown", 229 }, { "KbdIllumUp", 230 },
   { "F13", 183 }, { "F14", 184 }, { "F15", 185 }, { "F16", 186 }, { "F17", 187 }, { "F18", 188 },
   { "F19", 189 }, { "F20", 190 }, { "F21", 191 }, { "F22", 192 }, { "F23", 193 }, { "F24", 194 },
 };

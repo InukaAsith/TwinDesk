@@ -125,6 +125,7 @@ final class Capture {
                                 .otherMouseDragged, .scrollWheel, .keyDown, .keyUp, .flagsChanged]
     var mask = types.reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
     for raw in Capture.gestureTypes { mask |= CGEventMask(1) << CGEventMask(raw) } // trackpad gestures
+    mask |= CGEventMask(1) << CGEventMask(Capture.systemDefined) // volume, brightness, media keys
     guard let t = CGEvent.tapCreate(tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap,
                                     eventsOfInterest: mask, callback: tapCallback, userInfo: nil) else {
       log("event tap failed: Accessibility / Input Monitoring not granted?")
@@ -420,6 +421,7 @@ final class Capture {
     }
     if event.getIntegerValueField(.eventSourceUserData) == injectedMark { return pass }
     if Capture.gestureTypes.contains(type.rawValue) { return onGesture(event) ? nil : pass }
+    if type.rawValue == Capture.systemDefined { return onSystemKey(event) ? nil : pass }
     switch type {
     case .flagsChanged: return onFlags(event) ? nil : pass
     case .keyDown, .keyUp: return onKey(event, down: type == .keyDown) ? nil : pass
@@ -495,6 +497,7 @@ final class Capture {
   // gesture, 29 gesture (pinch, smart zoom, swipe), 30 dock control (the system's 3/4-finger swipes
   // and pinches: Mission Control, Spaces, App Exposé, Launchpad, Show Desktop), 31 swipe, 32 smart zoom.
   static let gestureTypes: Set<UInt32> = [18, 19, 20, 29, 30, 31, 32]
+  static let systemDefined: UInt32 = 14 // NX_SYSDEFINED
   // Private gesture fields (as WindowServer fills them for dock swipes).
   private static let fHidType = CGEventField(rawValue: 110)!, fMotion = CGEventField(rawValue: 123)!,
     fProgress = CGEventField(rawValue: 124)!, fPhase = CGEventField(rawValue: 132)!, fExit = CGEventField(rawValue: 129)!
@@ -563,6 +566,19 @@ final class Capture {
     if !down && swallowUps.remove(kc) != nil { return true } // pressed on the other machine
     if down { localDown.insert(kc) } else { localDown.remove(kc) }
     return false
+  }
+
+  // Volume, brightness and media keys (NX_SYSDEFINED, subtype 8): to the other computer while the
+  // keyboard is there, as k.kd / k.ku with their codes (KeyCodes.system). Anything else stays here.
+  private func onSystemKey(_ e: CGEvent) -> Bool {
+    guard capturing && capKeyboard, let ns = NSEvent(cgEvent: e), ns.subtype.rawValue == 8 else { return false }
+    let d = ns.data1
+    guard let code = KeyCodes.fromSystem[(d & 0xFFFF0000) >> 16] else { return false }
+    let state = (d & 0xFF00) >> 8 // 0x0A down, 0x0B up
+    guard state == 0x0A || state == 0x0B else { return false }
+    hkStage = 0
+    ev(["t": state == 0x0A ? "k.kd" : "k.ku", "code": code])
+    return true
   }
 
   private func onMouse(_ type: CGEventType, _ e: CGEvent) -> Bool {
