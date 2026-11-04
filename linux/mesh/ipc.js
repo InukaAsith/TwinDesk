@@ -141,6 +141,7 @@ function setupIpc(ctx) {
     sound.apply();
     const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
     if (mic) mic.apply();
+    if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
   }));
   handle('setTerminal', (partial) => {
     const p = partial && typeof partial === 'object' ? { enabled: partial.enabled, allowMac: partial.allowMac } : {};

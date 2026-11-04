@@ -175,8 +175,25 @@
     await actx.audioWorklet.addModule('pcm-worklet.js');
     player = new AudioWorkletNode(actx, 'pcm-player', { outputChannelCount: [2] });
     player.connect(actx.destination);
+    await micSink();
     if (actx.state === 'suspended') await actx.resume(); // never left waiting for a click
   }
+
+  // The phone's microphone (kind 'mic'): played into what apps here take as a microphone, the
+  // output picked, else the TwinDesk Microphone's sink (Linux), else a virtual audio cable.
+  const CABLE = /CABLE Input|VB-Audio|BlackHole|Loopback Audio|Soundflower|Virtual Cable/i;
+  async function micSink() {
+    if (kind !== 'mic' || !actx || typeof actx.setSinkId !== 'function') return;
+    try {
+      const outs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default' && d.deviceId !== 'communications');
+      const sink = q.get('sink');
+      const d = (sink && outs.find((o) => o.deviceId === sink))
+        || (q.get('virtual') && outs.find((o) => /TwinDesk.Microphone.output/i.test(o.label)))
+        || outs.find((o) => CABLE.test(o.label));
+      if (d) await actx.setSinkId(d.deviceId); // none: the speakers, as a computer's microphone does
+    } catch (e) { console.warn('mic output', e.message); }
+  }
+  if (kind === 'mic') navigator.mediaDevices.addEventListener('devicechange', () => micSink());
   api.on('audio', (d) => {
     if (!player) {
       if (!startAudio.started) startAudio.started = startAudio().catch((e) => console.warn('audio', e.message));

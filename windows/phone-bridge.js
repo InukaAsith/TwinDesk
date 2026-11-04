@@ -215,6 +215,8 @@ class PhoneBridge extends EventEmitter {
     const adb = this.state === 'ready';
     const net = want && (!adb || this.netSound.on) && c.transport !== 'ble';
     this.views.sound(want && adb && !net);
+    const audio = this.getSettings().audio || {};
+    this.views.mic(isPhone(c) && adb && !!audio.micReceive, audio.micOut || ''); // the phone's microphone, here
     if (net !== this.netSound.asked) {
       this.netSound.asked = net;
       if (!net) Object.assign(this.netSound, { on: false, waiting: false, error: '' });
