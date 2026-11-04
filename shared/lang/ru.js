@@ -2023,4 +2023,10 @@
   "That app doesn't take pictures": "Это приложение не принимает изображения",
   "No service": "Нет сети",
   "Airplane mode is on": "Включён режим полёта",
+  "Remove from the phone?": "Удалить с телефона?",
+  "Remove 1 item from the phone?": "Удалить 1 элемент с телефона?",
+  "Remove {count} items from the phone?": "Удалить элементы с телефона ({count})?",
+  "Removing {count}…": "Удаление ({count})…",
+  "Tap the notification on the phone to remove {count} more": "Нажмите на уведомление на телефоне, чтобы удалить ещё ({count})",
+  "{count} couldn’t be removed": "Не удалось удалить: {count}",
 });

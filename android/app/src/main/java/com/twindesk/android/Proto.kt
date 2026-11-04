@@ -133,6 +133,7 @@ object Proto {
         const val MEDIA_THUMB = "media.thumb"
         const val MEDIA_VIEW = "media.view"
         const val MEDIA_SAVE = "media.save"
+        const val MEDIA_DELETE = "media.delete"
         const val FS_LIST = "fs.list"
         const val FS_DO = "fs.do"
         const val FS_DONE = "fs.done"

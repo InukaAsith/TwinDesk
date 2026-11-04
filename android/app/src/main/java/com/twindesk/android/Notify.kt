@@ -39,6 +39,7 @@ object Notify {
     const val ID_REZUME_READY = 14 // … a document that came, to open
     const val ID_RING = 15 // the computer rang this phone: Stop
     const val ID_DIAL = 16 // a code from the computer (*#06#…): tap to open the dialer with it
+    const val ID_MEDIA_DEL = 17 // Remove on the computer's Photos page, without All files access: tap for Android's confirmation
     const val ID_SOUND = 12 // the sound capture: asking for Start, then its service's own
     private const val ID_FILES_BASE = 1000
     private const val ID_COMPUTER_BASE = 100000
@@ -252,6 +253,24 @@ object Notify {
         .setOngoing(true)
         .addAction(Notification.Action.Builder(null, "Stop", action(ctx, ActionReceiver.SOUND_STOP, 13)).build())
         .build()
+
+    // Photos removed on the computer when TwinDesk can't delete them itself (no All files access):
+    // Android's own Delete confirmation, opened by tapping (it can't open from the background).
+    fun mediaDelete(ctx: Context, name: String, count: Int, confirm: PendingIntent) {
+        val what = if (count == 1) "1 photo or video" else "$count photos and videos"
+        runCatching {
+            nm(ctx).createNotificationChannel(NotificationChannel(CH_ASK, "Requests from your computer", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Your computer asks for access it needs (Calls, Messages, Photos)"
+            })
+            nm(ctx).notify(ID_MEDIA_DEL, Notification.Builder(ctx, CH_ASK)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle("Remove $what?")
+                .setContentText("$name asks to remove them from this phone. Tap to confirm.")
+                .setContentIntent(confirm)
+                .setAutoCancel(true)
+                .build())
+        }
+    }
 
     // The computer's Allow for Calls, Messages or Photos, when the prompt can't open by itself
     // (no "Display over other apps"): tap for Android's prompt. Its channel is made the first time.

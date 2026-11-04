@@ -28,14 +28,14 @@ const picture = (v, max) => (typeof v === 'string' && /^data:image\/(jpeg|png|we
 const ASKS = {
   [T.CALL_DO]: 'calls', [T.CALL_LOG]: 'calls', [T.CONTACTS]: 'calls',
   [T.SMS_THREADS]: 'messages', [T.SMS_THREAD]: 'messages', [T.SMS_PART]: 'messages', [T.SMS_SEND]: 'messages',
-  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_SAVE]: 'media',
+  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_SAVE]: 'media', [T.MEDIA_DELETE]: 'media',
   [T.FS_LIST]: 'files', [T.FS_DO]: 'files', [T.FS_SAVE]: 'files',
 };
 // The phone's answers, passed to the window.
 const ANSWERS = {
   [T.CALL_DONE]: 'calls', [T.CALL_LOG]: 'calls', [T.CONTACTS]: 'calls',
   [T.SMS_THREADS]: 'messages', [T.SMS_THREAD]: 'messages', [T.SMS_PART]: 'messages', [T.SMS_SENT]: 'messages', [T.SMS_NEW]: 'messages',
-  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media',
+  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_DELETE]: 'media',
   [T.FS_LIST]: 'files', [T.FS_DONE]: 'files',
 };
 // A path on the phone, relative to its shared storage: no '..', no empty or odd segments.
@@ -90,7 +90,7 @@ class PhoneHub extends EventEmitter {
           sims: m.messages && Array.isArray(m.messages.sims) ? m.messages.sims.filter((x) => x && Number.isInteger(x.id)).slice(0, 4).map((x) => ({ id: x.id, label: str(x.label, 40) })) : [], // texts' SIMs (two or more)
           mms: !!(m.messages && m.messages.mms), // sends pictures and group texts
         },
-        media: { perm: perm(m.media) },
+        media: { perm: perm(m.media), remove: !!(m.media && m.media.remove) }, // remove: takes media.delete
         files: { perm: perm(m.files) },
         bt: {
           allowed: bt.allowed !== false, radio: bt.radio !== false, name: str(bt.name, 100), bonded: bt.bonded === true ? true : bt.bonded === false ? false : null,
@@ -223,6 +223,11 @@ class PhoneHub extends EventEmitter {
       case T.MEDIA_THUMB: out.ids = ids(m.ids); break;
       case T.MEDIA_VIEW: out.id = str(m.id, 40); break;
       case T.MEDIA_SAVE: out.ids = ids(m.ids); break;
+      case T.MEDIA_DELETE:
+        if (!(this.state && this.state.media.remove)) return; // an older phone app
+        out.ids = ids(m.ids);
+        if (!out.ids.length) return;
+        break;
       case T.FS_LIST: {
         const p = phonePath(m.path);
         if (p == null) return;

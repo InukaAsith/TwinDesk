@@ -104,6 +104,7 @@ class Hub(core: Core) : Feature(core) {
             Proto.T.MEDIA_THUMB -> if (mediaOn && !core.link.ble) media().thumbs(m.optJSONArray("ids"))
             Proto.T.MEDIA_VIEW -> if (mediaOn && !core.link.ble) media().let { md -> val id = m.str("id", 40); run { core.send(msg(Proto.T.MEDIA_VIEW, "id" to id, "data" to md.view(id))) } }
             Proto.T.MEDIA_SAVE -> if (mediaOn) media().let { md -> val ids = m.optJSONArray("ids"); run { md.save(ids) } }
+            Proto.T.MEDIA_DELETE -> if (mediaOn) media().let { md -> val ids = m.optJSONArray("ids"); run { core.send(md.delete(ids)) } }
             Proto.T.FS_LIST -> if (filesOn) fs().let { f -> run { core.send(f.list(m)) } }
             Proto.T.FS_DO -> if (filesOn) fs().let { f -> run { core.send(f.act(m)) } }
             Proto.T.FS_SAVE -> if (filesOn) fs().let { f -> val paths = m.optJSONArray("paths"); run { f.save(paths) } }
@@ -154,7 +155,7 @@ class Hub(core: Core) : Feature(core) {
                 .put("sims", calls?.sims() ?: JSONArray()).put("companion", CallCompanion.allowed(core.ctx)),
             "messages" to JSONObject().put("perm", perm("messages")).put("missing", jsonArray(missing("messages"))).put("sims", messages?.sims() ?: JSONArray())
                 .put("mms", true), // pictures and group texts (sms.send image, addrs)
-            "media" to JSONObject().put("perm", perm("media")),
+            "media" to JSONObject().put("perm", perm("media")).put("remove", true), // media.delete
             "files" to JSONObject().put("perm", perm("files")),
             "bt" to if (callsOn) bt() else JSONObject(),
             "opens" to Settings.canDrawOverlays(core.ctx), // Allow on the computer opens the prompt here (else a notification)

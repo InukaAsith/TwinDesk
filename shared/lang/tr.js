@@ -2023,4 +2023,10 @@
   "That app doesn't take pictures": "Bu uygulama görüntü kabul etmiyor",
   "No service": "Servis yok",
   "Airplane mode is on": "Uçak modu açık",
+  "Remove from the phone?": "Telefondan kaldırılsın mı?",
+  "Remove 1 item from the phone?": "1 öğe telefondan kaldırılsın mı?",
+  "Remove {count} items from the phone?": "{count} öğe telefondan kaldırılsın mı?",
+  "Removing {count}…": "{count} öğe kaldırılıyor…",
+  "Tap the notification on the phone to remove {count} more": "{count} öğe daha kaldırmak için telefondaki bildirime dokunun",
+  "{count} couldn’t be removed": "{count} öğe kaldırılamadı",
 });

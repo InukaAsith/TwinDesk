@@ -2024,4 +2024,10 @@
   "That app doesn't take pictures": "该应用不接受图片",
   "No service": "无服务",
   "Airplane mode is on": "飞行模式已开启",
+  "Remove from the phone?": "要从手机中移除吗？",
+  "Remove 1 item from the phone?": "要从手机中移除 1 项吗？",
+  "Remove {count} items from the phone?": "要从手机中移除 {count} 项吗？",
+  "Removing {count}…": "正在移除 {count} 项…",
+  "Tap the notification on the phone to remove {count} more": "点按手机上的通知以再移除 {count} 项",
+  "{count} couldn’t be removed": "{count} 项无法移除",
 });
