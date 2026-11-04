@@ -40,9 +40,10 @@ function readPass(passFile) {
     try {
       return safeStorage.decryptString(raw).trim();
     } catch {
-      // Plain text: an older version wrote it. Seal it going forward.
+      // Plain text: an older version wrote it (24 random bytes as hex). Seal it going forward. Never
+      // a sealed one that didn't open: writing it back as "plain text" would lose the passphrase.
       const pass = raw.toString('utf8').trim();
-      writePass(passFile, pass);
+      if (/^[0-9a-f]{48}$/.test(pass)) writePass(passFile, pass);
       return pass;
     }
   }
