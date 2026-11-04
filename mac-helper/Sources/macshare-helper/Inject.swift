@@ -148,7 +148,7 @@ final class Injector {
   /// Button down/up at `p`, with the click count macOS expects for double/triple clicks.
   func button(_ b: Int, down: Bool, at p: CGPoint) {
     // Move windows (Grab.swift): the move key and an injected click grab a window, the same as here.
-    if b == 0 && down && WindowGrab.shared.tryGrab(at: p) { return }
+    if b == 0 && down && WindowGrab.shared.tryGrab(at: p, flags: flags.rawValue) { return }
     if b == 0 && !down && WindowGrab.shared.upPending { _ = WindowGrab.shared.up(); return }
     if down {
       let now = ProcessInfo.processInfo.systemUptime
