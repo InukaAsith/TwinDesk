@@ -51,6 +51,11 @@ jobs:
           }
           if ($bad) { exit 1 }
 
+      # The input lane (native/tdfast) for the arm64 installer too: tdfast.cmd builds a tdfast.dll
+      # per architecture, and the runner's Rust has only the x64 target.
+      - name: Rust target for Windows on ARM
+        run: rustup target add aarch64-pc-windows-msvc
+
       - name: Install dependencies
         working-directory: windows
         run: npm install
