@@ -50,7 +50,7 @@ UI.tab({
     ]);
     const listCard = UI.card(t('Mac apps'), [UI.row(t('Search'), '', [filter]), grid, status], { actions: [refresh] });
     const rezume = UI.rezumeCard ? UI.rezumeCard() : { el: UI.el('div', { hidden: true }), update() {} }; // the other computer's ReZume (shared/ui-rezume.js; not in Multi-device)
-    body.append(pair.el, moveCard, rezume.el, note, listCard);
+    body.append(pair.el, rezume.el, note, listCard, moveCard); // Move windows below the apps list
     filter.oninput = () => { key = ''; if (UI.state) render(UI.state); };
 
     let key = '';
