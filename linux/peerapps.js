@@ -4,7 +4,7 @@
 // arrives as its own `rtc2` session (kind 'window') and is shown in its own window here
 // (appview.html), sized like over there, with the app's icon. Input carries `wid`; focus / close /
 // resize go back to its window. The other direction (this computer's apps there) is pcapps.js.
-// A Mac's apps are listed and pinned through apps.js, but opened here window by window (its appsend.js).
+// Not with a Mac: it sends its own apps (apps.js).
 const path = require('path');
 const { app, BrowserWindow, ipcMain, nativeImage, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
@@ -83,12 +83,9 @@ class PeerApps {
   }
 
   // A PC or a Linux computer on the other end (the Mac does with apps.js instead).
+  // A PC or a Linux computer on the other end (a Mac sends its own apps, and ReZume / moved windows, with apps.js).
   get active() {
-    return this.link.status.state === 'connected'; // a PC, a Linux computer, or a Mac (its windows one by one, appsend.js)
-  }
-
-  get fromMac() {
-    return this.link.peerOs === P.OS.MAC;
+    return this.link.status.state === 'connected' && this.link.peerOs !== P.OS.MAC;
   }
 
   // Windows ReZume took from the other computer come too, with this tab's switch off (rezume.js take).
@@ -116,7 +113,7 @@ class PeerApps {
   }
 
   refresh() {
-    if (!this.active || !this.cfg.on || this.fromMac) return; // a Mac's list comes through apps.js
+    if (!this.active || !this.cfg.on) return;
     if (this.link.send({ t: T.PAPPS_LIST })) { this.loading = true; this.onChange(); }
   }
 
@@ -176,7 +173,7 @@ class PeerApps {
   }
 
   _app(id) {
-    return this.list.find((x) => x.id === id) || (this.otherApps ? this.otherApps().find((x) => x.id === id) : null) || null;
+    return this.list.find((x) => x.id === id) || null;
   }
 
   _i18n() {

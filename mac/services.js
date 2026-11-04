@@ -106,6 +106,7 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
       pcView.shutdown();
       pcApps.shutdown();
       appSend.shutdown();
+      apps.shutdown(); // moved windows back here
       kvm.shutdown();
       hub.shutdown(); // unmute this Mac if we muted it while sending
       stream.stop('off');
