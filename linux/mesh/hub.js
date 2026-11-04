@@ -143,8 +143,9 @@ class Hub extends EventEmitter {
   // IDLE_PING_MS (docs/mesh.md "Keep-alive"). The Kvm calls this on every mode change.
   setBusy(id, flag) {
     if (!id) return;
-    this.links.setBusy(id, !!flag);
-    if (this.server) this.server.setBusy(id, !!flag);
+    const f = flag == null ? null : !!flag; // null clears the flag
+    this.links.setBusy(id, f);
+    if (this.server) this.server.setBusy(id, f);
   }
 
   // ---- what the UI shows ----
