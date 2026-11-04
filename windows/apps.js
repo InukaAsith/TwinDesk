@@ -23,7 +23,6 @@ class Apps {
     this.opening = new Map(); // id → placeholder window: the app's taskbar button until its first window
     this.list = [];       // [{id, name, icon}] from apps.result
     this.windows = [];    // last app.windows list
-    this.cropWins = new Map(); // wid → its window here (Move windows: one dragged back goes home)
     this.picture = null;  // {width, height}: stream pixel size from app.windows pw/ph
     this.message = '';
     this.loading = false;
@@ -198,8 +197,6 @@ class Apps {
     });
     wc.on('did-create-window', (win, d) => {
       const wid = Number(String(d.frameName).slice(4));
-      this.cropWins.set(wid, win);
-      win.on('closed', () => { if (this.cropWins.get(wid) === win) this.cropWins.delete(wid); });
       this._dress(win, wid);
       win.setMenu(null);
       win.on('page-title-updated', (e) => e.preventDefault());
@@ -255,22 +252,6 @@ class Apps {
       fs.writeFileSync(file, Buffer.concat([head, png]));
       return file;
     } catch (_) { return ''; }
-  }
-
-  // Move windows: a window grabbed with the move key crossed back to the Mac (the helper's `moving`).
-  // True for any of the Mac's windows here, so none is sent over as one of ours; one the Mac moved
-  // here goes home there (app.return).
-  returnWindow(handle) {
-    if (!handle) return false;
-    for (const [wid, win] of this.cropWins) {
-      if (win.isDestroyed()) continue;
-      const h = win.getNativeWindowHandle();
-      if ((h.length >= 8 ? Number(h.readBigUInt64LE(0)) : h.readUInt32LE(0)) !== handle) continue;
-      const w = this.windows.find((x) => x.wid === wid);
-      if (w && w.moved === true) this.link.send({ t: T.APP_RETURN, wid });
-      return true;
-    }
-    return false;
   }
 
   view() {

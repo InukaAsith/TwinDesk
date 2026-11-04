@@ -601,14 +601,12 @@ app.whenReady().then(() => {
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
   svc.kvm.laneReady.then(laneGo);
   // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
-  // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over the
-  // way its apps do: to a Mac window by window (appsend.js), to a PC through the shared display (apps.js).
+  // copy of the other computer’s window goes home there (pcapps.js); one of this Mac’s goes over
+  // window by window, shared on its own (appsend.js, movewin.js), apart from how apps open.
   svc.kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;
-    if (!settings.apps.moveWindows) return;
-    if (peer.current && peer.current.os === P.OS.MAC) svc.appSend.moveOut(wid, Number(m.movingPid));
-    else svc.apps.moveOut(wid, Number(m.movingPid));
+    if (settings.apps.moveWindows) svc.appSend.moveOut(wid, Number(m.movingPid));
   };
   afterLane().then(() => {
     server.listen();
