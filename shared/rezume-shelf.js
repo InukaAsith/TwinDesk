@@ -11,7 +11,10 @@
 //   dock? {show(o, take, dismiss), hide()} (o.icon there is already badged).
 'use strict';
 
-const { BrowserWindow, Notification, nativeImage } = require('electron');
+const { app, BrowserWindow, Notification, nativeImage } = require('electron');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const what = (o) => (o.kind === 'web' ? hostOf(o.url) : o.kind === 'doc' ? o.name : o.appName || 'App');
@@ -44,6 +47,20 @@ function badged(base, badge, size = 256) {
   } catch (_) {
     return base;
   }
+}
+
+// `img` as a .ico at `file` that embeds the PNG (supported since Windows Vista); '' when it can't be written.
+function toIco(img, file) {
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const png = img.resize({ width: 64, height: 64, quality: 'best' }).toPNG();
+    const head = Buffer.alloc(22);
+    head.writeUInt16LE(0, 0); head.writeUInt16LE(1, 2); head.writeUInt16LE(1, 4); // ICONDIR: 1 image
+    head.writeUInt8(64, 6); head.writeUInt8(64, 7); head.writeUInt8(0, 8); head.writeUInt8(0, 9);
+    head.writeUInt16LE(1, 10); head.writeUInt16LE(32, 12); head.writeUInt32LE(png.length, 14); head.writeUInt32LE(22, 18);
+    fs.writeFileSync(file, Buffer.concat([head, png]));
+    return file;
+  } catch (_) { return ''; }
 }
 
 class ReZumeShelf {
@@ -111,7 +128,7 @@ class ReZumeShelf {
       webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: false },
     });
     this.win = win;
-    if (process.platform === 'win32' && this.appId) win.setAppDetails({ appId: this.appId, relaunchDisplayName: 'ReZume' }); // its own button, not in TwinDesk's group
+    if (process.platform === 'win32' && this.appId) this._details(win, o, icon); // its own button, not in TwinDesk's group
     const img = o.icon ? `<img src="${esc(o.icon)}">` : '';
     win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html><meta charset="utf-8"><title>${esc(label)}</title>
 <style>body{margin:0;font:13px system-ui,sans-serif;background:#1f1f22;color:#eee;display:flex;align-items:center;gap:12px;padding:16px;height:78px;box-sizing:border-box}
@@ -141,6 +158,20 @@ ${img}<div><b>${esc(title)}</b><span>From ${esc(from)} · ${esc(what(o))}</span>
       e.preventDefault();
       dismiss();
     });
+  }
+
+  // Windows: a button with its own AppUserModelID shows the relaunch icon (a file, not the window's
+  // icon), and that only with a relaunch command. One id per app, since the taskbar keeps an id's icon.
+  _details(win, o, icon) {
+    const key = crypto.createHash('sha1').update(String(o.app || o.kind || '')).digest('hex').slice(0, 12);
+    const ico = icon && !icon.isEmpty() ? toIco(icon, path.join(app.getPath('userData'), 'app-icons', 'rezume.' + key + '.ico')) : '';
+    const args = app.isPackaged ? '' : ' "' + app.getAppPath() + '"';
+    try {
+      win.setAppDetails({
+        appId: this.appId + '.' + key, relaunchCommand: '"' + process.execPath + '"' + args, relaunchDisplayName: 'ReZume',
+        ...(ico ? { appIconPath: ico, appIconIndex: 0 } : {}),
+      });
+    } catch (_) { /* older taskbar */ }
   }
 
   _hide() {
