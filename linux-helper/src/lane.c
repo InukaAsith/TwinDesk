@@ -20,12 +20,25 @@ static int driving, started;
 // The lane's thread hands moves to the main loop (where all injection happens) through a pipe.
 static int qpipe[2] = { -1, -1 };
 
+// A move the pipe had no room for (#132): the lane already counted it (its totals moved on), so it
+// is kept here, on the lane's thread, and goes with the next write. 16 bytes is under PIPE_BUF, so a
+// write is all or nothing.
+static double held_dx, held_dy;
+
+static void hand_over(void) {
+  if (qpipe[1] < 0 || (held_dx == 0 && held_dy == 0)) return;
+  double m[2] = { held_dx, held_dy };
+  if (write(qpipe[1], m, sizeof m) == (ssize_t)sizeof m) held_dx = held_dy = 0;
+}
+
 static void callback(void *ctx, int32_t kind, double dx, double dy, const uint8_t *json, size_t len) {
   (void)ctx;
   if (kind == TD_MOVE) {
-    double m[2] = { dx, dy };
-    if (qpipe[1] >= 0 && write(qpipe[1], m, sizeof m) != (ssize_t)sizeof m) { /* full: the next total catches up */ }
+    held_dx += dx;
+    held_dy += dy;
+    hand_over();
   } else if (kind == TD_EVENT) {
+    hand_over(); // a click goes after the moves before it
     if (!json || len == 0 || len > 3000) return;
     char line[3100];
     snprintf(line, sizeof line, "{\"event\":\"laneEv\",\"msg\":%.*s}", (int)len, (const char *)json);
@@ -35,6 +48,7 @@ static void callback(void *ctx, int32_t kind, double dx, double dy, const uint8_
     snprintf(line, sizeof line, "{\"event\":\"lane\",\"up\":true,\"rtt\":%.3f}", dx);
     emit(line);
   } else if (kind == TD_DOWN) {
+    held_dx = held_dy = 0; // that session is gone: its moves with it
     emit("{\"event\":\"lane\",\"up\":false}");
   }
 }
@@ -79,6 +93,7 @@ void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void 
   } else if (!strcmp(op, "stop")) {
     td_stop();
     started = driving = 0;
+    held_dx = held_dy = 0; // the lane thread is gone
   } else if (!strcmp(op, "active")) {
     td_active(jbool(c, "on", 0));
   } else if (!strcmp(op, "route")) {
