@@ -872,6 +872,7 @@ function buildState() {
     clipboard: { ...settings.clipboard, ...clip.view },
     ui: settings.ui,
     app: settings.app,
+    encoder: require('../encoder').view(), // General › Advanced › Hardware encoder
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer
     updates: updates ? updates.view : null,

@@ -56,6 +56,21 @@ namespace MacShare
         [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
         [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
         [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
+        [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
+        [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, IntPtr extra);
+
+        // Caps Lock (#131): on or off here; set != null turns it that way (a tap, marked ours).
+        public static bool Caps(bool? set)
+        {
+            bool on = (GetKeyState(0x14) & 1) != 0;
+            if (set.HasValue && set.Value != on)
+            {
+                keybd_event(0x14, 0x3A, 0, MARK);
+                keybd_event(0x14, 0x3A, 2, MARK);
+                on = set.Value;
+            }
+            return on;
+        }
         [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint mapType);
         public const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
 

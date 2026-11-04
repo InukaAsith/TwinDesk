@@ -1967,5 +1967,10 @@
   "Apps pick “TwinDesk Microphone”. Waiting for {device}": "Приложения выбирают «TwinDesk Microphone». Ожидание {device}",
   "Live into {output}: apps pick its other end as the microphone": "Работает в {output}: приложения выбирают его другой конец как микрофон",
   "Into {output}. Waiting for {device}": "В {output}. Ожидание {device}",
-  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "Виртуальный аудиокабель не найден: звук идёт в динамики. Установите VB-CABLE (Windows) или BlackHole (macOS), и приложения смогут выбрать его как микрофон"
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "Виртуальный аудиокабель не найден: звук идёт в динамики. Установите VB-CABLE (Windows) или BlackHole (macOS), и приложения смогут выбрать его как микрофон",
+  "Hardware encoder": "Аппаратный кодировщик",
+  "Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart": "Экран и окна приложений кодирует видеокарта. Выкл.: программно (OpenH264), если картинка зависает или становится чёрной. Применяется после перезапуска",
+  "Turned off by itself: the hardware encoder stopped sending. Software encoding (OpenH264) is in use": "Выключен автоматически: аппаратный кодировщик перестал отправлять. Используется программное кодирование (OpenH264)",
+  "Turned off by itself: the hardware encoder stopped sending. Restart to use the software encoder (OpenH264)": "Выключен автоматически: аппаратный кодировщик перестал отправлять. Перезапустите, чтобы использовать программный кодировщик (OpenH264)",
+  "The hardware encoder stopped sending. Restart TwinDesk to use the software encoder (General › Advanced)": "Аппаратный кодировщик перестал отправлять. Перезапустите TwinDesk, чтобы использовать программный кодировщик (Общие › Дополнительно)",
 });

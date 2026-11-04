@@ -478,6 +478,7 @@ namespace MacShare
                         smoother.Flush(injector.Move);
                         Injector.Type(Json.Str(c, "text", ""));
                         break;
+                    case "caps": c["on"] = Native.Caps(Json.Has(c, "set") ? (bool?)Json.Bool(c, "set", false) : null); break; // Caps Lock, as the other computer's (#131)
                     case "info":
                         Native.POINT cur;
                         Native.GetCursorPos(out cur);
@@ -496,6 +497,7 @@ namespace MacShare
             if (error != null) reply["error"] = error;
             if (cmd == "info") { reply["cursor"] = c["cursor"]; reply["capturing"] = c["capturing"]; }
             if (cmd == "displays") reply["displays"] = c["displays"];
+            if (cmd == "caps" && c.ContainsKey("on")) reply["on"] = c["on"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
             if (cmd == "wifiLowLatency" && c.ContainsKey("applied")) reply["applied"] = c["applied"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];

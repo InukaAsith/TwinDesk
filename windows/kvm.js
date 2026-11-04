@@ -2,6 +2,7 @@
 // Shared cursor and keyboard: state machine, Windows side, both roles
 // (this PC drives the Mac, or the Mac drives this PC).
 const P = require('../shared/protocol.js');
+const { CapsSync } = require('../shared/capsync.js');
 const CL = require('../shared/cursorlock.js');
 const blepipe = require('../shared/blepipe.js');
 const { KvmMoves } = require('../shared/kvm-moves.js');
@@ -100,6 +101,11 @@ class Kvm {
     });
     link.on(T.KVM_DISPLAYS, (m) => this.map.onDisplays(m));
     link.on(T.KVM_IDENTIFY, () => this.map.identify(false));
+    // Caps Lock follows the input (shared/capsync.js, #131): after the handlers above.
+    this.caps = new CapsSync({ helper: this.helper, platform: 'win' });
+    link.on(T.KVM_TAKE, () => { if (this.mode === 'driven') this.caps.expect(); });
+    link.on(T.KVM_HOME, () => { if (this.mode === 'home') this.caps.expect(); });
+    link.on(T.KVM_CAPS, (m) => this.caps.onPeer(m));
     link.on(T.KVM_TAKE, (m) => this._onTake(m));
     link.on(T.KVM_LINK, (m) => this.setLinked(m.on !== false, false)); // the other side switched it: follow, no echo
     link.on(T.KVM_ACCEPT, (m) => {
@@ -455,6 +461,7 @@ class Kvm {
     const k = this.cfg;
     this.keyboardOnly = !where.side; // the hotkey in keyboard-only mode (edge crossings carry a side)
     this._drive({ t: T.KVM_TAKE, route: this.route, ...where, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard });
+    if (!(this.local && this.local.drives())) this.caps.handOver((m) => this.link.send(m)); // our Caps Lock, there
     this._setMode('driving', '');
     this.clip.sendIfChanged('switch');
     this._clearAccept();
@@ -659,6 +666,7 @@ class Kvm {
     const msg = typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset: this.map.toPeer(offset) } : { t: T.KVM_HOME, route: this.peerRoute };
     const out = this._dragHome(msg, drag);
     this.link.send(msg);
+    this.caps.handOver((c) => this.link.send(c)); // our Caps Lock, home
     if (out) this.fileDrop.beginDrag(out); // after kvm.home: drag.start, then the files
     this._drivenHome(message, true);
   }
