@@ -7,7 +7,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 const P = require('../shared/protocol.js');
 const { script } = require('./ps');
 
@@ -28,6 +28,27 @@ function certOf(pfx, passphrase) {
   return der;
 }
 
+// The passphrase on disk: DPAPI-sealed (safeStorage) so a local process running as this user
+// can't just read it; plain text only where sealing isn't available.
+function writePass(passFile, pass) {
+  fs.writeFileSync(passFile, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(pass) : pass);
+}
+
+function readPass(passFile) {
+  const raw = fs.readFileSync(passFile);
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(raw).trim();
+    } catch {
+      // Plain text: an older version wrote it. Seal it going forward.
+      const pass = raw.toString('utf8').trim();
+      writePass(passFile, pass);
+      return pass;
+    }
+  }
+  return raw.toString('utf8').trim();
+}
+
 // Returns {pfx, passphrase, fp}; makes the certificate the first time.
 async function load() {
   const pfxFile = path.join(dir(), 'identity.pfx');
@@ -35,10 +56,10 @@ async function load() {
   if (!fs.existsSync(pfxFile) || !fs.existsSync(passFile)) {
     const pass = crypto.randomBytes(24).toString('hex');
     await makePfx(pfxFile, pass);
-    fs.writeFileSync(passFile, pass);
+    writePass(passFile, pass);
   }
   const pfx = fs.readFileSync(pfxFile);
-  const passphrase = fs.readFileSync(passFile, 'utf8').trim();
+  const passphrase = readPass(passFile);
   const der = certOf(pfx, passphrase);
   if (!der) throw new Error('could not read the certificate');
   const fp = P.normFingerprint(new crypto.X509Certificate(der).fingerprint256);
