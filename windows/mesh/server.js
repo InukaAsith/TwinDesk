@@ -54,8 +54,16 @@ class Server extends EventEmitter {
     this.wss = new WebSocketServer({ server: this.https, maxPayload: P.MAX_PAYLOAD });
     this.wss.on('connection', (ws, req) => this._onConnection(ws, req));
     this.wss.on('error', () => {}); // ws repeats the server's errors here; listenError below reports them
-    this.https.on('error', (err) => this.emit('listenError', err)); // e.g. EADDRINUSE: another copy listens
     this.port = port !== undefined ? port : LISTEN_PORT;
+    // The port taken (another copy, or a program in WSL with mirrored networking, #124): tried again
+    // every 10 s, so TwinDesk starts listening once it's free, without a restart.
+    this.https.on('error', (err) => {
+      this.emit('listenError', err);
+      if ((err.code === 'EADDRINUSE' || err.code === 'EACCES') && !this.https.listening && !this.closed) {
+        clearTimeout(this.listenRetry);
+        this.listenRetry = setTimeout(() => !this.closed && !this.https.listening && this.https.listen(this.port, '0.0.0.0'), 10000);
+      }
+    });
     this.https.listen(this.port, '0.0.0.0', () => {
       this.port = this.https.address().port;
       this.emit('listening');
@@ -334,6 +342,8 @@ class Server extends EventEmitter {
   }
 
   close() {
+    this.closed = true;
+    clearTimeout(this.listenRetry);
     clearInterval(this.tick);
     this.ilPool.close();
     clearTimeout(this.graceTimer);

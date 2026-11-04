@@ -176,7 +176,11 @@ class Discovery extends EventEmitter {
       if (sock !== this.sock) return;
       this.sock = null;
       try { sock.close(); } catch (e) { /* closed */ }
-      this._setStatus(false, 'Can’t listen (' + (err.code || err.message) + ')');
+      // EACCES / EADDRINUSE: another program holds the port for itself (one in WSL with mirrored
+      // networking, #124). Tried again below.
+      this._setStatus(false, err.code === 'EACCES' || err.code === 'EADDRINUSE'
+        ? 'Port ' + P.DISCOVERY_PORT + ' is in use by another program (another copy of TwinDesk, or one in WSL)'
+        : 'Can’t listen (' + (err.code || err.message) + ')');
       this.bindTimer = setTimeout(() => this._bind(), RETRY_BIND_MS);
     });
     this.sock = sock;

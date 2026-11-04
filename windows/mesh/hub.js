@@ -75,7 +75,7 @@ class Hub extends EventEmitter {
     server.on('listenError', (err) => {
       this._host = {
         on: false,
-        error: err.code === 'EADDRINUSE' ? 'Port ' + P.PORT + ' is in use (another copy of TwinDesk?)' : err.code || err.message,
+        error: err.code === 'EADDRINUSE' || err.code === 'EACCES' ? 'Port ' + P.PORT + ' is in use by another program (another copy of TwinDesk, or one in WSL). Trying again…' : err.code || err.message,
       };
       this._change();
     });
