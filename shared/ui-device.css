@@ -55,6 +55,7 @@
 /* Apps */
 .papps-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .papps-bar input[type=search] { flex: 1; max-width: 360px; }
+.papps-bar .btn { margin-left: auto; white-space: nowrap; } /* + Install Apps */
 #page-papps .app-grid { max-height: none; }
 
 /* QR pairing (shared/ui-qrpair.js) and wireless debugging's QR (shared/ui-adbqr.js) */

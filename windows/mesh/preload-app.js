@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld('macshare', {
   phoneScreenAct: call('phoneScreenAct'),
   phoneAppMenu: call('phoneAppMenu'),
   phoneInstallFull: call('phoneInstallFull'),
+  phoneInstallApps: call('phoneInstallApps'),
   phoneAssets: call('phoneAssets'),
   setPcApps: call('setPcApps'),
   setMacApps: call('setMacApps'),

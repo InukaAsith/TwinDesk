@@ -2,7 +2,7 @@
 // Mirroring and Apps (Mac, PC and Linux), the phone's two pages that were on the Phone page:
 //   Mirroring: the phone's screen in a window, what's open here, and how phone windows look and
 //   behave (sound, picture, controls, keys).
-//   Apps: the phone's apps, each opened in a window of its own.
+//   Apps: the phone's apps, each opened in a window of its own, and Install Apps (.apk files over ADB).
 // Only while a phone is connected. Mirroring goes through ADB (wireless debugging) or Native (the
 // phone shares its screen itself: shared/nativescreen.js); phone apps in windows need ADB.
 'use strict';
@@ -141,7 +141,10 @@
       const note = UI.note('info', '');
       search.oninput = () => { key = ''; UI.state && render(UI.state); };
       const menuWord = mac ? 'add it to the Dock' : linux ? '' : 'pin it to Start';
-      body.append(adb.el, el('div', { class: 'papps-bar' }, [search, count]), note, el('div', { class: 'card' }, [grid]));
+      // Install Apps (shared/apkinstall.js): .apk files from here, over ADB; only while it's ready.
+      const installBtn = api.phoneInstallApps ? UI.button(tr('+ Install Apps'), () => api.phoneInstallApps(), 'small') : null;
+      if (installBtn) installBtn.title = tr('Install Android apps (.apk) from {computer} on the phone', { computer: here });
+      body.append(adb.el, el('div', { class: 'papps-bar' }, installBtn ? [search, count, installBtn] : [search, count]), note, el('div', { class: 'card' }, [grid]));
 
       let key = '';
       function render(s) {
@@ -152,6 +155,13 @@
         const term = search.value.trim().toLowerCase();
         const shown = term ? apps.filter((a) => a.name.toLowerCase().includes(term)) : apps;
         count.textContent = apps.length ? tr(term ? '{shown} of {total}' : '{total} apps', { shown: shown.length, total: apps.length }) : '';
+        const inst = (ph.bridge || {}).appInstall;
+        const busy = !!(inst && inst.state === 'installing');
+        if (installBtn) {
+          installBtn.hidden = !ready;
+          installBtn.disabled = busy;
+          installBtn.textContent = busy ? (inst.total > 1 ? tr('Installing {done} of {total}…', { done: inst.done + 1, total: inst.total }) : tr('Installing…')) : tr('+ Install Apps');
+        }
         note.set(ready && !apps.length ? tr('Loading the phone’s apps…') : '');
         const k = JSON.stringify([shown.length, term, ph.assets, ready]);
         if (k === key) return;

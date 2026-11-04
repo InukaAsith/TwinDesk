@@ -98,6 +98,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setStartup: call('setStartup'),
   quit: call('quit'),
   phoneInstallFull: call('phoneInstallFull'),
+  phoneInstallApps: call('phoneInstallApps'),
   setNet: call('setNet'),
   wifiSetup: call('wifiSetup'),
   setMesh: call('setMesh'),

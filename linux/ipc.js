@@ -260,6 +260,7 @@ function setupIpc(ctx) {
   phone('phoneScreenAct', (key) => (key === 'rotate' || key === 'screenPower') && ctx.phoneViews.screenAct(key));
   phone('phoneRetry', () => ctx.phone.bridge.retry()); // also Set Up, when nothing used wireless debugging
   phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
+  phone('phoneInstallApps', () => require('../shared/apkinstall.js').choose(ctx.phone.bridge, (s) => (ctx.t ? ctx.t(s) : s))); // Phone › Apps › Install Apps
   handle('phoneAssets', () => (ctx.phone ? ctx.phone.assetsView() : { wallpaper: '', apps: [] }));
   handle('skipSetup', () => change('setup', { skipped: ctx.buildState().setup.missing, done: true }));
   handle('checkFirewall', () => ctx.checkFirewall());

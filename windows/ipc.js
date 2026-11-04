@@ -272,6 +272,7 @@ function setupIpc(ctx) {
   });
   phone('phoneRetry', () => ctx.phone.bridge.retry()); // also Set Up, when nothing used wireless debugging
   phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
+  phone('phoneInstallApps', () => require('../shared/apkinstall.js').choose(ctx.phone.bridge, (s) => (ctx.t ? ctx.t(s) : s))); // Phone › Apps › Install Apps
   phone('phoneScreenAct', (key) => (key === 'rotate' || key === 'screenPower') && ctx.phoneViews.screenAct(key)); // the Phone page's Rotate and Phone screen off
   handle('phoneAssets', () => (ctx.phone ? ctx.phone.assetsView() : { wallpaper: '', apps: [] }));
   handle('installVdd', () => vdd.install());
