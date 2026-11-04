@@ -6,11 +6,16 @@
 // through System Events (Accessibility, which TwinDesk has for the mouse and keyboard, and System
 // Events' Automation, asked once). Firefox has no scripting: its window's title, then its own
 // session file (shared/browsertabs.js). Anything else is at least the app itself (kind 'app'), whose
-// window ReZume may send to another computer. Nothing runs before ReZume is on.
+// window ReZume may send to another computer. Nothing runs before ReZume is on. A browser tab
+// showing a local file (a PDF in Safari, Chrome, Edge) offers that file as a document. An app that
+// gives no AXDocument (VLC, IINA, mpv) but names a picture, video or PDF in its title: Spotlight finds it,
+// the one used most lately (mdfind; shared/docfind.js reads the names).
 'use strict';
 
 const { execFile } = require('child_process');
+const path = require('path');
 const tabs = require('../shared/browsertabs.js');
+const docfind = require('../shared/docfind.js');
 
 const CHROMIUMS = ['com.google.Chrome', 'com.google.Chrome.beta', 'com.microsoft.edgemac', 'com.brave.Browser', 'com.vivaldi.Vivaldi', 'com.operasoftware.Opera', 'company.thebrowser.Browser', 'org.chromium.Chromium'];
 const SKIP = /^(com\.apple\.(finder|dock|loginwindow|systemuiserver|controlcenter|notificationcenterui|Spotlight|systempreferences)|org\.macshare\.|com\.twindesk\.|com\.github\.Electron)/;
@@ -79,11 +84,36 @@ const iconOf = (p) => new Promise((resolve) => {
   });
 });
 
+// A file of this name Spotlight knows, the one used most lately (several: the newest by use, then by change).
+const mdfind = (name) => new Promise((resolve) => {
+  const q = 'kMDItemFSName == "' + name.replace(/["\\*]/g, '\\$&') + '"c';
+  execFile('/usr/bin/mdfind', [q], { timeout: 3000, maxBuffer: 1 << 20 }, (err, out) => {
+    const hits = err ? [] : String(out).split('\n').filter((p) => p.startsWith('/')).slice(0, 20);
+    if (hits.length <= 1) return resolve(hits[0] || null);
+    execFile('/usr/bin/mdls', ['-raw', '-name', 'kMDItemLastUsedDate', ...hits], { timeout: 3000 }, (e2, o2) => {
+      const used = e2 ? [] : String(o2).split('\0');
+      const at = (i) => Date.parse(String(used[i] || '').replace(/ \+0000$/, ' GMT')) || 0;
+      const mt = (p) => { try { return require('fs').statSync(p).mtimeMs; } catch (_) { return 0; } };
+      const order = hits.map((p, i) => ({ p, u: at(i), m: mt(p) })).filter((h) => h.m).sort((a, b) => (b.u - a.u) || (b.m - a.m));
+      resolve(order.length ? order[0].p : null);
+    });
+  });
+});
+
 // "Not authorized to send Apple events" (-1743): Automation was refused for that app.
 const refused = (e) => /-1743|not authori[sz]ed|not allowed assistive/i.test(String(e || ''));
 
 function create({ cfg }) {
   const paths = new Map(); // bundle id → its .app, for its icon
+  let named = { key: '', file: null }; // the last title Spotlight was asked about
+  async function byTitle(app, title) {
+    const key = app + '\n' + title;
+    if (named.key === key) return named.file && require('fs').existsSync(named.file) ? named.file : null;
+    let file = null;
+    for (const n of docfind.titleNames(title).filter((x) => docfind.MEDIA.test(x))) if ((file = await mdfind(n))) break;
+    named = { key, file };
+    return file;
+  }
   return {
     async detect() {
       const r = await jxa(!!cfg().docs);
@@ -94,13 +124,19 @@ function create({ cfg }) {
       if (r.browser || /firefox|librewolf|zen/i.test(app)) {
         if (refused(r.err)) return { why: 'Let TwinDesk control ' + appName + ' to offer its tabs: System Settings › Privacy & Security › Automation › TwinDesk' };
         const url = r.url || (tabs.tabOf(app, r.title || '') || {}).url;
+        const local = docfind.fileUrlPath(url, 'darwin');
+        if (local) return require('fs').existsSync(local) ? { kind: 'doc', path: local, title: path.basename(local), app, appName } : null; // a PDF in the browser
         return url ? { kind: 'web', url, title: tabs.splitTitle(r.title || '').page || r.title || url, app, appName } : null; // a browser: its link only
       }
       if (refused(r.serr)) return { why: 'Let TwinDesk control System Events to offer documents: System Settings › Privacy & Security › Automation › TwinDesk' };
       if (typeof r.doc === 'string' && r.doc.startsWith('file://')) {
         let p = '';
         try { p = decodeURIComponent(new URL(r.doc).pathname); } catch (_) { p = ''; }
-        if (p) return { kind: 'doc', path: p, title: require('path').basename(p), app, appName };
+        if (p) return { kind: 'doc', path: p, title: path.basename(p), app, appName };
+      }
+      if (cfg().docs && r.title) {
+        const f = await byTitle(app, docfind.clean(r.title));
+        if (f) return { kind: 'doc', path: f, title: path.basename(f), app, appName };
       }
       return { kind: 'app', title: r.title || appName, app, appName };
     },

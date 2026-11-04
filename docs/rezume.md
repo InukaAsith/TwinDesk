@@ -13,16 +13,16 @@ side, the other follows while they're connected (`pair.sync`, key `rezume`).
 | From | What | How it's read | Opens on the other side |
 |---|---|---|---|
 | Windows | Browser tab | The address bar, through UI Automation (helper `frontActivity`, `Activity.cs`); otherwise the browser's own files | Default browser, or the phone (the app the link belongs to) |
-| Windows | Document | The file in Windows' Recent list whose name the window title shows | Its file comes across (`file.offer` drop `rezume`) and opens |
+| Windows | Document | The file in Windows' Recent list whose name the window title shows; else the app's command line, PotPlayer's own memory (registry, .ini, playlists), VLC's list, or a file of that name next to Recent's newest (Photos' next picture). Store apps (Photos, Media Player) by the app inside their frame | Its file comes across (`file.offer` drop `rezume`) and opens |
 | Mac | Browser tab | Safari and Chromium browsers through Apple Events (macOS asks once per browser); Firefox from its session file | As above |
-| Mac | Document | The front window's `AXDocument` (System Events: asked once) | As above |
+| Mac | Document | The front window's `AXDocument` (System Events: asked once); an app without one (VLC, IINA) that names a picture, video or PDF in its title: Spotlight's most lately used file of that name | As above |
 | Linux | Browser tab | The address bar through AT-SPI (X11 and Wayland); otherwise Firefox's session or Chromium's history | As above |
-| Linux | Document | `recently-used.xbel` matched to the window title | As above |
+| Linux | Document | `recently-used.xbel` and KDE's `RecentDocuments` matched to the window title; else VLC's list, or a file of that name next to the recent ones | As above |
 | Phone | Browser tab | The address bar by its view id (TwinDesk's Accessibility, full app) | Default browser |
 | Phone | App | The app in front (Accessibility), or through wireless debugging when Accessibility is off | A phone window (Mirror apps; needs wireless debugging) |
 | Computer | App window | The app in front when it shows no web page or document (off by default: ReZume › App windows, on both computers) | Its windows, streamed one by one as the Apps tab's are |
 
-Only `http` and `https` addresses are ever opened. A browser always sends its tab's link, never its
+A browser tab showing a local file (`file:///…`, a PDF in Edge, Chrome, Firefox or Safari) is offered as that document, never as a link (`shared/docfind.js`, which also reads VLC's list and finds a folder's next file). Only `http` and `https` addresses are ever opened. A browser always sends its tab's link, never its
 window; a video (YouTube, Vimeo, Twitch, Dailymotion, a video file) opens at the second it was at
 (Windows and Linux: the system's media controls; Mac: the browser, where it allows JavaScript from
 Apple Events). A document's path never leaves the device: only its name and size do, and the file
@@ -86,4 +86,4 @@ is) (shared/protocol.js). A side offers only
 to one whose `rz.policy` says on, so an older app never gets any. Code: `shared/rezume.js` (core),
 `shared/rezume-shelf.js` (taskbar and notification), `shared/ui-rezume.js` (tab),
 `shared/browsertabs.js`, each platform's `activity.js`, Android's `Rezume.kt`. Live documents: `shared/rzlive.js`; the chooser: `shared/rzpick.js`. Tests:
-`node shared/test/rezume.js`, `node shared/test/rzlive.js`.
+`node shared/test/rezume.js`, `node shared/test/rzlive.js`, `node shared/test/docfind.js`.
