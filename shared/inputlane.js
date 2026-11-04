@@ -67,7 +67,12 @@ function readU64(buf, off) {
   return buf.readUInt32LE(off) + buf.readUInt32LE(off + 4) * 0x100000000;
 }
 
-// One packet: header + sealed body + tag.
+// Scratch for seal/open, which use it synchronously: no nonce buffer per packet. The first four
+// bytes stay zero.
+const NONCE = Buffer.alloc(12);
+
+// One packet: header + sealed body + tag. The packet is new (dgram may still hold it after send);
+// the cipher's own objects are all that's allocated besides (Node can't re-key a GCM cipher).
 function seal(key, type, seq, body) {
   const out = Buffer.allocUnsafe(HDR + body.length + TAG);
   out[0] = MAGIC0;
@@ -75,9 +80,8 @@ function seal(key, type, seq, body) {
   out[2] = VER;
   out[3] = type;
   writeU64(out, 4, seq);
-  const nonce = Buffer.alloc(12);
-  out.copy(nonce, 4, 4, 12);
-  const c = crypto.createCipheriv('aes-256-gcm', key, nonce);
+  out.copy(NONCE, 4, 4, 12);
+  const c = crypto.createCipheriv('aes-256-gcm', key, NONCE);
   c.setAAD(out.subarray(0, HDR));
   const n = c.update(body).copy(out, HDR);
   c.final();
@@ -85,18 +89,23 @@ function seal(key, type, seq, body) {
   return out;
 }
 
-// {type, seq, body} or null (not ours, or not authentic).
-function open(key, pkt) {
+// {type, seq, body} or null (not ours, or not authentic). into: an object to fill instead of a new
+// one (the lane's own, reused for every packet).
+function open(key, pkt, into) {
   if (!Buffer.isBuffer(pkt) || pkt.length < HDR + TAG || pkt.length > MAX_PACKET) return null;
   if (pkt[0] !== MAGIC0 || pkt[1] !== MAGIC1 || pkt[2] !== VER) return null;
-  const nonce = Buffer.alloc(12);
-  pkt.copy(nonce, 4, 4, 12);
+  pkt.copy(NONCE, 4, 4, 12);
   try {
-    const d = crypto.createDecipheriv('aes-256-gcm', key, nonce);
+    const d = crypto.createDecipheriv('aes-256-gcm', key, NONCE);
     d.setAAD(pkt.subarray(0, HDR));
     d.setAuthTag(pkt.subarray(pkt.length - TAG));
-    const body = Buffer.concat([d.update(pkt.subarray(HDR, pkt.length - TAG)), d.final()]);
-    return { type: pkt[3], seq: readU64(pkt, 4), body };
+    const body = d.update(pkt.subarray(HDR, pkt.length - TAG));
+    d.final(); // GCM: nothing more comes out, it only checks the tag
+    const p = into || {};
+    p.type = pkt[3];
+    p.seq = readU64(pkt, 4);
+    p.body = body;
+    return p;
   } catch (_) {
     return null;
   }
@@ -122,8 +131,9 @@ class ReplayWindow {
   }
 }
 
-function encodeMove(s) {
-  const b = Buffer.allocUnsafe(MOVE_BODY);
+// b: a buffer to write into (the lane's scratch: seal copies it out at once), else a new one.
+function encodeMove(s, b) {
+  b = b || Buffer.allocUnsafe(MOVE_BODY);
   b.writeUInt32LE(s.route >>> 0, 0);
   b.writeUInt32LE(s.mn >>> 0, 4);
   b.writeUInt32LE((s.es || 0) >>> 0, 8);
@@ -132,10 +142,29 @@ function encodeMove(s) {
   return b;
 }
 
-function decodeMove(b) {
+// into: an object to fill instead of a new one (the lane's own, reused for every packet).
+function decodeMove(b, into) {
   if (b.length !== MOVE_BODY) return null;
-  const s = { route: b.readUInt32LE(0), mn: b.readUInt32LE(4), es: b.readUInt32LE(8), cx: b.readDoubleLE(12), cy: b.readDoubleLE(20) };
-  return Number.isFinite(s.cx) && Number.isFinite(s.cy) ? s : null;
+  const cx = b.readDoubleLE(12);
+  const cy = b.readDoubleLE(20);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  const s = into || {};
+  s.route = b.readUInt32LE(0);
+  s.mn = b.readUInt32LE(4);
+  s.es = b.readUInt32LE(8);
+  s.cx = cx;
+  s.cy = cy;
+  return s;
+}
+
+const newMove = () => ({ route: 0, mn: 0, es: 0, cx: 0, cy: 0 });
+function copyMove(to, s) {
+  to.route = s.route >>> 0;
+  to.mn = s.mn;
+  to.es = s.es || 0;
+  to.cx = s.cx;
+  to.cy = s.cy;
+  return to;
 }
 
 // events: [{es, json: Buffer}], newest last. As many of the newest as fit.
@@ -199,13 +228,32 @@ class InputLane extends EventEmitter {
     this.pingTimer = null;
     this.lastPong = 0;
     this.pingEvery = PING_UP_MS;
-    this.move = null; // the latest move to send: {s, sentAt}
+    this.move = null; // the latest totals to send (this.mv while there are any)
     this.moveAt = 0;
     this.moveTimer = null;
     this.events = []; // the last few sent: [{es, json}]
-    this.tails = { move: [], events: [] };
     this.sent = 0;
     this.received = 0;
+    // Nothing is allocated per move in JS (besides the packet and its cipher): the totals, the move's
+    // body, a ping's body, the packet opened and the move received are these, reused; the throttle and
+    // the tail resends are timers made once and refresh()ed, their callbacks bound once.
+    this.mv = newMove();
+    this.rxMove = newMove(); // 'move' hands this one out: a listener copies it to keep it
+    this.rxPkt = { type: 0, seq: 0, body: null };
+    this.moveBody = Buffer.allocUnsafe(MOVE_BODY);
+    this.pingBody = Buffer.allocUnsafe(8);
+    this._flushMoveNow = () => {
+      this.moveTimer = null;
+      this._flushMove();
+    };
+    this._moveTimers = [null, null]; // 1 ms and 2 ms (the throttle's waits), made once
+    this._resendMove = () => this.move && this.keys && this._send(TYPE.MOVE, encodeMove(this.move, this.moveBody));
+    this._resendEvents = () => {
+      if (!this.keys || !this.events.length) return;
+      const b = encodeEvents(this.events);
+      if (b) this._send(TYPE.EVENTS, b);
+    };
+    this.tails = { move: null, events: null }; // [timer per TAIL_MS], made once
   }
 
   // ---- P3: the helper's native lane (native/tdfast) behind this same object ----
@@ -230,7 +278,6 @@ class InputLane extends EventEmitter {
       if (!port || this.keys) return false;
       this.nat = helper;
       this.native = true;
-      this.natEvents = r.events === 1; // the helper injects clicks and wheel from the lane itself (claim)
       if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
       this.sock = null;
       this.port = port;
@@ -263,7 +310,6 @@ class InputLane extends EventEmitter {
     if (!this.native) return;
     const helper = this.nat;
     this.native = false;
-    this.natEvents = false;
     this.nat = null;
     this.port = 0;
     this._binding = null;
@@ -371,6 +417,7 @@ class InputLane extends EventEmitter {
     this.lastPong = 0;
     this.rttMs = null;
     this.move = null;
+    this.moveTimer = null;
     this.events = [];
     this.emit('start');
     this._pingLoop(PING_UP_MS);
@@ -394,24 +441,27 @@ class InputLane extends EventEmitter {
   }
 
   // The latest totals ({route, mn, es, cx, cy}): at once, or within MOVE_GAP_MS (always the newest).
+  // Copied (s may be the caller's own totals, which go on changing).
   sendMove(s) {
     if (!this.keys || this.native) return; // native: the helper sends its moves itself
-    this.move = s;
+    this.move = copyMove(this.mv, s);
     if (this.moveTimer) return;
     const wait = MOVE_GAP_MS - (performance.now() - this.moveAt);
     if (wait <= 0) return this._flushMove();
-    this.moveTimer = setTimeout(() => {
-      this.moveTimer = null;
-      this._flushMove();
-    }, Math.ceil(wait));
+    const i = Math.min(Math.ceil(wait), MOVE_GAP_MS) - 1;
+    let t = this._moveTimers[i];
+    if (!t) {
+      t = this._moveTimers[i] = setTimeout(this._flushMoveNow, i + 1);
+      if (t.unref) t.unref();
+    } else t.refresh();
+    this.moveTimer = t;
   }
 
   _flushMove() {
     if (!this.move || !this.keys) return;
     this.moveAt = performance.now();
-    const body = encodeMove(this.move);
-    this._send(TYPE.MOVE, body);
-    this._tail('move', () => this.move && this._send(TYPE.MOVE, encodeMove(this.move)));
+    this._send(TYPE.MOVE, encodeMove(this.move, this.moveBody));
+    this._tail('move', this._resendMove);
   }
 
   // An event message that already has its es: with the few before it, for redundancy.
@@ -426,16 +476,23 @@ class InputLane extends EventEmitter {
     const body = encodeEvents(this.events);
     if (!body) return;
     this._send(TYPE.EVENTS, body);
-    this._tail('events', () => {
-      const b = encodeEvents(this.events);
-      if (b) this._send(TYPE.EVENTS, b);
-    });
+    this._tail('events', this._resendEvents);
   }
 
-  // Send `fn` again after each of TAIL_MS (from now; a newer send starts it again).
+  // Send `fn` again after each of TAIL_MS (from now; a newer send starts it again). The timers are
+  // made once and refresh()ed; never cleared (a cleared one won't refresh), fn checks there's a
+  // session and something to send.
   _tail(kind, fn) {
-    for (const t of this.tails[kind]) clearTimeout(t);
-    this.tails[kind] = TAIL_MS.map((ms) => setTimeout(fn, ms));
+    const ts = this.tails[kind];
+    if (ts) {
+      for (const t of ts) t.refresh();
+      return;
+    }
+    this.tails[kind] = TAIL_MS.map((ms) => {
+      const t = setTimeout(fn, ms);
+      if (t.unref) t.unref();
+      return t;
+    });
   }
 
   _send(type, body) {
@@ -454,12 +511,11 @@ class InputLane extends EventEmitter {
     const ping = () => {
       if (!this.keys) return;
       if (this.up && performance.now() - this.lastPong > DOWN_AFTER * this.pingEvery + 50) this._setUp(false);
-      const b = Buffer.allocUnsafe(8);
-      writeU64(b, 0, nowUs());
-      this._send(TYPE.PING, b);
+      writeU64(this.pingBody, 0, nowUs());
+      this._send(TYPE.PING, this.pingBody);
       // Driving: the latest totals again with each ping, so the pointer ends in the right place
       // even when a move and both its resends were lost.
-      if (this.up && this.isActive && this.move && performance.now() - this.moveAt < RESEND_FOR_MS) this._send(TYPE.MOVE, encodeMove(this.move));
+      if (this.up && this.isActive && this.move && performance.now() - this.moveAt < RESEND_FOR_MS) this._send(TYPE.MOVE, encodeMove(this.move, this.moveBody));
     };
     this.pingTimer = setInterval(ping, ms);
     if (this.pingTimer.unref) this.pingTimer.unref();
@@ -477,7 +533,7 @@ class InputLane extends EventEmitter {
 
   _onPacket(pkt, rinfo) {
     if (!this.keys) return;
-    const p = open(this.keys.rx, pkt);
+    const p = open(this.keys.rx, pkt, this.rxPkt);
     if (!p || !this.win.ok(p.seq)) return;
     this.win.mark(p.seq);
     this.received++;
@@ -496,8 +552,8 @@ class InputLane extends EventEmitter {
         break;
       }
       case TYPE.MOVE: {
-        const s = decodeMove(p.body);
-        if (s) this.emit('move', s);
+        const s = decodeMove(p.body, this.rxMove);
+        if (s) this.emit('move', s); // reused for the next one: copy it to keep it
         break;
       }
       case TYPE.EVENTS:
@@ -510,9 +566,8 @@ class InputLane extends EventEmitter {
   stop() {
     if (this.native && this.keys) this.nativeSend('stop');
     clearInterval(this.pingTimer);
-    clearTimeout(this.moveTimer);
-    for (const k of Object.keys(this.tails)) for (const t of this.tails[k]) clearTimeout(t);
-    this.tails = { move: [], events: [] };
+    // The throttle's and the tails' timers stay (refresh()ed by the next session); with no keys and no
+    // move they send nothing when they fire.
     this.pingTimer = null;
     this.moveTimer = null;
     const was = this.up;
@@ -552,10 +607,16 @@ class MoveTotals {
   }
 
   add(dx, dy) {
+    this.step(dx, dy);
+    return this.current();
+  }
+
+  // add() without a new object: these totals themselves ({route, mn, es, cx, cy}), which go on changing.
+  step(dx, dy) {
     this.mn++;
     this.cx += Number(dx) || 0;
     this.cy += Number(dy) || 0;
-    return this.current();
+    return this;
   }
 
   current() {
@@ -574,15 +635,23 @@ class MoveApply {
     this.mn = 0;
     this.cx = 0;
     this.cy = 0;
+    this.dx = 0;
+    this.dy = 0;
   }
 
   take(s) {
-    if (!s || (s.route >>> 0) !== this.route || !(s.mn > this.mn)) return null;
-    const d = { dx: s.cx - this.cx, dy: s.cy - this.cy };
+    return this.apply(s) ? { dx: this.dx, dy: this.dy } : null;
+  }
+
+  // take() without a new object: true when s is new, its delta in this.dx, this.dy.
+  apply(s) {
+    if (!s || (s.route >>> 0) !== this.route || !(s.mn > this.mn)) return false;
+    this.dx = s.cx - this.cx;
+    this.dy = s.cy - this.cy;
     this.mn = s.mn;
     this.cx = s.cx;
     this.cy = s.cy;
-    return d;
+    return true;
   }
 }
 
@@ -651,7 +720,7 @@ class LaneDrive {
       return true;
     }
     this.t.es = lane.es; // the last event numbered on this lane (a new session starts again at 0)
-    const s = this.t.add(dx, dy);
+    const s = this.t.step(dx, dy); // sendMove copies it: nothing new per move
     if (lane.up) lane.sendMove(s);
     else sendWss({ t: 'k.mm', dx, dy, route: s.route, mn: s.mn, mc: [s.cx, s.cy] });
     return true;
@@ -664,10 +733,6 @@ class LaneDrive {
     if (!lane) return sendWss(msg);
     if (lane.native) { // numbered and fenced by the helper's tap (none: it wasn't driving on the lane)
       if (!Number.isInteger(msg.es)) return sendWss(msg);
-      if (msg.sent) { // a click or wheel the helper put on the lane itself: only its WSS copy here
-        const { sent, ...m } = msg; // eslint-disable-line no-unused-vars
-        return sendWss(m);
-      }
       sendWss(msg);
       if (lane.up) lane.sendEvent(msg);
       return;
@@ -688,7 +753,7 @@ class LaneDrive {
     if (!lane || !lane.native || !e || !Number.isInteger(e.es)) return;
     const m = { t: 'k.ku', es: e.es, route: e.route, mn: e.mn, mc: e.mc };
     sendWss(m);
-    if (lane.up && !e.sent) lane.sendEvent(m);
+    if (lane.up) lane.sendEvent(m);
   }
 
   // Moves never wait for the WSS backlog while they go on the lane.
@@ -703,19 +768,17 @@ const fenceOf = (m) => (Number.isInteger(m.mn) && Array.isArray(m.mc) && Number.
 
 // kvm.js glue, driven. o: route() -> the crossing we're driven by; move(dx, dy) -> as a k.mm;
 // deliver(msg) -> a click, key, wheel or gesture, as today; native() -> the lane when it is the
-// helper's (its moves are injected there; fences and done go to it), else null; speed() -> kvm.speed;
-// reverse() -> scrolling reversed. With a helper that can (natEvents), its lane injects clicks and
-// wheel as they come; kvm.js's `_injectEv` sends the others through inject(ev), so whichever copy
-// is first is injected, once.
+// helper's (its moves are injected there; fences and done go to it), else null; speed() -> kvm.speed.
 class LaneDriven {
   constructor(o) {
     this.o = o;
     this.ma = new MoveApply();
     this.eo = new EventOrder();
-    this.held = null; // a move waiting for the event before it
-    this.early = null; // a move for a crossing whose kvm.take hasn't come yet
-    this.es = 0; // the event being delivered (its inject claims it in the helper)
-    this.direct = false; // this crossing's clicks and wheel may be injected by the helper's lane
+    this.held = null; // a move waiting for the event before it (heldS, or null)
+    this.early = null; // a move for a crossing whose kvm.take hasn't come yet (earlyS, or null)
+    // The lane hands out one move object for all; what's kept is copied into these.
+    this.heldS = newMove();
+    this.earlyS = newMove();
   }
 
   // A new session (the lane started again).
@@ -726,31 +789,26 @@ class LaneDriven {
     this.early = null;
   }
 
-  // kvm.take: totals start again; a move that came ahead of it goes now. opts.drag: files come
-  // with this crossing (its button-up drops them: Node handles every click then).
-  take(route, opts = {}) {
+  // kvm.take: totals start again; a move that came ahead of it goes now.
+  take(route) {
     const nat = this.o.native && this.o.native();
-    this.direct = !opts.drag;
-    if (nat) {
-      nat.nativeSend('driven', { route: route >>> 0, speed: this.o.speed ? this.o.speed() : 1 });
-      this.config();
-    }
+    if (nat) nat.nativeSend('driven', { route: route >>> 0, speed: this.o.speed ? this.o.speed() : 1 });
     this.ma.reset(route);
     const e = this.early;
     this.early = null;
     this.held = null;
-    if (e && e.route === (route >>> 0)) this.move(e);
+    if (e && e.route === (route >>> 0)) this.move(e); // heldS is free (held is null): move copies into it, not into earlyS
   }
 
   // Totals from the lane, or from a WSS k.mm that has them.
   move(s) {
     const route = this.o.route() >>> 0;
     if (s.route !== route) {
-      if (s.route > route && (!this.early || this.early.route !== s.route || s.mn > this.early.mn)) this.early = s;
+      if (s.route > route && (!this.early || this.early.route !== s.route || s.mn > this.early.mn)) this.early = copyMove(this.earlyS, s);
       return;
     }
     if (s.es > this.eo.done) {
-      if (!this.held || s.mn > this.held.mn) this.held = s;
+      if (!this.held || s.mn > this.held.mn) this.held = s === this.heldS ? s : copyMove(this.heldS, s);
       return;
     }
     this._apply(s);
@@ -770,8 +828,7 @@ class LaneDriven {
       const f = fenceOf(x);
       if (f && f.route === (this.o.route() >>> 0)) this._apply(f);
       const { es, route, mn, mc, ...msg } = x; // eslint-disable-line no-unused-vars
-      this.es = es;
-      try { this.o.deliver(msg); } finally { this.es = 0; }
+      this.o.deliver(msg);
       const nat = this.o.native && this.o.native();
       if (nat) nat.nativeSend('done', { es }); // a move on the lane that waited for it goes now
     }
@@ -788,22 +845,6 @@ class LaneDriven {
     if (nat) nat.nativeSend('driven', { route: 0, speed: 1 });
   }
 
-  // The helper's lane: clicks and wheel straight from the lane (not with files coming), and the
-  // scroll direction. Again when the settings change.
-  config() {
-    const nat = this.o.native && this.o.native();
-    if (nat && nat.natEvents) nat.nativeSend('direct', { on: this.direct, reverse: !!(this.o.reverse && this.o.reverse()) });
-  }
-
-  // kvm.js's inject for an event being delivered: the helper injects it unless its lane did already.
-  // false: inject it as always.
-  inject(ev) {
-    const nat = this.es && this.o.native && this.o.native();
-    if (!nat || !nat.natEvents) return false;
-    nat.nativeSend('inject', { es: this.es, ev });
-    return true;
-  }
-
   // Drag-in arming (native): the helper holds the lane's moves meanwhile.
   hold(on) {
     const nat = this.o.native && this.o.native();
@@ -813,8 +854,8 @@ class LaneDriven {
   _apply(s) {
     const nat = this.o.native && this.o.native();
     if (nat) return nat.nativeSend('fence', { route: s.route, mn: s.mn, cx: s.cx, cy: s.cy }); // the helper's totals
-    const d = this.ma.take(s);
-    if (d && (d.dx || d.dy)) this.o.move(d.dx, d.dy);
+    const ma = this.ma;
+    if (ma.apply(s) && (ma.dx || ma.dy)) this.o.move(ma.dx, ma.dy);
   }
 }
 

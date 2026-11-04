@@ -13,7 +13,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // One message per turn, summed.
   {
     const out = [];
-    const m = new KvmMoves({ send: (x) => out.push(x) });
+    const m = new KvmMoves({ send: (x) => out.push({ ...x }) });
     m.add(1, 2);
     m.add(3, 4);
     assert.deepStrictEqual(out, [], 'not before the turn ends');
@@ -27,7 +27,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // flush: at once (a click goes after the moves before it); drop: forgotten.
   {
     const out = [];
-    const m = new KvmMoves({ send: (x) => out.push(x) });
+    const m = new KvmMoves({ send: (x) => out.push({ ...x }) });
     m.add(5, 0);
     m.flush();
     assert.deepStrictEqual(out, [{ dx: 5, dy: 0 }]);
@@ -43,7 +43,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   {
     const out = [];
     let backlog = 100000;
-    const m = new KvmMoves({ send: (x) => out.push(x), backlog: () => backlog, limit: () => 16384, maxWait: () => 1000 });
+    const m = new KvmMoves({ send: (x) => out.push({ ...x }), backlog: () => backlog, limit: () => 16384, maxWait: () => 1000 });
     for (let i = 0; i < 50; i++) {
       m.add(1, 0);
       await wait(1);
@@ -57,7 +57,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   // Backed up for good: one goes every maxWait, so the pointer still moves.
   {
     const out = [];
-    const m = new KvmMoves({ send: (x) => out.push(x), backlog: () => 1e6, limit: () => 16384, maxWait: () => 16 });
+    const m = new KvmMoves({ send: (x) => out.push({ ...x }), backlog: () => 1e6, limit: () => 16384, maxWait: () => 16 });
     const end = Date.now() + 200;
     let added = 0; // Windows' timers tick every ~15.6 ms, so how many went in depends on the OS
     while (Date.now() < end) {
@@ -74,7 +74,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   {
     const out = [];
     let backlog = 0;
-    const m = new KvmMoves({ send: (x) => out.push(x), delay: () => 16, backlog: () => backlog, limit: () => 512 });
+    const m = new KvmMoves({ send: (x) => out.push({ ...x }), delay: () => 16, backlog: () => backlog, limit: () => 512 });
     m.add(1, 0);
     await turn();
     assert.strictEqual(out.length, 0, 'waits the delay');

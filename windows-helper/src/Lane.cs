@@ -2,12 +2,10 @@
 // The input lane in the helper (native/tdfast's tdfast.dll, docs/perf-plan.md P3), as mac-helper's
 // Lane.swift: Node out of the move path on both ends. Driving: the hook's moves go straight onto the
 // lane (td_move) and nothing is written to stdout; clicks, keys, wheel and gestures carry their event
-// number and fence for Node, and clicks and wheel go onto the lane from here too ("sent"). Driven: the
-// lane's moves are injected here (deduplicated, speed applied, after the event they wait for), and so
-// are its clicks and wheel when they're next in order (`direct`); every event also goes to Node as
-// {"event":"laneEv"}, and what Node injects comes back as `lane inject`, injected only if the lane
-// didn't already (td_claim). Command `lane {op: bind | start | stop | active | route | event | driven |
-// direct | hold | fence | done | inject}`. Without tdfast.dll next to the .exe, `lane` fails (DllNotFoundException) and Node
+// number and fence for Node. Driven: the lane's moves are injected here (deduplicated, speed applied,
+// after the event they wait for); its events go to Node as {"event":"laneEv"} and come back as
+// `inject` in order. Command `lane {op: bind | start | stop | active | route | event | driven | hold |
+// fence | done}`. Without tdfast.dll next to the .exe, `lane` fails (DllNotFoundException) and Node
 // keeps its own lane (shared/inputlane.js), which speaks the same wire.
 using System;
 using System.Collections.Generic;
@@ -22,7 +20,7 @@ namespace MacShare
 {
     static class Lane
     {
-        const int TD_MOVE = 1, TD_EVENT = 2, TD_UP = 3, TD_DOWN = 4, TD_BUTTON = 5, TD_WHEEL = 6, WHEEL_LINE = 7;
+        const int TD_MOVE = 1, TD_EVENT = 2, TD_UP = 3, TD_DOWN = 4;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         delegate void Callback(IntPtr ctx, int kind, double dx, double dy, IntPtr json, UIntPtr len);
@@ -40,15 +38,11 @@ namespace MacShare
         [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_hold(int on);
         [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern int td_fence_apply(uint route, uint mn, double cx, double cy, out double dx, out double dy);
         [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_done(uint es);
-        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern int td_claim(uint es);
-        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_direct(int on, int reverse);
 
         static readonly Callback callback = OnLane; // kept alive: the lane's thread calls it
         static readonly JavaScriptSerializer json = new JavaScriptSerializer();
         static readonly HashSet<string> fenced = new HashSet<string> { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" };
-        static readonly HashSet<string> direct = new HashSet<string> { "k.md", "k.mu", "k.wh" };
         static Action<double, double> inject;
-        static Action<Dictionary<string, object>> injectEv;
         static Action<Dictionary<string, object>> emit;
         static volatile bool driving;
         static bool started, loaded;
@@ -56,11 +50,9 @@ namespace MacShare
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
 
         // On the UI thread, before Application.Run: the window that receives the lane's moves is its.
-        // move: a move from the lane; ev: a click or wheel from it, or an event Node delivers (`inject`).
-        public static void Init(Action<double, double> move, Action<Dictionary<string, object>> ev, Action<Dictionary<string, object>> emitter)
+        public static void Init(Action<double, double> move, Action<Dictionary<string, object>> emitter)
         {
             inject = move;
-            injectEv = ev;
             emit = emitter;
             sink = new Sink();
             if (Environment.GetEnvironmentVariable("TWINDESK_NO_TDFAST") != null) return;
@@ -76,7 +68,7 @@ namespace MacShare
             return v <= 0 ? 0 : v >= uint.MaxValue ? uint.MaxValue : (uint)v;
         }
 
-        // On the UI thread. Reply fields go into c (Program copies "port" and "events").
+        // On the UI thread. Reply fields go into c (Program copies "port").
         public static void Handle(Dictionary<string, object> c)
         {
             string op = Json.Str(c, "op", "");
@@ -87,7 +79,6 @@ namespace MacShare
                     ushort port = td_bind();
                     if (port == 0) throw new Exception("no lane socket");
                     c["port"] = (int)port;
-                    c["events"] = 1; // `direct` and `inject`: clicks and wheel from the lane
                     break;
                 case "start":
                     string key = Json.Str(c, "key", null), ip = Json.Str(c, "ip", null);
@@ -112,11 +103,6 @@ namespace MacShare
                     td_send_event(b, (UIntPtr)b.Length, U32(c, "es"));
                     break;
                 case "driven": td_driven(U32(c, "route"), Json.Num(c, "speed", 1)); break;
-                case "direct": td_direct(Json.Bool(c, "on", false) ? 1 : 0, Json.Bool(c, "reverse", false) ? 1 : 0); break;
-                case "inject": // once, unless the lane injected it already
-                    Dictionary<string, object> ev = Json.Obj(c, "ev");
-                    if (ev != null && td_claim(U32(c, "es")) == 1) injectEv(ev);
-                    break;
                 case "hold": td_hold(Json.Bool(c, "on", false) ? 1 : 0); break;
                 case "fence":
                     double fx, fy;
@@ -146,9 +132,7 @@ namespace MacShare
             k["mc"] = new double[] { cx, cy };
         }
 
-        // A click, key, wheel or gesture: numbered, with where the moves before it took the pointer. A
-        // click or wheel goes onto the lane from here too, without waiting for Node (no layout to apply):
-        // "sent", Node sends only its WSS copy.
+        // A click, key, wheel or gesture: numbered, with where the moves before it took the pointer.
         public static void Fence(Dictionary<string, object> k)
         {
             object t;
@@ -163,20 +147,9 @@ namespace MacShare
             k["route"] = (double)r;
             k["mn"] = (double)mn;
             k["mc"] = new double[] { cx, cy };
-            if (!direct.Contains((string)t)) return;
-            Dictionary<string, object> m = new Dictionary<string, object>(k);
-            m.Remove("es");
-            try
-            {
-                byte[] b = Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(m)); // its own: this is the hook's thread
-                td_send_event(b, (UIntPtr)b.Length, es);
-                k["sent"] = true;
-            }
-            catch (Exception) { }
         }
 
-        // The lane's thread: moves, clicks and wheel are injected on the UI thread, in order with stdin's
-        // `inject` and `fence`.
+        // The lane's thread: moves are injected on the UI thread, in order with stdin's `inject` and `fence`.
         static void OnLane(IntPtr ctx, int kind, double dx, double dy, IntPtr ptr, UIntPtr len)
         {
             try
@@ -184,11 +157,7 @@ namespace MacShare
                 switch (kind)
                 {
                     case TD_MOVE:
-                    case TD_BUTTON:
-                        Queue(kind, dx, dy);
-                        break;
-                    case TD_WHEEL:
-                        Queue(len.ToUInt32() == 1 ? WHEEL_LINE : TD_WHEEL, dx, dy);
+                        Queue(dx, dy);
                         break;
                     case TD_EVENT:
                         int n = (int)len.ToUInt32();
@@ -217,12 +186,11 @@ namespace MacShare
             catch (Exception) { /* never throw into the lane's thread */ }
         }
 
-        // The lane's moves to the UI thread without allocating: a fixed ring of {kind, dx, dy}, and one
-        // posted message to a message-only window per batch (not a delegate per move, as BeginInvoke
-        // would be). Clicks and wheel take their place in it, in order with the moves.
+        // The lane's moves to the UI thread without allocating: a fixed ring, and one posted message
+        // to a message-only window per batch (not a delegate per move, as BeginInvoke would be).
         const int RING = 1024;
         const uint WM_LANE = 0x8000 + 0x4C; // WM_APP + 'L'
-        static readonly double[] ring = new double[RING * 3];
+        static readonly double[] ring = new double[RING * 2];
         static readonly object ringGate = new object();
         static int head, tail, posted;
         static Sink sink;
@@ -245,23 +213,22 @@ namespace MacShare
             }
         }
 
-        static void Queue(int kind, double dx, double dy)
+        static void Queue(double dx, double dy)
         {
             lock (ringGate)
             {
                 if (head - tail < RING)
                 {
-                    int i = (head % RING) * 3;
-                    ring[i] = kind;
-                    ring[i + 1] = dx;
-                    ring[i + 2] = dy;
+                    int i = (head % RING) * 2;
+                    ring[i] = dx;
+                    ring[i + 1] = dy;
                     head++;
                 }
-                else if (kind == TD_MOVE && ring[((head - 1) % RING) * 3] == TD_MOVE) // full (the UI thread is stuck): add to the newest move
+                else // full (the UI thread is stuck): add to the newest, nothing is lost
                 {
-                    int i = ((head - 1) % RING) * 3;
-                    ring[i + 1] += dx;
-                    ring[i + 2] += dy;
+                    int i = ((head - 1) % RING) * 2;
+                    ring[i] += dx;
+                    ring[i + 1] += dy;
                 }
             }
             if (sink != null && Interlocked.Exchange(ref posted, 1) == 0) PostMessage(sink.Handle, WM_LANE, IntPtr.Zero, IntPtr.Zero);
@@ -272,32 +239,16 @@ namespace MacShare
             Interlocked.Exchange(ref posted, 0); // a move from now on posts again
             for (;;)
             {
-                int kind;
                 double dx, dy;
                 lock (ringGate)
                 {
                     if (tail == head) return;
-                    int i = (tail % RING) * 3;
-                    kind = (int)ring[i];
-                    dx = ring[i + 1];
-                    dy = ring[i + 2];
+                    int i = (tail % RING) * 2;
+                    dx = ring[i];
+                    dy = ring[i + 1];
                     tail++;
                 }
-                if (kind == TD_MOVE) { inject(dx, dy); continue; }
-                Dictionary<string, object> ev = new Dictionary<string, object>();
-                if (kind == TD_BUTTON)
-                {
-                    ev["t"] = dy != 0 ? "k.md" : "k.mu";
-                    ev["b"] = dx;
-                }
-                else
-                {
-                    ev["t"] = "k.wh";
-                    ev["dx"] = dx;
-                    ev["dy"] = dy;
-                    ev["mode"] = kind == WHEEL_LINE ? "line" : "pixel";
-                }
-                injectEv(ev);
+                inject(dx, dy);
             }
         }
     }

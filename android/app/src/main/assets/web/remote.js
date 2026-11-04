@@ -13,6 +13,8 @@
 
 (() => {
   const send = (m) => TD.send(JSON.stringify(m));
+  // Moves and wheel steps straight to the socket (WebHost's TD.move): no object or JSON per frame.
+  const hot = typeof TD.move === 'function';
   const tick = () => { try { TD.tick(); } catch (_) { /* older app */ } };
   const $ = (id) => document.getElementById(id);
   let opts = { mode: 'pad', name: 'the computer', me: 'this device', connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
@@ -130,12 +132,14 @@
     const dx = Math.trunc(mx), dy = Math.trunc(my);
     if (dx || dy) {
       mx -= dx; my -= dy; // keep the fractions for the next frame
-      send({ t: 'remote.mm', dx, dy, smooth: opts.smooth !== false });
+      if (hot) TD.move(0, dx, dy, opts.smooth !== false);
+      else send({ t: 'remote.mm', dx, dy, smooth: opts.smooth !== false });
     }
     const sx = Math.round(wx), sy = Math.round(wy);
     if (sx || sy) {
       wx -= sx; wy -= sy;
-      send({ t: 'remote.wh', dx: sx, dy: sy });
+      if (hot) TD.move(1, sx, sy, false);
+      else send({ t: 'remote.wh', dx: sx, dy: sy });
     }
   }
   function queue() {
