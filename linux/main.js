@@ -361,7 +361,7 @@ function start() {
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
   kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
-    if (!wid || peerApps.returnWindow(wid) || apps.returnWindow(wid)) return; // a Mac's window here goes home (apps.js)
+    if (!wid || peerApps.returnWindow(wid)) return;
     if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
   };
   helper.on('exit', pushState);

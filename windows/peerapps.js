@@ -36,7 +36,7 @@ class PeerApps {
       this._sync([]);
     });
     link.on(T.PAPPS_RESULT, (m) => {
-      if (!this.active) return;
+      if (!this.appsHere) return;
       this.loading = false;
       const str = (v, n) => String(v == null ? '' : v).slice(0, n);
       this.list = (Array.isArray(m.apps) ? m.apps : []).filter((a) => a && a.id != null)
@@ -44,12 +44,12 @@ class PeerApps {
       this.onChange();
     });
     link.on(T.PAPP_LAUNCHED, (m) => {
-      if (!this.active || m.ok) return;
+      if (!this.appsHere || m.ok) return;
       const a = this.list.find((x) => x.id === String(m.id));
       this.message = 'Couldn’t open ' + (a ? a.name : 'the app') + (m.why ? ': ' + m.why : '');
       this.onChange();
     });
-    link.on(T.PAPP_WINDOWS, (m) => this.active && this.accepting && Array.isArray(m.windows) && this._sync(m.windows));
+    link.on(T.PAPP_WINDOWS, (m) => this.active && this.accepting && Array.isArray(m.windows) && this._sync(this.fromMac ? movedOnly(m.windows) : m.windows));
     link.on(T.RTC2_OFFER, (m) => this._onOffer(m));
     link.on(T.RTC2_ICE, (m) => {
       if (m.win !== 'send') return; // our own sender's sessions (sender.js)
@@ -84,10 +84,19 @@ class PeerApps {
     return this.settings.macApps;
   }
 
-  // Any computer on the other end. A Mac lists its apps through apps.js, and its windows come here.
-  // A PC or a Linux computer on the other end (a Mac sends its own apps, and ReZume / moved windows, with apps.js).
+  // Any computer on the other end: its windows come here. A Mac's apps don't (it opens them with
+  // apps.js, as always): from a Mac only the windows moved here with Move windows.
   get active() {
-    return this.link.status.state === 'connected' && this.link.peerOs !== P.OS.MAC;
+    return this.link.status.state === 'connected';
+  }
+
+  get fromMac() {
+    return this.link.peerOs === P.OS.MAC;
+  }
+
+  // Its apps listed and opened here: a PC or a Linux computer only.
+  get appsHere() {
+    return this.active && !this.fromMac;
   }
 
   // Windows ReZume took from the other computer come too, with this tab's switch off (rezume.js take).
@@ -99,7 +108,9 @@ class PeerApps {
   }
 
   get accepting() {
-    return !!this.cfg.on || this.rz === true || !!(this.settings.pcApps && this.settings.pcApps.moveWindows); // Move windows takes the windows moved here too
+    const moves = !!(this.settings.pcApps && this.settings.pcApps.moveWindows); // Move windows takes the windows moved here too
+    if (this.fromMac) return moves; // a Mac's apps and ReZume windows come through apps.js
+    return !!this.cfg.on || this.rz === true || moves;
   }
 
   _policy() {
@@ -115,12 +126,12 @@ class PeerApps {
   }
 
   refresh() {
-    if (!this.active || !this.cfg.on) return;
+    if (!this.appsHere || !this.cfg.on) return;
     if (this.link.send({ t: T.PAPPS_LIST })) { this.loading = true; this.onChange(); }
   }
 
   launch(id) {
-    if (!this.active || !this.cfg.on || typeof id !== 'string') return;
+    if (!this.appsHere || !this.cfg.on || typeof id !== 'string') return;
     const a = this.list.find((x) => x.id === id);
     this.message = '';
     this.popup('away', { key: 'Opening {app} on {name}…', vars: { app: a ? a.name : { key: 'the app' }, name: this.peerName() } });
@@ -367,6 +378,12 @@ function attachKeys(win, { send, enabled }) {
     }
   });
   return { release: () => { for (const c of [...held]) { held.delete(c); send({ t: T.IN_KEY_UP, code: c }); } } };
+}
+
+// A Mac's papp.windows: only the windows moved here (Move windows) and their pop-ups.
+function movedOnly(list) {
+  const moved = new Set(list.filter((w) => w && w.moved === true && !w.popup).map((w) => Number(w.wid)));
+  return list.filter((w) => w && (moved.has(Number(w.wid)) || (w.popup && moved.has(Number(w.owner)))));
 }
 
 module.exports = PeerApps;
