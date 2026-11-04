@@ -167,6 +167,7 @@ class AppSend extends EventEmitter {
     const a = w && this.launched.get(w.id);
     if (!a || !a.rz) return false;
     a.skip.add(wid);
+    this.helper.request('appFocus', { wid }).catch(() => {}); // back to the front here (it never left this screen)
     return true;
   }
 
