@@ -9,7 +9,7 @@ UI.tab({
   id: 'apps',
   hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
   order: 80,
-  title: 'Apps',
+  title: 'Apps and Windows',
   color: 'linear-gradient(#bf5af2, #5e5ce6)',
   desc: 'Use apps from the other computer in their own windows.',
   master: { get: (s) => s.macApps.on || s.pcApps.allow, set: (v) => { UI.api.setMacApps({ on: v }); UI.api.setPcApps({ allow: v }); } },
@@ -37,15 +37,29 @@ UI.tab({
       { on: { get: (s) => s.macApps.on, set: (v) => api.setMacApps({ on: v }) }, label: t('Open {name}’s apps on {me}'), hint: t('Pick one below'), rows: [openCount] },
       { on: { get: (s) => s.pcApps.allow, set: (v) => api.setPcApps({ allow: v }) }, label: t('Open {me}’s apps on {name}'), hint: t('Pick them over there'), rows: [pcState] },
     );
+    // Move windows (shared/movewin.js): the key held, a window clicked and dragged past the shared
+    // edge moves to the other computer (and back the same way). Off: nothing of it is loaded.
+    const MOVE_KEYS = [['ControlRight', t('Right Ctrl')], ['ControlLeft', t('Left Ctrl')], ['AltRight', t('Right Alt')], ['AltLeft', t('Left Alt')],
+      ['ShiftRight', t('Right Shift')], ['ShiftLeft', t('Left Shift')], ['MetaRight', t('Right Super')], ['MetaLeft', t('Left Super')]];
+    const moveSw = UI.switch((v) => api.setPcApps({ moveWindows: v }), { label: t('Move windows') });
+    const moveKey = UI.select(MOVE_KEYS.map(([value, label]) => ({ value, label })), (v) => api.setPcApps({ moveKey: v }));
+    const moveKeyRow = UI.row(t('Key to hold'), t('Hold it, then click anywhere in a window and drag'), [moveKey]);
+    const moveCard = UI.card(t('Move windows'), [
+      UI.row(t('Move windows to {name}'), t('Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home'), [moveSw]),
+      moveKeyRow,
+    ]);
     const listCard = UI.card(t('Mac apps'), [UI.row(t('Search'), '', [filter]), grid, status], { actions: [refresh] });
     const rezume = UI.rezumeCard ? UI.rezumeCard() : { el: UI.el('div', { hidden: true }), update() {} }; // the other computer's ReZume (shared/ui-rezume.js; not in Multi-device)
-    body.append(pair.el, rezume.el, note, listCard);
+    body.append(pair.el, moveCard, rezume.el, note, listCard);
     filter.oninput = () => { key = ''; if (UI.state) render(UI.state); };
 
     let key = '';
     let asked = false;
     function render(s) {
       rezume.update(s);
+      moveSw.set(!!s.pcApps.moveWindows);
+      moveKey.set(s.pcApps.moveKey || 'ControlRight');
+      moveKeyRow.hidden = !s.pcApps.moveWindows;
       const a = s.apps;
       const connected = s.link.state === 'connected';
       pair.update(s); // the two direction switches follow the settings

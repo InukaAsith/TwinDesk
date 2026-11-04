@@ -271,6 +271,126 @@ namespace MacShare
             PostMessage(Handle(wid), WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
 
+        // ---- moving a window to another computer (pcapps.js, Apps and Windows › Move windows) ----
+        // The move key held (Right Ctrl unless another is chosen), a click on a window grabs it: the
+        // click never reaches the app, and the window follows the pointer until the button is let go.
+        // If the pointer crosses to another computer meanwhile, the window goes with it (the edge or
+        // return event carries `moving`). Input injected from the other computer grabs the same way.
+
+        const uint WM_CANCELMODE = 0x1F, SWP_NOSIZE = 1, SWP_ASYNCWINDOWPOS = 0x4000;
+
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
+        [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr GetShellWindow();
+
+        public static uint[] MoveVks = new uint[0]; // the move key's virtual keys; empty: moving is off
+        public static string MoveKeyName = "";
+        static IntPtr grab = IntPtr.Zero; // the window that follows the pointer
+        static int grabDx, grabDy; // the pointer's place in it
+        static bool grabUp; // the left button's release is swallowed (its press was)
+        static readonly uint ownPid = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+
+        public static bool Grabbing { get { return grab != IntPtr.Zero; } }
+        public static bool GrabUpPending { get { return grabUp; } }
+
+        static bool MoveKeyHeld()
+        {
+            foreach (uint vk in MoveVks) if ((Native.GetAsyncKeyState((int)vk) & 0x8000) != 0) return true;
+            return false;
+        }
+
+        // The left button went down at x, y. True: a window was grabbed and the click is swallowed.
+        public static bool TryGrab(int x, int y)
+        {
+            if (MoveVks.Length == 0 || grab != IntPtr.Zero || !MoveKeyHeld()) return false;
+            IntPtr h = WindowFromPoint(new Native.POINT(x, y));
+            if (h == IntPtr.Zero) return false;
+            h = GetAncestor(h, GA_ROOT);
+            if (h == IntPtr.Zero || h == GetShellWindow() || !IsWindowVisible(h)) return false;
+            uint pid;
+            GetWindowThreadProcessId(h, out pid);
+            if (pid == ownPid) return false;
+            StringBuilder cls = new StringBuilder(64);
+            GetClassName(h, cls, 64);
+            string c = cls.ToString();
+            if (c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd" || c == "Progman" || c == "WorkerW" || c == "NotifyIconOverflowWindow") return false;
+            if ((GetWindowLong(h, GWL_STYLE) & WS_CHILD) != 0) return false;
+            RECT r;
+            if (IsZoomed(h))
+            {
+                // A maximized window comes off the screen's size first; the pointer ends up on its title bar.
+                ShowWindow(h, SW_RESTORE);
+                GetWindowRect(h, out r);
+                grabDx = (r.right - r.left) / 2;
+                grabDy = 16;
+            }
+            else
+            {
+                GetWindowRect(h, out r);
+                grabDx = x - r.left;
+                grabDy = y - r.top;
+            }
+            grab = h;
+            grabUp = true;
+            SetForegroundWindow(h);
+            GrabMove(x, y);
+            return true;
+        }
+
+        // The pointer moved to x, y: the grabbed window follows (asynchronously: the hook never waits on the app).
+        public static void GrabMove(int x, int y)
+        {
+            if (grab == IntPtr.Zero) return;
+            if (!IsWindow(grab)) { grab = IntPtr.Zero; return; }
+            SetWindowPos(grab, IntPtr.Zero, x - grabDx, y - grabDy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+        }
+
+        // The left button came up: the grab ends. True: the release is swallowed, as its press was.
+        public static bool GrabUp()
+        {
+            bool was = grabUp;
+            grab = IntPtr.Zero;
+            grabUp = false;
+            return was;
+        }
+
+        // The pointer crossed to another computer: a grabbed window goes in the event (main moves it),
+        // and the grab ends. keepUp: the button is still down here (the home side, whose release comes
+        // later and is swallowed); on the driven side the release never comes.
+        public static void AddMoving(Dictionary<string, object> d, bool keepUp)
+        {
+            if (grab == IntPtr.Zero) return;
+            d["moving"] = grab.ToInt64();
+            grab = IntPtr.Zero;
+            if (!keepUp) grabUp = false;
+        }
+
+        // That drag ends where it is (a title-bar move loop leaves on WM_CANCELMODE).
+        public static void EndMove(double wid)
+        {
+            PostMessage(Handle(wid), WM_CANCELMODE, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        // Out of sight past every screen, still shown: a minimized window has no picture to send.
+        public static void Park(double wid)
+        {
+            IntPtr h = Handle(wid);
+            if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+            Rectangle vs = System.Windows.Forms.SystemInformation.VirtualScreen;
+            SetWindowPos(h, IntPtr.Zero, vs.Right + 200, vs.Top + 40, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+
+        // Back with its visible frame's top left at x, y (physical px, as List gives them), in front.
+        public static void Place(double wid, int x, int y)
+        {
+            IntPtr h = Handle(wid);
+            RECT outer, vis;
+            GetWindowRect(h, out outer);
+            if (!Frame(h, out vis)) vis = outer;
+            SetWindowPos(h, IntPtr.Zero, x - (vis.left - outer.left), y - (vis.top - outer.top), 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            Raise(wid);
+        }
+
         // w × h = the visible frame (as in List); the invisible resize borders are added back.
         public static void Resize(double wid, int w, int h)
         {

@@ -21,11 +21,13 @@ UI.tab({
     const sendRow = UI.row(I18n.t('Play {me}’s sound on {name}'), '', [sendSw], { literalHint: true });
     const recvRow = UI.row(I18n.t('Play {name}’s sound on {me}'), '', [recvSw], { literalHint: true });
     const phoneCard = UI.phoneAudioCard(); // a phone: its media controls on Overview
+    const micCard = UI.micCard ? UI.micCard() : null; // Microphone, each way (shared/ui-mic.js)
     body.append(
       UI.pair(
         UI.dir('m2w', [sendRow, UI.row(I18n.t('Mute {me} while sending'), '', [mute])]),
         UI.dir('w2m', [recvRow, UI.row(I18n.t('Volume'), '', [vol])]),
       ),
+      ...(micCard ? [micCard.el] : []),
       phoneCard.el,
     );
     const live = (x) => x && x.status === 'live';
@@ -33,6 +35,7 @@ UI.tab({
       const a = s.audio;
       if (!a) return;
       phoneCard.update(s);
+      if (micCard) { micCard.update(s); }
       sendSw.set(a.send);
       mute.set(a.muteLocal);
       recvSw.set(a.receive);

@@ -27,6 +27,7 @@ const clamp = (lo, hi, dflt) => (v) => {
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt;
 };
 const oneOf = (list, dflt) => (v) => (list.includes(v) ? v : dflt);
+const devId = (v) => (typeof v === 'string' ? v.slice(0, 200) : ''); // an audio device's id (shared/mic.js)
 // A global shortcut: at least Control, Option or Command, plus one key (Electron accelerator).
 const KEY = /^(?:(?:Control|Alt|Shift|Command)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Tab|Backspace|Delete|Enter|Up|Down|Left|Right|[`\-=[\];',./\\])$/;
 const accel = (dflt) => (v) => (typeof v === 'string' && KEY.test(v) && /Control|Alt|Command/.test(v) ? v : dflt);
@@ -41,12 +42,12 @@ const SCHEMA = {
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac) },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp') },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
-  audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool },
+  audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
   notifs: { send: bool, receive: bool, hideText: bool },
   smb: { connectPc: bool },
-  apps: { offer: bool },
+  apps: { offer: bool, moveWindows: bool, moveKey: oneOf(['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'], 'ControlRight') }, // moveWindows: Apps and Windows › Move windows (movewin.js)
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth'], 'fast'), codec: oneOf(['h264', 'h265'], 'h264') },
   papps: { on: bool },
@@ -407,6 +408,7 @@ function setupIpc(ctx) {
       setGroup('apps', partial);
       ctx.apps.applySettings();
       ctx.appSend.applySettings();
+      if (ctx.pcApps) ctx.pcApps.applySettings(); // Move windows: it takes moved windows too
     },
     setReceive(partial) {
       setGroup('receive', partial);
@@ -468,6 +470,9 @@ function setupIpc(ctx) {
     setAudio(partial) {
       setGroup('audio', partial);
       ctx.audio.applySettings();
+      const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
+      if (mic) mic.apply();
+      if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
       // Loaded when first turned on; off, the loaded one stops.
       const np = partial && 'phoneMedia' in partial && ctx.loadNowPlaying ? ctx.loadNowPlaying() : null;
       if (np) np.apply();

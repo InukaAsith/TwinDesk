@@ -594,6 +594,7 @@ static void on_key(int ev, int down) {
 static void on_button(int xb, int down) {
   if (xb < 0 || xb >= 32) return;
   if (xb == 1) { leftDown = down; if (!down && soft) softUp = 1; }
+  if (xb == 1 && !down && wins_move_eat_up()) return; // Move windows' grab had the press (wins.c)
   if (xb == 1 && !down && watchRel && !capturing) { watchRel = 0; emit("{\"event\":\"released\"}"); }
   if (!down && swallowButtons[xb]) { swallowButtons[xb] = 0; release_grabs(); return; }
   if (down && !capturing && xb >= 1 && xb <= 3 && local_note(0, 0, 1)) retArmed = 0; // a click here while driven
@@ -642,6 +643,7 @@ void capture_feed_return(int x, int y, double dx, double dy) {
     JOut o;
     jo_begin(&o);
     jo_str(&o, "event", "return");
+    { unsigned long mw = wins_move_take(0); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
     jo_str(&o, "side", side_name(s));
     jo_num(&o, "offset", round(screens_offset(x, y, s) * 10000) / 10000);
     emit(jo_end(&o));
@@ -651,7 +653,7 @@ void capture_feed_return(int x, int y, double dx, double dy) {
 
 // At home: the first watched side pushed through takes the pointer there (`edge` names the side).
 static void multi_edge_push(int x, int y, unsigned mask, double rdx, double rdy) {
-  if (!driveOther || !nsides || (mask & (Button1Mask | Button2Mask | Button3Mask))) { memset(pushBy, 0, sizeof pushBy); return; } // rule 6
+  if (!driveOther || !nsides || ((mask & (Button1Mask | Button2Mask | Button3Mask)) && !wins_grabbing())) { memset(pushBy, 0, sizeof pushBy); return; } // rule 6 (a grabbed window may cross)
   double now = now_ms();
   for (int i = 0; i < nsides; i++) {
     int s = sides[i];
@@ -670,6 +672,7 @@ static void multi_edge_push(int x, int y, unsigned mask, double rdx, double rdy)
     JOut o;
     jo_begin(&o);
     jo_str(&o, "event", "edge");
+    { unsigned long mw = wins_move_take(1); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
     jo_str(&o, "side", side_name(s));
     jo_num(&o, "offset", round(offset * 10000) / 10000);
     emit(jo_end(&o));
@@ -693,6 +696,7 @@ void capture_feed_return(int x, int y, double dx, double dy) {
   JOut o;
   jo_begin(&o);
   jo_str(&o, "event", "return");
+  { unsigned long mw = wins_move_take(0); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
   jo_num(&o, "offset", round(screens_offset(x, y, retSide) * 10000) / 10000);
   emit(jo_end(&o));
 }
@@ -721,7 +725,7 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
 #ifdef MULTI
   multi_edge_push(x, y, mask, rdx, rdy);
 #else
-  if (!driveOther || side == SIDE_NONE || (mask & (Button1Mask | Button2Mask | Button3Mask))) { push = 0; return; } // rule 6
+  if (!driveOther || side == SIDE_NONE || ((mask & (Button1Mask | Button2Mask | Button3Mask)) && !wins_grabbing())) { push = 0; return; } // rule 6 (a grabbed window may cross)
   double outward = screens_outward(side, rdx, rdy);
   if (!may_cross(side, outward)) { push = 0; return; }
   if (outward <= 0 || !screens_on_outer_edge(x, y, side) || !zones_contain(edgeZ, nEdgeZ, x, y, side)) { push = 0; return; }
@@ -738,6 +742,7 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
   JOut o;
   jo_begin(&o);
   jo_str(&o, "event", "edge");
+  { unsigned long mw = wins_move_take(1); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
   jo_num(&o, "offset", round(offset * 10000) / 10000);
   emit(jo_end(&o));
 #endif

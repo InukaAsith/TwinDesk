@@ -368,6 +368,8 @@ class Kvm {
           const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut() ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
           const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
           this._take({ side: P.opposite(this.crossingSide), offset: this.map.toPeer(msg.offset), ...(drag ? { drag: { count: drag.count } } : {}) });
+          // A window grabbed with the move key crossed with the pointer (main.js onMoveWindow).
+          if (!drag && msg.moving && this.onMoveWindow) this.onMoveWindow(msg);
           if (drag) { // order: kvm.take, drag.start, then the files
             this.dragOutPaths = paths;
             this.fileDrop.beginDrag(drag);
@@ -416,7 +418,11 @@ class Kvm {
         if (this.mode === 'driven' && !this.locked && !this.cfg.syncPads) this._sendHome(undefined, '');
         break;
       case 'return':
-        if (this.mode === 'driven' && !this.locked) this._sendHome(msg.offset, '', msg.drag || {});
+        if (this.mode === 'driven' && !this.locked) {
+          this._sendHome(msg.offset, '', msg.drag || {});
+          // A window grabbed with the move key crossed with the pointer, home (main.js onMoveWindow).
+          if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg);
+        }
         break;
       case 'ev':
         if (this.mode === 'driving' && msg.ev && (K_TYPES.has(msg.ev.t) || (msg.ev.t === T.K_GESTURE && this.cfg.gestures !== false))) {
