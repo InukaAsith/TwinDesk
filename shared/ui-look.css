@@ -27,3 +27,8 @@
 #pcs:empty { display: none; }
 .pc-wall { width: 26px; height: 46px; flex: none; display: grid; place-items: center; }
 .pc-wall .os-ico { transform: scale(0.9); }
+
+/* A page in sections (General): its title stays while the sections scroll under it, the section
+   list just below it. The title's background is the page's, so the cards pass under it cleanly. */
+.page:has(.sections) .page-head { position: sticky; top: 0; z-index: 4; background: var(--content); }
+.page:has(.sections) .sec-nav { top: 84px; }

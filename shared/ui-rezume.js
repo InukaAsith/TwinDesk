@@ -55,7 +55,7 @@
     icon: 'rezume',
     color: 'linear-gradient(#64d2ff, #0a84ff)',
     desc: tr('Pick up where you left off on your other device.'),
-    badge: (s) => (s.rezume && s.rezume.on && s.rezume.incoming ? '1' : ''),
+    badge: (s) => (s.rezume && s.rezume.on ? 'on' : ''),
     master: {
       get: (s) => !!(s.rezume && s.rezume.on),
       set: (v) => UI.api.setReZume({ on: v }),

@@ -79,6 +79,7 @@ UI.tab({
     );
 
     let key = '';
+    let progressKey = '';
     return (s) => {
       const f = s.files;
       const m = s.smb;
@@ -89,10 +90,13 @@ UI.tab({
       zone.classList.toggle('off', !canSend);
       zoneText.textContent = canSend ? I18n.t('Drop files or folders here') : I18n.t('Connect to send files');
       sendBtn.disabled = !canSend;
-      const out = f.sending.reduce((a, r) => [a[0] + r.sent, a[1] + r.size], [0, 0]);
-      sendBar.hidden = !f.sending.length;
+      // A batch is one entry (mac/filesend.js): its files left and its bytes.
+      const outB = f.outBatches || [];
+      const out = outB.reduce((a, b) => [a[0] + b.sent, a[1] + b.bytes], f.sending.reduce((a, r) => [a[0] + r.sent, a[1] + r.size], [0, 0]));
+      const outCount = f.sending.length + (f.sendingMore || 0) + outB.reduce((n, b) => n + b.left, 0);
+      sendBar.hidden = !outCount;
       sendBar.firstChild.style.width = `${Math.floor((100 * out[0]) / Math.max(1, out[1]))}%`;
-      sendRow.setHint(f.sending.length ? I18n.t(f.sending.length === 1 ? 'Sending {count} file to {device}' : 'Sending {count} files to {device}', { count: f.sending.length, device: pc }) : canSend ? I18n.t('To {device}', { device: pc }) : '');
+      sendRow.setHint(outCount ? I18n.t(outCount === 1 ? 'Sending {count} file to {device}' : 'Sending {count} files to {device}', { count: outCount, device: pc }) : canSend ? I18n.t('To {device}', { device: pc }) : '');
       // Shortcuts
       const ck = f.clip || {};
       keysSw.set(f.shortcuts !== false);
@@ -122,10 +126,24 @@ UI.tab({
               : I18n.t('Waiting for {device} to share a folder', { device: pc }));
       reveal.set(f.reveal);
       folderRow.setHint(tilde(f.folder || f.defaultFolder));
-      progress.replaceChildren(
-        ...f.receiving.map((r) => UI.note('info', I18n.t('Receiving {file}  {progress}%', { file: r.name, progress: Math.floor((100 * r.got) / Math.max(1, r.size)) }), { literal: true })),
-        ...f.sending.map((r) => UI.note('info', I18n.t('Sending {file}  {progress}%', { file: r.name, progress: Math.floor((100 * r.sent) / Math.max(1, r.size)) }), { literal: true })),
-      );
+      // Files on their way: a batch as one line, a few single files, the rest counted. Redrawn only
+      // when a line changes (10,000 small files made it jump for each one).
+      const pctOf = (n, of) => Math.min(99, Math.floor((100 * n) / Math.max(1, of)));
+      const lines = [
+        ...(f.inBatches || []).map((b) => I18n.t(b.kind === 'paste' ? (b.count === 1 ? 'Pasting {count} file from {name} · {percent} %' : 'Pasting {count} files from {name} · {percent} %')
+          : b.count === 1 ? 'Receiving {count} file from {name} · {percent} %' : 'Receiving {count} files from {name} · {percent} %',
+        { count: b.count, name: pc, percent: b.bytes ? pctOf(b.got, b.bytes) : pctOf(b.done, b.count) })),
+        ...f.receiving.map((r) => I18n.t('Receiving {file}  {progress}%', { file: r.name, progress: pctOf(r.got, r.size) })),
+        ...(f.receivingMore ? [I18n.t('{count} more files waiting', { count: f.receivingMore })] : []),
+        ...outB.map((b) => I18n.t('Sending {file} to {name} · {percent} %', { file: b.items > 1 ? I18n.t('{count} items', { count: b.items }) : b.name, name: pc, percent: pctOf(b.sent, b.bytes) })),
+        ...f.sending.map((r) => I18n.t('Sending {file}  {progress}%', { file: r.name, progress: pctOf(r.sent, r.size) })),
+        ...(f.sendingMore ? [I18n.t('{count} more files waiting', { count: f.sendingMore })] : []),
+      ];
+      const pk = lines.join('\n');
+      if (pk !== progressKey) {
+        progressKey = pk;
+        progress.replaceChildren(...lines.map((l) => UI.note('info', l, { literal: true })));
+      }
       const items = [...f.recent.map((r) => ({ ...r, dir: 'in' })), ...f.sent.map((r) => ({ ...r, dir: 'out' }))].sort((a, b) => b.at - a.at).slice(0, 30);
       const k = JSON.stringify(items.map((r) => r.at)) + Math.floor(Date.now() / 15000);
       if (k === key) return;

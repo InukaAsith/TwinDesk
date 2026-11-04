@@ -46,6 +46,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
@@ -202,9 +207,9 @@ fun App(core: Core, resumed: Int) {
             title = { Text("Turn on wireless debugging", color = pal.text) },
             text = {
                 Text(
-                    "$name uses it for this device’s screen, its mouse and keyboard here, and sound. " +
-                        "Some phones (MIUI, HyperOS) switch it off after a Wi-Fi change, a screen lock or a restart.\n\n" +
-                        "Settings opens at Developer options: switch USB debugging and Wireless debugging on, then come back.",
+                    "$name uses it to show this screen, control this device with its mouse and keyboard, and play sound. " +
+                        "Some phones (MIUI, HyperOS) turn it off after a network change, screen lock or restart.\n\n" +
+                        "Developer options will open. Turn on USB debugging and Wireless debugging, then return to TwinDesk.",
                     color = pal.muted,
                 )
             },
@@ -220,7 +225,7 @@ fun App(core: Core, resumed: Int) {
             onDismissRequest = {},
             containerColor = pal.card,
             title = { Text("${inv.name} wants to pair", color = pal.text) },
-            text = { Text("Press Pair to pair this device with ${inv.name}. You’ll check that both show the same code.", color = pal.muted) },
+            text = { Text("Tap Pair to pair this device with ${inv.name}. You’ll confirm that both devices show the same code.", color = pal.muted) },
             confirmButton = { TextButton(onClick = { core.pair(inv) }) { Text("Pair", color = pal.accent) } },
             dismissButton = { TextButton(onClick = { core.dismissInvite() }) { Text("Not now", color = pal.muted) } },
         )
@@ -255,21 +260,56 @@ fun App(core: Core, resumed: Int) {
                 Page(core, v, tab, Modifier.weight(1f))
             }
         } else {
+            // Back: through the pages visited, in order (More counts as one); with none left,
+            // Android's own Back (leaves the app).
+            val history = remember { androidx.compose.runtime.mutableStateListOf<Pair<Tab, Boolean>>() }
+            val go = { t: Tab, m: Boolean ->
+                if ((tab to more) != (t to m)) {
+                    history.add(tab to more)
+                    if (history.size > 40) history.removeAt(0)
+                    tab = t; more = m
+                }
+            }
+            androidx.activity.compose.BackHandler(enabled = history.isNotEmpty()) {
+                var back = history.removeAt(history.lastIndex)
+                while (!shown(core, back.first) && history.isNotEmpty()) back = history.removeAt(history.lastIndex) // Overview after a disconnect
+                if (shown(core, back.first)) { tab = back.first; more = back.second }
+            }
             Column(Modifier.safeDrawingPadding()) {
-                TopIdentity(core, v)
-                if (more) MoreList(core, v, BOTTOM, Modifier.weight(1f)) { tab = it; more = false }
+                if (!more && tab == BOTTOM.first()) TopIdentity(core, v) // TwinDesk on the main page only
+                else Spacer(Modifier.height(10.dp))
+                // The page in a big rounded sheet under the branding; the bar floats at its bottom.
+                Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(pal.sheet)) {
+                if (more) MoreList(core, v, BOTTOM, Modifier.weight(1f)) { go(it, false) }
                 else Page(core, v, tab, Modifier.weight(1f))
-                NavigationBar(containerColor = pal.card) {
-                    val item = @Composable { label: String, icon: ImageVector, colors: List<Color>, selected: Boolean, go: () -> Unit ->
+                // A Material navigation bar, as Google's own apps have it: line icons, the selected
+                // one in a pill of the accent colour, labels under them, the bar itself rounded and
+                // floating off the edges (the tablet keeps the Mac-like sidebar with coloured tiles).
+                NavigationBar(
+                    containerColor = pal.card, tonalElevation = 0.dp, windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp)
+                        .shadow(14.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+                        .clip(RoundedCornerShape(28.dp)).height(72.dp),
+                ) {
+                    val item = @Composable { label: String, icon: ImageVector, selected: Boolean, dot: Boolean, go: () -> Unit ->
                         NavigationBarItem(
                             selected = selected, onClick = go,
-                            icon = { Tile(icon, colors, 28) }, // in their colours, selected or not
-                            label = { Text(label, maxLines = 1, fontSize = 11.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal) },
-                            colors = NavigationBarItemDefaults.colors(selectedTextColor = pal.accent, indicatorColor = pal.accentSoft, unselectedTextColor = pal.muted),
+                            icon = {
+                                Box {
+                                    Icon(icon, label, modifier = Modifier.size(24.dp))
+                                    if (dot) Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-2).dp)) { Dot(pal.good, 7) }
+                                }
+                            },
+                            label = { Text(label, maxLines = 1, softWrap = false, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = pal.accent, selectedTextColor = pal.text, indicatorColor = pal.accentSoft,
+                                unselectedIconColor = pal.muted, unselectedTextColor = pal.muted,
+                            ),
                         )
                     }
-                    for (t in BOTTOM) item(t.title, t.icon, t.colors, !more && tab == t) { tab = t; more = false }
-                    item("More", Ico.more, grad(0xFFAEAEB2, 0xFF636366), more || tab !in BOTTOM) { more = true }
+                    for (t in BOTTOM) item(if (t == Tab.Connection) "Connect" else t.title, t.icon, !more && tab == t, isOn(core, t)) { go(t, false) }
+                    item("More", Ico.more, more || tab !in BOTTOM, false) { go(tab, true) }
+                }
                 }
             }
         }
@@ -319,7 +359,7 @@ private fun Sidebar(core: Core, v: Int, tab: Tab, go: (Tab) -> Unit) {
 @Composable
 private fun TopIdentity(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
-    Box(Modifier.fillMaxWidth().background(pal.sidebar).padding(horizontal = 16.dp, vertical = 10.dp)) { Identity(core, v, 40) }
+    Box(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp)) { Identity(core, v, 36) }
 }
 
 @Composable
@@ -380,16 +420,28 @@ private val ROW_PAD = androidx.compose.foundation.layout.PaddingValues(horizonta
 
 @Composable
 private fun Primary(label: String, onClick: () -> Unit) = Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White),
-    shape = RoundedCornerShape(8.dp), contentPadding = ROW_PAD, modifier = Modifier.height(36.dp)) { Text(label, fontSize = 14.sp, maxLines = 1) }
+    shape = if (Modern.on) RoundedCornerShape(50) else RoundedCornerShape(8.dp), contentPadding = ROW_PAD, modifier = Modifier.height(if (Modern.on) 40.dp else 36.dp)) { Text(label, fontSize = 14.sp, maxLines = 1, fontWeight = if (Modern.on) FontWeight.SemiBold else null) }
+
+// A row of equal buttons (Ring, Lock, Sleep): tonal pills on the phone, outlined on the tablet.
+@Composable
+private fun ChipButton(onClick: () -> Unit, modifier: Modifier, content: @Composable RowScope.() -> Unit) =
+    if (Modern.on) Button(onClick = onClick, modifier = modifier.height(44.dp), shape = RoundedCornerShape(50), elevation = null,
+        colors = ButtonDefaults.buttonColors(containerColor = pal.chip, contentColor = pal.text), content = content)
+    else OutlinedButton(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(8.dp), content = content)
 
 @Composable
-private fun Secondary(label: String, color: Color = pal.text, onClick: () -> Unit) = OutlinedButton(onClick = onClick, shape = RoundedCornerShape(8.dp),
-    contentPadding = ROW_PAD, modifier = Modifier.height(36.dp)) { Text(label, color = color, fontSize = 14.sp, maxLines = 1) }
+private fun Secondary(label: String, color: Color = pal.text, onClick: () -> Unit) =
+    // The phone: a tonal pill (the accent's soft tint, no outline); the tablet: outlined, as the Mac's.
+    if (Modern.on) Button(onClick = onClick, shape = RoundedCornerShape(50), contentPadding = ROW_PAD, modifier = Modifier.height(40.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = pal.chip, contentColor = if (color == pal.text) pal.text else color), elevation = null,
+    ) { Text(label, color = if (color == pal.text) pal.text else color, fontSize = 14.sp, maxLines = 1, fontWeight = FontWeight.Medium) }
+    else OutlinedButton(onClick = onClick, shape = RoundedCornerShape(8.dp),
+        contentPadding = ROW_PAD, modifier = Modifier.height(36.dp)) { Text(label, color = color, fontSize = 14.sp, maxLines = 1) }
 
 @Composable
 private fun NotConnected(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
-    Note("Not connected. Connect to ${them(core)} on the Overview page.", "warn")
+    Note("Not connected. Connect to ${them(core)} from the Connection page.", "warn")
 }
 
 // ---- Overview ----
@@ -450,72 +502,10 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
         }
     }
 
-    // The hero: this device, the link, the computer (the Mac's `.hero`).
-    MacCard {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Device(me, phone = true, Modifier.weight(1f))
-            Column(Modifier.weight(0.9f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(
-                    if (host != null) Brush.horizontalGradient(listOf(pal.good, pal.accent)) else Brush.horizontalGradient(listOf(pal.trackOff, pal.trackOff)),
-                ))
-                Text(
-                    when { host != null -> listOfNotNull(core.net.via, link.rttMs?.let { "$it ms" }).joinToString(" · ").ifEmpty { "Connected" }; link.state == "connecting" -> "Connecting…"; link.pair != null -> "Pairing…"; else -> "Not connected" },
-                    color = pal.muted, fontSize = 11.sp, maxLines = 2, lineHeight = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            Device(them(core), phone = false, Modifier.weight(1f))
-        }
-        Text(
-            when {
-                host != null -> "Connected"
-                link.message.isNotEmpty() -> link.message
-                core.hosts().isNotEmpty() -> "Tap Connect, or click this device on your Mac."
-                else -> "Pick a computer below, or pair by address."
-            },
-            color = pal.muted, fontSize = 12.5.sp, lineHeight = 17.sp, textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
-        )
-        // Wireless debugging not set up (or off): one line under Connected, with the way to fix it.
-        // Reached anyway (adb's TCP mode, on a direct Wi-Fi link): nothing to fix.
-        // Over Bluetooth: greyed out, it only works over Wi-Fi.
-        val adbBle = core.link.ble
-        if (host != null && !core.adb.paired && (adbBle || core.adb.setupNeeded || !core.adb.wifiDebugging)) Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp).clip(RoundedCornerShape(8.dp)).background(if (adbBle) pal.line.copy(alpha = 0.35f) else pal.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                if (adbBle) "Wireless debugging: only available over Wi-Fi. You’re connected to ${host.name} over Bluetooth."
-                else if (core.adb.setupNeeded) "Wireless debugging isn’t set up. ${host.name} needs it to show this screen and control it through ADB."
-                else "Wireless debugging is off. ${host.name} needs it to show this screen and control it through ADB.",
-                color = if (adbBle) pal.muted else pal.text, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f).padding(end = 8.dp),
-            )
-            if (!adbBle) { if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true } else Secondary("Turn on") { core.adb.turnOn() } }
-        }
-        if (host != null) {
-            val show = { core.ctx.startActivity(Intent(core.ctx, ViewerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            // On Bluetooth: a direct Wi-Fi link on request, or made for files and screens: Back to Bluetooth ends it (both sides).
-            val onWifi = core.net.wanted("user") || core.net.linked
-            val wifiLabel = if (onWifi) "Back to Bluetooth" else if (core.link.ble) "Connect with Wi-Fi Direct" else null
-            val wifiClick = { if (onWifi) core.net.drop() else core.net.need("user"); core.changed() }
-            if (LocalConfiguration.current.screenWidthDp >= 600) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-                    Primary("Show ${host.name}’s screen", show)
-                    if (wifiLabel != null) Secondary(wifiLabel) { wifiClick() }
-                    Secondary("Disconnect") { core.disconnect() }
-                }
-            } else {
-                // A phone: one button per line, inside the card's padding.
-                Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = show, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White)) {
-                        Text("Show ${host.name}’s screen", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (wifiLabel != null) OutlinedButton(onClick = { wifiClick() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) { Text(wifiLabel, color = pal.text) }
-                    OutlinedButton(onClick = { core.disconnect() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) { Text("Disconnect", color = pal.text) }
-                }
-            }
-        }
-    }
+    // The hero: this device, the link, the computer (the Mac's `.hero`). The phone: a card in the
+    // accent's gradient with everything on it in white.
+    val heroAccent = pal.accent
+    if (Modern.on) HeroCard { HeroBody(core, v, me, host, link, heroAccent) } else MacCard { HeroBody(core, v, me, host, link, heroAccent) }
 
 
     // The computer's own controls (dev.state, DevCtl.kt): ring, lock, sleep, Bluetooth, Do not disturb, volume.
@@ -527,27 +517,34 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
         if (others.isNotEmpty()) MacCard("Switch to") {
             others.forEachIndexed { i, h ->
                 val near = core.isNear(h.id)
-                MacRow(h.name, if (near && !core.discovery.found.containsKey(h.id)) "Nearby over Bluetooth · paired" else if (near) "Nearby · paired" else "Paired · not nearby", i == 0) {
+                MacRow(h.name, if (near && !core.discovery.found.containsKey(h.id)) "Paired · Nearby over Bluetooth" else if (near) "Paired · Nearby" else "Paired · Not nearby", i == 0) {
                     Secondary(if (near) "Take over" else "Switch") { core.switchTo(h) }
                 }
             }
         }
-        MacCard { BleSwitch(core, "Allow Nearby devices on the General page", first = true) }
+        MacCard { BleSwitch(core, "Allow Nearby devices permission in General", first = true) }
     }
 
     // What each feature does in each direction is on its own page (the switches are shared with the
     // computer): Overview keeps to the link, the computer's controls and the way to its screen.
 
-    if (host == null) MacCard("Nearby") {
+    // Refresh: asks every computer on the network to answer now (they also announce themselves every few seconds).
+    var looking by remember { mutableStateOf(false) }
+    LaunchedEffect(looking) { if (looking) { kotlinx.coroutines.delay(1500); looking = false } }
+    if (host == null) MacCard("Nearby", action = {
+        TextButton(onClick = { looking = true; Thread { runCatching { core.discovery.probe() } }.start() }, enabled = !looking) {
+            Text(if (looking) "Looking…" else "Refresh", color = pal.accent, fontSize = 14.sp)
+        }
+    }) {
         val hosts = core.hosts()
         // The computer's QR code (Connection there): an extra way, next to these.
         val act = LocalContext.current
-        MacRow("Scan a QR code", "Connection › Pair a phone with a QR code, on the computer", true) { Secondary("Scan") { scanQr(act) } }
+        MacRow("Scan a QR code", "On your computer, open Connection › Pair a phone with a QR code", true) { Secondary("Scan") { scanQr(act) } }
         var first = false
         for (h in hosts) {
             val near = core.isNear(h.id)
-            MacRow(h.name, if (link.state == "connecting" && link.host?.id == h.id) "Connecting…" else if (near && !core.discovery.found.containsKey(h.id)) "Nearby over Bluetooth · paired" else if (near) "Nearby · paired" else "Paired · not nearby", first) {
-                Secondary("Forget", pal.bad) { core.forget(h.id) }
+            MacRow(h.name, if (link.state == "connecting" && link.host?.id == h.id) "Connecting…" else if (near && !core.discovery.found.containsKey(h.id)) "Paired · Nearby over Bluetooth" else if (near) "Paired · Nearby" else "Paired · Not nearby", first) {
+                Secondary("Forget", pal.muted) { core.forget(h.id) }
                 // Nearby: Take over (a phone's hello takes the computer from whoever has it).
                 Primary(if (near) "Take over" else "Connect") { core.connect(h) }
             }
@@ -557,8 +554,8 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
             MacRow(f.name, "${if (f.os == "mac") "Mac" else if (f.os == "linux") "Linux" else "PC"} · ${if (f.address.startsWith("ble:") || f.address.startsWith("blp:")) "Bluetooth" else f.address}", first) { Secondary("Pair") { core.pair(f) } }
             first = false
         }
-        if (first) MacRow("Looking for computers…", if (core.bleOn && core.ble.allowed()) "Open TwinDesk on your computer (same Wi-Fi, or Bluetooth on)" else "Open TwinDesk on your computer (same Wi-Fi)", true)
-        BleSwitch(core, "Allow Nearby devices on the General page")
+        if (first) MacRow("Looking for computers…", if (core.bleOn && core.ble.allowed()) "Open TwinDesk on your computer. Use the same Wi-Fi network, or turn on Bluetooth." else "Open TwinDesk on your computer, on the same Wi-Fi network", true)
+        BleSwitch(core, "Allow Nearby devices permission in General")
         var addr by remember { mutableStateOf("") }
         Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(1.dp).background(pal.line))
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -576,23 +573,24 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
 // The connected computer's controls, when it has them (an older TwinDesk says nothing: no card).
 @Composable
 private fun ComputerCard(core: Core, name: String) {
+    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
     val c = core.dev.computer ?: return
     // Which TwinDesk the computer runs (its dev.state's app; none: older than 2.5): red when older than this one.
     val theirs = c.optJSONObject("app")?.optString("v").orEmpty()
     val older = theirs.isEmpty() || Updates.compare(theirs, BuildConfig.VERSION_NAME) < 0
-    if (older) Note(if (theirs.isEmpty()) "$name has an older TwinDesk. Update it there: some features need the same version on both."
-        else "$name has TwinDesk $theirs, this phone ${BuildConfig.VERSION_NAME}. Update it there: some features need the same version on both.", "warn")
+    if (older) Note(if (theirs.isEmpty()) "$name has an older version of TwinDesk. Update it to use all features."
+        else "$name has TwinDesk $theirs and this phone has ${BuildConfig.VERSION_NAME}. Update TwinDesk on $name to use all features.", "warn")
     val can = c.optJSONObject("can") ?: return
     if (can.length() == 0) return
     MacCard(name) {
         MacRow("TwinDesk", "On $name", true) { Text(theirs.ifEmpty { "Older" }, color = if (older) pal.bad else pal.muted, fontSize = 14.sp) }
         val ringing = c.optBoolean("ringing")
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (can.optBoolean("ring")) OutlinedButton(onClick = { core.dev.ask(if (ringing) "ringStop" else "ring") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
+            if (can.optBoolean("ring")) ChipButton({ core.dev.ask(if (ringing) "ringStop" else "ring") }, Modifier.weight(1f)) {
                 Text(if (ringing) "Stop" else "Ring", color = if (ringing) pal.bad else pal.text, maxLines = 1)
             }
-            if (can.optBoolean("lock")) OutlinedButton(onClick = { core.dev.ask("lock") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text("Lock", color = pal.text, maxLines = 1) }
-            if (can.optBoolean("sleep")) OutlinedButton(onClick = { core.dev.ask("sleep") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text("Sleep", color = pal.text, maxLines = 1) }
+            if (can.optBoolean("lock")) ChipButton({ core.dev.ask("lock") }, Modifier.weight(1f)) { Text("Lock", color = pal.text, maxLines = 1) }
+            if (can.optBoolean("sleep")) ChipButton({ core.dev.ask("sleep") }, Modifier.weight(1f)) { Text("Sleep", color = pal.text, maxLines = 1) }
         }
         var first = true
         if (can.optBoolean("bluetooth") && c.has("bluetooth")) { SwitchRow("Bluetooth", "On $name", c.optBoolean("bluetooth"), first = first) { core.dev.ask("bluetooth", "on" to it) }; first = false }
@@ -621,7 +619,7 @@ fun scanQr(ctx: android.content.Context) {
 }
 
 private fun openCamera(ctx: android.content.Context) {
-    android.widget.Toast.makeText(ctx, "Scan it with the camera app: it opens TwinDesk", android.widget.Toast.LENGTH_LONG).show()
+    android.widget.Toast.makeText(ctx, "Scan it with the Camera app to open TwinDesk", android.widget.Toast.LENGTH_LONG).show()
     runCatching { ctx.startActivity(Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
@@ -629,16 +627,17 @@ private fun openCamera(ctx: android.content.Context) {
 // network. Off by itself while the session is on the same Wi-Fi, on again when that drops (Core.bleTick).
 @Composable
 private fun BleSwitch(core: Core, askHint: String, first: Boolean = false) {
+    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
     val ctx = LocalContext.current
     val name = them(core)
     val link = core.link
     val allowed = (Ble.permissions() + BleServe.permissions() + Direct.permission()).all { ctx.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
     SwitchRow("Bluetooth with computers", when {
-        !core.bleOn -> "Only computers on this network or a USB cable connect"
+        !core.bleOn -> "Only computers on this network or connected by USB can connect"
         !core.ble.radioOn -> "Bluetooth is off on this device"
         !allowed -> askHint
-        core.bleWifiOff && link.connected && core.net.via == "Wi-Fi" -> "Off while you’re on the same Wi-Fi as $name, on again if it drops"
-        else -> "Connects to $name over Bluetooth when it isn’t on this network. Files and screens move to a direct Wi-Fi link for a while"
+        core.bleWifiOff && link.connected && core.net.via == "Wi-Fi" -> "Paused while you’re on the same Wi-Fi as $name. Resumes if Wi-Fi drops."
+        else -> "Connects to $name over Bluetooth when it isn’t on this network. Files and screen sharing use a temporary Wi-Fi Direct link."
     }, core.bleOn, first = first) { core.store.setFlag("ble", it); core.changed() }
 }
 
@@ -662,6 +661,7 @@ private fun Device(name: String, phone: Boolean, modifier: Modifier) {
 // Connect with Wi-Fi Direct): the page itself stays as it is.
 @Composable
 private fun WifiGate(core: Core, what: String) {
+    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
     if (core.host == null || !core.link.ble) return
     val n = core.net
     val moving = n.state in listOf("asking", "hosting", "joining")
@@ -669,7 +669,7 @@ private fun WifiGate(core: Core, what: String) {
         when {
             moving -> "$what is only available over Wi-Fi Direct. Connecting…"
             n.state == "failed" -> "$what is only available over Wi-Fi Direct. ${n.error.ifEmpty { "Wi-Fi Direct didn’t come up" }}"
-            else -> "$what is only available over Wi-Fi Direct (or the same Wi-Fi network): you’re connected over Bluetooth."
+            else -> "$what requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth."
         },
         "warn",
     )
@@ -693,27 +693,27 @@ private fun HubHead(core: Core, v: Int, what: String, title: String, desc: Strin
         if (it && perm != "ok") hub.askHere(what)
     }
     if (core.host == null) { NotConnected(core, v); return false }
-    if (!hub.peer) { Note("TwinDesk on $name needs to be up to date for $title.", "warn"); return false }
+    if (!hub.peer) { Note("Update TwinDesk on $name to use $title.", "warn"); return false }
     when {
-        perm == "none" && what == "files" -> Note("File access needs Android 11 or later. Mount on $name works through ADB instead.", "warn")
-        perm == "none" -> Note("$title needs TwinDesk with notifications: Android doesn’t let downloaded apps read texts. $name installs it once wireless debugging is set up (its Phone page › Install). Your settings and pairing stay.", "warn")
-        !on -> Note("Off. Switch it on here or on $name.")
+        perm == "none" && what == "files" -> Note("File access requires Android 11 or later. You can still mount this phone on $name using ADB.", "warn")
+        perm == "none" -> Note("$title requires the full version of TwinDesk, as Android restricts downloaded apps from reading messages. Once wireless debugging is set up, install it from the Phone page on $name. Your settings and pairings are kept.", "warn")
+        !on -> Note("Off. Turn it on here or on $name.")
         perm == "ask" -> {
             Note(
                 when (what) {
-                    "files" -> "Allow All files access, so $name can browse this phone’s storage. TwinDesk reads and writes the files itself: no ADB."
-                    "media" -> "Allow photos and videos, so $name can show them."
-                    else -> "Allow what $title needs: ${Hub.wanted(what).size} permissions, asked for once."
+                    "files" -> "Allow All files access so $name can browse this phone’s storage. ADB isn’t required."
+                    "media" -> "Allow access to photos and videos so $name can show them."
+                    else -> "$title needs ${Hub.wanted(what).size} permissions. You’ll be asked once."
                 },
                 "warn",
             )
             Row(Modifier.padding(bottom = 14.dp)) { Primary("Allow") { hub.askHere(what) } }
         }
         perm == "partial" -> {
-            Note(if (what == "media") "Only the photos you chose show on $name." else "Some of $title needs more: allow the rest to use all of it.")
+            Note(if (what == "media") "Only the photos you selected are shown on $name." else "Some $title features need more permissions.")
             Row(Modifier.padding(bottom = 14.dp)) { Secondary("Allow more") { hub.askHere(what) } }
         }
-        else -> Note("On: $title from this phone on $name.")
+        else -> Note("On. $title from this phone is available on $name.")
     }
     return on && perm != "none"
 }
@@ -721,10 +721,10 @@ private fun HubHead(core: Core, v: Int, what: String, title: String, desc: Strin
 @Composable
 private fun CallsPage(core: Core, v: Int) {
     val name = them(core)
-    if (!HubHead(core, v, "calls", "Calls", "Answer, make and end this phone’s calls on ${them(core)}.")) return
+    if (!HubHead(core, v, "calls", "Calls", "Answer, make and end calls on ${them(core)}.")) return
     MacCard("On $name") {
-        MacRow("Answer and decline", "A window on $name when this phone rings", first = true)
-        MacRow("Make calls", "The number pad, contacts and recent calls on $name’s Calls page")
+        MacRow("Answer and decline", "Shows incoming calls on $name", first = true)
+        MacRow("Make calls", "Use the keypad, contacts and recent calls on $name")
     }
     // The computer as this phone's headset: paired over classic Bluetooth by the person, in Bluetooth
     // settings (TwinDesk doesn't pair them itself). Forget at the bottom.
@@ -736,14 +736,14 @@ private fun CallsPage(core: Core, v: Int) {
         MacRow(
             "Bluetooth",
             when {
-                !allowed -> "Allow Nearby devices so TwinDesk sees this phone’s pairing with $name"
+                !allowed -> "Allow Nearby devices permission to check the Bluetooth pairing with $name"
                 !bt.optBoolean("radio", true) -> "Bluetooth is off on this phone"
-                bt.optBoolean("bonding") -> "Pairing… Confirm the code here and on $name"
-                bt.optBoolean("forget") -> "Forget $name in Bluetooth settings here (Android keeps the old pairing for itself), then pair them again there"
-                bonded -> "Paired with $name: calls can play there"
-                bt.optBoolean("le") -> "Paired over Bluetooth LE only, which can’t carry a call: Forget, then pair them again in Bluetooth settings"
+                bt.optBoolean("bonding") -> "Pairing… Confirm the code on both devices"
+                bt.optBoolean("forget") -> "Forget $name in this phone’s Bluetooth settings, then pair them again"
+                bonded -> "Paired with $name. Call audio can play there."
+                bt.optBoolean("le") -> "Paired over Bluetooth LE only, which doesn’t support calls. Forget the device, then pair it again in Bluetooth settings."
                 !hub.btKnown -> "Waiting for $name…"
-                else -> "Not paired with $name over classic Bluetooth: pair them in Bluetooth settings (here: Pair new device, or Add device on $name). TwinDesk connects once they are"
+                else -> "Not paired with $name over Bluetooth. Pair them in Bluetooth settings, and TwinDesk connects automatically."
             },
             first = true,
         ) {
@@ -751,7 +751,7 @@ private fun CallsPage(core: Core, v: Int) {
             else if (hub.btKnown && !bonded && !bt.optBoolean("bonding")) Secondary("Open Bluetooth settings") { hub.btSettings() }
         }
         var sure by remember { mutableStateOf(false) }
-        MacRow("Forget", "This phone and $name forget each other, over classic Bluetooth and LE; Bluetooth settings open to pair them again") {
+        MacRow("Forget", "Removes the Bluetooth pairing between this phone and $name, then opens Bluetooth settings") {
             TextButton(onClick = { if (sure) { sure = false; hub.forgetBt() } else { sure = true } }) { Text(if (sure) "Forget?" else "Forget", color = pal.bad) }
         }
     }
@@ -760,10 +760,10 @@ private fun CallsPage(core: Core, v: Int) {
 @Composable
 private fun MessagesPage(core: Core, v: Int) {
     val name = them(core)
-    if (!HubHead(core, v, "messages", "Messages", "Read and send this phone’s texts on ${them(core)}.")) return
+    if (!HubHead(core, v, "messages", "Messages", "Read and send text messages on ${them(core)}.")) return
     MacCard("On $name") {
-        MacRow("Conversations", "Texts and MMS pictures on $name’s Messages page", first = true)
-        MacRow("New texts", "Counted on the Messages tab on $name")
+        MacRow("Conversations", "Texts and MMS pictures in Messages on $name", first = true)
+        MacRow("New texts", "Shown as a badge in Messages on $name")
     }
 }
 
@@ -771,10 +771,10 @@ private fun MessagesPage(core: Core, v: Int) {
 private fun PhotosPage(core: Core, v: Int) {
     val name = them(core)
     WifiGate(core, "Photos on $name")
-    if (!HubHead(core, v, "media", "Photos", "See this phone’s photos and videos on ${them(core)} and copy them there.")) return
+    if (!HubHead(core, v, "media", "Photos", "View and copy this phone’s photos and videos on ${them(core)}.")) return
     MacCard("On $name") {
-        MacRow("Photos, videos and screenshots", "Newest first on $name’s Photos page", first = true)
-        MacRow("Save", "Copies go to $name’s Downloads")
+        MacRow("Photos, videos and screenshots", "Newest first, in Photos on $name", first = true)
+        MacRow("Save", "Saved to the Downloads folder on $name")
     }
 }
 
@@ -782,10 +782,10 @@ private fun PhotosPage(core: Core, v: Int) {
 private fun FileAccessPage(core: Core, v: Int) {
     val name = them(core)
     WifiGate(core, "Phone Files on $name")
-    if (HubHead(core, v, "files", "File access", "Browse this phone’s storage on ${them(core)}, and copy files both ways.")) MacCard("On $name") {
-        MacRow("Phone Files", "Folders, Save to $name, Upload, New folder, Rename, Delete", first = true)
-        MacRow("No ADB", "TwinDesk reads and writes the files itself with All files access. Mount on $name is the ADB way")
-        MacRow("Where", "On USB, Wi-Fi or Wi-Fi Direct. Over Bluetooth $name says so, with Connect with Wi-Fi Direct")
+    if (HubHead(core, v, "files", "File access", "Browse this phone’s storage on ${them(core)} and copy files in either direction.")) MacCard("On $name") {
+        MacRow("Phone Files", "Browse, upload, download, rename and delete files", first = true)
+        MacRow("Without ADB", "Uses All files access instead of ADB. To use ADB, mount the phone on $name.")
+        MacRow("Connection", "Works over USB, Wi-Fi and Wi-Fi Direct")
     }
     if (core.host != null) SharedFolders(core, v)
 }
@@ -804,10 +804,10 @@ private fun SharedFolders(core: Core, v: Int) {
         SwitchRow(
             "Share a folder with $name",
             when {
-                !sh.allowed -> "Needs All files access (above)"
-                ble && sh.on -> "${sh.shown()}: $name opens it over Wi-Fi Direct"
+                !sh.allowed -> "Requires All files access"
+                ble && sh.on -> "${sh.shown()}. $name opens it over Wi-Fi Direct."
                 sh.error.isNotEmpty() -> "Couldn’t share: ${sh.error}"
-                sh.on && sh.serving -> "${sh.shown()}: open on $name (Phone Files › Shared folders)"
+                sh.on && sh.serving -> "${sh.shown()}. Open it on $name in Phone Files › Shared folders."
                 else -> sh.shown()
             },
             sh.on, first = true,
@@ -821,10 +821,10 @@ private fun SharedFolders(core: Core, v: Int) {
             "$name’s shared folder",
             when {
                 ble && sh.opening -> "Connecting with Wi-Fi Direct…"
-                ble && sh.pcServe -> "Open connects with Wi-Fi Direct"
-                pc != null -> "“${pc.name}” in the Files app and every app’s file picker"
+                ble && sh.pcServe -> "Opening connects over Wi-Fi Direct"
+                pc != null -> "Available as “${pc.name}” in the Files app and file pickers"
                 sh.pcServe -> "Opening…"
-                else -> "Off: switch it on to see a folder of $name in the Files app"
+                else -> "Turn on to browse a folder on $name from the Files app"
             },
         ) {
             if (pc != null) Primary("Open") { openPcShare(ctx) }
@@ -864,7 +864,7 @@ private fun CameraPage(core: Core, v: Int) {
     val shown = if (cam.on) cam.facing ?: facing else facing
     PageHead(
         "Camera",
-        "This device’s camera on $name: in TwinDesk there, and as a camera its apps can pick.",
+        "Use this device’s camera on $name, in TwinDesk or in any app.",
         master = if (host != null && (canShow || cam.on)) cam.on else null,
         onMaster = { adb.cameraOnComputer(it, facing) },
     )
@@ -872,7 +872,7 @@ private fun CameraPage(core: Core, v: Int) {
     MacCard("This camera on $name") {
         MacRow(
             "Camera",
-            if (cam.on) "Switching takes a moment" else "The one it starts with",
+            if (cam.on) "Switching may take a moment" else "Camera used when starting",
             first = true,
         ) {
             SingleChoiceSegmentedButtonRow {
@@ -889,17 +889,17 @@ private fun CameraPage(core: Core, v: Int) {
         MacRow(
             "On $name",
             when {
-                !canShow -> "Needs wireless debugging: set it up from Overview"
+                !canShow -> "Requires wireless debugging. Set it up from Overview."
                 cam.error.isNotEmpty() -> "It stopped: ${cam.error}"
-                cam.on && cam.virtual -> "Running as “TwinDesk Camera”: in Zoom, Teams or the browser there, choose only that one"
-                cam.on -> "In TwinDesk’s Camera page there. Its Virtual camera makes it a camera other apps can pick"
+                cam.on && cam.virtual -> "Available as “TwinDesk Camera”. Choose it in Zoom, Teams or your browser."
+                cam.on -> "Shown on the Camera page in TwinDesk. Turn on Virtual camera there to use it in other apps."
                 else -> "Off"
             },
         )
     }
     Note(
-        if (cam.virtual) "$name’s Virtual camera is on: apps there see this camera as “TwinDesk Camera”."
-        else "Turn on Virtual camera in TwinDesk’s Camera page on $name to use this camera as a real camera in its apps (Zoom, Teams, the browser…).",
+        if (cam.virtual) "Virtual camera is on. Apps on $name can use this camera as “TwinDesk Camera”."
+        else "To use this camera in apps like Zoom, Teams or a browser, turn on Virtual camera on the Camera page in TwinDesk on $name.",
     )
 }
 
@@ -911,7 +911,7 @@ private fun ScreenPage(core: Core, v: Int) {
     val s = core.screen
     val ctx = LocalContext.current
     val name = them(core)
-    PageHead("Screen", "Use this device as a screen for $name: its own screen (Mirror), or a second one (Extend).")
+    PageHead("Screen", "Use this device as a display for $name, either mirroring its screen or extending it.")
     if (host == null) return NotConnected(core, v)
     // The other way round: this device's screen in a window on the computer, over wireless debugging.
     // Paired now or before: the computer brings it back by itself (on Bluetooth, onto Wi-Fi first).
@@ -921,9 +921,9 @@ private fun ScreenPage(core: Core, v: Int) {
         MacRow(
             "Show this screen on $name",
             when {
-                !canShow -> "Needs wireless debugging: set it up from Overview"
-                adb.viewed -> "This device’s windows are open on $name. Close shuts them"
-                else -> "In a window there, with its mouse and keyboard"
+                !canShow -> "Requires wireless debugging. Set it up from Overview."
+                adb.viewed -> "This device’s windows are open on $name"
+                else -> "Opens in a window you can control with the mouse and keyboard"
             },
             first = true,
         ) {
@@ -934,15 +934,15 @@ private fun ScreenPage(core: Core, v: Int) {
     Note(
         when {
             !s.sharing -> "$name isn’t sharing its screen."
-            s.mode == "extend" -> "$name shares a second screen the size of this one (Extend)."
-            else -> "$name shares its own screen (Mirror)."
+            s.mode == "extend" -> "$name is extending its desktop to this screen."
+            else -> "$name is mirroring its screen."
         },
     )
     MacCard {
-        MacRow("Show $name’s screen", "Full screen. Tap the handle at the top for Mirror, Extend and the keyboard", first = true) {
+        MacRow("Show $name’s screen", "Opens full screen. Tap the handle at the top for display options and the keyboard.", first = true) {
             Primary("Open") { ctx.startActivity(Intent(ctx, ViewerActivity::class.java)) }
         }
-        if (s.remote) MacRow("Mode", "Extend makes $name a second screen the size of this one") {
+        if (s.remote) MacRow("Mode", "Extend uses this device as a second display for $name") {
             // A phone: Mirror and Extend across the row's width, under the label.
             SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
                 val modes = listOf("mirror" to "Mirror", "extend" to "Extend")
@@ -950,31 +950,31 @@ private fun ScreenPage(core: Core, v: Int) {
                     SegmentedButton(selected = s.sharing && s.mode == m, onClick = { s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
                 }
             }
-        } else MacRow("Mode", "$name starts and switches its sharing itself")
+        } else MacRow("Mode", "Managed from $name")
         if (s.sharing && s.remote) MacRow("Sharing", "") { Secondary("Stop") { s.control(share = false) } }
     }
     MacCard("Touch") {
         val pad = core.store.flag("screen.touchpad", true)
-        SwitchRow("Touchpad", "Slide to move the pointer; sliding never clicks. Off: the pointer goes where you touch", pad, first = true) { s.setOpt("screen.touchpad", it) }
+        SwitchRow("Touchpad", "Slide to move the pointer, like a laptop touchpad. When off, the pointer follows your finger.", pad, first = true) { s.setOpt("screen.touchpad", it) }
         if (pad) {
-            MacRow("Slide", "Move the pointer")
-            MacRow("Tap", if (core.remote.tapClick) "Left click" else "Nothing (Remote › Tap to click is off)")
-            MacRow("Hold", "Right click")
-            MacRow("Two fingers", "Scroll")
+            MacRow("Slide", "Moves the pointer")
+            MacRow("Tap", if (core.remote.tapClick) "Clicks" else "No action (Tap to click is off in Remote)")
+            MacRow("Touch and hold", "Right-click")
+            MacRow("Two fingers", "Scrolls")
         } else {
-            MacRow("Tap", "Click")
-            MacRow("Hold", "Right click")
-            MacRow("Drag", "Drag (select, move windows)")
-            MacRow("Two fingers", "Scroll")
+            MacRow("Tap", "Clicks")
+            MacRow("Touch and hold", "Right-click")
+            MacRow("Drag", "Select or move windows")
+            MacRow("Two fingers", "Scrolls")
         }
-        if (!s.inputOn) MacRow("Input is off", "$name doesn’t take input from here (its Share screen › Receive input)")
+        if (!s.inputOn) MacRow("Input is off", "$name doesn’t accept input from this device. Turn on Receive input in Share screen on $name.")
     }
     MacCard("Stylus") {
-        SwitchRow("Pen", "Pressure, tilt, the eraser and the side button, as a drawing tablet on $name; your hand on the screen does nothing while the pen is near. Off: the stylus is a mouse", core.store.flag("screen.pen", true), first = true) { s.setOpt("screen.pen", it) }
+        SwitchRow("Pen", "Use the stylus as a drawing tablet on $name, with pressure, tilt, eraser and side button. Touch is ignored while the pen is near. When off, the stylus acts as a mouse.", core.store.flag("screen.pen", true), first = true) { s.setOpt("screen.pen", it) }
     }
     MacCard("Playback") {
-        SwitchRow("$name’s sound with the screen", "When $name shares sound with its screen", core.store.flag("screen.sound", false), first = true) { s.setOpt("screen.sound", it) }
-        SwitchRow("Smooth", "Even motion, about one frame later. Off: each frame the moment it arrives", core.store.flag("screen.smooth", false)) { s.setOpt("screen.smooth", it) }
+        SwitchRow("$name’s sound with the screen", "When $name shares audio with its screen", core.store.flag("screen.sound", false), first = true) { s.setOpt("screen.sound", it) }
+        SwitchRow("Smooth motion", "Smoother playback with about one frame of added delay", core.store.flag("screen.smooth", false)) { s.setOpt("screen.smooth", it) }
     }
 }
 
@@ -989,7 +989,7 @@ private fun CursorPage(core: Core, v: Int) {
     // Over Bluetooth (pair.sync "ble", the computer's kvm.js): off, nothing crosses while the session runs through Bluetooth.
     val paused = core.link.ble && core.sync.value("ble") == "false"
     val shared = core.kvm.linked && core.sync.get("cursor", "in") && !paused
-    PageHead("Cursor", "Move $name’s pointer off the edge of its screen to use this device.", if (host != null) shared else null) {
+    PageHead("Cursor", "Move the pointer past the edge of the screen on $name to control this device.", if (host != null) shared else null) {
         // Through Bluetooth, with cursor sharing on, the switch is Over Bluetooth: off there leaves it on for Wi-Fi.
         if (core.link.ble && core.kvm.linked && core.sync.get("cursor", "in")) core.sync.setValue("ble", it)
         else {
@@ -1006,14 +1006,14 @@ private fun CursorPage(core: Core, v: Int) {
     val adbMissing = !viaPhone && !adbOn
     Note(
         when {
-            viaPhone && !core.input.supported -> "This build of TwinDesk can’t use Accessibility: Android’s Play Protect blocks downloaded apps that can. " +
-                "Use wireless debugging, or once it’s set up, $name installs TwinDesk with notifications, which can (on $name, Phone page › Install)."
-            viaPhone && !core.input.on -> "Allow TwinDesk in Accessibility, so $name’s pointer can tap and type here."
-            adbMissing -> "$name moves the pointer here through wireless debugging, which is off. Or choose Accessibility below."
-            !core.pointer.allowed -> "Allow “Show the pointer” in General › Setup to see $name’s pointer here."
+            viaPhone && !core.input.supported -> "This version of TwinDesk can’t use Accessibility, as Play Protect restricts downloaded apps. " +
+                "Use wireless debugging instead, or install the full version of TwinDesk from the Phone page on $name."
+            viaPhone && !core.input.on -> "Allow TwinDesk in Accessibility settings so $name can tap and type on this device."
+            adbMissing -> "$name controls this device through wireless debugging, which is off. You can also choose Accessibility below."
+            !core.pointer.allowed -> "Allow “Show the pointer” in General to see the pointer from $name."
             !core.kvm.linked -> "Cursor sharing is off. Double-tap ${core.kvm.hotkey} on $name to turn it on."
-            paused -> "Cursor sharing is off over Bluetooth. It comes back on Wi-Fi, or double-tap ${core.kvm.hotkey} on $name to turn it on."
-            else -> "Push $name’s pointer past its edge to come here. Double-tap ${core.kvm.hotkey} to take everything back."
+            paused -> "Cursor sharing is paused over Bluetooth. It resumes on Wi-Fi, or double-tap ${core.kvm.hotkey} on $name to turn it on."
+            else -> "Move the pointer on $name past the edge of its screen to control this device. Double-tap ${core.kvm.hotkey} to return."
         },
         if (adbMissing || viaPhone && !core.input.on || !core.pointer.allowed) "warn" else "info",
     )
@@ -1028,12 +1028,12 @@ private fun CursorPage(core: Core, v: Int) {
     }
     MacCard {
         DirHead(name, false, me, true)
-        SwitchRow("Use $name’s mouse and keyboard on $me", "Push the pointer past the edge", core.sync.get("cursor", "in"), first = true) { core.sync.set("cursor", "in", it) }
-        MacRow("Through", when {
-            core.input.via == "auto" && core.input.effective == "adb" -> "Automatic: ADB, wireless debugging is on"
-            core.input.via == "auto" -> "Automatic: Accessibility until wireless debugging is on"
-            core.input.via == "phone" -> "Accessibility: TwinDesk taps and types itself, over Wi-Fi, Wi-Fi Direct or Bluetooth. No developer options"
-            else -> "ADB (wireless debugging): full control. Over Bluetooth without it, Accessibility"
+        SwitchRow("Use $name’s mouse and keyboard on $me", "Move the pointer past the edge of the screen", core.sync.get("cursor", "in"), first = true) { core.sync.set("cursor", "in", it) }
+        MacRow("Control method", when {
+            core.input.via == "auto" && core.input.effective == "adb" -> "Automatic (using ADB)"
+            core.input.via == "auto" -> "Automatic (using Accessibility until wireless debugging is on)"
+            core.input.via == "phone" -> "Accessibility works over Wi-Fi, Wi-Fi Direct and Bluetooth, without developer options"
+            else -> "ADB gives full control through wireless debugging. Accessibility is used over Bluetooth."
         }) {
             SingleChoiceSegmentedButtonRow {
                 val ways = listOf("adb" to "ADB", "phone" to "Accessibility")
@@ -1044,21 +1044,21 @@ private fun CursorPage(core: Core, v: Int) {
         }
     }
     MacCard("Where $name is") { LayoutPicker(me, name, core.kvm.macSide) { core.kvm.setMacSide(it) } }
-    MacCard("Feel") {
+    MacCard("Pointer") {
         val speed = core.sync.value("speed").toFloatOrNull() ?: 1f
-        MacRow("Pointer speed here", "", first = true) {
+        MacRow("Pointer speed", "", first = true) {
             MacSlider(speed, 0.25f..4f, 14, { "%.2f×".format(it) }) { v ->
                 val steps = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f, 3.5f, 4f)
                 val snapped = steps.minBy { kotlin.math.abs(it - v) }
                 core.sync.setValue("speed", if (snapped % 1f == 0f) snapped.toInt() else snapped)
             }
         }
-        SwitchRow("Reverse scrolling", "Scroll here the other way", core.sync.value("reverseScroll") == "true") { core.sync.setValue("reverseScroll", it) }
-        MacRow("Right click", "Back")
+        SwitchRow("Reverse scrolling", "Invert the scroll direction on this device", core.sync.value("reverseScroll") == "true") { core.sync.setValue("reverseScroll", it) }
+        MacRow("Right-click", "Back")
         MacRow("Middle click", "Home")
     }
     MacCard("Not on the same network") {
-        SwitchRow("Over Bluetooth", "When $name isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both",
+        SwitchRow("Over Bluetooth", "Keeps working over Bluetooth when $name isn’t on this network, at a slower rate. When off, it pauses until you’re back on Wi-Fi.",
             core.sync.value("ble") != "false", first = true) { core.sync.setValue("ble", it) }
     }
 }
@@ -1074,17 +1074,17 @@ private fun KeyboardPage(core: Core, v: Int) {
     val on = core.sync.value("keyboard") == "true"
     PageHead("Keyboard", "Type on whichever device the pointer is on.", if (host != null) on else null) { core.sync.setValue("keyboard", it) }
     if (host == null) return NotConnected(core, v)
-    Note(if (on) "$name’s keyboard types here while its pointer is here." else "Keyboard sharing is off: only the pointer comes here.")
+    Note(if (on) "The keyboard on $name types on this device while its pointer is here." else "Keyboard sharing is off. Only the pointer is shared.")
     MacCard("Hotkey") {
-        MacRow(core.kvm.hotkey, "Double-tap on $name to turn cursor sharing on or off. Set it in TwinDesk on $name", first = true)
+        MacRow(core.kvm.hotkey, "Double-tap on $name to turn cursor sharing on or off. You can change it in TwinDesk on $name.", first = true)
     }
     MacCard {
         DirHead(name, false, me, true)
-        MacRow("Shortcuts here", "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes", first = true)
-        MacRow("Typing", "Every key goes as a key, so any keyboard layout and the soft keyboard stay out of the way")
+        MacRow("Shortcuts", "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes", first = true)
+        MacRow("Typing", "Keys are sent directly, so any keyboard layout works and the on-screen keyboard stays hidden")
     }
     MacCard("In the screen view") {
-        MacRow("$name’s screen here", "A keyboard on this device types on $name. The Keyboard button opens the soft keyboard", first = true)
+        MacRow("$name’s screen here", "A keyboard connected to this device types on $name. Tap Keyboard to open the on-screen keyboard.", first = true)
     }
 }
 
@@ -1097,8 +1097,8 @@ private fun RezumePage(core: Core, v: Int) {
     val r = core.rezume
     val ctx = LocalContext.current
     val name = them(core)
-    PageHead("ReZume", "Like Handoff on Apple devices: go on with what you were doing. $name’s page or document here, and this phone’s page or app on $name.", r.on) { r.set("on", it) }
-    if (!r.on) return Note("Off: nothing here is read or sent. Turned on, the page or app in front goes to $name, and $name’s comes here.")
+    PageHead("ReZume", "Continue the web page, document or app you were using, on this phone or on $name.", r.on) { r.set("on", it) }
+    if (!r.on) return Note("Off. When on, the page or app you’re using is offered to $name, and what you’re using on $name is offered here.")
     if (core.host == null) return NotConnected(core, v)
     val o = r.incoming
     if (o != null) MacCard("Continue from $name") {
@@ -1110,33 +1110,33 @@ private fun RezumePage(core: Core, v: Int) {
     }
     val p = r.peer
     Note(when {
-        p == null -> "$name has no ReZume yet: update TwinDesk there."
-        !p.optBoolean("on") -> "ReZume is off on $name: turn it on there too."
-        InputService.running == null && core.adb.wifiDebugging -> "Ready. $name sees this phone’s apps through wireless debugging; for its pages too, turn on TwinDesk’s Accessibility."
-        InputService.running == null -> "$name’s pages and documents come here. For this phone’s to go there, turn on TwinDesk’s Accessibility (or wireless debugging, for apps)."
+        p == null -> "ReZume isn’t available on $name. Update TwinDesk there."
+        !p.optBoolean("on") -> "ReZume is off on $name. Turn it on there as well."
+        InputService.running == null && core.adb.wifiDebugging -> "Ready. $name can continue this phone’s apps through wireless debugging. To include web pages, turn on Accessibility for TwinDesk."
+        InputService.running == null -> "You can continue pages and documents from $name. To send this phone’s pages, turn on Accessibility for TwinDesk, or wireless debugging for apps."
         r.offered.isNotEmpty() -> "Offered to $name: ${r.offered}"
         else -> "Ready."
     }, if (p == null || !p.optBoolean("on")) "warn" else "info")
     if (r.message.isNotEmpty()) Note(r.message)
     if (InputService.running == null) MacCard {
-        MacRow("Accessibility", "Says which app is in front and reads a browser’s address bar, nothing else", first = true) {
+        MacRow("Accessibility", "Used only to detect the active app and the browser’s current address", first = true) {
             Secondary("Open settings") { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
     }
-    MacCard("What goes") {
-        SwitchRow("Web pages", "The tab in front in Chrome, Firefox, Edge, Samsung Internet, Brave, Opera, Vivaldi or DuckDuckGo, and $name’s here", r.opt("web"), first = true) { r.set("web", it) }
-        SwitchRow("Documents", "$name’s document in front comes here and opens", r.opt("docs")) { r.set("docs", it) }
-        SwitchRow("Apps", "The app in front here opens on $name in a window of its own (wireless debugging)", r.opt("apps")) { r.set("apps", it) }
+    MacCard("Content") {
+        SwitchRow("Web pages", "The active tab in Chrome, Firefox, Edge, Samsung Internet, Brave, Opera, Vivaldi or DuckDuckGo", r.opt("web"), first = true) { r.set("web", it) }
+        SwitchRow("Documents", "Open the active document from $name on this phone", r.opt("docs")) { r.set("docs", it) }
+        SwitchRow("Apps", "Open the active app on $name in its own window. Requires wireless debugging.", r.opt("apps")) { r.set("apps", it) }
     }
-    MacCard("Which ways") {
-        SwitchRow("Offer what’s in use here", "$name can go on with it", r.opt("send"), first = true) { r.set("send", it) }
-        SwitchRow("Take $name’s", "What’s in use there shows here", r.opt("receive")) { r.set("receive", it) }
-        SwitchRow("Open what’s sent at once", "Send to on $name opens it here without asking (needs Display over other apps; else a notification)", r.opt("push")) { r.set("push", it) }
+    MacCard("Sharing") {
+        SwitchRow("Send from this device", "$name can continue what you’re using", r.opt("send"), first = true) { r.set("send", it) }
+        SwitchRow("Take $name’s", "Receive from $name", r.opt("receive")) { r.set("receive", it) }
+        SwitchRow("Open received items automatically", "Items sent from $name open without asking. Requires Display over other apps, otherwise a notification is shown.", r.opt("push")) { r.set("push", it) }
     }
-    MacCard("Where $name’s shows") {
-        SwitchRow("Notification", "A quiet one, replaced by the next. Off: only on this page", r.opt("notify"), first = true) { r.set("notify", it) }
+    MacCard("Items from $name") {
+        SwitchRow("Show a notification", "A silent notification that’s replaced by the next one", r.opt("notify"), first = true) { r.set("notify", it) }
     }
-    Note("Share a link to “Open on computer” to open it on $name now.")
+    Note("Share a link to “Open on computer” to open it on $name.")
 }
 
 @Composable
@@ -1151,30 +1151,30 @@ private fun RemotePage(core: Core, v: Int) {
         NotConnected(core, v)
         return BtPadCard(core) // works without TwinDesk on the computer
     }
-    if (r.unsupported) Note("$name doesn’t answer the remote: update TwinDesk there.", "warn")
-    else if (r.allowed == false) Note(r.why.ifEmpty { "$name doesn’t take input from here. On $name, turn on Remote in TwinDesk." }, "warn")
+    if (r.unsupported) Note("$name doesn’t support Remote. Update TwinDesk there.", "warn")
+    else if (r.allowed == false) Note(r.why.ifEmpty { "$name doesn’t accept input from this device. Turn on Remote in TwinDesk on $name." }, "warn")
     val open = { mode: String -> ctx.startActivity(Intent(ctx, RemoteActivity::class.java).putExtra("mode", mode)) }
     MacCard {
-        MacRow("Touchpad and keyboard", "Slide to move $name’s pointer, tap to click, hold to right click, two fingers to scroll. Keys and media keys too", first = true) {
+        MacRow("Touchpad and keyboard", "Slide to move the pointer, tap to click, touch and hold to right-click, and scroll with two fingers. Includes a keyboard and media keys.", first = true) {
             Primary("Open") { open("pad") }
         }
-        MacRow("Gamepad", "Held sideways, like a controller. The left stick is WASD, the right stick is the mouse; Keys in its top bar sets what each button presses") {
+        MacRow("Gamepad", "Hold the phone sideways like a controller. The left stick acts as WASD and the right stick as the mouse. Customise buttons with Keys.") {
             Primary("Open") { open("gamepad") }
         }
     }
     MacCard("Touchpad") {
-        MacRow("Pointer speed", "Also the gamepad’s right stick and the Screen page’s touchpad", first = true) {
+        MacRow("Pointer speed", "Also applies to the gamepad’s right stick and the screen touchpad", first = true) {
             MacSlider(r.speed, 0.3f..3f, 0, { "%.1f×".format(java.util.Locale.ROOT, it) }) { r.setSpeed(it) }
         }
-        SwitchRow("Tap to click", "A quick tap left-clicks; a slide never clicks. Off: only the click buttons click", r.tapClick) { r.setTapClick(it) }
-        SwitchRow("Smooth", "Even pointer motion on $name, about a frame later. Off: each move the moment it arrives", r.smooth) { r.setSmooth(it) }
+        SwitchRow("Tap to click", "Tap to click. When off, use the click buttons.", r.tapClick) { r.setTapClick(it) }
+        SwitchRow("Smooth motion", "Smoother pointer movement on $name, with about one frame of added delay", r.smooth) { r.setSmooth(it) }
     }
     BtPadCard(core)
     Note(
         when {
-            core.link.wired -> "On the USB cable: the quickest way for games."
-            core.link.ble -> "Through Bluetooth the pointer moves about 30 times a second. On Wi-Fi or a USB cable it’s quicker."
-            else -> "Over Wi-Fi it’s as quick as the delay at the top of the app. For games, a USB cable is quickest."
+            core.link.wired -> "Connected by USB, the fastest connection for games."
+            core.link.ble -> "Over Bluetooth, the pointer updates about 30 times a second. Wi-Fi or USB is faster."
+            else -> "Over Wi-Fi, the response time is shown at the top of the app. For games, USB is fastest."
         },
     )
 }
@@ -1182,6 +1182,7 @@ private fun RemotePage(core: Core, v: Int) {
 // As a Bluetooth gamepad (BtPad.kt): any computer, the Mac too, no driver and no TwinDesk there.
 @Composable
 private fun BtPadCard(core: Core) {
+    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
     val ctx = LocalContext.current
     val made = core.btPadMade
     val on = core.store.flag("remote.btpad", false)
@@ -1194,24 +1195,24 @@ private fun BtPadCard(core: Core) {
     }
     val state = pad?.state ?: "off"
     MacCard("As a Bluetooth gamepad") {
-        SwitchRow("As a Bluetooth gamepad", "A game controller for any computer over Bluetooth, the Mac too: no driver and no TwinDesk needed there. " +
-            "Games that take any controller (Steam, emulators); Xbox-only games on Windows want Real gamepad on the PC instead", on, first = true) { v ->
+        SwitchRow("As a Bluetooth gamepad", "Use this phone as a Bluetooth game controller for any computer, without drivers or TwinDesk. " +
+            "Works with games that support any controller, such as Steam and emulators. For Xbox-only games on Windows, use Real gamepad on the PC.", on, first = true) { v ->
             if (!v) core.btPad.setOn(false)
             else if (!core.btPad.allowed()) ask.launch(BtPad.permissions())
             else { core.btPad.setOn(true); findable.launch(core.btPad.discoverableIntent()) }
         }
         if (on) {
-            MacRow("Now", when (state) {
+            MacRow("Status", when (state) {
                 "starting" -> "Starting…"
                 "unavailable" -> pad?.message ?: ""
-                "connected" -> "Connected to ${pad?.hostName}: open the gamepad"
-                "ready" -> "Ready: waiting for a computer"
+                "connected" -> "Connected to ${pad?.hostName}. Open the gamepad to play."
+                "ready" -> "Ready. Waiting for a computer to connect."
                 else -> pad?.message?.ifEmpty { "Off" } ?: "Off"
             }) { if (state == "connected") Primary("Open") { ctx.startActivity(Intent(ctx, RemoteActivity::class.java).putExtra("mode", "gamepad")) } }
             if (state == "ready") {
-                MacRow("Pair it once", "On the computer: Bluetooth settings › Add device (Windows: Bluetooth; Mac: System Settings › Bluetooth; Linux: Bluetooth › +), " +
-                    "then pick “${core.store.deviceName}”. Afterwards it connects by itself while this is on") {
-                    Secondary("Let computers find it") { findable.launch(core.btPad.discoverableIntent()) }
+                MacRow("Pair it once", "On the computer, open Bluetooth settings and add a device, " +
+                    "then choose “${core.store.deviceName}”. It reconnects automatically while this is on.") {
+                    Secondary("Make discoverable") { findable.launch(core.btPad.discoverableIntent()) }
                 }
             }
         }
@@ -1226,16 +1227,16 @@ private fun ClipboardPage(core: Core, v: Int) {
     val name = them(core)
     val me = core.store.deviceName
     val ctx = LocalContext.current
-    PageHead("Clipboard", "Copy on one, paste on the other.")
+    PageHead("Clipboard", "Copy on one device and paste on the other.")
     if (core.host == null) NotConnected(core, v)
     MacCard {
         DirHead(name, false, me, true)
-        SwitchRow("Copies on $name land here", "At once", core.sync.get("clipboard", "in"), first = true) { core.sync.set("clipboard", "in", it) }
+        SwitchRow("Receive from $name", "At once", core.sync.get("clipboard", "in"), first = true) { core.sync.set("clipboard", "in", it) }
     }
     MacCard {
         DirHead(me, true, name, false)
-        SwitchRow("Copies here go to $name", "While TwinDesk is open, or always with wireless debugging", core.sync.get("clipboard", "out"), first = true) { core.sync.set("clipboard", "out", it) }
-        if (core.host != null) MacRow("Send the clipboard now", "Also: the Send clipboard tile in Quick Settings") { Secondary("Send") { core.clip.sendCurrent(true) } }
+        SwitchRow("Send to $name", "While TwinDesk is open, or at any time with wireless debugging", core.sync.get("clipboard", "out"), first = true) { core.sync.set("clipboard", "out", it) }
+        if (core.host != null) MacRow("Send the clipboard now", "Also available as a Quick Settings tile") { Secondary("Send") { core.clip.sendCurrent(true) } }
     }
     // Pictures both ways, this device's screenshots among them (Clip.kt, Screenshots.kt). Finding
     // new screenshots needs photo access.
@@ -1246,11 +1247,11 @@ private fun ClipboardPage(core: Core, v: Int) {
         core.changed()
     }
     MacCard("Pictures") {
-        SwitchRow("Pictures", "Pictures and screenshots up to 10 MB, both ways, with Clipboard › Pictures on on $name too. Not over Bluetooth", clip.picturesOn, first = true) { clip.setPictures(it); shots.watch() }
-        if (clip.picturesOn && core.host != null && !clip.peerImages) MacRow("Off on $name", "Turn on Clipboard › Pictures there (TwinDesk 2.3 or later)")
+        SwitchRow("Pictures", "Copy pictures and screenshots up to 10 MB in both directions. Also turn on Pictures on $name. Not available over Bluetooth.", clip.picturesOn, first = true) { clip.setPictures(it); shots.watch() }
+        if (clip.picturesOn && core.host != null && !clip.peerImages) MacRow("Off on $name", "Turn on Pictures in Clipboard on $name (TwinDesk 2.3 or later)")
         if (clip.picturesOn) {
-            SwitchRow("Screenshots go to $name", "Each one taken here lands on $name’s clipboard: paste it there", shots.on) { shots.setOn(it) }
-            if (shots.on && !shots.canRead) MacRow("Allow photo access", "TwinDesk looks only for new screenshots") { Primary("Allow") { askPhotos.launch(shots.permission) } }
+            SwitchRow("Send screenshots to $name", "New screenshots are copied to the clipboard on $name", shots.on) { shots.setOn(it) }
+            if (shots.on && !shots.canRead) MacRow("Allow photo access", "TwinDesk only checks for new screenshots") { Primary("Allow") { askPhotos.launch(shots.permission) } }
             if (shots.lastSent.isNotEmpty()) MacRow("Last screenshot sent", shots.lastSent)
         }
     }
@@ -1271,20 +1272,20 @@ private fun NotificationsPage(core: Core, v: Int) {
     val name = them(core)
     val me = core.store.deviceName
     val ctx = LocalContext.current
-    PageHead("Notifications", "See each other’s notifications.")
+    PageHead("Notifications", "See notifications from both devices.")
     if (core.host == null) NotConnected(core, v)
     if (!core.notifs.supported) Note(
-        "This build of TwinDesk can’t read this device’s notifications: Android’s Play Protect blocks downloaded apps that can. " +
-            "$name installs TwinDesk with notifications for you once wireless debugging is set up: on $name, Phone page › Install. Your settings and pairing stay.",
+        "This version of TwinDesk can’t read notifications, as Play Protect restricts downloaded apps. " +
+            "Once wireless debugging is set up, install the full version from the Phone page on $name. Your settings and pairings are kept.",
         "warn",
     )
-    else if (!core.notifs.hasAccess) Note("Allow Notification access so this device’s notifications can go to $name.", "warn")
+    else if (!core.notifs.hasAccess) Note("Allow Notification access to show this device’s notifications on $name.", "warn")
     MacCard {
         DirHead(me, true, name, false)
         SwitchRow("Show this device’s notifications on $name", "${core.notifs.sent} sent", core.sync.get("notifs", "out"), first = true) { core.sync.set("notifs", "out", it) }
-        SwitchRow("Hide the message text", "Only the app and title go to $name", core.store.flag("notifs.hideText", false)) { core.store.setFlag("notifs.hideText", it); core.changed() }
-        if (core.notifs.supported && !core.notifs.hasAccess) MacRow("Notification access", "Needed to read them") { Primary("Allow") { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-        if (!core.notifs.supported && !core.adb.paired) MacRow("Wireless debugging", "Set it up first, then install from $name") { Primary("Guide") { Guide.open.value = true } }
+        SwitchRow("Hide the message text", "Only the app name and title are shown on $name", core.store.flag("notifs.hideText", false)) { core.store.setFlag("notifs.hideText", it); core.changed() }
+        if (core.notifs.supported && !core.notifs.hasAccess) MacRow("Notification access", "Required to read notifications") { Primary("Allow") { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+        if (!core.notifs.supported && !core.adb.paired) MacRow("Wireless debugging", "Set it up, then install the full version from $name") { Primary("Guide") { Guide.open.value = true } }
     }
     MacCard {
         DirHead(name, false, me, true)
@@ -1303,7 +1304,7 @@ private fun FilesPage(core: Core, v: Int) {
     val name = them(core)
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) core.files.send(core.files.describe(uris), "send") }
     val pickCopy = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) core.fclip.copy(core.files.describe(uris)) }
-    PageHead("Files", "Send files, copy and paste them, drag them across.")
+    PageHead("Files", "Send, copy and drag files between your devices.")
     if (host == null) return NotConnected(core, v)
 
     core.fclip.incoming?.let { o ->
@@ -1316,8 +1317,8 @@ private fun FilesPage(core: Core, v: Int) {
     }
 
     MacCard("Send to $name") {
-        MacRow("Send files", "They land in $name’s Downloads. From any app: Share › $name", first = true) { Primary("Choose…") { pick.launch("*/*") } }
-        MacRow("Copy files", "Paste them on $name with ⌃⌥V, where you want them") { Secondary("Choose…") { pickCopy.launch("*/*") } }
+        MacRow("Send files", "Saved to the Downloads folder on $name. You can also share from any app.", first = true) { Primary("Choose…") { pick.launch("*/*") } }
+        MacRow("Copy files", "Choose files, then paste them anywhere on $name with ⌃⌥V") { Secondary("Choose…") { pickCopy.launch("*/*") } }
         // Drag files here from another app (split screen or a floating window).
         var over by remember { mutableStateOf(false) }
         val target = remember {
@@ -1338,22 +1339,27 @@ private fun FilesPage(core: Core, v: Int) {
             }
         }
         Box(
-            Modifier.padding(16.dp).fillMaxWidth().height(100.dp).clip(RoundedCornerShape(10.dp))
-                .border(2.dp, if (over) pal.accent else pal.faint.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                .background(if (over) pal.accentSoft else Color.Transparent)
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().height(if (Modern.on) 52.dp else 100.dp)
+                .clip(RoundedCornerShape(if (Modern.on) 16.dp else 10.dp))
+                .let { if (Modern.on) it.background(if (over) pal.accentSoft else pal.chip) else it.border(2.dp, if (over) pal.accent else pal.faint.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).background(if (over) pal.accentSoft else Color.Transparent) }
                 .dragAndDropTarget(shouldStartDragAndDrop = { ev -> ev.mimeTypes().isNotEmpty() }, target = target),
             contentAlignment = Alignment.Center,
-        ) { Text(if (over) "Drop to send to $name" else "Drag files here to send them to $name", color = pal.muted) }
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Ico.files, null, tint = if (over) pal.accent else pal.muted, modifier = Modifier.size(18.dp))
+                Text(if (over) "Drop to send to $name" else "Or drag files here", color = if (over) pal.accent else pal.muted, fontSize = 13.5.sp, maxLines = 1)
+            }
+        }
     }
     MacCard("From $name") {
-        MacRow("Drag across the edge", "Files dragged onto this device land in Downloads › TwinDesk", first = true)
-        MacRow("⌃⌥C on $name", "This device offers to copy them to its clipboard or save them")
-        MacRow("Drop on the phone window", "Files dropped on this device’s window on $name come here")
+        MacRow("Drag across the screen edge", "Files you drag to this device are saved in Downloads › TwinDesk", first = true)
+        MacRow("Copy on $name with ⌃⌥C", "Paste the files here, or save them to this device")
+        MacRow("Drop on the phone window", "Files dropped on this phone’s window on $name are saved to this device")
     }
 
     val moving = core.files.sending.map { "Sending ${it.name}" to Files.pct(it.sent, it.bytes) } +
         core.files.receiving.map { "Receiving ${Files.plural(it.count, "file")}" to Files.pct(it.got, it.bytes) }
-    if (moving.isNotEmpty() || core.fclip.status.isNotEmpty()) MacCard("Now") {
+    if (moving.isNotEmpty() || core.fclip.status.isNotEmpty()) MacCard("In progress") {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for ((label, pct) in moving) {
                 Text("$label · $pct%", color = pal.text)
@@ -1375,7 +1381,7 @@ private fun SoundPage(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     val name = them(core)
     val me = core.store.deviceName
-    PageHead("Sound", "Hear one on the other.")
+    PageHead("Sound", "Play audio from one device on the other.")
     if (core.host == null) NotConnected(core, v)
     else WifiGate(core, "Sound")
     MacCard {
@@ -1387,22 +1393,23 @@ private fun SoundPage(core: Core, v: Int) {
         SwitchRow("Play this device’s sound on $name", soundHint(core), core.sync.get("audio", "out"), first = true) { core.sync.set("audio", "out", it) }
         SoundStart(core)
     }
-    Note("Sound that comes with the screen plays in the screen view (Screen › Playback).")
+    Note("Audio from screen sharing plays in the screen view. See Screen › Playback.")
 }
 
 // This device's sound there: through wireless debugging, else captured here (Sound.kt).
 private fun soundHint(core: Core) = when {
-    core.sound.on -> "Playing there (captured here: Stop in the notification)"
+    core.sound.on -> "Playing on the other device. Stop it from the notification."
     core.sound.error.isNotEmpty() -> core.sound.error
-    else -> "Through wireless debugging, else TwinDesk captures it (Start, each time)"
+    else -> "Uses wireless debugging when available. Otherwise, TwinDesk asks to capture audio each time."
 }
 
 // The computer is waiting for the capture: Start here, as in the notification.
 @Composable
 private fun SoundStart(core: Core) {
+    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
     val ctx = LocalContext.current
-    if (core.sound.wanted && !core.sound.on) MacRow("Start the sound", "Android asks to allow the capture") { Primary("Start") { core.sound.start(ctx) } }
-    else if (core.sound.on) MacRow("Captured sound", "Plays here too: only wireless debugging moves it off this phone") { Secondary("Stop") { core.sound.stop() } }
+    if (core.sound.wanted && !core.sound.on) MacRow("Start the sound", "Android asks for permission to capture audio") { Primary("Start") { core.sound.start(ctx) } }
+    else if (core.sound.on) MacRow("Captured sound", "Audio also plays on this phone. Use wireless debugging to play it only on the computer.") { Secondary("Stop") { core.sound.stop() } }
 }
 
 // ---- General ----
@@ -1414,17 +1421,6 @@ private fun GeneralPage(core: Core, v: Int) {
     val name = them(core)
     var dev by remember { mutableStateOf(core.store.deviceName) }
     PageHead("General", "")
-    MacCard("This device") {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Name", color = pal.text, fontSize = 15.sp)
-            Text("What your computers call it", color = pal.muted, fontSize = 12.5.sp)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(dev, { dev = it }, singleLine = true, modifier = Modifier.weight(1f),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = pal.text), shape = RoundedCornerShape(8.dp))
-                Secondary("Save") { core.store.setDeviceName(dev); core.changed() }
-            }
-        }
-    }
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
     fun Setup(label: String, hint: String, done: Boolean, action: String, first: Boolean = false, onClick: () -> Unit) =
@@ -1440,8 +1436,8 @@ private fun GeneralPage(core: Core, v: Int) {
     ) { core.changed() }
     // Every permission and feature in one place: each is asked for only when switched on elsewhere,
     // or here.
-    MacCard("Allow") {
-        if (Build.VERSION.SDK_INT >= 33) Setup("Notifications", "Files arriving, invites from $name, and TwinDesk staying connected",
+    MacCard("Permissions") {
+        if (Build.VERSION.SDK_INT >= 33) Setup("Notifications", "Incoming files, pairing requests and connection status",
             ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED, "Allow") {
             askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -1450,27 +1446,27 @@ private fun GeneralPage(core: Core, v: Int) {
             "calls" to "Answer and make calls on $name",
             "messages" to "Read and send texts on $name",
             "media" to "Your photos and videos on $name",
-            "files" to "This device’s storage and shared folders on $name, no ADB",
+            "files" to "Browse this device’s storage and shared folders on $name",
         )) {
             val perm = core.hub.perm(what)
-            if (perm == "none") MacRow(Hub.label(what), if (what == "files") "Needs Android 11 or later" else "Needs TwinDesk with notifications ($name installs it)")
-            else Setup(Hub.label(what), if (perm == "partial") "Some access is missing: $hint" else hint, perm == "ok", "Allow") { core.hub.askHere(what) }
+            if (perm == "none") MacRow(Hub.label(what), if (what == "files") "Requires Android 11 or later" else "Requires the full version of TwinDesk, which you can install from $name")
+            else Setup(Hub.label(what), if (perm == "partial") "Some permissions are missing: $hint" else hint, perm == "ok", "Allow") { core.hub.askHere(what) }
         }
-        if (core.notifs.supported) Setup("Notification access", "To show this device’s notifications on $name", core.notifs.hasAccess, "Allow") {
+        if (core.notifs.supported) Setup("Notification access", "Show this device’s notifications on $name", core.notifs.hasAccess, "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        } else MacRow("Notification access", "Comes with TwinDesk with notifications, which $name installs (its Phone page)")
-        Setup("Run in the background", "So $name can reach this device any time", pm.isIgnoringBatteryOptimizations(ctx.packageName), "Allow") {
+        } else MacRow("Notification access", "Available in the full version of TwinDesk, which you can install from $name")
+        Setup("Run in the background", "Lets $name connect to this device at any time", pm.isIgnoringBatteryOptimizations(ctx.packageName), "Allow") {
             @Suppress("BatteryLife")
             ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
         }
         MacRow(
             "Wireless debugging",
             when {
-                core.adb.paired -> "Paired with $name: this screen and sound there, its mouse and keyboard here"
-                core.link.ble -> "Only available over Wi-Fi: you’re connected over Bluetooth"
+                core.adb.paired -> "Paired with $name for screen, sound, mouse and keyboard"
+                core.link.ble -> "Requires Wi-Fi. You’re connected over Bluetooth."
                 core.adb.wifiDebugging && !core.adb.setupNeeded -> "Paired with $name, reconnecting…"
-                core.adb.wifiDebugging -> "On. Pair it with $name once (the guide walks you through it)"
-                else -> "For this screen and sound on $name, and its mouse and keyboard here"
+                core.adb.wifiDebugging -> "On. Pair it with $name once using the guide."
+                else -> "Used for screen, sound, mouse and keyboard with $name"
             },
         ) {
             if (core.adb.paired) Pill("Paired", "good")
@@ -1484,28 +1480,40 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow(
             "Turn off wireless debugging when disconnected",
             when {
-                !core.adb.canEnable -> "Once paired with $name: off again 2 minutes after it disconnects, when TwinDesk switched it on"
-                core.adb.autoOffEnabled -> "2 minutes after $name disconnects, when TwinDesk switched it on, and on again as it connects. Switched on by you, it stays on"
+                !core.adb.canEnable -> "Turns off 2 minutes after $name disconnects, if TwinDesk turned it on"
+                core.adb.autoOffEnabled -> "Turns off 2 minutes after $name disconnects and back on when it reconnects. Stays on if you turned it on yourself."
                 else -> "Wireless debugging stays on after $name disconnects"
             },
             core.adb.autoOffEnabled, enabled = core.adb.canEnable,
         ) { core.adb.setAutoOff(it) }
-        Setup("Nearby devices", "Bluetooth and Wi-Fi Direct, for $name when it isn’t on this network", nearbyAllowed, "Allow") {
+        Setup("Nearby devices", "Use Bluetooth and Wi-Fi Direct when $name isn’t on this network", nearbyAllowed, "Allow") {
             askNearby.launch(nearbyPerms)
         }
-        if (core.input.supported) Setup("Mouse and keyboard", "Accessibility: $name’s cursor on this phone without wireless debugging, on any network. Only needed when ADB isn’t used", core.input.on, "Allow") { core.input.openSettings() }
-        else MacRow("Mouse and keyboard", "Through wireless debugging. Without it: comes with TwinDesk with notifications, which $name installs (its Phone page)")
-        Setup("Show the pointer", "Draws $name’s pointer over other apps", core.pointer.allowed, "Allow") {
+        if (core.input.supported) Setup("Mouse and keyboard", "Lets $name control this phone on any network without wireless debugging", core.input.on, "Allow") { core.input.openSettings() }
+        else MacRow("Mouse and keyboard", "Uses wireless debugging. Accessibility control is available in the full version of TwinDesk.")
+        Setup("Show the pointer", "Shows the pointer from $name over other apps", core.pointer.allowed, "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
         }
-        if (Build.VERSION.SDK_INT >= 30) Setup("All files access", "Your wallpaper on $name, Files and shared folders", android.os.Environment.isExternalStorageManager(), "Allow") {
+        if (Build.VERSION.SDK_INT >= 30) Setup("All files access", "Used for your wallpaper on $name, Files and shared folders", android.os.Environment.isExternalStorageManager(), "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")))
         }
     }
+    AppearanceCard()
+    MacCard("This device") {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Name", color = pal.text, fontSize = 15.sp)
+            Text("How this device appears on your computers", color = pal.muted, fontSize = 12.5.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(dev, { dev = it }, singleLine = true, modifier = Modifier.weight(1f),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = pal.text), shape = RoundedCornerShape(8.dp))
+                Secondary("Save") { core.store.setDeviceName(dev); core.changed() }
+            }
+        }
+    }
     MacCard("Not on the same network") {
-        BleSwitch(core, "Allow Nearby devices above", first = true)
-        SwitchRow("Turn off Bluetooth on Wi-Fi connections", if (core.bleWifiOff) "On the same Wi-Fi network as $name (not Wi-Fi Direct), Bluetooth goes off until the connection ends"
-            else "Bluetooth stays on beside the Wi-Fi, the way back if it drops", core.bleWifiOff) { core.store.setFlag("bleWifiOff", it); core.changed() }
+        BleSwitch(core, "Allow Nearby devices permission above", first = true)
+        SwitchRow("Turn off Bluetooth on Wi-Fi connections", if (core.bleWifiOff) "Turns Bluetooth off while connected to $name over the same Wi-Fi network"
+            else "Bluetooth stays on as a backup if Wi-Fi drops", core.bleWifiOff) { core.store.setFlag("bleWifiOff", it); core.changed() }
         val n = core.net
         if (n.state != "idle") MacRow("Wi-Fi", when (n.state) {
             "asking", "hosting" -> "Starting a direct Wi-Fi link…"
@@ -1519,11 +1527,99 @@ private fun GeneralPage(core: Core, v: Int) {
         core.hosts().forEachIndexed { i, h ->
             MacRow(h.name, if (core.host?.id == h.id) (if (core.link.wired) "Connected over USB" else if (core.link.ble) "Connected over Bluetooth" else "Connected") else "Last address ${h.address}", first = i == 0) {
                 if (core.host?.id == h.id) Pill("Online", "good")
-                TextButton(onClick = { core.forget(h.id) }) { Text("Forget", color = pal.bad) }
+                TextButton(onClick = { core.forget(h.id) }) { Text("Forget", color = pal.muted) }
             }
         }
     }
 }
+
+
+// The phone's hero card: one surface with a faint tint of the accent (no inner shade, no
+// gradient), so nothing in it asks for attention; its buttons are white pills on it.
+@Composable
+private fun HeroCard(content: @Composable ColumnScope.() -> Unit) {
+    val p = pal
+    val dark = p.text.luminance() > 0.5f
+    val bg = androidx.compose.ui.graphics.lerp(p.card, p.accent, if (dark) 0.07f else 0.05f)
+    val soft = p.copy(chip = if (dark) Color.White.copy(alpha = 0.08f) else Color.White)
+    Column(Modifier.padding(bottom = 18.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(bg)) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalPalette provides soft) { content() }
+    }
+}
+
+@Composable
+private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, link: Link, accent: Color) {
+    @Suppress("UNUSED_EXPRESSION") v
+
+        Row(
+            Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp).fillMaxWidth()
+                
+                .padding(horizontal = 8.dp, vertical = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Device(me, phone = true, Modifier.weight(1f))
+            Column(Modifier.weight(0.9f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(
+                    if (host != null) Brush.horizontalGradient(listOf(pal.good, pal.accent)) else Brush.horizontalGradient(listOf(pal.trackOff, pal.trackOff)),
+                ))
+                Text(
+                    when { host != null -> listOfNotNull(core.net.via, link.rttMs?.let { "$it ms" }).joinToString(" · ").ifEmpty { "Connected" }; link.state == "connecting" -> "Connecting…"; link.pair != null -> "Pairing…"; else -> "Not connected" },
+                    color = pal.muted, fontSize = 11.sp, maxLines = 2, lineHeight = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            Device(them(core), phone = false, Modifier.weight(1f))
+        }
+        if (!(Modern.on && host != null)) Text(
+            when {
+                host != null -> "Connected"
+                link.message.isNotEmpty() -> link.message
+                core.hosts().isNotEmpty() -> "Tap Connect, or select this device on your computer."
+                else -> "Choose a computer below, or pair by address."
+            },
+            color = pal.muted, fontSize = 12.5.sp, lineHeight = 17.sp, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+        )
+        // Wireless debugging not set up (or off): one line under Connected, with the way to fix it.
+        // Reached anyway (adb's TCP mode, on a direct Wi-Fi link): nothing to fix.
+        // Over Bluetooth: greyed out, it only works over Wi-Fi.
+        val adbBle = core.link.ble
+        if (host != null && !core.adb.paired && (adbBle || core.adb.setupNeeded || !core.adb.wifiDebugging)) Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp).clip(RoundedCornerShape(8.dp)).background(if (Modern.on) pal.chip else if (adbBle) pal.line.copy(alpha = 0.35f) else pal.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (adbBle) "Wireless debugging requires Wi-Fi. You’re connected to ${host.name} over Bluetooth."
+                else if (core.adb.setupNeeded) "Wireless debugging isn’t set up. ${host.name} uses it to show and control this screen."
+                else "Wireless debugging is off. ${host.name} uses it to show and control this screen.",
+                color = if (adbBle) pal.muted else pal.text, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f).padding(end = 8.dp),
+            )
+            if (!adbBle) { if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true } else Secondary("Turn on") { core.adb.turnOn() } }
+        }
+        if (host != null) {
+            val show = { core.ctx.startActivity(Intent(core.ctx, ViewerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            // On Bluetooth: a direct Wi-Fi link on request, or made for files and screens: Back to Bluetooth ends it (both sides).
+            val onWifi = core.net.wanted("user") || core.net.linked
+            val wifiLabel = if (onWifi) "Back to Bluetooth" else if (core.link.ble) "Connect with Wi-Fi Direct" else null
+            val wifiClick = { if (onWifi) core.net.drop() else core.net.need("user"); core.changed() }
+            if (LocalConfiguration.current.screenWidthDp >= 600) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                    Primary("Show ${host.name}’s screen", show)
+                    if (wifiLabel != null) Secondary(wifiLabel) { wifiClick() }
+                    Secondary("Disconnect") { core.disconnect() }
+                }
+            } else {
+                // A phone: one button per line, inside the card's padding.
+                Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = show, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (Modern.on) pal.accentSoft else pal.accent, contentColor = if (Modern.on) pal.accent else Color.White), elevation = if (Modern.on) null else ButtonDefaults.buttonElevation()) {
+                        Text("Show ${host.name}’s screen", fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (wifiLabel != null) Button(onClick = { wifiClick() }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(50), elevation = null, colors = ButtonDefaults.buttonColors(containerColor = pal.chip, contentColor = pal.text)) { Text(wifiLabel) }
+                    Button(onClick = { core.disconnect() }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(50), elevation = null, colors = ButtonDefaults.buttonColors(containerColor = pal.chip, contentColor = pal.text)) { Text("Disconnect") }
+                }
+            }
+        }
+    }
 
 // ---- About ----
 
@@ -1534,7 +1630,7 @@ private fun AboutPage(core: Core, v: Int) {
         Logo(110)
         Text("TwinDesk", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = pal.text, modifier = Modifier.padding(top = 10.dp))
         Text("Version ${BuildConfig.VERSION_NAME}", color = pal.muted)
-        Text("Use your computer and this device as one desk.", color = pal.muted, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp))
+        Text("Use your computer and phone together as one workspace.", color = pal.muted, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp))
     }
     val ctx = LocalContext.current
     val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -1546,7 +1642,7 @@ private fun AboutPage(core: Core, v: Int) {
                 u.checking -> "Checking…"
                 u.error.isNotEmpty() -> "Couldn’t check: ${u.error}"
                 u.available -> "${u.latest} is available. You have ${u.current}. " + (u.download?.let { "Download ${it.name}" } ?: "Opens the release page")
-                u.noReleases -> "Version ${u.current}. No releases published yet"
+                u.noReleases -> "Version ${u.current}. No releases are available yet."
                 u.checkedAt > 0 -> "Up to date · checked " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(u.checkedAt))
                 else -> "Version ${u.current}"
             },
@@ -1569,4 +1665,6 @@ private fun AboutPage(core: Core, v: Int) {
         MacRow("Screen, input and sound over wireless debugging", "scrcpy-server (Apache-2.0)")
         MacRow("Network", "OkHttp (Apache-2.0)")
     }
+    Text("Crafted with ☕ and ❤️ in Sri Lanka 🇱🇰", color = pal.muted, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 24.dp))
 }

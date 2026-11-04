@@ -61,7 +61,7 @@
 
   // Paired computers nearby, under the phones at the top of the sidebar (as the phone app shows
   // them): its kind, its name and the link. Click: connect it; the connected one opens Overview.
-  // list: [{id, name, os, connected, sub, go()}]; open(): show Overview; active: Overview is open.
+  // list: [{id, name, os, connected, sub, go()}]; open(): show Overview; active: the connected one is lit (blue) on every page.
   let pcKey = '';
   UI.renderPcs = (box, list, { open, active }) => {
     const key = JSON.stringify([list.map((d) => [d.id, d.name, d.os, d.connected, d.sub]), active]);
