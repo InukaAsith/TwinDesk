@@ -225,7 +225,7 @@
       PAPP_SIZE: 'papp.size', // M->W {wid, w, h} physical px
       PAPP_RETURN: 'papp.return', // M->W {wid}: a window moved here (papp.windows moved: true) goes back, dragged past the edge home
       // A phone (os 'android') as the peer
-      PHONE_INFO: 'phone.info', // phone->Mac {model, maker, sdk, release, battery?, charging?, colors: ['#rrggbb'], wallpaper?: data URL (small JPEG)}
+      PHONE_INFO: 'phone.info', // phone->Mac {model, maker, sdk, release, battery?, charging?, colors: ['#rrggbb'], wallpaper?: data URL (small JPEG), app? (versionName), caps?: ['mirror.native', …] (what it can do without wireless debugging; an older app sends none)}
       PHONE_APPS_LIST: 'phone.apps.list', // Mac->phone
       PHONE_APPS: 'phone.apps', // phone->Mac {apps: [{id (package), name, icon (data URL PNG)}]}
       PHONE_POINTER: 'phone.pointer', // Mac->phone {on, x?, y?}: where the Mac's pointer is while it drives the phone (the app draws it)
@@ -241,6 +241,12 @@
       PHONE_SOUND_WANT: 'phone.sound.want', // computer->phone {on}: its sound here without wireless debugging (playback capture, Start on the phone), while adb can't carry it
       PHONE_SOUND: 'phone.sound', // phone->computer {codec: 'opus'|'pcm', p: [base64]}: 20 ms each (Opus packets, or 48 kHz stereo s16le)
       PHONE_SOUND_STATE: 'phone.sound.state', // phone->computer {on, waiting (for Start on the phone), error, codec}
+      // The phone's screen without wireless debugging (shared/nativescreen.js, Mirror.kt): the phone
+      // captures it itself (one Start on the phone for the screen and its sound) and sends H.264 over
+      // HTTPS to the session's port (POST /twindesk/mirror, header x-twindesk-mirror: key), in
+      // scrcpy's 12-byte packets. Only to a phone whose phone.info caps has 'mirror.native'.
+      PHONE_MIRROR_WANT: 'phone.mirror.want', // computer->phone {on, key (a secret for the stream), maxSize, bitrate (b/s), fps} | {on, sync: true} (a keyframe now)
+      PHONE_MIRROR_STATE: 'phone.mirror.state', // phone->computer {on, waiting (for Start on the phone), error, w, h (the picture), sw, sh (the screen, for phone.in)}
       // What plays on the phone, for the Overview's media controls (shared/nowplaying.js, NowPlaying.kt):
       PHONE_MEDIA_WANT: 'phone.media.want', // computer->phone {on}: send phone.media (Audio › Media controls on Overview)
       PHONE_MEDIA: 'phone.media', // phone->computer {app, appName, title, artist, album, playing, duration, position, at, speed, next, prev, seek, art?} or {none, why?}; art (a data: URL) only when it changed
@@ -277,7 +283,7 @@
       ADB_STATE: 'adb.state', // phone->Mac {devOptions, wifi (wireless debugging on), canEnable (WRITE_SECURE_SETTINGS granted), address, full, port (its wireless debugging port from its own mDNS, 0 if not known yet), net (on a Wi-Fi network: wireless debugging can't be on without one)}
       ADB_ENABLE: 'adb.enable', // Mac->phone {on}: switch wireless debugging (needs canEnable)
       ADB_PAIR: 'adb.pair', // phone->computer {code, port?}: the code from "Pair device with pairing code", typed on the phone (port: its pairing port, 0 if unknown)
-      ADB_BRIDGE: 'adb.bridge', // computer->phone {state, message}: how the computer's wireless debugging link is doing (off|missing|waitingWifi|needsPair|connecting|ready|error), viewed, camera {on, facing, error, virtual} (its camera running there, for its Camera page)
+      ADB_BRIDGE: 'adb.bridge', // computer->phone {state, message}: how the computer's wireless debugging link is doing (off|missing|waitingWifi|needsPair|connecting|ready|error), viewed, camera {on, facing, error, virtual} (its camera running there, for its Camera page), need? (bool: something here uses wireless debugging; false: the phone doesn't switch it on or ask for it; an older computer never says, and the phone does as before)
       // A session through Bluetooth moves onto Wi-Fi for files and screens (shared/netlink.js): one
       // side hosts a network (Wi-Fi Direct group / Windows' legacy access point), the other joins
       // it, and the guest moves the session onto it (hello {resume}, below) without ending it.
@@ -295,15 +301,15 @@
       HUB_ASK: 'hub.ask', // computer->phone {what: 'calls'|'messages'|'media'|'files'|'bt'}: ask the person on the phone for that one's permissions
       HUB_SET: 'hub.set', // phone->computer {what, on}: switched on or off on the phone
       HUB_BT: 'hub.bt', // computer->phone {address, unpair?}: this computer's Bluetooth address (is the phone paired with it?); unpair: forget it (classic and LE). phone->computer {unpair: true}: Forget on the phone, the computer forgets it too. Pairing itself is the person's, in Bluetooth settings
-      CALL_STATE: 'call.state', // phone->computer {state: 'idle'|'ringing'|'offhook', number, name, photo?, dir: 'in'|'out', since}
-      CALL_DO: 'call.do', // computer->phone {a: 'dial'|'answer'|'end'|'mute', number?, on?}
-      CALL_DONE: 'call.done', // phone->computer {a, ok, error?}
+      CALL_STATE: 'call.state', // phone->computer {state: 'idle'|'ringing'|'offhook', number, name, photo?, dir: 'in'|'out', since, held?, silenced?, can?: ['hold'|'dtmf'|'silence']}
+      CALL_DO: 'call.do', // computer->phone {a: 'dial'|'answer'|'end'|'mute'|'hold'|'dtmf'|'silence', number?, sim?, on?, key?} (a number with * or # opens the phone's dialer: onPhone in call.done)
+      CALL_DONE: 'call.done', // phone->computer {a, ok, error?, onPhone?}
       CALL_LOG: 'call.log', // computer->phone {n} | phone->computer {items: [{number, name, type: 'in'|'out'|'missed'|'rejected'|'blocked', at, dur}]}
       CONTACTS: 'contacts', // computer->phone {q} | phone->computer {q, items: [{name, numbers: [{n, label}]}]}
       SMS_THREADS: 'sms.threads', // computer->phone {n} | phone->computer {items: [{id, addrs, name, snippet, at, unread, out}]}
       SMS_THREAD: 'sms.thread', // computer->phone {id, before?, n} | phone->computer {id, before, items: [{id, body, at, out, from, status, parts?: [{id, type}]}], more}
       SMS_PART: 'sms.part', // computer->phone {id}: an MMS picture | phone->computer {id, data}
-      SMS_SEND: 'sms.send', // computer->phone {to, body, ref}
+      SMS_SEND: 'sms.send', // computer->phone {to, body, ref, sim? (a subscription id from hub.state messages.sims), addrs? (a group: everyone, 2–20), image? (a JPEG data: URL)}: with addrs or image, an MMS (hub.state messages.mms)
       SMS_SENT: 'sms.sent', // phone->computer {ref, ok, error?}
       SMS_NEW: 'sms.new', // phone->computer {thread, summary, msg}: a message arrived or was sent on the phone
       MEDIA_LIST: 'media.list', // computer->phone {kind: 'all'|'photos'|'videos'|'screenshots', before?, n} | phone->computer {kind, before, items: [{id, video, at, w, h, size, name, dur, album}], more}

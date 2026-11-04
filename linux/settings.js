@@ -186,6 +186,9 @@ function normalize(s) {
       wallpaper: bool(ph.wallpaper, true),
       input: ph.input === 'phone' ? 'phone' : 'adb', // the mouse and keyboard through adb, or the phone's Accessibility service
       inputPicked: bool(ph.inputPicked, false), // not picked: automatic (phone-bridge.js inputMode)
+      // The screen and the sound: through wireless debugging or the phone itself (shared/phonemodes.js)
+      mirror: ['adb', 'native'].includes(ph.mirror) ? ph.mirror : 'auto',
+      soundVia: ['adb', 'native'].includes(ph.soundVia) ? ph.soundVia : 'auto',
       panel: bool(ph.panel, true), // the phone windows' controls in the title bar (its panel button hides them)
       // Keys in a phone window and on the phone (shared/phonechat.js): Enter sends in WhatsApp,
       // Instagram and Telegram (Shift+Enter a new line); the arrow keys swipe the screen.

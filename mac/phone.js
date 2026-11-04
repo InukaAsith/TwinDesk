@@ -49,6 +49,8 @@ class Phone extends EventEmitter {
         model: str(m.model, 80), maker: str(m.maker, 40), release: str(m.release, 20), sdk: m.sdk | 0,
         battery: Number.isFinite(m.battery) ? Math.max(0, Math.min(100, Math.round(m.battery))) : null,
         charging: !!m.charging, colors, wallpaper, display,
+        // This app's version and what it can do without wireless debugging (shared/phonemodes.js caps): an older app sends neither.
+        app: str(m.app, 40), caps: Array.isArray(m.caps) ? m.caps.filter((c) => typeof c === 'string').slice(0, 50).map((c) => c.slice(0, 40)) : [],
       };
       if (wallpaper !== ((prev && prev.wallpaper) || '')) this.assets++;
       this.emit('info', this.info);

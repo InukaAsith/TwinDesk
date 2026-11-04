@@ -72,6 +72,7 @@ class Peer {
     if (this.il) server.ilOffer = (ctx) => (ctx.ilOn = this.il.offer(ctx.ilWanted, ctx.address));
     server.https.on('request', (req, res) => {
       if (this.fx.request(req, res)) return;
+      if (require('../shared/nativescreen.js').NativeScreen.request(req, res)) return; // a phone's own screen (Mirroring › Native)
       res.writeHead(404);
       res.end();
     });

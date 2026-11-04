@@ -14,6 +14,9 @@
     muted: 'M10 3a2 2 0 0 1 2 2v5a2 2 0 0 1-4 0V5a2 2 0 0 1 2-2z M5.5 9.5a4.5 4.5 0 0 0 9 0 M10 14v3 M3.5 3.5l13 13',
     here: 'M3 4h14v9H3z M7 17h6 M10 13v4',
     phone: 'M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2',
+    silence: 'M4 8h3l4-3.5v11L7 12H4z M13.5 8l4 4 M17.5 8l-4 4',
+    hold: 'M7 4.5v11 M13 4.5v11',
+    resume: 'M6.5 4.5v11l9-5.5z',
   };
   const icon = (name) => {
     const s = document.createElementNS(SVG, 'svg');
@@ -58,6 +61,12 @@
     $('decline').hidden = !c || c.state !== 'ringing';
     $('end').hidden = !c || c.state === 'ringing';
     $('mute').hidden = !c || c.state === 'ringing';
+    const can = (c && c.can) || [];
+    $('silence').hidden = !c || c.state !== 'ringing' || !can.includes('silence') || !!c.silenced;
+    set($('silence'), 'silence', 'Silence');
+    $('hold').hidden = !c || c.state === 'ringing' || !can.includes('hold');
+    if (c) set($('hold'), c.held ? 'resume' : 'hold', c.held ? 'Resume' : 'Hold');
+    $('hold').classList.toggle('on', !!(c && c.held));
     set($('mute'), st.muted ? 'muted' : 'mute', st.muted ? 'Unmute' : 'Mute');
     $('mute').classList.toggle('on', !!st.muted);
     $('where').hidden = !c || c.state === 'ringing' || !bt || st.audio.canMove === false;
@@ -67,6 +76,8 @@
   $('answer').onclick = () => window.callpop.act({ do: 'call', a: 'answer' });
   $('decline').onclick = () => window.callpop.act({ do: 'call', a: 'end' });
   $('end').onclick = () => window.callpop.act({ do: 'call', a: 'end' });
+  $('silence').onclick = () => window.callpop.act({ do: 'call', a: 'silence' });
+  $('hold').onclick = () => window.callpop.act({ do: 'call', a: 'hold', on: !(st && st.call && st.call.held) });
   $('mute').onclick = () => window.callpop.act({ do: 'call', a: 'mute', on: !(st && st.muted) });
   $('where').onclick = () => window.callpop.act({ do: 'audio', a: st && st.audio && st.audio.here ? 'phone' : 'here' });
   $('close').onclick = () => window.callpop.close();

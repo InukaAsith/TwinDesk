@@ -60,7 +60,9 @@ function setupIpc(ctx) {
   });
   handle('refreshFound', () => discovery.refresh());
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text)) : notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
+    : r.dismiss ? notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
+      : notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('qrPair', () => ctx.qrPair());
   handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code // Connection: the phone pairing QR code's link
   handle('importCancel', () => ctx.explorer() && ctx.explorer().cancel()); // Phone Files: stop importing into Explorer's folder
@@ -236,6 +238,7 @@ function setupIpc(ctx) {
   phone('disconnectPhone', () => ctx.phone.disconnect());
   handle('setPhone', (partial) => change('phone', partial, () => {
     if (partial && 'input' in partial && ctx.phone) ctx.phone.bridge.tellVia();
+    if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial) && ctx.phone) ctx.phone.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js)
     if (partial && 'controls' in partial && ctx.phoneViews) ctx.phoneViews.applyControls(); // the open phone windows move theirs
     if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts(); // and light their switches
   }));
@@ -267,7 +270,7 @@ function setupIpc(ctx) {
       { label: 'Pin to Start', click: () => ctx.phoneViews.pin(arg.id, name) },
     ]).popup();
   });
-  phone('phoneRetry', () => ctx.phone.bridge._kick());
+  phone('phoneRetry', () => ctx.phone.bridge.retry()); // also Set Up, when nothing used wireless debugging
   phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
   handle('phoneAssets', () => (ctx.phone ? ctx.phone.assetsView() : { wallpaper: '', apps: [] }));
   handle('installVdd', () => vdd.install());

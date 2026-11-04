@@ -79,8 +79,17 @@ class PhoneHub extends EventEmitter {
       // Bluetooth LE link to it fails on them.
       if (bt.forget && !(this.state && this.state.bt.forget) && this.audio && this.audio.unpair) this.audio.unpair();
       this.state = {
-        calls: { perm: perm(m.calls), missing: missing(m.calls) },
-        messages: { perm: perm(m.messages), missing: missing(m.messages) },
+        calls: {
+          perm: perm(m.calls), missing: missing(m.calls),
+          // The SIMs a call can go out on (two or more), and whether Hold and the keypad can work (CallCompanion.kt).
+          sims: m.calls && Array.isArray(m.calls.sims) ? m.calls.sims.filter((x) => x && typeof x.id === 'string').slice(0, 4).map((x) => ({ id: str(x.id, 200), label: str(x.label, 40) })) : [],
+          companion: !!(m.calls && m.calls.companion),
+        },
+        messages: {
+          perm: perm(m.messages), missing: missing(m.messages),
+          sims: m.messages && Array.isArray(m.messages.sims) ? m.messages.sims.filter((x) => x && Number.isInteger(x.id)).slice(0, 4).map((x) => ({ id: x.id, label: str(x.label, 40) })) : [], // texts' SIMs (two or more)
+          mms: !!(m.messages && m.messages.mms), // sends pictures and group texts
+        },
         media: { perm: perm(m.media) },
         files: { perm: perm(m.files) },
         bt: {
@@ -201,7 +210,15 @@ class PhoneHub extends EventEmitter {
       case T.SMS_THREADS: out.n = n(m.n, 300, 60); break;
       case T.SMS_THREAD: Object.assign(out, { id: str(m.id, 20), before: Number(m.before) || 0, n: n(m.n, 200, 50) }); break;
       case T.SMS_PART: out.id = str(m.id, 40); break;
-      case T.SMS_SEND: Object.assign(out, { to: str(m.to, 60), body: str(m.body, 5000), ref: str(m.ref, 60) }); break;
+      case T.SMS_SEND: {
+        Object.assign(out, { to: str(m.to, 60), body: str(m.body, 5000), ref: str(m.ref, 60), ...(Number.isInteger(m.sim) && m.sim >= 0 ? { sim: m.sim } : {}) });
+        // An MMS (phones that say messages.mms): a picture, and/or everyone in a group.
+        const addrs = Array.isArray(m.addrs) ? m.addrs.map((a) => str(a, 60).trim()).filter(Boolean).slice(0, 20) : [];
+        if (addrs.length > 1) out.addrs = addrs;
+        const image = picture(m.image, 6000000);
+        if (image) out.image = image;
+        break;
+      }
       case T.MEDIA_LIST: Object.assign(out, { kind: ['all', 'photos', 'videos', 'screenshots'].includes(m.kind) ? m.kind : 'all', before: str(m.before, 40), n: n(m.n, 500, 120) }); break;
       case T.MEDIA_THUMB: out.ids = ids(m.ids); break;
       case T.MEDIA_VIEW: out.id = str(m.id, 40); break;
@@ -258,10 +275,13 @@ class PhoneHub extends EventEmitter {
     }
     if (a === 'dial') {
       const number = str(m.number, 60).replace(/[^\d+*#,;]/g, '');
-      if (number) this.server.sendToClient({ t: T.CALL_DO, a, number });
+      const sim = str(m.sim, 200);
+      if (number) this.server.sendToClient({ t: T.CALL_DO, a, number, ...(sim ? { sim } : {}) });
       return;
     }
-    if (a === 'answer' || a === 'end') this.server.sendToClient({ t: T.CALL_DO, a });
+    if (a === 'answer' || a === 'end' || a === 'silence') this.server.sendToClient({ t: T.CALL_DO, a });
+    if (a === 'hold') this.server.sendToClient({ t: T.CALL_DO, a, on: !!m.on });
+    if (a === 'dtmf' && /^[0-9*#]$/.test(String(m.key))) this.server.sendToClient({ t: T.CALL_DO, a, key: String(m.key) });
   }
 
   // ---- from the phone ----
@@ -284,6 +304,9 @@ class PhoneHub extends EventEmitter {
         photo: picture(m.photo, 60000) || (was ? was.photo : ''),
         dir: m.dir === 'out' ? 'out' : 'in',
         since: same ? was.since : Date.now(), // this computer's clock: the timer counts from here
+        held: !!m.held,
+        silenced: !!m.silenced,
+        can: Array.isArray(m.can) ? m.can.filter((x) => ['hold', 'dtmf', 'silence'].includes(x)) : [], // an older phone app: none
       };
     }
     // A call under way with the hands-free link up: its sound comes here (the phone may keep it

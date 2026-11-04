@@ -8,6 +8,7 @@ const path = require('path');
 const P = require('../shared/protocol.js');
 const { IconsIn } = require('../shared/notificon.js');
 const { otpOf } = require('../shared/otp.js');
+const { actionsOf, withPhoneActions } = require('../shared/notifacts.js');
 
 const xmlEsc = (t) => String(t).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 
@@ -47,6 +48,7 @@ class Notifs {
       this.onChange();
     });
     link.on(T.NOTIF, (m) => this._show(m));
+    link.on('notif.gone', (m) => this.gone(m.id)); // gone from the phone (shared/notifacts.js)
     this.helper.on('ready', () => this._watch());
     this.helper.on('event', (name, ev) => name === 'notif' && this._local(ev));
   }
@@ -117,7 +119,7 @@ class Notifs {
     const appName = str(m.appName, 100);
     const title = str(m.title, 200) || appName || peer;
     const item = {
-      id: str(m.id, 64) || String(Date.now()),
+      id: str(m.id, 200) || String(Date.now()), // the phone's key, whole: notif.act and notif.dismiss name it
       app: str(m.app, 200),
       appName,
       title,
@@ -125,6 +127,7 @@ class Notifs {
       body: str(m.body, 1000),
       at: Math.round(Number(m.at)) || Date.now(),
       reply: m.reply === true, // a phone chat's: answered with reply() (notif.reply)
+      actions: actionsOf(m), // its buttons, clicked from Overview (act())
     };
     if (item.app && typeof m.icon === 'string' && m.icon.startsWith('data:image/') && m.icon.length < 200000) {
       this.historyIcons.delete(item.app);
@@ -147,6 +150,7 @@ class Notifs {
           + '<visual><binding template="ToastGeneric"><text>' + xmlEsc(title) + '</text><text>' + xmlEsc(body) + '</text></binding></visual>'
           + '<actions><action content="' + xmlEsc('Copy ' + code) + '" activationType="protocol" arguments="twindesk:copy?code=' + code + '"/></actions></toast>',
       }) : new Notification({ title, icon, body });
+      n.tdId = item.id;
       this.live.add(n);
       const drop = () => this.live.delete(n);
       n.on('close', drop);
@@ -168,6 +172,9 @@ class Notifs {
     return true;
   }
 
+  send(m) { this.link.send(m); }
+  changed() { this.onChange(); }
+
   clearHistory() {
     this.history = [];
     this.onChange();
@@ -186,5 +193,7 @@ class Notifs {
     };
   }
 }
+
+withPhoneActions(Notifs);
 
 module.exports = Notifs;

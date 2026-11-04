@@ -24,6 +24,7 @@ import android.os.Environment
 import android.os.Process
 import android.provider.Settings
 import android.util.Log
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -149,8 +150,10 @@ class Hub(core: Core) : Feature(core) {
         if (!peer || !core.link.connected) return
         val st = msg(
             Proto.T.HUB_STATE,
-            "calls" to JSONObject().put("perm", perm("calls")).put("missing", jsonArray(missing("calls"))),
-            "messages" to JSONObject().put("perm", perm("messages")).put("missing", jsonArray(missing("messages"))),
+            "calls" to JSONObject().put("perm", perm("calls")).put("missing", jsonArray(missing("calls")))
+                .put("sims", calls?.sims() ?: JSONArray()).put("companion", CallCompanion.allowed(core.ctx)),
+            "messages" to JSONObject().put("perm", perm("messages")).put("missing", jsonArray(missing("messages"))).put("sims", messages?.sims() ?: JSONArray())
+                .put("mms", true), // pictures and group texts (sms.send image, addrs)
             "media" to JSONObject().put("perm", perm("media")),
             "files" to JSONObject().put("perm", perm("files")),
             "bt" to if (callsOn) bt() else JSONObject(),

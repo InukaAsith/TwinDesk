@@ -2,4 +2,6 @@
 <paths>
     <!-- Files copied on the computer, waiting on the clipboard (FileClip). -->
     <cache-path name="clip" path="clip/" />
+    <!-- An MMS from the computer, for Android to send (MmsPdu.kt), and pictures for a chat app (Notifs). -->
+    <cache-path name="mms" path="mms/" />
 </paths>

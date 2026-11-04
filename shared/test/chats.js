@@ -37,8 +37,12 @@ v = c.view();
 assert.strictEqual(v[0].items.filter((x) => x.text === 'On my way').length, 1, "the phone's copy replaces the one typed here");
 assert.ok(!v[0].items.some((x) => x.local));
 
-on['chat.conv']({ key: 'x', app: 'com.example.spam', items: [{ at: 1, text: 'hi' }] });
-assert.strictEqual(c.view().length, 1, 'only chat apps');
+on['chat.conv']({ key: 'x', app: 'com.google.android.apps.messaging', items: [{ at: 1, text: 'hi' }] });
+on['chat.conv']({ key: 'y', app: 'not a package', items: [{ at: 1, text: 'hi' }] });
+assert.strictEqual(c.view().length, 1, 'never a texting app (those are the texts), nor anything but a package');
+on['chat.conv']({ key: 'z', app: 'com.viber.voip', appName: 'Viber', name: 'Ann', items: [{ at: 2, text: 'hi' }] });
+assert.strictEqual(c.view().length, 2, 'other chat apps too');
+assert.ok(c.view().some((x) => x.app === 'com.viber.voip'));
 
 link.current = { deviceId: 'phone2' };
 assert.deepStrictEqual(c.view(), [], 'another phone: its own');
@@ -48,6 +52,6 @@ on.closed();
 assert.strictEqual(c.view()[0].reply, false, 'no Reply without a session');
 c.stop();
 const again = new Chats({ link, dir, want: () => false });
-assert.strictEqual(again.view().length, 1, 'kept after a restart');
+assert.strictEqual(again.view().length, 2, 'kept after a restart');
 fs.rmSync(dir, { recursive: true, force: true });
 console.log('chats ok');
