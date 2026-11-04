@@ -14,6 +14,7 @@
 'use strict';
 
 const P = require('../../shared/protocol.js');
+const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
 const { KvmMoves } = require('../../shared/kvm-moves.js');
@@ -107,6 +108,11 @@ class Kvm {
     });
     for (const t of K_TYPES) bus.on(t, (m, from) => this._onWire(m, from));
     bus.on(T.K_GESTURE, (m, from) => this._onWire(m, from)); // Trackpad gestures
+    // Caps Lock follows the input (shared/capsync.js, #131): after the handlers above.
+    this.caps = new CapsSync({ helper: this.helper, platform: 'linux' });
+    bus.on(T.KVM_TAKE, () => { if (this.mode === 'driven') this.caps.expect(); });
+    bus.on(T.KVM_HOME, () => { if (this.mode === 'home') this.caps.expect(); });
+    bus.on(T.KVM_CAPS, (m, from) => { if (this.mode === 'home' || from === this.partner) this.caps.onPeer(m); });
     bus.on(T.KVM_LOCK, (m, from) => {
       if (this.mode !== 'home' && from === this.partner) this.setLocked(m.on === true, false);
     });
@@ -545,6 +551,8 @@ class Kvm {
     this.partner = id || null;
     this.lanes.drive.reset(this.route);
     this._drive({ t: T.KVM_TAKE, route: this.route, ...where, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard });
+    const to = this.partner;
+    if (to && !(this.local && this.local.drives(to))) this.caps.handOver((m) => this._send(to, m)); // our Caps Lock, there
     this._setMode('driving', '');
     this.clip.sendIfChanged('switch');
     this._clearAccept();
@@ -864,7 +872,9 @@ class Kvm {
   // Row 8c: we send the input home (return edge or hotkey).
   _sendHome(offset, message = '') {
     const msg = typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset } : { t: T.KVM_HOME, route: this.peerRoute };
-    this._send(this.partner, msg);
+    const to = this.partner;
+    this._send(to, msg);
+    this.caps.handOver((c) => this._send(to, c)); // our Caps Lock, home
     this._drivenHome(message, true);
   }
 

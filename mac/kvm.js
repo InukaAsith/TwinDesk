@@ -9,6 +9,7 @@
 
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { CapsSync } = require('../shared/capsync.js');
 const blepipe = require('../shared/blepipe.js');
 const { KvmMoves } = require('../shared/kvm-moves.js');
 const { LaneDrive, LaneDriven } = require('../shared/inputlane.js');
@@ -145,6 +146,11 @@ class Kvm extends EventEmitter {
     });
     on(P.T.KVM_DISPLAYS, (m) => this.map.onDisplays(m));
     on(P.T.KVM_IDENTIFY, () => this.map.identify(false));
+    // Caps Lock follows the input (shared/capsync.js, #131): after the handlers above.
+    this.caps = new CapsSync({ helper: this.helper, platform: 'mac' });
+    on(P.T.KVM_TAKE, () => { if (this.mode === 'driven') this.caps.expect(); });
+    on(P.T.KVM_HOME, () => { if (this.mode === 'home') this.caps.expect(); });
+    on(P.T.KVM_CAPS, (m) => this.caps.onPeer(m));
     on(P.T.KVM_ACCEPT, (m) => {
       if (this.mode === 'driving' && m.route === this.route) clearTimeout(this.acceptTimer);
     });
@@ -405,6 +411,7 @@ class Kvm extends EventEmitter {
     const plan = fields.paths && fields.paths.length ? this.fileSend.planDrag(fields.paths) : null;
     if (plan) take.drag = { count: plan.items.length };
     this._drive(take);
+    if (!(this.local && this.local.drives())) this.caps.handOver((m) => this.server.sendToClient(m)); // our Caps Lock, there
     if (plan) {
       this.dragOut = this.fileSend.startDrag(plan); // drag.start right after kvm.take
       this.dragOutPaths = fields.paths;
@@ -722,6 +729,7 @@ class Kvm extends EventEmitter {
       if (plan) msg.drag = { count: plan.items.length };
     }
     this.server.sendToClient(msg);
+    this.caps.handOver((c) => this.server.sendToClient(c)); // our Caps Lock, home
     if (plan) { // after kvm.home: drag.start, then the files
       const id = this.fileSend.startDrag(plan);
       console.log(`[drag] back ${id}: ${plan.items.length} item(s), ${plan.files} file(s), ${plan.bytes} bytes`);

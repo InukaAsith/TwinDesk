@@ -123,6 +123,8 @@ func handle(_ line: String) {
 #endif
   case "ping":
     reply(id)
+  case "caps": // Caps Lock, as the other computer's (#131)
+    reply(id, ["on": injector.caps(set: msg["set"] as? Bool)])
   case "keyLayout": // what each key types alone and with Shift in the current layout (shared/keylayout.js); type: it takes "type"
     let source = msg["source"] as? String
     var r: [String: Any] = ["layout": KeyLayout.current(sourceID: source), "shift": KeyLayout.current(sourceID: source, shift: true),
