@@ -197,6 +197,10 @@ function setupIpc(ctx) {
     phoneInstallFull() {
       ctx.phone.bridge.installFull();
     },
+    // Phone › Apps › Install Apps: .apk files picked here, installed over ADB (shared/apkinstall.js).
+    phoneInstallApps() {
+      if (ctx.phone) return require('../shared/apkinstall.js').choose(ctx.phone.bridge, t);
+    },
     phoneRetry() {
       ctx.phone.bridge.retry(); // also Set Up, when nothing used wireless debugging
     },

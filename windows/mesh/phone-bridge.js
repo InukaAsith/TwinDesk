@@ -143,7 +143,7 @@ class PhoneBridge extends EventEmitter {
       via: this.via, // 'usb' | 'wifi' | null: how adb reaches the phone
       input: this.inputVia, inputMode: this.inputMode, // the mouse and keyboard: what they go through now, and the choice
       control: !!(this.control && !this.control.closed), driving: !!this.kvm,
-      install: this.install, fullApk: !!fullApk(),
+      install: this.install, fullApk: !!fullApk(), appInstall: this.appInstall || null, // appInstall: Phone › Apps › Install Apps (shared/apkinstall.js)
       windows: this.views ? this.views.list() : [],
       // the phone's sound without adb: asked for, playing, waiting for Start on the phone, or why not
       sound: { net: this.netSound.asked, on: this.netSound.on, waiting: this.netSound.waiting, error: this.netSound.error },
