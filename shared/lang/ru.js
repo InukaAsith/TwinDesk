@@ -1931,7 +1931,6 @@
   "UDP (tdv2)": "UDP (tdv2)",
   "TCP (tdv1)": "TCP (tdv1)",
   "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "С UDP указатель движется быстрее. TCP работает в сетях, где UDP заблокирован. Применяется после перезапуска",
-  "Apps and Windows": "Приложения и окна",
   "Move windows": "Перемещение окон",
   "Move windows to {name}": "Перемещать окна на {name}",
   "Key to hold": "Удерживаемая клавиша",

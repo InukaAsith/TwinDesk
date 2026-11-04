@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Apps and Windows › Move windows (mac/appsend.js, shared/movewin.js): the move key held (Right Ctrl
+// Apps › Move windows (mac/appsend.js, shared/movewin.js): the move key held (Right Command
 // unless another is chosen), a click on a window grabs it. The click never reaches the app (the tap
 // swallows it, or the injector doesn't post it), and the window follows the pointer through
 // Accessibility until the button comes up. If the pointer crosses to another computer meanwhile, the

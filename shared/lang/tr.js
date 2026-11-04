@@ -1931,7 +1931,6 @@
   "UDP (tdv2)": "UDP (tdv2)",
   "TCP (tdv1)": "TCP (tdv1)",
   "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "UDP ile işaretçi daha hızlı hareket eder. TCP, UDP’yi engelleyen ağlarda çalışır. Yeniden başlatınca uygulanır",
-  "Apps and Windows": "Uygulamalar ve Pencereler",
   "Move windows": "Pencereleri taşı",
   "Move windows to {name}": "Pencereleri {name} cihazına taşı",
   "Key to hold": "Basılı tutulacak tuş",

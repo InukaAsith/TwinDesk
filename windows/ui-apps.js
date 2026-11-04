@@ -9,7 +9,7 @@ UI.tab({
   id: 'apps',
   hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
   order: 80,
-  title: 'Apps and Windows',
+  title: 'Apps',
   color: 'linear-gradient(#bf5af2, #5e5ce6)',
   desc: 'Use apps from the other computer in their own windows.',
   master: { get: (s) => s.macApps.on || s.pcApps.allow, set: (v) => { UI.api.setMacApps({ on: v }); UI.api.setPcApps({ allow: v }); } },

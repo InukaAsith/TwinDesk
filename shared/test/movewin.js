@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// shared/movewin.js (Apps and Windows › Move windows): a grabbed window goes over (listed `moved`,
+// shared/movewin.js (Apps › Move windows): a grabbed window goes over (listed `moved`,
 // parked here), comes back where it was or under the pointer, and is forgotten when it closes; with
 // the switch off nothing moves. Run with: node shared/test/movewin.js
 'use strict';
@@ -50,6 +50,16 @@ function fakePc(over = {}) {
   assert.strictEqual(pops.length, 1);
   assert.deepStrictEqual([pops[0].owner, pops[0].x, pops[0].y], [7, 50, 40], 'the pop-up over its owner');
   assert.ok(taken.has(7) && taken.has(9));
+
+  // Used from its copy: back where it was (once, not per input), parked again when the input stops.
+  const before = pc.sent.length;
+  MW.touch(pc, 7);
+  MW.touch(pc, 7);
+  assert.deepStrictEqual(pc.sent.slice(before), [['winPlace', { wid: 7, x: 100, y: 50 }]], 'placed on a screen once');
+  await new Promise((r) => setTimeout(r, 2700));
+  assert.deepStrictEqual(pc.sent.at(-1), ['winPark', { wid: 7 }], 'parked again after the input');
+  MW.touch(pc, 123); // not moved: nothing
+  assert.deepStrictEqual(pc.sent.at(-1), ['winPark', { wid: 7 }]);
 
   // Dragged back: under the pointer, title bar under it.
   MW.bringBack(pc, 7, true);

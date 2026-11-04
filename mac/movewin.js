@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Apps and Windows › Move windows on the Mac (#18), appsend.js's side of shared/movewin.js: a window
+// Apps › Move windows on the Mac (#18), appsend.js's side of shared/movewin.js: a window
 // grabbed with the move key (the helper's Grab.swift) crossed to the other computer with the pointer.
 // It is streamed there as one of this Mac's app windows (papp.windows, `moved: true`) and kept out of
 // the way here (the virtual display, else past the screens' right edge), so it is in one place at a
@@ -20,14 +20,16 @@ async function moveOut(as, wid, pid) {
   const w = r && Array.isArray(r.windows) && r.windows.find((x) => x.wid === wid && !x.popup);
   if (!w) return false;
   as.moved.set(wid, { pid, x: w.x, y: w.y, w: w.w, h: w.h });
-  // Out of the way once the grab let go: on the virtual display (clicks from there reach it), else past the right edge.
-  setTimeout(() => {
-    if (!as.moved.has(wid)) return;
-    const vb = (as.displays && as.displays.virtualBounds()) || as._edge();
-    as.helper.request('appPlace', { wid, x: vb.x + 40, y: vb.y + 60 }).catch(() => {});
-  }, 60);
   as._poll();
   as.emit('change');
+  // Out of the way once the grab let go: on the virtual display (clicks from there reach it; it is
+  // made now if it wasn't there, so wait for it a moment), else past the right edge, where the
+  // pointer can't reach it.
+  const made = Promise.resolve(as._holdDisplay && as._holdDisplay()).catch(() => {});
+  await Promise.all([new Promise((r) => setTimeout(r, 60)), Promise.race([made, new Promise((r) => setTimeout(r, 4000))])]);
+  if (!as.moved.has(wid)) return true;
+  const vb = (as.displays && as.displays.virtualBounds()) || as._edge();
+  as.helper.request('appPlace', { wid, x: vb.x + 40, y: vb.y + 60 }).catch(() => {});
   return true;
 }
 
