@@ -7,6 +7,7 @@
 // helper's uinput backend); L7 packages (package.json "build"); L8 the shared folder (Samba + GVFS),
 // copy/paste of files with shortcuts, file drags across the edge, the file managers' Send to, and
 // Extend (a virtual monitor from Mutter on Wayland, a spare output on X11).
+const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, Notification } = require('electron');
 const { Updates } = require('../shared/updates.js');
 const { aboutInfo } = require('../shared/about.js');
@@ -1152,7 +1153,7 @@ function buildState() {
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },
-    net: { ...(net ? net.view : {}), ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '' },
+    net: { ...(net ? net.view : {}), ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address) },
   };
 }
 

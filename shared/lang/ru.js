@@ -2030,4 +2030,5 @@
   "Tap the notification on the phone to remove {count} more": "Нажмите на уведомление на телефоне, чтобы удалить ещё ({count})",
   "{count} couldn’t be removed": "Не удалось удалить: {count}",
   "All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.": "Все кнопки справа в каждом окне телефона: громкость, поворот, снимок экрана и другие. Выкл.: «Назад», «Домой», «Недавние» и уведомления в строке заголовка.",
+  "Ethernet": "Ethernet",
 });

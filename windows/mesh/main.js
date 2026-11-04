@@ -3,6 +3,7 @@
 // own code when multi.json says so. Lifecycle, windows, tray, IPC and the state pushed to the main
 // window, as ../main.js, over the mesh (hub.js) instead of one peer. When a fix in ../main.js applies
 // here too, make it in both.
+const { lanType } = require('../../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, Notification, shell, globalShortcut } = require('electron');
 const { Updates } = require('../../shared/updates.js');
 const { aboutInfo } = require('../../shared/about.js');
@@ -893,7 +894,7 @@ function buildState() {
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: phoneHub ? phoneHub.view : { ...settings.hub, connected: false },
-    net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '' },
+    net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address) },
   };
 }
 
