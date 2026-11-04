@@ -25,6 +25,8 @@ import kotlin.math.roundToInt
 @SuppressLint("MissingPermission") // start() checks allowed()
 class BtPad(private val core: Core) {
     companion object {
+        private const val RING = 16 // reports waiting at most (about a quarter of a second of frames)
+
         fun permissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31)
             arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE)
         else emptyArray()
@@ -58,7 +60,25 @@ class BtPad(private val core: Core) {
     private val manager get() = core.ctx.getSystemService(BluetoothManager::class.java)
     private var hid: BluetoothHidDevice? = null
     @Volatile private var device: BluetoothDevice? = null
-    @Volatile private var report = ByteArray(13).also { it[2] = 8 } // nothing held, the hat centred
+    // The current report (nothing held, the hat centred), and the reports on their way out: a ring of
+    // buffers made once, so the gamepad page's frames (pad(), about 60 a second) allocate nothing. The
+    // io thread sends them in order; with all of them waiting (the radio stalled), the newest waiting
+    // one is overwritten instead. Guarded by `ring`.
+    private val report = ByteArray(13).also { it[2] = 8 }
+    private val ring = Array(RING) { ByteArray(13) }
+    private var head = 0 // next slot to fill
+    private var tail = 0 // next slot to send
+    private var draining = false
+    private val drain = Runnable {
+        while (true) {
+            val r = synchronized(ring) {
+                if (tail == head) { draining = false; null } else ring[tail % RING]
+            } ?: return@Runnable
+            val d = device; val h = hid
+            if (d != null && h != null) runCatching { h.sendReport(d, ID.toInt(), r) } // binder: copied before it returns
+            synchronized(ring) { tail++ } // only now may pad() fill that slot again
+        }
+    }
 
     fun allowed(): Boolean = permissions().all { core.ctx.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
 
@@ -132,7 +152,7 @@ class BtPad(private val core: Core) {
                     hostName = runCatching { d.name }.getOrNull() ?: d.address
                     core.store.setPrefsString("remote.btpad.host", d.address)
                     set("connected", "")
-                    send(report)
+                    sendCurrent()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> if (device == null || device?.address == d.address) {
                     device = null
@@ -142,14 +162,15 @@ class BtPad(private val core: Core) {
         }
 
         override fun onGetReport(d: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            hid?.replyReport(d, type, ID, report)
+            hid?.replyReport(d, type, ID, synchronized(ring) { report.copyOf() })
         }
     }
 
     // The gamepad page's state (remote.js, as remote.pad): b the buttons (bits 0..13: A B X Y LB RB
     // Back Start L3 R3 Up Down Left Right), the sticks -1..1 (y down), the triggers 0..1.
-    fun pad(b: Int, lx: Double, ly: Double, rx: Double, ry: Double, lt: Double, rt: Double) {
-        val r = ByteArray(13)
+    fun pad(b: Int, lx: Double, ly: Double, rx: Double, ry: Double, lt: Double, rt: Double) = synchronized(ring) {
+        val r = report
+        val was0 = r[0]; val was1 = r[1]; val was2 = r[2]
         r[0] = (b and 0xff).toByte()
         r[1] = (b shr 8 and 0x03).toByte() // L3, R3; the d-pad is the hat
         val up = b and (1 shl 10) != 0; val down = b and (1 shl 11) != 0
@@ -158,21 +179,33 @@ class BtPad(private val core: Core) {
             up && right -> 1; down && right -> 3; down && left -> 5; up && left -> 7
             up -> 0; right -> 2; down -> 4; left -> 6; else -> 8
         }.toByte()
-        fun axis(i: Int, v: Double) {
-            val n = (v.coerceIn(-1.0, 1.0) * 32767).roundToInt()
-            r[i] = (n and 0xff).toByte(); r[i + 1] = (n shr 8 and 0xff).toByte()
-        }
-        axis(3, lx); axis(5, ly); axis(7, rx); axis(9, ry)
-        r[11] = (lt.coerceIn(0.0, 1.0) * 255).roundToInt().toByte()
-        r[12] = (rt.coerceIn(0.0, 1.0) * 255).roundToInt().toByte()
-        report = r
-        send(r)
+        var same = r[0] == was0 && r[1] == was1 && r[2] == was2
+        same = axis(r, 3, lx) && same; same = axis(r, 5, ly) && same; same = axis(r, 7, rx) && same; same = axis(r, 9, ry) && same
+        val l = (lt.coerceIn(0.0, 1.0) * 255).roundToInt().toByte()
+        val t = (rt.coerceIn(0.0, 1.0) * 255).roundToInt().toByte()
+        same = same && r[11] == l && r[12] == t
+        r[11] = l; r[12] = t
+        if (!same) queueLocked()
     }
 
-    private fun send(r: ByteArray) {
-        val d = device ?: return
-        val h = hid ?: return
-        io.execute { runCatching { h.sendReport(d, ID.toInt(), r) } }
+    // Writes a stick axis (little-endian, -32767..32767) at i; true when it was already that.
+    private fun axis(r: ByteArray, i: Int, v: Double): Boolean {
+        val n = (v.coerceIn(-1.0, 1.0) * 32767).roundToInt()
+        val lo = (n and 0xff).toByte(); val hi = (n shr 8 and 0xff).toByte()
+        val same = r[i] == lo && r[i + 1] == hi
+        r[i] = lo; r[i + 1] = hi
+        return same
+    }
+
+    // The current report, out again (a computer just connected).
+    private fun sendCurrent() = synchronized(ring) { queueLocked() }
+
+    // Holding `ring`: a copy of the report goes in the ring, and the io thread drains it.
+    private fun queueLocked() {
+        if (device == null || hid == null) return
+        val slot = if (head - tail >= RING) head - 1 else head++ // all waiting: the newest is replaced
+        System.arraycopy(report, 0, ring[slot % RING], 0, 13)
+        if (!draining) { draining = true; io.execute(drain) }
     }
 
     // Asks Android to let computers find this device (for pairing), from the Remote page.

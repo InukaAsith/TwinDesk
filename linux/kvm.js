@@ -51,7 +51,6 @@ class Kvm {
       deliver: (m) => (m.t === T.K_GESTURE ? this._onGesture(m) : this._inject(m)),
       native: () => { const l = this._lane(); return l && l.native ? l : null; }, // P3: the helper's lane
       speed: () => this.cfg.speed,
-      reverse: () => !!this.cfg.reverseScroll,
     });
     const il = this.link.il;
     let laneSettled;
@@ -238,7 +237,6 @@ class Kvm {
   // Tell the helper where the edge is and whether to watch it.
   applyConfig() {
     const k = this.cfg;
-    if (this.laneIn) this.laneIn.config(); // the scroll direction for the clicks and wheel the helper's lane injects
     const f = this.settings.files;
     this.helper.send('kvmConfig', {
       side: this.crossingSide,
@@ -544,7 +542,7 @@ class Kvm {
   _injectEv(ev) {
     if (ev.t === P.T.K_MOVE && !ev.smooth) return this.injectMoves.add(ev.dx, ev.dy);
     this.injectMoves.flush();
-    if (!this.laneIn.inject(ev)) this.helper.send('inject', { ev }); // the lane's events: once, whichever copy came first
+    this.helper.send('inject', { ev });
   }
 
   _drive(msg) {
@@ -576,7 +574,7 @@ class Kvm {
       this.peerRoute = route;
       this.link.send({ t: T.KVM_ACCEPT, route });
       if (m.side && m.mouse !== false) this.helper.send('place', { side: m.side, offset: m.offset });
-      this.laneIn.take(route, { drag: !!m.drag }); // the lane's totals start again (a move that came ahead goes now)
+      this.laneIn.take(route); // the lane's totals start again (a move that came ahead goes now)
       return;
     }
     if (!this.cfg.beDriven || !this.linked || this.paused) { // cursor sharing off
@@ -592,7 +590,7 @@ class Kvm {
       this.helper.send('place', P.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
       if (this.crossingSide) this.helper.send('armReturn', this._returnCfg());
     }
-    this.laneIn.take(route, { drag: !!m.drag });
+    this.laneIn.take(route);
   }
 
   // Row 8. X has no per-monitor scale here: logical px = physical px.

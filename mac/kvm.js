@@ -59,7 +59,6 @@ class Kvm extends EventEmitter {
       deliver: (m) => (m.t === P.T.K_GESTURE ? this._onGesture(m) : this._onK(m)),
       native: () => { const l = this._lane(); return l && l.native ? l : null; }, // P3: the helper's lane
       speed: () => this.cfg.speed,
-      reverse: () => !!this.cfg.reverseScroll,
     });
     const il = server.il;
     let laneSettled;
@@ -236,7 +235,6 @@ class Kvm extends EventEmitter {
   // Call after settings.kvm or the link changed.
   config() {
     const k = this.cfg;
-    if (this.laneIn) this.laneIn.config(); // the scroll direction for the clicks and wheel the helper's lane injects
     this.helper
       .request('kvmConfig', {
         side: k.pcSide, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
@@ -459,7 +457,7 @@ class Kvm extends EventEmitter {
   _injectEv(ev) {
     if (ev.t === P.T.K_MOVE && !ev.smooth) return this.injectMoves.add(ev.dx, ev.dy);
     this.injectMoves.flush();
-    if (!this.laneIn.inject(ev)) this.helper.send('inject', { ev }); // the lane's events: once, whichever copy came first
+    this.helper.send('inject', { ev });
   }
 
   // The input lane, when this session has one and the peer is a computer (not the phone bridge).
@@ -589,7 +587,7 @@ class Kvm extends EventEmitter {
       if (!this.locked) this.helper.send('armReturn', this._returnCfg());
     }
     this.drop.dragIn.onDriven(); // after 'place': the native drag starts where the pointer came in
-    this.laneIn.take(m.route, { drag: !!m.drag }); // the lane's totals start again (a move that came ahead goes now)
+    this.laneIn.take(m.route); // the lane's totals start again (a move that came ahead goes now)
     if (this.drop.dragIn.arming) this.laneIn.hold(true); // the helper's lane holds its moves too
   }
 

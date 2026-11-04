@@ -45,6 +45,7 @@ class Kvm {
     this.sentDragPolicy = undefined;
     // k.mm summed while driving, sent as one (shared/kvm-moves.js): paced for Bluetooth, and held
     // (still summed) while the socket is backed up, so the pointer never replays old moves.
+    this._driveWss = (x) => this._drive(x); // bound once: nothing new per move
     this.moves = new KvmMoves({
       send: (m) => this.mode === 'driving' && this._driveMove(m),
       delay: () => (this._movesBle() ? P.KVM_MOVE_BLE_MS : 0),
@@ -59,12 +60,12 @@ class Kvm {
       il: (id) => (this._session(id) && this._session(id).il) || null,
       partner: () => this.partner,
       route: () => this.peerRoute,
-      move: (dx, dy, id) => this._inject({ t: P.T.K_MOVE, dx, dy }, id),
+      move: (dx, dy, id) => this._laneMove(dx, dy, id),
       deliver: (m, id) => (m.t === P.T.K_GESTURE ? this._onGesture(m, id) : this._inject(m, id)),
     });
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
-      send: (m) => this.mode === 'driven' && this.helper.send('inject', { ev: { t: P.T.K_MOVE, dx: m.dx, dy: m.dy } }),
+      send: (m) => this.mode === 'driven' && (this.helper.sendMove ? this.helper.sendMove(m.dx, m.dy) : this.helper.send('inject', { ev: { t: P.T.K_MOVE, dx: m.dx, dy: m.dy } })),
     });
     this.keys = new KeyLayout((cmd, args) => this.helper.request(cmd, args), (cmd, args) => this.helper.send(cmd, args)); // shortcuts and alphabets across layouts
     this.locked = false; // cursor lock (shared/cursorlock.js): the pointer stays on the device it is on
@@ -585,13 +586,22 @@ class Kvm {
 
   // A summed move while driving: on the partner's input lane when there is one, else as always.
   _driveMove(m) {
-    if (!this.lanes.drive.move(m.dx, m.dy, (x) => this._drive(x))) this._drive({ t: P.T.K_MOVE, dx: m.dx, dy: m.dy });
+    if (!this.lanes.drive.move(m.dx, m.dy, this._driveWss)) this._drive({ t: P.T.K_MOVE, dx: m.dx, dy: m.dy });
+  }
+
+  // A move from a device's input lane: summed for the helper at once, without a message object per
+  // move (_inject's k.mm path, which copies the message first). Relayed on to a phone: as a k.mm.
+  _laneMove(dx, dy, from) {
+    if (this.mode !== 'driven' || from !== this.partner) return;
+    if (this.sub) return this._inject({ t: P.T.K_MOVE, dx, dy }, from);
+    const speed = this.cfg.speed;
+    this.injectMoves.add(dx * speed, dy * speed);
   }
 
   // A click, key, wheel or gesture while driving: numbered for the lane when there is one.
   _driveEvent(msg) {
     if (!LANE_TYPES.has(msg.t) || !this.lanes.o.lane(this.partner)) return this._drive(msg);
-    this.lanes.drive.event(msg, (x) => this._drive(x));
+    this.lanes.drive.event(msg, this._driveWss);
   }
 
   // Input from a device on WSS: numbered or with totals (an app with the input lane) through that
