@@ -161,10 +161,12 @@ ${img}<div><b>${esc(title)}</b><span>From ${esc(from)} · ${esc(what(o))}</span>
   }
 
   // Windows: a button with its own AppUserModelID shows the relaunch icon (a file, not the window's
-  // icon), and that only with a relaunch command. One id per app, since the taskbar keeps an id's icon.
+  // icon), and that only with a relaunch command. One id per app and icon, since the taskbar keeps an
+  // id's icon (an app's id from when its icon was wrong would stay wrong).
   _details(win, o, icon) {
-    const key = crypto.createHash('sha1').update(String(o.app || o.kind || '')).digest('hex').slice(0, 12);
-    const ico = icon && !icon.isEmpty() ? toIco(icon, path.join(app.getPath('userData'), 'app-icons', 'rezume.' + key + '.ico')) : '';
+    const has = icon && !icon.isEmpty();
+    const key = crypto.createHash('sha1').update(String(o.app || o.kind || '')).update(has ? icon.toPNG() : '').digest('hex').slice(0, 12);
+    const ico = has ? toIco(icon, path.join(app.getPath('userData'), 'app-icons', 'rezume.' + key + '.ico')) : '';
     const args = app.isPackaged ? '' : ' "' + app.getAppPath() + '"';
     try {
       win.setAppDetails({

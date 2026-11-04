@@ -51,6 +51,27 @@ const jxa = (docs) => new Promise((resolve) => {
   });
 });
 
+// An app's own icon, 64 px PNG in base64 (as the helper's Apps.icon). Not app.getFileIcon: on macOS
+// it goes by the extension alone, so every .app got the blank app icon.
+const ICON = `
+ObjC.import('AppKit');
+function run(argv) {
+  const img = $.NSWorkspace.sharedWorkspace.iconForFile(argv[0]);
+  const rep = $.NSBitmapImageRep.alloc.initWithBitmapDataPlanesPixelsWidePixelsHighBitsPerSampleSamplesPerPixelHasAlphaIsPlanarColorSpaceNameBytesPerRowBitsPerPixel(null, 64, 64, 8, 4, true, false, 'NSDeviceRGBColorSpace', 0, 0);
+  $.NSGraphicsContext.saveGraphicsState;
+  $.NSGraphicsContext.setCurrentContext($.NSGraphicsContext.graphicsContextWithBitmapImageRep(rep));
+  img.drawInRectFromRectOperationFraction($.NSMakeRect(0, 0, 64, 64), $.NSMakeRect(0, 0, 0, 0), 2, 1); // the whole image, source-over
+  $.NSGraphicsContext.restoreGraphicsState;
+  return rep.representationUsingTypeProperties(4, $({})).base64EncodedStringWithOptions(0).js; // PNG
+}`;
+
+const iconOf = (p) => new Promise((resolve) => {
+  execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', ICON, p], { timeout: 5000 }, (err, out) => {
+    const b64 = err ? '' : String(out).trim();
+    resolve(/^[A-Za-z0-9+/=]{100,}$/.test(b64) ? 'data:image/png;base64,' + b64 : '');
+  });
+});
+
 // "Not authorized to send Apple events" (-1743): Automation was refused for that app.
 const refused = (e) => /-1743|not authori[sz]ed|not allowed assistive/i.test(String(e || ''));
 
@@ -78,10 +99,7 @@ function create({ cfg }) {
     },
     async appIcon(app) {
       const p = paths.get(app);
-      if (!p) return '';
-      const { app: eApp } = require('electron');
-      const img = await eApp.getFileIcon(p, { size: 'normal' }); // 'large' aborts the whole app on macOS (Chromium's NOTREACHED)
-      return img && !img.isEmpty() ? img.resize({ width: 64, height: 64 }).toDataURL() : '';
+      return p ? iconOf(p) : '';
     },
     stop() {},
   };
