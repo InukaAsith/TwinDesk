@@ -17,6 +17,9 @@ UI.tab({
     const offerSw = UI.switch((v) => api.setApps({ offer: v }), { label: I18n.t('Share apps') });
     const offerRow = UI.row(I18n.t('Open {me}’s apps on {name}'), '', [offerSw]);
     const usage = UI.row(I18n.t('Open there now'), '');
+    // apps.onVirtual (apps.js _holdVirtual): off by default, apps open on the shared screen as before.
+    const vdSw = UI.switch((v) => api.setApps({ onVirtual: v }), { label: I18n.t('Open on a virtual display') });
+    const vdRow = UI.row(I18n.t('Open on a virtual display'), I18n.t('Apps open on their own virtual display, in Mirror mode too. Off: they open on the shared screen, as before'), [vdSw]);
     const pcSw = UI.switch((v) => api.setPcApps({ on: v }), { label: I18n.t('Show apps here') });
     const pcRow = UI.row(I18n.t('Open {name}’s apps on {me}'), '', [pcSw], { literalHint: true });
     const pcUsage = UI.row(I18n.t('Open here now'), '');
@@ -66,6 +69,7 @@ UI.tab({
       UI.pair(
         UI.dir('m2w', [
           offerRow,
+          vdRow,
           usage,
         ]),
         UI.dir('w2m', [pcRow, pcUsage]),
@@ -79,6 +83,8 @@ UI.tab({
       const a = s.apps;
       if (!a) return;
       offerSw.set(a.offer);
+      vdSw.set(!!a.onVirtual);
+      vdRow.hidden = !a.offer;
       moveSw.set(!!a.moveWindows);
       moveKey.set(a.moveKey || 'ControlRight');
       moveKeyRow.hidden = !a.moveWindows;

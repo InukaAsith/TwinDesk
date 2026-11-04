@@ -171,10 +171,12 @@ class Apps extends EventEmitter {
     if (!this.timer) this.timer = setInterval(() => this._poll(), POLL_MS);
   }
 
-  // Mirror mode (no virtual display of its own): the virtual display held, and shared, while this
-  // Mac's apps are open there (displays.js 'apps-open'). Extend mode is as it always was.
+  // Apps and Windows › Open on a virtual display (apps.onVirtual, off by default): in Mirror mode the
+  // virtual display is held, and shared, while this Mac's apps are open there (displays.js
+  // 'apps-open'). Off, apps open on the shared display as they always did. Extend mode is unchanged.
   _holdVirtual(on) {
-    if (on && this.getSettings().virtual.enabled) return;
+    const s = this.getSettings();
+    if (on && (!s.apps.onVirtual || s.virtual.enabled)) return;
     if (!!this.holdingVirtual === on || !this.displays.hold) return;
     this.holdingVirtual = on;
     this.displays.hold('apps-open', on).catch(() => {});
@@ -250,6 +252,7 @@ class Apps extends EventEmitter {
   }
 
   applySettings() {
+    if (!this.getSettings().apps.onVirtual) this._holdVirtual(false); // turned off while apps were open: the display goes
     if (!this.enabled) {
       for (const [id, a] of this.launched) if (!a.rz) this.launched.delete(id);
       this.lastKey = '';
