@@ -119,6 +119,8 @@ final class Injector {
   /// One `in.*` message (key codes already swapped by main) onto the display at `bounds`.
   func input(_ ev: [String: Any], bounds: CGRect) {
     guard let t = ev["t"] as? String else { return }
+    // At a window's copy over there: the hidden pointer stays where we put it (Capture.injectedPointer).
+    if t == "in.mm" || t == "in.md" || t == "in.mu" { Capture.shared.injectedPointer(at: point(ev, bounds)) }
     if let p = ev["pen"] as? [String: Any] {
       guard pen.arrive(p) else { return } // out of range: its proximity ended
       pen.current = p

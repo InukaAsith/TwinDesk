@@ -305,6 +305,7 @@ api.on((m) => {
       inputOn = m.on;
       document.body.classList.toggle('input-off', !inputOn);
       break;
+    case 'cursor': document.body.classList.toggle('own-cursor', !!m.own); break;
     case 'volume': video.volume = Math.max(0, Math.min(1, Number(m.volume))); break;
     case 'pacing':
       pacing = m.pacing === 'smooth' ? 'smooth' : 'fast';

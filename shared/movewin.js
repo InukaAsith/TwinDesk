@@ -12,13 +12,16 @@ const MAX_POPUPS = 6;
 const IDLE_MS = 2500; // a moved window used from its copy is parked again this long after the last input
 
 // False: it stays (off, the other side doesn't take windows, Bluetooth, already there, gone).
-async function moveOut(pc, wid) {
+// from: {x, y}, its visible frame's top left when it was grabbed (the helper's fromX/fromY): it comes
+// back there, not to the edge it was dragged to (where it would sit half on the screen).
+async function moveOut(pc, wid, from) {
   if (typeof wid !== 'number' || !wid || !pc.settings.pcApps.moveWindows || !pc.macAccepts) return false;
   if (pc.moved.has(wid) || pc._mine(wid) || (pc.link.current && pc.link.current.transport === 'ble')) return false;
   const r = await pc.helper.request('windows').catch(() => null);
   const w = r && Array.isArray(r.windows) && r.windows.find((x) => x.wid === wid && !x.popup);
   if (!w) return false;
-  pc.moved.set(wid, { x: w.x, y: w.y, w: w.w, h: w.h, pid: w.pid });
+  const at = from && Number.isFinite(from.x) && Number.isFinite(from.y) ? from : w;
+  pc.moved.set(wid, { x: Math.round(at.x), y: Math.round(at.y), w: w.w, h: w.h, pid: w.pid });
   setTimeout(() => pc.moved.has(wid) && pc.helper.send('winPark', { wid }), 60); // once the grab let go
   pc._poll(true);
   pc.onChange();

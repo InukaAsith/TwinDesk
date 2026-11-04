@@ -908,6 +908,7 @@ app.whenReady().then(() => {
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
+    svc.pcApps.setDriven(mode === 'driven'); // a moved window's copy shows this Mac's pointer then
     const name = peer.current ? peer.current.name : { key: 'the other computer' };
     if (mode === 'driving') hud.show('away', { key: settings.kvm.mouse ? 'Using {name}' : 'Typing on {name}', vars: { name } });
     else if (mode === 'driven') hud.show('driven', { key: '{name} is using {me}', vars: { name, me: id.macName } });
