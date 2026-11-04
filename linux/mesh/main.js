@@ -113,6 +113,7 @@ let helper = null;
 let kvm = null;
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let sound = null;
+let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
 let fileDrop = null;
 let fileRecv = null;
 let fileClip = null;
@@ -211,6 +212,7 @@ function start() {
   fileDrop = new FileDrop({ link, settings, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
   screen.fileDrop = fileDrop;
   sound = new Sound({ link, settings, onChange: pushState });
+  loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   terminal = new Terminal({ link, settings, onChange: pushState });
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
@@ -321,6 +323,14 @@ function start() {
   screen.apps = apps;
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
+  // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
+  // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
+  kvm.onMoveWindow = (m, to) => {
+    const wid = Number(m.moving);
+    if (to && to !== hub.selectedId) return; // apps and windows go to the selected device only
+    if (!wid || peerApps.returnWindow(wid)) return;
+    if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
+  };
   helper.on('exit', pushState);
   helper.on('ready', () => { sendScreens(); pushState(); });
   const { screen: displays } = require('electron');
@@ -340,7 +350,7 @@ function start() {
   });
   updates.start();
   const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage });
@@ -923,7 +933,7 @@ function buildState() {
     updates: updates ? updates.view : null,
     firewall: fw,
     session: { ...session, input: helper.backend || '', access: session.type === 'wayland' ? system.inputAccess() : null, inputNote, helperError: helper.error || '' },
-    audio: { ...settings.audio, ...sound.view() },
+    audio: { ...settings.audio, ...sound.view(), mic: mic ? mic.view() : null },
     pcScreen: pcScreen.view(),
     files: { ...settings.files, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view(), session: session.type },
     terminal: { ...settings.terminal, ...terminal.view(), installedKey: undefined, server: sshd.view() },
@@ -1125,7 +1135,7 @@ function updateTray(s) {
   const rtt = connected && s.link.rtt != null ? ' · ' + s.link.rtt + ' ms' : '';
   const host = s.paired && s.paired.macName;
   const again = !connected && host && (s.link.state === 'stopped' || !!s.link.busy);
-  const key = JSON.stringify([name, rtt, again, away, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
+  const key = JSON.stringify([name, rtt, again, away, pcApps ? pcApps.moved.size : 0, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
     settings.audio.send, settings.app.hud, k.keyboard, settings.files.edgeDrag, settings.files.shortcuts, settings.files.copyKeys, found.map((d) => [d.id, d.name, d.os]), s.updates && s.updates.available && s.updates.latest]);
   if (key === trayKey) return;
   trayKey = key;
@@ -1142,6 +1152,7 @@ function updateTray(s) {
     connected,
     status: connected ? t('Connected to {name}', { name }) + rtt : t('Not connected'),
     home: away ? () => kvm.home() : null,
+    windowsBack: pcApps && pcApps.moved.size ? { label: t(pcApps.moved.size === 1 ? 'Bring the Window Back from {name}' : 'Bring {count} Windows Back from {name}', { count: pcApps.moved.size, name: other }), click: () => pcApps.bringBack() } : null,
     shared: { checked: kvm.linked && !kvm.paused, set: (on) => kvm.setShared(on) },
     lock: connected ? { label: t('Lock Cursor on {name} ({keys})', { name: kvm.mode === 'driving' ? other : device.name, keys: CL.keysLabel(settings.keys.lockKeys, 'linux') }), checked: kvm.locked, set: (on) => kvm.setLocked(on) } : null,
     keyboard: { checked: k.keyboard, set: (on) => set('kvm', { keyboard: on }, () => kvm.applyConfig()) },
@@ -1172,7 +1183,16 @@ function updateTray(s) {
   })));
 }
 
+// Audio › Microphone: loaded the first time one of its switches is on (each change applies it).
+function loadMic() {
+  if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
+  const { Mic } = require('../../shared/mic.js');
+  mic = new Mic({ link, cfg: () => settings.audio, onChange: pushState });
+  return mic;
+}
+
 app.on('before-quit', () => {
+  if (mic) mic.shutdown();
   quitting = true;
   theme.stop();
   saveBounds();

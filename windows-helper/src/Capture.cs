@@ -289,6 +289,7 @@ namespace MacShare
             lastCross = DateTime.UtcNow;
             if (Flash != null) Flash.Play(p, side, true);
             Dictionary<string, object> d = Ev("return");
+            AppWindows.AddMoving(d, false); // a window grabbed with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(Screens.Offset(p.X, p.Y, side), 4);
 #if MULTI
             d["side"] = side;
@@ -418,6 +419,15 @@ namespace MacShare
             rawSinceHook = DateTime.MinValue;
             if (nCode < 0) return Native.CallNextHookEx(mouseHook, nCode, wParam, lParam);
             Native.MSLLHOOKSTRUCT m = Native.ReadMouse(lParam); // no allocation per event
+            // Moving a window (AppWindows.TryGrab): the move key and a click grab it, here or injected
+            // from the other computer, never while this PC's input goes elsewhere.
+            int gmsg = wParam.ToInt32();
+            if (gmsg == Native.WM_LBUTTONUP && AppWindows.GrabUpPending) { AppWindows.GrabUp(); return (IntPtr)1; }
+            if (!capturing)
+            {
+                if (gmsg == Native.WM_LBUTTONDOWN && AppWindows.TryGrab(m.pt.x, m.pt.y)) return (IntPtr)1;
+                if (gmsg == Native.WM_MOUSEMOVE && AppWindows.Grabbing) AppWindows.GrabMove(m.pt.x, m.pt.y);
+            }
             if ((m.flags & Native.LLMHF_INJECTED) != 0 && m.dwExtraInfo == Native.MARK)
                 return Native.CallNextHookEx(mouseHook, nCode, wParam, lParam); // Rule 4: our own
             int msg = wParam.ToInt32();
@@ -612,7 +622,7 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
-            if (!DriveOther || Side == null || AnyButtonDown()) { push = 0; return; } // Rule 6: no crossing mid-drag
+            if (!DriveOther || Side == null || (AnyButtonDown() && !AppWindows.Grabbing)) { push = 0; return; } // Rule 6: no crossing mid-drag
             double outward = Screens.Outward(Side, dx, dy);
             if (!MayCross(Side, outward)) { push = 0; return; }
             if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, Side) || !InZone(EdgeZones, p.x, p.y, Side)) { push = 0; return; }
@@ -626,6 +636,7 @@ namespace MacShare
             Begin(true, EdgeKeyboard); // start capturing at once so no motion leaks, then tell main
             saved = new Point(p.x, p.y);
             Dictionary<string, object> d = Ev("edge");
+            AppWindows.AddMoving(d, true); // a window grabbed with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(offset, 4);
             emit(d);
         }
@@ -647,6 +658,7 @@ namespace MacShare
             lastCross = now;
             if (Flash != null) Flash.Play(new Point(x, y), retSide, true); // leaving this PC for the Mac
             Dictionary<string, object> d = Ev("return");
+            AppWindows.AddMoving(d, false); // a window grabbed with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(Screens.Offset(x, y, retSide), 4);
             emit(d);
         }

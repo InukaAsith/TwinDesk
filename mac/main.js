@@ -223,7 +223,7 @@ function pushState() {
     }
     if (stream) {
       state.stream = stream.view;
-      state.audio = { ...settings.audio, ...svc.audio.view, screen: stream.audio };
+      state.audio = { ...settings.audio, ...svc.audio.view, screen: stream.audio, mic: svc.mic ? svc.mic.view() : null };
     }
     state.streamInput = settings.streamInput !== false;
     state.displayMode = displayMode();
@@ -600,6 +600,13 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
   svc.kvm.laneReady.then(laneGo);
+  // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
+  // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
+  svc.kvm.onMoveWindow = (m) => {
+    const wid = Number(m.moving);
+    if (!wid || svc.pcApps.returnWindow(wid)) return;
+    if (settings.apps.moveWindows) svc.appSend.moveOut(wid, Number(m.movingPid));
+  };
   afterLane().then(() => {
     server.listen();
     link.start();
@@ -693,6 +700,15 @@ app.whenReady().then(() => {
     return svc.nowPlaying;
   };
   svc.loadNowPlaying();
+  // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
+  svc.loadMic = () => {
+    if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
+    const { Mic } = require('../shared/mic.js');
+    const askMic = () => (systemPreferences.getMediaAccessStatus('microphone') === 'granted' ? Promise.resolve(true) : systemPreferences.askForMediaAccess('microphone'));
+    svc.mic = new Mic({ server: peer, cfg: () => settings.audio, onChange: pushState, platform: 'mac', askMic });
+    return svc.mic;
+  };
+  svc.loadMic();
   // Camera tab: the cameras of the two computers (shared/camshare.js; a phone's is phoneViews.openCamera),
   // loaded only while Camera is on. ipc reaches them through svc.cam() (its ctx is a copy of svc).
   svc.loadCamera = () => {
@@ -1171,6 +1187,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 app.on('before-quit', () => {
+  if (svc && svc.mic) svc.mic.shutdown();
   if (svc && svc.rzShelf) svc.rzShelf.shutdown();
   if (svc && svc.rz) svc.rz.shutdown();
   quitting = true;

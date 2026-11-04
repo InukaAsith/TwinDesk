@@ -648,7 +648,7 @@ class Kvm extends EventEmitter {
     // The one-to-one helper (macshare-helper-multi not built) says no side: it watches the first one we sent.
     const side = E.SIDES.includes(ev.side) ? ev.side : this._watchedSides()[0] || null;
     const id = side ? this.edges[side] : null;
-    if (this.mode !== 'home' || this.locked || !id || !this._canDriveTo(id) || !this.cfg.mouse || (this.blockEdge && this.blockEdge())) {
+    if (this.mode !== 'home' || this.locked || !id || !this._canDriveTo(id) || !this.cfg.mouse || (!ev.moving && this.blockEdge && this.blockEdge())) {
       // The helper already captures (it started at the edge); undo that if we can't cross.
       this.helper.send('capture', { on: false });
       if (!this.hub.bus.connectedIds().length) this._setMode('home', 'Nothing connected');
@@ -659,6 +659,7 @@ class Kvm extends EventEmitter {
       return;
     }
     this._take({ where: { side: P.opposite(side), offset: ev.offset }, paths: ev.drag && ev.drag.paths }, id);
+    if (ev.moving && this.onMoveWindow) this.onMoveWindow(ev, id); // a window grabbed with the move key (main.js)
   }
 
   // ---- driven: a device drives this Mac ----
@@ -706,7 +707,10 @@ class Kvm extends EventEmitter {
   // device leaves the edge live.
   _onReturn(msg) {
     const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
-    if (!side || side === this.layoutSync.sideTo(this.partner)) return this._sendHome(msg.offset, '');
+    if (!side || side === this.layoutSync.sideTo(this.partner)) {
+      if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg, this.partner); // a window grabbed with the move key (main.js)
+      return this._sendHome(msg.offset, '');
+    }
     const to = this.layoutSync.across(side);
     if (to && to !== this.partner) this._send(this.partner, { t: P.T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
     this._armReturn();

@@ -28,7 +28,7 @@ const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
 // The window's own bars around the picture (phoneview.css): the title bar, the side panel, the bottom bar.
 const TITLE_H = 32, PANEL_W = 44, NAVBAR_H = 40;
-const HIDDEN = ['sound', 'netsound']; // windows that only play the phone's sound: no picture, no bars
+const HIDDEN = ['sound', 'netsound', 'mic']; // windows that only play the phone's sound: no picture, no bars
 let nextId = 1;
 let quitting = false; // a camera's window hides on close, but not on quit
 app.on('before-quit', () => { quitting = true; });
@@ -93,6 +93,18 @@ class PhoneViews extends EventEmitter {
     } else if (!on && open) this.close(open.id);
   }
 
+  // The phone's microphone as a microphone here (Audio › Microphone, Android 11 or later): an
+  // audio-only session capturing the phone's mic, in a hidden window that plays it into the
+  // TwinDesk Microphone (Linux) or a virtual audio cable (phoneview-renderer.js picks it).
+  mic(on, out = '') {
+    const open = [...this.views.values()].find((v) => v.kind === 'mic');
+    if (open && on && open.sink !== out) this.close(open.id); // another output picked: start again
+    else if (open && on) return;
+    if (on && this.bridge.serial) {
+      this._open({ kind: 'mic', title: this._i18n().t('Phone microphone'), titleKey: 'Phone microphone', width: 200, height: 100, hidden: true, sink: out, opts: { video: false, audio: true, control: false, audioSource: 'mic' } });
+    } else if (!on && open) this.close(open.id);
+  }
+
   // The phone's sound captured by the phone itself (no wireless debugging, phone-bridge.js): a
   // hidden window with no adb session, fed what comes through the session.
   netSound(on) {
@@ -107,7 +119,7 @@ class PhoneViews extends EventEmitter {
   }
 
   list() {
-    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
+    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
   }
 
   get focused() {
@@ -272,10 +284,10 @@ class PhoneViews extends EventEmitter {
     return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
   }
 
-  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false }) {
+  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false, sink = '' }) {
     if (!this.bridge.serial && kind !== 'netsound') {
       // Wireless debugging not up yet (just on Wi-Fi after Bluetooth): main.js opens it once it is.
-      if (this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
+      if (kind !== 'mic' && this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
       return this.bridge.emit('popup', 'home', 'Set up wireless debugging on the Phone page first');
     }
     const id = nextId++;
@@ -287,10 +299,10 @@ class PhoneViews extends EventEmitter {
       // click never comes: without this its AudioContext stays suspended and silent).
       webPreferences: { preload: path.join(__dirname, 'preload-phoneview.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
     });
-    const v = { id, kind, app, title, win, session: null, keys: new KeyState(), size: null, ready: false, queue: [], chrome: this._chrome(), screenOff: false, torch: false, eaten: new Set() };
+    const v = { id, kind, app, title, win, sink, session: null, keys: new KeyState(), size: null, ready: false, queue: [], chrome: this._chrome(), screenOff: false, torch: false, eaten: new Set() };
     this.views.set(id, v);
     this._send(v, 'phoneview:opts', this._opts(v));
-    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, titleKey, titleName, controls: this._controls(), language: this._i18n().locale } });
+    win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, titleKey, titleName, ...(kind === 'mic' ? { sink, virtual: process.platform === 'linux' ? '1' : '' } : {}), controls: this._controls(), language: this._i18n().locale } });
     // The phone's screen: the window keeps the picture's shape, its bars added (snapped exact
     // when a resize ends: with the bars in, the right ratio changes a little with the size).
     if (kind === 'screen') win.on('resized', () => this._fit(v, 'height'));

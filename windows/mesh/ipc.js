@@ -136,7 +136,12 @@ function setupIpc(ctx) {
   handle('setOverview', (o) => o && typeof o === 'object' && change('ui', { overview: { ...settings.ui.overview, ...o } })); // General › Overview // invalid names fall back in normalize()
   handle('setMulti', (on) => require('../multi').set(on === true)); // Multi-device off: TwinDesk restarts one to one
   handle('relaunch', () => { app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); app.quit(); }); // General › Advanced: a setting read at startup
-  handle('setAudio', (partial) => change('audio', partial, () => sound.apply()));
+  handle('setAudio', (partial) => change('audio', partial, () => {
+    sound.apply();
+    const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
+    if (mic) mic.apply();
+    if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
+  }));
   handle('setTerminal', (partial) => {
     const p = partial && typeof partial === 'object' ? { enabled: partial.enabled, allowMac: partial.allowMac } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
@@ -196,7 +201,7 @@ function setupIpc(ctx) {
     change('pcScreen', partial, () => { pcScreen.applyInput(); if (!settings.pcScreen.input) pcApps.input.release(); if (settings.pcScreen.extendSize !== size) pcScreen.sizeExtend(); else pcScreen.apply(); });
   });
   handle('setMacApps', (partial) => change('macApps', partial, () => peerApps.apply()));
-  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); }));
+  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); if (peerApps) peerApps.apply(); }));
   handle('setPcScreenMode', (mode) => pcScreen.setMode(mode));
   // Share screen to one target: { mode: 'off'|'mirror'|'extend', displayId? } for device `id` (screen-mesh stream table).
   handle('setPcScreenTarget', (id, choice) => typeof id === 'string' && choice && typeof choice === 'object' ? pcScreen.setTarget(id, choice) : undefined);

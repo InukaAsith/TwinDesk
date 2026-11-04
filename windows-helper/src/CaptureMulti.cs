@@ -118,7 +118,7 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
-            if (!DriveOther || Sides.Count == 0 || AnyButtonDown()) { pushes.Clear(); return; } // Rule 6: no crossing mid-drag
+            if (!DriveOther || Sides.Count == 0 || (AnyButtonDown() && !AppWindows.Grabbing)) { pushes.Clear(); return; } // Rule 6: no crossing mid-drag
             foreach (string side in Sides)
             {
                 double outward = Screens.Outward(side, dx, dy);
@@ -136,6 +136,7 @@ namespace MacShare
                 Begin(true, EdgeKeyboard, side); // start capturing at once so no motion leaks, then tell main
                 saved = new Point(p.x, p.y);
                 Dictionary<string, object> d = Ev("edge");
+                AppWindows.AddMoving(d, true); // a window grabbed with the move key goes over with the pointer (pcapps.js)
                 d["offset"] = Math.Round(offset, 4);
                 d["side"] = side;
                 emit(d);
@@ -167,6 +168,7 @@ namespace MacShare
                 lastCross = now;
                 if (Flash != null) Flash.Play(new Point(x, y), side, true); // leaving this PC for another device
                 Dictionary<string, object> d = Ev("return");
+                AppWindows.AddMoving(d, false); // a window grabbed with the move key goes over with the pointer (pcapps.js)
                 d["offset"] = Math.Round(Screens.Offset(x, y, side), 4);
                 d["side"] = side;
                 emit(d);

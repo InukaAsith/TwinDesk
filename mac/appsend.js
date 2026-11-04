@@ -35,6 +35,7 @@ class AppSend extends EventEmitter {
     this.parked = new Set(); // pids whose windows were moved onto the virtual display
     this.accepts = false; // the viewer's papp.policy
     this.launched = new Map(); // app id -> {id, pids: Set, since, had, lastSeen}
+    this.moved = new Map(); // wid -> {pid, x, y, w, h}: windows moved to the other computer (movewin.js), and where they were (points)
     this.windows = []; // the list last sent
     this.bounds = new Map(); // wid -> {x, y, width, height} points
     this.streams = new Map(); // wid -> session
@@ -55,8 +56,10 @@ class AppSend extends EventEmitter {
       if (server.current) return;
       this.accepts = false;
       for (const id of [...this.launched.keys()]) this._forget(id);
+      this.bringBack();
       this._sync([]);
     });
+    helper.on('ready', () => this._moveKey()); // a restarted helper is told the move key again
     const on = (t, fn) => server.on(`t:${t}`, fn);
     on(T.PAPP_POLICY, (m) => {
       this.accepts = m.accept === true;
@@ -65,7 +68,9 @@ class AppSend extends EventEmitter {
     on(T.PAPPS_LIST, () => this._list());
     on(T.PAPP_LAUNCH, (m) => typeof m.id === 'string' && this._launch(m.id));
     on(T.PAPP_FOCUS, (m) => this._mine(m.wid) && !this._popup(m.wid) && this.helper.request('appFocus', { wid: m.wid }).catch(() => {}));
-    on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && !this._unfollow(m.wid) && this.helper.request('appClose', { wid: m.wid }).catch(() => {}));
+    // Closing a moved window's copy there brings it back here (it isn't closed); one ReZume sent stays open here.
+    on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && (this.moved.has(m.wid) ? this.bringBack(m.wid) : !this._unfollow(m.wid) && this.helper.request('appClose', { wid: m.wid }).catch(() => {})));
+    on(T.PAPP_RETURN, (m) => this.moved.has(m.wid) && this.bringBack(m.wid, true));
     on(T.PAPP_SIZE, (m) => {
       const ok = (v) => Number.isInteger(v) && v >= 50 && v <= 16384;
       const w = this.windows.find((x) => x.wid === m.wid);
@@ -109,11 +114,31 @@ class AppSend extends EventEmitter {
   }
 
   applySettings() {
+    const mv = !!this.getSettings().apps.moveWindows;
+    if (!mv) this.bringBack(); // Move windows off: every moved window back here
+    this._moveKey();
     if (!this.allowed) {
       for (const [id, a] of this.launched) if (!a.rz) this._forget(id);
       if (this.launched.size) this._poll();
       else this._sync([]);
     }
+  }
+
+  // The helper grabs a window with the move key and a click (Grab.swift); "" = off.
+  _moveKey() {
+    const a = this.getSettings().apps;
+    this.helper.send('moveWin', { key: a.moveWindows ? a.moveKey || 'ControlRight' : '' });
+  }
+
+  // Move windows (movewin.js, loaded only when used): a grabbed window crossed with the pointer
+  // goes over there; bringBack returns one or all of them.
+  moveOut(wid, pid) {
+    if (!this.getSettings().apps.moveWindows) return Promise.resolve(false);
+    return require('./movewin.js').moveOut(this, Number(wid), Number(pid));
+  }
+
+  bringBack(wid, home = false) {
+    if (this.moved.size) require('./movewin.js').bringBack(this, wid, home);
   }
 
   // ReZume: the windows of an app that is open here (its bundle id), streamed to the other Mac.
@@ -186,11 +211,11 @@ class AppSend extends EventEmitter {
     if (this.timer) return;
     const tick = async () => {
       this.timer = null;
-      if (!this.launched.size || !this.server.current) return this._sync([]);
-      const pids = [...this.launched.values()].flatMap((a) => [...a.pids]);
+      if ((!this.launched.size && !this.moved.size) || !this.server.current) return this._sync([]);
+      const pids = [...this.launched.values()].flatMap((a) => [...a.pids]).concat([...this.moved.values()].map((m) => m.pid));
       const r = await this.helper.request('appWindows', { pids, popups: true }).catch(() => null);
       if (r && Array.isArray(r.windows)) this._match(r.windows);
-      if (this.launched.size) this.timer = setTimeout(tick, POLL_MS);
+      if (this.launched.size || this.moved.size) this.timer = setTimeout(tick, POLL_MS);
     };
     this.timer = setTimeout(tick, 0);
   }
@@ -201,6 +226,7 @@ class AppSend extends EventEmitter {
     const out = [];
     const pops = [];
     this.bounds.clear();
+    if (this.moved.size) require('./movewin.js').list(this, all, out, pops); // moved windows (Move windows)
     for (const a of this.launched.values()) {
       const mine = all.filter((w) => a.pids.has(w.pid) && !(a.skip && a.skip.has(w.wid)));
       const main = mine.filter((w) => !w.popup);
@@ -254,7 +280,7 @@ class AppSend extends EventEmitter {
   // The virtual display is held while app windows are streamed (no screen sharing needed).
   _holdDisplay() {
     if (!this.displays || !this.displays.hold) return;
-    const want = this.launched.size > 0 && this.server.current != null;
+    const want = (this.launched.size > 0 || this.moved.size > 0) && this.server.current != null;
     if (want !== !!this.holding) {
       this.holding = want;
       this.displays.hold('apps', want).catch(() => {});
@@ -288,7 +314,7 @@ class AppSend extends EventEmitter {
     this.sentKey = key;
     this.windows = list;
     for (const wid of this.failed) if (!list.some((w) => w.wid === wid)) this.failed.delete(wid);
-    const want = this.accepts && (this.allowed || this.rezumes) ? new Set(list.map((w) => w.wid)) : new Set();
+    const want = this.accepts && (this.allowed || this.rezumes || this.moved.size > 0) ? new Set(list.map((w) => w.wid)) : new Set();
     for (const [wid, session] of this.streams) {
       if (want.has(wid)) continue;
       this.streams.delete(wid);
@@ -373,13 +399,14 @@ class AppSend extends EventEmitter {
 
   shutdown() {
     for (const id of [...this.launched.keys()]) this._forget(id);
+    this.bringBack(); // quitting: every moved window back here
     if (this.holding && this.displays) this.displays.hold('apps', false).catch(() => {});
     for (const session of this.streams.values()) this._stop(session);
     this.streams.clear();
   }
 
   get view() {
-    return { accepts: this.accepts, open: this.windows.filter((w) => !w.popup).length, streaming: this.streams.size };
+    return { accepts: this.accepts, open: this.windows.filter((w) => !w.popup).length, streaming: this.streams.size, moved: this.moved.size };
   }
 }
 

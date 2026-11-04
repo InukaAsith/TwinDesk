@@ -182,6 +182,12 @@
       AUDIO_ANSWER: 'audio.answer', // receiver->sender {dir, session, sdp}
       AUDIO_ICE: 'audio.ice', // either {dir, session, candidate}
       AUDIO_STOP: 'audio.stop', // sender->receiver {dir}
+      // Audio › Microphone (shared/mic.js): each side's microphone on the other, either way on its own
+      MIC_POLICY: 'mic.policy', // either {accept, ask?}: it uses the other's microphone; ask: send yours back (just loaded)
+      MIC_OFFER: 'mic.offer', // sender->receiver {session, sdp}
+      MIC_ANSWER: 'mic.answer', // receiver->sender {session, sdp}
+      MIC_ICE: 'mic.ice', // either {session, to: 'recv'|'send', candidate}
+      MIC_STOP: 'mic.stop', // sender->receiver {}
       // Camera sharing between two computers (shared/camshare.js, the Camera tab): one's camera in a
       // window on the other, WebRTC set up through these, the picture straight between them.
       CAM_POLICY: 'cam.policy', // either way, after welcome and on change {share}: this side lets the other see its camera
@@ -216,6 +222,7 @@
       PAPP_FOCUS: 'papp.focus', // M->W {wid}
       PAPP_CLOSE: 'papp.close', // M->W {wid}
       PAPP_SIZE: 'papp.size', // M->W {wid, w, h} physical px
+      PAPP_RETURN: 'papp.return', // M->W {wid}: a window moved here (papp.windows moved: true) goes back, dragged past the edge home
       // A phone (os 'android') as the peer
       PHONE_INFO: 'phone.info', // phone->Mac {model, maker, sdk, release, battery?, charging?, colors: ['#rrggbb'], wallpaper?: data URL (small JPEG)}
       PHONE_APPS_LIST: 'phone.apps.list', // Mac->phone

@@ -102,7 +102,7 @@ class PeerApps {
   }
 
   get accepting() {
-    return !!this.cfg.on || this.rz === true;
+    return !!this.cfg.on || this.rz === true || !!(this.settings.pcApps && this.settings.pcApps.moveWindows); // Move windows takes the windows moved here too
   }
 
   _policy() {
@@ -145,6 +145,7 @@ class PeerApps {
         w: Math.max(80, Number(raw.w) || 800), h: Math.max(60, Number(raw.h) || 600), scale: Math.min(4, Math.max(1, Number(raw.scale) || 1)),
         popup: raw.popup === true, owner: Number(raw.owner), x: Number(raw.x) || 0, y: Number(raw.y) || 0,
         maxW: Number(raw.maxW) > 0 ? Number(raw.maxW) : 0, maxH: Number(raw.maxH) > 0 ? Number(raw.maxH) : 0,
+        moved: raw.moved === true, // dragged over from there (pcapps.js moveOut): it opens where the pointer came in
       };
       if (info.popup) {
         // A menu / drop-down: needs its owner's window here (listed before it).
@@ -161,6 +162,21 @@ class PeerApps {
     this.onChange();
   }
 
+  // Dragged back past the edge (kvm.js, the helper's return event): if it's the copy of a window
+  // moved here, that window goes home (pcapps.js bringBack); the pointer is going there anyway.
+  returnWindow(hwnd) {
+    if (!this.active || !hwnd) return false;
+    for (const w of this.wins.values()) {
+      if (!w.info.moved || w.win.isDestroyed()) continue;
+      const h = w.win.getNativeWindowHandle();
+      const id = h.length >= 8 ? Number(h.readBigUInt64LE(0)) : h.readUInt32LE(0);
+      if (id !== hwnd) continue;
+      this.link.send({ t: T.PAPP_RETURN, wid: w.info.wid });
+      return true;
+    }
+    return false;
+  }
+
   _app(id) {
     return this.list.find((x) => x.id === id) || (this.otherApps ? this.otherApps().find((x) => x.id === id) : null) || null;
   }
@@ -170,6 +186,8 @@ class PeerApps {
   }
 
   _title(info) {
+    // Moved here from the other computer: its name says so (it goes back when closed or dragged back).
+    if (info.moved) return this._i18n().t('{title} (from {name})', { title: info.title || this._i18n().t('App'), name: this.peerName() });
     const a = this._app(info.id);
     const name = a ? a.name : '';
     return info.title && name && !info.title.includes(name) ? info.title + ' · ' + name : info.title || name || this._i18n().t('App');
@@ -210,11 +228,20 @@ class PeerApps {
 
   _create(info) {
     if (info.popup) return this._createPopup(info);
-    const wa = displays.getPrimaryDisplay().workArea;
+    // A moved window comes in with the pointer: on that screen, its title bar under the pointer.
+    const at = info.moved ? displays.getCursorScreenPoint() : null;
+    const wa = (at ? displays.getDisplayNearestPoint(at) : displays.getPrimaryDisplay()).workArea;
+    const width = Math.min(Math.round(info.w / info.scale), wa.width);
+    const height = Math.min(Math.round(info.h / info.scale), wa.height - 40);
+    const where = at ? {
+      x: Math.round(Math.min(Math.max(at.x - width / 2, wa.x), wa.x + wa.width - width)),
+      y: Math.round(Math.min(Math.max(at.y - 16, wa.y), wa.y + wa.height - height)),
+    } : {};
     const win = new BrowserWindow({
       title: this._title(info),
-      width: Math.min(Math.round(info.w / info.scale), wa.width),
-      height: Math.min(Math.round(info.h / info.scale), wa.height - 40),
+      width,
+      height,
+      ...where,
       useContentSize: true,
       backgroundColor: '#000000',
       fullscreenable: false, // full screen stretched the picture; maximize resizes it over there

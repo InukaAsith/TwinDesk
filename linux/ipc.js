@@ -119,6 +119,9 @@ function setupIpc(ctx) {
   handle('relaunch', () => { app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); app.quit(); }); // General › Advanced: a setting read at startup
   handle('setAudio', (partial) => change('audio', partial, () => {
     sound.apply();
+    const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
+    if (mic) mic.apply();
+    if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
     // Loaded when first turned on (applied then); off, the loaded one stops.
     if (partial && 'phoneMedia' in partial && ctx.nowPlaying) ctx.nowPlaying.apply(); else if (partial && 'phoneMedia' in partial) ctx.loadNowPlaying();
     if (partial && 'phoneBt' in partial && ctx.btAudio) ctx.btAudio.apply(); else if (partial && 'phoneBt' in partial) ctx.loadBtAudio();
@@ -176,7 +179,7 @@ function setupIpc(ctx) {
   handle('launchApp', (id) => { if (!macPeer()) peerApps.launch(id); else { apps.launch(id); screen.ensureHidden(); } });
   handle('pinApp', (id) => typeof id === 'string' && macPeer() && apps.pin(id, true)); // a launcher in the app menu
   handle('setMacApps', (partial) => change('macApps', partial, () => peerApps.apply()));
-  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); }));
+  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); if (peerApps) peerApps.apply(); }));
   handle('setFiles', (partial) => {
     // shareOn/shareFolder only change through share()/unshare()
     const p = partial && typeof partial === 'object' ? { dropToMac: partial.dropToMac, mountMac: partial.mountMac, acceptFromMac: partial.acceptFromMac, edgeDrag: partial.edgeDrag,

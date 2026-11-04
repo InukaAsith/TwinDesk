@@ -530,6 +530,7 @@ class Kvm {
     const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut(id) ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
     const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
     this._take({ side: P.opposite(side), offset: msg.offset, ...(drag ? { drag: { count: drag.count } } : {}) }, id);
+    if (!drag && msg.moving && this.onMoveWindow) this.onMoveWindow(msg, id); // a window grabbed with the move key (main.js)
     if (drag) { // order: kvm.take, drag.start, then the files
       this.fileDrop.beginDrag(drag);
       this.dragPending = true;
@@ -736,7 +737,10 @@ class Kvm {
     const to = side ? this.layoutSync.across(side) : null;
     console.log('[kvm] return ' + side + ' -> ' + (to || 'nobody') + ' (partner ' + this.partner + ')');
     // The way back: the side of the device that drives us (judged by who is there, not only by the side we expect).
-    if (!side || to === this.partner || side === this.layoutSync.sideTo(this.partner)) return this._sendHome(msg.offset);
+    if (!side || to === this.partner || side === this.layoutSync.sideTo(this.partner)) {
+      if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg, this.partner); // a window grabbed with the move key (main.js)
+      return this._sendHome(msg.offset);
+    }
     if (to && to !== this.partner && this._canRelay(to)) return this._relayTo(to, side, Number(msg.offset) || 0);
     if (to && to !== this.partner) this._send(this.partner, { t: T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
     this._armReturn();

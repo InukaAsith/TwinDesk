@@ -7,7 +7,7 @@ UI.tab({
   hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
   group: 'More',
   order: 80,
-  title: I18n.t('Apps'),
+  title: I18n.t('Apps and Windows'),
   desc: I18n.t('Open apps from the other computer in their own windows.'),
   color: 'linear-gradient(#bf5af2, #5e5ce6)',
   master: { get: (s) => !!((s.apps && s.apps.offer) || (s.papps && s.papps.on)), set: (v) => { UI.api.setApps({ offer: v }); UI.api.setPcApps({ on: v }); } },
@@ -52,6 +52,15 @@ UI.tab({
       }));
       if (!apps.length) grid.append(el('div', { class: 'app-empty', text: p.listing ? I18n.t('Loading {device}’s apps…', { device: UI.peer(UI.state).name }) : q ? I18n.t('No app matches') : I18n.t('No apps yet. Press Refresh.') }));
     }
+    // Move windows (movewin.js): the key held, a window clicked and dragged past the shared edge moves
+    // to the other computer (and back the same way). Off: nothing of it is loaded.
+    const MOVE_KEYS = [['ControlRight', I18n.t('Right Control')], ['ControlLeft', I18n.t('Left Control')], ['AltRight', I18n.t('Right Option')], ['AltLeft', I18n.t('Left Option')],
+      ['MetaRight', I18n.t('Right Command')], ['MetaLeft', I18n.t('Left Command')], ['ShiftRight', I18n.t('Right Shift')], ['ShiftLeft', I18n.t('Left Shift')]];
+    const moveSw = UI.switch((v) => api.setApps({ moveWindows: v }), { label: I18n.t('Move windows') });
+    const moveKey = UI.select(MOVE_KEYS.map(([value, label]) => ({ value, label })), (v) => api.setApps({ moveKey: v }));
+    const moveRow = UI.row(I18n.t('Move windows to {name}'), I18n.t('Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home'), [moveSw]);
+    const moveKeyRow = UI.row(I18n.t('Key to hold'), I18n.t('Hold it, then click anywhere in a window and drag'), [moveKey]);
+    const moveCard = UI.card(I18n.t('Move windows'), [moveRow, moveKeyRow]);
     const rezume = UI.rezumeCard ? UI.rezumeCard() : { el: UI.el('div', { hidden: true }), update() {} }; // the other computer's ReZume (shared/ui-rezume.js; not in Multi-device)
     body.append(
       UI.pair(
@@ -61,6 +70,7 @@ UI.tab({
         ]),
         UI.dir('w2m', [pcRow, pcUsage]),
       ),
+      moveCard,
       rezume.el,
       gridCard,
     );
@@ -69,6 +79,10 @@ UI.tab({
       const a = s.apps;
       if (!a) return;
       offerSw.set(a.offer);
+      moveSw.set(!!a.moveWindows);
+      moveKey.set(a.moveKey || 'ControlRight');
+      moveKeyRow.hidden = !a.moveWindows;
+      moveRow.setHint(a.moveWindows && !s.permissions.accessibility ? I18n.t('Needs Accessibility (General)') : I18n.t('Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home'));
       offerRow.setHint(!a.offer ? ''
         : !s.sharing || !s.sharing.on ? I18n.t('Screen sharing turns on while an app is open')
           : !s.permissions.accessibility ? I18n.t('Needs Accessibility (General)') : '');

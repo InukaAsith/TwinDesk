@@ -145,6 +145,12 @@ static void dispatch(const char *line) {
     wins_close((unsigned long)jnum(c, "wid", 0));
   } else if (!strcmp(cmd, "winSize")) {
     wins_size((unsigned long)jnum(c, "wid", 0), (int)jnum(c, "w", 0), (int)jnum(c, "h", 0));
+  } else if (!strcmp(cmd, "moveWin")) {
+    wins_move_key(jstr(c, "key", ""));
+  } else if (!strcmp(cmd, "winPark")) {
+    wins_park((unsigned long)jnum(c, "wid", 0));
+  } else if (!strcmp(cmd, "winPlace")) {
+    wins_place((unsigned long)jnum(c, "wid", 0), (int)jnum(c, "x", 0), (int)jnum(c, "y", 0));
   } else if (!strcmp(cmd, "winMove")) {
     wins_move((unsigned long)jnum(c, "wid", 0), jnum(c, "x", 0), jnum(c, "y", 0));
   } else if (!strcmp(cmd, "capture")) {
@@ -321,7 +327,7 @@ int main(void) {
     while (XPending(dpy_in)) { // core events delivered to the grab (capture.c): not used; drop.c's XDND
       XEvent e;
       XNextEvent(dpy_in, &e);
-      drop_xevent(&e);
+      if (!wins_move_xevent(&e)) drop_xevent(&e); // Move windows' grab (wins.c), else XDND
     }
     struct pollfd p[4] = { { 0, POLLIN, 0 }, { xfd, POLLIN, 0 }, { ConnectionNumber(dpy_in), POLLIN, 0 }, { -1, POLLIN, 0 } };
 #ifdef TDFAST
