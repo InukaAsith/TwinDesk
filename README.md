@@ -328,7 +328,7 @@ sustained-low-latency GC mode.
 
 **Fallback.** No lane (an older app, Bluetooth, UDP blocked) means input stays on the session
 exactly as before. General › Advanced › Input protocol lets you pick **UDP (tdv2)**, the default, or
-**TCP (tdv1)**.
+**TCP (tdv1)**. The old and new protocols side by side: [docs/protocol.md](docs/protocol.md).
 
 </details>
 
