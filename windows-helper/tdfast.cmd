@@ -10,7 +10,7 @@ where cargo >nul 2>nul || (echo note: no cargo: no tdfast.dll, the input lane st
 set CRATE=%~dp0..\native\tdfast
 set BIN=%~dp0bin
 call :arch x86_64-pc-windows-msvc x64
-rustup target list --installed 2>nul | findstr /x aarch64-pc-windows-msvc >nul && call :arch aarch64-pc-windows-msvc arm64
+rustup target list --installed 2>nul | findstr /b /c:"aarch64-pc-windows-msvc" >nul && call :arch aarch64-pc-windows-msvc arm64
 if errorlevel 1 echo note: no aarch64-pc-windows-msvc target: no arm64 tdfast.dll ^(rustup target add aarch64-pc-windows-msvc^)
 exit /b 0
 

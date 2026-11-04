@@ -446,6 +446,7 @@ namespace MacShare
             if (cmd == "info") { reply["cursor"] = c["cursor"]; reply["capturing"] = c["capturing"]; }
             if (cmd == "displays") reply["displays"] = c["displays"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
+            if (cmd == "wifiLowLatency" && c.ContainsKey("applied")) reply["applied"] = c["applied"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];
             if (cmd == "folderAt") { reply["path"] = c["path"]; reply["desktop"] = c["desktop"]; }
             if (cmd == "keyLayout")

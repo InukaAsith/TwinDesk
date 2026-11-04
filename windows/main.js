@@ -283,6 +283,7 @@ function start() {
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
   kvm = new Kvm({ link, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
+  kvm.laneReady.then(laneGo);
   require('../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   hud = new Hud(() => settings);
   // Cursor sharing switched on/off (hotkey double-tap, tray, or the other computer): the big card.
@@ -407,7 +408,7 @@ function start() {
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', () => { checkTaskbar(); pushState(); });
   loadReZume(); // only while it's on
-  link.start();
+  afterLane().then(() => link.start());
 
   link.on('welcome', () => { // a pinned Mac app started while the Mac wasn't connected
     if (pendingMacApp && Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
@@ -420,10 +421,18 @@ function start() {
   if (process.argv.includes('--test-monitor')) screen.open(true); // dev: ?test=1 pattern
 }
 
+// The first session, either way, waits for the helper's input lane (kvm.laneReady), so it's native
+// from the start: about 0.3 s at launch, at most LANE_WAIT_MS when the helper doesn't answer.
+const LANE_WAIT_MS = 1500;
+let laneGo;
+const laneGate = new Promise((r) => (laneGo = r));
+const afterLane = () => Promise.race([laneGate, new Promise((r) => setTimeout(r, LANE_WAIT_MS))]);
+
 // Host role: our own server, once the certificate exists (made on first start).
 async function startHost(guest) {
   try {
     const id = await identity.load();
+    await afterLane();
     discovery.self.fp = id.fp; // beacons carry it now
     const server = new Server(id);
     discovery.self.port = server.port;

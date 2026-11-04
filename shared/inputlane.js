@@ -212,19 +212,22 @@ class InputLane extends EventEmitter {
   // helper: {request(cmd, args), send(cmd, args), on('event'|'exit')} with caps.lane. From the next
   // session on (the port in hello/welcome is the helper's), moves never pass through Node: the
   // helper's event tap sends them, and injects the ones that come. Events still pass through Node.
+  // Resolves when it's settled (true: native now), so an app can hold its first session till then.
   useNative(helper) {
-    if (this.native || laneOff() || process.env.TWINDESK_NO_TDFAST) return;
+    if (this.native) return Promise.resolve(true);
+    if (laneOff() || process.env.TWINDESK_NO_TDFAST) return Promise.resolve(false);
     if (this.keys) {
       this._wantNative = helper; // after this session
-      return;
+      return Promise.resolve(false);
     }
     this._wantNative = null;
-    if (!helper || typeof helper.request !== 'function') return;
+    if (!helper || typeof helper.request !== 'function') return Promise.resolve(false);
     let asked;
-    try { asked = Promise.resolve(helper.request('lane', { op: 'bind' })); } catch (_) { return; }
-    asked.then((r) => {
+    try { asked = Promise.resolve(helper.request('lane', { op: 'bind' })); } catch (_) { return Promise.resolve(false); }
+    return asked.then((r) => {
       const port = r && Number(r.port);
-      if (!port || this.native || this.keys) return;
+      if (this.native) return true;
+      if (!port || this.keys) return false;
       this.nat = helper;
       this.native = true;
       if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
@@ -237,7 +240,8 @@ class InputLane extends EventEmitter {
         helper.on('exit', () => this._nativeLost());
       }
       console.log(`[lane] native (the helper's), port ${port}`);
-    }, () => {});
+      return true;
+    }, () => false);
   }
 
   _onNative(name, ev) {

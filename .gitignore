@@ -29,7 +29,8 @@ mac/vendor/adb/
 mac/vendor/twindesk-android-full.apk
 .env
 result
-result-*# The input lane's native library (native/tdfast) and the copies the helpers link
+result-*
+# The input lane's native library (native/tdfast) and the copies the helpers link
 native/tdfast/target/
 mac-helper/lib/
 linux-helper/lib/
