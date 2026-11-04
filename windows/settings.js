@@ -58,7 +58,7 @@ function normalize(s) {
   const hub = s.hub || {};
   const nt = s.net || {};
   return {
-    rev: 10, // settings revision (upgrades in normalize, like the Mac's store.js)
+    rev: 11, // settings revision (upgrades in normalize, like the Mac's store.js)
     kvm: {
       mouse: bool(kvm.mouse, was),
       keyboard: bool(kvm.keyboard, was),
@@ -189,10 +189,9 @@ function normalize(s) {
       // The screen and the sound: through wireless debugging or the phone itself (shared/phonemodes.js)
       mirror: ['adb', 'native'].includes(ph.mirror) ? ph.mirror : 'auto',
       soundVia: ['adb', 'native'].includes(ph.soundVia) ? ph.soundVia : 'auto',
-      // Where a phone window's controls sit (phoneview.js): 'top' (the title bar, the default), 'side'
-      // (a panel down the right), 'bottom' (Back, Home and Recents under the picture). rev 10: the title bar once.
-      controls: (s.rev || 0) >= 10 && ['side', 'top', 'bottom'].includes(ph.controls) ? ph.controls : 'top',
-      panel: bool(ph.panel, true), // the controls shown in phone windows (the title bar's panel button), as last left
+      // Where a phone window's controls sit (phoneview.js): 'top' (the title bar, as on the Mac: the
+      // default) or 'side' (Phone › Side panel: a panel down the right). rev 11: the title bar once.
+      controls: (s.rev || 0) >= 11 && ph.controls === 'side' ? 'side' : 'top',
       // Keys in a phone window and on the phone (shared/phonechat.js): Enter sends in WhatsApp,
       // Instagram and Telegram (Shift+Enter a new line); the arrow keys swipe the screen.
       enterSends: bool(ph.enterSends, true),

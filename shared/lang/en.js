@@ -2030,4 +2030,5 @@
   "Removing {count}…": "Removing {count}…",
   "Tap the notification on the phone to remove {count} more": "Tap the notification on the phone to remove {count} more",
   "{count} couldn’t be removed": "{count} couldn’t be removed",
+  "All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.": "All the buttons down the right of each phone window: volume, rotate, screenshot and more. Off: Back, Home, Recents and Notifications in the title bar.",
 });
