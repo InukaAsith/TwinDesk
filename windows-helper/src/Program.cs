@@ -40,6 +40,9 @@ namespace MacShare
             catch (Exception) { Native.SetProcessDPIAware(); }
             Console.InputEncoding = new UTF8Encoding(false);
             Console.OutputEncoding = new UTF8Encoding(false);
+            // The mouse hook and the lane's injection run managed code: no blocking full collections
+            // (background ones only), so a collection doesn't hold a move or a click.
+            try { System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency; } catch (Exception) { }
 
             invoker = new Control();
             invoker.CreateControl();
@@ -54,7 +57,8 @@ namespace MacShare
             injector.Stops = capture.ReturnStops;
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move
-            Lane.Init(delegate (double x, double y) { smoother.Flush(laneMove); laneMove(x, y); }, Emit); // the input lane (Lane.cs)
+            Lane.Init(delegate (double x, double y) { smoother.Flush(laneMove); laneMove(x, y); }, // the input lane (Lane.cs)
+                delegate (Dictionary<string, object> ev) { Injector.Wake(); smoother.Flush(injector.Move); injector.Apply(ev); }, Emit);
             HideCursor.Restore(); // in case a crash left the cursors blank
             capture.Start();
             capture.Flash = new Flash();
@@ -445,7 +449,7 @@ namespace MacShare
             if (error != null) reply["error"] = error;
             if (cmd == "info") { reply["cursor"] = c["cursor"]; reply["capturing"] = c["capturing"]; }
             if (cmd == "displays") reply["displays"] = c["displays"];
-            if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
+            if (cmd == "lane" && c.ContainsKey("port")) { reply["port"] = c["port"]; reply["events"] = c["events"]; }
             if (cmd == "wifiLowLatency" && c.ContainsKey("applied")) reply["applied"] = c["applied"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];
             if (cmd == "folderAt") { reply["path"] = c["path"]; reply["desktop"] = c["desktop"]; }

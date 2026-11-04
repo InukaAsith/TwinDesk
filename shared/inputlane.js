@@ -230,6 +230,7 @@ class InputLane extends EventEmitter {
       if (!port || this.keys) return false;
       this.nat = helper;
       this.native = true;
+      this.natEvents = r.events === 1; // the helper injects clicks and wheel from the lane itself (claim)
       if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
       this.sock = null;
       this.port = port;
@@ -262,6 +263,7 @@ class InputLane extends EventEmitter {
     if (!this.native) return;
     const helper = this.nat;
     this.native = false;
+    this.natEvents = false;
     this.nat = null;
     this.port = 0;
     this._binding = null;
@@ -662,6 +664,10 @@ class LaneDrive {
     if (!lane) return sendWss(msg);
     if (lane.native) { // numbered and fenced by the helper's tap (none: it wasn't driving on the lane)
       if (!Number.isInteger(msg.es)) return sendWss(msg);
+      if (msg.sent) { // a click or wheel the helper put on the lane itself: only its WSS copy here
+        const { sent, ...m } = msg; // eslint-disable-line no-unused-vars
+        return sendWss(m);
+      }
       sendWss(msg);
       if (lane.up) lane.sendEvent(msg);
       return;
@@ -672,6 +678,17 @@ class LaneDrive {
     const m = { ...msg, es, route: c.route, mn: c.mn, mc: [c.cx, c.cy] };
     sendWss(m);
     if (lane.up) lane.sendEvent(m);
+  }
+
+  // An event the helper numbered that this side won't send (a copy/paste shortcut done over there, no
+  // longer driving): a key-up with no key in its place, which every app ignores, so the other side's
+  // order doesn't wait for that number for ever.
+  skip(e, sendWss) {
+    const lane = this.getLane();
+    if (!lane || !lane.native || !e || !Number.isInteger(e.es)) return;
+    const m = { t: 'k.ku', es: e.es, route: e.route, mn: e.mn, mc: e.mc };
+    sendWss(m);
+    if (lane.up && !e.sent) lane.sendEvent(m);
   }
 
   // Moves never wait for the WSS backlog while they go on the lane.
@@ -686,7 +703,10 @@ const fenceOf = (m) => (Number.isInteger(m.mn) && Array.isArray(m.mc) && Number.
 
 // kvm.js glue, driven. o: route() -> the crossing we're driven by; move(dx, dy) -> as a k.mm;
 // deliver(msg) -> a click, key, wheel or gesture, as today; native() -> the lane when it is the
-// helper's (its moves are injected there; fences and done go to it), else null; speed() -> kvm.speed.
+// helper's (its moves are injected there; fences and done go to it), else null; speed() -> kvm.speed;
+// reverse() -> scrolling reversed. With a helper that can (natEvents), its lane injects clicks and
+// wheel as they come; kvm.js's `_injectEv` sends the others through inject(ev), so whichever copy
+// is first is injected, once.
 class LaneDriven {
   constructor(o) {
     this.o = o;
@@ -694,6 +714,8 @@ class LaneDriven {
     this.eo = new EventOrder();
     this.held = null; // a move waiting for the event before it
     this.early = null; // a move for a crossing whose kvm.take hasn't come yet
+    this.es = 0; // the event being delivered (its inject claims it in the helper)
+    this.direct = false; // this crossing's clicks and wheel may be injected by the helper's lane
   }
 
   // A new session (the lane started again).
@@ -704,10 +726,15 @@ class LaneDriven {
     this.early = null;
   }
 
-  // kvm.take: totals start again; a move that came ahead of it goes now.
-  take(route) {
+  // kvm.take: totals start again; a move that came ahead of it goes now. opts.drag: files come
+  // with this crossing (its button-up drops them: Node handles every click then).
+  take(route, opts = {}) {
     const nat = this.o.native && this.o.native();
-    if (nat) nat.nativeSend('driven', { route: route >>> 0, speed: this.o.speed ? this.o.speed() : 1 });
+    this.direct = !opts.drag;
+    if (nat) {
+      nat.nativeSend('driven', { route: route >>> 0, speed: this.o.speed ? this.o.speed() : 1 });
+      this.config();
+    }
     this.ma.reset(route);
     const e = this.early;
     this.early = null;
@@ -743,7 +770,8 @@ class LaneDriven {
       const f = fenceOf(x);
       if (f && f.route === (this.o.route() >>> 0)) this._apply(f);
       const { es, route, mn, mc, ...msg } = x; // eslint-disable-line no-unused-vars
-      this.o.deliver(msg);
+      this.es = es;
+      try { this.o.deliver(msg); } finally { this.es = 0; }
       const nat = this.o.native && this.o.native();
       if (nat) nat.nativeSend('done', { es }); // a move on the lane that waited for it goes now
     }
@@ -758,6 +786,22 @@ class LaneDriven {
   home() {
     const nat = this.o.native && this.o.native();
     if (nat) nat.nativeSend('driven', { route: 0, speed: 1 });
+  }
+
+  // The helper's lane: clicks and wheel straight from the lane (not with files coming), and the
+  // scroll direction. Again when the settings change.
+  config() {
+    const nat = this.o.native && this.o.native();
+    if (nat && nat.natEvents) nat.nativeSend('direct', { on: this.direct, reverse: !!(this.o.reverse && this.o.reverse()) });
+  }
+
+  // kvm.js's inject for an event being delivered: the helper injects it unless its lane did already.
+  // false: inject it as always.
+  inject(ev) {
+    const nat = this.es && this.o.native && this.o.native();
+    if (!nat || !nat.natEvents) return false;
+    nat.nativeSend('inject', { es: this.es, ev });
+    return true;
   }
 
   // Drag-in arming (native): the helper holds the lane's moves meanwhile.

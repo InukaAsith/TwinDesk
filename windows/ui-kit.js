@@ -373,9 +373,9 @@ const UI = {
 
   // Small device glyph by OS: 'mac' | 'win' | 'linux' | 'android'.
   osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' ? 'phone' : 'pc'),
-  // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's.
+  // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's, light or dark as the appearance.
   appIcon(src) {
-    const fallback = 'assets/sidebar-icon@2x.png';
+    const fallback = matchMedia('(prefers-color-scheme: dark)').matches ? 'assets/sidebar-icon@2x.png' : 'assets/sidebar-icon-light@2x.png';
     const img = UI.el('img', { src: src || fallback, alt: '' });
     img.onerror = () => { img.onerror = null; img.src = fallback; };
     return img;

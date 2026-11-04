@@ -2,7 +2,8 @@
 // A lane peer for shared/test/tdfast-interop.js: the C ABI, driven by JSON lines on stdin, the
 // callbacks as JSON lines on stdout. Commands: {"op":"bind"} {"op":"start","role","key","ip","port"}
 // {"op":"active","on"} {"op":"drive","route"} {"op":"move","dx","dy"} {"op":"event","json"}
-// {"op":"driven","route","speed"} {"op":"fence","route","mn","cx","cy"} {"op":"done","es"} {"op":"hold","on"}.
+// {"op":"driven","route","speed"} {"op":"fence","route","mn","cx","cy"} {"op":"done","es"} {"op":"hold","on"}
+// {"op":"direct","on","reverse"} {"op":"claim","es"}.
 use std::ffi::{c_void, CString};
 use std::io::{BufRead, Write};
 use std::sync::Mutex;
@@ -25,6 +26,8 @@ extern "C" fn cb(_ctx: *mut c_void, kind: i32, dx: f64, dy: f64, json: *const u8
             let msg: serde_json::Value = serde_json::from_slice(s).unwrap_or(serde_json::Value::Null);
             say(serde_json::json!({"ev":"event","msg":msg}));
         }
+        TD_BUTTON => say(serde_json::json!({"ev":"button","b":dx,"down":dy == 1.0})),
+        TD_WHEEL => say(serde_json::json!({"ev":"wheel","dx":dx,"dy":dy,"line":len == 1})),
         TD_UP => say(serde_json::json!({"ev":"up","rtt":dx})),
         TD_DOWN => say(serde_json::json!({"ev":"down"})),
         _ => {}
@@ -68,6 +71,8 @@ fn main() {
                 }
             }
             "done" => td_done(u("es")),
+            "direct" => td_direct(m["on"].as_bool().unwrap_or(false) as i32, m["reverse"].as_bool().unwrap_or(false) as i32),
+            "claim" => say(serde_json::json!({"ev":"claim","es":u("es"),"new":td_claim(u("es")) == 1})),
             "stop" => td_stop(),
             _ => {}
         }

@@ -57,7 +57,8 @@ require('../shared/applog.js').start(app); // console.* and crashes into the log
 // Encoder setting works on the next share. One enable-features switch for the app: Chromium keeps only the last one.
 {
   const codec = require('../shared/screencodec.js');
-  const on = codec.features([]);
+  const hub = require('./audiohub.js'); // the screen's sound captured by Chromium (macOS 14.2+)
+  const on = codec.features(hub.loopback() ? hub.LOOPBACK_FEATURES : []);
   if (on) app.commandLine.appendSwitch('enable-features', on);
 }
 // Multi-device switched on (multi.js, docs/multi-device.md): mesh/main.js runs instead of everything below.
@@ -527,6 +528,13 @@ function updateTray() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(trayMenu.appMenu(model))); // the same items in the menu bar
 }
 
+// The first session, either way, waits for the helper's input lane (kvm.laneReady), so it's native
+// from the start: about 0.3 s at launch, at most LANE_WAIT_MS when the helper doesn't answer.
+const LANE_WAIT_MS = 1500;
+let laneGo;
+const laneGate = new Promise((r) => (laneGo = r));
+const afterLane = () => Promise.race([laneGate, new Promise((r) => setTimeout(r, LANE_WAIT_MS))]);
+
 app.whenReady().then(() => {
   if (app.dock) app.dock.hide();
   // Dev runs show Electron's icon otherwise; the built app has it in its bundle.
@@ -538,7 +546,7 @@ app.whenReady().then(() => {
   Object.assign(state, { macName: id.macName, macId: id.macId, fp: id.fp, version: app.getVersion(), about: aboutInfo(app) });
   console.log(`[main] ${id.macName} (${id.macId}) fp ${id.fp}`);
 
-  server = new Server(id);
+  server = new Server(id, { hold: true }); // listens once the helper's input lane is settled (afterLane below)
   server.on('listening', () => console.log(`[server] listening on 0.0.0.0:${server.port}`));
   server.on('listenError', (err) => {
     state.serverError = `Cannot listen on port ${P.PORT}: ${err.code || err.message}`;
@@ -588,9 +596,13 @@ app.whenReady().then(() => {
   });
   peer.on('closed', pushState);
   peer.on('rtt', pushState);
-  link.start();
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
+  svc.kvm.laneReady.then(laneGo);
+  afterLane().then(() => {
+    server.listen();
+    link.start();
+  });
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
   svc.phone = new Phone({ server: peer, raw: server, discovery, pairing });

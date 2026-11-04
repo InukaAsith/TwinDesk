@@ -51,16 +51,20 @@ class Kvm {
       deliver: (m) => (m.t === T.K_GESTURE ? this._onGesture(m) : this._inject(m)),
       native: () => { const l = this._lane(); return l && l.native ? l : null; }, // P3: the helper's lane
       speed: () => this.cfg.speed,
+      reverse: () => !!this.cfg.reverseScroll,
     });
     const il = this.link.il;
+    let laneSettled;
+    this.laneReady = new Promise((r) => (laneSettled = r)); // the helper's lane asked for: main.js starts the first session after
     if (il) {
       // The helper's own lane (native/tdfast, P3) when it has one: an older helper answers "unknown cmd".
-      this.helper.on('ready', () => il.useNative(this.helper));
-      if (this.helper.running) il.useNative(this.helper);
+      const native = () => il.useNative(this.helper).then(laneSettled, laneSettled);
+      this.helper.on('ready', native);
+      if (this.helper.running) native();
       il.on('start', () => this.laneIn.reset());
       il.on('move', (s) => this.laneIn.move(s));
       il.on('event', (m) => LANE_EVENTS.has(m.t) && this.laneIn.event(m, true));
-    }
+    } else laneSettled();
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
       send: (m) => this.mode === 'driven' && this.helper.send('inject', { ev: { t: P.T.K_MOVE, dx: m.dx, dy: m.dy } }),
@@ -234,6 +238,7 @@ class Kvm {
   // Tell the helper where the edge is and whether to watch it.
   applyConfig() {
     const k = this.cfg;
+    if (this.laneIn) this.laneIn.config(); // the scroll direction for the clicks and wheel the helper's lane injects
     const f = this.settings.files;
     this.helper.send('kvmConfig', {
       side: this.crossingSide,
@@ -428,7 +433,7 @@ class Kvm {
       case 'ev':
         if (this.mode === 'driving' && msg.ev && K_TYPES.has(msg.ev.t)) {
           if (this.local && this.local.drives() && this._lockKeyHere(msg.ev)) break; // a phone has no lock key: ours counts there
-          if (this.fileClip && this.fileClip.intercept(msg.ev)) break; // copy/paste shortcut: done over there
+          if (this.fileClip && this.fileClip.intercept(msg.ev)) { this.lane.skip(msg.ev, (x) => this.link.send(x)); break; } // copy/paste shortcut: done over there
           if (msg.ev.t === T.K_MOVE) {
             this.lane.nativeTotals(msg.ev); // the helper's lane is down: its totals go with the move
             this.moves.add(Number(msg.ev.dx) || 0, Number(msg.ev.dy) || 0);
@@ -437,7 +442,7 @@ class Kvm {
           this._flushMove(); // a click goes where the moves before it took the pointer
           this._driveEvent(this.keys.tag(msg.ev)); // keys with the letter they type here (shared/keylayout.js)
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released over there
-        }
+        } else if (msg.ev) this.lane.skip(msg.ev, (x) => this.link.send(x)); // numbered by the helper but not sent: its number goes all the same
         break;
       case 'captureEnded': // dead-man, or a grab another app holds: input is back here
         if (this.mode === 'driving') this._release(msg.reason === 'grab' ? 'Another app is holding the mouse or keyboard' : '');
@@ -539,7 +544,7 @@ class Kvm {
   _injectEv(ev) {
     if (ev.t === P.T.K_MOVE && !ev.smooth) return this.injectMoves.add(ev.dx, ev.dy);
     this.injectMoves.flush();
-    this.helper.send('inject', { ev });
+    if (!this.laneIn.inject(ev)) this.helper.send('inject', { ev }); // the lane's events: once, whichever copy came first
   }
 
   _drive(msg) {
@@ -571,7 +576,7 @@ class Kvm {
       this.peerRoute = route;
       this.link.send({ t: T.KVM_ACCEPT, route });
       if (m.side && m.mouse !== false) this.helper.send('place', { side: m.side, offset: m.offset });
-      this.laneIn.take(route); // the lane's totals start again (a move that came ahead goes now)
+      this.laneIn.take(route, { drag: !!m.drag }); // the lane's totals start again (a move that came ahead goes now)
       return;
     }
     if (!this.cfg.beDriven || !this.linked || this.paused) { // cursor sharing off
@@ -587,7 +592,7 @@ class Kvm {
       this.helper.send('place', P.SIDES.includes(m.side) ? { side: m.side, offset: Number(m.offset) || 0 } : { center: true });
       if (this.crossingSide) this.helper.send('armReturn', this._returnCfg());
     }
-    this.laneIn.take(route);
+    this.laneIn.take(route, { drag: !!m.drag });
   }
 
   // Row 8. X has no per-monitor scale here: logical px = physical px.

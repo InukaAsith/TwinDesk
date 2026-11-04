@@ -156,8 +156,8 @@ double now_ms(void);
 // ---- lane.c: the input lane in the helper (native/tdfast; only with -DTDFAST) ----
 #ifdef TDFAST
 int lane_fd(void); // the main loop polls it: moves from the lane's thread
-void lane_drain(void (*inject)(double dx, double dy));
-void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void (*inject)(double dx, double dy));
+void lane_drain(void (*inject)(double dx, double dy), void (*inject_ev)(const JObj *ev));
+void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void (*inject)(double dx, double dy), void (*inject_ev)(const JObj *ev));
 int lane_move(double dx, double dy, JOut *k);
 const char *lane_fence(const char *k, char *buf, size_t n);
 #endif

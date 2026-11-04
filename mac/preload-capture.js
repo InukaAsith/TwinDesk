@@ -12,4 +12,6 @@ contextBridge.exposeInMainWorld('capture', {
   send: (msg) => ipcRenderer.send('capture:out', msg),
   stats: (s) => ipcRenderer.send('capture:stats', s),
   state: (s) => ipcRenderer.send('capture:state', s),
+  helperAudio: () => ipcRenderer.invoke('capture:helperAudio'), // Chromium gave no sound: the helper's
+
 });

@@ -36,10 +36,10 @@ button, input, select { font: inherit; color: inherit; -webkit-app-region: no-dr
 .side-drag { height: 46px; margin: 0 -10px; -webkit-app-region: drag; }
 .identity { -webkit-app-region: drag; }
 .identity { display: flex; align-items: center; gap: 14px; padding: 6px 8px 20px 4px; }
-.app-mark { /* the TwinDesk icon (shared/icon/teindesk-dark), as on Windows */
+.app-mark { /* the TwinDesk icon (shared/icon/teindesk; teindesk-dark on a dark appearance), as on Windows */
   width: 60px; height: 60px; flex: none;
-  background: image-set(url(assets/sidebar-icon@1x.png) 1x, url(assets/sidebar-icon@2x.png) 2x,
-    url(assets/sidebar-icon@3x.png) 3x, url(assets/sidebar-icon@4x.png) 4x) center / contain no-repeat;
+  background: image-set(url(assets/sidebar-icon-light@1x.png) 1x, url(assets/sidebar-icon-light@2x.png) 2x,
+    url(assets/sidebar-icon-light@3x.png) 3x, url(assets/sidebar-icon-light@4x.png) 4x) center / contain no-repeat;
 }
 .who { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .app-name { font-weight: 700; font-size: 18px; line-height: 1.2; letter-spacing: -0.2px; }
@@ -290,3 +290,8 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .spin { width: 12px; height: 12px; flex: none; border: 2px solid var(--control-line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .code-hint { font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* The dark icon on a dark appearance (the light one above). */
+@media (prefers-color-scheme: dark) {
+  .app-mark { background-image: image-set(url(assets/sidebar-icon@1x.png) 1x, url(assets/sidebar-icon@2x.png) 2x, url(assets/sidebar-icon@3x.png) 3x, url(assets/sidebar-icon@4x.png) 4x); }
+}
