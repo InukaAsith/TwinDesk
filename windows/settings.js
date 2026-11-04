@@ -4,6 +4,7 @@
 const P = require('../shared/protocol.js');
 const CL = require('../shared/cursorlock.js');
 const { savedLanguage } = require('../shared/i18n.js');
+const Look = require('../shared/look.js');
 const { normalizeFolder } = require('../shared/received.js');
 
 const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'general', 'about'];
@@ -200,7 +201,8 @@ function normalize(s) {
     // that restarts, a phone connecting don't bring the screen back).
     setup: { skipped: Array.isArray(setup.skipped) ? setup.skipped.filter((x) => typeof x === 'string').slice(0, 10) : [], done: bool(setup.done, Array.isArray(setup.skipped) && setup.skipped.length > 0) },
     // overview: what Overview shows (General › Overview), each on unless switched off.
-    ui: { tab: OLD_TABS[ui.tab] || (TABS.includes(ui.tab) ? ui.tab : 'overview'), overview: overviewParts(ui.overview), chats: bool(ui.chats, false), language: savedLanguage(ui.language) },
+    ui: { tab: OLD_TABS[ui.tab] || (TABS.includes(ui.tab) ? ui.tab : 'overview'), overview: overviewParts(ui.overview), chats: bool(ui.chats, false), language: savedLanguage(ui.language),
+      theme: Look.theme(ui.theme), accent: Look.accent(ui.accent) }, // General › Appearance (shared/look.js)
     windows: s.windows && typeof s.windows === 'object' ? s.windows : {},
   };
 }

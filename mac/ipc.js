@@ -604,6 +604,16 @@ function setupIpc(ctx) {
     adbQr(on) {
       if (ctx.adbQr) ctx.adbQr(on === true);
     },
+    // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.
+    setLook(o) {
+      if (!o || typeof o !== 'object') return;
+      const Look = require('../shared/look.js');
+      if (typeof o.theme === 'string') settings.ui.theme = Look.theme(o.theme);
+      if (typeof o.accent === 'string') settings.ui.accent = Look.accent(o.accent);
+      store.saveSettings(settings);
+      if (ctx.onLook) ctx.onLook();
+      ctx.pushState();
+    },
     setLanguage(language) {
       if (!['en', 'zh-CN'].includes(language) || settings.ui.language === language) return;
       settings.ui.language = language;

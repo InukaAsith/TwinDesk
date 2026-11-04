@@ -175,7 +175,7 @@ UI.tab({
       chatNote.textContent = t.msgs ? tr('Reply here once the phone shows this chat’s notification again.') : tr('Answer this one on the phone: its notification has no Reply.');
     }
 
-    body.append(top.el, chatsCard, pills, layout, chatLayout);
+    body.append(top.el, pills, layout, chatLayout, chatsCard); // the messages first, the setting under them
     chatLayout.hidden = true;
 
     let threads = [];

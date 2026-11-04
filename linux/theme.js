@@ -12,14 +12,22 @@ const readline = require('readline');
 const PORTAL = ['--session', '--dest', 'org.freedesktop.portal.Desktop', '--object-path', '/org/freedesktop/portal/desktop'];
 
 let watcher = null;
+let pref = 'system'; // General › Appearance: light or dark wins over the portal
+let scheme = 0;
 
-const apply = (scheme) => {
-  const want = scheme === 2 ? 'light' : 'dark';
+const apply = (s) => {
+  scheme = s;
+  const want = pref !== 'system' ? pref : scheme === 2 ? 'light' : 'dark';
   if (nativeTheme.themeSource !== want) nativeTheme.themeSource = want;
 };
 
+function setPref(t) {
+  pref = t === 'light' || t === 'dark' ? t : 'system';
+  apply(scheme);
+}
+
 function start() {
-  apply(0);
+  apply(scheme);
   execFile('gdbus', ['call', ...PORTAL, '--method', 'org.freedesktop.portal.Settings.Read', 'org.freedesktop.appearance', 'color-scheme'],
     { timeout: 3000 }, (err, out) => {
       const m = !err && /uint32 (\d)/.exec(String(out));
@@ -40,4 +48,4 @@ function stop() {
   if (w) try { w.kill(); } catch {}
 }
 
-module.exports = { start, stop };
+module.exports = { start, stop, setPref };

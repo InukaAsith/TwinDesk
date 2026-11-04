@@ -22,6 +22,7 @@
   padding-left: 22px; border-left: 1px solid var(--row-line); font-size: 12px; min-width: 200px; }
 .dv-facts dt { color: var(--muted); }
 .dv-facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.dv-facts dd.dv-old { color: var(--bad); font-weight: 600; } /* the other side's TwinDesk is older */
 
 .dv-media { padding: 4px 14px; }
 .dv-media .np { width: 100%; max-width: none; }

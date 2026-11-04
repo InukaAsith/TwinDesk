@@ -263,16 +263,27 @@
         const pi = (ctl && ctl.info) || {};
         const control = br.input === 'phone' ? t('Accessibility')
           : br.state === 'ready' ? t('ADB · ready') : br.state === 'connecting' ? t('ADB · connecting') : br.state === 'needsPair' ? t('ADB · not paired') : br.state === 'waitingWifi' ? t('ADB · off') : t('Not set up');
+        // Which TwinDesk it runs (dev.state's app: shared/appinfo.js), red when older than this one.
+        const ac = ctl && ctl.appCheck;
+        const verFact = () => {
+          if (!ac) return [];
+          const dd = el('dd', { text: ac.version || t('Older') });
+          dd.classList.toggle('dv-old', ac.older);
+          dd.title = ac.older ? t('Older than this one. Update it there: some features need the same version on both') : '';
+          return [el('dt', { text: 'TwinDesk' }), dd];
+        };
         facts.replaceChildren(...(phone ? [
           ...fact(t('Storage'), pi.storageTotal ? t('{used} of {total} GB', { used: pi.storageUsed, total: pi.storageTotal }) : info.storage ? t('{used} of {total} GB', { used: info.storage.used, total: info.storage.total }) : ''),
           ...fact(t('Network'), [pi.wifi, pi.cell].filter(Boolean).join(' · ')),
           ...fact(t('Control'), control),
           ...fact(t('Signal'), pi.signal),
           ...fact(t('Link'), via),
+          ...verFact(),
         ] : [
           ...fact(t('System'), s.peer && s.peer.osVersion),
           ...fact(t('Address'), (s.paired && s.paired.address) || (s.client && s.client.address)),
           ...fact(t('Link'), via),
+          ...verFact(),
         ]));
         facts.hidden = !facts.childElementCount;
 

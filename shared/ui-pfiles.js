@@ -88,7 +88,7 @@ UI.tab({
     const importCard = UI.card('', [importRow], { cls: 'import-card' });
     importCard.hidden = true;
     let importTo = null;
-    body.append(top.el, importCard, shareCard, wrap);
+    body.append(top.el, importCard, wrap, shareCard); // the files first, the shared folders' settings under them
     const tilde = (p) => String(p || '').replace(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Z]:\\Users\\[^\\]+)/, '~');
     function renderShare(s) {
       const sh = s.hub && s.hub.share;

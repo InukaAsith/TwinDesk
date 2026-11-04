@@ -110,10 +110,16 @@ class DevCtl(core: Core) : Feature(core) {
 
     private val audio get() = ctx.getSystemService(AudioManager::class.java)
 
+    // Ringing because the computer asked: Stop on the phone (its notification, or Overview here).
+    val ringing get() = ringtone != null
+    fun stopRing() = main.post { ring(false) }.let { }
+
     private fun ring(on: Boolean) {
         main.removeCallbacks(stopRing)
+        val was = ringtone != null
         ringtone?.stop()
         ringtone = null
+        if (was && !on) { Notify.cancelRinging(ctx); core.changed() }
         if (alarmBefore >= 0) { runCatching { audio.setStreamVolume(AudioManager.STREAM_ALARM, alarmBefore, 0) }; alarmBefore = -1 }
         if (!on) { later(0); return }
         val uri = RingtoneManager.getActualDefaultRingtoneUri(ctx, RingtoneManager.TYPE_ALARM)
@@ -125,6 +131,8 @@ class DevCtl(core: Core) : Feature(core) {
         runCatching { audio.setStreamVolume(AudioManager.STREAM_ALARM, audio.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0) }
         r.play()
         ringtone = r
+        Notify.ringing(ctx, core.host?.name.orEmpty())
+        core.changed()
         main.postDelayed(stopRing, RING_MS)
         later(0)
     }
@@ -242,6 +250,7 @@ class DevCtl(core: Core) : Feature(core) {
         val can = JSONObject().put("ring", true).put("qs", true).put("ringer", true).put("volume", true)
         if (InputService.running != null && Build.VERSION.SDK_INT >= 28) can.put("lock", true)
         val m = msg(STATE, "can" to can, "ringing" to (ringtone != null), "qs" to qs, "info" to info())
+        m.put("app", JSONObject().put("v", BuildConfig.VERSION_NAME)) // which TwinDesk (shared/appinfo.js): the computer warns when it's older
         top()?.let { m.put("top", jsonArray(it)) }
         val k = m.toString()
         if (k == last) return

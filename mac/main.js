@@ -39,7 +39,8 @@ let adbQr = null; // wireless debugging's pairing QR code while shown (shared/ad
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, nativeImage, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
+const Look = require('../shared/look.js');
 
 app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns');
 // The hidden capture window plays system audio into WebRTC without any user gesture.
@@ -237,6 +238,7 @@ function pushState() {
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null;
     state.btAudio = null; // macOS can't be a phone's Bluetooth speaker
     state.ui = settings.ui;
+    state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
     if (kvm && lockKey) {
@@ -610,14 +612,25 @@ app.whenReady().then(() => {
     link: {
       on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
       send: (m) => peer.sendToClient(m),
+      get current() { return peer.current; },
     },
     local: new DevLocal(),
+    version: app.getVersion(),
     adb: () => {
       const br = svc.phone && svc.phone.bridge;
       return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
     },
   });
   svc.devctl.on('change', pushState);
+  // The other side runs an older TwinDesk (shared/appinfo.js): say so once.
+  svc.devctl.on('outdated', (o) => {
+    const { FEATURES } = require('../shared/appinfo.js');
+    const title = o.version ? t('{name} has an older TwinDesk ({version})', { name: o.name || t('The other device'), version: o.version })
+      : t('{name} has an older TwinDesk', { name: o.name || t('The other device') });
+    const body = o.missing.length ? t('Update it there for: {features}', { features: o.missing.map((k) => t(FEATURES[k])).join(', ') })
+      : t('Update it there: some features need the same version on both');
+    try { new Notification({ title, body }).show(); } catch {}
+  });
   // Messages' chat apps from a phone, kept per phone (shared/chats.js).
   const { Chats } = require('../shared/chats.js');
   svc.chats = new Chats({ link: {
@@ -821,7 +834,11 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
+  Look.applyTheme(nativeTheme, settings.ui.theme);
+  nativeTheme.on('updated', () => pushState());
+  // The system accent colour changed (General › Appearance › System follows it).
+  try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {

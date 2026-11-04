@@ -86,7 +86,7 @@ const DEFAULT_SETTINGS = {
   },
   // setupSkipped: the missing items when Setup was skipped; setupDone: Setup has been through once
   // (everything allowed, or skipped), so it never takes over the window again (General shows the rest).
-  ui: { tab: 'overview', setupSkipped: '', setupDone: false, language: '' },
+  ui: { tab: 'overview', setupSkipped: '', setupDone: false, language: '', theme: 'system', accent: '' }, // theme/accent: General › Appearance
   app: { openAtLogin: false, keepAwake: true, hud: true }, // hud = popup when switching computers
   updates: { auto: true, notified: '', skipped: '' }, // check GitHub for new releases; notified = last version announced, skipped = version ignored
   audio: { send: false, receive: false, muteLocal: false, volume: 1, phoneMedia: false }, // Independent, both ways; phoneMedia: a phone's media controls on Overview
@@ -123,6 +123,7 @@ function loadSettings() {
   for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub', 'camera', 'remote']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
   out.rezume = require('../shared/rezume.js').normalize(s.rezume);
   out.ui.language = require('../shared/i18n.js').savedLanguage(out.ui.language);
+  { const Look = require('../shared/look.js'); out.ui.theme = Look.theme(out.ui.theme); out.ui.accent = Look.accent(out.ui.accent); }
   if (Object.keys(s).length) {
     for (const [k, keys] of Object.entries(WAS_ON)) for (const f of keys) if (!s[k] || s[k][f] === undefined) out[k][f] = true;
   }

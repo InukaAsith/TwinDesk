@@ -26,6 +26,10 @@ function setupIpc(ctx) {
     if (language !== 'en' && language !== 'zh-CN') return;
     change('ui', { language }, () => ctx.onLanguage());
   });
+  // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.
+  handle('setLook', (o) => o && typeof o === 'object' && change('ui', {
+    ...(typeof o.theme === 'string' ? { theme: o.theme } : {}), ...(typeof o.accent === 'string' ? { accent: o.accent } : {}),
+  }, () => ctx.onLook && ctx.onLook()));
   // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
   handle('hub', (r) => ctx.hub().act(r));
 
