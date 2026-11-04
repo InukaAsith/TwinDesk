@@ -70,9 +70,9 @@ UI.tab({
         ]),
         UI.dir('w2m', [pcRow, pcUsage]),
       ),
-      moveCard,
       rezume.el,
       gridCard,
+      moveCard, // below the apps list
     );
     return (s) => {
       rezume.update(s);
