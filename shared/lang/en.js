@@ -1924,5 +1924,10 @@
   "Edit": "Edit",
   "Open a copy on this device": "Open a copy on this device",
   "Edit the file on {peer}": "Edit the file on {peer}",
-  "Use the app from {peer}": "Use the app from {peer}"
+  "Use the app from {peer}": "Use the app from {peer}",
+  "Advanced": "Advanced",
+  "Input protocol": "Input protocol",
+  "UDP (tdv2)": "UDP (tdv2)",
+  "TCP (tdv1)": "TCP (tdv1)",
+  "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart"
 });

@@ -1924,5 +1924,10 @@
   "Edit": "编辑",
   "Open a copy on this device": "在此设备上打开副本",
   "Edit the file on {peer}": "编辑 {peer} 上的文件",
-  "Use the app from {peer}": "使用 {peer} 上的应用"
+  "Use the app from {peer}": "使用 {peer} 上的应用",
+  "Advanced": "高级",
+  "Input protocol": "输入协议",
+  "UDP (tdv2)": "UDP (tdv2)",
+  "TCP (tdv1)": "TCP (tdv1)",
+  "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "UDP 让指针移动更快。TCP 适用于屏蔽 UDP 的网络。重启后生效"
 });

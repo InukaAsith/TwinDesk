@@ -45,7 +45,7 @@ function render(locale) {
     updates: { available: true, skipped: true, latest: '2.0', current: '1.2.3', download: { name: 'Allowed {name} $&.dmg' } } };
   general(s); about(s); ui.setup.render(s);
   const translated = (text) => t(text);
-  const selectors = nodes.filter((n) => n.tag === 'select');
+  const selectors = nodes.filter((n) => n.tag === 'select' && n.options.some((o) => o.value === 'en')); // the language pickers (Advanced has the input protocol's)
   assert.strictEqual(selectors.length, 2, 'General and Setup both expose the language selector');
   for (const selector of selectors) {
     assert.strictEqual(selector.value, locale);
