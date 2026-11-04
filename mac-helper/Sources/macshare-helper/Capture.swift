@@ -62,6 +62,7 @@ final class Capture {
   var gestures = true // Send trackpad gestures (k.ge) while capturing
   private var dock: (motion: Int64, progress: Double)? = nil // the dock swipe in progress
   private var pinnedAt: CGPoint?            // where the pointer stays (hidden) while it is on the other computer
+  private var leftAt: CGPoint?              // where it left (pinnedAt moves with our own injected pointer)
   private var lastCommand = 0.0
   private var deadman: Timer?
 #if MULTI
@@ -190,6 +191,7 @@ final class Capture {
     if mouse {
       CGAssociateMouseAndMouseCursorPosition(0) // pointer frozen, deltas still arrive
       pinnedAt = CGEvent(source: nil)?.location
+      leftAt = pinnedAt
       // Hide it once the leaving animation and a drag hand-off at the edge had their moment.
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
         if let self = self, self.capturing, self.capMouse { PointerVisibility.hide() }
@@ -211,18 +213,32 @@ final class Capture {
     deadman?.invalidate()
     deadman = nil
     if capMouse { CGAssociateMouseAndMouseCursorPosition(1) }
+    var moved: CGPoint? = nil // our injected pointer moved the pin: where it left
+    if let p = pinnedAt, let l = leftAt, abs(p.x - l.x) > 0.5 || abs(p.y - l.y) > 0.5 { moved = l }
     pinnedAt = nil
+    leftAt = nil
     PointerVisibility.show()
     if let side = side, let offset = offset {
       let p = Screens.edgePoint(side: side, offset: offset)
       warp(p)
       Flash.shared.arrive(at: p, side: side) // back on this Mac
+    } else if let back = moved {
+      warp(back) // our injected pointer moved it (a moved window used over there): back where it left
+      Flash.shared.arrive(at: back, side: nil)
     } else {
       Flash.shared.arrive(at: CGEvent(source: nil)?.location ?? .zero, side: nil)
     }
     swallowUps.formUnion(remoteDown)
     remoteDown.removeAll()
     arrived(side: side)
+  }
+
+  /// Our own injected pointer (a window moved to the other computer, used from its copy there while
+  /// this Mac drives it) put the hidden pointer at `p`: it stays there, not warped back to the pin.
+  /// Warping back fought every injected move, and each warp held the mouse still for a moment, so
+  /// this Mac's pointer couldn't get into that copy.
+  func injectedPointer(at p: CGPoint) {
+    if capturing && capMouse && pinnedAt != nil { pinnedAt = p }
   }
 
   /// The pointer came to this computer (back home, or placed by the driver) through `side`, or by

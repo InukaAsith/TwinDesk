@@ -238,6 +238,7 @@ class PcApps extends EventEmitter {
       },
     });
     const w = { info, win, session: null, ready: false, queue: [], closing: false, focusedAt: Date.now(), sizedAt: 0 };
+    if (info.moved && this.driven) this._toWin(w, { t: 'cursor', own: true });
     win.on('page-title-updated', (e) => {
       e.preventDefault();
       win.setTitle(this._title(w.info));
@@ -395,6 +396,15 @@ class PcApps extends EventEmitter {
     if (!a) return;
     const ok = await addToDock(a);
     this.emit('popup', ok ? 'home' : 'driven', { key: ok ? '{app} is in the Dock' : 'Couldn’t add {app} to the Dock', vars: { app: a.name } });
+  }
+
+  // The PC drives this Mac (kvm.js mode): its pointer is hidden there, so a moved window's copy
+  // (whose picture has no pointer then) shows this Mac's own over it.
+  setDriven(on) {
+    on = !!on;
+    if (on === !!this.driven) return;
+    this.driven = on;
+    for (const w of this.wins.values()) if (w.info.moved && !w.info.popup) this._toWin(w, { t: 'cursor', own: on });
   }
 
   // Is one of the PC app windows focused? (kvm.js doesn't cross the edge while it is.)

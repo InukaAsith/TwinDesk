@@ -287,6 +287,7 @@ namespace MacShare
         public static string MoveKeyName = "";
         static IntPtr grab = IntPtr.Zero; // the window that follows the pointer
         static int grabDx, grabDy; // the pointer's place in it
+        static int fromX, fromY; // its visible frame's top left when it was grabbed (where it goes back to)
         static bool grabUp; // the left button's release is swallowed (its press was)
         static readonly uint ownPid = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
 
@@ -330,6 +331,10 @@ namespace MacShare
                 grabDx = x - r.left;
                 grabDy = y - r.top;
             }
+            RECT vis;
+            if (!Frame(h, out vis)) vis = r;
+            fromX = vis.left;
+            fromY = vis.top;
             grab = h;
             grabUp = true;
             // A Windows key held for it (a Mac's Command): an unassigned key tapped now keeps its
@@ -368,6 +373,8 @@ namespace MacShare
         {
             if (grab == IntPtr.Zero) return;
             d["moving"] = grab.ToInt64();
+            d["fromX"] = fromX; // where it was grabbed: it comes back there, not to the edge it crossed at
+            d["fromY"] = fromY;
             grab = IntPtr.Zero;
             if (!keepUp) grabUp = false;
         }
@@ -385,6 +392,12 @@ namespace MacShare
             if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
             Rectangle vs = System.Windows.Forms.SystemInformation.VirtualScreen;
             SetWindowPos(h, IntPtr.Zero, vs.Right + 200, vs.Top + 40, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            // Some apps put themselves back on a screen: say so (the log shows which one).
+            RECT r;
+            if (GetWindowRect(h, out r) && r.left < vs.Right)
+            {
+                try { Console.Error.WriteLine("[move] window " + h.ToInt64() + " (" + Text(h, true) + ") stayed on a screen at " + r.left + "," + r.top); } catch (Exception) { }
+            }
         }
 
         // Back with its visible frame's top left at x, y (physical px, as List gives them), in front.

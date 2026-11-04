@@ -172,9 +172,9 @@ class PcApps {
 
   // Move windows (shared/movewin.js, loaded only when used): a grabbed window crossed with the
   // pointer goes over there; bringBack returns one or all of them.
-  moveOut(wid) {
+  moveOut(wid, from) {
     if (!this.settings.pcApps.moveWindows) return Promise.resolve(false);
-    return require('../shared/movewin.js').moveOut(this, wid);
+    return require('../shared/movewin.js').moveOut(this, wid, from);
   }
 
   bringBack(wid, home = false) {

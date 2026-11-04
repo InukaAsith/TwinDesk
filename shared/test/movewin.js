@@ -71,6 +71,17 @@ function fakePc(over = {}) {
   MW.bringBack(pc);
   assert.deepStrictEqual(pc.sent.at(-1), ['winPlace', { wid: 7, x: 100, y: 50 }]);
 
+  // Grabbed somewhere else and dragged to the edge: it comes back where it was grabbed, used from its copy or closed.
+  await MW.moveOut(pc, 7, { x: 300, y: 200 });
+  assert.deepStrictEqual([pc.moved.get(7).x, pc.moved.get(7).y], [300, 200], 'where it was grabbed, not where it crossed');
+  MW.touch(pc, 7);
+  assert.deepStrictEqual(pc.sent.at(-1), ['winPlace', { wid: 7, x: 300, y: 200 }]);
+  MW.bringBack(pc);
+  assert.deepStrictEqual(pc.sent.at(-1), ['winPlace', { wid: 7, x: 300, y: 200 }]);
+  await MW.moveOut(pc, 7, { x: NaN, y: NaN }); // a helper without it: where it crossed
+  assert.deepStrictEqual([pc.moved.get(7).x, pc.moved.get(7).y], [100, 50]);
+  MW.bringBack(pc);
+
   // A moved window that closed here is forgotten.
   await MW.moveOut(pc, 7);
   MW.list(pc, [], new Set(), [], []);

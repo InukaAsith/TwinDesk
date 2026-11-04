@@ -8,7 +8,7 @@
   <style>
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
     #video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; cursor: none; }
-    body.input-off #video { cursor: default; }
+    body.input-off #video, body.own-cursor #video { cursor: default; }
     #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #9a9fa8;
       font: 15px/1.4 -apple-system, system-ui, sans-serif; pointer-events: none; user-select: none; }
     #overlay.hidden { display: none; }
