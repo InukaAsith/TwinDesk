@@ -5,7 +5,13 @@
 // their windows and their menus / pop-ups (`popup`, `owner`, offset). Every window is its own `rtc2`
 // session (kind 'window', `win: 'send'`) from a hidden capture window, only while the viewer's
 // `papp.policy` accepts and "apps.offer" is on. Its input (`in.*` + `wid`) is injected at that
-// window. Nothing is captured before the viewer opened an app.
+// window. Nothing is captured before the viewer opened an app, or ReZume sent one that is open here
+// (adopt): independent of "apps.offer", and closing its copy there stops only that copy.
+// Its windows are kept out of the way here while they're streamed: on TwinDesk's virtual display
+// (held for them while screen sharing is off, displays.hold('apps')), where clicks from the other
+// computer still reach them; without one (Share screen › virtual display off) past the right edge
+// of the screens, where only keys reach them (macOS keeps the pointer on the screens). Back on the
+// main display when they stop.
 //
 // Events: 'change'.
 'use strict';
@@ -23,9 +29,10 @@ const MAX_POPUPS = 6;
 const IN_TYPES = [T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL, T.IN_KEY_DOWN, T.IN_KEY_UP];
 
 class AppSend extends EventEmitter {
-  constructor({ server, helper, getSettings }) {
+  constructor({ server, helper, displays, getSettings }) {
     super();
-    Object.assign(this, { server, helper, getSettings });
+    Object.assign(this, { server, helper, displays, getSettings });
+    this.parked = new Set(); // pids whose windows were moved onto the virtual display
     this.accepts = false; // the viewer's papp.policy
     this.launched = new Map(); // app id -> {id, pids: Set, since, had, lastSeen}
     this.windows = []; // the list last sent
@@ -47,7 +54,7 @@ class AppSend extends EventEmitter {
     server.on('closed', () => {
       if (server.current) return;
       this.accepts = false;
-      this.launched.clear();
+      for (const id of [...this.launched.keys()]) this._forget(id);
       this._sync([]);
     });
     const on = (t, fn) => server.on(`t:${t}`, fn);
@@ -58,7 +65,7 @@ class AppSend extends EventEmitter {
     on(T.PAPPS_LIST, () => this._list());
     on(T.PAPP_LAUNCH, (m) => typeof m.id === 'string' && this._launch(m.id));
     on(T.PAPP_FOCUS, (m) => this._mine(m.wid) && !this._popup(m.wid) && this.helper.request('appFocus', { wid: m.wid }).catch(() => {}));
-    on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && this.helper.request('appClose', { wid: m.wid }).catch(() => {}));
+    on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && !this._unfollow(m.wid) && this.helper.request('appClose', { wid: m.wid }).catch(() => {}));
     on(T.PAPP_SIZE, (m) => {
       const ok = (v) => Number.isInteger(v) && v >= 50 && v <= 16384;
       const w = this.windows.find((x) => x.wid === m.wid);
@@ -95,11 +102,50 @@ class AppSend extends EventEmitter {
     return this.getSettings().apps.offer !== false;
   }
 
+  // An app followed for ReZume (adopt), which the Apps switch doesn't stop.
+  get rezumes() {
+    for (const a of this.launched.values()) if (a.rz) return true;
+    return false;
+  }
+
   applySettings() {
     if (!this.allowed) {
-      this.launched.clear();
-      this._sync([]);
+      for (const [id, a] of this.launched) if (!a.rz) this._forget(id);
+      if (this.launched.size) this._poll();
+      else this._sync([]);
     }
+  }
+
+  // ReZume: the windows of an app that is open here (its bundle id), streamed to the other Mac.
+  async adopt(id) {
+    if (typeof id !== 'string' || !/^[A-Za-z0-9.-]{1,200}$/.test(id) || !this.server.current) return false;
+    const had = this.launched.get(id);
+    if (had) {
+      if (had.skip) had.skip.clear();
+      this._poll();
+      return true;
+    }
+    const r = await this.helper.request('appLaunch', { appId: id }).catch(() => null); // it's running: its pid
+    if (!r || !r.pid) return false;
+    this.launched.set(id, { id, rz: true, skip: new Set(), pids: new Set([r.pid]), since: Date.now(), had: false, lastSeen: 0 });
+    this._poll();
+    return true;
+  }
+
+  // ReZume's window sharing turned off (app: only that app's windows).
+  unadopt(app) {
+    let any = false;
+    for (const [id, a] of this.launched) if (a.rz && (!app || a.id === app)) { this._forget(id); any = true; }
+    if (any && !this.launched.size) this._sync([]);
+  }
+
+  // A window ReZume sent, closed there: only its copy goes (the window stays open here).
+  _unfollow(wid) {
+    const w = this.windows.find((x) => x.wid === wid);
+    const a = w && this.launched.get(w.id);
+    if (!a || !a.rz) return false;
+    a.skip.add(wid);
+    return true;
   }
 
   _mine(wid) {
@@ -156,7 +202,7 @@ class AppSend extends EventEmitter {
     const pops = [];
     this.bounds.clear();
     for (const a of this.launched.values()) {
-      const mine = all.filter((w) => a.pids.has(w.pid));
+      const mine = all.filter((w) => a.pids.has(w.pid) && !(a.skip && a.skip.has(w.wid)));
       const main = mine.filter((w) => !w.popup);
       for (const w of main) out.push(this._entry(w, a.id));
       const popups = mine.filter((w) => w.popup).sort((x, y) => y.w * y.h - x.w * x.h).slice(0, MAX_POPUPS);
@@ -170,9 +216,56 @@ class AppSend extends EventEmitter {
         a.had = true;
         a.lastSeen = now;
       }
-      if ((a.had && now - a.lastSeen > 3000) || (!a.had && now - a.since > 30000)) this.launched.delete(a.id);
+      if (main.length) this._park(a, main);
+      else if (a.had) this._unpark(a);
+      if ((a.had && now - a.lastSeen > 3000) || (!a.had && now - a.since > 30000)) this._forget(a.id);
     }
     this._sync(out.concat(pops)); // owners before their pop-ups
+  }
+
+  // Streamed windows wait on the virtual display, else past the screens' right edge.
+  _park(a, main) {
+    const vb = (this.displays && this.displays.virtualBounds()) || this._edge();
+    const off = main.filter((w) => !(w.x < vb.x + vb.width && w.x + w.w > vb.x && w.y < vb.y + vb.height && w.y + w.h > vb.y));
+    for (const pid of new Set(off.map((w) => w.pid))) {
+      this.parked.add(pid);
+      this.helper.request('appMove', { pid, bounds: vb }).catch(() => {});
+    }
+  }
+
+  // Past the right edge of all the screens: helper's appMove places a window 40 pt into these bounds,
+  // so 1 pt of it stays on a screen (macOS wants some of every window there).
+  _edge() {
+    const all = screen.getAllDisplays();
+    const right = Math.max(...all.map((d) => d.bounds.x + d.bounds.width));
+    const top = screen.getPrimaryDisplay().bounds.y + 80;
+    return { x: right - 41, y: top, width: 100000, height: 100000 };
+  }
+
+  // Not streamed any more: its windows back on the main display.
+  _unpark(a) {
+    const main = screen.getPrimaryDisplay().workArea;
+    for (const pid of a.pids) {
+      if (!this.parked.delete(pid)) continue;
+      this.helper.request('appMove', { pid, bounds: main }).catch(() => {});
+    }
+  }
+
+  // The virtual display is held while app windows are streamed (no screen sharing needed).
+  _holdDisplay() {
+    if (!this.displays || !this.displays.hold) return;
+    const want = this.launched.size > 0 && this.server.current != null;
+    if (want !== !!this.holding) {
+      this.holding = want;
+      this.displays.hold('apps', want).catch(() => {});
+    }
+  }
+
+  _forget(id) {
+    const a = this.launched.get(id);
+    if (!a) return;
+    this._unpark(a);
+    this.launched.delete(id);
   }
 
   // One entry of papp.windows: sizes in physical px, `scale` = the display's backing scale.
@@ -188,13 +281,14 @@ class AppSend extends EventEmitter {
   }
 
   async _sync(list) {
+    this._holdDisplay();
     const key = JSON.stringify(list);
     const changed = key !== this.sentKey;
     if (changed && this.server.current) this.server.sendToClient({ t: T.PAPP_WINDOWS, windows: list });
     this.sentKey = key;
     this.windows = list;
     for (const wid of this.failed) if (!list.some((w) => w.wid === wid)) this.failed.delete(wid);
-    const want = this.accepts && this.allowed ? new Set(list.map((w) => w.wid)) : new Set();
+    const want = this.accepts && (this.allowed || this.rezumes) ? new Set(list.map((w) => w.wid)) : new Set();
     for (const [wid, session] of this.streams) {
       if (want.has(wid)) continue;
       this.streams.delete(wid);
@@ -278,7 +372,8 @@ class AppSend extends EventEmitter {
   }
 
   shutdown() {
-    this.launched.clear();
+    for (const id of [...this.launched.keys()]) this._forget(id);
+    if (this.holding && this.displays) this.displays.hold('apps', false).catch(() => {});
     for (const session of this.streams.values()) this._stop(session);
     this.streams.clear();
   }

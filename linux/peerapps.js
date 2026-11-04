@@ -4,7 +4,7 @@
 // arrives as its own `rtc2` session (kind 'window') and is shown in its own window here
 // (appview.html), sized like over there, with the app's icon. Input carries `wid`; focus / close /
 // resize go back to its window. The other direction (this computer's apps there) is pcapps.js.
-// Not with a Mac: it sends its own apps (apps.js).
+// A Mac's apps are listed and pinned through apps.js, but opened here window by window (its appsend.js).
 const path = require('path');
 const { app, BrowserWindow, ipcMain, nativeImage, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
@@ -24,6 +24,7 @@ class PeerApps {
 
     const link = this.link;
     link.on('welcome', () => {
+      this.rz = false;
       this.list = [];
       this.message = '';
       this._policy();
@@ -46,7 +47,7 @@ class PeerApps {
       this.message = 'Couldn’t open ' + (a ? a.name : 'the app') + (m.why ? ': ' + m.why : '');
       this.onChange();
     });
-    link.on(T.PAPP_WINDOWS, (m) => this.active && this.cfg.on && Array.isArray(m.windows) && this._sync(m.windows));
+    link.on(T.PAPP_WINDOWS, (m) => this.active && this.accepting && Array.isArray(m.windows) && this._sync(m.windows));
     link.on(T.RTC2_OFFER, (m) => this._onOffer(m));
     link.on(T.RTC2_ICE, (m) => {
       if (m.win !== 'send') return; // our own sender's sessions (sender.js)
@@ -83,23 +84,39 @@ class PeerApps {
 
   // A PC or a Linux computer on the other end (the Mac does with apps.js instead).
   get active() {
-    return this.link.status.state === 'connected' && this.link.peerOs !== P.OS.MAC;
+    return this.link.status.state === 'connected'; // a PC, a Linux computer, or a Mac (its windows one by one, appsend.js)
+  }
+
+  get fromMac() {
+    return this.link.peerOs === P.OS.MAC;
+  }
+
+  // Windows ReZume took from the other computer come too, with this tab's switch off (rezume.js take).
+  acceptReZume(on) {
+    if (this.rz === (on === true)) return;
+    this.rz = on === true;
+    this._policy();
+    if (!this.accepting) this._sync([]);
+  }
+
+  get accepting() {
+    return !!this.cfg.on || this.rz === true;
   }
 
   _policy() {
-    if (this.active) this.link.send({ t: T.PAPP_POLICY, accept: !!this.cfg.on });
+    if (this.active) this.link.send({ t: T.PAPP_POLICY, accept: this.accepting });
   }
 
   // Apps tab switch changed.
   apply() {
     this._policy();
-    if (!this.cfg.on) this._sync([]);
+    if (!this.accepting) this._sync([]);
     else if (!this.list.length) this.refresh();
     this.onChange();
   }
 
   refresh() {
-    if (!this.active || !this.cfg.on) return;
+    if (!this.active || !this.cfg.on || this.fromMac) return; // a Mac's list comes through apps.js
     if (this.link.send({ t: T.PAPPS_LIST })) { this.loading = true; this.onChange(); }
   }
 
@@ -143,7 +160,7 @@ class PeerApps {
   }
 
   _app(id) {
-    return this.list.find((x) => x.id === id) || null;
+    return this.list.find((x) => x.id === id) || (this.otherApps ? this.otherApps().find((x) => x.id === id) : null) || null;
   }
 
   _i18n() {
@@ -292,7 +309,7 @@ class PeerApps {
   }
 
   _onOffer(m) {
-    if (m.kind !== 'window' || typeof m.sdp !== 'string' || !this.cfg.on || !this.active) return;
+    if (m.kind !== 'window' || typeof m.sdp !== 'string' || !this.accepting || !this.active) return;
     const w = this.wins.get(Number(m.wid));
     if (!w || w.win.isDestroyed()) return; // not listed yet: the sender lists before it offers
     w.session = m.session;

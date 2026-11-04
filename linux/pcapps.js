@@ -6,7 +6,8 @@
 // `popup` entries with their `owner` and offset. Its input in such a window (`in.*` + `wid`) is
 // injected at that window. A GTK window's shadow is cut off its picture (`inset`). Windows come
 // from the helper (`windows`, EWMH): X11 only; on Wayland no app may list or capture other
-// apps' windows.
+// apps' windows. ReZume sends an app that is already open the same way (adopt, by its WM_CLASS):
+// independent of this tab's switch, and closing its copy there stops only that copy.
 const { desktopCapturer, screen: displays } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -63,7 +64,7 @@ class PcApps {
     link.on(T.PAPPS_LIST, () => this._list());
     link.on(T.PAPP_LAUNCH, (m) => typeof m.id === 'string' && this._launch(m.id));
     link.on(T.PAPP_FOCUS, (m) => this._mine(m.wid) && !this._popup(m.wid) && this._raise(m.wid));
-    link.on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && this.helper.send('winClose', { wid: m.wid }));
+    link.on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && (this._unfollow(m.wid) || this.helper.send('winClose', { wid: m.wid })));
     link.on(T.PAPP_SIZE, (m) => {
       const ok = (v) => Number.isInteger(v) && v >= 50 && v <= 16384;
       if (this._mine(m.wid) && !this._popup(m.wid) && ok(m.w) && ok(m.h)) this.helper.send('winSize', { wid: m.wid, w: m.w, h: m.h });
@@ -86,13 +87,58 @@ class PcApps {
     return this.settings.pcApps.allow;
   }
 
-  // The switch changed. Off: nothing is followed or streamed any more (the apps keep running).
+  // An app followed for ReZume (adopt), which this tab's switch doesn't stop.
+  get rezumes() {
+    for (const a of this.launched.values()) if (a.rz) return true;
+    return false;
+  }
+
+  // The switch changed. Off: nothing is followed or streamed any more (the apps keep running),
+  // except what ReZume sent.
   apply() {
     if (!this.allowed) {
-      this.launched.clear();
-      this._sync([]);
+      for (const [id, a] of this.launched) if (!a.rz) this.launched.delete(id);
+      if (this.launched.size) this._poll(true);
+      else this._sync([]);
     }
     this.onChange();
+  }
+
+  // ReZume can send windows only where they can be listed and captured (X11).
+  get canAdopt() {
+    return !WAYLAND;
+  }
+
+  // ReZume: the windows of an app that is open here (its WM_CLASS), streamed to the other computer.
+  adopt(cls) {
+    if (WAYLAND || typeof cls !== 'string' || !cls || this.link.status.state !== 'connected') return false;
+    const key = cls.toLowerCase();
+    for (const a of this.launched.values()) {
+      if (a.cls !== key) continue;
+      if (a.skip) a.skip.clear();
+      this._poll(true);
+      return true;
+    }
+    this.launched.set(cls, { id: cls, exe: '', cls: key, rz: true, skip: new Set(), pids: new Set(), since: Date.now(), had: false, lastSeen: 0, before: new Set(), beforePids: new Set() });
+    this._poll(true);
+    return true;
+  }
+
+  // ReZume's window sharing turned off (app: only that app's windows).
+  unadopt(app) {
+    let any = false;
+    for (const [id, a] of this.launched) if (a.rz && (!app || a.id === app)) { this.launched.delete(id); any = true; }
+    if (any) this._poll(true);
+  }
+
+  // A window ReZume sent, closed there: only its copy goes (the window stays open here).
+  _unfollow(wid) {
+    const w = this.windows.find((x) => x.wid === wid);
+    const a = w && this.launched.get(w.id);
+    if (!a || !a.rz) return false;
+    a.skip.add(wid);
+    this._poll(true);
+    return true;
   }
 
   _mine(wid) {
@@ -214,10 +260,10 @@ class PcApps {
     const taken = new Set();
     for (const a of this.launched.values()) {
       const id = a.id.toLowerCase();
-      const mine = all.filter((w) => !taken.has(w.wid) && ((a.cls && clsOf(w).includes(a.cls))
+      const mine = all.filter((w) => !taken.has(w.wid) && !(a.skip && a.skip.has(w.wid)) && ((a.cls && clsOf(w).includes(a.cls))
         || (a.exe && String(w.exe).toLowerCase() === a.exe) || a.pids.has(w.pid) || a.pids.has(w.ppid)));
       let main = mine.filter((w) => !w.popup);
-      if (!main.length && now - a.since > 1500 && now - a.since < 20000) { // started through D-Bus or a wrapper
+      if (!main.length && !a.rz && now - a.since > 1500 && now - a.since < 20000) { // started through D-Bus or a wrapper
         const fresh = all.find((w) => !w.popup && !a.before.has(w.wid) && !a.beforePids.has(w.pid) && !taken.has(w.wid));
         if (fresh) { a.exe = String(fresh.exe).toLowerCase(); main = [fresh]; }
       }
@@ -253,7 +299,7 @@ class PcApps {
     this.sentKey = key;
     this.windows = list;
     for (const wid of this.failed) if (!list.some((w) => w.wid === wid)) this.failed.delete(wid);
-    const want = this.macAccepts && this.allowed ? new Set(list.map((w) => w.wid)) : new Set();
+    const want = this.macAccepts && (this.allowed || this.rezumes) ? new Set(list.map((w) => w.wid)) : new Set();
     for (const [wid, session] of this.streams) {
       if (!want.has(wid)) {
         this.streams.delete(wid);

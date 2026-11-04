@@ -10,11 +10,18 @@
 #define LOCAL_PX 6.0
 #define LOCAL_GRACE_MS 300.0
 
-static int watching;
+static int watching, takeBack = 1;
 static double since, at, acc;
 
+// kvmConfig takeBack (off with Sync touchpads): our own input never takes it back, the return
+// watch stays on and either mouse crosses.
+void local_allow(int on) {
+  takeBack = on;
+  if (!on) watching = 0;
+}
+
 void local_watch(int on) {
-  watching = on;
+  watching = on && takeBack;
   since = now_ms();
   acc = 0;
 }

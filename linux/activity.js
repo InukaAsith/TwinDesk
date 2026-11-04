@@ -6,6 +6,8 @@
 // the browser's own files (shared/browsertabs.js); a document is the recently used file
 // (recently-used.xbel, which GTK and KDE apps keep) whose name the title shows. One Python process
 // (GObject introspection, as linux/fm.js) answers while ReZume looks, started the first time.
+// Anything else is at least the app itself (kind 'app', its WM_CLASS), whose window ReZume may send
+// to another computer (X11 only).
 'use strict';
 
 const { spawn } = require('child_process');
@@ -237,10 +239,10 @@ function create({ helper }) {
       const appName = t.app || app;
       if (BROWSER.test(app)) {
         url = url || (tabs.tabOf(app, title) || {}).url || '';
-        return url ? { kind: 'web', url, title: t.page, app, appName } : null;
+        return url ? { kind: 'web', url, title: t.page, app, appName } : null; // a browser: its link only
       }
       const doc = docOf(title);
-      return doc ? { kind: 'doc', path: doc, title: path.basename(doc), app, appName } : null;
+      return doc ? { kind: 'doc', path: doc, title: path.basename(doc), app, appName } : { kind: 'app', title: title || appName, app, appName };
     },
     async appIcon(app) {
       const f = iconFile(app);

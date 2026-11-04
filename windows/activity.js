@@ -3,7 +3,8 @@
 // frontActivity (Activity.cs) names its .exe and title and reads a browser's address bar; a browser
 // it can't read goes through its own files (shared/browsertabs.js); a document is the one Windows
 // lists as recently opened under the name the title shows. TwinDesk's own windows and the shell's
-// (the taskbar, Start, File Explorer) are nothing to go on with.
+// (the taskbar, Start, File Explorer) are nothing to go on with. Anything else is at least the app
+// itself (kind 'app'), whose window ReZume may send to another computer.
 'use strict';
 
 const path = require('path');
@@ -24,10 +25,9 @@ function create({ helper, selfExe }) {
       const appName = NAMES[base] || t.app || path.basename(exe, '.exe');
       if (r.browser) {
         const url = r.url || (tabs.tabOf(base, r.title) || {}).url;
-        return url ? { kind: 'web', url, title: t.page, app: exe, appName } : null;
-      }
-      if (r.file) return { kind: 'doc', path: r.file, title: path.basename(r.file), app: exe, appName };
-      return null;
+        return url ? { kind: 'web', url, title: t.page, app: exe, appName } : null; // a browser: its link only
+      } else if (r.file) return { kind: 'doc', path: r.file, title: path.basename(r.file), app: exe, appName };
+      return { kind: 'app', title: r.title || appName, app: exe, appName };
     },
     async appIcon(exe) {
       const { app } = require('electron');

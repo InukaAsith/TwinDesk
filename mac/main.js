@@ -795,9 +795,38 @@ app.whenReady().then(() => {
       appIcon: (a) => svc.rzAct.appIcon(a),
       open: { url: (u) => shell.openExternal(u), file: (p) => shell.openPath(p), phoneApp: (pkg) => openPhoneApp(pkg) },
       sendFile: (p, batch) => !!svc.fileSend.sendBatch([p], 'rezume', batch),
-      expectFile: (batch) => svc.drop.expectBatch(batch, '', true),
+      expectFile: (batch, dir) => svc.drop.expectBatch(batch, dir || '', true),
+      // Documents opened in place (shared/rzlive.js), the chooser (shared/rzpick.js), and where copies go.
+      cacheDir: path.join(app.getPath('temp'), 'TwinDesk ReZume'),
+      live: (() => {
+        const { LiveShare } = require('../shared/rzlive.js');
+        const ls = new LiveShare({ tls: () => server && server.tls, mounter: require('./phonedrive').mounter });
+        return {
+          share: (p) => ls.share(p),
+          mount: async (info) => {
+            if (svc.net && !(await svc.net.need('folder'))) throw new Error('The other computer could not be reached over Wi-Fi');
+            return ls.mount(info);
+          },
+          stop: () => ls.stop(),
+          shutdown: () => ls.shutdown(),
+        };
+      })(),
+      pick: (o, ways) => require('../shared/rzpick.js').pick(o, ways, { peer: name(), language: i18n.locale }),
       adb: () => phoneAdb(svc.phone && svc.phone.bridge),
       phoneApps: () => (svc.phone && svc.phone.apps) || [],
+      save: () => store.saveSettings(settings),
+      // An app's window between two computers: ours streamed window by window (appsend.js), theirs
+      // shown here as the PC apps are (pcapps.js).
+      window: {
+        canSend: () => true,
+        send: (app) => svc.appSend.adopt(app), // window by window, kept on the virtual display here
+        accept: async (on) => {
+          if (on && svc.net && !(await svc.net.need('apps'))) return false;
+          svc.pcApps.acceptReZume(on);
+          return true;
+        },
+        stop: (app) => { svc.appSend.unadopt(app); svc.apps.unadopt(app); },
+      },
     });
     svc.rz.on('change', pushState);
     svc.rz.on('opened', (o) => hud && hud.show('home', { key: o.how === 'sent' ? 'Sent to {name}: {title}' : 'From {name}: {title}', vars: { name: peer.current ? peer.current.name : { key: 'the other computer' }, title: o.title } }));

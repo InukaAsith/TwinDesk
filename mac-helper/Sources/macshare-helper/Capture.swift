@@ -83,6 +83,11 @@ final class Capture {
   private var localWatch = false
   private var localSince = 0.0, localAt = 0.0, localAcc = 0.0
   private let localPx = 6.0, localGrace = 0.3
+  // kvmConfig takeBack (off with Sync touchpads): our own input never takes the Mac back, the return
+  // watch stays on and either mouse crosses.
+  var takeBack = true {
+    didSet { if !takeBack { localWatch = false } }
+  }
   // Where along the side the other computer's monitors touch ours (shared/kvm-geom.js zones, 0–1 of
   // the bounding box, as `offset`): the edge and the way back only cross inside them. nil: anywhere.
   var edgeZones: [ClosedRange<Double>]?
@@ -318,7 +323,7 @@ final class Capture {
 #endif
 
   private func watchLocal(_ on: Bool) {
-    localWatch = on
+    localWatch = on && takeBack
     localSince = now()
     localAcc = 0
   }

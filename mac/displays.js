@@ -17,6 +17,7 @@ class Displays extends EventEmitter {
     this.helper = helper;
     this.getSettings = getSettings;
     this.virtualId = null; // CGDirectDisplayID of our virtual display, when it exists
+    this.holds = new Set(); // reasons it is needed without screen sharing ('apps': app windows streamed from it)
     this.virtualError = null;
     this.applying = null;
     this.changeTimer = null;
@@ -60,8 +61,9 @@ class Displays extends EventEmitter {
       const v = this.getSettings().virtual;
       this.virtualError = null;
       try {
-        // The virtual display exists only while this Mac's screen is shared (no empty extra monitor).
-        if (!v.enabled || !this.getSettings().sharing.on) {
+        // The virtual display exists only while this Mac's screen is shared (no empty extra monitor),
+        // or while something holds it (app windows streamed to another computer wait there).
+        if (!v.enabled || !(this.getSettings().sharing.on || this.holds.size)) {
           if (this.virtualId !== null) await this.helper.request('destroyDisplay');
           this.virtualId = null;
           this.virtualKey = '';
@@ -90,6 +92,20 @@ class Displays extends EventEmitter {
     };
     this.applying = (this.applying || Promise.resolve()).then(run);
     return this.applying;
+  }
+
+  // Needed (or not any more) without screen sharing. Resolves once it is applied.
+  hold(reason, on) {
+    if (this.holds.has(reason) === !!on) return this.applying || Promise.resolve();
+    if (on) this.holds.add(reason);
+    else this.holds.delete(reason);
+    return this.applyVirtual();
+  }
+
+  // The virtual display's bounds (points), or null.
+  virtualBounds() {
+    const d = this.virtualId !== null && screen.getAllDisplays().find((x) => x.id === this.virtualId);
+    return d ? d.bounds : null;
   }
 
   _waitForDisplay(id) {

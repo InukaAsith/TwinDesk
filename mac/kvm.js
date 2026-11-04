@@ -244,6 +244,7 @@ class Kvm extends EventEmitter {
         dwellMs: P.KVM_EDGE_DWELL_MS,
         zones: this.map.zones(), // only where the monitors touch (null: anywhere on the side)
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
+        takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
         dragFiles: this.fileSend.dragOn && this.fileSend.peerDrag, // drag.policy, both sides
       })
       .then(() => this._setTapError(null), (e) => this._setTapError(e.message));

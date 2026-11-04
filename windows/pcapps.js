@@ -4,7 +4,8 @@
 // kind 'window', sender.js) while the Mac's `papp.policy` accepts and "Let the Mac open this PC's
 // apps" is on — menus, drop-downs and other pop-ups too, as `popup` entries with their `owner` and
 // offset, so the Mac draws them over the right window. The Mac's input in such a window (`in.*` +
-// `wid`) is injected at that window.
+// `wid`) is injected at that window. ReZume sends an app that's already open the same way (adopt):
+// its windows only while ReZume lets it (not this tab's switch), and closing one there stops only that.
 const { desktopCapturer, screen: displays } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -69,7 +70,7 @@ class PcApps {
     link.on(T.PAPPS_LIST, () => this._list());
     link.on(T.PAPP_LAUNCH, (m) => typeof m.id === 'string' && this._launch(m.id));
     link.on(T.PAPP_FOCUS, (m) => this._mine(m.wid) && !this._popup(m.wid) && this._raise(m.wid));
-    link.on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && this.helper.send('winClose', { wid: m.wid }));
+    link.on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && (this._unfollow(m.wid) || this.helper.send('winClose', { wid: m.wid })));
     link.on(T.PAPP_SIZE, (m) => {
       const ok = (v) => Number.isInteger(v) && v >= 50 && v <= 16384;
       if (this._mine(m.wid) && !this._popup(m.wid) && ok(m.w) && ok(m.h)) this.helper.send('winSize', { wid: m.wid, w: m.w, h: m.h });
@@ -92,14 +93,54 @@ class PcApps {
     return this.settings.pcApps.allow;
   }
 
-  // The switch changed. Off: nothing is followed or streamed any more (the apps keep running).
+  // An app followed for ReZume (adopt), which this tab's switch doesn't stop.
+  get rezumes() {
+    for (const a of this.launched.values()) if (a.rz) return true;
+    return false;
+  }
+
+  // The switch changed. Off: nothing is followed or streamed any more (the apps keep running), but
+  // what ReZume sent.
   apply() {
     this.generation++;
     if (!this.allowed) {
-      this.launched.clear();
-      this._sync([]);
+      for (const [id, a] of this.launched) if (!a.rz) this.launched.delete(id);
+      if (this.launched.size) this._poll(true);
+      else this._sync([]);
     }
     this.onChange();
+  }
+
+  // ReZume: the windows of an app that's open here (its exe), streamed to the other computer.
+  adopt(exe) {
+    if (this.stopped || typeof exe !== 'string' || !/\.exe$/i.test(exe) || this.link.status.state !== 'connected') return false;
+    const key = exe.toLowerCase();
+    for (const a of this.launched.values()) {
+      if (a.exe !== key) continue;
+      if (a.skip) a.skip.clear();
+      this._poll(true);
+      return true;
+    }
+    this.launched.set(exe, { id: exe, exe: key, rz: true, skip: new Set(), pids: new Set(), since: Date.now(), had: false, lastSeen: 0, before: new Set(), beforePids: new Set() });
+    this._poll(true);
+    return true;
+  }
+
+  // ReZume's window sharing off (app: only that one's): its windows stop going.
+  unadopt(app) {
+    let any = false;
+    for (const [id, a] of this.launched) if (a.rz && (!app || a.id === app)) { this.launched.delete(id); any = true; }
+    if (any) this._poll(true);
+  }
+
+  // A window ReZume sent, closed there: only its copy goes (the window stays open here).
+  _unfollow(wid) {
+    const w = this.windows.find((x) => x.wid === wid);
+    const a = w && this.launched.get(w.id);
+    if (!a || !a.rz) return false;
+    a.skip.add(wid);
+    this._poll(true);
+    return true;
   }
 
   _mine(wid) {
@@ -163,7 +204,7 @@ class PcApps {
   }
 
   _current(generation) {
-    return !this.stopped && this.allowed && this.generation === generation && this.link.status.state === 'connected';
+    return !this.stopped && (this.allowed || this.rezumes) && this.generation === generation && this.link.status.state === 'connected';
   }
 
   async _launch(id) {
@@ -241,7 +282,7 @@ class PcApps {
     const taken = new Set();
     for (const a of this.launched.values()) {
       const id = a.id.toLowerCase();
-      const mine = all.filter((w) => !taken.has(w.wid) && ((w.aumid && w.aumid.toLowerCase() === id)
+      const mine = all.filter((w) => !taken.has(w.wid) && !(a.skip && a.skip.has(w.wid)) && ((w.aumid && w.aumid.toLowerCase() === id)
         || (a.exe && String(w.exe).toLowerCase() === a.exe) || a.pids.has(w.pid) || a.pids.has(w.ppid)));
       let main = mine.filter((w) => !w.popup);
       if (!main.length && !a.exe && now - a.since > 1500 && now - a.since < 20000) {

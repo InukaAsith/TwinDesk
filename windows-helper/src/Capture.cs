@@ -53,6 +53,14 @@ namespace MacShare
         double localAcc;
         const double LocalPx = 6;
         const int LocalGraceMs = 300;
+        // kvmConfig takeBack (off with Sync touchpads): our own input never takes the PC back, the return
+        // watch stays on and either mouse crosses.
+        bool takeBack = true;
+        public bool TakeBack
+        {
+            get { return takeBack; }
+            set { takeBack = value; if (!value) localWatch = false; }
+        }
 
         // edge push (home) and return edge (driven)
 #if !MULTI
@@ -338,7 +346,7 @@ namespace MacShare
 
         void WatchLocal(bool on)
         {
-            localWatch = on;
+            localWatch = on && takeBack;
             localSince = DateTime.UtcNow;
             localAcc = 0;
         }

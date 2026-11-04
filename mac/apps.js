@@ -1,6 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Mac apps on the PC: app list, launch, and the windows of launched
 // apps as rectangles normalized over the stream picture, so the PC crops each into its own window.
+// ReZume sends an app that is already open the same way (adopt): independent of "apps.offer", and
+// closing its copy on the PC stops only that copy (the window stays open here).
 //
 // Events: 'change' — this.view changed.
 'use strict';
@@ -15,7 +17,7 @@ class Apps extends EventEmitter {
   constructor({ server, helper, displays, stream, getSettings }) {
     super();
     Object.assign(this, { server, helper, displays, stream, getSettings });
-    this.launched = new Map(); // bundle id -> { pid, name }
+    this.launched = new Map(); // bundle id -> { pid, name, rz?, skip? }
     this.lastKey = '';
     this.windows = [];
     this.timer = null;
@@ -29,7 +31,7 @@ class Apps extends EventEmitter {
     on(P.T.APPS_LIST, () => this._list());
     on(P.T.APP_LAUNCH, (m) => this._launch(String(m.id || '')));
     on(P.T.APP_FOCUS, (m) => this.helper.request('appFocus', { wid: Number(m.wid) }).catch(() => {}));
-    on(P.T.APP_CLOSE, (m) => this.helper.request('appClose', { wid: Number(m.wid) }).catch(() => {}));
+    on(P.T.APP_CLOSE, (m) => !this._unfollow(Number(m.wid)) && this.helper.request('appClose', { wid: Number(m.wid) }).catch(() => {}));
     server.on('closed', () => {
       if (!server.current) {
         this._stopPolling();
@@ -66,14 +68,61 @@ class Apps extends EventEmitter {
       const { pid } = await this.helper.request('appLaunch', { appId: id }, 20000);
       this.launched.set(id, { pid });
       reply(true);
-      this.lastKey = '';
-      this._startPolling();
-      // New windows appear a moment after launch: move them onto the shared display a few times.
-      for (const ms of [300, 1000, 2500]) setTimeout(() => this._moveOnto(pid), ms);
-      this.emit('change');
+      this._follow(pid);
     } catch (e) {
       reply(false, e.message);
     }
+  }
+
+  // ReZume: the windows of an app that is open here (its bundle id), on the PC. Like opening it
+  // from the PC's Apps tab, without its switch.
+  async adopt(id) {
+    if (!/^[A-Za-z0-9.-]{1,200}$/.test(id) || !this.server.current) return false;
+    const had = this.launched.get(id);
+    if (had) {
+      if (had.skip) had.skip.clear();
+      this.lastKey = '';
+      this._moveOnto(had.pid);
+      return true;
+    }
+    if (!this.getSettings().sharing.on && this.setSharing) {
+      this.autoShare = true;
+      this.setSharing(true, 'apps');
+    }
+    this.emptySince = 0;
+    try {
+      const { pid } = await this.helper.request('appLaunch', { appId: id }, 20000);
+      this.launched.set(id, { pid, rz: true, skip: new Set() });
+      this._follow(pid);
+      return true;
+    } catch (e) {
+      console.log('[apps] ReZume window not sent: ' + e.message);
+      return false;
+    }
+  }
+
+  // ReZume's window sharing turned off (app: only that app's windows).
+  unadopt(app) {
+    for (const [id, a] of this.launched) if (a.rz && (!app || id === app)) this.launched.delete(id);
+    this.lastKey = '';
+  }
+
+  // A window ReZume sent, closed on the PC: only its copy goes.
+  _unfollow(wid) {
+    const w = this.windows.find((x) => x.wid === wid);
+    const a = w && this.launched.get(w.id);
+    if (!a || !a.rz) return false;
+    a.skip.add(wid);
+    this.lastKey = '';
+    return true;
+  }
+
+  _follow(pid) {
+    this.lastKey = '';
+    this._startPolling();
+    // New windows appear a moment after launch: move them onto the shared display a few times.
+    for (const ms of [300, 1000, 2500]) setTimeout(() => this._moveOnto(pid), ms);
+    this.emit('change');
   }
 
   _moveOnto(pid) {
@@ -117,7 +166,9 @@ class Apps extends EventEmitter {
     }
     const idOf = new Map([...this.launched].map(([id, a]) => [a.pid, id]));
     const b = t.bounds;
+    const skipped = (w) => { const a = this.launched.get(idOf.get(w.pid)); return !!(a && a.skip && a.skip.has(w.wid)); };
     const wins = r.windows
+      .filter((w) => !skipped(w))
       .filter((w) => w.x < b.x + b.width && w.x + w.w > b.x && w.y < b.y + b.height && w.y + w.h > b.y) // on the shared display
       .map((w) => ({
         wid: w.wid, id: idOf.get(w.pid), title: w.title,
@@ -150,9 +201,12 @@ class Apps extends EventEmitter {
 
   applySettings() {
     if (!this.enabled) {
-      this.launched.clear();
-      this._stopPolling();
-      this.server.sendToClient({ t: P.T.APP_WINDOWS, windows: [] });
+      for (const [id, a] of this.launched) if (!a.rz) this.launched.delete(id);
+      this.lastKey = '';
+      if (!this.launched.size) {
+        this._stopPolling();
+        this.server.sendToClient({ t: P.T.APP_WINDOWS, windows: [] });
+      }
     }
     this.emit('change');
   }

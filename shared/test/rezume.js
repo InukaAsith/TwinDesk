@@ -292,6 +292,133 @@ const start = (p, a, b) => {
     assert.strictEqual(p.sent.a.length + p.sent.b.length, n + 2, 'answered once, no back and forth');
   }
 
+  // ---- windows between computers: off by default, then allowlisted, recorded, and streamed when taken ----
+  {
+    assert.strictEqual(normalize(undefined).windows, false, 'window sharing is off by default');
+    const p = pair('win', 'linux');
+    const sent = [];
+    const accepts = [];
+    const bridge = (log) => ({ canSend: () => true, send: (app) => { log.push(app); return true; }, accept: (on) => { accepts.push(on); return true; }, stop() {} });
+    let saves = 0;
+    const a = side(p.link.a, { window: bridge(sent), save: () => { saves++; } });
+    const b = side(p.link.b, { window: bridge([]) });
+    start(p, a, b);
+    a.now = { kind: 'app', app: 'C:\\Apps\\paint.exe', appName: 'Paint', title: 'Untitled - Paint' };
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    assert.ok(!p.sent.a.some((m) => m.t === 'rz.offer'), 'nothing while window sharing is off');
+    assert.deepStrictEqual(a.view.windowApps, [], 'and nothing recorded');
+    a.c.windows = b.c.windows = true;
+    a.apply(); b.apply();
+    assert.strictEqual(a.peerPolicy.windows, true);
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    const offer = p.sent.a.find((m) => m.t === 'rz.offer');
+    assert.ok(offer && offer.kind === 'window' && offer.app === 'C:\\Apps\\paint.exe');
+    assert.strictEqual(a.view.windowApps.length, 1, 'found: on the list');
+    assert.strictEqual(a.view.windowApps[0].on, true, 'allowed (new apps are)');
+    assert.strictEqual(b.view.incoming.kind, 'window');
+    await b.take();
+    assert.deepStrictEqual(accepts.slice(-1), [true], 'b shows windows that come');
+    await new Promise((r) => setImmediate(r));
+    assert.deepStrictEqual(sent, ['C:\\Apps\\paint.exe'], 'a streams the app');
+    assert.ok(p.sent.a.some((m) => m.t === 'rz.done' && m.ok === true));
+    assert.strictEqual(a.view.windowApps[0].sent, 1, 'counted');
+    // blocked on the list: not offered, and not sent when asked
+    a.allow('windows', 'C:\\Apps\\paint.exe', false);
+    a.now = { kind: 'app', app: 'C:\\Apps\\notes.exe', appName: 'Notes', title: 'Notes' };
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    a.now = { kind: 'app', app: 'C:\\Apps\\paint.exe', appName: 'Paint', title: 'Paint' };
+    const before = p.sent.a.filter((m) => m.t === 'rz.offer').length;
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    assert.strictEqual(p.sent.a.filter((m) => m.t === 'rz.offer').length, before, 'a blocked app is not offered');
+    // new apps blocked: recorded, switched off
+    a.c.newWindows = false;
+    a.now = { kind: 'app', app: 'C:\\Apps\\calc.exe', appName: 'Calculator', title: 'Calculator' };
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    const calc = a.view.windowApps.find((r) => r.app === 'C:\\Apps\\calc.exe');
+    assert.ok(calc && calc.on === false, 'recorded but blocked');
+    // a browser sends its link, never its window
+    a.now = { kind: 'web', url: 'https://example.com/v', title: 'V', app: 'C:\\Apps\\chrome.exe', appName: 'Chrome' };
+    a.c.web = false;
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    assert.ok(!a.view.windowApps.some((r) => r.app === 'C:\\Apps\\chrome.exe'), 'a browser is never a window');
+    a.forget('windows', '');
+    assert.deepStrictEqual(a.view.windowApps, []);
+    // the records survive the settings' round trip
+    a.c.windowApps = { 'x.exe': { name: 'X', on: false, found: 5, sent: 2, last: 9 }, bad: 'no' };
+    assert.deepStrictEqual(normalize(a.c).windowApps, { 'x.exe': { name: 'X', on: false, found: 5, sent: 2, last: 9 } });
+    // window sharing turned off: the streams stop, nothing is taken
+    let stopped = 0;
+    a.window.stop = () => { stopped++; };
+    a.c.windows = false;
+    a.apply();
+    assert.ok(stopped >= 1);
+    assert.strictEqual(b.peerPolicy.windows, false);
+    a.shutdown(); b.shutdown();
+    await new Promise((r) => setTimeout(r, 350)); // the records' save
+    assert.ok(saves > 0, 'the records were saved');
+  }
+
+  // ---- a document that may also come as its app's window: the chooser decides; copies go to the cache ----
+  {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rz-'));
+    const cache = path.join(dir, 'cache');
+    const file = path.join(dir, 'plan.docx');
+    fs.writeFileSync(file, 'v1');
+    const p = pair('mac', 'win');
+    const files = [];
+    const expected = [];
+    const asked = [];
+    const shared = [];
+    let answer = 'live';
+    const live = { share: (f) => { shared.push(f); return { port: 1, token: 'a'.repeat(32), volume: 'plan (ReZume)', file: 'plan.docx', cert: 'x', hosts: [] }; }, mount: async () => '/Volumes/plan (ReZume)/plan.docx', stop() {}, shutdown() {} };
+    const bridge = { canSend: () => true, send: () => true, accept: () => true, stop() {} };
+    const a = side(p.link.a, { live, window: bridge, sendFile: (f, batch) => { files.push([f, batch]); return true; } });
+    const b = side(p.link.b, { live, window: bridge, cacheDir: cache, expectFile: (batch, d) => expected.push([batch, d]), pick: async (o, ways) => { asked.push(ways); return answer; } });
+    for (const h of [a, b]) Object.assign(h.c, { windows: true, live: true });
+    start(p, a, b);
+    a.apply(); b.apply();
+    a.now = { kind: 'doc', path: file, title: 'plan.docx', app: 'com.microsoft.Word', appName: 'Word' };
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    const offer = p.sent.a.find((m) => m.t === 'rz.offer');
+    assert.ok(offer && offer.kind === 'doc' && offer.live === true && offer.window === true);
+    assert.deepStrictEqual(b.view.incoming.ways, ['copy', 'live', 'window']);
+    await b.take();
+    assert.deepStrictEqual(asked, [['copy', 'live', 'window']], 'all three ways: asked');
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepStrictEqual(shared, [file], 'Edit: the file itself is shared');
+    assert.deepStrictEqual(b.opened.slice(-1), [['file', '/Volumes/plan (ReZume)/plan.docx']], 'and opened from where it is mounted');
+    assert.strictEqual(a.view.fileApps[0].sent, 1);
+    // Preview: a copy into the cache
+    answer = 'copy';
+    p.bus.b.emit('rz.offer', { ...offer, id: 'second' });
+    await b.take();
+    assert.deepStrictEqual(expected.slice(-1), [['rz-second', cache]], 'the copy goes to the cache');
+    assert.ok(p.sent.b.some((m) => m.t === 'rz.take' && m.id === 'second' && m.how === 'copy'), 'asked for a copy');
+    // the sender's side of a copy: the file goes in the batch the other side expects
+    a._taken(offer.id, 'copy');
+    assert.deepStrictEqual(files.slice(-1), [[file, 'rz-' + offer.id]]);
+    // closed without an answer: nothing
+    answer = null;
+    p.bus.b.emit('rz.offer', { ...offer, id: 'third' });
+    assert.strictEqual(await b.take(), false);
+    assert.ok(!p.sent.b.some((m) => m.t === 'rz.take' && m.id === 'third'));
+    // live off here: a copy, without asking, when no window may come either
+    b.c.live = false;
+    b.c.windows = false;
+    b.apply();
+    p.bus.b.emit('rz.offer', { ...offer, id: 'fourth' });
+    const n = asked.length;
+    await b.take();
+    assert.strictEqual(asked.length, n, 'one way: not asked');
+    assert.ok(p.sent.b.some((m) => m.t === 'rz.take' && m.id === 'fourth' && m.how === 'copy'));
+    // the cache is emptied at shutdown
+    fs.mkdirSync(cache, { recursive: true });
+    fs.writeFileSync(path.join(cache, 'plan.docx'), 'copy');
+    b.shutdown(); a.shutdown();
+    assert.ok(!fs.existsSync(cache), 'copies removed when TwinDesk quits');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
   console.log('rezume ok');
   process.exit(0); // the sides' 10-minute timers
 })().catch((e) => { console.error(e); process.exit(1); });
