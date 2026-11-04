@@ -117,6 +117,13 @@ void wins_close(unsigned long wid);
 void wins_size(unsigned long wid, int w, int h);
 void wins_move(unsigned long wid, double x, double y);
 void wins_info(double id, int atPointer);
+void wins_move_key(const char *key);     // Move windows: the key held to grab a window, "" = off
+int wins_move_xevent(XEvent *e);         // the grab's core events (main.c's dpy_in loop)
+int wins_grabbing(void);                 // a window follows the pointer
+int wins_move_eat_up(void);              // the grab's left-button release: not passed on
+unsigned long wins_move_take(int keepUp); // crossing: the grabbed window (0: none); the grab ends
+void wins_park(unsigned long wid);
+void wins_place(unsigned long wid, int x, int y);
 
 // ---- wl.c: Wayland backend (evdev + uinput) ----
 struct pollfd;

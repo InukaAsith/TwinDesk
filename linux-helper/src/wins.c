@@ -10,6 +10,7 @@
 #include <string.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/keysym.h>
 
 static Atom atom(const char *n) { return XInternAtom(dpy_in, n, False); }
 
@@ -271,4 +272,139 @@ void wins_info(double id, int atPointer) {
   buf[len] = 0;
   emit(buf);
   free(buf);
+}
+
+// ---- moving a window to another computer (linux/pcapps.js, shared/movewin.js) ----
+// Apps and Windows › Move windows: the move key held (Right Ctrl unless another is chosen), a click
+// on a window grabs it. A passive button grab on the root window with the key's modifier catches the
+// click; if the exact key (left or right) isn't the one held, the click is replayed to the app as if
+// nothing happened. While grabbed, the window follows the pointer (_NET_MOVERESIZE_WINDOW, which the
+// window managers honour); crossing to another computer meanwhile takes it along (capture.c adds
+// `moving`). Clicks injected from the other computer (XTest) trigger the grab the same way. X11 only.
+
+static int mvKey;            // the move key's X keycode; 0: moving is off
+static unsigned mvMod;       // its modifier mask (the passive grab)
+static Window mvGrab;        // the app window following the pointer
+static int mvDx, mvDy;       // the pointer's place in it (its client window)
+static int mvUp;             // the left button's release is not passed on (its press wasn't)
+
+static const unsigned MV_IGNORED[] = { 0, LockMask, Mod2Mask, LockMask | Mod2Mask }; // Caps Lock, Num Lock
+
+static void mv_grabs(int on) {
+  for (unsigned i = 0; i < sizeof MV_IGNORED / sizeof *MV_IGNORED; i++) {
+    if (on) XGrabButton(dpy_in, Button1, mvMod | MV_IGNORED[i], root_in, False, ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeSync, GrabModeAsync, None, None);
+    else XUngrabButton(dpy_in, Button1, mvMod | MV_IGNORED[i], root_in);
+  }
+  XFlush(dpy_in);
+}
+
+// `moveWin {key}`: "ControlRight" … "MetaLeft", "" = off.
+void wins_move_key(const char *key) {
+  if (mvKey) mv_grabs(0);
+  mvKey = 0;
+  mvGrab = 0;
+  if (!key || !*key) return;
+  KeySym ks = 0;
+  if (!strcmp(key, "ControlRight")) ks = XK_Control_R, mvMod = ControlMask;
+  else if (!strcmp(key, "ControlLeft")) ks = XK_Control_L, mvMod = ControlMask;
+  else if (!strcmp(key, "ShiftRight")) ks = XK_Shift_R, mvMod = ShiftMask;
+  else if (!strcmp(key, "ShiftLeft")) ks = XK_Shift_L, mvMod = ShiftMask;
+  else if (!strcmp(key, "AltRight")) ks = XK_ISO_Level3_Shift, mvMod = Mod5Mask; // AltGr on most layouts
+  else if (!strcmp(key, "AltLeft")) ks = XK_Alt_L, mvMod = Mod1Mask;
+  else if (!strcmp(key, "MetaRight")) ks = XK_Super_R, mvMod = Mod4Mask;
+  else if (!strcmp(key, "MetaLeft")) ks = XK_Super_L, mvMod = Mod4Mask;
+  if (!ks) return;
+  if (!strcmp(key, "AltRight") && !XKeysymToKeycode(dpy_in, ks)) ks = XK_Alt_R, mvMod = Mod1Mask;
+  mvKey = XKeysymToKeycode(dpy_in, ks);
+  if (mvKey) mv_grabs(1);
+}
+
+static int mv_key_held(void) {
+  char keys[32];
+  XQueryKeymap(dpy_in, keys);
+  return (keys[mvKey / 8] >> (mvKey % 8)) & 1;
+}
+
+// The client window's top left (root coordinates) to x, y: StaticGravity means the client itself.
+static void mv_to(Window w, int x, int y) {
+  XEvent e;
+  memset(&e, 0, sizeof e);
+  e.xclient.type = ClientMessage;
+  e.xclient.window = w;
+  e.xclient.message_type = atom("_NET_MOVERESIZE_WINDOW");
+  e.xclient.format = 32;
+  e.xclient.data.l[0] = StaticGravity | (1 << 8) | (1 << 9) | (2 << 12); // x and y, from a pager / tool
+  e.xclient.data.l[1] = x;
+  e.xclient.data.l[2] = y;
+  XSendEvent(dpy_in, root_in, False, SubstructureRedirectMask | SubstructureNotifyMask, &e);
+  XFlush(dpy_in);
+}
+
+int wins_grabbing(void) { return mvGrab != 0; }
+
+// A core event on dpy_in (main.c). True: it was the move grab's.
+int wins_move_xevent(XEvent *e) {
+  if (!mvKey) return 0;
+  if (e->type == ButtonPress && e->xbutton.button == Button1 && e->xbutton.root == root_in) {
+    Window c = e->xbutton.subwindow ? client_of(e->xbutton.subwindow, 0) : 0;
+    int wx, wy, ww, hh, v, o;
+    if (!capture_active() && c && mv_key_held() && geometry(c, &wx, &wy, &ww, &hh, &v, &o)) {
+      static const char *desk[] = { "_NET_WM_WINDOW_TYPE_DESKTOP", "_NET_WM_WINDOW_TYPE_DOCK", NULL };
+      if (!has_type(c, desk)) {
+        mvGrab = c;
+        mvDx = e->xbutton.x_root - wx;
+        mvDy = e->xbutton.y_root - wy;
+        mvUp = 1;
+        client_message(c, "_NET_ACTIVE_WINDOW", 2, CurrentTime);
+        XAllowEvents(dpy_in, AsyncPointer, e->xbutton.time); // ours: the app never sees the click
+        XFlush(dpy_in);
+        return 1;
+      }
+    }
+    XAllowEvents(dpy_in, ReplayPointer, e->xbutton.time); // not a move: the click goes to the app
+    XFlush(dpy_in);
+    return 1;
+  }
+  if (e->type == MotionNotify && mvGrab) {
+    mv_to(mvGrab, e->xmotion.x_root - mvDx, e->xmotion.y_root - mvDy);
+    return 1;
+  }
+  if (e->type == ButtonRelease && e->xbutton.button == Button1 && (mvGrab || mvUp)) {
+    mvGrab = 0;
+    mvUp = 0;
+    return 1;
+  }
+  return 0;
+}
+
+// The left button's raw release (capture.c): true while the grab holds it, so it isn't passed on.
+int wins_move_eat_up(void) {
+  if (!mvUp) return 0;
+  mvUp = 0;
+  mvGrab = 0;
+  return 1;
+}
+
+// Crossing with a grabbed window: its id (capture.c adds `moving`), and the grab ends. keepUp: the
+// button is still down here (the home side), its release comes later and is not passed on.
+unsigned long wins_move_take(int keepUp) {
+  Window w = mvGrab;
+  mvGrab = 0;
+  if (!keepUp) mvUp = 0;
+  return (unsigned long)w;
+}
+
+// `winPark`: as far past the screens as the window manager lets it (still mapped: a minimized
+// window has no picture to send).
+void wins_park(unsigned long wid) {
+  int w = DisplayWidth(dpy_in, DefaultScreen(dpy_in));
+  mv_to((Window)wid, w + 200, 40);
+}
+
+// `winPlace {x, y}`: back with its visible part's top left at x, y (as `windows` lists them), raised.
+void wins_place(unsigned long wid, int x, int y) {
+  int l, r, t, b;
+  extents((Window)wid, &l, &r, &t, &b);
+  mv_to((Window)wid, x - l, y - t);
+  wins_raise(wid);
 }

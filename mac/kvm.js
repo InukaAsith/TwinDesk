@@ -501,12 +501,14 @@ class Kvm extends EventEmitter {
     switch (name) {
       case 'edge':
         // The helper already captures (it started at the edge); undo that if we can't cross.
-        if (!this._canDrive() || !k.mouse || this.locked || (this.blockEdge && this.blockEdge())) {
+        if (!this._canDrive() || !k.mouse || this.locked || (!ev.moving && this.blockEdge && this.blockEdge())) {
           this.helper.send('capture', { on: false });
           if (!this.server.current) this._setMode('home', 'Nothing connected');
           return;
         }
         this._take({ mouse: true, where: { side: P.opposite(k.pcSide), offset: this.map.toPeer(ev.offset) }, paths: ev.drag && ev.drag.paths });
+        // A window grabbed with the move key crossed with the pointer (main.js onMoveWindow).
+        if (ev.moving && this.onMoveWindow) this.onMoveWindow(ev);
         break;
       // Double-tap: switches mouse and keyboard sharing off (everything home)
       // and on again. In keyboard-only mode (Cursor off + "Switch the keyboard with the hotkey") it
@@ -569,7 +571,11 @@ class Kvm extends EventEmitter {
         if (this.mode === 'driven' && !this.locked && !this.cfg.syncPads) this._sendHome(undefined, '');
         break;
       case 'return':
-        if (this.mode === 'driven' && !this.locked) this._sendHome(ev.offset, '', ev.drag || {});
+        if (this.mode === 'driven' && !this.locked) {
+          this._sendHome(ev.offset, '', ev.drag || {});
+          // A window grabbed with the move key crossed with the pointer, home (main.js onMoveWindow).
+          if (ev.moving && this.onMoveWindow) this.onMoveWindow(ev);
+        }
         break;
     }
   }

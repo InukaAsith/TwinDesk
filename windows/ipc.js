@@ -224,7 +224,7 @@ function setupIpc(ctx) {
     change('pcScreen', partial, () => { pcScreen.applyInput(); if (!settings.pcScreen.input) pcApps.input.release(); if (settings.pcScreen.extendSize !== size) pcScreen.sizeExtend(); else pcScreen.apply(); });
   });
   handle('setMacApps', (partial) => change('macApps', partial, () => peerApps.apply()));
-  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); }));
+  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); if (peerApps) peerApps.apply(); }));
   handle('setPcScreenMode', (mode) => pcScreen.setMode(mode));
   // A phone as the peer (phone.js, phone-bridge.js, phoneview.js; there once our server runs)
   const phone = (name, fn) => handle(name, (...args) => (ctx.phone ? fn(...args) : undefined));

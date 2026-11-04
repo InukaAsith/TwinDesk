@@ -235,6 +235,12 @@ func handle(_ line: String) {
                                    width: b["width"]?.doubleValue ?? 0, height: b["height"]?.doubleValue ?? 0))
     }
     reply(id)
+  case "appPlace":
+    reply(id, ["done": Apps.place(wid: (msg["wid"] as? NSNumber)?.intValue ?? 0,
+                                  x: (msg["x"] as? NSNumber)?.doubleValue ?? 0, y: (msg["y"] as? NSNumber)?.doubleValue ?? 0)])
+  case "moveWin": // Apps and Windows › Move windows: the key held to grab a window, "" = off
+    WindowGrab.shared.setKey((msg["key"] as? String) ?? "")
+    reply(id)
   case "appFocus":
     reply(id, ["done": Apps.focus(wid: (msg["wid"] as? NSNumber)?.intValue ?? 0)])
   case "appClose":

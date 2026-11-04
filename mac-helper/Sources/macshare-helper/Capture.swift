@@ -288,6 +288,8 @@ final class Capture {
     Flash.shared.leave(at: p, side: found.side)
     var out: [String: Any] = ["event": "return", "side": found.side, "offset": found.offset]
     if let d = returnDrag(at: p) { out["drag"] = d }
+    let moving = WindowGrab.shared.take(keepUp: false)
+    if moving != 0 { out["moving"] = moving; out["movingPid"] = WindowGrab.shared.pid } // a grabbed window goes along
     emit(out)
   }
 
@@ -318,6 +320,8 @@ final class Capture {
     Flash.shared.leave(at: p, side: side)
     var out: [String: Any] = ["event": "return", "offset": off]
     if let d = returnDrag(at: p) { out["drag"] = d }
+    let moving = WindowGrab.shared.take(keepUp: false)
+    if moving != 0 { out["moving"] = moving; out["movingPid"] = WindowGrab.shared.pid } // a grabbed window goes along
     emit(out)
   }
 #endif
@@ -562,7 +566,16 @@ final class Capture {
   }
 
   private func onMouse(_ type: CGEventType, _ e: CGEvent) -> Bool {
+    var type = type
     let dx = e.getDoubleValueField(.mouseEventDeltaX), dy = e.getDoubleValueField(.mouseEventDeltaY)
+    // Move windows (Grab.swift): the move key and a click grab a window, never while capturing.
+    let grab = WindowGrab.shared
+    if type == .leftMouseUp && grab.upPending { _ = grab.up(); return true }
+    if !capturing {
+      if type == .leftMouseDown && grab.tryGrab(at: e.location) { return true }
+      if grab.grabbing && type == .leftMouseDragged { e.type = .mouseMoved; type = .mouseMoved } // the system never saw the press
+      if grab.grabbing && type == .mouseMoved { grab.move(to: e.location) }
+    }
     let isDown = type == .leftMouseDown || type == .rightMouseDown || type == .otherMouseDown
     let isUp = type == .leftMouseUp || type == .rightMouseUp || type == .otherMouseUp
     if isDown {
@@ -634,19 +647,25 @@ final class Capture {
       // The system's own button state: counting downs and ups here stuck at 1 when the tap missed
       // an up (disabled by a timeout meanwhile), and nothing crossed again until a restart.
 #if MULTI
-      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0,
+      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0 || grab.grabbing,
          let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
         Flash.shared.leave(at: e.location, side: hit.side)
-        emit(["event": "edge", "side": hit.side, "offset": hit.offset])
+        var out: [String: Any] = ["event": "edge", "side": hit.side, "offset": hit.offset]
+        let moving = grab.take(keepUp: true)
+        if moving != 0 { out["moving"] = moving; out["movingPid"] = WindowGrab.shared.pid } // a grabbed window goes along
+        emit(out)
         return true
       }
 #else
-      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0,
+      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0 || grab.grabbing,
          let off = push(&edge, e.location, dx, dy, side, resistance, edgeZones) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
         Flash.shared.leave(at: e.location, side: side)
-        emit(["event": "edge", "offset": off])
+        var out: [String: Any] = ["event": "edge", "offset": off]
+        let moving = grab.take(keepUp: true)
+        if moving != 0 { out["moving"] = moving; out["movingPid"] = WindowGrab.shared.pid } // a grabbed window goes along
+        emit(out)
         return true
       }
 #endif
