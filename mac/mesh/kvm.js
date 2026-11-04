@@ -637,6 +637,10 @@ class Kvm extends EventEmitter {
         this._driveEvent(this.keys.tag(e)); // keys with the letter they type here (shared/keylayout.js)
         break;
       }
+      // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
+      case 'shake':
+        if (this.mode === 'driving' && this.cfg.shakeHome !== false) this.goHome('');
+        break;
       case 'captureEnded':
         if (this.mode === 'driving') this.goHome(ev.reason === 'deadman' ? 'Input came back by itself (safety timeout)' : '');
         break;

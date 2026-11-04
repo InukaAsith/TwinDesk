@@ -1418,6 +1418,8 @@
   "Too big for {name}": "Слишком большой для {name}",
   "Torch": "Фонарик",
   "Touch blocked": "Касания заблокированы",
+  "Shake to bring the pointer back": "Встряхнуть, чтобы вернуть указатель",
+  "While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here": "Пока вы работаете на другом компьютере, встряхните мышь или трекпад этого компьютера влево-вправо: указатель вернётся сюда",
   "Sync touchpads": "Синхронизировать тачпады",
   "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both": "Вкл.: мышь и трекпад любого компьютера двигают один общий указатель, где бы он ни был. Выкл.: трекпад компьютера возвращает ему его указатель. Одинаково на обоих",
   "Trackpad gestures": "Жесты трекпада",

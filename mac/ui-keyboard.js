@@ -17,7 +17,10 @@ UI.tab({
     const status = UI.note('info', '', { literal: true });
     const hotkey = UI.select(Object.entries(UI.HOTKEYS).map(([value, label]) => ({ value, label })), (v) => api.setKeys({ hotkey: v }));
     const hotkeyRow = UI.row(I18n.t('Hotkey'), I18n.t('Double-tap to turn cursor sharing on or off'), [hotkey]);
-    const switchSw = UI.switch((v) => api.setKvm({ hotkeySwitch: v }), { label: I18n.t('Switch the keyboard with the hotkey') });
+    // Cursor sharing off by its switch or the hotkey (kvm.linked) leaves kvm.mouse on: keyboard-only
+    // switching needs the keyboard shared and only the cursor off, so turning it on swaps one for the other.
+    let cursorOff = false;
+    const switchSw = UI.switch((v) => api.setKvm(v && cursorOff ? { hotkeySwitch: true, mouse: false, shared: true } : { hotkeySwitch: v }), { label: I18n.t('Switch the keyboard with the hotkey') });
     const switchRow = UI.row(I18n.t('Switch the keyboard with the hotkey'), '', [switchSw], { literalHint: true });
     const swap = UI.switch((v) => api.setKeys({ swapCtrlCmd: v }), { label: I18n.t('Swap Ctrl and Command') });
     const shortcutsRow = UI.row(I18n.t('Shortcuts on {name}'), I18n.t('⌘ works as Ctrl, so ⌘C copies there'));
@@ -37,10 +40,11 @@ UI.tab({
       status.className = `note ${kind}`;
       status.set(text);
       hotkey.set((s.keys && s.keys.hotkey) || 'AltRight');
-      // Keyboard-only switching exists only while the pointer isn't shared (Cursor off).
-      switchSw.set(s.kvm.hotkeySwitch);
-      switchSw.disable(!!s.kvm.mouse);
-      switchRow.setHint(s.kvm.mouse ? I18n.t('Only when Cursor is off') : I18n.t('Double-tap to type on {device} and back', { device: p.name }));
+      // Keyboard-only switching exists only while the pointer isn't shared (Cursor off, either way).
+      cursorOff = !s.kvm.mouse || s.kvm.linked === false;
+      switchSw.set(s.kvm.hotkeySwitch && !s.kvm.mouse);
+      switchSw.disable(!cursorOff);
+      switchRow.setHint(!cursorOff ? I18n.t('Only when Cursor is off') : I18n.t('Double-tap to type on {device} and back', { device: p.name }));
       // Ctrl/Cmd swapping only between a Mac and a PC or Linux.
       shortcutsRow.hidden = p.same;
       swapRow.hidden = p.same;

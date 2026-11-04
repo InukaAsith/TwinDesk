@@ -625,6 +625,7 @@ final class Capture {
 #else
         ev(["t": "k.mm", "dx": dx, "dy": dy])
 #endif
+        Shake.feed(dx, dy) // after it went: shaken, the pointer comes home (Shake.swift)
       }
       return true
     }

@@ -444,6 +444,10 @@ class Kvm {
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released on the Mac
         } else if (msg.ev) this.lane.skip(msg.ev, (x) => this.link.send(x)); // numbered by the helper but not sent: its number goes all the same
         break;
+      // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
+      case 'shake':
+        if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
+        break;
       case 'captureEnded': // dead-man or a local stop: input is back here
         if (this.mode === 'driving') this._release(msg.reason === 'secureDesktop' ? 'Back here for the administrator prompt or lock screen' : '');
         break;

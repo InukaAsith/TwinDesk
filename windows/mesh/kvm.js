@@ -501,6 +501,10 @@ class Kvm {
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released on the Mac
         }
         break;
+      // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
+      case 'shake':
+        if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
+        break;
       case 'captureEnded': // dead-man or a local stop: input is back here
         console.log('[kvm] capture ended by the helper: ' + (msg.reason || 'stopped'));
         if (this.mode === 'driving') this._release(msg.reason === 'secureDesktop' ? 'Back here for the administrator prompt or lock screen' : '');

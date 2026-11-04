@@ -1418,6 +1418,8 @@
   "Too big for {name}": "Too big for {name}",
   "Torch": "Torch",
   "Touch blocked": "Touch blocked",
+  "Shake to bring the pointer back": "Shake to bring the pointer back",
+  "While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here": "While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here",
   "Sync touchpads": "Sync touchpads",
   "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both": "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both",
   "Trackpad gestures": "Trackpad gestures",

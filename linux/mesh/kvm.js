@@ -514,6 +514,10 @@ class Kvm {
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released over there
         }
         break;
+      // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
+      case 'shake':
+        if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
+        break;
       case 'captureEnded': // dead-man, or a grab another app holds: input is back here
         console.log('[kvm] capture ended by the helper: ' + (msg.reason || 'stopped'));
         if (this.mode === 'driving') this._release(msg.reason === 'grab' ? 'Another app is holding the mouse or keyboard' : '');
