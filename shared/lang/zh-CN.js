@@ -1949,5 +1949,20 @@
   "the PC": "电脑",
   "{title} (from {name})": "{title}（来自 {name}）",
   "Bring the Window Back from {name}": "从 {name} 取回窗口",
-  "Bring {count} Windows Back from {name}": "从 {name} 取回 {count} 个窗口"
+  "Bring {count} Windows Back from {name}": "从 {name} 取回 {count} 个窗口",
+  "Microphone": "麦克风",
+  "Use {me}’s microphone on {name}": "在 {name} 上使用 {me} 的麦克风",
+  "Use {name}’s microphone on {me}": "在 {me} 上使用 {name} 的麦克风",
+  "Default microphone": "默认麦克风",
+  "Found by itself": "自动查找",
+  "Plays into": "播放到",
+  "Calls and recordings on {name} hear this microphone": "{name} 上的通话和录音会听到这个麦克风",
+  "In use on {device}": "正在 {device} 上使用",
+  "Apps here pick it as “TwinDesk Microphone”": "这里的应用可选择“TwinDesk Microphone”",
+  "Apps here pick it through a virtual audio cable": "这里的应用通过虚拟音频线选择它",
+  "Live: apps pick “TwinDesk Microphone”": "已接通：应用可选择“TwinDesk Microphone”",
+  "Apps pick “TwinDesk Microphone”. Waiting for {device}": "应用可选择“TwinDesk Microphone”。正在等待 {device}",
+  "Live into {output}: apps pick its other end as the microphone": "正在播放到 {output}：应用选择它的另一端作为麦克风",
+  "Into {output}. Waiting for {device}": "播放到 {output}。正在等待 {device}",
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "未找到虚拟音频线：将在扬声器上播放。安装 VB-CABLE（Windows）或 BlackHole（macOS）后，应用即可将其选为麦克风"
 });

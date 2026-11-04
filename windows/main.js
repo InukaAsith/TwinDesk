@@ -149,6 +149,7 @@ let fileDrop = null;
 let smb = null;
 let apps = null;
 let sound = null;
+let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
 let pcScreen = null;
 let pcApps = null;
 let peerApps = null; // The other PC's apps here
@@ -277,6 +278,7 @@ function start() {
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
   sound = new Sound({ link, settings, onChange: pushState });
+  loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   helper = new Helper();
   screen.helper = helper; // Wi-Fi low-latency mode while a screen is shown (Wlan.cs)
@@ -411,7 +413,7 @@ function start() {
   updates.start();
   const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, explorer: () => explorer, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
-    get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
+    get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, applyNet, joinHotspot,
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
@@ -1108,7 +1110,7 @@ function buildState() {
     about: about || (about = aboutInfo(app)), // About page: this app and this computer
     updates: updates ? updates.view : null,
     firewall: fw,
-    audio: { ...settings.audio, ...sound.view() },
+    audio: { ...settings.audio, ...sound.view(), mic: mic ? mic.view() : null },
     pcScreen: pcScreen.view(),
     pcApps: pcApps.view(),
     macApps: settings.macApps,
@@ -1407,7 +1409,16 @@ function updateTray(s = buildState()) {
   })));
 }
 
+// Audio › Microphone: loaded the first time one of its switches is on (each change applies it).
+function loadMic() {
+  if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
+  const { Mic } = require('../shared/mic.js');
+  mic = new Mic({ link, cfg: () => settings.audio, onChange: pushState });
+  return mic;
+}
+
 app.on('before-quit', () => {
+  if (mic) mic.shutdown();
   quitting = true;
   saveBounds();
   if (discovery) discovery.stop();

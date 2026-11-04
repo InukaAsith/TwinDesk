@@ -119,6 +119,8 @@ function setupIpc(ctx) {
   handle('relaunch', () => { app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); app.quit(); }); // General › Advanced: a setting read at startup
   handle('setAudio', (partial) => change('audio', partial, () => {
     sound.apply();
+    const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
+    if (mic) mic.apply();
     // Loaded when first turned on (applied then); off, the loaded one stops.
     if (partial && 'phoneMedia' in partial && ctx.nowPlaying) ctx.nowPlaying.apply(); else if (partial && 'phoneMedia' in partial) ctx.loadNowPlaying();
     if (partial && 'phoneBt' in partial && ctx.btAudio) ctx.btAudio.apply(); else if (partial && 'phoneBt' in partial) ctx.loadBtAudio();

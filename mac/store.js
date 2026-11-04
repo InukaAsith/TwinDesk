@@ -90,7 +90,7 @@ const DEFAULT_SETTINGS = {
   ui: { tab: 'overview', setupSkipped: '', setupDone: false, language: '', theme: 'system', accent: '' }, // theme/accent: General › Appearance
   app: { openAtLogin: false, keepAwake: true, hud: true, inputProtocol: 'udp' }, // inputProtocol: udp = tdv2 input lane, tcp = tdv1 // hud = popup when switching computers
   updates: { auto: true, notified: '', skipped: '' }, // check GitHub for new releases; notified = last version announced, skipped = version ignored
-  audio: { send: false, receive: false, muteLocal: false, volume: 1, phoneMedia: false }, // Independent, both ways; phoneMedia: a phone's media controls on Overview
+  audio: { send: false, receive: false, muteLocal: false, volume: 1, phoneMedia: false, micSend: false, micReceive: false, micDevice: '', micOut: '' }, // Independent, both ways; phoneMedia: a phone's media controls on Overview
   rezume: require('../shared/rezume.js').DEFAULTS, // ReZume tab (shared/rezume.js): off until turned on; what goes, which ways, where it shows
   remote: { allow: false }, // Remote tab (shared/phone-remote.js): the phone's Remote page moves the pointer and types here
   camera: { on: false, share: false, device: '', virtual: false, rotate: 0, target: 'obs' }, // Camera tab (shared/camshare.js): this Mac's camera to the other computer, off until turned on; virtual: the running camera's picture also goes to the virtual camera (shared/vcam.js); rotate: its picture turned clockwise; target: the virtual camera it feeds, 'obs' (OBS Virtual Camera, the default) or 'twindesk'

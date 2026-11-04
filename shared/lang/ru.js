@@ -1948,5 +1948,20 @@
   "the PC": "компьютер",
   "{title} (from {name})": "{title} (с {name})",
   "Bring the Window Back from {name}": "Вернуть окно с {name}",
-  "Bring {count} Windows Back from {name}": "Вернуть окна ({count}) с {name}"
+  "Bring {count} Windows Back from {name}": "Вернуть окна ({count}) с {name}",
+  "Microphone": "Микрофон",
+  "Use {me}’s microphone on {name}": "Микрофон {me} на {name}",
+  "Use {name}’s microphone on {me}": "Микрофон {name} на {me}",
+  "Default microphone": "Микрофон по умолчанию",
+  "Found by itself": "Определяется само",
+  "Plays into": "Воспроизводится в",
+  "Calls and recordings on {name} hear this microphone": "Звонки и записи на {name} слышат этот микрофон",
+  "In use on {device}": "Используется на {device}",
+  "Apps here pick it as “TwinDesk Microphone”": "Приложения здесь выбирают его как «TwinDesk Microphone»",
+  "Apps here pick it through a virtual audio cable": "Приложения здесь выбирают его через виртуальный аудиокабель",
+  "Live: apps pick “TwinDesk Microphone”": "Работает: приложения выбирают «TwinDesk Microphone»",
+  "Apps pick “TwinDesk Microphone”. Waiting for {device}": "Приложения выбирают «TwinDesk Microphone». Ожидание {device}",
+  "Live into {output}: apps pick its other end as the microphone": "Работает в {output}: приложения выбирают его другой конец как микрофон",
+  "Into {output}. Waiting for {device}": "В {output}. Ожидание {device}",
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "Виртуальный аудиокабель не найден: звук идёт в динамики. Установите VB-CABLE (Windows) или BlackHole (macOS), и приложения смогут выбрать его как микрофон"
 });

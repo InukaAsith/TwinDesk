@@ -137,7 +137,11 @@ function setupIpc(ctx) {
   handle('setOverview', (o) => o && typeof o === 'object' && change('ui', { overview: { ...settings.ui.overview, ...o } })); // General › Overview // invalid names fall back in normalize()
   handle('setMulti', (on) => require('../multi').set(on === true)); // Multi-device off: TwinDesk restarts one to one
   handle('relaunch', () => { app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); app.quit(); }); // General › Advanced: a setting read at startup
-  handle('setAudio', (partial) => change('audio', partial, () => sound.apply()));
+  handle('setAudio', (partial) => change('audio', partial, () => {
+    sound.apply();
+    const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
+    if (mic) mic.apply();
+  }));
   handle('setTerminal', (partial) => {
     const p = partial && typeof partial === 'object' ? { enabled: partial.enabled, allowMac: partial.allowMac } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
