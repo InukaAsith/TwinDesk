@@ -22,22 +22,23 @@ assert.strictEqual(C.order(noHevc)[0].sdpFmtpLine, 'profile-level-id=640c1f');
 
 assert.ok(C.RTPMAP.test('a=rtpmap:96 H265/90000') && C.RTPMAP.test('a=rtpmap:102 H264/90000') && !C.RTPMAP.test('a=rtpmap:111 opus/48000/2'));
 
-// The Encoder setting, on the sender: h264 drops H.265; auto puts it first; h265 keeps only H.265 (and
-// rtx/red/fec) when there is one, else it's auto.
+// The Encoder setting, on the sender: h264 drops H.265; h265 keeps only H.265 (and rtx/red/fec) when
+// there is one, else it's H.264.
 const names = (l) => l.map((c) => c.mimeType);
 assert.ok(!names(C.order(caps, 'h264')).includes('video/H265'), 'h264: no H.265 in the offer');
 assert.strictEqual(C.order(caps, 'h264')[0].sdpFmtpLine, 'profile-level-id=640c1f');
-assert.strictEqual(C.order(caps, 'auto')[0].mimeType, 'video/H265');
 assert.deepStrictEqual(names(C.order(caps, 'h265')), ['video/H265', 'video/rtx'], 'h265: H.265 only');
 assert.strictEqual(C.order(noHevc, 'h265')[0].sdpFmtpLine, 'profile-level-id=640c1f', 'h265 without an H.265 encoder: H.264');
 
 delete process.env.TWINDESK_SCREEN_CODEC;
 assert.strictEqual(C.mode(undefined), 'h264', 'default: H.264 until P5 is measured');
-assert.strictEqual(C.mode('auto'), 'auto');
+assert.strictEqual(C.mode('auto'), 'h264', 'Automatic is gone: a saved one is H.264');
 assert.strictEqual(C.mode('h265'), 'h265');
 assert.strictEqual(C.mode('vp9'), 'h264', 'an unknown value: the default');
+process.env.TWINDESK_SCREEN_CODEC = 'h265';
+assert.strictEqual(C.mode('h264'), 'h265', 'the env wins');
 process.env.TWINDESK_SCREEN_CODEC = 'auto';
-assert.strictEqual(C.mode('h264'), 'auto', 'the env wins');
+assert.strictEqual(C.mode('h265'), 'h265', 'an env auto is ignored');
 delete process.env.TWINDESK_SCREEN_CODEC;
 
 delete process.env.TWINDESK_NO_H265;

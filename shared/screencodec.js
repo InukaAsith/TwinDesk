@@ -2,9 +2,8 @@
 // Screen share codec (docs/perf-plan.md P5): which encoder this computer sends its screen with.
 // The setting (Share screen › Picture › Encoder, sharing.codec / pcScreen.codec):
 //   'h264' (default): H.264 only, High before Main before Baseline (better quality per bit).
-//   'auto': H.265 when both computers have it (in hardware), else H.264.
 //   'h265': H.265 only, for testing it; the other computer must decode it too, else nothing shows.
-//           Without an H.265 encoder here it's the same as 'auto'.
+//           Without an H.265 encoder here it's H.264. (A saved 'auto', from before, is 'h264'.)
 // Chromium's WebRTC lists H.265 only with WebRtcAllowH265Send / WebRtcAllowH265Receive, so every app
 // switches them on at start (one enable-features switch, merged with its others): the setting then
 // works on the next share, without a restart. With an older app the SDP negotiation picks H.264 by
@@ -15,7 +14,7 @@
 'use strict';
 
 const H265_FEATURES = ['WebRtcAllowH265Send', 'WebRtcAllowH265Receive'];
-const MODES = ['auto', 'h264', 'h265'];
+const MODES = ['h264', 'h265'];
 const DEFAULT = 'h264';
 
 const env = (k) => (typeof process !== 'undefined' && process.env ? process.env[k] : undefined);

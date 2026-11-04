@@ -249,15 +249,13 @@ const UI = {
   codecRow(set) {
     const sel = UI.select([
       { value: 'h264', label: 'H.264' },
-      { value: 'auto', label: I18n.t('Automatic') },
       { value: 'h265', label: 'H.265' },
     ], (v) => set(v));
     const row = UI.row(I18n.t('Codec'), '', [sel]);
     row.render = (v) => {
-      v = v || 'h264';
+      v = v === 'h265' ? v : 'h264';
       sel.set(v);
-      row.setHint(v === 'auto' ? I18n.t('H.265 when both computers have it, else H.264. From the next share')
-        : v === 'h265' ? I18n.t('H.265 only: {name} must decode it too, else nothing shows. From the next share')
+      row.setHint(v === 'h265' ? I18n.t('H.265 only: {name} must decode it too, else nothing shows. From the next share')
           : I18n.t('Works with every computer and phone'));
     };
     return row;
