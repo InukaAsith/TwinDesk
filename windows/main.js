@@ -386,14 +386,11 @@ function start() {
   pcScreen = new PcScreen({ link, helper, sender, vdd, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
-  // A Mac's apps: listed and pinned through apps.js, opened window by window through peerapps.js.
-  peerApps.otherApps = () => apps.list;
-  apps.launchWindows = (id) => peerApps.launch(id);
   // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
   kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
-    if (!wid || peerApps.returnWindow(wid)) return;
+    if (!wid || peerApps.returnWindow(wid) || apps.returnWindow(wid)) return; // a Mac's window here goes home (apps.js)
     if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
   };
   helper.on('exit', pushState);

@@ -361,12 +361,9 @@ function start() {
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
   kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
-    if (!wid || peerApps.returnWindow(wid)) return;
+    if (!wid || peerApps.returnWindow(wid) || apps.returnWindow(wid)) return; // a Mac's window here goes home (apps.js)
     if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
   };
-  // A Mac's apps: listed and pinned through apps.js, opened window by window through peerapps.js.
-  peerApps.otherApps = () => apps.list;
-  apps.launchWindows = (id) => peerApps.launch(id);
   helper.on('exit', pushState);
   helper.on('ready', () => { sendScreens(); pushState(); });
   const { screen: displays } = require('electron');

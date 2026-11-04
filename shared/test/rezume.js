@@ -322,6 +322,16 @@ const start = (p, a, b) => {
     assert.deepStrictEqual(sent, ['C:\\Apps\\paint.exe'], 'a streams the app');
     assert.ok(p.sent.a.some((m) => m.t === 'rz.done' && m.ok === true));
     assert.strictEqual(a.view.windowApps[0].sent, 1, 'counted');
+    // still in front here after its window went: not offered again (no loop back and forth)
+    const offers = () => p.sent.a.filter((m) => m.t === 'rz.offer').length;
+    const went = offers();
+    for (let i = 0; i < 3; i++) { await tick(a); now += STABLE_MS + 1; await tick(a); }
+    assert.strictEqual(offers(), went, 'the app whose window went is not offered again while in front');
+    // something else in front, then back: offered again
+    a.now = null; await tick(a);
+    a.now = { kind: 'app', app: 'C:\\Apps\\paint.exe', appName: 'Paint', title: 'Untitled - Paint' };
+    await tick(a); now += STABLE_MS + 1; await tick(a);
+    assert.strictEqual(offers(), went + 1, 'offered again once it was left and came back');
     // blocked on the list: not offered, and not sent when asked
     a.allow('windows', 'C:\\Apps\\paint.exe', false);
     a.now = { kind: 'app', app: 'C:\\Apps\\notes.exe', appName: 'Notes', title: 'Notes' };

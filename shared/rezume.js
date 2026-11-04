@@ -109,6 +109,7 @@ class ReZume extends EventEmitter {
     this.out = null; // what we offer: {id, kind, title, url, path, name, size, app, appName, icon, at, key}
     this.sent = new Map(); // id → {path} | {app, appName}: the last few documents and windows offered (taken a bit later still works)
     this.wantWin = null; // {id, title}: a window asked for
+    this.winOut = ''; // the app whose window was just sent there: not offered again while it stays in front here
     this.seen = null; // {key, since, a}: in front now, not offered until it stayed STABLE_MS
     this.last = null; // the last activity seen here (push: the tray's click puts the taskbar in front)
     this.incoming = null; // the other side's offer
@@ -151,6 +152,7 @@ class ReZume extends EventEmitter {
     }
     this.out = null;
     this.seen = null;
+    this.winOut = '';
     this.waiting = null;
     this.wantWin = null;
     this.message = '';
@@ -302,6 +304,8 @@ class ReZume extends EventEmitter {
     } else if (a) this.why = '';
     a = this._clean(a);
     if (a) this.last = { ...a, seenAt: Date.now() };
+    // Another app in front here: the one whose window went may be offered again later.
+    if (this.winOut && (!a || a.app !== this.winOut)) this.winOut = '';
     const pp = this.peerPolicy;
     const c = this.cfg();
     if (!pp || !pp.on || !c.send) return;
@@ -323,6 +327,7 @@ class ReZume extends EventEmitter {
     const pp = this.peerPolicy;
     if (!a || !pp || !pp.on) return null;
     if (a.kind === 'web') return c.web && pp.web ? a : null; // a browser: its link, never its window
+    if (a.app && a.app === this.winOut) return null; // its window is there already (no offer back and forth)
     if (a.kind === 'doc' && c.docs && pp.docs && this._allowed('files', a)) return a;
     if (a.app && pp.windows && this._canSendWindows() && this._allowed('windows', a)) {
       return { kind: 'window', app: a.app, appName: a.appName, title: a.kind === 'app' ? a.title || a.appName : a.appName || a.title, key: 'win ' + a.app };
@@ -452,6 +457,8 @@ class ReZume extends EventEmitter {
     const ok = await this._win('send', s.app, s.appName);
     if (ok === false) return no((s.appName || 'The app') + ' is no longer open on the other device');
     this.link.send({ t: T.RZ_DONE, id, ok: true });
+    this.winOut = s.app;
+    if (this.out && this.out.app === s.app) this._clearOut();
     this._went('windows', s.app);
     console.log(`[rezume] window of ${path.basename(s.app)} sent`);
   }

@@ -601,11 +601,14 @@ app.whenReady().then(() => {
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
   svc.kvm.laneReady.then(laneGo);
   // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
-  // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
+  // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over the
+  // way its apps do: to a Mac window by window (appsend.js), to a PC through the shared display (apps.js).
   svc.kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
     if (!wid || svc.pcApps.returnWindow(wid)) return;
-    if (settings.apps.moveWindows) svc.appSend.moveOut(wid, Number(m.movingPid));
+    if (!settings.apps.moveWindows) return;
+    if (peer.current && peer.current.os === P.OS.MAC) svc.appSend.moveOut(wid, Number(m.movingPid));
+    else svc.apps.moveOut(wid, Number(m.movingPid));
   };
   afterLane().then(() => {
     server.listen();
@@ -836,7 +839,9 @@ app.whenReady().then(() => {
       // shown here as the PC apps are (pcapps.js).
       window: {
         canSend: () => true,
-        send: (app) => svc.appSend.adopt(app), // window by window, kept on the virtual display here
+        // The way this Mac's apps go there: to a Mac window by window (appsend.js), to a PC through
+        // the shared display (apps.js), exactly as its Apps tab opens them.
+        send: (app) => (peer.current && peer.current.os === P.OS.MAC ? svc.appSend.adopt(app) : svc.apps.adopt(app)),
         accept: async (on) => {
           if (on && svc.net && !(await svc.net.need('apps'))) return false;
           svc.pcApps.acceptReZume(on);

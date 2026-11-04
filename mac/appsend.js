@@ -7,11 +7,9 @@
 // `papp.policy` accepts and "apps.offer" is on. Its input (`in.*` + `wid`) is injected at that
 // window. Nothing is captured before the viewer opened an app, or ReZume sent one that is open here
 // (adopt): independent of "apps.offer", and closing its copy there stops only that copy.
-// Its windows are kept out of the way here while they're streamed: on TwinDesk's virtual display
-// (held for them while screen sharing is off, displays.hold('apps')), where clicks from the other
-// computer still reach them; without one (Share screen › virtual display off) past the right edge
-// of the screens, where only keys reach them (macOS keeps the pointer on the screens). Back on the
-// main display when they stop.
+// Opened or adopted apps' windows are never moved here. Only a window moved over (Move windows,
+// movewin.js) is kept out of the way: on TwinDesk's virtual display (held for it, displays.hold('apps')),
+// else past the right edge of the screens.
 //
 // Events: 'change'.
 'use strict';
@@ -32,7 +30,6 @@ class AppSend extends EventEmitter {
   constructor({ server, helper, displays, getSettings }) {
     super();
     Object.assign(this, { server, helper, displays, getSettings });
-    this.parked = new Set(); // pids whose windows were moved onto the virtual display
     this.accepts = false; // the viewer's papp.policy
     this.launched = new Map(); // app id -> {id, pids: Set, since, had, lastSeen}
     this.moved = new Map(); // wid -> {pid, x, y, w, h}: windows moved to the other computer (movewin.js), and where they were (points)
@@ -242,24 +239,12 @@ class AppSend extends EventEmitter {
         a.had = true;
         a.lastSeen = now;
       }
-      if (main.length) this._park(a, main);
-      else if (a.had) this._unpark(a);
       if ((a.had && now - a.lastSeen > 3000) || (!a.had && now - a.since > 30000)) this._forget(a.id);
     }
     this._sync(out.concat(pops)); // owners before their pop-ups
   }
 
-  // Streamed windows wait on the virtual display, else past the screens' right edge.
-  _park(a, main) {
-    const vb = (this.displays && this.displays.virtualBounds()) || this._edge();
-    const off = main.filter((w) => !(w.x < vb.x + vb.width && w.x + w.w > vb.x && w.y < vb.y + vb.height && w.y + w.h > vb.y));
-    for (const pid of new Set(off.map((w) => w.pid))) {
-      this.parked.add(pid);
-      this.helper.request('appMove', { pid, bounds: vb }).catch(() => {});
-    }
-  }
-
-  // Past the right edge of all the screens: helper's appMove places a window 40 pt into these bounds,
+  // A moved window (movewin.js) waits past the right edge of all the screens: helper's appMove places a window 40 pt into these bounds,
   // so 1 pt of it stays on a screen (macOS wants some of every window there).
   _edge() {
     const all = screen.getAllDisplays();
@@ -268,19 +253,10 @@ class AppSend extends EventEmitter {
     return { x: right - 41, y: top, width: 100000, height: 100000 };
   }
 
-  // Not streamed any more: its windows back on the main display.
-  _unpark(a) {
-    const main = screen.getPrimaryDisplay().workArea;
-    for (const pid of a.pids) {
-      if (!this.parked.delete(pid)) continue;
-      this.helper.request('appMove', { pid, bounds: main }).catch(() => {});
-    }
-  }
-
-  // The virtual display is held while app windows are streamed (no screen sharing needed).
+  // The virtual display is held only while a window is moved over (no screen sharing needed).
   _holdDisplay() {
     if (!this.displays || !this.displays.hold) return;
-    const want = (this.launched.size > 0 || this.moved.size > 0) && this.server.current != null;
+    const want = this.moved.size > 0 && this.server.current != null;
     if (want !== !!this.holding) {
       this.holding = want;
       this.displays.hold('apps', want).catch(() => {});
@@ -290,7 +266,6 @@ class AppSend extends EventEmitter {
   _forget(id) {
     const a = this.launched.get(id);
     if (!a) return;
-    this._unpark(a);
     this.launched.delete(id);
   }
 

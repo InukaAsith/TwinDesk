@@ -213,6 +213,7 @@
       APP_WINDOWS: 'app.windows', // M->W {windows: [{wid, id, title, x, y, w, h}]} normalized rects
       APP_FOCUS: 'app.focus', // W->M {wid}
       APP_CLOSE: 'app.close', // W->M {wid}
+      APP_RETURN: 'app.return', // W->M {wid}: a window moved there (app.windows moved: true) dragged back past the edge: it comes home
       // PC apps on the Mac
       PAPP_POLICY: 'papp.policy', // M->W {accept}
       PAPPS_LIST: 'papps.list', // M->W
