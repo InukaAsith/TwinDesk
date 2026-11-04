@@ -148,6 +148,7 @@
     $('peer-text').textContent = c ? `${c.name}${UI.via(s) !== 'Wi-Fi' ? ` · ${UI.via(s)}` : ''}${c.rttMs != null ? ` · ${c.rttMs} ms` : ''}`
       : s.pairing || (s.guest && s.guest.pairing) ? tr('Pairing…') : gs === 'connecting' || gs === 'reconnecting' ? tr('Connecting…') : tr('Not connected');
     renderPhones(s);
+    renderPcs(s);
     // Tabs that don't apply to the peer (a phone has no terminal or screen to share to it…).
     for (const v of views.values()) {
       const hide = !!(v.def.hidden && v.def.hidden(s));
@@ -168,6 +169,23 @@
   // one connects it (the computer steps aside); the connected one opens its page.
   let phonesKey = '';
   let assetsSeen = -1;
+  // Paired computers nearby, under the phones (shared/ui-look.js): click to connect.
+  function renderPcs(s) {
+    const g = s.guest || { hosts: [] };
+    const near = new Set((s.found || []).map((d) => d.id));
+    const c = s.client && s.client.os !== 'android' ? s.client : null;
+    const seen = new Set();
+    const list = [];
+    for (const x of [...(s.paired || []), ...(g.hosts || [])]) {
+      if (!x || seen.has(x.id) || x.os === 'android') continue;
+      seen.add(x.id);
+      const connected = !!(c && c.id === x.id);
+      if (!connected && !near.has(x.id)) continue;
+      list.push({ id: x.id, name: x.name, os: x.os, connected, sub: connected ? (c.rttMs != null ? tr('{value} ms', { value: c.rttMs }) : tr('Connected')) : tr('Nearby · Click to connect'), go: () => api.pairWith(x.id) });
+    }
+    UI.renderPcs($('pcs'), list, { open: () => show('overview', true), active: !!(current && current.def.id === 'overview') });
+  }
+
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
     if (ph.assets !== assetsSeen) {

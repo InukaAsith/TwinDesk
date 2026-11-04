@@ -59,6 +59,27 @@
     return row;
   };
 
+  // Paired computers nearby, under the phones at the top of the sidebar (as the phone app shows
+  // them): its kind, its name and the link. Click: connect it; the connected one opens Overview.
+  // list: [{id, name, os, connected, sub, go()}]; open(): show Overview; active: Overview is open.
+  let pcKey = '';
+  UI.renderPcs = (box, list, { open, active }) => {
+    const key = JSON.stringify([list.map((d) => [d.id, d.name, d.os, d.connected, d.sub]), active]);
+    if (!box || key === pcKey) return;
+    pcKey = key;
+    box.replaceChildren(...list.map((d) => {
+      const b = UI.el('button', { class: 'phone-tile pc-tile' + (d.connected ? ' connected' : ''), title: d.connected ? d.name : t('Connect to {name}', { name: d.name }) }, [
+        UI.el('span', { class: 'pc-wall' }, [UI.osIcon(d.os)]),
+        UI.el('span', { class: 'phone-text' }, [UI.el('span', { class: 'phone-name', text: d.name, attrs: { 'data-literal': '' } }),
+          UI.el('span', { class: 'phone-sub', text: d.sub, attrs: { 'data-literal': '' } })]),
+        d.connected ? UI.el('span', { class: 'dot good' }) : null,
+      ]);
+      b.classList.toggle('active', !!(d.connected && active));
+      b.onclick = () => (d.connected ? open() : d.go());
+      return b;
+    }));
+  };
+
   UI.sections = (cards) => {
     const list = UI.el('div', { class: 'sec-nav', attrs: { role: 'navigation' } });
     const col = UI.el('div', { class: 'sec-body' }, cards);

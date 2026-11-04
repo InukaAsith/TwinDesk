@@ -21,3 +21,9 @@
 .swatch.sys { background: conic-gradient(var(--sw) 0 50%, color-mix(in srgb, var(--sw) 45%, #fff) 50% 100%); }
 .swatch.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--sw); }
 .swatch:focus-visible { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--accent-soft); }
+
+/* UI.renderPcs: paired computers nearby in the sidebar, as the phones above them */
+#pcs { display: flex; flex-direction: column; gap: 6px; margin: -6px 0 12px; }
+#pcs:empty { display: none; }
+.pc-wall { width: 26px; height: 46px; flex: none; display: grid; place-items: center; }
+.pc-wall .os-ico { transform: scale(0.9); }

@@ -230,6 +230,9 @@ function start() {
     return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
   } });
   devctl.on('change', pushState);
+  // ReZume off here (not loaded): still answer the other side's policy, so it shows ReZume as off
+  // here, not missing, and offers nothing.
+  link.on(P.T.RZ_POLICY, () => { if (!rezume) link.send({ t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
   // The other side runs an older TwinDesk (shared/appinfo.js): say so once.
   devctl.on('outdated', (o) => {
     const { FEATURES } = require('../shared/appinfo.js');
@@ -590,6 +593,9 @@ function loadRemote() {
 // Loaded the first time it's turned on: until then nothing is looked at.
 function loadReZume() {
   if (rezume || !settings.rezume.on) return rezume;
+  try { return loadReZumeNow(); } catch (e) { console.error('[rezume] couldn’t start: ' + (e && e.stack || e)); rezume = null; return null; }
+}
+function loadReZumeNow() {
   const { shell } = require('electron');
   const { ReZume } = require('../shared/rezume.js');
   const { ReZumeShelf } = require('../shared/rezume-shelf.js');
@@ -1371,7 +1377,6 @@ function updateTray(s) {
     update: s.updates && s.updates.available ? { label: t('Download TwinDesk {version}…', { version: s.updates.latest }), click: showUpdateWindow } : null,
     rezume: rezumeItems(),
     open: showMain,
-    log: () => require('../shared/applog.js').open(),
     quit: () => app.quit(),
   })));
 }

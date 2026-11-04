@@ -82,7 +82,7 @@ try {
       state: { client: { name: 'Work $& {me}', os: 'win' }, input: { where: 'home' }, found: [] },
       settings, id: { macName: 'Mac $& {name}' }, svc: null, link: null, updates: null,
       tray: { setToolTip() {}, setContextMenu(value) { menu = value; } }, trayKey: '',
-      Menu: { buildFromTemplate: (x) => x }, P: require('../protocol'),
+      Menu: { buildFromTemplate: (x) => x, setApplicationMenu() {} }, P: require('../protocol'),
       CL: require('../cursorlock'), trayMenu: require('../traymenu'),
       i18n, t: (...args) => i18n.t(...args), rezumeItems: () => [],
       actions: {}, showWindow() {}, showUpdateWindow() {}, app: {},

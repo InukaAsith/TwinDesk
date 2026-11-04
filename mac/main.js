@@ -492,7 +492,7 @@ function updateTray() {
   if (key === trayKey) return;
   trayKey = key;
   tray.setToolTip(c ? `TwinDesk: ${c.name}` : 'TwinDesk');
-  tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+  const model = {
     t,
     connected: !!c,
     status: c ? t('Connected to {name}', { name: c.name }) + (c.transport === 'ble' ? ' · ' + t('Bluetooth') : '') : t('Not connected'),
@@ -521,9 +521,10 @@ function updateTray() {
     update: updates && updates.status.available ? { label: t('TwinDesk {version} available…', { version: updates.status.latest }), click: showUpdateWindow } : null,
     rezume: rezumeItems(),
     open: showWindow,
-    log: () => require('../shared/applog.js').open(),
     quit: () => app.quit(),
-  })));
+  };
+  tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template(model)));
+  Menu.setApplicationMenu(Menu.buildFromTemplate(trayMenu.appMenu(model))); // the same items in the menu bar
 }
 
 app.whenReady().then(() => {
@@ -622,6 +623,9 @@ app.whenReady().then(() => {
     },
   });
   svc.devctl.on('change', pushState);
+  // ReZume off here (not loaded): still answer the other side's policy, so it shows ReZume as off
+  // here, not missing, and offers nothing.
+  peer.on(`t:${P.T.RZ_POLICY}`, () => { if (!svc.rz && peer.current) peer.sendToClient({ t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
   // The other side runs an older TwinDesk (shared/appinfo.js): say so once.
   svc.devctl.on('outdated', (o) => {
     const { FEATURES } = require('../shared/appinfo.js');
