@@ -158,6 +158,7 @@
     else if (l.state === 'identity_changed') text = t('Identity changed');
     $('peer-text').textContent = text;
     renderPhones(s);
+    renderPcs(s);
     // Tabs that don't apply to the peer (a phone has no terminal or screen to share to it…).
     for (const v of views.values()) {
       const hide = !!(v.def.hidden && v.def.hidden(s));
@@ -178,6 +179,27 @@
   // one connects it (the computer steps aside); the connected one opens its page.
   let phonesKey = '';
   let assetsSeen = -1;
+  // Paired computers nearby, under the phones (shared/ui-look.js): click to connect.
+  function renderPcs(s) {
+    const near = new Set((s.found || []).map((d) => d.id));
+    const live = s.link && s.link.state === 'connected' && s.peer && s.peer.os !== 'android' ? s.peer.id : '';
+    const all = [
+      ...(s.paired ? [{ id: s.paired.macId, name: s.paired.macName, os: s.paired.os, go: () => api.connectAgain() }] : []),
+      ...(s.guests || []).map((g) => ({ id: g.id, name: g.name, os: g.os, go: () => api.connectGuest(g.id) })),
+    ];
+    const seen = new Set();
+    const list = [];
+    for (const x of all) {
+      if (seen.has(x.id) || x.os === 'android') continue;
+      seen.add(x.id);
+      const connected = x.id === live;
+      if (!connected && !near.has(x.id)) continue;
+      const rtt = s.link && s.link.rtt;
+      list.push({ ...x, connected, sub: connected ? (rtt != null ? t('{value} ms', { value: rtt }) : t('Connected')) : t('Nearby · Click to connect') });
+    }
+    UI.renderPcs($('pcs'), list, { open: () => show('overview', true), active: !!(current && current.def.id === 'overview') });
+  }
+
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
     if (ph.assets !== assetsSeen) {
