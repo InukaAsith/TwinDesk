@@ -63,6 +63,16 @@ final class Injector {
     return on
   }
 
+  // A volume, brightness or media key as macOS's own keys send it (NX_SYSDEFINED, aux control
+  // button): a key event with the volume's virtual key does nothing (#115).
+  func systemKey(_ kt: Int, down: Bool) {
+    let state = down ? 0x0A : 0x0B
+    guard let e = NSEvent.otherEvent(with: .systemDefined, location: .zero, modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(state << 8)),
+                                     timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
+                                     data1: (kt << 16) | (state << 8), data2: -1) else { return }
+    post(e.cgEvent)
+  }
+
   func post(_ e: CGEvent?) {
     guard let e = e else { return }
     e.setIntegerValueField(.eventSourceUserData, value: injectedMark)
@@ -167,6 +177,7 @@ final class Injector {
   }
 
   func key(_ code: String, down: Bool) {
+    if let kt = KeyCodes.system[code] { return systemKey(kt, down: down) }
     if code == "Space" {
       let held = Set(heldMods.map(Injector.kind))
       if down && (held == ["Control"] || held == ["Control", "Alt"]) {

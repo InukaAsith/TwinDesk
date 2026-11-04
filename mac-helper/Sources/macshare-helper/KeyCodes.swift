@@ -29,7 +29,19 @@ enum KeyCodes {
     "ArrowDown": 0x7D, "ArrowUp": 0x7E,
     // PC keys without a Mac key: map onto the spare F keys (as macOS does for PC keyboards).
     "PrintScreen": 0x69, "ScrollLock": 0x6B, "Pause": 0x71,
+    // Brightness as some Mac keyboards send it (a key, not a system key); injected as system keys.
+    "BrightnessUp": 0x90, "BrightnessDown": 0x91,
   ]
+
+  /// The system keys (volume, brightness, media, keyboard light): NX_SYSDEFINED events of subtype 8
+  /// (aux control buttons), their NX_KEYTYPE_* from ev_keymap.h. macOS acts on these, not on a key
+  /// event with the volume's virtual key, so they're read and posted that way (#115).
+  static let system: [String: Int] = [
+    "AudioVolumeUp": 0, "AudioVolumeDown": 1, "BrightnessUp": 2, "BrightnessDown": 3, "AudioVolumeMute": 7,
+    "MediaPlayPause": 16, "MediaTrackNext": 17, "MediaTrackPrevious": 18, "MediaFastForward": 19, "MediaRewind": 20,
+    "KbdIllumUp": 21, "KbdIllumDown": 22, "KbdIllumToggle": 23,
+  ]
+  static let fromSystem: [Int: String] = Dictionary(uniqueKeysWithValues: system.map { ($1, $0) })
 
   static let fromMac: [UInt16: String] = {
     var m: [UInt16: String] = [:]
