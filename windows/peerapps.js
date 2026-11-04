@@ -102,7 +102,7 @@ class PeerApps {
   }
 
   get accepting() {
-    return !!this.cfg.on || this.rz === true;
+    return !!this.cfg.on || this.rz === true || !!(this.settings.pcApps && this.settings.pcApps.moveWindows); // Move windows takes the windows moved here too
   }
 
   _policy() {

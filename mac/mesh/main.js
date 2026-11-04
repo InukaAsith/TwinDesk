@@ -588,6 +588,14 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
     hub, mesh, layoutSync, selfName: () => id.macName });
+  // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
+  // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
+  svc.kvm.onMoveWindow = (m, to) => {
+    const wid = Number(m.moving);
+    if (to && to !== hub.selectedId) return; // apps and windows go to the selected device only
+    if (!wid || svc.pcApps.returnWindow(wid)) return;
+    if (settings.apps.moveWindows) svc.appSend.moveOut(wid, Number(m.movingPid));
+  };
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 
   // Every phone gets its own stack (phone.js, phone-bridge.js, phoneview.js) on a link bound to it (phones.js);

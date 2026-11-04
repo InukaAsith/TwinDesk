@@ -386,13 +386,13 @@ function start() {
   // A Mac's apps: listed and pinned through apps.js, opened window by window through peerapps.js.
   peerApps.otherApps = () => apps.list;
   apps.launchWindows = (id) => peerApps.launch(id);
-  // A window dragged past the shared edge with the move key held goes over there (pcapps.js moveOut,
-  // Apps › Move windows); its copy dragged back past the edge comes home (peerapps.js returnWindow).
+  // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
+  // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
   kvm.onMoveWindow = (m) => {
-    const c = settings.pcApps;
-    if (c.moveWindows && Array.isArray(m.mods) && m.mods.includes(c.moveKey)) pcApps.moveOut(Number(m.moving));
+    const wid = Number(m.moving);
+    if (!wid || peerApps.returnWindow(wid)) return;
+    if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
   };
-  kvm.onReturnWindow = (m) => peerApps.returnWindow(Number(m.moving));
   helper.on('exit', pushState);
   setupNet(guest);
   helper.start();

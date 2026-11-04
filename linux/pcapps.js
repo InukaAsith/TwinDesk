@@ -46,6 +46,7 @@ class PcApps {
     this.launched = new Map(); // id → {id, exe, pids: Set, since, before: Set(wid), had, lastSeen}
     this.windows = []; // the list last sent to the Mac
     this.streams = new Map(); // wid → session
+    this.moved = new Map(); // wid → {x, y, w, h, pid}: windows moved to the other computer (shared/movewin.js), and where they were
     this.failed = new Set(); // wids whose capture failed (not retried)
     this.timer = null;
     this.sentKey = '';
@@ -54,7 +55,7 @@ class PcApps {
 
     const link = this.link;
     link.on('welcome', () => { this.macAccepts = false; this.sentKey = ''; });
-    link.on('closed', () => { this.macAccepts = false; this.launched.clear(); this._sync([]); });
+    link.on('closed', () => { this.macAccepts = false; this.launched.clear(); this.bringBack(); this._sync([]); });
     link.on(T.PAPP_POLICY, (m) => {
       this.macAccepts = m.accept === true;
       if (this.macAccepts && this.allowed) this._build().catch(() => {}); // icons ready before the Mac asks
@@ -64,14 +65,17 @@ class PcApps {
     link.on(T.PAPPS_LIST, () => this._list());
     link.on(T.PAPP_LAUNCH, (m) => typeof m.id === 'string' && this._launch(m.id));
     link.on(T.PAPP_FOCUS, (m) => this._mine(m.wid) && !this._popup(m.wid) && this._raise(m.wid));
-    link.on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && (this._unfollow(m.wid) || this.helper.send('winClose', { wid: m.wid })));
+    // Closing a moved window's copy over there brings it back here (it isn't closed); one ReZume sent stays open here.
+    link.on(T.PAPP_CLOSE, (m) => this._mine(m.wid) && (this.moved.has(m.wid) ? this.bringBack(m.wid) : this._unfollow(m.wid) || this.helper.send('winClose', { wid: m.wid })));
+    link.on(T.PAPP_RETURN, (m) => this.moved.has(m.wid) && this.bringBack(m.wid, true));
     link.on(T.PAPP_SIZE, (m) => {
       const ok = (v) => Number.isInteger(v) && v >= 50 && v <= 16384;
       if (this._mine(m.wid) && !this._popup(m.wid) && ok(m.w) && ok(m.h)) this.helper.send('winSize', { wid: m.wid, w: m.w, h: m.h });
     });
     for (const t of RemoteInput.TYPES) link.on(t, (m) => this._input(m));
     // A top-level window appeared or went (a menu opened?): look right away instead of at the next tick.
-    this.helper.on('event', (name) => name === 'winShown' && this.launched.size && this._poll(true));
+    this.helper.on('event', (name) => name === 'winShown' && (this.launched.size || this.moved.size) && this._poll(true));
+    this.helper.on('ready', () => this._moveKey()); // a restarted helper is told the move key again
     this.sender.on('state', (session, s) => {
       if (s.status !== 'ended' && s.status !== 'failed') return;
       for (const [wid, ses] of this.streams) {
@@ -96,12 +100,41 @@ class PcApps {
   // The switch changed. Off: nothing is followed or streamed any more (the apps keep running),
   // except what ReZume sent.
   apply() {
+    if (!this.settings.pcApps.moveWindows) this.bringBack(); // moving is its own switch, apart from letting the other open apps
+    this._moveKey();
     if (!this.allowed) {
       for (const [id, a] of this.launched) if (!a.rz) this.launched.delete(id);
       if (this.launched.size) this._poll(true);
       else this._sync([]);
     }
     this.onChange();
+  }
+
+  // The helper grabs a window with the move key and a click (wins.c, X11); "" = off.
+  _moveKey() {
+    const c = this.settings.pcApps;
+    this.helper.send('moveWin', { key: c.moveWindows && !WAYLAND ? c.moveKey : '' });
+  }
+
+  // Move windows (shared/movewin.js, loaded only when used): a grabbed window crossed with the
+  // pointer goes over there; bringBack returns one or all of them.
+  moveOut(wid) {
+    if (!this.settings.pcApps.moveWindows || WAYLAND) return Promise.resolve(false);
+    return require('../shared/movewin.js').moveOut(this, wid);
+  }
+
+  bringBack(wid, home = false) {
+    if (this.moved.size) require('../shared/movewin.js').bringBack(this, wid, home);
+  }
+
+  _cursorPx() {
+    const p = displays.getCursorScreenPoint();
+    const k = displays.getPrimaryDisplay().scaleFactor || 1; // X11: one scale for the whole desktop
+    return { x: Math.round(p.x * k), y: Math.round(p.y * k) };
+  }
+
+  _movedExtra(w) {
+    return { ...workArea(w), ...inset(w) };
   }
 
   // ReZume can send windows only where they can be listed and captured (X11).
@@ -228,14 +261,14 @@ class PcApps {
       try {
         do {
           this.again = false;
-          if (!this.launched.size || this.link.status.state !== 'connected') return this._sync([]);
+          if ((!this.launched.size && !this.moved.size) || this.link.status.state !== 'connected') return this._sync([]);
           const r = await this.helper.request('windows').catch(() => null);
           if (r && Array.isArray(r.windows)) this._match(r.windows);
         } while (this.again);
       } finally {
         this.ticking = false;
       }
-      if (this.launched.size && !this.timer) this.timer = setTimeout(tick, POLL_MS);
+      if ((this.launched.size || this.moved.size) && !this.timer) this.timer = setTimeout(tick, POLL_MS);
     };
     this.timer = setTimeout(tick, 0);
   }
@@ -258,6 +291,7 @@ class PcApps {
     const out = [];
     const pops = [];
     const taken = new Set();
+    if (this.moved.size) require('../shared/movewin.js').list(this, all, taken, out, pops); // moved windows (Move windows)
     for (const a of this.launched.values()) {
       const id = a.id.toLowerCase();
       const mine = all.filter((w) => !taken.has(w.wid) && !(a.skip && a.skip.has(w.wid)) && ((a.cls && clsOf(w).includes(a.cls))
@@ -336,12 +370,13 @@ class PcApps {
   // Quit: stop the window streams (the apps keep running on the PC).
   shutdown() {
     this.launched.clear();
+    this.bringBack(); // quitting: every moved window back here
     for (const session of this.streams.values()) this.sender.stop(session);
     this.streams.clear();
   }
 
   view() {
-    return { wayland: WAYLAND, allow: this.allowed, macAccepts: this.macAccepts, open: this.windows.length, streaming: this.streams.size, message: this.message };
+    return { wayland: WAYLAND, allow: this.allowed, macAccepts: this.macAccepts, open: this.windows.length, streaming: this.streams.size, moved: this.moved.size, moveWindows: this.settings.pcApps.moveWindows, moveKey: this.settings.pcApps.moveKey, message: this.message };
   }
 }
 

@@ -196,7 +196,7 @@ function setupIpc(ctx) {
     change('pcScreen', partial, () => { pcScreen.applyInput(); if (!settings.pcScreen.input) pcApps.input.release(); if (settings.pcScreen.extendSize !== size) pcScreen.sizeExtend(); else pcScreen.apply(); });
   });
   handle('setMacApps', (partial) => change('macApps', partial, () => peerApps.apply()));
-  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); }));
+  handle('setPcApps', (partial) => change('pcApps', partial, () => { pcApps.apply(); pcApps.input.release(); if (peerApps) peerApps.apply(); }));
   handle('setPcScreenMode', (mode) => pcScreen.setMode(mode));
   // Share screen to one target: { mode: 'off'|'mirror'|'extend', displayId? } for device `id` (screen-mesh stream table).
   handle('setPcScreenTarget', (id, choice) => typeof id === 'string' && choice && typeof choice === 'object' ? pcScreen.setTarget(id, choice) : undefined);

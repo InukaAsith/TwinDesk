@@ -271,40 +271,101 @@ namespace MacShare
             PostMessage(Handle(wid), WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
 
-        // ---- moving a window to the other computer (pcapps.js) ----
+        // ---- moving a window to another computer (pcapps.js, Apps and Windows › Move windows) ----
+        // The move key held (Right Ctrl unless another is chosen), a click on a window grabs it: the
+        // click never reaches the app, and the window follows the pointer until the button is let go.
+        // If the pointer crosses to another computer meanwhile, the window goes with it (the edge or
+        // return event carries `moving`). Input injected from the other computer grabs the same way.
 
-        const int GUI_INMOVESIZE = 2;
-        const uint WM_CANCELMODE = 0x1F, SWP_NOSIZE = 1;
+        const uint WM_CANCELMODE = 0x1F, SWP_NOSIZE = 1, SWP_ASYNCWINDOWPOS = 0x4000;
 
-        // The window being dragged by its title bar right now (Windows' move loop), else 0.
-        public static long Moving()
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
+        [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr GetShellWindow();
+
+        public static uint[] MoveVks = new uint[0]; // the move key's virtual keys; empty: moving is off
+        public static string MoveKeyName = "";
+        static IntPtr grab = IntPtr.Zero; // the window that follows the pointer
+        static int grabDx, grabDy; // the pointer's place in it
+        static bool grabUp; // the left button's release is swallowed (its press was)
+        static readonly uint ownPid = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+
+        public static bool Grabbing { get { return grab != IntPtr.Zero; } }
+        public static bool GrabUpPending { get { return grabUp; } }
+
+        static bool MoveKeyHeld()
         {
-            IntPtr fg = GetForegroundWindow();
-            if (fg == IntPtr.Zero) return 0;
+            foreach (uint vk in MoveVks) if ((Native.GetAsyncKeyState((int)vk) & 0x8000) != 0) return true;
+            return false;
+        }
+
+        // The left button went down at x, y. True: a window was grabbed and the click is swallowed.
+        public static bool TryGrab(int x, int y)
+        {
+            if (MoveVks.Length == 0 || grab != IntPtr.Zero || !MoveKeyHeld()) return false;
+            IntPtr h = WindowFromPoint(new Native.POINT(x, y));
+            if (h == IntPtr.Zero) return false;
+            h = GetAncestor(h, GA_ROOT);
+            if (h == IntPtr.Zero || h == GetShellWindow() || !IsWindowVisible(h)) return false;
             uint pid;
-            uint tid = GetWindowThreadProcessId(fg, out pid);
-            GUITHREADINFO g = new GUITHREADINFO();
-            g.cbSize = Marshal.SizeOf(typeof(GUITHREADINFO));
-            if (!GetGUIThreadInfo(tid, ref g) || (g.flags & GUI_INMOVESIZE) == 0 || g.hwndMoveSize == IntPtr.Zero) return 0;
-            return GetAncestor(g.hwndMoveSize, GA_ROOT).ToInt64();
+            GetWindowThreadProcessId(h, out pid);
+            if (pid == ownPid) return false;
+            StringBuilder cls = new StringBuilder(64);
+            GetClassName(h, cls, 64);
+            string c = cls.ToString();
+            if (c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd" || c == "Progman" || c == "WorkerW" || c == "NotifyIconOverflowWindow") return false;
+            if ((GetWindowLong(h, GWL_STYLE) & WS_CHILD) != 0) return false;
+            RECT r;
+            if (IsZoomed(h))
+            {
+                // A maximized window comes off the screen's size first; the pointer ends up on its title bar.
+                ShowWindow(h, SW_RESTORE);
+                GetWindowRect(h, out r);
+                grabDx = (r.right - r.left) / 2;
+                grabDy = 16;
+            }
+            else
+            {
+                GetWindowRect(h, out r);
+                grabDx = x - r.left;
+                grabDy = y - r.top;
+            }
+            grab = h;
+            grabUp = true;
+            SetForegroundWindow(h);
+            GrabMove(x, y);
+            return true;
         }
 
-        static readonly int[] ModVks = { 0xA2, 0xA3, 0xA0, 0xA1, 0xA4, 0xA5, 0x5B, 0x5C };
-        static readonly string[] ModNames = { "ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight" };
-
-        // On an edge or return event: the window being dragged and the modifier keys held (main
-        // moves it to the other computer when its key is one of them).
-        public static void AddMoving(Dictionary<string, object> d)
+        // The pointer moved to x, y: the grabbed window follows (asynchronously: the hook never waits on the app).
+        public static void GrabMove(int x, int y)
         {
-            long w = Moving();
-            if (w == 0) return;
-            List<object> held = new List<object>();
-            for (int i = 0; i < ModVks.Length; i++) if ((Native.GetAsyncKeyState(ModVks[i]) & 0x8000) != 0) held.Add(ModNames[i]);
-            d["moving"] = w;
-            d["mods"] = held;
+            if (grab == IntPtr.Zero) return;
+            if (!IsWindow(grab)) { grab = IntPtr.Zero; return; }
+            SetWindowPos(grab, IntPtr.Zero, x - grabDx, y - grabDy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
         }
 
-        // That drag ends where it is (the move loop leaves on WM_CANCELMODE).
+        // The left button came up: the grab ends. True: the release is swallowed, as its press was.
+        public static bool GrabUp()
+        {
+            bool was = grabUp;
+            grab = IntPtr.Zero;
+            grabUp = false;
+            return was;
+        }
+
+        // The pointer crossed to another computer: a grabbed window goes in the event (main moves it),
+        // and the grab ends. keepUp: the button is still down here (the home side, whose release comes
+        // later and is swallowed); on the driven side the release never comes.
+        public static void AddMoving(Dictionary<string, object> d, bool keepUp)
+        {
+            if (grab == IntPtr.Zero) return;
+            d["moving"] = grab.ToInt64();
+            grab = IntPtr.Zero;
+            if (!keepUp) grabUp = false;
+        }
+
+        // That drag ends where it is (a title-bar move loop leaves on WM_CANCELMODE).
         public static void EndMove(double wid)
         {
             PostMessage(Handle(wid), WM_CANCELMODE, IntPtr.Zero, IntPtr.Zero);

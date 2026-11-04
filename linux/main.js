@@ -355,6 +355,13 @@ function start() {
   screen.apps = apps;
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
+  // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
+  // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
+  kvm.onMoveWindow = (m) => {
+    const wid = Number(m.moving);
+    if (!wid || peerApps.returnWindow(wid)) return;
+    if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
+  };
   // A Mac's apps: listed and pinned through apps.js, opened window by window through peerapps.js.
   peerApps.otherApps = () => apps.list;
   apps.launchWindows = (id) => peerApps.launch(id);
@@ -1373,7 +1380,7 @@ function updateTray(s) {
   const rtt = connected && s.link.rtt != null ? ' · ' + s.link.rtt + ' ms' : '';
   const host = s.paired && s.paired.macName;
   const again = !connected && host && (s.link.state === 'stopped' || !!s.link.busy);
-  const key = JSON.stringify([name, rtt, again, away, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
+  const key = JSON.stringify([name, rtt, again, away, pcApps ? pcApps.moved.size : 0, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
     settings.audio.send, settings.app.hud, k.keyboard, settings.files.edgeDrag, settings.files.shortcuts, settings.files.copyKeys, rezumeItems().map((i) => i.label), found.map((d) => [d.id, d.name, d.os]), s.updates && s.updates.available && s.updates.latest]);
   if (key === trayKey) return;
   trayKey = key;
@@ -1390,6 +1397,7 @@ function updateTray(s) {
     connected,
     status: connected ? t('Connected to {name}', { name }) + rtt : t('Not connected'),
     home: away ? () => kvm.home() : null,
+    windowsBack: pcApps && pcApps.moved.size ? { label: t(pcApps.moved.size === 1 ? 'Bring the Window Back from {name}' : 'Bring {count} Windows Back from {name}', { count: pcApps.moved.size, name: other }), click: () => pcApps.bringBack() } : null,
     shared: { checked: kvm.linked && !kvm.paused, set: (on) => kvm.setShared(on) },
     lock: connected ? { label: t('Lock Cursor on {name} ({keys})', { name: kvm.mode === 'driving' ? other : device.name, keys: CL.keysLabel(settings.keys.lockKeys, 'linux') }), checked: kvm.locked, set: (on) => kvm.setLocked(on) } : null,
     keyboard: { checked: k.keyboard, set: (on) => set('kvm', { keyboard: on }, () => kvm.applyConfig()) },

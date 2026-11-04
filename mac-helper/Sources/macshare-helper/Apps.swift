@@ -127,6 +127,25 @@ enum Apps {
     return nil
   }
 
+  /// The AX window of `pid` with this frame (a CG window's bounds), for WindowGrab.
+  static func axWindow(pid: Int, frame r: CGRect) -> AXUIElement? {
+    for w in axWindows(pid) {
+      if let f = frame(w), abs(f.minX - r.minX) < 2, abs(f.minY - r.minY) < 2, abs(f.width - r.width) < 2 { return w }
+    }
+    return nil
+  }
+
+  /// One window's top-left to x, y (points), raised: a moved window back (shared/movewin.js).
+  static func place(wid: Int, x: Double, y: Double) -> Bool {
+    guard let (w, pid) = ax(for: wid) else { return false }
+    var p = CGPoint(x: x, y: y)
+    guard let v = AXValueCreate(.cgPoint, &p) else { return false }
+    let ok = AXUIElementSetAttributeValue(w, kAXPositionAttribute as CFString, v) == .success
+    AXUIElementPerformAction(w, kAXRaiseAction as CFString)
+    NSRunningApplication(processIdentifier: pid_t(pid))?.activate()
+    return ok
+  }
+
   /// Move every window of `pid` that isn't on `bounds` onto it (cascaded from its top-left).
   static func moveOnto(pid: Int, bounds: CGRect) {
     var i = 0

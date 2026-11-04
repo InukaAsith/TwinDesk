@@ -81,6 +81,7 @@ class PcApps {
     for (const t of RemoteInput.TYPES) link.on(t, (m) => this._input(m));
     // A top-level window appeared or went (a menu opened?): look right away instead of at the next tick.
     this.helper.on('event', (name) => name === 'winShown' && this.launched.size && this._poll(true));
+    this.helper.on('ready', () => this._moveKey()); // a restarted helper is told the move key again
     this.sender.on('state', (session, s) => {
       if (s.status !== 'ended' && s.status !== 'failed') return;
       for (const [wid, ses] of this.streams) {
@@ -107,6 +108,7 @@ class PcApps {
   apply() {
     this.generation++;
     if (!this.settings.pcApps.moveWindows) this.bringBack(); // moving is its own switch, apart from letting the other open apps
+    this._moveKey();
     if (!this.allowed) {
       for (const [id, a] of this.launched) if (!a.rz) this.launched.delete(id);
       if (this.launched.size) this._poll(true);
@@ -160,38 +162,29 @@ class PcApps {
     this.helper.send('winRaise', { wid });
   }
 
-  // A window dragged past the shared edge with the move key held (kvm.js, the helper's edge event):
-  // it goes to the other computer as one of these windows and out of sight here, so it is in one
-  // place at a time (#18). False: it stays (off, not allowed there, Bluetooth, already there).
-  async moveOut(wid) {
-    if (typeof wid !== 'number' || !wid || !this.settings.pcApps.moveWindows || !this.macAccepts) return false;
-    if (this.moved.has(wid) || this._mine(wid) || (this.link.current && this.link.current.transport === 'ble')) return false;
-    this.helper.send('winEndMove', { wid }); // the drag stops here; the pointer goes on over there
-    const r = await this.helper.request('windows').catch(() => null);
-    const w = r && Array.isArray(r.windows) && r.windows.find((x) => x.wid === wid && !x.popup);
-    if (!w) return false;
-    this.moved.set(wid, { x: w.x, y: w.y, w: w.w, h: w.h, pid: w.pid });
-    setTimeout(() => this.moved.has(wid) && this.helper.send('winPark', { wid }), 60); // once the move loop let go
-    this._poll(true);
-    this.onChange();
-    return true;
+  // The helper grabs a window with the move key and a click (AppWindows.TryGrab); "" = off.
+  _moveKey() {
+    const c = this.settings.pcApps;
+    this.helper.send('moveWin', { key: c.moveWindows ? c.moveKey : '' });
   }
 
-  // Moved windows (one, or all of them) back where they were, in front. home: it was dragged back
-  // past the edge, so it shows where the pointer comes in.
+  // Move windows (shared/movewin.js, loaded only when used): a grabbed window crossed with the
+  // pointer goes over there; bringBack returns one or all of them.
+  moveOut(wid) {
+    if (!this.settings.pcApps.moveWindows) return Promise.resolve(false);
+    return require('../shared/movewin.js').moveOut(this, wid);
+  }
+
   bringBack(wid, home = false) {
-    for (const [id, m] of [...this.moved]) {
-      if (wid !== undefined && id !== wid) continue;
-      this.moved.delete(id);
-      let at = m;
-      if (home) {
-        const p = displays.dipToScreenPoint(displays.getCursorScreenPoint());
-        at = { x: Math.round(p.x - m.w / 2), y: Math.max(0, Math.round(p.y - 12)) };
-      }
-      this.helper.send('winPlace', { wid: id, x: at.x, y: at.y });
-    }
-    if (!this.stopped) this._poll(true);
-    this.onChange();
+    if (this.moved.size) require('../shared/movewin.js').bringBack(this, wid, home);
+  }
+
+  _cursorPx() {
+    return displays.dipToScreenPoint(displays.getCursorScreenPoint());
+  }
+
+  _movedExtra(w) {
+    return workArea(w);
   }
 
   async _apps() {
@@ -318,17 +311,7 @@ class PcApps {
     const out = [];
     const pops = [];
     const taken = new Set();
-    // Moved windows: that one window (not its app's others), with its process's pop-ups (menus).
-    for (const [wid, m] of this.moved) {
-      const w = all.find((x) => x.wid === wid);
-      if (!w) { this.moved.delete(wid); continue; } // closed
-      taken.add(wid);
-      out.push({ wid, id: 'moved', moved: true, title: w.title, w: w.w, h: w.h, scale: w.scale, ...workArea({ ...w, x: m.x, y: m.y }) });
-      for (const p of all.filter((x) => x.popup && x.pid === m.pid && !taken.has(x.wid) && (x.w >= 64 || x.h >= 64)).slice(0, MAX_POPUPS)) {
-        taken.add(p.wid);
-        pops.push({ wid: p.wid, id: 'moved', title: p.title, w: p.w, h: p.h, scale: p.scale, popup: true, owner: wid, x: p.x - w.x, y: p.y - w.y });
-      }
-    }
+    if (this.moved.size) require('../shared/movewin.js').list(this, all, taken, out, pops); // moved windows (Move windows)
     for (const a of this.launched.values()) {
       const id = a.id.toLowerCase();
       const mine = all.filter((w) => !taken.has(w.wid) && !(a.skip && a.skip.has(w.wid)) && ((w.aumid && w.aumid.toLowerCase() === id)
@@ -424,7 +407,7 @@ class PcApps {
   }
 
   view() {
-    return { allow: this.allowed, macAccepts: this.macAccepts, open: this.windows.length, streaming: this.streams.size, moved: this.moved.size, message: this.message };
+    return { allow: this.allowed, macAccepts: this.macAccepts, open: this.windows.length, streaming: this.streams.size, moved: this.moved.size, moveWindows: this.settings.pcApps.moveWindows, moveKey: this.settings.pcApps.moveKey, message: this.message };
   }
 }
 
