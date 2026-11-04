@@ -1923,5 +1923,10 @@
   "Edit": "Изменить",
   "Open a copy on this device": "Открыть копию на этом устройстве",
   "Edit the file on {peer}": "Изменить файл на {peer}",
-  "Use the app from {peer}": "Использовать приложение с {peer}"
+  "Use the app from {peer}": "Использовать приложение с {peer}",
+  "Advanced": "Дополнительно",
+  "Input protocol": "Протокол ввода",
+  "UDP (tdv2)": "UDP (tdv2)",
+  "TCP (tdv1)": "TCP (tdv1)",
+  "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "С UDP указатель движется быстрее. TCP работает в сетях, где UDP заблокирован. Применяется после перезапуска"
 });

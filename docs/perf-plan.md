@@ -47,6 +47,7 @@ Already native and good: capture and injection (the helpers), and screen encodin
 - If a capability is unknown, use today's path. If a fast path fails at runtime, use today's path for the rest of that session, silently.
 - Never use a fast path over Bluetooth, with a phone as the peer (`local.drives()`), or on a multi-hop mesh route. A session can move between IP and Bluetooth mid-way (server.js emits `'transport'`), so check the current transport on every use.
 - Kill switches for debugging: env `TWINDESK_NO_IL=1` and `TWINDESK_NO_FX2=1`.
+- General › Advanced › Input protocol: UDP (tdv2, the default) or TCP (tdv1, no lane, the same as `TWINDESK_NO_IL`). Saved as `app.inputProtocol`, read at startup (`setLaneProtocol` in each main.js), so a change shows Restart. Either side on TCP makes the session TCP: its hello asks for no lane and it refuses an offered one.
 - Order: Mac first, then Windows, then Linux, then mesh (`*/mesh/`). After each, run `for f in shared/test/*.js; do node $f; done` and the Linux VM test (`vm-test.sh`).
 
 ## P0: Measure (½ day)

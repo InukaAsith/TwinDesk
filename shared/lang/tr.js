@@ -1923,5 +1923,10 @@
   "Edit": "Düzenle",
   "Open a copy on this device": "Bu cihazda bir kopya aç",
   "Edit the file on {peer}": "{peer} üzerindeki dosyayı düzenle",
-  "Use the app from {peer}": "{peer} üzerindeki uygulamayı kullan"
+  "Use the app from {peer}": "{peer} üzerindeki uygulamayı kullan",
+  "Advanced": "Gelişmiş",
+  "Input protocol": "Giriş protokolü",
+  "UDP (tdv2)": "UDP (tdv2)",
+  "TCP (tdv1)": "TCP (tdv1)",
+  "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "UDP ile işaretçi daha hızlı hareket eder. TCP, UDP’yi engelleyen ağlarda çalışır. Yeniden başlatınca uygulanır"
 });

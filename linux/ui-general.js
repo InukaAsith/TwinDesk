@@ -77,6 +77,15 @@ UI.tab({
     const themeRow = UI.themeRow((v) => api.setLook({ theme: v }));
     const accentRow = UI.accentRow((v) => api.setLook({ accent: v }));
     // One page that scrolls, its sections listed beside it; Permissions first.
+    // Advanced: how input travels (shared/inputlane.js). UDP (tdv2, the default): moves on their own
+    // lane beside the session. TCP (tdv1): everything on the session. Read at startup, so Restart shows.
+    let protoStart = null; // the protocol this run started with
+    const protoRestart = UI.button(t('Restart'), () => api.relaunch(), 'small');
+    protoRestart.hidden = true;
+    const protoSel = UI.select([
+      { value: 'udp', label: t('UDP (tdv2)') }, { value: 'tcp', label: t('TCP (tdv1)') },
+    ], (v) => { api.setApp({ inputProtocol: v }); protoRestart.hidden = v === protoStart; });
+    const protoRow = UI.row(t('Input protocol'), t('UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart'), [protoSel, protoRestart]);
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, steadyRow]),
       UI.card(t('Startup'), [
@@ -96,6 +105,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, keepRow]),
       UI.card(t('This computer'), [deviceRow, sessRow, inRow, helperRow]),
+      UI.card(t('Advanced'), [protoRow]),
       UI.card(t('Quit'), [
         UI.row(t('Quit TwinDesk'), t('Stops sharing until you open it again'), [UI.button(t('Quit'), () => api.quit(), 'small')]),
       ], { cls: 'keep-on' }),
@@ -103,6 +113,12 @@ UI.tab({
     body.append(sections);
 
     return (s) => {
+      if (s.app) {
+        const proto = s.app.inputProtocol === 'tcp' ? 'tcp' : 'udp';
+        if (protoStart === null) protoStart = proto;
+        protoSel.set(proto);
+        protoRestart.hidden = proto === protoStart;
+      }
       themeRow.render(s.look && s.look.theme);
       accentRow.render(s.look);
       sections.spy();

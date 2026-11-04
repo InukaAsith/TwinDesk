@@ -49,7 +49,11 @@ const WINDOW = 64; // replay window, as WireGuard's
 const RESEND_FOR_MS = 3000; // … and with each ping this long after the last move
 const HOLD_MAX = 512; // events held for a gap, at most (the WSS copy always fills it)
 
-const laneOff = () => !!process.env.TWINDESK_NO_IL;
+// General › Advanced › Input protocol: "tcp" (tdv1) keeps every move and event on the TCP session, "udp"
+// (tdv2, the default) uses this lane. Read at startup (main.js), so a change applies after a restart.
+let tcpOnly = false;
+const setLaneProtocol = (p) => { tcpOnly = p === 'tcp'; };
+const laneOff = () => tcpOnly || !!process.env.TWINDESK_NO_IL;
 
 function deriveKeys(keyHex, role) {
   const key = Buffer.from(keyHex, 'hex');
@@ -987,5 +991,5 @@ class LaneMesh {
 module.exports = {
   InputLane, MoveTotals, MoveApply, EventOrder, LaneDrive, LaneDriven, ReplayWindow,
   LanePool, LaneMesh, linkLane, peerIp, LANE_TYPES,
-  seal, open, deriveKeys, encodeMove, decodeMove, encodeEvents, decodeEvents, laneOff, TYPE,
+  seal, open, deriveKeys, encodeMove, decodeMove, encodeEvents, decodeEvents, laneOff, setLaneProtocol, TYPE,
 };
