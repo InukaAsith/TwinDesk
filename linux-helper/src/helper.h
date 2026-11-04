@@ -159,6 +159,7 @@ int ble_handle(const char *line); // 1: a ble*/blp* command, taken
 void ble_shutdown(void);
 
 double now_ms(void);
+void shake_feed(double dx, double dy); // shake.c: a shake while capturing emits {"event":"shake"}
 
 // ---- localwatch.c: driven, this computer's own mouse or touchpad takes it back (`local`) ----
 void local_allow(int on); // kvmConfig takeBack

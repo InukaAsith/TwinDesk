@@ -598,9 +598,10 @@ static void on_motion(double rdx, double rdy, double tMs) {
     jo_num(&k, "dx", round(dx * 100) / 100);
     jo_num(&k, "dy", round(dy * 100) / 100);
 #ifdef TDFAST
-    if (lane_move(dx, dy, &k)) return; // it went on the input lane (lane.c)
+    if (!lane_move(dx, dy, &k)) // on the input lane (lane.c), nothing is written
 #endif
-    forward(jo_end(&k));
+      forward(jo_end(&k));
+    shake_feed(dx, dy); // after it went: shaken, the pointer comes home (shake.c)
     return;
   }
   // Follow the pointer.

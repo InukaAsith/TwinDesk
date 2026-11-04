@@ -17,7 +17,10 @@ UI.tab({
     const t = (...args) => I18n.t(...args);
     const hotkey = UI.select(Object.entries(UI.HOTKEYS).map(([value, label]) => ({ value, label })), (v) => api.setKeys({ hotkey: v }));
     const hotkeyRow = UI.row(t('Hotkey'), t('Double-tap to turn cursor sharing on or off'), [hotkey]);
-    const switchSw = UI.switch((v) => api.setKvm({ hotkeySwitch: v }), { label: t('Switch the keyboard with the hotkey') });
+    // Cursor sharing off by its switch or the hotkey (kvm.linked) leaves kvm.mouse on: keyboard-only
+    // switching needs the keyboard shared and only the cursor off, so turning it on swaps one for the other.
+    let cursorOff = false;
+    const switchSw = UI.switch((v) => api.setKvm(v && cursorOff ? { hotkeySwitch: true, mouse: false, shared: true } : { hotkeySwitch: v }), { label: t('Switch the keyboard with the hotkey') });
     const switchRow = UI.row(t('Switch the keyboard with the hotkey'), '', [switchSw], { literal: true });
     const swap = UI.switch((v) => api.setKeys({ swapCtrlCmd: v }), { label: t('Swap Ctrl and Command') });
     const otherHotkey = UI.row('', '', [], { literal: true });
@@ -40,10 +43,11 @@ UI.tab({
       pair.update(s);
       status.update(s);
       hotkey.set(s.keys.hotkey);
-      // Keyboard-only switching exists only while the pointer isn't shared (Cursor off).
-      switchSw.set(s.kvm.hotkeySwitch);
-      switchSw.disable(!!s.kvm.mouse);
-      switchRow.setHint(s.kvm.mouse ? t('Only when Cursor is off') : t('Double-tap to type on {device} and back', { device: p.the }));
+      // Keyboard-only switching exists only while the pointer isn't shared (Cursor off, either way).
+      cursorOff = !s.kvm.mouse || s.kvm.linked === false;
+      switchSw.set(s.kvm.hotkeySwitch && !s.kvm.mouse);
+      switchSw.disable(!cursorOff);
+      switchRow.setHint(!cursorOff ? t('Only when Cursor is off') : t('Double-tap to type on {device} and back', { device: p.the }));
       otherHotkey.label.textContent = t('Hotkey on {device}', { device: p.the });
       otherHotkey.setHint(t('Set in TwinDesk on {device}', { device: p.the }));
       // Ctrl/Cmd swapping only between a Mac and a PC.

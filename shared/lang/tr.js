@@ -1418,6 +1418,8 @@
   "Too big for {name}": "{name} için çok büyük",
   "Torch": "El feneri",
   "Touch blocked": "Dokunma engellendi",
+  "Shake to bring the pointer back": "İşaretçiyi geri getirmek için salla",
+  "While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here": "Başka bir bilgisayarı kullanırken bu bilgisayarın faresini veya dokunmatik yüzeyini sağa sola sallayın: işaretçi buraya geri gelir",
   "Sync touchpads": "Dokunmatik yüzeyleri eşitle",
   "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both": "Açık: her bilgisayarın faresi ve dokunmatik yüzeyi, nerede olursa olsun tek işaretçiyi hareket ettirir. Kapalı: bir bilgisayarın kendi dokunmatik yüzeyini kullanmak işaretçisini geri alır. İkisinde de aynı",
   "Trackpad gestures": "Dokunmatik yüzey hareketleri",

@@ -1418,6 +1418,8 @@
   "Too big for {name}": "文件超过 {name} 的大小限制",
   "Torch": "手电筒",
   "Touch blocked": "触控被阻止",
+  "Shake to bring the pointer back": "摇动以召回指针",
+  "While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here": "在使用另一台电脑时，左右摇动这台电脑的鼠标或触控板：指针会回到这里",
   "Sync touchpads": "同步触控板",
   "On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both": "开：每台电脑的鼠标和触控板都移动同一个指针，无论它在哪里。关：使用某台电脑自己的触控板会把指针收回到这台电脑。两台电脑相同",
   "Trackpad gestures": "触控板手势",

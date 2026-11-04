@@ -470,6 +470,7 @@ namespace MacShare
                         if (lane == 0) Lane.Totals(k, lr, lmn, lcx, lcy); // the lane is down: its totals go with the move
                         Forward(k);
                     }
+                    Shake.Feed(dx / s, dy / s, emit); // after it went: shaken, the pointer comes home (Shake.cs)
                 }
             }
             else if (button >= 0 && (down || up))

@@ -462,6 +462,10 @@ class Kvm {
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released over there
         } else if (msg.ev) this.lane.skip(msg.ev, (x) => this.link.send(x)); // numbered by the helper but not sent: its number goes all the same
         break;
+      // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
+      case 'shake':
+        if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
+        break;
       case 'captureEnded': // dead-man, or a grab another app holds: input is back here
         if (this.mode === 'driving') this._release(msg.reason === 'grab' ? 'Another app is holding the mouse or keyboard' : '');
         break;

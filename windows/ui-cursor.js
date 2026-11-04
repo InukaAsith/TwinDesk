@@ -28,6 +28,8 @@ UI.tab({
     const gestureRow = UI.row(t('Trackpad gestures'), t('Pinch to zoom, swipe between desktops, Task View / Mission Control, back and forward — done the native way on {name}. The same on both'), [gestures]);
     const syncPads = UI.switch((v) => set({ syncPads: v }), { label: t('Sync touchpads') });
     const syncRow = UI.row(t('Sync touchpads'), t('On: every computer’s mouse and trackpad move the one pointer, wherever it is. Off: using a computer’s own trackpad takes its pointer back. The same on both'), [syncPads]);
+    const shake = UI.switch((v) => set({ shakeHome: v }), { label: t('Shake to bring the pointer back') });
+    const shakeRow = UI.row(t('Shake to bring the pointer back'), t('While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here'), [shake]);
     const ble = UI.switch((v) => set({ ble: v }), { label: t('Over Bluetooth') });
     const bleRow = UI.row(t('Over Bluetooth'), t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : t('None')) }, (v) => set({ resistancePx: v }));
@@ -57,7 +59,7 @@ UI.tab({
       viaCard,
       pair.el,
       lock.el,
-      UI.card(t('Feel'), [gestureRow, syncRow]),
+      UI.card(t('Feel'), [gestureRow, syncRow, shakeRow]),
       UI.card(t('Not on the same network'), [bleRow]),
       UI.card(t('Right now'), [status], { cls: 'keep-on' }),
       el('div', { class: 'card-title', text: t('Where the other computer is') }),
@@ -81,6 +83,7 @@ UI.tab({
       reverse.set(k.reverseScroll);
       gestures.set(k.gestures !== false);
       syncPads.set(k.syncPads === true);
+      shake.set(k.shakeHome !== false);
       ble.set(k.ble !== false);
       resistance.set(k.resistancePx);
       // kvm.layout says where this computer is seen from the other one; the other one is opposite.
