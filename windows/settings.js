@@ -131,6 +131,12 @@ function normalize(s) {
       // Bluetooth, this computer as its speaker (shared/btaudio.js), off until turned on
       phoneMedia: bool(audio.phoneMedia, was),
       phoneBt: bool(audio.phoneBt, false),
+      // Microphone (shared/mic.js): this computer's to the other (micSend), the other's here (micReceive),
+      // off until turned on; micDevice: the microphone sent, micOut: where the other's plays ('' = found)
+      micSend: bool(audio.micSend, false),
+      micReceive: bool(audio.micReceive, false),
+      micDevice: typeof audio.micDevice === 'string' ? audio.micDevice.slice(0, 200) : '',
+      micOut: typeof audio.micOut === 'string' ? audio.micOut.slice(0, 200) : '',
       phoneBtDevice: typeof audio.phoneBtDevice === 'string' ? audio.phoneBtDevice.slice(0, 400) : '',
     },
     terminal: {

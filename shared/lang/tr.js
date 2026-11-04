@@ -1948,5 +1948,20 @@
   "the PC": "bilgisayar",
   "{title} (from {name})": "{title} ({name} cihazından)",
   "Bring the Window Back from {name}": "Pencereyi {name} cihazından geri getir",
-  "Bring {count} Windows Back from {name}": "{count} pencereyi {name} cihazından geri getir"
+  "Bring {count} Windows Back from {name}": "{count} pencereyi {name} cihazından geri getir",
+  "Microphone": "Mikrofon",
+  "Use {me}’s microphone on {name}": "{me} mikrofonunu {name} üzerinde kullan",
+  "Use {name}’s microphone on {me}": "{name} mikrofonunu {me} üzerinde kullan",
+  "Default microphone": "Varsayılan mikrofon",
+  "Found by itself": "Kendiliğinden bulunur",
+  "Plays into": "Şuraya çalar",
+  "Calls and recordings on {name} hear this microphone": "{name} üzerindeki aramalar ve kayıtlar bu mikrofonu duyar",
+  "In use on {device}": "{device} üzerinde kullanılıyor",
+  "Apps here pick it as “TwinDesk Microphone”": "Buradaki uygulamalar onu “TwinDesk Microphone” olarak seçer",
+  "Apps here pick it through a virtual audio cable": "Buradaki uygulamalar onu sanal ses kablosuyla seçer",
+  "Live: apps pick “TwinDesk Microphone”": "Canlı: uygulamalar “TwinDesk Microphone” seçer",
+  "Apps pick “TwinDesk Microphone”. Waiting for {device}": "Uygulamalar “TwinDesk Microphone” seçer. {device} bekleniyor",
+  "Live into {output}: apps pick its other end as the microphone": "{output} içine canlı: uygulamalar diğer ucunu mikrofon olarak seçer",
+  "Into {output}. Waiting for {device}": "{output} içine. {device} bekleniyor",
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "Sanal ses kablosu bulunamadı: hoparlörlerde çalar. VB-CABLE (Windows) veya BlackHole (macOS) kurun, uygulamalar onu mikrofon olarak seçebilir"
 });

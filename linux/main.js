@@ -128,6 +128,7 @@ let rezumeAct = null; // … what's in front here (activity.js)
 let helper = null;
 let kvm = null;
 let sound = null;
+let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
 let fileDrop = null;
 let fileRecv = null;
 let fileClip = null;
@@ -258,6 +259,7 @@ function start() {
   fileDrop = new FileDrop({ link, settings, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
   screen.fileDrop = fileDrop;
   sound = new Sound({ link, settings, onChange: pushState });
+  loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   loadTerminal(); // only while it's on
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
@@ -385,7 +387,7 @@ function start() {
   updates.start();
   const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
-    get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
+    get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
@@ -1136,7 +1138,7 @@ function buildState() {
     updates: updates ? updates.view : null,
     firewall: fw,
     session: { ...session, input: helper.backend || '', access: session.type === 'wayland' ? system.inputAccess() : null, inputNote, helperError: helper.error || '' },
-    audio: { ...settings.audio, ...sound.view() },
+    audio: { ...settings.audio, ...sound.view(), mic: mic ? mic.view() : null },
     pcScreen: pcScreen.view(),
     files: { ...settings.files, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view(), session: session.type },
     terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, server: sshd.view() },
@@ -1430,7 +1432,16 @@ function updateTray(s) {
   })));
 }
 
+// Audio › Microphone: loaded the first time one of its switches is on (each change applies it).
+function loadMic() {
+  if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
+  const { Mic } = require('../shared/mic.js');
+  mic = new Mic({ link, cfg: () => settings.audio, onChange: pushState });
+  return mic;
+}
+
 app.on('before-quit', () => {
+  if (mic) mic.shutdown();
   quitting = true;
   theme.stop();
   saveBounds();

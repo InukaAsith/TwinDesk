@@ -1949,5 +1949,20 @@
   "the PC": "the PC",
   "{title} (from {name})": "{title} (from {name})",
   "Bring the Window Back from {name}": "Bring the Window Back from {name}",
-  "Bring {count} Windows Back from {name}": "Bring {count} Windows Back from {name}"
+  "Bring {count} Windows Back from {name}": "Bring {count} Windows Back from {name}",
+  "Microphone": "Microphone",
+  "Use {me}’s microphone on {name}": "Use {me}’s microphone on {name}",
+  "Use {name}’s microphone on {me}": "Use {name}’s microphone on {me}",
+  "Default microphone": "Default microphone",
+  "Found by itself": "Found by itself",
+  "Plays into": "Plays into",
+  "Calls and recordings on {name} hear this microphone": "Calls and recordings on {name} hear this microphone",
+  "In use on {device}": "In use on {device}",
+  "Apps here pick it as “TwinDesk Microphone”": "Apps here pick it as “TwinDesk Microphone”",
+  "Apps here pick it through a virtual audio cable": "Apps here pick it through a virtual audio cable",
+  "Live: apps pick “TwinDesk Microphone”": "Live: apps pick “TwinDesk Microphone”",
+  "Apps pick “TwinDesk Microphone”. Waiting for {device}": "Apps pick “TwinDesk Microphone”. Waiting for {device}",
+  "Live into {output}: apps pick its other end as the microphone": "Live into {output}: apps pick its other end as the microphone",
+  "Into {output}. Waiting for {device}": "Into {output}. Waiting for {device}",
+  "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone": "No virtual audio cable found: it plays on the speakers. Install VB-CABLE (Windows) or BlackHole (macOS) and apps can pick it as a microphone"
 });

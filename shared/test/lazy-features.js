@@ -10,9 +10,16 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 const LAZY = {
-  'windows/main.js': ['nowplaying', 'btaudio', 'terminal', 'gamepad', 'camshare', 'vcam', 'phone-remote', 'rezume', 'rezume-shelf', 'activity'],
-  'linux/main.js': ['nowplaying', 'btaudio', 'a2dp', 'terminal', 'gamepad', 'camshare', 'vcam', 'phone-remote', 'rezume', 'rezume-shelf', 'activity'],
-  'mac/main.js': ['nowplaying', 'camshare', 'vcam', 'phone-remote', 'rezume', 'rezume-shelf', 'activity'],
+  'windows/main.js': ['nowplaying', 'btaudio', 'terminal', 'gamepad', 'camshare', 'vcam', 'phone-remote', 'rezume', 'rezume-shelf', 'activity', 'mic'],
+  'linux/main.js': ['nowplaying', 'btaudio', 'a2dp', 'terminal', 'gamepad', 'camshare', 'vcam', 'phone-remote', 'rezume', 'rezume-shelf', 'activity', 'mic'],
+  'mac/main.js': ['nowplaying', 'camshare', 'vcam', 'phone-remote', 'rezume', 'rezume-shelf', 'activity', 'mic'],
+  'windows/mesh/main.js': ['mic'],
+  'linux/mesh/main.js': ['mic'],
+  'mac/mesh/main.js': ['mic'],
+  // Move windows: its code loads only once a window moves
+  'windows/pcapps.js': ['movewin'],
+  'linux/pcapps.js': ['movewin'],
+  'mac/appsend.js': ['movewin'],
 };
 
 for (const [file, mods] of Object.entries(LAZY)) {

@@ -27,6 +27,7 @@ const clamp = (lo, hi, dflt) => (v) => {
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : dflt;
 };
 const oneOf = (list, dflt) => (v) => (list.includes(v) ? v : dflt);
+const devId = (v) => (typeof v === 'string' ? v.slice(0, 200) : ''); // an audio device's id (shared/mic.js)
 // A global shortcut: at least Control, Option or Command, plus one key (Electron accelerator).
 const KEY = /^(?:(?:Control|Alt|Shift|Command)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|Space|Tab|Backspace|Delete|Enter|Up|Down|Left|Right|[`\-=[\];',./\\])$/;
 const accel = (dflt) => (v) => (typeof v === 'string' && KEY.test(v) && /Control|Alt|Command/.test(v) ? v : dflt);
@@ -42,7 +43,7 @@ const SCHEMA = {
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp') },
   mesh: { autoJoin: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
-  audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool },
+  audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
   notifs: { send: bool, receive: bool, hideText: bool },
@@ -494,6 +495,8 @@ function setupIpc(ctx) {
     setAudio(partial) {
       setGroup('audio', partial);
       ctx.audio.applySettings();
+      const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
+      if (mic) mic.apply();
     },
     // "Share sound with the screen" (Display › Mac → PC).
     setScreenSound(on) {
