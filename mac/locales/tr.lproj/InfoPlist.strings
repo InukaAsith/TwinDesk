@@ -1,0 +1,10 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. macOS owns the surrounding permission dialog. */
+"NSLocalNetworkUsageDescription" = "TwinDesk'in yerel ağdaki diğer bilgisayarlarınızı bulması ve onlara bağlanması gerekir.";
+"NSMicrophoneUsageDescription" = "TwinDesk'in Mac ile diğer bilgisayarlar arasında ses aktarması gerekir.";
+"NSAudioCaptureUsageDescription" = "TwinDesk'in bu Mac'in sesini diğer bilgisayarlara aktarması gerekir.";
+"NSCameraUsageDescription" = "Kamera paylaşılırken TwinDesk'in bu Mac'in kamera görüntüsünü diğer bilgisayarlarda göstermesi gerekir.";
+"NSAppleEventsUsageDescription" = "TwinDesk'in dosyaları geçerli klasöre kopyalayıp yapıştırmak için Finder'a bu klasörü sorması gerekir.";
+"NSBluetoothAlwaysUsageDescription" = "Telefonlar veya bilgisayarlar aynı ağda değilken TwinDesk'in onlara Bluetooth ile bağlanması gerekir.";
+"NSLocationUsageDescription" = "macOS Wi-Fi ağlarını yalnızca konum erişimi olan uygulamalara gösterir. Aynı ağda olmayan bir telefon veya bilgisayara dosya aktarmak için TwinDesk'in onun Wi-Fi ağına katılması gerekir.";
+"NSLocationWhenInUseUsageDescription" = "macOS Wi-Fi ağlarını yalnızca konum erişimi olan uygulamalara gösterir. Aynı ağda olmayan bir telefon veya bilgisayara dosya aktarmak için TwinDesk'in onun Wi-Fi ağına katılması gerekir.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "macOS Wi-Fi ağlarını yalnızca konum erişimi olan uygulamalara gösterir. Aynı ağda olmayan bir telefon veya bilgisayara dosya aktarmak için TwinDesk'in onun Wi-Fi ağına katılması gerekir.";
