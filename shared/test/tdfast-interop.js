@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The native lane (native/tdfast, docs/perf-plan.md P3) and the JS lane (shared/inputlane.js) on real UDP:
+// The native lane (native/tdfast, docs/protocol.md) and the JS lane (shared/inputlane.js) on real UDP:
 // a P2 peer and a P3 peer interoperate. Moves both ways come out exact under 30% loss; events carry
 // their es and a move waits for the event before it. Needs the example peer built:
 //   cargo build --release --example peer   (in native/tdfast); skipped without it.

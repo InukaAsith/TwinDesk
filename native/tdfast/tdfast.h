@@ -1,5 +1,5 @@
 /* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
- * tdfast: the input lane in the helpers (docs/perf-plan.md P3), the wire of shared/inputlane.js.
+ * tdfast: the input lane in the helpers (docs/protocol.md), the wire of shared/inputlane.js.
  * One lane per process. The callback runs on the lane's thread: hop to your own queue. */
 #ifndef TDFAST_H
 #define TDFAST_H

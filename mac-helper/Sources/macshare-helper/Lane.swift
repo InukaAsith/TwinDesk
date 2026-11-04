@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The input lane in the helper (native/tdfast, docs/perf-plan.md P3): Node out of the move path on both
+// The input lane in the helper (native/tdfast, docs/protocol.md): Node out of the move path on both
 // ends. Driving: the event tap's moves go straight onto the lane (td_move) and nothing is written to
 // stdout; clicks, keys, wheel and gestures carry their event number and fence for Node. Driven: the
 // lane's moves are injected here (deduplicated, speed applied, after the event they wait for); its

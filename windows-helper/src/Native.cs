@@ -97,7 +97,7 @@ namespace MacShare
         public struct KBDLLHOOKSTRUCT { public uint vkCode, scanCode, flags, time; public IntPtr dwExtraInfo; }
 
         // The hooks' structs read field by field: Marshal.PtrToStructure boxes one object per event,
-        // and the hooks run for every mouse move (docs/perf-plan.md: nothing allocated per move).
+        // and the hooks run for every mouse move (docs/protocol.md: nothing allocated per move).
         static readonly int MsExtra = Marshal.OffsetOf(typeof(MSLLHOOKSTRUCT), "dwExtraInfo").ToInt32();
         static readonly int KbExtra = Marshal.OffsetOf(typeof(KBDLLHOOKSTRUCT), "dwExtraInfo").ToInt32();
         public static MSLLHOOKSTRUCT ReadMouse(IntPtr p)

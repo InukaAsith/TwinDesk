@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The input lane in the helper (docs/perf-plan.md P3): what shared/inputlane.js's InputLane, MoveTotals,
+// The input lane in the helper (docs/protocol.md): what shared/inputlane.js's InputLane, MoveTotals,
 // MoveApply and LaneDriven do for moves, with the same timings, so a native peer and a JS peer behave
 // alike. One thread: recv with a 1 ms timeout drives the throttle, the tail resends and the pings.
 // td_move runs on the event tap's thread: a short lock and a send, never a wait.

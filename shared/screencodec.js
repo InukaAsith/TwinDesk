@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Screen share codec (docs/perf-plan.md P5): which encoder this computer sends its screen with.
+// Screen share codec: which encoder this computer sends its screen with.
 // The setting (Share screen › Picture › Encoder, sharing.codec / pcScreen.codec):
 //   'h264' (default): H.264 only, High before Main before Baseline (better quality per bit).
 //   'h265': H.265 only, for testing it; the other computer must decode it too, else nothing shows.

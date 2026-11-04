@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Fast files v2 (docs/perf-plan.md P4, capability `fx2`): the engine. It moves file bytes, TLS and
+// Fast files v2 (docs/protocol.md, capability `fx2`): the engine. It moves file bytes, TLS and
 // hashing off the app's main thread: it runs in an Electron utility process (shared/fx2.js starts it),
 // or in the same process where there is none (plain node, the tests).
 //

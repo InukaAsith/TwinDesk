@@ -1,6 +1,6 @@
 @echo off
 rem TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-rem Builds the input lane (native/tdfast, docs/perf-plan.md P3) for the helper: bin\x64\tdfast.dll and,
+rem Builds the input lane (native/tdfast, docs/protocol.md) for the helper: bin\x64\tdfast.dll and,
 rem when Rust has the target, bin\arm64\tdfast.dll (Lane.cs loads the one of the helper's own
 rem architecture). Optional: without cargo, or with TWINDESK_NO_TDFAST set, nothing is built and
 rem Node keeps its own lane (shared/inputlane.js), which speaks the same wire.
