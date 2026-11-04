@@ -78,7 +78,7 @@ class Peer {
     server.on('listening', () => { this.host = { on: true, error: '' }; this._changed(); });
     server.on('listenError', (err) => {
       console.error('[server]', err.code || err.message);
-      this.host = { on: false, error: err.code === 'EADDRINUSE' ? 'Port ' + P.PORT + ' is in use (another copy of TwinDesk?)' : err.code || err.message };
+      this.host = { on: false, error: err.code === 'EADDRINUSE' || err.code === 'EACCES' ? 'Port ' + P.PORT + ' is in use by another program (another copy of TwinDesk, or one in WSL). Trying again…' : err.code || err.message };
       this._changed();
     });
     server.on('client', (ctx) => {
