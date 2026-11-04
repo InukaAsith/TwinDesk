@@ -156,8 +156,9 @@
         sw.mirror.disable(!h.on || !h.apps);
         sw.live.disable(!h.on || !h.docs || !h.liveHere);
         sw.windows.disable(!h.on || !h.windowsHere);
-        winList.update(h.windowApps || [], !!h.on);
-        fileList.update(h.fileApps || [], !!(h.on && h.docs));
+        // ReZume not loaded yet (off): the settings' own records, not the lists — nothing to show.
+        winList.update(Array.isArray(h.windowApps) ? h.windowApps : [], !!h.on);
+        fileList.update(Array.isArray(h.fileApps) ? h.fileApps : [], !!(h.on && h.docs));
         offer.update(s, true);
         const phone = !!h.phone;
         appRow.hidden = mirrorRow.hidden = !phone;
