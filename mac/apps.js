@@ -171,7 +171,7 @@ class Apps extends EventEmitter {
     if (!this.timer) this.timer = setInterval(() => this._poll(), POLL_MS);
   }
 
-  // Apps and Windows › Open on a virtual display (apps.onVirtual, off by default): in Mirror mode the
+  // Apps › Open on a virtual display (apps.onVirtual, off by default): in Mirror mode the
   // virtual display is held, and shared, while this Mac's apps are open there (displays.js
   // 'apps-open'). Off, apps open on the shared display as they always did. Extend mode is unchanged.
   _holdVirtual(on) {

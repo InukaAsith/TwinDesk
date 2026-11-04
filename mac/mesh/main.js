@@ -600,7 +600,7 @@ app.whenReady().then(() => {
     return svc.mic;
   };
   svc.loadMic();
-  // Apps and Windows › Move windows: a window grabbed with the move key crossed with the pointer. A
+  // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
   svc.kvm.onMoveWindow = (m, to) => {
     const wid = Number(m.moving);

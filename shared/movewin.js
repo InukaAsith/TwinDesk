@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Apps and Windows › Move windows (#18): a window grabbed with the move key (the helper) crossed to
+// Apps › Move windows (#18): a window grabbed with the move key (the helper) crossed to
 // the other computer with the pointer. It is streamed there as one of the PC apps' windows (papp.*,
 // `moved: true`) and parked out of sight here, so it is in one place at a time; it comes back when
 // its copy there is closed or dragged back, from the tray, at a disconnect or at quit.
@@ -9,6 +9,7 @@
 'use strict';
 
 const MAX_POPUPS = 6;
+const IDLE_MS = 2500; // a moved window used from its copy is parked again this long after the last input
 
 // False: it stays (off, the other side doesn't take windows, Bluetooth, already there, gone).
 async function moveOut(pc, wid) {
@@ -31,6 +32,7 @@ function bringBack(pc, wid, home = false) {
   for (const [id, m] of [...pc.moved]) {
     if (wid !== undefined && id !== wid) continue;
     pc.moved.delete(id);
+    clearTimeout(m.timer);
     any = true;
     let at = m;
     if (home) {
@@ -42,6 +44,24 @@ function bringBack(pc, wid, home = false) {
   if (!any) return;
   if (!pc.stopped) pc._poll(true);
   pc.onChange();
+}
+
+// Input from its copy there: parked past the screens, the pointer can't reach it (the helper puts
+// the pointer on the window), so it comes back where it was, in front, while it's used, and is parked
+// again once the input stops for IDLE_MS. The commands go in order: it's placed before the input lands.
+function touch(pc, wid) {
+  const m = pc.moved.get(wid);
+  if (!m) return;
+  if (!m.out) {
+    m.out = true;
+    pc.helper.send('winPlace', { wid, x: m.x, y: m.y });
+  }
+  clearTimeout(m.timer);
+  m.timer = setTimeout(() => {
+    if (pc.moved.get(wid) !== m || !m.out) return;
+    m.out = false;
+    pc.helper.send('winPark', { wid });
+  }, IDLE_MS);
 }
 
 // The moved windows in the helper's list (all): that one window, not its app's others, with its
@@ -59,4 +79,4 @@ function list(pc, all, taken, out, pops) {
   }
 }
 
-module.exports = { moveOut, bringBack, list };
+module.exports = { moveOut, bringBack, touch, list };

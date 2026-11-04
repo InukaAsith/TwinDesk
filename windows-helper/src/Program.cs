@@ -387,7 +387,7 @@ namespace MacShare
                         break;
                     case "winRaise": AppWindows.Raise(Json.Num(c, "wid", 0)); break;
                     case "winClose": AppWindows.Close(Json.Num(c, "wid", 0)); break;
-                    case "moveWin": // Apps and Windows › Move windows: the key held to grab a window, "" = off
+                    case "moveWin": // Apps › Move windows: the key held to grab a window, "" = off
                         {
                             string mk = Json.Str(c, "key", "");
                             AppWindows.MoveKeyName = mk;

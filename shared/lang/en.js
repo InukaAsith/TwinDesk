@@ -1932,7 +1932,6 @@
   "UDP (tdv2)": "UDP (tdv2)",
   "TCP (tdv1)": "TCP (tdv1)",
   "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart",
-  "Apps and Windows": "Apps and Windows",
   "Move windows": "Move windows",
   "Move windows to {name}": "Move windows to {name}",
   "Key to hold": "Key to hold",

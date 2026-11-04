@@ -124,7 +124,7 @@ class AppSend extends EventEmitter {
   // The helper grabs a window with the move key and a click (Grab.swift); "" = off.
   _moveKey() {
     const a = this.getSettings().apps;
-    this.helper.send('moveWin', { key: a.moveWindows ? a.moveKey || 'ControlRight' : '' });
+    this.helper.send('moveWin', { key: a.moveWindows ? a.moveKey || 'MetaRight' : '' });
   }
 
   // Move windows (movewin.js, loaded only when used): a grabbed window crossed with the pointer
@@ -256,12 +256,13 @@ class AppSend extends EventEmitter {
 
   // The virtual display is held only while a window is moved over (no screen sharing needed).
   _holdDisplay() {
-    if (!this.displays || !this.displays.hold) return;
+    if (!this.displays || !this.displays.hold) return Promise.resolve();
     const want = this.moved.size > 0 && this.server.current != null;
     if (want !== !!this.holding) {
       this.holding = want;
-      this.displays.hold('apps', want).catch(() => {});
+      this.holdDone = this.displays.hold('apps', want).catch(() => {});
     }
+    return this.holdDone;
   }
 
   _forget(id) {

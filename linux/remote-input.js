@@ -22,8 +22,11 @@ class RemoteInput {
   // before(): called before a button/key goes down (e.g. raise the app window).
   // pen(x, y, state): a phone's stylus at x,y normalized, its P.penOf state (the helper's `pen`);
   // without it, the stylus is a mouse.
-  handle(m, move, before, pen) {
-    if (!this.allowed) return;
+  // force: a window moved there with Move windows (shared/movewin.js), whose copy takes input even
+  // while this computer drives the other one (it is the only place that window is used).
+  handle(m, move, before, pen, force) {
+    if (!force && !this.allowed) return;
+    if (force) this.forced = true;
     const ev = (e) => this.helper.send('inject', { ev: e });
     if (POINTER.has(m.t)) {
       const x = Number(m.x), y = Number(m.y);
@@ -57,7 +60,8 @@ class RemoteInput {
   release() {
     if (!this.held) return;
     this.held = false;
-    if (this.inputAllowed()) this.helper.send('releaseAll');
+    if (this.inputAllowed() || this.forced) this.helper.send('releaseAll');
+    this.forced = false;
   }
 }
 

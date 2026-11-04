@@ -1932,7 +1932,6 @@
   "UDP (tdv2)": "UDP (tdv2)",
   "TCP (tdv1)": "TCP (tdv1)",
   "UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart": "UDP 让指针移动更快。TCP 适用于屏蔽 UDP 的网络。重启后生效",
-  "Apps and Windows": "应用和窗口",
   "Move windows": "移动窗口",
   "Move windows to {name}": "将窗口移到 {name}",
   "Key to hold": "按住的键",

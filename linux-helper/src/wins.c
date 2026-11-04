@@ -275,7 +275,7 @@ void wins_info(double id, int atPointer) {
 }
 
 // ---- moving a window to another computer (linux/pcapps.js, shared/movewin.js) ----
-// Apps and Windows › Move windows: the move key held (Right Ctrl unless another is chosen), a click
+// Apps › Move windows: the move key held (Right Ctrl unless another is chosen), a click
 // on a window grabs it. A passive button grab on the root window with the key's modifier catches the
 // click; if the exact key (left or right) isn't the one held, the click is replayed to the app as if
 // nothing happened. While grabbed, the window follows the pointer (_NET_MOVERESIZE_WINDOW, which the

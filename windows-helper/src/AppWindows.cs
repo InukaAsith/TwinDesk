@@ -271,7 +271,7 @@ namespace MacShare
             PostMessage(Handle(wid), WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
 
-        // ---- moving a window to another computer (pcapps.js, Apps and Windows › Move windows) ----
+        // ---- moving a window to another computer (pcapps.js, Apps › Move windows) ----
         // The move key held (Right Ctrl unless another is chosen), a click on a window grabs it: the
         // click never reaches the app, and the window follows the pointer until the button is let go.
         // If the pointer crosses to another computer meanwhile, the window goes with it (the edge or
