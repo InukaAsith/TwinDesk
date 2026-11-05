@@ -182,6 +182,7 @@ class Engine {
       if (!this.port) this.post({ ev: 'port', port: 0 });
     });
     s.keepAliveTimeout = 60000;
+    s.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
     s.listen(0, '0.0.0.0', () => {
       this.server = s;
       this.port = s.address().port;
@@ -202,6 +203,7 @@ class Engine {
     const s = http.createServer((req, res) => this._request(req, res, true));
     this.plainServer = s;
     s.keepAliveTimeout = 60000;
+    s.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
     s.on('error', (e) => console.warn(`[fx2] plain server: ${e.code || e.message}`));
     s.listen(0, '0.0.0.0', () => {
       if (this.plainServer !== s) return s.close();

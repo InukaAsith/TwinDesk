@@ -19,6 +19,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const awake = require('../shared/awake.js');
 
 const HIGH_WATER = 1024 * 1024; // pause reading while the socket has more than this queued
 const MAX_FILES = 10000;
@@ -267,6 +268,7 @@ class FileSend extends EventEmitter {
         while (ws.bufferedAmount > HIGH_WATER) await new Promise((r) => setTimeout(r, 10));
         hash.update(chunk);
         this.server.sendToClient({ t: P.T.FILE_CHUNK, id, seq: seq++, data: chunk.toString('base64') });
+        awake.touch(); // stay awake while the bytes go (shared/awake.js)
         f.sent += chunk.length;
         if (seq % 64 === 0) this._changed();
       }

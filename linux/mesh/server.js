@@ -52,6 +52,7 @@ class Server extends EventEmitter {
     this._now = now || (() => Date.now());
     this.tls = { key, cert }; // also the shared folder's server (shared/foldershare.js)
     this.https = https.createServer(this.tls);
+    this.https.requestTimeout = 0; // not Node's 5-min cap on a whole request: fast files' PUTs (a phone's, a guest's) outlast it
     this.wss = new WebSocketServer({ server: this.https, maxPayload: P.MAX_PAYLOAD });
     this.wss.on('connection', (ws, req) => this._onConnection(ws, req));
     this.wss.on('error', () => {}); // ws repeats the server's errors here; listenError below reports them

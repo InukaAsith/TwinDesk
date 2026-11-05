@@ -216,6 +216,7 @@ class FolderShare extends EventEmitter {
       req.pipe(up);
     });
     srv.keepAliveTimeout = 30000;
+    srv.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
     this.proxy = { server: srv, agent };
     return new Promise((resolve, reject) => {
       srv.on('error', reject);
@@ -281,6 +282,7 @@ class FolderShare extends EventEmitter {
       // Only the phone in the session (the cable: adb reverse, from 127.0.0.1), before TLS even starts.
       srv.on('connection', (sock) => { if (!this._allowed(sock.remoteAddress)) sock.destroy(); });
       srv.keepAliveTimeout = 30000;
+      srv.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
       srv.on('error', reject);
       srv.listen(0, '0.0.0.0', () => {
         this.server = srv;

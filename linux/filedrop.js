@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const awake = require('../shared/awake.js');
 
 const T = P.T;
 const HIGH_WATER = 1024 * 1024;
@@ -234,6 +235,7 @@ class FileDrop {
         if (this.link.status.state !== 'connected') throw localError('{Name} disconnected');
         hash.update(chunk);
         this.link.send({ t: T.FILE_CHUNK, id, seq: seq++, data: chunk.toString('base64') });
+        awake.touch(); // stay awake while the bytes go (shared/awake.js)
         this._sent(job, cur, chunk.length, true);
       }
     } finally {
