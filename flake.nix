@@ -80,6 +80,9 @@
 
               $CC -O2 -Wall -Wextra -std=gnu11 linux-helper/pad/pad.c                 -o linux-helper/bin/twindesk-pad
 
+              # Camera > Virtual camera's writer (linux/vcam.js); without it the switch says "Not in this build"
+              $CC -O2 -Wall -Wextra -std=gnu11 linux-helper/vcam/vcam.c               -o linux-helper/bin/twindesk-vcam
+
               runHook postBuild
             '';
 
@@ -99,12 +102,14 @@
               if [ -d shared/icon ]; then
                 cp -r shared/icon "$share/shared/"
               fi
+              cp -r shared/lang "$out/share/twindesk/shared/"
 
               # Copy helper binaries
               cp linux-helper/bin/macshare-linuxhelper "$share/linux-helper/bin/"
               cp linux-helper/bin/macshare-linuxhelper-multi "$share/linux-helper/bin/"
               cp linux-helper/bin/twindesk-wifiap "$share/linux-helper/bin/"
               cp linux-helper/bin/twindesk-pad "$share/linux-helper/bin/"
+              cp linux-helper/bin/twindesk-vcam "$share/linux-helper/bin/"
               cp linux-helper/bin/twindesk-wifiap "$out/libexec/twindesk-wifiap"
 
               # Install twindesk-connector helper and polkit policy for Extend virtual display
@@ -292,6 +297,18 @@ EOF
                 default = true;
                 description = "Whether to configure security.wrappers for twindesk-wifiap with CAP_NET_ADMIN.";
               };
+
+              virtualCamera = mkOption {
+                type = types.bool;
+                default = true;
+                description = ''
+                  Whether to provide a "TwinDesk Camera" v4l2loopback device for Camera > Virtual camera.
+                  TwinDesk's own installer for it needs apt, dnf or pacman, which NixOS doesn't have. This loads
+                  the v4l2loopback module and adds the device at boot with v4l2loopback-ctl, without touching
+                  boot.extraModprobeConfig, so it works beside other v4l2loopback users (OBS's virtual camera,
+                  say).
+                '';
+              };
             };
 
             cfg = if config.programs.twindesk.enable then config.programs.twindesk else config.services.twindesk;
@@ -321,6 +338,29 @@ EOF
               # the keyboard; TwinDesk doesn't need it, #144).
               users.users = mkIf (cfg.uinput && cfg.inputGroups && cfg.user != null) {
                 ${cfg.user}.extraGroups = [ "input" "uinput" ];
+              };
+
+              # Virtual camera: a v4l2loopback device named "TwinDesk Camera" (linux/vcam.js looks it up by that name).
+              # Added at runtime rather than through `options v4l2loopback ...` in boot.extraModprobeConfig:
+              # those lines from different modules (OBS, ...) don't merge.
+              boot.extraModulePackages = mkIf cfg.virtualCamera [ config.boot.kernelPackages.v4l2loopback ];
+              boot.kernelModules = mkIf cfg.virtualCamera [ "v4l2loopback" ];
+              systemd.services.twindesk-vcam = mkIf cfg.virtualCamera {
+                description = "TwinDesk virtual camera device (v4l2loopback)";
+                wantedBy = [ "multi-user.target" ];
+                wants = [ "modprobe@v4l2loopback.service" ];
+                after = [ "systemd-modules-load.service" "modprobe@v4l2loopback.service" ];
+                serviceConfig = {
+                  Type = "oneshot";
+                  RemainAfterExit = true;
+                };
+                script = ''
+                  for f in /sys/class/video4linux/*/name; do
+                    read -r name 2>/dev/null < "$f" || continue
+                    [ "$name" = "TwinDesk Camera" ] && exit 0
+                  done
+                  ${config.boot.kernelPackages.v4l2loopback.bin}/bin/v4l2loopback-ctl add -x 1 -n "TwinDesk Camera"
+                '';
               };
 
               warnings = optional (cfg.user != null && !cfg.inputGroups)
