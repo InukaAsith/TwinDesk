@@ -73,6 +73,7 @@ class Files(core: Core) : Feature(core) {
         var lastNote = 0L
     }
 
+    private val awake = Awake(core.ctx) // the phone stays awake while file bytes move
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "td-files-in").apply { isDaemon = true } }
     private val pump = Executors.newSingleThreadExecutor { r -> Thread(r, "td-files-out").apply { isDaemon = true } }
     private val pulls = Executors.newCachedThreadPool { r -> Thread(r, "td-files-fx").apply { isDaemon = true } }
@@ -147,6 +148,7 @@ class Files(core: Core) : Feature(core) {
         }
         for (o in outgoing) cancelOut(o.id)
         outBatches.clear()
+        awake.release()
         core.changed()
     }
 
@@ -220,6 +222,7 @@ class Files(core: Core) : Feature(core) {
             f.out.write(data)
             f.hash.update(data)
             f.got += data.size
+            awake.touch()
             batches[f.batch]?.let { it.got += data.size; note(it, false) }
         } catch (e: Exception) {
             abort(f.id, e.message ?: "write failed", true)
@@ -322,6 +325,7 @@ class Files(core: Core) : Feature(core) {
     }
 
     private fun gotBytes(f: Incoming, n: Long) {
+        awake.touch()
         batches[f.batch]?.let { it.got += n; note(it, false) }
     }
 
@@ -505,6 +509,7 @@ class Files(core: Core) : Feature(core) {
 
     private fun sentBytes(f: Outgoing, n: Int) {
         f.sent += n
+        awake.touch()
         val b = outBatches[f.batch] ?: return
         b.sent += n
         val now = System.currentTimeMillis()

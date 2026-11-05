@@ -91,6 +91,7 @@ class LiveShare {
         res.end();
       }));
       srv.keepAliveTimeout = 30000;
+      srv.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
       srv.on('error', reject);
       srv.listen(0, '0.0.0.0', () => {
         this.server = srv;
@@ -340,6 +341,7 @@ class LiveShare {
       req.pipe(up);
     });
     srv.keepAliveTimeout = 30000;
+    srv.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
     m.proxy = srv;
     m.agent = agent;
     return new Promise((resolve, reject) => {

@@ -214,6 +214,7 @@ class PhoneDrive extends EventEmitter {
         });
       });
       srv.keepAliveTimeout = 30000;
+      srv.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
       srv.on('error', reject);
       srv.listen(0, '127.0.0.1', () => {
         this.server = srv;

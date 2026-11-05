@@ -36,6 +36,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const P = require('./protocol.js');
 const { GROUP_NETS } = require('./netlink.js');
+const awake = require('./awake.js');
 
 const T = P.T;
 const PATH = '/twindesk/fx/';
@@ -128,6 +129,7 @@ class FastFiles {
       res.end();
     });
     srv.keepAliveTimeout = 60000;
+    srv.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
     srv.on('error', (e) => console.warn(`[fx] plain server: ${e.code || e.message}`));
     srv.listen(0, '0.0.0.0', () => {
       if (this.plainServer !== srv) return srv.close();
@@ -251,6 +253,11 @@ class FastFiles {
   // Sends an accepted file; resolves with its SHA-256 (send file.end then). Rejects with e.early
   // when nothing went. onBytes(n) as bytes go.
   send(id, path, size, onBytes) {
+    if (!onBytes.awake) { // the computer stays awake while the bytes go (shared/awake.js)
+      const tell = onBytes;
+      onBytes = (n) => { awake.touch(); tell(n); };
+      onBytes.awake = true;
+    }
     if (this.outgoing.has(id) || this.out2.has(id)) return Promise.reject(new Error('file is already transferring'));
     const s = this.o.session();
     if (!s || !s.token) return Promise.reject(early('no fast files'));
@@ -351,6 +358,7 @@ class FastFiles {
   }
 
   _progress2(id, n) {
+    awake.touch();
     const r = this.in2.get(id);
     if (r && r.hook.progress) try { r.hook.progress(id, n); } catch (_) { /* the receiver's */ }
   }
@@ -494,6 +502,7 @@ class FastFiles {
 
   // Every message from the peer before the feature code sees it: true when it was ours (or waits).
   incoming(msg) {
+    if (msg.t === T.FILE_CHUNK) awake.touch(); // the old way's bytes
     switch (msg.t) {
       case T.FILE_END: {
         const r2 = this.in2.get(msg.id);
@@ -594,6 +603,7 @@ class FastFiles {
   _receive(id, stream, ok, r = this._track(id, stream)) {
     stream.on('data', (b) => {
       if (this.arriving.get(id) !== r) return;
+      awake.touch();
       r.parts.push(b);
       r.size += b.length;
       if (r.size >= CHUNK_BYTES) this._flush(id, r);
