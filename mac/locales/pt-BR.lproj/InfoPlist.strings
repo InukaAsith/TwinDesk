@@ -1,0 +1,10 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. macOS owns the surrounding permission dialog. */
+"NSLocalNetworkUsageDescription" = "O TwinDesk precisa encontrar seus outros computadores na rede local e se conectar a eles.";
+"NSMicrophoneUsageDescription" = "O TwinDesk precisa transmitir o som entre o Mac e seus outros computadores.";
+"NSAudioCaptureUsageDescription" = "O TwinDesk precisa transmitir o som deste Mac para seus outros computadores.";
+"NSCameraUsageDescription" = "Ao compartilhar a câmera, o TwinDesk precisa mostrar a imagem da câmera deste Mac nos seus outros computadores.";
+"NSAppleEventsUsageDescription" = "O TwinDesk precisa perguntar ao Finder qual é a pasta atual para copiar e colar arquivos nela.";
+"NSBluetoothAlwaysUsageDescription" = "O TwinDesk precisa se conectar ao seu celular e aos seus computadores por Bluetooth quando eles não estão na mesma rede.";
+"NSLocationUsageDescription" = "O macOS só mostra redes Wi-Fi para apps com acesso à Localização. O TwinDesk precisa entrar no Wi-Fi do seu celular ou computador para enviar arquivos quando eles não estão na mesma rede.";
+"NSLocationWhenInUseUsageDescription" = "O macOS só mostra redes Wi-Fi para apps com acesso à Localização. O TwinDesk precisa entrar no Wi-Fi do seu celular ou computador para enviar arquivos quando eles não estão na mesma rede.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "O macOS só mostra redes Wi-Fi para apps com acesso à Localização. O TwinDesk precisa entrar no Wi-Fi do seu celular ou computador para enviar arquivos quando eles não estão na mesma rede.";
