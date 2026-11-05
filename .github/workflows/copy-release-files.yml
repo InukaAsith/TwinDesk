@@ -1,0 +1,51 @@
+name: Copy release files
+
+# Puts one release's files on another, on GitHub's side (nothing goes through your connection).
+# E.g. from v2.5.1 to v2.5.0 after a hotpatch, so the older release's links get the fixed build.
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: Release to copy the files from (e.g. v2.5.1).
+        required: true
+      to:
+        description: Release to put them on (e.g. v2.5.0).
+        required: true
+      replace:
+        description: Delete the files on the target release that the source doesn't have (its old builds).
+        type: boolean
+        required: false
+        default: true
+
+# Write: uploading and deleting release files.
+permissions:
+  contents: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      FROM: ${{ inputs.from }}
+      TO: ${{ inputs.to }}
+    steps:
+      - name: Download from the source release
+        run: |
+          mkdir files
+          gh release download "$FROM" -D files
+          ls -l files
+      - name: Upload to the target release
+        run: gh release upload "$TO" files/* --clobber
+      - name: Remove the target's old files
+        if: inputs.replace
+        run: |
+          keep=$(ls files)
+          gh release view "$TO" --json assets -q '.assets[].name' | while read -r name; do
+            if ! grep -qxF "$name" <<<"$keep"; then
+              echo "Deleting $name"
+              gh release delete-asset "$TO" "$name" -y
+            fi
+          done
+      - name: The target's files now
+        run: gh release view "$TO" --json assets -q '.assets[] | "\(.name)  \(.size)"'
