@@ -358,6 +358,7 @@
 
   function render(s) {
     UI.state = s;
+    UI.look(s.look); // the accent colour (shared/ui-look.js)
     document.body.classList.toggle('no-peer', !linked(s)); // switches of what needs a device can't be changed (shared/feature-art.js)
     selectionChanged(s);
     renderPeer(s);

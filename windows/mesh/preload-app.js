@@ -7,6 +7,7 @@ const call = (name) => (...args) => ipcRenderer.invoke(name, ...args);
 contextBridge.exposeInMainWorld('macshare', {
   getState: call('getState'),
   setLanguage: call('setLanguage'),
+  setLook: call('setLook'), // General › Appearance: theme and accent colour
   onState: (fn) => ipcRenderer.on('state', (_e, s) => fn(s)),
   onShowUpdate: (fn) => ipcRenderer.on('show-update', () => fn()),
   onGo: (fn) => ipcRenderer.on('go', (_e, tab) => fn(tab)),
