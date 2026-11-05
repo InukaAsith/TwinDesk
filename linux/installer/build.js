@@ -43,8 +43,13 @@ function copyDeps(names, seen = new Set()) {
 }
 
 async function main() {
-  console.log('Building the helper…');
-  execFileSync('sh', [path.join(ROOT, 'linux-helper', 'build.sh')], { stdio: 'inherit' });
+  // CI builds the helpers on an old glibc first (build-linux.yml, issue #149) and sets this: keep those.
+  if (process.env.TWINDESK_HELPERS_PREBUILT) {
+    console.log('Using the helpers already in linux-helper/bin');
+  } else {
+    console.log('Building the helper…');
+    execFileSync('sh', [path.join(ROOT, 'linux-helper', 'build.sh')], { stdio: 'inherit' });
+  }
 
   console.log('Staging…');
   fs.rmSync(STAGE, { recursive: true, force: true });
