@@ -99,6 +99,7 @@
               if [ -d shared/icon ]; then
                 cp -r shared/icon "$share/shared/"
               fi
+              cp -r shared/lang "$out/share/twindesk/shared/"
 
               # Copy helper binaries
               cp linux-helper/bin/macshare-linuxhelper "$share/linux-helper/bin/"
