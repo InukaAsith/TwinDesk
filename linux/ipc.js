@@ -185,9 +185,9 @@ function setupIpc(ctx) {
   handle('setFiles', (partial) => {
     // shareOn/shareFolder only change through share()/unshare()
     const p = partial && typeof partial === 'object' ? { dropToMac: partial.dropToMac, mountMac: partial.mountMac, acceptFromMac: partial.acceptFromMac, edgeDrag: partial.edgeDrag,
-      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys } : {};
+      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys, plain: partial.plain } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
-    change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); });
+    change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); link.setPlain(settings.files.plain === true); });
   });
   // General › Received files (shared/received.js): chosen here only, never by the page itself.
   handle('chooseReceivedFolder', async () => {
@@ -265,7 +265,9 @@ function setupIpc(ctx) {
   handle('skipSetup', () => change('setup', { skipped: ctx.buildState().setup.missing, done: true }));
   handle('checkFirewall', () => ctx.checkFirewall());
   handle('fixFirewall', () => ctx.fixFirewall());
-  handle('fixInput', () => ctx.fixInput()); // Wayland: uinput rule + input group (L6)
+  handle('fixInput', () => ctx.fixInput()); // Wayland: the helper's own input access (system.js, #144)
+  handle('leaveInputGroup', () => ctx.leaveInputGroup());
+  handle('removeInput', () => ctx.removeInput());
   handle('installVdd', () => ctx.vdd.install()); // X11 Extend: the connector helper (vdd.js)
   handle('removeVdd', () => ctx.vdd.remove());
   handle('setStartup', (on) => ctx.setStartup(on === true));

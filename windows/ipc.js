@@ -179,9 +179,9 @@ function setupIpc(ctx) {
   handle('setFiles', (partial) => {
     // shareOn/shareFolder only change through share()/unshare()
     const p = partial && typeof partial === 'object' ? { dropToMac: partial.dropToMac, mountMac: partial.mountMac, acceptFromMac: partial.acceptFromMac, edgeDrag: partial.edgeDrag,
-      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys } : {};
+      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys, plain: partial.plain } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
-    change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); });
+    change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); link.setPlain(settings.files.plain === true); });
   });
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {

@@ -590,6 +590,7 @@ app.whenReady().then(() => {
   pairing.on('change', pushState);
   pairing.on('request', showWindow);
   peer = new Peer(server, link);
+  peer.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
   peer.on('client', (ctx) => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });

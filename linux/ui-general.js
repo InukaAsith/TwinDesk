@@ -37,7 +37,10 @@ UI.tab({
     const sessRow = UI.row(t('Desktop session'), '', [sessPill], { literal: true });
     const inPill = el('span', { class: 'pill' });
     const inFix = UI.button(t('Fix'), () => api.fixInput(), 'small primary');
-    const inRow = UI.row(t('Input access'), '', [inPill, inFix], { literal: true });
+    // #144: the input group lets every program read the keyboard; the helper has it on its own now.
+    const inLeave = UI.button(t('Leave the group'), () => api.leaveInputGroup(), 'small');
+    const inRemove = UI.button(t('Remove'), () => api.removeInput(), 'small');
+    const inRow = UI.row(t('Input access'), '', [inPill, inFix, inLeave, inRemove], { literal: true });
     const helperPill = el('span', { class: 'pill' });
     const helperRow = UI.row(t('Mouse and keyboard helper'), '', [helperPill]);
     const deviceName = el('span', { class: 'value', attrs: { 'data-literal': '' } });
@@ -156,12 +159,19 @@ UI.tab({
       inRow.hidden = !wl;
       const a = ss.access || {};
       const ok = a.uinput && a.read;
-      inPill.textContent = ok ? t('OK') : a.uinput ? t('Partly') : t('Needs a fix');
-      inPill.className = 'pill ' + (ok ? 'good' : 'bad');
-      inFix.hidden = ok;
-      inRow.setHint(ss.inputNote ? t(ss.inputNote) : ok ? t('Reads the mouse and keyboard for crossing; injects through uinput')
-        : a.uinput ? t('Can be controlled, but can’t read the mouse and keyboard to cross over (log out and back in after Fix)')
-          : t('Needed to share the mouse and keyboard on Wayland. Asks for your password once'));
+      inPill.textContent = a.group ? t('Too wide') : ok ? t('OK') : a.uinput ? t('Partly') : t('Needs a fix');
+      inPill.className = 'pill ' + (ok && !a.group ? 'good' : 'bad');
+      inFix.hidden = ok && (a.scoped || !a.group);
+      inLeave.hidden = !(a.group && a.scoped);
+      inRemove.hidden = !(a.scoped || a.group || a.stale) || (a.group && a.scoped); // one button at a time
+      inRow.setHint(ss.inputNote ? t(ss.inputNote)
+        : a.group && a.scoped ? t('Your account is in the input group: every program you run can read the keyboard. TwinDesk doesn’t need that')
+          : a.group ? t('Works through the input group, which lets every program you run read the keyboard. Fix gives that to the TwinDesk helper alone; then leave the group')
+            : ok ? t('Only the TwinDesk helper reads the mouse and keyboard (to cross over and for the hotkey) and injects through uinput. Remove undoes it')
+              : a.stale ? t('TwinDesk was updated: Fix once more for its new helper (asks for your password)')
+                : a.uinput ? t('Can be controlled, but can’t read the mouse and keyboard to cross over')
+                  : t('Needed to share the mouse and keyboard on Wayland. Fix gives that to the TwinDesk helper alone, not to your account. Asks for your password once'));
+      inRow.hint.classList.toggle('bad', !!a.group && !ss.inputNote);
       const h = s.kvmState.helper;
       helperPill.textContent = h ? (h === 'starting' ? t('Starting…') : t('Not running')) : t('Running');
       helperPill.className = 'pill ' + (h ? (h === 'starting' ? 'muted' : 'bad') : 'good');

@@ -64,6 +64,9 @@ UI.tab({
 
     const edgeDrag = sw(I18n.t('Drag files across the screen edge'), (v) => api.setFiles({ edgeDrag: v }));
     const edgeRow = UI.row(I18n.t('Drag files between computers'), '', [edgeDrag]);
+    // Unencrypted file transfers (shared/fastfile.js fxPlain): the switch is on while they're encrypted.
+    const encrypt = sw(I18n.t('Encrypt file transfers'), (v) => api.setFiles({ plain: !v }));
+    const encryptRow = UI.row(I18n.t('Encrypt file transfers'), '', [encrypt]);
     const cancelBtn = UI.button(I18n.t('Cancel'), () => api.cancelDrop(), 'small');
     const outRow = UI.row('', '', [cancelBtn], { literal: true });
     const inRow = UI.row('', '', [], { literal: true });
@@ -71,7 +74,7 @@ UI.tab({
       UI.card('', [sendRow, zone], { cls: 'keep-on' }),
       UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
       pair.el,
-      UI.card('', [edgeRow]),
+      UI.card('', [edgeRow, encryptRow]),
       UI.card(I18n.t('Recent'), [outRow, inRow]),
     );
     const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
@@ -103,6 +106,9 @@ UI.tab({
         : ck.incoming ? I18n.t('{device} copied {items} · press {keys}', { device: p.them, items: ck.incoming.name || I18n.t('{count} items', { count: ck.incoming.items }), keys: UI.keysLabel(f.pasteKeys) })
           : I18n.t('Into the app in front (a chat, a mail…), or the file manager folder in front, else {folder}', { folder: UI.receivedName(s) }));
       edgeDrag.set(f.edgeDrag);
+      encrypt.set(f.plain !== true);
+      encryptRow.setHint(f.plain === true ? I18n.t('Off: files cross the network unencrypted, so others on it can read them (changes are still caught). Turn it off on both computers; a phone follows its computer.') : I18n.t('Files are encrypted on the way, like everything else'));
+      encryptRow.hint.classList.toggle('bad', f.plain === true);
       edgeRow.setHint(f.edgeDrag && f.macDrags === false ? I18n.t('Turned off on {name}')
         : !f.edgeDrag ? '' : f.session === 'wayland' ? I18n.t('From {device}: drop on a folder or the desktop. From here: needs an Xorg session', { device: p.the })
           : I18n.t('Drag through the screen edge. Here, drop on a folder or the desktop'));

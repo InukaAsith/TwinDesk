@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const fs = require('fs');
 const path = require('path');
+const { helperBin } = require('./system.js'); // its setgid input copy on Wayland (#144)
 
 const BIN = path.join(__dirname, '..', 'linux-helper', 'bin', 'macshare-linuxhelper');
 const RESTART_MS = 1000;
@@ -41,7 +42,7 @@ class Helper extends EventEmitter {
       this.emit('exit', -1);
       return;
     }
-    const proc = spawn(BIN, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn(helperBin(BIN), [], { stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc = proc;
     this.buf = '';
     let stderr = '';

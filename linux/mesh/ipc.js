@@ -239,7 +239,9 @@ function setupIpc(ctx) {
   handle('skipSetup', () => change('setup', { skipped: ctx.buildState().setup.missing, done: true }));
   handle('checkFirewall', () => ctx.checkFirewall());
   handle('fixFirewall', () => ctx.fixFirewall());
-  handle('fixInput', () => ctx.fixInput()); // Wayland: uinput rule + input group (L6)
+  handle('fixInput', () => ctx.fixInput()); // Wayland: the helper's own input access (system.js, #144)
+  handle('leaveInputGroup', () => ctx.leaveInputGroup());
+  handle('removeInput', () => ctx.removeInput());
   handle('installVdd', () => ctx.vdd.install()); // X11 Extend: the connector helper (vdd.js)
   handle('removeVdd', () => ctx.vdd.remove());
   handle('setStartup', (on) => ctx.setStartup(on === true));

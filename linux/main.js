@@ -222,6 +222,7 @@ function start() {
     resolveAddress: (macId) => discovery.get(macId),
   });
   link = new Peer(guest);
+  link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
   startHost(guest);
   link.onState(() => {
     discovery.wantProbes = link.snapshot().link.state !== 'connected'; // probe every 10 s only while not connected
@@ -387,7 +388,7 @@ function start() {
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
-    checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
+    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', pushState);
   loadReZume(); // only while it's on
@@ -1232,13 +1233,35 @@ async function fixFirewall() {
   pushState();
 }
 
+// Input access on Wayland (system.js, #144): the helper's own, never the user's.
 async function fixInput() {
   try {
     await system.fixInput();
-    inputNote = 'Done. Log out and back in once to finish.';
+    inputNote = 'Done. Only the TwinDesk helper can read and control the mouse and keyboard.';
   } catch (e) {
     inputNote = 'Not fixed: ' + e.message;
   }
+  helper.stop();
+  helper.start(); // as its setgid copy now
+  pushState();
+}
+async function leaveInputGroup() {
+  try {
+    await system.leaveInputGroup();
+    inputNote = 'Done. Log out and back in once to finish.';
+  } catch (e) {
+    inputNote = 'Not changed: ' + e.message;
+  }
+  pushState();
+}
+async function removeInput() {
+  try {
+    await system.removeInput();
+    inputNote = 'Removed. Log out and back in once to finish. Sharing the mouse and keyboard on Wayland needs Fix again.';
+  } catch (e) {
+    inputNote = 'Not removed: ' + e.message;
+  }
+  helper.stop();
   helper.start();
   pushState();
 }

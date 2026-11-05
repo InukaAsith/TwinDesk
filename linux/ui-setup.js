@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Setup screen (same page as the PC's):
 // a full page before the tabs while something isn't ready: the desktop session, input access on
-// Wayland (Fix = uinput rule + the input group, one password prompt), the firewall (Fix
+// Wayland (Fix = the helper's own setgid input copy + a uinput rule, one password prompt; never the
+// user in the input group, #144), the firewall (Fix
 // through pkexec), the mouse and keyboard helper. "Skip for now" is remembered until something new
 // is missing. No sidebar while it shows.
 'use strict';
@@ -55,7 +56,8 @@ UI.setup = (() => {
 
     const inBad = s.setup.missing.includes('input');
     inRow.hidden = !shown.has('input');
-    inRow.setHint(ss.inputNote || (inBad ? 'Wayland lets TwinDesk share the mouse and keyboard through /dev/uinput and /dev/input. Fix sets that up once (asks for your password); then log out and back in.' : ''));
+    inRow.setHint(ss.inputNote || (!inBad ? '' : (ss.access || {}).stale ? 'TwinDesk was updated: Fix once more for its new helper (asks for your password).'
+      : 'On Wayland, TwinDesk’s helper reads the mouse and keyboard (/dev/input) to see them cross to the other computer, and injects through /dev/uinput. Fix gives that to the helper alone, not to your account, so other programs still can’t read your keyboard (asks for your password once). General › Input access › Remove undoes it.'));
     inFix.hidden = !inBad;
     inDone.hidden = inBad;
 

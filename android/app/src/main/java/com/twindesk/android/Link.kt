@@ -77,6 +77,12 @@ class Link(
     private val lastRxOf = java.util.concurrent.ConcurrentHashMap<WebSocket, Long>()
     private var helloTimer: ScheduledFuture<*>? = null
     var bleRx: () -> Long = { 0L } // Ble.lastDown: bytes arriving through Bluetooth count as alive
+    // Fast files (Proto.FX_PATH): the session's token from welcome {fx}; none from a computer that can't.
+    @Volatile private var fxToken = ""
+    // … and welcome {fxPlain: {port, token}}: the computer allows unencrypted file transfers (its
+    // Files › Encrypt file transfers off). We always allow them (hello {fxPlain: 1}): the computer decides.
+    @Volatile private var fxPlain: Fx.Plain? = null
+    private var fxClient: Pair<String, OkHttpClient>? = null // (pinned fingerprint, client), kept for its connections
 
     private fun run(block: () -> Unit) = exec.execute { try { block() } catch (e: Exception) { Log.e("TwinDesk", "link", e) } }
 
@@ -215,6 +221,30 @@ class Link(
         return client(fp).newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).writeTimeout(0, TimeUnit.MILLISECONDS).build()
     }
 
+    // Fast files for the next file: the computer gave a token, and the session is on the network or
+    // a cable (as the computers' fastfile.js usable()). Else the bytes go as file.chunk.
+    // plain: unencrypted (FxHttp) to `address` on that port, with its own token; null: HTTPS (client).
+    class Fx(val base: String, val token: String, val client: OkHttpClient, val address: String, val plain: Plain?) {
+        class Plain(val port: Int, val token: String)
+    }
+
+    fun fx(): Fx? {
+        val token = fxToken
+        if (state != "connected" || ble || token.isEmpty()) return null
+        val (address, port) = endpoint() ?: return null
+        if (Proto.GROUP_NETS.any { address.startsWith(it) }) return null
+        val fp = host?.fp ?: return null
+        val c = synchronized(this) {
+            fxClient?.takeIf { it.first == fp }?.second ?: client(fp).newBuilder()
+                .readTimeout(30, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS) // the computer's IDLE_MS
+                .build().also { fxClient = fp to it }
+        }
+        val h = if (address.contains(':')) "[$address]" else address
+        // Not through the cable: adb reverse carries only the session's port.
+        val plain = if (wired) null else fxPlain
+        return Fx("https://$h:$port${Proto.FX_PATH}", token, c, address, plain)
+    }
+
     // Self-signed certificates: the fingerprint is the identity (pinned once paired).
     private fun socket(url: String, pinFp: String?): WebSocket {
         val w = client(pinFp).newWebSocket(Request.Builder().url(url).build(), Listener())
@@ -345,7 +375,7 @@ class Link(
 
     private fun hello() {
         val h = host ?: return
-        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token))
+        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "fx" to 1, "fxPlain" to 1))
         helloTimer?.cancel(false)
         helloTimer = exec.schedule({ if (state != "connected") { message = "No answer"; ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
@@ -411,6 +441,12 @@ class Link(
         store.putHost(h)
         rttMs = null
         resumeKey = m.optString("resume")
+        fxToken = m.optString("fx").takeIf { Regex("^[0-9a-f]{32}$").matches(it) } ?: ""
+        fxPlain = m.optJSONObject("fxPlain")?.let { p ->
+            val port = p.optInt("port", 0)
+            val token = p.optString("token")
+            if (port in 1..65535 && Regex("^[0-9a-f]{32}$").matches(token)) Fx.Plain(port, token) else null
+        }
         ws?.let { lastRxOf[it] = System.currentTimeMillis() }
         // Each of the session's sockets on its own: a quiet fallback goes, the session lives on.
         pinger = exec.scheduleWithFixedDelay({
@@ -473,6 +509,8 @@ class Link(
         pinger?.cancel(false)
         helloTimer?.cancel(false)
         ws = null
+        fxToken = ""
+        fxPlain = null
         dropOthers()
         if (mode == "pair") {
             val p = pair
@@ -496,6 +534,8 @@ class Link(
         helloTimer?.cancel(false)
         val w = ws
         ws = null
+        fxToken = ""
+        fxPlain = null
         dropOthers()
         val wasConnected = state == "connected"
         if (wasConnected) state = "idle"

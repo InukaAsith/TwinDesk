@@ -11,9 +11,10 @@
 //
 // Messages, main -> engine:
 //   {op:'listen', tls}                                    -> {ev:'port', port} (0: none)
-//   {op:'tokens', list}                                    the fx tokens our server takes
+//   {op:'tokens', list, plain?}                            the fx tokens our server takes (plain: our plain server's)
+//   {op:'plain', on}                                       our plain HTTP server (fxPlain) -> {ev:'plainPort', port}
 //   {op:'serve', id, path, size}                           host: the guest GETs it
-//   {op:'put', id, path, size, to}                         guest: PUT it (to: {host, port, fp, token})
+//   {op:'put', id, path, size, to}                         guest: PUT it (to: {host, port, fp, token, plain?})
 //   {op:'pull', id, path, size, to}                        guest: GET it into path
 //   {op:'target', id, path}                                host: answer to 'want' (path null: refused)
 //   {op:'cancel', id}, {op:'reset'}
@@ -24,6 +25,7 @@
 //   {ev:'failed', id, dir, early, message}                 early: no byte went (send it another way)
 'use strict';
 
+const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -125,6 +127,9 @@ class Engine {
     this.server = null;
     this.port = 0;
     this.tokens = [];
+    this.plainServer = null; // fxPlain (shared/fastfile.js): plain HTTP, its own tokens
+    this.plainPort = 0;
+    this.plainTokens = [];
     this.serving = new Map(); // id -> {path, size, ranges, hashes, left, reqs}
     this.incoming = new Map(); // id -> {size, path|null (waiting), fd, ranges, hashes, left, queue, reqs}
     this.outgoing = new Map(); // id -> {reqs, done}
@@ -132,6 +137,7 @@ class Engine {
     this.counts = new Map(); // id\0dir -> bytes not told yet
     this.countTimer = null;
     this.agent = this._agent();
+    this.plainAgent = new http.Agent({ keepAlive: true, maxSockets: 32 });
   }
 
   _agent() {
@@ -142,7 +148,11 @@ class Engine {
     try {
       switch (m && m.op) {
         case 'listen': return this._listen(m.tls);
-        case 'tokens': this.tokens = Array.isArray(m.list) ? m.list.filter((t) => typeof t === 'string' && t) : []; return;
+        case 'tokens':
+          this.tokens = Array.isArray(m.list) ? m.list.filter((t) => typeof t === 'string' && t) : [];
+          this.plainTokens = Array.isArray(m.plain) ? m.plain.filter((t) => typeof t === 'string' && t) : [];
+          return;
+        case 'plain': return this._plain(!!m.on);
         case 'serve': return this._serve(m);
         case 'put': return this._put(m);
         case 'pull': return this._pull(m);
@@ -179,10 +189,31 @@ class Engine {
     });
   }
 
-  _request(req, res) {
+  // Unencrypted file transfers (fxPlain): a plain HTTP server beside the HTTPS one, its own tokens.
+  _plain(on) {
+    if (!on) {
+      if (this.plainServer) this.plainServer.close();
+      this.plainServer = null;
+      this.plainPort = 0;
+      this.plainTokens = [];
+      return this.post({ ev: 'plainPort', port: 0 });
+    }
+    if (this.plainServer) return this.post({ ev: 'plainPort', port: this.plainPort });
+    const s = http.createServer((req, res) => this._request(req, res, true));
+    this.plainServer = s;
+    s.keepAliveTimeout = 60000;
+    s.on('error', (e) => console.warn(`[fx2] plain server: ${e.code || e.message}`));
+    s.listen(0, '0.0.0.0', () => {
+      if (this.plainServer !== s) return s.close();
+      this.plainPort = s.address().port;
+      this.post({ ev: 'plainPort', port: this.plainPort });
+    });
+  }
+
+  _request(req, res, plain = false) {
     const fail = (code) => { res.writeHead(code); res.end(); };
     if (!req.url.startsWith(PATH)) return fail(404);
-    if (!this.tokens.some((t) => same(req.headers[HEADER], t))) return fail(403);
+    if (!(plain ? this.plainTokens : this.tokens).some((t) => same(req.headers[HEADER], t))) return fail(403);
     let url;
     try { url = new URL(req.url, 'https://x'); } catch (_) { return fail(400); }
     let id;
@@ -316,16 +347,17 @@ class Engine {
   // ---- the client (as the guest) ----
 
   _req(to, method, id, r, size) {
-    return https.request({
-      host: to.host, port: to.port, method, agent: this.agent,
+    return (to.plain ? http : https).request({
+      host: to.host, port: to.port, method, agent: to.plain ? this.plainAgent : this.agent,
       path: `${PATH}${encodeURIComponent(id)}?i=${r.i}&off=${r.off}&len=${r.len}&total=${size}`,
       headers: { [HEADER]: to.token, ...(method === 'PUT' ? { 'content-type': 'application/octet-stream', 'content-length': r.len } : {}) },
     });
   }
 
   // Go once the socket is the host's (its fingerprint the paired one): nothing, not even the
-  // token, is written before.
-  _pinned(req, fp, go) {
+  // token, is written before. plain (fxPlain): no certificate to pin, go at once.
+  _pinned(req, fp, go, plain = false) {
+    if (plain) return go();
     req.on('socket', (sock) => {
       const check = () => {
         const cert = sock.getPeerCertificate() || {};
@@ -369,7 +401,7 @@ class Engine {
         rs.on('data', (b) => { hash.update(b); o.sent += b.length; this._count(m.id, 'send', b.length); });
         rs.on('error', (e) => { req.destroy(); this._failed(m.id, 'send', e); });
         rs.pipe(req);
-      });
+      }, !!m.to.plain);
     }
   }
 
@@ -398,7 +430,7 @@ class Engine {
         f.reqs.add(res);
         this._takeRange(m.id, f, r, res, null, null);
       });
-      this._pinned(req, m.to.fp, () => { if (this.pulls.get(m.id) === f) req.end(); });
+      this._pinned(req, m.to.fp, () => { if (this.pulls.get(m.id) === f) req.end(); }, !!m.to.plain);
     }
   }
 
@@ -470,6 +502,8 @@ class Engine {
     for (const map of [this.serving, this.outgoing, this.incoming, this.pulls]) for (const id of [...map.keys()]) this._cancel(id);
     this.agent.destroy();
     this.agent = this._agent();
+    this.plainAgent.destroy();
+    this.plainAgent = new http.Agent({ keepAlive: true, maxSockets: 32 });
   }
 }
 

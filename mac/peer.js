@@ -30,6 +30,9 @@ class Peer extends EventEmitter {
     }
     this.fx = new FastFiles({ session: () => this._fxSession(), deliver: (m) => this.current && this._deliver(m, this.current), send: (m) => this.sendNow(m), fx2: this.fx2 });
     server.fxOn = true;
+    // Unencrypted file transfers (Files › Encrypt file transfers off; setPlain).
+    server.fxPlainOffer = (ctx) => this.fx.plainOffer(ctx);
+    link.fxPlainHello = () => this.fx.plainHello();
     // The input lane (shared/inputlane.js): moves and input over UDP with an app that can.
     this.il = laneOff() ? null : new InputLane();
     if (this.il) {
@@ -81,12 +84,17 @@ class Peer extends EventEmitter {
     });
   }
 
+  // Files › Encrypt file transfers (settings.files.plain = off): see shared/fastfile.js setPlain.
+  setPlain(on) {
+    this.fx.setPlain(on);
+  }
+
   // For fast files: {host, token, transport, address, port?, fp?}, or null (an older app).
   _fxSession() {
     const c = this.current;
     if (!c || !c.fx) return null;
-    if (c === this.link.ctx) return { host: false, token: c.fx, transport: 'ip', address: this.link.address, port: this.link.host.port, fp: this.link.host.fp, fx2: !!c.fx2Port, fx2Port: c.fx2Port };
-    return { host: true, token: c.fx, transport: c.transport, address: c.address, fx2: !!c.fx2 };
+    if (c === this.link.ctx) return { host: false, token: c.fx, transport: 'ip', address: this.link.address, port: this.link.host.port, fp: this.link.host.fp, fx2: !!c.fx2Port, fx2Port: c.fx2Port, plain: FastFiles.parsePlain({ fxPlain: c.fxPlainMsg }) };
+    return { host: true, token: c.fx, plainToken: c.fxPlain || '', transport: c.transport, address: c.address, fx2: !!c.fx2 };
   }
 
   // The input lane while it can carry input (started with this session, and not through

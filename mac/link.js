@@ -178,7 +178,7 @@ class Link extends EventEmitter {
   }
 
   _hello() {
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.id.macId, name: this.id.macName, os: P.OS.MAC, token: this.host.token, fx: 1, ...(this.fx2Hello && this.fx2Hello() ? { fx2: 1 } : {}), ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.id.macId, name: this.id.macName, os: P.OS.MAC, token: this.host.token, fx: 1, ...(this.fx2Hello && this.fx2Hello() ? { fx2: 1 } : {}), ...(this.fxPlainHello ? this.fxPlainHello() : {}), ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
@@ -273,6 +273,7 @@ class Link extends EventEmitter {
       fx: typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : '', // fast files (shared/fastfile.js); older hosts: none
       il: msg.il && typeof msg.il === 'object' ? msg.il : null, // the input lane (shared/inputlane.js); older hosts: none
       fx2Port: msg.fx2 && typeof msg.fx2 === 'object' && Number.isInteger(msg.fx2.port) && msg.fx2.port > 0 && msg.fx2.port < 65536 ? msg.fx2.port : 0, // fast files v2 (shared/fx2.js); older hosts: none
+      fxPlainMsg: msg.fxPlain, // unencrypted file transfers (shared/fastfile.js parsePlain); older hosts: none
     };
     this.timers.ping = setInterval(() => {
       if (Date.now() - this.lastRx > P.TIMEOUT_MS) {

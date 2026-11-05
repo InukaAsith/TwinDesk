@@ -23,6 +23,12 @@ object Proto {
     const val CLIP_IMAGE_MAX_BYTES = 10 * 1024 * 1024 // clipboard picture limit (PNG bytes, before base64)
     const val CLIP_IMAGE_PART_BYTES = 256 * 1024 // raw bytes per clip.image.part
     const val FILE_CHUNK_BYTES = 64 * 1024
+    const val FILE_MAX_BYTES = 16L * 1024 * 1024 * 1024 * 1024 // protocol.js FILE_MAX_BYTES (16 TiB; was 4 GiB, #143)
+    // Fast files (shared/fastfile.js, docs/protocol.md "fx"): a file's bytes as one HTTPS stream on the
+    // session's port, never on Bluetooth or a Wi-Fi Direct group / hotspot (netlink.js GROUP_NETS).
+    const val FX_PATH = "/twindesk/fx/"
+    const val FX_HEADER = "x-twindesk-fx"
+    val GROUP_NETS = listOf("192.168.49.", "10.42.", "192.168.137.", "192.168.43.", "172.20.10.")
     const val MAX_PAYLOAD = 16 * 1024 * 1024
     const val OS = "android"
     private const val SAS_LABEL = "macshare-sas-v1"
@@ -57,6 +63,7 @@ object Proto {
         const val FILE_END = "file.end"
         const val FILE_DONE = "file.done"
         const val FILE_CANCEL = "file.cancel"
+        const val FILE_PULL = "file.pull" // from the computer {id}: GET the file's bytes (fast files); ours {id, failed}: send them as file.chunk
         const val FILES_DONE = "files.done"
         const val DRAG_POLICY = "drag.policy"
         const val FCLIP_OFFER = "fclip.offer"

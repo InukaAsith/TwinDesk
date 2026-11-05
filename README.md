@@ -628,6 +628,11 @@ On Linux, TwinDesk runs on both X11 and Wayland. On Wayland, the mouse and keybo
 evdev and uinput (the Setup screen grants access once), screens are captured through the desktop
 portal, and the clipboard goes through wl-clipboard. A few things work a little differently:
 
+- **Input access on Wayland.** Reading `/dev/input` means reading every key typed, so it goes to
+  TwinDesk's helper alone: Setup's Fix installs a setgid `input` copy of the helper (the NixOS module a
+  wrapper) and never adds your account to the `input` group. General › Input access › Remove undoes it.
+  Details and the manual undo are in [docs/nixos.md](docs/nixos.md#1-wayland-mouse--keyboard-kvm).
+
 - **Shared folder.** Sharing uses Samba. The first time, one password prompt installs it if it's
   missing and adds a network-only account. The other computer's folder is connected with GVFS
   and shows in the file manager's sidebar.
