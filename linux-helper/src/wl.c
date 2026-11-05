@@ -25,6 +25,11 @@
 #include <unistd.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
+// Kernel headers before 4.16 (the old-glibc release build, #149) name these time.tv_sec / tv_usec.
+#ifndef input_event_sec
+#define input_event_sec time.tv_sec
+#define input_event_usec time.tv_usec
+#endif
 
 #define NAME_PREFIX "TwinDesk virtual"
 #define ABS_MAXV 65535
