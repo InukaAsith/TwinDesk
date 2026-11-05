@@ -224,7 +224,7 @@ class Server extends EventEmitter {
     this.current = ctx;
     // The input lane (shared/inputlane.js): when its hello asked, over the network only.
     const il = ctx.ilWanted && ctx.transport === 'ip' && this.ilOffer ? this.ilOffer(ctx) : null;
-    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(ctx.fx ? { fx: ctx.fx } : {}), ...(ctx.fx2 ? { fx2: { port: ctx.fx2 } } : {}), ...(il ? { il } : {}) });
+    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(ctx.fx ? { fx: ctx.fx } : {}), ...(ctx.fx2 ? { fx2: { port: ctx.fx2 } } : {}), ...(this.fxPlainOffer ? this.fxPlainOffer(ctx) : {}), ...(il ? { il } : {}) });
     this.emit('client', ctx);
   }
 

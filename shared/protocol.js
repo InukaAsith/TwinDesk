@@ -64,7 +64,7 @@
     CLIP_IMAGE_PART_BYTES: 256 * 1024, // raw bytes per clip.image.part (base64 on the wire)
     CLIP_SKEW_MS: 10 * 60 * 1000, // a copy time further ahead of our clock than this is clamped (a clock that wrong must not win for ever)
     FILE_CHUNK_BYTES: 64 * 1024, // raw bytes per file.chunk (base64 on the wire)
-    FILE_MAX_BYTES: 4 * 1024 * 1024 * 1024, // largest dropped file
+    FILE_MAX_BYTES: 16 * 1024 ** 4, // largest file sent or received (16 TiB: no real limit; was 4 GiB, #143)
     SIDES: ['left', 'right', 'top', 'bottom'],
 
     // Control message types (field `t`)

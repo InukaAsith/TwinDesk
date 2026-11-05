@@ -193,6 +193,38 @@ Measured: 10,000 files of 10 KB went from a Windows PC to a Mac in 47.6 s.
 
 Tests: `shared/test/fx2.js` (30 MB in 4 ranges), `shared/test/fastfile.js` and `shared/test/drop-async.js`.
 
+### The phone and fx
+
+From 2.5.2 the Android app says `fx: 1` in hello too, and moves file bytes the fx way: it PUTs what
+it sends and GETs what the computer sends after `file.pull` (`Files.kt`, `Link.fx()`), pinning the
+computer's certificate as the session does. Before, its bytes went as base64 `file.chunk`, a third
+more on the wire. As with computers: only on the network or a cable, never Bluetooth or a Wi-Fi Direct
+group / hotspot; anything wrong before a byte went sends that file and the rest as `file.chunk`
+(`file.pull {failed}` one way, a refused PUT the other). An older computer gives no token, so it still
+gets `file.chunk`; an older phone never asks.
+
+### fxPlain: unencrypted file transfers
+
+Files › Encrypt file transfers, on by default. Turned off, file bytes can go over plain HTTP:
+
+- **Negotiation:** the guest's hello `fxPlain: 1` (a computer when its switch is off; the phone
+  always, so its computer decides), the host's welcome `fxPlain: {port, fx2Port?, token}` only when
+  the guest asked and the host's switch is off too. Either side without it: TLS as before.
+- **Where:** `port` is the app's plain server for fx (`shared/fastfile.js`), `fx2Port` the files
+  engine's (`shared/fx2-engine.js`). Same paths and requests as fx and fx2.
+- **Token:** its own, random per session, sent in the encrypted welcome. The session's token never
+  goes in the clear, and the plain servers take only the plain one.
+- **What stays encrypted:** the session, and so `file.end`'s SHA-256s (fx2's per range). The
+  receiver checks them, so a file can be read on the network but not changed unnoticed.
+- **Never over the cable** on the phone: adb reverse carries only the session's port. The phone's
+  plain requests use their own HTTP/1.1 client (`FxHttp.kt`), since the app's network policy refuses
+  cleartext everywhere else.
+
+### File size
+
+`FILE_MAX_BYTES` is 16 TiB (it was 4 GiB, #143). Offers above an older app's 4 GiB are refused there
+with `too_big`, as before.
+
 ## Compatibility
 
 | This app ↔ other side | Input | Files |
@@ -201,4 +233,5 @@ Tests: `shared/test/fx2.js` (30 MB in 4 ranges), `shared/test/fastfile.js` and `
 | 2.5 ↔ 2.5, Wi-Fi Direct or hotspot | tdv2 if UDP gets through, else tdv1 | file.chunk |
 | 2.5 ↔ 2.5, Bluetooth | tdv1 | file.chunk (moves to Wi-Fi Direct when it's big) |
 | 2.5 ↔ 2.4 or older | tdv1 | fx or file.chunk |
-| Computer ↔ Android | tdv1 (no lane on Android yet) | As before 2.5 |
+| Computer ↔ Android 2.5.2+, network or cable | tdv1 (no lane on Android yet) | fx (fxPlain when the computer allows it, not on the cable) |
+| Computer ↔ Android, Bluetooth or Wi-Fi Direct, or an older side | tdv1 | file.chunk |

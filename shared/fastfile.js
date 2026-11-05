@@ -21,8 +21,16 @@
 // checks them itself and hands the finished file to its receiver (receiver() hooks: target, adopt,
 // fail), so receivers never see those bytes or that file.end. Anything wrong before a byte went: the
 // file goes the fx way, and so do the rest of the session's.
+//
+// Unencrypted file transfers (docs/protocol.md, `fxPlain`; Files › Encrypt file transfers off): the
+// guest's hello {fxPlain: 1} when it allows it (a phone always does: its computer decides), the host's
+// welcome {fxPlain: {port, fx2Port, token}} when it allows it too. The bytes then go over plain HTTP
+// on those ports (fx and fx2 alike) with a token of their own, so the session's token never goes in
+// the clear. The session stays on TLS, and so do file.end's hashes, which the receiver checks: a
+// file can be read on the network, not changed. An app without it never says either: TLS as before.
 'use strict';
 
+const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -42,6 +50,9 @@ const IDLE_MS = 30000; // no bytes this long: the transfer failed
 
 // No TLS session resumption: a resumed connection has no peer certificate to pin.
 const agent = () => new https.Agent({ keepAlive: true, maxSockets: PARALLEL_SMALL + 2, rejectUnauthorized: false, maxCachedSessions: 0 });
+const plainAgent = () => new http.Agent({ keepAlive: true, maxSockets: PARALLEL_SMALL + 2 });
+const TOKEN = /^[0-9a-f]{32}$/;
+const okPort = (n) => Number.isInteger(n) && n > 0 && n < 65536;
 const same = (a, b) => {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const left = Buffer.from(a), right = Buffer.from(b);
@@ -80,7 +91,83 @@ class FastFiles {
     this.outgoing = new Map(); // id -> host: {path, size, onBytes, resolve, reject, timer, res?}; guest: {req}
     this.broken = false;
     this.agent = agent();
+    this.plainAgent = plainAgent();
     this.pressures = []; // receivers': (id) -> a promise while their disk is behind, else null
+    // Unencrypted file transfers: on (the setting), and our plain server's port once it listens.
+    this.plainOn = false;
+    this.plainServer = null;
+    this.plainPort = 0;
+  }
+
+  // ---- unencrypted file transfers (fxPlain) ----
+
+  // Files › Encrypt file transfers, off = on here: our plain servers listen (as the host), and we
+  // say so in hello (as the guest). A session already going keeps what it agreed, except that our
+  // plain servers close when it's turned back off (its files then go the TLS way).
+  setPlain(on) {
+    on = !!on;
+    if (on === this.plainOn) return;
+    this.plainOn = on;
+    if (on) this._listenPlain();
+    else {
+      if (this.plainServer) this.plainServer.close();
+      this.plainServer = null;
+      this.plainPort = 0;
+      this.plainAgent.destroy();
+      this.plainAgent = plainAgent();
+    }
+    if (this.fx2) this.fx2.setPlain(on);
+    this.tokens2 = null;
+    this._syncTokens();
+  }
+
+  _listenPlain() {
+    const srv = http.createServer((req, res) => {
+      if (this.request(req, res, true)) return;
+      res.writeHead(404);
+      res.end();
+    });
+    srv.keepAliveTimeout = 60000;
+    srv.on('error', (e) => console.warn(`[fx] plain server: ${e.code || e.message}`));
+    srv.listen(0, '0.0.0.0', () => {
+      if (this.plainServer !== srv) return srv.close();
+      this.plainPort = srv.address().port;
+      console.log(`[fx] unencrypted files on port ${this.plainPort}`);
+    });
+    this.plainServer = srv;
+  }
+
+  // The guest's hello field.
+  plainHello() {
+    return this.plainOn ? { fxPlain: 1 } : {};
+  }
+
+  // The host's welcome field for a session (ctx: fx, fxPlainWanted from its hello); sets ctx.fxPlain,
+  // the session's plain token ('' when it stays encrypted).
+  plainOffer(ctx) {
+    const ok = !!ctx && !!ctx.fx && ctx.fxPlainWanted === true && this.plainOn && this.plainPort > 0;
+    if (ctx) ctx.fxPlain = ok ? P.randomHex(16) : '';
+    if (!ok) return {};
+    const fx2Port = this.fx2 && this.fx2.plainPort > 0 ? this.fx2.plainPort : 0;
+    return { fxPlain: { port: this.plainPort, ...(fx2Port ? { fx2Port } : {}), token: ctx.fxPlain } };
+  }
+
+  // The guest's side of welcome {fxPlain}: {port, fx2Port, token}, or null (encrypted).
+  static parsePlain(msg) {
+    const p = msg && msg.fxPlain;
+    if (!p || typeof p !== 'object' || !okPort(p.port) || typeof p.token !== 'string' || !TOKEN.test(p.token)) return null;
+    return { port: p.port, fx2Port: okPort(p.fx2Port) ? p.fx2Port : 0, token: p.token };
+  }
+
+  // As guest: where our requests go — plain when both agreed (and we still allow it), else the session's port over TLS.
+  _to(s) {
+    if (this.plainOn && s.plain && okPort(s.plain.port)) return { mod: http, port: s.plain.port, token: s.plain.token, agent: this.plainAgent, plain: true };
+    return { mod: https, port: s.port, token: s.token, agent: this.agent, plain: false };
+  }
+
+  _to2(s) {
+    if (this.plainOn && s.plain && okPort(s.plain.fx2Port)) return { host: s.address, port: s.plain.fx2Port, token: s.plain.token, plain: true };
+    return { host: s.address, port: s.fx2Port, fp: s.fp, token: s.token };
   }
 
   // A receiver's backpressure: after each chunk, fn(id) -> a promise (the transfer waits for it)
@@ -115,9 +202,10 @@ class FastFiles {
     if (!this.fx2) return;
     const s = this.o.session();
     const t = s && s.host && s.fx2 && s.token ? s.token : '';
-    if (t === this.tokens2) return;
-    this.tokens2 = t;
-    this.fx2.setTokens(t ? [t] : []);
+    const pt = t && this.plainOn && s.plainToken ? s.plainToken : '';
+    if (t + pt === this.tokens2) return;
+    this.tokens2 = t + pt;
+    this.fx2.setTokens(t ? [t] : [], pt ? [pt] : []);
   }
 
   // Fast files for the next file: both sides can, on the network or a cable.
@@ -154,6 +242,8 @@ class FastFiles {
     for (const id of [...this.outgoing.keys()]) this._fail(id, new Error('the other computer disconnected'));
     this.agent.destroy();
     this.agent = agent();
+    this.plainAgent.destroy();
+    this.plainAgent = plainAgent();
   }
 
   // ---- sending ----
@@ -194,8 +284,7 @@ class FastFiles {
       return crypto.createHash('sha256').update(hashes.join(',')).digest('hex');
     };
     if (!s.host) {
-      const to = { host: s.address, port: s.fx2Port, fp: s.fp, token: s.token };
-      return this.fx2.put(id, path, size, to, onBytes).then(done);
+      return this.fx2.put(id, path, size, this._to2(s), onBytes).then(done);
     }
     this._syncTokens();
     return new Promise((resolve, reject) => {
@@ -255,8 +344,7 @@ class FastFiles {
     if (this.arriving.has(id) || !Number.isSafeInteger(size) || size < 0) return failed();
     const file = await this._target(id, size);
     if (!file) return failed();
-    const to = { host: s.address, port: s.fx2Port, fp: s.fp, token: s.token };
-    this.fx2.pull(id, file, size, to, (n) => this._progress2(id, n)).then(
+    this.fx2.pull(id, file, size, this._to2(s), (n) => this._progress2(id, n)).then(
       (hashes) => this._got2(id, hashes),
       (e) => this._recvFailed2(id, !!e.early, e.message),
     );
@@ -316,9 +404,10 @@ class FastFiles {
         if (err.early) this.broken = true;
         reject(err);
       };
-      const req = https.request({
-        host: s.address, port: s.port, method: 'PUT', path: PATH + encodeURIComponent(id), agent: this.agent,
-        headers: { [HEADER]: s.token, 'content-type': 'application/octet-stream', 'content-length': size },
+      const to = this._to(s);
+      const req = to.mod.request({
+        host: s.address, port: to.port, method: 'PUT', path: PATH + encodeURIComponent(id), agent: to.agent,
+        headers: { [HEADER]: to.token, 'content-type': 'application/octet-stream', 'content-length': size },
       });
       w.req = req;
       w.fail = (e) => { req.destroy(); if (w.res) w.res.destroy(); finish(e); };
@@ -346,7 +435,7 @@ class FastFiles {
         rs.on('data', (b) => { if (done) return; hash.update(b); sent += b.length; onBytes(b.length); });
         rs.on('error', (e) => { req.destroy(); finish(e); });
         rs.pipe(req);
-      });
+      }, to.plain);
     });
   }
 
@@ -435,11 +524,12 @@ class FastFiles {
     }
   }
 
-  // Our server's HTTPS requests: true when it was one of ours.
-  request(req, res) {
+  // Our server's HTTPS requests (plain: our plain server's): true when it was one of ours.
+  request(req, res, plain = false) {
     if (!req.url.startsWith(PATH)) return false;
     const s = this.o.session();
-    if (!s || !s.host || !same(req.headers[HEADER], s.token)) {
+    const token = !s || !s.host ? '' : plain ? (this.plainOn && s.plainToken) || '' : s.token;
+    if (!token || !same(req.headers[HEADER], token)) {
       res.writeHead(403);
       res.end();
       return true;
@@ -467,7 +557,8 @@ class FastFiles {
     if (!s || s.host || !s.token) return failed();
     const r = this._track(id, null);
     // Not https.get: that sends the request (and the token) before the certificate is checked.
-    const req = https.request({ host: s.address, port: s.port, method: 'GET', path: PATH + encodeURIComponent(id), agent: this.agent, headers: { [HEADER]: s.token } });
+    const to = this._to(s);
+    const req = to.mod.request({ host: s.address, port: to.port, method: 'GET', path: PATH + encodeURIComponent(id), agent: to.agent, headers: { [HEADER]: to.token } });
     r.stream = req;
     const fail = () => {
       if (this.arriving.get(id) !== r) return;
@@ -489,7 +580,7 @@ class FastFiles {
       this._receive(id, res, null, r);
       res.on('close', () => !res.complete && fail());
     });
-    this._pinned(req, s.fp, () => { if (this.arriving.get(id) === r) req.end(); });
+    this._pinned(req, s.fp, () => { if (this.arriving.get(id) === r) req.end(); }, to.plain);
   }
 
   _track(id, stream) {
@@ -552,7 +643,9 @@ class FastFiles {
 
   // Go on once the socket is the host's (its certificate's fingerprint is the one paired with).
   // Nothing is written before: the headers (and the token) go with the first write or end().
-  _pinned(req, fp, go) {
+  // plain: plain HTTP (fxPlain), no certificate to pin: go at once.
+  _pinned(req, fp, go, plain = false) {
+    if (plain) return go();
     req.on('socket', (sock) => {
       const check = () => {
         const cert = sock.getPeerCertificate() || {};

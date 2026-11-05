@@ -27,7 +27,7 @@
         rec {
           twindesk = pkgs.stdenv.mkDerivation rec {
             pname = "twindesk";
-            version = "2.5.0";
+            version = "2.5.2";
 
             src = self;
 
@@ -264,13 +264,27 @@ EOF
               uinput = mkOption {
                 type = types.bool;
                 default = true;
-                description = "Whether to enable hardware.uinput for Wayland remote input injection.";
+                description = ''
+                  Wayland mouse and keyboard sharing: loads uinput, gives /dev/uinput to the input group, and
+                  installs the TwinDesk helper as a setgid input wrapper (/run/wrappers/bin/twindesk-linuxhelper),
+                  so the helper alone can read /dev/input and write /dev/uinput. No user is added to a group.
+                '';
               };
 
               user = mkOption {
                 type = types.nullOr types.str;
                 default = null;
-                description = "Primary user to add to the 'input' and 'uinput' groups for Wayland input capture & injection.";
+                description = "Your user name. Only used with inputGroups.";
+              };
+
+              inputGroups = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Also add `user` to the input and uinput groups. TwinDesk doesn't need this (its helper has the
+                  input group on its own), and it lets every program that user runs read the keyboard and inject
+                  input. Leave it off unless you know you want it.
+                '';
               };
 
               enableWifiDirect = mkOption {
@@ -300,23 +314,45 @@ EOF
               # Wayland input emulation
               hardware.uinput.enable = mkIf cfg.uinput true;
               services.udev.extraRules = mkIf cfg.uinput ''
-                KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
+                KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
               '';
 
-              # Add user to input and uinput groups if configured
-              users.users = mkIf (cfg.uinput && cfg.user != null) {
+              # Only with inputGroups: the user in the input groups (every program of theirs can then read
+              # the keyboard; TwinDesk doesn't need it, #144).
+              users.users = mkIf (cfg.uinput && cfg.inputGroups && cfg.user != null) {
                 ${cfg.user}.extraGroups = [ "input" "uinput" ];
               };
 
-              # Wi-Fi Direct helper security wrapper with CAP_NET_ADMIN
-              security.wrappers = mkIf cfg.enableWifiDirect {
-                twindesk-wifiap = {
-                  source = "${cfg.package}/libexec/twindesk-wifiap";
-                  capabilities = "cap_net_admin+ep";
-                  owner = "root";
-                  group = "root";
-                };
-              };
+              warnings = optional (cfg.user != null && !cfg.inputGroups)
+                "programs.twindesk.user no longer adds ${cfg.user} to the input and uinput groups: the TwinDesk helper has the input group on its own (a setgid wrapper). Set programs.twindesk.inputGroups = true only if you want the old behaviour.";
+
+              security.wrappers = mkMerge [
+                # The helper alone gets the input group (setgid): it reads /dev/input and writes /dev/uinput
+                # for Wayland sharing (linux/system.js helperBin).
+                (mkIf cfg.uinput {
+                  twindesk-linuxhelper = {
+                    source = "${cfg.package}/share/twindesk/linux-helper/bin/macshare-linuxhelper";
+                    setgid = true;
+                    owner = "root";
+                    group = "input";
+                  };
+                  twindesk-linuxhelper-multi = {
+                    source = "${cfg.package}/share/twindesk/linux-helper/bin/macshare-linuxhelper-multi";
+                    setgid = true;
+                    owner = "root";
+                    group = "input";
+                  };
+                })
+                # Wi-Fi Direct helper security wrapper with CAP_NET_ADMIN
+                (mkIf cfg.enableWifiDirect {
+                  twindesk-wifiap = {
+                    source = "${cfg.package}/libexec/twindesk-wifiap";
+                    capabilities = "cap_net_admin+ep";
+                    owner = "root";
+                    group = "root";
+                  };
+                })
+              ];
             };
           };
 

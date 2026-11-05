@@ -35,6 +35,9 @@ class Peer {
     this.fx2 = fx2Off() ? null : new Fx2();
     if (this.fx2) link.fx2Hello = () => this.fx2.client;
     this.fx = new FastFiles({ session: () => this._fxSession(), deliver: (m) => this._deliver(m), send: (m) => this.sendNow(m), fx2: this.fx2 });
+    // Unencrypted file transfers (Files › Encrypt file transfers off; setPlain): what the host offered us.
+    this.fxPlain = null;
+    link.fxPlainHello = () => this.fx.plainHello();
 
     // The input lane (shared/inputlane.js): moves and input over UDP with an app that can.
     this.il = laneOff() ? null : new InputLane();
@@ -47,6 +50,7 @@ class Peer {
     link.onAny = (msg) => this.fx.incoming(msg) || this._deliver(msg);
     link.on('welcome', (msg) => {
       this.fx.reset();
+      this.fxPlain = FastFiles.parsePlain(msg);
       const ws = link.ws;
       if (this.il && !(link.il && link.transport === 'ip' && ws && this.il.accept(link.il, (ws._socket && ws._socket.remoteAddress) || ws.address))) this.il.stop();
       this._emit('welcome', msg);
@@ -64,6 +68,7 @@ class Peer {
     this.server = server;
     this.pairing = pairing;
     server.fxOn = true;
+    server.fxPlainOffer = (ctx) => this.fx.plainOffer(ctx);
     if (this.fx2) {
       this.fx2.listen(server.tls);
       server.fx2Port = () => this.fx2.port;
@@ -188,15 +193,20 @@ class Peer {
     return this.hosting ? this.server.current.lastRx : this.link.lastRx;
   }
 
+  // Files › Encrypt file transfers (settings.files.plain = off): see shared/fastfile.js setPlain.
+  setPlain(on) {
+    this.fx.setPlain(on);
+  }
+
   // For fast files: {host, token, transport, address, port?, fp?}, or null (an older app).
   _fxSession() {
     if (this.hosting) {
       const c = this.server.current;
-      return c.fx ? { host: true, token: c.fx, transport: c.transport, address: c.address, fx2: !!c.fx2 } : null;
+      return c.fx ? { host: true, token: c.fx, plainToken: c.fxPlain || '', transport: c.transport, address: c.address, fx2: !!c.fx2 } : null;
     }
     const ws = this.link.ws;
     if (!this.link.authed || !this.link.fxToken || !ws || !this.link.pairing) return null;
-    return { host: false, token: this.link.fxToken, transport: this.link.transport, address: ws.address, port: ws.port, fp: this.link.pairing.fp, fx2: !!this.link.fx2Port, fx2Port: this.link.fx2Port };
+    return { host: false, token: this.link.fxToken, transport: this.link.transport, address: ws.address, port: ws.port, fp: this.link.pairing.fp, fx2: !!this.link.fx2Port, fx2Port: this.link.fx2Port, plain: this.fxPlain };
   }
 
   get bufferedAmount() {

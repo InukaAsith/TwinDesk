@@ -28,6 +28,9 @@ UI.tab({
     // shared
     const dragSw = UI.switch((v) => api.setFiles({ dragEdge: v }), { label: I18n.t('Drag files across the screen edge') });
     const dragRow = UI.row(I18n.t('Drag files between computers'), I18n.t('Drag through the screen edge and drop anywhere'), [dragSw], { literalHint: true });
+    // Unencrypted file transfers (shared/fastfile.js fxPlain): the switch is on while they're encrypted.
+    const encryptSw = UI.switch((v) => api.setFiles({ plain: !v }), { label: I18n.t('Encrypt file transfers') });
+    const encryptRow = UI.row(I18n.t('Encrypt file transfers'), '', [encryptSw], { literalHint: true });
     const reveal = UI.switch((v) => api.setFiles({ reveal: v }), { label: I18n.t('Show in Finder') });
     const folderRow = UI.row(I18n.t('Save to'), '', [UI.button(I18n.t('Choose…'), () => api.pickDropFolder(), 'small'), UI.button(I18n.t('Downloads'), () => api.resetDropFolder(), 'small')], { literalHint: true });
     const progress = el('div');
@@ -69,7 +72,7 @@ UI.tab({
         UI.dir('m2w', [shareRow]),
         UI.dir('w2m', [acceptRow, pcRow]),
       ),
-      UI.card('', [dragRow], { cls: 'keep-on' }),
+      UI.card('', [dragRow, encryptRow], { cls: 'keep-on' }),
       progress,
       UI.card(I18n.t('Arriving files'), [
         folderRow,
@@ -108,6 +111,9 @@ UI.tab({
         : ck.incoming ? I18n.t('{device} copied {items} · press {keys}', { device: pc, items: ck.incoming.name || I18n.t('{count} items', { count: ck.incoming.items }), keys: UI.keysLabel(f.pasteKeys) })
           : I18n.t('Into the app in front (a chat, a mail…), or the Finder folder in front, else the Desktop'));
       dragSw.set(f.dragEdge !== false);
+      encryptSw.set(f.plain !== true);
+      encryptRow.setHint(f.plain === true ? I18n.t('Off: files cross the network unencrypted, so others on it can read them (changes are still caught). Turn it off on both computers; a phone follows its computer.') : I18n.t('Files are encrypted on the way, like everything else'));
+      encryptRow.hint.classList.toggle('bad', f.plain === true);
       dragRow.setHint(f.dragEdge !== false && !f.peerDrag ? I18n.t('Turned off on {device}', { device: pc }) : I18n.t('Drag through the screen edge and drop anywhere'));
       shareSw.set(m.sharing);
       shareSw.disable(m.shareBusy);

@@ -356,7 +356,7 @@ function start() {
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
-    checkFirewall, fixFirewall, fixInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
+    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'] }); // Two-way switches per pair (no ReZume or Remote here)
   nativeTheme.on('updated', pushState);
   link.start();
@@ -995,13 +995,35 @@ async function fixFirewall() {
   pushState();
 }
 
+// Input access on Wayland (system.js, #144): the helper's own, never the user's.
 async function fixInput() {
   try {
     await system.fixInput();
-    inputNote = 'Done. Log out and back in once to finish.';
+    inputNote = 'Done. Only the TwinDesk helper can read and control the mouse and keyboard.';
   } catch (e) {
     inputNote = 'Not fixed: ' + e.message;
   }
+  helper.stop();
+  helper.start(); // as its setgid copy now
+  pushState();
+}
+async function leaveInputGroup() {
+  try {
+    await system.leaveInputGroup();
+    inputNote = 'Done. Log out and back in once to finish.';
+  } catch (e) {
+    inputNote = 'Not changed: ' + e.message;
+  }
+  pushState();
+}
+async function removeInput() {
+  try {
+    await system.removeInput();
+    inputNote = 'Removed. Log out and back in once to finish. Sharing the mouse and keyboard on Wayland needs Fix again.';
+  } catch (e) {
+    inputNote = 'Not removed: ' + e.message;
+  }
+  helper.stop();
   helper.start();
   pushState();
 }

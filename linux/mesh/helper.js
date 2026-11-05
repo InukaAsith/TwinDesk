@@ -6,6 +6,7 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { helperBin } = require('../system.js'); // its setgid input copy on Wayland (#144)
 const Helper = require('../helper');
 
 const BIN_DIR = path.join(__dirname, '..', '..', 'linux-helper', 'bin');
@@ -29,7 +30,7 @@ class MeshHelper extends Helper {
       this.emit('exit', -1);
       return;
     }
-    const proc = spawn(BIN, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn(helperBin(BIN), [], { stdio: ['pipe', 'pipe', 'pipe'] });
     this.proc = proc;
     this.buf = '';
     let stderr = '';

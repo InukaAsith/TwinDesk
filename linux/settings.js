@@ -156,6 +156,7 @@ function normalize(s) {
       shortcuts: bool(files.shortcuts, was),
       copyKeys: accel(files.copyKeys, 'Control+Alt+C'),
       pasteKeys: accel(files.pasteKeys, 'Control+Alt+V'),
+      plain: bool(files.plain, false), // Encrypt file transfers off: plain HTTP for file bytes where both allow it (shared/fastfile.js fxPlain)
       receivedFolder: normalizeFolder(files.receivedFolder), // General › Received files ('' = Downloads; shared/received.js)
     },
     notifs: { // (notifs.js): muted = apps never sent

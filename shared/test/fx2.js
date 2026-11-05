@@ -81,14 +81,27 @@ async function pair(opts = {}) {
   const wire = (to) => (m) => setImmediate(() => { if (!to.fx.incoming(m)) to.rx.deliver(m); });
   // welcome's fx2 only when the guest's hello said fx2 and the host has an engine (as server.js does)
   const fx2On = !!(host.fx2 && guest.fx2);
+  // Unencrypted file transfers (opts.plain: both allow it): the host's plain token, the guest's offer.
   host.fx = new FastFiles({
-    session: () => ({ host: true, token, transport: 'ip', address: '127.0.0.1', fx2: fx2On }),
+    session: () => ({ host: true, token, plainToken: host.plainToken || '', transport: 'ip', address: '127.0.0.1', fx2: fx2On }),
     deliver: (m) => host.rx.deliver(m), send: wire(guest), fx2: host.fx2,
   });
   guest.fx = new FastFiles({
-    session: () => ({ host: false, token, transport: 'ip', address: '127.0.0.1', port: host.port, fp, fx2: fx2On, fx2Port: opts.fx2Port || (host.fx2 ? host.fx2.port : 0) }),
+    session: () => ({ host: false, token, transport: 'ip', address: '127.0.0.1', port: host.port, fp, fx2: fx2On, fx2Port: opts.fx2Port || (host.fx2 ? host.fx2.port : 0), plain: guest.plain || null }),
     deliver: (m) => guest.rx.deliver(m), send: wire(host), fx2: guest.fx2,
   });
+  if (opts.plain) {
+    host.fx.setPlain(true);
+    guest.fx.setPlain(true);
+    await until(() => host.fx.plainPort > 0 && (!host.fx2 || host.fx2.plainPort > 0), 'plain servers listen');
+    // As server.js and link.js do: the offer in welcome, parsed by the guest.
+    const ctx = { fx: token, fxPlainWanted: true };
+    const welcome = host.fx.plainOffer(ctx);
+    host.plainToken = ctx.fxPlain; // the host's session keeps it (server.js ctx.fxPlain)
+    guest.plain = FastFiles.parsePlain(welcome);
+    assert.ok(guest.plain && guest.plain.token === ctx.fxPlain, 'the plain offer parses');
+    if (opts.plain === 'token') guest.plain.token = token; // the session's token must not work there
+  }
   host.fx.receiver(host.rx.hook);
   guest.fx.receiver(guest.rx.hook);
   host.fx.reset();
@@ -216,6 +229,79 @@ async function arrived(to, id, p) {
       assert.strictEqual((await arrived(host, `${k}1`, p)).verified, false);
       await send(host, guest, `${k}2`, p);
       assert.strictEqual((await arrived(guest, `${k}2`, p)).verified, false);
+    } finally {
+      close();
+    }
+  }
+
+  // Unencrypted file transfers (fxPlain): fx2 and fx, both ways, over plain HTTP.
+  {
+    const { host, guest, close } = await pair({ plain: true });
+    try {
+      let plainReqs = 0;
+      const realReq = require('http').request;
+      require('http').request = function (...a) { plainReqs++; return realReq.apply(this, a); };
+      const big = file('p-big.bin', 20 * 1024 * 1024 + 1);
+      await send(guest, host, 'p1', big);
+      assert.ok((await arrived(host, 'p1', big)).verified, 'fx2 over plain HTTP, the hashes checked');
+      await send(host, guest, 'p2', big);
+      assert.ok((await arrived(guest, 'p2', big)).verified);
+      require('http').request = realReq;
+      // The engine's requests go from its own module: count what the plain servers took instead.
+      assert.ok(host.fx2.plainPort > 0);
+      // A bad hash is still caught.
+      const bad = file('p-bad.bin', 9 * 1024 * 1024);
+      await send(guest, host, 'p3', bad, (m) => ({ ...m, fx2: m.fx2.map((h, i) => (i ? h : 'f'.repeat(64))) }));
+      await until(() => host.rx.done.has('p3'), 'p3 settles');
+      assert.deepStrictEqual(host.rx.done.get('p3'), { ok: false, why: 'checksum mismatch' });
+      void plainReqs;
+    } finally {
+      close();
+    }
+  }
+  // fx over plain HTTP (an app without fx2, a phone): the guest's PUT and GET, verified by file.end.
+  {
+    const { host, guest, close } = await pair({ plain: true, guestFx2: false });
+    try {
+      const http = require('http');
+      let plainReqs = 0;
+      const realReq = http.request;
+      http.request = function (...a) { plainReqs++; return realReq.apply(this, a); };
+      const p = file('pfx.bin', 3 * 1024 * 1024 + 5);
+      await send(guest, host, 'q1', p);
+      assert.strictEqual((await arrived(host, 'q1', p)).verified, false, 'the fx way');
+      await send(host, guest, 'q2', p);
+      await arrived(guest, 'q2', p);
+      http.request = realReq;
+      assert.strictEqual(plainReqs, 2, 'both went over plain HTTP');
+      assert.ok(host.rx.chunks.get('q1') > 0 && guest.rx.chunks.get('q2') > 0);
+    } finally {
+      close();
+    }
+  }
+  // The plain servers take only the plain token: the session's is refused (403 before any byte),
+  // and the file goes over TLS, as file.chunk would after that.
+  {
+    const { host, guest, close } = await pair({ plain: 'token', guestFx2: false });
+    try {
+      const p = file('ptok.bin', 1024 * 1024);
+      host.rx.accept('t1', 1024 * 1024);
+      await assert.rejects(guest.fx.send('t1', p, 1024 * 1024, () => {}), (e) => e.early && /403/.test(e.message));
+      assert.ok(guest.fx.broken, 'refused on the plain server before a byte: the apps send it, and the rest, as file.chunk');
+    } finally {
+      close();
+    }
+  }
+  // Turned off on the host: no offer, and its plain servers close.
+  {
+    const { host, close } = await pair({ plain: true });
+    try {
+      const ctx = { fx: token, fxPlainWanted: true };
+      host.fx.setPlain(false);
+      assert.deepStrictEqual(host.fx.plainOffer(ctx), {});
+      assert.strictEqual(ctx.fxPlain, '');
+      assert.strictEqual(host.fx.plainPort, 0);
+      assert.deepStrictEqual(host.fx.plainOffer({ fx: token }), {}, 'a guest that didn’t ask gets none');
     } finally {
       close();
     }

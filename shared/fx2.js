@@ -26,6 +26,8 @@ class Fx2 extends EventEmitter {
     super();
     this.tls = tls;
     this.port = 0;
+    this.plainPort = 0; // our plain HTTP server's (fxPlain), while it's on
+    this.plainOn = false;
     this.jobs = new Map(); // `${dir}:${id}` -> {resolve, reject, onBytes}
     this.want = null; // (id, size) -> Promise<path|null>: where an incoming file goes (fastfile.js)
     this.failedRecv = null; // (id, early, message) for a file we receive that we didn't ask the engine for
@@ -62,6 +64,7 @@ class Fx2 extends EventEmitter {
       child.on('exit', (code) => {
         if (!this.closing) console.warn(`[fx2] the files process stopped (${code}): files go the fx way`);
         this.port = 0;
+        this.plainPort = 0;
         this.dead = true;
         this.child = null;
         this.post = () => {};
@@ -101,8 +104,15 @@ class Fx2 extends EventEmitter {
     return this.port > 0;
   }
 
-  setTokens(list) {
-    this.post({ op: 'tokens', list: list.filter(Boolean) });
+  setTokens(list, plain = []) {
+    this.post({ op: 'tokens', list: list.filter(Boolean), plain: plain.filter(Boolean) });
+  }
+
+  // Unencrypted file transfers (shared/fastfile.js setPlain): our plain server on or off.
+  setPlain(on) {
+    this.plainOn = !!on;
+    if (!on) this.plainPort = 0;
+    this.post({ op: 'plain', on: !!on });
   }
 
   _job(dir, id, onBytes) {
@@ -160,6 +170,7 @@ class Fx2 extends EventEmitter {
     this.reset();
     if (this.child) try { this.child.kill(); } catch (_) { /* gone */ }
     if (this.engine && this.engine.server) this.engine.server.close();
+    if (this.engine && this.engine.plainServer) this.engine.plainServer.close();
     if (this.engine) this.engine.agent.destroy();
   }
 
@@ -172,6 +183,9 @@ class Fx2 extends EventEmitter {
         this.port = Number(m.port) || 0;
         if (this.port) console.log(`[fx2] files on port ${this.port}${this.child ? ' (utility process)' : ''}`);
         return this.emit('port', this.port);
+      case 'plainPort':
+        this.plainPort = this.plainOn ? Number(m.port) || 0 : 0;
+        return;
       case 'want':
         Promise.resolve(this.want ? this.want(m.id, m.size) : null).catch(() => null)
           .then((file) => this.post({ op: 'target', id: m.id, path: file || null }));

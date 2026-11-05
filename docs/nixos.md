@@ -42,8 +42,7 @@ Add TwinDesk to your system flake inputs and enable the NixOS module:
         {
           # Enable TwinDesk
           programs.twindesk = {
-            enable = true;
-            user = "yourusername"; # Automatically adds your user to 'input' and 'uinput' groups
+            enable = true; # the helper alone gets input access (a setgid wrapper); no user joins a group
           };
         }
       ];
@@ -62,9 +61,10 @@ Add TwinDesk to your system flake inputs and enable the NixOS module:
 |---|---|---|---|
 | `programs.twindesk.enable` | `bool` | `false` | Enable TwinDesk application and system integration. |
 | `programs.twindesk.package` | `package` | `twindesk` | The TwinDesk package derivation to use. |
-| `programs.twindesk.user` | `nullOr str` | `null` | Your username. If specified, adds the user to the `input` and `uinput` groups. |
+| `programs.twindesk.user` | `nullOr str` | `null` | Your username. Only used with `inputGroups`. |
+| `programs.twindesk.inputGroups` | `bool` | `false` | Also add `user` to the `input` and `uinput` groups. **Not needed**, and it lets every program that user runs read the keyboard and inject input (see below). |
 | `programs.twindesk.openFirewall` | `bool` | `true` | Automatically opens TCP port `47800` (peer traffic) and UDP ports `47801` (discovery) & `5353` (mDNS). |
-| `programs.twindesk.uinput` | `bool` | `true` | Enables `hardware.uinput.enable` and configures udev rules for Wayland input capture & injection. |
+| `programs.twindesk.uinput` | `bool` | `true` | Wayland mouse and keyboard sharing: loads uinput, gives `/dev/uinput` to the `input` group, and installs the helper as `/run/wrappers/bin/twindesk-linuxhelper` (setgid `input`). |
 | `programs.twindesk.enableWifiDirect` | `bool` | `true` | Creates `/run/wrappers/bin/twindesk-wifiap` with `CAP_NET_ADMIN` so Wi-Fi Direct interface management works seamlessly without root password prompts. |
 
 ---
@@ -72,10 +72,42 @@ Add TwinDesk to your system flake inputs and enable the NixOS module:
 ## 🛠️ Features & How They Work on NixOS
 
 ### 1. Wayland Mouse & Keyboard (KVM)
-On Wayland, input capture and injection operate via `/dev/input/event*` and `/dev/uinput`.
-- The NixOS module automatically enables `hardware.uinput.enable = true;` and configures `/etc/udev/rules.d` for uinput.
-- Ensure your user belongs to both `input` and `uinput` groups (configured automatically when setting `programs.twindesk.user = "yourusername";`).
-- Remember to log out and back in if you were just added to those groups.
+On Wayland no app may read or inject global input, so TwinDesk's helper works under the compositor: it
+reads `/dev/input/event*` (to see the mouse cross to the other computer, and the switch hotkey; it grabs
+the devices only while this computer drives the other one) and injects through `/dev/uinput`.
+
+**What that access means.** Whoever can read `/dev/input` can read every key typed, and whoever can
+write `/dev/uinput` can type and click as you. Membership of the `input` (or `uinput`) group grants
+exactly that to *every* program the user runs, and it stays after TwinDesk is gone. So TwinDesk never
+puts you in those groups:
+
+- The module installs the helper as a setgid wrapper, `/run/wrappers/bin/twindesk-linuxhelper` (and
+  `-multi`), owner `root`, group `input`. Only that helper gets the `input` group. TwinDesk runs it when
+  it's there.
+- `/dev/uinput` is given to the `input` group (mode `0660`), and `hardware.uinput.enable` loads the module.
+- `programs.twindesk.user` no longer adds anyone to a group. Set `programs.twindesk.inputGroups = true;`
+  only if you want the old behaviour.
+
+**Undo it.** Set `programs.twindesk.uinput = false;` (or remove `programs.twindesk`) and rebuild. If an
+older version of the module added you to `input`/`uinput`, rebuilding with this one takes you out (the
+groups are declarative); log out and back in. Check with `id`.
+
+**Other distributions.** Setup › Input access › Fix does the same through one password prompt: a
+root-owned, setgid-`input` copy of the helper in `/usr/local/libexec/twindesk/`, a udev rule giving
+`/dev/uinput` to `input` (`/etc/udev/rules.d/70-twindesk-uinput.rules`), and `uinput` loaded at boot
+(`/etc/modules-load.d/twindesk-uinput.conf`). After an update TwinDesk asks once more, for the new helper.
+General › Input access › **Remove** undoes all of it, and takes your account out of `input` if an older
+TwinDesk (2.5.1 and earlier) put it there; **Leave the group** does only that. By hand:
+
+```sh
+sudo rm -rf /usr/local/libexec/twindesk
+sudo rm -f /etc/udev/rules.d/70-twindesk-uinput.rules /etc/udev/rules.d/60-twindesk-uinput.rules /etc/modules-load.d/twindesk-uinput.conf
+sudo udevadm control --reload-rules && sudo udevadm trigger --sysname-match=uinput
+sudo gpasswd -d "$USER" input   # then log out and back in
+```
+
+(`60-twindesk-uinput.rules` is Remote › Real gamepad's: it lets the person at the computer write
+`/dev/uinput`, so a game sees the phone as a gamepad. It's set up only when that's turned on.)
 
 ### 2. Wi-Fi Direct & Hotspot Links
 Creating a secondary access point interface on supported Wi-Fi adapters requires `CAP_NET_ADMIN`.

@@ -238,6 +238,7 @@ function start() {
     resolveAddress: (macId) => discovery.get(macId),
   });
   link = new Peer(guest);
+  link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
   startHost(guest);
   link.onState(() => {
     discovery.wantProbes = link.snapshot().link.state !== 'connected'; // probe every 10 s only while not connected

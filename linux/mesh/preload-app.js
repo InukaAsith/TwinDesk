@@ -96,6 +96,8 @@ contextBridge.exposeInMainWorld('macshare', {
   checkFirewall: call('checkFirewall'),
   fixFirewall: call('fixFirewall'),
   fixInput: call('fixInput'),
+  leaveInputGroup: call('leaveInputGroup'),
+  removeInput: call('removeInput'),
   setStartup: call('setStartup'),
   quit: call('quit'),
   phoneInstallFull: call('phoneInstallFull'),
