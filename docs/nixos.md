@@ -66,6 +66,7 @@ Add TwinDesk to your system flake inputs and enable the NixOS module:
 | `programs.twindesk.openFirewall` | `bool` | `true` | Automatically opens TCP port `47800` (peer traffic) and UDP ports `47801` (discovery) & `5353` (mDNS). |
 | `programs.twindesk.uinput` | `bool` | `true` | Wayland mouse and keyboard sharing: loads uinput, gives `/dev/uinput` to the `input` group, and installs the helper as `/run/wrappers/bin/twindesk-linuxhelper` (setgid `input`). |
 | `programs.twindesk.enableWifiDirect` | `bool` | `true` | Creates `/run/wrappers/bin/twindesk-wifiap` with `CAP_NET_ADMIN` so Wi-Fi Direct interface management works seamlessly without root password prompts. |
+| `programs.twindesk.virtualCamera` | `bool` | `true` | Loads the `v4l2loopback` kernel module and adds a `TwinDesk Camera` device at boot, for Camera › Virtual camera. |
 
 ---
 
@@ -126,6 +127,14 @@ Creating a secondary access point interface on supported Wi-Fi adapters requires
 - **GNOME on Wayland**: Uses Mutter's virtual monitor portal. The package wrapper automatically bundles and sets up Python 3 with `pygobject` and `gst-python` with all GStreamer PipeWire plugins and GI typelibs.
 - **X11**: The module automatically installs the Polkit policy (`org.twindesk.linux.connector.policy`) and connector script (`twindesk-connector`) into `/run/current-system/sw` so output switching works out of the box.
 
-### 4. File Sharing & Remote Terminal
+### 4. Virtual Camera
+- The package builds and ships `twindesk-vcam`, the writer behind Camera › Virtual camera.
+- TwinDesk's own installer for the `v4l2loopback` module uses `apt`, `dnf` or `pacman`, so on NixOS the module sets it up instead (`virtualCamera`, on by default): it adds `v4l2loopback` to `boot.extraModulePackages` and `boot.kernelModules`, and a `twindesk-vcam` systemd service adds a `TwinDesk Camera` device with `v4l2loopback-ctl`. Reboot (or load the module and `sudo systemctl start twindesk-vcam`) after the first rebuild.
+- It sets no `options v4l2loopback` line, so it works beside other users of the module (OBS's virtual camera, say), whose own options stay as they are.
+- `v4l2loopback` in `boot.kernelModules` is incompatible with `services.howdy`; if you use Howdy, set `programs.twindesk.virtualCamera = false;`.
+- The Camera tab is in the normal window; Multi-device mode has no Camera tab in TwinDesk.
+- Virtual Camera currently only works when installed using `programs.twindes`, `nix run` doesn't work because it doesn't create and run the `systemd service`.
+
+### 5. File Sharing & Remote Terminal
 - **OpenSSH (Terminal)**: Enable `services.openssh.enable = true;` in your NixOS configuration.
 - **Samba (Folder Sharing)**: Enable `services.samba.enable = true;` in your NixOS configuration.
