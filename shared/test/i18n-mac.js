@@ -66,11 +66,14 @@ try {
   }
   const build = fs.readFileSync(path.join(ROOT, 'mac/build-app.sh'), 'utf8');
   assert.ok(build.includes('"$ROOT/shared/lang" "$STAGE/shared/"'), 'Mac packages include the shared catalogs');
-  assert.ok(build.includes('zh-Hans.lproj'), 'Mac packages include Chinese system permission descriptions');
-  const descriptions = fs.readFileSync(path.join(ROOT, 'mac/locales/zh-Hans.lproj/InfoPlist.strings'), 'utf8');
-  for (const [, key] of build.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)) {
-    // The system extension has its own bundle; the app's permission descriptions live here.
-    if (key !== 'NSSystemExtensionUsageDescription') assert.ok(descriptions.includes('"' + key + '" = '), `Chinese system description: ${key}`);
+  for (const lproj of ['zh-Hans', 'ru', 'tr', 'pt-BR']) {
+    assert.ok(build.includes(`locales/${lproj}.lproj`), `Mac packages include ${lproj} system permission descriptions`);
+    assert.ok(build.includes(`<string>${lproj}</string>`), `Mac bundle lists the ${lproj} localization`);
+    const descriptions = fs.readFileSync(path.join(ROOT, `mac/locales/${lproj}.lproj/InfoPlist.strings`), 'utf8');
+    for (const [, key] of build.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)) {
+      // The system extension has its own bundle; the app's permission descriptions live here.
+      if (key !== 'NSSystemExtensionUsageDescription') assert.ok(descriptions.includes('"' + key + '" = '), `${lproj} system description: ${key}`);
+    }
   }
   for (const mode of ['mac', 'mac/mesh']) {
     const source = fs.readFileSync(path.join(ROOT, mode, 'main.js'), 'utf8');

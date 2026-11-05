@@ -18,6 +18,10 @@ assert.strictEqual(I18n.resolveLanguage('en', 'zh-CN'), 'en');
 assert.strictEqual(I18n.resolveLanguage('zh-CN', 'en-US'), 'zh-CN');
 assert.strictEqual(I18n.resolveLanguage('../evil', 'en-US'), 'en');
 assert.strictEqual(I18n.resolveLanguage(null, null), 'en');
+for (const system of ['pt-BR', 'pt_BR', 'pt', 'pt-PT']) assert.strictEqual(I18n.resolveLanguage('', system), 'pt-BR', `${system} selects Brazilian Portuguese`);
+assert.strictEqual(I18n.resolveLanguage('pt-BR', 'en-US'), 'pt-BR');
+assert.strictEqual(I18n.resolveLanguage('', 'ptx'), 'en');
+assert.strictEqual(I18n.savedLanguage('pt-br'), '', 'saved preferences are exact');
 
 const catalogs = { en: { hello: 'Hello {name}', missing: 'English fallback', empty: 'English empty' }, 'zh-CN': { hello: '你好，{name}', empty: '' } };
 const zh = I18n.create('zh-CN', catalogs);
@@ -46,21 +50,26 @@ for (const model of [{ normalize, apply }, mesh]) {
 }
 
 const en = require('../lang/en.js');
-const cn = require('../lang/zh-CN.js');
 assert.ok(Object.keys(en).length > 50, 'the first pages have real translations');
-assert.deepStrictEqual(Object.keys(cn).sort(), Object.keys(en).sort());
-for (const [key, text] of Object.entries(en)) {
-  assert.ok(typeof cn[key] === 'string' && cn[key].trim(), `translation for ${key}`);
-  const placeholders = (s) => (s.match(/\{\w+\}/g) || []).sort();
-  assert.deepStrictEqual(placeholders(cn[key]), placeholders(text), `placeholders for ${key}`);
+const placeholders = (s) => (s.match(/\{\w+\}/g) || []).sort();
+for (const locale of I18n.LANGUAGES.filter((l) => l !== 'en')) {
+  const catalog = require(`../lang/${locale}.js`);
+  assert.deepStrictEqual(Object.keys(catalog).sort(), Object.keys(en).sort(), `${locale} has exactly the English keys`);
+  for (const [key, text] of Object.entries(en)) {
+    assert.ok(typeof catalog[key] === 'string' && catalog[key].trim(), `${locale} translation for ${key}`);
+    assert.deepStrictEqual(placeholders(catalog[key]), placeholders(text), `${locale} placeholders for ${key}`);
+  }
 }
 
 const browser = vm.createContext({});
-for (const name of ['lang/en.js', 'lang/zh-CN.js', 'i18n.js']) {
+for (const name of [...I18n.LANGUAGES.map((l) => `lang/${l}.js`), 'i18n.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', name), 'utf8'), browser);
 }
-assert.strictEqual(browser.TwinDeskI18n.create('zh-CN').t('General'), I18n.create('zh-CN').t('General'));
-assert.notStrictEqual(I18n.create('zh-CN').t('General'), 'General');
+for (const locale of I18n.LANGUAGES.filter((l) => l !== 'en')) {
+  assert.strictEqual(browser.TwinDeskI18n.create(locale).t('General'), I18n.create(locale).t('General'), `${locale} loads in a browser`);
+  assert.notStrictEqual(I18n.create(locale).t('General'), 'General', `${locale} translates General`);
+}
+assert.strictEqual(I18n.create('pt-BR').t('Connected to {name}', { name: 'PC {me} $&' }), 'Conectado a PC {me} $&');
 
 // A translated sentence may already contain literal braces supplied by a device or clipboard.
 const kitWindow = { MacShareProtocol: require('../protocol.js') };
