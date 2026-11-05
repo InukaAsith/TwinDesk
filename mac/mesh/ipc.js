@@ -585,6 +585,16 @@ function setupIpc(ctx) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
       if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
     },
+    // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.
+    setLook(o) {
+      if (!o || typeof o !== 'object') return;
+      const Look = require('../../shared/look.js');
+      if (typeof o.theme === 'string') settings.ui.theme = Look.theme(o.theme);
+      if (typeof o.accent === 'string') settings.ui.accent = Look.accent(o.accent);
+      store.saveSettings(settings);
+      if (ctx.onLook) ctx.onLook();
+      ctx.pushState();
+    },
     setLanguage(language) {
       if (!require('../../shared/i18n.js').savedLanguage(language) || settings.ui.language === language) return;
       settings.ui.language = language;

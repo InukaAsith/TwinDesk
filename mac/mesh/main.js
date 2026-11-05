@@ -40,7 +40,7 @@
 
 const { lanType } = require('../../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, nativeImage, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
 
 // ../main.js has set the command-line switches (WebRTC, autoplay) and the user data folder before handing over.
 if (!app.requestSingleInstanceLock()) {
@@ -52,6 +52,7 @@ const P = require('../../shared/protocol.js');
 const CL = require('../../shared/cursorlock.js');
 const trayMenu = require('../../shared/traymenu.js');
 const I18n = require('../../shared/i18n.js');
+const Look = require('../../shared/look.js');
 let i18n = I18n.create('en');
 const t = (...args) => i18n.t(...args);
 const store = require('./store');
@@ -228,6 +229,7 @@ function publishState() {
     state.keys = settings.keys;
     state.clipboard = clip ? { ...settings.clipboard, ...clip.view } : null;
     state.ui = settings.ui;
+    state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.mesh = settings.mesh;
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
@@ -682,7 +684,9 @@ app.whenReady().then(() => {
     },
   });
   updates.start();
-  actions = setupIpc({ devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
+  Look.applyTheme(nativeTheme, settings.ui.theme);
+  nativeTheme.on('updated', () => pushState());
+  actions = setupIpc({ devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
