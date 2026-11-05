@@ -84,7 +84,7 @@ UI.tab({
       row(t('Apps'), 'apps', (s) => s.apps.open > 0, null, undefined, notPhone),
     ];
     const p2m = [
-      row(t('Screen'), 'pc-mac', (s) => s.pcScreen.mode !== 'off', (v) => api.setPcScreenMode(v ? 'mirror' : 'off')),
+      row(t('Screen'), 'pc-mac', (s) => s.pcScreen.mode !== 'off', (v) => api.setPcScreenMode(v ? 'last' : 'off')),
       row(t('Sound'), 'audio', (s) => s.audio.send, (v) => api.setAudio({ send: v })),
       row(t('Mouse and keyboard'), 'cursor', (s) => s.kvm.driveOther, (v) => api.setKvm({ driveOther: v })),
       row(t('Clipboard'), 'clipboard', (s) => s.clipboard.send, (v) => api.setClipboard({ send: v })),

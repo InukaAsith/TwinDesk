@@ -84,7 +84,7 @@ try {
       tray: { setToolTip() {}, setContextMenu(value) { menu = value; } }, trayKey: '',
       Menu: { buildFromTemplate: (x) => x, setApplicationMenu() {} }, P: require('../protocol'),
       CL: require('../cursorlock'), trayMenu: require('../traymenu'),
-      i18n, t: (...args) => i18n.t(...args), rezumeItems: () => [],
+      i18n, t: (...args) => i18n.t(...args), rezumeItems: () => [], displayMode: () => 'mirror', shareAs() {},
       actions: {}, showWindow() {}, showUpdateWindow() {}, app: {},
     };
     vm.runInNewContext(code + '\nupdateTray();', context);

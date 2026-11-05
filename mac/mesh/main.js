@@ -304,6 +304,13 @@ function handleSendLink(url) {
   hud && hud.show('away', { key: paths.length === 1 ? 'Sending {count} item to {name}' : 'Sending {count} items to {name}', vars: { count: paths.length, name: peer.current.name } });
 }
 
+// The menu's Share Screen, Extend and Mirror: share in that mode (null: stop), as the viewer's screen.ctl does.
+function shareAs(mode) {
+  if (!mode) return void (settings.sharing.on && actions.setSharing(false));
+  if (displayMode() !== mode) actions.setDisplayMode(mode);
+  if (!settings.sharing.on) actions.setSharing(true);
+}
+
 function displayMode() {
   const t = svc && svc.displays.target();
   if (!t) return 'custom';
@@ -463,7 +470,10 @@ function updateTray() {
     driven: { label: t('Let {name} Control {me}', { name: other, me: id.macName }), checked: k.beDriven, set: (on) => actions.setKvm({ beDriven: on }) },
     popup: { checked: settings.app.hud !== false, set: (on) => actions.setApp({ hud: on }) },
     screen: [
-      { label: t('Share Screen'), checked: settings.sharing.on, set: (on) => actions.setSharing(on) },
+      { label: t('Share Screen'), checked: settings.sharing.on, set: (on) => actions.setSharing(on) }, // in the mode picked here
+      { label: t('Extend'), checked: !!settings.sharing.on && displayMode() === 'extend', set: (on) => shareAs(on ? 'extend' : null) },
+      { label: t('Mirror'), checked: !!settings.sharing.on && displayMode() === 'mirror', set: (on) => shareAs(on ? 'mirror' : null) },
+      { sep: true },
       { label: t('Receive Screen'), checked: svc && svc.pcView.isOpen, set: (on) => (on ? actions.showPcView() : actions.closePcView()) },
     ],
     clipboard: { checked: settings.clipboard.enabled, set: (on) => actions.setClipboard({ enabled: on }) },

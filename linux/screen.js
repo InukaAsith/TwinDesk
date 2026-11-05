@@ -151,6 +151,7 @@ class Screen {
   }
 
   _onState(m) {
+    const was = this.remote;
     const modes = Array.isArray(m.modes) ? m.modes.slice(0, 4).map(String) : [];
     this.remote = { on: m.on === true, mode: String(m.mode || ''), remote: m.remote !== false, modes };
     if (!this.remote.on) this.startedByUs = false;
@@ -158,6 +159,10 @@ class Screen {
     this.wantStart = false;
     this._pushRemote();
     this.onChange();
+    // The other computer just started sharing (its menu, its window): watch it here. Not on
+    // connecting to one that already shares (was: null), which would pop the window every time.
+    const shown = !!(this.win && !this.win.isDestroyed() && this.win.isVisible());
+    if (this.remote.on && was && !was.on && !this.test && !shown) this.open(false);
   }
 
   _onInfo(m) {

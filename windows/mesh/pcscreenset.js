@@ -91,6 +91,7 @@ class PcScreenSet extends EventEmitter {
 
   // ---- the single-peer API: the active target ----
   setMode(mode) { return this.active.setMode(mode); }
+  extend() { return this.active.extend(); }
   get mode() { return this.active.mode; }
   get link() { return this.first.link; }
   applyInput() { for (const u of this.all) u.applyInput(); }

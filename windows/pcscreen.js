@@ -18,7 +18,7 @@ const T = P.T;
 const RETRY_MS = 2000; // a capture that ended by itself (the desktop locked): tried again, doubling up to 30 s
 
 class PcScreen {
-  // opts: link, helper, sender, vdd, settings (shared), inputAllowed() (KVM at home), onChange()
+  // opts: link, helper, sender, vdd, settings (shared), inputAllowed() (KVM at home), onChange(), needDriver?() (Extend asked, no driver)
   constructor(opts) {
     Object.assign(this, opts);
     this.mode = 'off'; // 'off' | 'mirror' | 'extend' — never saved
@@ -100,6 +100,8 @@ class PcScreen {
   }
 
   async setMode(mode, prepare) {
+    // 'last': this side's own Share switch, in the mode last picked here (the viewer's start is Mirror: _onCtl).
+    if (mode === 'last') return this.lastMode === 'extend' ? this.extend() : this.setMode('mirror', prepare);
     if (!['off', 'mirror', 'extend'].includes(mode)) return;
     const request = ++this.modeRequest;
     if (prepare && (!(await prepare()) || request !== this.modeRequest)) return;
@@ -268,8 +270,19 @@ class PcScreen {
   }
 
   // What we offer the viewer: Extend only with the virtual display driver.
+  // Extend from a menu or the viewer. Without the display driver: Mirror for now, and the Share
+  // screen tab here, where Install is (needDriver; never an administrator prompt from afar).
+  extend() {
+    if (this.vdd.state.checked && !this.vdd.state.installed) {
+      if (this.needDriver) this.needDriver();
+      return this.setMode('mirror');
+    }
+    return this.setMode('extend');
+  }
+
+  // Both, always: the viewer keeps its Extend button even before the driver is here (extend()).
   _modes() {
-    return this.vdd.state.installed ? ['extend', 'mirror'] : ['mirror'];
+    return ['extend', 'mirror'];
   }
 
   // screen.state after welcome and whenever any of it changes (called with every state push).
@@ -292,7 +305,7 @@ class PcScreen {
     }
     const mode = m.mode === 'extend' || m.mode === 'mirror' ? m.mode : null;
     if (m.share === false) return this.setMode('off');
-    if (mode && (m.share === true || this.mode !== 'off')) return this.setMode(mode);
+    if (mode && (m.share === true || this.mode !== 'off')) return mode === 'extend' ? this.extend() : this.setMode(mode);
     if (mode) { this.lastMode = mode; return this.onChange(); }
     // Started from the viewer: Mirror (a virtual display doesn't always start); Extend is its switch.
     if (m.share === true && this.mode === 'off') return this.setMode('mirror');
