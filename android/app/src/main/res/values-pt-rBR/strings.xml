@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brazilian Portuguese for what Android itself shows (values/strings.xml). -->
+<resources>
+    <string name="sc_adb_short">Depuração por Wi-Fi</string>
+    <string name="sc_adb_long">Ativar a depuração por Wi-Fi</string>
+    <string name="sc_screen_short">Tela do Mac</string>
+    <string name="sc_screen_long">Mostrar a tela do Mac</string>
+    <string name="input_service">TwinDesk: mouse e teclado do seu computador</string>
+    <string name="input_service_desc">Permite que o computador pareado no TwinDesk toque, role e digite neste celular com o mouse e o teclado dele quando a depuração por Wi-Fi não está disponível (por exemplo, por Bluetooth). O TwinDesk só age sobre o que esse computador envia enquanto você compartilha o cursor dele; ele não lê a sua tela.</string>
+    <string name="label_screen">Tela do Mac</string>
+    <string name="label_remote">Remoto</string>
+    <string name="label_send">Enviar para o computador</string>
+    <string name="label_copy">Copiar para o computador</string>
+    <string name="label_open">Abrir no computador</string>
+    <string name="label_clip_tile">Enviar área de transferência</string>
+</resources>

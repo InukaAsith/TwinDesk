@@ -34,7 +34,7 @@ class FileClip(core: Core) : Feature(core) {
                 val o = Offer(m.optString("id"), names, m.optInt("files"), m.optLong("bytes"), System.currentTimeMillis())
                 if (o.id.isEmpty()) return true
                 incoming = o
-                Notify.fclipOffer(core.ctx, core.host?.name ?: "your computer", "${describe(o)} · ${size(o.bytes)}", o.id)
+                Notify.fclipOffer(core.ctx, core.host?.name ?: tr("your computer"), "${describe(o)} · ${size(o.bytes)}", o.id)
             }
             Proto.T.FCLIP_GONE -> {
                 if (incoming?.id == m.optString("id")) {
@@ -65,16 +65,16 @@ class FileClip(core: Core) : Feature(core) {
         incoming = null
     }
 
-    private fun describe(o: Offer) = if (o.names.size == 1) o.names[0] else "${o.names.size} items"
+    private fun describe(o: Offer) = if (o.names.size == 1) o.names[0] else tr("{count} items", "count" to o.names.size)
 
     // "Copy to clipboard" / "Save to Downloads" on the computer's copy.
     fun fetch(id: String, save: Boolean) {
         val o = incoming
         if (o == null || o.id != id || !core.link.connected) {
-            Notify.fclipReady(core.ctx, "Nothing to copy any more", "Copy the files again on your computer.", null)
+            Notify.fclipReady(core.ctx, tr("Nothing to copy any more"), tr("Copy the files again on your computer."), null)
             return
         }
-        val from = core.host?.name ?: "your computer"
+        val from = core.host?.name ?: tr("your computer")
         if (save) {
             core.files.expect(id, Files.Target(true))
         } else {
@@ -83,29 +83,30 @@ class FileClip(core: Core) : Feature(core) {
             dir.mkdirs()
             core.files.expect(id, Files.Target(false, dir) { b -> onCopied(o, b, from) })
         }
-        status = if (save) "Saving ${describe(o)}…" else "Copying ${describe(o)}…"
+        status = if (save) tr("Saving {what}…", "what" to describe(o)) else tr("Copying {what}…", "what" to describe(o))
         core.send(msg(Proto.T.FCLIP_PASTE, "id" to id))
-        Notify.fclipProgress(core.ctx, "${if (save) "Saving" else "Copying"} ${describe(o)} from $from", -1)
+        Notify.fclipProgress(core.ctx, if (save) tr("Saving {what} from {from}", "what" to describe(o), "from" to from)
+            else tr("Copying {what} from {from}", "what" to describe(o), "from" to from), -1)
         core.changed()
     }
 
     private fun onCopied(o: Offer, b: Files.Batch, from: String) {
         if (!b.ok || b.placed.isEmpty()) {
-            status = "Copy failed"
-            Notify.fclipReady(core.ctx, "Couldn’t copy ${describe(o)}", "Not everything arrived from $from.", null)
+            status = tr("Copy failed")
+            Notify.fclipReady(core.ctx, tr("Couldn’t copy {what}", "what" to describe(o)), tr("Not everything arrived from {from}.", "from" to from), null)
             return
         }
         val cr = core.ctx.contentResolver
         val clip = ClipData.newUri(cr, describe(o), b.placed[0].first)
         for ((uri, _) in b.placed.drop(1)) clip.addItem(cr, ClipData.Item(uri))
         (core.ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
-        status = "${describe(o)} copied"
+        status = tr("{what} copied", "what" to describe(o))
         val share = if (b.placed.size == 1) {
             Intent(Intent.ACTION_SEND).setType(b.placed[0].second ?: "*/*").putExtra(Intent.EXTRA_STREAM, b.placed[0].first)
         } else {
             Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*").putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList<Uri>(b.placed.map { it.first }))
         }.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        Notify.fclipReady(core.ctx, "${describe(o)} copied", "Paste it in any app, or share it.", share)
+        Notify.fclipReady(core.ctx, tr("{what} copied", "what" to describe(o)), tr("Paste it in any app, or share it."), share)
         incoming = null
         core.changed()
     }

@@ -20,14 +20,14 @@ class ShareActivity : Activity() {
         val open = intent.component?.className?.endsWith("OpenOnComputer") == true
         val host = core.host
         if (host == null) {
-            toast("Not connected. Open TwinDesk to connect to your computer.")
+            toast(tr("Not connected. Open TwinDesk to connect to your computer."))
             return finish()
         }
         // ReZume's "Open on computer": the link opens there now.
         if (open) {
             val text = listOfNotNull(intent.getStringExtra(Intent.EXTRA_TEXT), intent.dataString).joinToString(" ")
             val why = core.rezume.pushUrl(text)
-            toast(why ?: "Opening on ${host.name}")
+            toast(why ?: tr("Opening on {name}", "name" to host.name))
             return finish()
         }
         val uris = mutableListOf<Uri>()
@@ -38,7 +38,7 @@ class ShareActivity : Activity() {
                     val text = intent.getStringExtra(Intent.EXTRA_TEXT)
                     if (!text.isNullOrEmpty()) {
                         core.clip.sendText(text)
-                        toast("Copied on ${host.name}")
+                        toast(tr("Copied on {name}", "name" to host.name))
                         return finish()
                     }
                 }
@@ -56,9 +56,9 @@ class ShareActivity : Activity() {
             runOnUiThread {
                 toast(
                     when {
-                        !ok -> "Couldn’t send to ${host.name}"
-                        copy -> "Copied for ${host.name}: paste there with ⌃⌥V"
-                        else -> "Sending ${Files.plural(items.size, "item")} to ${host.name}"
+                        !ok -> tr("Couldn’t send to {name}", "name" to host.name)
+                        copy -> tr("Copied for {name}: paste there with ⌃⌥V", "name" to host.name)
+                        else -> tr("Sending {items} to {name}", "items" to trCount(items.size, "item"), "name" to host.name)
                     },
                 )
             }
@@ -76,18 +76,18 @@ class ClipActivity : Activity() {
         val core = Core.get(this)
         val cm = getSystemService(ClipboardManager::class.java)
         val clip = cm.primaryClip
-        val name = core.host?.name ?: "your computer"
+        val name = core.host?.name ?: tr("your computer")
         val text = if (clip != null && clip.itemCount > 0) clip.getItemAt(0).coerceToText(this)?.toString() else null
         val uri = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.uri
         val msg = when {
-            core.host == null -> "Not connected to your computer"
+            core.host == null -> tr("Not connected to your computer")
             uri != null -> {
                 val items = core.files.describe((0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri })
-                if (core.fclip.copy(items)) "Copied for $name: paste there with ⌃⌥V" else "Couldn’t copy that"
+                if (core.fclip.copy(items)) tr("Copied for {name}: paste there with ⌃⌥V", "name" to name) else tr("Couldn’t copy that")
             }
-            text.isNullOrEmpty() -> "The clipboard is empty"
-            core.clip.sendText(text) -> "Clipboard sent to $name"
-            else -> "Couldn’t send the clipboard"
+            text.isNullOrEmpty() -> tr("The clipboard is empty")
+            core.clip.sendText(text) -> tr("Clipboard sent to {name}", "name" to name)
+            else -> tr("Couldn’t send the clipboard")
         }
         Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
         finish()
@@ -103,8 +103,8 @@ class RezumeActivity : Activity() {
         val o = r.incoming
         if (o != null && o.id == intent.getStringExtra("id")) {
             r.take(o, this)
-            if (o.kind == "doc") toast("Getting ${o.name}…")
-        } else toast("That isn’t offered any more")
+            if (o.kind == "doc") toast(tr("Getting {name}…", "name" to o.name))
+        } else toast(tr("That isn’t offered any more"))
         finish()
     }
 
@@ -118,7 +118,7 @@ class AdbActivity : Activity() {
         val core = Core.get(this)
         if (core.adb.enable(true, byPerson = true)) {
             core.adb.sendState()
-            Toast.makeText(applicationContext, "Wireless debugging is on", Toast.LENGTH_SHORT).show()
+            Toast.makeText(applicationContext, tr("Wireless debugging is on"), Toast.LENGTH_SHORT).show()
         } else core.adb.openSettings()
         finish()
     }

@@ -132,14 +132,14 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                 if (s.remote) {
                     for (mode in listOf("mirror", "extend")) {
                         val on = s.sharing && s.mode == mode
-                        val label = if (mode == "mirror") "Mirror" else "Extend"
+                        val label = if (mode == "mirror") tr("Mirror") else tr("Extend")
                         if (on) FilledTonalButton(onClick = { bar = true }) { Text(label) }
                         else TextButton(onClick = { s.pick(mode); bar = true }) { Text(label, color = Color.White) }
                     }
-                    if (s.sharing) TextButton(onClick = { s.control(share = false) }) { Text("Stop", color = Color.White) }
+                    if (s.sharing) TextButton(onClick = { s.control(share = false) }) { Text(tr("Stop"), color = Color.White) }
                 }
-                TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) "Hide keyboard" else "Keyboard", color = Color.White) }
-                TextButton(onClick = { s.end(); close() }) { Text("Close", color = Color.White) }
+                TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
+                TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
             }
         }
     }

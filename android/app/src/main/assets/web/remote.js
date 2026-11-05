@@ -17,7 +17,12 @@
   const hot = typeof TD.move === 'function';
   const tick = () => { try { TD.tick(); } catch (_) { /* older app */ } };
   const $ = (id) => document.getElementById(id);
-  let opts = { mode: 'pad', name: 'the computer', me: 'this device', connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
+  // The app's language (I18n.kt through TD.tr): {name} parts filled from vars, English without the app.
+  const t = (text, vars = {}) => (typeof TD.tr === 'function' ? TD.tr(text, JSON.stringify(vars))
+    : text.replace(/^[^|]*\|/, '').replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)));
+  for (const e of document.querySelectorAll('[data-i18n]')) e.textContent = t(e.dataset.i18n || e.textContent);
+  for (const e of document.querySelectorAll('[aria-label]')) e.setAttribute('aria-label', t(e.getAttribute('aria-label')));
+  let opts = { mode: 'pad', name: t('the computer'), me: t('this device'), connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
   let allowed = null; // the computer's remote.state
   let why = ''; // …and why it doesn't take it now
   let off = false; // …because its Remote is off: Turn on, here
@@ -55,23 +60,24 @@
     const game = opts.mode === 'gamepad';
     document.body.classList.toggle('gamepad', game);
     document.body.classList.toggle('pad', !game);
-    $('name').textContent = game && opts.bt ? `Bluetooth gamepad · ${opts.btName || 'connected'}`
-      : `${game ? (real ? 'Gamepad (real)' : 'Gamepad') : 'Touchpad'} · ${opts.name}`;
+    const name = opts.name, me = opts.me;
+    $('name').textContent = game && opts.bt ? t('Bluetooth gamepad · {name}', { name: opts.btName || t('connected') })
+      : `${game ? (real ? t('Gamepad (real)') : t('Gamepad')) : t('Touchpad')} · ${name}`;
     const note = game && opts.bt ? ''
-      : !opts.connected ? `Not connected to ${opts.name}. Connect from TwinDesk’s Overview.`
-      : allowed === false && off ? `Remote is off on ${opts.name}.`
-      : allowed === false ? (why || `${opts.name} doesn’t take input from ${opts.me}. On ${opts.name}, turn on Remote in TwinDesk.`)
-        : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? `${opts.name} doesn’t answer the remote: update TwinDesk there.`
+      : !opts.connected ? t('Not connected to {name}. Connect from TwinDesk’s Overview.', { name })
+      : allowed === false && off ? t('Remote is off on {name}.', { name })
+      : allowed === false ? (why || t('{name} doesn’t take input from {me}. On {name}, turn on Remote in TwinDesk.', { name, me }))
+        : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? t('{name} doesn’t answer the remote: update TwinDesk there.', { name })
           : '';
     $('note-text').textContent = note;
     $('note').hidden = !note;
     $('note-on').hidden = !(note && allowed === false && off && opts.connected);
     // A real controller: what the computer sees it as.
     const sees = !game ? ''
-      : opts.bt ? `${opts.btName || 'The computer'} sees ${opts.me} as “TwinDesk Gamepad”, a Bluetooth game controller`
-        : real && opts.os === 'win' ? `Windows sees it as an Xbox 360 Controller: games take it as one (joy.cpl lists it under Game Controllers)`
-          : real && opts.os === 'linux' ? `${opts.name} sees it as “TwinDesk Gamepad”, an Xbox 360 controller`
-            : real ? `${opts.name} sees it as a game controller` : '';
+      : opts.bt ? t('{name} sees {me} as “TwinDesk Gamepad”, a Bluetooth game controller', { name: opts.btName || t('The computer'), me })
+        : real && opts.os === 'win' ? t('Windows sees it as an Xbox 360 Controller: games take it as one (joy.cpl lists it under Game Controllers)')
+          : real && opts.os === 'linux' ? t('{name} sees it as “TwinDesk Gamepad”, an Xbox 360 controller', { name })
+            : real ? t('{name} sees it as a game controller', { name }) : '';
     $('pad-note').textContent = sees;
     $('pad-note').hidden = !sees;
     if (!$('map').hidden) mapFill();
@@ -91,8 +97,8 @@
       list.append(row);
     }
     $('map-hint').textContent = asPad()
-      ? 'It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).'
-      : 'What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.';
+      ? t('It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).')
+      : t('What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.');
   }
   $('b-map').onclick = () => { releaseAll(); mapFill(); $('map').hidden = false; };
   $('map-done').onclick = () => { $('map').hidden = true; };

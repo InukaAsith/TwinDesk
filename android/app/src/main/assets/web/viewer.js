@@ -18,6 +18,9 @@
   const audio = document.getElementById('audio');
   const overlay = document.getElementById('overlay');
   const kbd = document.getElementById('kbd');
+  // The app's language (I18n.kt through TD.tr): {name} parts filled from vars, English without the app.
+  const t = (text, vars = {}) => (typeof TD.tr === 'function' ? TD.tr(text, JSON.stringify(vars))
+    : text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)));
   const TD = window.TD;
   const send = (m) => TD.send(JSON.stringify(m));
   // in.mm straight to the socket (WebHost's TD.move): no object or JSON per pointer event.
@@ -27,7 +30,7 @@
   let pc = null;
   let session = null;
   let pending = null;
-  let name = 'the computer'; // the one we're connected to (opts)
+  let name = t('the computer'); // the one we're connected to (opts)
   let streamAudio = false;
   let sound = true;
   let pacing = 'fast';
@@ -67,7 +70,7 @@
     const my = (pc = new RTCPeerConnection(msg.ice || { iceServers: [] }));
     session = msg.session;
     const queue = (pending = []);
-    setOverlay(`Connecting to ${name}…`);
+    setOverlay(t('Connecting to {name}…', { name }));
     my.ontrack = (e) => {
       if (e.track.kind === 'audio') {
         if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
@@ -97,7 +100,7 @@
       send({ t: 'rtc.answer', session: msg.session, sdp: my.localDescription.sdp });
     } catch (err) {
       console.log(`viewer offer failed: ${err.message}`);
-      if (my === pc) setOverlay(`Couldn’t start the video: ${err.message}`);
+      if (my === pc) setOverlay(t('Couldn’t start the video: {error}', { error: err.message }));
     }
   }
 
@@ -113,7 +116,7 @@
       case 'stream.info': // its name is the display shared, not the computer
         streamAudio = msg.audio === true;
         applyAudio();
-        if (!pc) setOverlay(`Waiting for ${name}…`);
+        if (!pc) setOverlay(t('Waiting for {name}…', { name }));
         break;
       case 'rtc.offer': onOffer(msg); break;
       case 'rtc.ice':
@@ -123,10 +126,10 @@
         break;
       case 'stream.stop':
         closePc();
-        setOverlay(`${name} isn’t sharing its screen`);
+        setOverlay(t('{name} isn’t sharing its screen', { name }));
         break;
       case 'screen.state':
-        if (!pc) setOverlay(msg.on ? `Waiting for ${name}…` : `${name} isn’t sharing its screen. Start it with the button below.`);
+        if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name }) : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
         break;
       case 'opts':
         if (msg.name) name = msg.name;
@@ -464,6 +467,6 @@
     if (!e.isComposing && !composing) settle();
   });
 
-  setOverlay('Waiting for the computer…');
+  setOverlay(t('Waiting for the computer…'));
   TD.ready();
 })();
