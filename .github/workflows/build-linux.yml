@@ -43,6 +43,34 @@ jobs:
             libxfixes-dev \
             libglib2.0-dev
 
+      # The helpers are plain C (+ the tdfast Rust lane) and are built on Ubuntu 18.04 (glibc 2.27), so they
+      # load on Ubuntu 20.04, Debian 10/11, RHEL 8, Kylin V10 and the like (#149). Built on 24.04 they
+      # needed glibc 2.39 and mouse sharing died on those. The Electron app itself doesn't care.
+      - name: Build the helpers on an old glibc
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src ubuntu:18.04 sh -ec '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update || { sed -i "s|http://[a-z.]*ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g" /etc/apt/sources.list; apt-get update; }
+            apt-get install -y --no-install-recommends build-essential pkg-config curl ca-certificates \
+              libx11-dev libxi-dev libxtst-dev libxext-dev libxrandr-dev libxfixes-dev libglib2.0-dev
+            curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+            . "$HOME/.cargo/env"
+            sh linux-helper/build.sh
+            chown -R '"$(id -u):$(id -g)"' linux-helper native/tdfast/target
+          '
+
+      # Fails the build if a helper needs a newer glibc than 2.27, or went without the tdfast lane.
+      - name: Check the helpers
+        run: |
+          bad=0
+          for f in linux-helper/bin/*; do
+            max=$(objdump -T "$f" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+            echo "$f needs $max"
+            [ "$(printf '%s\nGLIBC_2.27\n' "$max" | sort -V | tail -1)" = "GLIBC_2.27" ] || bad=1
+          done
+          nm linux-helper/bin/macshare-linuxhelper | grep -q tdfast || { echo "no tdfast lane in the helper"; bad=1; }
+          exit $bad
+
       - uses: ./.github/actions/android-full
         with:
           keystore: ${{ secrets.ANDROID_KEYSTORE }}
@@ -53,6 +81,8 @@ jobs:
 
       - name: Build Linux packages
         working-directory: linux
+        env:
+          TWINDESK_HELPERS_PREBUILT: '1'
         run: npm run dist
 
       - name: Upload packages
