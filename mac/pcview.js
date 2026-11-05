@@ -47,11 +47,15 @@ class PcView extends EventEmitter {
       this._policy();
     });
     server.on(`t:${T.SCREEN_STATE}`, (m) => {
+      const was = this.remote;
       this.remote = { on: !!m.on, mode: String(m.mode || ''), remote: m.remote !== false, modes: Array.isArray(m.modes) ? m.modes.slice(0, 4).map(String) : [] };
       if (!this.remote.on) this.startedByUs = false;
       this._toWin({ t: 'remote', ...this.remote });
       if (this.wantStart && this.remote.remote && !this.remote.on) this.control({ share: true });
       this.wantStart = false;
+      // The other computer just started sharing (its menu, its window): watch it here. Not on
+      // connecting to one that already shares (was: null), which would pop the window every time.
+      if (this.remote.on && was && !was.on && !this.isOpen) return void this.show();
       this.emit('change');
     });
     server.on('closed', () => {

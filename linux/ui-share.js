@@ -14,7 +14,7 @@ UI.tab({
   icon: 'display',
   color: 'linear-gradient(#5ac8fa, #0a84ff)',
   desc: 'See {me} in a window on the other computer.',
-  master: { get: (s) => s.pcScreen.mode !== 'off', set: (v) => UI.api.setPcScreenMode(v ? 'mirror' : 'off') },
+  master: { get: (s) => s.pcScreen.mode !== 'off', set: (v) => UI.api.setPcScreenMode(v ? 'last' : 'off') },
   badge: (s) => (s.pcScreen.status === 'live' ? 'on' : ''),
   build(body) {
     const { el, api } = UI;

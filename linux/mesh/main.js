@@ -320,7 +320,7 @@ function start() {
   wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   const sender = new Sender(link);
   vdd = new Vdd({ onChange: pushState });
-  pcScreen = new PcScreen({ link, helper, sender, vdd, settings, popup: (kind, text) => hud.show(kind, text), inputAllowed: () => kvm.mode === 'home', onChange: pushState });
+  pcScreen = new PcScreen({ link, helper, sender, vdd, settings, popup: (kind, text) => hud.show(kind, text), inputAllowed: () => kvm.mode === 'home', onChange: pushState , needDriver: () => goTab('pc-mac') });
   vdd.check(); // Extend: can this desktop add a virtual monitor? (and one left on by a crash goes)
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
@@ -1164,7 +1164,7 @@ function updateTray(s) {
   const found = s.found.filter((d) => !s.peer || d.id !== s.peer.id);
   const host = s.paired && s.paired.macName;
   const again = !connected && host && (s.link.state === 'stopped' || !!s.link.busy);
-  const key = JSON.stringify([name, again, away, pcApps ? pcApps.moved.size : 0, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
+  const key = JSON.stringify([name, again, away, pcApps ? pcApps.moved.size : 0, kvm.linked, kvm.paused, kvm.locked, kvm.mode, settings.keys.lockKeys, sharing, s.pcScreen.mode, watching, k.driveOther, k.beDriven, settings.clipboard.enabled,
     settings.audio.send, settings.app.hud, k.keyboard, settings.files.edgeDrag, settings.files.shortcuts, settings.files.copyKeys, found.map((d) => [d.id, d.name, d.os]), s.updates && s.updates.available && s.updates.latest]);
   if (key === trayKey) return;
   trayKey = key;
@@ -1189,7 +1189,10 @@ function updateTray(s) {
     driven: { label: t('Let {name} Control {me}', { name: other, me: device.name }), checked: k.beDriven, set: (on) => set('kvm', { beDriven: on }, () => kvm.applyConfig()) },
     popup: { checked: settings.app.hud, set: (on) => set('app', { hud: on }) },
     screen: [
-      { label: t('Share Screen'), checked: sharing, set: (on) => pcScreen.setMode(on ? 'mirror' : 'off') },
+      { label: t('Share Screen'), checked: sharing, set: (on) => pcScreen.setMode(on ? 'last' : 'off') }, // in the mode last picked here
+      { label: t('Extend'), checked: pcScreen.mode === 'extend', set: (on) => (on ? pcScreen.extend() : pcScreen.setMode('off')) },
+      { label: t('Mirror'), checked: pcScreen.mode === 'mirror', set: (on) => pcScreen.setMode(on ? 'mirror' : 'off') },
+      { sep: true },
       // Opens/closes the screen window (opening starts the other computer's sharing).
       { label: t('Receive Screen'), checked: watching, set: (on) => (on ? screen.open(false) : screen.close()) },
     ],

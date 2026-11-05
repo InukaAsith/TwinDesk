@@ -6,7 +6,7 @@
 //   template(m) -> an Electron menu template
 //   m: {status, connected, home?(), shared: {checked, set(on)}, lock?: {label, checked, set},
 //       keyboard: {checked, set}, drive: {label, checked, set}, driven?: {label, checked, set},
-//       popup: {checked, set}, screen: [{label, checked, set}], clipboard: {checked, set},
+//       popup: {checked, set}, screen: [{label, checked, set} | {sep: true}], clipboard: {checked, set},
 //       sound: {checked, set}, drag: {checked, set}, shortcuts: {label, checked, set},
 //       found: [{label, click}], byAddress(), lookAgain(), again?: {label, click},
 //       disconnect?: {label, click}, update?: {label, click}, windowsBack?: {label, click}, open(), quit(),
@@ -44,7 +44,7 @@ function kinds(m, t, short = false) {
         check(t('Show a Popup When Switching'), m.popup),
       ],
     },
-    { label: t('Screen'), submenu: m.screen.map((x) => check(x.label, x)) },
+    { label: t('Screen'), submenu: m.screen.map((x) => (x.sep ? sep : check(x.label, x))) },
     { label: t(short ? 'Clipboard & Sound' : 'Clipboard and Sound'), submenu: [check(t('Share Clipboard'), m.clipboard), check(t('Send Sound'), m.sound)] },
     { label: t('Files'), submenu: [check(t('Drag Files Across the Screen Edge'), m.drag), check(m.shortcuts.label, m.shortcuts)] },
     { label: t('Connection'), submenu: [...(m.disconnect ? [m.disconnect, sep] : []), connectTo(m, t)] },

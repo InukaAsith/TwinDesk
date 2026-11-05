@@ -312,6 +312,13 @@ function handleSendLink(url) {
   hud && hud.show('away', { key: paths.length === 1 ? 'Sending {count} item to {name}' : 'Sending {count} items to {name}', vars: { count: paths.length, name: peer.current.name } });
 }
 
+// The menu's Share Screen, Extend and Mirror: share in that mode (null: stop), as the viewer's screen.ctl does.
+function shareAs(mode) {
+  if (!mode) return void (settings.sharing.on && actions.setSharing(false));
+  if (displayMode() !== mode) actions.setDisplayMode(mode);
+  if (!settings.sharing.on) actions.setSharing(true);
+}
+
 function displayMode() {
   const t = svc && svc.displays.target();
   if (!t) return 'custom';
@@ -488,7 +495,7 @@ function updateTray() {
   const OS = { mac: 'Mac', linux: 'Linux', android: t('Phone') };
   const g = (svc && link && link.view()) || { status: {}, hosts: [] };
   const again = !c && g.hosts.length && (g.status.state === 'stopped' || !!g.status.busy);
-  const key = JSON.stringify([c && c.name, c && c.transport, phone, again, where, k.linked, k.ble, svc && svc.kvm.locked, settings.keys.lockKeys, k.driveOther, k.beDriven, settings.sharing.on,
+  const key = JSON.stringify([c && c.name, c && c.transport, phone, again, where, k.linked, k.ble, svc && svc.kvm.locked, settings.keys.lockKeys, k.driveOther, k.beDriven, settings.sharing.on, displayMode(),
     !!(svc && svc.pcView.isOpen), phoneView, settings.clipboard.enabled, settings.audio.send, settings.app.hud, k.keyboard, settings.files.dragEdge, settings.files.shortcuts, settings.files.copyKeys, rezumeItems().map((i) => i.label),
     found.map((d) => [d.id, d.name, d.os]), updates && updates.status.available && updates.status.latest]);
   if (key === trayKey) return;
@@ -506,7 +513,10 @@ function updateTray() {
     driven: phone ? null : { label: t('Let {name} Control {me}', { name, me: id.macName }), checked: k.beDriven, set: (on) => actions.setKvm({ beDriven: on }) },
     popup: { checked: settings.app.hud !== false, set: (on) => actions.setApp({ hud: on }) },
     screen: [
-      { label: t('Share Screen'), checked: settings.sharing.on, set: (on) => actions.setSharing(on) },
+      { label: t('Share Screen'), checked: settings.sharing.on, set: (on) => actions.setSharing(on) }, // in the mode picked here
+      { label: t('Extend'), checked: !!settings.sharing.on && displayMode() === 'extend', set: (on) => shareAs(on ? 'extend' : null) },
+      { label: t('Mirror'), checked: !!settings.sharing.on && displayMode() === 'mirror', set: (on) => shareAs(on ? 'mirror' : null) },
+      { sep: true },
       phone
         ? { label: t('Show Phone Screen'), checked: phoneView, set: (on) => actions.phoneScreen(on) }
         : { label: t('Receive Screen'), checked: svc && svc.pcView.isOpen, set: (on) => (on ? actions.showPcView() : actions.closePcView()) },
