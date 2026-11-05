@@ -228,7 +228,7 @@ Every app has **an all-new look**, in light and dark. And underneath, the mouse 
 | 📦 | **fx2.** Files in their own process, in parallel ranges, verified while they stream | [More](#speed) |
 | 🪟 | **Move windows.** Hold Right Ctrl and drag a window past the edge: it moves to the other computer | [More](#move-windows) |
 | 🎙 | **Microphone sharing.** One computer's microphone on the other, or the phone as a microphone | [More](#sound-and-microphone) |
-| 🌍 | **Русский, Türkçe, 简体中文** on every desktop | |
+| 🌍 | **Русский, Türkçe, 简体中文, Português (Brasil)** on every desktop | |
 
 <a name="rezume"></a>
 
