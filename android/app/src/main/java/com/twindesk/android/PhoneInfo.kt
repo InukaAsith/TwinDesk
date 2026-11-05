@@ -365,7 +365,7 @@ class Adb(core: Core) : Feature(core) {
     private fun settle(isOff: Boolean) {
         if (isOff == off) return
         off = isOff
-        if (isOff) Notify.adbOff(core.ctx, core.host?.name ?: "your computer") else Notify.cancelAdbOff(core.ctx)
+        if (isOff) Notify.adbOff(core.ctx, core.host?.name ?: tr("your computer")) else Notify.cancelAdbOff(core.ctx)
         core.changed()
     }
 
@@ -400,8 +400,8 @@ class Adb(core: Core) : Feature(core) {
                 } ?: Camera()
                 if (pairing && bridge != "connecting") {
                     pairing = false
-                    if (bridge == "ready") Notify.pairResult(core.ctx, "Paired with ${core.host?.name ?: "your computer"}", "Its screen, mouse, keyboard and sound work with this device now.", false)
-                    else if (bridge == "needsPair") Notify.pairResult(core.ctx, "Pairing didn’t work", bridgeMessage.ifEmpty { "Try a new code." }, true)
+                    if (bridge == "ready") Notify.pairResult(core.ctx, tr("Paired with {name}", "name" to (core.host?.name ?: tr("your computer"))), tr("Its screen, mouse, keyboard and sound work with this device now."), false)
+                    else if (bridge == "needsPair") Notify.pairResult(core.ctx, tr("Pairing didn’t work"), bridgeMessage.ifEmpty { tr("Try a new code.") }, true)
                 }
                 if (bridge == "ready" && was != "ready") stopPortSearch()
                 if (m.has("need")) {
@@ -426,7 +426,7 @@ class Adb(core: Core) : Feature(core) {
     // (typing it there keeps Settings' dialog open), and look for our own pairing port meanwhile.
     fun askForCode() {
         findPairPort()
-        Notify.pairCode(core.ctx, core.host?.name ?: "your computer")
+        Notify.pairCode(core.ctx, core.host?.name ?: tr("your computer"))
     }
 
     // The Screen page's Show and Close: this phone's screen in a window on the computer (it opens
@@ -443,11 +443,11 @@ class Adb(core: Core) : Feature(core) {
 
     fun sendPairCode(code: String) {
         val digits = code.filter { it.isDigit() }
-        if (digits.length != 6) return Notify.pairResult(core.ctx, "The pairing code has six digits", "Type the code Settings shows.", true)
-        if (!core.link.connected) return Notify.pairResult(core.ctx, "Not connected", "Connect to your computer in TwinDesk first.", true)
+        if (digits.length != 6) return Notify.pairResult(core.ctx, tr("The pairing code has six digits"), tr("Type the code Settings shows."), true)
+        if (!core.link.connected) return Notify.pairResult(core.ctx, tr("Not connected"), tr("Connect to your computer in TwinDesk first."), true)
         pairing = true
         core.send(msg(Proto.T.ADB_PAIR, "code" to digits, "port" to pairPort))
-        Notify.pairResult(core.ctx, "Pairing…", "Sent to ${core.host?.name ?: "your computer"}", false, progress = true)
+        Notify.pairResult(core.ctx, tr("Pairing…"), tr("Sent to {name}", "name" to (core.host?.name ?: tr("your computer"))), false, progress = true)
         core.changed()
     }
 

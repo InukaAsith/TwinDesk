@@ -46,6 +46,12 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
     }
 
     private inner class Bridge {
+        // The pages' text in the app's language (I18n.kt); vars: a JSON object for its {name} parts.
+        @JavascriptInterface fun tr(text: String, vars: String): String {
+            val o = runCatching { JSONObject(vars) }.getOrNull() ?: JSONObject()
+            return com.twindesk.android.tr(text, *o.keys().asSequence().map { it to o.opt(it) }.toList().toTypedArray())
+        }
+
         @JavascriptInterface fun send(json: String) {
             runCatching { core.send(JSONObject(json)) }
         }
@@ -176,7 +182,7 @@ class Screen(core: Core) : Feature(core) {
             val ok = runCatching { ctx.startActivity(android.content.Intent(ctx, ViewerActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
             if (ok) return
         }
-        Notify.screen(ctx, core.host?.name ?: "Your computer")
+        Notify.screen(ctx, core.host?.name ?: tr("Your computer"))
     }
 
     fun detach(h: WebHost) {
@@ -202,7 +208,7 @@ class Screen(core: Core) : Feature(core) {
     // pointer goes where the finger is, tap = click); speed and tap are the Remote page's touchpad settings;
     // pen: a stylus is a pen on the computer (its pressure, tilt, eraser), else a mouse.
     fun opts(): JSONObject = msg("opts", "sound" to core.store.flag("screen.sound", false), "pacing" to (core.store.flag("screen.smooth", false).let { if (it) "smooth" else "fast" }),
-        "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
+        "name" to (core.host?.name ?: tr("the computer")), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
         "speed" to core.remote.speed.toDouble(), "tap" to core.remote.tapClick, "pen" to core.store.flag("screen.pen", true))
 
     // The touchpad settings changed on the Remote page: an open viewer follows.
