@@ -89,6 +89,18 @@ ViGEmBus 1.22.0 — https://github.com/nefarius/ViGEmBus — BSD-3-Clause.
 Installed on Windows only when the user turns on Remote › Real gamepad (windows/gamepad.js).
 
 
+AirBridge / playfair (AirPlay receiver core)
+--------------------------------------------
+native/tdplay includes protocol receiver code adapted from AirBridge by Jannik Beyerstein:
+  https://github.com/30jannik06/AirBridge
+Licensed under the GNU General Public License v3.0 (GPL-3.0).
+
+native/tdplay/vendor/playfair contains the playfair FairPlay decryption library
+from the UxPlay project:
+  https://github.com/FDH2/UxPlay
+Licensed under the GNU General Public License v3.0 (GPL-3.0).
+
+
 npm dependencies (installed by npm, not included in this repository)
 --------------------------------------------------------------------
 ws (MIT), Electron (MIT), electron-builder (MIT), @electron/packager (BSD-2-Clause) and their

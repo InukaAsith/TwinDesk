@@ -58,6 +58,8 @@ const PeerApps = require('./peerapps');
 const desktopApps = require('./desktopapps');
 const loopback = require('./loopback');
 const autostart = require('./autostart');
+const { TdWebServer } = require('../shared/tdweb.js');
+const { TdPlayManager } = require('../shared/tdplay.js');
 const { PairSync } = require('./pairsync');
 const { PhoneLink } = require('./phone-link');
 const { Wired } = require('./wired');
@@ -170,6 +172,8 @@ const session = system.session();
 // Started at login (tray only), or by a Mac app's launcher (that app only).
 const startHidden = process.argv.includes('--hidden') || process.argv.some((a) => a.startsWith('--mac-app='));
 let lastPairPhase = null;
+let tdweb = null;
+let tdplay = null;
 
 function loadDevice() {
   let d = store.read('device.json', null);
@@ -387,11 +391,12 @@ function start() {
   const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
-    get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
+    get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings, applyWeb,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', pushState);
   loadReZume(); // only while it's on
+  applyWeb(); // only while it's on
   afterLane().then(() => link.start());
   link.on('welcome', () => { // a Mac app's launcher was used while the Mac wasn't connected
     if (pendingMacApp && Date.now() < pendingMacApp.until) openMacApp(pendingMacApp.id);
@@ -612,6 +617,77 @@ function loadRemote() {
 
 // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js).
 // Loaded the first time it's turned on: until then nothing is looked at.
+function applyWeb() {
+  const w = settings.web || {};
+  if (!w.enabled) {
+    if (tdweb) { tdweb.stop(); tdweb = null; }
+    if (tdplay) { tdplay.stop(); tdplay = null; }
+    pushState();
+    return;
+  }
+
+  if (w.portal) {
+    if (!tdweb) {
+      let creds = {};
+      try { creds = identity.getCredentials ? identity.getCredentials() : {}; } catch (_) {}
+      tdweb = new TdWebServer({
+        getSettings: () => settings,
+        getIdentity: () => ({ name: os.hostname() }),
+        getClipboard: () => {
+          try { return clipboard.readText(); } catch (_) { return ''; }
+        },
+        setClipboard: (text) => {
+          try { clipboard.writeText(text); } catch (_) {}
+        },
+        getDownloadsDir: () => receivedDir(settings, app.getPath('downloads')),
+        onInput: (_m) => {},
+      });
+      tdweb.on('file-received', (info) => {
+        pushState();
+        if (Notification.isSupported()) {
+          new Notification({ title: 'TwinDesk Web', body: `Received ${info.name}` }).show();
+        }
+      });
+      tdweb.on('client-connected', () => pushState());
+      tdweb.on('client-disconnected', () => pushState());
+      tdweb.on('devices-change', () => pushState());
+      tdweb.on('chats-change', () => pushState());
+      tdweb.start({ port: w.port || 47802, credentials: creds });
+    }
+  } else if (tdweb) {
+    tdweb.stop();
+    tdweb = null;
+  }
+
+  if (w.airplay) {
+    if (!tdplay) {
+      tdplay = new TdPlayManager();
+      tdplay.on('ready', () => pushState());
+      tdplay.on('client', () => pushState());
+      tdplay.on('mirror_start', () => {
+        if (phoneViews) phoneViews.openScreen(true);
+        pushState();
+      });
+      tdplay.on('mirror_stop', () => pushState());
+      tdplay.on('video', (buf) => {
+        if (phoneViews) {
+          for (const v of phoneViews.views.values()) {
+            if (v.kind === 'screen') {
+              phoneViews._send(v, 'phoneview:video', { data: buf });
+            }
+          }
+        }
+      });
+      tdplay.start({ name: `TwinDesk (${os.hostname()})`, port: 7000, mirrorPort: 7100 });
+    }
+  } else if (tdplay) {
+    tdplay.stop();
+    tdplay = null;
+  }
+
+  pushState();
+}
+
 function loadReZume() {
   if (rezume || !settings.rezume.on) return rezume;
   try { return loadReZumeNow(); } catch (e) { console.error('[rezume] couldn’t start: ' + (e && e.stack || e)); rezume = null; return null; }
@@ -1053,6 +1129,9 @@ function pushState() {
     if (phase === 'code' && lastPairPhase !== 'code') showMain(); // a code to compare: to the front
     lastPairPhase = phase;
     if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('state', s);
+    if (tdweb && tdweb.running) {
+      try { tdweb.notifyClipboard(clipboard.readText()); } catch (_) {}
+    }
     updateTray(s);
   });
 }
@@ -1129,6 +1208,16 @@ function buildState() {
     phoneMedia: nowPlaying ? nowPlaying.view : null,
     btAudio: btAudio ? btAudio.view : null,
     rezume: rezume ? rezume.view : { ...settings.rezume, connected: false }, // ReZume tab (shared/rezume.js)
+    web: {
+      ...settings.web,
+      urls: tdweb && tdweb.running ? TdWebServer.getNetworkLinks(settings.web.port, tdweb.token) : null,
+      pairCode: tdweb && tdweb.running ? tdweb.token : null,
+      airplayActive: !!(tdplay && tdplay.running),
+      airplayClient: tdplay ? tdplay.activeDevice : null,
+    },
+    webDevices: tdweb && tdweb.running ? tdweb.getDevices() : [],
+    activeWebDevice: tdweb && tdweb.running ? tdweb.getActiveDevice() : null,
+    webChats: tdweb && tdweb.running ? tdweb.getChats() : [],
     ui: settings.ui,
     look: Look.view(settings.ui, null), // Linux has no system accent colour to read
     app: settings.app,

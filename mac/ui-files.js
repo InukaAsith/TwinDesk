@@ -87,9 +87,9 @@ UI.tab({
       const f = s.files;
       const m = s.smb;
       if (!f || !m) return;
-      const pc = UI.peer(s).name;
+      const pc = s.activeWebDevice ? s.activeWebDevice.name : UI.peer(s).name;
       // Send files
-      canSend = !!s.client;
+      canSend = !!(s.client || s.activeWebDevice);
       zone.classList.toggle('off', !canSend);
       zoneText.textContent = canSend ? I18n.t('Drop files or folders here') : I18n.t('Connect to send files');
       sendBtn.disabled = !canSend;

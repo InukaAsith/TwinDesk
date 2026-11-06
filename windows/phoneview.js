@@ -133,20 +133,22 @@ class PhoneViews extends EventEmitter {
     return [...this.views.values()].some((v) => v.win && !v.win.isDestroyed() && v.win.isFocused());
   }
 
-  openScreen() {
+  openScreen(opts) {
+    const isAirplay = typeof opts === 'object' ? !!opts?.airplay : (opts === true);
     const open = [...this.views.values()].find((v) => v.kind === 'screen');
     if (open) return open.win.show(), open.win.focus();
-    const info = this.phone.info || {};
+    const info = (this.phone && this.phone.info) || {};
     const d = info.display || { w: 1080, h: 2400 };
     const work = screen.getPrimaryDisplay().workAreaSize;
     const c = this._chrome();
     const h = Math.min(860, work.height - 80);
     const w = Math.round((h - c.h) * Math.min(d.w, d.h) / Math.max(d.w, d.h)) + c.w;
-    const name = (this.server.current && this.server.current.name) || this._i18n().t('Phone');
-    const titleKey = (this.server.current && this.server.current.name) ? '' : 'Phone';
+    const devName = (opts && typeof opts === 'object' && opts.name) || (this.server && this.server.current && this.server.current.name);
+    const name = isAirplay ? (devName || 'AirPlay') : (devName || this._i18n().t('Phone'));
+    const titleKey = isAirplay ? '' : (devName ? '' : 'Phone');
     // Mirroring › Native (or Automatic without wireless debugging): the phone shares it itself.
-    const native = this.bridge.mirrorVia === 'native';
-    this._open({ kind: 'screen', native, title: name, titleKey, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
+    const native = isAirplay || (this.bridge && this.bridge.mirrorVia === 'native');
+    this._open({ kind: 'screen', native, airplay: isAirplay, title: name, titleKey, width: w, height: h, opts: isAirplay ? null : (this.bridge ? this.bridge.sessionOpts('screen') : {}) });
   }
 
   // The phone's camera (Camera's switch, or the phone's Camera page; scrcpy's camera source, Android
@@ -293,8 +295,8 @@ class PhoneViews extends EventEmitter {
     return I18n.create(I18n.resolveLanguage(settings.ui && settings.ui.language, app.getLocale()));
   }
 
-  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false, sink = '', native = false }) {
-    if (!this.bridge.serial && kind !== 'netsound' && !native) {
+  _open({ kind, app, title, titleKey = '', titleName = '', width, height, opts, hidden = false, sink = '', native = false, airplay = false }) {
+    if (!this.bridge.serial && kind !== 'netsound' && !native && !airplay) {
       // Wireless debugging not up yet (just on Wi-Fi after Bluetooth): main.js opens it once it is.
       if (kind !== 'mic' && this.onNoAdb && this.onNoAdb({ kind, app, title, titleKey, titleName, width, height, opts, hidden })) return;
       return this.bridge.emit('popup', 'home', 'Set up wireless debugging on the Phone page first');
@@ -308,7 +310,7 @@ class PhoneViews extends EventEmitter {
       // click never comes: without this its AudioContext stays suspended and silent).
       webPreferences: { preload: path.join(__dirname, 'preload-phoneview.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
     });
-    const v = { id, kind, app, title, win, sink, native, session: null, keys: new KeyState(), size: null, ready: false, queue: [], chrome: this._chrome(), screenOff: false, torch: false, eaten: new Set() };
+    const v = { id, kind, app, title, win, sink, native, airplay: !!airplay, session: null, keys: new KeyState(), size: null, ready: false, queue: [], chrome: this._chrome(), screenOff: false, torch: false, eaten: new Set() };
     this.views.set(id, v);
     this._send(v, 'phoneview:opts', this._opts(v));
     win.loadFile(path.join(__dirname, 'phoneview.html'), { query: { kind, title, titleKey, titleName, ...(kind === 'mic' ? { sink, virtual: process.platform === 'linux' ? '1' : '' } : {}), controls: this._controls(), language: this._i18n().locale } });
@@ -343,10 +345,14 @@ class PhoneViews extends EventEmitter {
       this.emit('change');
     });
     this.emit('change');
-    if (kind !== 'netsound') this._start(v, opts).catch((e) => {
-      console.log(`[phone] ${kind} window: ${e.message}`);
-      this._send(v, 'phoneview:status', { error: e.message, errorKey: e.messageKey, errorVars: e.messageVars });
-    });
+    if (airplay) {
+      this._send(v, 'phoneview:status', { ready: true, via: 'airplay' });
+    } else if (kind !== 'netsound') {
+      this._start(v, opts).catch((e) => {
+        console.log(`[phone] ${kind} window: ${e.message}`);
+        this._send(v, 'phoneview:status', { error: e.message, errorKey: e.messageKey, errorVars: e.messageVars });
+      });
+    }
     return v;
   }
 

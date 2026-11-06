@@ -40,7 +40,7 @@
   };
   const otpOf = (t) => (window.Otp ? window.Otp.otpOf(t) : '');
   // The PC and Linux say the session in s.link, the Mac in s.client.
-  const linked = (s) => !!(s && ((s.link && s.link.state === 'connected') || s.client || (s.phone && s.phone.connected)));
+  const linked = (s) => !!(s && ((s.link && s.link.state === 'connected') || s.client || (s.phone && s.phone.connected) || s.activeWebDevice || (s.webDevices && s.webDevices.some((d) => d.active))));
   const viaOf = (s) => (UI.via ? UI.via(s) : s.client && s.client.transport === 'ble' ? t('Bluetooth') : t('Wi-Fi'));
 
   UI.tab({
@@ -69,7 +69,7 @@
       const batt = el('div', { class: 'dv-batt' }, [el('div', { class: 'dv-batt-fill' })]);
       const battText = el('span', { class: 'dv-batt-text' });
       const battRow = el('div', { class: 'dv-batt-row' }, [batt, battText]);
-      const showBtn = UI.button(t('Show screen'), () => api.phoneScreen(true), 'primary');
+      const showBtn = UI.button(t('Show screen'), () => (UI.state && UI.state.activeWebDevice ? UI.go('share') : api.phoneScreen(true)), 'primary');
       let ringing = false;
       const ringBtn = UI.button(t('Ring'), () => { ringing = !ringing; doIt({ do: ringing ? 'ring' : 'ringStop' }); paint(); });
       const lockBtn = UI.button(t('Lock'), () => doIt({ do: 'lock' }));
@@ -77,7 +77,12 @@
       let wifiOn = false;
       const wifiBtn = UI.button(t('Use Wi-Fi Direct'), () => api.netWifi(!wifiOn));
       const hotspotBtn = UI.button(t('Use hotspot'), () => { api.netWifi('hotspot'); UI.go('connection'); });
-      const discBtn = UI.button(t('Disconnect'), () => (UI.isPhone(UI.state) && api.disconnectPhone ? api.disconnectPhone() : api.disconnect()));
+      const discBtn = UI.button(t('Disconnect'), () => {
+        const s = UI.state || {};
+        if (s.activeWebDevice && api.disconnectWebClient) return api.disconnectWebClient(s.activeWebDevice.id);
+        if (UI.isPhone(s) && api.disconnectPhone) return api.disconnectPhone();
+        return api.disconnect();
+      });
       // Each button with its icon (20×20 strokes, the colour of its text).
       const ICO = {
         show: 'M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2',
@@ -222,16 +227,18 @@
         const ctl = (phone ? ph.ctl : s.peerCtl) || null; // what the other side can do (deviceDo), null: an older TwinDesk
 
         // hero
-        const devName = phone && c ? c.name : (s.peer && s.peer.name) || (s.client && s.client.name) || p.name;
+        const web = s.activeWebDevice;
+        const devName = phone && c ? c.name : (web ? web.name : ((s.peer && s.peer.name) || (s.client && s.client.name) || p.name));
         h1.textContent = devName;
         name.textContent = devName;
-        pic.className = 'device big ' + (phone ? 'phone' : UI.osClass(p.os));
+        pic.className = 'device big ' + (phone ? 'phone' : (web ? UI.osClass(web.os) : UI.osClass(p.os)));
         if (phone && UI.phoneWall) pic.style.setProperty('--phone-wall', UI.phoneWall);
         else if (phone && info.colors && info.colors.length) pic.style.setProperty('--phone-wall', `linear-gradient(160deg, ${info.colors.join(', ')}${info.colors.length === 1 ? `, ${info.colors[0]}` : ''})`);
         else pic.style.removeProperty('--phone-wall');
         const rtt = phone ? c && c.rttMs : s.link ? s.link.rtt : s.client && s.client.rttMs;
-        const via = phone && c && c.usb ? 'USB' : viaOf(s);
-        desc.textContent = phone ? [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `Android ${info.release}`].filter(Boolean).join(' · ')
+        const via = phone && c && c.usb ? 'USB' : (web ? t('Web') : viaOf(s));
+        desc.textContent = web ? (web.kind === 'phone' ? (web.os === 'ios' ? 'Apple iPhone' : t('Mobile Web Client')) : (web.os === 'ipados' ? 'Apple iPad' : t('Web Companion Client')))
+          : phone ? [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `Android ${info.release}`].filter(Boolean).join(' · ')
           : { mac: 'Mac', win: t('Windows PC'), linux: t('Linux computer') }[p.os] || '';
         sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(' · ');
         const level = phone ? info.battery : s.peerInfo && s.peerInfo.battery;
@@ -242,9 +249,15 @@
           battText.textContent = t('{level}%{charging}', { level, charging: (phone ? info.charging : s.peerInfo && s.peerInfo.charging) ? ' · ' + t('Charging') : '' });
         }
         const ready = !!(ph.bridge && ph.bridge.state === 'ready');
-        showBtn.hidden = !phone;
-        showBtn.disabled = !ready;
-        showBtn.title = ready ? '' : t('Needs wireless debugging (Connection)');
+        if (s.activeWebDevice) {
+          showBtn.hidden = false;
+          showBtn.disabled = false;
+          showBtn.title = t('Share screen with web client');
+        } else {
+          showBtn.hidden = !phone;
+          showBtn.disabled = !ready;
+          showBtn.title = ready ? '' : t('Needs wireless debugging (Connection)');
+        }
         const can = (k) => !!(ctl && ctl.can && ctl.can[k]);
         ringBtn.hidden = !can('ring');
         if (ctl && typeof ctl.ringing === 'boolean' && ctl.ringing !== ringing) ringing = ctl.ringing;

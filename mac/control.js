@@ -206,7 +206,10 @@ const UI = {
   peer(s) {
     const c = s && s.client;
     let os = c && c.os, name = c && c.name;
-    if (!os && s) {
+    if (s && s.activeWebDevice) {
+      os = s.activeWebDevice.os || 'ios';
+      name = s.activeWebDevice.name || 'Web Device';
+    } else if (!os && s) {
       const all = [...(s.paired || []), ...((s.guest && s.guest.hosts) || [])].sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
       if (all[0]) ({ os, name } = all[0]);
     }
@@ -303,10 +306,13 @@ const UI = {
     return p;
   },
 
-  isPhone: (s) => !!(s && s.client && s.client.os === 'android'),
+  isPhone: (s) => !!(s && (
+    (s.client && (s.client.os === 'android' || s.client.os === 'ios' || s.client.os === 'ipados' || s.client.kind === 'phone')) ||
+    (s.activeWebDevice && (s.activeWebDevice.kind === 'phone' || s.activeWebDevice.os === 'ios' || s.activeWebDevice.os === 'ipados' || s.activeWebDevice.os === 'android'))
+  )),
 
-  // A small device glyph for lists: 'mac' | 'win' | 'linux' | 'android'.
-  osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' ? 'phone' : 'pc'),
+  // A small device glyph for lists: 'mac' | 'win' | 'linux' | 'android' | 'ios'.
+  osClass: (os) => (os === 'mac' ? 'mac' : (os === 'android' || os === 'ios' || os === 'ipados') ? 'phone' : 'pc'),
   // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's, light or dark as the appearance.
   appIcon(src) {
     const fallback = matchMedia('(prefers-color-scheme: dark)').matches ? 'assets/sidebar-icon@2x.png' : 'assets/sidebar-icon-light@2x.png';

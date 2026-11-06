@@ -1,0 +1,832 @@
+<!doctype html>
+<!-- TwinDesk Web — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#18181b">
+  <title>TwinDesk</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Mobile Header (Visible on phone screens < 768px) -->
+  <header class="mobile-header">
+    <div class="brand">
+      <img class="app-logo-mob" src="icon.png" alt="TwinDesk">
+      <div class="title-area">
+        <h2>TwinDesk</h2>
+        <div class="sub">
+          <span class="dot good" id="mob-peer-dot"></span>
+          <span id="mob-host-name">Connecting…</span>
+        </div>
+      </div>
+    </div>
+    <div id="mob-transport-badge" class="pill good">
+      <svg class="icon-inline" viewBox="0 0 20 20"><path d="M3 7.5c4-3.5 10-3.5 14 0 M5.5 10.5c2.5-2.2 6.5-2.2 9 0 M8 13.5c1.1-.9 2.9-.9 4 0"></path></svg>
+      <span id="mob-transport-text">Wi-Fi · 1 ms</span>
+    </div>
+  </header>
+
+  <div id="app-container">
+    <!-- Desktop Sidebar (Visible on >= 768px) -->
+    <aside id="sidebar">
+      <div class="identity">
+        <img class="app-logo" src="icon.png" alt="TwinDesk">
+        <div class="who">
+          <div class="app-name">TwinDesk</div>
+          <div class="peer">
+            <span class="dot good" id="sidebar-dot"></span>
+            <span id="sidebar-host-name">Connecting…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Attached Devices Wall -->
+      <div id="phones">
+        <button class="phone-tile active" id="tile-connected-device" type="button">
+          <span class="phone-wall">
+            <svg viewBox="0 0 20 20"><path d="M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2"></path></svg>
+          </span>
+          <span class="phone-text">
+            <span class="phone-name" id="sidebar-client-name">This Device</span>
+            <span class="phone-sub" id="sidebar-client-sub">Connected · Wi-Fi</span>
+          </span>
+          <span class="dot good"></span>
+        </button>
+      </div>
+
+      <ul id="nav">
+        <!-- Group 1: Overview & Connection -->
+        <li>
+          <button class="nav-item active" data-tab="overview">
+            <span class="tile tile-overview">
+              <svg viewBox="0 0 20 20"><path d="M3 9.5 10 4l7 5.5V17H3z M8 17v-4h4v4"></path></svg>
+            </span>
+            <span class="label">Overview</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-tab="connection">
+            <span class="tile tile-link">
+              <svg viewBox="0 0 20 20"><path d="M8.5 11.5a3.2 3.2 0 0 0 4.5 0l2.5-2.5a3.2 3.2 0 0 0-4.5-4.5l-.8.8 M11.5 8.5a3.2 3.2 0 0 0-4.5 0L4.5 11a3.2 3.2 0 0 0 4.5 4.5l.8-.8"></path></svg>
+            </span>
+            <span class="label">Connection</span>
+          </button>
+        </li>
+        <li class="sep"></li>
+
+        <!-- Group 2: Screens -->
+        <li>
+          <button class="nav-item" data-tab="receive">
+            <span class="tile tile-receive">
+              <svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4 M10 6v4.5 M7.8 8.5 10 10.7l2.2-2.2"></path></svg>
+            </span>
+            <span class="label">Receive screen</span>
+            <span class="nav-badge-dot"></span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-tab="share">
+            <span class="tile tile-share">
+              <svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4"></path></svg>
+            </span>
+            <span class="label">Share screen</span>
+          </button>
+        </li>
+        <li class="sep"></li>
+
+        <!-- Group 3: Drop & Files -->
+        <li>
+          <button class="nav-item" data-tab="drop">
+            <span class="tile tile-drop">
+              <svg viewBox="0 0 20 20"><path d="M3 4.5h14v9H8.5L5 16.5v-3H3z"></path></svg>
+            </span>
+            <span class="label">Drop</span>
+            <span class="nav-badge-dot"></span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-tab="files">
+            <span class="tile tile-files">
+              <svg viewBox="0 0 20 20"><path d="M3 5h5l1.5 2H17v9H3z"></path></svg>
+            </span>
+            <span class="label">Files</span>
+          </button>
+        </li>
+        <li class="sep"></li>
+
+        <!-- Group 4: Clipboard & Remote -->
+        <li>
+          <button class="nav-item" data-tab="clipboard">
+            <span class="tile tile-clip">
+              <svg viewBox="0 0 20 20"><path d="M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4"></path></svg>
+            </span>
+            <span class="label">Clipboard</span>
+            <span class="nav-badge-dot"></span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-tab="remote">
+            <span class="tile tile-remote">
+              <svg viewBox="0 0 20 20"><path d="M6.5 6.5h7a4 4 0 0 1 4 4v1.5a2.8 2.8 0 0 1-5 1.7L11.4 12H8.6l-1.1 1.7a2.8 2.8 0 0 1-5-1.7v-1.5a4 4 0 0 1 4-4z M6 8.5v3 M4.5 10h3"></path></svg>
+            </span>
+            <span class="label">Remote</span>
+          </button>
+        </li>
+        <li class="sep"></li>
+
+        <!-- Group 5: General & About -->
+        <li>
+          <button class="nav-item" data-tab="general">
+            <span class="tile tile-general">
+              <svg viewBox="0 0 20 20"><path d="M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M4.7 15.3l1.4-1.4 M13.9 6.1l1.4-1.4"></path></svg>
+            </span>
+            <span class="label">General</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-tab="about">
+            <span class="tile tile-about">
+              <svg viewBox="0 0 20 20"><path d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M10 9v5 M10 6.2v.1"></path></svg>
+            </span>
+            <span class="label">About</span>
+          </button>
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main id="content">
+      <div id="pages">
+
+        <!-- 0. OVERVIEW PAGE (Signature Kotlin Modern UI from uploaded screenshots) -->
+        <section id="page-overview" class="page active">
+          <div class="page-head">
+            <div class="titles">
+              <h1 id="overview-head-title">Overview</h1>
+              <p id="overview-head-sub">All features at a glance.</p>
+            </div>
+          </div>
+
+          <!-- Big Screen Hero Card -->
+          <div class="big-screen-card">
+            <div class="screen-hero-visual">
+              <div class="device-node local">
+                <div class="device-icon">
+                  <svg viewBox="0 0 20 20"><path d="M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2"></path></svg>
+                </div>
+                <span class="device-name" id="hero-local-name">This Device</span>
+              </div>
+
+              <div class="connection-bridge">
+                <div class="bridge-line"></div>
+                <div class="bridge-badge pill good" id="hero-bridge-badge">
+                  <span class="pulse-dot"></span>
+                  <span id="hero-bridge-text">Wi-Fi · 1 ms</span>
+                </div>
+              </div>
+
+              <div class="device-node remote">
+                <div class="device-icon">
+                  <svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4"></path></svg>
+                </div>
+                <span class="device-name" id="hero-host-name">Computer</span>
+              </div>
+            </div>
+
+            <div class="screen-action-area">
+              <a id="btn-show-screen-big" href="viewer.html" class="btn-pill-large">
+                <svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4 M10 6v4.5 M7.8 8.5 10 10.7l2.2-2.2"></path></svg>
+                <span id="btn-show-screen-text">Show Computer's screen</span>
+              </a>
+              <button id="btn-hero-disconnect" class="btn-tonal-pill" type="button">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- Host Details & Quick Controls Card -->
+          <div class="card host-controls-card">
+            <div class="card-title" id="ctl-host-name">Computer</div>
+            <div class="row">
+              <div class="text">
+                <span class="label" id="ctl-host-version-label">TwinDesk on Computer</span>
+                <span class="hint">Connected and synchronized</span>
+              </div>
+              <div class="controls">
+                <span class="pill muted">v2.5.3</span>
+              </div>
+            </div>
+
+            <div class="chip-buttons-row">
+              <button class="chip-btn" id="btn-host-ring" type="button">Ring</button>
+              <button class="chip-btn" id="btn-host-lock" type="button">Lock</button>
+              <button class="chip-btn" id="btn-host-sleep" type="button">Sleep</button>
+            </div>
+
+            <div class="row volume-row">
+              <div class="text">
+                <span class="label">Volume</span>
+              </div>
+              <div class="controls volume-controls">
+                <input type="range" id="host-volume-slider" min="0" max="100" value="50">
+                <span class="volume-val" id="host-volume-val">50%</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1. RECEIVE SCREEN PAGE -->
+        <section id="page-receive" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1 id="receive-head-title">Receive screen</h1>
+              <p>See the computer's screen in a window or full display here.</p>
+            </div>
+            <div class="master-switch">
+              <input type="checkbox" id="master-receive" class="switch" checked>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="row">
+              <div class="text">
+                <span class="label">Screen window</span>
+                <span class="hint" id="receive-win-hint">Waiting for stream</span>
+              </div>
+              <div class="controls">
+                <a id="btn-launch-monitor" href="viewer.html" class="btn primary">Open</a>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label" id="receive-shares-label">Display mode</span>
+                <span class="hint">Mirror or extend the desktop workspace</span>
+              </div>
+              <div class="controls">
+                <div class="seg" id="seg-shares">
+                  <button data-val="off">Off</button>
+                  <button data-val="mirror" class="on">Mirror</button>
+                  <button data-val="extend">Extend</button>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Stream resolution</span>
+                <span class="hint">Target rendering resolution over the low-latency link</span>
+              </div>
+              <div class="controls">
+                <select id="select-resolution">
+                  <option value="1080">1080p, fastest</option>
+                  <option value="1440" selected>1440p, sharper</option>
+                  <option value="0">Native Retina (Full size)</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Control computer from screen</span>
+                <span class="hint">Apple Pencil pressure, tilt, and touch input forwarding</span>
+              </div>
+              <div class="controls">
+                <input type="checkbox" id="sw-control" class="switch" checked>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Playback</span>
+                <span class="hint" id="receive-playback-hint">Each frame the moment it arrives. Low latency</span>
+              </div>
+              <div class="controls">
+                <div class="seg" id="seg-playback">
+                  <button data-val="fastest" class="on">Fastest</button>
+                  <button data-val="smooth">Smooth</button>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Keep screen awake</span>
+                <span class="hint">Prevents iPad / phone screen from sleeping while streaming</span>
+              </div>
+              <div class="controls">
+                <input type="checkbox" id="sw-wakelock" class="switch" checked>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Live Stream Details</div>
+            <div class="row">
+              <div class="text"><span class="label">Status</span></div>
+              <div class="value" id="val-status">Live</div>
+            </div>
+            <div class="row">
+              <div class="text"><span class="label">Picture</span></div>
+              <div class="value" id="val-picture">2560 × 1600 @ 60 FPS</div>
+            </div>
+            <div class="row">
+              <div class="text"><span class="label">Speed</span></div>
+              <div class="value" id="val-speed">16.4 Mbps</div>
+            </div>
+            <div class="row">
+              <div class="text"><span class="label">Round trip</span></div>
+              <div class="value" id="val-rtt">1.4 ms</div>
+            </div>
+            <div class="row">
+              <div class="text"><span class="label">Codec</span></div>
+              <div class="value" id="val-codec">H.264 (Hardware)</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. SHARE SCREEN PAGE (AirPlay Receiver) -->
+        <section id="page-share" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1 id="share-head-title">Share screen</h1>
+              <p>Mirror your iPhone or iPad screen to your computer via AirPlay.</p>
+            </div>
+          </div>
+
+          <div class="dir-head">
+            <svg viewBox="0 0 20 20"><path d="M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2"></path></svg>
+            <span id="share-source-name">This Device</span>
+            <span class="arrow">›</span>
+            <span class="dest" id="share-target-name">Computer</span>
+          </div>
+
+          <div class="card">
+            <div class="card-title">AirPlay Receiver (tdplay)</div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Receiver Status</span>
+                <span class="hint">Broadcasting AirPlay service via mDNS</span>
+              </div>
+              <div class="controls">
+                <span class="pill good">Active</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Step 1: Open Control Center</span>
+                <span class="hint">Swipe down from top-right corner on iPhone / iPad</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Step 2: Tap Screen Mirroring</span>
+                <span class="hint">Select the two overlapping screens icon</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Step 3: Select TwinDesk</span>
+                <span class="hint">Screen appears instantly in high quality on your computer</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. DROP PAGE -->
+        <section id="page-drop" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>Drop</h1>
+              <p>Drop files, photos, or text to send instantly to the computer.</p>
+            </div>
+          </div>
+
+          <!-- Drop Zone -->
+          <div class="card">
+            <div id="drop-zone" class="drop-zone">
+              <svg viewBox="0 0 20 20"><path d="M3 5h5l1.5 2H17v9H3z"></path></svg>
+              <div class="drop-title" id="drop-zone-title">Drop files or folders here</div>
+              <div class="drop-hint">They go to the other device’s Downloads folder immediately</div>
+              <input type="file" id="file-picker" style="display: none;" multiple>
+            </div>
+
+            <!-- In Progress Transfer Indicator -->
+            <div id="transfer-card" class="progress-card" style="display: none;">
+              <div class="progress-meta">
+                <span id="transfer-label">Transferring…</span>
+                <span id="transfer-pct">0%</span>
+              </div>
+              <div class="progress-track">
+                <div id="transfer-fill" class="progress-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity / Chat stream inside Drop -->
+          <div class="card">
+            <div class="card-title">Activity</div>
+            <div id="drop-stream" class="drop-stream">
+              <div class="drop-bubble in">
+                Connected to TwinDesk Drop. Files dropped here are saved directly to your computer.
+                <div class="time">Connected</div>
+              </div>
+            </div>
+
+            <!-- Input Bar -->
+            <div class="drop-input-bar">
+              <button id="btn-attach" class="drop-icon-btn" title="Choose file to send" type="button">
+                <svg viewBox="0 0 20 20"><path d="M10 4v12 M5 10h10"></path></svg>
+              </button>
+              <input type="text" id="drop-text" placeholder="Send message or drop files…">
+              <button id="btn-clip-toggle" class="drop-icon-btn" title="Push text to Computer Clipboard" type="button">
+                <svg viewBox="0 0 20 20"><path d="M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4"></path></svg>
+              </button>
+              <button id="btn-send" class="drop-icon-btn primary" title="Send" type="button">
+                <svg viewBox="0 0 20 20"><path d="M4 10l12-6-4 12-3-5z"></path></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. FILE SHARING PAGE (With the requested Two Big Buttons: Send and Receive) -->
+        <section id="page-files" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>Files</h1>
+              <p>Send, copy and drag files between your devices.</p>
+            </div>
+          </div>
+
+          <!-- The Two Big Buttons: Send & Receive -->
+          <div class="big-buttons-grid">
+            <button id="btn-files-send-big" class="big-action-card send" type="button">
+              <div class="big-action-icon">
+                <svg viewBox="0 0 20 20"><path d="M10 14V4 M6 8l4-4 4 4 M4 17h12"></path></svg>
+              </div>
+              <div class="big-action-text">
+                <span class="big-action-title">Send</span>
+                <span class="big-action-sub">Choose files or photos to send to PC</span>
+              </div>
+            </button>
+
+            <button id="btn-files-receive-big" class="big-action-card receive" type="button">
+              <div class="big-action-icon">
+                <svg viewBox="0 0 20 20"><path d="M10 4v10 M6 10l4 4 4-4 M4 17h12"></path></svg>
+              </div>
+              <div class="big-action-text">
+                <span class="big-action-title">Receive</span>
+                <span class="big-action-sub">Browse arriving downloads from PC</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Drag and drop zone -->
+          <div class="card">
+            <div id="files-drop-zone" class="drop-zone files-drop-zone">
+              <svg viewBox="0 0 20 20"><path d="M3 5h5l1.5 2H17v9H3z"></path></svg>
+              <div class="drop-title">Or drag and drop files here</div>
+              <div class="drop-hint">Saved to Downloads folder on the computer</div>
+              <input type="file" id="files-file-picker" style="display: none;" multiple>
+            </div>
+          </div>
+
+          <!-- Transfers list -->
+          <div class="card">
+            <div class="card-title">Recent Transfers</div>
+            <div id="files-transfers-list" class="transfers-list">
+              <div class="empty-state">No files transferred yet in this session</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. CLIPBOARD PAGE -->
+        <section id="page-clipboard" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>Clipboard</h1>
+              <p>Copy on one device and paste on the other.</p>
+            </div>
+          </div>
+
+          <div class="dir-head">
+            <svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4"></path></svg>
+            <span id="clip-host-label">Computer</span>
+            <span class="arrow">›</span>
+            <span class="dest">This Device</span>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Receive from Computer</div>
+            <div id="clip-remote-text" class="clip-display-box">(Clipboard empty)</div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Copy to Device</span>
+                <span class="hint">Writes computer clipboard text into this device's pasteboard</span>
+              </div>
+              <div class="controls">
+                <button id="btn-copy-remote" class="btn primary" type="button">
+                  <svg class="icon-inline" viewBox="0 0 20 20"><path d="M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4"></path></svg>
+                  <span>Copy</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dir-head">
+            <svg viewBox="0 0 20 20"><path d="M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2"></path></svg>
+            <span>This Device</span>
+            <span class="arrow">›</span>
+            <span class="dest" id="clip-push-label">Computer</span>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Send to Computer</div>
+            <textarea id="clip-local-input" class="clip-textarea" placeholder="Type or paste text to send to computer clipboard…"></textarea>
+            <div class="row">
+              <div class="text">
+                <span class="label">Push Clipboard</span>
+                <span class="hint">Updates the computer clipboard instantly</span>
+              </div>
+              <div class="controls">
+                <button id="btn-push-local" class="btn primary" type="button">
+                  <svg class="icon-inline" viewBox="0 0 20 20"><path d="M4 10l12-6-4 12-3-5z"></path></svg>
+                  <span>Push</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. REMOTE PAGE (Touchpad, keyboard, gamepad) -->
+        <section id="page-remote" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>Remote</h1>
+              <p>Use this device as the computer's touchpad, keyboard, or gamepad.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Touchpad and keyboard</div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Touchpad</span>
+                <span class="hint">Slide to move pointer, tap to click, two fingers to scroll</span>
+              </div>
+              <div class="controls">
+                <a href="viewer.html" class="btn primary">Open</a>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Pointer speed</span>
+                <span class="hint">Sensitivity multiplier</span>
+              </div>
+              <div class="controls">
+                <input type="range" min="0.5" max="2.0" step="0.1" value="1.0" class="slider" id="remote-speed">
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Tap to click</span>
+                <span class="hint">Tap anywhere on screen to left-click</span>
+              </div>
+              <div class="controls">
+                <input type="checkbox" class="switch" checked>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. CONNECTION PAGE -->
+        <section id="page-connection" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>Connection</h1>
+              <p>Manage connection parameters and nearby device discovery.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="row">
+              <div class="text">
+                <span class="label" id="conn-host-name">Computer</span>
+                <span class="hint" id="conn-ip-hint">Local IP Address</span>
+              </div>
+              <div class="controls">
+                <span class="pill" id="conn-status-label">Online</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Link Transport</span>
+                <span class="hint">Automatic low-latency transport</span>
+              </div>
+              <div class="controls">
+                <span class="pill good" id="conn-transport-badge">Wi-Fi · 1 ms</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Access Token / Pair Code</span>
+                <span class="hint">6-character session token</span>
+              </div>
+              <div class="controls">
+                <span class="pill muted" id="conn-token" style="font-family: monospace; font-size: 13px; letter-spacing: 1.5px;">------</span>
+                <button type="button" class="btn small" id="btn-copy-token" style="margin-left: 8px;">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pair with Code Card (For PCs, laptops, and devices without cameras) -->
+          <div class="card">
+            <div class="card-title">Pair with Code</div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Enter Pair Code</span>
+                <span class="hint">Found on the TwinDesk Web tab in your computer app</span>
+              </div>
+              <div class="controls" style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="input-pair-code" maxlength="8" placeholder="e.g. B8D24E" style="text-transform: uppercase; font-family: monospace; font-weight: 700; width: 110px; text-align: center; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--control-line); background: var(--control); color: var(--text);">
+                <button type="button" id="btn-pair-code" class="btn primary small">Connect</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- QR Pairing -->
+          <div class="card">
+            <div class="card-title">Pair with QR Code</div>
+            <div class="qr-container">
+              <div id="qr-canvas-box" class="qr-box"></div>
+              <p class="qr-hint">Scan with mobile camera to connect to this TwinDesk session</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 8. MORE PAGE (Mobile Drawer/List from uploaded screenshot Screen 6) -->
+        <section id="page-more" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>More</h1>
+              <p>All TwinDesk features and settings.</p>
+            </div>
+          </div>
+
+          <div class="card more-menu-card">
+            <div class="more-item" data-goto="share">
+              <span class="tile tile-share"><svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4"></path></svg></span>
+              <span class="more-label">Share screen (AirPlay)</span>
+              <span class="chevron">›</span>
+            </div>
+            <div class="more-item" data-goto="drop">
+              <span class="tile tile-drop"><svg viewBox="0 0 20 20"><path d="M3 4.5h14v9H8.5L5 16.5v-3H3z"></path></svg></span>
+              <span class="more-label">Drop</span>
+              <span class="chevron">›</span>
+            </div>
+            <div class="more-item" data-goto="clipboard">
+              <span class="tile tile-clip"><svg viewBox="0 0 20 20"><path d="M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4"></path></svg></span>
+              <span class="more-label">Clipboard</span>
+              <span class="chevron">›</span>
+            </div>
+            <div class="more-item" data-goto="remote">
+              <span class="tile tile-remote"><svg viewBox="0 0 20 20"><path d="M6.5 6.5h7a4 4 0 0 1 4 4v1.5a2.8 2.8 0 0 1-5 1.7L11.4 12H8.6l-1.1 1.7a2.8 2.8 0 0 1-5-1.7v-1.5a4 4 0 0 1 4-4z M6 8.5v3 M4.5 10h3"></path></svg></span>
+              <span class="more-label">Remote</span>
+              <span class="chevron">›</span>
+            </div>
+            <div class="more-item" data-goto="general">
+              <span class="tile tile-general"><svg viewBox="0 0 20 20"><path d="M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M4.7 15.3l1.4-1.4 M13.9 6.1l1.4-1.4"></path></svg></span>
+              <span class="more-label">General</span>
+              <span class="chevron">›</span>
+            </div>
+            <div class="more-item" data-goto="about">
+              <span class="tile tile-about"><svg viewBox="0 0 20 20"><path d="M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M10 9v5 M10 6.2v.1"></path></svg></span>
+              <span class="more-label">About</span>
+              <span class="chevron">›</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. GENERAL SETTINGS PAGE -->
+        <section id="page-general" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>General</h1>
+              <p>Appearance and application settings.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Appearance</div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Theme</span>
+                <span class="hint">System follows this device’s light or dark mode setting</span>
+              </div>
+              <div class="controls">
+                <div class="seg" id="seg-theme">
+                  <button data-val="system" class="on">System</button>
+                  <button data-val="light">Light</button>
+                  <button data-val="dark">Dark</button>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="label">Accent colour</span>
+                <span class="hint">System uses the default TwinDesk accent colour</span>
+              </div>
+              <div class="controls">
+                <div class="swatches" id="accent-swatches">
+                  <button class="swatch on" data-color="#0a84ff" style="--sw: #0a84ff;" title="Blue"></button>
+                  <button class="swatch" data-color="#5e5ce6" style="--sw: #5e5ce6;" title="Indigo"></button>
+                  <button class="swatch" data-color="#bf5af2" style="--sw: #bf5af2;" title="Purple"></button>
+                  <button class="swatch" data-color="#ff375f" style="--sw: #ff375f;" title="Pink"></button>
+                  <button class="swatch" data-color="#ff453a" style="--sw: #ff453a;" title="Red"></button>
+                  <button class="swatch" data-color="#ff9f0a" style="--sw: #ff9f0a;" title="Orange"></button>
+                  <button class="swatch" data-color="#30d158" style="--sw: #30d158;" title="Green"></button>
+                  <button class="swatch" data-color="#00c7be" style="--sw: #00c7be;" title="Teal"></button>
+                  <button class="swatch" data-color="#8e8e93" style="--sw: #8e8e93;" title="Grey"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 10. ABOUT PAGE -->
+        <section id="page-about" class="page">
+          <div class="page-head">
+            <div class="titles">
+              <h1>About</h1>
+              <p>TwinDesk version and system information.</p>
+            </div>
+          </div>
+
+          <div class="card about-hero-card">
+            <div class="about-icon-large"></div>
+            <div class="about-title-large">TwinDesk</div>
+            <div class="about-version-badge">Version 2.5.3 (tdweb)</div>
+            <div class="about-desc">
+              All your computers and your phone, working as one desk.
+              One mouse and keyboard, files, clipboard, screens, and apps
+              shared seamlessly over Wi-Fi and high-speed USB-C.
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="row">
+              <div class="text"><span class="label">License</span></div>
+              <div class="value">GNU GPL-3.0</div>
+            </div>
+            <div class="row">
+              <div class="text"><span class="label">Hardware Acceleration</span></div>
+              <div class="value">WebCodecs VideoDecoder</div>
+            </div>
+            <div class="row">
+              <div class="text"><span class="label">Zero Idle Usage</span></div>
+              <div class="value">Enabled</div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile Floating Bottom Navigation (Exact Jetpack Compose Ui.kt clone) -->
+  <nav class="mobile-bottom-nav">
+    <button class="mob-nav-item active" data-tab="overview" type="button">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 20 20"><path d="M3 9.5 10 4l7 5.5V17H3z M8 17v-4h4v4"></path></svg>
+      </div>
+      <span>Overview</span>
+    </button>
+    <button class="mob-nav-item" data-tab="connection" type="button">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 20 20"><path d="M8.5 11.5a3.2 3.2 0 0 0 4.5 0l2.5-2.5a3.2 3.2 0 0 0-4.5-4.5l-.8.8 M11.5 8.5a3.2 3.2 0 0 0-4.5 0L4.5 11a3.2 3.2 0 0 0 4.5 4.5l.8-.8"></path></svg>
+      </div>
+      <span>Connect</span>
+    </button>
+    <button class="mob-nav-item" data-tab="receive" type="button">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 20 20"><path d="M3 4h14v9H3z M7 17h6 M10 13v4"></path></svg>
+      </div>
+      <span>Screen</span>
+    </button>
+    <button class="mob-nav-item" data-tab="files" type="button">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 20 20"><path d="M3 5h5l1.5 2H17v9H3z"></path></svg>
+      </div>
+      <span>Files</span>
+    </button>
+    <button class="mob-nav-item" data-tab="more" type="button">
+      <div class="icon-wrap">
+        <svg viewBox="0 0 20 20"><path d="M4.5 10h.1 M10 10h.1 M15.5 10h.1"></path></svg>
+      </div>
+      <span>More</span>
+    </button>
+  </nav>
+
+  <script src="qr.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

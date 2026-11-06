@@ -160,19 +160,21 @@ UI.tab({
       bleSw.set(!s.net || s.net.ble !== false);
       blePcSw.set(!!s.net && s.net.blePc === true);
       const l = s.link;
-      const connected = l.state === 'connected';
+      const web = s.activeWebDevice;
+      const connected = l.state === 'connected' || !!web;
       pcName.textContent = s.device.name;
       const p = UI.peer(s);
-      macName.textContent = s.peer ? s.peer.name : t('The other computer');
-      peerDev.className = 'device ' + UI.osClass(p.os);
+      macName.textContent = s.peer ? s.peer.name : web ? web.name : t('The other computer');
+      peerDev.className = 'device ' + (web ? (web.kind === 'phone' ? 'phone' : UI.osClass(web.os)) : UI.osClass(p.os));
       if (UI.phoneWall && p.phone) peerDev.style.setProperty('--phone-wall', UI.phoneWall);
       else peerDev.style.removeProperty('--phone-wall');
       linkLine.className = 'hero-link' + (connected ? ' up' : '');
       const ble = s.net && s.net.transport === 'ble';
-      linkText.textContent = connected ? (l.rtt != null ? l.rtt + ' ms · ' : '') + UI.via(s)
+      linkText.textContent = connected ? (web ? (t('Web') + ' · ' + t('Wi-Fi / Cable')) : ((l.rtt != null ? l.rtt + ' ms · ' : '') + UI.via(s)))
         : s.pairing ? t('Pairing…') : s.paired ? t('Connecting…') : t('Not connected');
       const bad = l.state === 'identity_changed';
       status.textContent = bad ? t('This {kind} looks different now. Forget it and pair again.', { kind: t(p.kind) })
+        : web ? t('Connected to {name} via TwinDesk Web.', { name: web.name })
         : connected ? UI.fill(t(s.kvmState.message || '') || WHERE[s.input] || t('Connected'))
           : s.peer ? t('Open TwinDesk on {name}.', { name: s.peer.name })
             : t('Pick a computer below, or connect by address.');
@@ -184,6 +186,8 @@ UI.tab({
         status.textContent = stopped ? t(l.message || 'Disconnected').replace(/\{Name\}/g, () => s.paired.macName) + '.' : t(busyBy) + '.';
       }
       discBtn.hidden = !connected;
+      if (web) discBtn.onclick = () => api.disconnectWebClient(web.id);
+      else discBtn.onclick = () => api.disconnect();
       againBtn.hidden = connected || !s.paired || !(stopped || busyBy);
       againBtn.textContent = busyBy || (stopped && l.message) ? t('Take over') : t('Connect');
       sessionBtns.hidden = discBtn.hidden && againBtn.hidden;
@@ -272,26 +276,40 @@ UI.tab({
       // paired
       const wk = s.wake || { peers: {} };
       const near = new Set(s.found.map((dev) => dev.id));
-      const pk = JSON.stringify([s.paired, s.guests, live, [...near], l.state, Object.keys(wk.peers), wk.waking]);
+      const pk = JSON.stringify([s.paired, s.guests, s.webDevices, live, [...near], l.state, Object.keys(wk.peers), wk.waking]);
       if (pk === pairedKey) return;
       pairedKey = pk;
+      const webRows = (s.webDevices || []).map((w) => {
+        const isLive = !!w.active || (s.activeWebDevice && s.activeWebDevice.id === w.id);
+        return {
+          id: w.id,
+          name: w.name,
+          os: w.os || (w.kind === 'phone' ? 'android' : 'linux'),
+          hint: t('Web client') + (w.ip ? ' · ' + w.ip : ''),
+          isWeb: true,
+          connected: isLive,
+          connect: !isLive ? () => api.selectWebDevice(w.id) : null,
+          forget: () => api.disconnectWebClient(w.id),
+        };
+      });
       const all = [
         ...(s.paired ? [{ id: s.paired.macId, name: s.paired.macName, os: s.paired.os, hint: s.paired.address, forget: () => api.forget(), connect: () => api.connectAgain() }] : []),
         ...s.guests.map((g) => ({ id: g.id, name: g.name, os: g.os, hint: g.lastSeen ? t('Last seen {time}', { time: UI.ago(g.lastSeen) }) : '', forget: () => api.forgetGuest(g.id),
           connect: near.has(g.id) ? () => api.connectGuest(g.id) : null })),
+        ...webRows,
       ];
       pairedList.replaceChildren(...(all.length ? all.map((x) => {
-        const online = x.id === live;
+        const online = x.isWeb ? x.connected : x.id === live;
         const waking = !online && wk.waking === x.id;
         // An offline computer that told us how to wake it gets Wake.
-        const wakeBtn = !online && wk.peers[x.id] ? UI.button(waking ? t('Waking…') : t('Wake'), () => api.wakePeer(x.id), 'small') : null;
+        const wakeBtn = !online && !x.isWeb && wk.peers[x.id] ? UI.button(waking ? t('Waking…') : t('Wake'), () => api.wakePeer(x.id), 'small') : null;
         if (wakeBtn) wakeBtn.disabled = waking;
-        const r = UI.row(x.name, online ? t('Connected') : waking ? t('Waking {name}…', { name: x.name }) : x.hint, [
+        const r = UI.row(x.name, online ? (x.isWeb ? t('Connected · Web') : t('Connected')) : waking ? t('Waking {name}…', { name: x.name }) : x.hint, [
           online ? el('span', { class: 'pill good', text: t('Online') }) : null,
           wakeBtn,
           // Switch to it: whatever the session is now, it ends (paired, and nearby to be reached).
-          !online && x.connect ? UI.button(live ? t('Switch') : t('Connect'), x.connect, 'small') : null,
-          UI.button(t('Forget'), x.forget, 'small'),
+          !online && x.connect ? UI.button(live || s.activeWebDevice ? t('Switch') : t('Connect'), x.connect, 'small' + (x.isWeb ? ' primary' : '')) : null,
+          UI.button(x.isWeb ? t('Disconnect') : t('Forget'), x.forget, 'small'),
         ], { literal: true });
         r.querySelector('.text').prepend(UI.osIcon(x.os));
         r.classList.add('with-ico');

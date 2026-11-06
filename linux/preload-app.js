@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('macshare', {
   copyHistory: call('copyHistory'),
   clearHistory: call('clearHistory'),
   setTab: call('setTab'),
+  setWeb: call('setWeb'),
   setMulti: call('setMulti'),
   relaunch: call('relaunch'),
   setAudio: call('setAudio'),
@@ -118,6 +119,9 @@ contextBridge.exposeInMainWorld('macshare', {
   sendFiles: call('sendFiles'),
   chooseSendFiles: call('chooseSendFiles'),
   pathsOf: (files) => [...files].map((f) => webUtils.getPathForFile(f)).filter(Boolean), // dropped files → paths
+  selectWebDevice: call('selectWebDevice'),
+  disconnectWebClient: call('disconnectWebClient'),
+  sendWebChat: call('sendWebChat'),
   setNotifs: call('setNotifs'),
   muteNotifApp: call('muteNotifApp'),
 });

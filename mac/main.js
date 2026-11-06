@@ -39,6 +39,8 @@ let adbQr = null; // wireless debugging's pairing QR code while shown (shared/ad
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
+const { TdWebServer } = require('../shared/tdweb.js');
+let tdweb = null;
 const path = require('path');
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
 const Look = require('../shared/look.js');
@@ -235,6 +237,15 @@ function pushState() {
     state.camera = svc && svc.camShare ? { ...svc.camShare.state, on: settings.camera.on !== false } : svc ? { on: false } : null;
     state.vcam = svc && svc.vcam ? svc.vcam.view() : svc ? { checked: true, supported: true, on: false } : null;
     state.rezume = svc && svc.rz ? svc.rz.view : svc ? { ...settings.rezume, connected: false } : null; // ReZume tab (shared/rezume.js)
+    state.web = {
+      ...settings.web,
+      urls: tdweb && tdweb.running ? TdWebServer.getNetworkLinks(settings.web.port, tdweb.token) : null,
+      pairCode: tdweb && tdweb.running ? tdweb.token : null,
+      airplayActive: false,
+    };
+    state.webDevices = tdweb && tdweb.running ? tdweb.getDevices() : [];
+    state.activeWebDevice = tdweb && tdweb.running ? tdweb.getActiveDevice() : null;
+    state.webChats = tdweb && tdweb.running ? tdweb.getChats() : [];
     state.remote = svc && svc.phoneRemote ? svc.phoneRemote.view
       : svc ? { allow: false, why: '', opened: false, using: false, pad: { on: false, supported: false, live: false, busy: '', message: '', name: '' } } : null;
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null;
@@ -273,6 +284,9 @@ function pushState() {
     if (pairSync) pairSync.check();
     sendScreenState();
     if (win && !win.isDestroyed()) win.webContents.send('state', state);
+    if (tdweb && tdweb.running) {
+      try { tdweb.notifyClipboard(clipboard.readText()); } catch (_) {}
+    }
     updateTray();
   });
 }
@@ -915,7 +929,43 @@ app.whenReady().then(() => {
   nativeTheme.on('updated', () => pushState());
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
+  function applyWeb() {
+    const w = settings.web || {};
+    if (!w.enabled || !w.portal) {
+      if (tdweb) { tdweb.stop(); tdweb = null; }
+      pushState();
+      return;
+    }
+    if (!tdweb) {
+      tdweb = new TdWebServer({
+        getSettings: () => settings,
+        getIdentity: () => ({ name: id.macName || os.hostname() }),
+        getClipboard: () => {
+          try { const { clipboard } = require('electron'); return clipboard.readText(); } catch (_) { return ''; }
+        },
+        setClipboard: (text) => {
+          try { const { clipboard } = require('electron'); clipboard.writeText(text); } catch (_) {}
+        },
+        getDownloadsDir: () => app.getPath('downloads'),
+        onInput: (_m) => {},
+      });
+      tdweb.on('file-received', (info) => {
+        pushState();
+        if (Notification.isSupported()) {
+          new Notification({ title: 'TwinDesk Web', body: `Received ${info.name}` }).show();
+        }
+      });
+      tdweb.on('client-connected', () => pushState());
+      tdweb.on('client-disconnected', () => pushState());
+      tdweb.on('devices-change', () => pushState());
+      tdweb.on('chats-change', () => pushState());
+      tdweb.start({ port: w.port || 47802, credentials: { key: id.keyPem, cert: id.certPem } });
+    }
+    pushState();
+  }
+
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates, applyWeb, get tdweb() { return tdweb; } });
+  applyWeb();
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {

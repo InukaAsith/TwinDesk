@@ -115,6 +115,7 @@ function setupIpc(ctx) {
   handle('copyHistory', (index) => clip.copyHistory(Number(index)));
   handle('clearHistory', () => clip.clearHistory());
   handle('setTab', (tab) => change('ui', { tab }));
+  handle('setWeb', (partial) => change('web', partial, () => ctx.applyWeb && ctx.applyWeb()));
   handle('setChats', (on) => { change('ui', { chats: on === true }); if (ctx.chats && ctx.chats()) ctx.chats().sync(); }); // Messages: WhatsApp, Telegram and Instagram there too
   handle('setOverview', (o) => o && typeof o === 'object' && change('ui', { overview: { ...settings.ui.overview, ...o } })); // General › Overview // invalid names fall back in normalize()
   handle('setMulti', (on) => require('./multi').set(on === true)); // Multi-device: TwinDesk restarts
@@ -186,7 +187,12 @@ function setupIpc(ctx) {
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {
     const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && path.win32.isAbsolute(p)).slice(0, 1000);
-    if (list.length) fileDrop.sendBatch(list, 'send');
+    if (list.length) {
+      fileDrop.sendBatch(list, 'send');
+      if (ctx.tdweb) {
+        for (const fp of list) ctx.tdweb.offerFile(fp);
+      }
+    }
   };
   handle('sendFiles', sendFiles);
   handle('chooseSendFiles', async () => {
@@ -286,6 +292,18 @@ function setupIpc(ctx) {
   handle('netCancel', () => ctx.net && ctx.net.cancel());
   handle('netJoinHotspot', (arg) => ctx.joinHotspot(arg));
   handle('netLocation', () => shell.openExternal('ms-settings:privacy-location')); // netsh's Wi-Fi commands need it (wifi.js)
+  handle('selectWebDevice', (id) => {
+    if (ctx.tdweb) ctx.tdweb.selectDevice(id);
+    if (ctx.push) ctx.push();
+  });
+  handle('disconnectWebClient', (id) => {
+    if (ctx.tdweb) ctx.tdweb.disconnectDevice(id);
+    if (ctx.push) ctx.push();
+  });
+  handle('sendWebChat', (text, toClipboard) => {
+    if (ctx.tdweb) ctx.tdweb.sendChat(text, toClipboard);
+    if (ctx.push) ctx.push();
+  });
   handle('openBluetoothSettings', () => shell.openExternal('ms-settings:bluetooth'));
   // Connect with Wi-Fi Direct (a session on Bluetooth), or back to Bluetooth (the link ends, whatever it was made for).
   // on = 'hotspot': Connect with hotspot (a phone's; the Overview asks for its name and password).

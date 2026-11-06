@@ -30,7 +30,7 @@
     icon: 'phone',
     color: 'linear-gradient(#64d2ff, #0a84ff)',
     desc: tr('The phone’s screen in a window, with touch, mouse and keyboard.'),
-    hidden: (s) => !isPhone(s),
+    hidden: (s) => !isPhone(s) || !!s.activeWebDevice,
     build(body) {
       const { el, api } = UI;
       // Auto, Full (ADB) or Limited (Native: settings.phone.mirror 'auto' | 'adb' | 'native'): the bridge says which it is now.
@@ -131,7 +131,7 @@
     icon: 'apps',
     color: 'linear-gradient(#5ac8fa, #007aff)',
     desc: tr('Open any phone app in its own window.'),
-    hidden: (s) => !isPhone(s),
+    hidden: (s) => !isPhone(s) || !!s.activeWebDevice,
     build(body) {
       const { el, api } = UI;
       const adb = needAdb(tr('Phone apps in windows need it. Set it up once on the Connection page.'));

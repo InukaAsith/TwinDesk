@@ -7,6 +7,7 @@ UI.tab({
   id: 'keyboard',
   group: 'Input',
   order: 30,
+  hidden: (s) => !!s.activeWebDevice,
   title: I18n.t('Keyboard'),
   desc: I18n.t('Type on whichever computer the pointer is on.'),
   color: 'linear-gradient(#d1d1d6, #8e8e93)',

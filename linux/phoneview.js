@@ -124,19 +124,21 @@ class PhoneViews extends EventEmitter {
     return [...this.views.values()].some((v) => v.win && !v.win.isDestroyed() && v.win.isFocused());
   }
 
-  openScreen() {
+  openScreen(opts) {
+    const isAirplay = typeof opts === 'object' ? !!opts?.airplay : (opts === true);
     const open = [...this.views.values()].find((v) => v.kind === 'screen');
     if (open) return open.win.show(), open.win.focus();
-    const info = this.phone.info || {};
+    const info = (this.phone && this.phone.info) || {};
     const d = info.display || { w: 1080, h: 2400 };
     const work = screen.getPrimaryDisplay().workAreaSize;
     const h = Math.min(860, work.height - 80);
     const w = Math.round(h * Math.min(d.w, d.h) / Math.max(d.w, d.h));
-    const name = (this.server.current && this.server.current.name) || this._i18n().t('Phone');
-    const titleKey = (this.server.current && this.server.current.name) ? '' : 'Phone';
+    const devName = (opts && typeof opts === 'object' && opts.name) || (this.server && this.server.current && this.server.current.name);
+    const name = isAirplay ? (devName || 'AirPlay') : (devName || this._i18n().t('Phone'));
+    const titleKey = isAirplay ? '' : (devName ? '' : 'Phone');
     // Mirroring › Native (or Automatic without wireless debugging): the phone shares it itself.
-    const native = this.bridge.mirrorVia === 'native';
-    this._open({ kind: 'screen', native, title: name, titleKey, width: w, height: h, opts: this.bridge.sessionOpts('screen') });
+    const native = isAirplay || (this.bridge && this.bridge.mirrorVia === 'native');
+    this._open({ kind: 'screen', native, airplay: isAirplay, title: name, titleKey, width: w, height: h, opts: isAirplay ? null : (this.bridge ? this.bridge.sessionOpts('screen') : {}) });
   }
 
   // The phone's camera (Camera's switch, or the phone's Camera page; scrcpy's camera source, Android

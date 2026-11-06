@@ -10,7 +10,7 @@ const { normalizeFolder } = require('../shared/received.js');
 // The keys that can be held to move a window to the other computer (the helper reports these).
 const MOVE_KEYS = ['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'];
 
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'web', 'multi', 'general', 'about'];
 
 const OLD_TABS = { display: 'mac-pc', receive: 'mac-pc', share: 'pc-mac' }; // older names
 
@@ -110,6 +110,12 @@ function normalize(s) {
     remote: { allow: bool((s.remote || {}).allow, was), pad: bool((s.remote || {}).pad, false) },
     // ReZume tab (shared/rezume.js): off until turned on; what goes, which ways, where it shows
     rezume: require('../shared/rezume.js').normalize(s.rezume),
+    web: {
+      enabled: bool((s.web || {}).enabled, false),
+      portal: bool((s.web || {}).portal, true),
+      airplay: bool((s.web || {}).airplay, true),
+      port: num((s.web || {}).port, 47802, 1024, 65535),
+    },
     // Camera tab (shared/camshare.js): this computer's camera to the other one, off until turned
     // on; device: which camera (a deviceId), '' = the default one; virtual: the running camera's
     // picture also goes to the virtual camera (shared/vcam.js), off until turned on; rotate: its

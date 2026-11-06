@@ -358,6 +358,9 @@ function setupIpc(ctx) {
     sendFiles(paths) {
       const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && p.startsWith('/')).slice(0, 1000);
       if (list.length && ctx.server.current) ctx.fileSend.sendBatch(list, 'send');
+      if (list.length && ctx.tdweb) {
+        for (const fp of list) ctx.tdweb.offerFile(fp);
+      }
     },
     async chooseSendFiles() {
       const r = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: t('Send') });
@@ -644,6 +647,27 @@ function setupIpc(ctx) {
       if (!TABS.includes(tab)) return;
       settings.ui.tab = tab;
       store.saveSettings(settings); // no state push needed; the window already shows it
+    },
+    setWeb(partial) {
+      if (!partial || typeof partial !== 'object') return;
+      settings.web = { ...settings.web, ...partial };
+      store.saveSettings(settings);
+      if (ctx.applyWeb) ctx.applyWeb();
+      ctx.pushState();
+    },
+    selectWebDevice(id) {
+      if (ctx.tdweb) ctx.tdweb.selectDevice(id);
+      ctx.pushState();
+    },
+    disconnectWebClient(id) {
+      if (ctx.tdweb) ctx.tdweb.disconnectDevice(id);
+      ctx.pushState();
+    },
+    sendWebChat(arg) {
+      const text = typeof arg === 'string' ? arg : arg && arg.text;
+      const toClipboard = typeof arg === 'object' && !!arg.toClipboard;
+      if (ctx.tdweb) ctx.tdweb.sendChat(text, toClipboard);
+      ctx.pushState();
     },
     pairRespond(allow) {
       ctx.pairing.respond(!!allow);

@@ -14,8 +14,8 @@
   // The sidebar's order and groups (the same as the PC's and Linux's): the device and Connection,
   // the phone's own things, screens, input, sharing, media; Multi-device, General and About below a
   // line. A tab not named here keeps its own order and group.
-  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, receive: 2, share: 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
-  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, receive: 11, share: 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
+  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, receive: 2, share: 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, drop: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
+  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, receive: 11, share: 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, drop: 41, notifications: 42, files: 43, pfiles: 44, mount: 45, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
   const ALIAS = { phone: 'overview', display: 'share' }; // older names (saved, the tray, a popup)
   const orderOf = (d) => ORDER[d.id] ?? d.order ?? 50;
   let lastGroup = null;
@@ -89,7 +89,7 @@
   const onBle = (s) => !!(s && s.client && s.client.transport === 'ble');
 
   // Something to work with: the other computer, or a phone.
-  const linked = (s) => !!(s && (s.client || (s.phone && s.phone.connected)));
+  const linked = (s) => !!(s && (s.client || (s.phone && s.phone.connected) || s.activeWebDevice || (s.webDevices && s.webDevices.some((d) => d.active))));
 
   // Where to go when a page isn't there (hidden, or nothing connected): the device, else Connection.
   const home = (s) => (linked(s) ? 'overview' : 'connection');
@@ -183,11 +183,25 @@
       if (!connected && !near.has(x.id)) continue;
       list.push({ id: x.id, name: x.name, os: x.os, connected, sub: connected ? (c.rttMs != null ? tr('{value} ms', { value: c.rttMs }) : tr('Connected')) : tr('Nearby · Click to connect'), go: () => api.pairWith(x.id) });
     }
+    // Web desktop/PC devices
+    for (const w of (s.webDevices || [])) {
+      if (w.kind === 'phone' || w.os === 'ios' || w.os === 'ipados' || w.os === 'android') continue;
+      const active = !!w.active || (s.activeWebDevice && s.activeWebDevice.id === w.id);
+      list.push({
+        id: w.id,
+        name: w.name,
+        os: w.os || 'win',
+        connected: active,
+        sub: active ? tr('Connected · Web') : tr('Web client'),
+        go: () => { if (api.selectWebDevice) api.selectWebDevice(w.id); show('overview', true); },
+      });
+    }
     UI.renderPcs($('pcs'), list, { open: () => show('overview', true), active: true });
   }
 
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
+    const webPhones = (s.webDevices || []).filter((w) => w.kind === 'phone' || w.os === 'ios' || w.os === 'ipados' || w.os === 'android');
     if (ph.assets !== assetsSeen) {
       assetsSeen = ph.assets;
       api.phoneAssets().then((a) => {
@@ -199,10 +213,10 @@
     }
     const info = ph.info || {};
     const colors = info.colors && info.colors.length ? info.colors : null;
-    const key = JSON.stringify([ph.nearby, ph.connecting, ph.connected && ph.connected.rttMs, ph.held, info.battery, info.charging, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
+    const key = JSON.stringify([ph.nearby, webPhones, ph.connecting, ph.connected && ph.connected.rttMs, ph.held, info.battery, info.charging, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
     if (key === phonesKey) return;
     phonesKey = key;
-    $('phones').replaceChildren(...ph.nearby.map((d) => {
+    const phoneTiles = ph.nearby.map((d) => {
       const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
       if (d.connected && UI.phoneWall) wall.style.backgroundImage = UI.phoneWall;
       else if (d.connected && colors) wall.style.backgroundImage = `linear-gradient(160deg, ${colors.join(', ')}${colors.length === 1 ? `, ${colors[0]}` : ''})`;
@@ -219,7 +233,25 @@
       b.classList.toggle('active', !!d.connected);
       b.onclick = () => (d.connected ? show('overview', true) : api.connectPhone(d.id));
       return b;
-    }));
+    });
+
+    const webTiles = webPhones.map((w) => {
+      const active = !!w.active || (s.activeWebDevice && s.activeWebDevice.id === w.id);
+      const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
+      wall.style.backgroundImage = 'linear-gradient(160deg, #5ac8fa, #0a84ff)';
+      const sub = active ? tr('Connected · Web') : tr('Web client');
+      const b = el('button', { class: `phone-tile${active ? ' connected active' : ''}`, title: w.name }, [
+        wall,
+        el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: w.name, attrs: { 'data-literal': '' } }), el('span', { class: 'phone-sub', text: sub, attrs: { 'data-literal': '' } })]),
+        active ? el('span', { class: 'dot good' }) : null,
+      ]);
+      b.dataset.connected = active ? '1' : '';
+      b.classList.toggle('active', active);
+      b.onclick = () => { if (api.selectWebDevice) api.selectWebDevice(w.id); show('overview', true); };
+      return b;
+    });
+
+    $('phones').replaceChildren(...phoneTiles, ...webTiles);
   }
 
   // Two kinds of pairing request: someone pairs with this Mac (Allow / Deny), or this Mac pairs

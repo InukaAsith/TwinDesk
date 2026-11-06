@@ -289,6 +289,20 @@ const UI = {
   // "PC1" and the other "PC2"; real names show in the
   // overview and the paired list. toMe = the peer's things here, fromMe = this PC's things there.
   peer(s) {
+    if (s && s.activeWebDevice) {
+      const w = s.activeWebDevice;
+      const os = w.os || 'ios';
+      const name = w.name || 'Web Device';
+      const Name = name.charAt(0).toUpperCase() + name.slice(1);
+      const me = (s && s.device && s.device.name) || I18n.t('This computer');
+      return {
+        os, same: false, kind: w.kind === 'phone' ? I18n.t('Phone') : 'Web',
+        me, name, Name, phone: w.kind === 'phone' || os === 'ios' || os === 'android',
+        the: name, them: name, there: name, here: me, meName: me,
+        fromMe: `${me} → ${name}`,
+        toMe: `${name} → ${me}`,
+      };
+    }
     const p = s && s.peer;
     const os = p ? p.os : 'linux';
     const KIND = { mac: 'Mac', win: 'PC', linux: 'Linux', android: I18n.t('Phone') };
@@ -369,10 +383,13 @@ const UI = {
     return String(t).replace(/\{(\w+)\}/g, (m, k) => (k in p ? p[k] : m));
   },
 
-  isPhone: (s) => !!(s && s.peerSession && s.peerSession.os === 'android'), // s.session is the desktop's here
+  isPhone: (s) => !!(s && (
+    (s.peerSession && (s.peerSession.os === 'android' || s.peerSession.os === 'ios' || s.peerSession.os === 'ipados' || s.peerSession.kind === 'phone')) ||
+    (s.activeWebDevice && (s.activeWebDevice.kind === 'phone' || s.activeWebDevice.os === 'ios' || s.activeWebDevice.os === 'ipados' || s.activeWebDevice.os === 'android'))
+  )),
 
-  // Small device glyph by OS: 'mac' | 'win' | 'linux' | 'android'.
-  osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' ? 'phone' : os === 'linux' ? 'pc linux' : 'pc'),
+  // Small device glyph by OS: 'mac' | 'win' | 'linux' | 'android' | 'ios'.
+  osClass: (os) => (os === 'mac' ? 'mac' : (os === 'android' || os === 'ios' || os === 'ipados') ? 'phone' : os === 'linux' ? 'pc linux' : 'pc'),
   // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's, light or dark as the appearance.
   appIcon(src) {
     const fallback = matchMedia('(prefers-color-scheme: dark)').matches ? 'assets/sidebar-icon@2x.png' : 'assets/sidebar-icon-light@2x.png';

@@ -11,7 +11,7 @@ const ACTIONS = [
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost', 'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup',
   'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneCamera', 'phoneListCameras', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
-  'deviceDo', 'setOverview', 'setChats', 'notifReply', 'adbQr', // the redesign: Overview, General › Overview, Messages, QR codes
+  'deviceDo', 'setOverview', 'setChats', 'notifReply', 'adbQr', 'setWeb', 'selectWebDevice', 'disconnectWebClient', 'sendWebChat', // the redesign: Overview, General › Overview, Messages, QR codes
   'setUpdates', 'skipUpdate', 'unskipUpdate', 'checkUpdates', 'openUpdate', 'openLink', 'setNet', 'netJoinHotspot', 'netCancel', 'netWifi', 'hub',
 ];
 

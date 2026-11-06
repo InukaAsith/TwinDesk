@@ -1,0 +1,30 @@
+[package]
+name = "tdplay"
+version = "0.1.0"
+edition = "2021"
+description = "TwinDesk AirPlay receiver helper: headless H.264 stream bridge"
+license = "GPL-3.0-only"
+publish = false
+
+[dependencies]
+aes = "0.8"
+anyhow = "1.0"
+ctr = "0.9"
+ed25519-dalek = { version = "2.1", features = ["std"] }
+getrandom = "0.2"
+mdns-sd = "0.11"
+plist = "1.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+x25519-dalek = { version = "2.0", default-features = false }
+
+[build-dependencies]
+cc = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

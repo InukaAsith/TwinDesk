@@ -15,8 +15,8 @@
   // Sidebar groups: no headings, one icon column, a small gap between groups: the device and
   // Connection, the phone's own things, screens, input, sharing, media; Multi-device, General and
   // About below a line. ORDER places each tab (the tab files' own order is the fallback).
-  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, 'mac-pc': 2, 'pc-mac': 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
-  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
+  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, 'mac-pc': 2, 'pc-mac': 2, share: 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, drop: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
+  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, share: 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, drop: 41, notifications: 42, files: 43, pfiles: 44, mount: 45, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
   // Older names for a page (saved in settings, sent by the tray or a popup).
   const ALIAS = { phone: 'overview' };
   const orderOf = (d) => ORDER[d.id] ?? d.order ?? 50;
@@ -88,7 +88,7 @@
   const onBle = (s) => !!(s && s.net && s.net.transport === 'ble');
 
   // Something to work with: the other computer, or a phone.
-  const linked = (s) => !!(s && ((s.link && s.link.state === 'connected') || (s.phone && s.phone.connected)));
+  const linked = (s) => !!(s && ((s.link && s.link.state === 'connected') || (s.phone && s.phone.connected) || s.activeWebDevice || (s.webDevices && s.webDevices.some((d) => d.active))));
 
   // Where to go when a page isn't there (hidden, or nothing connected): the device, else Connection.
   const home = (s) => (linked(s) ? 'overview' : 'connection');
@@ -197,11 +197,25 @@
       const rtt = s.link && s.link.rtt;
       list.push({ ...x, connected, sub: connected ? (rtt != null ? t('{value} ms', { value: rtt }) : t('Connected')) : t('Nearby · Click to connect') });
     }
+    // Web desktop/PC devices
+    for (const w of (s.webDevices || [])) {
+      if (w.kind === 'phone' || w.os === 'ios' || w.os === 'ipados' || w.os === 'android') continue;
+      const active = !!w.active || (s.activeWebDevice && s.activeWebDevice.id === w.id);
+      list.push({
+        id: w.id,
+        name: w.name,
+        os: w.os || 'linux',
+        connected: active,
+        sub: active ? t('Connected · Web') : t('Web client'),
+        go: () => { if (api.selectWebDevice) api.selectWebDevice(w.id); show('overview', true); },
+      });
+    }
     UI.renderPcs($('pcs'), list, { open: () => show('overview', true), active: true });
   }
 
   function renderPhones(s) {
     const ph = s.phone || { nearby: [] };
+    const webPhones = (s.webDevices || []).filter((w) => w.kind === 'phone' || w.os === 'ios' || w.os === 'ipados' || w.os === 'android');
     if (ph.assets !== assetsSeen) {
       assetsSeen = ph.assets;
       api.phoneAssets().then((a) => {
@@ -218,7 +232,7 @@
     const subOf = (d) => (d.connected
       ? (ph.connected.rttMs != null ? t('{value} ms', { value: ph.connected.rttMs }) : t('Connected')) + (info.battery != null ? ' · ' + info.battery + '%' + (info.charging ? ' ⚡' : '') : '')
       : ph.connecting && ph.connecting.id === d.id ? t('Connecting…') : t('Nearby · Click to connect'));
-    const key = JSON.stringify([ph.nearby, ph.connecting, ph.held, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
+    const key = JSON.stringify([ph.nearby, webPhones, ph.connecting, ph.held, colors, UI.phoneWall ? UI.phoneWall.length : 0, current && current.def.id]);
     if (key === phonesKey) {
       ph.nearby.forEach((d, i) => {
         const sub = $('phones').children[i] && $('phones').children[i].querySelector('.phone-sub');
@@ -227,7 +241,7 @@
       return;
     }
     phonesKey = key;
-    $('phones').replaceChildren(...ph.nearby.map((d) => {
+    const phoneTiles = ph.nearby.map((d) => {
       const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
       if (d.connected && UI.phoneWall) wall.style.backgroundImage = UI.phoneWall;
       else if (d.connected && colors) wall.style.backgroundImage = 'linear-gradient(160deg, ' + colors.join(', ') + (colors.length === 1 ? ', ' + colors[0] : '') + ')';
@@ -241,7 +255,25 @@
       b.classList.toggle('active', !!d.connected);
       b.onclick = () => (d.connected ? show('overview', true) : api.connectPhone(d.id));
       return b;
-    }));
+    });
+
+    const webTiles = webPhones.map((w) => {
+      const active = !!w.active || (s.activeWebDevice && s.activeWebDevice.id === w.id);
+      const wall = el('span', { class: 'phone-wall' }, [UI.icon('phone')]);
+      wall.style.backgroundImage = 'linear-gradient(160deg, #5ac8fa, #0a84ff)';
+      const sub = active ? t('Connected · Web') : t('Web client');
+      const b = el('button', { class: 'phone-tile' + (active ? ' connected active' : ''), title: w.name }, [
+        wall,
+        el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: w.name }), el('span', { class: 'phone-sub', text: sub })]),
+        active ? el('span', { class: 'dot good' }) : null,
+      ]);
+      b.dataset.connected = active ? '1' : '';
+      b.classList.toggle('active', active);
+      b.onclick = () => { if (api.selectWebDevice) api.selectWebDevice(w.id); show('overview', true); };
+      return b;
+    });
+
+    $('phones').replaceChildren(...phoneTiles, ...webTiles);
   }
 
   function renderBanner(s) {

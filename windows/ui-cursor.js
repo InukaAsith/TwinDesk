@@ -7,6 +7,7 @@
 UI.tab({
   id: 'cursor',
   order: 20,
+  hidden: (s) => !!s.activeWebDevice,
   title: 'Mouse',
   color: 'linear-gradient(#ffb340, #ff9500)',
   desc: 'Move the pointer off the edge of the screen to go to the other computer.',

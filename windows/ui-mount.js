@@ -6,7 +6,7 @@
 
 UI.tab({
   id: 'mount',
-  hidden: (s) => !UI.isPhone(s), // only while a phone is connected
+  hidden: (s) => !UI.isPhone(s) || !!s.activeWebDevice, // only while a phone is connected
   wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
   order: 55,
   title: I18n.t('Mount'),

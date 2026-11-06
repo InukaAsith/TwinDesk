@@ -84,7 +84,7 @@ UI.tab({
       const p = UI.peer(s);
       pair.update(s);
       // Send files
-      canSend = s.link.state === 'connected';
+      canSend = s.link.state === 'connected' || !!s.activeWebDevice;
       zone.classList.toggle('off', !canSend);
       zoneText.textContent = canSend ? I18n.t('Drop files or folders here') : I18n.t('Connect to send files');
       zoneHint.textContent = !canSend ? '' : p.phone ? I18n.t('They go to {device}’s Downloads', { device: p.the })
