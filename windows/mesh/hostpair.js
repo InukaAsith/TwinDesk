@@ -125,6 +125,7 @@ class Pairing extends EventEmitter {
         this.emit('change');
         return this._maybeFinish();
       case P.T.PAIR_CANCEL:
+        this.fails.fail(p.ctx.address); // a cancel after an accepted start counts toward the lockout
         this._clear();
         ctx.ws.close();
         return;
@@ -199,7 +200,10 @@ class Pairing extends EventEmitter {
   }
 
   _onClosed(ctx) {
-    if (this.pending && this.pending.ctx === ctx) this._clear();
+    if (this.pending && this.pending.ctx === ctx) {
+      this.fails.fail(ctx.address); // a socket dropped mid-pairing counts like a cancel
+      this._clear();
+    }
     if (ctx.authed && ctx.deviceId) this.touch(ctx.deviceId);
     this.emit('change');
   }
