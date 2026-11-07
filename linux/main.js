@@ -488,6 +488,7 @@ function startPhone(server, pairing) {
   wired = new Wired({ adb: phone.bridge.adb, raw: server, peer: pl, getId: () => device.id, getName: () => device.name });
   pairing.isWired = (nonce) => wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
   pairing.isQr = qrKnows;
+  pairing.consumeQr = () => { qrPair = null; }; // a QR pairing that went through: the link is single-use
   wired.on('change', pushState);
   phone.bridge.wired = wired;
   phone.wired = wired;

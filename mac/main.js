@@ -638,6 +638,7 @@ app.whenReady().then(() => {
   svc.wired = new Wired({ adb: svc.phone.bridge.adb, raw: server, peer, getId: () => id.macId, getName: () => id.macName });
   pairing.isWired = (nonce) => svc.wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
   pairing.isQr = qrKnows;
+  pairing.consumeQr = () => { qrPair = null; }; // a QR pairing that went through: the link is single-use
   // Overview's controls of the other device, and this Mac's for it (shared/devctl.js): the session
   // is peer.js here, its 'client' the start.
   const { DevCtl } = require('../shared/devctl.js');
