@@ -109,7 +109,7 @@ async function start(o) {
 
 async function remote(m) {
   const me = cur;
-  if (!me || !me.pc) return;
+  if (!me || !me.pc || (m.session != null && m.session !== me.session)) return;
   try {
     if (m.t === 'rtc.answer' && typeof m.sdp === 'string') {
       await me.pc.setRemoteDescription({ type: 'answer', sdp: tune(m.sdp, me.mbps) });

@@ -4,8 +4,9 @@
 // capture (a computer watching this screen) without touching it.
 //
 // new WebCap({audio: 'loopback'|'helper', hub?: {acquire(name, webContents), release(name)},
-//   worklet: file URL of the platform's pcm-worklet.js, display?() → electron Display})
-// start({video, audio, maxH, fps, mbps}); stop(); remote(msg)
+//   worklet: file URL of the platform's pcm-worklet.js, display?(mode, dev) → electron Display,
+//   release?(mode, dev): after a stream with that mode (Extend: the platform's screen of its own goes)})
+// start({video, audio, mode: 'mirror'|'extend', dev {id, name, w, h}, maxH, fps, mbps}); stop(); remote(msg)
 // Events: 'out' (rtc.offer / rtc.ice for the page), 'status' (text)
 'use strict';
 
@@ -16,16 +17,17 @@ const { BrowserWindow, ipcMain, session, desktopCapturer, screen } = require('el
 const PARTITION = 'twindesk-webcap';
 
 class WebCap extends EventEmitter {
-  constructor({ audio = 'loopback', hub = null, worklet, display = null }) {
+  constructor({ audio = 'loopback', hub = null, worklet, display = null, release = null }) {
     super();
-    Object.assign(this, { audioMode: audio, hub, worklet, display });
+    Object.assign(this, { audioMode: audio, hub, worklet, display, releaseDisplay: release });
     this.win = null;
     this.session = 0;
     this.active = null;
     this.ses = session.fromPartition(PARTITION);
     this.ses.setDisplayMediaRequestHandler(async (req, cb) => {
       try {
-        const want = (this.display && this.display()) || screen.getPrimaryDisplay();
+        const a = this.active || {};
+        const want = (this.display && (await this.display(a.mode || 'mirror', a.dev || null))) || screen.getPrimaryDisplay();
         const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
         const src = sources.find((s) => s.display_id === String(want.id)) || sources[0];
         if (!src) throw new Error('no screens (Screen Recording permission?)');
@@ -38,8 +40,7 @@ class WebCap extends EventEmitter {
     const mine = (e) => this.win && !this.win.isDestroyed() && e.sender === this.win.webContents;
     ipcMain.on('webcap:out', (e, m) => {
       if (!mine(e) || !this.active || m.session !== this.active.session) return;
-      delete m.session;
-      this.emit('out', m);
+      this.emit('out', m); // with its session: the viewer (the phone app's viewer.js) matches it
     });
     ipcMain.on('webcap:state', (e, s) => {
       if (!mine(e) || !this.active || s.session !== this.active.session) return;
@@ -58,10 +59,10 @@ class WebCap extends EventEmitter {
     return this.ready;
   }
 
-  async start({ video = true, audio = false, maxH = 1080, fps = 60, mbps = 12 }) {
+  async start({ video = true, audio = false, mode = 'mirror', dev = null, maxH = 1080, fps = 60, mbps = 12 }) {
     this.stop();
     const session = ++this.session;
-    this.active = { session, audio };
+    this.active = { session, audio, mode: video ? mode : 'mirror', dev };
     this.emit('status', 'starting');
     const win = await this._window();
     if (!this.active || this.active.session !== session) return;
@@ -75,8 +76,10 @@ class WebCap extends EventEmitter {
 
   stop() {
     if (!this.active) return;
+    const was = this.active;
     this.active = null;
     if (this.hub) this.hub.release('web');
+    if (this.releaseDisplay) { try { this.releaseDisplay(was.mode, was.dev); } catch (_) {} }
     if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stop');
     this.emit('status', 'off');
     // The window goes after a while unused (it holds a renderer process).

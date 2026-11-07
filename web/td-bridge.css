@@ -1,0 +1,10 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The phone app's viewer and remote pages in a browser: an iPhone's notch and home bar, and no Rotate
+   (a page can't turn the phone; the gamepad asks to hold it sideways instead). */
+#top { padding-top: env(safe-area-inset-top) !important; height: calc(48px + env(safe-area-inset-top)) !important; padding-left: calc(14px + env(safe-area-inset-left)) !important; padding-right: calc(10px + env(safe-area-inset-right)) !important; }
+body:not(.gamepad) #pad-view { top: calc(48px + env(safe-area-inset-top)) !important; padding-bottom: calc(14px + env(safe-area-inset-bottom)) !important; padding-left: calc(12px + env(safe-area-inset-left)) !important; padding-right: calc(12px + env(safe-area-inset-right)) !important; }
+#note { top: calc(56px + env(safe-area-inset-top)) !important; }
+#b-rotate { display: none !important; }
+body.gamepad #top { top: 0; }
+#td-sound { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 9; padding: 10px 18px; border: 0; border-radius: 22px; background: rgba(40, 40, 44, 0.85); color: #fff; font: 600 15px system-ui, sans-serif; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+#td-sound[hidden] { display: none; }
