@@ -322,7 +322,7 @@ class Adb(core: Core) : Feature(core) {
         sendState()
     }
 
-    // byPerson: the Quick Settings tile and the home screen shortcut, the person's own switch (auto-off
+    // byPerson: the Quick Settings tile, the person's own switch (auto-off
     // leaves it on); TwinDesk's own (connecting, the computer asking, Turn on in this app) is `ours`.
     fun enable(on: Boolean, byPerson: Boolean = false): Boolean {
         if (!canEnable || on && !onWifiNetwork) return false

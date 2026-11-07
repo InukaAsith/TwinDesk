@@ -243,7 +243,7 @@
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
         </service>
 
-        <!-- Home screen shortcut: wireless debugging on, then gone (no window). -->
+        <!-- Home screen shortcut: the wireless debugging setting, then gone (no window). -->
         <activity
             android:name=".AdbActivity"
             android:exported="true"

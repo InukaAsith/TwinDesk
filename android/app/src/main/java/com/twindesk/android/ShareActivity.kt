@@ -111,15 +111,13 @@ class RezumeActivity : Activity() {
     private fun toast(t: String) = Toast.makeText(applicationContext, t, Toast.LENGTH_SHORT).show()
 }
 
-// The home screen shortcut "Wireless debugging": on at once if the Mac granted it, else the setting.
+// The home screen shortcut "Wireless debugging": the setting, where the person turns it on. Any
+// app can start an exported activity, so this one must not switch wireless debugging itself:
+// only the Quick Settings tile (BIND_QUICK_SETTINGS_TILE) and in-app paths may call enable().
 class AdbActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val core = Core.get(this)
-        if (core.adb.enable(true, byPerson = true)) {
-            core.adb.sendState()
-            Toast.makeText(applicationContext, "Wireless debugging is on", Toast.LENGTH_SHORT).show()
-        } else core.adb.openSettings()
+        Core.get(this).adb.openSettings()
         finish()
     }
 }
