@@ -40,6 +40,13 @@ function startWeb(o) {
   const webRoot = firstThere([path.join(o.root, 'web')]);
   const tdRoot = firstThere([path.join(o.root, 'android-web'), path.join(o.root, 'android', 'app', 'src', 'main', 'assets', 'web')]);
 
+  const displaysList = () => {
+    try {
+      const { screen } = require('electron');
+      const main = screen.getPrimaryDisplay().id;
+      return screen.getAllDisplays().map((d, i) => ({ id: String(d.id), label: d.label || (d.id === main ? t('Main display') : t('Display {n}', { n: i + 1 })), w: Math.round(d.size.width * d.scaleFactor), h: Math.round(d.size.height * d.scaleFactor), main: d.id === main }));
+    } catch (_) { return []; }
+  };
   let target = null; // the display the web device watches: its input lands there
   const capture = new WebCap({
     audio: o.capture.audio, hub: o.capture.hub || null, source: o.capture.source || null, worklet: o.capture.worklet ? pathToFileURL(o.capture.worklet).href : '',
@@ -47,6 +54,10 @@ function startWeb(o) {
       const { screen } = require('electron');
       let d = null;
       if (mode === 'extend' && o.extend) d = await o.extend.display(dev);
+      // Mirror: the display picked for it on its Share screen page, else the main one.
+      const pick = dev && dev.id && hub.devices.find((x) => x.id === dev.id);
+      const want = pick && hub.allow(pick).display;
+      if (!d && want) d = screen.getAllDisplays().find((x) => String(x.id) === want) || null;
       d = d || screen.getPrimaryDisplay();
       target = d;
       return d;
@@ -184,7 +195,7 @@ function startWeb(o) {
     view() {
       const v = hub.view();
       const c = cfg();
-      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), media: media ? media.state() : null, remote: remote ? remote.view : null, share: o.share ? o.share.view() : null };
+      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, share: o.share ? o.share.view() : null };
     },
     shutdown() { try { hub.stop(); } catch (_) {} },
   };

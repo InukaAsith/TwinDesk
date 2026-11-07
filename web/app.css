@@ -352,6 +352,7 @@ html.dark .dv-hero { background: color-mix(in srgb, var(--card) 96%, var(--accen
 .dv-facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: start; }
 .ov-grid > .card-wrap { min-width: 0; }
+.ov-grid.one { grid-template-columns: 1fr; }
 .ov-grid .span { grid-column: 1 / -1; }
 .np { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
 .np .art { width: 52px; height: 52px; border-radius: 12px; background: var(--chip) center / cover; flex: none; display: grid; place-items: center; color: var(--muted); }
@@ -415,3 +416,22 @@ html.dark .dv-hero { background: color-mix(in srgb, var(--card) 96%, var(--accen
 .present-bar .btn { flex: none; }
 .present-bar .btn.danger { background: #ff453a; color: #fff; }
 html.presenting .page { padding-bottom: 90px; }
+
+/* The link while connected: a pulse travels along it; just connected: it fills in and both devices glow */
+.link .line { position: relative; overflow: hidden; }
+.link .line .pulse { display: none; }
+.link .line.up .pulse { display: block; position: absolute; top: 0; left: 0; width: 40px; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent); animation: travel 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+@keyframes travel { from { left: -40px; } to { left: 100%; } }
+.hero.just .link .line.up { animation: fillin 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: left; }
+.hero.just .dev .phone, .hero.just .dev .screen { animation: devglow 1.2s 0.5s ease-out both; }
+@keyframes fillin { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes devglow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+@media (prefers-reduced-motion: reduce) { .link .line.up .pulse, .hero.just .link .line.up, .hero.just .dev .phone, .hero.just .dev .screen { animation: none; } }
+
+/* The dashboard's install offer */
+.install-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-bottom: 18px; }
+.install-card .ic-text { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.install-card .ic-text .desc { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.install-card .ic-btns { display: flex; align-items: center; gap: 12px; flex: none; }
+@media (max-width: 560px) { .install-card { flex-wrap: wrap; } .install-card .ic-btns { width: 100%; justify-content: flex-end; } }

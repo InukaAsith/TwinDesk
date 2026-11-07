@@ -138,8 +138,11 @@
         el('li', { text: tr('The folder stays under Shared in Files.') }),
       ]);
       const howCard = UI.card(tr('In the Files app'), [el('div', { class: 'web-pad' }, [steps])]);
-      const airCard = UI.card(tr('AirPlay'), [
-        UI.row(tr('Receive AirPlay'), tr('Not available yet. Until then, a web device shows this screen with Screen in TwinDesk Web, and sends its own with the steps on its Send screen page.'), [UI.switch(() => {}, { disabled: true }).el]),
+      // The Mac receives AirPlay itself (System Settings), so TwinDesk only points there.
+      const mac = /Mac/.test(navigator.platform);
+      const airCard = UI.card(tr('AirPlay'), [mac
+        ? UI.row(tr('AirPlay Receiver'), tr('This Mac receives AirPlay itself: System Settings › General › AirDrop & Handoff › AirPlay Receiver. An iPhone or iPad then mirrors to it from Control Center.'))
+        : UI.row(tr('Receive AirPlay'), tr('Not available yet. Until then, a web device shows this screen with Screen in TwinDesk Web, and sends its own with the steps on its Send screen page.'), [UI.switch(() => {}, { disabled: true }).el]),
       ]);
       body.append(shareErr, smbCard, howCard, airCard);
       let addr = '';
@@ -176,7 +179,40 @@
   const setAll = (d, sws) => { for (const sw of sws) sw.set((d.allow || {})[sw.key] !== false); };
   const live = (st) => (st === 'live' ? tr('Live') : st === 'connecting' || st === 'new' ? tr('Connecting…') : st ? tr(String(st).replace(/^error: /, '')) : tr('Off'));
 
-  // The device's Overview: as a phone's (shared/ui-device.js), its picture, name, status and facts.
+  // 20×20 stroke icons, as the phone's Overview draws them (shared/ui-device.js).
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const glyph = (d) => {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('aria-hidden', 'true');
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    svg.append(p);
+    return svg;
+  };
+  const GL = {
+    files: 'M10 13.5V3.5 M6.5 7L10 3.5 13.5 7 M3.5 12.5v3a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-3',
+    drop: 'M3.5 4.5h13v9h-7l-4 3v-3h-2z',
+    stop: 'M5.5 5.5h9v9h-9z',
+    disconnect: 'M8.5 11.5l-1 1a3 3 0 0 1-4.2-4.2l2.2-2.2 M11.5 8.5l1-1a3 3 0 0 1 4.2 4.2l-2.2 2.2 M3 3l14 14',
+    screen: 'M2.5 4h15v9.5h-15z M7 17h6 M10 13.5V17',
+    receive: 'M2.5 4h15v9.5h-15z M7 17h6 M10 6.5v4.5 M7.8 8.8L10 11l2.2-2.2',
+    extend: 'M1.5 5h8v7h-8z M10.5 5h8v7h-8z M4 15h3 M13 15h3',
+    control: 'M6 3.5l8.5 7-4 .5 2.3 4.6-1.8.9-2.3-4.6L6 14.5z',
+    sound: 'M3 8h3l4-3.5v11L6 12H3z M13 7.5a3.5 3.5 0 0 1 0 5 M15 5.5a6.5 6.5 0 0 1 0 9',
+    mic: 'M10 2.5a2.5 2.5 0 0 1 2.5 2.5v5a2.5 2.5 0 0 1-5 0V5A2.5 2.5 0 0 1 10 2.5z M5 9.5a5 5 0 0 0 10 0 M10 14.5v3',
+    clip: 'M7 3.5h6v2.5H7z M5.5 4.5h-1v12h11v-12h-1 M7.5 10h5 M7.5 13h3',
+    notifs: 'M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0',
+    camera: 'M2.5 6h10v8h-10z M12.5 8.5l5-2.5v8l-5-2.5',
+    remote: 'M7 2.5h6v15H7z M10 5.5v.1 M8.7 8.5h2.6 M10 7.2v2.6 M8.5 13h3',
+    folder: 'M2.5 5.5a1 1 0 0 1 1-1h4l1.5 1.5h7.5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z',
+  };
+  const iconed = (b, k) => { b.prepend(glyph(GL[k])); b.classList.add('ico'); return b; };
+  UI.webGlyph = (k) => glyph(GL[k]);
+
+  // The device's Overview, as a phone's (shared/ui-device.js): its picture, name and link; its actions with
+  // their icons; what it may do, as quick-action tiles; then Drop on the left, and the clipboard and a drop
+  // zone for files on the right.
   UI.tab({
     id: 'wd-overview', web: true, group: 'w0', order: 92, icon: 'overview', title: 'Overview', color: 'linear-gradient(#8e8e93, #636366)',
     build(body, page) {
@@ -186,13 +222,57 @@
       const name = el('div', { class: 'hero-name' });
       const sub = el('div', { class: 'hero-status' });
       const facts = el('dl', { class: 'dv-facts' });
-      const dropBtn = UI.button(tr('Send files'), () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' }), 'primary');
-      const chatBtn = UI.button(tr('Drop'), () => UI.go('wd-drop'));
-      const stopBtn = UI.button(tr('Stop screen'), () => UI.webDev && api().webStopScreen(UI.webDev));
-      const offBtn = UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev));
+      const dropBtn = iconed(UI.button(tr('Send files'), () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' }), 'primary'), 'files');
+      const chatBtn = iconed(UI.button(tr('Drop'), () => UI.go('wd-drop')), 'drop');
+      const stopBtn = iconed(UI.button(tr('Stop screen'), () => UI.webDev && api().webStopScreen(UI.webDev)), 'stop');
+      const offBtn = iconed(UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev)), 'disconnect');
       const hero = el('div', { class: 'card dv-hero' }, [pic, el('div', { class: 'dv-hero-main' }, [name, sub, el('div', { class: 'dv-actions' }, [dropBtn, chatBtn, stopBtn, offBtn])]), facts]);
-      // What it may do here, at a glance: each opens its page.
-      const feats = el('div', { class: 'card web-feats' });
+
+      // Quick actions: each tile turns that permission on or off; its page has the rest.
+      const FEATS = [['screen', 'Share screen', 'screen'], ['share', 'Receive screen', 'receive'], ['extend', 'Extend', 'extend'], ['control', 'Control', 'control'],
+        ['sound', 'Audio', 'sound'], ['mic', 'Microphone', 'mic'], ['clipOut', 'Clipboard', 'clip'], ['notifs', 'Notifications', 'notifs'],
+        ['files', 'Files', 'files'], ['camera', 'Camera', 'camera']];
+      const tiles = {};
+      const grid = el('div', { class: 'dv-qs' });
+      for (const [key, label, ic] of FEATS) {
+        const state = el('span', { class: 'dv-qs-state' });
+        const b = el('button', { class: 'dv-qs-tile', attrs: { 'aria-pressed': 'false' } }, [glyph(GL[ic]), el('span', { class: 'dv-qs-label' }, [el('span', { text: tr(label) }), state])]);
+        b.onclick = () => {
+          const d = UI.webDevOf(UI.state);
+          if (!d) return;
+          const on = (d.allow || {})[key] !== false;
+          api().webAllow({ id: d.id, [key]: !on, ...(key === 'clipOut' ? { clipIn: !on } : {}) });
+        };
+        tiles[key] = { b, state };
+        grid.append(b);
+      }
+      const cols = () => {
+        const n = [...grid.children].filter((x) => !x.hidden).length || 1;
+        const w = grid.clientWidth - 28;
+        grid.style.setProperty('--cols', String(w >= n * 110 ? n : Math.ceil(n / 2)));
+      };
+      new ResizeObserver(cols).observe(grid);
+      const qsCard = UI.card(tr('Quick actions'), [grid], { actions: [UI.button(tr('Settings'), () => UI.go('wd-share'), 'small link')] });
+
+      // Drop on the left; the clipboard and Send files on the right.
+      const dropList = el('div', { class: 'history web-ov-drop' });
+      const dropCard = UI.card(tr('Drop'), [dropList], { actions: [UI.button(tr('Open'), () => UI.go('wd-drop'), 'small link')] });
+      const clipText = el('div', { class: 'web-ov-clip' });
+      const clipCard = UI.card(tr('Clipboard'), [clipText], { actions: [UI.button(tr('See all'), () => UI.go('wd-clipboard'), 'small link')] });
+      const zoneHint = el('div', { class: 'hint' });
+      const zone = el('div', { class: 'dropzone dv-drop' }, [el('div', {}, [el('div', { class: 'big', text: tr('Drop files here') }), zoneHint])]);
+      const sendCard = UI.card(tr('Send files'), [zone], { actions: [UI.button(tr('Choose…'), () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' }), 'small link')] });
+      let canSend = false;
+      zone.ondragover = (e) => { e.preventDefault(); if (canSend) zone.classList.add('over'); };
+      zone.ondragleave = () => zone.classList.remove('over');
+      zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const paths = api().pathsOf ? api().pathsOf([...e.dataTransfer.files]) : [];
+        if (canSend && paths.length && UI.webDev) api().webSendFiles({ id: UI.webDev, paths, kind: 'files' });
+      };
+      const lower = el('div', { class: 'dv-two' }, [el('div', { class: 'dv-col' }, [dropCard]), el('div', { class: 'dv-col' }, [clipCard, sendCard])]);
+
       // Its pairing (the rest of its connection is in Connection, as for every device).
       const nameIn = el('input', { class: 'web-name', type: 'text', maxLength: 60, attrs: { 'aria-label': tr('Name') } });
       nameIn.onchange = () => UI.webDev && nameIn.value.trim() && api().webRename({ id: UI.webDev, name: nameIn.value });
@@ -201,24 +281,50 @@
         UI.row(tr('Disconnect'), tr('Its TwinDesk Web closes the connection and stays off until Connect is pressed there. It stays paired.'), [UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev), 'small')]),
         UI.row(tr('Forget this device'), tr('It will need a new pairing code to connect again. Its messages and files list are removed.'), [UI.button(tr('Forget'), () => UI.webDev && api().webForget(UI.webDev), 'small')]),
       ]);
-      body.append(hero, UI.card(tr('On this device'), [feats]), pairCard);
-      const FEATS = [['wd-share', 'Share screen', 'screen'], ['wd-receive', 'Receive screen', 'share'], ['wd-audio', 'Audio', 'sound'], ['wd-clipboard', 'Clipboard', 'clipOut'],
-        ['wd-notifications', 'Notifications', 'notifs'], ['wd-files', 'Files', 'files'], ['wd-camera', 'Camera', 'camera'], ['wd-remote', 'Remote', 'control']];
+      body.append(hero, qsCard, lower, pairCard);
       const fact = (k, v) => (v ? [el('dt', { text: k }), el('dd', { text: v })] : []);
+      const tablet = (d) => /ipad|tablet|tab\b|pad/i.test(`${d.model || ''} ${d.os || ''}`);
+      let dropKey = '';
       return (s) => {
         const d = UI.webDevOf(s);
         if (!d) return;
         name.textContent = d.name;
-        sub.textContent = `${kind(d)} · ${status(d)}`;
+        sub.textContent = [kind(d), status(d), d.online && d.rtt != null ? tr('{value} ms', { value: d.rtt }) : ''].filter(Boolean).join(' · ');
+        pic.className = `device big ${['mac', 'win', 'linux'].includes(d.os) ? (d.os === 'mac' ? 'mac' : 'pc') : 'phone'}${tablet(d) ? ' tablet' : ''}`;
         const al = d.allow || {};
-        feats.replaceChildren(...FEATS.map(([id, label, key]) => {
-          const b = el('button', { class: 'web-feat' }, [el('span', { class: 'web-feat-name', text: tr(label) }), el('span', { class: `web-feat-state${al[key] === false ? '' : ' on'}`, text: al[key] === false ? tr('Off') : tr('On') })]);
-          b.onclick = () => UI.go(id);
-          return b;
-        }));
+        const w = W(s);
+        for (const [key] of FEATS) {
+          const { b, state } = tiles[key];
+          const on = al[key] !== false;
+          b.hidden = key === 'extend' && !w.extend && !(d.watching && d.watching.mode === 'extend');
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
+          const now = key === 'screen' && d.watching ? (d.watching.mode === 'extend' ? tr('Extending') : tr('Viewing'))
+            : key === 'control' && d.remote ? tr('In use') : '';
+          state.textContent = now || (on ? tr('On') : tr('Off'));
+        }
+        cols();
         stopBtn.hidden = !d.watching;
         offBtn.hidden = !d.online;
         dropBtn.disabled = !d.online;
+        canSend = !!d.online && al.files !== false;
+        zone.classList.toggle('off', !canSend);
+        zoneHint.textContent = !d.online ? tr('{name} is not connected', { name: d.name }) : al.files === false ? tr('Files are off for it') : tr('They wait on its Files page until it saves them.');
+        // Drop: the latest few.
+        const chat = (d.chat || []).filter((x) => x.kind !== 'files').slice(-5).reverse();
+        const k = JSON.stringify(chat.map((x) => x.id));
+        if (k !== dropKey) {
+          dropKey = k;
+          dropList.replaceChildren(...(chat.length ? chat.map((x) => {
+            const r = UI.row(x.file ? `📎 ${x.file.name}` : String(x.text || '').replace(/\s+/g, ' ').slice(0, 140), `${x.from === 'pc' ? tr('You') : d.name} · ${ago(x.at)}`, [], { literal: true });
+            r.classList.add('click');
+            r.onclick = () => UI.go('wd-drop');
+            return r;
+          }) : [el('div', { class: 'hint web-ov-none', text: tr('No messages yet') })]));
+        }
+        const c = w.clip || {};
+        clipText.textContent = al.clipOut === false ? tr('Clipboard is off for it') : c.text ? c.text.slice(0, 400) : tr('Nothing copied yet');
+        clipText.classList.toggle('hint', al.clipOut === false || !c.text);
         if (document.activeElement !== nameIn) nameIn.value = d.name;
         const alt = d.alerts || {};
         const notes = d.push ? [alt.clip && tr('Clipboard'), alt.drop && tr('Messages'), alt.files && tr('Files'), alt.notifs && tr('Notifications')].filter(Boolean).join(', ') || tr('None') : tr('Off');
@@ -243,13 +349,25 @@
       const q = UI.select ? UI.select([[0, tr('As the device asks')], [720, '720p'], [1080, '1080p'], [1440, '1440p'], [2160, '4K']].map(([value, label]) => ({ value, label })), (v) => UI.webDev && api().webAllow({ id: UI.webDev, maxH: Number(v) })) : null;
       const stRow = UI.row(tr('Now'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopScreen(UI.webDev), 'small')], { literalHint: true });
       const extRow = UI.row(tr('Extend'), '', [extendSw]);
+      // Sharing settings, as for a computer or a phone: which display, how smooth, how sharp.
+      const set = (k) => (v) => UI.webDev && api().webAllow({ id: UI.webDev, [k]: v });
+      let dispKey = '';
+      const dispSel = UI.select ? UI.select([{ value: '', label: tr('Main display') }], set('display')) : null;
+      const dispRow = dispSel ? UI.row(tr('Display'), tr('Which screen Mirror shows. Extend always makes one of its own.'), [dispSel]) : null;
+      const fpsSeg = UI.segmented ? UI.segmented([{ value: '0', label: tr('Auto') }, { value: '30', label: '30 fps' }, { value: '60', label: '60 fps' }], (v) => set('fps')(Number(v))) : null;
+      const mbpsSel = UI.select ? UI.select([[0, tr('As the device asks')], [4, tr('Low (4 Mbps)')], [8, tr('Medium (8 Mbps)')], [12, tr('High (12 Mbps)')], [20, tr('Very high (20 Mbps)')], [30, tr('Highest (30 Mbps)')]].map(([value, label]) => ({ value: String(value), label })), (v) => set('mbps')(Number(v))) : null;
       body.append(
         UI.card(tr('Share screen'), [
           UI.row(tr('Let it view this screen'), tr('With this computer’s sound when the device asks for it (Audio).'), [screenSw]),
           extRow,
           UI.row(tr('Let it control this computer'), tr('Mouse, keyboard and pen from the screen viewer, and the Remote page.'), [controlSw]),
-          q ? UI.row(tr('Highest quality'), tr('The picture never goes above this, whatever the device picks.'), [q]) : null,
         ]),
+        UI.card(tr('Sharing'), [
+          dispRow,
+          q ? UI.row(tr('Highest resolution'), tr('The picture never goes above this, whatever the device picks.'), [q]) : null,
+          fpsSeg ? UI.row(tr('Frame rate'), tr('60 for video and games, 30 saves battery and Wi-Fi.'), [fpsSeg]) : null,
+          mbpsSel ? UI.row(tr('Quality'), tr('More is sharper on a strong Wi-Fi; less holds up on a weak one.'), [mbpsSel]) : null,
+        ].filter(Boolean)),
         UI.card(tr('Status'), [stRow]),
       );
       return (s) => {
@@ -257,6 +375,16 @@
         if (!d) return;
         setAll(d, [screenSw, extendSw, controlSw]);
         if (q) q.set(String((d.allow || {}).maxH || 0));
+        const al = d.allow || {};
+        const ds = W(s).displays || [];
+        if (dispSel && dispSel.options) {
+          const k = JSON.stringify(ds);
+          if (k !== dispKey) { dispKey = k; dispSel.options([{ value: '', label: tr('Main display') }, ...ds.filter((x) => !x.main).map((x) => ({ value: x.id, label: `${x.label} · ${x.w} × ${x.h}` }))]); }
+        }
+        if (dispRow) dispRow.hidden = ds.length < 2;
+        if (dispSel) dispSel.set(ds.some((x) => x.id === al.display) ? al.display : '');
+        if (fpsSeg) fpsSeg.set(String(al.fps || 0));
+        if (mbpsSel) mbpsSel.set(String(al.mbps || 0));
         extRow.setHint(W(s).extend ? tr('A screen of its own, in the device’s shape, beside this one') : tr('Not available while this screen is shared with the other computer'));
         const st = d.watching;
         stRow.setHint(st ? `${st.video ? (st.mode === 'extend' ? tr('Extended screen') : tr('Mirrored screen')) : tr('Sound only')} · ${live(st.status)}` : tr('Not watching'));
@@ -351,11 +479,24 @@
     build(body) {
       const sw = allowSw('files');
       const folderRow = UI.row(tr('Save them in'), '', [UI.button(tr('Choose…'), () => UI.webDev && api().webChooseFolder(UI.webDev), 'small'), UI.button(tr('Default'), () => UI.webDev && api().webAllow({ id: UI.webDev, folder: '' }), 'small')], { literalHint: true });
+      // At the top, as on a phone's or a computer's Files page: drop files here to send them.
+      const zoneHint = el('div', { class: 'hint' });
+      const zone = el('div', { class: 'dropzone dv-drop web-files-zone' }, [el('div', {}, [el('div', { class: 'big', text: tr('Drop files here to send') }), zoneHint])]);
+      zone.onclick = () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' });
+      let canSend = false;
+      zone.ondragover = (e) => { e.preventDefault(); if (canSend) zone.classList.add('over'); };
+      zone.ondragleave = () => zone.classList.remove('over');
+      zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const paths = api().pathsOf ? api().pathsOf([...e.dataTransfer.files]) : [];
+        if (canSend && paths.length && UI.webDev) api().webSendFiles({ id: UI.webDev, paths, kind: 'files' });
+      };
       body.append(
+        UI.card(tr('Send files'), [zone], { actions: [UI.button(tr('Choose…'), () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' }), 'small link')] }),
         UI.card(tr('Files'), [
           UI.row(tr('Take files from it'), tr('Each one also goes on the Paste Files shortcut: press it in a folder or an app to put it there.'), [sw]),
           folderRow,
-          UI.row(tr('Send files to it'), tr('They wait on its Files page until it saves them. Drag files here too.'), [UI.button(tr('Choose Files…'), () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' }), 'small')]),
         ]),
       );
       // Transfers both ways: what it sent, and what's waiting for it or on its way.
@@ -363,14 +504,6 @@
       const none = el('div', { class: 'hint web-xfers-none', text: tr('Nothing yet') });
       const xcard = UI.card(tr('Transfers'), [none, list]);
       body.append(xcard);
-      body.addEventListener('dragover', (e) => { e.preventDefault(); xcard.classList.add('hub-drop'); });
-      body.addEventListener('dragleave', () => xcard.classList.remove('hub-drop'));
-      body.addEventListener('drop', (e) => {
-        e.preventDefault();
-        xcard.classList.remove('hub-drop');
-        const paths = api().pathsOf ? api().pathsOf(e.dataTransfer.files) : [];
-        if (paths.length && UI.webDev) api().webSendFiles({ id: UI.webDev, paths, kind: 'files' });
-      });
       let key = '';
       const xfers = (d) => {
         const items = (d.chat || []).filter((x) => x.file && x.kind === 'files').slice().reverse();
@@ -400,6 +533,9 @@
         const d = UI.webDevOf(s);
         if (!d) return;
         setAll(d, [sw]);
+        canSend = !!d.online;
+        zone.classList.toggle('off', !canSend);
+        zoneHint.textContent = d.online ? tr('or click to choose. They wait on {name}’s Files page until it saves them.', { name: d.name }) : tr('{name} is not connected', { name: d.name });
         xfers(d);
         folderRow.setHint((d.allow || {}).folder || tr('The received files folder (Files › Save to)'));
       };
@@ -543,13 +679,71 @@
 
   // ---------------------------------------------------------------- Connection's card
   // Paired web devices beside the paired computers and phones (each platform's Connection tab).
+  // With a web device's pages: the Connection page's hero is this computer and that device, as for any
+  // connection (the same picture, link line and moving pulse), with its own Disconnect.
+  const webHero = () => {
+    const linkLine = el('div', { class: 'hero-link' }, [el('span', { class: 'hero-pulse' })]);
+    const linkText = el('div', { class: 'hero-link-text' });
+    const meName = el('div', { class: 'hero-name', attrs: { 'data-literal': '' } });
+    const devName = el('div', { class: 'hero-name', attrs: { 'data-literal': '' } });
+    const meDev = el('div', { class: 'device pc' });
+    const devPic = el('div', { class: 'device phone' });
+    const status = el('div', { class: 'hero-status', attrs: { 'data-literal': '' } });
+    const offBtn = UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev), 'small');
+    const openBtn = UI.button(tr('Overview'), () => UI.go('wd-overview'), 'small');
+    const hero = el('div', { class: 'card hero web-hero' }, [
+      el('div', { class: 'hero-devices' }, [
+        el('div', { class: 'hero-device' }, [meDev, meName]),
+        el('div', { class: 'hero-mid' }, [linkLine, linkText]),
+        el('div', { class: 'hero-device' }, [devPic, devName]),
+      ]),
+      status,
+      el('div', { class: 'hero-actions' }, [openBtn, offBtn]),
+    ]);
+    let was = null;
+    hero.render = (s) => {
+      const d = UI.webDevOf(s);
+      hero.hidden = !d;
+      const page = hero.closest('.page, section');
+      if (page) page.classList.toggle('web-mode', !!d);
+      if (!d) { was = null; return; }
+      const w = W(s);
+      const me = w.me || {};
+      meName.textContent = me.name || '';
+      meDev.className = `device ${me.os === 'mac' ? 'mac' : 'pc'}`;
+      devName.textContent = d.name;
+      devPic.className = `device ${['mac', 'win', 'linux'].includes(d.os) ? (d.os === 'mac' ? 'mac' : 'pc') : 'phone'}`;
+      const up = !!d.online;
+      linkLine.className = `hero-link${up ? ' up' : ''}`;
+      // Just connected: the line fills in and both pictures light up once, as the HUD shows it.
+      if (up && was === false) {
+        hero.classList.remove('just');
+        void hero.offsetWidth;
+        hero.classList.add('just');
+        setTimeout(() => hero.classList.remove('just'), 1600);
+      }
+      was = up;
+      linkText.textContent = up ? [tr('TwinDesk Web'), d.secure ? tr('Secure') : tr('Not secure')].join(' · ') : tr('Not connected');
+      status.textContent = up ? (d.watching ? (d.watching.mode === 'extend' ? tr('{name} is extending this screen', { name: d.name }) : tr('{name} is viewing this screen', { name: d.name })) : tr('Connected'))
+        : tr('Paired. It connects when TwinDesk Web is opened on it. {when}', { when: status_(d) });
+      offBtn.hidden = !up;
+    };
+    return hero;
+  };
+  const status_ = (d) => status(d);
+
   UI.webConnCard = () => {
     const list = el('div');
     const card = UI.card(tr('TwinDesk Web'), [list], { actions: [UI.button(tr('Pair a Device…'), () => UI.go('web'), 'small')] });
+    const hero = webHero();
     let key = '';
+    let placed = false;
     return {
       el: card,
       render(s) {
+        // The hero goes first on the page, once the card is on it.
+        if (!placed && card.parentNode) { placed = true; card.parentNode.prepend(hero); }
+        hero.render(s);
         const w = W(s);
         card.hidden = !w.cfg.on && !w.devices.length;
         const k = JSON.stringify([w.running, w.devices.map((d) => [d.id, d.name, d.online, d.background, d.lastSeen])]);

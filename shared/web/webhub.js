@@ -93,7 +93,7 @@ const ALERT_KINDS = ['clip', 'drop', 'files', 'notifs'];
 //   clipOut: this clipboard to it · clipIn: its clipboard here · notifs: this computer's notifications there
 //   files: take its files · folder: where they go ('' = the received files folder) · camera, mic: its camera
 //   and microphone here · share: its screen here · maxH: the highest picture it gets (0: as it asks)
-const ALLOW = { screen: true, sound: true, control: true, extend: true, clipOut: true, clipIn: true, notifs: true, files: true, folder: '', camera: true, mic: true, share: true, maxH: 0 };
+const ALLOW = { screen: true, sound: true, control: true, extend: true, clipOut: true, clipIn: true, notifs: true, files: true, folder: '', camera: true, mic: true, share: true, maxH: 0, fps: 0, mbps: 0, display: '' };
 const ALERT_DEFAULTS = { clip: true, drop: true, files: true, notifs: false, preview: true, badge: true };
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/heic': '.heic', 'image/gif': '.gif', 'image/webp': '.webp', 'video/quicktime': '.mov', 'video/mp4': '.mp4', 'application/pdf': '.pdf', 'text/plain': '.txt', 'audio/mp4': '.m4a', 'application/zip': '.zip' };
 const OSES = new Set(['ios', 'ipados', 'android', 'mac', 'win', 'linux', 'other']);
@@ -759,7 +759,7 @@ class WebHub extends EventEmitter {
     this._send(dev.id, { t: 'stream.info', audio });
     if (video) this.inBus.current = { id: dev.id, name: dev.name, os: dev.os };
     const maxH = Math.max(360, Math.min(al.maxH || 2160, Number(m.maxH) || 1080));
-    this.capture.start({ video, audio, mode, dev: { id: dev.id, name: dev.name, w: Number(m.w) || 0, h: Number(m.h) || 0 }, maxH, fps: Math.max(15, Math.min(60, Number(m.fps) || 60)), mbps: Math.max(2, Math.min(40, Number(m.mbps) || 12)) });
+    this.capture.start({ video, audio, mode, dev: { id: dev.id, name: dev.name, w: Number(m.w) || 0, h: Number(m.h) || 0 }, maxH, fps: al.fps || Math.max(15, Math.min(60, Number(m.fps) || 60)), mbps: al.mbps || Math.max(2, Math.min(40, Number(m.mbps) || 12)) });
     this.emit('change');
   }
 
@@ -981,6 +981,9 @@ class WebHub extends EventEmitter {
       if (!(k in ALLOW) && k !== 'muted') continue;
       if (k === 'folder') a.folder = typeof v === 'string' ? v.slice(0, 1000) : '';
       else if (k === 'maxH') a.maxH = [0, 720, 1080, 1440, 2160].includes(Number(v)) ? Number(v) : 0;
+      else if (k === 'fps') a.fps = [0, 30, 60].includes(Number(v)) ? Number(v) : 0;
+      else if (k === 'mbps') a.mbps = [0, 4, 8, 12, 20, 30].includes(Number(v)) ? Number(v) : 0;
+      else if (k === 'display') a.display = typeof v === 'string' || typeof v === 'number' ? String(v).slice(0, 40) : '';
       else if (k === 'muted') a.muted = Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 300) : [];
       else a[k] = !!v;
     }
@@ -1064,6 +1067,7 @@ class WebHub extends EventEmitter {
     return {
       on: !!this.cfg.on,
       running: this.running,
+      me: { name: this.self().name, os: this.self().os },
       error: this.error || (this.mdns && this.mdns.error ? `Network name: ${this.mdns.error}` : ''),
       code: this.running ? this.code : '',
       links: this.running ? this.links() : null,

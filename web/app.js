@@ -196,6 +196,7 @@
   ME.model = IPAD ? 'iPad' : ME.os === 'ios' ? 'iPhone' : ME.os === 'android' ? 'Android phone' : ME.os === 'mac' ? 'Mac browser' : ME.os === 'win' ? 'Windows browser' : 'Browser';
   ME.kind = IPAD ? 'iPad' : ME.os === 'ios' ? 'iPhone' : ME.os === 'android' ? 'phone' : 'browser';
   const STANDALONE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const MAC_SAFARI = !STANDALONE && /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints < 2 && /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Firefox|OPR/.test(navigator.userAgent);
   const STORE = 'twindesk.web';
   const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || 'null') || {}; } catch (_) { return {}; } };
   const save = (o) => { try { localStorage.setItem(STORE, JSON.stringify(o)); } catch (_) {} };
@@ -251,9 +252,10 @@
   // ---------------------------------------------------------------- the address: pairing, upgrade
   const hashParams = () => new URLSearchParams(location.hash.slice(1));
   const query = new URLSearchParams(location.search);
-  async function reachable(base) {
+  // A .local name's first lookup can take a few seconds (mDNS); an address answers at once.
+  async function reachable(base, ms = 2500) {
     const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 2500);
+    const t = setTimeout(() => ctl.abort(), ms);
     try {
       const r = await fetch(`${base}/api/ping`, { cache: 'no-store', signal: ctl.signal });
       return r.ok ? await r.json() : null;
@@ -282,6 +284,8 @@
   // trusts it: by name first (the same whatever address the computer has), then by address. On https
   // with no pairing here, look once on the plain address, where an earlier pairing may be.
   async function upgrade() {
+    // An installed app stays where it was added (moving would leave the app for the browser).
+    if (STANDALONE) return false;
     const h = hashParams();
     const st = load();
     const host = h.get('h') || (st.pc && st.pc.host) || (/\.local$/.test(location.hostname) ? location.hostname : '');
@@ -291,15 +295,24 @@
       const ping = await reachable('');
       const ip = ping && ping.ip;
       if (!ip) return false;
-      location.replace(`http://${ip}:${(Number(location.port) || 47870) + 1}/${location.search}#hop=1&h=${encodeURIComponent(ping.host || host)}&p=${Number(location.port) || 47870}`);
+      // To the plain page by name (this page resolves it): a pairing made without the secure page is there.
+      const name = ping.host || host || location.hostname;
+      location.replace(`http://${/\.local$/.test(name) ? name : ip}:${(Number(location.port) || 47870) + 1}/${location.search}#hop=1&h=${encodeURIComponent(name)}&p=${Number(location.port) || 47870}`);
       return true;
     }
     if (location.protocol !== 'http:') return false;
     const port = Number(h.get('p')) || Number(location.port) - 1 || 47870;
+    const onIp = /^\d+\.\d+\.\d+\.\d+$/.test(location.hostname);
     const back = h.get('hop') && !st.creds; // came here looking for a pairing: none, back to https to pair
-    for (const base of [host && `https://${host}:${port}`, `https://${location.hostname}:${port}`].filter(Boolean)) {
-      if (await reachable(base)) {
-        location.replace(`${base}/${location.search}${back ? `#hop=2&h=${encodeURIComponent(host)}&p=${port}` : carry()}`);
+    // In order of preference, asked all at once: the secure page by name, the secure page on this
+    // address, then (no secure page yet) the plain page by name. Off the address onto the name, an app
+    // added from here keeps working when the computer's address changes (the name follows it).
+    const name = host && /\.local$/.test(host) ? host : '';
+    const bases = [name && `https://${name}:${port}`, `https://${location.hostname}:${port}`, onIp && name && `http://${name}:${port + 1}`].filter(Boolean);
+    const tries = bases.map((b) => reachable(b, b.includes('.local') ? 6000 : 2500));
+    for (let i = 0; i < bases.length; i++) {
+      if (await tries[i]) {
+        location.replace(`${bases[i]}/${location.search}${back ? `#hop=2&h=${encodeURIComponent(host)}&p=${port}` : carry()}`);
         return true;
       }
     }
@@ -717,8 +730,9 @@
   const BUILD = {};
 
   // The two devices and the link between them.
+  let heroWas = null; // kept across rebuilds of the page, so the moment it connects is seen
   function hero() {
-    const line = el('div', { class: 'line' });
+    const line = el('div', { class: 'line' }, [el('span', { class: 'pulse' })]);
     const ltxt = el('div', { class: 'txt' });
     const meN = el('span', { class: 'nm' });
     const pcN = el('span', { class: 'nm' });
@@ -737,6 +751,15 @@
       meN.textContent = load().name || ME.model;
       pcN.textContent = pcName();
       line.className = `line${online() ? ' up' : S.conn === 'connecting' || S.conn === 'boot' ? '' : ' idle'}`;
+      // Just connected: the line fills in and both pictures light up once.
+      if (online() && heroWas === false) {
+        e.classList.remove('just');
+        void e.offsetWidth;
+        e.classList.add('just');
+        setTimeout(() => e.classList.remove('just'), 1600);
+        haptic();
+      }
+      heroWas = online();
       ltxt.textContent = statusText();
       msg.textContent = text || '';
       msg.hidden = !msg.textContent;
@@ -830,15 +853,77 @@
     for (const k of ['h', 'p', 'hop']) if (q.get(k)) h.set(k, q.get(k));
     return h.toString();
   }
+  // Paired on the plain page: the dashboard offers the secure one (the steps are on Connection).
+  const secLater = () => { try { return Date.now() - (Number(localStorage.getItem('twindesk.web.secureLater')) || 0) < 3 * 864e5; } catch (_) { return false; } };
+  function secureOffer() {
+    const box = el('div', { class: 'card install-card' });
+    const LATER = 'twindesk.web.secureLater';
+    box.update = () => {
+      let later = 0;
+      try { later = Number(localStorage.getItem(LATER)) || 0; } catch (_) {}
+      box.hidden = S.secure || !S.creds || location.protocol !== 'http:' || Date.now() - later < 3 * 864e5;
+      if (box.hidden || box.firstChild) return;
+      box.replaceChildren(tile('lock', ['#30d158', '#248a3d'], 40),
+        el('div', { class: 'ic-text' }, [el('b', { text: 'Set up a secure connection' }), el('div', { class: 'desc', text: `For the camera, screen sharing, alerts and the clipboard. Takes a minute, once${STANDALONE ? '. Then add TwinDesk again from the secure address.' : ', before adding TwinDesk as an app.'}` })]),
+        el('div', { class: 'ic-btns' }, [btn('Set Up', () => go('connection'), 'small primary'), link('Not now', () => { try { localStorage.setItem(LATER, String(Date.now())); } catch (_) {} box.hidden = true; })]));
+    };
+    return box;
+  }
+
+  // Paired, but in the browser: the dashboard offers the app (it opens paired: the address it's added
+  // with carries the pairing). Not now hides it for a week.
+  function installCard() {
+    const box = el('div', { class: 'card install-card' });
+    const LATER = 'twindesk.web.installLater';
+    box.update = () => {
+      let later = 0;
+      try { later = Number(localStorage.getItem(LATER)) || 0; } catch (_) {}
+      const can = ME.apple || MAC_SAFARI || !!installEvt;
+      box.hidden = STANDALONE || !S.creds || !can || Date.now() - later < 7 * 864e5 || (location.protocol === 'http:' && !S.secure && !skipSecure() && !secLater());
+      if (box.hidden) return;
+      const notNow = link('Not now', () => { try { localStorage.setItem(LATER, String(Date.now())); } catch (_) {} box.hidden = true; });
+      const how = ME.apple ? el('div', { class: 'desc', html: 'Tap <b>Share</b> in Safari, then <b>Add to Home Screen</b>. It opens connected, with alerts on the Lock Screen.' })
+        : MAC_SAFARI ? el('div', { class: 'desc', html: 'In Safari’s menu bar, choose <b>File › Add to Dock</b>. It opens connected, in its own window.' })
+          : el('div', { class: 'desc', text: 'It opens connected in its own window, with alerts and the share menu.' });
+      box.replaceChildren(tile('down', ['#64d2ff', '#0a84ff'], 40), el('div', { class: 'ic-text' }, [el('b', { text: `Install TwinDesk for ${pcName()}` }), how]),
+        el('div', { class: 'ic-btns' }, [ME.apple || MAC_SAFARI ? null : installBtn(), notNow].filter(Boolean)));
+    };
+    return box;
+  }
+
+  // Before the app is added: the secure connection first (the app keeps the address it's added from, and
+  // the camera, screen sharing and alerts need the secure one), then the app. Skip keeps it plain.
+  const SKIP_SECURE = 'twindesk.web.skipSecure';
+  const skipSecure = () => { try { return sessionStorage.getItem(SKIP_SECURE) === '1'; } catch (_) { return false; } };
   function installFirst() {
     const box = el('div', { class: 'install-first' });
     box.update = () => {
       if (STANDALONE || S.creds) { box.hidden = true; return; }
+      if (location.protocol === 'http:' && !skipSecure() && (ME.mobile || MAC_SAFARI || installEvt)) {
+        box.hidden = false;
+        box.replaceChildren(
+          el('b', { text: 'First, set up a secure connection' }),
+          el('div', { class: 'desc', text: `Once per computer. The camera, screen sharing and alerts need it${ME.apple ? ', and the Home Screen app opens on it' : MAC_SAFARI ? ', and the Dock app opens on it' : ', and the installed app opens on it'}.` }),
+          el('ol', {}, secureSteps()),
+          link('Skip for now', () => { try { sessionStorage.setItem(SKIP_SECURE, '1'); } catch (_) {} box.update(); }),
+        );
+        return;
+      }
       const frag = pendingFrag();
       const m = $('manifest');
       if (m && frag) m.href = `/manifest.webmanifest?h=${encodeURIComponent(frag)}`; // the app opens with the code
       if (frag && location.hash.slice(1) !== frag) history.replaceState(null, '', `/#${frag}`);
-      if (ME.apple) {
+      if (MAC_SAFARI) {
+        box.hidden = false;
+        box.replaceChildren(
+          el('b', { text: 'Add TwinDesk to the Dock' }),
+          el('ol', {}, [
+            el('li', { html: 'In Safari’s menu bar, choose <b>File › Add to Dock</b>, then <b>Add</b>.' }),
+            el('li', { text: 'Open TwinDesk from the Dock: it pairs there and stays connected.' }),
+          ]),
+          el('div', { class: 'desc', text: 'The Dock app keeps its own sign-in, apart from Safari.' }),
+        );
+      } else if (ME.apple) {
         const hold = holdForInstall();
         box.hidden = false;
         box.replaceChildren(
@@ -990,9 +1075,14 @@
     const btRow = row('Bluetooth', '', [btSw]);
     const dndRow = row('Do Not Disturb', '', [dndSw]);
     const controls = card('Controls', [btRow, dndRow]);
-    const grid = el('div', { class: 'ov-grid' }, [np, clip, notifs, files, sendCard, controls]);
-    page.append(hero, off, grid);
+    // The clipboard and Send files side by side first, at iPad and desktop widths alike; then the rest in pairs.
+    const grid = el('div', { class: 'ov-grid' }, [clip, sendCard, np, notifs, files, controls]);
+    const inst = installCard();
+    const secOffer = secureOffer();
+    page.append(hero, off, secOffer, inst, grid);
     return () => {
+      inst.update();
+      secOffer.update();
       const can = (S.devs && S.devs.can) || {};
       const st = (S.devs && S.devs.state) || {};
       const ringing = !!st.ringing;
@@ -1044,6 +1134,8 @@
       btSw.checked = !!st.bluetooth;
       dndSw.checked = !!st.dnd;
       controls.hidden = !online() || (!can.bluetooth && !can.dnd);
+      // A card alone in the grid takes the whole width.
+      grid.classList.toggle('one', [...grid.children].filter((c) => !c.hidden).length < 2);
     };
   };
 
@@ -1068,7 +1160,7 @@
     let addrKey = '';
     return () => {
       hd.desc(`This ${ME.kind} reconnects to ${pcName()} automatically, even when either device's network address changes.`);
-      h.update([]);
+      h.update(S.conn === 'paused' ? [btn('Connect', () => reconnect(), 'primary')] : []);
       status.set(statusText().split(' · ')[0]);
       rtt.set(online() && S.rtt != null ? `${S.rtt} ms` : '');
       sec.set(S.secure ? 'Encrypted (HTTPS)' : 'Not encrypted');
@@ -1078,6 +1170,7 @@
         const port = (S.pc && S.pc.port) || Number(location.port) || 47870;
         const L = [];
         if (S.pc && S.pc.host) L.push(['Secure address (recommended)', `https://${S.pc.host}:${port}/`]);
+        if (S.pc && S.pc.host) L.push(['By name (keeps working when the computer’s address changes)', `http://${S.pc.host}:${port + 1}/`]);
         for (const ip of (S.pc && S.pc.ips) || []) L.push([`Local address (${ip})`, `http://${ip}:${port + 1}/`]);
         if (!L.length) L.push(['This page', location.origin + '/']);
         addr.replaceChildren(...L.map(([l, u]) => el('div', {}, [el('div', { class: 'muted', style: 'font-size:12.5px', text: l }), copyBox(() => u)])));
@@ -1087,13 +1180,14 @@
       forget.setHint(`Paired${S.pc && S.pc.version ? ` · TwinDesk ${S.pc.version}` : ''}. Forgetting removes the pairing on both devices.`);
       install.setHint(STANDALONE ? 'Installed. TwinDesk opens connected without pairing again.'
         : ME.apple ? 'In Safari, tap Share › Add to Home Screen. Required for notifications on iPhone and iPad.'
+          : MAC_SAFARI ? 'In Safari’s menu bar, choose File › Add to Dock.'
           : 'Opens TwinDesk in its own window and adds it to the share menu.');
     };
   };
 
   // Install prompt (Chrome, Edge, Android): the browser's own, when it offers one.
   let installEvt = null;
-  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; refresh('connection', 'shortcuts'); });
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; refresh('connection', 'shortcuts', 'overview'); });
   function installBtn() {
     const b = btn('Install', async () => {
       if (!installEvt) return;
@@ -1107,7 +1201,7 @@
     return b;
   }
 
-  function secureCard() {
+  function secureSteps() {
     const steps = ME.apple ? [
       el('li', {}, [el('a', { href: '/twindesk.mobileconfig', text: 'Download the TwinDesk profile' }), '.']),
       el('li', { html: 'Open Settings › <b>Profile Downloaded</b> and tap Install.' }),
@@ -1115,11 +1209,21 @@
     ] : ME.os === 'android' ? [
       el('li', {}, [el('a', { href: '/twindesk.cer', text: 'Download the TwinDesk certificate' }), '.']),
       el('li', { html: 'Open Settings › Security › More security settings › Encryption &amp; credentials › <b>Install a certificate</b> › CA certificate, and select the file.' }),
+    ] : ME.os === 'mac' ? [
+      // A profile, as on iPhone: System Settings installs it and trusts it in one go. (Double-clicking a
+      // .cer imports into the default keychain, which fails with -25294 when that's iCloud or Local Items.)
+      el('li', {}, [el('a', { href: '/twindesk.mobileconfig', text: 'Download the TwinDesk profile' }), '.']),
+      el('li', { html: 'Open System Settings › General › <b>Device Management</b> (on older macOS: Privacy &amp; Security › <b>Profiles</b>), double-click TwinDesk and click <b>Install</b>.' }),
+      el('li', {}, ['Or with Keychain Access: ', el('a', { href: '/twindesk.cer', text: 'download the certificate' }), ', choose File › Import Items, pick the ', el('b', { text: 'login' }), ' keychain, then double-click it and set Trust to Always Trust.']),
     ] : [
       el('li', {}, [el('a', { href: '/twindesk.cer', text: 'Download the TwinDesk certificate' }), '.']),
-      el('li', { text: ME.os === 'mac' ? 'Open the file to add it to Keychain Access, then double-click it and set Trust to Always Trust.' : ME.os === 'win' ? 'Open the file and choose Install Certificate › Current User › Trusted Root Certification Authorities.' : 'Import it into your browser’s certificate settings as a certificate authority.' }),
+      el('li', { text: ME.os === 'win' ? 'Open the file and choose Install Certificate › Current User › Trusted Root Certification Authorities.' : 'Import it into your browser’s certificate settings as a certificate authority.' }),
     ];
     steps.push(el('li', {}, [btn('Switch to the secure address', () => secureNow(), 'small primary')]));
+    return steps;
+  }
+  function secureCard() {
+    const steps = secureSteps();
     return card('Set up a secure connection', [
       el('div', { class: 'pad16', style: 'padding-bottom:0' }, [el('div', { class: 'muted', text: 'Required for the camera, microphone, notifications and clipboard access. It also keeps the address the same when the computer changes networks.' })]),
       el('ol', { class: 'steps' }, steps),
@@ -1272,12 +1376,15 @@
             S.scr.on && vt ? row('Showing', scrWhat(vt).replace(/^./, (c) => c.toUpperCase())) : null,
           ].filter(Boolean)),
         ]);
+      } else if (!ME.apple && !window.isSecureContext) {
+        // Browsers hide screen sharing on a plain http page: it's the connection, not the browser.
+        share = card('Share this screen', [row('Needs a secure connection', `Browsers share the screen only on a secure page. Set it up once on Connection, then present to ${name} from here.`, [btn('Set Up', () => go('connection'), 'small primary')])]);
       } else if (!ME.apple) {
         share = card('', [row('This browser can’t share its screen', ME.os === 'android' ? 'Use Chrome for Android, or AirPlay or screen casting if the computer has it turned on.' : 'Use Chrome, Edge or Firefox, or AirPlay if this device has it.')]);
       }
       if (ME.apple) {
         body.replaceChildren(
-          el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('airplay', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: `AirPlay to ${name}` }), el('div', { class: 'muted', text: `${name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.` })]),
+          el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('airplay', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: `AirPlay to ${name}` }), el('div', { class: 'muted', text: S.pc && S.pc.os === 'mac' ? `${name} receives AirPlay when AirPlay Receiver is on in its System Settings.` : `${name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.` })]),
           card('Mirror your screen', [el('ol', { class: 'steps' }, [
             el('li', { html: 'Open <b>Control Center</b>.' }),
             el('li', { html: 'Tap <b>Screen Mirroring</b>.' }),
@@ -1288,7 +1395,7 @@
             el('li', { html: 'In Photos, Music, YouTube or another app, tap the <b>AirPlay</b> button.' }),
             el('li', {}, ['Select ', el('b', { text: name }), '.']),
           ])]),
-          card('', [row(`${name} is not listed`, `Enable AirPlay in TwinDesk on ${name} (AirPlay & SMB). Both devices must be on the same network, or connected with a cable.`)]),
+          card('', [row(`${name} is not listed`, S.pc && S.pc.os === 'mac' ? `On ${name}, open System Settings › General › AirDrop & Handoff and turn on AirPlay Receiver (Allow AirPlay for: Current User, or Everyone on the same network). Both devices must be on the same network.` : `Enable AirPlay in TwinDesk on ${name} (AirPlay & SMB). Both devices must be on the same network, or connected with a cable.`)]),
         );
       } else if (ME.os === 'android') {
         body.replaceChildren(
@@ -1848,8 +1955,9 @@
   };
 
   async function secureNow() {
-    const host = S.pc && S.pc.host;
-    const port = (S.pc && S.pc.port) || Number(location.port) - 1;
+    const hp = hashParams();
+    const host = (S.pc && S.pc.host) || hp.get('h') || (/\.local$/.test(location.hostname) ? location.hostname : '');
+    const port = (S.pc && S.pc.port) || Number(hp.get('p')) || Number(location.port) - 1;
     const frag = S.creds ? `#d=${encodeURIComponent(S.creds.id)}&k=${encodeURIComponent(S.creds.key)}` : location.hash;
     for (const base of [host && `https://${host}:${port}`, `https://${location.hostname}:${port}`].filter(Boolean)) {
       if (await reachable(base)) return location.replace(`${base}/${frag}`);
@@ -2389,7 +2497,12 @@
     adoptCreds();
     if (query.get('go')) pendingGo = query.get('go');
     frame();
-    if (await upgrade()) return;
+    // The better address is looked for alongside: the page connects at once, and moves when one answers
+    // (an untrusted certificate makes the secure page's probe wait out its time).
+    let moving = false;
+    upgrade().then((m) => { moving = m; }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    if (moving) return;
     if (!S.creds) {
       S.conn = 'pairing';
       S.serving = await reachable('');

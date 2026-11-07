@@ -57,3 +57,20 @@
 .web-xfer.in .web-xfer-bar { display: none; }
 .web-xfer-acts { display: flex; gap: 6px; flex: none; }
 .card.hub-drop { outline: 2px dashed var(--accent, #0a84ff); outline-offset: -4px; }
+
+/* The web device's Overview */
+.dv-hero .device.phone.big.tablet { width: 112px; height: 140px; border-radius: 14px; }
+.dv-hero .device.phone.big.tablet::after { left: 44px; right: 44px; }
+.web-ov-clip { padding: 12px 16px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-height: 7.5em; overflow: hidden; }
+.web-ov-none { padding: 12px 16px; }
+.dropzone.dv-drop.off { opacity: 0.55; }
+.web-files-zone { cursor: pointer; }
+
+/* Connection with a web device's pages: its own hero, in place of the computer-to-computer one */
+.web-mode .card.hero:not(.web-hero) { display: none; }
+.web-hero .hero-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+.web-hero.just .hero-link.up { animation: web-fill 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: left; }
+.web-hero.just .device { animation: web-glow 1.2s 0.5s ease-out both; }
+@keyframes web-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes web-glow { 0% { box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.6); } 100% { box-shadow: 0 0 0 14px rgba(48, 209, 88, 0); } }
+@media (prefers-reduced-motion: reduce) { .web-hero.just .hero-link.up, .web-hero.just .device { animation: none; } }
