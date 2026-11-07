@@ -64,7 +64,23 @@ function negotiated(sdp) {
   return r ? r[1] : '';
 }
 
-const api = { mode, features, negotiated, rank, order, RTPMAP, H265_FEATURES, MODES, DEFAULT };
+// Playback › Steady: an SDP without the playout-delay header extension. Every app sends each frame
+// with "show it now" (playout delay 0/0, the main.js field trial), which shows frames the moment they
+// are decoded; without the extension in the answer it never goes out, and the viewer paces the
+// frames itself (WebRTC's jitter buffer, as a web browser plays it). The sender leaves it out of its
+// offer, the viewer out of its answer: either side alone is enough.
+const NO_DELAY = /^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm;
+function steady(sdp) { return String(sdp || '').replace(NO_DELAY, ''); }
+
+// Frames per second to send: the display's refresh rate (30–120), at most `cap` (Share screen › Frame
+// rate: 30 or 60; 0 = the display's).
+const FPS_CAPS = [0, 30, 60];
+function fps(hz, cap) {
+  const rate = Math.min(120, Math.max(30, Math.round(Number(hz) || 60)));
+  return FPS_CAPS.includes(cap) && cap ? Math.min(cap, rate) : rate;
+}
+
+const api = { mode, features, negotiated, rank, order, steady, fps, FPS_CAPS, RTPMAP, H265_FEATURES, MODES, DEFAULT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.TwinDeskScreenCodec = api;
 })();

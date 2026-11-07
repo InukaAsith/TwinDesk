@@ -101,8 +101,9 @@ function normalize(s) {
       volume: Math.round(num(mon.volume, 1, 0, 1) * 100) / 100,
       mute: bool(mon.mute, false),
       // Playback of shared screens, both directions, the same on both computers (pair.sync
-      // 'pace'): 'fast' (default, shown the moment it is decoded) | 'smooth' (about a frame of buffer)
-      pacing: mon.pacing === 'smooth' && (s.rev || 0) >= 8 ? 'smooth' : 'fast', // rev 8: back to Fastest once
+      // 'pace'): 'fast' (default, shown the moment it is decoded) | 'smooth' (about a frame of buffer) |
+      // 'steady' (no zero playout delay on the stream: WebRTC paces it itself, as a web browser plays it)
+      pacing: ['smooth', 'steady'].includes(mon.pacing) && (s.rev || 0) >= 8 ? mon.pacing : 'fast', // rev 8: back to Fastest once
       framegen: bool(mon.framegen, false), // in-between frames on the GPU (shared/framegen.js), off by default
     },
     // Remote tab (shared/phone-remote.js): the phone's Remote page moves the pointer and types here
@@ -175,8 +176,9 @@ function normalize(s) {
     },
     pcScreen: { // Display › PC → Mac; Off/Mirror/Extend itself is never saved
       monitor: typeof pcs.monitor === 'string' ? pcs.monitor : '', // Electron display id for Mirror ('' = main)
-      mbps: [10, 20, 30, 50].includes(pcs.mbps) ? pcs.mbps : 30, // same presets as the Mac
-      maxHeight: [0, 1080, 1440].includes(pcs.maxHeight) ? pcs.maxHeight : 1080, // stream size (0 = full pixels)
+      mbps: [10, 20, 30, 50, 80].includes(pcs.mbps) ? pcs.mbps : 30, // same presets as the Mac
+      maxHeight: [0, 1080, 1440, 2160].includes(pcs.maxHeight) ? pcs.maxHeight : 1080, // stream size (0 = full pixels)
+      fps: [0, 30, 60].includes(pcs.fps) ? pcs.fps : 0, // frame rate cap (0 = the display's refresh rate)
       extendSize: ['mac', '1920x1080', '2560x1440', '3840x2160'].includes(pcs.extendSize) ? pcs.extendSize : 'mac', // the virtual monitor
       sound: bool(pcs.sound, false), // the screen's sound in the same session
       input: bool(pcs.input, true), // the Mac's mouse and keyboard drive this PC
@@ -247,7 +249,7 @@ function pairSync(v) {
     for (const [f, d] of Object.entries(feats).slice(0, 10)) {
       if (f === 'values') {
         out[id].values = {};
-        if (d && ['fast', 'smooth'].includes(d.pace)) out[id].values.pace = d.pace;
+        if (d && ['fast', 'smooth', 'steady'].includes(d.pace)) out[id].values.pace = d.pace;
         if (d && typeof d.gestures === 'boolean') out[id].values.gestures = d.gestures;
         if (d && typeof d.keyboard === 'boolean') out[id].values.keyboard = d.keyboard; // with a phone
         if (d && typeof d.reverseScroll === 'boolean') out[id].values.reverseScroll = d.reverseScroll;

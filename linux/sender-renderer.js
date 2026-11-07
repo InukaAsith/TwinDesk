@@ -98,7 +98,9 @@ async function start(m) {
     await tr.sender.setParameters(p);
     if (!alive(me)) return;
     const kind = m.offer.kind === 'screen' && audio ? 'screen+audio' : m.offer.kind;
-    api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp: pc.localDescription.sdp, kind });
+    // Playback › Steady: no "show it now" on the frames (shared/screencodec.js steady()).
+    const sdp = m.steady ? window.TwinDeskScreenCodec.steady(pc.localDescription.sdp) : pc.localDescription.sdp;
+    api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp, kind });
     report(me, 'connecting');
     me.statsTimer = setInterval(() => stats(me), 1000);
   } catch (e) {

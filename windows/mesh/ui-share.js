@@ -38,6 +38,7 @@ UI.tab({
     const streamSize = UI.select([
       { value: 1080, label: t('1080p (1920 × 1080), fastest') },
       { value: 1440, label: t('1440p (2560 × 1440), sharper') },
+      { value: 2160, label: t('4K (3840 × 2160), sharpest') },
       { value: 0, label: t('Full size') },
     ], (v) => set({ maxHeight: Number(v) }));
     const quality = UI.select([
@@ -45,8 +46,15 @@ UI.tab({
       { value: 20, label: t('Medium, 20 Mbps') },
       { value: 30, label: t('High, 30 Mbps') },
       { value: 50, label: t('Best, 50 Mbps (wired)') },
+      { value: 80, label: t('Max, 80 Mbps (wired)') },
     ], (v) => set({ mbps: Number(v) }));
     const paceRow = UI.paceRow(); // One Playback setting, synced with the other computer
+    // Frame rate: the monitor's refresh rate unless capped (pcscreen.js; a change starts a new session).
+    const frameRate = UI.select([
+      { value: 0, label: t('Match the display') },
+      { value: 60, label: t('60 fps') },
+      { value: 30, label: t('30 fps, lighter') },
+    ], (v) => set({ fps: Number(v) }));
     const sound = UI.switch((v) => set({ sound: v }), { label: t('Include sound') });
     const input = UI.switch((v) => set({ input: v }), { label: t('Receive input') });
     const inputRow = UI.row(t('Receive input'), '', [input], { literal: true }); // "Receive input from Mac" / "from PC2"
@@ -109,7 +117,7 @@ UI.tab({
       missing,
       screens,
       UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow]),
-      UI.card(t('screen.picture'), [UI.row(t('Resolution'), '', [streamSize]), UI.row(t('Quality'), '', [quality]), paceRow], { cls: 'keep-on' }),
+      UI.card(t('screen.picture'), [UI.row(t('Resolution'), '', [streamSize]), UI.row(t('Quality'), '', [quality]), UI.row(t('Frame rate'), '', [frameRate]), paceRow], { cls: 'keep-on' }),
       UI.card(t('Sound and control'), [UI.row(t('Include sound'), '', [sound]), inputRow], { cls: 'keep-on' }),
       UI.card(t('Remote'), [remoteRow], { cls: 'keep-on' }),
       details,
@@ -134,6 +142,7 @@ UI.tab({
       extendRow.setHint(p.extendSize === 'mac' ? p.extendPx[0] + ' × ' + p.extendPx[1] : '');
       streamSize.set(p.maxHeight);
       quality.set(p.mbps);
+      frameRate.set(p.fps || 0);
       paceRow.render(s);
       sound.set(p.sound);
       input.set(p.input);

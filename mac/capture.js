@@ -89,7 +89,7 @@ async function getStream(sourceId, width, height, fps, audio) {
 
 // Every frame matters more than the last bit of sharpness: under pressure the encoder lowers
 // quality, never the frame rate (dropped frames are what feels jagged and what adds lag).
-async function start({ session, bitrateMbps, sourceId, width, height, audio, fps = 60, ice, codec }) {
+async function start({ session, bitrateMbps, sourceId, width, height, audio, fps = 60, ice, codec, steady }) {
   close();
   const me = { session, pendingIce: [], remoteSet: false, last: null };
   cur = me;
@@ -134,7 +134,9 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     p.degradationPreference = 'maintain-framerate';
     await tr.sender.setParameters(p);
     if (cur !== me) return;
-    api.send({ t: P.T.RTC_OFFER, session, sdp: pc.localDescription.sdp });
+    // Playback › Steady: no "show it now" on the frames (shared/screencodec.js steady()).
+    const sdp = steady ? window.TwinDeskScreenCodec.steady(pc.localDescription.sdp) : pc.localDescription.sdp;
+    api.send({ t: P.T.RTC_OFFER, session, sdp });
     const pl = /a=fmtp:\d+ .*profile-level-id=([0-9a-f]{6})/i.exec(pc.localDescription.sdp);
     console.log(`offer: first H.264 profile-level-id ${pl ? pl[1] : 'none'}`);
     api.state({ session, status: 'waiting for answer' });

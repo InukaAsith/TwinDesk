@@ -50,7 +50,7 @@ const DEFAULT_SETTINGS = {
   // sharing and switch Extend/Mirror (screen.ctl). pace: playback of shared screens, both
   // directions, the same on both computers (pair.sync): 'fast' (shown the moment it arrives) |
   // 'smooth' (about one frame of buffer, even motion).
-  sharing: { on: false, displayId: null, audio: false, remote: true, pace: 'fast', codec: 'h264' }, // codec: Share screen › Encoder (shared/screencodec.js)
+  sharing: { on: false, displayId: null, audio: false, remote: true, pace: 'fast', codec: 'h264', fps: 0 }, // fps: frame rate cap, 0 = the display's refresh rate (stream.js) // codec: Share screen › Encoder (shared/screencodec.js)
   virtual: { enabled: true, width: 1920, height: 1080, hiDPI: false, hz: 60 },
   bitrateMbps: 30,
   streamInput: true, // accept mouse/keyboard from Monitor 2

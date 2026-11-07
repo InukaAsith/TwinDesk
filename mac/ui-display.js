@@ -52,6 +52,7 @@ UI.tab({
     const streamSize = UI.select([
       { value: 1080, label: I18n.t('1080p, fastest') },
       { value: 1440, label: I18n.t('1440p, sharper') },
+      { value: 2160, label: I18n.t('4K (2160p), sharpest') },
       { value: 0, label: I18n.t('Full size') },
     ], (v) => api.setStreamMaxHeight(Number(v)));
     const quality = UI.select([
@@ -63,6 +64,12 @@ UI.tab({
     ], (v) => api.setBitrate(Number(v)));
 
     const paceRow = UI.paceRow();
+    // Frame rate: the display's refresh rate unless capped (stream.js; a change starts a new session).
+    const frameRate = UI.select([
+      { value: 0, label: I18n.t('Match the display') },
+      { value: 60, label: I18n.t('60 fps') },
+      { value: 30, label: I18n.t('30 fps, lighter') },
+    ], (v) => api.setSharingOpts({ fps: Number(v) }));
     const codecRow = UI.codecRow((v) => api.setSharingOpts({ codec: v }));
     const remoteSw = UI.switch((v) => api.setSharingOpts({ remote: v }), { label: I18n.t('Remote start') });
     const remoteRow = UI.row(I18n.t('Let {name} start and switch this screen'), I18n.t('Open it on {name} — no need to touch {me}'), [remoteSw]);
@@ -95,6 +102,7 @@ UI.tab({
       UI.card(I18n.t('screen.picture'), [
         UI.row(I18n.t('Resolution'), '', [streamSize]),
         UI.row(I18n.t('Quality'), '', [quality]),
+        UI.row(I18n.t('Frame rate'), '', [frameRate]),
         paceRow,
         codecRow,
       ]),
@@ -128,6 +136,7 @@ UI.tab({
 
       streamSize.set(sh.streamMaxHeight || 0);
       quality.set(sh.bitrateMbps);
+      frameRate.set(sh.fps || 0);
 
       soundSw.set(sh.audio);
       remoteSw.set(sh.remote !== false);

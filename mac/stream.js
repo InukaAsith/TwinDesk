@@ -215,7 +215,8 @@ class Stream extends EventEmitter {
       this._toWindow('start', {
         session: s, bitrateMbps: phone ? Math.min(PHONE_MBPS, set.bitrateMbps) : set.bitrateMbps, sourceId: src.id, width, height, audio,
         ice: (this.server.current && this.server.current.ice) || null, // a phone on the USB cable: through the relay
-        fps: Math.min(120, Math.max(30, Math.round(target.hz || 60))),
+        fps: ScreenCodec.fps(target.hz, set.sharing && set.sharing.fps), // Share screen › Frame rate
+        steady: !!(set.sharing && set.sharing.pace === 'steady'), // Playback › Steady (shared/screencodec.js)
         codec: ScreenCodec.mode(set.sharing && set.sharing.codec), // Share screen › Encoder
       });
     } catch (e) {

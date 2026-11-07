@@ -110,7 +110,7 @@ function setupIpc(ctx) {
   handle('checkUpdates', () => ctx.updates.check(true));
   handle('openUpdate', () => ctx.updates.open());
   handle('openLink', (key) => (key === 'logs' ? require('../shared/applog.js').open() : Object.hasOwn(LINKS, key) && shell.openExternal(LINKS[key]))); // About page: only its own links, and the log folder
-  handle('setMonitor', (partial) => change('monitor', partial, () => screen.applyAudio()));
+  handle('setMonitor', (partial) => change('monitor', partial, () => { screen.applyAudio(); pcScreen.apply(); })); // apply(): Playback › Steady takes a new session (pcscreen.js)
   handle('setClipboard', (partial) => change('clipboard', partial, () => clip.applySettings()));
   handle('copyHistory', (index) => clip.copyHistory(Number(index)));
   handle('clearHistory', () => clip.clearHistory());
@@ -290,7 +290,7 @@ function setupIpc(ctx) {
   // pairsync.js applies a value the other computer changed, with the same side effects.
   const AFTER = {
     clipboard: () => clip.applySettings(),
-    monitor: () => screen.applyAudio(), // pacing (pair.sync 'pace')
+    monitor: () => { screen.applyAudio(); pcScreen.apply(); }, // pacing (pair.sync 'pace'); Steady: a new session
     notifs: () => notifs.applySettings(),
     audio: () => sound.apply(),
     kvm: () => kvm.applyConfig(),

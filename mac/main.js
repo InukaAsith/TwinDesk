@@ -215,6 +215,7 @@ function pushState() {
         remote: settings.sharing.remote !== false,
         pace: settings.sharing.pace || 'fast',
         codec: settings.sharing.codec || 'h264', // Encoder (shared/screencodec.js)
+        fps: settings.sharing.fps || 0, // Frame rate (stream.js)
         displayId: settings.sharing.displayId,
         bitrateMbps: settings.bitrateMbps,
         streamMaxHeight: settings.streamMaxHeight,

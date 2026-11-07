@@ -25,11 +25,16 @@ let fgOn = false;
 // smooth: a 16 ms jitter buffer target and no playout delay hint (WebRTC paces frames evenly);
 // fast: both 0, every frame shown the moment it is decoded (may judder on Wi-Fi). Both are
 // nullable in Chromium, so smooth clears a hint that fast left behind.
+// steady: neither, and the answer leaves out the playout-delay extension (steadySdp), so the
+// sender's "show it now" on every frame (main.js field trial) never arrives: WebRTC's own pacing,
+// as a web browser plays it. It takes a new session: the sender starts one when Playback changes.
 function pace(receiver) {
   const fast = pacing === 'fast';
-  if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = fast ? 0 : 16;
+  const steady = pacing === 'steady';
+  if ('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = fast ? 0 : steady ? null : 16;
   if ('playoutDelayHint' in receiver) receiver.playoutDelayHint = fast ? 0 : null;
 }
+const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 // The peer's screen.state: while we wait for its picture, say what is happening.
 api.onRemote((r) => {
   if (pc || !r) return;
@@ -38,7 +43,7 @@ api.onRemote((r) => {
 });
 api.onPacing((p) => {
   const was = pacing;
-  pacing = p && p.pacing === 'smooth' ? 'smooth' : 'fast';
+  pacing = p && ['smooth', 'steady'].includes(p.pacing) ? p.pacing : 'fast';
   if (pacing !== was && pc) for (const r of pc.getReceivers()) if (r.track.kind === 'video') pace(r);
   frameGen(!!(p && p.framegen));
 });
@@ -122,7 +127,7 @@ async function onOffer(msg) {
   };
 
   try {
-    await my.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+    await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(msg.sdp) });
     if (my !== pc) return;
     pending = null;
     for (const c of queue) {

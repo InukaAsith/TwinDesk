@@ -41,10 +41,16 @@ let fg = null; // FrameGen while frame generation is on
 const bar = document.getElementById('bar');
 const btn = (id) => document.getElementById(id);
 
+// steady: no hints, and the answer leaves out the playout-delay extension (steadySdp), so the PC's
+// "show it now" on every frame (its main.js field trial) never arrives: WebRTC's own pacing, as a
+// web browser plays it. It takes a new session: the PC starts one when Playback changes.
+const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
+const paceOf = (p) => (['smooth', 'steady'].includes(p) ? p : 'fast');
+
 function applyPacing() {
   for (const r of receivers) {
     if (r.track.kind !== 'video') continue;
-    if ('jitterBufferTarget' in r) r.jitterBufferTarget = pacing === 'fast' ? 0 : 16;
+    if ('jitterBufferTarget' in r) r.jitterBufferTarget = pacing === 'fast' ? 0 : pacing === 'steady' ? null : 16;
     if ('playoutDelayHint' in r) r.playoutDelayHint = pacing === 'fast' ? 0 : null;
   }
 }
@@ -121,7 +127,7 @@ async function onOffer(m) {
   closePc();
   session = m.session;
   inputOn = m.input;
-  pacing = m.pacing === 'smooth' ? 'smooth' : 'fast';
+  pacing = paceOf(m.pacing);
   receivers = [];
   setFrameGen(!!m.framegen);
   document.body.classList.toggle('input-off', !inputOn);
@@ -149,7 +155,7 @@ async function onOffer(m) {
   };
 
   try {
-    await my.setRemoteDescription({ type: 'offer', sdp: m.sdp });
+    await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(m.sdp) });
     // H.265 when both have it, else H.264 first (hardware decode), as the PC offers it.
     for (const tr of my.getTransceivers()) {
       tr.direction = 'recvonly';
@@ -308,7 +314,7 @@ api.on((m) => {
     case 'cursor': document.body.classList.toggle('own-cursor', !!m.own); break;
     case 'volume': video.volume = Math.max(0, Math.min(1, Number(m.volume))); break;
     case 'pacing':
-      pacing = m.pacing === 'smooth' ? 'smooth' : 'fast';
+      pacing = paceOf(m.pacing);
       applyPacing();
       setFrameGen(!!m.framegen);
       break;

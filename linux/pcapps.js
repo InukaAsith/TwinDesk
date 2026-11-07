@@ -352,7 +352,8 @@ class PcApps {
         const src = sources.find((s) => s.id.startsWith('window:' + wid + ':'));
         const session = this.sender.start({
           sourceId: src ? src.id : 'window:' + wid + ':0', width: MAX_W, height: MAX_H, follow: true,
-          mbps: this.settings.pcScreen.mbps, fps: PcScreen.fps(displays.getPrimaryDisplay()),
+          mbps: this.settings.pcScreen.mbps, fps: PcScreen.fps(displays.getPrimaryDisplay(), this.settings.pcScreen.fps),
+          steady: !!(this.settings.monitor && this.settings.monitor.pacing === 'steady'), // Playback › Steady
           inset: (this.windows.find((w) => w.wid === wid) || {}).inset, offer: { kind: 'window', wid },
         });
         this.streams.set(wid, session);

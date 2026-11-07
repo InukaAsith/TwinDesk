@@ -41,11 +41,14 @@
     overlay.classList.toggle('hidden', !t);
   }
 
+  // steady: no hints, and the answer leaves out the playout-delay extension, so the computer's
+  // "show it now" on every frame never arrives: WebRTC's own pacing, as a web browser plays it.
   function pace(r) {
     const fast = pacing === 'fast';
-    if ('jitterBufferTarget' in r) r.jitterBufferTarget = fast ? 0 : 16;
+    if ('jitterBufferTarget' in r) r.jitterBufferTarget = fast ? 0 : pacing === 'steady' ? null : 16;
     if ('playoutDelayHint' in r) r.playoutDelayHint = fast ? 0 : null;
   }
+  const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 
   function closePc() {
     if (pc) pc.close();
@@ -88,7 +91,7 @@
       else if (my.connectionState === 'disconnected') setOverlay('The video connection was interrupted…');
     };
     try {
-      await my.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+      await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(msg.sdp) });
       for (const c of queue) await my.addIceCandidate(c).catch(() => {});
       if (my !== pc) return;
       pending = null;
@@ -131,7 +134,7 @@
       case 'opts':
         if (msg.name) name = msg.name;
         sound = msg.sound !== false;
-        pacing = msg.pacing === 'smooth' ? 'smooth' : 'fast';
+        pacing = ['smooth', 'steady'].includes(msg.pacing) ? msg.pacing : 'fast';
         touchMode = msg.touch === 'direct' ? 'direct' : 'pad';
         if (Number(msg.speed) > 0) speed = Number(msg.speed);
         tapClick = msg.tap === true;

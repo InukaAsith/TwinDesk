@@ -45,7 +45,7 @@ function closePc() {
 async function onOffer(m) {
   closePc();
   session = m.session;
-  pacing = m.pacing === 'smooth' ? 'smooth' : 'fast';
+  pacing = ['smooth', 'steady'].includes(m.pacing) ? m.pacing : 'fast'; // steady: as monitor.js
   const my = (pc = new RTCPeerConnection({ iceServers: [] }));
   const queue = (pending = []);
   const ms = new MediaStream();
@@ -53,7 +53,7 @@ async function onOffer(m) {
 
   my.ontrack = (e) => {
     const r = e.receiver;
-    if ('jitterBufferTarget' in r) r.jitterBufferTarget = pacing === 'fast' ? 0 : 16;
+    if ('jitterBufferTarget' in r) r.jitterBufferTarget = pacing === 'fast' ? 0 : pacing === 'steady' ? null : 16;
     if ('playoutDelayHint' in r) r.playoutDelayHint = pacing === 'fast' ? 0 : null;
     ms.addTrack(e.track);
     if (video.srcObject !== ms) video.srcObject = ms;
@@ -65,7 +65,7 @@ async function onOffer(m) {
   };
 
   try {
-    await my.setRemoteDescription({ type: 'offer', sdp: m.sdp });
+    await my.setRemoteDescription({ type: 'offer', sdp: pacing === 'steady' ? m.sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : m.sdp });
     // H.265 when both have it, else H.264 first (hardware decode), as the sender offers it.
     for (const tr of my.getTransceivers()) {
       tr.direction = 'recvonly';

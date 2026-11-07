@@ -212,6 +212,8 @@ function publishState() {
       state.sharing = {
         on: !!settings.sharing.on,
         audio: !!settings.sharing.audio,
+        pace: settings.sharing.pace || 'fast',
+        fps: settings.sharing.fps || 0, // Frame rate (stream.js)
         displayId: settings.sharing.displayId,
         bitrateMbps: settings.bitrateMbps,
         streamMaxHeight: settings.streamMaxHeight,

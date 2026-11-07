@@ -203,8 +203,10 @@ class PcScreen {
     if (!d) return this._stopSend(true);
     const rect = displays.dipToScreenRect(null, d.bounds);
     const [width, height] = this._streamSize(rect);
-    const fps = PcScreen.fps(d);
-    const key = [d.id, rect.x, rect.y, rect.width, rect.height, width, this.cfg.mbps, this.cfg.sound, fps, transport].join(',');
+    const fps = PcScreen.fps(d, this.cfg.fps);
+    // Playback › Steady is set up per session (shared/screencodec.js steady()): a change starts a new one.
+    const steady = !!(this.settings.monitor && this.settings.monitor.pacing === 'steady');
+    const key = [d.id, rect.x, rect.y, rect.width, rect.height, width, this.cfg.mbps, this.cfg.sound, fps, transport, steady].join(',');
     if (this.sending && this.sending.key === key) return;
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
     const src = sources.find((s) => s.display_id === String(d.id));
@@ -215,7 +217,7 @@ class PcScreen {
     this._stopSend(true);
     // A phone over Wi-Fi: a high rate only fills the radio's queues (latency), it isn't sharper there.
     const mbps = this.link.peerOs === P.OS.ANDROID ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
-    const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, audio: this.cfg.sound, offer: { kind: 'screen' } });
+    const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen' } });
     this.sending = { session, displayId: d.id, rect, key };
     this.stats = null;
     Object.assign(this.status, { status: 'starting', error: '', name: d.label || src.name, width: rect.width, height: rect.height });
@@ -264,8 +266,10 @@ class PcScreen {
   }
 
   // Frames per second to send: the display's refresh rate (30–120), so motion is never decimated.
-  static fps(d) {
-    return Math.min(120, Math.max(30, Math.round((d && d.displayFrequency) || 60)));
+  // cap: Share screen › Frame rate (30 or 60; 0 = the display's).
+  static fps(d, cap = 0) {
+    const hz = Math.min(120, Math.max(30, Math.round((d && d.displayFrequency) || 60)));
+    return cap === 30 || cap === 60 ? Math.min(cap, hz) : hz;
   }
 
   _stopSend(tellMac) {

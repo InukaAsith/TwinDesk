@@ -50,7 +50,7 @@ const SCHEMA = {
   smb: { connectPc: bool },
   apps: { offer: bool, onVirtual: bool, moveWindows: bool, moveKey: oneOf(['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'], 'MetaRight') }, // moveWindows: Apps › Move windows (movewin.js)
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
-  sharing: { remote: bool, pace: oneOf(['fast', 'smooth'], 'fast') },
+  sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
   phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, enterSends: bool, arrowSwipe: bool },
   mount: { on: bool },
@@ -284,8 +284,11 @@ function setupIpc(ctx) {
     },
     // Who may start our sharing, and smoothness vs. sharpness.
     setSharingOpts(partial) {
+      const was = { steady: settings.sharing.pace === 'steady', fps: settings.sharing.fps || 0 };
       setGroup('sharing', partial);
       ctx.pcView.applySettings(); // playback pace in the open viewer
+      // Steady is set up per session (the viewer's answer), the frame rate too: a new one.
+      if (ctx.stream && ctx.stream.active && (was.steady !== (settings.sharing.pace === 'steady') || was.fps !== (settings.sharing.fps || 0))) ctx.stream.restart('playback changed');
     },
     // Start/stop the other computer's sharing or switch its Extend/Mirror from here.
     remoteScreen(arg) {

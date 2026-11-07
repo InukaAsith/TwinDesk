@@ -233,13 +233,15 @@ const UI = {
     const seg = UI.segmented([
       { value: 'fast', label: I18n.t('Fastest') },
       { value: 'smooth', label: I18n.t('Smooth') },
+      { value: 'steady', label: I18n.t('Steady') },
     ], (v) => UI.api.setSharingOpts({ pace: v }));
     const row = UI.row(I18n.t('Playback'), '', [seg]);
     row.render = (s) => {
       const pace = (s.sharing && s.sharing.pace) || 'fast';
       seg.set(pace);
-      row.setHint(pace === 'smooth' ? I18n.t('Even motion, about one frame later. The same on {name}')
-        : I18n.t('Each frame the moment it arrives. The same on {name}'));
+      row.setHint(pace === 'steady' ? I18n.t('The steadiest motion, paced as a web browser plays it, a few frames later. The same on {name}')
+        : pace === 'smooth' ? I18n.t('Even motion, about one frame later. The same on {name}')
+          : I18n.t('Each frame the moment it arrives. The same on {name}'));
     };
     return row;
   },
