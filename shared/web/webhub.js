@@ -71,6 +71,7 @@ const MIME = {
   '.ico': 'image/x-icon', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
   '.heic': 'image/heic', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4',
   '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8', '.zip': 'application/zip',
+  '.shortcut': 'application/octet-stream',
 };
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
