@@ -5,6 +5,13 @@ TwinDesk is licensed under the GNU General Public License v3.0 (see LICENSE).
 It includes or adapts the following works.
 
 
+jsQR
+----
+Source:  https://github.com/cozmo/jsQR (npm jsqr 1.4.0, dist/jsQR.js)
+Used in: web/vendor/jsQR.js (unchanged): TwinDesk Web's QR code scanner on the pairing page
+License: Apache-2.0 — Copyright 2017 Cosmo Wolfe (full text: https://www.apache.org/licenses/LICENSE-2.0)
+
+
 Beamer
 ------
 Source:  https://github.com/kalkman-code/beamer

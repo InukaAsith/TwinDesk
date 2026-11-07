@@ -83,6 +83,7 @@ UI.tab({
     const adb = UI.adbCard();
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null;
     const pairedList = el('div');
+    const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
 
     body.append(
       permCard,
@@ -92,6 +93,7 @@ UI.tab({
       hero,
       adb.el,
       UI.card(tr('Paired'), [pairedList]),
+      ...(webCard ? [webCard.el] : []),
     );
 
     let foundKey = '';
@@ -153,6 +155,7 @@ UI.tab({
     }
 
     const update = (s) => {
+      if (webCard) webCard.render(s);
       last = s;
       const p = UI.names(s);
       bleSw.set(!s.net || s.net.ble !== false);

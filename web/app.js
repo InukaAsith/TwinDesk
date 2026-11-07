@@ -223,6 +223,8 @@
     remote: null, // remote.state
     cam: { on: false, status: 'off', facing: 'user', stream: null },
     mic: { on: false, status: 'off', stream: null },
+    scr: { on: false, status: 'off', stream: null }, // this device's screen on the computer
+    allow: {}, // what the computer lets this device do (policy)
     listening: false, // the computer's sound without the picture
     alerts: null, push: false, // the computer's alert settings for this device, and whether it pushes
     devs: null, // {can, state}: the computer's ring, lock, sleep…
@@ -262,17 +264,42 @@
     }
   }
 
-  // On plain http (the QR code's address), move to the secure page when this device trusts it: by
-  // name first (the same whatever address the computer has), then by address.
-  async function upgrade() {
-    if (location.protocol !== 'http:') return false;
+  // One device, several addresses (twindesk.local, the computer's name, its IP; http and https), and
+  // each keeps its own storage: the pairing goes along in the address whenever the page moves, so
+  // whichever one is typed ends up signed in.
+  const credsHash = (c) => (c && c.id && c.key ? `d=${encodeURIComponent(c.id)}&k=${encodeURIComponent(c.key)}` : '');
+  function carry(extra) {
     const h = hashParams();
-    const host = h.get('h') || (load().pc && load().pc.host);
+    const st = load();
+    if (!h.get('d') && st.creds) for (const [k, v] of new URLSearchParams(credsHash(st.creds))) h.set(k, v);
+    h.delete('hop');
+    for (const [k, v] of Object.entries(extra || {})) h.set(k, v);
+    const out = h.toString();
+    return out ? `#${out}` : '';
+  }
+
+  // On plain http (the QR code's address, twindesk.local), move to the secure page when this device
+  // trusts it: by name first (the same whatever address the computer has), then by address. On https
+  // with no pairing here, look once on the plain address, where an earlier pairing may be.
+  async function upgrade() {
+    const h = hashParams();
+    const st = load();
+    const host = h.get('h') || (st.pc && st.pc.host) || (/\.local$/.test(location.hostname) ? location.hostname : '');
+    if (location.protocol === 'https:') {
+      if (st.creds || h.get('d') || h.get('pair') || h.get('hop')) return false;
+      try { if (sessionStorage.getItem('twindesk.web.hopped')) return false; sessionStorage.setItem('twindesk.web.hopped', '1'); } catch (_) {}
+      const ping = await reachable('');
+      const ip = ping && ping.ip;
+      if (!ip) return false;
+      location.replace(`http://${ip}:${(Number(location.port) || 47870) + 1}/${location.search}#hop=1&h=${encodeURIComponent(ping.host || host)}&p=${Number(location.port) || 47870}`);
+      return true;
+    }
+    if (location.protocol !== 'http:') return false;
     const port = Number(h.get('p')) || Number(location.port) - 1 || 47870;
-    const keep = location.hash;
+    const back = h.get('hop') && !st.creds; // came here looking for a pairing: none, back to https to pair
     for (const base of [host && `https://${host}:${port}`, `https://${location.hostname}:${port}`].filter(Boolean)) {
       if (await reachable(base)) {
-        location.replace(`${base}/${location.search}${keep}`);
+        location.replace(`${base}/${location.search}${back ? `#hop=2&h=${encodeURIComponent(host)}&p=${port}` : carry()}`);
         return true;
       }
     }
@@ -294,7 +321,7 @@
     o.creds = S.creds;
     o.pc = S.pc;
     save(o);
-    const frag = `d=${encodeURIComponent(S.creds.id)}&k=${encodeURIComponent(S.creds.key)}`;
+    const frag = credsHash(S.creds);
     history.replaceState(null, '', `/#${frag}`);
     const m = $('manifest');
     if (m) m.href = `/manifest.webmanifest?h=${encodeURIComponent(frag)}`;
@@ -322,6 +349,7 @@
 
   function connect() {
     clearTimeout(retry);
+    if (S.paused) return;
     if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
     const sock = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
     ws = sock;
@@ -329,13 +357,21 @@
     sock.onopen = () => {
       tries = 0;
       if (S.creds) sock.send(JSON.stringify({ t: 'hello', id: S.creds.id, key: S.creds.key, os: ME.os, model: ME.model, name: load().name || '' }));
-      else if (S.pairCode && S.pairCode.length === 6) pair(S.pairCode);
+      else if (S.pairCode && S.pairCode.length === 6 && !holdForInstall()) pair(S.pairCode);
     };
     sock.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } onMessage(m); };
     sock.onclose = (e) => {
       if (ws !== sock) return;
       ws = null;
       if (e.code === 4001) return dropCreds('This device was removed on the computer. Pair again to reconnect.');
+      if (e.code === 4002 || S.paused) { // Disconnect, here or on the computer: off until Connect
+        S.paused = S.paused || 'computer';
+        S.conn = 'paused';
+        stopCam(true); stopMic(true);
+        closeOverlay(true);
+        keepAlive(false);
+        return render();
+      }
       if (S.creds) {
         S.conn = tries > 1 ? 'offline' : 'connecting';
         stopCam(true); stopMic(true);
@@ -344,6 +380,22 @@
       }
       retry = setTimeout(connect, Math.min(10000, 800 * 2 ** tries++));
     };
+  }
+
+  // Disconnect (the Overview's button): closed until Connect, still paired.
+  function disconnectHere() {
+    S.paused = 'here';
+    clearTimeout(retry);
+    if (ws) try { ws.close(1000, 'disconnect'); } catch (_) {}
+    S.conn = 'paused';
+    render();
+  }
+  function reconnect() {
+    S.paused = '';
+    tries = 0;
+    S.conn = 'connecting';
+    render();
+    connect();
   }
 
   function pair(code) {
@@ -374,6 +426,7 @@
         break;
       case 'unknown': return dropCreds('This device is no longer paired with the computer. Pair again to reconnect.');
       case 'forgotten': return dropCreds('This device was removed on the computer.');
+      case 'disconnected': S.paused = 'computer'; break;
       case 'bad-code':
         S.pairErr = m.why === 'off' ? 'TwinDesk Web is turned off on that computer.' : m.wait ? `Too many attempts. Try again in ${m.wait} seconds.` : 'Incorrect code. Check the code in TwinDesk › TwinDesk Web on the computer.';
         renderPage();
@@ -386,6 +439,11 @@
         if (m.item.from === 'pc' && !document.hidden && cur !== 'drop' && cur !== 'files') toast(m.item.file ? `${pcName()} sent ${m.item.file.name}` : `${pcName()}: ${String(m.item.text).slice(0, 60)}`);
         refresh('files', 'drop', 'overview');
         break;
+      case 'chat.state': {
+        const x = S.chat.find((i) => i.id === m.id);
+        if (x && x.file) { x.file.got = m.got || 0; x.file.saved = m.saved || 0; refresh('files'); }
+        break;
+      }
       case 'chat.gone': S.chat = S.chat.filter((x) => x.id !== m.id); refresh('files', 'drop', 'overview'); break;
       case 'notifs.all': S.notifs = m.items || []; S.notifsOn = true; refresh('notifications'); break;
       case 'notif':
@@ -432,6 +490,15 @@
       case 'alert': localAlert(m); break;
       case 'push.result':
         toast(m.ok ? (m.local ? 'Test sent. It appears when TwinDesk is in the background.' : 'Test sent. Lock this device or switch apps to see it.') : `The test was not delivered${m.status ? ` (push service error ${m.status})` : m.why ? `: ${m.why}` : ''}`);
+        break;
+      case 'policy': S.allow = m.allow || {}; renderPage(); break;
+      case 'scr.answer': case 'scr.ice': answerIn('scr', m); break;
+      case 'scr.state':
+        S.scr.status = m.status;
+        if (m.status.startsWith('error')) { toast(m.status.replace(/^error: /, '')); stopScr(true); }
+        if (m.status === 'off' && S.scr.on) { if (m.why) toast(m.why); stopScr(true); }
+        presentBar();
+        refresh('send');
         break;
       case 'dev.state': S.devs = { can: m.can || {}, state: m.state || {} }; refresh('overview'); break;
       case 'dev.error': toast(`Could not ${m.do}: ${m.why}`); break;
@@ -530,7 +597,7 @@
       dot.className = `dot${online() ? ' good' : S.conn === 'connecting' || S.conn === 'boot' ? ' warn' : ''}`;
       who.textContent = !S.creds ? (S.serving ? `Not connected · ${S.serving.name} available` : 'Not connected')
         : online() ? [pcName(), S.rtt != null ? `${S.rtt} ms` : ''].filter(Boolean).join(' · ')
-          : S.conn === 'offline' ? `${pcName()} · Not reachable` : `${pcName()} · Connecting…`;
+          : S.conn === 'paused' ? `${pcName()} · Disconnected` : S.conn === 'offline' ? `${pcName()} · Not reachable` : `${pcName()} · Connecting…`;
     };
     e.update();
     return e;
@@ -616,19 +683,32 @@
     renderNav();
   }
 
+  // What the computer turned off for this device (its pages in TwinDesk there): said at the top of the page.
+  const POLICY = {
+    receive: [['screen', 'Viewing the screen']], sound: [['sound', 'Computer audio'], ['mic', 'The microphone']],
+    clipboard: [['clipOut', 'Receiving the clipboard'], ['clipIn', 'Sending the clipboard']], notifications: [['notifs', 'Notifications']],
+    files: [['files', 'Sending files']], camera: [['camera', 'The camera']], remote: [['control', 'Control']], send: [['share', 'Sharing this screen']],
+  };
+  function policyNote(v) {
+    const off = (POLICY[cur] || []).filter(([k]) => S.allow && S.allow[k] === false).map(([, label]) => label);
+    if (!v.policy) { v.policy = el('div', { class: 'note warn policy' }); v.el.prepend(v.policy); }
+    v.policy.hidden = !off.length || !S.creds;
+    v.policy.textContent = off.length ? `${off.join(' and ')} ${off.length > 1 ? 'are' : 'is'} turned off for this ${ME.kind} on ${pcName()}. Turn ${off.length > 1 ? 'them' : 'it'} on in TwinDesk there, on this device’s page.` : '';
+  }
   function renderPage() {
     if (topEl) topEl.update();
     const v = built.get(cur);
-    if (v && !more) { try { v.render(); } catch (e) { console.error(e); } }
+    if (v && !more) { try { policyNote(v); v.render(); } catch (e) { console.error(e); } }
   }
   function refresh(...ids) {
     if (!more && ids.includes(cur)) renderPage();
     if (ids.some((i) => ['notifications', 'receive', 'camera', 'sound', 'background'].includes(i))) renderNav();
   }
   function render() { renderTop(); renderNav(); renderPage(); }
-  const offlineNote = () => note(S.conn === 'offline' ? `${pcName()} is not reachable. Make sure TwinDesk is open on it and both devices are on the same network.` : `Connecting to ${pcName()}…`, 'warn');
+  const offlineNote = () => note(S.conn === 'paused' ? `Disconnected${S.paused === 'computer' ? ` on ${pcName()}` : ''}. Still paired: Connect when you want it back.` : S.conn === 'offline' ? `${pcName()} is not reachable. Make sure TwinDesk is open on it and both devices are on the same network.` : `Connecting to ${pcName()}…`, 'warn');
   const needOnline = () => { if (online()) return true; toast(`Not connected to ${pcName()}`); return false; };
-  const statusText = () => (online() ? ['Connected', S.rtt != null ? `${S.rtt} ms` : '', S.secure ? 'Secure' : ''].filter(Boolean).join(' · ') : S.conn === 'offline' ? 'Not reachable' : 'Connecting…');
+  const statusText = () => (online() ? ['Connected', S.rtt != null ? `${S.rtt} ms` : '', S.secure ? 'Secure' : ''].filter(Boolean).join(' · ')
+    : S.conn === 'paused' ? (S.paused === 'computer' ? `Disconnected on ${pcName()}` : 'Disconnected') : S.conn === 'offline' ? 'Not reachable' : 'Connecting…');
   const osName = (os) => ({ mac: 'macOS', win: 'Windows', linux: 'Linux' }[os] || '');
   const chev = () => el('span', { class: 'chev', text: '›' });
   const link = (text, fn) => el('a', { href: '#', class: 'act', text, onclick: (e) => { e.preventDefault(); fn(); } });
@@ -672,18 +752,41 @@
     const input = el('input', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: '6', autocomplete: 'one-time-code', 'aria-label': 'Pairing code' });
     const goBtn = btn('Connect', null, 'primary big');
     const err = note('', 'bad');
+    // The six boxes are made once, the input stays where it is: moving a focused input (iOS) drops
+    // its keyboard, so the code couldn't be typed.
+    const cells = [0, 1, 2, 3, 4, 5].map(() => el('span'));
+    boxes.replaceChildren(...cells, input);
     const paint = () => {
       const v = input.value.replace(/\D/g, '').slice(0, 6);
       if (v !== input.value) input.value = v;
-      boxes.replaceChildren(...[0, 1, 2, 3, 4, 5].map((i) => el('span', { class: i === Math.min(v.length, 5) && document.activeElement === input ? 'cur' : '', text: v[i] || '' })), input);
+      cells.forEach((c, i) => {
+        c.textContent = v[i] || '';
+        c.className = i === Math.min(v.length, 5) && document.activeElement === input ? 'cur' : '';
+      });
       goBtn.disabled = v.length !== 6;
     };
+    boxes.onclick = () => input.focus();
     input.oninput = () => { paint(); if (input.value.length === 6) submit(); };
     input.onfocus = input.onblur = paint;
     const submit = () => { if (input.value.length === 6) { S.pairErr = ''; pair(input.value); goBtn.textContent = 'Connecting…'; setTimeout(() => { goBtn.textContent = 'Connect'; }, 3000); } };
     goBtn.onclick = submit;
     if (S.pairCode) input.value = S.pairCode;
     paint();
+    // A QR code from the computer's TwinDesk Web page: its code (and, for another computer, its address).
+    const scanBtn = btn('Scan QR Code', () => scanQr((text) => {
+      let u = null;
+      try { u = new URL(text); } catch (_) { return toast('That isn’t a TwinDesk QR code'); }
+      const h = new URLSearchParams(u.hash.slice(1));
+      const code = (h.get('pair') || '').replace(/\D/g, '').slice(0, 6);
+      if (code.length !== 6) return toast('That isn’t a TwinDesk QR code');
+      const host = h.get('h');
+      const here = (S.serving && S.serving.host) || location.hostname;
+      if (host && host !== here && u.host !== location.host) return location.assign(u.href); // another computer
+      input.value = code;
+      paint();
+      submit();
+    }), 'big', 'camera');
+    const installBox = installFirst();
     const serve = el('div', { class: 'desc' });
     const F = [
       ['display', ['#5AC8FA', '#0A84FF'], 'Screen sharing', 'View and control your computer, with audio'],
@@ -698,7 +801,7 @@
       el('h1', { text: 'TwinDesk' }),
       el('p', { text: 'Your computers and phone, working as one: screen, files, clipboard and input, shared across devices. Free and open source.' }),
     ]);
-    const connect = card('Connect to a computer', [el('div', { class: 'pair-box' }, [serve, boxes, goBtn, err,
+    const connect = card('Connect to a computer', [el('div', { class: 'pair-box' }, [serve, installBox, boxes, goBtn, scanBtn, err,
       el('div', { class: 'desc', text: `On the computer, open TwinDesk › TwinDesk Web. Scan the QR code${ME.mobile ? ' with your camera' : ''} or enter the six-digit code above.` })])]);
     const feat = el('div', { class: 'feat' }, F.map(([i, c, t, d]) => el('div', {}, [tile(i, c, 34), el('b', { text: t }), el('span', { text: d })])));
     const dl = downloads();
@@ -708,9 +811,124 @@
       serve.textContent = S.serving ? `${S.serving.name} is ready to pair. You only need to pair once.` : 'You only need to pair once.';
       err.textContent = S.pairErr;
       err.hidden = !S.pairErr;
+      installBox.update();
       paint();
     };
   };
+
+  // ---- Install before pairing ----
+  // An iPhone's Home Screen app keeps its own storage, apart from Safari's: paired in Safari, the app
+  // opens unpaired. So on an iPhone or iPad the page offers the Home Screen first and waits to pair;
+  // the app then opens with this pairing code (the manifest's start_url). Elsewhere the installed app
+  // shares the browser's storage: Install is offered, pairing goes on either way.
+  const HOLD_KEY = 'twindesk.web.pairHere';
+  const holdForInstall = () => ME.apple && !STANDALONE && !S.creds && sessionStorage.getItem(HOLD_KEY) !== '1';
+  function pendingFrag() {
+    const h = new URLSearchParams();
+    if (S.pairCode) h.set('pair', S.pairCode);
+    const q = hashParams();
+    for (const k of ['h', 'p', 'hop']) if (q.get(k)) h.set(k, q.get(k));
+    return h.toString();
+  }
+  function installFirst() {
+    const box = el('div', { class: 'install-first' });
+    box.update = () => {
+      if (STANDALONE || S.creds) { box.hidden = true; return; }
+      const frag = pendingFrag();
+      const m = $('manifest');
+      if (m && frag) m.href = `/manifest.webmanifest?h=${encodeURIComponent(frag)}`; // the app opens with the code
+      if (frag && location.hash.slice(1) !== frag) history.replaceState(null, '', `/#${frag}`);
+      if (ME.apple) {
+        const hold = holdForInstall();
+        box.hidden = false;
+        box.replaceChildren(
+          el('b', { text: hold ? 'First, add TwinDesk to your Home Screen' : 'Add TwinDesk to your Home Screen' }),
+          el('ol', {}, [
+            el('li', { html: 'Tap <b>Share</b> (the square with an arrow) in Safari.' }),
+            el('li', { html: 'Choose <b>Add to Home Screen</b>, then <b>Add</b>.' }),
+            el('li', { text: 'Open TwinDesk from the Home Screen: it pairs there and stays connected.' }),
+          ]),
+          el('div', { class: 'desc', text: 'The Home Screen app keeps its own sign-in, apart from Safari, so pair it inside the app.' }),
+          hold ? link('Pair here in Safari instead', () => { sessionStorage.setItem(HOLD_KEY, '1'); render(); if (S.pairCode && S.pairCode.length === 6) pair(S.pairCode); }) : null,
+        );
+      } else {
+        const b = installBtn();
+        box.hidden = b.hidden;
+        box.replaceChildren(el('b', { text: 'Install TwinDesk as an app' }), el('div', { class: 'desc', text: 'It opens like an app, with alerts and shortcuts.' }), b);
+      }
+    };
+    box.update();
+    return box;
+  }
+
+  // ---- QR scanner: the camera where the page may use it (https), else a photo of the code ----
+  let jsQrLoad = null;
+  const loadJsQr = () => jsQrLoad || (jsQrLoad = new Promise((ok, no) => {
+    const sc = document.createElement('script');
+    sc.src = '/vendor/jsQR.js';
+    sc.onload = () => (window.jsQR ? ok(window.jsQR) : no(new Error('no decoder')));
+    sc.onerror = () => { jsQrLoad = null; no(new Error('the decoder didn’t load')); };
+    document.head.append(sc);
+  }));
+  const decodeFrom = (jsQR, src, w, h) => {
+    const k = Math.min(1, 1024 / Math.max(w, h));
+    const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(src, 0, 0, cw, ch);
+    const r = jsQR(g.getImageData(0, 0, cw, ch).data, cw, ch, { inversionAttempts: 'attemptBoth' });
+    return r && r.data;
+  };
+  function scanQr(done) {
+    const live = !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    if (!live) return scanPhoto(done);
+    const video = el('video', { class: 'qr-video', playsinline: '', muted: '', autoplay: '' });
+    video.muted = true;
+    video.setAttribute('playsinline', '');
+    const close = btn('Cancel', () => stop(), 'big');
+    const photo = link('Use a photo instead', () => { stop(); scanPhoto(done); });
+    const sheet = el('div', { class: 'qr-sheet' }, [
+      el('div', { class: 'qr-frame' }, [video, el('div', { class: 'qr-aim' })]),
+      el('div', { class: 'desc', text: 'Point the camera at the QR code in TwinDesk Web on the computer.' }),
+      photo, close,
+    ]);
+    document.body.append(sheet);
+    let stream = null;
+    let on = true;
+    const stop = () => { on = false; if (stream) stream.getTracks().forEach((t) => t.stop()); sheet.remove(); };
+    Promise.all([loadJsQr(), navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })]).then(([jsQR, st]) => {
+      stream = st;
+      if (!on) return stop();
+      video.srcObject = st;
+      video.play().catch(() => {});
+      const tick = () => {
+        if (!on) return;
+        if (video.readyState >= 2 && video.videoWidth) {
+          const text = decodeFrom(jsQR, video, video.videoWidth, video.videoHeight);
+          if (text) { stop(); return done(text); }
+        }
+        setTimeout(() => requestAnimationFrame(tick), 120);
+      };
+      tick();
+    }, (e) => { stop(); toast(e && e.name === 'NotAllowedError' ? 'Camera access is off: use a photo of the code' : 'The camera isn’t available here'); scanPhoto(done); });
+  }
+  function scanPhoto(done) {
+    const pick = el('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: '' });
+    document.body.append(pick);
+    pick.onchange = async () => {
+      const f = pick.files && pick.files[0];
+      pick.remove();
+      if (!f) return;
+      try {
+        const jsQR = await loadJsQr();
+        const img = await createImageBitmap(f);
+        const text = decodeFrom(jsQR, img, img.width, img.height);
+        if (text) done(text); else toast('No QR code in that photo');
+      } catch (e) { toast('Couldn’t read that photo'); }
+    };
+    pick.click();
+  }
 
   function downloads() {
     const v = (S.pc && S.pc.version) || (S.serving && S.serving.version) || '';
@@ -779,7 +997,7 @@
       const st = (S.devs && S.devs.state) || {};
       const ringing = !!st.ringing;
       name.textContent = pcName();
-      dot.className = `dot${online() ? ' good' : S.conn === 'offline' ? '' : ' warn'}`;
+      dot.className = `dot${online() ? ' good' : S.conn === 'offline' || S.conn === 'paused' ? '' : ' warn'}`;
       stText.textContent = [statusText(), osName(S.pc && S.pc.os)].filter(Boolean).join(' · ');
       const A = online() ? [
         btn('Show screen', () => openViewer(), 'primary', 'display'),
@@ -787,6 +1005,10 @@
         can.ring && btn(ringing ? 'Stop ringing' : 'Ring', () => { haptic(); send({ t: 'dev.do', do: ringing ? 'ringStop' : 'ring' }); st.ringing = !ringing; renderPage(); }, ringing ? 'on' : '', 'ring'),
         can.lock && btn('Lock', () => { haptic(); send({ t: 'dev.do', do: 'lock' }); toast(`Locking ${pcName()}`); }, '', 'lock'),
         can.sleep && btn('Sleep', () => { haptic(); send({ t: 'dev.do', do: 'sleep' }); toast(`Putting ${pcName()} to sleep`); }, '', 'sleep'),
+        btn('Disconnect', () => disconnectHere(), '', 'stop'),
+      ] : S.conn === 'paused' ? [
+        btn('Connect', () => reconnect(), 'primary'),
+        btn('Use another computer', () => forgetHere()),
       ] : [
         btn('Try again', () => { tries = 0; connect(); }, 'primary'),
         btn('Use another computer', () => forgetHere()),
@@ -847,7 +1069,7 @@
     return () => {
       hd.desc(`This ${ME.kind} reconnects to ${pcName()} automatically, even when either device's network address changes.`);
       h.update([]);
-      status.set(online() ? 'Connected' : S.conn === 'offline' ? 'Not reachable' : 'Connecting…');
+      status.set(statusText().split(' · ')[0]);
       rtt.set(online() && S.rtt != null ? `${S.rtt} ms` : '');
       sec.set(S.secure ? 'Encrypted (HTTPS)' : 'Not encrypted');
       const key = JSON.stringify([S.pc && S.pc.host, S.pc && S.pc.ips, location.host]);
@@ -1028,6 +1250,31 @@
     return () => {
       const name = pcName();
       hd.desc(`Show this ${ME.kind}’s screen on ${name}.`);
+      let share = null;
+      if (CAN_SHARE) {
+        const vt = S.scr.stream && S.scr.stream.getVideoTracks()[0];
+        const audio = sw((on) => { prefs.scrAudio = on; savePrefs(); });
+        audio.checked = prefs.scrAudio !== false;
+        audio.disabled = S.scr.on;
+        const prev = el('video', { class: 'present-prev', muted: true, playsinline: true, autoplay: true });
+        prev.muted = true;
+        if (S.scr.stream) { prev.srcObject = S.scr.stream; prev.play().catch(() => {}); }
+        const stage = S.scr.on
+          ? el('div', { class: 'present-stage' }, [prev, el('div', { class: 'present-live' }, [el('span', { class: 'dot' + (S.scr.status === 'live' ? ' on' : '') }), S.scr.status === 'live' ? `Live on ${name}` : 'Connecting…'])])
+          : el('div', { class: 'present-stage idle', onclick: () => { if (needOnline()) startScr(); } }, [tile('share', PAGE.send.c, 54), el('b', { text: `Present to ${name}` }), el('span', { class: 'muted', text: ME.os === 'android' ? 'Shares this phone’s screen in a window there.' : 'Choose a screen, a window or a tab. It opens in a window there.' })]);
+        share = el('div', {}, [
+          stage,
+          el('div', { class: S.scr.on && !ME.mobile ? 'two' : 'one', style: 'margin:14px 0 18px;display:grid' }, S.scr.on
+            ? [ME.mobile ? null : btn('Share another', () => switchScr(), 'big', 'display'), btn('Stop presenting', () => stopScr(), 'big danger')].filter(Boolean)
+            : [btn('Start presenting', () => { if (needOnline()) startScr(); }, 'primary big', 'share')]),
+          card('', [
+            row('Share audio', S.scr.on ? `${S.scr.stream && S.scr.stream.getAudioTracks().length ? 'Sound is going' : 'No sound in this share'}. Change it next time you start.` : ME.os === 'android' ? 'Where Android allows it (Android 10 and later, for apps that let it).' : 'The tab’s sound, or the whole computer’s where the browser offers it (Chrome and Edge on Windows and ChromeOS).', [audio]),
+            S.scr.on && vt ? row('Showing', scrWhat(vt).replace(/^./, (c) => c.toUpperCase())) : null,
+          ].filter(Boolean)),
+        ]);
+      } else if (!ME.apple) {
+        share = card('', [row('This browser can’t share its screen', ME.os === 'android' ? 'Use Chrome for Android, or AirPlay or screen casting if the computer has it turned on.' : 'Use Chrome, Edge or Firefox, or AirPlay if this device has it.')]);
+      }
       if (ME.apple) {
         body.replaceChildren(
           el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('airplay', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: `AirPlay to ${name}` }), el('div', { class: 'muted', text: `${name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.` })]),
@@ -1045,6 +1292,7 @@
         );
       } else if (ME.os === 'android') {
         body.replaceChildren(
+          share,
           card('', [row('TwinDesk for Android', `Shares this phone’s screen and audio with ${name}, and lets ${name} control it.`, [el('a', { class: 'btn small primary', href: 'https://github.com/InukaAsith/TwinDesk/releases/latest', target: '_blank', rel: 'noopener', text: 'Download' })])]),
           card('Screen casting', [el('ol', { class: 'steps' }, [
             el('li', { html: 'Open Quick Settings and tap <b>Screen cast</b> (or Smart View).' }),
@@ -1052,7 +1300,7 @@
           ])]),
         );
       } else {
-        body.replaceChildren(card('', [row('Install TwinDesk on this computer', `TwinDesk shares this screen with ${name} as an extended or mirrored display, with keyboard and mouse.`)]), downloads());
+        body.replaceChildren(share, card('', [row('Install TwinDesk on this computer', `TwinDesk shares this screen with ${name} as an extended or mirrored display, with keyboard and mouse.`)]), downloads());
       }
     };
   };
@@ -1060,6 +1308,10 @@
   // ---- Files ----
   BUILD.files = (page) => {
     const hd = head('Files');
+    // Send: from here to the computer. Receive: what the computer sent, waiting to be saved here.
+    let view = 'send';
+    const tabs = seg([['send', 'Send'], ['receive', 'Receive']], () => view, (v) => { view = v; shown = ''; queueMicrotask(paint); }, 'full');
+    const tabsWrap = el('div', { style: 'margin-bottom:18px' }, [tabs]);
     const zone = el('div', { class: 'dropzone', onclick: () => pickFiles() }, [tile('up', PAGE.files.c, 46), el('b', { text: 'Drop files here to send' }), el('span', { text: 'or click to choose files' })]);
     const actions = el('div', { class: 'two', style: 'margin-bottom:18px' }, [
       el('button', { class: 'btn primary big', onclick: () => pickFiles() }, [icon('up'), 'Choose files']),
@@ -1067,43 +1319,94 @@
     ]);
     const prog = el('div', { class: 'card' });
     const progWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: 'Sending' }), prog]);
-    const recv = el('div', { class: 'card' });
-    const recvWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Received' }), el('span', { class: 'muted act rc' })]), recv]);
     const sent = el('div', { class: 'card' });
     const sentWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: 'Sent' }), sent]);
+    const wait = el('div', { class: 'card' });
+    const saveAll = el('button', { class: 'muted act', text: 'Save All' });
+    const waitWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Waiting' }), saveAll]), wait]);
+    const done = el('div', { class: 'card' });
+    const doneWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Saved' }), el('button', { class: 'muted act', text: 'Clear', onclick: () => { for (const x of incoming().filter((i) => i.file.saved)) send({ t: 'chat.del', id: x.id }); } })]), done]);
     const empty = el('div', { class: 'empty' });
+    const sendPart = el('div', {}, [zone, actions, progWrap, sentWrap]);
+    const recvPart = el('div', {}, [waitWrap, doneWrap]);
     let depth = 0;
     page.ondragenter = (e) => { e.preventDefault(); depth++; zone.classList.add('over'); };
     page.ondragleave = () => { if (--depth <= 0) { depth = 0; zone.classList.remove('over'); } };
     page.ondragover = (e) => { e.preventDefault(); };
-    page.ondrop = (e) => { e.preventDefault(); depth = 0; zone.classList.remove('over'); if (e.dataTransfer.files.length) upload([...e.dataTransfer.files]); };
-    page.append(hd, zone, actions, progWrap, recvWrap, sentWrap, empty);
+    page.ondrop = (e) => { e.preventDefault(); depth = 0; zone.classList.remove('over'); if (e.dataTransfer.files.length) { view = 'send'; upload([...e.dataTransfer.files]); } };
+    page.append(hd, tabsWrap, sendPart, recvPart, empty);
+    const files = () => S.chat.filter((x) => x.file && x.kind === 'files');
+    const incoming = () => files().filter((x) => x.from === 'pc').reverse();
+    // Save All: one download each on a computer; on a phone the share sheet takes them together.
+    saveAll.onclick = async () => {
+      const list = incoming().filter((x) => !x.file.saved);
+      if (!list.length) return;
+      if (ME.mobile && navigator.canShare) {
+        try {
+          const fs = await Promise.all(list.map(async (x) => new File([await (await fetch(fileUrl(x))).blob()], x.file.name)));
+          if (navigator.canShare({ files: fs })) return void (await navigator.share({ files: fs }));
+        } catch (e) { if (e && e.name === 'AbortError') return; }
+      }
+      list.forEach((x, i) => setTimeout(() => { const a = el('a', { href: fileUrl(x), download: x.file.name }); document.body.append(a); a.click(); a.remove(); }, i * 400));
+    };
     let shown = '';
-    return () => {
-      hd.desc(`Files you send are saved to ${pcName()}’s Downloads folder and placed on its clipboard, ready to paste with ⌃⌥V.`);
+    let seen = 0;
+    const paint = () => {
+      const got = incoming();
+      const waiting = got.filter((x) => !x.file.saved);
+      // A new file from the computer: show Receive.
+      if (got.length > seen && got.some((x) => !x.file.saved && Date.now() - x.at < 15000)) view = 'receive';
+      seen = got.length;
+      hd.desc(view === 'send'
+        ? `Files you send are saved in ${pcName()}’s received files folder (Downloads unless changed there). To put them somewhere else, press the Paste Files shortcut (⌃⌥V) on ${pcName()}.`
+        : `Files ${pcName()} sends from its Files page wait here until you save them. Photos and messages sent in Drop stay in Drop.`);
+      tabs.paint();
+      const badge = waiting.length ? ` (${waiting.length})` : '';
+      tabs.children[1].textContent = `Receive${badge}`;
+      const ups = [...S.uploads.values()].filter((u) => u.to !== 'drop');
+      const key = JSON.stringify([view, files().map((x) => [x.id, x.file.got, x.file.saved]), ups.map((u) => Math.round(u.sent / Math.max(1, u.size) * 50))]);
+      if (key === shown) return;
+      shown = key;
+      sendPart.hidden = view !== 'send';
+      recvPart.hidden = view !== 'receive';
       const touchOnly = ME.mobile && !IPAD;
       zone.hidden = touchOnly;
       actions.hidden = !touchOnly;
-      const key = JSON.stringify([S.chat.filter((x) => x.file).map((x) => x.id), [...S.uploads.values()].map((u) => Math.round(u.sent / Math.max(1, u.size) * 50))]);
-      if (key === shown) return;
-      shown = key;
-      const files = S.chat.filter((x) => x.file);
-      const got = files.filter((x) => x.from === 'pc').reverse();
-      const out = files.filter((x) => x.from !== 'pc').reverse();
-      recvWrap.querySelector('.rc').textContent = got.length ? String(got.length) : '';
-      prog.replaceChildren(...[...S.uploads.values()].map((u) => {
-        const r = row(u.name, `${bytes(u.sent)} of ${bytes(u.size)}`, [el('span', { class: 'spin' })]);
-        r.querySelector('.text').append(el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round(u.sent / Math.max(1, u.size) * 100)}%` })]));
-        return r;
-      }));
-      progWrap.hidden = !S.uploads.size;
-      recv.replaceChildren(...got.slice(0, 60).map((x) => fileRow(x, [btn('Remove', () => send({ t: 'chat.del', id: x.id }), 'small')])));
-      recvWrap.hidden = !got.length;
-      sent.replaceChildren(...out.slice(0, 40).map((x) => fileRow(x)));
-      sentWrap.hidden = !out.length;
-      empty.replaceChildren(el('div', { text: `No files yet. Files sent from ${pcName()} appear here.` }));
-      empty.hidden = !!(got.length || out.length || S.uploads.size);
+      if (view === 'send') {
+        const out = files().filter((x) => x.from !== 'pc').reverse();
+        prog.replaceChildren(...ups.map((u) => {
+          const r = row(u.name, `${bytes(u.sent)} of ${bytes(u.size)}`, [el('span', { class: 'spin' })]);
+          r.querySelector('.text').append(el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round(u.sent / Math.max(1, u.size) * 100)}%` })]));
+          return r;
+        }));
+        progWrap.hidden = !ups.length;
+        sent.replaceChildren(...out.slice(0, 40).map((x) => fileRow(x)));
+        sentWrap.hidden = !out.length;
+        empty.replaceChildren(el('div', { text: `Nothing sent yet. Choose files to send them to ${pcName()}.` }));
+        empty.hidden = !!(out.length || ups.length) || !touchOnly;
+      } else {
+        const saved = got.filter((x) => x.file.saved);
+        wait.replaceChildren(...waiting.slice(0, 60).map((x) => {
+          const f = x.file;
+          const going = f.got > 0 && f.size && f.got < f.size;
+          const r = fileRow(x, [btn('Remove', () => send({ t: 'chat.del', id: x.id }), 'small')]);
+          r.setHint(going ? `Saving… ${bytes(f.got)} of ${bytes(f.size)}` : `From ${pcName()} · ${bytes(f.size)} · ${ago(x.at)}`);
+          if (going) r.querySelector('.text').append(el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round((f.got / f.size) * 100)}%` })]));
+          return r;
+        }));
+        waitWrap.hidden = !waiting.length;
+        saveAll.hidden = waiting.length < 2;
+        done.replaceChildren(...saved.slice(0, 40).map((x) => {
+          const r = fileRow(x, [btn('Remove', () => send({ t: 'chat.del', id: x.id }), 'small')]);
+          r.setHint(`Saved · ${bytes(x.file.size)} · ${ago(x.file.saved)}`);
+          return r;
+        }));
+        doneWrap.hidden = !saved.length;
+        empty.replaceChildren(el('div', { text: `Nothing to receive. Files ${pcName()} sends from its Files page appear here.` }));
+        empty.hidden = !!got.length;
+      }
     };
+    return paint;
   };
 
   // ---- Drop ----
@@ -1121,29 +1424,31 @@
     hd.style.marginBottom = '4px';
     const top = el('div', { style: wideQ.matches ? 'padding:28px 40px 0' : 'padding:20px 20px 0' }, [hd]);
     page.ondragover = (e) => { e.preventDefault(); };
-    page.ondrop = (e) => { e.preventDefault(); if (e.dataTransfer.files.length) upload([...e.dataTransfer.files], true); };
+    page.ondrop = (e) => { e.preventDefault(); if (e.dataTransfer.files.length) upload([...e.dataTransfer.files], true, 'drop'); };
     page.append(top, thread, form);
     let shown = '';
     return () => {
       hd.desc(`Messages, links and files shared with ${pcName()}.`);
-      const key = JSON.stringify([S.chat.map((x) => x.id), [...S.uploads.values()].map((u) => [u.name, Math.round(u.sent / Math.max(1, u.size) * 50)])]);
+      const items = S.chat.filter((x) => x.kind !== 'files');
+      const ups = [...S.uploads.values()].filter((u) => u.to === 'drop');
+      const key = JSON.stringify([items.map((x) => x.id), ups.map((u) => [u.name, Math.round(u.sent / Math.max(1, u.size) * 50)])]);
       grow();
       if (key === shown) return;
       shown = key;
       const atEnd = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 60;
       const kids = [];
       let day = '';
-      for (const x of S.chat) {
+      for (const x of items) {
         const d = new Date(x.at).toDateString();
         if (d !== day) { day = d; kids.push(el('div', { class: 'day', text: d === new Date().toDateString() ? 'Today' : new Date(x.at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) })); }
         kids.push(bubble(x));
       }
-      for (const [, u] of S.uploads) {
+      for (const u of ups) {
         kids.push(el('div', { class: 'msg me' }, [el('div', { class: 'file' }, [el('div', { class: 'ext', text: (u.name.split('.').pop() || '').slice(0, 4) }), el('div', { style: 'min-width:0' }, [el('div', { class: 'nm', text: u.name }), el('div', { class: 'sz', text: `${bytes(u.sent)} of ${bytes(u.size)}` }), el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round(u.sent / Math.max(1, u.size) * 100)}%` })])]), el('span', { class: 'spin' })])]));
       }
       if (!kids.length) kids.push(el('div', { class: 'empty' }, [tile('drop', PAGE.drop.c, 54), el('div', { text: `No messages yet. Send a note, link or photo to ${pcName()}.` })]));
       thread.replaceChildren(...kids);
-      if (atEnd || S.uploads.size) thread.scrollTop = thread.scrollHeight;
+      if (atEnd || ups.length) thread.scrollTop = thread.scrollHeight;
     };
   };
 
@@ -1175,7 +1480,7 @@
   const fileInput = el('input', { type: 'file', multiple: true, hidden: true });
   document.body.append(fileInput);
   let inDrop = false;
-  fileInput.onchange = () => { const f = [...fileInput.files]; fileInput.value = ''; if (f.length) upload(f, inDrop); };
+  fileInput.onchange = () => { const f = [...fileInput.files]; fileInput.value = ''; if (f.length) upload(f, inDrop, inDrop ? 'drop' : 'files'); };
   function pickFiles(accept, drop) {
     if (!needOnline()) return;
     inDrop = !!drop;
@@ -1183,15 +1488,15 @@
     fileInput.click();
   }
   let upSeq = 0;
-  function upload(files, stay) {
+  function upload(files, stay, to) {
     if (!needOnline()) return;
     if (!stay && cur !== 'files' && cur !== 'drop') go('files');
     for (const f of files) {
       const id = ++upSeq;
-      const u = { name: f.name || 'photo.jpg', size: f.size, sent: 0 };
+      const u = { name: f.name || 'photo.jpg', size: f.size, sent: 0, to: to === 'drop' ? 'drop' : 'files' };
       S.uploads.set(id, u);
       const x = new XMLHttpRequest();
-      x.open('POST', `/api/up?name=${encodeURIComponent(u.name)}&t=${encodeURIComponent(S.creds.token)}`);
+      x.open('POST', `/api/up?name=${encodeURIComponent(u.name)}&t=${encodeURIComponent(S.creds.token)}${to === 'drop' ? '&to=drop' : ''}`);
       x.upload.onprogress = (e) => { u.sent = e.loaded; refresh('files', 'drop'); };
       x.onloadend = () => {
         S.uploads.delete(id);
@@ -1923,7 +2228,92 @@
   }
 
   // ---------------------------------------------------------------- this device's camera and microphone
-  const outs = { cam: null, mic: null };
+  const outs = { cam: null, mic: null, scr: null };
+  // This device's screen on the computer (browsers that share a screen: Android Chrome, desktop browsers).
+  const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) && !ME.apple;
+  // As Meet and Teams share: the browser's picker (a screen, a window or a tab, with its sound where the
+  // browser has it), a preview here, a "You're presenting" bar on every page, and Share another one
+  // that swaps what's shown without starting over.
+  const pickScreen = () => navigator.mediaDevices.getDisplayMedia({
+    video: { frameRate: { ideal: 30, max: 60 }, width: { max: 3840 }, height: { max: 2160 } },
+    audio: prefs.scrAudio !== false ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
+    systemAudio: prefs.scrAudio !== false ? 'include' : 'exclude', selfBrowserSurface: 'exclude', surfaceSwitching: 'include', monitorTypeSurfaces: 'include',
+  });
+  const scrWhat = (vt) => {
+    const st = (vt && vt.getSettings && vt.getSettings()) || {};
+    return st.displaySurface === 'browser' ? 'a tab' : st.displaySurface === 'window' ? 'a window' : ME.os === 'android' ? 'this phone’s screen' : 'your screen';
+  };
+  async function startScr() {
+    if (!S.secure && location.hostname !== 'localhost') return toast('Sharing the screen requires a secure connection. Set it up under Connection.');
+    try {
+      const stream = await pickScreen();
+      S.scr = { on: true, stream, status: 'connecting' };
+      const vt = stream.getVideoTracks()[0];
+      if (vt) { vt.contentHint = 'detail'; vt.onended = () => stopScr(); }
+      await offerOut('scr', stream);
+      haptic();
+    } catch (e) {
+      if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(`Screen: ${e.message}`);
+      stopScr(true);
+    }
+    refresh('send', 'overview');
+    presentBar();
+  }
+  // Another screen, window or tab, on the same connection (replaceTrack: the computer's window stays).
+  async function switchScr() {
+    const o = outs.scr;
+    if (!o || !S.scr.on) return startScr();
+    let stream;
+    try { stream = await pickScreen(); } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(`Screen: ${e.message}`); return; }
+    const old = S.scr.stream;
+    const senders = o.pc.getSenders();
+    let renegotiate = false;
+    for (const kind of ['video', 'audio']) {
+      const t = stream.getTracks().find((x) => x.kind === kind) || null;
+      const sd = senders.find((x) => x.track && x.track.kind === kind) || senders.find((x) => !x.track && x._kind === kind);
+      if (sd) { sd._kind = kind; await sd.replaceTrack(t).catch(() => {}); } else if (t) { o.pc.addTrack(t, stream); renegotiate = true; }
+    }
+    const vt = stream.getVideoTracks()[0];
+    if (vt) { vt.contentHint = 'detail'; vt.onended = () => stopScr(); }
+    S.scr.stream = stream;
+    if (old) old.getTracks().forEach((t) => { t.onended = null; t.stop(); });
+    if (renegotiate) await offerOut('scr', stream);
+    refresh('send', 'overview');
+    presentBar();
+  }
+  function stopScr(quiet) {
+    if (!S.scr.on && !S.scr.stream) return;
+    if (!quiet) send({ t: 'scr.stop' });
+    if (outs.scr) outs.scr.pc.close();
+    outs.scr = null;
+    if (S.scr.stream) S.scr.stream.getTracks().forEach((t) => { t.onended = null; t.stop(); });
+    S.scr = { on: false, stream: null, status: 'off' };
+    refresh('send', 'overview');
+    presentBar();
+  }
+  // The bar, on every page while sharing.
+  let bar = null;
+  function presentBar() {
+    if (!S.scr.on) { if (bar) { bar.remove(); bar = null; } document.documentElement.classList.remove('presenting'); return; }
+    if (!bar) {
+      const v = el('video', { class: 'pb-prev', muted: true, playsinline: true, autoplay: true });
+      v.muted = true;
+      bar = el('div', { class: 'present-bar', role: 'status' }, [
+        v, el('div', { class: 'pb-text' }, [el('b'), el('span')]),
+        btn('Share another', () => switchScr(), 'small'), btn('Stop', () => stopScr(), 'small danger'),
+      ]);
+      bar.querySelector('.pb-prev').onclick = () => go('send');
+      document.body.append(bar);
+      document.documentElement.classList.add('presenting');
+    }
+    const v = bar.querySelector('video');
+    if (v.srcObject !== S.scr.stream) { v.srcObject = S.scr.stream; v.play().catch(() => {}); }
+    const vt = S.scr.stream && S.scr.stream.getVideoTracks()[0];
+    const audio = S.scr.stream && S.scr.stream.getAudioTracks().length > 0;
+    bar.querySelector('b').textContent = S.scr.status === 'live' ? `You’re presenting to ${pcName()}` : `Connecting to ${pcName()}…`;
+    bar.querySelector('span').textContent = `Showing ${scrWhat(vt)}${audio ? ', with sound' : ''}`;
+    bar.querySelectorAll('button')[0].hidden = ME.mobile;
+  }
   async function offerOut(kind, stream) {
     const o = { pc: new RTCPeerConnection({ iceServers: [] }), pending: [], remote: false };
     if (outs[kind]) outs[kind].pc.close();

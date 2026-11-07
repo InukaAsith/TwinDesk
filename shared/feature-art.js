@@ -13,7 +13,7 @@
 //     keep: Dismiss is remembered
 (function () {
   const t = (text) => window.I18n ? window.I18n.t(text) : text;
-  const FREE = ['overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles'];
+  const FREE = ['overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles', 'web', 'airplay', 'wd-overview', 'wd-share', 'wd-receive', 'wd-remote', 'wd-clipboard', 'wd-notifications', 'wd-files', 'wd-drop', 'wd-audio', 'wd-camera']; // web, airplay, wd-*: TwinDesk Web (shared/ui-web.js), its own server
 
   // Nothing connected: a switch of a feature can't be turned on or off (it shows dimmed, styled from
   // .no-peer). Held here, before the page's own handler, so each page keeps setting its switches as it does.

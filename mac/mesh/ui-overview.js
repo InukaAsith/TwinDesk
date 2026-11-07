@@ -118,6 +118,7 @@ UI.tab({
     const adbPairRow = UI.row(tr('Pairing code'), tr('Or type it on the phone, in TwinDesk’s notification'), [adbCode, adbWhere, adbPair]);
     const adbCard = UI.card(tr('Phone screen, mouse and keyboard'), [adbRow, adbPairRow]);
     const pairedList = el('div');
+    const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
     // Devices: every computer and phone of the mesh. Use makes it the one the features talk to.
     const devicesList = el('div');
 
@@ -130,12 +131,14 @@ UI.tab({
       UI.pair(UI.dir('m2w', m2w.map((x) => x.row)), UI.dir('w2m', w2m.map((x) => x.row))),
       UI.card(tr('Devices'), [devicesList]),
       UI.card(tr('Paired'), [pairedList]),
+      ...(webCard ? [webCard.el] : []),
     );
 
     let foundKey = '';
     let pairedKey = '';
     let devicesKey = '';
     return (s) => {
+      if (webCard) webCard.render(s);
       const p = UI.names(s);
       bleSw.set(!s.net || s.net.ble !== false);
       blePcSw.set(!!s.net && s.net.blePc === true);

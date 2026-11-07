@@ -5,7 +5,7 @@
 // address it doesn't name shows up, or a month before it runs out; the authority stays, so a phone
 // that trusts it never has to do anything again.
 //
-// load(dir, host) → {ca: {keyPem, certPem}, leaf: {keyPem, certPem}, fresh: bool}
+// load(dir, host, aliases?) → {ca: {keyPem, certPem}, leaf: {keyPem, certPem}, fresh: bool}
 // mobileconfig(certPem, name) → the iOS profile (a .mobileconfig) that installs the authority.
 'use strict';
 
@@ -25,7 +25,7 @@ function write(file, text, secret) {
   fs.writeFileSync(file, text, secret ? { mode: 0o600 } : undefined);
 }
 
-function load(dir, host) {
+function load(dir, host, aliases) {
   fs.mkdirSync(dir, { recursive: true });
   const f = (n) => path.join(dir, n);
   let caKey = read(f('ca.key'));
@@ -39,7 +39,7 @@ function load(dir, host) {
   }
   const ca = { keyPem: caKey, certPem: caCert };
   const ips = ['127.0.0.1', ...ipv4s().map((i) => i.address)];
-  const dns = [host]; // only names the authority may sign for (x509.js constraints): no 'localhost'
+  const dns = [host, ...(aliases || [])]; // only names the authority may sign for (x509.js constraints): no 'localhost'
   let leafKey = read(f('server.key'));
   let leafCert = read(f('server.pem'));
   let fresh = false;

@@ -93,6 +93,7 @@ let startHidden = process.argv.includes('--hidden');
 // server: this Mac's server (many clients); links: the hosts we dial; hub: the mesh (hub.js);
 // peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
 let autoJoin, settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
+let web = null; // TwinDesk Web (shared/web/webwire.js), beside the mesh as in the one-to-one app
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
@@ -241,6 +242,7 @@ function publishState() {
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
+    state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web
     state.chats = chats ? chats.view() : null; // Messages' WhatsApp, Instagram… conversations
     if (svc) {
       const { secret, ...smb } = settings.smb; // never send the share password to the window
@@ -696,6 +698,7 @@ app.whenReady().then(() => {
   updates.start();
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
+  setupWeb();
   actions = setupIpc({ devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
@@ -912,12 +915,78 @@ function goTab(tab) {
 }
 
 app.on('second-instance', showWindow);
+// TwinDesk Web in Multi-device: the same server, pairings and pages as the one-to-one app (one
+// userData), with this Mac's screen mirrored (Extend stays the mesh's), its sound, input and the rest.
+function setupWeb() {
+  const { ipcMain, shell } = require('electron');
+  const { startWeb } = require('../../shared/web/webwire.js');
+  const { Input } = require('../input');
+  const { PhoneRemote } = require('../../shared/phone-remote.js');
+  const { DevLocal } = require('../../shared/devlocal.js');
+  const apple = (c) => !!c && ['ios', 'ipados', 'mac'].includes(c.os);
+  const save = () => store.saveSettings(settings);
+  web = startWeb({
+    dir: app.getPath('userData'), root: path.join(__dirname, '..', '..'), t,
+    settings: () => settings, save, pushState,
+    self: () => ({ id: id.macId, name: id.macName, os: 'mac', version: app.getVersion() }),
+    receivedDir: () => settings.files.folder || app.getPath('downloads'),
+    say: (title, body, onClick) => {
+      if (!Notification.isSupported()) return;
+      try {
+        const n = new Notification({ title, body });
+        if (onClick) n.on('click', onClick);
+        n.show();
+      } catch {}
+    },
+    reveal: (p) => shell.showItemInFolder(p),
+    open: (p) => shell.openPath(p),
+    capture: { audio: 'helper', hub: svc.hub, worklet: path.join(__dirname, '..', 'pcm-worklet.js') },
+    extend: null,
+    input: (bus, target) => new Input(bus, svc.helper, { target: () => target() }, {
+      enabled: () => settings.web.control !== false && (!svc.kvm || svc.kvm.mode === 'home'),
+      swapKeys: () => !apple(bus.current) && settings.keys.swapCtrlCmd !== false,
+    }),
+    remote: (bus, getSettings) => new PhoneRemote({ server: bus, helper: svc.helper, getSettings, atHome: () => !svc.kvm || svc.kvm.mode === 'home', onChange: pushState,
+      padNote: 'Real gamepad isn’t on the Mac: the gamepad’s buttons work as keys' }),
+    notifs: svc.notifs,
+    devLocal: (devctl && devctl.local) || new DevLocal(),
+    smbInfo: () => {
+      const c = settings.smb;
+      const pw = c.sharing && svc.smb.password ? svc.smb.password() : '';
+      if (!pw) return { on: false };
+      const host = web ? web.hub.host : require('os').hostname();
+      return { on: true, host, share: 'MacShare', user: 'macshare', password: pw, path: c.folder || path.join(require('os').homedir(), 'MacShare'), url: `smb://${host}/MacShare` };
+    },
+    share: {
+      view: () => {
+        const v = svc.smb.view;
+        return { on: !!settings.smb.sharing, busy: v.shareBusy ? 'setup' : '', error: v.shareError || '', folder: settings.smb.folder || v.defaultFolder, name: 'MacShare', user: 'macshare' };
+      },
+      set: (on) => (on ? svc.smb.startSharing() : svc.smb.stopSharing()),
+      async choose(folder) {
+        if (settings.smb.sharing) await svc.smb.stopSharing();
+        settings.smb.folder = folder;
+        save();
+        svc.smb.startSharing(folder);
+      },
+    },
+    key: (code) => {
+      svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
+      svc.helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
+    },
+    fileClip: svc.fileClip && svc.fileClip.offerLocal ? svc.fileClip : null,
+  });
+  if (svc.smb.on) svc.smb.on('change', () => web.hub.running && web.hub._all(web.hub._mount()));
+  for (const [name, fn] of Object.entries(web.actions)) ipcMain.on(name, (_e, arg) => fn(arg));
+}
+
 app.on('activate', showWindow);
 app.on('window-all-closed', () => {}); // keep running in the menu bar
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 app.on('before-quit', () => {
+  if (web) web.shutdown();
   if (svc && svc.mic) svc.mic.shutdown();
   quitting = true;
   if (svc && svc.phone) svc.phone.shutdown();

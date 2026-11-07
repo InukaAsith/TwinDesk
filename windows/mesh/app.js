@@ -89,15 +89,24 @@
   // Something to work with: the other computer, or a phone.
   const linked = (s) => !!(s && ((s.link && s.link.state === 'connected') || (s.phone && s.phone.connected)));
 
+  // A web device's pages (shared/ui-web.js) while its tile is picked (UI.webDev); any other page
+  // goes back to the sidebar's own.
   function show(id, user) {
+    const want = views.get(id);
+    if (want && want.def.web && !UI.webDev) id = 'web';
+    else if (want && !want.def.web && !UI.WEB_KEEP.includes(want.def.id)) UI.webDev = null;
     const v = views.get(id === 'phone' ? 'overview' : id) || views.get('connection'); // 'phone': the old Phone page
-    if (current === v) return;
+    if (current === v) {
+      if (UI.state) { renderSidebar(UI.state); renderPage(v, UI.state); }
+      return;
+    }
     if (current) {
       current.page.hidden = true;
       current.navBtn.classList.remove('active');
       current.navBtn.setAttribute('aria-selected', 'false');
     }
     current = v;
+    if (UI.state) renderSidebar(UI.state); // in or out of a web device's pages
     v.page.hidden = false;
     v.navBtn.classList.add('active');
     v.navBtn.setAttribute('aria-selected', 'true');
@@ -155,10 +164,17 @@
     else if (l.state === 'connecting' || l.state === 'reconnecting') text = t('Reconnecting…');
     else if (l.state === 'identity_changed') text = t('Identity changed');
     $('peer-text').textContent = text;
+    if (UI.webDev && !UI.webDevOf(s)) UI.webDev = null; // forgotten meanwhile
     renderPhones(s);
-    // Tabs that don't apply to the peer (a phone has no terminal or screen to share to it…).
+    UI.webTiles($('webdevs'), s, (devId) => {
+      UI.webDev = devId;
+      show(devId ? (current && current.def.web ? current.def.id : 'wd-overview') : 'web', true);
+    });
+    // Tabs that don't apply to the peer (a phone has no terminal or screen to share to it…). A web
+    // device picked: its own pages, then Connection, TwinDesk Web, AirPlay & SMB, General and About.
     for (const v of views.values()) {
-      const hide = !!(v.def.hidden && v.def.hidden(s));
+      const hide = UI.webDev ? !v.def.web && !UI.WEB_KEEP.includes(v.def.id)
+        : !!v.def.web || !!(v.def.hidden && v.def.hidden(s));
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
       if (hide && current === v) show(M.firstSection(kindOfState(s), availableFor(kindOfState(s))), false);
     }
@@ -166,7 +182,7 @@
     for (const v of views.values()) if (v.gap) v.gap.hidden = [...views.values()].every((x) => x.gap !== v.gap || !x.navBtn.parentElement || x.navBtn.parentElement.hidden);
     for (const v of views.values()) {
       let b = v.def.badge ? v.def.badge(s) : v.def.phase ? 'P' + v.def.phase : '';
-      if (b === 'on' && !linked(s)) b = 'warn'; // on, but nothing connected: it waits (yellow), it isn't working
+      if (b === 'on' && !linked(s) && !FeatureArt.FREE.includes(v.def.id)) b = 'warn'; // on, but nothing connected: it waits (yellow), it isn't working
       v.stateEl.className = 'state' + (b === 'on' ? ' on' : b === 'warn' ? ' warn' : '');
       v.stateEl.textContent = b === 'on' || b === 'warn' ? '' : b || '';
     }
@@ -180,7 +196,7 @@
   // Tiles of the selected device's sections: lit while one of its own sections is open.
   function markTiles() {
     const scoped = !!(current && M.isScoped(current.def.id));
-    for (const t of $('phones').children) t.classList.toggle('active', scoped && t.dataset.selected === '1');
+    for (const t of $('phones').children) t.classList.toggle('active', scoped && !UI.webDev && t.dataset.selected === '1');
   }
 
   // A tile was clicked: a connected device becomes the selected one (hub.select) and its sections

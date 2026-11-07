@@ -128,6 +128,8 @@ class FileClip extends EventEmitter {
 
   // main.js, with every state push: whether anything is connected.
   syncConnected(on) {
+    this.session = !!on;
+    on = !!on || !!this.local; // files from a web device: the shortcut works without a session too
     if (!!on === !!this.live) return;
     this.live = !!on;
     this.apply();
@@ -184,8 +186,46 @@ class FileClip extends EventEmitter {
     this.emit('change');
   }
 
+  // Files a web device sent (shared/web/webhub.js): ⌃⌥V pastes them here, as it does the other
+  // computer's. Kept 30 minutes; the other computer's newer copy goes first.
+  offerLocal(paths, from) {
+    const there = (paths || []).filter((p) => fs.existsSync(p));
+    if (!there.length) return;
+    this.local = { paths: there, from: String(from || ''), at: Date.now() };
+    clearTimeout(this.localTimer);
+    this.localTimer = setTimeout(() => { this.local = null; this.syncConnected(this.session); this.emit('change'); }, 30 * 60000);
+    this.localTimer.unref?.();
+    this.syncConnected(this.session);
+    this.emit('change');
+  }
+
+  async _pasteLocal() {
+    const l = this.local;
+    let dir = '';
+    let into = false;
+    try {
+      const src = await this.helper.request('fileSource');
+      if (src.front === 'com.apple.finder') dir = await finderFolder();
+      else if (src.front && !src.front.startsWith('org.macshare.')) into = true;
+    } catch { /* Desktop */ }
+    const paths = l.paths.filter((p) => fs.existsSync(p));
+    const done = { key: paths.length === 1 ? 'Pasted {count} file' : 'Pasted {count} files', vars: { count: paths.length } };
+    if (!paths.length) return this.emit('popup', 'home', { key: 'Those files aren’t there any more' });
+    if (into) {
+      return pastefiles.pasteInto(this.helper, paths).then(() => this.emit('popup', 'home', done))
+        .catch(() => this.emit('popup', 'home', { key: '{result}: they’re on the clipboard, paste them with {keys}', vars: { result: done, keys: '⌘V' } }));
+    }
+    dir = dir && fs.existsSync(dir) ? dir.replace(/\/$/, '') : DESKTOP;
+    const { freeName } = require('../shared/web/webhub.js');
+    for (const p of paths) {
+      try { await fs.promises.cp(p, freeName(dir, path.basename(p)), { recursive: true, errorOnExist: true }); } catch (e) { console.warn('[fclip] paste:', e.message); }
+    }
+    this.emit('popup', 'home', done);
+  }
+
   async paste() {
     const inc = this.incoming;
+    if (this.local && (!inc || !this.server.current || this.local.at > inc.at)) return this._pasteLocal();
     if (!this.server.current) return this.emit('popup', 'home', { key: 'Not connected' });
     if (!inc) return this.emit('popup', 'home', { key: 'Nothing copied on {name}', vars: { name: this.peerName } });
     let dir = '';

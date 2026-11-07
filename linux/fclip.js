@@ -16,6 +16,7 @@ const { app } = require('electron');
 const clipboard = require('./wlclip').clipboard(); // the copied files' list too (#97)
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 const P = require('../shared/protocol.js');
 const fm = require('./fm');
 const pastefiles = require('../shared/pastefiles.js');
@@ -182,8 +183,39 @@ class FileClip {
     this.onChange();
   }
 
+  // Files a web device sent (shared/web/webhub.js): the paste shortcut pastes them here, as it does
+  // the other computer's. Kept 30 minutes; the other computer's newer copy goes first.
+  offerLocal(paths, from) {
+    const there = (paths || []).filter((p) => fs.existsSync(p));
+    if (!there.length) return;
+    this.local = { paths: there, from: String(from || ''), at: Date.now() };
+    clearTimeout(this.localTimer);
+    this.localTimer = setTimeout(() => { this.local = null; this.onChange(); }, 30 * 60000);
+    this.localTimer.unref?.();
+    this.onChange();
+  }
+
+  async _pasteLocal() {
+    const paths = this.local.paths.filter((p) => fs.existsSync(p));
+    if (!paths.length) return this.popup('home', 'Those files aren’t there any more');
+    const done = 'Pasted ' + plural(paths.length, 'file');
+    const win = await fm.front(this.helper).catch(() => null);
+    const front = win && win.folder && fs.existsSync(win.folder) ? win.folder : '';
+    if (!front && win && win.app && !win.fm && !win.desktop && !/twindesk/i.test(win.app)) {
+      return pastefiles.pasteInto(this.helper, paths).then(() => this.popup('home', done))
+        .catch(() => this.popup('home', done + ': they’re on the clipboard, paste them with Ctrl+V'));
+    }
+    const dir = front || app.getPath('desktop');
+    const { freeName } = require('../shared/web/webhub.js');
+    for (const p of paths) {
+      try { await fs.promises.cp(p, freeName(dir, path.basename(p)), { recursive: true, errorOnExist: true }); } catch (e) { console.warn('[fclip] paste:', e.message); }
+    }
+    this.popup('home', done);
+  }
+
   async paste() {
     const inc = this.incoming;
+    if (this.local && (!inc || !this.connected || this.local.at > inc.at)) return this._pasteLocal();
     if (!this.connected) return this.popup('home', 'Not connected');
     if (!inc) return this.popup('home', 'Nothing copied on ' + this.peerName());
     if (this.pasting) return;

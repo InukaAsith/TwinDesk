@@ -111,6 +111,8 @@ class FileClip {
 
   // main.js, with every state push: whether anything is connected.
   syncConnected(on) {
+    this.session = !!on;
+    on = !!on || !!this.local; // files from a web device: the shortcut works without a session too
     if (!!on === !!this.live) return;
     this.live = !!on;
     this.apply();
@@ -180,8 +182,43 @@ class FileClip {
     this.onChange();
   }
 
+  // Files a web device sent (shared/web/webhub.js): the paste shortcut pastes them here, as it does
+  // the other computer's. Kept 30 minutes; the other computer's newer copy goes first.
+  offerLocal(paths, from) {
+    const there = (paths || []).filter((p) => fs.existsSync(p));
+    if (!there.length) return;
+    this.local = { paths: there, from: String(from || ''), at: Date.now() };
+    clearTimeout(this.localTimer);
+    this.localTimer = setTimeout(() => { this.local = null; this.syncConnected(this.session); this.onChange(); }, 30 * 60000);
+    this.localTimer.unref?.();
+    this.syncConnected(this.session);
+    this.onChange();
+  }
+
+  async _pasteLocal() {
+    const l = this.local;
+    let front = {};
+    try { front = (await this.helper.request('frontFolder')) || {}; } catch (_) { /* Desktop */ }
+    const paths = l.paths.filter((p) => fs.existsSync(p));
+    if (!paths.length) return this.popup('home', { key: 'Those files aren’t there any more' });
+    const done = { key: paths.length === 1 ? 'Pasted {count} file' : 'Pasted {count} files', vars: { count: paths.length } };
+    const into = !front.path && front.app && front.pid !== process.pid ? { hwnd: front.hwnd, title: String(front.title || '') } : null;
+    if (into) {
+      return this.helper.request('pasteFiles', { paths, hwnd: into.hwnd })
+        .then(() => this.popup('home', into.title ? { key: '{result} into {title}', vars: { result: done, title: short(into.title) } } : done))
+        .catch(() => this.popup('home', { key: '{result}: they’re on the clipboard, paste them with {keys}', vars: { result: done, keys: 'Ctrl+V' } }));
+    }
+    const dir = front.path && fs.existsSync(front.path) ? front.path : app.getPath('desktop');
+    const { freeName } = require('../shared/web/webhub.js');
+    for (const p of paths) {
+      try { await fs.promises.cp(p, freeName(dir, path.basename(p)), { recursive: true, errorOnExist: true }); } catch (e) { console.warn('[fclip] paste:', e.message); }
+    }
+    this.popup('home', done);
+  }
+
   async paste() {
     const inc = this.incoming;
+    if (this.local && (!inc || !this.connected || this.local.at > inc.at)) return this._pasteLocal();
     if (!this.connected) return this.popup('home', { key: 'Not connected' });
     if (!inc) return this.popup('home', { key: 'Nothing copied on {name}', vars: { name: this.peerName() } });
     if (this.pasting || this.pastePending) return;

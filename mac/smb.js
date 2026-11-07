@@ -177,6 +177,11 @@ class Smb extends EventEmitter {
     }
   }
 
+  // The share's password, for TwinDesk Web's Mount page (an iPhone signs in with it in Files).
+  password() {
+    return this.cfg.sharing ? this._secret() || '' : '';
+  }
+
   _offerOurs() {
     const pw = this._secret();
     if (this.cfg.sharing && pw) this.server.sendToClient({ t: P.T.SMB_OFFER, share: 'MacShare', user: 'macshare', password: pw, port: 445 });

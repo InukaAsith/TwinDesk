@@ -78,7 +78,7 @@ class Notifs extends EventEmitter {
   // Read the database only while something would be sent; else just check access for the tab.
   _watch() {
     if (!this.helper.running) return;
-    const on = !!(this.cfg.send && this.peerAccepts && this.server.current);
+    const on = !!(this.cfg.send && this.peerAccepts && this.server.current) || !!this.webWant;
     this.helper.request('notifWatch', { on }).then((r) => this._setAccess(r.readable ? 'ok' : 'noAccess'), () => {});
   }
 
@@ -88,9 +88,19 @@ class Notifs extends EventEmitter {
     this.emit('change');
   }
 
+  // TwinDesk Web's devices that show this Mac's notifications (shared/web/webhub.js notifSource).
+  want(on) {
+    if (!!on === !!this.webWant) return;
+    this.webWant = !!on;
+    this._watch();
+  }
+
   _local(ev) {
     const app = str(ev.app, 200);
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
+    if (this.webWant && !(this.cfg.muted || []).includes(app)) {
+      this.emit('notif', { id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle), body: this.cfg.hideText ? '' : str(ev.body), at: Number(ev.at) || Date.now() });
+    }
     if (!this.cfg.send || !this.peerAccepts || !this.server.current || (this.cfg.muted || []).includes(app)) return this.emit('change');
     this.server.sendToClient({
       t: T.NOTIF, id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle),

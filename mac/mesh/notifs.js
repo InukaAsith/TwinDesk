@@ -149,7 +149,7 @@ class Notifs extends EventEmitter {
   // for the Notifications tab.
   _watch() {
     if (!this.helper.running) return;
-    const on = !!(this.cfg.send && this._anyAccepts());
+    const on = !!(this.cfg.send && this._anyAccepts()) || !!this.webWant;
     this.helper.request('notifWatch', { on }).then((r) => this._setAccess(r.readable ? 'ok' : 'noAccess'), () => {});
   }
 
@@ -157,6 +157,13 @@ class Notifs extends EventEmitter {
     if (this.access === a) return;
     this.access = a;
     this.emit('change');
+  }
+
+  // TwinDesk Web's devices that show this Mac's notifications (shared/web/webhub.js notifSource).
+  want(on) {
+    if (!!on === !!this.webWant) return;
+    this.webWant = !!on;
+    this._watch();
   }
 
   _local(ev) {
@@ -170,6 +177,9 @@ class Notifs extends EventEmitter {
     if (isOwn(app, ev.appName)) return; // TwinDesk's own toasts are never forwarded
     if (this.guard.repeat('out', app, ev.title, ev.body)) return;
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
+    if (this.webWant && !(this.cfg.muted || []).includes(app)) {
+      this.emit('notif', { id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle), body: this.cfg.hideText ? '' : str(ev.body), at: Math.round(Number(ev.at)) || Date.now() });
+    }
     if (this.cfg.send && !(this.cfg.muted || []).includes(app) && this._anyAccepts()) {
       const r = this.pool.publish({
         t: T.NOTIF, id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle),

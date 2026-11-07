@@ -7,6 +7,7 @@
 // from TwinDesk (libnotify).
 const electron = require('electron');
 const path = require('path');
+const { EventEmitter } = require('events');
 const { spawn } = require('child_process');
 const P = require('../../shared/protocol.js');
 const { Pool } = require('../../shared/mesh.js');
@@ -29,7 +30,7 @@ function notifPeers(mesh) {
   }));
 }
 
-class Notifs {
+class Notifs extends EventEmitter {
   // opts:
   //   bus      same shape as in clip.js
   //   mesh     shared/mesh.js Mesh
@@ -42,6 +43,7 @@ class Notifs {
   //   selfName  optional: this device's name (string or function), sent as `on` with our notifications
   //   spawn     optional: child_process.spawn (tests give a fake dbus-monitor)
   constructor(opts) {
+    super();
     this.bus = opts.bus;
     this.mesh = opts.mesh;
     this.settings = opts.settings;
@@ -144,7 +146,7 @@ class Notifs {
   // dbus-monitor runs only while something would be sent; whether it could start is `readable`
   // (Notifications tab).
   _watch() {
-    const on = !!(this.cfg.send && this._anyAccepts());
+    const on = !!(this.cfg.send && this._anyAccepts()) || !!this.webWant;
     if (!on) {
       if (this.mon) { this.mon.stdin.end(); this.mon = null; } // the wrapper stops dbus-monitor
       return;
@@ -207,6 +209,13 @@ class Notifs {
     this._local({ id: String(Date.now()), app: appName, appName, title: arg(args[3]), body: arg(args[4]), at: Date.now() });
   }
 
+  // TwinDesk Web's devices that show this computer's notifications (shared/web/webhub.js notifSource).
+  want(on) {
+    if (!!on === !!this.webWant) return;
+    this.webWant = !!on;
+    this._watch();
+  }
+
   _local(ev) {
     const app = str(ev.app, 300);
     if (!app) return;
@@ -219,6 +228,9 @@ class Notifs {
     if (this.guard.repeat('out', app, ev.title, ev.body)) return;
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
     if (this.apps.size > 60) this.apps.delete(this.apps.keys().next().value);
+    if (this.webWant && !this.cfg.muted.includes(app)) {
+      this.emit('notif', { id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle), body: this.cfg.hideText ? '' : str(ev.body), at: Math.round(Number(ev.at)) || Date.now() });
+    }
     if (this.cfg.send && !this.cfg.muted.includes(app) && this._anyAccepts()) {
       const r = this.pool.publish({
         t: T.NOTIF, id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle),

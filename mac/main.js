@@ -105,6 +105,7 @@ let hud = null;
 let quitting = false;
 let startHidden = process.argv.includes('--hidden');
 let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
+let web = null; // TwinDesk Web: this Mac as a page for iPhones and browsers (setupWeb)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is the Mac's sound capture (audiohub.js)
 
 const state = {
@@ -270,6 +271,7 @@ function pushState() {
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
     if (updates) state.updates = updates.view;
+    state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web (shared/web/webwire.js)
     if (pairSync) pairSync.check();
     sendScreenState();
     if (win && !win.isDestroyed()) win.webContents.send('state', state);
@@ -724,13 +726,11 @@ app.whenReady().then(() => {
   svc.loadMic();
   // Camera tab: the cameras of the two computers (shared/camshare.js; a phone's is phoneViews.openCamera),
   // loaded only while Camera is on. ipc reaches them through svc.cam() (its ctx is a copy of svc).
-  svc.loadCamera = () => {
-    if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
-    const { CamShare } = require('../shared/camshare.js');
+  // Camera › Virtual camera (shared/vcam.js, vcam.js): the running camera's picture also goes to a
+  // camera apps can pick. Also loaded by itself for a web device's camera (TwinDesk Web).
+  svc.loadVcam = () => {
+    if (svc.vcam) return svc.vcam;
     const { VirtualCam } = require('../shared/vcam.js');
-    const computer = () => !!peer.current && peer.current.os !== P.OS.ANDROID;
-    // Camera › Virtual camera (shared/vcam.js, vcam.js): the running camera's picture also goes to a
-    // camera apps can pick.
     svc.vcam = new VirtualCam({
       driver: require('./vcam'),
       cfg: () => settings.camera,
@@ -740,6 +740,14 @@ app.whenReady().then(() => {
       ui: () => win,
     });
     svc.phoneViews.vcam = svc.vcam;
+    svc.vcam.check();
+    return svc.vcam;
+  };
+  svc.loadCamera = () => {
+    if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
+    const { CamShare } = require('../shared/camshare.js');
+    const computer = () => !!peer.current && peer.current.os !== P.OS.ANDROID;
+    svc.loadVcam();
     svc.camShare = new CamShare({
       getLanguage: () => i18n.locale,
       link: {
@@ -755,7 +763,6 @@ app.whenReady().then(() => {
       peerName: () => (peer.current && peer.current.name) || 'the other computer',
       onChange: pushState,
     });
-    svc.vcam.check();
     svc.camShare.sendPolicy(); // connected already: the other computer hears whether it's shared
     return svc.camShare;
   };
@@ -915,6 +922,7 @@ app.whenReady().then(() => {
   nativeTheme.on('updated', () => pushState());
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
+  setupWeb();
   actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
@@ -1192,6 +1200,87 @@ function loadHub() {
 }
 
 // The window on one page (the call window's name opens Calls).
+// TwinDesk Web (shared/web/webwire.js): this Mac as a page for iPhones, iPads and any browser, its own
+// server beside the TwinDesk session. Each web device has its own pages in the sidebar.
+function setupWeb() {
+  const { ipcMain, screen, shell } = require('electron');
+  const { startWeb } = require('../shared/web/webwire.js');
+  const { Input } = require('./input');
+  const { PhoneRemote } = require('../shared/phone-remote.js');
+  const { DevLocal } = require('../shared/devlocal.js');
+  const apple = (c) => !!c && ['ios', 'ipados', 'mac'].includes(c.os);
+  web = startWeb({
+    dir: app.getPath('userData'), root: path.join(__dirname, '..'), t,
+    settings: () => settings, save: () => store.saveSettings(settings), pushState,
+    self: () => ({ id: id.macId, name: id.macName, os: 'mac', version: app.getVersion() }),
+    receivedDir: () => settings.files.folder || app.getPath('downloads'),
+    say: (title, body, onClick) => {
+      if (!Notification.isSupported()) return;
+      try {
+        const n = new Notification({ title, body });
+        if (onClick) n.on('click', onClick);
+        n.show();
+      } catch {}
+    },
+    reveal: (p) => shell.showItemInFolder(p),
+    open: (p) => shell.openPath(p),
+    capture: { audio: 'helper', hub: svc.hub, worklet: path.join(__dirname, 'pcm-worklet.js') },
+    // Extend: the virtual display, in the web device's shape, while this Mac's screen isn't shared
+    // with the other computer (that one is the session's then).
+    extend: {
+      can: () => !settings.sharing.on && !!svc.helper.running,
+      async display(dev) {
+        svc.displays.setOverride(dev && dev.w > 0 && dev.h > 0 ? { width: dev.w, height: dev.h } : null);
+        await svc.displays.hold('web', true);
+        const vid = svc.displays.virtualId;
+        return (vid !== null && screen.getAllDisplays().find((d) => d.id === vid)) || null;
+      },
+      release() {
+        svc.displays.hold('web', false);
+        if (!settings.sharing.on) svc.displays.setOverride(null);
+      },
+    },
+    input: (bus, target) => new Input(bus, svc.helper, { target: () => target() }, {
+      enabled: () => settings.web.control !== false,
+      swapKeys: () => !apple(bus.current) && settings.keys.swapCtrlCmd !== false, // an iPhone's keyboard has ⌘ already
+    }),
+    remote: (bus, getSettings) => new PhoneRemote({ server: bus, helper: svc.helper, getSettings, atHome: () => svc.kvm.mode === 'home', onChange: pushState,
+      padNote: 'Real gamepad isn’t on the Mac: the gamepad’s buttons work as keys' }),
+    notifs: svc.notifs,
+    devLocal: (svc.devctl && svc.devctl.local) || new DevLocal(),
+    smbInfo: () => {
+      const c = settings.smb;
+      const pw = c.sharing ? svc.smb.password() : '';
+      if (!pw) return { on: false };
+      const host = web ? web.hub.host : `${require('os').hostname()}`;
+      return { on: true, host, share: 'MacShare', user: 'macshare', password: pw, path: c.folder || path.join(require('os').homedir(), 'MacShare'), url: `smb://${host}/MacShare` };
+    },
+    key: (code) => {
+      svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
+      svc.helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
+    },
+    vcam: () => svc.loadVcam(),
+    fileClip: svc.fileClip,
+    share: {
+      view: () => {
+        const v = svc.smb.view;
+        return { on: !!settings.smb.sharing, busy: v.shareBusy ? 'setup' : '', error: v.shareError || '', folder: settings.smb.folder || v.defaultFolder, name: 'MacShare', user: 'macshare' };
+      },
+      set: (on) => (on ? svc.smb.startSharing() : svc.smb.stopSharing()),
+      async choose(folder) {
+        if (settings.smb.sharing) await svc.smb.stopSharing();
+        settings.smb.folder = folder;
+        store.saveSettings(settings);
+        svc.smb.startSharing(folder);
+      },
+    },
+  });
+  // The shared folder's sign-in changed (AirPlay & SMB): the pages that show it hear.
+  svc.smb.on('change', () => web.hub.running && web.hub._all(web.hub._mount()));
+  for (const [name, fn] of Object.entries(web.actions)) ipcMain.on(name, (_e, arg) => fn(arg));
+  app.on('before-quit', () => web.shutdown());
+}
+
 function goTab(tab) {
   if (TABS.includes(tab)) settings.ui.tab = tab; // a window made now opens there
   showWindow();

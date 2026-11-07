@@ -2,7 +2,7 @@
 // TwinDesk Web's capture window: this computer's screen and/or sound to one web device over WebRTC
 // (we offer; the page answers). As the TwinDesk session's capture (capture.js) does it, with what a
 // phone's browser plays: H.264 first (Safari decodes it in hardware), Opus stereo.
-// start {session, video, audio: 'loopback'|'helper'|false, maxH, fps, mbps, worklet}
+// start {session, video, audio: 'loopback'|'helper'|'source'|false, label (audio 'source'), maxH, fps, mbps, worklet}
 'use strict';
 
 const api = window.webcap;
@@ -36,6 +36,18 @@ function tune(sdp, mbps) {
     if (m[1] === opus) return `a=fmtp:${m[1]} ${[...m[2].split(';').filter((x) => x && !/^(stereo|sprop-stereo|maxaveragebitrate)=/.test(x)), 'stereo=1', 'sprop-stereo=1', 'maxaveragebitrate=128000'].join(';')}`;
     return l;
   }).join('\r\n');
+}
+
+// A capture device by its label (Linux: the loopback source over the output's monitor, loopback.js).
+async function sourceTrack(label) {
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const d = devs.find((x) => x.kind === 'audioinput' && x.label.includes(label));
+  if (!d) throw new Error('the sound loopback device didn’t show up');
+  const st = await navigator.mediaDevices.getUserMedia({
+    audio: { deviceId: { exact: d.deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
+    video: false,
+  });
+  return st.getAudioTracks()[0] || null;
 }
 
 async function helperTrack(me, worklet) {
@@ -80,7 +92,8 @@ async function start(o) {
       try { tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs, 'h264')); } catch (_) {}
     }
     let at = me.stream ? me.stream.getAudioTracks()[0] : null;
-    if (!at && o.audio) at = await helperTrack(me, o.worklet);
+    if (!at && o.audio === 'source' && o.label) at = await sourceTrack(o.label).catch((e) => { console.warn('sound: ' + e.message); return null; });
+    else if (!at && o.audio) at = await helperTrack(me, o.worklet);
     if (cur !== me) return;
     if (at) pc.addTransceiver(at, { direction: 'sendonly', streams: [me.stream || new MediaStream([at])] });
     if (!vt && !at) throw new Error('nothing to send');

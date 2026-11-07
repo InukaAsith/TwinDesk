@@ -8,7 +8,11 @@
 // starts and when the addresses change, and says goodbye when it stops. It shares port 5353 with the
 // system's own responder (mDNSResponder, Bonjour for Windows, Avahi) through SO_REUSEADDR/PORT.
 //
-// new MdnsHost(name).start(); .stop(); .addresses()
+// An alias (twindesk.local: the short name to type) is answered only while no other computer does:
+// asked for first (probing, RFC 6762 8.1), and given up when another answers for it; tried again
+// a while later.
+//
+// new MdnsHost(name, alias?).start(); .stop(); .addresses(); .aliasHeld
 'use strict';
 
 const dgram = require('dgram');
@@ -39,14 +43,8 @@ function encodeName(name) {
 }
 
 // Questions of a query: [{name, type, qu}] (compressed names followed).
-function parseQuestions(buf) {
-  if (buf.length < 12) return [];
-  const flags = buf.readUInt16BE(2);
-  if (flags & 0x8000) return []; // a response, not a query
-  const qd = buf.readUInt16BE(4);
-  const out = [];
-  let i = 12;
-  const readName = (at) => {
+function nameReader(buf) {
+  return (at) => {
     const labels = [];
     let jumped = false;
     let next = at;
@@ -65,6 +63,16 @@ function parseQuestions(buf) {
     }
     return { name: labels.join('.'), next };
   };
+}
+
+function parseQuestions(buf) {
+  if (buf.length < 12) return [];
+  const flags = buf.readUInt16BE(2);
+  if (flags & 0x8000) return []; // a response, not a query
+  const qd = buf.readUInt16BE(4);
+  const out = [];
+  let i = 12;
+  const readName = nameReader(buf);
   for (let q = 0; q < qd && i < buf.length; q++) {
     const n = readName(i);
     if (!n || n.next + 4 > buf.length) break;
@@ -74,6 +82,40 @@ function parseQuestions(buf) {
     i = n.next + 4;
   }
   return out;
+}
+
+// The A records of a response: [{name, ip}] (questions skipped).
+function parseAnswers(buf) {
+  if (buf.length < 12 || !(buf.readUInt16BE(2) & 0x8000)) return [];
+  const readName = nameReader(buf);
+  const qd = buf.readUInt16BE(4);
+  const rr = buf.readUInt16BE(6) + buf.readUInt16BE(8) + buf.readUInt16BE(10);
+  let i = 12;
+  for (let q = 0; q < qd; q++) {
+    const n = readName(i);
+    if (!n) return [];
+    i = n.next + 4;
+  }
+  const out = [];
+  for (let r = 0; r < rr && i < buf.length; r++) {
+    const n = readName(i);
+    if (!n || n.next + 10 > buf.length) break;
+    const type = buf.readUInt16BE(n.next);
+    const len = buf.readUInt16BE(n.next + 8);
+    const data = n.next + 10;
+    if (type === 1 && len === 4 && data + 4 <= buf.length) out.push({ name: n.name.toLowerCase(), ip: [...buf.subarray(data, data + 4)].join('.') });
+    i = data + len;
+  }
+  return out;
+}
+
+function question(name) {
+  const head = Buffer.alloc(12);
+  head.writeUInt16BE(1, 4);
+  const q = Buffer.alloc(4);
+  q.writeUInt16BE(1, 0); // A
+  q.writeUInt16BE(1, 2); // IN (multicast answer: everyone hears who has it)
+  return Buffer.concat([head, encodeName(name), q]);
 }
 
 function answer(name, ips, ttl = TTL) {
@@ -93,9 +135,12 @@ function answer(name, ips, ttl = TTL) {
 }
 
 class MdnsHost {
-  constructor(name) {
+  constructor(name, alias = '') {
     this.name = String(name).toLowerCase().replace(/\.$/, '');
     if (!this.name.endsWith('.local')) this.name += '.local';
+    this.alias = alias ? String(alias).toLowerCase() : '';
+    this.aliasHeld = false;
+    this.probing = false;
     this.sock = null;
     this.joined = new Set();
     this.lastIps = '';
@@ -125,6 +170,7 @@ class MdnsHost {
       try { sock.setMulticastTTL(255); sock.setMulticastLoopback(true); } catch (_) {}
       this._join();
       this._announce();
+      this._probe();
     });
     // New addresses (another network, the cable): join there and tell the network.
     this.poll = setInterval(() => {
@@ -136,6 +182,10 @@ class MdnsHost {
   stop(goodbye = true) {
     clearInterval(this.poll);
     clearTimeout(this.retry);
+    clearTimeout(this.probeTimer);
+    if (goodbye && this.aliasHeld && this.sock && this.lastIps) this._send(answer(this.alias, this.lastIps.split(','), 0));
+    this.aliasHeld = false;
+    this.probing = false;
     const s = this.sock;
     this.sock = null;
     this.joined.clear();
@@ -162,27 +212,79 @@ class MdnsHost {
     } catch (_) {}
   }
 
+  // Ask three times whether anyone has the alias; nobody answered: it's ours.
+  _probe() {
+    if (!this.alias || !this.sock || this.aliasHeld || this.probing) return;
+    this.probing = true;
+    this.taken = false;
+    let n = 0;
+    const step = () => {
+      if (!this.sock || !this.probing) return;
+      if (this.taken) { this.probing = false; return this._later(); }
+      if (n++ < 3) {
+        for (const i of ipv4s()) this._send(question(this.alias), i.address);
+        this.probeTimer = setTimeout(step, 250);
+        return;
+      }
+      this.probing = false;
+      this.aliasHeld = true;
+      this._announce();
+      if (this.onAlias) this.onAlias(true);
+    };
+    this.probeTimer = setTimeout(step, Math.floor(Math.random() * 250));
+  }
+
+  // Someone else has it: try again in a minute or two (it may have gone by then).
+  _later() {
+    clearTimeout(this.probeTimer);
+    this.probeTimer = setTimeout(() => this._probe(), 60000 + Math.floor(Math.random() * 60000));
+  }
+
+  _response(buf) {
+    if (!this.alias) return;
+    let rrs;
+    try { rrs = parseAnswers(buf); } catch (_) { return; }
+    const mine = new Set(this.addresses());
+    const other = rrs.some((r) => r.name === this.alias && !mine.has(r.ip));
+    if (!other) return;
+    if (this.probing) this.taken = true;
+    if (this.aliasHeld) {
+      this.aliasHeld = false;
+      console.log('[mdnshost] another computer answers for', this.alias, '- leaving it');
+      if (this.onAlias) this.onAlias(false);
+      this._later();
+    }
+  }
+
   _announce() {
     const ifs = ipv4s();
     this.lastIps = ifs.map((i) => i.address).join(',');
     if (!ifs.length) return;
     // Twice, a second apart (RFC 6762 8.3), each interface with its own address.
-    const once = () => { for (const i of ipv4s()) this._send(answer(this.name, [i.address]), i.address); };
+    const once = () => {
+      for (const i of ipv4s()) {
+        this._send(answer(this.name, [i.address]), i.address);
+        if (this.aliasHeld) this._send(answer(this.alias, [i.address]), i.address);
+      }
+    };
     once();
     setTimeout(once, 1000);
   }
 
   _query(buf, rinfo) {
+    if (buf.length >= 12 && buf.readUInt16BE(2) & 0x8000) return this._response(buf);
     let qs;
     try { qs = parseQuestions(buf); } catch (_) { return; }
-    const mine = qs.find((q) => q.name === this.name && (q.type === 1 || q.type === 255));
-    if (!mine) return;
+    const want = (n) => qs.find((q) => q.name === n && (q.type === 1 || q.type === 255));
+    const asked = want(this.name) ? this.name : this.aliasHeld && want(this.alias) ? this.alias : '';
+    if (!asked) return;
+    const mine = want(asked);
     // The address on the asker's network, else all of them.
     const ifs = ipv4s();
     const near = ifs.filter((i) => sameNet(i.address, rinfo.address, i.netmask));
     const ips = (near.length ? near : ifs).map((i) => i.address);
     if (!ips.length) return;
-    const msg = answer(this.name, ips);
+    const msg = answer(asked, ips);
     const via = near[0] ? near[0].address : null;
     // A legacy (one-shot) resolver asks from another port and wants the answer back there, with its id.
     if (rinfo.port !== PORT) {

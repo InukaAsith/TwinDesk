@@ -4,6 +4,7 @@
 // Windows notification database. The other computer's show here as Windows toasts from TwinDesk
 // (main.js sets the AppUserModelID, or Windows shows none). Port of mac/notifs.js.
 const { Notification, nativeImage } = require('electron');
+const { EventEmitter } = require('events');
 const path = require('path');
 const P = require('../shared/protocol.js');
 const { IconsIn } = require('../shared/notificon.js');
@@ -15,9 +16,10 @@ const xmlEsc = (t) => String(t).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
 
-class Notifs {
+class Notifs extends EventEmitter {
   // opts: link, helper, settings (shared), save(), selfIds: [AUMID], peerName(), onChange(), onClick({app, appName})? (main.js: a phone's notification clicked)
   constructor(opts) {
+    super();
     this.iconsIn = new IconsIn(nativeImage, path.join(__dirname, 'assets', 'sidebar-icon@2x.png')); // TwinDesk's for apps without one
     Object.assign(this, opts);
     this.peerAccepts = false; // the other side's notif.policy (assume no until told)
@@ -84,12 +86,19 @@ class Notifs {
   // can read it at all (Notifications tab).
   _watch() {
     if (!this.helper.running) return;
-    const on = !!(this.cfg.send && this.peerAccepts && this.connected);
+    const on = !!(this.cfg.send && this.peerAccepts && this.connected) || !!this.webWant;
     this.helper.request('notifWatch', { on, self: this.selfIds }).then((r) => {
       if (this.readable === !!r.readable) return;
       this.readable = !!r.readable;
       this.onChange();
     }, () => {});
+  }
+
+  // TwinDesk Web's devices that show this PC's notifications (shared/web/webhub.js notifSource).
+  want(on) {
+    if (!!on === !!this.webWant) return;
+    this.webWant = !!on;
+    this._watch();
   }
 
   _local(ev) {
@@ -102,6 +111,9 @@ class Notifs {
     if (this.echoes.some((e) => e.title === str(ev.title, 200) && str(ev.body).includes(e.body))) return;
     this.apps.set(app, { app, appName: str(ev.appName, 100) || app, at: Date.now() });
     if (this.apps.size > 60) this.apps.delete(this.apps.keys().next().value);
+    if (this.webWant && !this.cfg.muted.includes(app)) {
+      this.emit('notif', { id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle), body: this.cfg.hideText ? '' : str(ev.body), at: Math.round(Number(ev.at)) || Date.now() });
+    }
     if (this.cfg.send && this.peerAccepts && this.connected && !this.cfg.muted.includes(app)) {
       this.link.send({
         t: T.NOTIF, id: str(ev.id, 64), app, appName: str(ev.appName, 100), title: str(ev.title), subtitle: str(ev.subtitle),

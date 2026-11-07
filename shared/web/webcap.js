@@ -3,7 +3,9 @@
 // window of its own (webcap.html) in a session of its own, so it runs beside the TwinDesk session's
 // capture (a computer watching this screen) without touching it.
 //
-// new WebCap({audio: 'loopback'|'helper', hub?: {acquire(name, webContents), release(name)},
+// new WebCap({audio: 'loopback'|'helper'|'source', hub?: {acquire(name, webContents), release(name)},
+//   source?: {acquire() → Promise<label>, release()} (audio 'source': a capture device by its label,
+//   Linux's loopback.js),
 //   worklet: file URL of the platform's pcm-worklet.js, display?(mode, dev) → electron Display,
 //   release?(mode, dev): after a stream with that mode (Extend: the platform's screen of its own goes)})
 // start({video, audio, mode: 'mirror'|'extend', dev {id, name, w, h}, maxH, fps, mbps}); stop(); remote(msg)
@@ -17,9 +19,9 @@ const { BrowserWindow, ipcMain, session, desktopCapturer, screen } = require('el
 const PARTITION = 'twindesk-webcap';
 
 class WebCap extends EventEmitter {
-  constructor({ audio = 'loopback', hub = null, worklet, display = null, release = null }) {
+  constructor({ audio = 'loopback', hub = null, source = null, worklet, display = null, release = null }) {
     super();
-    Object.assign(this, { audioMode: audio, hub, worklet, display, releaseDisplay: release });
+    Object.assign(this, { audioMode: audio, hub, source, worklet, display, releaseDisplay: release });
     this.win = null;
     this.session = 0;
     this.active = null;
@@ -66,12 +68,23 @@ class WebCap extends EventEmitter {
     this.emit('status', 'starting');
     const win = await this._window();
     if (!this.active || this.active.session !== session) return;
-    const mode = audio ? this.audioMode : false;
-    if (mode === 'helper' && this.hub) {
+    let sound = audio ? this.audioMode : false;
+    let label = '';
+    if (sound === 'helper' && this.hub) {
       const ok = await this.hub.acquire('web', win.webContents);
       if (!ok) console.warn('[webcap] no system sound from the helper');
     }
-    win.webContents.send('start', { session, video, audio: mode, maxH, fps, mbps, worklet: this.worklet });
+    if (sound === 'source' && this.source) {
+      try {
+        label = await this.source.acquire();
+        this.active.sourceHeld = true;
+      } catch (e) {
+        console.warn('[webcap] no system sound:', e.message);
+        sound = false;
+      }
+      if (!this.active || this.active.session !== session) { if (label) this.source.release(); return; }
+    }
+    win.webContents.send('start', { session, video, audio: sound, label, maxH, fps, mbps, worklet: this.worklet });
   }
 
   stop() {
@@ -79,6 +92,7 @@ class WebCap extends EventEmitter {
     const was = this.active;
     this.active = null;
     if (this.hub) this.hub.release('web');
+    if (was.sourceHeld && this.source) this.source.release();
     if (this.releaseDisplay) { try { this.releaseDisplay(was.mode, was.dev); } catch (_) {} }
     if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stop');
     this.emit('status', 'off');

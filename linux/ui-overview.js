@@ -93,6 +93,7 @@ UI.tab({
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null;
 
     const pairedList = el('div');
+    const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
     body.append(
       UI.card('', [addrRow, ipRow]),
       UI.card(t('Found nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
@@ -100,6 +101,7 @@ UI.tab({
       hero,
       adb.el,
       UI.card(t('Paired'), [pairedList]),
+      ...(webCard ? [webCard.el] : []),
     );
 
     let last = null;
@@ -156,6 +158,7 @@ UI.tab({
       return { busy: true, text: mine.kind === 'take' ? t('Taking over…') : t('Connecting…') };
     }
     const update = (s) => {
+      if (webCard) webCard.render(s);
       last = s;
       bleSw.set(!s.net || s.net.ble !== false);
       blePcSw.set(!!s.net && s.net.blePc === true);

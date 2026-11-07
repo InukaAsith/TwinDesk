@@ -1,0 +1,59 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* TwinDesk Web's pages in the window (shared/ui-web.js). */
+.web-pair { display: flex; gap: 20px; align-items: center; padding: 16px; flex-wrap: wrap; }
+.web-qr { background: #fff; padding: 10px; border-radius: 12px; line-height: 0; flex: none; }
+.web-qr canvas { width: 176px; height: 176px; image-rendering: pixelated; }
+.web-pair-text { display: flex; flex-direction: column; gap: 6px; min-width: 200px; flex: 1; }
+.web-code { font-size: 34px; font-weight: 600; letter-spacing: 3px; color: var(--text); }
+.web-pair-btns { margin-top: 6px; }
+.web-pad { padding: 12px 16px; }
+.web-steps { margin: 0; padding-left: 20px; color: var(--text); line-height: 1.6; }
+.web-name { width: 220px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; }
+.web-cam-box { display: flex; justify-content: center; padding: 12px; min-height: 60px; }
+.web-cam { max-width: 100%; max-height: 50vh; border-radius: 10px; background: #000; }
+/* Drop: one conversation in a card, the height of the window (as Messages). */
+.web-drop { padding: 0; overflow: hidden; }
+.web-drop .hub-conv { height: calc(100vh - 210px); min-height: 340px; }
+.web-conv-head { flex-direction: row; align-items: center; justify-content: space-between; }
+.hub-bubble { position: relative; }
+.web-bubble-file { cursor: pointer; }
+.web-file { display: flex; gap: 10px; align-items: center; white-space: normal; }
+.web-file svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.4; flex: none; }
+.web-file-name { font-weight: 500; }
+.web-del { position: absolute; top: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; padding: 0; line-height: 18px; font-size: 13px;
+  background: var(--text); color: var(--card); cursor: pointer; opacity: 0; transition: opacity .15s; }
+.hub-bubble.in .web-del { right: -6px; }
+.hub-bubble.out .web-del { left: -6px; }
+.hub-bubble:hover .web-del { opacity: .85; }
+/* The sidebar tile: as a phone's, with a plain tint for a wallpaper. */
+.web-wall { background: linear-gradient(160deg, #5e5ce6, #0a84ff); color: #fff; }
+/* Web devices under the phones and computers, spaced as they are. */
+#webdevs { display: flex; flex-direction: column; gap: 6px; margin: -6px 0 12px; }
+#webdevs:empty { display: none; }
+#phones:not(:empty) + #pcs:not(:empty), #phones:not(:empty) ~ #webdevs:not(:empty), #pcs:not(:empty) + #webdevs:not(:empty) { margin-top: -6px; }
+/* A web device's Overview: what it may do here, each a way to its page. */
+.web-feats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 12px; }
+.web-feat { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: transparent; color: var(--text); font: inherit; text-align: left; cursor: default; }
+.web-feat:hover { background: var(--nav-hover); }
+.web-feat-state { font-size: 12px; color: var(--muted); }
+.web-feat-state.on { color: var(--good); }
+
+/* Drop: Save on a file bubble */
+.web-save { margin-left: 8px; border: 0; border-radius: 6px; padding: 3px 9px; font: inherit; font-size: 12px; cursor: pointer;
+  background: rgba(127, 127, 127, 0.22); color: inherit; align-self: center; flex: none; }
+.web-save:hover { background: rgba(127, 127, 127, 0.34); }
+
+/* Files: transfers both ways */
+.web-xfers { display: flex; flex-direction: column; }
+.web-xfers-none { padding: 10px 14px; }
+.web-xfer { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--sep, rgba(127, 127, 127, 0.18)); }
+.web-xfer:first-child { border-top: 0; }
+.web-xfer > svg { width: 22px; height: 22px; flex: none; opacity: 0.75; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.web-xfer-text { flex: 1; min-width: 0; }
+.web-xfer-text .web-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.web-xfer-bar { height: 3px; border-radius: 2px; margin-top: 5px; background: rgba(127, 127, 127, 0.2); overflow: hidden; }
+.web-xfer-bar i { display: block; height: 100%; background: var(--accent, #0a84ff); transition: width 0.3s; }
+.web-xfer.in .web-xfer-bar { display: none; }
+.web-xfer-acts { display: flex; gap: 6px; flex: none; }
+.card.hub-drop { outline: 2px dashed var(--accent, #0a84ff); outline-offset: -4px; }

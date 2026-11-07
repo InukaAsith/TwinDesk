@@ -57,8 +57,12 @@ async function main() {
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
   for (const name of fs.readdirSync(path.join(ROOT, 'shared'))) {
-    if (name === 'lang' || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
+    if (name === 'lang' || name === 'web' || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
   }
+  // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
+  // phone app's viewer and remote it reuses (android-web/).
+  copy(path.join(ROOT, 'web'), path.join(STAGE, 'web'), (name) => name !== 'shortcuts-src');
+  copy(path.join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'web'), path.join(STAGE, 'android-web'));
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper'));
   // Multi-device's helper (several watched edges, docs/multi-device.md): the same sources built with -DMULTI.
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper-multi'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper-multi'));

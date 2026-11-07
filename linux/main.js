@@ -165,6 +165,7 @@ let net = null; // Wi-Fi for a session through Bluetooth (netlink.js)
 let wifi = null; // this computer's Wi-Fi for it: hosting, joining (wifi.js, NetworkManager)
 let pendingView = null; // a phone window waiting for wireless debugging (phoneViews.onNoAdb)
 let lastMode = 'home';
+let web = null; // TwinDesk Web (shared/web/webwire.js): browsers and iPhones as devices of their own
 let fw = { checking: true, ok: null, message: 'Checking…' };
 const session = system.session();
 // Started at login (tray only), or by a Mac app's launcher (that app only).
@@ -384,6 +385,9 @@ function start() {
     },
   });
   updates.start();
+  // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
+  web = require('./web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
+    kvm: () => kvm, devctl: () => devctl, loadVcam });
   const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -561,12 +565,21 @@ function loadBtAudio() {
 
 // Camera: the cameras of the two computers (shared/camshare.js; a phone's is phoneview.js
 // openCamera), and the running one's picture to the tab and the virtual camera (shared/vcam.js).
-function loadCamera() {
-  if (camShare || !settings.camera.on) return camShare;
-  const { CamShare } = require('../shared/camshare.js');
+// The virtual camera by itself: also for a web device's camera (TwinDesk Web).
+function loadVcam() {
+  if (vcam) return vcam;
   const { VirtualCam } = require('../shared/vcam.js');
   // On or off, the phone's Camera page says so (phone-bridge.js).
   vcam = new VirtualCam({ driver: require('./vcam'), cfg: () => settings.camera, save: saveSettings, onChange: pushState, onReady: () => phoneViews && phoneViews.bridge._tellPhone(), ui: () => mainWin });
+  if (phoneViews) phoneViews.vcam = vcam; // the phone may have started first
+  vcam.check();
+  return vcam;
+}
+
+function loadCamera() {
+  if (camShare || !settings.camera.on) return camShare;
+  const { CamShare } = require('../shared/camshare.js');
+  loadVcam();
   const computer = () => link.status.state === 'connected' && !(link.current && link.current.os === P.OS.ANDROID);
   camShare = new CamShare({
     getLanguage: () => i18n.locale,
@@ -577,8 +590,6 @@ function loadCamera() {
     peerName,
     onChange: pushState,
   });
-  if (phoneViews) phoneViews.vcam = vcam; // the phone may have started first
-  vcam.check();
   camShare.sendPolicy(); // connected already: the other computer hears whether it's shared
   return camShare;
 }
@@ -1124,6 +1135,7 @@ function buildState() {
     monitor: settings.monitor,
     clipboard: { ...settings.clipboard, ...clip.view },
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
+    web: web ? web.view() : { cfg: { ...settings.web }, devices: [] }, // TwinDesk Web
     vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
     remote: phoneRemote ? phoneRemote.view : phoneServer ? REMOTE_OFF : null,
     phoneMedia: nowPlaying ? nowPlaying.view : null,
@@ -1468,6 +1480,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;
   theme.stop();

@@ -31,6 +31,12 @@ rm -rf "$STAGE" && mkdir -p "$STAGE/mac" "$STAGE/shared" "$STAGE/mac-helper/.bui
 rsync -a --exclude node_modules --exclude dist --exclude dev --exclude test --exclude dmg --exclude build-app.sh --exclude build-dmg.sh --exclude scripts/signing-identity.sh --exclude entitlements.plist ./ "$STAGE/mac/"
 cp "$ROOT"/shared/*.js "$ROOT"/shared/*.css "$ROOT"/shared/*.html "$STAGE/shared/"
 cp -R "$ROOT/shared/lang" "$STAGE/shared/"
+# TwinDesk Web (shared/web/webwire.js): its server, the page (web/, without the Shortcuts sources) and
+# the phone app's screen viewer and remote, which the page shows as they are.
+mkdir -p "$STAGE/shared/web" "$STAGE/web" "$STAGE/android-web"
+cp "$ROOT"/shared/web/*.js "$ROOT"/shared/web/*.html "$STAGE/shared/web/"
+rsync -a --exclude shortcuts-src "$ROOT/web/" "$STAGE/web/"
+cp -R "$ROOT/android/app/src/main/assets/web/." "$STAGE/android-web/"
 cp "$ROOT"/mac-helper/.build/release/macshare-helper "$ROOT"/mac-helper/.build/release/macshare-helper-multi "$ROOT"/mac-helper/.build/release/macshare-dockstub "$ROOT"/mac-helper/.build/release/macshare-calls "$STAGE/mac-helper/.build/release/"
 cp -R node_modules/ws "$STAGE/node_modules/"
 mkdir -p "$STAGE/mac/node_modules" && cp -R node_modules/ws "$STAGE/mac/node_modules/"

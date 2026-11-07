@@ -109,6 +109,7 @@ let devctl = null; // Overview's controls of the selected device (shared/devctl.
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let settings = null;
 let device = null;
+let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
 let clip = null;
 let helper = null;
@@ -352,6 +353,9 @@ function start() {
     },
   });
   updates.start();
+  // TwinDesk Web (../web.js): the same server and pairings as the one-to-one app (one userData).
+  web = require('../web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip,
+    kvm: () => kvm, devctl: () => devctl });
   const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
@@ -929,6 +933,7 @@ function buildState() {
     keys: settings.keys,
     monitor: settings.monitor,
     clipboard: { ...settings.clipboard, ...clip.view },
+    web: web ? web.view() : { cfg: { ...settings.web }, devices: [] }, // TwinDesk Web
     ui: settings.ui,
     look: Look.view(settings.ui, null), // Linux has no system accent colour to read
     app: settings.app,
@@ -1224,6 +1229,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;
   theme.stop();

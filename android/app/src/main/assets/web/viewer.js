@@ -174,7 +174,7 @@
   const SLOP = 10;
 
   function fingerDown(e) {
-    if (penNear || performance.now() - penAway < 500) return; // the hand holding the pen
+    if (penNear || performance.now() - Math.max(penAway, penAt) < PALM_MS) return; // the hand holding the pen
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (touchMode === 'pad') return padDown(e);
     if (touches.size === 1) {
@@ -297,20 +297,53 @@
   // a tablet pen; a computer that doesn't know `pen` takes it as a mouse. md/mu: b 0 the tip or the
   // eraser, b 1 the side button (a right click as a mouse). While it is near, fingers do nothing (the
   // hand resting on the screen).
+  //
+  // An Apple Pencil in Safari (iPadOS), as drawing apps on the web handle it:
+  //   - tilt from altitudeAngle/azimuthAngle when the browser has them (Safari's tiltX/tiltY are whole
+  //     degrees; the angles are exact), else tiltX/tiltY;
+  //   - the first sample of a stroke can come with pressure 0: the stroke's last pressure (or a light
+  //     touch) instead, so a line doesn't start with a gap;
+  //   - Scribble (iPadOS handwriting) swallows pointer events unless touchmove is cancelled
+  //     (WebKit bug 217430): every touchmove here is, and a stylus touchstart too;
+  //   - palm rejection: while the pen is near, and for PALM_MS after it last did anything, a finger
+  //     is the hand holding it (a Pencil without hover is only "near" while it touches).
   const PEN_BUTTON = { 0: B.LEFT, 5: B.LEFT, 2: B.RIGHT };
+  const PALM_MS = 1500;
   let penNear = false;
   let penAway = 0; // when it left (fingers count again a moment later)
+  let penAt = 0; // when it last did anything
   let penLast = null; // {x, y, pen} what was sent last
+  let strokeP = 0; // the stroke's last pressure
   const penHeld = new Set();
+  const DEG = 180 / Math.PI;
+  function penTilt(e) {
+    const alt = e.altitudeAngle, az = e.azimuthAngle;
+    if (typeof alt === 'number' && typeof az === 'number' && alt > 0) {
+      if (alt >= Math.PI / 2 - 1e-6) return [0, 0]; // straight up
+      const t = Math.tan(alt);
+      return [Math.round(Math.atan(Math.cos(az) / t) * DEG * 10) / 10, Math.round(Math.atan(Math.sin(az) / t) * DEG * 10) / 10];
+    }
+    return [Math.round(e.tiltX || 0), Math.round(e.tiltY || 0)];
+  }
   function penState(e) {
     const c = (e.buttons & 33) !== 0; // the tip (1) or the eraser (32)
+    let p = c ? Math.min(1, Math.max(0, e.pressure || 0)) : 0;
+    if (c && p === 0) p = strokeP || 0.2; // a first sample without pressure
+    strokeP = c ? p : 0;
+    const [tx, ty] = penTilt(e);
     return {
-      p: c ? Math.round(Math.min(1, Math.max(0, e.pressure || 0)) * 10000) / 10000 : 0,
-      tx: Math.round(e.tiltX || 0), ty: Math.round(e.tiltY || 0), tw: Math.round(e.twist || 0) % 360,
+      p: Math.round(p * 10000) / 10000,
+      tx, ty, tw: Math.round(e.twist || 0) % 360,
       c, er: (e.buttons & 32) !== 0 || e.button === 5, bar: (e.buttons & 2) !== 0,
     };
   }
+  // Scribble: cancelled touch moves keep Safari from taking the Pencil's strokes for handwriting.
+  document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchstart', (e) => {
+    if ([...e.changedTouches].some((t) => t.touchType === 'stylus')) e.preventDefault();
+  }, { passive: false });
   function penNearNow() {
+    penAt = performance.now();
     if (!penNear) { // the hand comes with it: let go of what fingers were doing
       penNear = true;
       if (one) {
