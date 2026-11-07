@@ -99,11 +99,11 @@
         controlSw.set(w.cfg.control !== false);
         camSw.set(w.cfg.camera !== false);
         micSw.set(w.cfg.mic !== false);
-        const key = JSON.stringify(w.devices.map((d) => [d.id, d.name, d.online, d.background, d.lastSeen, d.ip, d.secure, d.push]));
+        const key = JSON.stringify(w.devices.map((d) => [d.id, d.name, d.online, d.background, d.lastSeen, d.ip, d.secure, d.push, d.link]));
         if (key === listKey) return;
         listKey = key;
         list.replaceChildren(...(w.devices.length ? w.devices.map((d) => {
-          const hint = [kind(d), status(d), d.ip, d.online ? (d.secure ? tr('Secure') : tr('Not secure')) : '', d.push ? tr('Notifications on') : ''].filter(Boolean).join(' · ');
+          const hint = [kind(d), status(d), d.ip, d.online && d.link === 'USB-C' ? 'USB-C' : '', d.online ? (d.secure ? tr('Secure') : tr('Not secure')) : '', d.push ? tr('Notifications on') : ''].filter(Boolean).join(' · ');
           return UI.row(d.name, hint, [
             UI.button(tr('Open'), () => UI.openWebDev(d.id), 'small'),
             UI.button(tr('Forget'), () => api().webForget(d.id), 'small'),
@@ -226,8 +226,8 @@
   UI.webGlyph = (k) => glyph(GL[k]);
 
   // The device's Overview, as a phone's (shared/ui-device.js): its picture, name and link; its actions with
-  // their icons; what it may do, as quick-action tiles; then Drop on the left, and the clipboard and a drop
-  // zone for files on the right.
+  // their icons; what it may do, as quick-action tiles; then Drop and a drop zone for files on the left, and
+  // the clipboard on the right.
   UI.tab({
     id: 'wd-overview', web: true, group: 'w0', order: 92, icon: 'overview', title: 'Overview', color: 'linear-gradient(#8e8e93, #636366)',
     build(body, page) {
@@ -248,7 +248,7 @@
         ['sound', 'Audio', 'sound'], ['mic', 'Microphone', 'mic'], ['clipOut', 'Clipboard', 'clip'], ['notifs', 'Notifications', 'notifs'],
         ['files', 'Files', 'files'], ['camera', 'Camera', 'camera']];
       const tiles = {};
-      const grid = el('div', { class: 'dv-qs' });
+      const grid = el('div', { class: 'dv-qs web-qs' });
       for (const [key, label, ic] of FEATS) {
         const state = el('span', { class: 'dv-qs-state' });
         const b = el('button', { class: 'dv-qs-tile', attrs: { 'aria-pressed': 'false' } }, [glyph(GL[ic]), el('span', { class: 'dv-qs-label' }, [el('span', { text: tr(label) }), state])]);
@@ -264,12 +264,13 @@
       const cols = () => {
         const n = [...grid.children].filter((x) => !x.hidden).length || 1;
         const w = grid.clientWidth - 28;
-        grid.style.setProperty('--cols', String(w >= n * 110 ? n : Math.ceil(n / 2)));
+        const per = Math.max(1, Math.floor((w + 8) / 148)); // a tile wants 140 px and the 8 px gap
+        grid.style.setProperty('--cols', String(n <= per ? n : Math.ceil(n / Math.ceil(n / per))));
       };
       new ResizeObserver(cols).observe(grid);
       const qsCard = UI.card(tr('Quick actions'), [grid], { actions: [UI.button(tr('Settings'), () => UI.go('wd-share'), 'small link')] });
 
-      // Drop on the left; the clipboard and Send files on the right.
+      // Drop and Send files on the left; the clipboard on the right.
       const dropList = el('div', { class: 'history web-ov-drop' });
       const dropCard = UI.card(tr('Drop'), [dropList], { actions: [UI.button(tr('Open'), () => UI.go('wd-drop'), 'small link')] });
       const clipText = el('div', { class: 'web-ov-clip' });
@@ -286,7 +287,7 @@
         const paths = api().pathsOf ? api().pathsOf([...e.dataTransfer.files]) : [];
         if (canSend && paths.length && UI.webDev) api().webSendFiles({ id: UI.webDev, paths, kind: 'files' });
       };
-      const lower = el('div', { class: 'dv-two' }, [el('div', { class: 'dv-col' }, [dropCard]), el('div', { class: 'dv-col' }, [clipCard, sendCard])]);
+      const lower = el('div', { class: 'dv-two' }, [el('div', { class: 'dv-col' }, [dropCard, sendCard]), el('div', { class: 'dv-col' }, [clipCard])]);
 
       // Its pairing (the rest of its connection is in Connection, as for every device).
       const nameIn = el('input', { class: 'web-name', type: 'text', maxLength: 60, attrs: { 'aria-label': tr('Name') } });
@@ -345,7 +346,7 @@
         const notes = d.push ? [alt.clip && tr('Clipboard'), alt.drop && tr('Messages'), alt.files && tr('Files'), alt.notifs && tr('Notifications')].filter(Boolean).join(', ') || tr('None') : tr('Off');
         facts.replaceChildren(
           ...fact(tr('Address'), d.ip),
-          ...fact(tr('Connection'), d.online ? (d.secure ? tr('Secure') : tr('Not secure')) : tr('Offline')),
+          ...fact(tr('Connection'), d.online ? [d.link === 'USB-C' ? 'USB-C' : d.link ? tr(d.link) : '', d.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(' · ') : tr('Offline')),
           ...fact(tr('Alerts'), notes),
           ...fact(tr('Now'), d.watching ? (d.watching.mode === 'extend' ? tr('Extended screen') : tr('Mirroring screen')) : d.remote ? tr('Remote') : ''),
           ...fact(tr('Paired'), d.pairedAt ? new Date(d.pairedAt).toLocaleDateString() : ''),
@@ -738,7 +739,7 @@
         setTimeout(() => hero.classList.remove('just'), 1600);
       }
       was = up;
-      linkText.textContent = up ? [tr('TwinDesk Web'), d.secure ? tr('Secure') : tr('Not secure')].join(' · ') : tr('Not connected');
+      linkText.textContent = up ? [tr('TwinDesk Web'), d.link === 'USB-C' ? 'USB-C' : '', d.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(' · ') : tr('Not connected');
       status.textContent = up ? (d.watching ? (d.watching.mode === 'extend' ? tr('{name} is extending this screen', { name: d.name }) : tr('{name} is viewing this screen', { name: d.name })) : tr('Connected'))
         : tr('Paired. It connects when TwinDesk Web is opened on it. {when}', { when: status_(d) });
       offBtn.hidden = !up;

@@ -59,6 +59,7 @@ const { EventEmitter } = require('events');
 const webca = require('./webca.js');
 const { MdnsHost, ipv4s } = require('./mdnshost.js');
 const { WebPush } = require('./webpush.js');
+const { ifaceFor, kindOf, isUsbLink, refreshPorts } = require('../lantype.js');
 
 // ws: beside shared/ in a build (app/node_modules); in a checkout, the platform app's own.
 let WS;
@@ -98,6 +99,21 @@ const ALERT_DEFAULTS = { clip: true, drop: true, files: true, notifs: false, pre
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/heic': '.heic', 'image/gif': '.gif', 'image/webp': '.webp', 'video/quicktime': '.mov', 'video/mp4': '.mp4', 'application/pdf': '.pdf', 'text/plain': '.txt', 'audio/mp4': '.m4a', 'application/zip': '.zip' };
 const OSES = new Set(['ios', 'ipados', 'android', 'mac', 'win', 'linux', 'other']);
 const newCode = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+
+// USB-C: a phone or tablet on a cable (its hotspot over USB, Android USB tethering) reaches this
+// computer on an address of its own. The page moves its socket there when it can (web/app.js), and
+// while it's there the screen's WebRTC is kept on the cable (only candidates on that link).
+const v4n = (a) => {
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(String(a || ''));
+  return m ? ((+m[1] << 24) | (+m[2] << 16) | (+m[3] << 8) | +m[4]) >>> 0 : null;
+};
+const candAddr = (c) => { const f = String((c && c.candidate) || c || '').split(' '); return f.length > 5 ? f[4] : ''; };
+function linkOf(local) {
+  const name = ifaceFor(local);
+  if (!name) return '';
+  if (isUsbLink(name, local)) return 'USB-C';
+  return kindOf(name);
+}
 
 function readJson(file, dflt) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return dflt; }
@@ -149,7 +165,7 @@ class WebHub extends EventEmitter {
     this.inBus = new EventEmitter();
     this.inBus.current = null;
     if (this.capture) {
-      this.capture.on('out', (m) => this.screenDev && this._send(this.screenDev, m));
+      this.capture.on('out', (m) => this.screenDev && this._sendRtc(this.screenDev, m));
       this.capture.on('status', (status) => {
         this.screen.status = status;
         if (this.screenDev) this._send(this.screenDev, { t: 'screen.state', status, on: status !== 'off', video: this.screen.video, audio: this.screen.audio });
@@ -157,7 +173,7 @@ class WebHub extends EventEmitter {
       });
     }
     if (this.camRecv) {
-      this.camRecv.on('out', (dev, m) => this._send(dev, m));
+      this.camRecv.on('out', (dev, m) => this._sendRtc(dev, m));
       this.camRecv.on('change', () => this.emit('change'));
     }
     if (this.notifSource) this.notifSource.on('notif', (n) => this._notif(n));
@@ -255,7 +271,7 @@ class WebHub extends EventEmitter {
     this.addrTimer = setInterval(() => {
       this._addresses();
       if (Date.now() - this.codeAt > CODE_MS) this._rotate();
-    }, 10000);
+    }, 3000); // often enough that plugging in a cable moves the phone onto it within seconds
     this.lastAddrs = ipv4s().map((i) => i.address).join(',');
     this.clipTimer = setInterval(() => this._pollClip(), CLIP_POLL_MS);
     this.emit('change');
@@ -288,6 +304,9 @@ class WebHub extends EventEmitter {
     const now = ipv4s().map((i) => i.address).join(',');
     if (now === this.lastAddrs) return;
     this.lastAddrs = now;
+    // A cable just came in (or went): every page hears of it, so a phone can move to it now.
+    try { refreshPorts(); } catch (_) {}
+    setTimeout(() => this._all({ t: 'pc.links', ips: ipv4s().map((i) => i.address), cable: this._cableIps() }), 1500);
     try {
       const c = webca.load(this.dir, this.host, [ALIAS]);
       if (c.fresh) {
@@ -498,6 +517,8 @@ class WebHub extends EventEmitter {
   _socket(ws, req) {
     ws.ip = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
     ws.secure = !!req.socket.encrypted;
+    ws.local = String(req.socket.localAddress || '').replace(/^::ffff:/, '');
+    ws.link = linkOf(ws.local);
     ws.alive = true;
     this.pending.add(ws);
     const helloTimer = setTimeout(() => { if (!ws.dev) ws.close(4000, 'hello'); }, 15000);
@@ -535,7 +556,7 @@ class WebHub extends EventEmitter {
   _pcInfo() {
     const s = this.self();
     return {
-      id: s.id, name: s.name, os: s.os, version: s.version || '', host: this.host, port: this.port, ips: ipv4s().map((i) => i.address), control: this.cfg.control !== false,
+      id: s.id, name: s.name, os: s.os, version: s.version || '', host: this.host, port: this.port, ips: ipv4s().map((i) => i.address), cable: this._cableIps(), control: this.cfg.control !== false,
       vapid: this.push ? this.push.publicKey : '', media: !!this.media, mount: !!this.smbInfo, devices: !!this.devLocal,
       extend: !!(this.extendable && this.extendable()),
     };
@@ -545,7 +566,17 @@ class WebHub extends EventEmitter {
     this.pending.delete(ws);
     ws.dev = dev.id;
     if (!this.socks.has(dev.id)) this.socks.set(dev.id, new Set());
+    const before = this._primary(dev.id);
     this.socks.get(dev.id).add(ws);
+    // It moved to the cable (or back to Wi-Fi when the cable came out) while watching: the stream
+    // starts again on the new link once its old socket has closed.
+    if (before && before.link !== ws.link && this.screenDev === dev.id && this.screenReq && this.screenReq.dev === dev.id) {
+      clearTimeout(this.relinkTimer);
+      this.relinkTimer = setTimeout(() => {
+        const d = this.devices.find((x) => x.id === dev.id);
+        if (d && this.screenDev === dev.id && this.screenReq && this.screenReq.dev === dev.id) this._screenStart(d, this.screenReq.m, ws);
+      }, 600);
+    }
     // What it says about itself now (an iPhone's name can change; the address does all the time).
     const name = str(m.name, 60).trim();
     if (name) dev.name = name;
@@ -555,7 +586,7 @@ class WebHub extends EventEmitter {
     dev.lastIp = ws.ip;
     this._saveDevices();
     const token = this._token(dev);
-    this._sendWs(ws, { t: m.t === 'pair' ? 'paired' : 'welcome', id: dev.id, key: m.key || undefined, token, pc: this._pcInfo(), device: { id: dev.id, name: dev.name } });
+    this._sendWs(ws, { t: m.t === 'pair' ? 'paired' : 'welcome', id: dev.id, key: m.key || undefined, token, pc: this._pcInfo(), device: { id: dev.id, name: dev.name }, link: ws.link || '' });
     this._sendWs(ws, { t: 'policy', allow: this.allow(dev) });
     if (this.allow(dev).clipOut) this._sendWs(ws, { t: 'clip', text: this.clip.text, at: this.clip.at, history: this.clip.history.slice(0, 20) });
     this._sendWs(ws, { t: 'chat.all', items: this._chat(dev.id).map((x) => this._public(x)) });
@@ -690,6 +721,7 @@ class WebHub extends EventEmitter {
     }
     if (t === 'screen.start') return this._screenStart(dev, m, ws);
     if (t === 'screen.stop') return this.screenDev === dev.id && this._screenStop();
+    if ((t === 'rtc.ice' || /^(cam|mic|scr)\.ice$/.test(t)) && !this._onLink(dev.id, m.candidate, true)) return;
     if (t === 'rtc.answer' || t === 'rtc.ice') return this.screenDev === dev.id && this.capture && this.capture.remote(m);
     if (/^(cam|mic|scr)\.(offer|ice|stop)$/.test(t)) {
       const kind = t.split('.')[0];
@@ -736,6 +768,45 @@ class WebHub extends EventEmitter {
     return true;
   }
 
+  // The socket a device uses now: its newest (while it moves between links it has two for a moment).
+  _primary(devId) {
+    const set = this.socks.get(devId);
+    if (!set || !set.size) return null;
+    let last = null;
+    for (const ws of set) last = ws;
+    return last;
+  }
+
+  // This computer's addresses on a USB-C link, for the page to move to.
+  _cableIps() {
+    return ipv4s().filter((i) => isUsbLink(i.ifname, i.address)).map((i) => i.address);
+  }
+
+  // On the cable, a candidate counts only on that link: this computer's own address there, or (from
+  // the phone) one on the same subnet. Names (mDNS candidates) and anything unparsed are kept.
+  _onLink(devId, cand, fromPhone) {
+    const ws = this._primary(devId);
+    if (!ws || ws.link !== 'USB-C' || !cand) return true;
+    const a = candAddr(cand);
+    if (!a) return true;
+    if (!fromPhone) return a === ws.local;
+    const ip = v4n(a);
+    if (ip == null) return !a.includes(':'); // IPv6 would go around the cable
+    const i = ipv4s().find((x) => x.address === ws.local);
+    if (!i) return true;
+    const mask = v4n(i.netmask);
+    return ((ip & mask) >>> 0) === ((v4n(ws.local) & mask) >>> 0);
+  }
+
+  _sendRtc(devId, m) {
+    if (m && m.candidate && /\.ice$/.test(m.t || '') && !this._onLink(devId, m.candidate, false)) return true;
+    if (m && typeof m.sdp === 'string' && /\.(offer|answer)$/.test(m.t || '')) {
+      const ws = this._primary(devId);
+      if (ws && ws.link === 'USB-C') m = { ...m, sdp: m.sdp.split(/\r\n/).filter((l) => !l.startsWith('a=candidate:') || this._onLink(devId, l.slice(2), false)).join('\r\n') };
+    }
+    return this._send(devId, m);
+  }
+
   _sendWs(ws, m) {
     if (ws.readyState === 1) ws.send(JSON.stringify(m));
   }
@@ -752,6 +823,7 @@ class WebHub extends EventEmitter {
     if (!al.sound && m.video === false) return this._sendWs(ws, { t: 'screen.state', status: `error: Sound is off for ${dev.name} on ${this.self().name}` });
     if (this.screenDev && this.screenDev !== dev.id) this._send(this.screenDev, { t: 'screen.state', status: 'off', why: `${dev.name} is watching now` });
     this.screenDev = dev.id;
+    this.screenReq = { dev: dev.id, m };
     const video = m.video !== false;
     const audio = !!m.audio && al.sound;
     const mode = m.mode === 'extend' && al.extend && this.extendable && this.extendable() ? 'extend' : 'mirror';
@@ -766,6 +838,8 @@ class WebHub extends EventEmitter {
   _screenStop() {
     const dev = this.screenDev;
     this.screenDev = null;
+    this.screenReq = null;
+    clearTimeout(this.relinkTimer);
     this.screen = { status: 'off', video: false, audio: false };
     if (this.capture) this.capture.stop();
     if (this.inBus.current) { this.inBus.current = null; this.inBus.emit('closed'); }
@@ -1077,10 +1151,10 @@ class WebHub extends EventEmitter {
       clip: { text: this.clip.text.slice(0, 2000), at: this.clip.at },
       devices: this.devices.map((d) => {
         const set = this.socks.get(d.id);
-        const ws = set && [...set][0];
+        const ws = set && this._primary(d.id);
         return {
           id: d.id, name: d.name, os: d.os, model: d.model || '', pairedAt: d.pairedAt, lastSeen: d.lastSeen, ip: ws ? ws.ip : d.lastIp || '',
-          online: online(d.id), secure: ws ? ws.secure : null, notifs: !!d.notifs, remote: this.remoteBus.dev === d.id,
+          online: online(d.id), secure: ws ? ws.secure : null, link: ws ? this._primary(d.id).link || '' : '', notifs: !!d.notifs, remote: this.remoteBus.dev === d.id,
           push: !!d.push, alerts: this._alertsOf(d), allow: this.allow(d), background: !!(ws && [...set].every((x) => x.hidden)),
           watching: this.screenDev === d.id ? this.screen : null,
           chat: this._chat(d.id).slice(-80).map((x) => ({ ...this._public(x), path: x.file ? x.file.path : undefined })),

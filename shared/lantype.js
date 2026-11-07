@@ -77,4 +77,55 @@ function lanType(address) {
   return kind;
 }
 
-module.exports = { lanType, ifaceFor, kindOf, v4 };
+// Whether an interface is a USB-C link straight to the other device (TwinDesk Web, #web): a phone or
+// tablet sharing its connection through the cable (iPhone USB, Android USB tethering over RNDIS/NCM)
+// or a Thunderbolt/USB4 bridge. A USB Ethernet adapter is not one: that's a cable to a network.
+//   Mac:     the hardware port (iPhone USB, iPad USB, the phone's own name for Android, Thunderbolt Bridge).
+//   Linux:   the driver (ipheth, rndis_host, cdc_ncm, thunderbolt-net) or usb0/rndis0.
+//   Windows: the adapter's description (Apple Mobile Device Ethernet, Remote NDIS, UsbNcm), read once.
+// An iPhone's Personal Hotspot over the cable also always hands out 172.20.10.x on a wired port.
+const PHONE_PORT = /iphone|ipad|android|rndis|\bncm\b|pixel|galaxy|samsung|xiaomi|redmi|oneplus|motorola|huawei|honor|oppo|vivo|realme|nothing|sony|xperia|thunderbolt bridge/i;
+const USB_DESC = /apple mobile device|remote ndis|rndis|usbncm|ncm|android|thunderbolt.*network/i;
+let winDesc = null, winAt = 0;
+function readWinDesc() {
+  if (winAt && Date.now() - winAt < 60000) return;
+  winAt = Date.now();
+  require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    'Get-NetAdapter | Select-Object Name,InterfaceDescription | ConvertTo-Json -Compress'], { timeout: 8000, windowsHide: true }, (err, out) => {
+    if (err) return;
+    try {
+      const j = JSON.parse(String(out));
+      const map = {};
+      for (const a of Array.isArray(j) ? j : [j]) if (a && a.Name) map[a.Name] = String(a.InterfaceDescription || '');
+      winDesc = map;
+    } catch (_) {}
+  });
+}
+function isUsbLink(name, address = '', platform = process.platform) {
+  if (!name) return false;
+  if (platform === 'darwin') {
+    readMacPorts();
+    const port = (macPorts && macPorts[name]) || '';
+    if (/wi-?fi|airport/i.test(port)) return false;
+    if (PHONE_PORT.test(port)) return true;
+    return /^172\.20\.10\./.test(address) && /^en\d/.test(name);
+  }
+  if (platform === 'linux') {
+    if (/^(usb|rndis)\d/.test(name)) return true;
+    try {
+      if (fs.existsSync(`/sys/class/net/${name}/wireless`)) return false;
+      const drv = require('path').basename(fs.readlinkSync(`/sys/class/net/${name}/device/driver`));
+      if (/^(ipheth|rndis_host|cdc_ncm|cdc_ether|thunderbolt[-_]net)$/.test(drv)) return true;
+    } catch (_) {}
+    return /^172\.20\.10\./.test(address);
+  }
+  if (/wi-?fi|wlan|wireless/i.test(name)) return false;
+  readWinDesc();
+  if (winDesc && USB_DESC.test(winDesc[name] || '')) return true;
+  return /^172\.20\.10\./.test(address);
+}
+
+// A new interface came up (a cable plugged in): read the port names again on the next ask.
+function refreshPorts() { macAt = 0; winAt = 0; if (process.platform === 'darwin') readMacPorts(); else if (process.platform === 'win32') readWinDesc(); }
+
+module.exports = { lanType, ifaceFor, kindOf, isUsbLink, refreshPorts, v4 };

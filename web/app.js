@@ -214,6 +214,7 @@
     conn: 'boot', // boot | pairing | connecting | online | offline
     pairErr: '',
     rtt: null,
+    link: '', // how the computer sees this socket: 'USB-C', 'Wi-Fi', 'Ethernet' or ''
     secure: location.protocol === 'https:',
     clip: { text: '', at: 0, history: [] },
     chat: [],
@@ -358,24 +359,85 @@
   let ws = null;
   let tries = 0;
   let retry = null;
+  // USB-C: when the computer has an address on a cable to this device (its hotspot over USB, USB
+  // tethering), the socket moves there, and back to the page's own address when the cable comes out.
+  // The page itself stays where it is (its origin, its installed app); only the socket moves, and the
+  // old one closes once the new one is welcomed, so nothing stops in between.
+  let via = ''; // the cable address the socket uses, '' for the page's own host
+  let prev = null; // the socket being moved away from, until the new one is welcomed
+  let lastPong = 0;
   const send = (m) => { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(m)); return true; } return false; };
+  const wsUrl = () => `${location.protocol === 'https:' ? 'wss' : 'ws'}://${via ? `${via}${location.port ? `:${location.port}` : ''}` : location.host}/ws`;
 
-  function connect() {
+  function moveTo(host) {
+    if (host === via || prev || !ws || ws.readyState !== 1) return;
+    prev = { sock: ws, via };
+    via = host;
+    ws = null;
+    connect(true);
+  }
+  // The move failed before it was welcomed: stay on the old socket if it's still up.
+  function moveBack() {
+    if (!prev) return false;
+    const p = prev;
+    prev = null;
+    if (p.sock.readyState !== 1) { via = ''; return false; }
+    ws = p.sock;
+    via = p.via;
+    return true;
+  }
+
+  let probing = false;
+  async function probeCable() {
+    if (probing || prev || !S.creds || S.paused || !online() || !S.pc) return;
+    const cable = S.pc.cable || [];
+    const here = via || location.hostname;
+    if (cable.includes(here)) return;
+    if (via && !cable.includes(via)) return moveTo(''); // that cable is gone
+    probing = true;
+    try {
+      for (const ip of cable) {
+        try {
+          const ctl = new AbortController();
+          const t = setTimeout(() => ctl.abort(), 2000);
+          const r = await fetch(`${location.protocol}//${ip}${location.port ? `:${location.port}` : ''}/api/ping`, { cache: 'no-store', signal: ctl.signal });
+          clearTimeout(t);
+          const j = await r.json();
+          if (j && j.id === S.pc.id) { moveTo(ip); break; }
+        } catch (_) {}
+      }
+    } finally { probing = false; }
+  }
+  setInterval(probeCable, 10000);
+
+  function connect(quiet) {
     clearTimeout(retry);
     if (S.paused) return;
     if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
-    const sock = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+    let sock;
+    try { sock = new WebSocket(wsUrl()); } catch (_) { via = ''; sock = new WebSocket(wsUrl()); }
     ws = sock;
-    if (S.creds) { S.conn = S.conn === 'offline' ? 'offline' : 'connecting'; render(); }
+    if (S.creds && !quiet) { S.conn = S.conn === 'offline' ? 'offline' : 'connecting'; render(); }
     sock.onopen = () => {
       tries = 0;
       if (S.creds) sock.send(JSON.stringify({ t: 'hello', id: S.creds.id, key: S.creds.key, os: ME.os, model: ME.model, name: load().name || '' }));
       else if (S.pairCode && S.pairCode.length === 6 && !holdForInstall()) pair(S.pairCode);
     };
-    sock.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } onMessage(m); };
+    sock.onmessage = (e) => {
+      if (ws !== sock && !(prev && prev.sock === sock)) return;
+      let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+      // During a move the old socket still carries everything until the new one is welcomed.
+      if (prev && prev.sock !== sock && m.t !== 'welcome' && m.t !== 'unknown' && m.t !== 'forgotten') return;
+      if (prev && prev.sock === sock && (m.t === 'welcome' || m.t === 'paired')) return;
+      onMessage(m);
+    };
     sock.onclose = (e) => {
+      if (prev && prev.sock === sock) { if (ws && ws.readyState === 1) return; prev = null; return; }
       if (ws !== sock) return;
       ws = null;
+      if (prev && moveBack()) return render();
+      // The cable came out under it: straight back on the page's own address.
+      if (via && e.code !== 4001 && e.code !== 4002 && !S.paused) { via = ''; tries = 0; return connect(true); }
       if (e.code === 4001) return dropCreds('This device was removed on the computer. Pair again to reconnect.');
       if (e.code === 4002 || S.paused) { // Disconnect, here or on the computer: off until Connect
         S.paused = S.paused || 'computer';
@@ -423,6 +485,7 @@
       case 'paired':
         S.creds = { id: m.id, key: m.key, token: m.token };
         S.pc = m.pc;
+        S.link = m.link || '';
         S.conn = 'online';
         keepCreds();
         toast(`Paired with ${m.pc.name}`);
@@ -433,7 +496,9 @@
       case 'welcome':
         S.creds.token = m.token;
         S.pc = m.pc;
+        S.link = m.link || '';
         S.conn = 'online';
+        if (prev) { const p = prev.sock; prev = null; try { p.close(1000, 'moved'); } catch (_) {} if (S.link === 'USB-C') toast(`Connected to ${pcName()} over USB-C`); }
         keepCreds();
         frame();
         break;
@@ -444,7 +509,8 @@
         S.pairErr = m.why === 'off' ? 'TwinDesk Web is turned off on that computer.' : m.wait ? `Too many attempts. Try again in ${m.wait} seconds.` : 'Incorrect code. Check the code in TwinDesk › TwinDesk Web on the computer.';
         renderPage();
         break;
-      case 'pong': S.rtt = Math.max(1, Math.round(performance.now() - m.at)); renderTop(); refresh('connection', 'receive'); break;
+      case 'pc.links': if (S.pc) { S.pc.ips = m.ips || S.pc.ips; S.pc.cable = m.cable || []; } probeCable(); break;
+      case 'pong': lastPong = performance.now(); S.rtt = Math.max(1, Math.round(performance.now() - m.at)); renderTop(); refresh('connection', 'receive'); break;
       case 'clip': S.clip = { text: m.text || '', at: m.at, from: m.from, history: m.history || S.clip.history }; refresh('clipboard', 'overview'); break;
       case 'chat.all': S.chat = m.items || []; refresh('files', 'drop', 'overview'); break;
       case 'chat.add':
@@ -521,13 +587,19 @@
     }
     if (m.t === 'welcome' || m.t === 'paired') {
       clearInterval(pingTimer);
-      const ping = () => send({ t: 'ping', at: performance.now() });
+      lastPong = performance.now();
+      const ping = () => {
+        // On the cable and no answer for a while: the cable came out without the socket noticing.
+        if (via && performance.now() - lastPong > 8000 && !prev) { const dead = ws; ws = null; via = ''; try { dead.onclose = null; dead.close(); } catch (_) {} return connect(true); }
+        send({ t: 'ping', at: performance.now() });
+      };
       ping();
       pingTimer = setInterval(ping, 5000);
       if (S.notifsOn === false && load().notifs !== false) send({ t: 'notifs', on: true });
       send({ t: 'vis', hidden: document.hidden });
       syncPush();
       takeShared();
+      setTimeout(probeCable, 500);
       if (pendingGo) { const g = pendingGo; pendingGo = null; goTo(g); }
       paintMedia();
     }
@@ -609,7 +681,7 @@
     e.update = () => {
       dot.className = `dot${online() ? ' good' : S.conn === 'connecting' || S.conn === 'boot' ? ' warn' : ''}`;
       who.textContent = !S.creds ? (S.serving ? `Not connected · ${S.serving.name} available` : 'Not connected')
-        : online() ? [pcName(), S.rtt != null ? `${S.rtt} ms` : ''].filter(Boolean).join(' · ')
+        : online() ? [pcName(), S.link === 'USB-C' ? 'USB-C' : '', S.rtt != null ? `${S.rtt} ms` : ''].filter(Boolean).join(' · ')
           : S.conn === 'paused' ? `${pcName()} · Disconnected` : S.conn === 'offline' ? `${pcName()} · Not reachable` : `${pcName()} · Connecting…`;
     };
     e.update();
@@ -720,7 +792,7 @@
   function render() { renderTop(); renderNav(); renderPage(); }
   const offlineNote = () => note(S.conn === 'paused' ? `Disconnected${S.paused === 'computer' ? ` on ${pcName()}` : ''}. Still paired: Connect when you want it back.` : S.conn === 'offline' ? `${pcName()} is not reachable. Make sure TwinDesk is open on it and both devices are on the same network.` : `Connecting to ${pcName()}…`, 'warn');
   const needOnline = () => { if (online()) return true; toast(`Not connected to ${pcName()}`); return false; };
-  const statusText = () => (online() ? ['Connected', S.rtt != null ? `${S.rtt} ms` : '', S.secure ? 'Secure' : ''].filter(Boolean).join(' · ')
+  const statusText = () => (online() ? ['Connected', S.link === 'USB-C' ? 'USB-C' : '', S.rtt != null ? `${S.rtt} ms` : '', S.secure ? 'Secure' : ''].filter(Boolean).join(' · ')
     : S.conn === 'paused' ? (S.paused === 'computer' ? `Disconnected on ${pcName()}` : 'Disconnected') : S.conn === 'offline' ? 'Not reachable' : 'Connecting…');
   const osName = (os) => ({ mac: 'macOS', win: 'Windows', linux: 'Linux' }[os] || '');
   const chev = () => el('span', { class: 'chev', text: '›' });
@@ -1105,7 +1177,7 @@
       ];
       actions.replaceChildren(...A.filter(Boolean));
       const F = [
-        ['Connection', S.secure ? 'Secure' : 'Not secure'],
+        ['Connection', [S.link, S.secure ? 'Secure' : 'Not secure'].filter(Boolean).join(' · ')],
         ['Latency', online() && S.rtt != null ? `${S.rtt} ms` : '—'],
         ['Address', (S.pc && S.pc.ips && S.pc.ips[0]) || location.hostname],
         ['TwinDesk', (S.pc && S.pc.version) || '—'],
@@ -1161,7 +1233,7 @@
     return () => {
       hd.desc(`This ${ME.kind} reconnects to ${pcName()} automatically, even when either device's network address changes.`);
       h.update(S.conn === 'paused' ? [btn('Connect', () => reconnect(), 'primary')] : []);
-      status.set(statusText().split(' · ')[0]);
+      status.set([statusText().split(' · ')[0], online() && S.link ? S.link : ''].filter(Boolean).join(' · '));
       rtt.set(online() && S.rtt != null ? `${S.rtt} ms` : '');
       sec.set(S.secure ? 'Encrypted (HTTPS)' : 'Not encrypted');
       const key = JSON.stringify([S.pc && S.pc.host, S.pc && S.pc.ips, location.host]);
@@ -1291,7 +1363,8 @@
     const ctlSw = sw((v) => { prefs.control = v; savePrefs(); });
     const fullSw = sw((v) => { prefs.full = v; savePrefs(); });
     const soundSw = sw((v) => { prefs.sound = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
-    const paceSeg = seg([['fast', 'Lowest latency'], ['smooth', 'Smooth']], () => prefs.pacing, (v) => { prefs.pacing = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
+    // Steady takes a new session (viewer.js leaves the playout-delay extension out of its answer).
+    const paceSeg = seg([['fast', 'Lowest latency'], ['smooth', 'Smooth'], ['steady', 'Steady']], () => prefs.pacing, (v) => { const was = prefs.pacing; prefs.pacing = v; savePrefs(); toFrame('viewer', optsFor('viewer')); if ((was === 'steady') !== (v === 'steady') && overlay && overlay.kind === 'viewer') startScreen(); });
     const qSeg = seg([['low', '720p'], ['medium', '1080p'], ['auto', '1440p'], ['high', '4K']], () => prefs.quality, (v) => { prefs.quality = v; savePrefs(); if (overlay && overlay.kind === 'viewer') startScreen(); });
     const touchSeg = seg([['pad', 'Trackpad'], ['direct', 'Direct']], () => prefs.touch, (v) => { prefs.touch = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
     const tapSw = sw((v) => { prefs.tap = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
