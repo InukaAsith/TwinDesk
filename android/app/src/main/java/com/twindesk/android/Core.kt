@@ -274,22 +274,19 @@ class Core private constructor(val ctx: Context) : Link.Events {
     @Volatile private var wiredNonce = ""
 
     // The computer's pairing QR code, scanned here (QrActivity): the first of its addresses that
-    // answers, then pairing with its nonce (only Allow there, as on the cable), or a computer already
-    // paired connects at that address. false: none of them answers from this network.
+    // answers, then pairing with its nonce (only Allow there, as on the cable). A computer already
+    // paired connects at its own stored address: a browsable link cannot re-point it.
+    // false: none of them answers from this network.
     fun connectQr(id: String, addrs: List<String>, port: Int, nonce: String, name: String): Boolean {
-        val address = addrs.firstOrNull { a ->
-            runCatching { java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(a, port), 800) }; true }.getOrDefault(false)
-        } ?: return false
-        val h = store.hosts().find { it.id == id }
         resumeUntil = 0
-        if (h != null) {
-            Log.i("TwinDesk", "QR: connecting to ${h.name} at $address")
-            h.address = address
-            h.port = port
-            store.putHost(h)
+        store.hosts().find { it.id == id }?.let { h ->
+            Log.i("TwinDesk", "QR: connecting to ${h.name}")
             connect(h)
             return true
         }
+        val address = addrs.firstOrNull { a ->
+            runCatching { java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(a, port), 800) }; true }.getOrDefault(false)
+        } ?: return false
         Log.i("TwinDesk", "QR: pairing with ${name.ifEmpty { id }} at $address")
         invite?.let { discovery.clearInvite(it.id) }
         invite = null

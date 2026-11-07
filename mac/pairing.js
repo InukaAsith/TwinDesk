@@ -148,6 +148,7 @@ class Pairing extends EventEmitter {
     this.fails.clear(p.ctx.address);
     this.server.send(p.ctx, { t: P.T.PAIR_OK, token, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC });
     console.log(`[pairing] paired with ${p.name} (${p.id})`);
+    if (p.qr && this.consumeQr) this.consumeQr();
     this._clear();
   }
 
