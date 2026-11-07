@@ -122,7 +122,7 @@
     title: 'AirPlay & SMB',
     desc: 'This computer’s shared folder in the Files app on an iPhone or iPad, and AirPlay.',
     color: 'linear-gradient(#ffd60a, #ff9f0a)',
-    badge: (s) => (W(s).share && W(s).share.on ? 'on' : ''),
+    badge: (s) => ((W(s).share && W(s).share.on) || (W(s).airplay && W(s).airplay.on) ? 'on' : ''),
     build(body) {
       const shareSw = UI.switch((v) => api().webShareSet(v));
       const shareRow = UI.row(tr('Share a folder'), '', [shareSw], { literalHint: true });
@@ -140,11 +140,15 @@
       const howCard = UI.card(tr('In the Files app'), [el('div', { class: 'web-pad' }, [steps])]);
       // The Mac receives AirPlay itself (System Settings), so TwinDesk only points there.
       const mac = /Mac/.test(navigator.platform);
-      const airCard = UI.card(tr('AirPlay'), [mac
+      // A PC or Linux computer: TwinDesk's own receiver (shared/airplay): screen mirroring, with sound.
+      const airSw = mac ? null : UI.switch((v) => api().webAirplaySet(v));
+      const airRow = mac
         ? UI.row(tr('AirPlay Receiver'), tr('This Mac receives AirPlay itself: System Settings › General › AirDrop & Handoff › AirPlay Receiver. An iPhone or iPad then mirrors to it from Control Center.'))
-        : UI.row(tr('Receive AirPlay'), tr('Not available yet. Until then, a web device shows this screen with Screen in TwinDesk Web, and sends its own with the steps on its Send screen page.'), [UI.switch(() => {}, { disabled: true }).el]),
-      ]);
-      body.append(shareErr, smbCard, howCard, airCard);
+        : UI.row(tr('Receive AirPlay'), '', [airSw.el], { literalHint: true });
+      const liveRow = mac ? null : UI.row(tr('Mirroring'), '', [UI.button(tr('Stop'), () => api().webAirplayStop(), 'small')], { literalHint: true });
+      const airErr = el('div', { class: 'note warn', hidden: true });
+      const airCard = UI.card(tr('AirPlay'), mac ? [airRow] : [airRow, liveRow]);
+      body.append(shareErr, smbCard, howCard, airErr, airCard);
       let addr = '';
       return (s) => {
         const w = W(s);
@@ -161,6 +165,17 @@
         addrRow.hidden = userRow.hidden = pwRow.hidden = howCard.hidden = !on;
         addrRow.setHint(addr || tr('Turn on TwinDesk Web to get this computer’s network name'));
         userRow.setHint(m.user || 'macshare');
+        if (!mac) {
+          const a = w.airplay || {};
+          airSw.set(!!a.on);
+          airRow.setHint(a.on
+            ? tr('On iPhone or iPad: Control Center › Screen Mirroring › {name}. The screen and its sound show in a window here.', { name: a.name || me(s) })
+            : tr('Shows an iPhone’s, iPad’s or Mac’s screen here with Screen Mirroring, for anyone on the same network.'));
+          liveRow.hidden = !a.session;
+          if (a.session) liveRow.setHint(tr('{name} · since {when}', { name: a.session.name, when: new Date(a.session.since).toLocaleTimeString() }));
+          airErr.hidden = !a.error;
+          airErr.textContent = a.error ? tr('AirPlay couldn’t start: {why}', { why: a.error }) : '';
+        }
       };
     },
   });

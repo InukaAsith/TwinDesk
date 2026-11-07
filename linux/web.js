@@ -15,6 +15,7 @@ const P = require('../shared/protocol.js');
 const { receivedDir } = require('../shared/received.js');
 const { DevLocal } = require('../shared/devlocal.js');
 const { startWeb, pcShare } = require('../shared/web/webwire.js');
+const { airplayHost } = require('../shared/airplay/viewer.js');
 const RemoteInput = require('./remote-input');
 const loopback = require('./loopback');
 
@@ -104,6 +105,7 @@ function setupWeb(c) {
       helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
     },
     vcam: c.loadVcam || null,
+    airplay: airplayHost({ dir: app.getPath('userData'), name: () => c.device().name, t: c.t, pushState: c.pushState }),
     fileClip: c.fileClip && c.fileClip.offerLocal ? c.fileClip : null,
   });
   for (const [name, fn] of Object.entries(web.actions)) ipcMain.handle(name, (_e, arg) => fn(arg));

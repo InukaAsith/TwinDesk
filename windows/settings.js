@@ -113,7 +113,8 @@ function normalize(s) {
       const w = s.web || {};
       const port = Number(w.port);
       return { on: bool(w.on, false), port: Number.isInteger(port) && port >= 1024 && port < 65000 ? port : 47870,
-        screen: bool(w.screen, true), control: bool(w.control, true), camera: bool(w.camera, true), mic: bool(w.mic, true), pad: bool(w.pad, false) };
+        screen: bool(w.screen, true), control: bool(w.control, true), camera: bool(w.camera, true), mic: bool(w.mic, true), pad: bool(w.pad, false),
+        airplay: bool(w.airplay, false) }; // Receive AirPlay (shared/airplay), off until turned on
     })(),
     // ReZume tab (shared/rezume.js): off until turned on; what goes, which ways, where it shows
     rezume: require('../shared/rezume.js').normalize(s.rezume),

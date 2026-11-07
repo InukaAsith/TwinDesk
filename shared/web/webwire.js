@@ -13,7 +13,8 @@
 //   password, path} | null, o.key(code) (a media key), o.vcam() (the virtual camera loaded: the web
 //   camera's picture shows), o.fileClip {offerLocal(paths, from)} (the file-paste shortcut), o.t (i18n),
 //   o.share → {view() → {on, busy, error, folder, name, user}, set(on), choose(folder)} (AirPlay & SMB's
-//   shared folder; pcShare(smb) makes it, and smbInfo, from windows/smb.js or linux/smb.js).
+//   shared folder; pcShare(smb) makes it, and smbInfo, from windows/smb.js or linux/smb.js),
+//   o.airplay → shared/airplay/viewer.js's host (Receive AirPlay, settings.web.airplay) or null.
 // Returns {hub, view(), actions}: actions are the window's ipc calls (all named web*).
 'use strict';
 
@@ -115,6 +116,7 @@ function startWeb(o) {
 
   const apply = () => (cfg().on ? hub.start() : hub.stop());
   apply();
+  if (o.airplay && cfg().airplay) o.airplay.set(true);
 
   const dev = (id) => hub.devices.find((d) => d.id === id);
   const actions = {
@@ -187,6 +189,14 @@ function startWeb(o) {
       const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Share This Folder') });
       if (!r.canceled && r.filePaths[0]) await o.share.choose(r.filePaths[0]);
     },
+    webAirplaySet(on) {
+      if (!o.airplay) return;
+      cfg().airplay = on === true;
+      o.save();
+      o.airplay.set(on === true);
+      o.pushState();
+    },
+    webAirplayStop() { if (o.airplay) o.airplay.end(); },
     webCopy(text) { if (typeof text === 'string') require('electron').clipboard.writeText(text.slice(0, 1 << 20)); },
   };
 
@@ -195,9 +205,12 @@ function startWeb(o) {
     view() {
       const v = hub.view();
       const c = cfg();
-      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, share: o.share ? o.share.view() : null };
+      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, share: o.share ? o.share.view() : null, airplay: o.airplay ? o.airplay.view() : null };
     },
-    shutdown() { try { hub.stop(); } catch (_) {} },
+    shutdown() {
+      try { hub.stop(); } catch (_) {}
+      if (o.airplay) { try { o.airplay.shutdown(); } catch (_) {} }
+    },
   };
 }
 

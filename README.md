@@ -915,3 +915,8 @@ Copyright © 2026 inukaasith.
 
 Parts are adapted from [DeskPad](https://github.com/Stengo/DeskPad) (MIT). See [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)
 for details.
+
+---
+
+The AirPlay receiver (Windows and Linux) is adapted from [UxPlay](https://github.com/FDH2/UxPlay) and the projects it builds on; see [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
+AirPlay, Apple TV, iPhone, iPad and Mac are trademarks of Apple Inc. TwinDesk is not affiliated with or endorsed by Apple.

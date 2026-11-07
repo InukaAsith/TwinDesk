@@ -37,7 +37,7 @@
   const ICONS = {
     overview: 'M3 9.5 10 4l7 5.5V17H3z M8 17v-4h4v4',
     display: 'M3 4h14v9H3z M7 17h6 M10 13v4',
-    airplay: 'M5 14H3.5V4h13v10H15 M6.5 17.5 10 13l3.5 4.5z',
+    cast: 'M2.5 4h15v9.5h-15z M7 17h6 M10 6.5v4.5 M7.8 8.8L10 11l2.2-2.2', // a screen that receives (not Apple's AirPlay symbol)
     files: 'M3 5h5l1.5 2H17v9H3z',
     drop: 'M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5H9l-4 3v-3H4A1.5 1.5 0 0 1 2.5 13V6A1.5 1.5 0 0 1 4 4.5z M6.5 8.5h7 M6.5 11h4',
     drive: 'M3 11.5 5 4.5h10l2 7 M3 11.5h14v4H3z M13.5 13.5h.1',
@@ -548,7 +548,7 @@
     { id: 'overview', title: 'Overview', icon: 'overview', c: ['#8E8E93', '#636366'], g: 1 },
     { id: 'connection', title: 'Connection', icon: 'link', c: ['#30D158', '#248A3D'], g: 1 },
     { id: 'receive', title: 'Receive screen', short: 'Screen', icon: 'display', c: ['#5AC8FA', '#0A84FF'], g: 2 },
-    { id: 'send', title: 'Send screen', icon: 'airplay', c: ['#64D2FF', '#5E5CE6'], g: 2 },
+    { id: 'send', title: 'Send screen', icon: 'cast', c: ['#64D2FF', '#5E5CE6'], g: 2 },
     { id: 'remote', title: 'Remote', icon: 'remote', c: ['#BF5AF2', '#8944AB'], g: 3 },
     { id: 'clipboard', title: 'Clipboard', icon: 'clipboard', c: ['#64D2FF', '#30B0C7'], g: 4 },
     { id: 'notifications', title: 'Notifications', short: 'Alerts', icon: 'bell', c: ['#FF6961', '#FF3B30'], g: 4 },
@@ -1384,7 +1384,7 @@
       }
       if (ME.apple) {
         body.replaceChildren(
-          el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('airplay', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: `AirPlay to ${name}` }), el('div', { class: 'muted', text: S.pc && S.pc.os === 'mac' ? `${name} receives AirPlay when AirPlay Receiver is on in its System Settings.` : `${name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.` })]),
+          el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('cast', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: `AirPlay to ${name}` }), el('div', { class: 'muted', text: S.pc && S.pc.os === 'mac' ? `${name} receives AirPlay when AirPlay Receiver is on in its System Settings.` : `${name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.` })]),
           card('Mirror your screen', [el('ol', { class: 'steps' }, [
             el('li', { html: 'Open <b>Control Center</b>.' }),
             el('li', { html: 'Tap <b>Screen Mirroring</b>.' }),

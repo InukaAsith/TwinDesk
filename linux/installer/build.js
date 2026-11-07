@@ -57,7 +57,7 @@ async function main() {
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
   for (const name of fs.readdirSync(path.join(ROOT, 'shared'))) {
-    if (name === 'lang' || name === 'web' || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
+    if (name === 'lang' || name === 'web' || name === 'airplay' || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
   }
   // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
   // phone app's viewer and remote it reuses (android-web/).

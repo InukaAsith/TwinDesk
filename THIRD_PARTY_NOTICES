@@ -27,6 +27,38 @@ Design reference: pairing UX, input ownership and screen-edge crossing, key mapp
 capture/injection safety rules (mac/kvm.js, mac-helper/Sources/macshare-helper/Capture.swift).
 
 
+UxPlay — the AirPlay receiver
+-----------------------------
+Source:  https://github.com/FDH2/UxPlay
+License: GPL-3.0 — Copyright (C) the UxPlay authors: F. Duncanh (FDH2) and contributors, and
+         antimof (the original UxPlay, https://github.com/antimof/UxPlay)
+
+TwinDesk's AirPlay receiver (shared/airplay/) is UxPlay's work: its protocol, its handshakes and its
+choices, followed closely and rewritten in JavaScript. All credit for working out how AirPlay screen
+mirroring is received goes to UxPlay and the projects it grew from:
+  - RPiPlay, Florian Draschbacher (https://github.com/FD-/RPiPlay), GPL-3.0
+  - AirplayServer, dsafa22 (https://github.com/dsafa22/AirplayServer)
+  - shairplay, Juho Vähä-Herttua (https://github.com/juhovh/shairplay)
+  - playfair, EstebanKubata (https://github.com/EstebanKubata/playfair), GPL-3.0: FairPlay's
+    key exchange for AirPlay
+
+Included from UxPlay:
+  - shared/airplay/playfair/ (UxPlay lib/playfair, unchanged; LICENSE.md there), built to
+    shared/airplay/playfair.wasm with the small freestanding shim in playfair/shim/ (TwinDesk's)
+  - shared/airplay/fp-replies.js: the four FairPlay setup replies (lib/fairplay_playfair.c)
+Adapted from UxPlay (each file says which part):
+  - shared/airplay/receiver.js    lib/raop.c, raop_handlers.h, raop_rtp_mirror.c, raop_rtp.c,
+                                  raop_ntp.c, mirror_buffer.c: /info, SETUP, the stream keys,
+                                  the mirror and audio streams, the timing requests
+  - shared/airplay/pairing.js     lib/pairing.c: legacy pair-setup and pair-verify
+  - shared/airplay/fairplay.js    lib/fairplay_playfair.c: /fp-setup and the key unwrap
+  - shared/airplay/advertise.js   lib/dnssd.c: the _airplay._tcp and _raop._tcp records
+  - shared/airplay/viewer-renderer.js  the AAC-ELD AudioSpecificConfig (UxPlay's audio pipeline)
+
+AirPlay, Apple TV, iPhone, iPad and Mac are trademarks of Apple Inc. TwinDesk is not affiliated with
+or endorsed by Apple; the names say only what TwinDesk works with.
+
+
 DeskPad — CGVirtualDisplayPrivate.h
 -----------------------------------
 Source:  https://github.com/Stengo/DeskPad (DeskPad/CGVirtualDisplayPrivate.h)

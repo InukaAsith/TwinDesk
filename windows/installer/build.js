@@ -63,7 +63,7 @@ async function main() {
   copy(WIN, path.join(STAGE, 'windows'), (name) => !SKIP.has(name));
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
-  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || /\.(js|css|html)$/.test(name));
+  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'playfair.wasm' || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver
   // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
   // phone app's viewer and remote it reuses (android-web/).
   copy(path.join(ROOT, 'web'), path.join(STAGE, 'web'), (name) => name !== 'shortcuts-src');
