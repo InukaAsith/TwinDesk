@@ -1,0 +1,26 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shared:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # movebench.js is a benchmark, not part of the test run (it needs ws, which CI does not install).
+      - name: Shared tests
+        run: |
+          fail=0
+          for f in shared/test/*.js; do
+            case "$f" in */movebench.js) continue;; esac
+            node "$f" || fail=1
+          done
+          exit $fail
