@@ -39,16 +39,16 @@
   nsExec::Exec 'netsh advfirewall firewall delete rule name="MacShare"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="MacShare (TCP 47800)"'
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk" program="$INSTDIR\TwinDesk.exe"'
-  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk" dir=in action=allow program="$INSTDIR\TwinDesk.exe" profile=any enable=yes'
-  ; This PC also listens (PC ↔ PC host), so the port gets its own rule.
+  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk" dir=in action=allow program="$INSTDIR\TwinDesk.exe" profile=private enable=yes'
+  ; Private networks only: on a Public network the person marks it Private themselves.
+  ; The blanket rule above covers TCP 47800 already; the delete stays for older installs' rule.
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (TCP 47800)"'
-  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (TCP 47800)" dir=in action=allow protocol=TCP localport=47800 program="$INSTDIR\TwinDesk.exe" profile=any enable=yes'
   ; A phone: adb finds its wireless debugging over mDNS (phone-bridge.js).
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (adb)"'
-  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (adb)" dir=in action=allow program="$INSTDIR\resources\app\windows\vendor\adb\adb.exe" profile=any enable=yes'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (adb)" dir=in action=allow program="$INSTDIR\resources\app\windows\vendor\adb\adb.exe" profile=private enable=yes'
   ; The input lane in the helper (native/tdfast, Lane.cs): its UDP socket is the helper's.
   nsExec::Exec 'netsh advfirewall firewall delete rule name="TwinDesk (input lane)"'
-  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (input lane)" dir=in action=allow protocol=UDP program="$INSTDIR\resources\app\windows-helper\bin\macshare-winhelper.exe" profile=any enable=yes'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="TwinDesk (input lane)" dir=in action=allow protocol=UDP program="$INSTDIR\resources\app\windows-helper\bin\macshare-winhelper.exe" profile=private enable=yes'
   ; The phone as a drive goes through Windows' WebDAV client (phonedrive.js), which refuses files
   ; over 50 MB unless this says otherwise: 4 GB, its maximum (read when WebClient next starts).
   nsExec::Exec 'reg add HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters /v FileSizeLimitInBytes /t REG_DWORD /d 4294967295 /f'
