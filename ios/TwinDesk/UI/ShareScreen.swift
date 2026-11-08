@@ -34,7 +34,7 @@ struct ShareScreenCard: View {
                 .font(.title3.weight(.semibold)).glassChip(48, tint: on ? .red : .purple)
             VStack(alignment: .leading, spacing: 2) {
                 Text(on ? "Sharing this screen" : "Share Screen").font(.body.weight(.semibold))
-                Text(on ? "On \(core.host?.name ?? "the computer") · every app, until you stop" : "Show this iPhone on \(core.host?.name ?? "the computer"), like presenting in a call")
+                Text(on ? "On \(core.host?.name ?? "the computer") · every app, until you stop" : "Show this \(Device.word) on \(core.host?.name ?? "the computer"), like presenting in a call")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

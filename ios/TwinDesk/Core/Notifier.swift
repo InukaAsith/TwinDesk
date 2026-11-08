@@ -55,7 +55,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
 
     func fclip(id: String, names: [String], files: Int, from: String) {
         let what = files == 1 ? (names.first ?? "1 file") : "\(files) items"
-        post("fclip", "Copied on \(from)", "\(what) — Save to this iPhone?", cat: Cat.fclip, info: ["id": id], sound: true)
+        post("fclip", "Copied on \(from)", "\(what) — Save to this \(Device.word)?", cat: Cat.fclip, info: ["id": id], sound: true)
     }
 
     func cancelFclip() { c.removeDeliveredNotifications(withIdentifiers: ["fclip"]) }
@@ -69,7 +69,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func invite(_ name: String) {
-        post("invite", "\(name) wants to connect", "Pair this iPhone with it?", cat: Cat.invite, sound: true)
+        post("invite", "\(name) wants to connect", "Pair this \(Device.word) with it?", cat: Cat.invite, sound: true)
     }
 
     func filesIn(_ name: String, ok: Bool, from: String) {

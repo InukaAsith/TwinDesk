@@ -337,7 +337,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         }
         let name = host?.name ?? "The computer"
         switch code {
-        case Proto.E.badToken: message = "\(name) forgot this iPhone. Pair again."
+        case Proto.E.badToken: message = "\(name) forgot this \(Device.word). Pair again."
         case Proto.E.busy: message = m.str("message").isEmpty ? "Busy with another device" : m.str("message")
         case Proto.E.replaced: message = m.str("message").isEmpty ? "Another device connected" : m.str("message")
         case Proto.E.released: message = "Disconnected from \(name)"

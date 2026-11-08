@@ -3,6 +3,9 @@
 // shared/protocol.js and android/…/Proto.kt (keep the three in step).
 import Foundation
 import CryptoKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum Proto {
     static let version = 1
@@ -148,4 +151,16 @@ extension Data {
         }
         self = out
     }
+}
+
+// "iPhone" or "iPad", for what the app says about this device.
+enum Device {
+    static let isPad: Bool = {
+        #if canImport(UIKit)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return false
+        #endif
+    }()
+    static var word: String { isPad ? "iPad" : "iPhone" }
 }

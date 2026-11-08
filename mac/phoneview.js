@@ -154,7 +154,8 @@ class PhoneViews extends EventEmitter {
     const usb = await iosusb.list();
     const work = screen.getPrimaryDisplay().workAreaSize;
     const h = o.height || Math.min(860, work.height - 80);
-    const w = o.width || Math.round(h * 9 / 19.5);
+    const pad = ((this.phone && this.phone.info) || {}).platform === 'ipados'; // an iPad: 3:4 until its picture says (the window takes its shape)
+    const w = o.width || Math.round(h * (pad ? 3 / 4 : 9 / 19.5));
     const opts = { maxSize: 0, videoBitRate: 12000000 };
     if (usb.length) return void this._open({ kind: 'screen', usb: usb[0].id, title: o.title || usb[0].name, titleKey: '', width: w, height: h, opts });
     if (this.server.current && this.server.current.os === 'ios') this._open({ kind: 'screen', native: true, title: o.title || this.server.current.name, titleKey: o.titleKey || '', width: w, height: h, opts: this.bridge.sessionOpts('screen') });

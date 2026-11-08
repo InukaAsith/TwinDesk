@@ -2,7 +2,7 @@
 // Files both ways (Files.kt, docs/protocol.md "Files"): file.offer / accept / chunk / end / done,
 // and fast files (fx) where the computer offers them: we PUT what we send and GET what it sends
 // (after file.pull), over HTTPS pinned like the session. What arrives lands in
-// Files › On My iPhone › TwinDesk › Received (UIFileSharingEnabled).
+// Files › On My \(Device.word) › TwinDesk › Received (UIFileSharingEnabled).
 import Foundation
 import CryptoKit
 

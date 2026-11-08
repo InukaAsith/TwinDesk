@@ -9,7 +9,7 @@ struct ClipboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                Columns {
                     Button { core.clip.sendCurrent(force: true) } label: {
                         Label("Send Clipboard to \(core.host?.name ?? "Computer")", systemImage: "arrow.up.doc.on.clipboard").frame(maxWidth: .infinity)
                     }
@@ -17,7 +17,7 @@ struct ClipboardView: View {
 
                     SectionTitle(text: "Sync")
                     VStack(spacing: 12) {
-                        ToggleRow(title: "This iPhone’s copies go to the computer", on: sync("clipboard", "out"))
+                        ToggleRow(title: "This \(Device.word)’s copies go to the computer", on: sync("clipboard", "out"))
                         Divider()
                         ToggleRow(title: "The computer’s copies come here", on: sync("clipboard", "in"))
                         Divider()
@@ -33,14 +33,14 @@ struct ClipboardView: View {
                     }
                     .glassCard()
 
-                    SectionTitle(text: "This iPhone’s copies")
+                    SectionTitle(text: "This \(Device.word)’s copies")
                     VStack(alignment: .leading, spacing: 12) {
                         ToggleRow(title: "Ask to send what I copy", detail: "A notification with Send while TwinDesk runs in the background", on: opt("clip.notifyOwn"))
                         Text("iOS lets only the app on screen read the clipboard, so Send opens TwinDesk for a moment. Set Settings › TwinDesk › Paste from Other Apps to Allow, so iOS doesn’t ask each time. The Send Clipboard shortcut works from Back Tap and the Action button.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .glassCard()
-
+                } right: {
                     if !core.clip.history.isEmpty {
                         SectionTitle(text: "Recent")
                         VStack(spacing: 0) {
@@ -54,13 +54,13 @@ struct ClipboardView: View {
                                     }
                                     .padding(.vertical, 8).contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.plain).hoverLift()
                             }
                         }
                         .glassCard()
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 30)
+                .pageWidth()
             }
             .background(Backdrop())
             .navigationTitle("Clipboard")

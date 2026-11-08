@@ -213,7 +213,8 @@ const UI = {
     os = os || 'win';
     const same = os === 'mac';
     const phoneOs = os === 'android' || os === 'ios';
-    const kind = os === 'linux' ? 'Linux' : same ? 'Mac' : os === 'ios' ? 'iPhone' : phoneOs ? I18n.t('Phone') : 'PC';
+    const pad = os === 'ios' && !!(s && s.phone && s.phone.info && s.phone.info.platform === 'ipados');
+    const kind = os === 'linux' ? 'Linux' : same ? 'Mac' : os === 'ios' ? (pad ? 'iPad' : 'iPhone') : phoneOs ? I18n.t('Phone') : 'PC';
     // Computers are called by their names everywhere — this one by its own name, the
     // other by its name (or "the other computer" before anything was paired).
     const me = (s && s.macName) || I18n.t('This Mac');

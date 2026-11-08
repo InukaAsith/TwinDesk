@@ -30,6 +30,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var inflight = 0 // bytes handed to the socket not yet sent
     private var rx = Data()
     private var started = false
+    // Landscape (an iPad, mostly): iOS hands the frames upright as in portrait, with how the device
+    // is held beside them. Scaled down to the size we send, then turned, so the computer gets the
+    // picture the right way up (and the extension stays inside its 50 MB).
+    private var scaler: VTPixelTransferSession?
+    private var rotator: VTPixelRotationSession?
+    private var scaledPool: CVPixelBufferPool?
+    private var turnedPool: CVPixelBufferPool?
+    private var poolKey = ""
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         let c = NWConnection(host: "127.0.0.1", port: 47830, using: .tcp)
@@ -61,13 +69,16 @@ final class SampleHandler: RPBroadcastSampleHandler {
     }
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with sampleBufferType: RPSampleBufferType) {
-        guard sampleBufferType == .video, started, let px = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        guard sampleBufferType == .video, started, let raw = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let orient = (CMGetAttachment(sampleBuffer, key: RPVideoSampleOrientationKey as CFString, attachmentModeOut: nil) as? NSNumber)
+            .flatMap { CGImagePropertyOrientation(rawValue: $0.uint32Value) } ?? .up
         q.sync {
             // At most `fps`, and never while the socket is backed up (frames dropped, not queued).
             if lastFrame.isValid, CMTimeGetSeconds(CMTimeSubtract(pts, lastFrame)) < 1.0 / Double(fps) - 0.002 { return }
             if inflight > 3 << 20 { forceKey = true; return }
             lastFrame = pts
+            guard let px = upright(raw, orient) else { return }
             let w = CVPixelBufferGetWidth(px), h = CVPixelBufferGetHeight(px)
             if session == nil || w != srcSize.w || h != srcSize.h { makeSession(w, h) }
             guard let s = session else { return }
@@ -82,6 +93,49 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 self.q.async { self.encoded(sb) }
             }
         }
+    }
+
+    // ---- turning ----
+
+    private func upright(_ px: CVPixelBuffer, _ o: CGImagePropertyOrientation) -> CVPixelBuffer? {
+        let rotation: CFString
+        switch o {
+        case .left, .leftMirrored: rotation = kVTRotation_CW90
+        case .right, .rightMirrored: rotation = kVTRotation_CCW90
+        case .down, .downMirrored: rotation = kVTRotation_180
+        default: return px // portrait: as it is (the encoder scales it)
+        }
+        let sw = CVPixelBufferGetWidth(px), sh = CVPixelBufferGetHeight(px)
+        let k = maxSize > 0 ? min(1.0, Double(maxSize) / Double(max(sw, sh))) : 1.0
+        let w = Int(Double(sw) * k) & ~1, h = Int(Double(sh) * k) & ~1
+        let fmt = CVPixelBufferGetPixelFormatType(px)
+        let quarter = rotation != kVTRotation_180
+        let key = "\(w)x\(h)/\(fmt)/\(rotation)"
+        if key != poolKey {
+            poolKey = key
+            scaledPool = Self.pool(w, h, fmt)
+            turnedPool = quarter ? Self.pool(h, w, fmt) : Self.pool(w, h, fmt)
+            if scaler == nil { VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &scaler) }
+            if rotator == nil { VTPixelRotationSessionCreate(nil, &rotator) }
+            if let r = rotator { VTSessionSetProperty(r, key: kVTPixelRotationPropertyKey_Rotation, value: rotation) }
+        }
+        guard let sp = scaledPool, let tp = turnedPool, let s = scaler, let r = rotator else { return px }
+        var small: CVPixelBuffer?
+        var turned: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, sp, &small)
+        CVPixelBufferPoolCreatePixelBuffer(nil, tp, &turned)
+        guard let a = small, let b = turned,
+              VTPixelTransferSessionTransferImage(s, from: px, to: a) == noErr,
+              VTPixelRotationSessionRotateImage(r, a, b) == noErr else { return px }
+        return b
+    }
+
+    private static func pool(_ w: Int, _ h: Int, _ fmt: OSType) -> CVPixelBufferPool? {
+        var p: CVPixelBufferPool?
+        let attrs: [String: Any] = [kCVPixelBufferWidthKey as String: w, kCVPixelBufferHeightKey as String: h,
+                                    kCVPixelBufferPixelFormatTypeKey as String: fmt, kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        CVPixelBufferPoolCreate(nil, [kCVPixelBufferPoolMinimumBufferCountKey as String: 2] as CFDictionary, attrs as CFDictionary, &p)
+        return p
     }
 
     // ---- encoding ----

@@ -16,14 +16,15 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 GlassGroup {
-                    VStack(spacing: 16) {
+                    Columns {
                         hero
                         if core.connected { actions; ShareScreenCard() }
+                    } right: {
                         nearbyList
                         pairedList
                         byAddress
                     }
-                    .padding(.horizontal, 16).padding(.bottom, 30)
+                    .pageWidth()
                 }
             }
             .background(Backdrop())
@@ -85,7 +86,7 @@ struct HomeView: View {
     }
 
     private func action(_ title: String, _ icon: String, _ run: @escaping () -> Void) -> some View {
-        Button(action: run) { tile(title, icon) }.buttonStyle(.plain)
+        Button(action: run) { tile(title, icon) }.buttonStyle(.plain).hoverLift()
     }
 
     private func tile(_ title: String, _ icon: String) -> some View {
@@ -119,7 +120,7 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 ForEach(unpaired) { f in
                     Button { core.pair(f) } label: { row(f.name, f.os, f.invited ? "Wants to connect · Tap to pair" : "Tap to pair · \(f.address)") }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.plain).hoverLift()
                     if f.id != unpaired.last?.id { Divider().padding(.leading, 58) }
                 }
             }
@@ -138,7 +139,7 @@ struct HomeView: View {
                     Button { if !current { core.connect(h) } } label: {
                         row(h.name, h.os, current ? (core.connected ? "Connected" : "Connecting…") : here ? "Nearby · Tap to connect" : "Last at \(h.address)")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.plain).hoverLift()
                     .contextMenu { Button("Forget", role: .destructive) { core.forget(h.id) } }
                     if h.id != core.hosts.last?.id { Divider().padding(.leading, 58) }
                 }

@@ -11,8 +11,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    SectionTitle(text: "This iPhone")
+                Columns {
+                    SectionTitle(text: "This \(Device.word)")
                     VStack(alignment: .leading, spacing: 8) {
                         TextField("Name", text: $name).font(.title3.weight(.semibold))
                             .onSubmit { core.rename(name) }
@@ -35,7 +35,7 @@ struct SettingsView: View {
                         Text("Either keeps TwinDesk running; both is the most reliable. Each uses some battery.").font(.caption).foregroundStyle(.secondary)
                     }
                     .glassCard()
-
+                } right: {
                     SectionTitle(text: "Notifications")
                     VStack(spacing: 12) {
                         ToggleRow(title: "The computer’s notifications", detail: "Shown here while connected", on: sync("notifs", "in"))
@@ -56,7 +56,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassCard()
                 }
-                .padding(.horizontal, 16).padding(.bottom, 30)
+                .pageWidth()
             }
             .background(Backdrop())
             .navigationTitle("Settings")

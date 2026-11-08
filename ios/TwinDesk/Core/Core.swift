@@ -143,7 +143,7 @@ final class Core: ObservableObject, LinkEvents {
         guard !id.isEmpty, port > 0, !addrs.isEmpty else { return false }
         DispatchQueue.global().async {
             guard let address = addrs.first(where: { Self.reachable($0, port) }) else {
-                DispatchQueue.main.async { self.message = "Can’t reach \(name.isEmpty ? "the computer" : name). Is the iPhone on the same network?" }
+                DispatchQueue.main.async { self.message = "Can’t reach \(name.isEmpty ? "the computer" : name). Is the \(Device.word) on the same network?" }
                 return
             }
             DispatchQueue.main.async {

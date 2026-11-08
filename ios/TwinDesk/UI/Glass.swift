@@ -92,3 +92,42 @@ struct ToggleRow: View {
         }
     }
 }
+
+// Two columns side by side on a wide screen (iPad), one under the other on a narrow one.
+struct Columns<Left: View, Right: View>: View {
+    @Environment(\.horizontalSizeClass) private var width
+    @ViewBuilder var left: () -> Left
+    @ViewBuilder var right: () -> Right
+
+    var body: some View {
+        if width == .regular {
+            HStack(alignment: .top, spacing: 20) {
+                VStack(spacing: 16) { left() }.frame(maxWidth: .infinity)
+                VStack(spacing: 16) { right() }.frame(maxWidth: .infinity)
+            }
+        } else {
+            VStack(spacing: 16) { left(); right() }
+        }
+    }
+}
+
+extension View {
+    // A page's content: centred, at most 1100 pt wide (a 13-inch iPad in landscape), with the
+    // gutters a wide screen wants.
+    func pageWidth() -> some View { modifier(PageWidth()) }
+
+    // The pointer's lift on iPad (a trackpad or mouse); nothing elsewhere.
+    func hoverLift() -> some View { self.hoverEffect(.lift) }
+}
+
+private struct PageWidth: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var width
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: 1100)
+            .padding(.horizontal, width == .regular ? 28 : 16)
+            .padding(.top, width == .regular ? 8 : 0)
+            .padding(.bottom, 30)
+            .frame(maxWidth: .infinity)
+    }
+}
