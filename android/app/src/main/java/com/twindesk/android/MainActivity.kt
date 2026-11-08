@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         // In front: Android lets us read the clipboard now.
-        if (hasFocus) Core.get(this).let { if (it.sync.get("clipboard", "out")) it.clip.sendCurrent(false) }
+        if (hasFocus) Core.get(this).let { if (it.sync.get("clipboard", "out")) it.clip.sendCurrent(false); it.peer.clipNow() }
     }
 
     companion object {
@@ -133,6 +133,8 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     // Overview: the computer itself, only while connected; Connection: pairing, Nearby, the link.
     Overview("Overview", Ico.overview, grad(0xFF8E8E93, 0xFF636366), ""),
     Connection("Connection", Ico.link, grad(0xFF5AC8FA, 0xFF0A84FF), ""),
+    // Connect with Android: another phone, beside the computer (PeerUi.kt).
+    Android("Android", Ico.phone, grad(0xFF5EE07A, 0xFF30B94D), ""),
     // On the computer, from this phone (Hub.kt): their settings here.
     Calls("Calls", Ico.call, grad(0xFF5EE07A, 0xFF30B94D), "Phone"),
     Messages("Messages", Ico.message, grad(0xFF5EE07A, 0xFF30B94D), "Phone"),
@@ -153,12 +155,14 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
 }
 
 // The bottom bar: Overview first while connected, Connection second; before that Connection first.
-private fun bottom(core: Core) = if (core.host != null) listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files) else listOf(Tab.Connection, Tab.Screen, Tab.Cursor, Tab.Files)
+private fun bottom(core: Core) = if (core.host != null) listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files) else listOf(Tab.Connection, Tab.Android, Tab.Screen, Tab.Files)
 // Overview only while connected (elsewhere, Connection shows).
 private fun shown(core: Core, t: Tab) = t != Tab.Overview || core.host != null
 
 // The sidebar's green dot: the page's feature is on.
-private fun isOn(core: Core, t: Tab): Boolean = when (t) {
+private fun isOn(core: Core, t: Tab): Boolean = if (t == Tab.Android) core.peer.connected else isOnPc(core, t)
+
+private fun isOnPc(core: Core, t: Tab): Boolean = when (t) {
     Tab.Screen -> core.screen.viewing
     Tab.Cursor -> core.kvm.linked && core.sync.get("cursor", "in")
     Tab.Keyboard -> core.sync.value("keyboard") == "true"
@@ -258,6 +262,8 @@ fun App(core: Core, resumed: Int) {
             dismissButton = { TextButton(onClick = { core.link.cancelPairing() }) { Text("Cancel", color = pal.muted) } },
         )
     }
+
+    PeerDialogs(core, v) // another phone (Connect with Android): asks to connect, or its pairing code
 
     // Setup first while something needed isn't allowed (Skip for now remembers what was skipped).
     val ctx = LocalContext.current
@@ -405,6 +411,7 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
             when (tab) {
                 Tab.Overview -> OverviewPage(core, v, connection = false)
                 Tab.Connection -> OverviewPage(core, v, connection = true)
+                Tab.Android -> AndroidPage(core, v)
                 Tab.Calls -> CallsPage(core, v)
                 Tab.Messages -> MessagesPage(core, v)
                 Tab.Photos -> PhotosPage(core, v)

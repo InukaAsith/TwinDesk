@@ -62,18 +62,19 @@ class Store(private val ctx: Context) {
 
     fun setDeviceName(name: String) = prefs.edit().putString("deviceName", name.trim().take(64)).apply()
 
-    fun hosts(): List<Host> = try {
-        val a = JSONArray(prefs.getString("hosts", "[]"))
+    // key: "hosts" (computers), or "peerHosts" (phones this one connects to, Peer.kt).
+    fun hosts(key: String = "hosts"): List<Host> = try {
+        val a = JSONArray(prefs.getString(key, "[]"))
         (0 until a.length()).map { Host.from(a.getJSONObject(it)) }
     } catch (e: Exception) {
         emptyList()
     }
 
-    fun saveHosts(list: List<Host>) = prefs.edit().putString("hosts", jsonArray(list.map { it.json() }).toString()).apply()
+    fun saveHosts(list: List<Host>, key: String = "hosts") = prefs.edit().putString(key, jsonArray(list.map { it.json() }).toString()).apply()
 
-    fun putHost(h: Host) = saveHosts(listOf(h) + hosts().filter { it.id != h.id })
+    fun putHost(h: Host, key: String = "hosts") = saveHosts(listOf(h) + hosts(key).filter { it.id != h.id }, key)
 
-    fun forgetHost(id: String) = saveHosts(hosts().filter { it.id != id })
+    fun forgetHost(id: String, key: String = "hosts") = saveHosts(hosts(key).filter { it.id != id }, key)
 
     // Settings: one boolean per switch.
     fun flag(key: String, default: Boolean): Boolean = prefs.getBoolean(key, default)

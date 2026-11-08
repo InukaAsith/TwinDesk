@@ -37,6 +37,8 @@ data class PairState(
 class Link(
     private val store: Store,
     private val events: Events,
+    // Where paired hosts are kept: the computers ("hosts"), or another phone (Peer.kt: "peerHosts").
+    private val hostsKey: String = "hosts",
 ) {
     interface Events {
         fun onChange()
@@ -300,7 +302,7 @@ class Link(
         ble = false
         movedAt = System.currentTimeMillis()
         host?.let { h ->
-            if (h.address != pendingAddress) { h.address = pendingAddress; store.putHost(h) }
+            if (h.address != pendingAddress) { h.address = pendingAddress; store.putHost(h, hostsKey) }
         }
         Log.i("TwinDesk", "session moved to $pendingAddress")
         events.onChange()
@@ -422,7 +424,7 @@ class Link(
         // Through Bluetooth likewise: no network address yet (Core keeps the pipe for it).
         val h = if (p.wired || p.ble) Host(id, m.optString("macName").take(64).ifEmpty { p.name }, m.optString("os", "mac"), "127.0.0.1", Proto.PORT, seenFp, token, System.currentTimeMillis())
             else Host(id, m.optString("macName").take(64).ifEmpty { p.name }, m.optString("os", "mac"), p.address, p.port, seenFp, token, System.currentTimeMillis())
-        store.putHost(h)
+        store.putHost(h, hostsKey)
         pair = null
         mode = "session"
         host = h
@@ -438,7 +440,7 @@ class Link(
         val h = host ?: return
         m.optString("macName").takeIf { it.isNotEmpty() }?.let { h.name = it.take(64) }
         h.lastSeen = System.currentTimeMillis()
-        store.putHost(h)
+        store.putHost(h, hostsKey)
         rttMs = null
         resumeKey = m.optString("resume")
         fxToken = m.optString("fx").takeIf { Regex("^[0-9a-f]{32}$").matches(it) } ?: ""
@@ -485,7 +487,7 @@ class Link(
             Proto.E.ASLEEP -> "${host?.name ?: "The computer"} is asleep"
             else -> "Closed ($code)"
         }
-        if (code == Proto.E.BAD_TOKEN) host?.let { store.forgetHost(it.id) }
+        if (code == Proto.E.BAD_TOKEN) host?.let { store.forgetHost(it.id, hostsKey) }
     }
 
     private fun pairFailed(error: String) {

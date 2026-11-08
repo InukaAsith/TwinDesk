@@ -19,6 +19,19 @@ class ShareActivity : Activity() {
         val copy = intent.component?.className?.endsWith("CopyToComputer") == true
         val open = intent.component?.className?.endsWith("OpenOnComputer") == true
         val host = core.host
+        // No computer, but another phone (Connect with Android): Send goes to it.
+        if (host == null && !copy && !open && core.peer.connected) {
+            val uris = when (intent.action) {
+                Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+                Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+                else -> emptyList()
+            }
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (uris.isEmpty() && !text.isNullOrEmpty()) { core.peer.clipOut(text); toast("Copied on ${core.peer.peerName}"); return finish() }
+            for (u in uris) runCatching { grantUriPermission(packageName, u, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            if (uris.isNotEmpty()) { core.peer.sendUris(uris); toast("Sending ${Files.plural(uris.size, "item")} to ${core.peer.peerName}") }
+            return finish()
+        }
         if (host == null) {
             toast("Not connected. Open TwinDesk to connect to your computer.")
             return finish()

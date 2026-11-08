@@ -78,6 +78,9 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val nowPlaying = NowPlaying(this) // what plays here, for the computer's media controls
     val rezume = Rezume(this) // ReZume: go on with what's in use on the other device (off until turned on)
     val dev = DevCtl(this) // this phone's controls on the computer's Overview, the computer's on the Computer page
+    // Connect with Android: another phone, on a session of its own beside the computer's (Peer.kt).
+    // Not a Feature: the computer's messages never reach it, nor its the computer.
+    val peer = Peer(this)
     private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev)
 
     val host: Host? get() = if (link.connected) link.host else null
@@ -90,6 +93,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         if (started || store.flag("exited", false)) return
         started = true
         discovery.start()
+        runCatching { peer.start() }.onFailure { Log.e("TwinDesk", "peer", it) }
         Notify.channels(ctx)
         updates.start()
         if (store.flag("remote.btpad", false)) btPad.start()

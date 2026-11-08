@@ -102,6 +102,10 @@ class Notifs(core: Core) : Feature(core) {
     }
 
     // Extract title from standard, big title, conversation title, etc.
+    fun titleOf(x: Bundle) = extractTitle(x)
+    fun textOf(x: Bundle) = extractText(x)
+    fun appName(pkg: String) = appNameOf(pkg)
+
     private fun extractTitle(x: Bundle): String {
         return (x.getCharSequence(Notification.EXTRA_TITLE)
             ?: x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
@@ -236,6 +240,7 @@ class Notifs(core: Core) : Feature(core) {
     // From NotifListener: a new notification on this phone.
     fun posted(sbn: StatusBarNotification) {
         runCatching { chatPosted(sbn) }
+        runCatching { core.peer.notifPosted(sbn, this) } // and to a phone connected with Connect with Android (Peer.kt)
         if (!peerAccepts || !core.sync.get("notifs", "out") || !core.link.connected) return
         val n = sbn.notification ?: return
         val pkg = sbn.packageName

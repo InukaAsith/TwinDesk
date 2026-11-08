@@ -110,6 +110,7 @@ class Clip(core: Core) : Feature(core) {
     }
 
     fun sendText(text: String, force: Boolean = true): Boolean {
+        runCatching { core.peer.clipOut(text) } // a phone connected with Connect with Android too (Peer.kt)
         if (!core.link.connected || text.isEmpty()) return false
         if (!force && (text == lastOut || text == lastIn)) return false
         if (text.toByteArray().size > Proto.CLIP_MAX_BYTES) return false

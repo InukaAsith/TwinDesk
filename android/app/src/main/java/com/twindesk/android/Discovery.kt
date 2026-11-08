@@ -51,6 +51,11 @@ class Discovery(
     private val onInvite: (Found) -> Unit,
 ) {
     val found = ConcurrentHashMap<String, Found>()
+    // Other phones with TwinDesk (their beacon's `ap`, Peer.kt): port is their phone server's, 0 while
+    // they don't host one. Kept apart from `found`, which is only computers.
+    val phones = ConcurrentHashMap<String, Found>()
+    @Volatile var peerPort = 0 // ours, in our beacon as `phost` while we host
+    @Volatile var onPeerAsk: ((Found, JSONObject) -> Unit)? = null // another phone's peer.* (Peer.kt)
     @Volatile var error = ""
     @Volatile private var sock: DatagramSocket? = null
     @Volatile private var running = false
@@ -127,13 +132,17 @@ class Discovery(
 
     private fun beaconMsg(): JSONObject = self().put("t", Proto.T.BEACON).put("v", Proto.VERSION).put("os", Proto.OS)
         .put("role", "guest").put("port", Proto.PORT).put("fp", "")
+        .put("ap", 1).apply { if (peerPort > 0) put("phost", peerPort) } // a phone for other phones (computers ignore both)
+
+    // A packet to one address (Peer.kt's peer.ask to another phone).
+    fun sendTo(m: JSONObject, address: String) = send(m, address)
 
     fun probe(address: String? = null) {
         val m = JSONObject().put("t", Proto.T.PROBE).put("v", Proto.VERSION).put("id", self().getString("id"))
         if (address != null) send(m, address) else targets().forEach { send(m, it) }
     }
 
-    private fun beacon() {
+    fun beacon() {
         val m = beaconMsg()
         for (t in targets()) send(m, t)
     }
@@ -205,9 +214,23 @@ class Discovery(
         if (m.optInt("v") != Proto.VERSION || m.optString("id").isEmpty() || m.optString("id") == me) return
         val t = m.optString("t")
         if (t == Proto.T.PROBE) return send(beaconMsg(), address, port)
+        if (t.startsWith("peer.")) { // another phone (Peer.kt)
+            val f = phones[m.optString("id")]?.copy(address = address) ?: Found(m.optString("id"), m.optString("name").take(100).ifEmpty { "Phone" }, Proto.OS, address, 0, "", System.currentTimeMillis(), false)
+            onPeerAsk?.invoke(f, m)
+            return
+        }
         if (t != Proto.T.BEACON && t != Proto.T.INVITE) return
         val os = m.optString("os", "mac")
-        if (os == Proto.OS) return // other phones: nothing to do with them
+        if (os == Proto.OS) { // other phones: only for Connect with Android (Peer.kt)
+            if (t != Proto.T.BEACON || m.optInt("ap") != 1) return
+            val id = m.getString("id")
+            val old = phones[id]
+            val port = m.optInt("phost", 0).takeIf { it in 1..65535 } ?: 0
+            val d = Found(id, m.optString("name").take(100).ifEmpty { "Phone" }, os, address, port, "", System.currentTimeMillis(), false)
+            phones[id] = d
+            if (old == null || old.name != d.name || old.address != d.address || old.port != d.port) onChange()
+            return
+        }
         if (t == Proto.T.BEACON && m.optString("role", "host") != "host") return
         val id = m.getString("id")
         val old = found[id]
@@ -230,6 +253,7 @@ class Discovery(
         val now = System.currentTimeMillis()
         var changed = false
         for ((id, d) in found) if (now - d.lastSeen > Proto.DEVICE_STALE_MS) { found.remove(id); changed = true }
+        for ((id, d) in phones) if (now - d.lastSeen > Proto.DEVICE_STALE_MS) { phones.remove(id); changed = true }
         if (changed) onChange()
     }
 }

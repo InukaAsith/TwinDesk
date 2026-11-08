@@ -197,6 +197,28 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+        <!-- Connect with Android (Peer.kt, PeerScreen.kt, PeerUi.kt): this screen to another phone, its screen here, its Messages, Photos and Files -->
+        <service
+            android:name=".PeerCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+        <activity
+            android:name=".PeerGrantActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+        <activity
+            android:name=".PeerViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.TwinDesk" />
+        <activity
+            android:name=".PeerActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.TwinDesk" />
+
         <!-- This phone's sound on the computer without wireless debugging (Sound.kt) -->
         <service
             android:name=".SoundService"
