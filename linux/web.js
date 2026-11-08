@@ -53,7 +53,15 @@ function setupWeb(c) {
     },
     reveal: (p) => shell.showItemInFolder(p),
     open: (p) => shell.openPath(p),
-    capture: { audio: 'source', source: { acquire: () => loopback.acquire(), release: () => loopback.release() } },
+    // The default output's monitor (PulseAudio or PipeWire): it hears what the speakers play, so it
+    // can't be muted without silencing what's sent.
+    capture: {
+      audio: 'source', source: { acquire: () => loopback.acquire(), release: () => loopback.release() },
+      engines: {
+        list: () => [{ id: 'monitor', label: c.t('PulseAudio / PipeWire monitor'), hint: c.t('Captures the default output. This computer can’t be muted while sending: the capture hears what the speakers play.'), mute: false }],
+        get: () => 'monitor', set: () => {}, mute: () => false, setMute: () => {},
+      },
+    },
     // Extend: the virtual monitor (vdd.js), in the web device's shape, while Share screen isn't using it.
     extend: vdd ? {
       can: () => !!vdd.state.installed && (extending || ((!c.pcScreen || c.pcScreen.mode !== 'extend') && !vdd.state.on)),

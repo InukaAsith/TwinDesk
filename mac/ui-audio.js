@@ -17,16 +17,19 @@ UI.tab({
     const sendSw = UI.switch((v) => api.setAudio({ send: v }), { label: I18n.t('Send sound') });
     const mute = UI.switch((v) => api.setAudio({ muteLocal: v }), { label: I18n.t('Mute while sending') });
     const recvSw = UI.switch((v) => api.setAudio({ receive: v }), { label: I18n.t('Play sound here') });
+    const muteRow = UI.row(I18n.t('Mute {me} while sending'), '', [mute]);
     const vol = UI.slider({ min: 0, max: 1, step: 0.05, format: (v) => `${Math.round(v * 100)}%` }, (v) => api.setAudio({ volume: v }));
     const sendRow = UI.row(I18n.t('Play {me}’s sound on {name}'), '', [sendSw], { literalHint: true });
     const recvRow = UI.row(I18n.t('Play {name}’s sound on {me}'), '', [recvSw], { literalHint: true });
     const phoneCard = UI.phoneAudioCard(); // a phone: its media controls on Overview
     const micCard = UI.micCard ? UI.micCard() : null; // Microphone, each way (shared/ui-mic.js)
+    const cap = UI.audioCaptureCard ? UI.audioCaptureCard({ mute: false }) : null; // engine and mute (shared/ui-web.js)
     body.append(
       UI.pair(
-        UI.dir('m2w', [sendRow, UI.row(I18n.t('Mute {me} while sending'), '', [mute])]),
+        UI.dir('m2w', [sendRow, muteRow]),
         UI.dir('w2m', [recvRow, UI.row(I18n.t('Volume'), '', [vol])]),
       ),
+      ...(cap ? [cap.el] : []),
       ...(micCard ? [micCard.el] : []),
       phoneCard.el,
     );
@@ -38,6 +41,9 @@ UI.tab({
       if (micCard) { micCard.update(s); }
       sendSw.set(a.send);
       mute.set(a.muteLocal);
+      if (cap) cap.update(s);
+      // Mute works only with the helper's capture (Capture engine).
+      muteRow.hidden = !!(s.web && s.web.audio && s.web.audio.engine !== 'helper');
       recvSw.set(a.receive);
       vol.set(a.volume);
       const pc = UI.peer(s).name;

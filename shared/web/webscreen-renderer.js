@@ -49,6 +49,7 @@ async function offer(m) {
 api.on((m) => {
   if (m.t === 'scr.offer') return offer(m);
   if (m.t === 'scr.stop') return stop();
+  if (m.t === 'scr.opts') { video.muted = m.sound === false; return; }
   if (m.t === 'scr.ice' && m.candidate && cur) {
     if (cur.remoteSet) cur.pc.addIceCandidate(m.candidate).catch(() => {});
     else cur.pending.push(m.candidate);

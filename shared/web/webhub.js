@@ -94,7 +94,9 @@ const ALERT_KINDS = ['clip', 'drop', 'files', 'notifs'];
 //   clipOut: this clipboard to it · clipIn: its clipboard here · notifs: this computer's notifications there
 //   files: take its files · folder: where they go ('' = the received files folder) · camera, mic: its camera
 //   and microphone here · share: its screen here · maxH: the highest picture it gets (0: as it asks)
-const ALLOW = { screen: true, sound: true, control: true, extend: true, clipOut: true, clipIn: true, notifs: true, files: true, folder: '', camera: true, mic: true, share: true, maxH: 0, fps: 0, mbps: 0, display: '' };
+const ALLOW = { screen: true, sound: true, control: true, extend: true, clipOut: true, clipIn: true, notifs: true, files: true, folder: '', camera: true, mic: true, share: true, maxH: 0, fps: 0, mbps: 0, display: '',
+  // Its screen here (Receive screen): full screen, on top, with its sound; the most it sends (0: as it picks).
+  scrFull: false, scrTop: false, scrSound: true, scrMaxH: 0, scrFps: 0 };
 const ALERT_DEFAULTS = { clip: true, drop: true, files: true, notifs: false, preview: true, badge: true };
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/heic': '.heic', 'image/gif': '.gif', 'image/webp': '.webp', 'video/quicktime': '.mov', 'video/mp4': '.mp4', 'application/pdf': '.pdf', 'text/plain': '.txt', 'audio/mp4': '.m4a', 'application/zip': '.zip' };
 const OSES = new Set(['ios', 'ipados', 'android', 'mac', 'win', 'linux', 'other']);
@@ -236,6 +238,8 @@ class WebHub extends EventEmitter {
     }
     this.mdns = new MdnsHost(this.host, ALIAS);
     this.mdns.onAlias = () => this.emit('change');
+    // What the other TwinDesk Web computers list for this one (their pages' computer picker).
+    this.mdns.txt = () => ({ id: String(this.self().id || '').slice(0, 40), name: String(this.self().name || '').slice(0, 80), os: this.self().os || '', port: this.port, short: this.mdns.aliasHeld ? 1 : 0 });
     this.mdns.start();
     const handler = (secure) => (req, res) => this._http(req, res, secure).catch((e) => {
       console.warn('[web] http:', e.message);
@@ -245,6 +249,10 @@ class WebHub extends EventEmitter {
     this.http = http.createServer(handler(false));
     this.wss = new WS.WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
     for (const srv of [this.https, this.http]) {
+      // A big file over Wi-Fi takes longer than Node's 5-minute request limit: no limit (idle sockets
+      // still time out).
+      srv.requestTimeout = 0;
+      srv.keepAliveTimeout = 30000;
       srv.on('upgrade', (req, sock, head) => {
         if (!req.url.startsWith('/ws')) return sock.destroy();
         this.wss.handleUpgrade(req, sock, head, (ws) => this._socket(ws, req));
@@ -341,6 +349,11 @@ class WebHub extends EventEmitter {
       res.writeHead(200, { ...head, 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       return res.end(JSON.stringify({ ok: true, id: this.self().id, name: this.self().name, os: this.self().os, version: this.self().version || '', secure, host: this.host, port: this.port, ip: this.links().ip }));
     }
+    // The TwinDesk Web computers on this network, this one first: the page's computer picker.
+    if (p === '/api/peers') {
+      res.writeHead(200, { ...head, 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify(this.peers(req)));
+    }
     if (p === '/twindesk.mobileconfig') {
       res.writeHead(200, { ...head, 'Content-Type': 'application/x-apple-aspen-config', 'Content-Disposition': 'attachment; filename="TwinDesk.mobileconfig"' });
       return res.end(webca.mobileconfig(this.certs.ca.certPem, this.self().name));
@@ -411,7 +424,8 @@ class WebHub extends EventEmitter {
     if (!path.extname(name) && EXT[type]) name = (name || `From ${dev.name} ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}`) + EXT[type];
     const dest = freeName(dir, name);
     const part = dest + '.twindesk-part';
-    const out = fs.createWriteStream(part);
+    // Large chunks: the hub shares Electron's main thread; fewer, bigger writes keep it near the link's speed.
+    const out = fs.createWriteStream(part, { highWaterMark: 4 << 20 });
     let size = 0;
     req.on('data', (c) => { size += c.length; });
     req.pipe(out);
@@ -431,6 +445,11 @@ class WebHub extends EventEmitter {
         const item = this._chatAdd(dev.id, { from: 'phone', kind: drop ? 'drop' : 'files', file: { name: path.basename(dest), size, path: dest } });
         if (drop) this.say(`Drop from ${dev.name}`, path.basename(dest));
         else this.onReceived([dest], dev, item);
+        // A photo (Drop or Files) also goes onto this computer's clipboard as a picture, to paste
+        // anywhere with ⌘V / Ctrl+V, when the device's clipboard is allowed here.
+        if (this.onImage && this.allow(dev).clipIn && /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i.test(dest)) {
+          try { this.onImage(dest, dev); } catch (e) { console.warn('[web] picture to clipboard:', e.message); }
+        }
       });
     });
   }
@@ -460,11 +479,11 @@ class WebHub extends EventEmitter {
       if (start > end) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); return res.end(); }
       res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Content-Length': end - start + 1 });
       if (req.method === 'HEAD') return res.end();
-      return fs.createReadStream(file, { start, end }).pipe(res);
+      return fs.createReadStream(file, { start, end, highWaterMark: 1 << 20 }).pipe(res);
     }
     res.writeHead(200, { ...headers, 'Content-Length': st.size });
     if (req.method === 'HEAD') return res.end();
-    const rs = fs.createReadStream(file);
+    const rs = fs.createReadStream(file, { highWaterMark: 1 << 20 });
     // A whole download (not a picture shown in the page): both sides see it go, then that it arrived.
     if (!inline && item.from === 'pc') {
       let got = 0;
@@ -664,7 +683,12 @@ class WebHub extends EventEmitter {
     if (!dev) return ws.close(4001, 'forgotten');
     dev.lastSeen = Date.now();
     const t = m.t;
-    if (t === 'ping') return this._sendWs(ws, { t: 'pong', at: m.at });
+    if (t === 'ping') {
+      // Its round trip, as the device measured it (the sidebar shows it, as for the other devices).
+      const rtt = Number.isFinite(m.rtt) && m.rtt > 0 ? Math.min(9999, Math.round(m.rtt)) : null;
+      if (rtt !== ws.rtt) { ws.rtt = rtt; if (ws === this._primary(dev.id)) this.emit('change'); }
+      return this._sendWs(ws, { t: 'pong', at: m.at });
+    }
     if (t === 'vis') { ws.hidden = !!m.hidden; if (!ws.hidden && dev.unread) { dev.unread = 0; this._saveDevices(); } return; }
     if (t === 'seen') { dev.unread = 0; this._saveDevices(); return; }
     if (t === 'push.sub') {
@@ -727,7 +751,7 @@ class WebHub extends EventEmitter {
       const kind = t.split('.')[0];
       const key = kind === 'cam' ? 'camera' : kind === 'mic' ? 'mic' : 'share';
       if (t.endsWith('.offer') && !this.allow(dev)[key]) return this._sendWs(ws, { t: `${kind}.state`, status: `error: ${kind === 'scr' ? 'Screen sharing' : kind === 'cam' ? 'Camera' : 'Microphone'} from this device is off on ${this.self().name}` });
-      return this.camRecv && this.camRecv.fromPhone(dev, m);
+      return this.camRecv && this.camRecv.fromPhone(dev, m, this.allow(dev));
     }
     if (t.startsWith('in.')) {
       if (this.screenDev === dev.id && this.screen.video && this.allow(dev).control) this.inBus.emit(`t:${t}`, m);
@@ -875,7 +899,7 @@ class WebHub extends EventEmitter {
     this.clip.history = [{ text: text.slice(0, 20000), at, from }, ...this.clip.history.filter((h) => h.text !== text)].slice(0, 20);
     this._all({ t: 'clip', text, at, from, history: this.clip.history }, (id) => { const d = this.devices.find((x) => x.id === id); return !!d && this.allow(d).clipOut; });
     // Copied here: tell the web devices whose pages aren't in front (not the one that sent it).
-    if (!fromDev) for (const d of this.devices) if (this.allow(d).clipOut) this._alert(d, 'clip', { title: `Copied on ${this.self().name}`, body: text.replace(/\s+/g, ' ').trim().slice(0, 240), go: 'clipboard' });
+    if (!fromDev) for (const d of this.devices) if (this.allow(d).clipOut) this._alert(d, 'clip', { title: `Copied on ${this.self().name}`, body: text.replace(/\s+/g, ' ').trim().slice(0, 240), go: 'copy' }); // tapping it copies the text there
     this.emit('change');
   }
 
@@ -1056,6 +1080,8 @@ class WebHub extends EventEmitter {
       if (k === 'folder') a.folder = typeof v === 'string' ? v.slice(0, 1000) : '';
       else if (k === 'maxH') a.maxH = [0, 720, 1080, 1440, 2160].includes(Number(v)) ? Number(v) : 0;
       else if (k === 'fps') a.fps = [0, 30, 60].includes(Number(v)) ? Number(v) : 0;
+      else if (k === 'scrMaxH') a.scrMaxH = [0, 720, 1080, 1440, 2160].includes(Number(v)) ? Number(v) : 0;
+      else if (k === 'scrFps') a.scrFps = [0, 15, 30, 60].includes(Number(v)) ? Number(v) : 0;
       else if (k === 'mbps') a.mbps = [0, 4, 8, 12, 20, 30].includes(Number(v)) ? Number(v) : 0;
       else if (k === 'display') a.display = typeof v === 'string' || typeof v === 'number' ? String(v).slice(0, 40) : '';
       else if (k === 'muted') a.muted = Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 300) : [];
@@ -1067,6 +1093,7 @@ class WebHub extends EventEmitter {
     if (!a.sound && this.screenDev === id && !this.screen.video) this._screenStop();
     if (this.camRecv) for (const [kind, key] of [['cam', 'camera'], ['mic', 'mic'], ['scr', 'share']]) if (!a[key] && this.camRecv.state[kind] && this.camRecv.state[kind].dev === id) this.camRecv._stop(kind);
     if (!a.control) this._remoteGone(id);
+    if (this.camRecv && this.camRecv.scrOpts && this.camRecv.state.scr.dev === id) this.camRecv.scrOpts(a);
     this._send(id, { t: 'policy', allow: a });
     this._wantNotifs();
     this.emit('change');
@@ -1136,6 +1163,23 @@ class WebHub extends EventEmitter {
     };
   }
 
+  // Each computer once: [{id, name, os, host, port, ip, self, short}]. The address is the one on the
+  // asker's network when there is one (a page opens the other computer's plain page there; it moves
+  // itself to the secure name when it can).
+  peers(req) {
+    const asker = req ? String(req.socket.remoteAddress || '').replace(/^::ffff:/, '') : '';
+    const near = (ips) => ips.find((ip) => asker && v4n(ip) !== null && v4n(asker) !== null && ((v4n(ip) ^ v4n(asker)) >>> 8) === 0) || ips[0] || '';
+    const me = this.self();
+    const out = [{ id: me.id, name: me.name, os: me.os, host: this.host, port: this.port, ip: near(ipv4s().map((i) => i.address)), self: true, short: !!(this.mdns && this.mdns.aliasHeld) }];
+    if (this.mdns) {
+      for (const o of this.mdns.others()) {
+        if (!o.port || out.some((x) => x.host === o.host || (o.id && x.id === o.id))) continue;
+        out.push({ id: o.id || '', name: o.name || o.host, os: o.os || '', host: o.host, port: o.port, ip: near(o.ips), self: false, short: o.short === '1' });
+      }
+    }
+    return out;
+  }
+
   view() {
     const online = (id) => this.socks.has(id);
     return {
@@ -1145,6 +1189,7 @@ class WebHub extends EventEmitter {
       error: this.error || (this.mdns && this.mdns.error ? `Network name: ${this.mdns.error}` : ''),
       code: this.running ? this.code : '',
       links: this.running ? this.links() : null,
+      peers: this.running ? this.peers().filter((x) => !x.self) : [],
       screenAllowed: this.cfg.screen !== false,
       screen: { ...this.screen, dev: this.screenDev },
       cam: this.camRecv ? this.camRecv.view() : null,
@@ -1154,7 +1199,7 @@ class WebHub extends EventEmitter {
         const ws = set && this._primary(d.id);
         return {
           id: d.id, name: d.name, os: d.os, model: d.model || '', pairedAt: d.pairedAt, lastSeen: d.lastSeen, ip: ws ? ws.ip : d.lastIp || '',
-          online: online(d.id), secure: ws ? ws.secure : null, link: ws ? this._primary(d.id).link || '' : '', notifs: !!d.notifs, remote: this.remoteBus.dev === d.id,
+          online: online(d.id), rtt: ws && ws.rtt != null ? ws.rtt : null, secure: ws ? ws.secure : null, link: ws ? this._primary(d.id).link || '' : '', notifs: !!d.notifs, remote: this.remoteBus.dev === d.id,
           push: !!d.push, alerts: this._alertsOf(d), allow: this.allow(d), background: !!(ws && [...set].every((x) => x.hidden)),
           watching: this.screenDev === d.id ? this.screen : null,
           chat: this._chat(d.id).slice(-80).map((x) => ({ ...this._public(x), path: x.file ? x.file.path : undefined })),

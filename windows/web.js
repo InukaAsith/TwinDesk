@@ -44,7 +44,17 @@ function setupWeb(c) {
     },
     reveal: (p) => shell.showItemInFolder(p),
     open: (p) => shell.openPath(p),
-    capture: { audio: 'loopback' },
+    // Chromium's WASAPI loopback, which can silence this PC while it captures (Audio › Mute).
+    capture: {
+      audio: 'loopback',
+      muteLoopback: () => !!settings().audio.muteLocal,
+      engines: {
+        list: () => [{ id: 'system', label: c.t('Windows (WASAPI loopback)'), hint: c.t('Captures everything this PC plays. It can mute this PC’s speakers while its sound plays on another device.'), mute: true }],
+        get: () => 'system', set: () => {},
+        mute: () => !!settings().audio.muteLocal,
+        setMute: (v) => { settings().audio.muteLocal = !!v; c.save(); },
+      },
+    },
     // Extend: the virtual monitor (vdd.js), in the web device's shape, while Share screen isn't using it.
     extend: vdd ? {
       can: () => !!vdd.state.installed && (extending || ((!c.pcScreen || c.pcScreen.mode !== 'extend') && !vdd.state.on)),

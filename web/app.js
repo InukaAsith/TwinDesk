@@ -211,6 +211,7 @@
     creds: null, // {id, key, token}
     pc: null, // {id, name, os, version, host, port, ips, control, vapid, media, mount, devices, extend}
     serving: null, // /api/ping before pairing: who serves this page
+    peers: [], // /api/peers: the TwinDesk Web computers on this network, this one marked self
     conn: 'boot', // boot | pairing | connecting | online | offline
     pairErr: '',
     rtt: null,
@@ -265,6 +266,44 @@
     } finally {
       clearTimeout(t);
     }
+  }
+
+  // The TwinDesk Web computers on this network (each one lists the others): a choice at the top of
+  // the page when there's more than one. Each computer keeps its own pairing, on its own address:
+  // opening another one leaves this one's as it is.
+  async function loadPeers() {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 4000);
+    try {
+      const r = await fetch('/api/peers', { cache: 'no-store', signal: ctl.signal });
+      const list = r.ok ? await r.json() : [];
+      const key = (l) => JSON.stringify(l.map((x) => [x.id, x.name, x.ip, x.port]));
+      if (Array.isArray(list) && key(list) !== key(S.peers)) { S.peers = list; refresh('overview', 'connection'); if (peerBars.size) for (const b of peerBars) b.update(); }
+    } catch (_) {} finally { clearTimeout(t); }
+  }
+  setInterval(loadPeers, 30000);
+  const peerUrl = (x) => `http://${x.ip}:${x.port + 1}/#h=${encodeURIComponent(x.host)}&p=${x.port}`;
+  function openPeer(x) {
+    if (x.self) return;
+    toast(`Opening ${x.name}…`);
+    location.assign(peerUrl(x));
+  }
+  const peerBars = new Set();
+  function peerBar() {
+    const list = el('div', { class: 'peers-list', role: 'radiogroup', 'aria-label': 'Computer' });
+    const e = el('div', { class: 'peers' }, [el('div', { class: 'peers-title', text: 'Computers on this network' }), list]);
+    e.update = () => {
+      const L = S.peers || [];
+      e.hidden = L.length < 2;
+      if (e.hidden) return;
+      list.replaceChildren(...L.map((x) => el('button', {
+        type: 'button', class: x.self ? 'on' : '', role: 'radio', 'aria-checked': String(!!x.self), title: x.host,
+        onclick: () => openPeer(x),
+      }, [icon('display', 18), el('span', { text: x.name }), x.short ? el('i', { text: 'twindesk.local' }) : null])));
+    };
+    peerBars.add(e);
+    e.update();
+    return e;
   }
 
   // One device, several addresses (twindesk.local, the computer's name, its IP; http and https), and
@@ -511,7 +550,7 @@
         break;
       case 'pc.links': if (S.pc) { S.pc.ips = m.ips || S.pc.ips; S.pc.cable = m.cable || []; } probeCable(); break;
       case 'pong': lastPong = performance.now(); S.rtt = Math.max(1, Math.round(performance.now() - m.at)); renderTop(); refresh('connection', 'receive'); break;
-      case 'clip': S.clip = { text: m.text || '', at: m.at, from: m.from, history: m.history || S.clip.history }; refresh('clipboard', 'overview'); break;
+      case 'clip': S.clip = { text: m.text || '', at: m.at, from: m.from, history: m.history || S.clip.history }; refresh('clipboard', 'overview'); if (copyWant) copyLatest(); break;
       case 'chat.all': S.chat = m.items || []; refresh('files', 'drop', 'overview'); break;
       case 'chat.add':
         S.chat.push(m.item);
@@ -591,7 +630,7 @@
       const ping = () => {
         // On the cable and no answer for a while: the cable came out without the socket noticing.
         if (via && performance.now() - lastPong > 8000 && !prev) { const dead = ws; ws = null; via = ''; try { dead.onclose = null; dead.close(); } catch (_) {} return connect(true); }
-        send({ t: 'ping', at: performance.now() });
+        send({ t: 'ping', at: performance.now(), rtt: S.rtt });
       };
       ping();
       pingTimer = setInterval(ping, 5000);
@@ -742,7 +781,26 @@
   }
   const go = show;
   let pendingGo = null;
+  // A clipboard alert tapped: what was copied on the computer goes onto this device's clipboard.
+  // Browsers let a page write the clipboard only while it's in front (Safari: inside a tap), so when
+  // the write isn't allowed straight away, one tap on the banner does it.
+  let copyWant = false;
+  async function copyLatest() {
+    copyWant = false;
+    const t = S.clip && S.clip.text;
+    if (!t) { copyWant = true; return; } // the computer's clipboard comes with the welcome
+    if (document.hasFocus() && (await copyText(t))) { haptic(); return toast('Copied from ' + pcName()); }
+    const bar = el('div', { class: 'copy-bar' }, [
+      el('span', { text: `Copied on ${pcName()}: ${t.replace(/\s+/g, ' ').slice(0, 80)}` }),
+      btn('Copy', async () => { bar.remove(); await copy(t, 'Copied'); }, 'small primary'),
+      btn('Dismiss', () => bar.remove(), 'small'),
+    ]);
+    document.querySelectorAll('.copy-bar').forEach((x) => x.remove());
+    document.body.append(bar);
+    setTimeout(() => bar.remove(), 20000);
+  }
   function goTo(g) {
+    if (g === 'copy') { show('clipboard'); return void copyLatest(); }
     if (g === 'touchpad') return openRemote('pad');
     if (PAGE[g]) show(g);
   }
@@ -900,10 +958,12 @@
       el('div', { class: 'desc', text: `On the computer, open TwinDesk › TwinDesk Web. Scan the QR code${ME.mobile ? ' with your camera' : ''} or enter the six-digit code above.` })])]);
     const feat = el('div', { class: 'feat' }, F.map(([i, c, t, d]) => el('div', {}, [tile(i, c, 34), el('b', { text: t }), el('span', { text: d })])));
     const dl = downloads();
-    if (wideQ.matches) page.replaceChildren(el('div', { class: 'promo-grid' }, [el('div', {}, [promo, feat, dl]), el('div', { class: 'aside' }, [el('div', { style: 'height:30px' }), connect])]));
-    else page.replaceChildren(promo, connect, feat, dl);
+    const peers = peerBar();
+    if (wideQ.matches) page.replaceChildren(peers, el('div', { class: 'promo-grid' }, [el('div', {}, [promo, feat, dl]), el('div', { class: 'aside' }, [el('div', { style: 'height:30px' }), connect])]));
+    else page.replaceChildren(peers, promo, connect, feat, dl);
     return () => {
       serve.textContent = S.serving ? `${S.serving.name} is ready to pair. You only need to pair once.` : 'You only need to pair once.';
+      peers.update();
       err.textContent = S.pairErr;
       err.hidden = !S.pairErr;
       installBox.update();
@@ -1222,13 +1282,16 @@
     const setup = el('div');
     const forget = row('', '', [btn('Forget', () => forgetHere(), 'small danger')]);
     const install = row(ME.apple ? 'Add to Home Screen' : 'Install as an app', '', [installBtn()]);
-    page.append(hd, h,
+    const others = el('div');
+    page.append(peerBar(), hd, h,
       card('', [status, rtt, sec]),
       card('Addresses', [el('div', { class: 'pad16', style: 'gap:10px' }, [addr])]),
       setup,
       card('Paired computer', [forget]),
+      others,
       card('', [install]),
     );
+    let othersKey = '';
     let addrKey = '';
     return () => {
       hd.desc(`This ${ME.kind} reconnects to ${pcName()} automatically, even when either device's network address changes.`);
@@ -1248,6 +1311,15 @@
         addr.replaceChildren(...L.map(([l, u]) => el('div', {}, [el('div', { class: 'muted', style: 'font-size:12.5px', text: l }), copyBox(() => u)])));
       }
       if (!setup.firstChild && !S.secure) setup.append(secureCard());
+      const rest = (S.peers || []).filter((x) => !x.self);
+      const ok = JSON.stringify(rest.map((x) => [x.id, x.name, x.ip, x.port]));
+      if (ok !== othersKey) {
+        othersKey = ok;
+        others.replaceChildren(...(rest.length ? [card('Other computers on this network', [
+          ...rest.map((x) => row(x.name, [osName(x.os), x.host].filter(Boolean).join(' · '), [btn('Open', () => openPeer(x), 'small')])),
+          el('div', { class: 'pad16 desc', text: `Each computer is paired separately. Opening another one keeps this ${ME.kind} paired with ${pcName()}.` }),
+        ])] : []));
+      }
       forget.setLabel(pcName());
       forget.setHint(`Paired${S.pc && S.pc.version ? ` · TwinDesk ${S.pc.version}` : ''}. Forgetting removes the pairing on both devices.`);
       install.setHint(STANDALONE ? 'Installed. TwinDesk opens connected without pairing again.'
@@ -1327,6 +1399,9 @@
     return b;
   }
   async function shareFile(x, b) {
+    // A big file goes straight to the browser's downloads (Files on an iPhone): read into memory for
+    // the share sheet first, it would take as long again and may not fit.
+    if (x.file.size > 80 * 1024 * 1024 && !/\.(jpe?g|png|gif|webp|heic|mov|mp4)$/i.test(x.file.name)) { location.href = fileUrl(x); return; }
     const ready = blobs.get(x.file.fid);
     if (ready) {
       try { await navigator.share({ files: [ready] }); } catch (e) { if (e.name !== 'AbortError') location.href = fileUrl(x); }
@@ -1451,7 +1526,11 @@
         ]);
       } else if (!ME.apple && !window.isSecureContext) {
         // Browsers hide screen sharing on a plain http page: it's the connection, not the browser.
-        share = card('Share this screen', [row('Needs a secure connection', `Browsers share the screen only on a secure page. Set it up once on Connection, then present to ${name} from here.`, [btn('Set Up', () => go('connection'), 'small primary')])]);
+        // The same panel as when it can present, with what it takes: the secure page.
+        share = el('div', {}, [
+          el('div', { class: 'present-stage idle', onclick: () => go('connection') }, [tile('share', PAGE.send.c, 54), el('b', { text: `Present to ${name}` }), el('span', { class: 'muted', text: 'Browsers allow screen sharing only on a secure page. Set it up once, then choose a screen, a window or a tab here.' })]),
+          el('div', { class: 'two', style: 'margin:14px 0 18px;display:grid' }, [btn('Set Up Secure Connection', () => go('connection'), 'primary big', 'lock'), btn('Switch to Secure Address', () => secureNow(), 'big')]),
+        ]);
       } else if (!ME.apple) {
         share = card('', [row('This browser can’t share its screen', ME.os === 'android' ? 'Use Chrome for Android, or AirPlay or screen casting if the computer has it turned on.' : 'Use Chrome, Edge or Firefox, or AirPlay if this device has it.')]);
       }
@@ -1668,6 +1747,9 @@
     fileInput.click();
   }
   let upSeq = 0;
+  // Progress repaints at most 5 times a second: repainting on every event slows a phone's upload.
+  let progT = null;
+  const progressSoon = () => { if (!progT) progT = setTimeout(() => { progT = null; refresh('files', 'drop'); }, 200); };
   function upload(files, stay, to) {
     if (!needOnline()) return;
     if (!stay && cur !== 'files' && cur !== 'drop') go('files');
@@ -1677,7 +1759,7 @@
       S.uploads.set(id, u);
       const x = new XMLHttpRequest();
       x.open('POST', `/api/up?name=${encodeURIComponent(u.name)}&t=${encodeURIComponent(S.creds.token)}${to === 'drop' ? '&to=drop' : ''}`);
-      x.upload.onprogress = (e) => { u.sent = e.loaded; refresh('files', 'drop'); };
+      x.upload.onprogress = (e) => { u.sent = e.loaded; progressSoon(); };
       x.onloadend = () => {
         S.uploads.delete(id);
         if (x.status !== 200) toast(`Could not send ${u.name}`);
@@ -1883,6 +1965,8 @@
     const kaSw = sw((v) => { prefs.keepAlive = v; savePrefs(); keepAlive(v); renderPage(); });
     const kaRow = row('Stay connected in the background', '', [kaSw]);
     const mediaRow = row('Lock screen controls', '');
+    const locSw = sw((v) => { prefs.keepLoc = v; savePrefs(); keepLocation(v && prefs.keepAlive); renderPage(); });
+    const locRow = row('Also use location', 'Watches this device’s approximate location as a second way to stay active. The location is not sent anywhere. Uses more battery.', [locSw]);
     const nBtn = btn('Allow', () => enablePush(), 'small primary');
     const nRow = row('Notifications', '', [nBtn]);
     const testRow = row('Test notification', 'Sends a test alert from the computer', [btn('Send test', () => { if (needOnline()) send({ t: 'push.test' }); }, 'small')]);
@@ -1900,7 +1984,7 @@
       return row(l, h, [sws[k]]);
     });
     const why = note('', 'info');
-    page.append(hd, card('Connection', [kaRow, mediaRow]), card('Notifications', [nRow, testRow]), card('Alerts', aRows), why);
+    page.append(hd, card('Connection', [kaRow, locRow, mediaRow]), card('Notifications', [nRow, testRow]), card('Alerts', aRows), why);
     return () => {
       hd.desc(`Keep receiving updates from ${pcName()} while this ${ME.kind} is locked or another app is open.`);
       kaSw.checked = prefs.keepAlive;
@@ -1910,6 +1994,10 @@
           : 'Prevents the browser from suspending this page. Most desktop browsers stay connected without it.');
       mediaRow.setHint(S.pc && S.pc.media ? `Shows media playing on ${pcName()} with play, pause and skip controls` : `Shows “Connected to ${pcName()}” on the lock screen`);
       mediaRow.hidden = !prefs.keepAlive;
+      locSw.checked = !!prefs.keepLoc;
+      locRow.hidden = !prefs.keepAlive || !navigator.geolocation;
+      locSw.disabled = !window.isSecureContext;
+      if (!window.isSecureContext) locRow.setHint('Requires a secure connection. Set it up under Connection.');
       const p = notifPerm();
       const needsHome = ME.apple && !STANDALONE;
       nRow.setHint(!S.secure ? 'Requires a secure connection. Set it up under Connection.'
@@ -2232,7 +2320,23 @@
     for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round((Math.random() - 0.5) * 6), true);
     return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
   }
+  // Location, beside the audio (Background › Also use location): a page watching the position is one
+  // more reason for the browser to keep it running. Coarse and infrequent; nothing is sent anywhere.
+  let geoWatch = null;
+  function keepLocation(on) {
+    if (!on || !navigator.geolocation || !window.isSecureContext) {
+      if (geoWatch !== null) { try { navigator.geolocation.clearWatch(geoWatch); } catch (_) {} geoWatch = null; }
+      return;
+    }
+    if (geoWatch !== null) return;
+    try {
+      geoWatch = navigator.geolocation.watchPosition(() => {}, (e) => {
+        if (e && e.code === 1) { prefs.keepLoc = false; savePrefs(); geoWatch = null; toast('Location access was denied. Background mode uses audio only.'); refresh('background'); }
+      }, { enableHighAccuracy: false, maximumAge: 5 * 60000, timeout: 10 * 60000 });
+    } catch (_) { geoWatch = null; }
+  }
   function keepAlive(on) {
+    keepLocation(on && prefs.keepLoc);
     if (!on) {
       kaOn = false;
       if (ka) { ka.pause(); }
@@ -2415,8 +2519,12 @@
   // As Meet and Teams share: the browser's picker (a screen, a window or a tab, with its sound where the
   // browser has it), a preview here, a "You're presenting" bar on every page, and Share another one
   // that swaps what's shown without starting over.
+  // As sharp and as smooth as the computer asks for it (its Receive screen page), else up to 4K at 30.
   const pickScreen = () => navigator.mediaDevices.getDisplayMedia({
-    video: { frameRate: { ideal: 30, max: 60 }, width: { max: 3840 }, height: { max: 2160 } },
+    video: (() => {
+      const h = Number(S.allow && S.allow.scrMaxH) || 2160, f = Number(S.allow && S.allow.scrFps) || 30;
+      return { frameRate: { ideal: f, max: Math.max(f, 30) }, width: { max: Math.round(h * 16 / 9) }, height: { max: h } };
+    })(),
     audio: prefs.scrAudio !== false ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
     systemAudio: prefs.scrAudio !== false ? 'include' : 'exclude', selfBrowserSurface: 'exclude', surfaceSwitching: 'include', monitorTypeSurfaces: 'include',
   });
@@ -2576,6 +2684,7 @@
     upgrade().then((m) => { moving = m; }).catch(() => {});
     await new Promise((r) => setTimeout(r, 0));
     if (moving) return;
+    loadPeers();
     if (!S.creds) {
       S.conn = 'pairing';
       S.serving = await reachable('');

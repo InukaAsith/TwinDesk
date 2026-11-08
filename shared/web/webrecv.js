@@ -28,7 +28,7 @@ class WebRecv extends EventEmitter {
         s.status = m.status;
         if (m.out !== undefined) s.out = m.out;
         if (m.status === 'off') s.dev = null;
-        if (m.kind === 'scr' && m.status === 'live' && this.scrWin && !this.scrWin.isDestroyed() && !this.scrWin.isVisible()) this.scrWin.show();
+        if (m.kind === 'scr' && m.status === 'live' && this.scrWin && !this.scrWin.isDestroyed() && !this.scrWin.isVisible()) { this.scrWin.show(); this.scrOpts(this.scrAllow || {}); }
         if (m.kind === 'scr' && m.status === 'off' && this.scrWin && !this.scrWin.isDestroyed()) { const w = this.scrWin; this.scrWin = null; w.destroy(); }
         this.emit('out', m.dev, { t: `${m.kind}.state`, status: m.status, out: s.out || '' });
         this._idle();
@@ -66,11 +66,12 @@ class WebRecv extends EventEmitter {
     return this.scrReady;
   }
 
-  async fromPhone(dev, m) {
+  async fromPhone(dev, m, allow = {}) {
     const [kind, what] = m.t.split('.');
     const s = this.state[kind];
     if (kind === 'scr') {
       if (what === 'offer') {
+        this.scrAllow = allow;
         if (s.dev && s.dev !== dev.id) this.emit('out', s.dev, { t: 'scr.state', status: 'off', why: `${dev.name} took over` });
         s.dev = dev.id;
         s.status = 'connecting';
@@ -97,6 +98,25 @@ class WebRecv extends EventEmitter {
       return;
     }
     if (this.win && !this.win.isDestroyed()) this.win.webContents.send('webrecv:in', { t: m.t, dev: dev.id, sdp: typeof m.sdp === 'string' ? m.sdp : undefined, candidate: m.candidate });
+  }
+
+  // Receive screen's settings for the device on now: full screen, on top, its sound.
+  scrOpts(a) {
+    this.scrAllow = a || {};
+    const w = this.scrWin;
+    if (!w || w.isDestroyed()) return;
+    try { w.setAlwaysOnTop(!!a.scrTop, 'floating'); } catch (_) {}
+    if (w.isVisible() && w.isFullScreen() !== !!a.scrFull) try { w.setFullScreen(!!a.scrFull); } catch (_) {}
+    w.webContents.send('webrecv:in', { t: 'scr.opts', sound: a.scrSound !== false });
+  }
+
+  // Its window to the front (Receive screen's Show Window).
+  scrShow() {
+    const w = this.scrWin;
+    if (!w || w.isDestroyed()) return;
+    if (w.isMinimized()) w.restore();
+    w.show();
+    w.focus();
   }
 
   stopDevice(id) {

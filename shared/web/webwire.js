@@ -5,7 +5,8 @@
 //
 // startWeb(o): o.dir (userData), o.root (the app's folder: web/, shared/, android assets), o.settings(),
 //   o.save(), o.pushState(), o.self() → {id, name, os, version}, o.receivedDir(), o.say(title, body, onClick),
-//   o.reveal(path), o.open(path), o.capture {audio, hub, source, worklet} for shared/web/webcap.js,
+//   o.reveal(path), o.open(path), o.capture {audio (or () → it), hub, source, worklet, muteLoopback(), engines {list() →
+//   [{id, label, hint, mute}], get(), set(id), mute(), setMute(v), restart()}} for shared/web/webcap.js and Audio,
 //   o.extend → {can(), display(dev) → Promise<Display|null>, release()} (a screen of its own: Extend) or null,
 //   o.input(bus, target) (the viewer's in.* onto this computer, aimed at target() → {bounds}),
 //   o.remote(bus, cfg) → shared/phone-remote.js (the Remote page's touchpad, keyboard and gamepad),
@@ -50,7 +51,7 @@ function startWeb(o) {
   };
   let target = null; // the display the web device watches: its input lands there
   const capture = new WebCap({
-    audio: o.capture.audio, hub: o.capture.hub || null, source: o.capture.source || null, worklet: o.capture.worklet ? pathToFileURL(o.capture.worklet).href : '',
+    audio: o.capture.audio, muteLoopback: o.capture.muteLoopback || null, hub: o.capture.hub || null, source: o.capture.source || null, worklet: o.capture.worklet ? pathToFileURL(o.capture.worklet).href : '',
     display: async (mode, dev) => {
       const { screen } = require('electron');
       let d = null;
@@ -87,7 +88,14 @@ function startWeb(o) {
       lastFiles = paths;
       if (o.fileClip) { try { o.fileClip.offerLocal(paths, dev.name); } catch (e) { console.warn('[web] paste:', e.message); } }
       const name = path.basename(paths[0]);
-      o.say(t('From {name}', { name: dev.name }), o.fileClip ? t('{file} · paste it with the Paste Files shortcut', { file: name }) : name, () => lastFiles && o.reveal(lastFiles[0]));
+      const pic = paths.length === 1 && /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i.test(name) && hub.allow(dev).clipIn;
+      o.say(t('From {name}', { name: dev.name }), pic ? t('{file} · copied to the clipboard', { file: name }) : o.fileClip ? t('{file} · paste it with the Paste Files shortcut', { file: name }) : name, () => lastFiles && o.reveal(lastFiles[0]));
+    },
+    // A photo from a device: onto the clipboard as a picture (HEIC where the system reads it: macOS).
+    onImage: (file) => {
+      const { nativeImage, clipboard } = require('electron');
+      const img = nativeImage.createFromPath(file);
+      if (!img.isEmpty()) clipboard.writeImage(img);
     },
     say: (title, body) => o.say(title, body),
     capture, camRecv, notifSource: o.notifs || null, devLocal: o.devLocal || null,
@@ -171,6 +179,7 @@ function startWeb(o) {
     webDeleteItem(a) { if (a && dev(a.id)) hub.deleteItem(a.id, str(a.item, 64)); },
     webClearChat(id) { if (dev(id)) hub.clearChat(id); },
     webStopScreen(id) { hub.stopScreen(str(id, 64) || null); },
+    webShowScr() { camRecv.scrShow(); },
     webStopCam(a) {
       if (!a) return;
       if (['cam', 'mic', 'scr'].includes(a.kind)) { if (camRecv.state[a.kind].dev === a.id) camRecv._stop(a.kind); } else camRecv.stopDevice(a.id);
@@ -197,6 +206,16 @@ function startWeb(o) {
       o.pushState();
     },
     webAirplayStop() { if (o.airplay) o.airplay.end(); },
+    // Audio › capture engine and mute (o.capture.engines: shared by all of this computer's sound sharing).
+    // Remote › Real gamepad for web devices (their own setting, settings.web.pad).
+    webRemotePad(on) { if (remote && remote.setPad) { remote.setPad(on === true); o.pushState(); } },
+    webAudio(a) {
+      const e = o.capture.engines;
+      if (!e || !a) return;
+      if (typeof a.engine === 'string' && e.list().some((x) => x.id === a.engine)) e.set(a.engine);
+      if (typeof a.mute === 'boolean') e.setMute(a.mute);
+      o.pushState();
+    },
     webCopy(text) { if (typeof text === 'string') require('electron').clipboard.writeText(text.slice(0, 1 << 20)); },
   };
 
@@ -205,7 +224,7 @@ function startWeb(o) {
     view() {
       const v = hub.view();
       const c = cfg();
-      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, share: o.share ? o.share.view() : null, airplay: o.airplay ? o.airplay.view() : null };
+      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, audio: o.capture.engines ? { engines: o.capture.engines.list(), engine: o.capture.engines.get(), mute: !!o.capture.engines.mute(), restart: !!(o.capture.engines.restart && o.capture.engines.restart()) } : null, share: o.share ? o.share.view() : null, airplay: o.airplay ? o.airplay.view() : null };
     },
     shutdown() {
       try { hub.stop(); } catch (_) {}

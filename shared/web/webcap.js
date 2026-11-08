@@ -19,9 +19,11 @@ const { BrowserWindow, ipcMain, session, desktopCapturer, screen } = require('el
 const PARTITION = 'twindesk-webcap';
 
 class WebCap extends EventEmitter {
-  constructor({ audio = 'loopback', hub = null, source = null, worklet, display = null, release = null }) {
+  constructor({ audio = 'loopback', hub = null, source = null, worklet, display = null, release = null, muteLoopback = null }) {
     super();
-    Object.assign(this, { audioMode: audio, hub, source, worklet, display, releaseDisplay: release });
+    // audio: the mode, or a function giving it (the engine picked in Audio, at each start). muteLoopback():
+    // Chromium's loopback silences this computer while it captures (Windows: loopbackWithMute).
+    Object.assign(this, { audioModeOf: audio, hub, source, worklet, display, releaseDisplay: release, muteLoopback });
     this.win = null;
     this.session = 0;
     this.active = null;
@@ -33,7 +35,7 @@ class WebCap extends EventEmitter {
         const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
         const src = sources.find((s) => s.display_id === String(want.id)) || sources[0];
         if (!src) throw new Error('no screens (Screen Recording permission?)');
-        cb({ video: src, ...(req.audioRequested ? { audio: 'loopback' } : {}) });
+        cb({ video: src, ...(req.audioRequested ? { audio: this.muteLoopback && this.muteLoopback() ? 'loopbackWithMute' : 'loopback' } : {}) });
       } catch (e) {
         console.warn('[webcap]', e.message);
         cb({});
@@ -48,6 +50,10 @@ class WebCap extends EventEmitter {
       if (!mine(e) || !this.active || s.session !== this.active.session) return;
       this.emit('status', s.status);
     });
+  }
+
+  get audioMode() {
+    return typeof this.audioModeOf === 'function' ? this.audioModeOf() : this.audioModeOf;
   }
 
   _window() {
@@ -69,6 +75,7 @@ class WebCap extends EventEmitter {
     const win = await this._window();
     if (!this.active || this.active.session !== session) return;
     let sound = audio ? this.audioMode : false;
+    this.active.sound = sound;
     let label = '';
     if (sound === 'helper' && this.hub) {
       const ok = await this.hub.acquire('web', win.webContents);

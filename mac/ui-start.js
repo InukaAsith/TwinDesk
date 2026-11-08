@@ -157,6 +157,9 @@
     $('peer-text').textContent = c ? `${c.name}${UI.via(s) !== 'Wi-Fi' ? ` · ${UI.via(s)}` : ''}${c.rttMs != null ? ` · ${c.rttMs} ms` : ''}`
       : s.pairing || (s.guest && s.guest.pairing) ? tr('Pairing…') : gs === 'connecting' || gs === 'reconnecting' ? tr('Connecting…') : tr('Not connected');
     if (UI.webDev && !UI.webDevOf(s)) UI.webDev = null; // forgotten meanwhile
+    // A web device's pages: the line under TwinDesk is that device (shared/ui-web.js).
+    const wl = UI.webPeerLine && UI.webPeerLine(s);
+    if (wl) { $('peer-text').textContent = wl.text; $('peer-dot').className = `dot ${wl.dot}`; }
     renderPhones(s);
     renderPcs(s);
     UI.webTiles($('webdevs'), s, (devId) => {

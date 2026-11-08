@@ -166,6 +166,9 @@
     else if (l.state === 'identity_changed') text = t('Identity changed');
     $('peer-text').textContent = text;
     if (UI.webDev && !UI.webDevOf(s)) UI.webDev = null; // forgotten meanwhile
+    // A web device's pages: the line under TwinDesk is that device (shared/ui-web.js).
+    const wl = UI.webPeerLine && UI.webPeerLine(s);
+    if (wl) { $('peer-text').textContent = wl.text; $('peer-dot').className = `dot ${wl.dot}`; }
     renderPhones(s);
     renderPcs(s);
     UI.webTiles($('webdevs'), s, (devId) => {

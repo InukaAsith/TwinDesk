@@ -67,10 +67,10 @@
       const camSw = sw('camera');
       const micSw = sw('mic');
       const allowCard = UI.card(tr('New devices can'), [
-        UI.row(tr('View this screen and hear its sound'), tr('One device at a time. Extend gives it a screen of its own.'), [screenSw]),
+        UI.row(tr('View this screen and play its audio'), tr('One device at a time. Extend adds a separate display for it.'), [screenSw]),
         UI.row(tr('Control this computer'), tr('Mouse and keyboard from the screen viewer, and the Remote page’s touchpad, keyboard and gamepad.'), [controlSw]),
-        UI.row(tr('Use their camera here'), tr('Its picture shows on the device’s Camera page and in TwinDesk Camera.'), [camSw]),
-        UI.row(tr('Use their microphone here'), tr('Plays into a virtual audio cable when one is installed (BlackHole, VB-Cable), else the speakers.'), [micSw]),
+        UI.row(tr('Use their cameras on this computer'), tr('The video appears on the device’s Camera page and in TwinDesk Camera.'), [camSw]),
+        UI.row(tr('Use their microphones on this computer'), tr('Plays into a virtual audio cable when one is installed (BlackHole, VB-Cable), else the speakers.'), [micSw]),
       ]);
       const list = el('div');
       const devCard = UI.card(tr('Paired devices'), [list]);
@@ -184,7 +184,14 @@
   // As a device's own pages (shared/ui-device.js and the rest): each with this device's settings
   // (allow, kept by the hub per device). Colours and icons as the sidebar's pages of the same name.
   const like = (id, k) => ((UI.tabs.find((t) => t.id === id) || {})[k]);
-  const devPage = (id, base, extra) => UI.tab({ id, web: true, icon: like(base, 'icon') || base, color: like(base, 'color') || 'linear-gradient(#8e8e93, #636366)', ...extra });
+  // The same on every platform, whatever order the pages load in (and whatever a platform calls its own).
+  const LOOK = {
+    share: ['display', 'linear-gradient(#5ac8fa, #0a84ff)'], receive: ['receive', 'linear-gradient(#5ac8fa, #0a84ff)'],
+    remote: ['remote', 'linear-gradient(#bf5af2, #8944ab)'], clipboard: ['clipboard', 'linear-gradient(#64d2ff, #30b0c7)'],
+    notifications: ['bell', 'linear-gradient(#ff6961, #ff3b30)'], files: ['files', 'linear-gradient(#64d2ff, #0a84ff)'],
+    audio: ['audio', 'linear-gradient(#ff6482, #ff2d55)'], camera: ['camera', 'linear-gradient(#bf5af2, #8944ab)'],
+  };
+  const devPage = (id, base, extra) => UI.tab({ id, web: true, icon: (LOOK[base] || [])[0] || like(base, 'icon') || base, color: (LOOK[base] || [])[1] || like(base, 'color') || 'linear-gradient(#8e8e93, #636366)', ...extra });
   // A switch of this device's settings, and its row.
   const allowSw = (key) => {
     const sw = UI.switch((v) => UI.webDev && api().webAllow({ id: UI.webDev, [key]: v }));
@@ -294,8 +301,8 @@
       nameIn.onchange = () => UI.webDev && nameIn.value.trim() && api().webRename({ id: UI.webDev, name: nameIn.value });
       const pairCard = UI.card(tr('This device'), [
         UI.row(tr('Name'), tr('How this device appears on this computer'), [nameIn]),
-        UI.row(tr('Disconnect'), tr('Its TwinDesk Web closes the connection and stays off until Connect is pressed there. It stays paired.'), [UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev), 'small')]),
-        UI.row(tr('Forget this device'), tr('It will need a new pairing code to connect again. Its messages and files list are removed.'), [UI.button(tr('Forget'), () => UI.webDev && api().webForget(UI.webDev), 'small')]),
+        UI.row(tr('Disconnect'), tr('Ends the connection. The device stays paired and reconnects when Connect is pressed on it.'), [UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev), 'small')]),
+        UI.row(tr('Forget this device'), tr('Removes the pairing on both devices, with its messages and file list. Connecting again requires a new pairing code.'), [UI.button(tr('Forget'), () => UI.webDev && api().webForget(UI.webDev), 'small')]),
       ]);
       body.append(hero, qsCard, lower, pairCard);
       const fact = (k, v) => (v ? [el('dt', { text: k }), el('dd', { text: v })] : []);
@@ -325,7 +332,7 @@
         dropBtn.disabled = !d.online;
         canSend = !!d.online && al.files !== false;
         zone.classList.toggle('off', !canSend);
-        zoneHint.textContent = !d.online ? tr('{name} is not connected', { name: d.name }) : al.files === false ? tr('Files are off for it') : tr('They wait on its Files page until it saves them.');
+        zoneHint.textContent = !d.online ? tr('{name} is not connected', { name: d.name }) : al.files === false ? tr('File transfer is turned off for this device') : tr('Files appear on the device’s Files page until they are saved.');
         // Drop: the latest few.
         const chat = (d.chat || []).filter((x) => x.kind !== 'files').slice(-5).reverse();
         const k = JSON.stringify(chat.map((x) => x.id));
@@ -339,7 +346,7 @@
           }) : [el('div', { class: 'hint web-ov-none', text: tr('No messages yet') })]));
         }
         const c = w.clip || {};
-        clipText.textContent = al.clipOut === false ? tr('Clipboard is off for it') : c.text ? c.text.slice(0, 400) : tr('Nothing copied yet');
+        clipText.textContent = al.clipOut === false ? tr('Clipboard sharing is turned off for this device') : c.text ? c.text.slice(0, 400) : tr('Nothing copied yet');
         clipText.classList.toggle('hint', al.clipOut === false || !c.text);
         if (document.activeElement !== nameIn) nameIn.value = d.name;
         const alt = d.alerts || {};
@@ -363,20 +370,20 @@
       const extendSw = allowSw('extend');
       const controlSw = allowSw('control');
       const q = UI.select ? UI.select([[0, tr('As the device asks')], [720, '720p'], [1080, '1080p'], [1440, '1440p'], [2160, '4K']].map(([value, label]) => ({ value, label })), (v) => UI.webDev && api().webAllow({ id: UI.webDev, maxH: Number(v) })) : null;
-      const stRow = UI.row(tr('Now'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopScreen(UI.webDev), 'small')], { literalHint: true });
+      const stRow = UI.row(tr('Status'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopScreen(UI.webDev), 'small')], { literalHint: true });
       const extRow = UI.row(tr('Extend'), '', [extendSw]);
       // Sharing settings, as for a computer or a phone: which display, how smooth, how sharp.
       const set = (k) => (v) => UI.webDev && api().webAllow({ id: UI.webDev, [k]: v });
       let dispKey = '';
       const dispSel = UI.select ? UI.select([{ value: '', label: tr('Main display') }], set('display')) : null;
-      const dispRow = dispSel ? UI.row(tr('Display'), tr('Which screen Mirror shows. Extend always makes one of its own.'), [dispSel]) : null;
+      const dispRow = dispSel ? UI.row(tr('Display'), tr('The display shown in Mirror mode. Extend always adds a separate display.'), [dispSel]) : null;
       const fpsSeg = UI.segmented ? UI.segmented([{ value: '0', label: tr('Auto') }, { value: '30', label: '30 fps' }, { value: '60', label: '60 fps' }], (v) => set('fps')(Number(v))) : null;
       const mbpsSel = UI.select ? UI.select([[0, tr('As the device asks')], [4, tr('Low (4 Mbps)')], [8, tr('Medium (8 Mbps)')], [12, tr('High (12 Mbps)')], [20, tr('Very high (20 Mbps)')], [30, tr('Highest (30 Mbps)')]].map(([value, label]) => ({ value: String(value), label })), (v) => set('mbps')(Number(v))) : null;
       body.append(
         UI.card(tr('Share screen'), [
-          UI.row(tr('Let it view this screen'), tr('With this computer’s sound when the device asks for it (Audio).'), [screenSw]),
+          UI.row(tr('Allow this device to view this screen'), tr('Includes this computer’s audio when the device requests it.'), [screenSw]),
           extRow,
-          UI.row(tr('Let it control this computer'), tr('Mouse, keyboard and pen from the screen viewer, and the Remote page.'), [controlSw]),
+          UI.row(tr('Allow this device to control this computer'), tr('Mouse, keyboard and pen from the screen viewer, and the Remote page.'), [controlSw]),
         ]),
         UI.card(tr('Sharing'), [
           dispRow,
@@ -401,7 +408,7 @@
         if (dispSel) dispSel.set(ds.some((x) => x.id === al.display) ? al.display : '');
         if (fpsSeg) fpsSeg.set(String(al.fps || 0));
         if (mbpsSel) mbpsSel.set(String(al.mbps || 0));
-        extRow.setHint(W(s).extend ? tr('A screen of its own, in the device’s shape, beside this one') : tr('Not available while this screen is shared with the other computer'));
+        extRow.setHint(W(s).extend ? tr('Adds a separate display that matches the device’s screen') : tr('Not available while this screen is shared with the other computer'));
         const st = d.watching;
         stRow.setHint(st ? `${st.video ? (st.mode === 'extend' ? tr('Extended screen') : tr('Mirrored screen')) : tr('Sound only')} · ${live(st.status)}` : tr('Not watching'));
         stRow.querySelector('button').hidden = !st;
@@ -411,40 +418,80 @@
 
   devPage('wd-receive', 'receive', {
     group: 'w1', order: 92.11, title: 'Receive screen',
-    desc: 'The device’s screen in a window here. It starts from the device’s Send screen page.',
+    desc: 'The device’s screen in a window on this computer. The device starts it from its Send Screen page.',
     build(body) {
       const sw = allowSw('share');
-      const stRow = UI.row(tr('Now'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopCam({ id: UI.webDev, kind: 'scr' }), 'small')], { literalHint: true });
-      const howRow = UI.row(tr('How'), '', [], { literalHint: true });
-      body.append(UI.card(tr('Receive screen'), [UI.row(tr('Show its screen here'), tr('In a window of its own; closing the window stops it.'), [sw]), stRow, howRow]));
+      const fullSw = allowSw('scrFull');
+      const topSw = allowSw('scrTop');
+      const soundSw = allowSw('scrSound');
+      const set = (k) => (v) => UI.webDev && api().webAllow({ id: UI.webDev, [k]: Number(v) });
+      const resSel = UI.select ? UI.select([[0, tr('Automatic')], [720, '720p'], [1080, '1080p'], [1440, '1440p'], [2160, '4K']].map(([value, label]) => ({ value: String(value), label })), set('scrMaxH')) : null;
+      const fpsSeg = UI.segmented ? UI.segmented([{ value: '0', label: tr('Auto') }, { value: '15', label: '15 fps' }, { value: '30', label: '30 fps' }, { value: '60', label: '60 fps' }], set('scrFps')) : null;
+      const showBtn = UI.button(tr('Show Window'), () => api().webShowScr && api().webShowScr(), 'small');
+      const stopBtn = UI.button(tr('Stop'), () => UI.webDev && api().webStopCam({ id: UI.webDev, kind: 'scr' }), 'small');
+      const stRow = UI.row(tr('Status'), '', [showBtn, stopBtn], { literalHint: true });
+      const howRow = UI.row(tr('How to start'), '', [], { literalHint: true });
+      body.append(
+        UI.card(tr('Receive screen'), [UI.row(tr('Allow screen sharing from this device'), tr('Its screen opens in a window here. Closing the window ends the session.'), [sw]), stRow]),
+        UI.card(tr('Window'), [
+          UI.row(tr('Open in full screen'), tr('The window fills this display when sharing starts. Press Esc to leave full screen.'), [fullSw]),
+          UI.row(tr('Keep on top'), tr('The window stays above other windows.'), [topSw]),
+          UI.row(tr('Play audio'), tr('Plays the shared tab or screen audio when the device includes it.'), [soundSw]),
+        ]),
+        UI.card(tr('Quality'), [
+          resSel ? UI.row(tr('Maximum resolution'), tr('The highest resolution the device sends. Applies the next time it starts sharing.'), [resSel]) : null,
+          fpsSeg ? UI.row(tr('Frame rate'), tr('60 fps for video and animation, 15 fps for documents and slides on a weak network.'), [fpsSeg]) : null,
+        ].filter(Boolean)),
+        UI.card('', [howRow]),
+      );
       return (s) => {
         const d = UI.webDevOf(s);
         if (!d) return;
-        setAll(d, [sw]);
+        setAll(d, [sw, topSw, soundSw]);
+        fullSw.set((d.allow || {}).scrFull === true);
+        topSw.set((d.allow || {}).scrTop === true);
+        if (resSel) resSel.set(String((d.allow || {}).scrMaxH || 0));
+        if (fpsSeg) fpsSeg.set(String((d.allow || {}).scrFps || 0));
         const c = (W(s).cam || {}).scr;
         const mine = c && c.dev === d.id;
         stRow.setHint(mine ? live(c.status) : tr('Not sharing'));
-        stRow.querySelector('button').hidden = !mine;
+        showBtn.hidden = !mine;
+        stopBtn.hidden = !mine;
         howRow.setHint(d.os === 'ios' || d.os === 'ipados'
-          ? tr('An iPhone or iPad shares its screen with AirPlay, which isn’t available here yet.')
-          : tr('On the device, open Send screen in TwinDesk Web and tap Start. A browser asks which screen, window or tab to share.'));
+          ? tr('iPhone and iPad share their screens with AirPlay: on the device, open Control Center › Screen Mirroring and choose this computer.')
+          : tr('On the device, open Send Screen in TwinDesk Web and choose Start Presenting. The browser asks which screen, window or tab to share.'));
       };
     },
   });
 
   devPage('wd-remote', 'remote', {
     group: 'w2', order: 92.2, title: 'Remote',
-    desc: 'The device as a touchpad, keyboard and gamepad for this computer.',
+    desc: 'Use the device as a touchpad, keyboard and gamepad for this computer.',
     build(body) {
       const sw = allowSw('control');
-      const stRow = UI.row(tr('Now'), '', [], { literalHint: true });
-      body.append(UI.card(tr('Remote'), [UI.row(tr('Let it control this computer'), tr('Also the mouse and keyboard in its screen viewer (Share screen).'), [sw]), stRow]));
+      const stRow = UI.row(tr('Status'), '', [], { literalHint: true });
+      const padSw = UI.switch((v) => api().webRemotePad && api().webRemotePad(v));
+      const padRow = UI.row(tr('Real gamepad'), '', [padSw]);
+      const padNote = UI.note ? UI.note('info', '') : null;
+      body.append(
+        UI.card(tr('Remote'), [UI.row(tr('Allow this device to control this computer'), tr('Touchpad, keyboard and gamepad on the device’s Remote page, and the pointer and keyboard in its screen viewer.'), [sw]), stRow]),
+        UI.card(tr('Gamepad'), [padRow, padNote].filter(Boolean)),
+      );
       return (s) => {
         const d = UI.webDevOf(s);
         if (!d) return;
         setAll(d, [sw]);
-        const r = W(s).remote;
-        stRow.setHint(d.remote ? (r && r.why ? tr(r.why) : r && r.using ? tr('In use') : tr('Open on the device')) : tr('Not open on the device'));
+        const r = W(s).remote || {};
+        const p = r.pad || {};
+        padSw.set(!!p.on);
+        if (padSw.disable) padSw.disable(!p.supported || !!p.busy);
+        padRow.setHint(!p.supported ? tr('Not available on this computer. The gamepad’s buttons send keys instead.')
+          : p.busy ? tr(p.busy)
+            : !p.on ? tr('Off. The gamepad’s sticks and buttons send keys and mouse input.')
+              : p.live ? tr('On. The device’s gamepad appears to games as a controller ({controller}).', { controller: p.name || tr('Xbox 360 Controller') })
+                : tr('On. Ready when the device opens its gamepad.'));
+        if (padNote) { padNote.set(p.message ? tr(p.message) : ''); }
+        stRow.setHint(d.remote ? (r.why ? tr(r.why) : r.using ? tr('In use') : tr('Open on the device')) : tr('Not open on the device'));
       };
     },
   });
@@ -458,8 +505,8 @@
       const nowRow = UI.row(tr('On this computer’s clipboard'), '', [], { literalHint: true });
       body.append(
         UI.card(tr('Clipboard'), [
-          UI.row(tr('Send this computer’s clipboard to it'), tr('What you copy here shows on its Clipboard page, and as an alert when its page is in the background.'), [out]),
-          UI.row(tr('Take its clipboard'), tr('What it sends (its Clipboard page, a Shortcut) goes on this computer’s clipboard.'), [inn]),
+          UI.row(tr('Send this computer’s clipboard to it'), tr('Text copied on this computer appears on the device’s Clipboard page, and as an alert when TwinDesk Web is in the background.'), [out]),
+          UI.row(tr('Receive the device’s clipboard'), tr('Text and photos sent from the device (its Clipboard page or a Shortcut) are placed on this computer’s clipboard.'), [inn]),
         ]),
         UI.card(tr('Now'), [nowRow]),
       );
@@ -479,12 +526,12 @@
     build(body) {
       const sw = allowSw('notifs');
       const devRow = UI.row(tr('On the device'), '', [], { literalHint: true });
-      body.append(UI.card(tr('Notifications'), [UI.row(tr('Send this computer’s notifications'), tr('They show on its Notifications page, and as alerts when its page is in the background. The device chooses which kinds alert it.'), [sw]), devRow]));
+      body.append(UI.card(tr('Notifications'), [UI.row(tr('Send this computer’s notifications'), tr('Notifications appear on the device’s Notifications page, and as alerts when TwinDesk Web is in the background. The device chooses which kinds it is alerted for.'), [sw]), devRow]));
       return (s) => {
         const d = UI.webDevOf(s);
         if (!d) return;
         setAll(d, [sw]);
-        devRow.setHint(!d.notifs ? tr('Off on the device (its Notifications page)') : d.push && (d.alerts || {}).notifs ? tr('On, with alerts in the background') : tr('On, shown while its page is open'));
+        devRow.setHint(!d.notifs ? tr('Turned off on the device (Notifications page)') : d.push && (d.alerts || {}).notifs ? tr('On, with alerts in the background') : tr('On. Shown while TwinDesk Web is open'));
       };
     },
   });
@@ -511,7 +558,7 @@
       body.append(
         UI.card(tr('Send files'), [zone], { actions: [UI.button(tr('Choose…'), () => UI.webDev && api().webChooseFiles({ id: UI.webDev, kind: 'files' }), 'small link')] }),
         UI.card(tr('Files'), [
-          UI.row(tr('Take files from it'), tr('Each one also goes on the Paste Files shortcut: press it in a folder or an app to put it there.'), [sw]),
+          UI.row(tr('Receive files from this device'), tr('Each file is also available to the Paste Files shortcut: press it in a folder or app to paste it there. Photos are placed on the clipboard too.'), [sw]),
           folderRow,
         ]),
       );
@@ -632,18 +679,47 @@
     },
   });
 
+  // Audio › Capture: which engine records this computer's sound (for every device it plays on), and
+  // muting this computer while it does, offered only where the engine can (the helper's on a Mac,
+  // Windows' loopback). On the Audio tab and on a web device's Audio page.
+  UI.audioCaptureCard = (o = {}) => {
+    const sel = UI.select([], (v) => api().webAudio && api().webAudio({ engine: v }));
+    const engRow = UI.row(tr('Capture engine'), '', [sel]);
+    const muteSw = UI.switch((v) => api().webAudio && api().webAudio({ mute: v }));
+    const muteRow = UI.row(tr('Mute this computer while sending'), tr('Its speakers stay silent while its sound plays on another device.'), [muteSw]);
+    const card = UI.card(tr('Capture'), [engRow, muteRow]);
+    return {
+      el: card,
+      update(s) {
+        const a = W(s).audio;
+        card.hidden = !a;
+        if (!a) return;
+        sel.options(a.engines.map((x) => ({ value: x.id, label: x.label })));
+        sel.set(a.engine);
+        sel.el.disabled = a.engines.length < 2;
+        const cur = a.engines.find((x) => x.id === a.engine) || a.engines[0] || {};
+        engRow.setHint([cur.hint, a.restart ? tr('Restart TwinDesk to use it.') : ''].filter(Boolean).join(' '));
+        muteRow.hidden = !cur.mute || o.mute === false; // the page has its own
+        muteSw.set(!!a.mute);
+      },
+    };
+  };
+
   devPage('wd-audio', 'audio', {
     group: 'w4', order: 92.4, title: 'Audio',
     desc: 'This computer’s sound on the device, and the device’s microphone here.',
     build(body) {
       const snd = allowSw('sound');
       const mic = allowSw('mic');
-      const micRow = UI.row(tr('Now'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopCam({ id: UI.webDev, kind: 'mic' }), 'small')], { literalHint: true });
+      const micRow = UI.row(tr('Status'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopCam({ id: UI.webDev, kind: 'mic' }), 'small')], { literalHint: true });
+      const cap = UI.audioCaptureCard();
       body.append(
-        UI.card(tr('Computer audio'), [UI.row(tr('Let it hear this computer'), tr('With the screen, or by itself from its Audio page.'), [snd])]),
-        UI.card(tr('Microphone'), [UI.row(tr('Use its microphone here'), tr('Plays into a virtual audio cable when one is installed (BlackHole, VB-Cable), else the speakers.'), [mic]), micRow]),
+        UI.card(tr('Computer audio'), [UI.row(tr('Allow this device to play this computer’s audio'), tr('With the screen, or on its own from the device’s Audio page.'), [snd])]),
+        cap.el,
+        UI.card(tr('Microphone'), [UI.row(tr('Use the device’s microphone on this computer'), tr('Routed to a virtual audio device when one is installed (BlackHole, VB-CABLE); otherwise played through the speakers.'), [mic]), micRow]),
       );
       return (s) => {
+        cap.update(s);
         const d = UI.webDevOf(s);
         if (!d) return;
         setAll(d, [snd, mic]);
@@ -670,13 +746,13 @@
           img.src = url;
         });
       }
-      const camRow = UI.row(tr('Now'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopCam({ id: UI.webDev, kind: 'cam' }), 'small')], { literalHint: true });
+      const camRow = UI.row(tr('Status'), '', [UI.button(tr('Stop'), () => UI.webDev && api().webStopCam({ id: UI.webDev, kind: 'cam' }), 'small')], { literalHint: true });
       const picCard = UI.card('', [el('div', { class: 'web-cam-box' }, [img])]);
       body.append(
         UI.card(tr('Camera'), [
-          UI.row(tr('Use its camera here'), '', [sw]),
+          UI.row(tr('Use the device’s camera on this computer'), '', [sw]),
           camRow,
-          UI.row(tr('In other apps'), tr('Apps here pick TwinDesk Camera (Camera › Virtual camera) for its picture.'), [UI.button(tr('Camera'), () => { UI.webDev = null; UI.go('camera'); }, 'small')]),
+          UI.row(tr('In other apps'), tr('Video apps on this computer can select TwinDesk Camera (Camera › Virtual Camera) to use it.'), [UI.button(tr('Camera'), () => { UI.webDev = null; UI.go('camera'); }, 'small')]),
         ]),
         picCard,
       );
@@ -813,17 +889,29 @@
       else prevGap = g;
     }
   };
+  // The line under TwinDesk at the top of the sidebar while a web device's pages show: that device,
+  // its link and round trip (as for a connected computer), not the computer's own connection.
+  UI.webPeerLine = (s) => {
+    const d = UI.webDev && UI.webDevOf(s);
+    if (!d) return null;
+    const text = d.online ? [d.name, d.link === 'USB-C' ? 'USB-C' : '', d.rtt != null ? tr('{value} ms', { value: d.rtt }) : ''].filter(Boolean).join(' · ')
+      : `${d.name} · ${tr('Not connected')}`;
+    return { text, dot: d.online ? 'good' : '' };
+  };
   UI.webTiles = (box, s, pick) => {
     arrange(!!UI.webDev);
     queueMicrotask(tidyGaps);
     if (!box) return;
     const w = W(s);
     const list = w.running ? w.devices.filter((d) => d.online || d.id === UI.webDev) : [];
-    const key = JSON.stringify([list.map((d) => [d.id, d.name, d.online, d.background, d.watching && d.watching.status]), UI.webDev]);
+    const key = JSON.stringify([list.map((d) => [d.id, d.name, d.online, d.background, d.rtt, d.link, d.watching && d.watching.status, d.watching && d.watching.mode]), UI.webDev]);
     if (key === tilesKey) return;
     tilesKey = key;
     box.replaceChildren(...list.map((d) => {
-      const sub = d.online ? (d.watching ? tr('Watching the screen') : d.background ? tr('In the background') : tr('Connected')) : tr('Last seen {when}', { when: ago(d.lastSeen) });
+      // As the phones' and computers' tiles: its round trip while connected, then what it's doing.
+      const ms = d.rtt != null ? tr('{value} ms', { value: d.rtt }) : '';
+      const sub = d.online ? [ms || (d.background ? '' : tr('Connected')), d.link === 'USB-C' ? 'USB-C' : '', d.watching ? (d.watching.mode === 'extend' ? tr('Extending') : tr('Viewing')) : d.background ? tr('In the background') : ''].filter(Boolean).join(' · ')
+        : tr('Last seen {when}', { when: ago(d.lastSeen) });
       const b = el('button', { class: 'phone-tile web-tile' + (d.online ? ' connected' : ''), title: d.name }, [
         el('span', { class: 'phone-wall web-wall' }, [UI.icon(d.os === 'ios' || d.os === 'ipados' || d.os === 'android' ? 'phone' : 'globe')]),
         el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: d.name, attrs: { 'data-literal': '' } }), el('span', { class: 'phone-sub', text: sub, attrs: { 'data-literal': '' } })]),

@@ -1225,7 +1225,23 @@ function setupWeb() {
     },
     reveal: (p) => shell.showItemInFolder(p),
     open: (p) => shell.openPath(p),
-    capture: { audio: 'helper', hub: svc.hub, worklet: path.join(__dirname, 'pcm-worklet.js') },
+    // Audio › Capture engine: the helper's (ScreenCaptureKit, before the volume: it can mute this Mac)
+    // or Chromium's (macOS 14.2+, after the volume: no mute; switched on at launch).
+    capture: {
+      audio: () => (require('./audiohub.js').loopback() ? 'loopback' : 'helper'),
+      hub: svc.hub, worklet: path.join(__dirname, 'pcm-worklet.js'),
+      engines: {
+        list: () => [
+          { id: 'helper', label: t('TwinDesk Helper'), hint: t('Captures with ScreenCaptureKit before the volume control, so this Mac can be muted while its sound plays elsewhere.'), mute: true },
+          ...(require('./audiohub.js').loopbackAvailable() ? [{ id: 'system', label: t('macOS'), hint: t('Chromium’s built-in capture. This Mac can’t be muted while sending, and its own playback of other devices is left out.'), mute: false }] : []),
+        ],
+        get: () => (settings.audio.engine === 'system' ? 'system' : 'helper'),
+        set: (v) => { settings.audio.engine = v === 'system' ? 'system' : 'helper'; store.saveSettings(settings); },
+        mute: () => !!settings.audio.muteLocal,
+        setMute: (v) => { settings.audio.muteLocal = !!v; store.saveSettings(settings); svc.hub.applyMute(); },
+        restart: () => (settings.audio.engine === 'system' ? 'system' : 'helper') !== require('./audiohub.js').engineAtStart(),
+      },
+    },
     // Extend: the virtual display, in the web device's shape, while this Mac's screen isn't shared
     // with the other computer (that one is the session's then).
     extend: {
