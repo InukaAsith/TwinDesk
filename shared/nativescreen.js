@@ -54,7 +54,7 @@ class NativeScreen extends EventEmitter {
   // Resolves once the phone shares its screen (after Start there), rejects if it can't.
   start() {
     const c = this.server.current;
-    if (!c || c.os !== P.OS.ANDROID) return Promise.reject(err('the connection closed'));
+    if (!c || !P.isPhoneOs(c.os)) return Promise.reject(err('the connection closed'));
     if (c.transport === 'ble') return Promise.reject(err('Screens need Wi-Fi: the phone is connected through Bluetooth'));
     live.set(this.key, this);
     this.server.sendToClient({
@@ -149,7 +149,7 @@ class NativeScreen extends EventEmitter {
   }
 
   stop() {
-    if (!this.closed && this.server.current && this.server.current.os === P.OS.ANDROID) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: false, key: this.key });
+    if (!this.closed && this.server.current && P.isPhoneOs(this.server.current.os)) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: false, key: this.key });
     this._close('stopped');
   }
 

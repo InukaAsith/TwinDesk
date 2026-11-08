@@ -6,9 +6,9 @@
 import Foundation
 import Combine
 
-class Feature {
+class Feature: NSObject {
     unowned let core: Core
-    init(_ core: Core) { self.core = core }
+    init(_ core: Core) { self.core = core; super.init() }
     func onWelcome(_ host: Computer, _ m: JSON) {}
     func onClosed() {}
     func onMessage(_ t: String, _ m: JSON) -> Bool { false }
@@ -27,6 +27,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var files = Files(self)
     lazy var fclip = FileClip(self)
     lazy var info = PhoneInfo(self)
+    lazy var mirror = Mirror(self)
 
     // Published copies for the UI (main thread).
     @Published private(set) var state = "idle"
@@ -52,7 +53,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh() }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info]
+        features = [sync, clip, notifs, files, fclip, info, mirror]
     }
 
     func start() {

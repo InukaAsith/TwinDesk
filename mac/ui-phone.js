@@ -124,7 +124,8 @@ UI.tab({
       // An iPhone: its card (name, battery, Disconnect) only; no adb, screen, apps or input from iOS.
       const ios = !!(c && c.os === 'ios');
       if (ios) for (const x of [viaCard, adbCard, appsCard, winCard, optsCard, rezume.el]) x.hidden = true;
-      showBtn.hidden = ios;
+      showBtn.hidden = false; // an iPhone too: it asks the phone to share (Share Screen there)
+      if (ios) showBtn.disabled = false;
       notConnected.set(c ? '' : ph.nearby && ph.nearby.length ? I18n.t('Click the phone above Overview to connect it.') : I18n.t('No phone connected. Open TwinDesk on the phone and pair it from Overview › Nearby.'));
 
       if (!c) return;

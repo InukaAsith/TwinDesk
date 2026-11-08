@@ -415,6 +415,16 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         return r
     }
 
+    // An HTTPS request to the session's computer (its port), e.g. the screen's stream.
+    func sessionRequest(_ path: String, method: String) -> URLRequest? {
+        guard state == "connected", let h = host else { return nil }
+        let a = address.contains(":") ? "[\(address)]" : address
+        guard let url = URL(string: "https://\(a):\(h.port)\(path)") else { return nil }
+        var r = URLRequest(url: url)
+        r.httpMethod = method
+        return r
+    }
+
     // The session's URLSession: its certificate check pins the computer for fx too.
     var urlSession: URLSession { session }
 }

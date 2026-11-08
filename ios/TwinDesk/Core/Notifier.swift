@@ -64,6 +64,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post("n." + id, title.isEmpty ? app : title, body, info: [:], sound: true, thread: computer + "|" + app)
     }
 
+    func shareAsk(_ name: String) {
+        post("share", "\(name) wants to see this screen", "Open TwinDesk and tap Share Screen.", sound: true)
+    }
+
     func invite(_ name: String) {
         post("invite", "\(name) wants to connect", "Pair this iPhone with it?", cat: Cat.invite, sound: true)
     }

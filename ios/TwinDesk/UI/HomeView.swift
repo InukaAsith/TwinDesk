@@ -18,7 +18,7 @@ struct HomeView: View {
                 GlassGroup {
                     VStack(spacing: 16) {
                         hero
-                        if core.connected { actions }
+                        if core.connected { actions; ShareScreenCard() }
                         nearbyList
                         pairedList
                         byAddress

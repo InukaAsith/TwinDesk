@@ -139,7 +139,7 @@ class PhoneBridge extends EventEmitter {
       }
     });
     // The phone's own screen capture (Mirroring › Native): to its window.
-    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => isPhone(ctx) && m && NativeScreen.state(m));
+    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && m && NativeScreen.state(m)); // an iPhone's too (its broadcast extension)
     // The phone's sound without wireless debugging (Sound.kt there): asked for while adb can't carry
     // it; what comes plays in a hidden window (phoneview.js netSound).
     this.netSound = { asked: false, on: false, waiting: false, error: '' };
@@ -618,6 +618,7 @@ class PhoneBridge extends EventEmitter {
   }
 
   get mirrorVia() {
+    if (this.server.current && this.server.current.os === P.OS.IOS) return 'native'; // the iPhone's Share Screen: its only way
     return Modes.resolve(this.mirrorMode, { adbReady: this.state === 'ready', nativeOk: this.nativeMirrorOk });
   }
 
