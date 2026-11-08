@@ -14,9 +14,7 @@
 'use strict';
 
 const { execFile } = require('child_process');
-const fs = require('fs');
 const os = require('os');
-const path = require('path');
 
 const JOIN_MS = 45000;
 const LOCATION = 'ms-settings:privacy-location';
@@ -144,14 +142,9 @@ class Wifi {
     <sharedKey><keyType>passPhrase</keyType><protected>false</protected><keyMaterial>${esc(pass)}</keyMaterial></sharedKey>
   </security></MSM>
 </WLANProfile>`;
-    const file = path.join(os.tmpdir(), `twindesk-wifi-${process.pid}.xml`);
-    fs.writeFileSync(file, xml, { mode: 0o600 });
     this.joined = ssid;
-    try {
-      await this._netsh(['add', 'profile', `filename=${file}`, 'user=current']);
-    } finally {
-      fs.rmSync(file, { force: true });
-    }
+    // Pass the XML over the helper's pipe so the password never touches disk.
+    await this.helper.request('wlanProfile', { xml }, 15000);
     check();
     const until = Date.now() + JOIN_MS;
     let tries = 0;

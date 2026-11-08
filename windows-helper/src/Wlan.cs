@@ -33,6 +33,12 @@ namespace MacShare
         [DllImport("wlanapi.dll")]
         static extern void WlanFreeMemory(IntPtr memory);
 
+        [DllImport("wlanapi.dll", CharSet = CharSet.Unicode)]
+        static extern int WlanSetProfile(IntPtr hClientHandle, ref Guid pInterfaceGuid, uint dwFlags,
+            [MarshalAs(UnmanagedType.LPWStr)] string strProfileXml,
+            [MarshalAs(UnmanagedType.LPWStr)] string strAllUserProfileSecurity,
+            bool bOverwrite, IntPtr pReserved, out uint pdwReasonCode);
+
         static readonly object gate = new object();
         static IntPtr handle = IntPtr.Zero;
 
@@ -97,6 +103,44 @@ namespace MacShare
                 WlanFreeMemory(list);
             }
             return applied;
+        }
+
+        // Add a Wi-Fi profile from inline XML via WlanSetProfile — no temp file on disk.
+        // Tries every connected adapter; returns true if at least one accepted it.
+        public static bool AddProfile(string xml)
+        {
+            lock (gate)
+            {
+                uint negotiated;
+                IntPtr h;
+                if (WlanOpenHandle(2, IntPtr.Zero, out negotiated, out h) != 0)
+                    throw new Exception("WlanOpenHandle failed");
+                try
+                {
+                    IntPtr list;
+                    if (WlanEnumInterfaces(h, IntPtr.Zero, out list) != 0 || list == IntPtr.Zero)
+                        throw new Exception("no Wi-Fi adapters");
+                    bool any = false;
+                    try
+                    {
+                        int n = Marshal.ReadInt32(list, 0);
+                        for (int i = 0; i < n; i++)
+                        {
+                            IntPtr info = new IntPtr(list.ToInt64() + 8 + (long)i * INFO_SIZE);
+                            byte[] g = new byte[16];
+                            Marshal.Copy(info, g, 0, 16);
+                            Guid guid = new Guid(g);
+                            uint reason = 0;
+                            if (WlanSetProfile(h, ref guid, 0, xml, null, true, IntPtr.Zero, out reason) == 0)
+                                any = true;
+                        }
+                    }
+                    finally { WlanFreeMemory(list); }
+                    if (!any) throw new Exception("no Wi-Fi adapter accepted the profile");
+                    return true;
+                }
+                finally { try { WlanCloseHandle(h, IntPtr.Zero); } catch (Exception) { } }
+            }
         }
 
         static void Close()

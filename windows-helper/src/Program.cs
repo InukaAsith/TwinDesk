@@ -60,6 +60,7 @@ namespace MacShare
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move
             Lane.Init(delegate (double x, double y) { smoother.Flush(laneMove); laneMove(x, y); }, Emit); // the input lane (Lane.cs)
+            UsbWatch.Init(Emit); // USB plug/unplug events for adb phones (UsbWatch.cs)
             HideCursor.Restore(); // in case a crash left the cursors blank
             StartCursorGuard();
             capture.Start();
@@ -320,6 +321,11 @@ namespace MacShare
                         if (st != null) stylus.At((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0), st);
                         break;
                     case "displays": c["displays"] = Display.List(); break;
+                    case "usbWatch": c["present"] = UsbWatch.Present(); break; // current ADB phone state; UsbWatch.cs fires usbAdb events on change
+                    case "wlanProfile": // add a Wi-Fi profile from inline XML — no temp file (wifi.js)
+                        string wlanXml = Json.Str(c, "xml", "");
+                        Async(c, delegate (Dictionary<string, object> r) { Wlan.AddProfile(wlanXml); });
+                        return;
                     case "wifiLowLatency": c["applied"] = Wlan.Set(Json.Bool(c, "on", false)); break; // Wlan.cs: media streaming mode, no background scans
                     case "displayExtend": c["changed"] = Display.ExtendIfDuplicated(Json.Str(c, "monitor", "")); break;
                     // PC apps on the Mac
@@ -504,6 +510,7 @@ namespace MacShare
             if (cmd == "displays") reply["displays"] = c["displays"];
             if (cmd == "caps" && c.ContainsKey("on")) reply["on"] = c["on"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
+            if (cmd == "usbWatch" && c.ContainsKey("present")) reply["present"] = c["present"];
             if (cmd == "wifiLowLatency" && c.ContainsKey("applied")) reply["applied"] = c["applied"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];
             if (cmd == "folderAt") { reply["path"] = c["path"]; reply["desktop"] = c["desktop"]; }
