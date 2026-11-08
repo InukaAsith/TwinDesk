@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { NativeScreen } = require('../../shared/nativescreen.js');
 const { Adb } = require('../adb');
 const { Session, ACTION } = require('../scrcpy');
 const { KeyState, ANDROID } = require('../android-keys');
@@ -125,6 +126,8 @@ class PhoneBridge extends EventEmitter {
     server.on('closed', () => {
       if (!isPhone(server.current)) this._stopAll('');
     });
+    // An iPhone's Share Screen (its broadcast extension): to its window here (phoneview.js native).
+    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && m && NativeScreen.state(m));
     // The phone's sound without wireless debugging (Sound.kt there): asked for while adb can't carry
     // it; what comes plays in a hidden window (phoneview.js netSound).
     this.netSound = { asked: false, on: false, waiting: false, error: '' };
@@ -733,6 +736,11 @@ class PhoneBridge extends EventEmitter {
   // ---- windows (phoneview.js) ----
 
   // Options for a new screen/app session, from settings.
+  // How the phone's screen comes: an iPhone's only through its Share Screen; an Android phone's through adb here.
+  get mirrorVia() {
+    return this.server.current && this.server.current.os === P.OS.IOS ? 'native' : 'adb';
+  }
+
   sessionOpts(kind, extra = {}) {
     const ph = this.getSettings().phone || {};
     const base = { video: true, control: true, maxFps: 60, videoBitRate: (ph.bitrateMbps || 8) * 1000000 };
