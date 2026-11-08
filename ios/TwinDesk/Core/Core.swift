@@ -38,6 +38,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var camera = Camera(self)
     lazy var usb = Usb(self)
     lazy var ble = Ble(self)
+    lazy var shareIn = ShareIn(self)
 
     // Published copies for the UI (main thread).
     @Published private(set) var state = "idle"
@@ -63,7 +64,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh(); DispatchQueue.main.async { self.offBle(); self.ble.start() } }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble]
+        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn]
         link.bleRx = { [unowned self] in self.ble.lastDown }
     }
 

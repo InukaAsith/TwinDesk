@@ -341,6 +341,12 @@ final class Files: Feature {
         if fm.fileExists(atPath: target.path) { pendingShares.append(target) }
     }
 
+    // Files already in Outbox (ShareIn): sent now, or once connected.
+    func queue(_ urls: [URL]) {
+        pendingShares.append(contentsOf: urls)
+        flushShares()
+    }
+
     func flushShares() {
         guard core.connected, !pendingShares.isEmpty else { return }
         let list = pendingShares

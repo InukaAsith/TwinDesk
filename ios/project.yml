@@ -36,6 +36,8 @@ targets:
     dependencies:
       - target: Broadcast
         embed: true
+      - target: Share
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twindesk.ios
@@ -53,5 +55,18 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twindesk.ios.broadcast
         INFOPLIST_FILE: Broadcast/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        SKIP_INSTALL: "YES"
+  # Send to Computer in the share sheet (Share/ShareViewController.swift): the items go to the app
+  # on 127.0.0.1, which sends them over its session.
+  Share:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Share
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.twindesk.ios.share
+        INFOPLIST_FILE: Share/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
         SKIP_INSTALL: "YES"
