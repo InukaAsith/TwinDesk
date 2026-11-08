@@ -65,6 +65,9 @@ enum Proto {
         static let fclipGone = "fclip.gone"
         static let pairSync = "pair.sync"
         static let phoneInfo = "phone.info"
+        static let pcMedia = "pc.media"
+        static let pcMediaWant = "pc.media.want"
+        static let pcMediaCtl = "pc.media.ctl"
     }
 
     enum E {

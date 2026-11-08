@@ -59,6 +59,14 @@ final class Files: Feature {
 
     func expect(_ batch: String) { expected.insert(batch) }
 
+    // The computer's next batch goes into this folder (its Upload into a folder here: fs.expect),
+    // done told how it went.
+    private var targets: [String: (dir: URL, done: (Bool) -> Void)] = [:]
+    func expect(_ batch: String, into dir: URL, done: @escaping (Bool) -> Void) {
+        targets[batch] = (dir, done)
+        expected.insert(batch)
+    }
+
     override func onWelcome(_ host: Computer, _ m: JSON) {
         fxBroken = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.flushShares() }
@@ -114,7 +122,7 @@ final class Files: Feature {
         let id = m.str("id", max: 128)
         guard !id.isEmpty, incoming[id] == nil else { return }
         let drop = m.str("drop")
-        guard ["send", "paste", "drag"].contains(drop) else { return refuse(id, "not_allowed") }
+        guard ["send", "paste", "drag", "rezume"].contains(drop) else { return refuse(id, "not_allowed") }
         let size = m.int64("size", -1)
         guard size >= 0, size <= Proto.fileMaxBytes else { return refuse(id, "too_big") }
         let batchId = (drop == "drag" ? m.str("drag", max: 128) : m.str("batch", max: 128)).isEmpty ? id : (drop == "drag" ? m.str("drag", max: 128) : m.str("batch", max: 128))
@@ -128,11 +136,12 @@ final class Files: Feature {
             batches.insert(Batch(id: batchId, dir: "in", name: count == 1 ? name : "\(count) items", count: count, bytes: m.int64("bytes", size)), at: 0)
         }
         // Keep both: "name 2.ext" when one is already there.
-        var url = Self.receivedDir
+        let target0 = targets[batchId]
+        var url = target0?.dir ?? Self.receivedDir
         for seg in rel.dropLast() { url.appendPathComponent(seg, isDirectory: true) }
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         var target = url.appendingPathComponent(name)
-        if rel.count == 1 {
+        if rel.count == 1 || target0 != nil {
             let base = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
             var i = 2
             while FileManager.default.fileExists(atPath: target.path) {
@@ -257,7 +266,10 @@ final class Files: Feature {
         if batches[i].done >= batches[i].count {
             batches[i].finished = true
             let b = batches[i]
-            if b.dir == "in" {
+            if b.dir == "in", let t = targets.removeValue(forKey: b.id) {
+                core.send(msg(Proto.T.filesDone, ["batch": b.id, "ok": b.ok, "where": "TwinDesk", "files": b.done]))
+                t.done(b.ok)
+            } else if b.dir == "in" {
                 core.send(msg(Proto.T.filesDone, ["batch": b.id, "ok": b.ok, "where": "TwinDesk/Received", "files": b.done]))
                 Notifier.shared.filesIn(b.name, ok: b.ok, from: core.link.host?.name ?? "the computer")
             }
@@ -304,13 +316,14 @@ final class Files: Feature {
 
     // Files picked here (document picker, photos, the share sheet's inbox): offered to the computer.
     @discardableResult
-    func send(_ urls: [URL], kind: String = "send") -> Bool {
+    func send(_ urls: [URL], kind: String = "send", rels: [String]? = nil) -> Bool {
         guard core.connected, !urls.isEmpty else { return false }
         let batch = UUID().uuidString
         var items: [(URL, String, Int64)] = []
         var seen = Set<String>()
-        for u in urls {
+        for (ui, u) in urls.enumerated() {
             let size = (try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { $0 }.map(Int64.init) ?? 0
+            if let r = rels, ui < r.count { items.append((u, r[ui], size)); continue } // a folder's files, their paths kept
             var name = u.lastPathComponent
             var i = 2
             while !seen.insert(name).inserted {
@@ -324,8 +337,9 @@ final class Files: Feature {
         batches.insert(Batch(id: batch, dir: "out", name: items.count == 1 ? items[0].1 : "\(items.count) items", count: items.count, bytes: bytes), at: 0)
         for (index, it) in items.enumerated() {
             let id = UUID().uuidString
-            outgoing.append(Outgoing(id: id, url: it.0, name: it.1, size: it.2, batch: batch))
-            core.send(msg(Proto.T.fileOffer, ["id": id, "name": it.1, "size": it.2, "drop": kind, "batch": batch, "rel": it.1,
+            let leaf = (it.1 as NSString).lastPathComponent
+            outgoing.append(Outgoing(id: id, url: it.0, name: leaf, size: it.2, batch: batch))
+            core.send(msg(Proto.T.fileOffer, ["id": id, "name": leaf, "size": it.2, "drop": kind, "batch": batch, "rel": it.1,
                                               "index": index, "count": items.count, "bytes": bytes]))
         }
         core.changed()

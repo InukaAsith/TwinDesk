@@ -24,6 +24,15 @@ targets:
     platform: iOS
     sources:
       - path: TwinDesk
+        excludes: ["WebIOS/**"]
+      # The Android app's pages (the computer's screen, the Remote, its sound), as they are: "web".
+      - path: ../android/app/src/main/assets/web
+        type: folder
+        buildPhase: resources
+      # This app's own pages (the camera): "WebIOS".
+      - path: TwinDesk/WebIOS
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Broadcast
         embed: true

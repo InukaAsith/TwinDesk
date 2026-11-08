@@ -19,7 +19,7 @@
 const P = require('./protocol.js');
 
 const T = P.T;
-const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isPhone = (ctx) => !!ctx && P.isPhoneOs(ctx.os); // Android or iPhone
 const num = (v, max) => Math.max(-max, Math.min(max, Number(v) || 0));
 const BUTTONS = new Set(Object.values(P.BUTTON));
 const CODE = /^[A-Za-z0-9]{1,32}$/; // KeyboardEvent.code names (KeyA, ArrowLeft, MediaPlayPause…)

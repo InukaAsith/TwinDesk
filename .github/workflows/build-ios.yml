@@ -5,7 +5,7 @@ name: Build iOS
 on:
   push:
     branches: [ios-native]
-    paths: ['ios/**', '.github/workflows/build-ios.yml']
+    paths: ['ios/**', 'android/app/src/main/assets/web/**', '.github/workflows/build-ios.yml']
   workflow_dispatch:
     inputs:
       tag:

@@ -10,7 +10,7 @@ const P = require('./protocol.js');
 const { PcMedia } = require('./web/pcmedia.js');
 
 const T = P.T;
-const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isPhone = (ctx) => !!ctx && P.isPhoneOs(ctx.os); // Android or iPhone
 
 class PcNow {
   constructor({ server, key, platform = process.platform }) {

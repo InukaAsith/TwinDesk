@@ -32,6 +32,7 @@ struct TwinDeskApp: App {
             case .active:
                 core.wake()
                 core.clip.appBecameActive()
+                core.hub.appBecameActive()
                 core.files.importInbox()
             case .background: Background.shared.enteredBackground()
             default: break

@@ -657,6 +657,16 @@ app.whenReady().then(() => {
   svc.phone.bridge.on('save', () => store.saveSettings(settings));
   // A phone on a USB cable: pairing, the session, screen and sound through it (no Wi-Fi needed).
   svc.wired = new Wired({ adb: svc.phone.bridge.adb, raw: server, peer, getId: () => id.macId, getName: () => id.macName });
+  // An iPhone's or iPad's session through its USB cable (iosnet.js: usbmuxd to the app's port): this
+  // server, the WebRTC relay (wired.js) and the files engine, nothing else.
+  {
+    const { IosNet } = require('./iosnet.js');
+    svc.iosNet = new IosNet({
+      getId: () => id.macId, getName: () => id.macName,
+      allowed: (port) => port === P.PORT || port === svc.wired.turnPort || (!!server.fx2Port && port === server.fx2Port()),
+    });
+    svc.iosNet.on('change', () => { if (svc.iosNet.view.devices.some((d) => d.app)) svc.wired.relay(); pushState(); });
+  }
   pairing.isWired = (nonce) => svc.wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
   pairing.isQr = qrKnows;
   // Overview's controls of the other device, and this Mac's for it (shared/devctl.js): the session
@@ -770,12 +780,13 @@ app.whenReady().then(() => {
   svc.loadCamera = () => {
     if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
     const { CamShare } = require('../shared/camshare.js');
-    const computer = () => !!peer.current && !P.isPhoneOs(peer.current.os);
+    // A computer, or an iPhone (its app shares its camera the same way); an Android phone's goes through adb.
+    const computer = () => !!peer.current && peer.current.os !== P.OS.ANDROID;
     svc.loadVcam();
     svc.camShare = new CamShare({
       getLanguage: () => i18n.locale,
       link: {
-        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
+        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => ctx.os !== P.OS.ANDROID && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
         send: (m) => peer.sendToClient(m),
         connected: computer,
         ble: () => !!(peer.current && peer.current.transport === 'ble'),
@@ -829,7 +840,7 @@ app.whenReady().then(() => {
     return svc.phoneRemote;
   };
   svc.remote = () => svc.phoneRemote || null;
-  peer.on(`t:${P.T.REMOTE_HELLO}`, () => !svc.phoneRemote && peer.current && peer.current.os === P.OS.ANDROID
+  peer.on(`t:${P.T.REMOTE_HELLO}`, () => !svc.phoneRemote && peer.current && P.isPhoneOs(peer.current.os)
     && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there' }));
   svc.loadRemote();
   // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js), its
@@ -1216,7 +1227,7 @@ function setupNet() {
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
 function setupHub() {
   const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe;
-  peer.on('client', (ctx) => ctx.os === P.OS.ANDROID && !phoneHub && anyOn() && loadHub());
+  peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
   peer.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
@@ -1252,7 +1263,7 @@ function loadHub() {
   };
   hub.on('call', popup);
   hub.on('change', popup);
-  if (peer.current && peer.current.os === P.OS.ANDROID) hub.started();
+  if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
   return hub;
 }
 

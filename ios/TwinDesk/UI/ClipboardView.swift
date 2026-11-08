@@ -7,8 +7,7 @@ struct ClipboardView: View {
     @EnvironmentObject var core: Core
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 Columns {
                     Button { core.clip.sendCurrent(force: true) } label: {
                         Label("Send Clipboard to \(core.host?.name ?? "Computer")", systemImage: "arrow.up.doc.on.clipboard").frame(maxWidth: .infinity)
@@ -64,7 +63,6 @@ struct ClipboardView: View {
             }
             .background(Backdrop())
             .navigationTitle("Clipboard")
-        }
     }
 
     private func sync(_ f: String, _ d: String) -> Binding<Bool> {

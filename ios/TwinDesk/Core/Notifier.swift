@@ -15,6 +15,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         static let clipOut = "clip.out"
         static let fclip = "fclip"
         static let invite = "invite"
+        static let screen = "screen"
     }
 
     func setUp() {
@@ -28,6 +29,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             UNNotificationCategory(identifier: Cat.clipOut, actions: [send], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.fclip, actions: [save], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.invite, actions: [connect], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Cat.screen, actions: [UNNotificationAction(identifier: "view", title: "View", options: [.foreground])], intentIdentifiers: []),
         ])
         c.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
@@ -68,6 +70,16 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post("share", "\(name) wants to see this screen", "Open TwinDesk and tap Share Screen.", sound: true)
     }
 
+    // The computer started sharing its screen while TwinDesk wasn't in front.
+    func screen(_ name: String) {
+        post("screen", "\(name) is sharing its screen", "Tap to see it on this \(Device.word).", cat: Cat.screen, sound: true)
+    }
+
+    func cancel(_ id: String) { c.removeDeliveredNotifications(withIdentifiers: [id]) }
+
+    // Anything else (a one-off line from a feature).
+    func note(_ id: String, _ title: String, _ body: String, sound: Bool = false) { post(id, title, body, sound: sound) }
+
     func invite(_ name: String) {
         post("invite", "\(name) wants to connect", "Pair this \(Device.word) with it?", cat: Cat.invite, sound: true)
     }
@@ -103,6 +115,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { core.clip.sendCurrent(force: true) }
         case (Cat.fclip, "save"), (Cat.fclip, UNNotificationDefaultActionIdentifier):
             core.fclip.save(info["id"] as? String)
+        case (Cat.screen, _):
+            core.screen.autoOpen = true
+            core.changed()
         case (Cat.invite, _):
             if let f = core.invite { core.pair(f) }
         default: break

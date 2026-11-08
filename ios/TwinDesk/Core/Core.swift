@@ -28,6 +28,15 @@ final class Core: ObservableObject, LinkEvents {
     lazy var fclip = FileClip(self)
     lazy var info = PhoneInfo(self)
     lazy var mirror = Mirror(self)
+    lazy var screen = Screen(self)
+    lazy var sound = PcSound(self)
+    lazy var remote = Remote(self)
+    lazy var media = PcMedia(self)
+    lazy var dev = DevCtl(self)
+    lazy var smb = Smb(self)
+    lazy var hub = Hub(self)
+    lazy var camera = Camera(self)
+    lazy var usb = Usb(self)
 
     // Published copies for the UI (main thread).
     @Published private(set) var state = "idle"
@@ -53,13 +62,14 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh() }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info, mirror]
+        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb]
     }
 
     func start() {
         if started { return }
         started = true
         discovery.start()
+        remote.watchControllers()
         refresh()
         Background.shared.apply()
     }
@@ -71,7 +81,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.refresh()
         if link.state == "idle", link.pair == nil, let id = store.lastHostId, let h = store.host(id),
            store.flag("autoConnect", true) {
-            connect(h)
+            if usb.computerId == id { connectWired(h) } else { connect(h) }
         }
     }
 
@@ -97,10 +107,20 @@ final class Core: ObservableObject, LinkEvents {
     // ---- actions ----
 
     func connect(_ h: Computer) {
+        if usb.computerId == h.id { return connectWired(h) } // on the cable to it: through the cable
         resumeUntil = .distantPast
         var h = h
         if let f = discovery.get(h.id) { h.address = f.address; h.port = f.port; store.putHost(h) }
         link.connect(h)
+    }
+
+    // Onto the USB cable (Usb): the same computer at 127.0.0.1, the session moved there.
+    func connectWired(_ h: Computer) {
+        resumeUntil = .distantPast
+        var w = h
+        w.address = "127.0.0.1"
+        w.port = Proto.port
+        link.connect(w, force: true)
     }
 
     func disconnect() {
@@ -261,7 +281,7 @@ final class Core: ObservableObject, LinkEvents {
             return
         }
         let until = resumeUntil
-        connect(store.host(h.id) ?? h)
+        if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { connect(store.host(h.id) ?? h) }
         resumeUntil = until
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.resume() }
     }

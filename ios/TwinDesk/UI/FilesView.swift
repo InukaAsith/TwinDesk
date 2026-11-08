@@ -12,8 +12,7 @@ struct FilesView: View {
     @State private var photos: [PhotosPickerItem] = []
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
+        ScrollView {
                 GlassGroup {
                     Columns {
                         HStack(spacing: 12) {
@@ -69,7 +68,7 @@ struct FilesView: View {
                 }
             }
             .background(Backdrop())
-            .navigationTitle("Files")
+            .navigationTitle("File Sharing")
             .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
                 if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }
             }
@@ -81,7 +80,6 @@ struct FilesView: View {
                     await MainActor.run { core.files.flushShares() }
                 }
             }
-        }
     }
 
     private func transfer(_ b: Files.Batch) -> some View {

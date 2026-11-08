@@ -34,6 +34,8 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private(set) var rttMs: Int?
     private(set) var address = "" // where the socket goes now
     var connected: Bool { state == "connected" }
+    // Through the USB cable (Usb.swift mirrors the computer's port on 127.0.0.1).
+    var wired: Bool { address == "127.0.0.1" }
 
     private var session: URLSession!
     private var ws: URLSessionWebSocketTask?
@@ -64,9 +66,10 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
 
     // ---- what the app asks for ----
 
-    func connect(_ h: Computer) {
+    // force: even when already on this computer (moving onto the cable, or off it).
+    func connect(_ h: Computer, force: Bool = false) {
         q.async {
-            if self.ws != nil, self.host?.id == h.id, self.state == "connecting" || self.state == "connected" { return }
+            if !force, self.ws != nil, self.host?.id == h.id, self.address == h.address, self.state == "connecting" || self.state == "connected" { return }
             self.closeSocket()
             self.pair = nil
             self.host = h
@@ -299,7 +302,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         let name = m.str("macName", max: 64)
         if !name.isEmpty { h.name = name }
         h.lastSeen = Date().timeIntervalSince1970
-        h.address = address
+        if address != "127.0.0.1" { h.address = address } // the cable's address isn't where to find it next time
         host = h
         store.putHost(h)
         store.lastHostId = h.id

@@ -16,13 +16,16 @@
   let cur = null; // the last state, for the switch at the top
   let facing = 'back'; // a phone's camera to start with
 
+  // An Android phone's camera comes through wireless debugging; an iPhone shares its own as a
+  // computer does (its app sends it: camshare.js), so it is treated as one here.
+  const adbPhone = (s) => UI.isPhone(s) && !(s.client && s.client.os === 'ios');
   const phoneCam = (s) => ((s.phone && s.phone.bridge && s.phone.bridge.windows) || []).find((w) => w.kind === 'camera') || null;
-  const running = (s) => (UI.isPhone(s) ? !!phoneCam(s) : !!(s.camera && s.camera.viewing));
+  const running = (s) => (adbPhone(s) ? !!phoneCam(s) : !!(s.camera && s.camera.viewing));
 
   // Why it can't start now ('' when it can).
   function blocked(s) {
     const c = s.camera || {};
-    if (UI.isPhone(s)) {
+    if (adbPhone(s)) {
       const ph = s.phone || {};
       if (!ph.connected) return tr('Not connected');
       if (!ph.bridge || ph.bridge.state !== 'ready') return tr('Needs wireless debugging: set it up on the Phone page');
@@ -37,7 +40,7 @@
   function start(on, show = false) {
     const s = cur;
     if (!s) return;
-    if (UI.isPhone(s)) UI.api.phoneCamera(on, on ? { facing, show } : undefined);
+    if (adbPhone(s)) UI.api.phoneCamera(on, on ? { facing, show } : undefined);
     else UI.api.camera({ do: on ? 'view' : 'close', show });
   }
 
@@ -117,7 +120,7 @@
         cur = s;
         const c = s.camera || {};
         const v = s.vcam || {};
-        const phone = UI.isPhone(s);
+        const phone = adbPhone(s);
         const on = running(s);
         const vName = `“${v.name || 'TwinDesk Camera'}”`;
         const w = phone ? phoneCam(s) : null;

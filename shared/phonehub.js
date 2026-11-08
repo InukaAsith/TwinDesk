@@ -20,7 +20,7 @@ const P = require('./protocol.js');
 
 const T = P.T;
 const WHAT = ['calls', 'messages', 'media', 'files'];
-const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isPhone = (ctx) => !!ctx && P.isPhoneOs(ctx.os); // an iPhone answers Photos and Files; Calls and Messages it says it can't
 const str = (v, n = 200) => (typeof v === 'string' ? v.slice(0, n) : '');
 const picture = (v, max) => (typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= max ? v : '');
 

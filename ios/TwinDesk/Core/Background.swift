@@ -30,6 +30,9 @@ final class Background: NSObject, CLLocationManagerDelegate {
     var useLocation: Bool { store.flag("bg.location", true) }
     var useAudio: Bool { store.flag("bg.audio", true) }
     var active: Bool { locating || engine?.isRunning == true }
+    // The computer's music on the Lock Screen (PcMedia): our sound doesn't mix with others then,
+    // which is what makes iOS show our Now Playing.
+    private(set) var nowPlaying = false
     var authorization: CLAuthorizationStatus { lm.authorizationStatus }
 
     override init() {
@@ -51,8 +54,15 @@ final class Background: NSObject, CLLocationManagerDelegate {
     func apply() {
         let want = enabled && !store.hosts().isEmpty
         if want && useLocation { startLocation() } else { stopLocation() }
-        if want && useAudio { startAudio() } else { stopAudio() }
+        if want && (useAudio || nowPlaying) { startAudio() } else { stopAudio() }
         Core.shared.changed()
+    }
+
+    func setNowPlaying(_ on: Bool) {
+        guard on != nowPlaying else { return }
+        nowPlaying = on
+        stopAudio()
+        apply()
     }
 
     func askLocation() {
@@ -120,7 +130,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
         if engine?.isRunning == true { return }
         do {
             let s = AVAudioSession.sharedInstance()
-            try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try s.setCategory(.playback, mode: .default, options: nowPlaying ? [] : [.mixWithOthers])
             try s.setActive(true)
             let e = AVAudioEngine()
             let p = AVAudioPlayerNode()

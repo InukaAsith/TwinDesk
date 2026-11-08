@@ -11,8 +11,11 @@ extension View {
                 .glassEffect(tint.map { Glass.regular.tint($0.opacity(0.25)) } ?? .regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
         } else {
             self.padding(18)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(.white.opacity(0.12)))
+                .background {
+                    let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    ZStack { shape.fill(TDColor.card); shape.fill(tint?.opacity(0.14) ?? .clear) }
+                }
+                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(TDColor.line))
         }
     }
 
@@ -50,14 +53,29 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
-// The soft background every page sits on: glass needs something behind it.
+// TwinDesk's colours (the computers' dark appearance, mac/control.css).
+enum TDColor {
+    static let bg = Color(red: 0.105, green: 0.105, blue: 0.11) // #1b1b1c
+    static let content = Color(red: 0.118, green: 0.118, blue: 0.122) // #1e1e1f
+    static let card = Color(red: 0.165, green: 0.165, blue: 0.173) // #2a2a2c
+    static let control = Color(red: 0.227, green: 0.227, blue: 0.235) // #3a3a3c
+    static let line = Color.white.opacity(0.07)
+    static let text = Color(red: 0.96, green: 0.96, blue: 0.97)
+    static let muted = Color(red: 0.6, green: 0.6, blue: 0.62)
+    static let accent = Color(red: 0.04, green: 0.52, blue: 1) // #0a84ff
+    static let good = Color(red: 0.2, green: 0.84, blue: 0.29) // #32d74b
+    static let warn = Color(red: 1, green: 0.7, blue: 0.25)
+    static let bad = Color(red: 1, green: 0.27, blue: 0.23)
+}
+
+// The background every page sits on: the computers' dark content colour, with a faint glow at the
+// top for the glass to catch.
 struct Backdrop: View {
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.05, green: 0.18, blue: 0.42), Color(red: 0.24, green: 0.10, blue: 0.45)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            Circle().fill(Color.cyan.opacity(0.35)).frame(width: 340).blur(radius: 90).offset(x: -140, y: -260)
-            Circle().fill(Color.pink.opacity(0.25)).frame(width: 300).blur(radius: 100).offset(x: 150, y: 260)
+        ZStack(alignment: .top) {
+            TDColor.content
+            RadialGradient(colors: [TDColor.accent.opacity(0.16), .clear], center: .top, startRadius: 0, endRadius: 520)
+                .frame(height: 520)
         }
         .ignoresSafeArea()
     }
@@ -68,6 +86,70 @@ struct SectionTitle: View {
     var body: some View {
         Text(text).font(.footnote.weight(.semibold)).textCase(.uppercase).foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6).padding(.top, 8)
+    }
+}
+
+// A feature's icon as the computers' sidebar draws it: a white glyph on a rounded square of its colour.
+struct FeatureIcon: View {
+    let symbol: String
+    let color: Color
+    var size: CGFloat = 30
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.5, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(LinearGradient(colors: [color.opacity(0.95), color.opacity(0.75)], startPoint: .top, endPoint: .bottom),
+                        in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous).strokeBorder(.white.opacity(0.12)))
+    }
+}
+
+// A card's title row: the feature's icon, a title and an optional line under it.
+struct CardHeader: View {
+    let symbol: String
+    let color: Color
+    let title: String
+    var detail: String? = nil
+    var body: some View {
+        HStack(spacing: 12) {
+            FeatureIcon(symbol: symbol, color: color, size: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline)
+                if let d = detail { Text(d).font(.caption).foregroundStyle(.secondary) }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+// A page: its cards on the dark background, a large title, one or two columns.
+struct PageScroll<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        ScrollView {
+            GlassGroup { VStack(spacing: 16) { content() }.pageWidth() }
+        }
+        .background(Backdrop())
+        .navigationTitle(title)
+    }
+}
+
+// Something that needs a computer connected: says so in place of the page's controls.
+struct NeedsComputer: View {
+    @EnvironmentObject var core: Core
+    var what: String
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bolt.horizontal.circle").font(.title2).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(core.state == "connecting" ? "Connecting…" : "Not connected").font(.headline)
+                Text("Connect to a computer to use \(what).").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .glassCard()
     }
 }
 

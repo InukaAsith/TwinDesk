@@ -68,9 +68,13 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>TwinDesk uses your rough location (no GPS) only to stay connected to your computer while it isn’t on screen. It never stores or sends where you are.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pick photos and videos to send to your computer.</string>
+	<string>Send photos and videos to your computer, and let it show and save them (Photos on the computer, while you have it on).</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Scan your computer’s pairing QR code.</string>
+	<string>Use this camera on your computer (its Camera tab and virtual camera), while you let it.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Send this microphone’s sound to your computer, while you let it.</string>
+	<key>GCSupportsControllerUserInteraction</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
