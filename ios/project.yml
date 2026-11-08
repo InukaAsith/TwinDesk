@@ -1,0 +1,33 @@
+# TwinDesk for iPhone and iPad. The Xcode project is generated from this file (XcodeGen), so it
+# never has to be opened in Xcode: `xcodegen generate` then `./build.sh` (or the Build iOS workflow).
+name: TwinDesk
+options:
+  bundleIdPrefix: com.twindesk
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "2.5.3"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+    ENABLE_BITCODE: "NO"
+    TARGETED_DEVICE_FAMILY: "1,2"
+targets:
+  TwinDesk:
+    type: application
+    platform: iOS
+    sources:
+      - path: TwinDesk
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.twindesk.ios
+        INFOPLIST_FILE: TwinDesk/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: "NO"

@@ -20,7 +20,7 @@ function planConnect({ dev = null, address = '', pairedIds = [], hosts = [] } = 
 
   // Already paired with us: a phone is opened, any other computer is invited and dials us.
   if (dev && paired.has(dev.id)) {
-    if (dev.os === P.OS.ANDROID) return { action: 'phone', id: dev.id };
+    if (P.isPhoneOs(dev.os)) return { action: 'phone', id: dev.id };
     return {
       action: 'invite',
       expect: true,
@@ -37,7 +37,7 @@ function planConnect({ dev = null, address = '', pairedIds = [], hosts = [] } = 
 
   // We are its guest (a Mac, Windows or Linux host). Dial it. Checked before the
   // "ask a PC to connect" path, which is only for a computer we have not paired with.
-  if (host && (!dev || dev.os !== P.OS.ANDROID)) {
+  if (host && (!dev || !P.isPhoneOs(dev.os))) {
     const name = (dev && dev.name) || host.name || address;
     const addr = (dev && dev.address) || host.address || address;
     return {
@@ -60,7 +60,7 @@ function planConnect({ dev = null, address = '', pairedIds = [], hosts = [] } = 
       id: dev.id,
       address: dev.address,
       name: dev.name,
-      inviting: dev.os === P.OS.ANDROID,
+      inviting: P.isPhoneOs(dev.os),
       pending: pendingOf(dev.id, dev.name, dev.address),
       message: `Asked ${dev.name} to connect. Confirm on ${dev.name}.`,
       messageKey: 'Asked {name} to connect. Confirm on {name}.',

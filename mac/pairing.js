@@ -153,7 +153,7 @@ class Pairing extends EventEmitter {
     }
     // A phone only says hello when someone asked for it (or to resume): it takes the session.
     // A computer waits while a phone holds it.
-    const phone = (Object.values(P.OS).includes(msg.os) ? msg.os : e.os) === P.OS.ANDROID;
+    const phone = P.isPhoneOs(Object.values(P.OS).includes(msg.os) ? msg.os : e.os);
     // Take over (the person asked for it there, or here: Connect on it in this computer's list):
     // whoever holds the session is let go. Else a computer waits while another device holds it.
     const takeover = msg.takeover === true || (this.expected && this.expected.id === e.id && Date.now() < this.expected.until);

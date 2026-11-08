@@ -7,6 +7,7 @@ UI.tab({
   id: 'cursor',
   group: 'Input',
   order: 20,
+  hidden: (s) => UI.isIphone(s), // iOS takes no mouse or keyboard from an app
   title: I18n.t('Mouse'),
   desc: I18n.t('Move the pointer off the edge of the screen to go to the other computer.'),
   color: 'linear-gradient(#ffb340, #ff9500)',
@@ -94,7 +95,7 @@ UI.tab({
       syncPads.set(k.syncPads === true);
       shake.set(k.shakeHome !== false);
       ble.set(k.ble !== false);
-      viaCard.hidden = !p.phone;
+      viaCard.hidden = !p.phone || p.iphone;
       const br = (s.phone || {}).bridge || {};
       via.set(br.inputMode || (((s.phone || {}).settings || {}).input === 'phone' ? 'phone' : 'adb'));
       adbBtn.hidden = br.state === 'ready';

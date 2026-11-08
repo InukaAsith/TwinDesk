@@ -1,0 +1,59 @@
+name: Build iOS
+
+# An unsigned IPA for sideloading (SideStore, AltStore, or any signing tool signs it with your Apple
+# ID when it installs it). Runs by itself on pushes to the iOS branch, or by hand.
+on:
+  push:
+    branches: [ios-native]
+    paths: ['ios/**', '.github/workflows/build-ios.yml']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to put the IPA on (e.g. v2.6.0; made as a draft if it isn't there). Empty = run artifacts only.
+        required: false
+        default: ''
+      ref:
+        description: Branch to build.
+        required: false
+        default: ios-native
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # The newest Xcode on the runner (the iOS 26 SDK: Liquid Glass; the app runs from iOS 16).
+      - name: Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Using $X"
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - name: XcodeGen
+        run: brew install xcodegen xcbeautify
+
+      - name: Build
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: bash ios/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TwinDesk-iOS
+          path: ios/dist/TwinDesk.ipa
+          if-no-files-found: error
+
+      - name: Release
+        if: ${{ inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --title "${{ inputs.tag }}" --notes ""
+          gh release upload "${{ inputs.tag }}" ios/dist/TwinDesk.ipa --clobber

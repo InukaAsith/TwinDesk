@@ -1,0 +1,420 @@
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+// The iPhone's side of the session, as android/…/Link.kt: a WSS client with the computer's
+// certificate pinned (its SHA-256 is the identity), pairing as the initiator (numeric comparison,
+// or Allow only with a QR code's nonce), hello, liveness. One socket; no Bluetooth fallback.
+import Foundation
+
+struct PairState: Equatable {
+    var phase: String // connecting | starting | code | waiting | failed
+    var address: String
+    var port: UInt16
+    var name: String
+    var code = ""
+    var error = ""
+    var qr = false
+}
+
+protocol LinkEvents: AnyObject {
+    func linkChanged()
+    func linkWelcome(_ host: Computer, _ m: JSON)
+    func linkMessage(_ t: String, _ m: JSON)
+    func linkClosed(_ host: Computer, _ code: String?)
+}
+
+final class Link: NSObject, URLSessionWebSocketDelegate {
+    weak var events: LinkEvents?
+    private let store = Store.shared
+    let q = DispatchQueue(label: "td.link")
+
+    // idle | connecting | connected | failed (read on main through Core's published copy)
+    private(set) var state = "idle"
+    private(set) var message = ""
+    private(set) var pair: PairState?
+    private(set) var host: Computer?
+    private(set) var rttMs: Int?
+    private(set) var address = "" // where the socket goes now
+    var connected: Bool { state == "connected" }
+
+    private var session: URLSession!
+    private var ws: URLSessionWebSocketTask?
+    private var mode = "" // session | pair
+    private var nw = ""
+    private var pairNonce = ""
+    private var pinFp: String?
+    private(set) var seenFp = ""
+    private var lastRx = Date()
+    private var lastCode: String?
+    private var pinger: DispatchSourceTimer?
+    private var helloTimer: DispatchWorkItem?
+    private(set) var fxToken = ""
+    private var queuedBytes = 0 // sent but not yet written (file sending waits while it is high)
+    private let qLock = NSLock()
+
+    override init() {
+        super.init()
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 30
+        cfg.waitsForConnectivity = false
+        cfg.httpMaximumConnectionsPerHost = 6
+        let dq = OperationQueue()
+        dq.underlyingQueue = q
+        dq.maxConcurrentOperationCount = 1
+        session = URLSession(configuration: cfg, delegate: self, delegateQueue: dq)
+    }
+
+    // ---- what the app asks for ----
+
+    func connect(_ h: Computer) {
+        q.async {
+            if self.ws != nil, self.host?.id == h.id, self.state == "connecting" || self.state == "connected" { return }
+            self.closeSocket()
+            self.pair = nil
+            self.host = h
+            self.open("session", h.address, h.port, h.fp)
+            self.setState("connecting", "")
+        }
+    }
+
+    func disconnect() {
+        q.async {
+            if self.state == "connected" { self.raw(msg(Proto.T.bye)) }
+            self.closeSocket()
+            self.setState("idle", "")
+        }
+    }
+
+    // nonce: from the computer's QR code: no code to compare, only Allow there.
+    func startPairing(address: String, port: UInt16, name: String, nonce: String = "") {
+        q.async {
+            self.closeSocket()
+            self.host = nil
+            self.pairNonce = nonce
+            self.pair = PairState(phase: "connecting", address: address, port: port, name: name, qr: !nonce.isEmpty)
+            self.open("pair", address, port, nil)
+            self.changed()
+        }
+    }
+
+    func confirmCode() {
+        q.async {
+            guard var p = self.pair, p.phase == "code", self.mode == "pair" else { return }
+            self.raw(msg(Proto.T.pairConfirm))
+            p.phase = "waiting"
+            self.pair = p
+            self.changed()
+        }
+    }
+
+    func cancelPairing() {
+        q.async {
+            guard let p = self.pair else { return }
+            if self.mode == "pair" && p.phase != "failed" { self.raw(msg(Proto.T.pairCancel)) }
+            self.pair = nil
+            if self.mode == "pair" { self.closeSocket() }
+            self.changed()
+        }
+    }
+
+    @discardableResult
+    func send(_ m: JSON) -> Bool {
+        guard state == "connected", let text = encodeJSON(m) else { return false }
+        q.async { self.write(text) }
+        return true
+    }
+
+    // Bytes waiting to go (file.chunk waits while it's over a megabyte).
+    func queued() -> Int { qLock.lock(); defer { qLock.unlock() }; return queuedBytes }
+
+    // ---- socket ----
+
+    private func open(_ m: String, _ address: String, _ port: UInt16, _ fp: String?) {
+        mode = m
+        nw = ""
+        seenFp = ""
+        lastCode = nil
+        pinFp = fp
+        self.address = address
+        let h = address.contains(":") ? "[\(address)]" : address
+        guard let url = URL(string: "wss://\(h):\(port)") else { return }
+        let t = session.webSocketTask(with: url)
+        t.maximumMessageSize = Proto.maxPayload
+        ws = t
+        t.resume()
+        receive(t)
+    }
+
+    private func receive(_ t: URLSessionWebSocketTask) {
+        t.receive { [weak self] r in
+            guard let self = self else { return }
+            self.q.async {
+                guard t === self.ws else { return }
+                switch r {
+                case .success(let m):
+                    if case .string(let s) = m { self.onText(s) }
+                    else if case .data(let d) = m, let s = String(data: d, encoding: .utf8) { self.onText(s) }
+                    self.receive(t)
+                case .failure(let e):
+                    self.onClose((e as NSError).domain == NSURLErrorDomain && (e as NSError).code == NSURLErrorServerCertificateUntrusted ? "identity" : e.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func write(_ text: String) {
+        guard let t = ws else { return }
+        let n = text.utf8.count
+        qLock.lock(); queuedBytes += n; qLock.unlock()
+        t.send(.string(text)) { [weak self] _ in
+            guard let self = self else { return }
+            self.qLock.lock(); self.queuedBytes -= n; self.qLock.unlock()
+        }
+    }
+
+    private func raw(_ m: JSON) { if let s = encodeJSON(m) { write(s) } }
+
+    // Self-signed certificates: the fingerprint is the identity (pinned once paired). The same check
+    // serves the fast files' HTTPS requests (Files), which go through this session too.
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else { return completionHandler(.performDefaultHandling, nil) }
+        guard let fp = Self.leafFingerprint(trust) else { return completionHandler(.cancelAuthenticationChallenge, nil) }
+        let pin = pinFp ?? host?.fp
+        if mode == "pair" && pinFp == nil { seenFp = fp }
+        else if let pin = pin, !pin.isEmpty, pin != fp {
+            NSLog("TwinDesk: identity changed (%@ ≠ %@)", fp, pin)
+            lastCode = "identity"
+            return completionHandler(.cancelAuthenticationChallenge, nil)
+        } else { seenFp = fp }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    static func leafFingerprint(_ trust: SecTrust) -> String? {
+        var leaf: SecCertificate?
+        if #available(iOS 15.0, macOS 12.0, *) {
+            leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first
+        }
+        guard let c = leaf else { return nil }
+        return Proto.sha256(SecCertificateCopyData(c) as Data).hex
+    }
+
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        guard webSocketTask === ws else { return }
+        lastRx = Date()
+        if mode == "pair" {
+            nw = Proto.randomHex(16)
+            var start = msg(Proto.T.pairStart, ["v": Proto.version, "id": store.deviceId, "name": store.deviceName, "os": Proto.os,
+                                                "commit": Proto.commitOf(nw)])
+            if !pairNonce.isEmpty { start["wired"] = pairNonce }
+            raw(start)
+            pair?.phase = "starting"
+            changed()
+            return
+        }
+        hello()
+    }
+
+    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        guard webSocketTask === ws else { return }
+        onClose(nil)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard task === ws else { return }
+        onClose(lastCode == "identity" ? "identity" : error?.localizedDescription)
+    }
+
+    private func hello() {
+        guard let h = host else { return }
+        raw(msg(Proto.T.hello, ["v": Proto.version, "id": store.deviceId, "name": store.deviceName, "os": Proto.os,
+                                "token": h.token, "fx": 1]))
+        helloTimer?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            guard let self = self, self.state != "connected" else { return }
+            self.message = "No answer"
+            self.ws?.cancel(with: .goingAway, reason: nil)
+        }
+        helloTimer = w
+        q.asyncAfter(deadline: .now() + Proto.timeout, execute: w)
+    }
+
+    private func onText(_ text: String) {
+        guard let m = decodeJSON(text) else { return }
+        let t = m.str("t")
+        lastRx = Date()
+        switch t {
+        case Proto.T.pairNonce: return onNonce(m)
+        case Proto.T.pairOk: return onPairOk(m)
+        case Proto.T.pairCancel: return pairFailed("Pairing was cancelled on the computer.")
+        case Proto.T.welcome: return onWelcome(m)
+        case Proto.T.error: return onError(m)
+        case Proto.T.ping:
+            if state == "connected" { raw(msg(Proto.T.pong, ["ts": m["ts"] ?? NSNull()])) }
+            return
+        case Proto.T.pong:
+            if let ts = m["ts"] as? NSNumber { rttMs = max(0, Int(Date().timeIntervalSince1970 * 1000) - ts.intValue) }
+            return
+        default: break
+        }
+        if state == "connected" { events?.linkMessage(t, m) }
+    }
+
+    private func onNonce(_ m: JSON) {
+        guard var p = pair else { return }
+        let nonce = m.str("nonce", max: 200)
+        guard mode == "pair", !nw.isEmpty, Proto.isHex(nonce, min: 32, max: 128), nonce.count % 2 == 0 else {
+            return pairFailed("The computer sent a bad pairing message.")
+        }
+        raw(msg(Proto.T.pairReveal, ["nonce": nw]))
+        p.phase = "code"
+        p.code = Proto.sasCode(fp: seenFp, nw: nw, nm: nonce)
+        if p.qr {
+            raw(msg(Proto.T.pairConfirm))
+            p.phase = "waiting"
+        }
+        pair = p
+        changed()
+    }
+
+    private func onPairOk(_ m: JSON) {
+        guard let p = pair, mode == "pair", p.phase == "waiting" else { return }
+        let token = m.str("token")
+        let id = m.str("macId", max: 128)
+        guard !token.isEmpty, !id.isEmpty else { return pairFailed("The computer sent a bad pairing message.") }
+        let name = m.str("macName", max: 64)
+        let h = Computer(id: id, name: name.isEmpty ? p.name : name, os: m.str("os").isEmpty ? "mac" : m.str("os"),
+                     address: p.address, port: p.port, fp: seenFp, token: token, lastSeen: Date().timeIntervalSince1970)
+        store.putHost(h)
+        pair = nil
+        mode = "session"
+        host = h
+        pinFp = h.fp
+        setState("connecting", "")
+        hello()
+    }
+
+    private func onWelcome(_ m: JSON) {
+        guard mode == "session", state != "connected", var h = host else { return }
+        helloTimer?.cancel()
+        let name = m.str("macName", max: 64)
+        if !name.isEmpty { h.name = name }
+        h.lastSeen = Date().timeIntervalSince1970
+        h.address = address
+        host = h
+        store.putHost(h)
+        store.lastHostId = h.id
+        rttMs = nil
+        let fx = m.str("fx", max: 64)
+        fxToken = Proto.isHex(fx, min: 32, max: 32) ? fx : ""
+        let t = DispatchSource.makeTimerSource(queue: q)
+        t.schedule(deadline: .now() + Proto.pingInterval, repeating: Proto.pingInterval)
+        t.setEventHandler { [weak self] in
+            guard let self = self, let w = self.ws else { return }
+            let quiet = Date().timeIntervalSince(self.lastRx)
+            if quiet > Proto.timeout {
+                NSLog("TwinDesk: socket silent for %.1f s, closing", quiet)
+                self.message = "Stopped answering"
+                w.cancel(with: .goingAway, reason: nil)
+                self.onClose(nil)
+            } else {
+                self.raw(msg(Proto.T.ping, ["ts": Int(Date().timeIntervalSince1970 * 1000)]))
+            }
+        }
+        t.resume()
+        pinger = t
+        setState("connected", "")
+        events?.linkWelcome(h, m)
+    }
+
+    private func onError(_ m: JSON) {
+        let code = m.str("code")
+        lastCode = code
+        if mode == "pair" {
+            let known = [Proto.E.pairRefused: "Pairing was refused.", Proto.E.pairTimeout: "Pairing timed out.",
+                         Proto.E.busy: "That computer is busy pairing with another device.",
+                         Proto.E.versionMismatch: "That computer runs a different TwinDesk version. Update both."]
+            return pairFailed(known[code] ?? "Pairing failed (\(code)).")
+        }
+        let name = host?.name ?? "The computer"
+        switch code {
+        case Proto.E.badToken: message = "\(name) forgot this iPhone. Pair again."
+        case Proto.E.busy: message = m.str("message").isEmpty ? "Busy with another device" : m.str("message")
+        case Proto.E.replaced: message = m.str("message").isEmpty ? "Another device connected" : m.str("message")
+        case Proto.E.released: message = "Disconnected from \(name)"
+        case Proto.E.asleep: message = "\(name) is asleep"
+        default: message = "Closed (\(code))"
+        }
+        if code == Proto.E.badToken, let h = host { store.forgetHost(h.id) }
+    }
+
+    private func pairFailed(_ error: String) {
+        guard var p = pair else { return }
+        p.phase = "failed"
+        p.error = error
+        p.code = ""
+        pair = p
+        closeSocket()
+        changed()
+    }
+
+    private func onClose(_ failure: String?) {
+        guard ws != nil || state == "connected" || state == "connecting" || pair != nil else { return }
+        pinger?.cancel(); pinger = nil
+        helloTimer?.cancel()
+        ws = nil
+        fxToken = ""
+        if mode == "pair" {
+            if let p = pair, p.phase != "failed" {
+                pairFailed(p.phase == "connecting" ? "Couldn’t connect to \(p.address)\(failure.map { " (\($0))" } ?? "")." : "The connection closed.")
+            }
+            return
+        }
+        let was = state
+        if failure == "identity" {
+            setState("failed", "\(host?.name ?? "The computer") looks different now. Forget it and pair again.")
+        } else {
+            if message.isEmpty, let f = failure { message = f }
+            setState(was == "connected" || was == "connecting" ? "idle" : was, message)
+        }
+        if let h = host, was == "connected" || was == "connecting" { events?.linkClosed(h, lastCode) }
+    }
+
+    private func closeSocket() {
+        pinger?.cancel(); pinger = nil
+        helloTimer?.cancel()
+        let w = ws
+        ws = nil
+        fxToken = ""
+        let wasConnected = state == "connected"
+        if wasConnected { state = "idle" }
+        w?.cancel(with: .normalClosure, reason: nil)
+        if wasConnected, let h = host { events?.linkClosed(h, "local") }
+    }
+
+    private func setState(_ s: String, _ m: String) {
+        state = s
+        message = m
+        changed()
+    }
+
+    private func changed() { events?.linkChanged() }
+
+    // ---- fast files (fx): the file's bytes as one HTTPS stream on the session's port ----
+
+    // A request for /twindesk/fx/<id>, or nil when fast files can't be used (no token, a group network).
+    func fxRequest(_ id: String, method: String) -> URLRequest? {
+        guard state == "connected", !fxToken.isEmpty, let h = host else { return nil }
+        if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
+        let a = address.contains(":") ? "[\(address)]" : address
+        let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: "https://\(a):\(h.port)\(Proto.fxPath)\(enc)") else { return nil }
+        var r = URLRequest(url: url)
+        r.httpMethod = method
+        r.setValue(fxToken, forHTTPHeaderField: Proto.fxHeader)
+        r.timeoutInterval = 30
+        return r
+    }
+
+    // The session's URLSession: its certificate check pins the computer for fx too.
+    var urlSession: URLSession { session }
+}

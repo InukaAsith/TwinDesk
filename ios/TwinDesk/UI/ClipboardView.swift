@@ -1,0 +1,77 @@
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+// Clipboard: the two directions (shared with the computer, pair.sync), how the computer's copies
+// arrive here, the "You copied something" notification, and the recent items.
+import SwiftUI
+
+struct ClipboardView: View {
+    @EnvironmentObject var core: Core
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    Button { core.clip.sendCurrent(force: true) } label: {
+                        Label("Send Clipboard to \(core.host?.name ?? "Computer")", systemImage: "arrow.up.doc.on.clipboard").frame(maxWidth: .infinity)
+                    }
+                    .primaryButton().controlSize(.large).disabled(!core.connected)
+
+                    SectionTitle(text: "Sync")
+                    VStack(spacing: 12) {
+                        ToggleRow(title: "This iPhone’s copies go to the computer", on: sync("clipboard", "out"))
+                        Divider()
+                        ToggleRow(title: "The computer’s copies come here", on: sync("clipboard", "in"))
+                        Divider()
+                        ToggleRow(title: "Pictures", detail: "Copied pictures too, up to 10 MB", on: opt("clip.images"))
+                    }
+                    .glassCard()
+
+                    SectionTitle(text: "The computer’s copies")
+                    VStack(spacing: 12) {
+                        ToggleRow(title: "Put on the clipboard at once", detail: "Else only in the notification, with Copy", on: opt("clip.auto"))
+                        Divider()
+                        ToggleRow(title: "Notify", detail: "While TwinDesk is in the background", on: opt("clip.notify"))
+                    }
+                    .glassCard()
+
+                    SectionTitle(text: "This iPhone’s copies")
+                    VStack(alignment: .leading, spacing: 12) {
+                        ToggleRow(title: "Ask to send what I copy", detail: "A notification with Send while TwinDesk runs in the background", on: opt("clip.notifyOwn"))
+                        Text("iOS lets only the app on screen read the clipboard, so Send opens TwinDesk for a moment. Set Settings › TwinDesk › Paste from Other Apps to Allow, so iOS doesn’t ask each time. The Send Clipboard shortcut works from Back Tap and the Action button.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .glassCard()
+
+                    if !core.clip.history.isEmpty {
+                        SectionTitle(text: "Recent")
+                        VStack(spacing: 0) {
+                            ForEach(core.clip.history) { item in
+                                Button { core.clip.write(item.text) } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: item.dir == "in" ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                                            .foregroundStyle(item.dir == "in" ? .green : .blue)
+                                        Text(item.text).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                                        Image(systemName: "doc.on.doc").foregroundStyle(.secondary)
+                                    }
+                                    .padding(.vertical, 8).contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .glassCard()
+                    }
+                }
+                .padding(.horizontal, 16).padding(.bottom, 30)
+            }
+            .background(Backdrop())
+            .navigationTitle("Clipboard")
+        }
+    }
+
+    private func sync(_ f: String, _ d: String) -> Binding<Bool> {
+        Binding(get: { _ = core.tick; return core.sync.get(f, d) }, set: { core.sync.set(f, d, $0) })
+    }
+
+    private func opt(_ k: String) -> Binding<Bool> {
+        Binding(get: { _ = core.tick; return core.store.flag(k, true) }, set: { core.clip.setOption(k, $0) })
+    }
+}

@@ -244,7 +244,7 @@ class Kvm extends EventEmitter {
     this.helper
       .request('kvmConfig', {
         side: k.pcSide, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
-        driveOther: !!(this.linked && k.driveOther && k.mouse && this.server.current && !this.paused && !(this.locked && this.mode === 'home')),
+        driveOther: !!(this.linked && k.driveOther && k.mouse && this.server.current && this.server.current.os !== P.OS.IOS && !this.paused && !(this.locked && this.mode === 'home')),
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
         dwellMs: P.KVM_EDGE_DWELL_MS,

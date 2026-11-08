@@ -1,0 +1,41 @@
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+// The app: one window with four tabs, and the life-cycle hooks the session needs (front, back,
+// a twindesk://pair link from the computer's QR code, a relaunch by location in the background).
+import SwiftUI
+import UIKit
+
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Notifier.shared.setUp()
+        Core.shared.start()
+        // Relaunched in the background by a significant location change: straight back on.
+        if launchOptions?[.location] != nil { Core.shared.wake() }
+        return true
+    }
+}
+
+@main
+struct TwinDeskApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @Environment(\.scenePhase) private var phase
+    @StateObject private var core = Core.shared
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environmentObject(core)
+                .onOpenURL { core.openURL($0) }
+                .preferredColorScheme(.dark)
+        }
+        .onChange(of: phase) { p in
+            switch p {
+            case .active:
+                core.wake()
+                core.clip.appBecameActive()
+                core.files.importInbox()
+            case .background: Background.shared.enteredBackground()
+            default: break
+            }
+        }
+    }
+}

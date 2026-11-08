@@ -14,7 +14,7 @@
     PROBE_MS: 10000, // broadcast probe while not connected
     PROBE_REPLY_MS: 1500, // a unicast probe without a reply by then = nobody there
     DEVICE_STALE_MS: 10000, // found device dropped after this much silence
-    OS: { MAC: 'mac', WIN: 'win', LINUX: 'linux', ANDROID: 'android' },
+    OS: { MAC: 'mac', WIN: 'win', LINUX: 'linux', ANDROID: 'android', IOS: 'ios' },
     // A phone is a full peer in the one session: it connects only when asked (the Mac's phone
     // tile, its own Connect button, an invite) or to resume a session that just dropped, and it
     // replaces the computer. Computers are refused (busy) while it holds the session and for
@@ -507,6 +507,10 @@
   // Dev: TWINDESK_PING_MS pings the session more often, for finer RTT numbers
   // in the log's [link] line. Only the ping interval changes; the silence limits stay.
   if (typeof process !== 'undefined' && process.env && Number(process.env.TWINDESK_PING_MS) >= 50) P.PING_MS = Math.min(P.PING_MS, Number(process.env.TWINDESK_PING_MS));
+
+  // A phone holds the session the same way whichever it is (it connects when asked, takes over from a
+  // computer, gets the grace to resume). Android's extras (adb, scrcpy, its hub) check OS.ANDROID itself.
+  P.isPhoneOs = (os) => os === P.OS.ANDROID || os === P.OS.IOS;
 
   if (typeof module !== 'undefined' && module.exports) module.exports = P;
   else root.MacShareProtocol = P;

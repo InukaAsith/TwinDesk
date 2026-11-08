@@ -280,7 +280,7 @@ function pushState() {
       const v = svc.devctl && state.client && state.client.os === 'android' ? svc.devctl.view : null;
       state.phone = { ...svc.phone.view, settings: settings.phone, ctl: v, qs: v ? v.qs || null : null, top: v ? v.top || [] : [] };
     }
-    state.peerCtl = svc && svc.devctl && state.client && state.client.os !== 'android' ? svc.devctl.view : null; // a computer's controls on Overview
+    state.peerCtl = svc && svc.devctl && state.client && !P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // a computer's controls on Overview
     if (svc && svc.phoneDrive) state.mount = { ...svc.phoneDrive.view, on: !!settings.mount.on };
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
@@ -502,13 +502,13 @@ let trayKey = '';
 function updateTray() {
   if (!tray) return;
   const c = state.client;
-  const phone = !!(c && c.os === P.OS.ANDROID);
+  const phone = !!(c && P.isPhoneOs(c.os));
   const name = c ? c.name : t('Other Computer');
   const k = settings.kvm;
   const where = state.input && state.input.where;
   const found = (state.found || []).filter((d) => !c || d.id !== c.id);
   const phoneView = !!(phone && svc && svc.phoneViews.list().some((v) => v.kind === 'screen'));
-  const OS = { mac: 'Mac', linux: 'Linux', android: t('Phone') };
+  const OS = { mac: 'Mac', linux: 'Linux', android: t('Phone'), ios: 'iPhone' };
   const g = (svc && link && link.view()) || { status: {}, hosts: [] };
   const again = !c && g.hosts.length && (g.status.state === 'stopped' || !!g.status.busy);
   const key = JSON.stringify([c && c.name, c && c.transport, phone, again, where, k.linked, k.ble, svc && svc.kvm.locked, settings.keys.lockKeys, k.driveOther, k.beDriven, settings.sharing.on, displayMode(),
@@ -650,7 +650,7 @@ app.whenReady().then(() => {
   svc.phone = new Phone({ server: peer, raw: server, discovery, pairing });
   svc.phone.on('change', pushState);
   // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
-  peer.on('client', (ctx) => ctx.os === P.OS.ANDROID && peer.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
+  peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && peer.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
   // The phone's screen, input, clipboard and app windows, through wireless debugging.
   svc.phone.bridge = new PhoneBridge({ server: peer, phone: svc.phone, getSettings: () => settings, clipboard: svc.clipboard });
   svc.phone.bridge.on('change', pushState);
@@ -770,12 +770,12 @@ app.whenReady().then(() => {
   svc.loadCamera = () => {
     if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
     const { CamShare } = require('../shared/camshare.js');
-    const computer = () => !!peer.current && peer.current.os !== P.OS.ANDROID;
+    const computer = () => !!peer.current && !P.isPhoneOs(peer.current.os);
     svc.loadVcam();
     svc.camShare = new CamShare({
       getLanguage: () => i18n.locale,
       link: {
-        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => ctx.os !== P.OS.ANDROID && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
+        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
         send: (m) => peer.sendToClient(m),
         connected: computer,
         ble: () => !!(peer.current && peer.current.transport === 'ble'),

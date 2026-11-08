@@ -194,11 +194,11 @@
   function renderPcs(s) {
     const g = s.guest || { hosts: [] };
     const near = new Set((s.found || []).map((d) => d.id));
-    const c = s.client && s.client.os !== 'android' ? s.client : null;
+    const c = s.client && s.client.os !== 'android' && s.client.os !== 'ios' ? s.client : null;
     const seen = new Set();
     const list = [];
     for (const x of [...(s.paired || []), ...(g.hosts || [])]) {
-      if (!x || seen.has(x.id) || x.os === 'android') continue;
+      if (!x || seen.has(x.id) || x.os === 'android' || x.os === 'ios') continue;
       seen.add(x.id);
       const connected = !!(c && c.id === x.id);
       if (!connected && !near.has(x.id)) continue;

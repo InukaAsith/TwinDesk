@@ -194,9 +194,9 @@ UI.tab({
         const rows = s.found.map((dev) => {
           const online = c && c.id === dev.id;
           const known = pairedIds.has(dev.id);
-          const st = dev.os === 'android' ? null : rowState(s, dev, online); // a phone has its own popup
+          const st = dev.os === 'android' || dev.os === 'ios' ? null : rowState(s, dev, online); // a phone has its own popup
           const kind = known ? 'take' : dev.os === 'mac' ? 'pair' : 'invite';
-          const going = dev.os === 'android' && phoneGoing === dev.id;
+          const going = (dev.os === 'android' || dev.os === 'ios') && phoneGoing === dev.id;
           const label = online || going || (st && !st.fail) ? null : st ? tr('Retry') : known ? tr('Take over') : dev.os === 'mac' ? tr('Pair') : tr('Connect');
           const btn = label && UI.button(tr(label), () => go(dev, kind), `small${dev.invited || st ? ' primary' : ''}`);
           const match = st && st.code ? UI.button(st.allow ? tr('Allow') : tr('Codes match'), () => (st.allow ? api.pairRespond(true) : api.confirmGuestCode()), 'small primary') : null;
