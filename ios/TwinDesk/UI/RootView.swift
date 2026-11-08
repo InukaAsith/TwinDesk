@@ -283,7 +283,7 @@ struct Sidebar: View {
     private var statusLine: String {
         switch core.state {
         case "connected":
-            return [core.link.wired ? "USB" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi", core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
+            return [core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi", core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
         case "connecting": return "Connecting…"
         default: return core.hosts.isEmpty ? "Tap to pair a computer" : "Not connected · Tap to connect"
         }

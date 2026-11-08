@@ -37,6 +37,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var hub = Hub(self)
     lazy var camera = Camera(self)
     lazy var usb = Usb(self)
+    lazy var ble = Ble(self)
 
     // Published copies for the UI (main thread).
     @Published private(set) var state = "idle"
@@ -60,9 +61,10 @@ final class Core: ObservableObject, LinkEvents {
         discovery.self_ = { [unowned self] in (self.store.deviceId, self.store.deviceName) }
         discovery.known = { [unowned self] in self.store.hosts().map { $0.address } }
         discovery.wantSweep = { [unowned self] in !self.link.connected }
-        discovery.onChange = { [unowned self] in self.refresh() }
+        discovery.onChange = { [unowned self] in self.refresh(); DispatchQueue.main.async { self.offBle(); self.ble.start() } }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb]
+        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble]
+        link.bleRx = { [unowned self] in self.ble.lastDown }
     }
 
     func start() {
@@ -70,6 +72,7 @@ final class Core: ObservableObject, LinkEvents {
         started = true
         discovery.start()
         remote.watchControllers()
+        ble.start()
         refresh()
         Background.shared.apply()
     }
@@ -111,7 +114,43 @@ final class Core: ObservableObject, LinkEvents {
         resumeUntil = .distantPast
         var h = h
         if let f = discovery.get(h.id) { h.address = f.address; h.port = f.port; store.putHost(h) }
+        // Not seen on this network but linked over Bluetooth: the session through it.
+        else if ble.has(h.id) { return connectBle(h) }
         link.connect(h)
+    }
+
+    // Through a Bluetooth pipe (Ble): the computer's port reached on 127.0.0.1 here.
+    func connectBle(_ h: Computer) {
+        resumeUntil = .distantPast
+        ble.openPipe(h.id) { [weak self] port in
+            guard let self = self else { return }
+            guard let port = port else { return self.link.connect(h) } // no link after all: try the network
+            var b = h
+            b.address = "127.0.0.1"
+            b.port = port
+            NSLog("TwinDesk: session through Bluetooth")
+            self.link.connect(b, force: true, ble: true)
+        }
+    }
+
+    // The computer asked over Bluetooth (its invite on CTRL, which also wakes the app): back on it
+    // unless we left it on purpose or are with another.
+    func bleInvite(_ id: String) {
+        guard let h = store.host(id), link.pair == nil, store.lastHostId == id || store.lastHostId == nil && store.flag("autoConnect", true) else { return }
+        if link.host?.id == id && (link.state == "connected" || link.state == "connecting") { return }
+        if link.connected { return }
+        connect(h)
+    }
+
+    // On Bluetooth and the computer showed up on the network: the session moves back to it.
+    private func offBle() {
+        guard link.viaBle, link.connected, let h = link.host, let f = discovery.get(h.id), let saved = store.host(h.id) else { return }
+        var w = saved
+        w.address = f.address
+        w.port = f.port
+        store.putHost(w)
+        NSLog("TwinDesk: back on the network from Bluetooth")
+        link.connect(w, force: true)
     }
 
     // Onto the USB cable (Usb): the same computer at 127.0.0.1, the session moved there.

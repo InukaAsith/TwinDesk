@@ -35,7 +35,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private(set) var address = "" // where the socket goes now
     var connected: Bool { state == "connected" }
     // Through the USB cable (Usb.swift mirrors the computer's port on 127.0.0.1).
-    var wired: Bool { address == "127.0.0.1" }
+    var wired: Bool { address == "127.0.0.1" && !viaBle }
 
     private var session: URLSession!
     private var ws: URLSessionWebSocketTask?
@@ -49,6 +49,9 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private var pinger: DispatchSourceTimer?
     private var helloTimer: DispatchWorkItem?
     private(set) var fxToken = ""
+    private(set) var viaBle = false // through a Bluetooth pipe (Ble.swift) on 127.0.0.1
+    var bleRx: () -> Date = { .distantPast } // bytes through Bluetooth count as alive (a big message takes seconds)
+    private var timeout: TimeInterval { viaBle ? 20 : Proto.timeout }
     private(set) var fx2Port: UInt16 = 0 // the computer's files engine (Fx2.swift), 0: none
     private var queuedBytes = 0 // sent but not yet written (file sending waits while it is high)
     private let qLock = NSLock()
@@ -68,10 +71,11 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     // ---- what the app asks for ----
 
     // force: even when already on this computer (moving onto the cable, or off it).
-    func connect(_ h: Computer, force: Bool = false) {
+    func connect(_ h: Computer, force: Bool = false, ble: Bool = false) {
         q.async {
-            if !force, self.ws != nil, self.host?.id == h.id, self.address == h.address, self.state == "connecting" || self.state == "connected" { return }
+            if !force, self.ws != nil, self.host?.id == h.id, self.address == h.address, self.viaBle == ble, self.state == "connecting" || self.state == "connected" { return }
             self.closeSocket()
+            self.viaBle = ble
             self.pair = nil
             self.host = h
             self.open("session", h.address, h.port, h.fp)
@@ -91,6 +95,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     func startPairing(address: String, port: UInt16, name: String, nonce: String = "") {
         q.async {
             self.closeSocket()
+            self.viaBle = false
             self.host = nil
             self.pairNonce = nonce
             self.pair = PairState(phase: "connecting", address: address, port: port, name: name, qr: !nonce.isEmpty)
@@ -239,7 +244,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
             self.ws?.cancel(with: .goingAway, reason: nil)
         }
         helloTimer = w
-        q.asyncAfter(deadline: .now() + Proto.timeout, execute: w)
+        q.asyncAfter(deadline: .now() + self.timeout, execute: w)
     }
 
     private func onText(_ text: String) {
@@ -316,8 +321,8 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         t.schedule(deadline: .now() + Proto.pingInterval, repeating: Proto.pingInterval)
         t.setEventHandler { [weak self] in
             guard let self = self, let w = self.ws else { return }
-            let quiet = Date().timeIntervalSince(self.lastRx)
-            if quiet > Proto.timeout {
+            let quiet = Date().timeIntervalSince(self.viaBle ? max(self.lastRx, self.bleRx()) : self.lastRx)
+            if quiet > self.timeout {
                 NSLog("TwinDesk: socket silent for %.1f s, closing", quiet)
                 self.message = "Stopped answering"
                 w.cancel(with: .goingAway, reason: nil)
@@ -411,7 +416,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
 
     // A request for /twindesk/fx/<id>, or nil when fast files can't be used (no token, a group network).
     func fxRequest(_ id: String, method: String) -> URLRequest? {
-        guard state == "connected", !fxToken.isEmpty, let h = host else { return nil }
+        guard state == "connected", !viaBle, !fxToken.isEmpty, let h = host else { return nil }
         if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
         let a = address.contains(":") ? "[\(address)]" : address
         let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
@@ -425,7 +430,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
 
     // Where fast files v2 go (Fx2.swift), or nil when they can't (no engine there, a group network).
     func fx2Target() -> Fx2.To? {
-        guard state == "connected", !fxToken.isEmpty, fx2Port > 0, let h = host, !h.fp.isEmpty else { return nil }
+        guard state == "connected", !viaBle, !fxToken.isEmpty, fx2Port > 0, let h = host, !h.fp.isEmpty else { return nil }
         if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
         return Fx2.To(host: address, port: fx2Port, fp: h.fp, token: fxToken)
     }

@@ -2,6 +2,7 @@
 // General: this iPhone's name, staying connected in the background, the USB cable, and what
 // TwinDesk is allowed to use (each with its state, Allow while iOS can still ask, else Settings).
 import SwiftUI
+import CoreBluetooth
 import UIKit
 import CoreLocation
 import Photos
@@ -40,6 +41,8 @@ struct SettingsView: View {
                 SectionTitle(text: "Connection")
                 VStack(alignment: .leading, spacing: 12) {
                     ToggleRow(title: "Use the USB cable", detail: "Plugged into the computer, the session moves onto the cable by itself", on: flag("usb.auto"))
+                    Divider()
+                    ToggleRow(title: "Use Bluetooth", detail: bleDetail, on: Binding(get: { _ = core.tick; return core.ble.on }, set: { core.ble.setOn($0) }))
                 }
                 .glassCard()
             } right: {
@@ -48,6 +51,8 @@ struct SettingsView: View {
                     perm("bell.fill", Page.notifications.color, "Notifications", "The computer’s notifications, copies and files", notifState) { askNotifications() }
                     Divider().padding(.leading, 46)
                     perm("location.fill", TDColor.accent, "Location", "Staying connected in the background", locationState) { Background.shared.askLocation() }
+                    Divider().padding(.leading, 46)
+                    perm("dot.radiowaves.left.and.right", Color.blue, "Bluetooth", "Notifications and the session away from Wi-Fi", bleState) { core.ble.setOn(true) }
                     Divider().padding(.leading, 46)
                     perm("photo.fill", Page.photos.color, "Photos", "Sending photos, and Photos on the computer", photosState) { core.hub.askPhotos() }
                     Divider().padding(.leading, 46)
@@ -113,6 +118,25 @@ struct SettingsView: View {
         case .authorizedWhenInUse: return ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17 ? .ok : .partial
         case .notDetermined: return .ask
         default: return .denied
+        }
+    }
+
+    private var bleState: PermState {
+        _ = core.tick
+        switch CBManager.authorization {
+        case .allowedAlways: return .ok
+        case .notDetermined: return .ask
+        default: return .denied
+        }
+    }
+
+    private var bleDetail: String {
+        _ = core.tick
+        if !core.ble.near.isEmpty { return "Linked to \(core.ble.near.values.sorted().joined(separator: ", ")) · wakes TwinDesk, and carries the session off Wi-Fi" }
+        switch core.ble.radio {
+        case "unauthorized": return "Not allowed · Settings › TwinDesk › Bluetooth"
+        case "off": return core.ble.on ? "Bluetooth is off" : "Off"
+        default: return "Keeps TwinDesk woken in the background, and the session off Wi-Fi"
         }
     }
 

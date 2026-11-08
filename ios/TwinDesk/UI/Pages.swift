@@ -120,7 +120,7 @@ struct ViewerScreen: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 Text(core.host?.name ?? "Computer").font(.subheadline.weight(.semibold)).padding(.leading, 6)
-                Text(core.link.wired ? "USB" : "Wi-Fi").font(.caption2.weight(.semibold))
+                Text(core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : "Wi-Fi").font(.caption2.weight(.semibold))
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background((core.link.wired ? TDColor.good.opacity(0.35) : Color.white.opacity(0.18)), in: RoundedRectangle(cornerRadius: 6))
                 if s.remote {

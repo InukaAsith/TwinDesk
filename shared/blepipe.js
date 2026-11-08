@@ -160,7 +160,7 @@ class BleHost extends EventEmitter {
         const old = this.guests.get(dev);
         const g = { id: h.id.slice(0, 64), name: str(h.name, 64) || 'Device', os: Object.values(P.OS).includes(h.os) ? h.os : P.OS.ANDROID, at: Date.now() };
         if (!this.accept(g)) {
-          if (!this.refused.has(dev)) console.log(`[ble] ${g.name} turned away: Bluetooth with ${g.os === P.OS.ANDROID ? 'phones' : 'computers'} is off`);
+          if (!this.refused.has(dev)) console.log(`[ble] ${g.name} turned away: Bluetooth with ${P.isPhoneOs(g.os) ? 'phones' : 'computers'} is off`);
           this.refused.add(dev);
           this._closePipe(dev);
           if (this.guests.delete(dev)) this.emit('change');
