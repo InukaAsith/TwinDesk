@@ -614,6 +614,23 @@ texts, photos and camera go straight from the phone to your computer and nowhere
 locks out an address that keeps guessing wrong. The only internet request is an update check
 against GitHub's public releases, which you can turn off.
 
+<a name="code-signing"></a>
+
+## Code signing policy
+
+Free code signing on Windows provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+Only the Windows installers built from this repository by the **Build Windows** GitHub Actions
+workflow, on GitHub-hosted runners, are signed. Every signing request is approved by hand.
+
+- Committers and reviewers: [@InukaAsith](https://github.com/InukaAsith) (outside [contributors](https://github.com/InukaAsith/TwinDesk/graphs/contributors) send pull requests, which he reviews before merging)
+- Approvers: [@InukaAsith](https://github.com/InukaAsith)
+
+This program will not transfer any information to other networked systems unless specifically
+requested by the user or the person installing or operating it (see [Privacy](#privacy) above:
+the only automatic request is the update check against GitHub's releases, which can be turned off).
+
 <br>
 
 ---
@@ -881,9 +898,13 @@ native lane, and the Arch package. Set the `ANDROID_KEYSTORE` secret to the key 
 signed with (`base64 -i ~/.android/debug.keystore`): the APKs then install over existing ones, and
 the Linux and Windows builds carry the full Android app.
 
-To Authenticode-sign the Windows installers, set `WIN_CSC_LINK` to a base64-encoded code-signing
-`.pfx` and `WIN_CSC_KEY_PASSWORD` to its password. When `WIN_CSC_LINK` is set, the build fails if
-signing can't complete instead of publishing an unsigned installer.
+**Build Windows** signs the installers through [SignPath](#code-signing): set the
+`SIGNPATH_API_TOKEN` secret to the SignPath CI user's API token and pick the signing policy
+(`test-signing`, `release-signing`, or `none` for unsigned) when running the workflow. Alternatively,
+to Authenticode-sign with a certificate of your own, set `WIN_CSC_LINK` to a base64-encoded
+code-signing `.pfx` and `WIN_CSC_KEY_PASSWORD` to its password (run with signing `none`). When
+`WIN_CSC_LINK` is set, the build fails if signing can't complete instead of publishing an unsigned
+installer.
 
 </details>
 
