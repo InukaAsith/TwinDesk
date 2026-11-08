@@ -16,10 +16,21 @@ on:
         type: boolean
         required: false
         default: false
+      signing:
+        description: SignPath signing policy (test-signing = self-signed test certificate; release-signing once the SignPath Foundation certificate is issued; none = unsigned)
+        type: choice
+        required: false
+        default: test-signing
+        options:
+          - test-signing
+          - release-signing
+          - none
 
 # Write: the full Android APK can come from a draft release, which a read-only token can't see.
+# actions: read lets SignPath fetch the unsigned workflow artifact and check the run.
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
@@ -71,19 +82,58 @@ jobs:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
+      # Code signing by SignPath (free for open source, certificate by SignPath Foundation).
+      # The unsigned installers go up as one workflow artifact; SignPath takes that zip, signs every
+      # TwinDesk-Setup-*.exe in it (artifact configuration "initial" in the TwinDesk project) and the
+      # signed copies come back into windows/signed/. SIGNPATH_API_TOKEN: the "CI builds" user's token.
+      - name: Upload the unsigned installers for signing
+        id: upload-unsigned
+        if: inputs.signing != 'none'
+        uses: actions/upload-artifact@v4
+        with:
+          name: twindesk-windows-unsigned
+          path: windows/dist/TwinDesk-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Sign the installers (SignPath)
+        if: inputs.signing != 'none'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: 2b49db71-b908-47a9-a6f8-5af028126e05
+          project-slug: TwinDesk
+          signing-policy-slug: ${{ inputs.signing }}
+          artifact-configuration-slug: initial
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: windows/signed
+
+      # What gets published: the signed installers, or the build's own when signing is off.
+      - name: Pick the installers to publish
+        shell: bash
+        run: |
+          mkdir -p windows/out
+          if [ "${{ inputs.signing }}" != "none" ]; then
+            cp windows/signed/TwinDesk-Setup-*.exe windows/out/
+          else
+            cp windows/dist/TwinDesk-Setup-*.exe windows/out/
+          fi
+          ls -l windows/out
+
       - name: Upload the x64 installer
         uses: actions/upload-artifact@v4
         with:
           name: twindesk-windows-x64
           path: |
-            windows/dist/*.exe
-            !windows/dist/*-arm64.exe
+            windows/out/*.exe
+            !windows/out/*-arm64.exe
 
       - name: Upload the arm64 installer
         uses: actions/upload-artifact@v4
         with:
           name: twindesk-windows-arm64
-          path: windows/dist/*-arm64.exe
+          path: windows/out/*-arm64.exe
 
       # Straight onto the release, no download and re-upload.
       - name: Upload to the release
@@ -93,7 +143,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes "" || true
-          gh release upload "${{ inputs.tag }}" windows/dist/*.exe --clobber
+          # A self-signed test signature is never published: until release-signing works the
+          # release gets the unsigned installers (the test-signed ones stay in the run's artifacts).
+          if [ "${{ inputs.signing }}" = "test-signing" ]; then files=windows/dist/TwinDesk-Setup-*.exe; else files=windows/out/*.exe; fi
+          gh release upload "${{ inputs.tag }}" $files --clobber
 
   # The installers uploaded to VirusTotal and scanned: what each engine said goes in the run's
   # summary, with the link to the full report. VT_API_KEY: a free VirusTotal account's API key.
@@ -107,6 +160,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: twindesk-windows-*64
           path: dist
 
       - name: Scan
