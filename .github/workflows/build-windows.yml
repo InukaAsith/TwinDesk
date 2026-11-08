@@ -3,10 +3,6 @@ name: Build Windows
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release to put the files on (e.g. v2.0.1; made as a draft if it isn't there). Empty = run artifacts only.
-        required: false
-        default: ''
       ref:
         description: Branch to build (a test branch; releases come from main).
         required: false
@@ -28,6 +24,7 @@ on:
 
 # Write: the full Android APK can come from a draft release, which a read-only token can't see.
 # actions: read lets SignPath fetch the unsigned workflow artifact and check the run.
+# The installers end up in the run's artifacts only; releases are put together by hand.
 permissions:
   contents: write
   actions: read
@@ -109,7 +106,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: windows/signed
 
-      # What gets published: the signed installers, or the build's own when signing is off.
+      # What the run hands out: the signed installers, or the build's own when signing is off.
       - name: Pick the installers to publish
         shell: bash
         run: |
@@ -134,19 +131,6 @@ jobs:
         with:
           name: twindesk-windows-arm64
           path: windows/out/*-arm64.exe
-
-      # Straight onto the release, no download and re-upload.
-      - name: Upload to the release
-        if: inputs.tag != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes "" || true
-          # A self-signed test signature is never published: until release-signing works the
-          # release gets the unsigned installers (the test-signed ones stay in the run's artifacts).
-          if [ "${{ inputs.signing }}" = "test-signing" ]; then files=windows/dist/TwinDesk-Setup-*.exe; else files=windows/out/*.exe; fi
-          gh release upload "${{ inputs.tag }}" $files --clobber
 
   # The installers uploaded to VirusTotal and scanned: what each engine said goes in the run's
   # summary, with the link to the full report. VT_API_KEY: a free VirusTotal account's API key.
