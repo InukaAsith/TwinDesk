@@ -49,6 +49,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private var pinger: DispatchSourceTimer?
     private var helloTimer: DispatchWorkItem?
     private(set) var fxToken = ""
+    private(set) var fx2Port: UInt16 = 0 // the computer's files engine (Fx2.swift), 0: none
     private var queuedBytes = 0 // sent but not yet written (file sending waits while it is high)
     private let qLock = NSLock()
 
@@ -230,7 +231,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private func hello() {
         guard let h = host else { return }
         raw(msg(Proto.T.hello, ["v": Proto.version, "id": store.deviceId, "name": store.deviceName, "os": Proto.os,
-                                "token": h.token, "fx": 1]))
+                                "token": h.token, "fx": 1, "fx2": 1]))
         helloTimer?.cancel()
         let w = DispatchWorkItem { [weak self] in
             guard let self = self, self.state != "connected" else { return }
@@ -309,6 +310,8 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         rttMs = nil
         let fx = m.str("fx", max: 64)
         fxToken = Proto.isHex(fx, min: 32, max: 32) ? fx : ""
+        let p2 = m.obj("fx2")?["port"] as? NSNumber
+        fx2Port = p2.map { $0.intValue > 0 && $0.intValue < 65536 ? UInt16($0.intValue) : 0 } ?? 0
         let t = DispatchSource.makeTimerSource(queue: q)
         t.schedule(deadline: .now() + Proto.pingInterval, repeating: Proto.pingInterval)
         t.setEventHandler { [weak self] in
@@ -366,6 +369,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         helloTimer?.cancel()
         ws = nil
         fxToken = ""
+        fx2Port = 0
         if mode == "pair" {
             if let p = pair, p.phase != "failed" {
                 pairFailed(p.phase == "connecting" ? "Couldn’t connect to \(p.address)\(failure.map { " (\($0))" } ?? "")." : "The connection closed.")
@@ -388,6 +392,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         let w = ws
         ws = nil
         fxToken = ""
+        fx2Port = 0
         let wasConnected = state == "connected"
         if wasConnected { state = "idle" }
         w?.cancel(with: .normalClosure, reason: nil)
@@ -416,6 +421,13 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         r.setValue(fxToken, forHTTPHeaderField: Proto.fxHeader)
         r.timeoutInterval = 30
         return r
+    }
+
+    // Where fast files v2 go (Fx2.swift), or nil when they can't (no engine there, a group network).
+    func fx2Target() -> Fx2.To? {
+        guard state == "connected", !fxToken.isEmpty, fx2Port > 0, let h = host, !h.fp.isEmpty else { return nil }
+        if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
+        return Fx2.To(host: address, port: fx2Port, fp: h.fp, token: fxToken)
     }
 
     // An HTTPS request to the session's computer (its port), e.g. the screen's stream.

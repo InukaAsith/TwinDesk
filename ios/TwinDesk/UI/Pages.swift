@@ -578,7 +578,7 @@ struct AboutView: View {
                 Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""))")
                     .foregroundStyle(.secondary)
                 Text("Your \(Device.word) and computers as one: clipboard, files, screens, remote, sound.").font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
-                Link("github.com/InukaAsith/TwinDesk", destination: URL(string: "https://github.com/InukaAsith/TwinDesk")!).font(.subheadline)
+                SwiftUI.Link("github.com/InukaAsith/TwinDesk", destination: URL(string: "https://github.com/InukaAsith/TwinDesk")!).font(.subheadline)
                 Text("GPL-3.0 · ID \(core.store.deviceId.prefix(8))").font(.caption2.monospaced()).foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity)

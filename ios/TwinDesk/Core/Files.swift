@@ -30,6 +30,7 @@ final class Files: Feature {
         var seq = 0
         var pulling = false
         var heldEnd: JSON?
+        var fx2Hashes: [String]? // fx2: the ranges' hashes, once every one is in (file.end {fx2} must match)
         init(id: String, batch: String, name: String, rel: String, size: Int64, url: URL, handle: FileHandle) {
             self.id = id; self.batch = batch; self.name = name; self.rel = rel; self.size = size; self.url = url; self.handle = handle
         }
@@ -48,6 +49,7 @@ final class Files: Feature {
     private var outgoing: [Outgoing] = []
     private var expected: Set<String> = [] // batches asked for (fclip.paste)
     private var fxBroken = false
+    private var fx2Broken = false // fx2 failed before a byte went: the fx way for the rest of the session
     private let io = DispatchQueue(label: "td.files")
     private var pumping = false
 
@@ -69,6 +71,7 @@ final class Files: Feature {
 
     override func onWelcome(_ host: Computer, _ m: JSON) {
         fxBroken = false
+        fx2Broken = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.flushShares() }
     }
 
@@ -175,7 +178,7 @@ final class Files: Feature {
         if f.pulling { f.heldEnd = m; return }
         incoming.removeValue(forKey: f.id)
         try? f.handle.close()
-        let ok = f.got == f.size && Data(f.hash.finalize()).hex == m.str("sha256", max: 64)
+        let ok = f.got == f.size && (f.fx2Hashes.map { Fx2.same(m["fx2"], $0) } ?? (Data(f.hash.finalize()).hex == m.str("sha256", max: 64)))
         if !ok {
             try? FileManager.default.removeItem(at: f.url)
             core.send(msg(Proto.T.fileDone, ["id": f.id, "ok": false, "error": "checksum"]))
@@ -198,7 +201,7 @@ final class Files: Feature {
     // computer sends it as file.chunk.
     private func pull(_ m: JSON) {
         let id = m.str("id", max: 128)
-        if m.has("fx2") { core.send(msg(Proto.T.filePull, ["id": id, "failed": true, "fx2": 1])); return }
+        if m.has("fx2") { return pull2(id, m.int64("size", -1)) }
         guard let f = incoming[id], !fxBroken, !f.pulling, f.got == 0, f.seq == 0,
               let req = core.link.fxRequest(id, method: "GET") else {
             core.send(msg(Proto.T.filePull, ["id": id, "failed": true]))
@@ -236,6 +239,39 @@ final class Files: Feature {
             }
         }
         task.resume()
+    }
+
+    // file.pull {fx2, size}: its ranges fetched at once, each written at its offset. {failed, fx2}
+    // when we can't (before a byte): the computer sends it the fx way.
+    private func pull2(_ id: String, _ size: Int64) {
+        guard let f = incoming[id], !fxBroken, !fx2Broken, !f.pulling, f.got == 0, f.seq == 0, size == f.size,
+              let to = core.link.fx2Target() else {
+            core.send(msg(Proto.T.filePull, ["id": id, "failed": true, "fx2": 1]))
+            return
+        }
+        f.pulling = true
+        Fx2.get(to, id: id, url: f.url, size: f.size, progress: { [weak self] n in
+            guard let self = self, self.incoming[f.id] === f else { return }
+            self.addGot(f.batch, n)
+        }) { [weak self] r in
+            guard let self = self else { return }
+            f.pulling = false
+            guard self.incoming[f.id] === f else { return }
+            switch r {
+            case .success(let hs):
+                f.fx2Hashes = hs
+                f.got = f.size
+                if let e = f.heldEnd { f.heldEnd = nil; self.end(e) }
+            case .failure(let e) where e.early:
+                NSLog("TwinDesk: fast file (fx2) %@: %@: the fx way for this session", f.name, e.why)
+                self.fx2Broken = true
+                try? f.handle.truncate(atOffset: 0)
+                try? f.handle.seek(toOffset: 0)
+                self.core.send(msg(Proto.T.filePull, ["id": f.id, "failed": true, "fx2": 1]))
+            case .failure(let e):
+                self.abort(f.id, "fast file (fx2): \(e.why)", tell: true)
+            }
+        }
     }
 
     // The downloaded file's bytes into ours, hashed as they go.
@@ -356,6 +392,27 @@ final class Files: Feature {
             self.outgoing.removeAll { $0 === f }
             self.pumping = false
             self.pump()
+        }
+        if !fxBroken, !fx2Broken, let to = core.link.fx2Target() {
+            Fx2.put(to, id: f.id, url: f.url, size: f.size, progress: { [weak self] n in self?.addGot(f.batch, n) }) { [weak self] r in
+                guard let self = self else { return }
+                switch r {
+                case .success(let hs):
+                    self.core.send(msg(Proto.T.fileEnd, ["id": f.id, "sha256": Fx2.joined(hs), "fx2": hs]))
+                    done()
+                case .failure(let e) where e.early:
+                    NSLog("TwinDesk: fast file (fx2) %@: %@: the fx way for this session", f.name, e.why)
+                    self.fx2Broken = true
+                    f.state = "accepted"
+                    self.pumping = false
+                    self.pump()
+                case .failure(let e):
+                    NSLog("TwinDesk: send %@: %@", f.name, e.why)
+                    self.core.send(msg(Proto.T.fileCancel, ["id": f.id]))
+                    done()
+                }
+            }
+            return
         }
         if !fxBroken, let req = core.link.fxRequest(f.id, method: "PUT") {
             io.async {

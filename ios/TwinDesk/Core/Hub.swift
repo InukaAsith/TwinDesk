@@ -243,7 +243,7 @@ final class Hub: Feature {
         let list = deleting
         deleting = []
         let assets = list.compactMap { asset($0) }
-        guard !assets.isEmpty else { return core.send(msg("media.delete", ["ids": [String](), "failed": list.count, "confirm": 0])) }
+        guard !assets.isEmpty else { core.send(msg("media.delete", ["ids": [String](), "failed": list.count, "confirm": 0])); return }
         PHPhotoLibrary.shared().performChanges({ PHAssetChangeRequest.deleteAssets(assets as NSArray) }) { ok, _ in
             DispatchQueue.main.async {
                 self.core.send(msg("media.delete", ["ids": ok ? list : [String](), "failed": ok ? 0 : list.count, "confirm": 0]))
