@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Phones: Connect with Android (Core/Peer.swift). Android phones nearby with TwinDesk, pairing by
-// code as with a computer, then the clipboard, notifications and files both ways, its Photos and
-// Messages here, and its screen.
+// Phones (Core/Peer.swift): Android phones and iPhones nearby with TwinDesk, pairing by code as
+// with a computer, then the clipboard, notifications and files both ways, its Photos and Messages
+// here, and the screens both ways.
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -16,10 +16,12 @@ struct PhonesView: View {
         let _ = core.tick
         PageScroll(title: "Phones") {
             if let p = peer.pair { pairCard(p) }
+            if let h = peer.hostPairing { hostPairCard(h) }
+            if let a = peer.asked { askedCard(a) }
             if peer.connected { sessionCard } else { nearbyCard }
             if !peer.batches.isEmpty { transfersCard }
             settingsCard
-            Text("An Android phone with TwinDesk, on the same Wi-Fi. It hosts: if it doesn’t, Connect asks it to (Allow there). The iPhone’s own screen goes to computers only.")
+            Text("A phone with TwinDesk (Android or iPhone) on the same Wi-Fi. The one you connect to hosts: if it isn’t, Connect asks it to (Allow there). To show this \(Device.word)’s screen, start Share Screen first.")
                 .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
@@ -50,6 +52,35 @@ struct PhonesView: View {
                 }
             } else {
                 HStack { Spacer(); Button(p.phase == "failed" ? "OK" : "Cancel") { peer.link.cancelPairing() }.secondaryButton() }
+            }
+        }
+        .glassCard()
+    }
+
+    // A phone pairing with us: the code both show, Allow / Deny here.
+    private func hostPairCard(_ p: Peer.PairReq) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "lock.shield.fill", color: TDColor.accent, title: "\(p.name) wants to pair",
+                       detail: p.code.isEmpty ? "Waiting for its code…" : "Allow if it shows the same code")
+            if !p.code.isEmpty {
+                Text(p.code).font(.system(size: 40, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity)
+                HStack {
+                    Button("Deny", role: .destructive) { peer.respondPair(false) }.secondaryButton()
+                    Spacer()
+                    Button(p.allowed ? "Waiting for it…" : "Allow") { peer.respondPair(true) }.primaryButton().disabled(p.allowed)
+                }
+            }
+        }
+        .glassCard()
+    }
+
+    private func askedCard(_ f: Found) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "iphone.radiowaves.left.and.right", color: TDColor.good, title: "\(f.name) wants to connect", detail: "Let it connect to this \(Device.word)?")
+            HStack {
+                Button("Not now") { peer.answerAsk(false) }.secondaryButton()
+                Spacer()
+                Button("Allow") { peer.answerAsk(true) }.primaryButton()
             }
         }
         .glassCard()
@@ -89,16 +120,16 @@ struct PhonesView: View {
 
     private var nearbyCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            CardHeader(symbol: "antenna.radiowaves.left.and.right", color: TDColor.good, title: "Android phones nearby",
+            CardHeader(symbol: "antenna.radiowaves.left.and.right", color: TDColor.good, title: "Phones nearby",
                        detail: peer.waitingFor.isEmpty ? (peer.message.isEmpty ? nil : peer.message) : "Waiting for it to allow this iPhone…")
             let near = peer.nearby()
             let paired = Set(peer.paired().map { $0.id })
             if near.isEmpty {
-                Text(peer.on ? "Looking… Open TwinDesk on the Android phone, on the same Wi-Fi." : "Connect with Android is off.").font(.subheadline).foregroundStyle(.secondary)
+                Text(peer.on ? "Looking… Open TwinDesk on the other phone, on the same Wi-Fi." : "Phones is off.").font(.subheadline).foregroundStyle(.secondary)
             }
             ForEach(near) { f in
                 HStack {
-                    Image(systemName: "iphone.gen2").foregroundStyle(.secondary)
+                    Image(systemName: f.os == "ios" ? "iphone" : "iphone.gen2").foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(f.name)
                         Text(paired.contains(f.id) ? "Paired" : f.port > 0 ? "Ready" : "Asks first").font(.caption).foregroundStyle(.secondary)
@@ -137,7 +168,10 @@ struct PhonesView: View {
 
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ToggleRow(title: "Connect with Android", detail: "Android phones nearby with TwinDesk", on: bind("peer.on"))
+            ToggleRow(title: "Phones", detail: "Android phones and iPhones nearby with TwinDesk", on: bind("peer.on"))
+            Divider()
+            ToggleRow(title: "Host for other phones", detail: peer.hostPort > 0 ? "They connect without asking · port \(peer.hostPort)" : "They connect without asking first",
+                      on: Binding(get: { _ = core.tick; return peer.hostOn }, set: { peer.setHostOn($0) }))
             Divider()
             ToggleRow(title: "Clipboard", detail: "Copies go both ways while TwinDesk is open here", on: bind("peer.clip"))
             Divider()

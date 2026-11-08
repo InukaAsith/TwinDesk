@@ -30,6 +30,7 @@ final class Discovery {
     // (`phost`), 0 while they don't host. They answer our probes; their beacons are broadcasts.
     private var phones: [String: Found] = [:] // q only
     var peerOn: () -> Bool = { true }
+    var peerPort: () -> UInt16 = { 0 } // ours while we host (Peer.swift), in our beacon as `phost`
     var onPeer: (Found, JSON) -> Void = { _, _ in } // another phone's peer.* (main)
     var error = ""
 
@@ -126,7 +127,10 @@ final class Discovery {
         var targets = Set(known())
         for f in found.values { targets.insert(f.address) }
         for a in targets where !a.isEmpty && a != "127.0.0.1" { send(me, to: a) }
-        if peerOn() { let p = probeMsg(); for f in phones.values { send(p, to: f.address) } } // they answer probes only
+        if peerOn() { // they hear us only this way (no broadcast here), and answer probes
+            let p = probeMsg()
+            for f in phones.values { send(me, to: f.address); send(p, to: f.address) }
+        }
         // The subnet sweep: every 10 s while looking, else every 60 s (a computer that moved).
         let every: TimeInterval = wantSweep() ? 10 : 60
         if Date().timeIntervalSince(lastSweep) >= every {
@@ -145,8 +149,10 @@ final class Discovery {
 
     private func beaconMsg() -> JSON {
         let me = self_()
-        return ["t": Proto.T.beacon, "v": Proto.version, "id": me.id, "name": me.name, "os": Proto.os,
-                "role": "guest", "port": Int(Proto.port), "fp": ""]
+        var m: JSON = ["t": Proto.T.beacon, "v": Proto.version, "id": me.id, "name": me.name, "os": Proto.os,
+                       "role": "guest", "port": Int(Proto.port), "fp": ""]
+        if peerOn() { m["ap"] = 1; let p = peerPort(); if p > 0 { m["phost"] = Int(p) } } // a phone for other phones
+        return m
     }
 
     private func probeMsg() -> JSON { ["t": Proto.T.probe, "v": Proto.version, "id": self_().id] }
@@ -201,18 +207,17 @@ final class Discovery {
         }
         guard t == Proto.T.beacon || t == Proto.T.invite else { return }
         let os = m.str("os").isEmpty ? "mac" : m.str("os")
-        if os == "android" { // a phone for other phones: Connect with Android (Peer.swift)
+        if os == "android" || os == Proto.os { // a phone for other phones (Peer.swift)
             guard t == Proto.T.beacon, m.int("ap") == 1, peerOn() else { return }
             let old = phones[id]
             let pp = m.int("phost", 0)
             let name = m.str("name", max: 100)
-            let f = Found(id: id, name: name.isEmpty ? "Phone" : name, os: os, address: address,
+            let f = Found(id: id, name: name.isEmpty ? (os == "ios" ? "iPhone" : "Phone") : name, os: os, address: address,
                           port: (1...65535).contains(pp) ? UInt16(pp) : 0, fp: "", lastSeen: Date(), invited: false)
             phones[id] = f
             if old == nil || old!.name != f.name || old!.address != f.address || old!.port != f.port { changed() }
             return
         }
-        if os == Proto.os { return }
         if t == Proto.T.beacon && (m["role"] as? String ?? "host") != "host" { return }
         let old = found[id]
         let p = m.int("port", Int(Proto.port))

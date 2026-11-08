@@ -1,18 +1,21 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Connect with Android (Android's Peer.kt): this iPhone and an Android phone with TwinDesk, side by
-// side with the computer's session and never in its way: a second Link, with its own paired list
-// ("peerHosts"). The Android phone hosts (its own TLS server, pinned once paired, exactly as a
-// computer is); this iPhone is always the guest. Not hosting itself, it gives no token back (peer.rev):
-// the Android phone sees it while it's connected, and it connects again from here.
+// Phones (Android's Peer.kt, the same protocol): this iPhone and another phone with TwinDesk, an
+// Android phone or an iPhone, side by side with the computer's session and never in its way.
+// Roles: the phone that taps Connect is the guest, the other the host. The guest's side is a second
+// Link (pairing by code, hello, pings) with its own paired list ("peerHosts"); the host runs
+// PeerServer (with Host for other phones on, or for a while when asked: peer.ask over discovery,
+// which a paired phone gets at once and a new one after Allow). After the first pairing each phone
+// gives the other a token for itself (peer.rev), so either can connect to the other later.
 //
-// On the session: clip, notif, files (f.*), requests (q → r: the Android phone's Photos and Messages
-// here, this iPhone's Photos there) and its screen (screen.*). The bytes of files and the screen go in
-// HTTPS requests to the Android phone with the session's key (peer.key), never through the session.
+// On the session, the same messages both ways: clip, notif, files (f.*), requests (q → r: the other
+// phone's Photos and Messages, its screen) and screen.*. The bytes of files and the screen go in HTTPS
+// requests to the host (the guest's PUT/POST or GET) with the session's key (peer.key).
 import Foundation
 import UIKit
 import Photos
+import Network
 
-final class Peer: NSObject, LinkEvents {
+final class Peer: NSObject, LinkEvents, PeerServerHandler {
     static let hostsList = "peerHosts"
     static let header = "x-twindesk-peer"
 
@@ -21,7 +24,7 @@ final class Peer: NSObject, LinkEvents {
     private let work = DispatchQueue(label: "td.peer.work")
 
     // main
-    private(set) var role = "" // "" | guest
+    private(set) var role = "" // "" | host | guest
     private(set) var peerId = ""
     private(set) var peerName = ""
     private(set) var peerModel = ""
@@ -30,7 +33,29 @@ final class Peer: NSObject, LinkEvents {
     private var waitUntil = Date.distantPast
     private var key = ""
     private var resumeUntil = Date.distantPast
-    var connected: Bool { role == "guest" }
+    var connected: Bool { !role.isEmpty }
+
+    // ---- hosting ----
+    let server = PeerServer()
+    private var hostWs: PeerServer.Ws?
+    private(set) var hostPort: UInt16 = 0
+    private var starting = false
+    private var tempUntil = Date.distantPast // hosting because we were asked, until then
+    var hostOn: Bool { core.store.flag("peer.host", false) }
+    struct PairReq {
+        let ws: PeerServer.Ws
+        let id: String, name: String, commit: String, nm: String
+        var nw = "", code = ""
+        var confirmed = false, allowed = false
+        let at = Date()
+    }
+    private(set) var pairing: PairReq? // a phone pairing with us: the code, Allow / Deny
+    private(set) var asked: Found? // a phone asked us to host, not paired yet
+    private var guests: [String: JSON] {
+        get { (UserDefaults.standard.dictionary(forKey: "peer.guests") as? [String: JSON]) ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: "peer.guests") }
+    }
+    private var myFp: String { PeerKey.fingerprint }
 
     var on: Bool { core.store.flag("peer.on", true) }
     var clipOn: Bool { core.store.flag("peer.clip", true) }
@@ -38,7 +63,8 @@ final class Peer: NSObject, LinkEvents {
     var photosOn: Bool { core.store.flag("peer.photos", true) }
     func set(_ k: String, _ v: Bool) {
         core.store.setFlag(k, v)
-        if k == "peer.on" && !v { disconnect() }
+        if k == "peer.on" && !v { disconnect(); asked = nil }
+        hosting()
         changed()
     }
 
@@ -48,6 +74,9 @@ final class Peer: NSObject, LinkEvents {
         link.events = self
         core.discovery.peerOn = { [weak self] in self?.on ?? false }
         core.discovery.onPeer = { [weak self] f, m in self?.onPeer(f, m) }
+        core.discovery.peerPort = { [weak self] in self?.hostPort ?? 0 }
+        server.handler = self
+        core.mirror.peerTap = { [weak self] p in self?.screenOut.packet(p) }
         NotificationCenter.default.addObserver(forName: UIPasteboard.changedNotification, object: nil, queue: .main) { [weak self] _ in self?.clipNow() }
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.clipNow() }
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
@@ -88,18 +117,29 @@ final class Peer: NSObject, LinkEvents {
 
     func disconnect() {
         resumeUntil = .distantPast
-        link.disconnect()
+        if role == "host", let w = hostWs { w.send(text(msg(Proto.T.bye))); w.close() }
+        else { link.disconnect() }
         if link.pair != nil { link.cancelPairing() }
     }
+
+    private func text(_ m: JSON) -> String { encodeJSON(m) ?? "{}" }
 
     func forget(_ id: String) {
         if peerId == id && connected { send(msg("peer.forget")); disconnect() }
         core.store.forgetHost(id, Self.hostsList)
+        var g = guests; g.removeValue(forKey: id); guests = g
         changed()
     }
 
     private func onPeer(_ f: Found, _ m: JSON) {
         switch m.str("t", max: 30) {
+        case "peer.ask":
+            if connected || !on { return }
+            if hostOn || guests[f.id] != nil || paired().contains(where: { $0.id == f.id }) { return allowHost(f) }
+            if asked?.id == f.id { return }
+            asked = f
+            Notifier.shared.note("peer.ask", "\(f.name) wants to connect", "Open TwinDesk to let it connect to this \(Device.word).")
+            changed()
         case "peer.hosting":
             let p = m.int("port")
             guard waitingFor == f.id, (1...65535).contains(p) else { return }
@@ -114,7 +154,16 @@ final class Peer: NSObject, LinkEvents {
         }
     }
 
+    private var ticks = 0
     private func tick() {
+        ticks += 1
+        // The host's side of liveness: the guest pings every second.
+        if let w = hostWs {
+            if Date().timeIntervalSince(w.lastRx) > Proto.timeout { NSLog("TwinDesk: peer: %@ stopped answering", peerName); w.close(); wsClose(w) }
+            else { w.send(text(msg(Proto.T.ping, ["ts": Int(Date().timeIntervalSince1970 * 1000)]))) }
+        }
+        if let p = pairing, Date().timeIntervalSince(p.at) > 60 { fail(p.ws, Proto.E.pairTimeout, "Pairing timed out"); pairing = nil; changed() }
+        if ticks % 5 == 0 { hosting() }
         if !waitingFor.isEmpty {
             if let f = core.discovery.phone(waitingFor), f.port > 0 { waitingFor = ""; connect(f) }
             else if Date() > waitUntil {
@@ -138,6 +187,14 @@ final class Peer: NSObject, LinkEvents {
             self.peerName = host.name
             self.key = ""
             NSLog("TwinDesk: peer: session with %@", host.name)
+            // A token for the other way (it can connect to us later), and our certificate.
+            if !self.myFp.isEmpty {
+                let token = Proto.randomHex(32)
+                var g = self.guests
+                g[host.id] = ["name": host.name, "tokenHash": Proto.sha256(Data(token.utf8)).hex, "at": Date().timeIntervalSince1970]
+                self.guests = g
+                self.send(msg("peer.rev", ["token": token, "fp": self.myFp, "port": Int(PeerServer.port)]))
+            }
             self.send(msg("peer.info", ["model": self.core.store.model]))
             self.message = ""
             self.changed()
@@ -172,17 +229,31 @@ final class Peer: NSObject, LinkEvents {
         for id in Array(inFiles.keys) { inFailed(id) }
         outFiles.removeAll()
         screenEnded()
+        screenOut.stop()
+        hosting()
         changed()
     }
 
     @discardableResult
-    func send(_ m: JSON) -> Bool { link.send(m) }
+    func send(_ m: JSON) -> Bool {
+        if role == "host" { guard let w = hostWs else { return false }; w.send(text(m)); return true }
+        return link.send(m)
+    }
 
     private func dispatch(_ t: String, _ m: JSON) {
         switch t {
         case "peer.key": key = m.str("key", max: 64)
         case "peer.info": peerModel = m.str("model", max: 80); changed()
         case "peer.forget": forget(peerId)
+        case "peer.rev":
+            guard role == "host" else { return }
+            let token = m.str("token", max: 64), fp = Proto.normFingerprint(m["fp"] as? String)
+            let p = m.int("port", Int(PeerServer.port))
+            guard Proto.isHex(token, min: 64, max: 64), Proto.isHex(fp, min: 64, max: 64) else { return }
+            let near = core.discovery.phone(peerId)
+            core.store.putHost(Computer(id: peerId, name: peerName, os: near?.os ?? "android", address: near?.address ?? hostWs?.address ?? "",
+                                        port: (1...65535).contains(p) ? UInt16(p) : PeerServer.port, fp: fp, token: token,
+                                        lastSeen: Date().timeIntervalSince1970), Self.hostsList)
         case "clip": clipIn(m)
         case "notif": notifIn(m)
         case "f.offer": inOffer(m)
@@ -192,7 +263,7 @@ final class Peer: NSObject, LinkEvents {
         case "q": answer(m)
         case "r": if let cb = calls.removeValue(forKey: m.str("qid", max: 40)) { cb(m) }
         case "screen.ready": screenReady()
-        case "screen.stop": screenEnded()
+        case "screen.stop": screenEnded(); screenOut.stop()
         case "screen.state":
             screenError = m.str("error", max: 300)
             if !m.bool("on") { if screenError.isEmpty { screenEnded() } }
@@ -295,6 +366,7 @@ final class Peer: NSObject, LinkEvents {
 
     private func outAccepted(_ id: String) {
         guard let f = outFiles[id] else { return }
+        if role == "host" { return } // the guest GETs it
         guard var r = request("/peer/f/\(enc(id))", "PUT") else { return outDone(id, false) }
         r.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         r.setValue(String(f.size), forHTTPHeaderField: "Content-Length")
@@ -348,6 +420,10 @@ final class Peer: NSObject, LinkEvents {
         let f = InFile(id, rel.last!, size, bid, url)
         inFiles[id] = f
         send(msg("f.accept", ["id": id]))
+        if role == "host" { // the guest PUTs it
+            if size == 0 { FileManager.default.createFile(atPath: url.path, contents: nil); inDone(f) }
+            return
+        }
         guard let r = request("/peer/f/\(enc(id))", "GET") else { return inFailed(id) }
         let t = link.urlSession.downloadTask(with: r) { [weak self] tmp, res, err in
             var ok = err == nil && (res as? HTTPURLResponse)?.statusCode == 200 && tmp != nil
@@ -370,6 +446,13 @@ final class Peer: NSObject, LinkEvents {
         }
         f.task = t
         t.resume()
+    }
+
+    private func inDone(_ f: InFile) {
+        guard inFiles[f.id] === f else { return }
+        inFiles.removeValue(forKey: f.id)
+        send(msg("f.done", ["id": f.id, "ok": true]))
+        finished(f.batch, true)
     }
 
     private func inFailed(_ id: String) {
@@ -438,13 +521,22 @@ final class Peer: NSObject, LinkEvents {
             let ids = Array(((m["ids"] as? [String]) ?? []).prefix(500))
             core.hub.originals(ids) { urls in self.sendFiles(urls) }
             reply(["ok": true, "n": ids.count])
-        case "screen.start": reply(["error": "The iPhone’s screen goes to computers only (Share Screen)"])
+        case "screen.start":
+            guard core.mirror.sharing else {
+                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk, then ask again there.")
+                return reply(["error": "Start Share Screen on \(core.store.deviceName) first (TwinDesk › Share screen), then try again."])
+            }
+            reply(["ok": true])
+            core.mirror.peerWant(min(1920, max(480, m.int("maxSize", 1600))))
+            if role == "host" { send(msg("screen.ready")) } // it GETs our screen
+            else if let r = request("/peer/screen", "POST"), let fp = link.host?.fp { screenOut.post(r, pin: fp) } // we POST it
         default: reply(["error": "unknown"])
         }
     }
 
     // ---- its screen, here ----
 
+    let screenOut = PeerScreenOut()
     private(set) var screenOn = false
     private(set) var screenError = ""
     let screen = PeerScreenFeed()
@@ -460,6 +552,21 @@ final class Peer: NSObject, LinkEvents {
         }
     }
 
+    // As the host: the guest's screen comes in its POST.
+    private func screenIn(_ r: PeerServer.Request) {
+        guard screenOn else { return r.respond(409) }
+        screen.begin { [weak self] in self?.screenEnded(tell: false) }
+        func more() {
+            r.read { [weak self] d, err in
+                guard let self = self else { return }
+                if let d = d { self.screen.push(d); return more() }
+                r.respond(err ? 500 : 200)
+                DispatchQueue.main.async { self.screen.finished() }
+            }
+        }
+        more()
+    }
+
     private func screenReady() {
         guard screenOn, var r = request("/peer/screen", "GET"), let fp = link.host?.fp else { return }
         r.timeoutInterval = 3600
@@ -472,5 +579,319 @@ final class Peer: NSObject, LinkEvents {
         if tell && screenOn && connected { send(msg("screen.stop")) }
         screen.stop()
         if screenOn { screenOn = false; changed() }
+    }
+}
+
+// ---- PeerServerHandler: the host's side (main) ----
+
+extension Peer {
+    func wsOpen(_ ws: PeerServer.Ws) {}
+
+    func wsText(_ ws: PeerServer.Ws, _ t: String) {
+        guard let m = decodeJSON(t) else { return ws.close() }
+        let type = m.str("t", max: 40)
+        if ws === hostWs {
+            switch type {
+            case Proto.T.ping: ws.send(text(msg(Proto.T.pong, ["ts": m["ts"] ?? 0])))
+            case Proto.T.pong: break
+            case Proto.T.bye: ws.close(); wsClose(ws)
+            default: dispatch(type, m)
+            }
+            return
+        }
+        switch type {
+        case Proto.T.pairStart: pairStart(ws, m)
+        case Proto.T.pairReveal:
+            guard var p = pairing, p.ws === ws else { return }
+            let nonce = m.str("nonce", max: 64)
+            guard p.nw.isEmpty, Proto.isHex(nonce, min: 32, max: 32), Proto.commitOf(nonce) == p.commit else {
+                pairing = nil; changed()
+                return fail(ws, Proto.E.pairRefused, "Nonce does not match")
+            }
+            p.nw = nonce
+            p.code = Proto.sasCode(fp: myFp, nw: nonce, nm: p.nm)
+            pairing = p
+            Notifier.shared.note("peer.pair", "Pair with \(p.name)?", "Check that both phones show the same code in TwinDesk.")
+            changed()
+        case Proto.T.pairConfirm:
+            guard var p = pairing, p.ws === ws, !p.code.isEmpty else { return }
+            p.confirmed = true
+            pairing = p
+            finishPair()
+        case Proto.T.pairCancel:
+            if pairing?.ws === ws { pairing = nil; changed() }
+            ws.close()
+        case Proto.T.hello: hello(ws, m)
+        default: fail(ws, "bad_message", "\"\(type)\" before welcome")
+        }
+    }
+
+    func wsClose(_ ws: PeerServer.Ws) {
+        if pairing?.ws === ws { pairing = nil; changed() }
+        if ws === hostWs { hostWs = nil; ended() }
+    }
+
+    private func fail(_ ws: PeerServer.Ws, _ code: String, _ why: String) {
+        ws.send(text(msg(Proto.T.error, ["code": code, "message": why])))
+        ws.close()
+    }
+
+    private func pairStart(_ ws: PeerServer.Ws, _ m: JSON) {
+        if let p = pairing, p.ws !== ws { return fail(ws, Proto.E.busy, "Another pairing is in progress") }
+        if m.int("v") != Proto.version { return fail(ws, Proto.E.versionMismatch, "Different TwinDesk version") }
+        let id = m.str("id", max: 64), commit = m.str("commit", max: 64)
+        guard !id.isEmpty, Proto.isHex(commit, min: 64, max: 64) else { return fail(ws, "bad_message", "pair.start needs id and commit") }
+        guard !myFp.isEmpty else { return fail(ws, Proto.E.busy, "This iPhone can’t host") }
+        let nm = Proto.randomHex(16)
+        let name = m.str("name", max: 64)
+        pairing = PairReq(ws: ws, id: id, name: name.isEmpty ? "Phone" : name, commit: commit, nm: nm)
+        ws.send(text(msg(Proto.T.pairNonce, ["nonce": nm, "os": Proto.os])))
+        hosting()
+        changed()
+    }
+
+    // Allow / Deny here.
+    func respondPair(_ allow: Bool) {
+        guard var p = pairing else { return }
+        if !allow { pairing = nil; fail(p.ws, Proto.E.pairRefused, "Refused"); return changed() }
+        guard !p.code.isEmpty else { return }
+        p.allowed = true
+        pairing = p
+        finishPair()
+    }
+
+    private func finishPair() {
+        guard let p = pairing else { return }
+        changed()
+        guard p.confirmed, p.allowed else { return }
+        let token = Proto.randomHex(32)
+        var g = guests
+        g[p.id] = ["name": p.name, "tokenHash": Proto.sha256(Data(token.utf8)).hex, "at": Date().timeIntervalSince1970]
+        guests = g
+        p.ws.send(text(msg(Proto.T.pairOk, ["token": token, "macId": core.store.deviceId, "macName": core.store.deviceName, "os": Proto.os])))
+        pairing = nil
+        NSLog("TwinDesk: peer: paired with %@", p.name)
+        changed()
+    }
+
+    private func hello(_ ws: PeerServer.Ws, _ m: JSON) {
+        if m.int("v") != Proto.version { return fail(ws, Proto.E.versionMismatch, "Different TwinDesk version") }
+        let id = m.str("id", max: 64), token = m.str("token", max: 128)
+        guard let e = guests[id], !token.isEmpty, (e["tokenHash"] as? String) == Proto.sha256(Data(token.utf8)).hex else {
+            return fail(ws, Proto.E.badToken, "Not paired with this phone")
+        }
+        if role == "guest" { return fail(ws, Proto.E.busy, "Connected to another phone") }
+        if let old = hostWs, old !== ws { old.send(text(msg(Proto.T.error, ["code": Proto.E.replaced, "message": "Connected again"]))); old.close() }
+        if role == "host" { ended() }
+        hostWs = ws
+        role = "host"
+        peerId = id
+        let n = m.str("name", max: 64)
+        peerName = n.isEmpty ? ((e["name"] as? String) ?? "Phone") : n
+        var g = guests; var en = e; en["name"] = peerName; g[id] = en; guests = g
+        key = Proto.randomHex(16)
+        ws.send(text(msg(Proto.T.welcome, ["v": Proto.version, "macId": core.store.deviceId, "macName": core.store.deviceName, "os": Proto.os])))
+        ws.send(text(msg("peer.key", ["key": key])))
+        tempUntil = .distantPast
+        message = ""
+        asked = nil
+        NSLog("TwinDesk: peer: session with %@ as host", peerName)
+        send(msg("peer.info", ["model": core.store.model]))
+        hosting()
+        changed()
+    }
+
+    // The server runs while it's wanted: the setting, an ask, a session, a pairing.
+    func hosting() {
+        let want = on && (hostOn || Date() < tempUntil || role == "host" || pairing != nil)
+        if want && hostPort == 0 && !starting {
+            starting = true
+            server.start { [weak self] port in
+                guard let self = self else { return }
+                self.starting = false
+                self.hostPort = port
+                self.changed()
+            }
+        } else if !want && hostPort > 0 {
+            server.stop()
+            hostPort = 0
+            changed()
+        }
+    }
+
+    func setHostOn(_ v: Bool) { core.store.setFlag("peer.host", v); hosting(); changed() }
+
+    // Hosting for a phone that asked: it hears where (peer.hosting).
+    private func allowHost(_ f: Found) {
+        tempUntil = Date().addingTimeInterval(120)
+        let tell = { [weak self] in
+            guard let self = self, self.hostPort > 0 else { return }
+            self.core.discovery.sendTo(msg("peer.hosting", ["v": Proto.version, "id": self.core.store.deviceId, "name": self.core.store.deviceName, "port": Int(self.hostPort)]), f.address)
+        }
+        if hostPort > 0 { return tell() }
+        starting = true
+        server.start { [weak self] port in
+            self?.starting = false
+            self?.hostPort = port
+            tell()
+            self?.changed()
+        }
+    }
+
+    func answerAsk(_ allow: Bool) {
+        guard let f = asked else { return }
+        asked = nil
+        if allow { allowHost(f) }
+        else { core.discovery.sendTo(msg("peer.no", ["v": Proto.version, "id": core.store.deviceId, "name": core.store.deviceName]), f.address) }
+        changed()
+    }
+
+    var hostPairing: PairReq? { pairing }
+
+    // HTTPS on our server: the files' bytes and the screen, with the session's key, from its address.
+    func request(_ r: PeerServer.Request) {
+        guard role == "host", let ws = hostWs, !key.isEmpty, r.headers[Self.header] == key, r.address == ws.address else { return r.respond(403) }
+        let path = r.path.components(separatedBy: "?")[0]
+        if path.hasPrefix("/peer/f/") {
+            let id = String(path.dropFirst("/peer/f/".count)).removingPercentEncoding ?? ""
+            if r.method == "PUT" { return putIn(id, r) }
+            if r.method == "GET" { return getOut(id, r) }
+            return r.respond(400)
+        }
+        if path == "/peer/screen" {
+            if r.method == "GET" { return screenOut.serve(r) }
+            if r.method == "POST" { return screenIn(r) }
+        }
+        r.respond(404)
+    }
+
+    private func putIn(_ id: String, _ r: PeerServer.Request) {
+        guard let f = inFiles[id] else { return r.respond(404) }
+        FileManager.default.createFile(atPath: f.url.path, contents: nil)
+        guard let h = try? FileHandle(forWritingTo: f.url) else { return r.respond(500) }
+        var got: Int64 = 0
+        var last = Date()
+        var pending: Int64 = 0
+        func more() {
+            r.read { [weak self] d, err in
+                guard let self = self else { return }
+                if let d = d {
+                    if got + Int64(d.count) > f.size { try? h.close(); r.respond(400); return DispatchQueue.main.async { self.inFailed(id) } }
+                    do { try h.write(contentsOf: d) } catch { try? h.close(); r.respond(500); return DispatchQueue.main.async { self.inFailed(id) } }
+                    got += Int64(d.count)
+                    pending += Int64(d.count)
+                    if Date().timeIntervalSince(last) > 0.2 { let n = pending; pending = 0; last = Date(); DispatchQueue.main.async { self.moved(f.batch, n) } }
+                    return more()
+                }
+                try? h.close()
+                let ok = !err && got == f.size
+                r.respond(ok ? 200 : 500)
+                let n = pending
+                DispatchQueue.main.async {
+                    if n > 0 { self.moved(f.batch, n) }
+                    if ok { self.inDone(f) } else { self.inFailed(id) }
+                }
+            }
+        }
+        more()
+    }
+
+    private func getOut(_ id: String, _ r: PeerServer.Request) {
+        guard let f = outFiles[id], let h = try? FileHandle(forReadingFrom: f.url) else { return r.respond(404) }
+        r.streamHead(f.size)
+        let batch = f.batch
+        work.async {
+            var left = f.size
+            func next() {
+                if left <= 0 { try? h.close(); return }
+                let n = Int(min(left, 1 << 20))
+                guard let d = try? h.read(upToCount: n), d.count == n else { try? h.close(); r.close(); return }
+                left -= Int64(n)
+                r.write(d) { ok in
+                    if !ok { try? h.close(); return }
+                    DispatchQueue.main.async { self.moved(batch, Int64(n)) }
+                    self.work.async { next() }
+                }
+            }
+            next()
+        }
+    }
+}
+
+// Our screen to the other phone (the broadcast's packets, Mirror.peerTap): as the host, the body of
+// its GET; as the guest, the body of our POST to it (chunked).
+final class PeerScreenOut {
+    private let q = DispatchQueue(label: "td.peer.screenout")
+    private var get: PeerServer.Request?
+    private var post: NWConnection?
+    private var inflight = 0
+    private var head: [Data] = [] // the size and SPS/PPS packets: first in every new stream
+
+    func packet(_ p: Data) {
+        q.async {
+            guard p.count >= 12 else { return }
+            if p[p.startIndex] & 0x80 != 0 { self.head = [p] }
+            else if p[p.startIndex] & 0x40 != 0 { self.head = Array(self.head.prefix(1)) + [p] }
+            self.send(p)
+        }
+    }
+
+    private func send(_ p: Data) {
+        if inflight > 4 << 20 { return } // behind: dropped (the decoder waits for the next keyframe)
+        if let r = get {
+            inflight += p.count
+            r.write(p) { ok in self.q.async { self.inflight -= p.count; if !ok { self.get = nil } } }
+        } else if let c = post {
+            var d = Data(String(p.count, radix: 16).utf8) + Data("\r\n".utf8)
+            d.append(p)
+            d.append(Data("\r\n".utf8))
+            inflight += d.count
+            let n = d.count
+            c.send(content: d, completion: .contentProcessed { e in self.q.async { self.inflight -= n; if e != nil { self.post = nil } } })
+        }
+    }
+
+    func serve(_ r: PeerServer.Request) {
+        q.async {
+            self.get?.close()
+            self.get = r
+            self.inflight = 0
+            r.streamHead()
+            for p in self.head { self.send(p) }
+        }
+    }
+
+    func post(_ r: URLRequest, pin: String) {
+        q.async {
+            self.post?.cancel()
+            guard let u = r.url, let host = u.host, let port = u.port else { return }
+            let tls = NWProtocolTLS.Options()
+            sec_protocol_options_set_verify_block(tls.securityProtocolOptions, { _, trust, done in
+                done(Link.leafFingerprint(sec_trust_copy_ref(trust).takeRetainedValue()) == pin)
+            }, self.q)
+            let c = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port))!, using: NWParameters(tls: tls))
+            self.post = c
+            self.inflight = 0
+            var h = "POST \(u.path) HTTP/1.1\r\nHost: \(host):\(port)\r\nContent-Type: application/octet-stream\r\nTransfer-Encoding: chunked\r\n"
+            for (k, v) in r.allHTTPHeaderFields ?? [:] where k.lowercased().hasPrefix("x-") { h += "\(k): \(v)\r\n" }
+            c.stateUpdateHandler = { st in
+                switch st {
+                case .ready:
+                    c.send(content: Data((h + "\r\n").utf8), completion: .contentProcessed { _ in })
+                    self.q.async { for p in self.head { self.send(p) } }
+                case .failed, .cancelled: self.q.async { if self.post === c { self.post = nil } }
+                default: break
+                }
+            }
+            c.start(queue: self.q)
+        }
+    }
+
+    func stop() {
+        q.async {
+            self.get?.close(); self.get = nil
+            if let c = self.post { c.send(content: Data("0\r\n\r\n".utf8), completion: .contentProcessed { _ in c.cancel() }) }
+            self.post = nil
+        }
     }
 }

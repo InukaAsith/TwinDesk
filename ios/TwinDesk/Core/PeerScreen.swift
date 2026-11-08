@@ -46,6 +46,16 @@ final class PeerScreenFeed: NSObject, URLSessionDataDelegate {
         t.resume()
     }
 
+    // Pushed instead (a phone's POST to our server, Peer.screenIn): begin, push its bytes, finished.
+    func begin(_ ended: @escaping () -> Void) {
+        stop()
+        self.ended = ended
+    }
+
+    func push(_ d: Data) { q.async { self.buf.append(d); self.parse() } }
+
+    func finished() { let e = ended; ended = {}; e() }
+
     func stop() {
         task?.cancel()
         task = nil
@@ -95,7 +105,7 @@ final class PeerScreenFeed: NSObject, URLSessionDataDelegate {
                 continue
             }
             let len = be32(buf, 8)
-            if len <= 0 || len > 8 * 1024 * 1024 { task?.cancel(); return }
+            if len <= 0 || len > 8 * 1024 * 1024 { task?.cancel(); buf.removeAll(); return }
             guard buf.count >= 12 + len else { return }
             let config = buf[s] & 0x40 != 0
             let body = Data(buf[(s + 12)..<(s + 12 + len)])

@@ -225,7 +225,7 @@ class Discovery(
         }
         if (t != Proto.T.BEACON && t != Proto.T.INVITE) return
         val os = m.optString("os", "mac")
-        if (os == Proto.OS) { // other phones: only for Connect with Android (Peer.kt)
+        if (os == Proto.OS || os == "ios") { // other phones, Android or iPhone: only for Connect with Android (Peer.kt)
             if (t != Proto.T.BEACON || m.optInt("ap") != 1 || !peerOn) return
             val id = m.getString("id")
             val old = phones[id]

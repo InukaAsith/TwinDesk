@@ -30,6 +30,7 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     private var backlog = [Data]() // io only: packets waiting for room in the body stream
     private var sessionPacket: Data? // the size packet: first in every new request
     private var configPacket: Data? // SPS/PPS: next, so the window can decode from the first frame
+    var peerTap: ((Data) -> Void)? // a phone watching (Peer.swift): every packet, as it comes
 
     override init(_ core: Core) {
         super.init(core)
@@ -126,6 +127,12 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
         f.append(contentsOf: [UInt8(n >> 24), UInt8(n >> 16 & 255), UInt8(n >> 8 & 255), UInt8(n & 255)])
         f.append(d)
         c.send(content: f, completion: .idempotent)
+    }
+
+    // A phone wants it (Peer.swift): the encoder on, at its size, a keyframe now.
+    func peerWant(_ maxSize: Int) {
+        let w = want
+        sendExt(["maxSize": w?.int("maxSize") ?? maxSize, "bitrate": w?.int("bitrate", 8_000_000) ?? 6_000_000, "fps": min(60, w?.int("fps", 30) ?? 30), "want": 1, "sync": 1])
     }
 
     // Stop sharing (the app's button): the extension ends the broadcast.
@@ -227,6 +234,7 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     // A packet from the extension: kept if it's the size or SPS/PPS, then on to the computer.
     private func packet(_ p: Data) {
         guard p.count >= 12 else { return }
+        peerTap?(p)
         if p[p.startIndex] & 0x80 != 0 { sessionPacket = p; configPacket = nil }
         else if p[p.startIndex] & 0x40 != 0 { configPacket = p } // bit 62: config
         io.async {
