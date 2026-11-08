@@ -52,6 +52,10 @@ echo "built .build/release/macshare-helper-multi"
 swiftc -O -swift-version 5 -target "$TARGET" -framework AppKit \
   Sources/macshare-dockstub/main.swift -o .build/release/macshare-dockstub
 echo "built .build/release/macshare-dockstub"
+# An iPhone's or iPad's screen over its cable (mac/iosusb.js), its own process, run only while shown.
+swiftc -O -swift-version 5 -target "$TARGET" -framework AVFoundation -framework CoreMediaIO -framework VideoToolbox -framework CoreMedia \
+  Sources/macshare-iosusb/main.swift -o .build/release/macshare-iosusb
+echo "built .build/release/macshare-iosusb"
 # The calls' sound over Bluetooth (mac/callaudio.js), its own process: only it loads IOBluetooth.
 swiftc -O -swift-version 5 -target "$TARGET" -framework IOBluetooth \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Sources/macshare-calls/Info.plist \
