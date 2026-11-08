@@ -7,13 +7,14 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case overview, connection, receive, share, remote, clipboard, notifications, files, photos, audio, camera, media, airplay, shortcuts, general, about
+    case overview, connection, phones, receive, share, remote, clipboard, notifications, files, photos, audio, camera, media, airplay, shortcuts, general, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .overview: return "Overview"
         case .connection: return "Connection"
+        case .phones: return "Phones"
         case .receive: return "Receive screen"
         case .share: return "Share screen"
         case .remote: return "Remote"
@@ -35,6 +36,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return "house.fill"
         case .connection: return "link"
+        case .phones: return "iphone.gen2"
         case .receive: return "display"
         case .share: return "rectangle.on.rectangle"
         case .remote: return "gamecontroller.fill"
@@ -57,6 +59,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .overview: return Color(white: 0.45)
         case .connection, .receive, .share, .files, .about: return TDColor.accent
         case .remote: return .orange
+        case .phones: return TDColor.good
         case .clipboard: return Color(red: 0.35, green: 0.78, blue: 0.85)
         case .notifications: return TDColor.bad
         case .photos: return Color(red: 1, green: 0.58, blue: 0.2)
@@ -71,7 +74,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
     // The sidebar's groups, as the computers have them.
     static let groups: [[Page]] = [
-        [.overview, .connection],
+        [.overview, .connection, .phones],
         [.receive, .share, .remote],
         [.clipboard, .notifications, .files, .photos],
         [.audio, .camera, .media],
@@ -95,8 +98,8 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
 // What's over the pages now (full screen).
 enum Cover: Identifiable, Equatable {
-    case viewer, remote(String)
-    var id: String { switch self { case .viewer: return "viewer"; case .remote(let m): return "remote." + m } }
+    case viewer, remote(String), peerScreen
+    var id: String { switch self { case .viewer: return "viewer"; case .peerScreen: return "peerScreen"; case .remote(let m): return "remote." + m } }
 }
 
 final class AppUI: ObservableObject {
@@ -190,6 +193,7 @@ private struct Covers: ViewModifier {
         switch c {
         case .viewer: ViewerScreen()
         case .remote(let mode): RemoteScreen(mode: mode)
+        case .peerScreen: PeerScreenView()
         }
     }
 }
@@ -301,6 +305,7 @@ struct Sidebar: View {
 
     private func inUse(_ p: Page) -> Bool {
         _ = core.tick
+        if p == .phones { return core.peer.connected }
         guard core.connected else { return false }
         switch p {
         case .receive: return core.screen.viewing
@@ -325,6 +330,7 @@ struct PageView: View {
         switch page {
         case .overview: OverviewView()
         case .connection: ConnectionView()
+        case .phones: PhonesView()
         case .receive: ReceiveScreenView()
         case .share: ShareScreenView()
         case .remote: RemoteView()

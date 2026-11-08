@@ -59,23 +59,24 @@ final class Store {
 
     private let service = "com.twindesk.ios.hosts"
 
-    func hosts() -> [Computer] {
+    // list: "hosts" (computers), or "peerHosts" (phones, Peer.swift), kept apart.
+    func hosts(_ list: String = "hosts") -> [Computer] {
         lock.lock(); defer { lock.unlock() }
-        return readHosts()
+        return readHosts(list)
     }
 
-    private func readHosts() -> [Computer] {
+    private func readHosts(_ list: String = "hosts") -> [Computer] {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: "hosts", kSecReturnData as String: true]
+                                kSecAttrAccount as String: list, kSecReturnData as String: true]
         var out: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return [] }
         return (try? JSONDecoder().decode([Computer].self, from: data)) ?? []
     }
 
-    private func writeHosts(_ list: [Computer]) {
+    private func writeHosts(_ list: [Computer], _ account: String = "hosts") {
         guard let data = try? JSONEncoder().encode(list) else { return }
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: "hosts"]
+                                kSecAttrAccount as String: account]
         // After first unlock: the app reconnects in the background while the phone is locked.
         let attrs: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         if SecItemUpdate(q as CFDictionary, attrs as CFDictionary) == errSecItemNotFound {
@@ -85,16 +86,16 @@ final class Store {
         }
     }
 
-    func host(_ id: String) -> Computer? { hosts().first { $0.id == id } }
+    func host(_ id: String, _ list: String = "hosts") -> Computer? { hosts(list).first { $0.id == id } }
 
-    func putHost(_ h: Computer) {
+    func putHost(_ h: Computer, _ list: String = "hosts") {
         lock.lock(); defer { lock.unlock() }
-        writeHosts([h] + readHosts().filter { $0.id != h.id })
+        writeHosts([h] + readHosts(list).filter { $0.id != h.id }, list)
     }
 
-    func forgetHost(_ id: String) {
+    func forgetHost(_ id: String, _ list: String = "hosts") {
         lock.lock(); defer { lock.unlock() }
-        writeHosts(readHosts().filter { $0.id != id })
+        writeHosts(readHosts(list).filter { $0.id != id }, list)
         d.removeObject(forKey: "sync.\(id)")
     }
 

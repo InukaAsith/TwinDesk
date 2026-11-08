@@ -39,6 +39,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var usb = Usb(self)
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
+    lazy var peer = Peer(self) // Connect with Android: its own link, beside the computer's
 
     // Published copies for the UI (main thread).
     @Published private(set) var state = "idle"
@@ -74,6 +75,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.start()
         remote.watchControllers()
         ble.start()
+        _ = peer
         refresh()
         Background.shared.apply()
     }

@@ -56,7 +56,10 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private var queuedBytes = 0 // sent but not yet written (file sending waits while it is high)
     private let qLock = NSLock()
 
-    override init() {
+    let list: String // the store's list its hosts go in: "hosts", or "peerHosts" (Peer.swift)
+
+    init(list: String = "hosts") {
+        self.list = list
         super.init()
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 30
@@ -293,7 +296,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         let name = m.str("macName", max: 64)
         let h = Computer(id: id, name: name.isEmpty ? p.name : name, os: m.str("os").isEmpty ? "mac" : m.str("os"),
                      address: p.address, port: p.port, fp: seenFp, token: token, lastSeen: Date().timeIntervalSince1970)
-        store.putHost(h)
+        store.putHost(h, list)
         pair = nil
         mode = "session"
         host = h
@@ -310,8 +313,8 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         h.lastSeen = Date().timeIntervalSince1970
         if address != "127.0.0.1" { h.address = address } // the cable's address isn't where to find it next time
         host = h
-        store.putHost(h)
-        store.lastHostId = h.id
+        store.putHost(h, list)
+        if list == "hosts" { store.lastHostId = h.id }
         rttMs = nil
         let fx = m.str("fx", max: 64)
         fxToken = Proto.isHex(fx, min: 32, max: 32) ? fx : ""
@@ -355,7 +358,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         case Proto.E.asleep: message = "\(name) is asleep"
         default: message = "Closed (\(code))"
         }
-        if code == Proto.E.badToken, let h = host { store.forgetHost(h.id) }
+        if code == Proto.E.badToken, let h = host { store.forgetHost(h.id, list) }
     }
 
     private func pairFailed(_ error: String) {

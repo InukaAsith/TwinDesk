@@ -26,6 +26,11 @@ final class Discovery {
     private var beaconTimer: DispatchSourceTimer?
     private var lastSweep = Date.distantPast
     private(set) var found: [String: Found] = [:] // q only; read with list()
+    // Android phones with TwinDesk (their beacon's `ap`, Peer.swift): port is their phone server's
+    // (`phost`), 0 while they don't host. They answer our probes; their beacons are broadcasts.
+    private var phones: [String: Found] = [:] // q only
+    var peerOn: () -> Bool = { true }
+    var onPeer: (Found, JSON) -> Void = { _, _ in } // another phone's peer.* (main)
     var error = ""
 
     var self_: () -> (id: String, name: String) = { ("", "") }
@@ -48,6 +53,19 @@ final class Discovery {
     }
 
     func get(_ id: String) -> Found? { q.sync { found[id] } }
+
+    func phoneList() -> [Found] { q.sync { phones.values.sorted { $0.name < $1.name } } }
+    func phone(_ id: String) -> Found? { q.sync { phones[id] } }
+    func setPhonePort(_ id: String, _ address: String, _ port: UInt16) {
+        q.async {
+            guard var f = self.phones[id] else { return }
+            f.address = address; f.port = port; f.lastSeen = Date()
+            self.phones[id] = f
+            self.changed()
+        }
+    }
+    // A packet to one address (peer.ask to a phone).
+    func sendTo(_ m: JSON, _ address: String) { q.async { self.send(m, to: address) } }
 
     func clearInvite(_ id: String) {
         q.async {
@@ -108,6 +126,7 @@ final class Discovery {
         var targets = Set(known())
         for f in found.values { targets.insert(f.address) }
         for a in targets where !a.isEmpty && a != "127.0.0.1" { send(me, to: a) }
+        if peerOn() { let p = probeMsg(); for f in phones.values { send(p, to: f.address) } } // they answer probes only
         // The subnet sweep: every 10 s while looking, else every 60 s (a computer that moved).
         let every: TimeInterval = wantSweep() ? 10 : 60
         if Date().timeIntervalSince(lastSweep) >= every {
@@ -172,9 +191,28 @@ final class Discovery {
         guard m.int("v") == Proto.version, !id.isEmpty, id != me else { return }
         let t = m.str("t")
         if t == Proto.T.probe { return send(beaconMsg(), to: address, port: port) }
+        if t.hasPrefix("peer.") { // an Android phone (Peer.swift)
+            guard peerOn() else { return }
+            var f = phones[id] ?? Found(id: id, name: m.str("name", max: 100).isEmpty ? "Phone" : m.str("name", max: 100), os: "android",
+                                        address: address, port: 0, fp: "", lastSeen: Date(), invited: false)
+            f.address = address
+            DispatchQueue.main.async { self.onPeer(f, m) }
+            return
+        }
         guard t == Proto.T.beacon || t == Proto.T.invite else { return }
         let os = m.str("os").isEmpty ? "mac" : m.str("os")
-        if os == "android" || os == Proto.os { return } // other phones: nothing to do with them
+        if os == "android" { // a phone for other phones: Connect with Android (Peer.swift)
+            guard t == Proto.T.beacon, m.int("ap") == 1, peerOn() else { return }
+            let old = phones[id]
+            let pp = m.int("phost", 0)
+            let name = m.str("name", max: 100)
+            let f = Found(id: id, name: name.isEmpty ? "Phone" : name, os: os, address: address,
+                          port: (1...65535).contains(pp) ? UInt16(pp) : 0, fp: "", lastSeen: Date(), invited: false)
+            phones[id] = f
+            if old == nil || old!.name != f.name || old!.address != f.address || old!.port != f.port { changed() }
+            return
+        }
+        if os == Proto.os { return }
         if t == Proto.T.beacon && (m["role"] as? String ?? "host") != "host" { return }
         let old = found[id]
         let p = m.int("port", Int(Proto.port))
@@ -190,6 +228,9 @@ final class Discovery {
 
     private func prune() {
         let now = Date()
+        let stalePhones = phones.values.filter { now.timeIntervalSince($0.lastSeen) > Proto.deviceStale * 2 }.map { $0.id }
+        for id in stalePhones { phones.removeValue(forKey: id) }
+        if !stalePhones.isEmpty { changed() }
         let stale = found.values.filter { now.timeIntervalSince($0.lastSeen) > Proto.deviceStale }.map { $0.id }
         if stale.isEmpty { return }
         for id in stale { found.removeValue(forKey: id) }

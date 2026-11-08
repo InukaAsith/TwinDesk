@@ -120,7 +120,10 @@ final class Hub: Feature {
     }
 
     // One page, newest first. `before` is where the last page ended (a creation time in ms).
-    private func list(_ m: JSON) {
+    private func list(_ m: JSON) { core.send(msg("media.list", page(m))) }
+
+    // One page (also for a phone, Peer.swift): {kind, before, items, more, next}.
+    func page(_ m: JSON) -> JSON {
         let kind = m.str("kind", max: 20)
         let n = max(1, min(500, m.int("n", 120)))
         let before = Double(m.str("before", max: 40)) ?? 0
@@ -150,7 +153,7 @@ final class Hub: Feature {
                 last = String(Int64(at))
             }
         }
-        core.send(msg("media.list", ["kind": kind, "before": m.str("before", max: 40), "items": items, "more": more, "next": last]))
+        return ["kind": kind, "before": m.str("before", max: 40), "items": items, "more": more, "next": last]
     }
 
     // These next: the ones still waiting from before are dropped (scrolled past).
@@ -183,7 +186,7 @@ final class Hub: Feature {
         }
     }
 
-    private func image(_ id: String, _ side: CGFloat, quality: CGFloat, fast: Bool, _ done: @escaping (String?) -> Void) {
+    func image(_ id: String, _ side: CGFloat, quality: CGFloat, fast: Bool, _ done: @escaping (String?) -> Void) {
         guard let a = asset(id) else { return done(nil) }
         let o = PHImageRequestOptions()
         o.isNetworkAccessAllowed = true // in iCloud: downloaded
@@ -201,7 +204,10 @@ final class Hub: Feature {
     }
 
     // The files themselves (the originals, with their names), to the computer.
-    private func save(_ list: [String]) {
+    private func save(_ list: [String]) { originals(list) { urls in self.core.files.send(urls) } }
+
+    // The originals of these, as files in a temporary folder (main).
+    func originals(_ list: [String], _ done: @escaping ([URL]) -> Void) {
         let assets = list.prefix(500).compactMap { asset($0) }
         guard !assets.isEmpty else { return }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("photos-" + UUID().uuidString, isDirectory: true)
@@ -223,7 +229,7 @@ final class Hub: Feature {
                 group.leave()
             }
         }
-        group.notify(queue: .main) { if !urls.isEmpty { self.core.files.send(urls.sorted { $0.path < $1.path }) } }
+        group.notify(queue: .main) { if !urls.isEmpty { done(urls.sorted { $0.path < $1.path }) } }
     }
 
     // Removed from the library: iOS asks here first (Delete), so it waits for this app to be in front.
