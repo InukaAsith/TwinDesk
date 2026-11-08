@@ -78,6 +78,13 @@ jobs:
       # The unsigned installers go up as one workflow artifact; SignPath takes that zip, signs every
       # TwinDesk-Setup-*.exe in it (artifact configuration "initial" in the TwinDesk project) and the
       # signed copies come back into windows/signed/. SIGNPATH_API_TOKEN: the "CI builds" user's token.
+      # The app's version: SignPath checks that the installers' product version matches it.
+      - name: Version
+        id: version
+        if: inputs.signing != 'none'
+        shell: bash
+        run: echo "version=$(node -p "require('./windows/package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Upload the unsigned installers for signing
         id: upload-unsigned
         if: inputs.signing != 'none'
@@ -100,6 +107,8 @@ jobs:
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: windows/signed
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version) }}
 
       # What the run hands out: the signed installers, or the build's own when signing is off.
       - name: Pick the installers to publish
