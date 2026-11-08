@@ -660,7 +660,7 @@ app.whenReady().then(() => {
   // An iPhone's or iPad's session through its USB cable (iosnet.js: usbmuxd to the app's port): this
   // server, the WebRTC relay (wired.js) and the files engine, nothing else.
   {
-    const { IosNet } = require('./iosnet.js');
+    const { IosNet } = require('../shared/iosnet.js');
     svc.iosNet = new IosNet({
       getId: () => id.macId, getName: () => id.macName,
       allowed: (port) => port === P.PORT || port === svc.wired.turnPort || (!!server.fx2Port && port === server.fx2Port()),

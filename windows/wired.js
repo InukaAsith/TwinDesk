@@ -47,7 +47,7 @@ class Wired extends EventEmitter {
     this.turnOk = false;
     this.phoneTurn = TURN_PORT; // the relay's port on the phone's side of adb reverse
     // Every session from 127.0.0.1 is a phone through adb reverse: its WebRTC uses the relay.
-    raw.iceFor = (ctx) => (ctx.os === P.OS.ANDROID && isLoopback(ctx.address) && ctx.transport !== 'ble' && this.turnOk ? this._ice() : null);
+    raw.iceFor = (ctx) => (P.isPhoneOs(ctx.os) && isLoopback(ctx.address) && ctx.transport !== 'ble' && this.turnOk ? this._ice() : null);
     peer.on('t:phone.wired', (m, ctx) => {
       const hit = [...this.plugged].find(([, p]) => p.nonce && p.nonce === m.nonce);
       if (!hit || !ctx.deviceId) return;
@@ -68,7 +68,7 @@ class Wired extends EventEmitter {
 
   get wired() {
     const c = this.raw.current;
-    return !!(c && c.os === P.OS.ANDROID && c.ice);
+    return !!(c && P.isPhoneOs(c.os) && c.ice);
   }
 
   // A nonce we sent through the cable, to a phone that's still on it.
@@ -141,6 +141,11 @@ class Wired extends EventEmitter {
       this.polling = false;
     }
   }
+
+  get turnPort() { return TURN_PORT; }
+
+  // The relay for an iPhone on a cable too (iosnet.js): started once, kept from then on.
+  relay() { return this._relay(); }
 
   _relay() {
     if (!this.relayStart) {

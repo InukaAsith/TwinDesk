@@ -182,7 +182,7 @@ class Hub extends EventEmitter {
 
   // The phone's route: the connected phone, whichever computer is selected.
   phoneRoute() {
-    return this.route((hub) => hub._connectedIdWhere((s) => s.peerOs === P.OS.ANDROID));
+    return this.route((hub) => hub._connectedIdWhere((s) => P.isPhoneOs(s.peerOs)));
   }
 
   // The server (server.js) and the host pairing (pairing.js) of this Mac. They may arrive after the

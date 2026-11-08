@@ -255,7 +255,7 @@ function publishState() {
     }
     if (svc) state.wake = svc.wake.view;
     const ctlView = devctl ? devctl.view : null;
-    const onPhone = !!(state.client && state.client.os === 'android');
+    const onPhone = !!(state.client && (state.client.os === 'android' || state.client.os === 'ios'));
     if (svc && svc.phone) state.phone = { ...svc.phone.view, settings: settings.phone, ctl: onPhone ? ctlView : null, qs: onPhone && ctlView ? ctlView.qs || null : null, top: onPhone && ctlView ? ctlView.top || [] : [] };
     state.peerCtl = !onPhone ? ctlView : null; // a computer's controls on Overview
     if (svc && svc.net) {
@@ -557,11 +557,11 @@ app.whenReady().then(() => {
     storage: { get: () => settings.layout, set: (l) => { settings.layout = l; store.saveSettings(settings); } },
     knownIds: () => hub.peers().map((p) => p.id),
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
-    endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && s.peerOs === P.OS.ANDROID; },
+    endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
     legacyEdges: () => {
       const k = settings.kvm || {};
       if (k.edges && Object.values(k.edges).some(Boolean)) return k.edges;
-      const pcs = hub.peers().filter((p) => p.state !== 'via' && p.os !== P.OS.ANDROID);
+      const pcs = hub.peers().filter((p) => p.state !== 'via' && !P.isPhoneOs(p.os));
       return pcs.length === 1 && k.pcSide ? { [k.pcSide]: pcs[0].id } : null;
     },
     onChange: () => {
@@ -631,9 +631,16 @@ app.whenReady().then(() => {
   const adb = new Adb();
   const phoneDir = new PhoneDir(hub, server);
   svc.wired = new Wired({ adb, raw: server, peer: phoneDir, getId: () => id.macId, getName: () => id.macName,
-    hasPhone: () => pairing.list().some((x) => x.os === P.OS.ANDROID) });
+    hasPhone: () => pairing.list().some((x) => P.isPhoneOs(x.os)) });
   pairing.isWired = (nonce) => svc.wired.knows(nonce);
   svc.wired.on('change', pushState);
+  // An iPhone's or iPad's session through its USB cable (shared/iosnet.js: usbmuxd to the app's port):
+  // this server and the WebRTC relay (wired.js), nothing else.
+  svc.iosNet = new (require('../../shared/iosnet.js').IosNet)({
+    getId: () => id.macId, getName: () => id.macName,
+    allowed: (port) => port === server.port || port === svc.wired.turnPort,
+  });
+  svc.iosNet.on('change', () => { if (svc.iosNet.view.devices.some((d) => d.app)) svc.wired.relay(); pushState(); });
   svc.phone = new PhoneSet({
     hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
     make: (scoped) => {
@@ -757,13 +764,30 @@ app.whenReady().then(() => {
 let bleOff = false; // General's Turn off Bluetooth on Wi-Fi connections, in effect (bleQuiet)
 const bleQuiet = wifiQuiet();
 
+// iPhones and iPads in a session: their Bluetooth link stays up beside the Wi-Fi (idle, no pipe), as
+// it's what wakes TwinDesk there when iOS suspends it, and what the session falls back to.
+const iosSessions = () => (hub ? hub.sessions.list().filter((s) => s.connected && s.peerOs === P.OS.IOS) : []);
+const iosNow = () => iosSessions().length > 0;
+
+// An iPhone or iPad linked over Bluetooth but not in a session (it links only to computers it's
+// paired with): invited now and then, which wakes TwinDesk there to come back (its Ble.swift).
+let iosInvitedAt = 0;
+function inviteIos() {
+  if (!svc.ble || bleOff || Date.now() - iosInvitedAt < 20000) return;
+  const on = new Set(iosSessions().map((s) => s.id));
+  for (const g of svc.ble.list()) {
+    if (g.os !== P.OS.IOS || on.has(g.id)) continue;
+    iosInvitedAt = Date.now();
+    svc.ble.invite(g.id);
+  }
+}
 function setupNet() {
   const { safeStorage } = require('electron');
   svc.ble = new BleHost({
     helper: svc.helper, server,
     info: () => ({ id: id.macId, name: id.macName.slice(0, 40), os: P.OS.MAC, port: server.port, fp: id.fp }),
     enabled: () => !bleOff && (settings.net.ble !== false || settings.net.blePc === true),
-    accept: (g) => (g.os === P.OS.ANDROID ? settings.net.ble !== false : settings.net.blePc === true), // General's two Bluetooth switches
+    accept: (g) => (P.isPhoneOs(g.os) ? settings.net.ble !== false : settings.net.blePc === true), // General's two Bluetooth switches
   });
   svc.ble.on('change', pushState);
   // PCs nearby that aren't on this network (not paired yet: they haven't connected to say hello).
@@ -774,7 +798,7 @@ function setupNet() {
     // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
     // blepolicy.js wifiQuiet): no advertising, its pipes and the session's Bluetooth fallback closed;
     // back as it was when the session ends.
-    const off = bleQuiet({ on: settings.net.bleWifiOff !== false, current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
+    const off = bleQuiet({ on: settings.net.bleWifiOff !== false && !iosNow(), current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
     if (off !== bleOff) {
       bleOff = off;
       console.log(`[ble] ${off ? 'off: the session is on the same Wi-Fi' : 'on again'}`);
@@ -782,6 +806,7 @@ function setupNet() {
       pushState();
     }
     svc.bleLook.look(settings.net.blePc === true && !peer.current);
+    inviteIos();
   }, 3000).unref();
   discovery.extra = {
     list: () => {
@@ -871,10 +896,10 @@ function setupNet() {
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
 function setupHub() {
   const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe;
-  peer.on('client', (ctx) => ctx.os === P.OS.ANDROID && !phoneHub && anyOn() && loadHub());
+  peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
-  peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
-  peer.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
+  peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
+  peer.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
 }
 
 let callwin = null;
@@ -905,7 +930,7 @@ function loadHub() {
   };
   hub.on('call', popup);
   hub.on('change', popup);
-  if (peer.current && peer.current.os === P.OS.ANDROID) hub.started();
+  if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
   return hub;
 }
 

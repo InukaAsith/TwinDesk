@@ -243,12 +243,12 @@ UI.tab({
         const rows = s.found.map((dev) => {
           const isKnown = known.has(dev.id);
           const online = dev.id === live;
-          const st = dev.os === 'android' ? null : rowState(s, dev, online); // a phone has its own card
+          const st = dev.os === 'android' || dev.os === 'ios' ? null : rowState(s, dev, online); // a phone has its own card
           const pairIt = () => go(dev, 'pair', () => api.pair(dev.id));
           // A Mac hosts; with a PC or another Linux computer the one who clicks is the guest (L4).
           // A phone is asked to pair.
           const btn = online || isKnown || (st && !st.fail) ? null
-            : UI.button(st ? t('Retry') : dev.os === 'mac' || dev.os === 'android' ? t('Pair') : t('Connect'), pairIt, 'small' + (dev.invited || st ? ' primary' : ''));
+            : UI.button(st ? t('Retry') : dev.os === 'mac' || dev.os === 'android' || dev.os === 'ios' ? t('Pair') : t('Connect'), pairIt, 'small' + (dev.invited || st ? ' primary' : ''));
           if (btn) btn.disabled = (busy && !st) || connected;
           // Paired: Take over (the computer we're a guest of: a takeover hello; one that connects to us:
           // invited, and its hello takes the session from whoever has it).

@@ -6,6 +6,7 @@
 
 UI.tab({
   id: 'cursor',
+  hidden: (s) => UI.isIphone(s), // iOS takes no mouse or keyboard from an app
   order: 20,
   title: 'Mouse',
   color: 'linear-gradient(#ffb340, #ff9500)',

@@ -202,7 +202,7 @@
   // Paired computers nearby, under the phones (shared/ui-look.js): click to connect.
   function renderPcs(s) {
     const near = new Set((s.found || []).map((d) => d.id));
-    const live = s.link && s.link.state === 'connected' && s.peer && s.peer.os !== 'android' ? s.peer.id : '';
+    const live = s.link && s.link.state === 'connected' && s.peer && s.peer.os !== 'android' && s.peer.os !== 'ios' ? s.peer.id : '';
     const all = [
       ...(s.paired ? [{ id: s.paired.macId, name: s.paired.macName, os: s.paired.os, go: () => api.connectAgain() }] : []),
       ...(s.guests || []).map((g) => ({ id: g.id, name: g.name, os: g.os, go: () => api.connectGuest(g.id) })),
@@ -210,7 +210,7 @@
     const seen = new Set();
     const list = [];
     for (const x of all) {
-      if (seen.has(x.id) || x.os === 'android') continue;
+      if (seen.has(x.id) || x.os === 'android' || x.os === 'ios') continue;
       seen.add(x.id);
       const connected = x.id === live;
       if (!connected && !near.has(x.id)) continue;

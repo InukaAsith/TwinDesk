@@ -36,7 +36,7 @@ function setupIpc(ctx) {
 
   const pairWith = (d) => {
     discovery.clearInvite(d.id);
-    if (d.os === P.OS.ANDROID) return ctx.connectPhoneDev(d); // a phone has no server to pair with
+    if (P.isPhoneOs(d.os)) return ctx.connectPhoneDev(d); // a phone has no server to pair with
     link.startPairing({ address: d.address, port: d.port, macName: d.name, id: d.id }); // id: one met over Bluetooth
   };
   handle('pair', (target) => {
@@ -80,7 +80,7 @@ function setupIpc(ctx) {
     if (typeof id !== 'string') return;
     const d = discovery.get(id) || discovery.near(id);
     if (!d) return;
-    if (d.os === P.OS.ANDROID) return ctx.connectPhoneDev(d);
+    if (P.isPhoneOs(d.os)) return ctx.connectPhoneDev(d);
     link.expect(id);
     discovery.invite(d.address);
   });

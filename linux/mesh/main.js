@@ -102,6 +102,7 @@ let quitting = false;
 let discovery = null;
 let autoJoin = null; // autojoin.js: introduces devices to each other (docs/mesh.md)
 let hub = null; // hub.js: every paired device (pooled features use its bus and mesh)
+let iosNet = null; // shared/iosnet.js: iPhones on a USB cable
 let links = null; // links.js: our guest links, one per host
 let mesh = null; // shared/mesh.js: the device registry and roster
 let link = null; // hub.facade: the SELECTED device, for every one-to-one feature
@@ -235,7 +236,7 @@ function start() {
     storage: { get: () => settings.layout, set: (l) => { settings.layout = l; saveSettings(); } },
     knownIds: () => hub.peers({ indirect: true }).map((p) => p.id), // with those known through a peer: one map everywhere
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
-    endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && s.peerOs === P.OS.ANDROID; },
+    endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
     legacyEdges: () => settings.kvm.edges, // settings from before the layout: once
     onChange: () => { if (kvm) kvm.layoutChanged(); pushState(); },
   });
@@ -442,9 +443,16 @@ function startPhone(server, pairing) {
   const adb = new Adb(); // one adb for every phone
   // A phone on a USB cable: pairing, the session, screen and sound through it (no Wi-Fi needed).
   wired = new Wired({ adb, raw: server, peer: pl, getId: () => device.id, getName: () => device.name,
-    hasPhone: () => pairing.list().some((x) => x.os === P.OS.ANDROID) });
+    hasPhone: () => pairing.list().some((x) => P.isPhoneOs(x.os)) });
   pairing.isWired = (nonce) => wired.knows(nonce);
   wired.on('change', pushState);
+  // An iPhone's or iPad's session through its USB cable (shared/iosnet.js: usbmuxd to the app's port):
+  // this server and the WebRTC relay (wired.js), nothing else.
+  iosNet = new (require('../../shared/iosnet.js').IosNet)({
+    getId: () => device.id, getName: () => device.name,
+    allowed: (port) => port === server.port || port === wired.turnPort,
+  });
+  iosNet.on('change', () => { if (iosNet.view.devices.some((d) => d.app)) wired.relay(); pushState(); });
   // Every phone gets its own stack (phone.js, phone-bridge.js, phoneview.js) made on a link scoped to it
   // (phones.js); `phone` is also the single-phone API for the active one.
   phone = new PhoneSet({
@@ -506,10 +514,10 @@ let callwin = null;
 function setupHub(pl) {
   phoneLink = pl;
   const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe;
-  pl.on('client', (ctx) => ctx.os === P.OS.ANDROID && !phoneHub && anyOn() && loadHub());
+  pl.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
-  pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
-  pl.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && ctx.os === P.OS.ANDROID && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
+  pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
+  pl.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
 }
 
 function loadHub() {
@@ -539,7 +547,7 @@ function loadHub() {
   };
   phoneHub.on('call', popup);
   phoneHub.on('change', popup);
-  if (phoneLink.current && phoneLink.current.os === P.OS.ANDROID) phoneHub.started();
+  if (phoneLink.current && P.isPhoneOs(phoneLink.current.os)) phoneHub.started();
   return phoneHub;
 }
 
@@ -639,6 +647,7 @@ function setupNet() {
     if (!(phone && phone.views && phone.views.list().length) && !pendingView) net.release('phone');
     if (!smb.mounted && !smbWait) net.release('smb');
     applyBle();
+    inviteIos();
   }, 2000);
   setInterval(lookForPhones, PHONE_LOOK_MS);
   const refresh = discovery.refresh.bind(discovery);
@@ -662,7 +671,7 @@ function bleNow() {
 
 // Who may come in through our advertising: a phone with phones on, a computer with computers on.
 function bleAccepts(os) {
-  return os === P.OS.ANDROID ? blePhonesOn() : blePcsOn();
+  return P.isPhoneOs(os) ? blePhonesOn() : blePcsOn();
 }
 
 function bleHostOn() {
@@ -671,12 +680,12 @@ function bleHostOn() {
   // phone connected over that same link to read who we are, and closing its side again made Android
   // drop the whole link, ours too: the phone's session went every few seconds to half a minute. It
   // asks for a pipe through our link (blp.want) without seeing us advertise.
-  const pc = !!bleHost && ([...bleHost.guests.values()].some((g) => g.os !== P.OS.ANDROID) || bleHost.pipes.size > 0);
+  const pc = !!bleHost && ([...bleHost.guests.values()].some((g) => !P.isPhoneOs(g.os)) || bleHost.pipes.size > 0);
   return !(blePhones && blePhones.links.size > 0 && !pc);
 }
 
 function applyBle() {
-  applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => !!net && net.onGroup }));
+  applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !iosNow(), current: () => link.current, onGroup: () => !!net && net.onGroup }));
   const p = bleNow();
   if (bleHost) bleHost.apply();
   if (bleOff) {
@@ -697,6 +706,23 @@ function applyBle() {
   }
 }
 
+// iPhones and iPads in a session: their Bluetooth link stays up beside the Wi-Fi (idle, no pipe), as
+// it's what wakes TwinDesk there when iOS suspends it, and what the session falls back to.
+const iosSessions = () => (hub ? hub.sessions.list().filter((s) => s.connected && s.peerOs === P.OS.IOS) : []);
+const iosNow = () => iosSessions().length > 0;
+
+// An iPhone or iPad linked over Bluetooth but not in a session (it links only to computers it's
+// paired with): invited now and then, which wakes TwinDesk there to come back (its Ble.swift).
+let iosInvitedAt = 0;
+function inviteIos() {
+  if (!bleHost || bleOff || Date.now() - iosInvitedAt < 20000) return;
+  const on = new Set(iosSessions().map((s) => s.id));
+  for (const g of bleHost.list()) {
+    if (g.os !== P.OS.IOS || on.has(g.id)) continue;
+    iosInvitedAt = Date.now();
+    bleHost.invite(g.id);
+  }
+}
 // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
 // blepolicy.js wifiQuiet): no advertising, scanning or links, its Bluetooth fallback closed with
 // them; back as it was when the session ends.
@@ -717,7 +743,7 @@ const PHONE_BURST_MS = 2000;
 function lookForPhones() {
   if (!blePhones || !blePhonesOn() || bleOff || !mainWin || mainWin.isDestroyed() || !mainWin.isVisible()) return;
   const c = link.current;
-  if (c && c.os === P.OS.ANDROID && c.transport === 'ble') return;
+  if (c && P.isPhoneOs(c.os) && c.transport === 'ble') return;
   blePhones.burst(PHONE_BURST_MS);
 }
 
@@ -900,7 +926,7 @@ function setupShows(miss) {
 // The selected device is a phone: its controls go with state.phone (as one to one).
 function selectedIsPhone() {
   const p = peerView();
-  return !!(p && p.os === P.OS.ANDROID);
+  return !!(p && P.isPhoneOs(p.os));
 }
 function meshPhoneCtl() {
   const v = devctl && selectedIsPhone() ? devctl.view : null;
@@ -1180,7 +1206,7 @@ function updateTray(s) {
     if (after) after();
     pushState();
   };
-  const kind = (os) => (os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'android' ? t('Phone') : 'PC');
+  const kind = (os) => (os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'ios' ? 'iPhone' : os === 'android' ? t('Phone') : 'PC');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
     t,
     connected,
@@ -1206,7 +1232,7 @@ function updateTray(s) {
     drag: { checked: settings.files.edgeDrag, set: (on) => set('files', { edgeDrag: on }, () => kvm.applyConfig()) },
     shortcuts: { label: t('Copy and Paste Files ({copy}, {paste})', { copy: CL.keysLabel(settings.files.copyKeys, 'linux'), paste: CL.keysLabel(settings.files.pasteKeys, 'linux') }), checked: settings.files.shortcuts, set: (on) => set('files', { shortcuts: on }, () => { kvm.applyConfig(); fileClip.apply(); }) },
     found: found.map((d) => ({ label: d.name + ' (' + kind(d.os) + ')', click: () => {
-      if (d.os === P.OS.ANDROID) return connectPhoneDev(d);
+      if (P.isPhoneOs(d.os)) return connectPhoneDev(d);
       discovery.clearInvite(d.id);
       link.startPairing({ address: d.address, port: d.port, macName: d.name, id: d.id });
       showMain();

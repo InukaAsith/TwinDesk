@@ -291,7 +291,7 @@ const UI = {
   peer(s) {
     const p = s && s.peer;
     const os = p ? p.os : 'win';
-    const KIND = { mac: 'Mac', win: 'PC', linux: 'Linux', android: I18n.t('Phone') };
+    const KIND = { mac: 'Mac', win: 'PC', linux: 'Linux', android: I18n.t('Phone'), ios: 'iPhone' };
     const same = os === 'win';
     // Device names everywhere: this PC by its own name,
     // the other computer by its name (or "the other computer" before anything was paired).
@@ -299,7 +299,7 @@ const UI = {
     const name = (p && p.name) || I18n.t('the other computer');
     const Name = name.charAt(0).toUpperCase() + name.slice(1);
     return {
-      os, same, me, name, Name, phone: os === 'android',
+      os, same, me, name, Name, phone: os === 'android' || os === 'ios', iphone: os === 'ios',
       kind: KIND[os],
       them: name, us: me, the: name, there: name, There: Name, // older templates
       toMe: name + ' → ' + me,
@@ -371,10 +371,12 @@ const UI = {
     return String(t).replace(/\{(\w+)\}/g, (m, k) => (k in p ? p[k] : m));
   },
 
-  isPhone: (s) => !!(s && s.session && s.session.os === 'android'),
+  isPhone: (s) => !!(s && s.session && (s.session.os === 'android' || s.session.os === 'ios')),
+  // An iPhone or iPad as the peer: no adb, no screen, input or apps from it (iOS lets no app give them).
+  isIphone: (s) => !!(s && s.session && s.session.os === 'ios'),
 
   // Small device glyph by OS: 'mac' | 'win' | 'linux' | 'android'.
-  osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' ? 'phone' : 'pc'),
+  osClass: (os) => (os === 'mac' ? 'mac' : os === 'android' || os === 'ios' ? 'phone' : 'pc'),
   // An app's icon in a grid: its own, else (none, or it doesn't load) TwinDesk's, light or dark as the appearance.
   appIcon(src) {
     const fallback = matchMedia('(prefers-color-scheme: dark)').matches ? 'assets/sidebar-icon@2x.png' : 'assets/sidebar-icon-light@2x.png';
@@ -383,7 +385,7 @@ const UI = {
     return img;
   },
   osIcon(os) {
-    return UI.el('span', { class: `os-ico ${UI.osClass(os)}`, attrs: { 'aria-label': os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'android' ? 'Phone' : 'PC' } });
+    return UI.el('span', { class: `os-ico ${UI.osClass(os)}`, attrs: { 'aria-label': os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'ios' ? 'iPhone' : os === 'android' ? 'Phone' : 'PC' } });
   },
 
   // Two equal direction cards, always Mac → PC then PC → Mac.

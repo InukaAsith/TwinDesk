@@ -14,7 +14,7 @@ const P = require('../../shared/protocol.js');
 const T = P.T;
 const CONNECT_WAIT_MS = 8000; // an invited phone that doesn't say hello by then isn't coming
 const str = (v, n = 200) => (typeof v === 'string' ? v.slice(0, n) : '');
-const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isPhone = (ctx) => !!ctx && P.isPhoneOs(ctx.os); // Android or iPhone
 
 class Phone extends EventEmitter {
   constructor({ server, raw, discovery, pairing }) {
@@ -32,7 +32,7 @@ class Phone extends EventEmitter {
     server.on('client', (ctx) => {
       if (!isPhone(ctx)) return this._reset();
       this._doneConnecting('');
-      this.server.sendToClient({ t: T.PHONE_APPS_LIST });
+      if (ctx.os === P.OS.ANDROID) this.server.sendToClient({ t: T.PHONE_APPS_LIST });
       this.emit('change');
     });
     server.on('closed', () => {
@@ -49,7 +49,7 @@ class Phone extends EventEmitter {
       this.info = {
         model: str(m.model, 80), maker: str(m.maker, 40), release: str(m.release, 20), sdk: m.sdk | 0,
         battery: Number.isFinite(m.battery) ? Math.max(0, Math.min(100, Math.round(m.battery))) : null,
-        charging: !!m.charging, colors, wallpaper, display,
+        charging: !!m.charging, colors, wallpaper, display, platform: str(m.platform, 10),
       };
       if (wallpaper !== ((prev && prev.wallpaper) || '')) this.assets++;
       this.emit('info', this.info);
@@ -79,17 +79,17 @@ class Phone extends EventEmitter {
 
   // Paired phones that discovery sees right now, plus the connected one.
   nearby() {
-    const paired = new Map(this.pairing.list().filter((p) => p.os === P.OS.ANDROID).map((p) => [p.id, p]));
+    const paired = new Map(this.pairing.list().filter((p) => P.isPhoneOs(p.os)).map((p) => [p.id, p]));
     const out = [];
     const c = this.server.current;
-    if (isPhone(c)) out.push({ id: c.deviceId, name: c.name, connected: true, usb: !!c.ice });
+    if (isPhone(c)) out.push({ id: c.deviceId, name: c.name, os: c.os, connected: true, usb: !!c.ice });
     // On the cable (it connected through it before): no Wi-Fi needed to show it.
     for (const id of this.wired ? this.wired.byDevice.keys() : []) {
-      if (paired.has(id) && !out.some((x) => x.id === id)) out.push({ id, name: paired.get(id).name, connected: false, usb: true });
+      if (paired.has(id) && !out.some((x) => x.id === id)) out.push({ id, name: paired.get(id).name, os: paired.get(id).os, connected: false, usb: true });
     }
     for (const d of this.discovery.list()) {
-      if (d.os !== P.OS.ANDROID || !paired.has(d.id) || out.some((x) => x.id === d.id)) continue;
-      out.push({ id: d.id, name: d.name || paired.get(d.id).name, address: d.address, connected: false });
+      if (!P.isPhoneOs(d.os) || !paired.has(d.id) || out.some((x) => x.id === d.id)) continue;
+      out.push({ id: d.id, name: d.name || paired.get(d.id).name, os: d.os, address: d.address, connected: false });
     }
     return out;
   }
@@ -104,7 +104,7 @@ class Phone extends EventEmitter {
       return this.emit('change');
     }
     const d = this.discovery.get(String(id)) || this.discovery.near(String(id)); // the network, else Bluetooth
-    if (!d || d.os !== P.OS.ANDROID) return this._fail('That phone isn’t nearby any more.');
+    if (!d || !P.isPhoneOs(d.os)) return this._fail('That phone isn’t nearby any more.');
     if (this.connected && this.server.current.deviceId === d.id) return;
     clearTimeout(this.connecting && this.connecting.timer);
     this.connecting = { id: d.id, name: d.name, timer: setTimeout(() => this._doneConnecting(`${d.name} didn’t answer. Open TwinDesk on it.`), CONNECT_WAIT_MS) };
@@ -150,7 +150,7 @@ class Phone extends EventEmitter {
     const c = this.server.current;
     return {
       nearby: this.nearby(),
-      connected: isPhone(c) ? { id: c.deviceId, name: c.name, rttMs: c.rttMs, usb: !!c.ice } : null,
+      connected: isPhone(c) ? { id: c.deviceId, name: c.name, os: c.os, rttMs: c.rttMs, usb: !!c.ice } : null,
       connecting: this.connecting ? { id: this.connecting.id, name: this.connecting.name } : null,
       message: this.message,
       info: this.info && { ...this.info, wallpaper: !!this.info.wallpaper },

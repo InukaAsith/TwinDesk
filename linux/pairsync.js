@@ -100,7 +100,7 @@ class PairSync {
 
   // The shared values with this peer: the phone-only ones only with a phone.
   _values() {
-    const phone = this.link.peerOs === P.OS.ANDROID;
+    const phone = P.isPhoneOs(this.link.peerOs);
     return Object.fromEntries(Object.entries(VALUES).filter(([, d]) => (phone || !d.phone) && (!d.feature || this.features[d.feature])));
   }
 

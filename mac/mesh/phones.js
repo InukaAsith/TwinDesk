@@ -19,7 +19,7 @@ const { Peer } = require('./peer.js');
 const { viewOf } = require('./hub.js');
 
 const CONNECT_WAIT_MS = 8000; // an invited phone that doesn't say hello by then isn't coming
-const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isPhone = (ctx) => !!ctx && P.isPhoneOs(ctx.os); // Android or iPhone
 
 // The phones connected to this Mac, as events and lookups: 'client' (ctx) when one says hello, 'closed' when
 // it goes, 't:<type>' (msg, ctx) for what a phone sends, ctxOf(id), all(), and scoped(id) for a link to one.
@@ -30,7 +30,7 @@ class PhoneDir extends EventEmitter {
     this.server = server;
     this.wired = new Set();
     hub.bus.onPeer('welcome', (id) => { const c = this.ctxOf(id); if (c) this.emit('client', c); });
-    hub.bus.onPeer('closed', (id) => { const s = hub.sessions.get(id); if (s && s.peerOs === P.OS.ANDROID) this.emit('closed', { deviceId: id }); });
+    hub.bus.onPeer('closed', (id) => { const s = hub.sessions.get(id); if (s && P.isPhoneOs(s.peerOs)) this.emit('closed', { deviceId: id }); });
     this.on('newListener', (ev) => {
       if (typeof ev !== 'string' || !ev.startsWith('t:') || this.wired.has(ev)) return;
       this.wired.add(ev);
@@ -43,12 +43,12 @@ class PhoneDir extends EventEmitter {
 
   ctxOf(id) {
     const s = id ? this.hub.sessions.get(id) : null;
-    if (!s || !s.connected || s.peerOs !== P.OS.ANDROID) return null;
+    if (!s || !s.connected || !P.isPhoneOs(s.peerOs)) return null;
     return viewOf(s);
   }
 
   all() {
-    return this.hub.sessions.list().filter((s) => s.connected && s.peerOs === P.OS.ANDROID).map((s) => this.ctxOf(s.id)).filter(Boolean);
+    return this.hub.sessions.list().filter((s) => s.connected && P.isPhoneOs(s.peerOs)).map((s) => this.ctxOf(s.id)).filter(Boolean);
   }
 
   scoped(id = null) {
@@ -174,18 +174,18 @@ class PhoneSet extends EventEmitter {
 
   // Connected phones, those on a cable, and paired ones discovery sees right now.
   nearby() {
-    const paired = new Map(this.pairing.list().filter((p) => p.os === P.OS.ANDROID).map((p) => [p.id, p]));
+    const paired = new Map(this.pairing.list().filter((p) => P.isPhoneOs(p.os)).map((p) => [p.id, p]));
     const out = [];
     for (const u of this.all) {
       const c = u.link.current;
-      if (c) out.push({ id: c.deviceId, name: c.name, connected: true, usb: !!c.ice });
+      if (c) out.push({ id: c.deviceId, name: c.name, os: c.os, connected: true, usb: !!c.ice });
     }
     for (const id of this.wired ? this.wired.byDevice.keys() : []) {
-      if (paired.has(id) && !out.some((x) => x.id === id)) out.push({ id, name: paired.get(id).name, connected: false, usb: true });
+      if (paired.has(id) && !out.some((x) => x.id === id)) out.push({ id, name: paired.get(id).name, os: paired.get(id).os, connected: false, usb: true });
     }
     for (const d of this.discovery.list()) {
-      if (d.os !== P.OS.ANDROID || !paired.has(d.id) || out.some((x) => x.id === d.id)) continue;
-      out.push({ id: d.id, name: d.name || paired.get(d.id).name, address: d.address, connected: false });
+      if (!P.isPhoneOs(d.os) || !paired.has(d.id) || out.some((x) => x.id === d.id)) continue;
+      out.push({ id: d.id, name: d.name || paired.get(d.id).name, os: d.os, address: d.address, connected: false });
     }
     return out;
   }
@@ -203,7 +203,7 @@ class PhoneSet extends EventEmitter {
       return this.emit('change');
     }
     const d = this.discovery.get(id);
-    if (!d || d.os !== P.OS.ANDROID) return this._fail('That phone isn’t nearby any more.');
+    if (!d || !P.isPhoneOs(d.os)) return this._fail('That phone isn’t nearby any more.');
     clearTimeout(this.connecting && this.connecting.timer);
     this.connecting = { id: d.id, name: d.name, timer: setTimeout(() => this._doneConnecting(`${d.name} didn’t answer. Open TwinDesk on it.`), CONNECT_WAIT_MS) };
     this.message = '';
@@ -242,7 +242,7 @@ class PhoneSet extends EventEmitter {
     return {
       ...v,
       nearby: this.nearby(),
-      connected: c ? { id: c.deviceId, name: c.name, rttMs: c.rttMs, usb: !!c.ice } : null,
+      connected: c ? { id: c.deviceId, name: c.name, os: c.os, rttMs: c.rttMs, usb: !!c.ice } : null,
       connecting: this.connecting ? { id: this.connecting.id, name: this.connecting.name } : null,
       message: this.message || v.message,
       activeId: c ? c.deviceId : null,

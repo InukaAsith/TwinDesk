@@ -12,7 +12,7 @@
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 
-const isAndroid = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isAndroid = (ctx) => !!ctx && P.isPhoneOs(ctx.os);
 
 class PhoneLink extends EventEmitter {
   // hub: hub.js (the sessions and the pooled bus); server: server.js (our host role).

@@ -16,7 +16,7 @@ const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 
 const CONNECT_WAIT_MS = 8000; // an invited phone that doesn't say hello by then isn't coming
-const isPhone = (ctx) => !!ctx && ctx.os === P.OS.ANDROID;
+const isPhone = (ctx) => !!ctx && P.isPhoneOs(ctx.os); // Android or iPhone
 
 class PhoneSet extends EventEmitter {
   // hub: hub.js; link: phone-link.js; make(scopedLink) -> { phone, bridge, views }; onUnit(unit) once per stack.
@@ -101,18 +101,18 @@ class PhoneSet extends EventEmitter {
 
   // Connected phones, those on a cable, and paired ones discovery sees right now.
   nearby() {
-    const paired = new Map(this.pairing.list().filter((p) => p.os === P.OS.ANDROID).map((p) => [p.id, p]));
+    const paired = new Map(this.pairing.list().filter((p) => P.isPhoneOs(p.os)).map((p) => [p.id, p]));
     const out = [];
     for (const u of this.all) {
       const c = u.link.current;
-      if (c) out.push({ id: c.deviceId, name: c.name, connected: true, usb: !!c.ice });
+      if (c) out.push({ id: c.deviceId, name: c.name, os: c.os, connected: true, usb: !!c.ice });
     }
     for (const id of this.wired ? this.wired.byDevice.keys() : []) {
-      if (paired.has(id) && !out.some((x) => x.id === id)) out.push({ id, name: paired.get(id).name, connected: false, usb: true });
+      if (paired.has(id) && !out.some((x) => x.id === id)) out.push({ id, name: paired.get(id).name, os: paired.get(id).os, connected: false, usb: true });
     }
     for (const d of this.discovery.list()) {
-      if (d.os !== P.OS.ANDROID || !paired.has(d.id) || out.some((x) => x.id === d.id)) continue;
-      out.push({ id: d.id, name: d.name || paired.get(d.id).name, address: d.address, connected: false });
+      if (!P.isPhoneOs(d.os) || !paired.has(d.id) || out.some((x) => x.id === d.id)) continue;
+      out.push({ id: d.id, name: d.name || paired.get(d.id).name, os: d.os, address: d.address, connected: false });
     }
     return out;
   }
@@ -130,7 +130,7 @@ class PhoneSet extends EventEmitter {
       return this.emit('change');
     }
     const d = this.discovery.get(id);
-    if (!d || d.os !== P.OS.ANDROID) return this._fail('That phone isn’t nearby any more.');
+    if (!d || !P.isPhoneOs(d.os)) return this._fail('That phone isn’t nearby any more.');
     clearTimeout(this.connecting && this.connecting.timer);
     this.connecting = { id: d.id, name: d.name, timer: setTimeout(() => this._doneConnecting(`${d.name} didn’t answer. Open TwinDesk on it.`), CONNECT_WAIT_MS) };
     this.message = '';
@@ -169,7 +169,7 @@ class PhoneSet extends EventEmitter {
     return {
       ...v,
       nearby: this.nearby(),
-      connected: c ? { id: c.deviceId, name: c.name, rttMs: c.rttMs, usb: !!c.ice } : null,
+      connected: c ? { id: c.deviceId, name: c.name, os: c.os, rttMs: c.rttMs, usb: !!c.ice } : null,
       connecting: this.connecting ? { id: this.connecting.id, name: this.connecting.name } : null,
       message: this.message || v.message,
       activeId: c ? c.deviceId : null,

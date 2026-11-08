@@ -130,7 +130,7 @@ class PcScreen {
     // Extend for a phone has the same size in points).
     // Windows takes no monitor with a side under 640 × 480 (a portrait phone's half is ~540 wide):
     // grown to a short side of at least 720, keeping the phone's shape.
-    if (this.link.peerOs === P.OS.ANDROID) {
+    if (P.isPhoneOs(this.link.peerOs)) {
       const [w, h] = [this.mac.width / 2, this.mac.height / 2];
       const k = Math.max(1, 720 / Math.min(w, h));
       return [Math.round((w * k) / 2) * 2, Math.round((h * k) / 2) * 2];
@@ -216,7 +216,7 @@ class PcScreen {
     }
     this._stopSend(true);
     // A phone over Wi-Fi: a high rate only fills the radio's queues (latency), it isn't sharper there.
-    const mbps = this.link.peerOs === P.OS.ANDROID ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
+    const mbps = P.isPhoneOs(this.link.peerOs) ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
     const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen' } });
     this.sending = { session, displayId: d.id, rect, key };
     this.stats = null;

@@ -74,8 +74,8 @@ class Server extends EventEmitter {
     let best = null;
     for (const c of this.clients.values()) {
       if (!best) best = c;
-      else if ((best.os === P.OS.ANDROID) !== (c.os === P.OS.ANDROID)) {
-        if (c.os !== P.OS.ANDROID) best = c;
+      else if ((P.isPhoneOs(best.os)) !== (P.isPhoneOs(c.os))) {
+        if (!P.isPhoneOs(c.os)) best = c;
       } else if (c.authSeq > best.authSeq) best = c;
     }
     return best;
@@ -322,7 +322,7 @@ class Server extends EventEmitter {
   // Disconnect a phone on purpose (ctx: its client; default every phone client).
   releasePhone(ctx = null) {
     for (const c of this.clients.values()) {
-      if (c.os !== P.OS.ANDROID || (ctx && c.deviceId !== ctx.deviceId)) continue;
+      if (!P.isPhoneOs(c.os) || (ctx && c.deviceId !== ctx.deviceId)) continue;
       c.released = true;
       this.fail(c, P.E.RELEASED, 'The Mac disconnected the phone');
       setTimeout(() => c.ws.terminate(), 1000); // an older phone app never answers the close

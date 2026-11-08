@@ -94,7 +94,7 @@ class Server extends EventEmitter {
     this.sockets.delete(ctx);
     if (this.current === ctx) {
       this.current = null;
-      if (ctx.os === P.OS.ANDROID && !ctx.released) this._phoneGrace(ctx.deviceId);
+      if (P.isPhoneOs(ctx.os) && !ctx.released) this._phoneGrace(ctx.deviceId);
     }
     this.emit('closed', ctx);
   }
@@ -232,7 +232,7 @@ class Server extends EventEmitter {
       old.released = true; // taken over: a phone gets no grace
       // A computer a phone took over from waits and comes back when the phone lets go (busy);
       // one a computer took over from stays away until someone connects it again (replaced).
-      if (os === P.OS.ANDROID && old.os !== P.OS.ANDROID) this.fail(old, P.E.BUSY, `In use by ${name}`);
+      if (P.isPhoneOs(os) && !P.isPhoneOs(old.os)) this.fail(old, P.E.BUSY, `In use by ${name}`);
       else this.fail(old, P.E.REPLACED, old.deviceId === deviceId ? 'Another connection from this device replaced this one' : `${name} took over`);
     }
     ctx.authed = true;
@@ -254,7 +254,7 @@ class Server extends EventEmitter {
 
   // A phone holds the session (or just dropped it and may resume): computers are refused.
   phoneHolds() {
-    if (this.current && this.current.os === P.OS.ANDROID) return true;
+    if (this.current && P.isPhoneOs(this.current.os)) return true;
     return !!this.phoneGrace && Date.now() < this.phoneGrace.until;
   }
 

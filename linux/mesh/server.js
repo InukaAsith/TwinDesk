@@ -75,8 +75,8 @@ class Server extends EventEmitter {
     let best = null;
     for (const c of this.clients.values()) {
       if (!best) best = c;
-      else if ((best.os === P.OS.ANDROID) !== (c.os === P.OS.ANDROID)) {
-        if (c.os !== P.OS.ANDROID) best = c;
+      else if ((P.isPhoneOs(best.os)) !== (P.isPhoneOs(c.os))) {
+        if (!P.isPhoneOs(c.os)) best = c;
       } else if (c.authSeq > best.authSeq) best = c;
     }
     return best;
@@ -328,7 +328,7 @@ class Server extends EventEmitter {
 
   // Disconnect a phone on purpose (ctx: its client; default the primary client, when it is a phone).
   releasePhone(ctx = this.current) {
-    if (ctx && ctx.os === P.OS.ANDROID) {
+    if (ctx && P.isPhoneOs(ctx.os)) {
       ctx.released = true;
       this.fail(ctx, P.E.RELEASED, 'The computer disconnected the phone');
       setTimeout(() => ctx.ws.terminate(), 1000); // an older phone app never answers the close

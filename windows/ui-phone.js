@@ -126,17 +126,22 @@ UI.tab({
       const info = ph.info || {};
       const br = ph.bridge || { state: 'off' };
       for (const x of [hero, viaCard, adbCard, appsCard, winCard, optsCard]) x.hidden = !c;
+      // An iPhone: its card (name, battery, Disconnect) only; no adb, screen, apps or input from iOS.
+      const ios = !!(c && c.os === 'ios');
+      if (ios) for (const x of [viaCard, adbCard, appsCard, winCard, optsCard, rezume.el, wifiBtn, hotspotBtn]) x.hidden = true;
+      if (ios) showBtn.disabled = false; // it asks the phone to share (Share Screen there)
       notConnected.set(c ? '' : ph.nearby && ph.nearby.length ? I18n.t('Click the phone above Overview to connect it.') : I18n.t('No phone connected. Open TwinDesk on the phone and pair it from Overview › Nearby.'));
       if (!c) return;
 
       h1.textContent = c.name;
-      desc.textContent = [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `Android ${info.release}`].filter(Boolean).join(' · ');
+      desc.textContent = [info.maker && info.model ? `${info.maker} ${info.model}` : info.model, info.release && `${ios ? (info.platform === 'ipados' ? 'iPadOS' : 'iOS') : 'Android'} ${info.release}`].filter(Boolean).join(' · ');
       name.textContent = c.name;
       sub.textContent = [c.usb ? I18n.t('USB cable') : '', c.rttMs != null ? `${c.rttMs} ms` : I18n.t('Connected'), info.battery != null ? I18n.t(info.charging ? 'Battery {percent}%, charging' : 'Battery {percent}%', { percent: info.battery }) : ''].filter(Boolean).join(' · ');
       if (UI.phoneWall) dev.style.setProperty('--phone-wall', UI.phoneWall);
       else if (info.colors && info.colors.length) dev.style.setProperty('--phone-wall', `linear-gradient(160deg, ${info.colors.join(', ')}${info.colors.length === 1 ? `, ${info.colors[0]}` : ''})`);
       else dev.style.removeProperty('--phone-wall');
 
+      if (ios) return;
       const ready = br.state === 'ready';
       showBtn.disabled = !ready;
       const n = s.net || {};

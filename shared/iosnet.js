@@ -1,9 +1,10 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// An iPhone's or iPad's session through its USB cable (ios/TwinDesk/Core/Usb.swift there). macOS's
-// usbmuxd (the way Finder, Xcode and QuickTime reach a cabled, trusted device) connects to a TCP
-// port on the device; nothing like `adb reverse` goes the other way. So this keeps a few
+// An iPhone's or iPad's session through its USB cable (ios/TwinDesk/Core/Usb.swift there). usbmuxd
+// (the way Finder, Xcode and QuickTime reach a cabled, trusted device: macOS's own, Apple Mobile
+// Device Service on Windows on TCP 127.0.0.1:27015, the usbmuxd package on Linux) connects to a
+// TCP port on the device; nothing like `adb reverse` goes the other way. So this keeps a few
 // connections open to the app's port (47820) on every iOS device on a cable, each greeted with
-// this Mac's id and name; when the app wants one of this Mac's ports it writes "OPEN <port>" on one
+// this computer's id and name; when the app wants one of this computer's ports it writes "OPEN <port>" on one
 // and this joins it to 127.0.0.1:<port> here (the session's server, the relay for WebRTC, the
 // files engine: allowed() says which), and opens another to wait. To the server the session comes
 // from 127.0.0.1, as an Android phone's through adb does: wired, its WebRTC through the relay.
@@ -17,7 +18,7 @@
 const net = require('net');
 const { EventEmitter } = require('events');
 
-const SOCK = '/var/run/usbmuxd';
+const SOCK = process.platform === 'win32' ? { host: '127.0.0.1', port: 27015 } : '/var/run/usbmuxd';
 const APP_PORT = 47820;
 const POOL = 3; // connections kept waiting per device
 const RETRY_MS = 4000;
@@ -107,7 +108,7 @@ class Mux extends EventEmitter {
 }
 
 class IosNet extends EventEmitter {
-  // getId / getName: this Mac's; allowed(port): whether the app may reach that port here.
+  // getId / getName: this computer's; allowed(port): whether the app may reach that port here.
   constructor({ getId, getName, allowed }) {
     super();
     Object.assign(this, { getId, getName, allowed });

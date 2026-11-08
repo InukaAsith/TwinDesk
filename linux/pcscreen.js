@@ -170,7 +170,7 @@ class PcScreen {
     // A phone tells its pixels: a monitor half that size, so text is readable there (the Mac's
     // Extend for a phone has the same size in points).
     const even = (v, min) => Math.max(min, Math.round(v / 4) * 2);
-    if (this.link.peerOs === P.OS.ANDROID) return [even(this.mac.width, 480), even(this.mac.height, 360)];
+    if (P.isPhoneOs(this.link.peerOs)) return [even(this.mac.width, 480), even(this.mac.height, 360)];
     return [this.mac.width, this.mac.height];
   }
 
@@ -266,7 +266,7 @@ class PcScreen {
     if (!this.mode || this.mode === 'off' || !this.mac.accept) { if (audio) loopback.release(); return; }
     this._stopSend(true);
     // A phone over Wi-Fi: a high rate only fills the radio's queues (latency), it isn't sharper there.
-    const mbps = this.link.peerOs === P.OS.ANDROID ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
+    const mbps = P.isPhoneOs(this.link.peerOs) ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
     const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: false, audioLabel: audio, offer: { kind: 'screen' } });
     this.live = false;
     this.sending = { session, displayId: d.id, rect, key, loop: !!audio };

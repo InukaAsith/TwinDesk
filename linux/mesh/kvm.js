@@ -656,7 +656,7 @@ class Kvm {
   // device it reached sees the input come in through the side opposite to the one it left by.
   _onNext(m, from) {
     if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route || this.keyboardOnly || this.locked) return;
-    if (this._peerOs(from) === P.OS.ANDROID) return; // a phone has no edges of its own: it ends a chain
+    if (P.isPhoneOs(this._peerOs(from))) return; // a phone has no edges of its own: it ends a chain
     const side = E.SIDES.includes(m.side) ? m.side : null;
     const to = typeof m.to === 'string' ? m.to : '';
     if (!side || !to || to === from || to === this.hub.device.id) return;
