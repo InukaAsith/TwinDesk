@@ -2,7 +2,7 @@
 // Bluetooth LE and Wi-Fi Direct commands (Ble.cs, Wfd.cs), for a device that isn't on this PC's
 // network. Handled on the reader thread, not the main one: the session's bytes go through here and
 // the hooks on the main thread never wait for them; bleSend keeps its order.
-//   Host (this PC hosts the session): bleStart {info}, bleStop, bleSend {dev, data}, bleCtrl {dev, msg}
+//   Host (this PC hosts the session): bleStart {info}, bleStop, bleHold, bleSend {dev, data}, bleCtrl {dev, msg}
 //     events ble.state, ble.guest, ble.open, ble.data, ble.close, ble.gone, ble.sent
 //   Guest (this PC connects to a host): bleScan {on}, bleOpen {dev, hello}, bleSend, bleClose {dev}
 //     events ble.state, ble.found {dev, info}, ble.invite, ble.opened, ble.data, ble.close, ble.gone, ble.sent
@@ -91,6 +91,7 @@ namespace MacShare
                         Async(id, async () => { await host.Start(info); return null; });
                         break;
                     case "bleStop": host.Stop(); Reply(id, null); break;
+                    case "bleHold": host.Hold(); Reply(id, null); break;
                     case "bleCtrl": host.Ctrl(dev, Json.Str(m, "msg", "{}")); break;
                     case "bleSend":
                         byte[] data = Convert.FromBase64String(Json.Str(m, "data", ""));

@@ -456,6 +456,8 @@ async function startHost(guest, tries = 0) {
       info: () => ({ id: device.id, name: device.name.slice(0, 40), os: P.OS.LINUX, port: server.port, fp: id.fp }),
       enabled: () => bleHostOn(),
       accept: (g) => bleAccepts(g.os),
+      // Quiet on Wi-Fi with an iPhone or iPad in the session or linked: its link stays (the helper's bleHold).
+      hold: () => blePhonesOn() && (iosNow() || bleHost.list().some((g) => g.os === P.OS.IOS)),
     });
     bleHost.on('change', pushState);
     discovery.extras.unshift(bleHost);
@@ -925,7 +927,7 @@ function bleHostOn() {
 }
 
 function applyBle() {
-  applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !iosNow(), current: () => link.current, onGroup: () => !!net && net.onGroup }));
+  applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => !!net && net.onGroup }));
   const p = bleNow();
   if (bleHost) bleHost.apply();
   if (bleOff) {
@@ -946,8 +948,7 @@ function applyBle() {
   }
 }
 
-// An iPhone or iPad as the session: its Bluetooth link stays up beside the Wi-Fi (idle, no pipe), as
-// it's what wakes TwinDesk there when iOS suspends it, and what the session falls back to.
+// An iPhone or iPad as the session (its Bluetooth link is held through quiet: BleHost hold).
 const iosNow = () => !!link.current && link.current.os === P.OS.IOS;
 
 // No session, and an iPhone or iPad linked over Bluetooth (it links only to computers it's paired

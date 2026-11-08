@@ -39,6 +39,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var usb = Usb(self)
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
+    lazy var mic = Mic(self)
     lazy var peer = Peer(self) // Connect with Android: its own link, beside the computer's
 
     // Published copies for the UI (main thread).
@@ -65,7 +66,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh(); DispatchQueue.main.async { self.offBle(); self.ble.start() } }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn]
+        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic]
         link.bleRx = { [unowned self] in self.ble.lastDown }
     }
 
@@ -85,6 +86,10 @@ final class Core: ObservableObject, LinkEvents {
     func wake() {
         start()
         discovery.refresh()
+        // Back in front after the session went onto Bluetooth (backgrounded): onto the cable or the network again.
+        if link.viaBle, link.connected, let h = link.host {
+            if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { offBle() }
+        }
         if link.state == "idle", link.pair == nil, let id = store.lastHostId, let h = store.host(id),
            store.flag("autoConnect", true) {
             if usb.computerId == id { connectWired(h) } else { connect(h) }
@@ -143,6 +148,18 @@ final class Core: ObservableObject, LinkEvents {
         if link.host?.id == id && (link.state == "connected" || link.state == "connecting") { return }
         if link.connected { return }
         connect(h)
+    }
+
+    // Off the screen, iOS's own way (no location or silent audio keeping the app running): the session
+    // moves onto the Bluetooth link, which iOS keeps while TwinDesk is suspended and wakes it for each
+    // thing that comes on it (bluetooth-central), the computer's pings included, so the session lives
+    // on. Not while the backups keep the app running (the network stays), the microphone is recording
+    // (iOS keeps it running) or the screen is shared.
+    func backgrounded() {
+        guard Background.shared.enabled, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
+              !Background.shared.active, !mic.running, !mirror.sharing else { return }
+        NSLog("TwinDesk: off screen: the session onto Bluetooth")
+        connectBle(h)
     }
 
     // On Bluetooth and the computer showed up on the network: the session moves back to it.

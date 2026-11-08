@@ -64,6 +64,7 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
         }
         c.start(queue: .main)
         sharing = true
+        Background.shared.apply() // the app stays up while it relays the screen
         read(c)
         core.changed()
         if !core.connected {
@@ -109,6 +110,7 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     private func extGone() {
         guard sharing else { return }
         sharing = false
+        Background.shared.apply()
         ext?.cancel()
         ext = nil
         size = nil

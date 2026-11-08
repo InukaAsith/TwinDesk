@@ -3,7 +3,9 @@
 // computer's network; the same commands and events as windows-helper's Ble.cs:
 //   host:   a GATT application that advertises the TwinDesk service. A guest reads INFO, says
 //           hello on CTRL, opens a pipe and writes UP; we notify DOWN. Commands bleStart {info},
-//           bleStop, bleCtrl {dev, msg}, bleSend {dev, data}; events ble.state, ble.guest,
+//           bleStop, bleHold (no advertising, the service and the guests linked now kept; advertising
+//           comes back while none is left, so an iPhone can find us again; bleStart after it picks
+//           up as it was), bleCtrl {dev, msg}, bleSend {dev, data}; events ble.state, ble.guest,
 //           ble.open, ble.data, ble.close, ble.gone, ble.invite, ble.sent.
 //   guest:  scan for the service, read INFO, open a pipe to a host. bleScan {on}, bleOpen {dev,
 //           hello}, bleSend, bleClose {dev}; events ble.found, ble.opened, ble.data, ble.close,
@@ -887,6 +889,8 @@ static char *info; // INFO's value
 static int notifying[C_N];
 static guint reg_ids[2 + C_N + 1]; // the application, the service, its characteristics, the advertisement
 static gboolean registered, advertising, host_wanted; // wanted: bleStart until bleStop
+static gboolean holding; // bleHold: quiet, the links kept
+static void adv_set(int on);
 static char host_state[16] = "off";
 
 static void host_state_set(const char *s) {
@@ -954,6 +958,7 @@ static Guest *guest_of(const char *dev, int mtu) {
     g->mtu = 23;
     g_hash_table_insert(guests, g_strdup(dev), g);
     g_thread_unref(g_thread_new("ble-guest", guest_run, g));
+    if (holding) adv_set(0); // found again: quiet once more
   }
   if (mtu > 0) g->mtu = mtu;
   return g;
@@ -1045,7 +1050,7 @@ static void method(GDBusConnection *c, const char *sender, const char *path, con
   }
   if (!strcmp(iface, "org.bluez.LEAdvertisement1")) { // Release: BlueZ dropped it
     advertising = FALSE;
-    host_state_set("off");
+    if (!holding) host_state_set("off");
     g_dbus_method_invocation_return_value(inv, NULL);
     return;
   }
@@ -1162,6 +1167,7 @@ static void host_stop(void) {
     g_dbus_connection_call(bus, "org.bluez", adapter, "org.bluez.GattManager1", "UnregisterApplication",
                            g_variant_new("(o)", APP), NULL, G_DBUS_CALL_FLAGS_NONE, 5000, NULL, NULL, NULL);
   starting = FALSE;
+  holding = FALSE;
   advertising = registered = FALSE;
   for (size_t i = 0; i < G_N_ELEMENTS(reg_ids); i++) {
     if (reg_ids[i]) g_dbus_connection_unregister_object(bus, reg_ids[i]);
@@ -1223,6 +1229,7 @@ static void host_start(const char *inf, double id) {
   char *was = info;
   info = g_strdup(inf ? inf : "{}");
   g_free(was);
+  if (registered && holding && !starting) { holding = FALSE; adv_set(1); reply(id, NULL); return; } // back from bleHold: links stay
   if ((registered && advertising) || starting) { reply(id, NULL); return; } // a new name: INFO says it from now on
   host_stop();
   const char *why = no_radio();
@@ -1251,6 +1258,43 @@ static void host_start(const char *inf, double id) {
                          CALL_MS, NULL, app_done, GINT_TO_POINTER(host_gen));
 }
 
+// Advertising alone on or off (bleHold), the service and its guests left as they are.
+static void adv_on_done(GObject *src, GAsyncResult *res, gpointer gen) {
+  GError *e = NULL;
+  GVariant *r = g_dbus_connection_call_finish(G_DBUS_CONNECTION(src), res, &e);
+  if (r) g_variant_unref(r);
+  if (GPOINTER_TO_INT(gen) != host_gen) { if (e) g_error_free(e); return; }
+  if (e) { fprintf(stderr, "[ble] advertise: %s\n", e->message); g_error_free(e); return; }
+  advertising = TRUE;
+  host_state_set("on");
+}
+
+static void adv_set(int on) {
+  if (!registered || starting) return;
+  if (on && !advertising) {
+    advertising = TRUE; // asked: not twice
+    GVariantBuilder b;
+    g_variant_builder_init(&b, G_VARIANT_TYPE("a{sv}"));
+    g_dbus_connection_call(bus, "org.bluez", adapter, "org.bluez.LEAdvertisingManager1", "RegisterAdvertisement",
+                           g_variant_new("(o@a{sv})", ADV_PATH, g_variant_builder_end(&b)), NULL, G_DBUS_CALL_FLAGS_NONE,
+                           CALL_MS, NULL, adv_on_done, GINT_TO_POINTER(host_gen));
+  } else if (!on && advertising) {
+    advertising = FALSE;
+    g_dbus_connection_call(bus, "org.bluez", adapter, "org.bluez.LEAdvertisingManager1", "UnregisterAdvertisement",
+                           g_variant_new("(o)", ADV_PATH), NULL, G_DBUS_CALL_FLAGS_NONE, 5000, NULL, NULL, NULL);
+  }
+}
+
+// bleHold: quiet, but linked guests stay; with none, advertising stays so one can come back.
+static void host_hold(void) {
+  if (!registered || starting) return;
+  holding = TRUE;
+  g_mutex_lock(&mu);
+  int any = g_hash_table_size(guests) > 0;
+  g_mutex_unlock(&mu);
+  adv_set(!any);
+}
+
 // ---- signals ----
 
 static void gone(const char *dev) {
@@ -1260,6 +1304,7 @@ static void gone(const char *dev) {
     guest_end(g);
     g_hash_table_remove(guests, dev);
     event("ble.gone", dev, NULL, NULL, 0);
+    if (holding && g_hash_table_size(guests) == 0) adv_set(1); // its link dropped: it can find us again
   }
   Scanner *scs[2] = { &guest, &phones };
   for (int i = 0; i < 2; i++) {
@@ -1345,6 +1390,8 @@ static void command(char *line) {
   } else if (!strcmp(cmd, "bleStop")) {
     host_wanted = FALSE;
     host_stop();
+  } else if (!strcmp(cmd, "bleHold")) {
+    host_hold();
   }
   else if (!strcmp(cmd, "bleCtrl")) {
     const char *m = jstr(c, "msg", "{}");

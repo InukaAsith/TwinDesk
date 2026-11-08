@@ -38,6 +38,14 @@
         : m.error && /microphone/i.test(m.error) && !m.sending ? m.error
           : !m.peerAccepts ? t('Turned off on {device}', { device })
             : m.sending ? t('In use on {device}', { device }) : t('Connecting…'));
+      if (phone && UI.isIphone && UI.isIphone(s)) { // its app captures it (phone.mic.want)
+        const im = ((s.phone || {}).bridge || {}).iosMic || {};
+        const where = m.linux ? t('Apps here pick “TwinDesk Microphone”') : t('Plays into a virtual audio cable (VB-CABLE, BlackHole) when one is installed, else the speakers');
+        recvRow.setHint(!a.micReceive ? where
+          : im.error ? im.error
+            : im.on ? t('Live: {where}', { where }) : t('Open TwinDesk on {device} to start its microphone', { device }));
+        return;
+      }
       if (phone) {
         const ready = ((s.phone || {}).bridge || {}).state === 'ready';
         recvRow.setHint(!ready ? t('Needs wireless debugging (Phone page) and Android 11 or later')

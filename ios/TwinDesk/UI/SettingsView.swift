@@ -27,14 +27,15 @@ struct SettingsView: View {
 
                 SectionTitle(text: "Background")
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "Stay connected", detail: "Keeps the session while TwinDesk isn’t on screen", on: bg("bg.on"))
+                    ToggleRow(title: "Stay connected", detail: "Off screen, the session moves onto Bluetooth, the way iOS allows", on: bg("bg.on"))
                     Divider()
-                    ToggleRow(title: "Use location", detail: locationDetail, on: bg("bg.location"))
+                    Text("Backups").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    ToggleRow(title: "Use location", detail: locationDetail, on: bg("bg.location", false))
                     Divider()
-                    ToggleRow(title: "Use silent audio", detail: "Plays silence alongside your music", on: bg("bg.audio"))
+                    ToggleRow(title: "Use silent audio", detail: "Plays silence alongside your music", on: bg("bg.audio", false))
                     Divider()
                     ToggleRow(title: "Reconnect on its own", detail: "To the last computer, when TwinDesk wakes", on: flag("autoConnect"))
-                    Text("Either keeps TwinDesk running; both is the most reliable. Each uses some battery.").font(.caption).foregroundStyle(.secondary)
+                    Text("Bluetooth needs no backup. Turn one on if the computer has no Bluetooth, or to keep Wi-Fi speed with TwinDesk off screen. Each uses some battery.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
 
@@ -163,8 +164,8 @@ struct SettingsView: View {
         }
     }
 
-    private func bg(_ k: String) -> Binding<Bool> {
-        Binding(get: { _ = core.tick; return core.store.flag(k, true) }, set: { Background.shared.set(k, $0) })
+    private func bg(_ k: String, _ def: Bool = true) -> Binding<Bool> {
+        Binding(get: { _ = core.tick; return core.store.flag(k, def) }, set: { Background.shared.set(k, $0) })
     }
 
     private func flag(_ k: String) -> Binding<Bool> {

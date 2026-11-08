@@ -47,6 +47,13 @@ namespace MacShare
         long upTicket, upNext = 1;
         readonly SortedDictionary<long, KeyValuePair<string, byte[]>> upDone = new SortedDictionary<long, KeyValuePair<string, byte[]>>();
         string lastState = "";
+        // bleHold (the session on Wi-Fi, an iPhone linked): no advertising, the service and the linked
+        // guests kept; advertising comes back while none is left. If a link drops right after going
+        // quiet, this PC's Bluetooth takes the service down with the advertising: advertising stays on.
+        bool holding, holdBroken;
+        string infoNow = "";
+        GattServiceProviderAdvertisingParameters adParams;
+        DateTime quietAt = DateTime.MinValue;
 
         void State(string s)
         {
@@ -57,6 +64,14 @@ namespace MacShare
 
         public async Task Start(string info)
         {
+            GattServiceProvider held = provider;
+            if (held != null && holding && info == infoNow)
+            {
+                holding = false; // back from bleHold: the links stay
+                Advertise(true);
+                State("on");
+                return;
+            }
             Stop();
             BluetoothAdapter a = await BluetoothAdapter.GetDefaultAsync();
             if (a == null) { State("unsupported"); throw new Exception("no Bluetooth"); }
@@ -103,12 +118,36 @@ namespace MacShare
             ctrl = c;
             down = d;
             provider = p;
+            infoNow = info;
+            adParams = ap;
             p.StartAdvertising(ap);
             State("on");
         }
 
+        void Advertise(bool on)
+        {
+            GattServiceProvider p = provider;
+            if (p == null) return;
+            try
+            {
+                bool now = p.AdvertisementStatus == GattServiceProviderAdvertisementStatus.Started
+                    || p.AdvertisementStatus == GattServiceProviderAdvertisementStatus.StartedWithoutAllAdvertisementData;
+                if (on && !now) p.StartAdvertising(adParams);
+                else if (!on && now) { quietAt = DateTime.UtcNow; p.StopAdvertising(); }
+            }
+            catch (Exception) { }
+        }
+
+        public void Hold()
+        {
+            if (provider == null) return;
+            holding = true;
+            Advertise(clients.IsEmpty || holdBroken);
+        }
+
         public void Stop()
         {
+            holding = false;
             GattServiceProvider p = provider;
             provider = null;
             if (p != null) try { p.StopAdvertising(); } catch (Exception) { }
@@ -147,6 +186,7 @@ namespace MacShare
                 now.Add(dev);
                 clients[dev] = c;
             }
+            if (holding && now.Count > 0 && !holdBroken) Advertise(false); // found again: quiet once more
             foreach (string dev in new List<string>(clients.Keys))
             {
                 if (now.Contains(dev)) continue;
@@ -155,6 +195,11 @@ namespace MacShare
                 Sender s;
                 if (senders.TryRemove(dev, out s)) s.Stop();
                 Net.Event("ble.gone", dev, null, null);
+            }
+            if (holding && clients.IsEmpty)
+            {
+                if ((DateTime.UtcNow - quietAt).TotalSeconds < 5) holdBroken = true; // went with the advertising
+                Advertise(true); // its link dropped: it can find us again
             }
         }
 

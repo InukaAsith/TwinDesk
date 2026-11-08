@@ -1,10 +1,10 @@
 name: Build iOS
 
 # An unsigned IPA for sideloading (SideStore, AltStore, or any signing tool signs it with your Apple
-# ID when it installs it). Runs by itself on pushes to the iOS branch, or by hand.
+# ID when it installs it). Runs by itself on pushes to main (and the old iOS branch), or by hand.
 on:
   push:
-    branches: [ios-native]
+    branches: [main, ios-native]
     paths: ['ios/**', 'android/app/src/main/assets/web/**', '.github/workflows/build-ios.yml']
   workflow_dispatch:
     inputs:
@@ -15,7 +15,7 @@ on:
       ref:
         description: Branch to build.
         required: false
-        default: ios-native
+        default: main
 
 permissions:
   contents: write

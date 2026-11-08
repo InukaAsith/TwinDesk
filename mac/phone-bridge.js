@@ -150,6 +150,15 @@ class PhoneBridge extends EventEmitter {
       this.emit('change');
     });
     server.on(`t:${T.PHONE_SOUND}`, (m, ctx) => isPhone(ctx) && this.netSound.asked && this.views && this.views.netAudio(m));
+    // An iPhone's microphone (its app captures it, phone.mic.want): into the same window kind as Android's.
+    this.iosMic = { asked: false, on: false, error: '' };
+    server.on(`t:${T.PHONE_MIC}`, (m, ctx) => ctx && ctx.os === P.OS.IOS && this.views && this.views.netMicAudio(m));
+    server.on(`t:${T.PHONE_MIC_STATE}`, (m, ctx) => {
+      if (!ctx || ctx.os !== P.OS.IOS) return;
+      Object.assign(this.iosMic, { on: m.on === true, error: typeof m.error === 'string' ? m.error.slice(0, 200) : '' });
+      this.emit('change');
+    });
+    server.on('client', () => Object.assign(this.iosMic, { asked: false, on: false, error: '' }));
     server.on('client', () => { soundReset(); this._sound(); });
     server.on('closed', () => { if (!isPhone(server.current)) soundReset(); this._sound(); });
     server.on('transport', () => this._sound());
@@ -158,6 +167,7 @@ class PhoneBridge extends EventEmitter {
 
   get view() {
     return {
+      iosMic: this.iosMic, // an iPhone's microphone: {asked, on, error}
       state: this.state, message: this.message, serial: this.serial, available: this.adb.available, canPair: this.canPair, inputBlocked: this.inputBlocked,
       via: this.via, // 'usb' | 'wifi' | null: how adb reaches the phone
       input: this.inputVia, inputMode: this.inputMode, // the mouse and keyboard: what they go through now, and the choice
@@ -243,6 +253,14 @@ class PhoneBridge extends EventEmitter {
     this.views.sound(want && adb && !net);
     const audio = this.getSettings().audio || {};
     this.views.mic(isPhone(c) && adb && !!audio.micReceive, audio.micOut || ''); // the phone's microphone, here
+    const iosMic = !!c && c.os === P.OS.IOS && c.transport !== 'ble' && !!audio.micReceive;
+    this.views.netMic(iosMic, audio.micOut || '');
+    if (iosMic !== this.iosMic.asked) {
+      this.iosMic.asked = iosMic;
+      if (!iosMic) Object.assign(this.iosMic, { on: false, error: '' });
+      if (c && c.os === P.OS.IOS) this.server.sendToClient({ t: T.PHONE_MIC_WANT, on: iosMic });
+      this.emit('change');
+    }
     if (net !== this.netSound.asked) {
       this.netSound.asked = net;
       if (!net) Object.assign(this.netSound, { on: false, waiting: false, error: '' });

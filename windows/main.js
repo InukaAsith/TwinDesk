@@ -476,6 +476,8 @@ async function startHost(guest) {
       info: () => ({ id: device.id, name: device.name.slice(0, 40), os: P.OS.WIN, port: server.port, fp: id.fp }),
       enabled: () => !bleOff && (settings.net.ble || settings.net.blePc),
       accept: (g) => (P.isPhoneOs(g.os) ? settings.net.ble : settings.net.blePc), // General's two Bluetooth switches
+      // Quiet on Wi-Fi with an iPhone or iPad in the session or linked: its link stays (the helper's bleHold).
+      hold: () => settings.net.ble && (iosNow() || bleHost.list().some((g) => g.os === P.OS.IOS)),
     });
     bleHost.on('change', pushState);
     discovery.extras.unshift(bleHost);
@@ -900,7 +902,7 @@ function setupNet(guest) {
     if (!peerApps.view().open && !screen.watching()) net.release('apps');
     if (phoneViews && !phoneViews.list().length && !pendingView) net.release('phone');
     if (!smb.drive && !smbWait) net.release('smb');
-    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !iosNow(), current: () => link.current, onGroup: () => net.onGroup }));
+    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => net.onGroup }));
     inviteIos();
     const near = link.snapshot().link.state !== 'connected' && !link.hosting && !bleOff;
     bleGuest.scan(near && settings.net.blePc); // looking for a host only while there's no session
@@ -908,8 +910,7 @@ function setupNet(guest) {
   }, 2000);
 }
 
-// An iPhone or iPad as the session: its Bluetooth link stays up beside the Wi-Fi (idle, no pipe), as
-// it's what wakes TwinDesk there when iOS suspends it, and what the session falls back to.
+// An iPhone or iPad as the session (its Bluetooth link is held through quiet: BleHost hold).
 const iosNow = () => !!link.current && link.current.os === P.OS.IOS;
 
 // No session, and an iPhone or iPad linked over Bluetooth (it links only to computers it's paired
@@ -933,7 +934,7 @@ function applyQuiet(off) {
     console.log(`[ble] ${off ? 'off: the session is on the same Wi-Fi' : 'on again'}`);
     if (bleHost) bleHost.apply();
     pushState();
-  }
+  } else if (off && bleHost) bleHost.apply(); // an iPhone linked or gone while quiet: held or stopped
   if (!off) return;
   if (bleGuest) bleGuest.drop();
   if (blePhones) blePhones.stop();

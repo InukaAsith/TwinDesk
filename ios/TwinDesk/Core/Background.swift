@@ -1,7 +1,9 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Staying connected with TwinDesk in the background. iOS suspends an app a few seconds after it
-// leaves the screen, which ends the session. Two ways to keep running, each a switch in Settings ›
-// Background (both on by default while connected):
+// leaves the screen, which would end the session. iOS's own way comes first: the session moves onto
+// the Bluetooth link (Core.backgrounded), which iOS keeps and wakes the app for. The microphone,
+// once recording, keeps going on its own (Mic). Two backups keep the whole app running instead, each
+// a switch in Settings › Background, off unless turned on:
 //
 //  • Location: continuous updates at the lowest accuracy (cell and Wi-Fi only, no GPS) with the blue
 //    pill in the status bar. iOS 17+ needs only While Using (CLBackgroundActivitySession); iOS 16
@@ -9,7 +11,9 @@
 //  • Silent audio: a silent sound playing, mixed with others (your music isn't stopped). A phone
 //    call or another app taking the audio pauses it; we start it again when it's over.
 //
-// Both cost some battery. They run only while a computer is paired and "Stay connected" is on.
+// Both cost some battery. They run only while a computer is paired and "Stay connected" is on. While
+// the screen is shared (the broadcast extension sends through the app), the silent audio runs for
+// that time only: iOS keeps an extension, not the app it sends through.
 import Foundation
 import CoreLocation
 import AVFoundation
@@ -27,8 +31,10 @@ final class Background: NSObject, CLLocationManagerDelegate {
     private let store = Store.shared
 
     var enabled: Bool { store.flag("bg.on", true) }
-    var useLocation: Bool { store.flag("bg.location", true) }
-    var useAudio: Bool { store.flag("bg.audio", true) }
+    var useLocation: Bool { store.flag("bg.location", false) }
+    var useAudio: Bool { store.flag("bg.audio", false) }
+    // Mic is recording: the audio session is its (play and record); ours only adds to it.
+    var recording = false
     var active: Bool { locating || engine?.isRunning == true }
     // The computer's music on the Lock Screen (PcMedia): our sound doesn't mix with others then,
     // which is what makes iOS show our Now Playing.
@@ -53,8 +59,9 @@ final class Background: NSObject, CLLocationManagerDelegate {
     // On while there's a computer to stay with; off otherwise.
     func apply() {
         let want = enabled && !store.hosts().isEmpty
+        let sharing = Core.shared.mirror.sharing // the screen shared: the app relays it, so it stays up meanwhile
         if want && useLocation { startLocation() } else { stopLocation() }
-        if want && (useAudio || nowPlaying) { startAudio() } else { stopAudio() }
+        if want && (useAudio || nowPlaying || sharing) { startAudio() } else { stopAudio() }
         Core.shared.changed()
     }
 
@@ -78,6 +85,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
             bgTask = UIApplication.shared.beginBackgroundTask(withName: "TwinDesk") { [weak self] in self?.endTask() }
         }
         apply()
+        Core.shared.backgrounded() // iOS's own way: onto Bluetooth (when the backups aren't keeping us up)
         DispatchQueue.main.asyncAfter(deadline: .now() + 20) { self.endTask() }
     }
 
@@ -130,8 +138,10 @@ final class Background: NSObject, CLLocationManagerDelegate {
         if engine?.isRunning == true { return }
         do {
             let s = AVAudioSession.sharedInstance()
-            try s.setCategory(.playback, mode: .default, options: nowPlaying ? [] : [.mixWithOthers])
-            try s.setActive(true)
+            if !recording { // the microphone's play-and-record session takes our silence as it is
+                try s.setCategory(.playback, mode: .default, options: nowPlaying ? [] : [.mixWithOthers])
+                try s.setActive(true)
+            }
             let e = AVAudioEngine()
             let p = AVAudioPlayerNode()
             let fmt = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
@@ -155,7 +165,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
         engine?.stop()
         player = nil
         engine = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        if !recording { try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation]) }
     }
 
     @objc private func interrupted(_ n: Notification) {

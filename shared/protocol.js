@@ -241,6 +241,9 @@
       PHONE_SOUND_WANT: 'phone.sound.want', // computer->phone {on}: its sound here without wireless debugging (playback capture, Start on the phone), while adb can't carry it
       PHONE_SOUND: 'phone.sound', // phone->computer {codec: 'opus'|'pcm', p: [base64]}: 20 ms each (Opus packets, or 48 kHz stereo s16le)
       PHONE_SOUND_STATE: 'phone.sound.state', // phone->computer {on, waiting (for Start on the phone), error, codec}
+      PHONE_MIC_WANT: 'phone.mic.want', // computer->phone {on}: its microphone here (an iPhone's app captures it; Android's goes through adb)
+      PHONE_MIC: 'phone.mic', // phone->computer {codec: 'pcm', p: [base64]}: 48 kHz stereo s16le, 20 ms each
+      PHONE_MIC_STATE: 'phone.mic.state', // phone->computer {on, error}
       // The phone's screen without wireless debugging (shared/nativescreen.js, Mirror.kt): the phone
       // captures it itself (one Start on the phone for the screen and its sound) and sends H.264 over
       // HTTPS to the session's port (POST /twindesk/mirror, header x-twindesk-mirror: key), in
