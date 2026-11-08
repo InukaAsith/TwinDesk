@@ -15,7 +15,8 @@
 //   camera's picture shows), o.fileClip {offerLocal(paths, from)} (the file-paste shortcut), o.t (i18n),
 //   o.share → {view() → {on, busy, error, folder, name, user}, set(on), choose(folder)} (AirPlay & SMB's
 //   shared folder; pcShare(smb) makes it, and smbInfo, from windows/smb.js or linux/smb.js),
-//   o.airplay → shared/airplay/viewer.js's host (Receive AirPlay, settings.web.airplay) or null.
+//   o.airplay → shared/airplay/viewer.js's host (Receive AirPlay, settings.web.airplay; its switches
+//   airplayMusic, airplaySound, airplayFull, which the host reads with opts()) or null.
 // Returns {hub, view(), actions}: actions are the window's ipc calls (all named web*).
 'use strict';
 
@@ -216,6 +217,19 @@ function startWeb(o) {
       if (typeof a.mute === 'boolean') e.setMute(a.mute);
       o.pushState();
     },
+    // Music from an app: 'toggle' | 'next' | 'prev' (back to the sender) | 'stop'.
+    // iPhone over USB (Windows): 'start' | 'setup' (the driver filter, once) | 'stop'.
+    webIosUsb(a) { return o.airplay && o.airplay.usb ? o.airplay.usb(String(a)) : null; },
+    webAirplayCtl(a) { return o.airplay && o.airplay.ctl ? o.airplay.ctl(String(a)) : false; },
+    // AirPlay & SMB's switches: music from apps, the sound here, the mirror full screen.
+    webAirplayOpt(v) {
+      if (!o.airplay || !v || typeof v !== 'object') return;
+      const c = cfg();
+      for (const [k, key] of [['music', 'airplayMusic'], ['sound', 'airplaySound'], ['full', 'airplayFull']]) if (typeof v[k] === 'boolean') c[key] = v[k];
+      o.save();
+      if (o.airplay.options) o.airplay.options();
+      o.pushState();
+    },
     webCopy(text) { if (typeof text === 'string') require('electron').clipboard.writeText(text.slice(0, 1 << 20)); },
   };
 
@@ -224,7 +238,7 @@ function startWeb(o) {
     view() {
       const v = hub.view();
       const c = cfg();
-      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, audio: o.capture.engines ? { engines: o.capture.engines.list(), engine: o.capture.engines.get(), mute: !!o.capture.engines.mute(), restart: !!(o.capture.engines.restart && o.capture.engines.restart()) } : null, share: o.share ? o.share.view() : null, airplay: o.airplay ? o.airplay.view() : null };
+      return { ...v, cfg: { on: !!c.on, port: hub.port, screen: c.screen !== false, control: c.control !== false, camera: c.camera !== false, mic: c.mic !== false }, extend: !!(o.extend && o.extend.can()), displays: displaysList(), media: media ? media.state() : null, remote: remote ? remote.view : null, audio: o.capture.engines ? { engines: o.capture.engines.list(), engine: o.capture.engines.get(), mute: !!o.capture.engines.mute(), restart: !!(o.capture.engines.restart && o.capture.engines.restart()) } : null, share: o.share ? o.share.view() : null, airplay: o.airplay ? { ...o.airplay.view(), music: c.airplayMusic !== false, sound: c.airplaySound !== false, full: c.airplayFull === true } : null };
     },
     shutdown() {
       try { hub.stop(); } catch (_) {}

@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('airplay', {
   on: (fn) => ipcRenderer.on('airplay:in', (_e, m) => fn(m)),
   ready: () => ipcRenderer.send('airplay:ready'),
   size: (w, h) => ipcRenderer.send('airplay:size', { w, h }),
+  control: (cmd) => ipcRenderer.send('airplay:control', String(cmd)), // 'full' | 'stop'
 });

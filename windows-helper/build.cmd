@@ -56,5 +56,7 @@ rem The input lane in the helper (native/tdfast, Lane.cs): tdfast.dll per archit
 call "%~dp0tdfast.cmd"
 rem The virtual camera (windows/vcam.js), C++: built when Visual Studio's C++ tools are there.
 call "%~dp0vcam\build.cmd" || exit /b 1
+rem An iPhone's screen over USB (shared/iosusb): its own small .exe, started only while mirroring.
+call "%~dp0iosusb\build.cmd" || exit /b 1
 rem Real gamepad (windows/gamepad.js: Remote), C++ likewise.
 call "%~dp0pad\build.cmd" || exit /b 1

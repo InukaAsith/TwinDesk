@@ -8,7 +8,7 @@
 #include "helper.h"
 #include <math.h>
 
-#define STROKE 40.0
+#define STROKE 80.0
 #define REVERSALS 4
 #define WINDOW_MS 800.0
 #define GAP_MS 200.0

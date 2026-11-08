@@ -16,9 +16,12 @@
 // (NTP-like timing port); frames are shown as they come, so the times only matter to the sender.
 //
 // new AirPlayReceiver({name, dir, display: {width, height, fps}}); .start() → Promise; .stop();
-//   .view() → {on, error, port, session: {id, name, model, ip, since} | null}; .end() (stop mirroring)
+//   .view() → {on, error, port, session: {id, name, model, ip, since, mirroring} | null}; .end() (stop mirroring)
+//   .allowMusic: false refuses music-only senders (AirPlay to a speaker), true by default
 // Events: 'session' (info) | 'config' ({avcC, codec, width, height}) | 'frame' ({data, key, ts})
-//   | 'audio' ({ct (8: AAC-ELD, mirroring's), spf, data (one access unit), seq, ts}) | 'volume' (dB, -144 muted)
+//   | 'audio' ({ct (2: ALAC, music's; 4: AAC-LC; 8: AAC-ELD, mirroring's), spf, data (one access unit), seq, ts})
+//   | 'volume' (dB, -144 muted) | 'meta' ({title, artist, album}) | 'art' ({data, type} | null)
+//   | 'progress' ({position, duration} seconds) | 'flush' (paused or moved: the sound starts over)
 //   | 'end' | 'change'
 'use strict';
 
@@ -35,14 +38,18 @@ const { Advertiser } = require('./advertise.js');
 
 const SOURCE_VERSION = '220.68';
 const MODEL = 'AppleTV3,2';
-// UxPlay's feature bits (screen mirroring, FairPlay, legacy pairing, RAOP audio; no AirPlay video URLs).
-const FEATURES_LO = 0x5a7ffee6;
+// UxPlay's feature bits (screen mirroring, FairPlay, RAOP audio; no AirPlay video URLs). Bit 27,
+// "supports legacy pairing", is off as in UxPlay since 1.65 (uxplay.cpp, without -pin): the sender
+// then goes straight to /fp-setup and the FairPlay key is used unhashed. A sender that pairs anyway
+// still can (/pair-setup, /pair-verify below, and the key hashed with the secret).
+const FEATURES_LO = 0x527ffee6;
 const FEATURES_HI = 0x0;
 const FEATURES = `0x${FEATURES_LO.toString(16).toUpperCase()},0x${FEATURES_HI.toString(16).toUpperCase()}`;
 const MAX_BODY = 1 << 20;
 const DISPLAY_UUID = 'e0ff8a27-6738-3d56-8a16-cc53aacee925';
 
-const u64 = (v) => (typeof v === 'bigint' ? BigInt.asUintN(64, v) : BigInt(Math.trunc(Number(v) || 0))).toString();
+// streamConnectionID as UxPlay prints it (%llu): a plist int is signed, the key wants it unsigned.
+const u64 = (v) => BigInt.asUintN(64, typeof v === 'bigint' ? v : BigInt(Math.trunc(Number(v) || 0))).toString();
 const ntpNow = () => {
   const ms = Date.now();
   const b = Buffer.alloc(8);
@@ -62,6 +69,26 @@ function hasIdr(buf) {
   return false;
 }
 
+// The track an app sends (SET_PARAMETER, application/x-dmap-tagged): DMAP items, 4-byte tag and
+// length; mlit holds minm (title), asar (artist), asal (album).
+function dmapMeta(buf) {
+  const out = { title: '', artist: '', album: '' };
+  const walk = (b, depth) => {
+    for (let i = 0; i + 8 <= b.length;) {
+      const tag = b.toString('latin1', i, i + 4);
+      const n = b.readUInt32BE(i + 4);
+      const v = b.subarray(i + 8, i + 8 + n);
+      if (tag === 'mlit' && depth < 4) walk(v, depth + 1);
+      else if (tag === 'minm') out.title = v.toString('utf8').slice(0, 200);
+      else if (tag === 'asar') out.artist = v.toString('utf8').slice(0, 200);
+      else if (tag === 'asal') out.album = v.toString('utf8').slice(0, 200);
+      i += 8 + n;
+    }
+  };
+  try { walk(buf, 0); } catch (_) {}
+  return out;
+}
+
 class Session extends EventEmitter {
   constructor(rx, sock) {
     super();
@@ -77,6 +104,7 @@ class Session extends EventEmitter {
     this.mirror = null; // {server, sock}
     this.audio = null; // {data, control}
     this.timing = null;
+    this.dacp = null; // {id, remote}: the sender's remote control (music)
     this.buf = Buffer.alloc(0);
     sock.on('data', (d) => this._data(d));
     sock.on('error', () => {});
@@ -97,6 +125,7 @@ class Session extends EventEmitter {
       if (this.buf.length < end + 4 + len) return;
       const body = this.buf.subarray(end + 4, end + 4 + len);
       this.buf = this.buf.subarray(end + 4 + len);
+      if (method !== 'POST' || !/feedback/.test(uri || '')) this.rx._trace(`${this.ip} ${method} ${uri} (${len} bytes)`);
       try {
         this._request({ method, uri, proto: proto || 'RTSP/1.0', headers, body: Buffer.from(body) });
       } catch (e) {
@@ -127,10 +156,12 @@ class Session extends EventEmitter {
     if (method === 'POST' && p === '/pair-setup') return this._reply(req, 200, this.pairing.setup(body), 'application/octet-stream');
     if (method === 'POST' && p === '/pair-verify') {
       const r = this.pairing.verify(body);
+      if (!r) console.warn('[airplay] pair-verify refused from', this.ip);
       return r ? this._reply(req, 200, r, 'application/octet-stream') : this._reply(req, 470);
     }
     if (method === 'POST' && p === '/fp-setup') {
       const r = this.fp.setup(body);
+      if (!r) console.warn('[airplay] fp-setup refused from', this.ip, `(${body.length} bytes, mode ${body[14]})`);
       return r ? this._reply(req, 200, r, 'application/octet-stream') : this._reply(req, 400);
     }
     if (method === 'OPTIONS') return this._reply(req, 200, null, '', { Public: 'SETUP, RECORD, PAUSE, FLUSH, TEARDOWN, OPTIONS, GET_PARAMETER, SET_PARAMETER, ANNOUNCE' });
@@ -142,14 +173,31 @@ class Session extends EventEmitter {
       const want = body.toString('utf8');
       return this._reply(req, 200, /volume/.test(want) ? 'volume: 0.000000\r\n' : '', 'text/parameters');
     }
+    // Music from an app: who to send Play/Pause to (DACP, dacp.js), on every request.
+    if (req.headers['dacp-id'] && req.headers['active-remote']) this.dacp = { id: req.headers['dacp-id'], remote: req.headers['active-remote'] };
     if (method === 'SET_PARAMETER') {
-      const v = /volume:\s*(-?[\d.]+)/.exec(body.toString('utf8'));
-      if (v) this.rx.emit('volume', Number(v[1]));
+      const type = (req.headers['content-type'] || '').toLowerCase();
+      if (/^image\//.test(type)) this.rx.emit('art', body.length ? { data: body, type } : null);
+      else if (/dmap/.test(type)) this.rx.emit('meta', dmapMeta(body));
+      else {
+        const text = body.toString('utf8');
+        const v = /volume:\s*(-?[\d.]+)/.exec(text);
+        if (v) this.rx.emit('volume', Number(v[1]));
+        // progress: start/now/end, in samples (44.1 kHz) of the RTP clock
+        const pr = /progress:\s*(\d+)\/(\d+)\/(\d+)/.exec(text);
+        if (pr) {
+          const [a, b, c] = pr.slice(1).map(Number);
+          const d = (x) => ((x - a) >>> 0) / 44100;
+          this.rx.emit('progress', { position: d(b), duration: d(c) });
+        }
+      }
       return this._reply(req, 200);
     }
-    if (method === 'FLUSH' || method === 'ANNOUNCE') return this._reply(req, 200);
+    if (method === 'FLUSH') { this.rx.emit('flush'); return this._reply(req, 200); }
+    if (method === 'ANNOUNCE') return this._reply(req, 200);
     if (method === 'TEARDOWN') return this._teardown(req);
     if (method === 'POST' && (p === '/feedback' || p === '/command' || p === '/audioMode')) return this._reply(req, 200);
+    console.warn('[airplay] not handled:', method, uri);
     return this._reply(req, 404);
   }
 
@@ -157,8 +205,13 @@ class Session extends EventEmitter {
     const rx = this.rx;
     let q = null;
     try { q = req.body.length ? bplist.parse(req.body) : null; } catch (_) {}
-    if (q && Array.isArray(q.qualifier) && q.qualifier.includes('txtAirPlay')) {
-      return this._plist(req, { txtAirPlay: require('./advertise.js').txtData(rx.airplayTxt()) });
+    // UxPlay raop_handler_info: a request with a plist body asks for one TXT record, and gets only that.
+    if (/x-apple-binary-plist/.test(req.headers['content-type'] || '')) {
+      const want = q && Array.isArray(q.qualifier) ? q.qualifier[0] : '';
+      const { txtData } = require('./advertise.js');
+      if (want === 'txtAirPlay') return this._plist(req, { txtAirPlay: txtData(rx.airplayTxt()) });
+      if (want === 'txtRAOP') return this._plist(req, { txtRAOP: txtData(rx.raopTxt()) });
+      return this._plist(req, {});
     }
     const d = rx.display;
     const fmt = (type) => ({ type, audioInputFormats: 0x3fffffc, audioOutputFormats: 0x3fffffc });
@@ -174,6 +227,7 @@ class Session extends EventEmitter {
       sourceVersion: SOURCE_VERSION,
       statusFlags: 68,
       vv: 2,
+      initialVolume: { real: 0 },
       keepAliveLowPower: true,
       keepAliveSendStatsAsBody: true,
       audioFormats: [fmt(100), fmt(101)],
@@ -181,7 +235,7 @@ class Session extends EventEmitter {
       displays: [{
         uuid: DISPLAY_UUID, widthPhysical: 0, heightPhysical: 0,
         width: d.width, height: d.height, widthPixels: d.width, heightPixels: d.height,
-        rotation: false, refreshRate: { real: d.fps }, maxFPS: d.fps, overscanned: false, features: 14,
+        rotation: false, refreshRate: { real: 1 / d.fps }, maxFPS: d.fps, // refreshRate: the period, as UxPlay and an Apple TV give it overscanned: false, features: 14,
       }],
     });
   }
@@ -190,11 +244,15 @@ class Session extends EventEmitter {
     const s = bplist.parse(req.body);
     const out = {};
     if (Buffer.isBuffer(s.ekey) && Buffer.isBuffer(s.eiv)) {
+      const mirroring = s.isScreenMirroringSession === true;
+      // Music from an app (AirPlay to a speaker): only when allowed (AirPlay settings › Music).
+      if (!mirroring && !this.rx.allowMusic) { console.log('[airplay] music from', this.ip, 'refused (turned off)'); return this._reply(req, 453); }
       let key = this.fp.decrypt(s.ekey);
       if (this.pairing.secret) key = sha512(key, this.pairing.secret).subarray(0, 16);
+      console.log(`[airplay] ${String(s.name || 'a device')} (${String(s.model || '?')}, ${this.ip}) starts mirroring${this.pairing.secret ? ' (paired)' : ''}`);
       this.key = key;
       this.iv = Buffer.from(s.eiv.subarray(0, 16));
-      this.info = { id: this.id, name: String(s.name || 'iPhone').slice(0, 80), model: String(s.model || '').slice(0, 40), ip: this.ip, since: Date.now() };
+      this.info = { id: this.id, name: String(s.name || 'iPhone').slice(0, 80), model: String(s.model || '').slice(0, 40), ip: this.ip, since: Date.now(), mirroring };
       this.rx._claim(this);
       out.eventPort = 0;
       out.timingPort = await this._timing(Number(s.timingPort) || 0);
@@ -363,11 +421,12 @@ class AirPlayReceiver extends EventEmitter {
     this.error = '';
     this.conns = new Set();
     this.active = null; // the Session that mirrors now
+    this.allowMusic = o.allowMusic !== false;
   }
 
   airplayTxt() {
     return {
-      deviceid: this.identity.id, features: FEATURES, flags: '0x4', model: MODEL,
+      deviceid: this.identity.id, features: FEATURES, pw: 'false', flags: '0x4', model: MODEL,
       pk: this.identity.pk.toString('hex'), pi: this.identity.pi, srcvers: SOURCE_VERSION, vv: '2',
     };
   }
@@ -442,9 +501,15 @@ class AirPlayReceiver extends EventEmitter {
     this.emit('change');
   }
 
+  // Each request, into the log, for the first few of a connection: enough to see where a sender stops.
+  _trace(line) {
+    this.traced = (this.traced || 0) + 1;
+    if (this.traced <= 400) console.log('[airplay]', line);
+  }
+
   view() {
     return { on: !!this.server, error: this.error, port: this.port, name: this.name, session: this.active ? this.active.info : null };
   }
 }
 
-module.exports = { AirPlayReceiver };
+module.exports = { AirPlayReceiver, dmapMeta };

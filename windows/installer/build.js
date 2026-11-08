@@ -63,7 +63,7 @@ async function main() {
   copy(WIN, path.join(STAGE, 'windows'), (name) => !SKIP.has(name));
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
-  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'playfair.wasm' || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver
+  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'iosusb' || name === 'playfair.wasm' || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver; iosusb: an iPhone over USB
   // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
   // phone app's viewer and remote it reuses (android-web/).
   copy(path.join(ROOT, 'web'), path.join(STAGE, 'web'), (name) => name !== 'shortcuts-src');
@@ -94,6 +94,10 @@ async function main() {
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', a, 'tdfast.dll'));
     else console.log('note: no windows-helper/bin/' + a + '/tdfast.dll — the input lane stays in Node there (build the helper with cargo)');
   }
+  // AirPlay & SMB › iPhone over USB (shared/iosusb): the bridge to the phone's screen capture, C#.
+  const iosusb = path.join(ROOT, 'windows-helper', 'bin', 'twindesk-iosusb.exe');
+  if (fs.existsSync(iosusb)) copy(iosusb, path.join(STAGE, 'windows-helper', 'bin', 'twindesk-iosusb.exe'));
+  else console.log('note: no windows-helper/bin/twindesk-iosusb.exe — no iPhone over USB (build the helper on Windows)');
   // Remote › Real gamepad (gamepad.js): the Xbox 360 controller's feeder, likewise C++.
   const pad = path.join(ROOT, 'windows-helper', 'bin', 'twindesk-pad.exe');
   if (fs.existsSync(pad)) copy(pad, path.join(STAGE, 'windows-helper', 'bin', 'twindesk-pad.exe'));

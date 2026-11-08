@@ -88,3 +88,23 @@
 .web-qs .dv-qs-label > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .web-qs .dv-qs-state { font-weight: 400; color: var(--muted); opacity: 1; }
 .web-qs .dv-qs-tile:not(.on) .dv-qs-label > span:first-child { color: var(--muted); }
+
+/* Receive screen with a Mac: mirror it with AirPlay (UI.airplayMacTip, shared/ui-web.js) */
+.apt { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.apt-pic { flex: 0 0 240px; max-width: 42%; }
+.apt-pic svg { display: block; width: 100%; height: auto; }
+.apt-dev { fill: none; stroke: color-mix(in srgb, var(--text) 70%, var(--card)); stroke-width: 2.2; stroke-linejoin: round; }
+.apt-scr { fill: color-mix(in srgb, var(--accent) 22%, var(--card)); }
+.apt-scr.on { fill: color-mix(in srgb, var(--accent) 34%, var(--card)); }
+.apt-bar { fill: color-mix(in srgb, var(--text) 16%, transparent); }
+.apt-dock { fill: color-mix(in srgb, var(--text) 22%, transparent); }
+.apt-ap path { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.apt-ap path.fill { fill: var(--accent); stroke: none; }
+.apt-wave { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; opacity: 0; }
+.apt-body { flex: 1; min-width: 0; }
+.apt-head { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.apt-steps { margin: 4px 0 6px; font-size: 12.5px; }
+.apt-state { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.apt-state.on { color: var(--text); }
+.apt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (max-width: 620px) { .apt { flex-direction: column; align-items: stretch; } .apt-pic { max-width: 100%; flex-basis: auto; } }

@@ -113,6 +113,87 @@
     },
   });
 
+  // ---------------------------------------------------------------- Mac → this computer with AirPlay
+  // On Receive screen while the other computer is a Mac (a PC or Linux computer here): the Mac can show
+  // its screen here by itself, from its own Screen Mirroring, while Receive AirPlay is on (AirPlay &
+  // SMB, shared/airplay). A picture of it, the steps, and a button that turns the receiver on.
+  // Hide is remembered on this computer. UI.airplayMacTip() → {el, update(state)}.
+  UI.airplayMacTip = () => {
+    const KEY = 'twindesk.airplayMacTip.hidden';
+    let gone = false;
+    try { gone = localStorage.getItem(KEY) === '1'; } catch (_) {}
+    const pic = el('div', { class: 'apt-pic', attrs: { 'aria-hidden': 'true' } });
+    // The Mac (left) mirrors to this computer (right): the AirPlay sign between, waves going across.
+    const rep = 'repeatCount="indefinite"';
+    const wave = (d) => `<path class="apt-wave" d="M188 88q12 -12 24 0">`
+      + `<animate attributeName="opacity" values="0;1;0" dur="1.8s" begin="${d}s" ${rep}/>`
+      + `<animateTransform attributeName="transform" type="translate" values="-30 0;30 0" dur="1.8s" begin="${d}s" ${rep}/></path>`;
+    pic.innerHTML = '<svg viewBox="0 0 400 150">'
+      // the Mac: a laptop with a menu bar and a dock
+      + '<rect class="apt-dev" x="40" y="34" width="118" height="76" rx="7"/>'
+      + '<rect class="apt-scr" x="46" y="40" width="106" height="64" rx="3"/>'
+      + '<rect class="apt-bar" x="46" y="40" width="106" height="6"/>'
+      + '<rect class="apt-dock" x="76" y="96" width="46" height="5" rx="2.5"/>'
+      + '<path class="apt-dev" d="M26 112h146l-9 10H35z"/>'
+      // this computer: a monitor showing the same screen
+      + '<rect class="apt-dev" x="236" y="26" width="132" height="84" rx="7"/>'
+      + '<rect class="apt-scr on" x="242" y="32" width="120" height="72" rx="3"/>'
+      + '<rect class="apt-bar" x="242" y="32" width="120" height="6"/>'
+      + '<rect class="apt-dock" x="278" y="96" width="48" height="5" rx="2.5"/>'
+      + '<rect class="apt-dev" x="295" y="110" width="14" height="12"/>'
+      + '<rect class="apt-dev" x="278" y="122" width="48" height="6" rx="3"/>'
+      // AirPlay: a screen with a triangle at its foot
+      + '<g class="apt-ap"><path d="M190 66h-4a3 3 0 0 1-3-3V45a3 3 0 0 1 3-3h28a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3h-4"/>'
+      + '<path class="fill" d="M200 58l9 11h-18z"/></g>'
+      + wave(0) + wave(0.6) + wave(1.2)
+      + '</svg>';
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const svg = pic.firstChild;
+      if (svg && svg.pauseAnimations) svg.pauseAnimations();
+    }
+    const head = el('div', { class: 'apt-head', text: tr('Mirror the Mac with AirPlay, no app needed') });
+    const steps = el('ol', { class: 'web-steps apt-steps' });
+    const state = el('div', { class: 'apt-state' });
+    const onBtn = UI.button(tr('Turn on Receive AirPlay'), () => api().webAirplaySet(true), 'small primary');
+    const setBtn = UI.button(tr('AirPlay settings'), () => UI.go('airplay'), 'small');
+    let card = null;
+    const hide = UI.button(tr('Hide'), () => {
+      gone = true;
+      try { localStorage.setItem(KEY, '1'); } catch (_) {}
+      card.hidden = true;
+    }, 'small');
+    card = el('div', { class: 'card apt', hidden: true }, [
+      pic,
+      el('div', { class: 'apt-body' }, [head, steps, state, el('div', { class: 'apt-actions' }, [onBtn, setBtn, hide])]),
+    ]);
+    let key = '';
+    return {
+      el: card,
+      update(s) {
+        const a = W(s).airplay;
+        const peer = s && s.peer;
+        card.hidden = gone || !a || !peer || peer.os !== 'mac';
+        if (card.hidden) return;
+        const name = a.name || me(s);
+        const mac = peer.name || tr('the Mac');
+        const live = a.session && a.session.mirroring !== false ? a.session.name : '';
+        const k = [name, mac, !!a.on, live].join('|');
+        if (k === key) return;
+        key = k;
+        steps.replaceChildren(
+          el('li', { text: tr('On {mac}, open Control Center (top right of the menu bar) and click Screen Mirroring.', { mac }) }),
+          el('li', { text: tr('Pick {name}. The Mac’s screen and its sound show in a window here.', { name }) }),
+          el('li', { text: tr('Or choose Use As Separate Display there, for a second screen. Over Wi-Fi or a cable between the two.') }),
+        );
+        state.textContent = live
+          ? tr('{device} is mirroring now.', { device: live })
+          : a.on ? tr('Receive AirPlay is on: the Mac lists {name}.', { name }) : tr('Receive AirPlay is off, so the Mac doesn’t list this computer yet.');
+        state.classList.toggle('on', !!a.on);
+        onBtn.hidden = !!a.on;
+      },
+    };
+  };
+
   // ---------------------------------------------------------------- AirPlay & SMB
   UI.tab({
     id: 'airplay',
@@ -146,9 +227,42 @@
         ? UI.row(tr('AirPlay Receiver'), tr('This Mac receives AirPlay itself: System Settings › General › AirDrop & Handoff › AirPlay Receiver. An iPhone or iPad then mirrors to it from Control Center.'))
         : UI.row(tr('Receive AirPlay'), '', [airSw.el], { literalHint: true });
       const liveRow = mac ? null : UI.row(tr('Mirroring'), '', [UI.button(tr('Stop'), () => api().webAirplayStop(), 'small')], { literalHint: true });
+      // The receiver's switches (settings.web.airplayMusic / airplaySound / airplayFull).
+      const opt = (k) => UI.switch((v) => api().webAirplayOpt({ [k]: v }));
+      const musicSw = mac ? null : opt('music');
+      const soundSw = mac ? null : opt('sound');
+      const fullSw = mac ? null : opt('full');
+      const optRows = mac ? [] : [
+        UI.row(tr('Music from apps'), tr('Spotify, Music, YouTube and other apps can play to this computer as a speaker, from their AirPlay button.'), [musicSw.el]),
+        UI.row(tr('Mirroring sound'), tr('A mirrored screen’s sound from this computer’s speakers. Off: the picture only (the window’s Sound button mutes just that session).'), [soundSw.el]),
+        UI.row(tr('Open full screen'), tr('The mirrored screen fills the display. Esc leaves full screen, F11 goes back.'), [fullSw.el]),
+      ];
       const airErr = el('div', { class: 'note warn', hidden: true });
-      const airCard = UI.card(tr('AirPlay'), mac ? [airRow] : [airRow, liveRow]);
-      body.append(shareErr, smbCard, howCard, airErr, airCard);
+      const airCard = UI.card(tr('AirPlay'), mac ? [airRow] : [airRow, liveRow, ...optRows]);
+      // iPhone over USB (Windows; shared/iosusb): the phone's screen and sound through its cable, no
+      // network and no app on it. Nothing runs until Mirror is pressed.
+      const usbOk = false; // not yet: commercial app untested
+      const usbGo = usbOk ? UI.button(tr('Mirror'), () => api().webIosUsb('start'), 'small primary') : null;
+      const usbSetup = usbOk ? UI.button(tr('Set up…'), () => api().webIosUsb('setup'), 'small') : null;
+      const usbStop = usbOk ? UI.button(tr('Stop'), () => api().webIosUsb('stop'), 'small') : null;
+      const usbRow = usbOk ? UI.row(tr('iPhone or iPad on a USB cable'), '', [usbGo, usbSetup, usbStop], { literalHint: true }) : null;
+      const usbCard = usbOk ? UI.card(tr('Over USB'), [usbRow, UI.row(tr('Needs'), tr('Apple Devices from the Microsoft Store, or iTunes. Set up adds libusb-win32’s filter to Apple’s driver, once, with an administrator prompt.'), [])]) : null;
+      const USB_WHY = {
+        nodevice: 'Plug in the iPhone or iPad, unlock it, and tap Trust if it asks.',
+        setup: 'One more step: press Set up (an administrator prompt), then Mirror.',
+        replug: 'Set up is done: unplug the phone, plug it back in, and press Mirror.',
+        cancelled: 'Set up was cancelled.',
+        admin: 'Set up needs an administrator.',
+        noqt: 'The phone didn’t start screen capture: unlock it, tap Trust, and try again.',
+        config: 'Windows didn’t let the phone switch to screen capture. Unplug it, plug it back in, and try again.',
+        claim: 'Something else is using the phone’s screen capture.',
+        nolib: 'libusb-win32 isn’t installed: press Set up.',
+        nofilter: 'One more step: press Set up (an administrator prompt), then Mirror.',
+        noexe: 'This copy of TwinDesk was built without the USB helper.',
+      };
+      // What a device plays here (music from an app), with its controls (shared/ui-nowplaying.js).
+      const playing = !mac && UI.airplayPlaying ? UI.airplayPlaying() : null;
+      body.append(shareErr, ...(playing ? [playing.el] : []), smbCard, howCard, airErr, airCard, ...(usbCard ? [usbCard] : []));
       let addr = '';
       return (s) => {
         const w = W(s);
@@ -171,8 +285,33 @@
           airRow.setHint(a.on
             ? tr('On iPhone or iPad: Control Center › Screen Mirroring › {name}. The screen and its sound show in a window here.', { name: a.name || me(s) })
             : tr('Shows an iPhone’s, iPad’s or Mac’s screen here with Screen Mirroring, for anyone on the same network.'));
+          musicSw.set(a.music !== false);
+          soundSw.set(a.sound !== false);
+          fullSw.set(a.full === true);
+          for (const r of optRows) r.hidden = !a.on;
           liveRow.hidden = !a.session;
-          if (a.session) liveRow.setHint(tr('{name} · since {when}', { name: a.session.name, when: new Date(a.session.since).toLocaleTimeString() }));
+          if (a.session) {
+            liveRow.label.textContent = a.session.mirroring === false ? tr('Playing') : tr('Mirroring');
+            const VIA = { ethernet: tr('over Ethernet'), wifi: tr('over Wi-Fi') };
+            const via = VIA[a.session.via] ? ' · ' + VIA[a.session.via] : '';
+            liveRow.setHint(tr('{name} · since {when}', { name: a.session.name, when: new Date(a.session.since).toLocaleTimeString() }) + via);
+          }
+          if (playing) playing.update(s);
+          if (usbRow) {
+            const u = a.usb || {};
+            const busy = u.state === 'checking' || u.state === 'setup' || u.state === 'starting';
+            usbGo.hidden = u.state === 'live';
+            usbGo.disabled = busy;
+            usbStop.hidden = u.state !== 'live';
+            usbSetup.hidden = !(u.why === 'setup' || u.why === 'nofilter' || u.why === 'nolib' || u.why === 'replug' || u.state === 'setup');
+            usbSetup.disabled = busy;
+            usbRow.setHint(u.state === 'live' ? tr('{name} is mirroring over the cable. Its screen and sound show in a window here.', { name: u.name || 'iPhone' })
+              : u.state === 'checking' ? tr('Looking for the phone…')
+                : u.state === 'setup' ? tr('Setting up: downloading libusb-win32 and asking for an administrator…')
+                  : u.state === 'starting' ? tr('Starting screen capture on the phone… (it may ask to Trust this computer)')
+                    : u.why ? tr(USB_WHY[u.why] || 'Couldn’t start: {why}', { why: u.why })
+                      : tr('Its screen and sound in a window here, through the cable: no Wi-Fi, no app on the phone. The phone shows a demo status bar while it mirrors.'));
+          }
           airErr.hidden = !a.error;
           airErr.textContent = a.error ? tr('AirPlay couldn’t start: {why}', { why: a.error }) : '';
         }
@@ -304,11 +443,13 @@
         UI.row(tr('Disconnect'), tr('Ends the connection. The device stays paired and reconnects when Connect is pressed on it.'), [UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev), 'small')]),
         UI.row(tr('Forget this device'), tr('Removes the pairing on both devices, with its messages and file list. Connecting again requires a new pairing code.'), [UI.button(tr('Forget'), () => UI.webDev && api().webForget(UI.webDev), 'small')]),
       ]);
-      body.append(hero, qsCard, lower, pairCard);
+      const airplay = UI.airplayPlaying ? UI.airplayPlaying() : null; // music this device plays here (AirPlay)
+      body.append(hero, ...(airplay ? [airplay.el] : []), qsCard, lower, pairCard);
       const fact = (k, v) => (v ? [el('dt', { text: k }), el('dd', { text: v })] : []);
       const tablet = (d) => /ipad|tablet|tab\b|pad/i.test(`${d.model || ''} ${d.os || ''}`);
       let dropKey = '';
       return (s) => {
+        if (airplay) airplay.update(s);
         const d = UI.webDevOf(s);
         if (!d) return;
         name.textContent = d.name;

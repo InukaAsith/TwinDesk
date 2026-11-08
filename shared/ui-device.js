@@ -195,7 +195,8 @@
       const rezume = UI.rezumeCard ? UI.rezumeCard() : null;
       const rezumeTitle = rezume && rezume.el.querySelector('[data-peer]');
 
-      body.append(notConnected, hero, mediaCard, qsCard, pcCard, ...(rezume ? [rezume.el] : []), lower);
+      const airplay = UI.airplayPlaying ? UI.airplayPlaying() : null; // music an iPhone plays here (AirPlay)
+      body.append(notConnected, hero, ...(airplay ? [airplay.el] : []), mediaCard, qsCard, pcCard, ...(rezume ? [rezume.el] : []), lower);
 
       let notifKey = '';
       let clipKey = '';
@@ -210,6 +211,7 @@
       }
 
       return (s) => {
+        if (airplay) airplay.update(s);
         const phone = UI.isPhone(s);
         const ph = s.phone || {};
         const c = ph.connected;

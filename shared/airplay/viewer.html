@@ -7,8 +7,29 @@
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font: 13px -apple-system, "Segoe UI", system-ui, sans-serif; color: #fff; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
   [hidden] { display: none !important; }
-  #wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: .7; }
+  #wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: .7; padding: 0 16px; text-align: center; }
+  body.music canvas { display: none; }
+  body.music #wait { opacity: 1; font-size: 15px; bottom: 44px; }
+  /* The controls: over the picture while the mouse moves, always in the music window. */
+  #bar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px;
+    background: rgba(30, 30, 32, .78); backdrop-filter: blur(12px); border-radius: 12px; transition: opacity .2s; }
+  body.idle:not(.music) #bar { opacity: 0; pointer-events: none; }
+  body.idle:not(.music) { cursor: none; }
+  body.music #bar { bottom: 10px; }
+  body.music #full { display: none; }
+  #bar button { width: 34px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #fff; display: grid; place-items: center; cursor: pointer; }
+  #bar button:hover { background: rgba(255, 255, 255, .14); }
+  #bar button:focus-visible { outline: 2px solid #0a84ff; }
+  #bar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #bar .on { display: none; } #bar .is .on { display: block; } #bar .is .off { display: none; }
+  #stop { color: #ff453a !important; }
 </style>
 </head>
 <body><canvas id="c" width="16" height="9"></canvas><div id="wait">Waiting for the picture…</div>
+<div id="bar">
+  <button id="full" title="Full screen (F11)" aria-label="Full screen"><svg viewBox="0 0 20 20"><path class="off" d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><path class="on" d="M7 3v4H3M17 7h-4V3M13 17v-4h4M3 13h4v4"/></svg></button>
+  <button id="mute" title="Sound" aria-label="Sound"><svg viewBox="0 0 20 20"><path d="M3 8v4h3l4 3V5L6 8z"/><path class="off" d="M13 7.5a3.5 3.5 0 0 1 0 5M15 5a7 7 0 0 1 0 10"/><path class="on" d="M13.5 8l4 4M17.5 8l-4 4"/></svg></button>
+  <button id="stop" title="Stop" aria-label="Stop"><svg viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1.5"/></svg></button>
+</div>
+<script src="alac.js"></script>
 <script src="viewer-renderer.js"></script></body></html>

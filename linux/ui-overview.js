@@ -94,7 +94,9 @@ UI.tab({
 
     const pairedList = el('div');
     const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
+    const airplay = UI.airplayPlaying ? UI.airplayPlaying() : null; // music an iPhone plays here (AirPlay)
     body.append(
+      ...(airplay ? [airplay.el] : []),
       UI.card('', [addrRow, ipRow]),
       UI.card(t('Found nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
@@ -159,6 +161,7 @@ UI.tab({
     }
     const update = (s) => {
       if (webCard) webCard.render(s);
+      if (airplay) airplay.update(s);
       last = s;
       bleSw.set(!s.net || s.net.ble !== false);
       blePcSw.set(!!s.net && s.net.blePc === true);

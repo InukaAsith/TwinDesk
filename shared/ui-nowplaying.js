@@ -154,3 +154,80 @@ UI.nowPlaying = () => {
     },
   };
 };
+
+// Music an iPhone, iPad or Mac plays here over AirPlay (shared/airplay/viewer.js: state.web.airplay
+// .session.now): its art, title, artist and album, where it is, Previous, Play/Pause and Next (sent
+// back to the device) and Stop. On the Audio and Overview pages, only while it plays.
+// UI.airplayPlaying() → {el, update(state)}.
+UI.airplayPlaying = () => {
+  const t = (...args) => typeof I18n === 'undefined' ? args[0] : I18n.t(...args);
+  const { el } = UI;
+  const call = (a) => UI.api && UI.api.webAirplayCtl && UI.api.webAirplayCtl(a);
+  const svg = (d) => {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 20 20');
+    s.innerHTML = d;
+    return s;
+  };
+  const PLAY = '<path d="M6.5 4.5v11l9-5.5z"/>';
+  const PAUSE = '<path d="M6 4.5h2.5v11H6z M11.5 4.5H14v11h-2.5z"/>';
+  const ctl = (a, d, label) => {
+    const b = el('button', { class: 'np-btn', title: label, attrs: { 'aria-label': label } }, [svg(d)]);
+    b.onclick = () => call(a);
+    return b;
+  };
+  const art = el('div', { class: 'np-art' });
+  const title = el('div', { class: 'np-title' });
+  const sub = el('div', { class: 'np-sub' });
+  const from = el('div', { class: 'np-sub' });
+  const prev = ctl('prev', '<path d="M5 4.5v11 M15.5 4.5v11L7 10z"/>', t('Previous'));
+  const play = ctl('toggle', PLAY, t('Play'));
+  const next = ctl('next', '<path d="M15 4.5v11 M4.5 4.5v11L13 10z"/>', t('Next'));
+  const stop = ctl('stop', '<rect x="5" y="5" width="10" height="10" rx="1.5"/>', t('Stop'));
+  const bar = el('div', { class: 'np-bar' }, [el('div', { class: 'np-fill' })]);
+  const time = el('div', { class: 'np-time' });
+  const box = el('div', { class: 'np' }, [
+    art,
+    el('div', { class: 'np-main' }, [title, sub, from, el('div', { class: 'np-pos' }, [bar, time])]),
+    el('div', { class: 'np-ctl' }, [prev, play, next, stop]),
+  ]);
+  const card = el('div', { class: 'card dv-media', hidden: true }, [box]);
+
+  let now = null;
+  let lastArt = null;
+  const clock = (sec) => { const s = Math.max(0, Math.round(sec)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const tick = () => {
+    if (!now || card.hidden) return;
+    const d = now.duration;
+    const p = Math.min(d || Infinity, Math.max(0, now.playing ? now.position + (Date.now() - now.at) / 1000 : now.position));
+    bar.hidden = time.hidden = !(d > 0);
+    bar.firstChild.style.width = d > 0 ? (100 * p / d).toFixed(1) + '%' : '0';
+    time.textContent = clock(p) + ' / ' + clock(d);
+  };
+  setInterval(tick, 1000);
+
+  return {
+    el: card,
+    update(s) {
+      const a = (s && s.web && s.web.airplay) || null;
+      const ses = a && a.session;
+      now = ses && ses.now ? ses.now : null;
+      card.hidden = !now;
+      if (!now) return;
+      if (now.art !== lastArt) {
+        lastArt = now.art;
+        art.style.backgroundImage = now.art ? `url("${now.art}")` : '';
+        art.classList.toggle('none', !now.art);
+      }
+      title.textContent = now.title || t('AirPlay');
+      sub.textContent = [now.artist, now.album].filter(Boolean).join(' · ');
+      sub.hidden = !sub.textContent;
+      from.textContent = t('AirPlay from {device}', { device: ses.name });
+      play.replaceChildren(svg(now.playing ? PAUSE : PLAY));
+      play.title = now.playing ? t('Pause') : t('Play');
+      play.setAttribute('aria-label', play.title);
+      for (const b of [prev, play, next]) b.disabled = !now.control;
+      tick();
+    },
+  };
+};

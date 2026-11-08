@@ -74,7 +74,7 @@ function normalize(s) {
       linkedBy: kvm.linkedBy && typeof kvm.linkedBy === 'object'
         ? Object.fromEntries(Object.entries(kvm.linkedBy).filter(([, v]) => typeof v === 'boolean').slice(0, 50)) : {},
       gestures: bool(kvm.gestures, true), // Trackpad gestures work on the other computer (pair.sync 'gestures')
-      shakeHome: bool(kvm.shakeHome, true), // shake this computer's mouse while driving: the pointer comes home (the helper's shake)
+      shakeHome: bool(kvm.shakeHome, false), // shake this computer's mouse while driving: the pointer comes home (the helper's shake)
       syncPads: bool(kvm.syncPads, false), // every mouse and trackpad moves the one pointer; off: this PC's own takes it back (pair.sync 'syncPads')
       hotkeySwitch: bool(kvm.hotkeySwitch, false), // keyboard only (Cursor off): double-tap moves the keyboard over and back
       ble: bool(kvm.ble, true), // cursor sharing while the session runs through Bluetooth (pair.sync 'ble')
@@ -115,7 +115,8 @@ function normalize(s) {
       const port = Number(w.port);
       return { on: bool(w.on, false), port: Number.isInteger(port) && port >= 1024 && port < 65000 ? port : 47870,
         screen: bool(w.screen, true), control: bool(w.control, true), camera: bool(w.camera, true), mic: bool(w.mic, true), pad: bool(w.pad, false),
-        airplay: bool(w.airplay, false) }; // Receive AirPlay (shared/airplay), off until turned on
+        airplay: bool(w.airplay, false), // Receive AirPlay (shared/airplay), off until turned on
+        airplayMusic: bool(w.airplayMusic, true), airplaySound: bool(w.airplaySound, true), airplayFull: bool(w.airplayFull, false) }; // its switches
     })(),
     // ReZume tab (shared/rezume.js): off until turned on; what goes, which ways, where it shows
     rezume: require('../shared/rezume.js').normalize(s.rezume),

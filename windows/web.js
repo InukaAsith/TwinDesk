@@ -105,7 +105,8 @@ function setupWeb(c) {
       helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
     },
     vcam: c.loadVcam || null,
-    airplay: airplayHost({ dir: app.getPath('userData'), name: () => c.device().name, t: c.t, pushState: c.pushState }),
+    airplay: airplayHost({ dir: app.getPath('userData'), name: () => c.device().name, t: c.t, pushState: c.pushState,
+      opts: () => { const w = settings().web; return { music: w.airplayMusic !== false, sound: w.airplaySound !== false, full: w.airplayFull === true }; } }),
     fileClip: c.fileClip && c.fileClip.offerLocal ? c.fileClip : null,
   });
   for (const [name, fn] of Object.entries(web.actions)) ipcMain.handle(name, (_e, arg) => fn(arg));

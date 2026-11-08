@@ -12,7 +12,7 @@ namespace MacShare
 {
     static class Shake
     {
-        const double Stroke = 40;
+        const double Stroke = 80;
         const int Reversals = 4, WindowMs = 800, GapMs = 200, CooldownMs = 1000;
         static readonly int[] turns = new int[Reversals]; // a ring of the last Reversals turns
         static int dir, nTurns, head, last, quiet;
