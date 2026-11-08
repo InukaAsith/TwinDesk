@@ -14,9 +14,6 @@
 //   view().session.now (music): {title, artist, album, art (data URL), playing, position, duration, at}.
 //   ctl('toggle' | 'next' | 'prev' | 'stop').
 //   view().session.via: how the sender came in ('ethernet' | 'wifi' | '', lantype.js).
-//   iPhone over USB (Windows): usb(action) with 'start' | 'setup' | 'stop'; view().usb {supported, state
-//   ('' | 'checking' | 'setup' | 'starting' | 'live'), why, name}. shared/iosusb/host.js is required on
-//   the first use only; its picture and sound come to the same window as AirPlay's.
 'use strict';
 
 const path = require('path');
@@ -36,10 +33,6 @@ function airplayHost(o) {
   let now = null; // music: what plays
   let lastAudio = 0;
   let playTimer = null;
-  let usb = null; // shared/iosusb/host.js, once asked for
-  let usbState = { state: '', why: '', name: '' };
-  let usbSeq = 0;
-  const usbLive = () => !!(usb && usb.live);
   const opts = () => ({ music: true, sound: true, full: false, ...(o.opts ? o.opts() : {}) });
 
   const send = (m) => { if (win && !win.isDestroyed() && ready) win.webContents.send('airplay:in', m); };
@@ -92,7 +85,7 @@ function airplayHost(o) {
     win.on('closed', () => {
       if (win === me) { win = null; ready = false; }
       // Closed by hand while the device still mirrors: stop it there too.
-      if (info.id === 'usb') { if (usbLive()) usb.stop(); } else if (rx && rx.active && rx.active.info && rx.active.info.id === info.id) rx.end();
+      if (rx && rx.active && rx.active.info && rx.active.info.id === info.id) rx.end();
     });
     win.loadFile(path.join(__dirname, 'viewer.html'));
   }
@@ -116,7 +109,7 @@ function airplayHost(o) {
   ipcMain.on('airplay:control', (e, cmd) => {
     if (!win || e.sender !== win.webContents) return;
     if (cmd === 'full' && win.mirroring) win.setFullScreen(!win.isFullScreen());
-    if (cmd === 'stop') { if (usbLive()) usb.stop(); else if (rx && rx.active) rx.end(); else close(); }
+    if (cmd === 'stop') { if (rx && rx.active) rx.end(); else close(); }
   });
   ipcMain.on('airplay:size', (e, s) => { if (win && e.sender === win.webContents && s) fit(Number(s.w), Number(s.h)); });
 
@@ -175,57 +168,6 @@ function airplayHost(o) {
     rx.start().then(() => o.pushState());
   }
 
-  // ---- iPhone over USB ----
-  const setUsb = (v) => { usbState = { ...usbState, ...v }; o.pushState(); };
-  function usbHost() {
-    if (usb) return usb;
-    usb = require('../iosusb/host.js').iosUsb({ dir: o.dir });
-    usb.on('live', () => {
-      config = null;
-      usbSeq = 0;
-      setUsb({ state: 'live', why: '' });
-      open({ id: 'usb', name: usbState.name, mirroring: true });
-      if (o.say) o.say(t('AirPlay'), t('{name} is mirroring to this computer over USB', { name: usbState.name }));
-    });
-    usb.on('config', (c) => {
-      config = { t: 'config', codec: c.codec, avcC: c.avcC };
-      send(config);
-      if (c.width && c.height) fit(c.width, c.height);
-    });
-    usb.on('frame', (f) => send({ t: 'frame', data: f.data, key: f.key }));
-    usb.on('audio', (a) => { if (opts().sound) send({ t: 'audio', ct: 'pcm', data: a.data, rate: a.rate, channels: a.channels, seq: (usbSeq++) & 0xffff }); });
-    usb.on('end', (e) => {
-      if (win && !win.isDestroyed() && win.mirroring && !(rx && rx.active)) close();
-      setUsb({ state: '', why: e && e.why && e.why !== 'exit' ? e.why : '' });
-    });
-    return usb;
-  }
-  const PIDS = { 0x12ab: 'iPad', 0x12a8: 'iPhone' };
-  async function usbAction(a) {
-    if (process.platform !== 'win32') return usbState;
-    const h = usbHost();
-    if (a === 'stop') { h.stop(); return usbState; }
-    if (usbState.state && usbState.state !== 'live') return usbState; // busy
-    if (a === 'setup') {
-      setUsb({ state: 'setup', why: '' });
-      const r = await h.setup();
-      if (!r.ok) { setUsb({ state: '', why: r.why }); return usbState; }
-    }
-    if (h.live) return usbState;
-    setUsb({ state: 'checking', why: '' });
-    const st = await h.status();
-    if (!st.supported) return setUsb({ state: '', why: st.why }), usbState;
-    const dev = (st.devices || [])[0];
-    if (!dev) return setUsb({ state: '', why: 'nodevice' }), usbState;
-    const pid = parseInt((/PID_([0-9A-F]{4})/i.exec(dev.id) || [])[1] || '0', 16);
-    usbState.name = PIDS[pid] || 'iPhone';
-    if (!st.ready) return setUsb({ state: '', why: 'setup' }), usbState;
-    setUsb({ state: 'starting' });
-    const r = await h.start((st.usb[0] && st.usb[0].serial) || '');
-    if (!r.ok) setUsb({ state: '', why: r.why });
-    return usbState;
-  }
-
   function stop() {
     close();
     now = null;
@@ -241,10 +183,8 @@ function airplayHost(o) {
         v.session = { ...v.session, via: { Ethernet: 'ethernet', 'Wi-Fi': 'wifi' }[lanType(v.session.ip)] || '' };
         if (now) v.session.now = { ...now, control: !!(rx.active && rx.active.dacp) };
       }
-      v.usb = { supported: process.platform === 'win32', ...usbState };
       return v;
     },
-    usb: usbAction,
     set: (on) => (on ? start() : stop()),
     end: () => { if (rx) rx.end(); },
     // The pages' buttons for music: Previous, Play/Pause, Next back to the sender; Stop here.
@@ -265,7 +205,7 @@ function airplayHost(o) {
         send({ t: 'mute', on: !v.sound });
       }
     },
-    shutdown: () => { if (usbLive()) usb.stop(); stop(); },
+    shutdown: () => stop(),
   };
 }
 

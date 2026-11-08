@@ -138,5 +138,4 @@ contextBridge.exposeInMainWorld('macshare', {
   webAirplayStop: call('webAirplayStop'),
   webAirplayOpt: call('webAirplayOpt'),
   webAirplayCtl: call('webAirplayCtl'),
-  webIosUsb: call('webIosUsb'),
 });

@@ -218,8 +218,6 @@ function startWeb(o) {
       o.pushState();
     },
     // Music from an app: 'toggle' | 'next' | 'prev' (back to the sender) | 'stop'.
-    // iPhone over USB (Windows): 'start' | 'setup' (the driver filter, once) | 'stop'.
-    webIosUsb(a) { return o.airplay && o.airplay.usb ? o.airplay.usb(String(a)) : null; },
     webAirplayCtl(a) { return o.airplay && o.airplay.ctl ? o.airplay.ctl(String(a)) : false; },
     // AirPlay & SMB's switches: music from apps, the sound here, the mirror full screen.
     webAirplayOpt(v) {

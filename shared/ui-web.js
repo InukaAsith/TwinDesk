@@ -239,30 +239,9 @@
       ];
       const airErr = el('div', { class: 'note warn', hidden: true });
       const airCard = UI.card(tr('AirPlay'), mac ? [airRow] : [airRow, liveRow, ...optRows]);
-      // iPhone over USB (Windows; shared/iosusb): the phone's screen and sound through its cable, no
-      // network and no app on it. Nothing runs until Mirror is pressed.
-      const usbOk = false; // not yet: commercial app untested
-      const usbGo = usbOk ? UI.button(tr('Mirror'), () => api().webIosUsb('start'), 'small primary') : null;
-      const usbSetup = usbOk ? UI.button(tr('Set up…'), () => api().webIosUsb('setup'), 'small') : null;
-      const usbStop = usbOk ? UI.button(tr('Stop'), () => api().webIosUsb('stop'), 'small') : null;
-      const usbRow = usbOk ? UI.row(tr('iPhone or iPad on a USB cable'), '', [usbGo, usbSetup, usbStop], { literalHint: true }) : null;
-      const usbCard = usbOk ? UI.card(tr('Over USB'), [usbRow, UI.row(tr('Needs'), tr('Apple Devices from the Microsoft Store, or iTunes. Set up adds libusb-win32’s filter to Apple’s driver, once, with an administrator prompt.'), [])]) : null;
-      const USB_WHY = {
-        nodevice: 'Plug in the iPhone or iPad, unlock it, and tap Trust if it asks.',
-        setup: 'One more step: press Set up (an administrator prompt), then Mirror.',
-        replug: 'Set up is done: unplug the phone, plug it back in, and press Mirror.',
-        cancelled: 'Set up was cancelled.',
-        admin: 'Set up needs an administrator.',
-        noqt: 'The phone didn’t start screen capture: unlock it, tap Trust, and try again.',
-        config: 'Windows didn’t let the phone switch to screen capture. Unplug it, plug it back in, and try again.',
-        claim: 'Something else is using the phone’s screen capture.',
-        nolib: 'libusb-win32 isn’t installed: press Set up.',
-        nofilter: 'One more step: press Set up (an administrator prompt), then Mirror.',
-        noexe: 'This copy of TwinDesk was built without the USB helper.',
-      };
       // What a device plays here (music from an app), with its controls (shared/ui-nowplaying.js).
       const playing = !mac && UI.airplayPlaying ? UI.airplayPlaying() : null;
-      body.append(shareErr, ...(playing ? [playing.el] : []), smbCard, howCard, airErr, airCard, ...(usbCard ? [usbCard] : []));
+      body.append(shareErr, ...(playing ? [playing.el] : []), smbCard, howCard, airErr, airCard);
       let addr = '';
       return (s) => {
         const w = W(s);
@@ -297,21 +276,6 @@
             liveRow.setHint(tr('{name} · since {when}', { name: a.session.name, when: new Date(a.session.since).toLocaleTimeString() }) + via);
           }
           if (playing) playing.update(s);
-          if (usbRow) {
-            const u = a.usb || {};
-            const busy = u.state === 'checking' || u.state === 'setup' || u.state === 'starting';
-            usbGo.hidden = u.state === 'live';
-            usbGo.disabled = busy;
-            usbStop.hidden = u.state !== 'live';
-            usbSetup.hidden = !(u.why === 'setup' || u.why === 'nofilter' || u.why === 'nolib' || u.why === 'replug' || u.state === 'setup');
-            usbSetup.disabled = busy;
-            usbRow.setHint(u.state === 'live' ? tr('{name} is mirroring over the cable. Its screen and sound show in a window here.', { name: u.name || 'iPhone' })
-              : u.state === 'checking' ? tr('Looking for the phone…')
-                : u.state === 'setup' ? tr('Setting up: downloading libusb-win32 and asking for an administrator…')
-                  : u.state === 'starting' ? tr('Starting screen capture on the phone… (it may ask to Trust this computer)')
-                    : u.why ? tr(USB_WHY[u.why] || 'Couldn’t start: {why}', { why: u.why })
-                      : tr('Its screen and sound in a window here, through the cable: no Wi-Fi, no app on the phone. The phone shows a demo status bar while it mirrors.'));
-          }
           airErr.hidden = !a.error;
           airErr.textContent = a.error ? tr('AirPlay couldn’t start: {why}', { why: a.error }) : '';
         }

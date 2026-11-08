@@ -5,7 +5,7 @@
 // that, or an error, frames wait for the next key frame.
 // The sound: AAC-ELD (mirroring) and AAC-LC access units through WebCodecs' AAC decoder (Chromium's
 // FFmpeg decodes ELD from its AudioSpecificConfig, though the mp4a.40.39 name is refused); ALAC
-// (music from an app) with alac.js; an iPhone over USB (shared/iosusb) sends plain 16-bit PCM, Apple's decoder ported. Played a little ahead (LEAD) on an
+// (music from an app) with alac.js, Apple's decoder ported. Played a little ahead (LEAD) on an
 // AudioContext, at the sender's volume; music, with no picture to keep up with, further ahead.
 'use strict';
 
@@ -70,21 +70,6 @@ function audio(m) {
     if (d === 0 || (d > 0x8000 && 0x10000 - d < 64)) return;
   }
   snd.seq = m.seq;
-  // An iPhone over USB: 16-bit PCM, interleaved, no decoder.
-  if (m.ct === 'pcm') {
-    const d = m.data instanceof Int16Array ? m.data : new Int16Array(m.data.buffer, m.data.byteOffset, m.data.byteLength >> 1);
-    const ch = Math.max(1, Math.min(2, m.channels || 2));
-    const frames = Math.floor(d.length / ch);
-    if (!frames) return;
-    const planes = [];
-    for (let c = 0; c < ch; c++) {
-      const p = new Float32Array(frames);
-      for (let i = 0; i < frames; i++) p[i] = d[i * ch + c] / 32768;
-      planes.push(p);
-    }
-    play(planes, m.rate || 48000);
-    return;
-  }
   const ct = m.ct || 8;
   const spf = m.spf || (ct === 2 ? 352 : ct === 4 ? 1024 : 480);
   try {
