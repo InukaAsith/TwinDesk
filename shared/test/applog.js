@@ -70,14 +70,41 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     assert.ok(lines.length >= 1, 'a line while connected');
     assert.strictEqual(lines.length, after, 'none once not connected');
     assert.ok(/\[link\] rtt p50 \d+ ms \/ p95 (9|10) ms \/ p99 (9|10) ms \/ max 10 ms, lane p50 1\.5 ms \/ max 1\.5 ms, kvm moves (4\d\d|5\d\d)\/s, queued max (900|1000) bytes, loop p99 [\d.]+ ms \/ max [\d.]+ ms/.test(lines[0]), lines[0]);
+
+    // Launched from the desktop menu on Linux there is no terminal: the pipe behind stdout is gone.
+    // Node reports that EPIPE as an 'error' event on the stream, later, not as a throw — and every
+    // console line used to come back through crash(), which wrote to the same dead pipe again.
+    let piped = 0;
+    process.stdout.write = () => {
+      piped++;
+      process.nextTick(() => process.stdout.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })));
+      return false;
+    };
+    const crashBefore = read('crash.log');
+    console.log('the pipe is dead');
+    await wait(40); // the EPIPE lands here, after the write returned
+    assert.ok(/the pipe is dead/.test(read('TwinDesk.log')), 'the line still reaches the file');
+    const pipedOnce = piped;
+    for (let i = 0; i < 200; i++) console.log('and %d more', i);
+    await wait(60);
+    assert.strictEqual(piped, pipedOnce, 'the dead terminal is written to once, then never again');
+    assert.strictEqual(read('crash.log'), crashBefore, 'and none of it crashes anything');
+
+    // The same crash, again and again: one line, then how many times it came back.
+    for (let i = 0; i < 12; i++) process.emit('uncaughtException', new Error('same thing again'));
+    const dedup = read('crash.log');
+    assert.strictEqual((dedup.match(/\[crash\] uncaughtException: Error: same thing again\n/g) || []).length, 1, 'written once');
+    assert.ok(/uncaughtException: Error: same thing again \(repeated 10 times since /.test(dedup), dedup.slice(-500));
+    process.emit('uncaughtException', new Error('something else'));
+    assert.ok(/\[crash\] uncaughtException: Error: something else\n\s+at /.test(read('crash.log')), 'a new one keeps its stack');
   } finally {
     process.stdout.write = realOut;
     process.stderr.write = realErr;
   }
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* Windows: TwinDesk.log is still open */ }
-  console.log('applog: ok');
+  realOut('applog: ok\n'); // not console.log: its terminal was killed above, on purpose
   process.exit(0);
 })().catch((e) => {
-  console.error(e);
+  process.stderr.write(`${e && e.stack ? e.stack : e}\n`); // the console may be the dead one above
   process.exit(1);
 });

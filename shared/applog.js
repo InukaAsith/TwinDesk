@@ -29,6 +29,8 @@ let fd = null; // TwinDesk.log, written in order with crash()'s lines (a stream'
 let size = 0;
 let started = false;
 let terminal = console.error.bind(console); // the console before start(): the terminal only
+let consoleDead = false; // its pipe is gone (no terminal when launched from the menu): nothing more goes out to it
+const crashes = new Map(); // kind + the first line of the stack -> how often it came back, and when it started
 
 function dir() {
   return folder;
@@ -78,13 +80,52 @@ function write(line) {
   }
 }
 
-// What went wrong, at once and whatever happens next (crash.log and TwinDesk.log).
+// A tenth, hundredth, thousandth time: one line, not one line per crash.
+function milestone(n) {
+  while (n >= 10 && n % 10 === 0) n /= 10;
+  return n === 1;
+}
+
+// The EPIPE of a pipe nobody reads arrives as an 'error' event on the stream, asynchronously, not
+// as a throw the caller could catch: left unanswered it becomes an uncaughtException, and that is
+// what closed the loop (crash() wrote to the same dead terminal).
+function watchPipe(stream) {
+  if (!stream || typeof stream.on !== 'function') return;
+  stream.on('error', (e) => {
+    if (e && e.code === 'EPIPE') {
+      consoleDead = true;
+      return;
+    }
+    throw e; // anything else still goes through crash()
+  });
+}
+
+// crash.log keeps everything (it is what people send with a bug report), TwinDesk.log keeps the same
+// line under its own cap.
+function crashLine(line) {
+  try { fs.appendFileSync(path.join(folder, 'crash.log'), line); } catch (_) { /* no folder */ }
+  write(line);
+}
+
+// What went wrong, at once and whatever happens next (crash.log and TwinDesk.log). The same crash,
+// over and over, is one line and then a count: a loop must not fill the disk by itself.
 function crash(kind, detail) {
   const text = detail instanceof Error ? detail.stack || String(detail) : typeof detail === 'string' ? detail : util.inspect(detail);
-  const line = `${stamp()} [crash] ${kind}: ${text}\n`;
-  try { fs.appendFileSync(path.join(folder, 'crash.log'), line); } catch (_) { /* no folder */ }
-  try { if (fd !== null) fs.writeSync(fd, line); } catch (_) { /* best effort */ }
-  try { terminal(line.trimEnd()); } catch (_) { /* no terminal */ }
+  const at = stamp();
+  const key = `${kind}: ${text.split('\n')[0]}`;
+  const seen = crashes.get(key);
+  if (seen) {
+    seen.count++;
+    if (milestone(seen.count)) crashLine(`${at} [crash] ${key} (repeated ${seen.count} times since ${seen.first})\n`);
+    return;
+  }
+  crashes.set(key, { count: 1, first: at });
+  const line = `${at} [crash] ${kind}: ${text}\n`;
+  crashLine(line);
+  // Not on the terminal it is reporting about: that write is what came back as another crash.
+  if (!consoleDead) {
+    try { terminal(line.trimEnd()); } catch (_) { consoleDead = true; /* no terminal */ }
+  }
 }
 
 // opts.maxBytes: a smaller file, for tests.
@@ -104,10 +145,14 @@ function start(app, opts = {}) {
     fd = null;
   }
   terminal = console.error.bind(console);
+  watchPipe(process.stdout);
+  watchPipe(process.stderr);
   for (const level of LEVELS) {
     const orig = console[level].bind(console);
     console[level] = (...args) => {
-      try { orig(...args); } catch (_) { /* no terminal (EPIPE) */ }
+      if (!consoleDead) {
+        try { orig(...args); } catch (_) { consoleDead = true; /* no terminal (EPIPE) */ }
+      }
       try { write(`${stamp()} ${level === 'log' || level === 'info' ? '' : level.toUpperCase() + ' '}${util.format(...args)}\n`); } catch (_) { /* best effort */ }
     };
   }
