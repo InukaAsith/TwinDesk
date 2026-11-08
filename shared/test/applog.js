@@ -54,6 +54,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     // The link line: only while connected, rtt p50/p95, moves a second, the most queued.
     let connected = true;
     let rtt = 0;
+    process.env.TWINDESK_LINK_STATS = '1'; // off by default (no wakeups, no disk)
     const stop = applog.linkStats(() => (connected ? { rtt: (rtt = (rtt % 10) + 1), lane: 1.5, queued: rtt * 100 } : null), 200, 10);
     const moves = new KvmMoves({ send: () => {} });
     for (let i = 0; i < 100; i++) moves.add(1, 0);

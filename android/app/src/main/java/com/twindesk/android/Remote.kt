@@ -46,13 +46,22 @@ class Remote(core: Core) : Feature(core) {
         push()
     }
     fun resetPad() { core.store.setPrefsString("remote.pad", "{}"); push() }
+
+    // The gamepad's layout (its Edit, remote.js): {items: {id: {x, y, s, hide, label}}, custom: [{id, label, key, x, y, s}]},
+    // x and y the control's middle as a share of the screen. Kept as the page wrote it (checked to be JSON, 32 KB at most).
+    fun layout(): JSONObject = runCatching { JSONObject(core.store.prefsString("remote.layout", "{}")) }.getOrDefault(JSONObject())
+    fun setLayout(json: String) {
+        if (json.length > 32_000) return
+        val o = runCatching { JSONObject(json) }.getOrNull() ?: return
+        core.store.setPrefsString("remote.layout", o.toString())
+    }
     private fun overrides(): JSONObject = runCatching { JSONObject(core.store.prefsString("remote.pad", "{}")) }.getOrDefault(JSONObject())
     private fun padMap(): JSONObject = JSONObject().also { o -> for ((id, _) in CONTROLS) o.put(id, padKey(id)) }
 
     fun opts(): JSONObject {
         ble = core.link.ble
         return msg("opts", "mode" to mode, "name" to (core.host?.name ?: "the computer"), "me" to core.store.deviceName, "connected" to (core.host != null),
-            "os" to (core.host?.os ?: ""), "ble" to core.link.ble, "speed" to speed.toDouble(), "tap" to tapClick, "smooth" to smooth, "pad" to padMap(),
+            "os" to (core.host?.os ?: ""), "ble" to core.link.ble, "speed" to speed.toDouble(), "tap" to tapClick, "smooth" to smooth, "pad" to padMap(), "layout" to layout(),
             "bt" to (core.btPadMade && core.btPad.connected), "btName" to (if (core.btPadMade) core.btPad.hostName else ""),
             // The gamepad's Keys: its controls and what each can press.
             "controls" to org.json.JSONArray(CONTROLS.map { org.json.JSONArray(listOf(it.first, it.second)) }),

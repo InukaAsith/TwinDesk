@@ -2,6 +2,8 @@
 // The popup that says where the mouse and keyboard are: a small pill at
 // the bottom of the screen under the pointer, like the volume HUD. Click-through, on every Space,
 // never captured into a screen stream (content protection), off with General › "Show a popup".
+// Its window lives while a session is on (made when it starts, so the first popup is instant) and
+// goes IDLE_MS after the last popup once there's none: no renderer kept for an idle menu bar.
 'use strict';
 
 const path = require('path');
@@ -10,6 +12,7 @@ const I18n = require('../shared/i18n.js');
 
 const W = 360, H = 64, SHOW_MS = 1400;
 const BIG_W = 460, BIG_H = 230, BIG_MS = 2200; // the sharing on/off card
+const IDLE_MS = 30000;
 
 class Hud {
   constructor(getSettings) {
@@ -17,6 +20,28 @@ class Hud {
     this.win = null;
     this.ready = null;
     this.timer = null;
+    this.idleTimer = null;
+    this.keep = () => false; // main: true while a session is on
+  }
+
+  // A session started: the window now, so the first popup shows at once.
+  warm() {
+    if (this.getSettings().app.hud === false) return;
+    clearTimeout(this.idleTimer);
+    this._ensure();
+  }
+
+  // The window goes when nothing needs it: no session, nothing showing, for IDLE_MS.
+  idle() {
+    clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      if (this.keep() || !this.win || this.win.isDestroyed() || this.win.isVisible()) return;
+      const w = this.win;
+      this.win = null;
+      this.ready = null;
+      w.destroy();
+    }, IDLE_MS);
+    if (this.idleTimer.unref) this.idleTimer.unref();
   }
 
   _ensure() {
@@ -50,7 +75,10 @@ class Hud {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       if (this.win && !this.win.isDestroyed()) this.win.webContents.send('hud', { kind: 'hide' });
-      this.timer = setTimeout(() => this.win && !this.win.isDestroyed() && this.win.hide(), 400);
+      this.timer = setTimeout(() => {
+        if (this.win && !this.win.isDestroyed()) this.win.hide();
+        if (!this.keep()) this.idle();
+      }, 400);
     }, big ? BIG_MS : SHOW_MS);
   }
 }

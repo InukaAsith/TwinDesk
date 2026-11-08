@@ -1,5 +1,11 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Main process: lifecycle, windows, tray, IPC and the state pushed to the main window.
+// Launch: the compiled code of every module after this one is kept on disk (Node's compile cache).
+try {
+  const m = require('module');
+  if (typeof m.enableCompileCache === 'function') m.enableCompileCache();
+} catch {}
+const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, Notification, shell, globalShortcut, systemPreferences } = require('electron');
 const Look = require('../shared/look.js');
@@ -240,6 +246,11 @@ function start() {
   });
   link = new Peer(guest);
   link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
+  // The files engine (shared/fx2.js) stays up while another TwinDesk computer is on the network: a
+  // session with it then starts without waiting for it. Alone, it isn't running at all.
+  const fx2Nearby = () => { if (link.fx2) link.fx2.need('nearby', discovery.found.size > 0); };
+  discovery.on('change', fx2Nearby);
+  fx2Nearby();
   startHost(guest);
   link.onState(() => {
     discovery.wantProbes = link.snapshot().link.state !== 'connected'; // probe every 10 s only while not connected
@@ -385,6 +396,7 @@ function start() {
   };
   wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
   const sender = new Sender(link); // every rtc2 video session we send (screen, app windows)
+  sender.on('stats', (_, s) => { screenStats = { codec: s.codec, encoder: s.encoder, at: Date.now() }; }); // Engines in use
   sender.codec = () => settings.pcScreen.codec; // Share screen › Encoder
   pcScreen = new PcScreen({ link, helper, sender, vdd, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState, needDriver: () => goTab('pc-mac') });
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
@@ -517,6 +529,12 @@ function startPhone(server, pairing) {
   phoneViews.vcam = vcam;
   phoneServer = pl;
   loadNowPlaying(); // each only while it's on
+  // What plays on this computer, for the phone's Media page and its media notification (shared/pcnow.js).
+  new (require('../shared/pcnow.js').PcNow)({ server: pl, key: (code) => {
+    if (!helper) return;
+    helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
+    helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
+  } });
   loadBtAudio();
   phoneViews.on('change', pushState);
   // Remote off: its page hears so; on, PhoneRemote answers instead.
@@ -825,6 +843,7 @@ function setupNet(guest) {
   net.on('dropped', () => pcScreen.mode !== 'off' && pcScreen.setMode('off')); // Back to Bluetooth on the phone: it can't carry the screen
   link.hold = (m) => net.holdOut(m, (x) => link.sendNow(x));
   link.tap = (m) => net.onMessage(m);
+  link.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
   link.on('welcome', () => {
     net.started();
     recheck();
@@ -1091,6 +1110,18 @@ function setupShows(miss) {
   return (!settings.setup.done && !fw.checking && miss.some((x) => !settings.setup.skipped.includes(x)));
 }
 
+// General › Advanced › Engines in use (shared/engines.js), while connected. screenStats: the
+// sender's last stats (a second apart while it shares).
+let screenStats = null;
+function enginesView() {
+  if (!link) return null;
+  const live = screenStats && Date.now() - screenStats.at < 5000 ? screenStats : null;
+  return Engines.snapshot({
+    current: link.current, il: link.il, lane: link.lane(), fx: link.fx, fx2: link.fx2, net: net ? net.view : null,
+    lan: lanType(link.current && link.current.address), screen: live,
+  });
+}
+
 function buildState() {
   const miss = missing();
   return {
@@ -1119,6 +1150,7 @@ function buildState() {
     ui: settings.ui,
     look: Look.view(settings.ui, systemPreferences),
     app: settings.app,
+    engines: enginesView(),
     encoder: require('./encoder').view(), // General › Advanced › Hardware encoder
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer

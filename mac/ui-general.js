@@ -85,6 +85,7 @@ UI.tab({
       { value: 'udp', label: t('UDP (tdv2)') }, { value: 'tcp', label: t('TCP (tdv1)') },
     ], (v) => { api.setApp({ inputProtocol: v }); protoRestart.hidden = v === protoStart; });
     const protoRow = UI.row(t('Input protocol'), t('UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart'), [protoSel, protoRestart]);
+    const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const sections = UI.sections([
       UI.card(t('Permissions'), [
         ...perms.map((x) => x.row),
@@ -107,7 +108,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
       UI.card(t('This computer'), [deviceRow, helperRow]),
-      UI.card(t('Advanced'), [protoRow]),
+      UI.card(t('Advanced'), [protoRow, ...engines.rows]),
     ]);
     body.append(sections);
 
@@ -122,6 +123,7 @@ UI.tab({
       accentRow.render(s.look);
       sections.spy();
       media.update(s);
+      engines.update(s);
       wallSw.set(!s.phone || !s.phone.settings || s.phone.settings.wallpaper !== false);
       const ov = (s.ui && s.ui.overview) || {};
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);

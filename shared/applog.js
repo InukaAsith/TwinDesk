@@ -5,8 +5,8 @@
 // folder, %APPDATA%\MacShare\logs, ~/.config/MacShare/logs), kept to 5 MB × 3 (TwinDesk.log, .1.log,
 // .2.log). Crashes
 // (an uncaught exception or rejection here, a window's renderer or another Electron process gone)
-// go to crash.log as well, and the app goes on as before. While connected, once every 30 s, one
-// line on the link: round trip p50/p95/p99/max, the input lane's (shared/inputlane.js) when it's
+// go to crash.log as well, and the app goes on as before. With TWINDESK_LINK_STATS=1, while connected,
+// once every 30 s, one line on the link: round trip p50/p95/p99/max, the input lane's (shared/inputlane.js) when it's
 // up, pointer moves a second, bytes queued on the socket, and how long the main thread's event loop
 // was held up (p99 and max: garbage collection, sync writes, IPC).
 //
@@ -138,7 +138,10 @@ function pct(sorted, p) {
 }
 
 // The link line every 30 s while connected (sample: see above). Moves: shared/kvm-moves.js counts them.
+// Off unless TWINDESK_LINK_STATS=1 (a developer's measurement): its sampling (a 10 ms event-loop
+// monitor and a 1 s timer) would wake the app all day, and its line would go to disk every 30 s.
 function linkStats(sample, everyMs = STATS_MS, sampleMs = 1000) {
+  if (process.env.TWINDESK_LINK_STATS !== '1') return () => {};
   const { KvmMoves } = require('./kvm-moves.js');
   let loop = null; // the event loop's delay, reset after each line
   try {

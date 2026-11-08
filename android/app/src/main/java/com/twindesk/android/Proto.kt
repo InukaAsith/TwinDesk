@@ -25,9 +25,10 @@ object Proto {
     const val FILE_CHUNK_BYTES = 64 * 1024
     const val FILE_MAX_BYTES = 16L * 1024 * 1024 * 1024 * 1024 // protocol.js FILE_MAX_BYTES (16 TiB; was 4 GiB, #143)
     // Fast files (shared/fastfile.js, docs/protocol.md "fx"): a file's bytes as one HTTPS stream on the
-    // session's port, never on Bluetooth or a Wi-Fi Direct group / hotspot (netlink.js GROUP_NETS).
+    // session's port (or the files engine's, fx2: FX2_PATH), never on Bluetooth.
     const val FX_PATH = "/twindesk/fx/"
     const val FX_HEADER = "x-twindesk-fx"
+    const val FX2_PATH = "/twindesk/fx2/"
     val GROUP_NETS = listOf("192.168.49.", "10.42.", "192.168.137.", "192.168.43.", "172.20.10.")
     const val MAX_PAYLOAD = 16 * 1024 * 1024
     const val OS = "android"
@@ -95,6 +96,9 @@ object Proto {
         const val PHONE_MEDIA = "phone.media"
         const val PHONE_MEDIA_WANT = "phone.media.want"
         const val PHONE_MEDIA_CTL = "phone.media.ctl"
+        const val PC_MEDIA = "pc.media" // what plays on the computer (shared/pcnow.js, PcMedia.kt)
+        const val PC_MEDIA_WANT = "pc.media.want"
+        const val PC_MEDIA_CTL = "pc.media.ctl"
         const val REMOTE_HELLO = "remote.hello"
         const val REMOTE_STATE = "remote.state"
         const val REMOTE_RELEASE = "remote.release"

@@ -72,6 +72,8 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
         @JavascriptInterface fun setPad(id: String, code: String) = main.post {
             if (Remote.CONTROLS.any { it.first == id } && Remote.KEYS.any { it.first == code }) core.remote.setPad(id, code)
         }.let { }
+        // The gamepad's layout (Edit): where each control is, its size, hidden ones, extra buttons.
+        @JavascriptInterface fun setLayout(json: String) = main.post { core.remote.setLayout(json) }.let { }
         // The gamepad's state, as a Bluetooth gamepad (BtPad: remote.html while a computer is connected to it).
         @JavascriptInterface fun pad(b: Int, lx: Double, ly: Double, rx: Double, ry: Double, lt: Double, rt: Double) {
             if (core.btPadMade) core.btPad.pad(b, lx, ly, rx, ry, lt, rt)

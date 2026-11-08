@@ -12,6 +12,8 @@ const { BrowserWindow, ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 
+const DROP_MS = 30000;
+
 class Audio extends EventEmitter {
   constructor({ server, hub, stream, getSettings }) {
     super();
@@ -31,6 +33,7 @@ class Audio extends EventEmitter {
       if (server.current) return;
       this._stopSend(false);
       this._stopRecv();
+      this._idle();
     });
     server.on(`t:${P.T.AUDIO_POLICY}`, (m) => {
       this.peerAccepts = m.accept === true;
@@ -64,6 +67,7 @@ class Audio extends EventEmitter {
   }
 
   async _ensureWin() {
+    clearTimeout(this.dropTimer);
     if (this.win && !this.win.isDestroyed()) return;
     this.win = new BrowserWindow({
       show: false,
@@ -110,6 +114,21 @@ class Audio extends EventEmitter {
     this._toWin('send-stop', {});
     if (tell && this.server.current) this.server.sendToClient({ t: P.T.AUDIO_STOP, dir: 'm2w' });
     this.emit('change');
+    this._idle();
+  }
+
+  // Nothing playing either way and nobody who would (no session, or both switches off): the hidden
+  // window and its renderer go after DROP_MS; the next sound makes it again.
+  _idle() {
+    clearTimeout(this.dropTimer);
+    if (!this.win) return;
+    this.dropTimer = setTimeout(() => {
+      const c = this.cfg;
+      if (this.sending || this.receiving || !this.win || (this.server.current && (c.send || c.receive))) return;
+      const w = this.win;
+      this.win = null;
+      if (!w.isDestroyed()) w.destroy();
+    }, DROP_MS);
   }
 
   // w2m: the PC offers its sound.
@@ -126,6 +145,7 @@ class Audio extends EventEmitter {
     this.receiving = null;
     this._toWin('recv-stop', {});
     this.emit('change');
+    this._idle();
   }
 
   // After the Audio tab changed.
@@ -135,6 +155,7 @@ class Audio extends EventEmitter {
     this._toWin('volume', this.cfg.volume);
     this.hub.applyMute();
     this.evaluate();
+    this._idle();
   }
 
   get view() {

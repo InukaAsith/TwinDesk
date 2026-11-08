@@ -28,6 +28,7 @@ final class PasteboardWatch {
     guard on else { return }
     check()
     timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.check() }
+    timer?.tolerance = 0.05 // macOS may run it with other wakeups
   }
 
   private func check() {

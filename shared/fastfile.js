@@ -5,8 +5,9 @@
 // file.chunk messages (data a Buffer) from deliver(), so the receivers need only take a Buffer.
 //
 // Only when both apps said so (hello {fx: 1}, welcome {fx: token}, the token a secret of this
-// session) and the session runs on the network or a cable, never through Bluetooth or a link
-// netlink.js made (Wi-Fi Direct, a hotspot): those keep file.chunk. An older app never says so.
+// session) and the session runs on the network, a cable or a link netlink.js made (Wi-Fi Direct, a
+// hotspot), never through Bluetooth: that keeps file.chunk. An older app never says so. On a link
+// netlink.js made, the bytes keep it up as file.chunk does (active(): netlink.touch('files')).
 //
 // The guest connects, as it does for the session: it PUTs what it sends, and GETs what the host
 // sends when the host says file.pull. It pins the host's certificate as the session does; the host
@@ -35,7 +36,6 @@ const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
 const P = require('./protocol.js');
-const { GROUP_NETS } = require('./netlink.js');
 const awake = require('./awake.js');
 
 const T = P.T;
@@ -98,6 +98,44 @@ class FastFiles {
     this.plainOn = false;
     this.plainServer = null;
     this.plainPort = 0;
+    // () on bytes either way: a link made for files (netlink.js) stays up while they move.
+    this.active = null;
+    // The last file's way (Settings › General › Advanced, shared/engines.js): {way: 'fx2' | 'fx' |
+    // 'chunk', dir: 'send' | 'recv', plain, at}.
+    this.last = null;
+  }
+
+  _note(way, dir) {
+    const s = this.o.session();
+    this.last = { way, dir, plain: way !== 'chunk' && this._plainNow(s), at: Date.now() };
+  }
+
+  // The app sent a file.chunk (the old way): for describe()'s last.
+  sentChunk() {
+    if (!this.last || this.last.way !== 'chunk' || this.last.dir !== 'send') this._note('chunk', 'send');
+  }
+
+  _plainNow(s) {
+    return !!s && this.plainOn && !!(s.host ? s.plainToken : s.plain);
+  }
+
+  // What the next file uses and why (shared/engines.js): {next: 'fx2' | 'fx' | 'chunk', why: '' |
+  // 'peer' (the other app can't) | 'bluetooth' | 'failed' (it failed this session) | 'off' (here) |
+  // 'engine' (ours isn't up), plain, last}.
+  describe() {
+    const s = this.o.session();
+    const out = { next: 'chunk', why: '', plain: false, last: this.last };
+    if (!s || !s.token) return { ...out, why: 'peer' };
+    if (s.transport === 'ble' || String(s.address || '').startsWith('ble:')) return { ...out, why: 'bluetooth' };
+    if (this.broken) return { ...out, why: 'failed' };
+    out.plain = this._plainNow(s);
+    if (this.usable2()) return { ...out, next: 'fx2' };
+    return { ...out, next: 'fx', why: !this.fx2 ? 'off' : this.broken2 ? 'failed' : !s.fx2 ? 'peer' : 'engine' };
+  }
+
+  _active() {
+    awake.touch();
+    if (this.active) try { this.active(); } catch (_) { /* the app's */ }
   }
 
   // ---- unencrypted file transfers (fxPlain) ----
@@ -210,10 +248,10 @@ class FastFiles {
     this.fx2.setTokens(t ? [t] : [], pt ? [pt] : []);
   }
 
-  // Fast files for the next file: both sides can, on the network or a cable.
+  // Fast files for the next file: both sides can, on the network, a cable or a link made for it.
   usable() {
     const s = this.o.session();
-    return !this.broken && !!s && !!s.token && s.transport !== 'ble' && !GROUP_NETS.some((p) => String(s.address || '').startsWith(p));
+    return !this.broken && !!s && !!s.token && s.transport !== 'ble' && !String(s.address || '').startsWith('ble:');
   }
 
   // How many files go at once.
@@ -255,7 +293,7 @@ class FastFiles {
   send(id, path, size, onBytes) {
     if (!onBytes.awake) { // the computer stays awake while the bytes go (shared/awake.js)
       const tell = onBytes;
-      onBytes = (n) => { awake.touch(); tell(n); };
+      onBytes = (n) => { this._active(); tell(n); };
       onBytes.awake = true;
     }
     if (this.outgoing.has(id) || this.out2.has(id)) return Promise.reject(new Error('file is already transferring'));
@@ -288,6 +326,7 @@ class FastFiles {
   _send2(s, id, path, size, onBytes) {
     const done = (hashes) => {
       this.ends.set(id, hashes);
+      this._note('fx2', 'send');
       return crypto.createHash('sha256').update(hashes.join(',')).digest('hex');
     };
     if (!s.host) {
@@ -358,7 +397,7 @@ class FastFiles {
   }
 
   _progress2(id, n) {
-    awake.touch();
+    this._active();
     const r = this.in2.get(id);
     if (r && r.hook.progress) try { r.hook.progress(id, n); } catch (_) { /* the receiver's */ }
   }
@@ -367,6 +406,7 @@ class FastFiles {
     const r = this.in2.get(id);
     if (!r) return;
     r.hashes = hashes;
+    this._note('fx2', 'recv');
     this._settle2(id, r);
   }
 
@@ -408,7 +448,7 @@ class FastFiles {
         done = true;
         if (this.outgoing.get(id) === w) this.outgoing.delete(id);
         if (w.rs) w.rs.destroy();
-        if (!err) return resolve(sha);
+        if (!err) { this._note('fx', 'send'); return resolve(sha); }
         if (err.early) this.broken = true;
         reject(err);
       };
@@ -479,6 +519,7 @@ class FastFiles {
       if (this.outgoing.get(id) !== w) return;
       this.outgoing.delete(id);
       rs.destroy();
+      this._note('fx', 'send');
       w.resolve(hash.digest('hex'));
     });
     res.on('close', () => this.outgoing.get(id) === w && !res.writableFinished && this._fail(id, new Error('the transfer stopped')));
@@ -502,7 +543,10 @@ class FastFiles {
 
   // Every message from the peer before the feature code sees it: true when it was ours (or waits).
   incoming(msg) {
-    if (msg.t === T.FILE_CHUNK) awake.touch(); // the old way's bytes
+    if (msg.t === T.FILE_CHUNK) { // the old way's bytes
+      awake.touch();
+      if (!this.last || this.last.way !== 'chunk' || this.last.dir !== 'recv') this._note('chunk', 'recv');
+    }
     switch (msg.t) {
       case T.FILE_END: {
         const r2 = this.in2.get(msg.id);
@@ -603,7 +647,7 @@ class FastFiles {
   _receive(id, stream, ok, r = this._track(id, stream)) {
     stream.on('data', (b) => {
       if (this.arriving.get(id) !== r) return;
-      awake.touch();
+      this._active();
       r.parts.push(b);
       r.size += b.length;
       if (r.size >= CHUNK_BYTES) this._flush(id, r);
@@ -612,6 +656,7 @@ class FastFiles {
       if (this.arriving.get(id) !== r) return;
       this._flush(id, r);
       if (this.arriving.get(id) !== r) return;
+      this._note('fx', 'recv');
       if (ok) ok();
       if (this.arriving.get(id) === r) this._drop(id, false);
     });

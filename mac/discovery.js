@@ -53,9 +53,15 @@ class Discovery extends EventEmitter {
 
   start() {
     this._bind();
-    this.timers.push(setInterval(() => this._beacon(), P.BEACON_MS));
-    this.timers.push(setInterval(() => this._prune(), 1000));
-    this.timers.push(setInterval(() => this.wantProbes && this.probe(), P.PROBE_MS));
+    // One timer for all three (one wakeup every BEACON_MS): the beacon, the stale ones gone, and
+    // every PROBE_MS a probe. Beacons stay at BEACON_MS: other computers drop us after DEVICE_STALE_MS.
+    let n = 0;
+    const every = Math.max(1, Math.round(P.PROBE_MS / P.BEACON_MS));
+    this.timers.push(setInterval(() => {
+      this._beacon();
+      this._prune();
+      if (++n % every === 0 && this.wantProbes) this.probe();
+    }, P.BEACON_MS));
     this.wantProbes = true;
   }
 

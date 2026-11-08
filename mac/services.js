@@ -31,6 +31,7 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
   const s = getSettings;
   server.setMaxListeners(50); // one 'client'/'closed' listener per feature
   const helper = new Helper();
+  require('../shared/usbadb.js').watch(helper); // a phone on the USB cable: IOKit tells (no ioreg every 2 s)
   const displays = new Displays(helper, s);
   const hub = new AudioHub(helper, s);
   const stream = new Stream(server, displays, s, hub);

@@ -94,7 +94,7 @@
       ? 'It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).'
       : 'What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.';
   }
-  $('b-map').onclick = () => { releaseAll(); mapFill(); $('map').hidden = false; };
+  $('b-map').onclick = () => { releaseAll(); editEnd(); mapFill(); $('map').hidden = false; };
   $('map-done').onclick = () => { $('map').hidden = true; };
   $('map-reset').onclick = () => TD.event('padReset');
 
@@ -102,6 +102,7 @@
     if (m.t === 'opts') {
       if ((m.bt === true) !== (opts.bt === true)) releaseAll(); // what's held goes the old way
       opts = { ...opts, ...m };
+      if (m.layout && !layoutIn) { layoutIn = true; layoutApply(m.layout); }
       if (!opts.connected && !opts.bt) { allowed = null; releaseAll(); }
       if (opts.bt || !opts.connected) canText = false; // a Bluetooth keyboard has only keys
     } else if (m.t === 'remote.state') {
@@ -358,11 +359,13 @@
   // its keys as they are; the field doesn't change, so nothing is sent twice.
   const keyCode = (e) => e.code || ({ Backspace: 'Backspace', Enter: 'Enter' })[e.key] || '';
   window.addEventListener('keydown', (e) => {
+    if (editing) return; // typing a button's label (Edit)
     if (!keyCode(e) || e.keyCode === 229 || e.isComposing || e.repeat) return; // composing: see input
     e.preventDefault();
     press(keyCode(e), true);
   });
   window.addEventListener('keyup', (e) => {
+    if (editing) return; // typing a button's label (Edit)
     if (!keyCode(e) || e.keyCode === 229 || e.isComposing) return;
     e.preventDefault();
     press(keyCode(e), false);
@@ -399,9 +402,11 @@
     if (id in BIT) padSet('b', down ? gp.b | (1 << BIT[id]) : gp.b & ~(1 << BIT[id]));
   }
 
-  // A button: its key, or as a real gamepad's button; let go the way it was pressed.
-  for (const el of document.querySelectorAll('#game button[data-id]')) {
+  // A button: its key, or as a real gamepad's button; let go the way it was pressed. A button of
+  // the person's own (Edit › + Button) presses its key either way.
+  function bindButton(el) {
     const id = el.dataset.id;
+    const custom = el.classList.contains('custom');
     let pressed = null; // the key, or true (the real gamepad's)
     const up = () => {
       if (pressed == null) return;
@@ -413,7 +418,7 @@
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       if (pressed != null) return;
-      pressed = asPad() ? true : padKey(id);
+      pressed = custom ? (el.dataset.key || '') : asPad() ? true : padKey(id);
       el.classList.add('down');
       if (pressed === true) padButton(id, true); else press(pressed, true);
       tick();
@@ -421,6 +426,7 @@
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
   }
+  for (const el of document.querySelectorAll('#game button[data-id]')) bindButton(el);
 
   // A stick: where the finger is from its middle, -1..1 each way.
   function stick(el, onMove) {
@@ -487,6 +493,195 @@
     rs = { x, y };
     if (!rsFrame && Math.hypot(x, y) >= 0.12) rsFrame = requestAnimationFrame(rsStep);
   });
+
+  // ---- editing the gamepad (Edit): move, size, hide, rename and set the key of any control; add
+  // buttons of your own. The layout: {items: {id: {x, y, s, hide, label}}, custom: [{id, label, key, x, y, s, hide}]},
+  // x and y the control's middle as a share of the screen (kept by Remote.kt, TD.setLayout). ----
+  const UNITS = { lt: 'LT', lb: 'LB', rb: 'RB', rt: 'RT', back: 'Back', start: 'Start', ls: 'Left stick', rs: 'Right stick', dpad: 'D-pad', abxy: 'A B X Y', l3: 'L3', r3: 'R3' };
+  const KEYED = ['lt', 'lb', 'rb', 'rt', 'back', 'start', 'l3', 'r3']; // one button, one key
+  let layout = { items: {}, custom: [] };
+  let layoutIn = false; // the saved one is applied once (opts come again on every change)
+  let editing = false;
+  let sel = null; // the selected control's id
+  const unitEl = (id) => $(`g-${id}`) || $(id) || document.querySelector(`#game [data-unit="${id}"]`);
+  for (const id of Object.keys(UNITS)) {
+    const el = unitEl(id);
+    el.dataset.unit = id;
+    el.dataset.def = el.textContent;
+  }
+  const isCustom = (id) => layout.custom.some((c) => c.id === id);
+  const itemOf = (id) => layout.custom.find((c) => c.id === id) || (layout.items[id] = layout.items[id] || {});
+  const clamp = (v) => Math.max(0.02, Math.min(0.98, v));
+
+  function place(el, it) {
+    const at = typeof it.x === 'number' && typeof it.y === 'number';
+    el.style.left = at ? `${clamp(it.x) * 100}vw` : '';
+    el.style.top = at ? `${clamp(it.y) * 100}vh` : '';
+    el.style.right = at ? 'auto' : '';
+    el.style.bottom = at ? 'auto' : '';
+    const s = Number(it.s) || 1;
+    el.style.transform = `${at ? 'translate(-50%, -50%) ' : ''}${s !== 1 ? `scale(${s})` : ''}`.trim();
+    el.classList.toggle('off', it.hide === true);
+    if (el.tagName === 'BUTTON' && !(el.id === 'dpad' || el.id === 'abxy')) el.textContent = (typeof it.label === 'string' && it.label) || el.dataset.def || '';
+  }
+
+  function makeCustom(c) {
+    const el = document.createElement('button');
+    el.className = 'g custom';
+    el.dataset.id = c.id;
+    el.dataset.unit = c.id;
+    el.dataset.key = c.key || '';
+    el.dataset.def = 'Btn';
+    $('game').append(el);
+    bindButton(el);
+    place(el, c);
+    return el;
+  }
+
+  function layoutApply(l) {
+    for (const el of document.querySelectorAll('#game .custom')) el.remove();
+    const items = l && typeof l.items === 'object' && l.items ? l.items : {};
+    const custom = Array.isArray(l && l.custom) ? l.custom.filter((c) => c && typeof c.id === 'string').slice(0, 24) : [];
+    layout = { items: {}, custom };
+    for (const id of Object.keys(UNITS)) {
+      layout.items[id] = typeof items[id] === 'object' && items[id] ? items[id] : {};
+      place(unitEl(id), layout.items[id]);
+    }
+    for (const c of custom) makeCustom(c);
+  }
+  const save = () => { try { TD.setLayout(JSON.stringify(layout)); } catch (_) { /* older app */ } };
+
+  // The bar under a selected control: its size, key, label, Hide (or Show), Delete (one of yours).
+  function select(id) {
+    for (const el of document.querySelectorAll('#game [data-unit].sel')) el.classList.remove('sel');
+    sel = id;
+    $('edit-bar').hidden = !id;
+    if (!id) return;
+    const el = unitEl(id);
+    el.classList.add('sel');
+    const it = itemOf(id);
+    const custom = isCustom(id);
+    $('edit-name').textContent = custom ? (it.label || 'Button') : UNITS[id];
+    $('edit-size').value = String(Number(it.s) || 1);
+    const keyed = custom || KEYED.includes(id);
+    $('edit-key-row').hidden = !keyed;
+    $('edit-label-row').hidden = !keyed;
+    if (keyed) {
+      const k = $('edit-key');
+      if (!k.options.length) for (const [code, name] of opts.keys || []) k.add(new Option(name, code));
+      k.value = custom ? (it.key || '') : padKey(id);
+      $('edit-label').value = (typeof it.label === 'string' && it.label) || el.dataset.def || '';
+    }
+    $('edit-hide').textContent = it.hide ? 'Show' : 'Hide';
+    $('edit-del').hidden = !custom;
+  }
+
+  $('edit-size').oninput = () => {
+    if (!sel) return;
+    const it = itemOf(sel);
+    it.s = Number($('edit-size').value) || 1;
+    place(unitEl(sel), it);
+  };
+  $('edit-size').onchange = save;
+  $('edit-key').onchange = () => {
+    if (!sel) return;
+    const code = $('edit-key').value;
+    if (isCustom(sel)) { itemOf(sel).key = code; unitEl(sel).dataset.key = code; save(); }
+    else { TD.setPad(sel, code); opts.pad = { ...opts.pad, [sel]: code }; }
+  };
+  $('edit-label').oninput = () => {
+    if (!sel) return;
+    const it = itemOf(sel);
+    it.label = $('edit-label').value.slice(0, 12);
+    place(unitEl(sel), it);
+    if (isCustom(sel)) $('edit-name').textContent = it.label || 'Button';
+  };
+  $('edit-label').onchange = save;
+  $('edit-hide').onclick = () => {
+    if (!sel) return;
+    const it = itemOf(sel);
+    it.hide = !it.hide;
+    place(unitEl(sel), it);
+    $('edit-hide').textContent = it.hide ? 'Show' : 'Hide';
+    save();
+  };
+  $('edit-del').onclick = () => {
+    if (!sel || !isCustom(sel)) return;
+    unitEl(sel).remove();
+    layout.custom = layout.custom.filter((c) => c.id !== sel);
+    select(null);
+    save();
+  };
+  $('edit-add').onclick = () => {
+    if (layout.custom.length >= 24) return;
+    const c = { id: `c${Date.now().toString(36)}`, label: 'Btn', key: '', x: 0.5, y: 0.55, s: 1 };
+    layout.custom.push(c);
+    makeCustom(c);
+    select(c.id);
+    save();
+  };
+  $('edit-reset').onclick = () => {
+    layoutApply({ items: {}, custom: [] });
+    select(null);
+    save();
+  };
+
+  function editStart() {
+    releaseAll();
+    $('map').hidden = true;
+    editing = true;
+    document.body.classList.add('editing');
+    $('edit-top').hidden = false;
+  }
+  function editEnd() {
+    if (!editing) return;
+    editing = false;
+    select(null);
+    document.body.classList.remove('editing');
+    $('edit-top').hidden = true;
+    $('edit-bar').hidden = true;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  }
+  $('b-edit').onclick = editStart;
+  $('edit-done').onclick = editEnd;
+
+  // While editing, a touch on a control moves it (or, without moving, selects it) and presses nothing:
+  // caught on its way down to the control, before the control's own handlers.
+  const game = $('game');
+  let drag = null; // {id, el, pid, sx, sy, cx, cy, moved}
+  game.addEventListener('pointerdown', (e) => {
+    if (!editing) return;
+    e.stopPropagation();
+    e.preventDefault();
+    if (drag) return;
+    const el = e.target.closest('[data-unit]');
+    if (!el) return select(null);
+    const r = el.getBoundingClientRect();
+    drag = { id: el.dataset.unit, el, pid: e.pointerId, sx: e.clientX, sy: e.clientY, cx: r.left + r.width / 2, cy: r.top + r.height / 2, moved: false };
+    try { game.setPointerCapture(e.pointerId); } catch (_) { /* gone */ }
+  }, true);
+  game.addEventListener('pointermove', (e) => {
+    if (!editing) return;
+    e.stopPropagation();
+    if (!drag || e.pointerId !== drag.pid) return;
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true;
+    const it = itemOf(drag.id);
+    it.x = clamp((drag.cx + dx) / window.innerWidth);
+    it.y = clamp((drag.cy + dy) / window.innerHeight);
+    place(drag.el, it);
+  }, true);
+  const dragEnd = (e) => {
+    if (!editing) return;
+    e.stopPropagation();
+    if (!drag || e.pointerId !== drag.pid) return;
+    const d = drag;
+    drag = null;
+    if (d.moved) { save(); if (sel !== d.id) select(d.id); } else select(d.id);
+  };
+  game.addEventListener('pointerup', dragEnd, true);
+  game.addEventListener('pointercancel', dragEnd, true);
 
   render();
   TD.ready();

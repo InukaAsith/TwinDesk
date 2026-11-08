@@ -41,6 +41,27 @@ class Notifs(core: Core) : Feature(core) {
         core.changed()
     }
 
+    // Notifications › Apps: a block list (every app but the ones switched off: the muted set, as
+    // before) or an allow list (only the ones switched on), over every app on the phone (AppList).
+    val allowMode: Boolean get() = core.store.prefsString("notifs.filter", "block") == "allow"
+    fun setAllowMode(on: Boolean) { core.store.setPrefsString("notifs.filter", if (on) "allow" else "block"); core.changed() }
+    private val allowed get() = core.store.prefsSet("notifs.allowed")
+    fun isAllowed(pkg: String) = pkg in allowed
+    fun setAllowed(pkg: String, on: Boolean) {
+        core.store.setPrefsSet("notifs.allowed", if (on) allowed + pkg else allowed - pkg)
+        core.changed()
+    }
+    // Whether this app's notifications go to the computer.
+    fun sends(pkg: String) = if (allowMode) pkg in allowed else pkg !in muted
+    // The list's switch: on = its notifications go.
+    fun setSends(pkg: String, on: Boolean) = if (allowMode) setAllowed(pkg, on) else setMuted(pkg, !on)
+    // Every app at once (the list's All and None).
+    fun setAll(pkgs: Collection<String>, on: Boolean) {
+        if (allowMode) core.store.setPrefsSet("notifs.allowed", if (on) allowed + pkgs else allowed - pkgs.toSet())
+        else core.store.setPrefsSet("notifs.muted", if (on) muted - pkgs.toSet() else muted + pkgs)
+        core.changed()
+    }
+
     private fun seen(pkg: String) {
         val all = core.store.prefsSet("notifs.apps")
         if (pkg in all) return
@@ -250,7 +271,7 @@ class Notifs(core: Core) : Feature(core) {
         if (n.category == Notification.CATEGORY_TRANSPORT || n.category == Notification.CATEGORY_PROGRESS || n.category == Notification.CATEGORY_SERVICE) return
         if (n.category == Notification.CATEGORY_CALL && core.hub.callsOn) return // the computer shows the call itself
         seen(pkg)
-        if (pkg in muted) return
+        if (!sends(pkg)) return
 
         val x = n.extras
         val title = extractTitle(x)

@@ -46,8 +46,12 @@ class Clipboard extends EventEmitter {
       this.peerAccepts = true;
       this.images.reset();
       this.sendPolicy();
+      this._watch();
     });
-    server.on('closed', () => this.images.reset());
+    server.on('closed', () => {
+      this.images.reset();
+      this._watch();
+    });
     server.on(`t:${P.T.CLIP}`, (msg) => this._onClip(msg));
     server.on(`t:${P.T.CLIP_IMAGE}`, (msg) => this.images.header(msg));
     server.on(`t:${P.T.CLIP_IMAGE_PART}`, (msg) => this.images.part(msg));
@@ -73,10 +77,20 @@ class Clipboard extends EventEmitter {
   // Call after settings.clipboard changed (and once at start).
   applySettings() {
     const c = this.cfg;
-    this.helper.send('clipboardWatch', { on: !!(c.enabled && c.send) });
+    this._watch(true);
     if (c.historySize < this.history.length) this.history.length = c.historySize;
     this.sendPolicy();
     this.emit('change');
+  }
+
+  // The helper watches the clipboard (4 checks a second) only while a session could take a copy:
+  // with nobody connected nothing would be sent (sendIfChanged), so nothing wakes the Mac for it.
+  _watch(force = false) {
+    const c = this.cfg;
+    const on = !!(c.enabled && c.send && this.server.current);
+    if (!force && on === this.watching) return;
+    this.watching = on;
+    this.helper.send('clipboardWatch', { on });
   }
 
   sendPolicy() {

@@ -60,6 +60,7 @@ class InputService : AccessibilityService() {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: ""
         if (pkg.isEmpty() || pkg == activePackage || pkg == "com.android.systemui") return
+        runCatching { Core.get(this).bank.front(pkg) } // a banking app: debugging off, TwinDesk exits (BankGuard.kt)
         activePackage = pkg
         resend()
     }

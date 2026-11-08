@@ -31,7 +31,10 @@
 //   (its windows streamed to the other computer), accept(on) (take the other's windows here),
 //   stop() (stop sending ours)} | null, cacheDir (where copies go; emptied at shutdown), live →
 //   {share(path) → info, mount(info) → local path, stop()} | null (shared/rzlive.js), pick(offer,
-//   ['copy'|'live'|'window']) → Promise<how | null> (the chooser). Events: 'change', 'offer' (a
+//   ['copy'|'live'|'window']) → Promise<how | null> (the chooser), watch → {start(onChange) →
+//   Promise<bool> (true: onChange is called when the app or window in front changes), stop()} | null:
+//   then detect() runs on those changes (at most every POLL_MS) and every WATCH_SAFETY_MS, not every
+//   POLL_MS (the Mac: an osascript a look). Events: 'change', 'offer' (a
 //   new one to show), 'gone' (none to show any more), 'opened' ({title, how}).
 'use strict';
 
@@ -43,6 +46,7 @@ const P = require('./protocol.js');
 
 const T = P.T;
 const POLL_MS = 1500;
+const WATCH_SAFETY_MS = 15000; // with a watch: a look this often anyway (a change it didn't report)
 const STABLE_MS = 2500; // in front this long before it's offered (not every window passed on the way)
 const TTL_MS = 10 * 60 * 1000; // an offer this old is gone
 const ADB_POLL_MS = 3000;
@@ -118,6 +122,11 @@ class ReZume extends EventEmitter {
     this.message = '';
     this.why = ''; // why nothing is seen here (detect's {why})
     this.timer = null;
+    this.watching = false; // opts.watch started (its answer may still be coming)
+    this.watchGen = 0;
+    this.pokeTimer = null;
+    this.pokeAt = 0;
+    this.lastTick = 0;
     this.adbTimer = null;
     this.icons = new Map();
     this.iconAsks = new Set();
@@ -274,12 +283,30 @@ class ReZume extends EventEmitter {
     const peer = this.link.peer();
     // Looking here: to offer (the other side takes them) or for the tray's Send to (push).
     const look = !!(peer && c.on && c.send && ((this.peerPolicy && this.peerPolicy.on) || c.tray));
-    if (look && !this.timer) {
-      this.timer = setInterval(() => this._tick().catch((e) => console.error('[rezume]', e.message)), POLL_MS);
+    const tick = () => this._tickNow();
+    if (look && !this.timer && !this.watching) {
+      if (this.watch) {
+        this.watching = true;
+        const gen = ++this.watchGen;
+        const every = (ok) => {
+          if (gen !== this.watchGen || this.timer) return;
+          this.timer = setInterval(tick, ok ? WATCH_SAFETY_MS : POLL_MS);
+        };
+        Promise.resolve().then(() => this.watch.start(() => gen === this.watchGen && this._poke(0))).then((ok) => every(ok === true), () => every(false));
+      } else {
+        this.timer = setInterval(tick, POLL_MS);
+      }
       this._tick().catch(() => {});
-    } else if (!look && this.timer) {
+    } else if (!look && (this.timer || this.watching)) {
       clearInterval(this.timer);
       this.timer = null;
+      if (this.watching) {
+        this.watching = false;
+        ++this.watchGen;
+        try { this.watch.stop(); } catch (_) {}
+      }
+      clearTimeout(this.pokeTimer);
+      this.pokeTimer = null;
       this.seen = null;
     }
     // A phone that doesn't say what's in front: asked through wireless debugging.
@@ -293,9 +320,28 @@ class ReZume extends EventEmitter {
 
   // ---- offering ----
 
+  _tickNow() {
+    this._tick().catch((e) => console.error('[rezume]', e.message));
+  }
+
+  // With a watch: a look at `at` (0: now), never sooner than POLL_MS after the last one, so a window
+  // whose title changes all the time costs no more than the poll did. The earliest asked wins.
+  _poke(at) {
+    if (!this.watching) return;
+    const when = Math.max(at || 0, this.lastTick + POLL_MS, Date.now());
+    if (this.pokeTimer && this.pokeAt <= when) return;
+    clearTimeout(this.pokeTimer);
+    this.pokeAt = when;
+    this.pokeTimer = setTimeout(() => {
+      this.pokeTimer = null;
+      if (this.watching) this._tickNow();
+    }, when - Date.now());
+  }
+
   async _tick() {
     if (this.busy) return;
     this.busy = true;
+    this.lastTick = Date.now();
     let a = null;
     try { a = await this.detect(); } catch (_) { a = null; } finally { this.busy = false; }
     if (a && a.why) {
@@ -313,8 +359,11 @@ class ReZume extends EventEmitter {
     const o = a && this._pick(a);
     if (!o) return void (this.seen = null);
     if (this.out && this.out.key === o.key) return void (this.out.seenAt = Date.now());
-    if (!this.seen || this.seen.key !== o.key) return void (this.seen = { key: o.key, since: Date.now() });
-    if (Date.now() - this.seen.since < STABLE_MS) return;
+    if (!this.seen || this.seen.key !== o.key) {
+      this.seen = { key: o.key, since: Date.now() };
+      return void this._poke(this.seen.since + STABLE_MS + 20); // a watch reports changes only: look again when it's stable
+    }
+    if (Date.now() - this.seen.since < STABLE_MS) return void this._poke(this.seen.since + STABLE_MS + 20);
     this.seen = null;
     await this._send(o, false);
   }

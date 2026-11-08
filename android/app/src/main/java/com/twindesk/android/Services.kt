@@ -31,6 +31,13 @@ class TwinService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
+    // Swiped away from Recents with General › Run in the background off: TwinDesk stops, as Exit does.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        val core = Core.get(this)
+        if (!core.background) exitTwinDesk(this, core)
+    }
+
     override fun onDestroy() {
         running = false
         super.onDestroy()
@@ -50,7 +57,7 @@ class TwinService : Service() {
         fun refresh(ctx: Context) {
             if (!running) return // stopped (Exit): no notification without the service
             val core = Core.get(ctx)
-            val key = listOf(core.host?.name, core.link.state, core.adb.wifiDebugging, core.files.activeLine(), core.hosts().firstOrNull { core.isNear(it.id) }?.id).toString()
+            val key = listOf(core.host?.name, core.link.state, core.adb.wifiDebugging, core.files.activeLine(), core.hosts().firstOrNull { core.isNear(it.id) }?.id, QuickActions.key(core)).toString()
             if (key == lastKey) return
             lastKey = key
             ctx.getSystemService(NotificationManager::class.java).notify(Notify.ID_LINK, Notify.link(ctx, core))
@@ -89,7 +96,7 @@ class ActionReceiver : BroadcastReceiver() {
         val arg = intent.getStringExtra("arg") ?: ""
         when (intent.action) {
             DISCONNECT -> core.disconnect()
-            EXIT -> exit(ctx, core)
+            EXIT -> exitTwinDesk(ctx, core)
             CONNECT -> core.hosts().find { it.id == arg }?.let { core.connect(it) }
             SEND_CLIP -> ctx.startActivity(Intent(ctx, ClipActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             FCLIP_COPY -> core.fclip.fetch(arg, save = false)
@@ -98,22 +105,14 @@ class ActionReceiver : BroadcastReceiver() {
             SOUND_STOP -> core.sound.stop()
             RING_STOP -> core.dev.stopRing()
             REZUME_DISMISS -> core.rezume.dismiss() // ReZume's notification: Dismiss
+            PC_MEDIA -> core.pcMedia.control(arg.ifEmpty { "toggle" }) // the computer's media notification, or Play/Pause on ours
+            RING_PC -> core.dev.ask("ring")
+            LOCK_PC -> core.dev.ask("lock")
             PAIR_CODE -> {
                 val code = android.app.RemoteInput.getResultsFromIntent(intent)?.getCharSequence("code")?.toString() ?: ""
                 core.adb.sendPairCode(code)
             }
         }
-    }
-
-    // Exit: disconnect (so the computer hears it), stop the service and its notification, and end
-    // the process, so nothing reconnects or comes back until TwinDesk is opened again (or the phone
-    // restarts: BootReceiver).
-    private fun exit(ctx: Context, core: Core) {
-        core.store.setFlag("exited", true)
-        core.disconnect()
-        ctx.stopService(Intent(ctx, TwinService::class.java))
-        ctx.getSystemService(NotificationManager::class.java).cancelAll()
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 600)
     }
 
     companion object {
@@ -128,6 +127,9 @@ class ActionReceiver : BroadcastReceiver() {
         const val SOUND_STOP = "com.twindesk.android.SOUND_STOP"
         const val RING_STOP = "com.twindesk.android.RING_STOP"
         const val REZUME_DISMISS = "com.twindesk.android.REZUME_DISMISS"
+        const val PC_MEDIA = "com.twindesk.android.PC_MEDIA"
+        const val RING_PC = "com.twindesk.android.RING_PC"
+        const val LOCK_PC = "com.twindesk.android.LOCK_PC"
     }
 }
 
@@ -138,6 +140,7 @@ class WiredReceiver : BroadcastReceiver() {
         val id = intent.getStringExtra("host") ?: return
         val port = intent.getIntExtra("port", 0)
         if (port <= 0 || port > 65535) return
+        if (!Core.get(ctx).background && !MainActivity.shown) return // Run in the background off: only while the app is open
         runCatching { TwinService.start(ctx) }
         Core.get(ctx).connectWired(id, port, intent.getStringExtra("nonce") ?: "", intent.getStringExtra("name")?.take(64) ?: "")
     }
@@ -145,6 +148,8 @@ class WiredReceiver : BroadcastReceiver() {
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        // General › Run in the background off: only when the app is opened.
+        if (!Core.get(ctx).background) return
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) TwinService.start(ctx)
     }
 }
@@ -188,4 +193,15 @@ class ClipTile : TileService() {
             startActivityAndCollapse(i)
         }
     }
+}
+
+// Exit: disconnect (so the computer hears it), stop the service and its notification, and end
+// the process, so nothing reconnects or comes back until TwinDesk is opened again (or the phone
+// restarts: BootReceiver).
+fun exitTwinDesk(ctx: Context, core: Core) {
+    core.store.setFlag("exited", true)
+    core.disconnect()
+    ctx.stopService(Intent(ctx, TwinService::class.java))
+    ctx.getSystemService(NotificationManager::class.java).cancelAll()
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()) }, 600)
 }

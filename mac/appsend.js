@@ -55,6 +55,7 @@ class AppSend extends EventEmitter {
       for (const id of [...this.launched.keys()]) this._forget(id);
       this.bringBack();
       this._sync([]);
+      this._idle();
     });
     helper.on('ready', () => this._moveKey()); // a restarted helper is told the move key again
     const on = (t, fn) => server.on(`t:${t}`, fn);
@@ -321,6 +322,21 @@ class AppSend extends EventEmitter {
     if (!this.live.delete(session)) return;
     this._toWin({ t: 'stop', session });
     if (this.server.current) this.server.sendToClient({ t: T.RTC2_STOP, session, win: 'send' });
+    this._idle();
+  }
+
+  // No window streamed and no session: the hidden capture window goes after 30 s (made again for the next).
+  _idle() {
+    clearTimeout(this.dropTimer);
+    if (!this.win) return;
+    this.dropTimer = setTimeout(() => {
+      if (this.live.size || this.server.current || !this.win) return;
+      const w = this.win;
+      this.win = null;
+      this.ready = false;
+      if (!w.isDestroyed()) w.destroy();
+    }, 30000);
+    if (this.dropTimer.unref) this.dropTimer.unref();
   }
 
   // The viewer's input in one of our windows: at that window (normalized 0–1 over its frame).
@@ -360,6 +376,7 @@ class AppSend extends EventEmitter {
   }
 
   _create() {
+    clearTimeout(this.dropTimer);
     this.ready = false;
     this.queue = [];
     this.win = new BrowserWindow({

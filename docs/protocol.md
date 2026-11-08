@@ -198,10 +198,28 @@ Tests: `shared/test/fx2.js` (30 MB in 4 ranges), `shared/test/fastfile.js` and `
 From 2.5.2 the Android app says `fx: 1` in hello too, and moves file bytes the fx way: it PUTs what
 it sends and GETs what the computer sends after `file.pull` (`Files.kt`, `Link.fx()`), pinning the
 computer's certificate as the session does. Before, its bytes went as base64 `file.chunk`, a third
-more on the wire. As with computers: only on the network or a cable, never Bluetooth or a Wi-Fi Direct
-group / hotspot; anything wrong before a byte went sends that file and the rest as `file.chunk`
+more on the wire. As with computers: on the network, a cable or a Wi-Fi Direct group / hotspot, never
+Bluetooth; anything wrong before a byte went sends that file and the rest as `file.chunk`
 (`file.pull {failed}` one way, a refused PUT the other). An older computer gives no token, so it still
 gets `file.chunk`; an older phone never asks.
+
+Then the phone says `fx2: 1` too (not on the cable: adb reverse carries only the session's port) and
+does fx2 both ways (`Fx2.kt`): its ranges in parallel, each read or written at its offset, the range
+hashes in `file.end`. A file it can't read at offsets (a stream, not a file) goes the fx way alone;
+anything else wrong before a byte went: that file and the rest of the session go the fx way.
+
+### Fast files on a link made for them
+
+Wi-Fi Direct groups and hotspots made by netlink.js carry fx and fx2 as the network does (they used
+to keep `file.chunk`). The link stays up while bytes move: each side touches netlink's `files` need on
+its bytes (`FastFiles.active`, `Netlink.touch`), as `file.chunk` does.
+
+### The files engine on demand
+
+The computers' files engine (`shared/fx2.js`) runs only when something may need it: a session, another
+TwinDesk computer on the network, a socket coming in, a hello going out, or a job. It stops 30 s after
+nothing does, never during a session. Its port goes in welcome, so a host whose engine isn't up yet
+holds the welcome until it listens (a few tens of ms; up to 1.5 s, then without `fx2`).
 
 ### fxPlain: unencrypted file transfers
 
@@ -230,8 +248,10 @@ with `too_big`, as before.
 | This app ↔ other side | Input | Files |
 |---|---|---|
 | 2.5 ↔ 2.5, network or cable | tdv2 (native where the helper has tdfast) | fx2 |
-| 2.5 ↔ 2.5, Wi-Fi Direct or hotspot | tdv2 if UDP gets through, else tdv1 | file.chunk |
+| 2.5 ↔ 2.5, Wi-Fi Direct or hotspot | tdv2 if UDP gets through, else tdv1 | fx2 |
 | 2.5 ↔ 2.5, Bluetooth | tdv1 | file.chunk (moves to Wi-Fi Direct when it's big) |
 | 2.5 ↔ 2.4 or older | tdv1 | fx or file.chunk |
-| Computer ↔ Android 2.5.2+, network or cable | tdv1 (no lane on Android yet) | fx (fxPlain when the computer allows it, not on the cable) |
-| Computer ↔ Android, Bluetooth or Wi-Fi Direct, or an older side | tdv1 | file.chunk |
+| Computer ↔ Android, network, Wi-Fi Direct or hotspot (both up to date) | tdv1 (no lane on Android yet) | fx2 (fxPlain when the computer allows it) |
+| Computer ↔ Android, cable | tdv1 | fx |
+| Computer ↔ Android 2.5.2+ (older) | tdv1 | fx on the network or a cable, else file.chunk |
+| Computer ↔ Android, Bluetooth, or an older side | tdv1 | file.chunk |

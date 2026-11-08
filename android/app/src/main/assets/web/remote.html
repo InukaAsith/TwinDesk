@@ -13,6 +13,7 @@
     <button id="b-rotate" class="pad-only" aria-label="Rotate">Rotate</button>
     <button id="b-kbd" class="pad-only" aria-label="Keyboard">Keyboard</button>
     <button id="b-map" class="game-only" aria-label="Keys">Keys</button>
+    <button id="b-edit" class="game-only" aria-label="Edit layout">Edit</button>
     <button id="b-close" aria-label="Close">✕</button>
   </header>
   <div id="note" hidden><span id="note-text"></span><button id="note-on" hidden>Turn on Remote</button></div>
@@ -53,6 +54,23 @@
     <button class="g small" id="g-r3" data-id="r3">R3</button>
     <div id="pad-note" hidden></div>
   </section>
+
+  <!-- Editing the gamepad (Edit): drag a control to move it; tap one to size it, hide it, rename it or
+       set its key; add buttons of your own. Saved as you go (Remote.kt's layout). -->
+  <div id="edit-top" class="game-only" hidden>
+    <span>Drag to move · tap to change</span>
+    <button id="edit-add">+ Button</button>
+    <button id="edit-reset">Reset</button>
+    <button id="edit-done">Done</button>
+  </div>
+  <div id="edit-bar" class="game-only" hidden>
+    <b id="edit-name"></b>
+    <label class="edit-size">Size <input id="edit-size" type="range" min="0.5" max="2" step="0.05"></label>
+    <label id="edit-key-row">Key <select id="edit-key"></select></label>
+    <label id="edit-label-row">Label <input id="edit-label" maxlength="12" autocomplete="off"></label>
+    <button id="edit-hide">Hide</button>
+    <button id="edit-del">Delete</button>
+  </div>
 
   <!-- The gamepad's keys: what each control presses (Remote.kt keeps them) -->
   <div id="map" class="game-only" hidden>

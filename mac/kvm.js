@@ -100,7 +100,7 @@ class Kvm extends EventEmitter {
       this.emit('change');
     });
 
-    setInterval(() => this._tick(), 250);
+    this.ticker = null; // the 250 ms keepalive and silence check: only away from home (_setMode), as on Windows and Linux
     // The host tells the layout on connect; after that either side sends it when its user changes it.
     // Cursor sharing is remembered per pair: on connect take this pair's value, and the
     // host tells it so both computers agree; after that kvm.link keeps them in step.
@@ -364,6 +364,8 @@ class Kvm extends EventEmitter {
     const prev = this.mode;
     if (process.env.TWINDESK_DEBUG_KVM && prev !== mode) console.log(`[kvm] ${prev} -> ${mode}${message ? ` (${message})` : ''}`);
     this.mode = mode;
+    if (mode === 'home') { clearInterval(this.ticker); this.ticker = null; }
+    else if (!this.ticker) this.ticker = setInterval(() => this._tick(), 250);
     if (prev !== mode && this.locked) { // moved by the hotkey, the menu bar or a disconnect: the lock was for where it was
       this.locked = false;
       if (prev === 'home') this.config();

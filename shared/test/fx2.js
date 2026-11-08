@@ -77,7 +77,10 @@ async function pair(opts = {}) {
   const guest = { rx: receiver('guest') };
   host.fx2 = opts.hostFx2 === false ? null : new Fx2({ tls: { key, cert } });
   guest.fx2 = opts.guestFx2 === false ? null : new Fx2();
-  if (host.fx2) await new Promise((r) => (host.fx2.port ? r() : host.fx2.once('port', r)));
+  // As the peers do: a session needs the engines (they start on demand).
+  if (host.fx2) host.fx2.need('session', true);
+  if (guest.fx2) guest.fx2.need('session', true);
+  if (host.fx2) assert.ok(await (host.fx2.whenReady(5000) || true), 'the host’s engine listens');
   const wire = (to) => (m) => setImmediate(() => { if (!to.fx.incoming(m)) to.rx.deliver(m); });
   // welcome's fx2 only when the guest's hello said fx2 and the host has an engine (as server.js does)
   const fx2On = !!(host.fx2 && guest.fx2);
@@ -305,6 +308,45 @@ async function arrived(to, id, p) {
     } finally {
       close();
     }
+  }
+
+  // On demand: nothing runs until something needs it; it stops when nothing does, never during a
+  // session or a job; a new start gets the server, the plain server and the tokens back.
+  {
+    const h = new Fx2({ tls: { key, cert }, idleMs: 50 });
+    assert.strictEqual(h.state, 'stopped', 'not started by itself');
+    h.setTokens([token]);
+    h.setPlain(true);
+    assert.strictEqual(h.state, 'stopped', 'settings alone don’t start it');
+    const w = h.whenReady(5000);
+    assert.ok(w && typeof w.then === 'function', 'a wait while it starts');
+    assert.strictEqual(await w, true, 'it listens, its plain server too');
+    assert.ok(h.port > 0 && h.plainPort > 0);
+    assert.strictEqual(h.whenReady(), null, 'no wait once it listens');
+    await until(() => h.state === 'stopped', 'stops when nothing needs it', 2000);
+    assert.strictEqual(h.port, 0);
+    h.need('session', true);
+    await until(() => h.port > 0 && h.plainPort > 0, 'starts again for a session');
+    await new Promise((r) => setTimeout(r, 200));
+    assert.notStrictEqual(h.state, 'stopped', 'never stops during a session');
+    // The tokens came back with it: a range request with the session's token isn't refused for it.
+    const code = await new Promise((resolve) => {
+      const req = https.request({ host: '127.0.0.1', port: h.port, path: '/twindesk/fx2/x?i=0&off=0&len=1&total=1', method: 'GET', rejectUnauthorized: false, headers: { 'x-twindesk-fx': token } }, (res) => { res.resume(); resolve(res.statusCode); });
+      req.on('error', () => resolve(0));
+      req.end();
+    });
+    assert.strictEqual(code, 404, 'the token works after a restart (404: no such file, not 403)');
+    h.need('session', false);
+    await until(() => h.state === 'stopped', 'stops after the session', 2000);
+    // A job starts it (a guest's put/pull) and keeps it up until it settles.
+    const g = new Fx2({ idleMs: 50 });
+    const pf = file('lazy.bin', 1000);
+    const job = g.put('lz', pf, 1000, { host: '127.0.0.1', port: 1, token, fp });
+    assert.notStrictEqual(g.state, 'stopped', 'a job starts it');
+    await assert.rejects(job, (e) => e.early, 'nothing listens there: early, the fx way');
+    await until(() => g.state === 'stopped', 'stops after the job', 2000);
+    h.close();
+    g.close();
   }
 
   // The engine as a process of its own (a utility process in the app; a forked node here).

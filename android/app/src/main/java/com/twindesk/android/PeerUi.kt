@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Connect with Android's pages (Peer.kt): the Android page (phones near, the paired ones, Host for
-// other phones, and what to do with the one connected), its dialogs (a phone asks to connect, the
+// Connect with Android (Peer.kt): its section at the bottom of Connect (Host for other phones, the
+// phones found and paired, and what to do with the one connected), its dialogs (a phone asks to connect, the
 // pairing code on either side), and PeerActivity: the other phone's Messages, Photos and Files.
 package com.twindesk.android
 
@@ -76,16 +76,11 @@ private fun PButton(label: String, primary: Boolean = false, color: Color? = nul
 // ---- the Android page ----
 
 @Composable
-fun AndroidPage(core: Core, v: Int) {
+fun AndroidSection(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v
     val peer = core.peer
     val ctx = LocalContext.current
-    PageHead("Connect with Android", "Another phone or tablet with TwinDesk: files, clipboard, notifications, its messages, photos, files and screen. Beside your computer, not instead of it.")
     Note(peer.message, "warn")
-
-    MacCard {
-        SwitchRow("Host for other phones", "Other phones nearby can connect to this one at any time. Off: they ask first, and this phone hosts only after you allow it (at once for phones already paired).", peer.hostOn, first = true) { peer.setHostOn(it) }
-    }
 
     // Pairing from here (we're the guest): the code to compare.
     peer.link.pair?.let { p ->
@@ -125,17 +120,18 @@ fun AndroidPage(core: Core, v: Int) {
         }
     }
 
+    // One card: the switch, then the phones found (nearby first, then paired ones that aren't).
     val paired = peer.paired()
     val near = peer.nearby()
     var looking by remember { mutableStateOf(false) }
     LaunchedEffect(looking) { if (looking) { kotlinx.coroutines.delay(1500); looking = false } }
-    MacCard("Phones nearby", action = {
-        TextButton(onClick = { looking = true; Thread { runCatching { core.discovery.probe() } }.start() }, enabled = !looking) {
+    MacCard("Phones and tablets", action = {
+        if (peer.on) TextButton(onClick = { looking = true; Thread { runCatching { core.discovery.probe() } }.start() }, enabled = !looking) {
             Text(if (looking) "Looking…" else "Refresh", color = pal.accent, fontSize = 14.sp)
         }
     }) {
-        var first = true
-        for (f in near) {
+        SwitchRow("Connect with Android", if (peer.on) "Other phones and tablets with TwinDesk nearby see this one, and it sees them" else "Off: other phones don’t see this one", peer.on, first = true) { peer.setOn(it) }
+        if (peer.on) for (f in near) {
             val isPaired = peer.isPaired(f.id)
             val here = peer.connected && peer.peerId == f.id
             val hint = when {
@@ -144,20 +140,16 @@ fun AndroidPage(core: Core, v: Int) {
                 f.port > 0 -> if (isPaired) "Paired · Ready" else "Ready to pair"
                 else -> if (isPaired) "Paired · Nearby" else "Nearby · it will ask its owner first"
             }
-            MacRow(f.name, hint, first) {
+            MacRow(f.name, hint) {
+                if (isPaired && !here) PButton("Forget", color = pal.muted) { peer.forget(f.id) }
                 if (peer.waitingFor == f.id) PButton("Cancel") { peer.cancelWait() }
                 else if (!here) PButton(if (isPaired) "Connect" else "Pair", true) { peer.connect(f) }
             }
-            first = false
         }
-        if (first) MacRow("Looking for phones…", "Open TwinDesk on the other phone, on the same Wi-Fi (or one’s hotspot).", true)
-    }
-
-    val away = paired.filter { h -> near.none { it.id == h.id } }
-    if (paired.isNotEmpty()) MacCard("Paired phones") {
-        paired.forEachIndexed { i, h ->
-            MacRow(h.name, if (away.contains(h)) "Not nearby" else "Nearby", i == 0) { PButton("Forget", color = pal.muted) { peer.forget(h.id) } }
+        if (peer.on) for (h in paired.filter { h -> near.none { it.id == h.id } }) {
+            MacRow(h.name, "Paired · Not nearby") { PButton("Forget", color = pal.muted) { peer.forget(h.id) } }
         }
+        if (peer.on && near.isEmpty() && paired.isEmpty()) MacRow("Looking for phones…", "Open TwinDesk on the other phone, on the same Wi-Fi (or one’s hotspot).")
     }
 }
 
@@ -235,7 +227,7 @@ private fun PeerBrowse(core: Core, what: String, close: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             if (!peer.connected) {
                 PageHead(peer.peerName.ifEmpty { "Phone" }, "")
-                Note("Not connected. Connect from the Android page.", "warn")
+                Note("Not connected. Connect from Connect › Connect with Android.", "warn")
                 PButton("Close") { close() }
                 return@Column
             }

@@ -55,6 +55,9 @@ class Discovery(
     // they don't host one. Kept apart from `found`, which is only computers.
     val phones = ConcurrentHashMap<String, Found>()
     @Volatile var peerPort = 0 // ours, in our beacon as `phost` while we host
+    // Connect with Android on (Peer.kt): our beacon says `ap` (every phone app lists only a phone that
+    // does), and other phones are listed and heard. Off: phones don't see this one at all.
+    @Volatile var peerOn = true
     @Volatile var onPeerAsk: ((Found, JSONObject) -> Unit)? = null // another phone's peer.* (Peer.kt)
     @Volatile var error = ""
     @Volatile private var sock: DatagramSocket? = null
@@ -132,7 +135,7 @@ class Discovery(
 
     private fun beaconMsg(): JSONObject = self().put("t", Proto.T.BEACON).put("v", Proto.VERSION).put("os", Proto.OS)
         .put("role", "guest").put("port", Proto.PORT).put("fp", "")
-        .put("ap", 1).apply { if (peerPort > 0) put("phost", peerPort) } // a phone for other phones (computers ignore both)
+        .apply { if (peerOn) { put("ap", 1); if (peerPort > 0) put("phost", peerPort) } } // a phone for other phones (computers ignore both)
 
     // A packet to one address (Peer.kt's peer.ask to another phone).
     fun sendTo(m: JSONObject, address: String) = send(m, address)
@@ -215,6 +218,7 @@ class Discovery(
         val t = m.optString("t")
         if (t == Proto.T.PROBE) return send(beaconMsg(), address, port)
         if (t.startsWith("peer.")) { // another phone (Peer.kt)
+            if (!peerOn) return
             val f = phones[m.optString("id")]?.copy(address = address) ?: Found(m.optString("id"), m.optString("name").take(100).ifEmpty { "Phone" }, Proto.OS, address, 0, "", System.currentTimeMillis(), false)
             onPeerAsk?.invoke(f, m)
             return
@@ -222,7 +226,7 @@ class Discovery(
         if (t != Proto.T.BEACON && t != Proto.T.INVITE) return
         val os = m.optString("os", "mac")
         if (os == Proto.OS) { // other phones: only for Connect with Android (Peer.kt)
-            if (t != Proto.T.BEACON || m.optInt("ap") != 1) return
+            if (t != Proto.T.BEACON || m.optInt("ap") != 1 || !peerOn) return
             val id = m.getString("id")
             val old = phones[id]
             val port = m.optInt("phost", 0).takeIf { it in 1..65535 } ?: 0

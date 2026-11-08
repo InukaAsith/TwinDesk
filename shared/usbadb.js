@@ -6,11 +6,18 @@
 //   Linux   the same three numbers in /sys/bus/usb/devices/*/
 //   Windows a present device on a driver adb uses (WinUSB, Samsung's), from the registry
 // present() -> Promise<boolean>; cheap enough to ask every couple of seconds.
+// watch(helper): a helper that says when one is plugged in or out (the Mac's: usbWatch, UsbWatch.swift)
+// answers present() from then on, with no process started; usbadb.on('change', fn) hears of it at
+// once. Without one (an older helper, Windows, Linux), or while it restarts, present() asks as above.
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
+const { EventEmitter } = require('events');
+
+const events = new EventEmitter();
+let known = null; // true/false from a helper that watches; null: ask the system
 
 const run = (file, args) => new Promise((resolve) => {
   execFile(file, args, { timeout: 4000, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (err, out) => resolve(err ? '' : String(out || '')));
@@ -48,11 +55,46 @@ async function windows() {
   return false;
 }
 
+const CHECK_MS = 30000; // the helper says none: the system is still asked this often, in case it missed one
+let checked = 0;
+
 function present() {
+  if (known === true) return Promise.resolve(true);
+  if (known === false) {
+    if (Date.now() - checked < CHECK_MS) return Promise.resolve(false);
+    checked = Date.now();
+    return ask().then((yes) => {
+      if (yes && known === false) console.log('[usbadb] a phone on the cable the helper didn’t report');
+      return yes;
+    });
+  }
+  return ask();
+}
+
+function ask() {
   if (process.platform === 'darwin') return mac();
   if (process.platform === 'linux') return Promise.resolve(linux());
   if (process.platform === 'win32') return windows();
   return Promise.resolve(false);
 }
 
-module.exports = { present };
+function watch(helper) {
+  const arm = () => {
+    helper.request('usbWatch', {}, 5000).then((r) => {
+      const was = known;
+      known = !!r.present;
+      checked = Date.now();
+      if (was !== known) events.emit('change', known);
+    }).catch(() => { known = null; }); // an older helper: ask the system
+  };
+  helper.on('event', (name, ev) => {
+    if (name !== 'usbAdb' || known === null) return;
+    known = !!ev.present;
+    events.emit('change', known);
+  });
+  helper.on('exit', () => { known = null; });
+  helper.on('ready', arm);
+  if (helper.proc) arm();
+}
+
+module.exports = { present, watch, on: (e, fn) => events.on(e, fn) };

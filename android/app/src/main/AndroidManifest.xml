@@ -184,6 +184,14 @@
             android:excludeFromRecents="true"
             android:taskAffinity="" />
 
+        <!-- The notification's Send files (QuickActions.kt): Android's picker, then to the computer -->
+        <activity
+            android:name=".PickActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
         <activity
             android:name=".ClipActivity"
             android:exported="false"

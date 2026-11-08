@@ -34,10 +34,18 @@
 // }
 'use strict';
 
+// Launch: the compiled code of every module after this one is kept on disk (Node's compile cache),
+// so the next start skips parsing them. Nothing changes if the cache can't be written.
+try {
+  const m = require('module');
+  if (typeof m.enableCompileCache === 'function') m.enableCompileCache();
+} catch {}
+
 let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
 let adbQr = null; // wireless debugging's pairing QR code while shown (shared/adbqr.js)
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
+const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const path = require('path');
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, systemPreferences, Notification, dialog, globalShortcut } = require('electron');
@@ -245,6 +253,11 @@ function pushState() {
     state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
+    // General › Advanced › Engines in use (shared/engines.js), while connected.
+    state.engines = peer ? Engines.snapshot({
+      current: c, il: peer.il, lane: peer.lane(), fx: peer.fx, fx2: peer.fx2, net: svc && svc.net ? svc.net.view : null,
+      lan: state.net ? state.net.lan : '', screen: svc && svc.stream && svc.stream.active ? svc.stream.view : null,
+    }) : null;
     if (kvm && lockKey) {
       lockKey.sync(kvm.server.current ? settings.keys.lockKeys : '');
       state.input.lockError = lockKey.error;
@@ -604,6 +617,11 @@ app.whenReady().then(() => {
   pairing.on('request', showWindow);
   peer = new Peer(server, link);
   peer.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
+  // The files engine (shared/fx2.js) stays up while another TwinDesk computer is on the network: a
+  // session with it then starts without waiting for it. Alone, it isn't running at all.
+  const fx2Nearby = () => { if (peer.fx2) peer.fx2.need('nearby', discovery.found.size > 0); };
+  discovery.on('change', fx2Nearby);
+  fx2Nearby();
   peer.on('client', (ctx) => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
@@ -716,6 +734,11 @@ app.whenReady().then(() => {
     return svc.nowPlaying;
   };
   svc.loadNowPlaying();
+  // …and what plays on this Mac, for the phone's Media page and its media notification (shared/pcnow.js).
+  svc.pcNow = new (require('../shared/pcnow.js').PcNow)({ server: peer, key: (code) => {
+    svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
+    svc.helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
+  } });
   // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
   svc.loadMic = () => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
@@ -830,6 +853,18 @@ app.whenReady().then(() => {
       },
       cfg: () => settings.rezume,
       detect: () => svc.rzAct.detect(),
+      // Looks only when the app or window in front changed (the helper's frontWatch), not every 1.5 s.
+      watch: (() => {
+        let fn = null;
+        const onEvent = (n) => n === 'front' && fn && fn();
+        const arm = () => fn && svc.helper.request('frontWatch', { on: true }).catch(() => {});
+        svc.helper.on('event', onEvent);
+        svc.helper.on('ready', arm); // a restarted helper watches again
+        return {
+          start: (f) => { fn = f; return svc.helper.request('frontWatch', { on: true }).then((r) => !!r.ax); },
+          stop: () => { fn = null; svc.helper.send('frontWatch', { on: false }); },
+        };
+      })(),
       appIcon: (a) => svc.rzAct.appIcon(a),
       open: { url: (u) => shell.openExternal(u), file: (p) => shell.openPath(p), phoneApp: (pkg) => openPhoneApp(pkg) },
       sendFile: (p, batch) => !!svc.fileSend.sendBatch([p], 'rezume', batch),
@@ -927,6 +962,9 @@ app.whenReady().then(() => {
   actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
+  hud.keep = () => !!peer.current; // the popup's window lives while a session is on (mac/hud.js)
+  peer.on('client', () => hud.warm());
+  peer.on('closed', () => !peer.current && hud.idle());
   svc.kvm.on('where', (mode) => {
     svc.pcApps.setDriven(mode === 'driven'); // a moved window's copy shows this Mac's pointer then
     const name = peer.current ? peer.current.name : { key: 'the other computer' };
@@ -993,7 +1031,10 @@ app.whenReady().then(() => {
   // Files on their way, live: the percentage beside the menu bar icon, ↓ coming in, ↑ going out
   // (macOS notifications have no progress bar, and TwinDesk has no Dock icon to put one on).
   let trayPct = '';
-  setInterval(() => {
+  // Every 500 ms while a session is on (files move only then) and until what it showed is cleared;
+  // with no session nothing runs. A new session starts it again.
+  let pctTimer = null;
+  const pctTick = () => {
     const dv = svc.drop.view;
     const sv = svc.fileSend.view;
     const sum = (list, k) => list.reduce((a, f) => [a[0] + (f[k] || 0), a[1] + (f.size || 0)], [0, 0]);
@@ -1018,26 +1059,40 @@ app.whenReady().then(() => {
     }
     if (sb) liveShow('send', t('Sending {file}', { file: sb.items > 1 ? t('{count} items', { count: sb.items }) : sb.name }), t('To {name}', { name: peerLabel() }));
     const title = (gotOf ? ` ↓${pct(got, gotOf)}%` : '') + (sentOf ? ` ↑${pct(sent, sentOf)}%` : '');
+    if (!peer.current && !title && !rb && !sb && !dv.inBatches.length && !sv.outBatches.length) { clearInterval(pctTimer); pctTimer = null; }
     if (title === trayPct || !tray) return;
     trayPct = title;
     tray.setTitle(title, { fontType: 'monospacedDigit' });
-  }, 500).unref();
+  };
+  const pctStart = () => { if (!pctTimer) { pctTimer = setInterval(pctTick, 500); pctTimer.unref(); } };
+  peer.on('client', pctStart);
+  peer.on('closed', pctStart); // once more: what it showed is cleared, then it stops
+  if (peer.current) pctStart();
   // Started at login: in the menu bar only; the window is made when it's first opened.
   if (startHidden) startHidden = false;
   else createWindow();
   refreshPermissions();
   if (process.env.MACSHARE_DEV_TEST) require('./dev/m2m')({ role: process.env.MACSHARE_DEV_TEST, svc, actions, link, pairing, peer });
   readDefaultIf();
+  // Addresses change when the network does. With the window open: every 5 s as always (it shows
+  // them, and the link's round trip). Without it: only when an address changed (one getifaddrs, no
+  // process), and the default route is read again then.
+  let addrKey = '';
   setInterval(() => {
+    const key = interfaces().map((i) => `${i.name}=${i.address}`).join(',');
+    const changed = key !== addrKey;
+    addrKey = key;
+    if (!changed && !(win && !win.isDestroyed() && win.isVisible())) return;
     readDefaultIf();
     pushState();
-  }, 5000); // addresses change when the network does
+  }, 5000).unref();
   // While Setup shows something missing, notice the grant without waiting for a window focus.
   setInterval(() => {
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
     const p = state.permissions;
     const missing = p.screen !== 'granted' || !p.accessibility || p.inputMonitoring === false;
-    if (missing && win && !win.isDestroyed() && win.isVisible()) refreshPermissions();
-  }, 3000);
+    if (missing) refreshPermissions();
+  }, 3000).unref();
 });
 
 // Not on one network: the session through Bluetooth (this Mac advertises; phones and PCs connect),
@@ -1112,6 +1167,7 @@ function setupNet() {
   svc.net.on('dropped', () => settings.sharing.on && actions.setSharing(false)); // Bluetooth can't carry the screen
   peer.hold = (m) => svc.net.holdOut(m, (x) => peer.sendNow(x));
   peer.tap = (m) => svc.net.onMessage(m);
+  peer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
   peer.on('client', () => svc.net.started());
   peer.on('closed', () => svc.net.ended());
   peer.on('transport', () => {

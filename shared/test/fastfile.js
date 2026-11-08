@@ -194,14 +194,29 @@ async function check(rx, id, p) {
     close();
   }
 
-  // Bluetooth and links netlink made: never.
+  // Bluetooth: never. Links netlink made (Wi-Fi Direct, a hotspot): yes, and the bytes keep them
+  // up (active(), netlink.touch('files')), as file.chunk does.
   {
     const a = await pair({ transport: 'ble' });
     assert.strictEqual(a.guest.fx.usable(), false, 'Bluetooth');
     a.close();
-    const b = await pair({ address: '192.168.49.1' });
-    assert.strictEqual(b.guest.fx.usable(), false, 'Wi-Fi Direct');
-    b.close();
+    const a2 = await pair({ address: 'ble:AA:BB' });
+    assert.strictEqual(a2.guest.fx.usable(), false, 'a Bluetooth address');
+    a2.close();
+    for (const address of ['192.168.49.1', '10.42.0.1', '192.168.137.1', '172.20.10.1']) {
+      const b = await pair({ address });
+      assert.strictEqual(b.guest.fx.usable(), true, `a link made for it (${address})`);
+      b.close();
+    }
+    const { host, guest, close } = await pair();
+    let sent = 0, got = 0;
+    guest.fx.active = () => sent++;
+    host.fx.active = () => got++;
+    const p = file('act.bin', 3 * 1024 * 1024);
+    await send(guest, 'act', p);
+    await check(host.rx, 'act', p);
+    assert.ok(sent > 0 && got > 0, 'active() on both sides while bytes move');
+    close();
     const c = await pair({ address: '169.254.10.2' });
     assert.strictEqual(c.guest.fx.usable(), true, 'a cable (link-local)');
     c.close();

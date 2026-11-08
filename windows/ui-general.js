@@ -87,6 +87,7 @@ UI.tab({
     encRestart.hidden = true;
     const encSw = UI.switch((v) => api.setEncoder(v), { label: t('Hardware encoder') });
     const encRow = UI.row(t('Hardware encoder'), t('Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart'), [encSw, encRestart]);
+    const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, locRow]),
       UI.card(t('Startup'), [
@@ -106,11 +107,12 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, sendToRow]),
       UI.card(t('This computer'), [deviceRow, helperRow, vddRow]),
-      UI.card(t('Advanced'), [protoRow, ...(api.setEncoder ? [encRow] : [])]),
+      UI.card(t('Advanced'), [protoRow, ...(api.setEncoder ? [encRow] : []), ...engines.rows]),
     ]);
     body.append(sections);
 
     return (s) => {
+      engines.update(s);
       if (s.app) {
         const proto = s.app.inputProtocol === 'tcp' ? 'tcp' : 'udp';
         if (protoStart === null) protoStart = proto;

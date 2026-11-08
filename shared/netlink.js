@@ -57,7 +57,7 @@ class NetLink extends EventEmitter {
     this.timers = {};
     this.generation = 0;
     this.hostReady = false;
-    setInterval(() => this._tick(), 1000).unref();
+    this.ticker = null; // the 1 s check: only while something waits for Wi-Fi or needs it (_arm)
   }
 
   // The session runs on the link made here (an address in a Wi-Fi Direct group's or a hotspot's
@@ -149,12 +149,14 @@ class NetLink extends EventEmitter {
       if (this.linked) {
         if (!this.needs.has(why)) this.o.send({ t: T.NET_NEED, why, keep: true });
         this.needs.set(why, { idleMs, last: Date.now() });
+        this._arm();
         clearTimeout(this.timers.linger);
         this.emit('change');
       }
       return Promise.resolve(true);
     }
     this.needs.set(why, { idleMs, last: Date.now() });
+    this._arm();
     clearTimeout(this.timers.linger);
     const done = new Promise((resolve) => this.waiters.push(resolve)); // first: _ensure can fail at once
     if (['idle', 'failed'].includes(this.state)) this._ensure(why);
@@ -421,7 +423,18 @@ class NetLink extends EventEmitter {
     this.emit('change');
   }
 
+  _arm() {
+    if (this.ticker) return;
+    this.ticker = setInterval(() => this._tick(), 1000);
+    this.ticker.unref();
+  }
+
   _tick() {
+    if (!this.waiters.length && !this.needs.size) {
+      clearInterval(this.ticker);
+      this.ticker = null;
+      return;
+    }
     if (this.waiters.length && !this.onBle && this.o.current()) {
       clearTimeout(this.timers.ask);
       this._settle(true);

@@ -99,6 +99,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         TwinService.start(this)
         setContent { Theme { App(Core.get(this), resumed.value) } }
+        openTab.value = intent?.getStringExtra("tab")
+    }
+
+    // A notification opened a page (the computer's media: Media).
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra("tab")?.let { openTab.value = it }
     }
 
     override fun onResume() {
@@ -123,6 +131,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         @Volatile var shown = false // on screen: Android lets us open a prompt (Hub.ask)
+        val openTab = mutableStateOf<String?>(null) // a page to open (Tab's name), from a notification
     }
 }
 
@@ -133,8 +142,6 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     // Overview: the computer itself, only while connected; Connection: pairing, Nearby, the link.
     Overview("Overview", Ico.overview, grad(0xFF8E8E93, 0xFF636366), ""),
     Connection("Connection", Ico.link, grad(0xFF5AC8FA, 0xFF0A84FF), ""),
-    // Connect with Android: another phone, beside the computer (PeerUi.kt).
-    Android("Android", Ico.phone, grad(0xFF5EE07A, 0xFF30B94D), ""),
     // On the computer, from this phone (Hub.kt): their settings here.
     Calls("Calls", Ico.call, grad(0xFF5EE07A, 0xFF30B94D), "Phone"),
     Messages("Messages", Ico.message, grad(0xFF5EE07A, 0xFF30B94D), "Phone"),
@@ -149,18 +156,19 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     Files("Files", Ico.files, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
     Rezume("ReZume", Ico.rezume, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
     Sound("Sound", Ico.audio, grad(0xFFFF6482, 0xFFFF2D55), "More"),
+    Media("Media", Ico.media, grad(0xFFFF6482, 0xFFBF5AF2), "More"),
     Camera("Camera", Ico.camera, grad(0xFFBF5AF2, 0xFF8944AB), "More"),
     General("General", Ico.general, grad(0xFFAEAEB2, 0xFF636366), "bottom"),
     About("About", Ico.about, grad(0xFF64D2FF, 0xFF0A84FF), "bottom"),
 }
 
 // The bottom bar: Overview first while connected, Connection second; before that Connection first.
-private fun bottom(core: Core) = if (core.host != null) listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files) else listOf(Tab.Connection, Tab.Android, Tab.Screen, Tab.Files)
+private fun bottom(core: Core) = if (core.host != null) listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files) else listOf(Tab.Connection, Tab.Screen, Tab.Files)
 // Overview only while connected (elsewhere, Connection shows).
 private fun shown(core: Core, t: Tab) = t != Tab.Overview || core.host != null
 
 // The sidebar's green dot: the page's feature is on.
-private fun isOn(core: Core, t: Tab): Boolean = if (t == Tab.Android) core.peer.connected else isOnPc(core, t)
+private fun isOn(core: Core, t: Tab): Boolean = if (t == Tab.Connection && core.peer.connected) true else isOnPc(core, t) // Connect: another phone too
 
 private fun isOnPc(core: Core, t: Tab): Boolean = when (t) {
     Tab.Screen -> core.screen.viewing
@@ -170,6 +178,7 @@ private fun isOnPc(core: Core, t: Tab): Boolean = when (t) {
     Tab.Clipboard -> core.sync.get("clipboard", "in") || core.sync.get("clipboard", "out")
     Tab.Notifications -> core.sync.get("notifs", "in") || core.sync.get("notifs", "out")
     Tab.Sound -> core.sync.get("audio", "in") || core.sync.get("audio", "out")
+    Tab.Media -> core.pcMedia.now?.playing == true
     Tab.Camera -> core.adb.camera.on
     Tab.Rezume -> core.rezume.on
     Tab.Calls -> core.hub.callsOn
@@ -199,6 +208,10 @@ fun App(core: Core, resumed: Int) {
     if (!connected && tab == Tab.Overview) tab = Tab.Connection
     val BOTTOM = bottom(core)
     var more by rememberSaveable { mutableStateOf(false) }
+    MainActivity.openTab.value?.let { name ->
+        Tab.entries.firstOrNull { it.name == name }?.takeIf { shown(core, it) }?.let { tab = it; more = false }
+        MainActivity.openTab.value = null
+    }
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     // Wireless debugging went off (MIUI / HyperOS): ask once per time it happens.
     var adbAsked by rememberSaveable { mutableStateOf(false) }
@@ -411,7 +424,6 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
             when (tab) {
                 Tab.Overview -> OverviewPage(core, v, connection = false)
                 Tab.Connection -> OverviewPage(core, v, connection = true)
-                Tab.Android -> AndroidPage(core, v)
                 Tab.Calls -> CallsPage(core, v)
                 Tab.Messages -> MessagesPage(core, v)
                 Tab.Photos -> PhotosPage(core, v)
@@ -425,6 +437,7 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
                 Tab.Files -> FilesPage(core, v)
                 Tab.Rezume -> RezumePage(core, v)
                 Tab.Sound -> SoundPage(core, v)
+                Tab.Media -> MediaPage(core, v)
                 Tab.Camera -> CameraPage(core, v)
                 Tab.General -> GeneralPage(core, v)
                 Tab.About -> AboutPage(core, v)
@@ -588,12 +601,15 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
             }
         }
     }
+
+    // Connect with Android (PeerUi.kt): another phone, beside the computer, at the bottom.
+    if (connection) AndroidSection(core, v)
 }
 
 // The connected computer's controls, when it has them (an older TwinDesk says nothing: no card).
 @Composable
 private fun ComputerCard(core: Core, name: String) {
-    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val c = core.dev.computer ?: return
     // Which TwinDesk the computer runs (its dev.state's app; none: older than 2.5): red when older than this one.
     val theirs = c.optJSONObject("app")?.optString("v").orEmpty()
@@ -647,7 +663,7 @@ private fun openCamera(ctx: android.content.Context) {
 // network. Off by itself while the session is on the same Wi-Fi, on again when that drops (Core.bleTick).
 @Composable
 private fun BleSwitch(core: Core, askHint: String, first: Boolean = false) {
-    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val ctx = LocalContext.current
     val name = them(core)
     val link = core.link
@@ -681,7 +697,7 @@ private fun Device(name: String, phone: Boolean, modifier: Modifier) {
 // Connect with Wi-Fi Direct): the page itself stays as it is.
 @Composable
 private fun WifiGate(core: Core, what: String) {
-    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     if (core.host == null || !core.link.ble) return
     val n = core.net
     val moving = n.state in listOf("asking", "hosting", "joining")
@@ -1202,7 +1218,7 @@ private fun RemotePage(core: Core, v: Int) {
 // As a Bluetooth gamepad (BtPad.kt): any computer, the Mac too, no driver and no TwinDesk there.
 @Composable
 private fun BtPadCard(core: Core) {
-    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val ctx = LocalContext.current
     val made = core.btPadMade
     val on = core.store.flag("remote.btpad", false)
@@ -1311,14 +1327,8 @@ private fun NotificationsPage(core: Core, v: Int) {
         DirHead(name, false, me, true)
         SwitchRow("Show $name’s notifications here", "${core.notifs.shown} shown", core.sync.get("notifs", "in"), first = true) { core.sync.set("notifs", "in", it) }
     }
-    // Each app on its own (#102): switched off, its notifications stay on this device.
-    if (core.notifs.supported) MacCard("Apps") {
-        val apps = core.notifs.apps()
-        if (apps.isEmpty()) MacRow("No notifications yet", "Apps show up here after their first notification", first = true)
-        apps.forEachIndexed { i, (pkg, label) ->
-            SwitchRow(label, "", !core.notifs.isMuted(pkg), first = i == 0) { core.notifs.setMuted(pkg, !it) }
-        }
-    }
+    // Each app on its own (#102): every app on the phone, as a block list or an allow list (AppCards.kt).
+    if (core.notifs.supported) NotifAppsCard(core, name)
 }
 
 // ---- Files ----
@@ -1434,7 +1444,7 @@ private fun soundHint(core: Core) = when {
 // The computer is waiting for the capture: Start here, as in the notification.
 @Composable
 private fun SoundStart(core: Core) {
-    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val ctx = LocalContext.current
     if (core.mirror.wanted && !core.mirror.on) MacRow("Show this screen", core.mirror.error.ifEmpty { "Android asks once to share the screen" }) { Primary("Start") { core.sound.start(ctx) } }
     else if (core.mirror.on) MacRow("Screen shared", "Close its window on the computer, or Stop, to end it.") { Secondary("Stop") { core.sound.stop() } }
@@ -1451,6 +1461,9 @@ private fun GeneralPage(core: Core, v: Int) {
     val name = them(core)
     var dev by remember { mutableStateOf(core.store.deviceName) }
     PageHead("General", "")
+    MacCard {
+        SwitchRow("Run in the background", if (core.background) "Stays connected with TwinDesk closed, and starts with the phone" else "Only while TwinDesk is open: swiping it away from Recent apps stops it", core.background, first = true) { core.background = it }
+    }
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
     fun Setup(label: String, hint: String, done: Boolean, action: String, first: Boolean = false, onClick: () -> Unit) =
@@ -1528,6 +1541,8 @@ private fun GeneralPage(core: Core, v: Int) {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")))
         }
     }
+    NotifButtonsCard(core) // TwinDesk's notification: which buttons (QuickActions.kt)
+    BankCard(core) // banking apps: debugging off and TwinDesk closes (BankGuard.kt)
     AppearanceCard()
     MacCard("This device") {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

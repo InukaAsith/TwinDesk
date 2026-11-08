@@ -55,6 +55,7 @@ class Wired extends EventEmitter {
       this.emit('change');
     });
     this.timer = setInterval(() => this._poll().catch((e) => console.log(`[wired] ${e.message}`)), POLL_MS);
+    usbadb.on('change', () => this._poll().catch((e) => console.log(`[wired] ${e.message}`))); // plugged in or out: at once
   }
 
   // The USB serial of a phone connected through the cable, or null.

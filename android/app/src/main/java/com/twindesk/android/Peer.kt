@@ -56,6 +56,24 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private val xfer = Executors.newCachedThreadPool { r -> Thread(r, "td-peer-x").apply { isDaemon = true } }
 
     // ---- settings ----
+    // Connect with Android itself (on by default): off, other phones don't see this one (Discovery's
+    // peerOn), nothing hosts, a session with a phone ends.
+    val on get() = store.flag("peer.on", true)
+    fun setOn(v: Boolean) {
+        store.setFlag("peer.on", v)
+        core.discovery.peerOn = v
+        if (!v) {
+            if (connected) disconnect()
+            if (link.pair != null) link.cancelPairing()
+            asked = null
+            waitingFor = ""
+            message = ""
+            core.discovery.phones.clear()
+        }
+        hosting()
+        core.bg.execute { runCatching { core.discovery.beacon() } }
+        core.changed()
+    }
     val hostOn get() = store.flag("peer.host", false)
     fun setHostOn(v: Boolean) { store.setFlag("peer.host", v); hosting(); core.changed() }
     val clipOn get() = store.flag("peer.clip", true)
@@ -91,6 +109,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private val myFp: String by lazy { runCatching { Proto.sha256(android.util.Base64.decode(ShareKey.cert(), android.util.Base64.NO_WRAP)).hex() }.getOrDefault("") }
 
     fun start() {
+        core.discovery.peerOn = on
         core.discovery.onPeerAsk = { f, m -> main.post { onAsk(f, m) } }
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         ctx.mainExecutor.execute { cm.addPrimaryClipChangedListener { clipNow() } }
@@ -102,7 +121,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     @Synchronized
     private fun hosting() {
         val now = System.currentTimeMillis()
-        val want = hostOn || now < tempUntil || role == "host" || pairing != null
+        val want = on && (hostOn || now < tempUntil || role == "host" || pairing != null)
         if (want && !server.running) server.start()
         if (!want && server.running) server.stop()
         val port = if (server.running) server.port else 0

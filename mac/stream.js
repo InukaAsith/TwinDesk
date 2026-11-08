@@ -16,6 +16,9 @@ const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 
 const RETRY_MS = 2000;
+// Stopped with nobody to share to (no session, or sharing off): the hidden capture window goes after
+// this long. While a session is on and sharing is on it stays, so a viewer that opens again starts at once.
+const DROP_MS = 30000;
 // A phone over Wi-Fi: a high rate only fills the radio's queues (latency) without looking sharper
 // on a phone screen, and a smaller keyframe gets there sooner.
 const PHONE_MBPS = 16;
@@ -138,8 +141,9 @@ class Stream extends EventEmitter {
   }
 
   _ensureWindow() {
+    clearTimeout(this.dropTimer);
     if (this.win && !this.win.isDestroyed()) return Promise.resolve();
-    this.win = new BrowserWindow({
+    const w = this.win = new BrowserWindow({
       show: false,
       webPreferences: {
         preload: path.join(__dirname, 'preload-capture.js'),
@@ -149,6 +153,7 @@ class Stream extends EventEmitter {
       },
     });
     this.win.webContents.on('render-process-gone', (_e, d) => {
+      if (this.win !== w) return; // closed on purpose (_drop)
       console.error(`[stream] capture window gone: ${d.reason}`);
       this.win = null;
       this._scheduleRetry();
@@ -260,6 +265,16 @@ class Stream extends EventEmitter {
     this._toWindow('stop', {});
     Object.assign(this.view, { fps: 0, mbps: 0 });
     this._setStatus(status);
+    clearTimeout(this.dropTimer);
+    if (this.win) this.dropTimer = setTimeout(() => this._drop(), DROP_MS);
+  }
+
+  // The capture window and its renderer, gone while there's nobody to share to.
+  _drop() {
+    if (this.active || !this.win || (this.server.current && this.getSettings().sharing.on)) return;
+    const w = this.win;
+    this.win = null;
+    if (!w.isDestroyed()) w.destroy();
   }
 
   // Sharing off: tell Windows too, so it shows "Mac is not sharing".

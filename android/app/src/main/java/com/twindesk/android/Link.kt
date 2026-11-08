@@ -84,6 +84,9 @@ class Link(
     // … and welcome {fxPlain: {port, token}}: the computer allows unencrypted file transfers (its
     // Files › Encrypt file transfers off). We always allow them (hello {fxPlain: 1}): the computer decides.
     @Volatile private var fxPlain: Fx.Plain? = null
+    // … and fast files v2 (the computers' shared/fx2.js, Fx2.kt): welcome {fx2: {port}}, the port of
+    // the computer's files engine (0: none, an older computer).
+    @Volatile private var fx2Port = 0
     private var fxClient: Pair<String, OkHttpClient>? = null // (pinned fingerprint, client), kept for its connections
 
     private fun run(block: () -> Unit) = exec.execute { try { block() } catch (e: Exception) { Log.e("TwinDesk", "link", e) } }
@@ -223,18 +226,20 @@ class Link(
         return client(fp).newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).writeTimeout(0, TimeUnit.MILLISECONDS).build()
     }
 
-    // Fast files for the next file: the computer gave a token, and the session is on the network or
-    // a cable (as the computers' fastfile.js usable()). Else the bytes go as file.chunk.
-    // plain: unencrypted (FxHttp) to `address` on that port, with its own token; null: HTTPS (client).
-    class Fx(val base: String, val token: String, val client: OkHttpClient, val address: String, val plain: Plain?) {
-        class Plain(val port: Int, val token: String)
+    // Fast files for the next file: the computer gave a token, and the session is on the network, a
+    // cable or a Wi-Fi Direct group / hotspot (as the computers' fastfile.js usable()). Else the bytes
+    // go as file.chunk. plain: unencrypted (FxHttp) to `address` on that port, with its own token;
+    // null: HTTPS (client). fx2Port: the computer's files engine (fx2, Fx2.kt), 0 when there's none
+    // (an older computer, or through the cable: adb reverse carries only the session's port);
+    // plain.fx2Port: its plain server.
+    class Fx(val base: String, val token: String, val client: OkHttpClient, val address: String, val plain: Plain?, val fx2Port: Int = 0) {
+        class Plain(val port: Int, val token: String, val fx2Port: Int = 0)
     }
 
     fun fx(): Fx? {
         val token = fxToken
         if (state != "connected" || ble || token.isEmpty()) return null
         val (address, port) = endpoint() ?: return null
-        if (Proto.GROUP_NETS.any { address.startsWith(it) }) return null
         val fp = host?.fp ?: return null
         val c = synchronized(this) {
             fxClient?.takeIf { it.first == fp }?.second ?: client(fp).newBuilder()
@@ -244,7 +249,7 @@ class Link(
         val h = if (address.contains(':')) "[$address]" else address
         // Not through the cable: adb reverse carries only the session's port.
         val plain = if (wired) null else fxPlain
-        return Fx("https://$h:$port${Proto.FX_PATH}", token, c, address, plain)
+        return Fx("https://$h:$port${Proto.FX_PATH}", token, c, address, plain, if (wired) 0 else fx2Port)
     }
 
     // Self-signed certificates: the fingerprint is the identity (pinned once paired).
@@ -377,7 +382,7 @@ class Link(
 
     private fun hello() {
         val h = host ?: return
-        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "fx" to 1, "fxPlain" to 1))
+        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "fx" to 1, "fxPlain" to 1).apply { if (!wired) put("fx2", 1) })
         helloTimer?.cancel(false)
         helloTimer = exec.schedule({ if (state != "connected") { message = "No answer"; ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
@@ -447,8 +452,10 @@ class Link(
         fxPlain = m.optJSONObject("fxPlain")?.let { p ->
             val port = p.optInt("port", 0)
             val token = p.optString("token")
-            if (port in 1..65535 && Regex("^[0-9a-f]{32}$").matches(token)) Fx.Plain(port, token) else null
+            val p2 = p.optInt("fx2Port", 0).takeIf { it in 1..65535 } ?: 0
+            if (port in 1..65535 && Regex("^[0-9a-f]{32}$").matches(token)) Fx.Plain(port, token, p2) else null
         }
+        fx2Port = m.optJSONObject("fx2")?.optInt("port", 0)?.takeIf { it in 1..65535 && fxToken.isNotEmpty() } ?: 0
         ws?.let { lastRxOf[it] = System.currentTimeMillis() }
         // Each of the session's sockets on its own: a quiet fallback goes, the session lives on.
         pinger = exec.scheduleWithFixedDelay({
@@ -513,6 +520,7 @@ class Link(
         ws = null
         fxToken = ""
         fxPlain = null
+        fx2Port = 0
         dropOthers()
         if (mode == "pair") {
             val p = pair
@@ -538,6 +546,7 @@ class Link(
         ws = null
         fxToken = ""
         fxPlain = null
+        fx2Port = 0
         dropOthers()
         val wasConnected = state == "connected"
         if (wasConnected) state = "idle"

@@ -80,3 +80,24 @@ body.gamepad #note { top: 96px; left: 28vw; right: 28vw; }
 #map-list { flex: 1; overflow-y: auto; touch-action: pan-y; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; align-content: start; }
 #map-list label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 #map-list select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; max-width: 130px; touch-action: manipulation; }
+
+/* ---- editing the gamepad's layout (Edit) ---- */
+.g.custom { border-radius: 50%; width: 15vmin; height: 15vmin; font-size: 15px; overflow: hidden; }
+body.editing #game [data-unit] { outline: 1.5px dashed rgba(255, 255, 255, 0.35); outline-offset: 3px; }
+body.editing #game [data-unit].sel { outline: 2px solid var(--accent); }
+body.editing #game [data-unit].off { opacity: 0.3; }
+body:not(.editing) #game [data-unit].off { display: none !important; }
+body.editing #top, body.editing #note, body.editing #pad-note { display: none !important; }
+#edit-top { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--card); border-radius: 0 0 14px 14px; white-space: nowrap; }
+#edit-top span { color: var(--muted); font-size: 12.5px; margin-right: 4px; }
+#edit-top button, #edit-bar button { height: 32px; padding: 0 12px; font-size: 13.5px; touch-action: manipulation; }
+#edit-done { background: var(--accent); border-color: var(--accent); }
+#edit-top[hidden], #edit-bar[hidden] { display: none; }
+#edit-bar { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; max-width: 96vw; overflow-x: auto; touch-action: pan-x; white-space: nowrap; font-size: 13.5px; }
+#edit-bar b { font-size: 14px; }
+#edit-bar label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+#edit-bar input[type=range] { width: 120px; touch-action: manipulation; }
+#edit-bar select, #edit-bar input:not([type]) { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; max-width: 120px; touch-action: manipulation; user-select: text; -webkit-user-select: text; }
+#edit-bar input:not([type]) { width: 80px; }
+#edit-bar [hidden] { display: none !important; }
+#edit-del { color: #ff6961; }

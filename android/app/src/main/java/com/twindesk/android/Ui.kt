@@ -179,6 +179,12 @@ object Ico {
     val camera = lineIcon("camera", "M2.5 6h10v8h-10z M12.5 8.5l5-2.5v8l-5-2.5")
     val photo = lineIcon("photo", "M3 4.5h14v11H3z M3 13l4-4 3.5 3.5 2-2L17 14.5 M12.5 7.5h.1")
     val folder = lineIcon("folder", "M2.5 5h5.5l1.5 2h8v9.5h-15z")
+    val media = lineIcon("media", "M7.5 14.5V4.5l9-2v10 M7.5 14.5a2.2 2.2 0 1 1-4.4 0 2.2 2.2 0 0 1 4.4 0z M16.5 12.5a2.2 2.2 0 1 1-4.4 0 2.2 2.2 0 0 1 4.4 0z")
+    val play = lineIcon("play", "M6 4l10 6-10 6z")
+    val pause = lineIcon("pause", "M7 4.5v11 M13 4.5v11")
+    val prev = lineIcon("prev", "M4.5 4.5v11 M16 4.5l-8 5.5 8 5.5z")
+    val next = lineIcon("next", "M15.5 4.5v11 M4 4.5l8 5.5-8 5.5z")
+    val shield = lineIcon("shield", "M10 2.5l6 2.5v4.5c0 4-2.7 6.7-6 8-3.3-1.3-6-4-6-8V5z M7.5 10l2 2 3.5-3.5")
 }
 
 // A sidebar tile: the icon in white on its section's gradient (the Mac's `.tile`).

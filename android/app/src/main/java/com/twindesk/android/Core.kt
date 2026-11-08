@@ -78,10 +78,13 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val nowPlaying = NowPlaying(this) // what plays here, for the computer's media controls
     val rezume = Rezume(this) // ReZume: go on with what's in use on the other device (off until turned on)
     val dev = DevCtl(this) // this phone's controls on the computer's Overview, the computer's on the Computer page
+    val appList = AppList(this) // the phone's apps, for the pages that pick some (Notifications, Banking apps)
+    val bank = BankGuard(this) // a banking app opened: debugging off, and TwinDesk exits (General › Banking apps)
+    val pcMedia = PcMedia(this) // what plays on the computer: the Media page and a media notification here
     // Connect with Android: another phone, on a session of its own beside the computer's (Peer.kt).
     // Not a Feature: the computer's messages never reach it, nor its the computer.
     val peer = Peer(this)
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev)
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia)
 
     val host: Host? get() = if (link.connected) link.host else null
 
@@ -97,6 +100,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         Notify.channels(ctx)
         updates.start()
         if (store.flag("remote.btpad", false)) btPad.start()
+        runCatching { bank.start() }.onFailure { Log.e("TwinDesk", "bank", it) }
         bg.scheduleWithFixedDelay({ runCatching { bleTick() }.onFailure { Log.e("TwinDesk", "ble", it) } }, 2, 2, TimeUnit.SECONDS)
     }
 
@@ -143,11 +147,17 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // save adds 50–200 ms bursts).
     private val wifiFast by lazy { WifiFast(ctx) }
 
+    // General › Run in the background (on by default): connected with the app closed, and started with
+    // the phone. Off: only while the app is open (swiping it away stops TwinDesk, as Exit does).
+    var background: Boolean
+        get() = store.flag("background", true)
+        set(on) { store.setFlag("background", on); changed() }
+
     fun changed() {
         // (runCatching: discovery may report before every feature exists)
         runCatching { wifiFast.hold(link.connected && !link.wired && (screen.viewing || adb.viewed || remote.active)) }
         version.value++
-        main.post { TwinService.refresh(ctx) }
+        main.post { TwinService.refresh(ctx); if (started) bank.checkSoon() }
     }
 
     // Through Bluetooth, files wait for Wi-Fi (Netlink.holdOut).

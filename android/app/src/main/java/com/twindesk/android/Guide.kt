@@ -94,7 +94,7 @@ fun WirelessGuide(core: Core, ctx: Context, v: Int) {
 // with its hint and button, the rest as titles. The code field is for Settings side by side.
 @Composable
 private fun WirelessSteps(core: Core, ctx: Context, title: String, foot: @Composable () -> Unit = {}) {
-    @Suppress("UNUSED_VARIABLE") val v by core.version.collectAsState() // redraw on Core changes (Compose skips it otherwise: same core)
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val a = core.adb
     val name = core.host?.name ?: core.hosts().firstOrNull()?.name ?: "your computer"
     val connected = core.host != null
