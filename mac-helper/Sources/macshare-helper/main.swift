@@ -272,6 +272,9 @@ func handle(_ line: String) {
   case "bleStop":
     BlePeripheral.shared.stop()
     reply(id)
+  case "bleHold":
+    BlePeripheral.shared.hold()
+    reply(id)
   case "bleSend":
     if let dev = msg["dev"] as? String, let b64 = msg["data"] as? String, let data = Data(base64Encoded: b64) {
       BlePeripheral.shared.send(dev: dev, data: data)

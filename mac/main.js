@@ -1115,11 +1115,16 @@ const bleQuiet = wifiQuiet();
 
 function setupNet() {
   const { safeStorage } = require('electron');
+  const iosNow = () => !!peer.current && peer.current.os === P.OS.IOS;
   svc.ble = new BleHost({
     helper: svc.helper, server,
     info: () => ({ id: id.macId, name: id.macName.slice(0, 40), os: P.OS.MAC, port: server.port, fp: id.fp }),
     enabled: () => !bleOff && (settings.net.ble !== false || settings.net.blePc === true),
     accept: (g) => (P.isPhoneOs(g.os) ? settings.net.ble !== false : settings.net.blePc === true), // General's two Bluetooth switches
+    // Quiet on Wi-Fi with an iPhone or iPad in the session or linked: its link stays (idle, slow, no
+    // advertising: the helper's bleHold), as it's what wakes TwinDesk there when iOS suspends it and
+    // what the session falls back to. Advertising comes back only if that link drops.
+    hold: () => settings.net.ble !== false && (iosNow() || svc.ble.list().some((g) => g.os === P.OS.IOS)),
   });
   svc.ble.on('change', pushState);
   // PCs nearby that aren't on this network (not paired yet: they haven't connected to say hello).
@@ -1130,16 +1135,14 @@ function setupNet() {
     // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
     // blepolicy.js wifiQuiet): no advertising, its pipes and the session's Bluetooth fallback closed;
     // back as it was when the session ends.
-    // An iPhone or iPad is the exception: its link stays up beside the Wi-Fi (idle, no pipe), as it's
-    // what wakes TwinDesk there when iOS suspends it, and what the session falls back to.
-    const iosNow = () => !!peer.current && peer.current.os === P.OS.IOS;
-    const off = bleQuiet({ on: settings.net.bleWifiOff !== false && !iosNow(), current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
+    const off = bleQuiet({ on: settings.net.bleWifiOff !== false, current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
     if (off !== bleOff) {
       bleOff = off;
       console.log(`[ble] ${off ? 'off: the session is on the same Wi-Fi' : 'on again'}`);
       svc.ble.apply();
       pushState();
     }
+    else if (off) svc.ble.apply(); // an iPhone linked or gone while quiet: held or stopped (hold)
     svc.bleLook.look(settings.net.blePc === true && !peer.current);
     // No session, and an iPhone or iPad linked over Bluetooth (it links only to computers it's paired
     // with): invited now and then, which wakes TwinDesk there to come back (Ble.swift).
