@@ -1224,7 +1224,7 @@ function buildState() {
 
 // A phone's controls on Overview (dev.state): its quick settings, volume and ringer, most used apps.
 function phoneCtl() {
-  const v = devctl && link.peerOs === P.OS.ANDROID ? devctl.view : null;
+  const v = devctl && P.isPhoneOs(link.peerOs) ? devctl.view : null; // an iPhone's too: Ring (its Overview, shared/ui-device-ios.js)
   return v ? { ctl: v, qs: v.qs || null, top: v.top || [] } : { ctl: null, qs: null, top: [] };
 }
 

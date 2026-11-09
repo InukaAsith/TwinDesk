@@ -3,8 +3,9 @@
 //   Mirroring: the phone's screen in a window, what's open here, and how phone windows look and
 //   behave (sound, picture, controls, keys).
 //   Apps: the phone's apps, each opened in a window of its own, and Install Apps (.apk files over ADB).
-// Only while a phone is connected. Mirroring goes through ADB (wireless debugging) or Native (the
-// phone shares its screen itself: shared/nativescreen.js); phone apps in windows need ADB.
+// Only while an Android phone is connected (an iPhone's or iPad's screen: shared/ui-ios-screen.js).
+// Mirroring goes through ADB (wireless debugging) or Native (the phone shares its screen itself:
+// shared/nativescreen.js); phone apps in windows need ADB.
 'use strict';
 
 (function () {
@@ -30,6 +31,7 @@
     icon: 'phone',
     color: 'linear-gradient(#64d2ff, #0a84ff)',
     desc: tr('The phone’s screen in a window, with touch, mouse and keyboard.'),
+    for: ['android'], // an iPhone's or iPad's: shared/ui-ios-screen.js
     hidden: (s) => !isPhone(s),
     build(body) {
       const { el, api } = UI;
@@ -131,6 +133,7 @@
     icon: 'apps',
     color: 'linear-gradient(#5ac8fa, #007aff)',
     desc: tr('Open any phone app in its own window.'),
+    for: ['android'], // an iPhone's apps can't open here (iOS gives no app them)
     hidden: (s) => !isPhone(s),
     build(body) {
       const { el, api } = UI;

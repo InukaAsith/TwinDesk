@@ -20,7 +20,7 @@ UI.tab({
   icon: 'folder',
   color: 'linear-gradient(#64d2ff, #0a84ff)',
   desc: tr('Browse the phone’s storage and copy files both ways. No wireless debugging needed.'),
-  hidden: (s) => !UI.isPhone(s), // only while a phone is connected
+  for: ['android', 'ios'], // a phone's: Android, iPhone or iPad (shared/ui-kinds.js)
   wifiOnly: true, // files are too big for Bluetooth: Connect with Wi-Fi Direct on top, nothing loads
   master: { get: (s) => !!(s.hub && s.hub.files), set: (v) => UI.api.hub({ do: 'set', what: 'files', on: v }) },
   badge: (s) => (s.hub && s.hub.files ? 'on' : ''),

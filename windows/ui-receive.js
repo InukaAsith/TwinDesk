@@ -7,7 +7,7 @@
 
 UI.tab({
   id: 'mac-pc',
-  hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
+  for: ['computer'], // another computer's (shared/ui-kinds.js)
   group: 'Display',
   order: 10,
   title: 'Receive screen',

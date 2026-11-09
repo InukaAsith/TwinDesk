@@ -229,9 +229,10 @@ async function testMode(mode) {
     state.notifs = { ...state.notifs, receive: true, history: [{ id: 'n', at: 1, appName: 'App {me}', title: 'User title', body: 'literal {name} 123456' }] };
     state.clipboard = { ...state.clipboard, enabled: true, history: [{ at: 1, dir: 'in', text: 'literal {me}' }] };
     push(); await delay(80);
-    assert.ok(await read('document.querySelector("#page-overview").textContent.includes("literal {name} 123456")'));
-    assert.ok(await read('document.querySelector("#page-overview").textContent.includes("literal {me}")'));
-    assert.ok(await read('document.querySelector("#page-overview h1").textContent.includes("Work {me} $&")'));
+    // A phone's own Overview (shared/ui-device-android.js), in Overview's place.
+    assert.ok(await read('document.querySelector("#page-android-overview").textContent.includes("literal {name} 123456")'));
+    assert.ok(await read('document.querySelector("#page-android-overview").textContent.includes("literal {me}")'));
+    assert.ok(await read('document.querySelector("#page-android-overview h1").textContent.includes("Work {me} $&")'));
     await inspectPages('phone');
     assert.deepStrictEqual(errors, [], 'actual renderer must not throw');
     assert.ok(introductions.size >= (mode === 'linux/mesh' ? 7 : 8), 'the test inspects feature introductions as well as settings'); // Linux's Multi-device has fewer pages

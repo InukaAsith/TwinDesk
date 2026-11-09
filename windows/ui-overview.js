@@ -2,7 +2,7 @@
 // Connection page (was Overview): this PC's address and Connect by address, pairing a phone with a
 // QR code, the computers and phones found nearby, the link itself (connect, take over, Wi-Fi
 // Direct, a phone's hotspot), the phone's wireless debugging and what is paired. The start page
-// until something is connected; then Overview (shared/ui-device.js) shows the device.
+// until something is connected; then Overview (shared/ui-device-*.js) shows the device.
 'use strict';
 
 UI.tab({

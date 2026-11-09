@@ -18,7 +18,7 @@
 
   // An Android phone's camera comes through wireless debugging; an iPhone shares its own as a
   // computer does (its app sends it: camshare.js), so it is treated as one here.
-  const adbPhone = (s) => UI.isPhone(s) && !(s.client && s.client.os === 'ios');
+  const adbPhone = (s) => UI.deviceKind(s) === 'android'; // shared/ui-kinds.js (s.client is the Mac's alone: the PC and Linux sent an iPhone's through ADB)
   const phoneCam = (s) => ((s.phone && s.phone.bridge && s.phone.bridge.windows) || []).find((w) => w.kind === 'camera') || null;
   const running = (s) => (adbPhone(s) ? !!phoneCam(s) : !!(s.camera && s.camera.viewing));
 

@@ -2,7 +2,7 @@
 // Connection page (was Overview): this Mac's address and Connect by address on top, the computers
 // and phones nearby, pairing a phone with a QR code, the link itself, the phone's wireless debugging
 // and everything paired. The start page until something is connected; then Overview
-// (shared/ui-device.js) shows the device.
+// (shared/ui-device-*.js) shows the device.
 'use strict';
 
 UI.tab({

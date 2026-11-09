@@ -284,7 +284,7 @@
   });
 
   // ---------------------------------------------------------------- a web device's pages
-  // As a device's own pages (shared/ui-device.js and the rest): each with this device's settings
+  // As a device's own pages (shared/ui-device-*.js and the rest): each with this device's settings
   // (allow, kept by the hub per device). Colours and icons as the sidebar's pages of the same name.
   const like = (id, k) => ((UI.tabs.find((t) => t.id === id) || {})[k]);
   // The same on every platform, whatever order the pages load in (and whatever a platform calls its own).
@@ -304,7 +304,7 @@
   const setAll = (d, sws) => { for (const sw of sws) sw.set((d.allow || {})[sw.key] !== false); };
   const live = (st) => (st === 'live' ? tr('Live') : st === 'connecting' || st === 'new' ? tr('Connecting…') : st ? tr(String(st).replace(/^error: /, '')) : tr('Off'));
 
-  // 20×20 stroke icons, as the phone's Overview draws them (shared/ui-device.js).
+  // 20×20 stroke icons, as the phone's Overview draws them (shared/ui-device-*.js).
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const glyph = (d) => {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -335,7 +335,7 @@
   const iconed = (b, k) => { b.prepend(glyph(GL[k])); b.classList.add('ico'); return b; };
   UI.webGlyph = (k) => glyph(GL[k]);
 
-  // The device's Overview, as a phone's (shared/ui-device.js): its picture, name and link; its actions with
+  // The device's Overview, as a phone's (shared/ui-device-*.js): its picture, name and link; its actions with
   // their icons; what it may do, as quick-action tiles; then Drop and a drop zone for files on the left, and
   // the clipboard on the right.
   UI.tab({

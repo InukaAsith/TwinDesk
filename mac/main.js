@@ -277,7 +277,7 @@ function pushState() {
     if (svc) state.wake = svc.wake.view;
     if (svc && svc.phone) {
       // A phone's controls on Overview (dev.state): quick settings, volume and ringer, most used apps.
-      const v = svc.devctl && state.client && state.client.os === 'android' ? svc.devctl.view : null;
+      const v = svc.devctl && state.client && P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // an iPhone's too: Ring (its Overview, shared/ui-device-ios.js)
       state.phone = { ...svc.phone.view, settings: settings.phone, ctl: v, qs: v ? v.qs || null : null, top: v ? v.top || [] : [] };
     }
     state.peerCtl = svc && svc.devctl && state.client && !P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // a computer's controls on Overview

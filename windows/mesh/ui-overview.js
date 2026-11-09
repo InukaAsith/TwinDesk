@@ -5,7 +5,7 @@
 'use strict';
 
 UI.tab({
-  id: 'connection', // was Overview: the device's own Overview is shared/ui-device.js
+  id: 'connection', // was Overview: the device's own Overview is shared/ui-device-*.js
   order: 1,
   title: window.I18n.t('Connection'),
   heading: window.I18n.t('Connection'),

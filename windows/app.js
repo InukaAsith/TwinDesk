@@ -19,7 +19,7 @@
   const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
   // Older names for a page (saved in settings, sent by the tray or a popup).
   const ALIAS = { phone: 'overview' };
-  const orderOf = (d) => ORDER[d.id] ?? d.order ?? 50;
+  const orderOf = (d) => ORDER[UI.baseOf(d)] ?? d.order ?? 50; // a kind's own version of a page (variantOf): the page's place
   let lastGroup;
   let gap = null; // the gap before the current group (hidden with the group: renderSidebar)
   for (const def of UI.tabs.slice().sort((a, b) => orderOf(a) - orderOf(b))) {
@@ -27,7 +27,7 @@
       views.set(def.id, { def, ...buildPage(def), navBtn: el('button'), stateEl: el('span') });
       continue;
     }
-    const group = GROUP[def.id];
+    const group = GROUP[UI.baseOf(def)];
     if (!def.bottom && lastGroup !== undefined && group !== lastGroup) nav.append(gap = el('li', { class: 'gap', attrs: { role: 'presentation' } }));
     lastGroup = group;
     if (def.bottom && !nav.querySelector('.sep')) nav.append(el('li', { class: 'sep', attrs: { role: 'presentation' } })); // one line above General and About
@@ -95,7 +95,7 @@
   // A web device's pages (shared/ui-web.js) while its tile is picked (UI.webDev); any other page
   // goes back to the sidebar's own.
   function show(id, user) {
-    id = ALIAS[id] || id;
+    id = UI.pick(ALIAS[id] || id); // the version for the device in session (shared/ui-kinds.js)
     const want = views.get(id);
     if (want && want.def.web && !UI.webDev) id = 'web';
     else if (want && !want.def.web && !UI.WEB_KEEP.includes(want.def.id)) UI.webDev = null; // TwinDesk Web, AirPlay, General, About: both
@@ -180,7 +180,8 @@
       const hide = UI.webDev ? !v.def.web && !UI.WEB_KEEP.includes(v.def.id)
         : !!v.def.web || !!(v.def.hidden && v.def.hidden(s));
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
-      if (hide && current === v) show(home(s), false);
+      // Hidden for the device now in session: its version of this page (shared/ui-kinds.js), else the start.
+      if (hide && current === v) { const twin = UI.webDev ? v.def.id : UI.pick(v.def.id, s); show(twin !== v.def.id ? twin : home(s), false); }
     }
     // A group with every tab hidden takes its gap with it.
     for (const v of views.values()) if (v.gap) v.gap.hidden = [...views.values()].every((x) => x.gap !== v.gap || !x.navBtn.parentElement || x.navBtn.parentElement.hidden);
