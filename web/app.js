@@ -1166,6 +1166,27 @@
     pick.click();
   }
 
+  // The newest published release's IPA on GitHub (its address, kept for this visit), or '' (none, or offline).
+  let ipaAsk = null;
+  function latestIpa() {
+    if (ipaAsk) return ipaAsk;
+    try { const k = sessionStorage.getItem('twindesk.web.ipa'); if (k) return (ipaAsk = Promise.resolve(k)); } catch (_) {}
+    ipaAsk = fetch('https://api.github.com/repos/InukaAsith/TwinDesk/releases?per_page=15', { headers: { Accept: 'application/vnd.github+json' } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => {
+        for (const rel of Array.isArray(list) ? list : []) {
+          const a = !rel.draft && (rel.assets || []).find((x) => /\.ipa$/i.test(x.name || ''));
+          if (a && a.browser_download_url) {
+            try { sessionStorage.setItem('twindesk.web.ipa', a.browser_download_url); } catch (_) {}
+            return a.browser_download_url;
+          }
+        }
+        return '';
+      })
+      .catch(() => '');
+    return ipaAsk;
+  }
+
   function downloads() {
     const v = (S.pc && S.pc.version) || (S.serving && S.serving.version) || '';
     const R = 'https://github.com/InukaAsith/TwinDesk/releases';
@@ -1178,8 +1199,11 @@
       ['Linux', 'AppImage', f('TwinDesk-{v}-x86_64.AppImage')],
       ['Android', 'APK', f('TwinDesk-{v}.apk')],
     ];
+    // iPhone and iPad: the newest release on GitHub with an IPA (not every release has one yet).
+    const ipa = el('a', { href: `${R}`, target: '_blank', rel: 'noopener' }, [el('b', { text: 'iPhone / iPad' }), el('span', { text: tr('IPA, to sideload with SideStore or AltStore') })]);
+    latestIpa().then((u) => { if (u) ipa.href = u; });
     return card(tr('Download TwinDesk'), [
-      el('div', { class: 'dl' }, L.map(([a, b, href]) => el('a', { href, target: '_blank', rel: 'noopener' }, [el('b', { text: a }), el('span', { text: b })]))),
+      el('div', { class: 'dl' }, [...L.map(([a, b, href]) => el('a', { href, target: '_blank', rel: 'noopener' }, [el('b', { text: a }), el('span', { text: b })])), ipa]),
       row(tr('All releases'), tr('Free and open source under GPL-3.0'), [chev()], () => window.open(R, '_blank')),
     ], v ? el('span', { class: 'muted act', text: tr('Version {version}', { version: v }) }) : null);
   }
@@ -2160,20 +2184,70 @@
   }
 
   // ---- About ----
+  // About, as the apps have it: the icon and version, who made it, this device, this page, the
+  // licence and the downloads.
   BUILD.about = (page) => {
+    const ver = el('p', { class: 'ver' });
+    const go = (u) => () => window.open(u, '_blank', 'noopener');
+    const fact = (label) => valueRow(label);
+    const devName = fact(tr('Name')), devModel = fact(tr('Model')), devSys = fact(tr('System')), devBrowser = fact(tr('Browser')), devScreen = fact(tr('Screen'));
+    const appVer = fact(tr('Version')), appFrom = fact(tr('Served by')), appConn = fact(tr('Connection')), appMode = fact(tr('Opened as'));
     page.append(
-      el('div', { class: 'promo', style: 'padding-top:6px' }, [
+      el('div', { class: 'promo about-hero', style: 'padding-top:6px' }, [
         el('img', { class: 'logo', src: logo(), alt: '' }),
         el('h1', { text: 'TwinDesk' }),
-        el('p', { class: 'ver' }),
+        ver,
+        el('p', { class: 'muted', text: tr('Use your computers and phones together: screens, files, clipboard and input.') }),
+        el('p', { class: 'about-by', text: tr('by Inuka Asith') }),
       ]),
-      card('', [
+      card(tr('Made by'), [
+        row('Inuka Asith', tr('Designed and built TwinDesk · inukaasith.vercel.app'), [chev()], go('https://inukaasith.vercel.app')),
+        row(tr('Source code'), 'github.com/InukaAsith/TwinDesk', [chev()], go('https://github.com/InukaAsith/TwinDesk')),
+        row(tr('All releases'), tr('Downloads for macOS, Windows, Linux, Android and iPhone'), [chev()], go('https://github.com/InukaAsith/TwinDesk/releases')),
+        row(tr('Report a problem'), tr('Issues on GitHub'), [chev()], go('https://github.com/InukaAsith/TwinDesk/issues')),
+      ]),
+      card(tr('This device'), [devName, devModel, devSys, devBrowser, devScreen]),
+      card(tr('This app'), [
         row('TwinDesk Web', tr('Served by TwinDesk on your computer over your local network. Push notifications are end-to-end encrypted and relayed by your browser’s push service.')),
-        row(tr('Source code'), 'github.com/InukaAsith/TwinDesk', [chev()], () => window.open('https://github.com/InukaAsith/TwinDesk', '_blank')),
+        appVer, appFrom, appConn, appMode,
+      ]),
+      card(tr('Licence'), [
+        row(tr('GNU General Public License v3'), tr('Free and open source. Copyright © 2026 inukaasith'), [chev()], go('https://github.com/InukaAsith/TwinDesk/blob/main/LICENSE')),
+        row(tr('Crafted with ☕ and ❤️ in Sri Lanka 🇱🇰'), ''),
       ]),
       downloads(),
     );
-    return () => { page.querySelector('.ver').textContent = S.pc && S.pc.version ? tr('Version {version} on {name}', { version: S.pc.version, name: pcName() }) : ''; };
+    const sys = () => {
+      const ua = navigator.userAgent;
+      const ios = /OS (\d+)[._](\d+)/.exec(ua);
+      const and = /Android ([\d.]+)/.exec(ua);
+      const mac = /Mac OS X (\d+)[._](\d+)/.exec(ua);
+      const win = /Windows NT ([\d.]+)/.exec(ua);
+      if (ME.os === 'ios' || ME.os === 'ipados') return (ME.os === 'ipados' ? 'iPadOS' : 'iOS') + (ios ? ` ${ios[1]}.${ios[2]}` : '');
+      if (and) return `Android ${and[1]}`;
+      if (mac) return `macOS ${mac[1]}.${mac[2]}`;
+      if (win) return 'Windows';
+      return ME.os === 'linux' ? 'Linux' : '';
+    };
+    const browser = () => {
+      const ua = navigator.userAgent;
+      const m = /(Edg|OPR|Firefox|FxiOS|CriOS|Chrome|Version)\/([\d.]+)/.exec(ua);
+      const names = { Edg: 'Edge', OPR: 'Opera', Firefox: 'Firefox', FxiOS: 'Firefox', CriOS: 'Chrome', Chrome: 'Chrome', Version: 'Safari' };
+      return m ? `${names[m[1]]} ${m[2].split('.').slice(0, 2).join('.')}` : '';
+    };
+    return () => {
+      const v = (S.pc && S.pc.version) || (S.serving && S.serving.version) || '';
+      ver.textContent = v ? tr('Version {version}', { version: v }) : '';
+      devName.set(load().name || ME.model);
+      devModel.set(ME.model);
+      devSys.set(sys());
+      devBrowser.set(browser());
+      devScreen.set(`${screen.width} × ${screen.height} · ${Math.round((devicePixelRatio || 1) * 10) / 10}×`);
+      appVer.set(v);
+      appFrom.set(S.pc ? pcName() : (S.serving && S.serving.name) || '');
+      appConn.set(location.protocol === 'https:' ? tr('Secure') : tr('Not secure'));
+      appMode.set(STANDALONE ? tr('App') : tr('Browser tab'));
+    };
   };
 
   // ---------------------------------------------------------------- the phone app's pages, full screen
