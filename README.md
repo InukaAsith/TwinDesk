@@ -591,7 +591,7 @@ computers** (off until you want it), on the Connection page.
 # 🧭 Every TwinDesk app
 
 The same TwinDesk runs on Mac, Windows and Linux. The phone apps and TwinDesk Web connect to any of
-them. The iPhone and iPad app and TwinDesk Web are new in 2.6 (beta).
+them. The iPhone and iPad app and TwinDesk Web are new in 3.0.
 
 ✅ yes · ◐ partly · ✗ no · — doesn't apply
 
@@ -696,7 +696,7 @@ November 2026. If something here is out of date or wrong, please
 | | **TwinDesk** | Phone Link | KDE Connect | Apple Continuity | scrcpy | LocalSend |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Computers | Mac, Windows, Linux | Windows | Linux, Windows, Mac | Mac | Mac, Windows, Linux | all |
-| Phones | Android (iPhone and iPad in 2.6 beta) | Android, iPhone (fewer features) | Android, iPhone (fewer features) | iPhone, iPad | Android | all |
+| Phones | Android, iPhone and iPad | Android, iPhone (fewer features) | Android, iPhone (fewer features) | iPhone, iPad | Android | all |
 | Notifications | ✅ both ways | ✅ | ✅ both ways | ✅ | ✗ | ✗ |
 | Answer calls, talk through the computer | ✅ | ✅ | ◐ alerts, mute | ✅ | ✗ | ✗ |
 | Texts | ✅ SMS, WhatsApp, Instagram, Telegram | ✅ SMS | ✅ SMS | ✅ iMessage, SMS | ✗ | ✗ |

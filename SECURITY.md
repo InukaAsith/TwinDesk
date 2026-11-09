@@ -21,8 +21,7 @@ unless you'd rather not be named.
 
 | Version | Fixes |
 |---|---|
-| Latest release (2.5.x) | Yes |
-| Current beta (2.6.0-beta) | Yes |
+| Latest release (3.0.x) | Yes |
 | Older | No: update to the latest release |
 
 Each app checks for updates itself. The Homebrew cask and the Android app follow the releases.
