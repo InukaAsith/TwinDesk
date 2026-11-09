@@ -12,23 +12,23 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .overview: return "Overview"
-        case .connection: return "Connection"
-        case .receive: return "Receive screen"
-        case .share: return "Share screen"
-        case .remote: return "Remote"
-        case .clipboard: return "Clipboard"
-        case .notifications: return "Notifications"
-        case .files: return "File Sharing"
-        case .photos: return "Photos"
-        case .messages: return "Messages"
-        case .audio: return "Audio"
-        case .camera: return "Camera"
-        case .media: return "Media"
-        case .airplay: return "AirPlay & SMB"
-        case .shortcuts: return "Shortcuts"
-        case .general: return "General"
-        case .about: return "About"
+        case .overview: return tr("Overview")
+        case .connection: return tr("Connection")
+        case .receive: return tr("Receive screen")
+        case .share: return tr("Share screen")
+        case .remote: return tr("Remote")
+        case .clipboard: return tr("Clipboard")
+        case .notifications: return tr("Notifications")
+        case .files: return tr("File Sharing")
+        case .photos: return tr("Photos")
+        case .messages: return tr("Messages")
+        case .audio: return tr("Audio")
+        case .camera: return tr("Camera")
+        case .media: return tr("Media")
+        case .airplay: return tr("AirPlay & SMB")
+        case .shortcuts: return tr("Shortcuts")
+        case .general: return tr("General")
+        case .about: return tr("About")
         }
     }
 
@@ -86,9 +86,9 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
     static let bottom: [Page] = [.overview, .connection, .receive, .files]
     var tabTitle: String {
         switch self {
-        case .connection: return "Connect"
-        case .receive: return "Screen"
-        case .files: return "Files"
+        case .connection: return tr("Connect")
+        case .receive: return tr("Screen")
+        case .files: return tr("Files")
         default: return title
         }
     }
@@ -193,7 +193,7 @@ struct RootView: View {
                 Sidebar(selection: nil, hiding: tabs)
                     .navigationDestination(for: Page.self) { p in PageView(page: p) }
             }
-            .tabItem { Label("More", systemImage: "ellipsis") }
+            .tabItem { Label(tr("More"), systemImage: "ellipsis") }
             .tag(PhoneTab.more)
         }
         .modifier(TabBarGlass())
@@ -274,12 +274,12 @@ private struct PairPrompts: ViewModifier {
             .sheet(isPresented: Binding(get: { core.pair != nil }, set: { if !$0 { core.cancelPairing() } })) {
                 PairSheet().environmentObject(core).presentationDetents([.medium])
             }
-            .alert(core.invite.map { "\($0.name) wants to connect" } ?? "",
+            .alert(core.invite.map { tr("{name} wants to connect", ["name": $0.name]) } ?? "",
                    isPresented: Binding(get: { core.invite != nil && core.pair == nil }, set: { if !$0 { core.dismissInvite() } })) {
-                Button("Pair") { if let f = core.invite { core.pair(f) } }
-                Button("Not Now", role: .cancel) { core.dismissInvite() }
+                Button(tr("Pair")) { if let f = core.invite { core.pair(f) } }
+                Button(tr("Not Now"), role: .cancel) { core.dismissInvite() }
             } message: {
-                Text("Pair this \(Device.word) with it to share the clipboard, files and screens.")
+                Text(tr("Pair this {device} with it to share the clipboard, files and screens.", ["device": Device.word]))
             }
             // A phone (Android or iPhone) pairing with this one, or asking it to host: a popup on any
             // page, not only the card at the bottom of Connection. Swiping the sheet away denies.
@@ -289,13 +289,13 @@ private struct PairPrompts: ViewModifier {
                     PeerPairAsk(p: p).padding(24).environmentObject(core).presentationDetents([.medium])
                 }
             }
-            .alert(core.peer.asked.map { "\($0.name) wants to connect" } ?? "",
+            .alert(core.peer.asked.map { tr("{name} wants to connect", ["name": $0.name]) } ?? "",
                    isPresented: Binding(get: { _ = core.tick; return core.peer.asked != nil && core.peer.hostPairing == nil && core.pair == nil },
                                         set: { if !$0, core.peer.asked != nil { core.peer.answerAsk(false) } })) {
-                Button("Allow") { core.peer.answerAsk(true) }
-                Button("Not Now", role: .cancel) { core.peer.answerAsk(false) }
+                Button(tr("Allow")) { core.peer.answerAsk(true) }
+                Button(tr("Not Now"), role: .cancel) { core.peer.answerAsk(false) }
             } message: {
-                Text("Let it connect to this \(Device.word)?")
+                Text(tr("Let it connect to this {device}?", ["device": Device.word]))
             }
     }
 }
@@ -337,7 +337,7 @@ struct Sidebar: View {
         .background(Backdrop())
         // iPhone's More: a large title. iPad: TwinDesk's own header (the mark, the name, the state)
         // in the bar, beside the sidebar's button.
-        .navigationTitle(selection == nil ? "More" : "")
+        .navigationTitle(selection == nil ? tr("More") : "")
         .navigationBarTitleDisplayMode(selection == nil ? .large : .inline)
         .modifier(BrandBar(on: selection != nil)) // iPad: the mark and name in the bar, level with the sidebar button
         .refreshable { core.discovery.refresh() }
@@ -374,7 +374,7 @@ struct Sidebar: View {
                     .buttonStyle(PressScale())
                     .listRowBackground(TDColor.card)
                 }
-            } header: { Text("Nearby") }
+            } header: { Text(tr("Nearby")) }
         }
         // With a phone: only what it and this one can do (PeerViews' peerShows); Messages only then.
         let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && (core.peerMode ? peerShows($0, core.peer) : $0 != .messages) } }.filter { !$0.isEmpty }
@@ -407,8 +407,8 @@ struct Sidebar: View {
                     .font(.system(size: 22, weight: .regular)).foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(phone?.peerName ?? core.host?.name ?? core.hosts.first?.name ?? "No computer").font(.headline).foregroundStyle(TDColor.text)
-                    Text(phone != nil ? "Phone · Connected" : statusLine).font(.subheadline).foregroundStyle(.secondary)
+                    Text(phone?.peerName ?? core.host?.name ?? core.hosts.first?.name ?? tr("No computer")).font(.headline).foregroundStyle(TDColor.text)
+                    Text(phone != nil ? tr("Phone · Connected") : statusLine).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if live { LiveDot(size: 9) }
@@ -441,12 +441,12 @@ struct Sidebar: View {
         var list: [NearDev] = []
         for h in core.hosts where h.id != shown && core.host?.id != h.id && (core.nearby.contains(where: { $0.id == h.id }) || core.ble.has(h.id)) {
             let connecting = core.state == "connecting" && core.link.host?.id == h.id
-            list.append(NearDev(id: h.id, name: h.name, symbol: osSymbol(h.os), sub: connecting ? "Connecting…" : "Nearby · Tap to connect") { core.connect(h) })
+            list.append(NearDev(id: h.id, name: h.name, symbol: osSymbol(h.os), sub: connecting ? tr("Connecting…") : tr("Nearby · Tap to connect")) { core.connect(h) })
         }
         if core.peer.on {
             for f in core.peer.nearby() where f.id != shown && core.peer.isPaired(f.id) && !(core.peer.connected && core.peer.peerId == f.id) {
                 list.append(NearDev(id: f.id, name: f.name, symbol: f.os == "ios" ? "iphone" : "iphone.gen2",
-                                    sub: core.peer.waitingFor == f.id ? "Requesting connection…" : "Nearby · Tap to connect") { core.peer.connect(f) })
+                                    sub: core.peer.waitingFor == f.id ? tr("Requesting connection…") : tr("Nearby · Tap to connect")) { core.peer.connect(f) })
             }
         }
         return list
@@ -455,9 +455,9 @@ struct Sidebar: View {
     private var statusLine: String {
         switch core.state {
         case "connected":
-            return [core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi", core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
-        case "connecting": return "Connecting…"
-        default: return core.hosts.isEmpty ? "Tap to pair a computer" : "Not connected · Tap to connect"
+            return [core.link.wired ? "USB" : core.link.viaBle ? tr("Bluetooth") : Discovery.hasEthernet ? tr("Ethernet") : "Wi-Fi", core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
+        case "connecting": return tr("Connecting…")
+        default: return core.hosts.isEmpty ? tr("Tap to pair a computer") : tr("Not connected · Tap to connect")
         }
     }
 
@@ -545,24 +545,24 @@ struct PairSheet: View {
             Text(p?.name ?? "").font(.title2.bold())
             switch p?.phase ?? "" {
             case "code":
-                Text("Check that \(p?.name ?? "the computer") shows this code").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(tr("Check that {name} shows this code", ["name": p?.name ?? tr("the computer")])).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Text(spaced(p?.code ?? "")).font(.system(size: 44, weight: .bold, design: .rounded)).monospacedDigit()
                 HStack(spacing: 14) {
-                    Button("Cancel", role: .cancel) { core.cancelPairing() }.secondaryButton()
-                    Button("They Match") { core.confirmCode() }.primaryButton()
+                    Button(tr("Cancel"), role: .cancel) { core.cancelPairing() }.secondaryButton()
+                    Button(tr("They Match")) { core.confirmCode() }.primaryButton()
                 }
             case "waiting":
                 ProgressView()
-                Text(p?.qr == true ? "Click Allow on \(p?.name ?? "the computer")." : "Confirm the code on \(p?.name ?? "the computer") too.")
+                Text(p?.qr == true ? tr("Click Allow on {name}.", ["name": p?.name ?? tr("the computer")]) : tr("Confirm the code on {name} too.", ["name": p?.name ?? tr("the computer")]))
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button("Cancel", role: .cancel) { core.cancelPairing() }.secondaryButton()
+                Button(tr("Cancel"), role: .cancel) { core.cancelPairing() }.secondaryButton()
             case "failed":
                 Text(p?.error ?? "").multilineTextAlignment(.center).foregroundStyle(.secondary)
-                Button("Close") { core.cancelPairing() }.primaryButton()
+                Button(tr("Close")) { core.cancelPairing() }.primaryButton()
             default:
                 ProgressView()
-                Text("Connecting…").foregroundStyle(.secondary)
-                Button("Cancel", role: .cancel) { core.cancelPairing() }.secondaryButton()
+                Text(tr("Connecting…")).foregroundStyle(.secondary)
+                Button(tr("Cancel"), role: .cancel) { core.cancelPairing() }.secondaryButton()
             }
         }
         .padding(28)

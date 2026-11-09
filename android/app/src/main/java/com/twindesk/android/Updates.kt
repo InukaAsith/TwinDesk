@@ -59,10 +59,10 @@ class Updates(private val core: Core) {
                     checkedAt = System.currentTimeMillis()
                     return
                 }
-                if (!res.isSuccessful) throw Exception(if (res.code == 403) "GitHub is busy, try again later" else "GitHub answered ${res.code}")
+                if (!res.isSuccessful) throw Exception(if (res.code == 403) tr("GitHub is busy, try again later") else tr("GitHub answered {code}", "code" to res.code))
                 val r = JSONObject(res.body.string())
                 val tag = r.optString("tag_name").ifEmpty { r.optString("name") }.removePrefix("v").removePrefix("V")
-                if (parse(tag) == null) throw Exception("The latest release has no version number")
+                if (parse(tag) == null) throw Exception(tr("The latest release has no version number"))
                 latest = tag
                 available = compare(tag, current) > 0
                 download = pickApk(r.optJSONArray("assets"), BuildConfig.NOTIF_LISTENER)
@@ -75,7 +75,7 @@ class Updates(private val core: Core) {
                 Notify.update(core.ctx, latest, current)
             }
         } catch (e: Exception) {
-            if (manual) error = e.message ?: "Couldn’t reach GitHub"
+            if (manual) error = e.message ?: tr("Couldn’t reach GitHub")
         } finally {
             checking = false
             core.changed()

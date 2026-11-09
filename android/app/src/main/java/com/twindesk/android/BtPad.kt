@@ -97,9 +97,9 @@ class BtPad(private val core: Core) {
     // Registered while it's on (the Remote page calls this whenever it's shown).
     fun start() {
         if (!on || state != "off" && state != "unavailable") return
-        if (!allowed()) return set("off", "Allow Nearby devices for TwinDesk first")
+        if (!allowed()) return set("off", tr("Allow Nearby devices for TwinDesk first"))
         val adapter = manager?.adapter
-        if (adapter == null || !adapter.isEnabled) return set("off", "Turn on Bluetooth first")
+        if (adapter == null || !adapter.isEnabled) return set("off", tr("Turn on Bluetooth first"))
         set("starting", "")
         val asked = adapter.getProfileProxy(core.ctx, object : BluetoothProfile.ServiceListener {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
@@ -108,17 +108,17 @@ class BtPad(private val core: Core) {
                 if (!on) return stop()
                 val sdp = BluetoothHidDeviceAppSdpSettings("TwinDesk Gamepad", "${core.store.deviceName} as a gamepad", "TwinDesk",
                     BluetoothHidDevice.SUBCLASS2_GAMEPAD, DESCRIPTOR)
-                if (!h.registerApp(sdp, null, null, io, callback)) set("unavailable", "Another app is using this device as a Bluetooth keyboard or controller: turn that off first")
+                if (!h.registerApp(sdp, null, null, io, callback)) set("unavailable", tr("Another app is using this device as a Bluetooth keyboard or controller: turn that off first"))
             }
             override fun onServiceDisconnected(profile: Int) {
                 hid = null
                 device = null
-                if (state != "off") set("off", "Bluetooth stopped: turn it on again")
+                if (state != "off") set("off", tr("Bluetooth stopped: turn it on again"))
             }
         }, BluetoothProfile.HID_DEVICE)
-        if (!asked) return set("unavailable", "This phone doesn’t offer Bluetooth controllers (its maker left the profile out)")
+        if (!asked) return set("unavailable", tr("This phone doesn’t offer Bluetooth controllers (its maker left the profile out)"))
         // No answer at all: the profile is there in name only.
-        core.bg.schedule({ if (state == "starting" && hid == null) set("unavailable", "This phone doesn’t offer Bluetooth controllers (its maker left the profile out)") }, 5, TimeUnit.SECONDS)
+        core.bg.schedule({ if (state == "starting" && hid == null) set("unavailable", tr("This phone doesn’t offer Bluetooth controllers (its maker left the profile out)")) }, 5, TimeUnit.SECONDS)
     }
 
     fun stop() {
@@ -135,7 +135,7 @@ class BtPad(private val core: Core) {
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(plugged: BluetoothDevice?, registered: Boolean) {
             if (!registered) {
-                if (state != "off") set("off", if (on) "Android took the controller away: turn it off and on again" else "")
+                if (state != "off") set("off", if (on) tr("Android took the controller away: turn it off and on again") else "")
                 return
             }
             set("ready", "")

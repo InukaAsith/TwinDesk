@@ -162,7 +162,7 @@ final class Files: Feature {
             if drop == "paste" && !expected.contains(batchId) { return refuse(id, "not_expected") }
             expected.remove(batchId)
             let count = max(1, m.int("count", 1))
-            batches.insert(Batch(id: batchId, dir: "in", name: count == 1 ? name : "\(count) items", count: count, bytes: m.int64("bytes", size)), at: 0)
+            batches.insert(Batch(id: batchId, dir: "in", name: count == 1 ? name : trCount(count, "item"), count: count, bytes: m.int64("bytes", size)), at: 0)
         }
         // Keep both: "name 2.ext" when one is already there.
         let target0 = targets[batchId]
@@ -353,7 +353,7 @@ final class Files: Feature {
                 t.done(b.ok)
             } else if b.dir == "in" {
                 core.send(msg(Proto.T.filesDone, ["batch": b.id, "ok": b.ok, "where": "TwinDesk/Received", "files": b.done]))
-                Notifier.shared.filesIn(b.name, ok: b.ok, from: core.link.host?.name ?? "the computer")
+                Notifier.shared.filesIn(b.name, ok: b.ok, from: core.link.host?.name ?? tr("the computer"))
             }
         }
         core.changed()
@@ -426,7 +426,7 @@ final class Files: Feature {
             items.append((u, name, size))
         }
         let bytes = items.reduce(Int64(0)) { $0 + $1.2 }
-        batches.insert(Batch(id: batch, dir: "out", name: items.count == 1 ? items[0].1 : "\(items.count) items", count: items.count, bytes: bytes), at: 0)
+        batches.insert(Batch(id: batch, dir: "out", name: items.count == 1 ? items[0].1 : trCount(items.count, "item"), count: items.count, bytes: bytes), at: 0)
         for (index, it) in items.enumerated() {
             let id = UUID().uuidString
             let leaf = (it.1 as NSString).lastPathComponent
@@ -571,7 +571,7 @@ final class Files: Feature {
         batches[i].finished = true
         batches[i].ok = m.bool("ok")
         batches[i].done = batches[i].count
-        Notifier.shared.filesOut(batches[i].name, ok: batches[i].ok, to: core.link.host?.name ?? "the computer")
+        Notifier.shared.filesOut(batches[i].name, ok: batches[i].ok, to: core.link.host?.name ?? tr("the computer"))
         core.changed()
     }
 }
@@ -589,7 +589,7 @@ final class FileClip: Feature {
             let items = (m["items"] as? [JSON]) ?? []
             let names = items.prefix(3).map { $0.str("name", max: 100) }
             offer = (m.str("id", max: 128), m.int("files", items.count), m.int64("bytes"), names)
-            Notifier.shared.fclip(id: offer!.id, names: names, files: offer!.files, from: core.link.host?.name ?? "the computer")
+            Notifier.shared.fclip(id: offer!.id, names: names, files: offer!.files, from: core.link.host?.name ?? tr("the computer"))
             core.changed()
         case Proto.T.fclipGone:
             if offer?.id == m.str("id", max: 128) { offer = nil; Notifier.shared.cancelFclip(); core.changed() }

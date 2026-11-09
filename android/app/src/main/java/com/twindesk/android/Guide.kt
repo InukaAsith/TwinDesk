@@ -67,25 +67,25 @@ private val xiaomi = Build.MANUFACTURER.equals("Xiaomi", true) || Build.BRAND.eq
 fun WirelessGuide(core: Core, ctx: Context, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v
     val a = core.adb
-    val name = core.host?.name ?: core.hosts().firstOrNull()?.name ?: "your computer"
+    val name = core.host?.name ?: core.hosts().firstOrNull()?.name ?: tr("your computer")
 
     Box(Modifier.fillMaxSize().background(pal.content).safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Tile(Ico.display, listOf(Color(0xFF5AC8FA), Color(0xFF0A84FF)), 44)
                 Column(Modifier.padding(start = 14.dp)) {
-                    Text("Wireless debugging", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = pal.text)
-                    Text("A one-time setup so $name can show this screen and control it with a mouse and keyboard", color = pal.muted, fontSize = 13.5.sp)
+                    Text(tr("Wireless debugging"), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = pal.text)
+                    Text(tr("A one-time setup so {name} can show this screen and control it with a mouse and keyboard", "name" to name), color = pal.muted, fontSize = 13.5.sp)
                 }
             }
             Spacer(Modifier.height(20.dp))
-            if (a.paired) Note("Done. $name is paired with this device’s wireless debugging.", "info")
+            if (a.paired) Note(tr("Done. {name} is paired with this device’s wireless debugging.", "name" to name), "info")
             WirelessSteps(core, ctx, "")
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { Guide.close(core) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White),
-            ) { Text("Done", modifier = Modifier.padding(vertical = 4.dp)) }
+            ) { Text(tr("Done"), modifier = Modifier.padding(vertical = 4.dp)) }
         }
     }
 }
@@ -96,28 +96,28 @@ fun WirelessGuide(core: Core, ctx: Context, v: Int) {
 private fun WirelessSteps(core: Core, ctx: Context, title: String, foot: @Composable () -> Unit = {}) {
     @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val a = core.adb
-    val name = core.host?.name ?: core.hosts().firstOrNull()?.name ?: "your computer"
+    val name = core.host?.name ?: core.hosts().firstOrNull()?.name ?: tr("your computer")
     val connected = core.host != null
-    class S(val title: String, val hint: String, val done: Boolean, val optional: Boolean = false, val action: @Composable () -> Unit = {})
+    class S(val title: String, val hint: String, val done: Boolean, val optional: Boolean = false, val short: String = title, val action: @Composable () -> Unit = {})
     val steps = listOfNotNull(
-        S("Connect to $name", "Open TwinDesk on $name, then tap Connect on Overview.", connected) {
-            core.hosts().firstOrNull()?.let { h -> Secondary("Connect") { core.connect(h) } }
+        S(tr("Connect to {name}", "name" to name), tr("Open TwinDesk on {name}, then tap Connect on Overview.", "name" to name), connected, short = tr("Connect")) {
+            core.hosts().firstOrNull()?.let { h -> Secondary(tr("Connect")) { core.connect(h) } }
         },
         S(
-            "Turn on Developer options",
-            if (xiaomi) "About phone › tap “OS version” 7 times." else "About phone › tap “Build number” 7 times.", a.devOptions,
-        ) { Secondary("Open") { ctx.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+            tr("Turn on Developer options"),
+            if (xiaomi) tr("About phone › tap “OS version” 7 times.") else tr("About phone › tap “Build number” 7 times."), a.devOptions, short = tr("Developer options"),
+        ) { Secondary(tr("Open")) { ctx.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
         // Without it MIUI and HyperOS refuse the computer's touches and keys (the computer tells us).
         if (xiaomi) S(
-            "Xiaomi: “USB debugging (Security settings)”",
-            "Turn on Developer options › USB debugging (Security settings) to allow touch, mouse and keyboard input from $name. A Mi account is required.",
+            tr("Xiaomi: “USB debugging (Security settings)”"),
+            tr("Turn on Developer options › USB debugging (Security settings) to allow touch, mouse and keyboard input from {name}. A Mi account is required.", "name" to name),
             a.paired && !a.inputBlocked, optional = !a.inputBlocked,
-        ) { Secondary("Open") { a.openSettings() } } else null,
-        S("Turn on USB and Wireless debugging", "In Developer options, turn on USB debugging and Wireless debugging.", a.wifiDebugging) { Secondary("Open") { a.turnOn() } },
+        ) { Secondary(tr("Open")) { a.openSettings() } } else null,
+        S(tr("Turn on USB and Wireless debugging"), tr("In Developer options, turn on USB debugging and Wireless debugging."), a.wifiDebugging, short = tr("USB and Wireless debugging")) { Secondary(tr("Open")) { a.turnOn() } },
         S(
-            "Pair with $name",
-            if (a.pairing) "Pairing…" else "Tap “Pair device with pairing code”, then enter the code in TwinDesk’s notification.", a.paired,
-        ) { Primary("Pair") { a.askForCode(); a.openSettings() } },
+            tr("Pair with {name}", "name" to name),
+            if (a.pairing) tr("Pairing…") else tr("Tap “Pair device with pairing code”, then enter the code in TwinDesk’s notification."), a.paired, short = tr("Pair"),
+        ) { Primary(tr("Pair")) { a.askForCode(); a.openSettings() } },
     )
     val current = steps.indexOfFirst { !it.done && !it.optional }
     MacCard(title) {
@@ -126,7 +126,7 @@ private fun WirelessSteps(core: Core, ctx: Context, title: String, foot: @Compos
             Box(Modifier.size(22.dp).clip(CircleShape).background(pal.good), contentAlignment = Alignment.Center) {
                 Text("✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
-            Text(done.joinToString(" · ") { it.title.removePrefix("Turn on ").removeSuffix(" with $name").removeSuffix(" to $name") }, color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
+            Text(done.joinToString(" · ") { it.short }, color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
         }
         var first = done.isEmpty()
         steps.forEachIndexed { i, st ->
@@ -145,12 +145,12 @@ private fun WirelessSteps(core: Core, ctx: Context, title: String, foot: @Compos
             Box(Modifier.fillMaxWidth().height(1.dp).background(pal.line))
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    code, { code = it.filter { c -> c.isDigit() }.take(6) }, placeholder = { Text("Or enter the code", color = pal.faint, fontSize = 14.sp) }, singleLine = true,
+                    code, { code = it.filter { c -> c.isDigit() }.take(6) }, placeholder = { Text(tr("Or enter the code"), color = pal.faint, fontSize = 14.sp) }, singleLine = true,
                     modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 16.sp, color = pal.text, letterSpacing = 3.sp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 )
-                Primary("Pair") { a.askForCode(); a.sendPairCode(code) }
+                Primary(tr("Pair")) { a.askForCode(); a.sendPairCode(code) }
             }
         }
         foot()

@@ -20,10 +20,13 @@ struct TwinDeskApp: App {
     @Environment(\.scenePhase) private var phase
     @StateObject private var core = Core.shared
     @AppStorage("appearance") private var appearance = Appearance.system.rawValue
+    // General › Language: the whole window is drawn again in the new language.
+    @StateObject private var i18n = I18n.shared
 
     var body: some Scene {
         WindowGroup {
             RootView()
+                .id(i18n.lang)
                 .environmentObject(core)
                 .onOpenURL { core.openURL($0) }
                 .preferredColorScheme((Appearance(rawValue: appearance) ?? .system).scheme)

@@ -51,7 +51,7 @@ class FolderShare(core: Core) : Feature(core) {
     val allowed get() = FsBrowse.allowed()
 
     // ~ for the phone's storage, in what's shown.
-    fun shown(f: File = folder) = f.path.replace(Environment.getExternalStorageDirectory().path, "Phone storage")
+    fun shown(f: File = folder) = f.path.replace(Environment.getExternalStorageDirectory().path, tr("Phone storage"))
 
     override fun onWelcome(host: Host) {
         lastLink = ""

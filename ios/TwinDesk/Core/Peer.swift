@@ -158,7 +158,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             if hostOn || guests[f.id] != nil || paired().contains(where: { $0.id == f.id }) { return allowHost(f) }
             if asked?.id == f.id { return }
             asked = f
-            Notifier.shared.note("peer.ask", "\(f.name) requests a connection", "Open TwinDesk to allow the connection.")
+            Notifier.shared.note("peer.ask", tr("{name} requests a connection", ["name": f.name]), tr("Open TwinDesk to allow the connection."))
             changed()
         case "peer.hosting":
             let p = m.int("port")
@@ -169,7 +169,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             g.port = UInt16(p)
             connect(g)
         case "peer.no":
-            if waitingFor == f.id { waitingFor = ""; message = "\(f.name) said not now."; changed() }
+            if waitingFor == f.id { waitingFor = ""; message = tr("{name} said not now.", ["name": f.name]); changed() }
         default: break
         }
     }
@@ -187,9 +187,9 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         if !waitingFor.isEmpty {
             if let f = core.discovery.phone(waitingFor), f.port > 0 { waitingFor = ""; connect(f) }
             else if Date() > waitUntil {
-                let name = core.discovery.phone(waitingFor)?.name ?? "That phone"
+                let name = core.discovery.phone(waitingFor)?.name ?? tr("That phone")
                 waitingFor = ""
-                message = "\(name) didn’t answer. Open TwinDesk on it, or turn on Host for other phones there."
+                message = tr("{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.", ["name": name])
                 changed()
             }
         }
@@ -250,7 +250,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         screenAsked = nil
         let waiting = calls
         calls.removeAll()
-        for (_, cb) in waiting { cb(["error": "Disconnected"]) }
+        for (_, cb) in waiting { cb(["error": tr("Disconnected")]) }
         for id in Array(inFiles.keys) { inFailed(id) }
         outFiles.removeAll()
         screenEnded()
@@ -370,7 +370,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let batch = UUID().uuidString
         let items = urls.map { u -> (URL, Int64) in (u, Int64((try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)) }
         let bytes = items.reduce(0) { $0 + $1.1 }
-        batches[batch] = Batch(id: batch, up: true, name: items.count == 1 ? items[0].0.lastPathComponent : "\(items.count) items", count: items.count, bytes: bytes)
+        batches[batch] = Batch(id: batch, up: true, name: items.count == 1 ? items[0].0.lastPathComponent : trCount(items.count, "item"), count: items.count, bytes: bytes)
         for (i, it) in items.enumerated() {
             let id = UUID().uuidString
             let name = it.0.lastPathComponent
@@ -435,7 +435,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let bid = m.str("batch", max: 128).isEmpty ? id : m.str("batch", max: 128)
         let count = max(1, m.int("count", 1))
         if batches[bid] == nil {
-            batches[bid] = Batch(id: bid, up: false, name: count == 1 ? rel.last! : "\(count) items", count: count, bytes: m.int64("bytes", size))
+            batches[bid] = Batch(id: bid, up: false, name: count == 1 ? rel.last! : trCount(count, "item"), count: count, bytes: m.int64("bytes", size))
         }
         var dir = Files.receivedDir
         for p in rel.dropLast() { dir.appendPathComponent(p, isDirectory: true) }
@@ -515,14 +515,14 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
 
     // Ask the Android phone; the answer comes on main ({error} when it can't).
     func ask(_ op: String, _ args: JSON = [:], timeout: TimeInterval = 20, _ cb: @escaping (JSON) -> Void) {
-        guard connected else { return cb(["error": "Not connected"]) }
+        guard connected else { return cb(["error": tr("Not connected")]) }
         let id = Proto.randomHex(8)
         calls[id] = cb
         var m = args
         m["t"] = "q"; m["qid"] = id; m["op"] = op
         send(m)
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-            if let cb = self?.calls.removeValue(forKey: id) { cb(["error": "No answer"]) }
+            if let cb = self?.calls.removeValue(forKey: id) { cb(["error": tr("No answer")]) }
         }
     }
 
@@ -556,7 +556,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             guard core.mirror.sharing else {
                 // Remembered: starting Share Screen here sends it straight away (shareStarted).
                 screenAsked = size
-                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk to show it.")
+                Notifier.shared.note("peer.screen", tr("{name} wants to see this screen", ["name": peerName]), tr("Start Share Screen in TwinDesk to show it."))
                 return reply(["error": "Start Share Screen on \(core.store.deviceName) (TwinDesk › Share screen). It appears here once started."])
             }
             reply(["ok": true])
@@ -659,7 +659,7 @@ extension Peer {
             p.nw = nonce
             p.code = Proto.sasCode(fp: myFp, nw: nonce, nm: p.nm)
             pairing = p
-            Notifier.shared.note("peer.pair", "Pair with \(p.name)?", "Check that both phones show the same code in TwinDesk.")
+            Notifier.shared.note("peer.pair", tr("Pair with {name}?", ["name": p.name]), tr("Check that both phones show the same code in TwinDesk."))
             changed()
         case Proto.T.pairConfirm:
             guard var p = pairing, p.ws === ws, !p.code.isEmpty else { return }

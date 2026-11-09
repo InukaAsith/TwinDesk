@@ -49,15 +49,15 @@ object SetupCheck {
         val c = { a: Long, b: Long -> listOf(Color(a), Color(b)) }
         val list = mutableListOf<Item>()
         if (Build.VERSION.SDK_INT >= 33) list += Item(
-            "notify", "Notifications", "Incoming files, clipboard and notifications from your computer",
+            "notify", tr("Notifications"), tr("Incoming files, clipboard and notifications from your computer"),
             Ico.bell, c(0xFFFF6961, 0xFFFF3B30), true,
             ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
         )
-        if (core.notifs.supported) list += Item("listener", "Notification access", "Show this device’s notifications on your computer", Ico.bell, c(0xFFFFB340, 0xFFFF9500), true, core.notifs.hasAccess)
-        list += Item("battery", "Run in the background", "Lets your computer connect to this device at any time", Ico.general, c(0xFFAEAEB2, 0xFF636366), true, pm.isIgnoringBatteryOptimizations(ctx.packageName))
-        list += Item("overlay", "Show the pointer", "Shows your computer’s pointer over other apps", Ico.cursor, c(0xFFFFB340, 0xFFFF9500), true, core.pointer.allowed)
-        list += Item("adb", "Wireless debugging", "Show this screen on your computer and control it with a mouse and keyboard. Pairing is required only once.", Ico.display, c(0xFF5AC8FA, 0xFF0A84FF), false, core.adb.wifiDebugging)
-        if (Build.VERSION.SDK_INT >= 30) list += Item("wallpaper", "Wallpaper on your computer", "Optional. Android requires All files access to share the wallpaper.", Ico.files, c(0xFF64D2FF, 0xFF0A84FF), false, android.os.Environment.isExternalStorageManager())
+        if (core.notifs.supported) list += Item("listener", tr("Notification access"), tr("Show this device’s notifications on your computer"), Ico.bell, c(0xFFFFB340, 0xFFFF9500), true, core.notifs.hasAccess)
+        list += Item("battery", tr("Run in the background"), tr("Lets your computer connect to this device at any time"), Ico.general, c(0xFFAEAEB2, 0xFF636366), true, pm.isIgnoringBatteryOptimizations(ctx.packageName))
+        list += Item("overlay", tr("Show the pointer"), tr("Shows your computer’s pointer over other apps"), Ico.cursor, c(0xFFFFB340, 0xFFFF9500), true, core.pointer.allowed)
+        list += Item("adb", tr("Wireless debugging"), tr("Show this screen on your computer and control it with a mouse and keyboard. Pairing is required only once."), Ico.display, c(0xFF5AC8FA, 0xFF0A84FF), false, core.adb.wifiDebugging)
+        if (Build.VERSION.SDK_INT >= 30) list += Item("wallpaper", tr("Wallpaper on your computer"), tr("Optional. Android requires All files access to share the wallpaper."), Ico.files, c(0xFF64D2FF, 0xFF0A84FF), false, android.os.Environment.isExternalStorageManager())
         return list
     }
 
@@ -99,9 +99,9 @@ fun SetupScreen(core: Core, ctx: Context, v: Int, done: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Logo(84)
-            Text("Set up TwinDesk", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = pal.text, modifier = Modifier.padding(top = 12.dp))
+            Text(tr("Set up TwinDesk"), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = pal.text, modifier = Modifier.padding(top = 12.dp))
             Text(
-                "Allow these permissions so this device and your computer work together. You can change them at any time in General.",
+                tr("Allow these permissions so this device and your computer work together. You can change them at any time in General."),
                 color = pal.muted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp, bottom = 22.dp),
             )
             MacCard {
@@ -111,14 +111,14 @@ fun SetupScreen(core: Core, ctx: Context, v: Int, done: () -> Unit) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Tile(it.icon, it.colors, 30)
                             Column(Modifier.weight(1f).padding(start = 12.dp, end = 10.dp)) {
-                                Text(it.title + if (it.required) "" else " (optional)", color = pal.text, fontSize = 15.sp)
+                                Text(it.title + if (it.required) "" else tr(" (optional)"), color = pal.text, fontSize = 15.sp)
                                 Text(it.hint, color = pal.muted, fontSize = 12.5.sp)
                             }
-                            if (it.done) Pill("Allowed", "good")
+                            if (it.done) Pill(tr("Allowed"), "good")
                             else Button(
                                 onClick = { SetupCheck.open(ctx, core, it.id) { askNotify.launch(Manifest.permission.POST_NOTIFICATIONS) } },
                                 colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White), shape = RoundedCornerShape(8.dp),
-                            ) { Text(if (it.id == "adb") "Turn on" else "Allow") }
+                            ) { Text(if (it.id == "adb") tr("Turn on") else tr("Allow")) }
                         }
                     }
                 }
@@ -128,8 +128,8 @@ fun SetupScreen(core: Core, ctx: Context, v: Int, done: () -> Unit) {
                 onClick = { if (ready) done() else SetupCheck.skip(ctx, core) },
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White),
-            ) { Text(if (ready) "Continue" else "Skip for now", modifier = Modifier.padding(vertical = 4.dp)) }
-            if (!ready) Text("These are optional. Without them, some features are unavailable.", color = pal.faint, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
+            ) { Text(if (ready) tr("Continue") else tr("Skip for now"), modifier = Modifier.padding(vertical = 4.dp)) }
+            if (!ready) Text(tr("These are optional. Without them, some features are unavailable."), color = pal.faint, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

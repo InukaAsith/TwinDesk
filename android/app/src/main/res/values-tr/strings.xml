@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turkish for what Android itself shows (values/strings.xml). -->
+<resources>
+    <string name="sc_adb_short">Kablosuz hata ayıklama</string>
+    <string name="sc_adb_long">Kablosuz hata ayıklamayı aç</string>
+    <string name="sc_screen_short">Mac ekranı</string>
+    <string name="sc_screen_long">Mac’in ekranını göster</string>
+    <string name="input_service">TwinDesk: bilgisayarınızın faresi ve klavyesi</string>
+    <string name="input_service_desc">Kablosuz hata ayıklama kullanılamadığında (örneğin Bluetooth üzerinden), TwinDesk’te eşleştirdiğiniz bilgisayarın faresi ve klavyesiyle bu telefonda dokunmasını, kaydırmasını ve yazmasını sağlar. TwinDesk yalnızca siz imlecini paylaşırken o bilgisayarın gönderdiklerini uygular; ekranınızı okumaz.</string>
+    <string name="label_screen">Mac ekranı</string>
+    <string name="label_remote">Uzaktan Kumanda</string>
+    <string name="label_send">Bilgisayara gönder</string>
+    <string name="label_copy">Bilgisayara kopyala</string>
+    <string name="label_open">Bilgisayarda aç</string>
+    <string name="label_clip_tile">Panoyu gönder</string>
+</resources>

@@ -51,7 +51,7 @@ function render(locale) {
   assert.strictEqual(selectors.length, 2, 'General and Setup both expose the language selector');
   for (const selector of selectors) {
     assert.strictEqual(selector.value, locale);
-    assert.deepStrictEqual(Array.from(selector.options, (o) => o.label), ['English', '简体中文', 'Русский', 'Türkçe', 'Português (Brasil)']);
+    assert.deepStrictEqual(Array.from(selector.options, (o) => o.label), ['🇬🇧 English', '🇨🇳 简体中文', '🇷🇺 Русский', '🇹🇷 Türkçe', '🇧🇷 Português (Brasil)']);
     selector.change(locale === 'en' ? 'zh-CN' : 'en');
   }
   assert.strictEqual(calls.filter(([key]) => key === 'setLanguage').length, 2);

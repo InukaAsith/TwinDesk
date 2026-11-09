@@ -51,7 +51,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             case .failed, .waiting:
                 if !self.started {
                     self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                        "Open TwinDesk and connect to a computer, then share the screen again."]))
+                        tr("Open TwinDesk and connect to a computer, then share the screen again.")]))
                 }
             default: break
             }
@@ -258,7 +258,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             guard let self = self else { return }
             if let d = data { self.rx.append(d); self.parse() }
             if done || err != nil {
-                self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 2, userInfo: [NSLocalizedDescriptionKey: "TwinDesk stopped sharing the screen."]))
+                self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 2, userInfo: [NSLocalizedDescriptionKey: tr("TwinDesk stopped sharing the screen.")]))
                 return
             }
             self.read()
@@ -274,7 +274,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             rx = rx.subdata(in: (rx.startIndex + 5 + n)..<rx.endIndex)
             guard type == 1, let m = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else { continue }
             if m["stop"] != nil {
-                finishBroadcastWithError(NSError(domain: "TwinDesk", code: 3, userInfo: [NSLocalizedDescriptionKey: "Stopped from the computer."]))
+                finishBroadcastWithError(NSError(domain: "TwinDesk", code: 3, userInfo: [NSLocalizedDescriptionKey: tr("Stopped from the computer.")]))
                 return
             }
             if m["sync"] != nil { forceKey = true; sentConfig = nil }

@@ -156,10 +156,10 @@ final class Clip: Feature {
     private func receivePicture(_ png: Data, _ w: Int, _ h: Int) {
         guard let img = UIImage(data: png) else { return }
         expectEcho()
-        remember(Item(dir: "in", text: "Picture · \(w) × \(h)", pic: true))
+        remember(Item(dir: "in", text: tr("Picture · {w} × {h}", ["w": w, "h": h]), pic: true))
         writeImage(img)
         if notify && UIApplication.shared.applicationState != .active {
-            Notifier.shared.clipIn("Picture · \(w) × \(h)", from: core.link.host?.name ?? "Computer", copied: true)
+            Notifier.shared.clipIn(tr("Picture · {w} × {h}", ["w": w, "h": h]), from: core.link.host?.name ?? "Computer", copied: true)
         }
     }
 
@@ -188,7 +188,7 @@ final class Clip: Feature {
             sendCurrent(force: false)
         } else if notifyOwn {
             let hasImage = UIPasteboard.general.hasImages
-            Notifier.shared.clipOut(to: core.link.host?.name ?? "the computer", picture: hasImage)
+            Notifier.shared.clipOut(to: core.link.host?.name ?? tr("the computer"), picture: hasImage)
         }
     }
 
@@ -230,7 +230,7 @@ final class Clip: Feature {
             }
         }
         expectEcho()
-        remember(Item(dir: "out", text: "Picture · \(w) × \(h)", pic: true))
+        remember(Item(dir: "out", text: tr("Picture · {w} × {h}", ["w": w, "h": h]), pic: true))
         return true
     }
 

@@ -63,7 +63,7 @@ final class Camera: Feature {
             guard share else { core.send(msg("cam.state", ["status": "refused"])); return true }
             guard UIApplication.shared.applicationState == .active else {
                 core.send(msg("cam.state", ["status": "failed", "error": "open TwinDesk on the \(Device.word): iOS runs the camera only for the app on screen"]))
-                Notifier.shared.note("camera", "\(core.host?.name ?? "The computer") requests this camera", "Open TwinDesk to share it.", sound: true)
+                Notifier.shared.note("camera", tr("{name} requests this camera", ["name": core.host?.name ?? tr("The computer")]), tr("Open TwinDesk to share it."), sound: true)
                 return true
             }
             status = "starting"

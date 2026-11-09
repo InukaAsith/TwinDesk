@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Russian for what Android itself shows (values/strings.xml). -->
+<resources>
+    <string name="sc_adb_short">Отладка по Wi-Fi</string>
+    <string name="sc_adb_long">Включить отладку по Wi-Fi</string>
+    <string name="sc_screen_short">Экран Mac</string>
+    <string name="sc_screen_long">Показать экран Mac</string>
+    <string name="input_service">TwinDesk: мышь и клавиатура компьютера</string>
+    <string name="input_service_desc">Позволяет компьютеру, сопряжённому в TwinDesk, нажимать, прокручивать и печатать на этом телефоне своей мышью и клавиатурой, когда отладка по Wi-Fi недоступна (например, по Bluetooth). TwinDesk выполняет только то, что присылает этот компьютер, пока вы делитесь его курсором; он не читает ваш экран.</string>
+    <string name="label_screen">Экран Mac</string>
+    <string name="label_remote">Пульт</string>
+    <string name="label_send">Отправить на компьютер</string>
+    <string name="label_copy">Копировать на компьютер</string>
+    <string name="label_open">Открыть на компьютере</string>
+    <string name="label_clip_tile">Отправить буфер обмена</string>
+</resources>

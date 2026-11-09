@@ -105,7 +105,7 @@ class FsBrowse(private val core: Core) {
     fun expect(batch: String, path: String) {
         if (batch.isEmpty() || !allowed()) return
         val dir = at(path)?.takeIf { it.isDirectory } ?: return
-        core.files.expect(batch, Files.Target(false, dir, where = rel(dir).ifEmpty { "Storage" }, keepBoth = true) {
+        core.files.expect(batch, Files.Target(false, dir, where = rel(dir).ifEmpty { tr("Storage") }, keepBoth = true) {
             core.send(msg(Proto.T.FS_DONE, "ok" to it.ok, "error" to if (it.ok) null else "Not everything arrived", "path" to path))
         })
     }

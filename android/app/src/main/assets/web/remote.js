@@ -18,7 +18,13 @@
   const hot = typeof TD.move === 'function';
   const tick = () => { try { TD.tick(); } catch (_) { /* older app */ } };
   const $ = (id) => document.getElementById(id);
-  let opts = { mode: 'pad', name: 'the computer', me: 'this device', connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
+  // The app's language (I18n.kt through TD.tr): {name} parts filled from vars, English without the app.
+  const t = (text, vars = {}) => (typeof TD.tr === 'function' ? TD.tr(text, JSON.stringify(vars))
+    : text.replace(/^[^|]*\|/, '').replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)));
+  for (const e of document.querySelectorAll('[data-i18n]')) e.textContent = t(e.dataset.i18n || e.textContent);
+  for (const e of document.querySelectorAll('[aria-label]')) e.setAttribute('aria-label', t(e.getAttribute('aria-label')));
+  for (const e of document.querySelectorAll('[placeholder]')) e.placeholder = t(e.placeholder);
+  let opts = { mode: 'pad', name: t('the computer'), me: t('this device'), connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
   let allowed = null; // the computer's remote.state
   let why = ''; // …and why it doesn't take it now
   let off = false; // …because its Remote is off: Turn on, here
@@ -62,29 +68,30 @@
     document.body.classList.toggle('gamepad', game);
     document.body.classList.toggle('voice', voice);
     document.body.classList.toggle('pad', !game && !voice);
-    $('name').textContent = game && opts.bt ? `Bluetooth gamepad · ${opts.btName || 'connected'}`
-      : `${game ? (real ? 'Gamepad (real)' : 'Gamepad') : voice ? 'Voice typing' : 'Touchpad'} · ${opts.name}`;
+    const name = opts.name, me = opts.me;
+    $('name').textContent = game && opts.bt ? t('Bluetooth gamepad · {name}', { name: opts.btName || t('connected') })
+      : `${game ? (real ? t('Gamepad (real)') : t('Gamepad')) : voice ? t('Voice typing') : t('Touchpad')} · ${name}`;
     if (voice) voiceStatus();
     const note = game && opts.bt ? ''
-      : !opts.connected ? `Not connected to ${opts.name}. Connect from TwinDesk’s Overview.`
-      : voice && keyboardOff() ? `Keyboard is off on ${opts.name}: voice typing types there with it. Turn it on in TwinDesk’s Keyboard page there, or here.`
-      : voice && voiceOk === false ? (voiceWhy || `Not typing on ${opts.name}.`)
+      : !opts.connected ? t('Not connected to {name}. Connect from TwinDesk’s Overview.', { name })
+      : voice && keyboardOff() ? t('Keyboard is off on {name}: voice typing types there with it. Turn it on in TwinDesk’s Keyboard page there, or here.', { name })
+      : voice && voiceOk === false ? (voiceWhy || t('Not typing on {name}.', { name }))
       : voice && voiceOk === true ? ''
-      : allowed === false && off ? `Remote is off on ${opts.name}.`
-      : allowed === false ? (why || `${opts.name} doesn’t take input from ${opts.me}. On ${opts.name}, turn on Remote in TwinDesk.`)
-        : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? `${opts.name} doesn’t answer the remote: update TwinDesk there.`
+      : allowed === false && off ? t('Remote is off on {name}.', { name })
+      : allowed === false ? (why || t('{name} doesn’t take input from {me}. On {name}, turn on Remote in TwinDesk.', { name, me }))
+        : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? t('{name} doesn’t answer the remote: update TwinDesk there.', { name })
           : '';
     $('note-text').textContent = note;
     $('note').hidden = !note;
     const turnOn = voice && voiceOk !== null ? keyboardOff() : allowed === false && off;
-    $('note-on').textContent = voice && voiceOk !== null ? 'Turn on Keyboard' : 'Turn on Remote';
+    $('note-on').textContent = voice && voiceOk !== null ? t('Turn on Keyboard') : t('Turn on Remote');
     $('note-on').hidden = !(note && turnOn && opts.connected);
     // A real controller: what the computer sees it as.
     const sees = !game ? ''
-      : opts.bt ? `${opts.btName || 'The computer'} sees ${opts.me} as “TwinDesk Gamepad”, a Bluetooth game controller`
-        : real && opts.os === 'win' ? `Windows sees it as an Xbox 360 Controller: games take it as one (joy.cpl lists it under Game Controllers)`
-          : real && opts.os === 'linux' ? `${opts.name} sees it as “TwinDesk Gamepad”, an Xbox 360 controller`
-            : real ? `${opts.name} sees it as a game controller` : '';
+      : opts.bt ? t('{name} sees {me} as “TwinDesk Gamepad”, a Bluetooth game controller', { name: opts.btName || t('The computer'), me })
+        : real && opts.os === 'win' ? t('Windows sees it as an Xbox 360 Controller: games take it as one (joy.cpl lists it under Game Controllers)')
+          : real && opts.os === 'linux' ? t('{name} sees it as “TwinDesk Gamepad”, an Xbox 360 controller', { name })
+            : real ? t('{name} sees it as a game controller', { name }) : '';
     $('pad-note').textContent = sees;
     $('pad-note').hidden = !sees;
     if (!$('map').hidden) mapFill();
@@ -104,8 +111,8 @@
       list.append(row);
     }
     $('map-hint').textContent = asPad()
-      ? 'It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).'
-      : 'What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.';
+      ? t('It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).')
+      : t('What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.');
   }
   $('b-map').onclick = () => { releaseAll(); editEnd(); mapFill(); $('map').hidden = false; };
   $('map-done').onclick = () => { $('map').hidden = true; };
@@ -408,8 +415,10 @@
     const live = !blocked && Date.now() - vlast < 1500;
     dot.className = blocked ? 'bad' : live ? 'live' : '';
     const words = vbox.value.trim() ? vbox.value.trim().split(/\s+/).length : 0;
-    hint.textContent = blocked ? (keyboardOff() ? `Keyboard is off on ${opts.name}` : `Not typing on ${opts.name}`) : live ? `Typing on ${opts.name}…`
-      : words ? `${words} word${words === 1 ? '' : 's'} typed on ${opts.name}` : `Click where you want to type on ${opts.name}, then speak`;
+    const name = opts.name;
+    hint.textContent = blocked ? (keyboardOff() ? t('Keyboard is off on {name}', { name }) : t('Not typing on {name}', { name })) : live ? t('Typing on {name}…', { name })
+      : words === 1 ? t('1 word typed on {name}', { name }) : words ? t('{count} words typed on {name}', { count: words, name })
+        : t('Click where you want to type on {name}, then speak', { name });
   }
   setInterval(() => { if (opts.mode === 'voice') voiceStatus(); }, 700);
   vbox.addEventListener('input', voiceSync);
@@ -578,7 +587,7 @@
   // ---- editing the gamepad (Edit): move, size, hide, rename and set the key of any control; add
   // buttons of your own. The layout: {items: {id: {x, y, s, hide, label}}, custom: [{id, label, key, x, y, s, hide}]},
   // x and y the control's middle as a share of the screen (kept by Remote.kt, TD.setLayout). ----
-  const UNITS = { lt: 'LT', lb: 'LB', rb: 'RB', rt: 'RT', back: 'Back', start: 'Start', ls: 'Left stick', rs: 'Right stick', dpad: 'D-pad', abxy: 'A B X Y', l3: 'L3', r3: 'R3' };
+  const UNITS = { lt: 'LT', lb: 'LB', rb: 'RB', rt: 'RT', back: t('gamepad|Back'), start: t('gamepad|Start'), ls: t('Left stick'), rs: t('Right stick'), dpad: t('D-pad'), abxy: 'A B X Y', l3: 'L3', r3: 'R3' };
   const KEYED = ['lt', 'lb', 'rb', 'rt', 'back', 'start', 'l3', 'r3']; // one button, one key
   let layout = { items: {}, custom: [] };
   let layoutIn = false; // the saved one is applied once (opts come again on every change)
@@ -642,7 +651,7 @@
     el.classList.add('sel');
     const it = itemOf(id);
     const custom = isCustom(id);
-    $('edit-name').textContent = custom ? (it.label || 'Button') : UNITS[id];
+    $('edit-name').textContent = custom ? (it.label || t('Button')) : UNITS[id];
     $('edit-size').value = String(Number(it.s) || 1);
     const keyed = custom || KEYED.includes(id);
     $('edit-key-row').hidden = !keyed;
@@ -653,7 +662,7 @@
       k.value = custom ? (it.key || '') : padKey(id);
       $('edit-label').value = (typeof it.label === 'string' && it.label) || el.dataset.def || '';
     }
-    $('edit-hide').textContent = it.hide ? 'Show' : 'Hide';
+    $('edit-hide').textContent = it.hide ? t('Show') : t('Hide');
     $('edit-del').hidden = !custom;
   }
 
@@ -675,7 +684,7 @@
     const it = itemOf(sel);
     it.label = $('edit-label').value.slice(0, 12);
     place(unitEl(sel), it);
-    if (isCustom(sel)) $('edit-name').textContent = it.label || 'Button';
+    if (isCustom(sel)) $('edit-name').textContent = it.label || t('Button');
   };
   $('edit-label').onchange = save;
   $('edit-hide').onclick = () => {
@@ -683,7 +692,7 @@
     const it = itemOf(sel);
     it.hide = !it.hide;
     place(unitEl(sel), it);
-    $('edit-hide').textContent = it.hide ? 'Show' : 'Hide';
+    $('edit-hide').textContent = it.hide ? t('Show') : t('Hide');
     save();
   };
   $('edit-del').onclick = () => {

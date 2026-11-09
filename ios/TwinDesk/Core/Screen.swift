@@ -41,7 +41,7 @@ final class Screen: Feature {
     }
 
     func opts() -> JSON {
-        msg("opts", ["sound": sound, "pacing": smooth ? "smooth" : "fast", "name": core.host?.name ?? "the computer",
+        msg("opts", ["sound": sound, "pacing": smooth ? "smooth" : "fast", "name": core.host?.name ?? tr("the computer"),
                      "touch": touchpad ? "pad" : "direct", "speed": core.remote.speed, "tap": core.remote.tapClick, "pen": pen, "penFast": penFast])
     }
 
@@ -122,7 +122,7 @@ final class Screen: Feature {
             if let w = was, !w.bool("on"), on, !viewing, !startedByUs {
                 autoOpened = true
                 if UIApplication.shared.applicationState == .active { autoOpen = true }
-                else { Notifier.shared.screen(core.host?.name ?? "Your computer") }
+                else { Notifier.shared.screen(core.host?.name ?? tr("Your computer")) }
             }
             if !on { Notifier.shared.cancel("screen") }
             if wantStart { startIfNeeded() }

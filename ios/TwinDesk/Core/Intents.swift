@@ -15,8 +15,8 @@ struct SendClipboardIntent: AppIntent {
         let core = Core.shared
         core.wake()
         for _ in 0..<30 where !core.connected { try? await Task.sleep(nanoseconds: 100_000_000) }
-        guard core.connected else { return .result(dialog: "Not connected to a computer.") }
-        return .result(dialog: core.clip.sendCurrent(force: true) ? "Sent to \(core.link.host?.name ?? "the computer")." : "Nothing to send.")
+        guard core.connected else { return .result(dialog: "\(tr("Not connected to a computer."))") }
+        return .result(dialog: "\(core.clip.sendCurrent(force: true) ? tr("Sent to {name}.", ["name": core.link.host?.name ?? tr("the computer")]) : tr("Nothing to send."))")
     }
 }
 
@@ -28,9 +28,9 @@ struct SaveCopiedFilesIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let core = Core.shared
-        guard core.connected, core.fclip.offer != nil else { return .result(dialog: "Nothing copied on the computer.") }
+        guard core.connected, core.fclip.offer != nil else { return .result(dialog: "\(tr("Nothing copied on the computer."))") }
         core.fclip.save()
-        return .result(dialog: "Saving to Files › TwinDesk.")
+        return .result(dialog: "\(tr("Saving to Files › TwinDesk."))")
     }
 }
 
@@ -43,10 +43,10 @@ struct ConnectIntent: AppIntent {
         let core = Core.shared
         core.start()
         guard let id = core.store.lastHostId ?? core.store.hosts().first?.id, let h = core.store.host(id) else {
-            return .result(dialog: "Pair a computer in TwinDesk first.")
+            return .result(dialog: "\(tr("Pair a computer in TwinDesk first."))")
         }
         core.connect(h)
-        return .result(dialog: "Connecting to \(h.name)…")
+        return .result(dialog: "\(tr("Connecting to {name}…", ["name": h.name]))")
     }
 }
 
@@ -69,7 +69,7 @@ struct SendFilesIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard await ready() else { return .result(dialog: "Not connected to a computer.") }
+        guard await ready() else { return .result(dialog: "\(tr("Not connected to a computer."))") }
         let core = Core.shared
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("shortcut-" + UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -80,8 +80,8 @@ struct SendFilesIntent: AppIntent {
             if let u = f.fileURL, (try? FileManager.default.copyItem(at: u, to: to)) != nil { urls.append(to) }
             else if (try? f.data.write(to: to)) != nil { urls.append(to) }
         }
-        guard !urls.isEmpty, core.files.send(urls) else { return .result(dialog: "Nothing to send.") }
-        return .result(dialog: "Sending \(urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files") to \(core.link.host?.name ?? "the computer").")
+        guard !urls.isEmpty, core.files.send(urls) else { return .result(dialog: "\(tr("Nothing to send."))") }
+        return .result(dialog: "\(tr("Sending {items} to {name}.", ["items": urls.count == 1 ? urls[0].lastPathComponent : trCount(urls.count, "file"), "name": core.link.host?.name ?? tr("the computer")]))")
     }
 }
 
@@ -102,9 +102,9 @@ struct PlayPauseIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard await ready() else { return .result(dialog: "Not connected to a computer.") }
+        guard await ready() else { return .result(dialog: "\(tr("Not connected to a computer."))") }
         Core.shared.media.ctl("toggle")
-        return .result(dialog: "Done.")
+        return .result(dialog: "\(tr("Done."))")
     }
 }
 
@@ -114,9 +114,9 @@ struct LockComputerIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard await ready() else { return .result(dialog: "Not connected to a computer.") }
+        guard await ready() else { return .result(dialog: "\(tr("Not connected to a computer."))") }
         Core.shared.dev.act("lock")
-        return .result(dialog: "Locking \(Core.shared.link.host?.name ?? "the computer").")
+        return .result(dialog: "\(tr("Locking {name}.", ["name": Core.shared.link.host?.name ?? tr("the computer")]))")
     }
 }
 

@@ -15,7 +15,7 @@ struct OverviewView: View {
     @State private var photos: [PhotosPickerItem] = []
 
     var body: some View {
-        PageScroll(title: "Overview") {
+        PageScroll(title: tr("Overview")) {
             Columns {
                 Hero()
                 if core.connected { actions }
@@ -25,9 +25,9 @@ struct OverviewView: View {
                 if core.connected { PcClipCard(); PcNotifsCard() }
                 if !core.connected {
                     VStack(alignment: .leading, spacing: 10) {
-                        CardHeader(symbol: "link", color: TDColor.accent, title: core.hosts.isEmpty ? "Pair a computer" : "Connect",
-                                   detail: core.hosts.isEmpty ? "TwinDesk on a Mac, PC or Linux computer" : "Pick one in Connection")
-                        Button("Open Connection") { ui.open(.connection) }.primaryButton()
+                        CardHeader(symbol: "link", color: TDColor.accent, title: core.hosts.isEmpty ? tr("Pair a computer") : tr("Connect"),
+                                   detail: core.hosts.isEmpty ? tr("TwinDesk on a Mac, PC or Linux computer") : tr("Pick one in Connection"))
+                        Button(tr("Open Connection")) { ui.open(.connection) }.primaryButton()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .glassCard()
@@ -43,32 +43,32 @@ struct OverviewView: View {
 
     // Quick actions (Tiles.swift): what to do with the computer in a tap, edited in place.
     private var actions: some View {
-        let name = core.host?.name ?? "the computer"
+        let name = core.host?.name ?? tr("the computer")
         let can = core.dev.can
         let now = core.media.now
         let playing = now?.playing == true
         var defs: [TileDef] = [
-            TileDef(id: "screen", label: "Its screen", symbol: "display", color: Page.receive.color, state: name) { ui.cover = .viewer },
-            TileDef(id: "voice", label: "Voice typing", symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), state: "Speak, it types on \(name)") { ui.cover = .remote("voice") },
-            TileDef(id: "touchpad", label: "Touchpad", symbol: "hand.point.up.left.fill", color: .orange, state: "And keyboard") { ui.cover = .remote("pad") },
-            TileDef(id: "gamepad", label: "Gamepad", symbol: "gamecontroller.fill", color: Color(red: 0.69, green: 0.32, blue: 0.87), state: "Keys or a controller") { ui.cover = .remote("gamepad") },
-            TileDef(id: "photos", label: "Send photos", symbol: "photo.on.rectangle", color: Page.photos.color, state: "To \(name)") { pickingPhotos = true },
-            TileDef(id: "files", label: "Send files", symbol: "folder.fill.badge.plus", color: Page.files.color, state: "To Downloads") { picking = true },
-            TileDef(id: "clipboard", label: "Send clipboard", symbol: "doc.on.clipboard.fill", color: Page.clipboard.color, state: "What’s copied here") { _ = core.clip.sendCurrent(force: true) },
-            TileDef(id: "media", label: playing ? "Pause" : "Play", symbol: playing ? "pause.fill" : "play.fill", color: Page.media.color, on: playing,
-                    state: now.map { [$0.title, $0.artist].filter { !$0.isEmpty }.joined(separator: " · ") } ?? "Nothing playing") { core.media.ctl("toggle") },
-            TileDef(id: "next", label: "Next track", symbol: "forward.fill", color: Page.media.color, state: now?.title ?? "") { core.media.ctl("next") },
-            TileDef(id: "lock", label: "Lock", symbol: "lock.fill", color: Color(white: 0.45), has: can.contains(.lock), state: name) { core.dev.act("lock") },
-            TileDef(id: "sleep", label: "Sleep", symbol: "moon.zzz.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: can.contains(.sleep), state: name) { core.dev.act("sleep") },
-            TileDef(id: "dnd", label: "Focus", symbol: "moon.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: can.contains(.dnd), on: core.dev.dnd == true,
-                    state: core.dev.dnd == true ? "On" : "Off") { core.dev.act("dnd", ["on": !(core.dev.dnd ?? false)]) },
-            TileDef(id: "ring", label: "Ring", symbol: "bell.and.waves.left.and.right.fill", color: TDColor.bad, has: can.contains(.ring), state: "Find \(name)") { core.dev.act("ring") },
-            TileDef(id: "sound", label: "Sound", symbol: "speaker.wave.2.fill", color: Page.audio.color, state: "\(name)’s sound") { ui.open(.audio) },
-            TileDef(id: "camera", label: "Webcam", symbol: "video.fill", color: Page.camera.color, state: "This camera on \(name)") { ui.open(.camera) },
-            TileDef(id: "notifications", label: "Notifications", symbol: "bell.badge.fill", color: Page.notifications.color, state: "Both ways") { ui.open(.notifications) },
+            TileDef(id: "screen", label: tr("Its screen"), symbol: "display", color: Page.receive.color, state: name) { ui.cover = .viewer },
+            TileDef(id: "voice", label: tr("Voice typing"), symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), state: tr("Speak, it types on {name}", ["name": name])) { ui.cover = .remote("voice") },
+            TileDef(id: "touchpad", label: tr("Touchpad"), symbol: "hand.point.up.left.fill", color: .orange, state: tr("And keyboard")) { ui.cover = .remote("pad") },
+            TileDef(id: "gamepad", label: tr("Gamepad"), symbol: "gamecontroller.fill", color: Color(red: 0.69, green: 0.32, blue: 0.87), state: tr("Keys or a controller")) { ui.cover = .remote("gamepad") },
+            TileDef(id: "photos", label: tr("Send photos"), symbol: "photo.on.rectangle", color: Page.photos.color, state: tr("To {name}", ["name": name])) { pickingPhotos = true },
+            TileDef(id: "files", label: tr("Send files"), symbol: "folder.fill.badge.plus", color: Page.files.color, state: tr("To Downloads")) { picking = true },
+            TileDef(id: "clipboard", label: tr("Send clipboard"), symbol: "doc.on.clipboard.fill", color: Page.clipboard.color, state: tr("What’s copied here")) { _ = core.clip.sendCurrent(force: true) },
+            TileDef(id: "media", label: playing ? tr("Pause") : tr("Play"), symbol: playing ? "pause.fill" : "play.fill", color: Page.media.color, on: playing,
+                    state: now.map { [$0.title, $0.artist].filter { !$0.isEmpty }.joined(separator: " · ") } ?? tr("Nothing playing")) { core.media.ctl("toggle") },
+            TileDef(id: "next", label: tr("Next track"), symbol: "forward.fill", color: Page.media.color, state: now?.title ?? "") { core.media.ctl("next") },
+            TileDef(id: "lock", label: tr("Lock"), symbol: "lock.fill", color: Color(white: 0.45), has: can.contains(.lock), state: name) { core.dev.act("lock") },
+            TileDef(id: "sleep", label: tr("Sleep"), symbol: "moon.zzz.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: can.contains(.sleep), state: name) { core.dev.act("sleep") },
+            TileDef(id: "dnd", label: tr("Focus"), symbol: "moon.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: can.contains(.dnd), on: core.dev.dnd == true,
+                    state: core.dev.dnd == true ? tr("On") : tr("Off")) { core.dev.act("dnd", ["on": !(core.dev.dnd ?? false)]) },
+            TileDef(id: "ring", label: tr("Ring"), symbol: "bell.and.waves.left.and.right.fill", color: TDColor.bad, has: can.contains(.ring), state: tr("Find {name}", ["name": name])) { core.dev.act("ring") },
+            TileDef(id: "sound", label: tr("Sound"), symbol: "speaker.wave.2.fill", color: Page.audio.color, state: tr("{name}’s sound", ["name": name])) { ui.open(.audio) },
+            TileDef(id: "camera", label: tr("Webcam"), symbol: "video.fill", color: Page.camera.color, state: tr("This camera on {name}", ["name": name])) { ui.open(.camera) },
+            TileDef(id: "notifications", label: tr("Notifications"), symbol: "bell.badge.fill", color: Page.notifications.color, state: tr("Both ways")) { ui.open(.notifications) },
         ]
         if core.fclip.offer != nil { // what the computer copied: kept first while it's there
-            defs.insert(TileDef(id: "auto.savecopied", label: "Save copied", symbol: "square.and.arrow.down.fill", color: TDColor.good, state: "Copied on \(name)") { core.fclip.save() }, at: 0)
+            defs.insert(TileDef(id: "auto.savecopied", label: tr("Save copied"), symbol: "square.and.arrow.down.fill", color: TDColor.good, state: tr("Copied on {name}", ["name": name])) { core.fclip.save() }, at: 0)
         }
         return TilesCard(defs: defs)
     }
@@ -76,7 +76,7 @@ struct OverviewView: View {
     // The computer's own controls (shared/devctl.js there).
     private var controls: some View {
         VStack(alignment: .leading, spacing: 14) {
-            CardHeader(symbol: osSymbol(core.host?.os ?? "mac"), color: Color(white: 0.45), title: core.host?.name ?? "Computer")
+            CardHeader(symbol: osSymbol(core.host?.os ?? "mac"), color: Color(white: 0.45), title: core.host?.name ?? tr("Computer"))
             if core.dev.can.contains(.volume) {
                 HStack(spacing: 10) {
                     Image(systemName: "speaker.fill").foregroundStyle(.secondary)
@@ -85,11 +85,11 @@ struct OverviewView: View {
                 }
             }
             HStack(spacing: 10) {
-                if core.dev.can.contains(.lock) { Button { core.dev.act("lock") } label: { Label("Lock", systemImage: "lock.fill") }.secondaryButton() }
-                if core.dev.can.contains(.sleep) { Button { core.dev.act("sleep") } label: { Label("Sleep", systemImage: "moon.fill") }.secondaryButton() }
+                if core.dev.can.contains(.lock) { Button { core.dev.act("lock") } label: { Label(tr("Lock"), systemImage: "lock.fill") }.secondaryButton() }
+                if core.dev.can.contains(.sleep) { Button { core.dev.act("sleep") } label: { Label(tr("Sleep"), systemImage: "moon.fill") }.secondaryButton() }
                 if core.dev.can.contains(.dnd) {
                     Button { core.dev.act("dnd", ["on": !(core.dev.dnd ?? false)]) } label: {
-                        Label("Focus", systemImage: core.dev.dnd == true ? "moon.circle.fill" : "moon.circle")
+                        Label(tr("Focus"), systemImage: core.dev.dnd == true ? "moon.circle.fill" : "moon.circle")
                     }.secondaryButton()
                 }
             }
@@ -123,7 +123,7 @@ struct Hero: View {
         let up = core.connected || phone != nil
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 6) {
-                device(Device.isPad ? "ipad.landscape" : "iphone", "This \(Device.word)")
+                device(Device.isPad ? "ipad.landscape" : "iphone", tr("This {device}", ["device": Device.word]))
                 VStack(spacing: 7) {
                     LinkLine(up: up)
                     Text(linkText).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
@@ -132,23 +132,23 @@ struct Hero: View {
                 .padding(.horizontal, 4)
                 Group {
                     if let p = phone { device(p.peerOs == "ios" ? "iphone" : "iphone.gen2", p.peerName) }
-                    else { device(osSymbol(h?.os ?? "mac"), h?.name ?? "Computer") }
+                    else { device(osSymbol(h?.os ?? "mac"), h?.name ?? tr("Computer")) }
                 }
                     .opacity(up || st == "connecting" ? 1 : 0.55)
                     .animation(.easeInOut(duration: 0.4), value: up)
             }
             Divider().overlay(TDColor.line).padding(.top, 16)
-            Text(phone.map { "Connected to \($0.peerName). The pages show what it can do." } ?? statusText).font(.subheadline).foregroundStyle(core.message.isEmpty || up ? Color.secondary : TDColor.warn)
+            Text(phone.map { tr("Connected to {name}. The pages show what it can do.", ["name": $0.peerName]) } ?? statusText).font(.subheadline).foregroundStyle(core.message.isEmpty || up ? Color.secondary : TDColor.warn)
                 .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 11)
             HStack(spacing: 10) {
                 if let p = phone {
-                    Button("Disconnect", role: .destructive) { p.disconnect() }.secondaryButton()
+                    Button(tr("Disconnect"), role: .destructive) { p.disconnect() }.secondaryButton()
                 } else if core.connected {
-                    Button("Disconnect", role: .destructive) { core.disconnect() }.secondaryButton()
+                    Button(tr("Disconnect"), role: .destructive) { core.disconnect() }.secondaryButton()
                 } else if st == "connecting" {
                     ProgressView()
                 } else if let h = core.hosts.first {
-                    Button("Connect to \(h.name)") { core.connect(h) }.primaryButton()
+                    Button(tr("Connect to {name}", ["name": h.name])) { core.connect(h) }.primaryButton()
                 }
             }
             .controlSize(.small)
@@ -168,21 +168,21 @@ struct Hero: View {
     }
 
     private var linkText: String {
-        if core.peerMode { return "Phone" }
+        if core.peerMode { return tr("Phone") }
         switch core.state {
         case "connected":
-            let via = core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi"
+            let via = core.link.wired ? "USB" : core.link.viaBle ? tr("Bluetooth") : Discovery.hasEthernet ? tr("Ethernet") : "Wi-Fi"
             return [core.rttMs.map { "\($0) ms" }, via].compactMap { $0 }.joined(separator: " · ")
-        case "connecting": return core.pair != nil ? "Pairing…" : "Connecting…"
-        default: return "Not connected"
+        case "connecting": return core.pair != nil ? tr("Pairing…") : tr("Connecting…")
+        default: return tr("Not connected")
         }
     }
 
     private var statusText: String {
-        if core.connected { return "Connected. Clipboard, files and screens go both ways." }
-        if core.state == "connecting" { return "Connecting to \(core.host?.name ?? "the computer")…" }
+        if core.connected { return tr("Connected. Clipboard, files and screens go both ways.") }
+        if core.state == "connecting" { return tr("Connecting to {name}…", ["name": core.host?.name ?? tr("the computer")]) }
         if !core.message.isEmpty { return core.message }
-        return core.hosts.isEmpty ? "Pick a computer in Nearby, or connect by address." : "Open TwinDesk on the computer to connect."
+        return core.hosts.isEmpty ? tr("Pick a computer in Nearby, or connect by address.") : tr("Open TwinDesk on the computer to connect.")
     }
 }
 
@@ -191,14 +191,14 @@ struct PcClipCard: View {
     @EnvironmentObject var core: Core
     @EnvironmentObject var ui: AppUI
     var body: some View {
-        let name = core.host?.name ?? "the computer"
+        let name = core.host?.name ?? tr("the computer")
         let list = Array(core.clip.history.filter { $0.dir == "in" }.prefix(3))
-        DenseCard(title: "\(name)’s clipboard") {
-            Button("All") { ui.open(.clipboard) }.buttonStyle(.borderless).font(.subheadline)
+        DenseCard(title: tr("{name}’s clipboard", ["name": name])) {
+            Button(tr("All")) { ui.open(.clipboard) }.buttonStyle(.borderless).font(.subheadline)
         } content: {
             if list.isEmpty {
-                DenseRow(symbol: "doc.on.clipboard", title: "Nothing copied yet",
-                         hint: core.sync.get("clipboard", "in") ? "What you copy on \(name) shows here." : "Turn on Receive in Clipboard to get what \(name) copies.",
+                DenseRow(symbol: "doc.on.clipboard", title: tr("Nothing copied yet"),
+                         hint: core.sync.get("clipboard", "in") ? tr("What you copy on {name} shows here.", ["name": name]) : tr("Turn on Receive in Clipboard to get what {name} copies.", ["name": name]),
                          divider: false) { EmptyView() }
             }
             ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
@@ -221,14 +221,14 @@ struct PcNotifsCard: View {
     @EnvironmentObject var core: Core
     @EnvironmentObject var ui: AppUI
     var body: some View {
-        let name = core.host?.name ?? "the computer"
+        let name = core.host?.name ?? tr("the computer")
         let list = Array(core.notifs.recent.prefix(4))
-        DenseCard(title: "\(name)’s notifications") {
-            Button("Settings") { ui.open(.notifications) }.buttonStyle(.borderless).font(.subheadline)
+        DenseCard(title: tr("{name}’s notifications", ["name": name])) {
+            Button(tr("Settings")) { ui.open(.notifications) }.buttonStyle(.borderless).font(.subheadline)
         } content: {
             if list.isEmpty {
-                DenseRow(symbol: "bell", title: "No notifications yet",
-                         hint: core.sync.get("notifs", "in") ? "Notifications from \(name) show here while connected." : "Turn on Show notifications in Notifications to get them.",
+                DenseRow(symbol: "bell", title: tr("No notifications yet"),
+                         hint: core.sync.get("notifs", "in") ? tr("Notifications from {name} show here while connected.", ["name": name]) : tr("Turn on Show notifications in Notifications to get them."),
                          divider: false) { EmptyView() }
             }
             ForEach(Array(list.enumerated()), id: \.element.id) { i, n in
@@ -243,9 +243,10 @@ struct PcNotifsCard: View {
 }
 
 private func ago(_ d: Date) -> String {
-    if Date().timeIntervalSince(d) < 60 { return "Just now" }
+    if Date().timeIntervalSince(d) < 60 { return tr("Just now") }
     let f = RelativeDateTimeFormatter()
     f.unitsStyle = .short
+    f.locale = Locale(identifier: I18n.shared.lang)
     return f.localizedString(for: d, relativeTo: Date())
 }
 
@@ -291,7 +292,7 @@ struct ConnectionView: View {
     @State private var spin = 0.0
 
     var body: some View {
-        PageScroll(title: "Connection") {
+        PageScroll(title: tr("Connection")) {
             Columns {
                 Hero()
                 nearbyCard
@@ -320,24 +321,24 @@ struct ConnectionView: View {
     // ---- Nearby: every computer TwinDesk sees, paired or not ----
 
     private var nearbyCard: some View {
-        DenseCard(title: "Nearby") {
+        DenseCard(title: tr("Nearby")) {
             Button {
                 core.discovery.refresh()
                 withAnimation(.easeInOut(duration: 0.6)) { spin += 360 }
             } label: { Image(systemName: "arrow.clockwise").rotationEffect(.degrees(spin)) }
-                .buttonStyle(.borderless).accessibilityLabel("Look again")
+                .buttonStyle(.borderless).accessibilityLabel(tr("Look again"))
         } content: {
             let list = core.nearby
             if core.peerMode {
-                DenseRow(symbol: "iphone", title: "Connected to \(core.peer.peerName)", hint: "Connecting to a computer ends the session with \(core.peer.peerName).", divider: false) { EmptyView() }
+                DenseRow(symbol: "iphone", title: tr("Connected to {name}", ["name": core.peer.peerName]), hint: tr("Connecting to a computer ends the session with {name}.", ["name": core.peer.peerName]), divider: false) { EmptyView() }
             }
             if !core.discovery.error.isEmpty {
-                DenseRow(symbol: "exclamationmark.triangle", title: "Can’t look for computers on this network",
+                DenseRow(symbol: "exclamationmark.triangle", title: tr("Can’t look for computers on this network"),
                          hint: core.discovery.error, hintColor: TDColor.warn, divider: false) { EmptyView() }
             }
             let viaBle = bleOnly
             if list.isEmpty && viaBle.isEmpty {
-                DenseRow(title: "Looking for computers…", hint: "Open TwinDesk on the computer, on the same Wi-Fi.", divider: !core.discovery.error.isEmpty) {
+                DenseRow(title: tr("Looking for computers…"), hint: tr("Open TwinDesk on the computer, on the same Wi-Fi."), divider: !core.discovery.error.isEmpty) {
                     ProgressView()
                 }
             }
@@ -347,9 +348,9 @@ struct ConnectionView: View {
             ForEach(Array(viaBle.enumerated()), id: \.element.id) { i, b in
                 let going = core.pair?.name == b.name
                 DenseRow(symbol: "dot.radiowaves.left.and.right", title: b.name,
-                         hint: going ? "Pairing…" : "Over Bluetooth · not on this network",
+                         hint: going ? tr("Pairing…") : tr("Over Bluetooth · not on this network"),
                          divider: !(list.isEmpty && i == 0 && core.discovery.error.isEmpty)) {
-                    if going { ProgressView() } else { Button("Pair") { core.pairBle(b.id) }.primaryButton() }
+                    if going { ProgressView() } else { Button(tr("Pair")) { core.pairBle(b.id) }.primaryButton() }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -363,16 +364,16 @@ struct ConnectionView: View {
         let online = mine && core.connected
         let going = (mine && core.state == "connecting") || core.pair?.name == f.name
         DenseRow(symbol: osSymbol(f.os), title: f.name,
-                 hint: going ? (core.pair != nil ? "Pairing…" : "Connecting…") : f.invited ? "\(f.address) · wants to connect" : f.address,
+                 hint: going ? (core.pair != nil ? tr("Pairing…") : tr("Connecting…")) : f.invited ? tr("{address} · wants to connect", ["address": f.address]) : f.address,
                  divider: !first) {
             if going { ProgressView() }
-            if online { Pill(text: "Connected") }
-            else if known != nil && !going { Pill(text: "Paired", color: TDColor.muted) }
+            if online { Pill(text: tr("Connected")) }
+            else if known != nil && !going { Pill(text: tr("Paired"), color: TDColor.muted) }
             if !online && !going {
                 if let h = known {
-                    Button(core.connected || core.peer.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton()
+                    Button(core.connected || core.peer.connected ? tr("Switch") : tr("Connect")) { core.connect(h) }.secondaryButton()
                 } else {
-                    Button("Pair") { core.pair(f) }.primaryButton()
+                    Button(tr("Pair")) { core.pair(f) }.primaryButton()
                 }
             }
         }
@@ -382,19 +383,19 @@ struct ConnectionView: View {
     // ---- Paired: computers this device has paired with, Forget each ----
 
     private var pairedCard: some View {
-        DenseCard(title: "Paired") {
+        DenseCard(title: tr("Paired")) {
             if core.hosts.isEmpty {
-                DenseRow(title: "Nothing paired yet", hint: "Pair with a computer in Nearby.", divider: false) { EmptyView() }
+                DenseRow(title: tr("Nothing paired yet"), hint: tr("Pair with a computer in Nearby."), divider: false) { EmptyView() }
             }
             ForEach(Array(core.hosts.enumerated()), id: \.element.id) { i, h in
                 let online = core.host?.id == h.id && core.connected
                 let near = core.nearby.contains { $0.id == h.id }
                 DenseRow(symbol: osSymbol(h.os), title: h.name,
-                         hint: online ? "Connected" : near ? "Nearby · last seen \(ago(h.lastSeen))" : "Last seen \(ago(h.lastSeen)) at \(h.address)",
+                         hint: online ? tr("Connected") : near ? tr("Nearby · last seen {ago}", ["ago": ago(h.lastSeen)]) : tr("Last seen {ago} at {address}", ["ago": ago(h.lastSeen), "address": h.address]),
                          divider: i > 0) {
-                    if online { Pill(text: "Online") }
-                    else { Button(core.connected || core.peer.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton() }
-                    Button(sure == h.id ? "Forget?" : "Forget", role: sure == h.id ? .destructive : nil) {
+                    if online { Pill(text: tr("Online")) }
+                    else { Button(core.connected || core.peer.connected ? tr("Switch") : tr("Connect")) { core.connect(h) }.secondaryButton() }
+                    Button(sure == h.id ? tr("Forget?") : tr("Forget"), role: sure == h.id ? .destructive : nil) {
                         if sure == h.id { sure = nil; withAnimation { core.forget(h.id) } }
                         else {
                             withAnimation { sure = h.id }
@@ -412,18 +413,18 @@ struct ConnectionView: View {
     // ---- by address, or a QR code ----
 
     private var addressCard: some View {
-        DenseCard(title: "Pair") {
-            DenseRow(symbol: "qrcode.viewfinder", title: "Scan the computer’s QR code",
-                     hint: "In TwinDesk on the computer: Connection › Pair with a QR code. Scan it with the Camera app.", divider: false) { EmptyView() }
+        DenseCard(title: tr("Pair")) {
+            DenseRow(symbol: "qrcode.viewfinder", title: tr("Scan the computer’s QR code"),
+                     hint: tr("In TwinDesk on the computer: Connection › Pair with a QR code. Scan it with the Camera app."), divider: false) { EmptyView() }
             VStack(spacing: 0) {
                 Divider().overlay(TDColor.line)
                 HStack(spacing: 10) {
                     Image(systemName: "number").font(.system(size: 17, weight: .medium)).foregroundStyle(TDColor.text.opacity(0.85)).frame(width: 30)
-                    TextField("Computer’s address, e.g. 192.168.1.20", text: $address)
+                    TextField(tr("Computer’s address, e.g. 192.168.1.20"), text: $address)
                         .font(.subheadline)
                         .keyboardType(.numbersAndPunctuation).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .onSubmit { if !address.isEmpty { core.pairAddress(address) } }
-                    Button("Connect") { core.pairAddress(address) }.primaryButton().controlSize(.small).disabled(address.isEmpty)
+                    Button(tr("Connect")) { core.pairAddress(address) }.primaryButton().controlSize(.small).disabled(address.isEmpty)
                 }
                 .padding(.vertical, 9)
             }
@@ -431,27 +432,28 @@ struct ConnectionView: View {
     }
 
     private var usbCard: some View {
-        DenseCard(title: "USB cable") {
-            DenseRow(symbol: "cable.connector", title: core.link.wired ? "Connected through the cable" : core.usb.ready ? "\(core.usb.computerName ?? "A computer") is on the cable" : "Not plugged in",
-                     hint: "On a cable the session, the screen and files go through it: faster than Wi-Fi. TwinDesk moves onto it by itself.",
+        DenseCard(title: tr("USB cable")) {
+            DenseRow(symbol: "cable.connector", title: core.link.wired ? tr("Connected through the cable") : core.usb.ready ? tr("{computerName} is on the cable", ["computerName": core.usb.computerName ?? tr("A computer")]) : tr("Not plugged in"),
+                     hint: tr("On a cable the session, the screen and files go through it: faster than Wi-Fi. TwinDesk moves onto it by itself."),
                      divider: false) {
-                if core.link.wired { Pill(text: "In use") } else if core.usb.ready { Pill(text: "Ready", color: TDColor.accent) }
+                if core.link.wired { Pill(text: tr("In use")) } else if core.usb.ready { Pill(text: tr("Ready"), color: TDColor.accent) }
             }
             // On the cable to a computer not paired yet: pair through it (no Wi-Fi needed).
             if let u = core.usb.unpaired, !core.link.wired {
                 let going = core.pair?.name == u.name
-                DenseRow(symbol: "link", title: "\(u.name) isn’t paired yet",
-                         hint: going ? "Pairing through the cable…" : "Pair through the cable, whatever network each is on. Compare the code on both.") {
-                    if going { ProgressView() } else { Button("Pair") { core.pairUsb() }.primaryButton() }
+                DenseRow(symbol: "link", title: tr("{name} isn’t paired yet", ["name": u.name]),
+                         hint: going ? tr("Pairing through the cable…") : tr("Pair through the cable, whatever network each is on. Compare the code on both.")) {
+                    if going { ProgressView() } else { Button(tr("Pair")) { core.pairUsb() }.primaryButton() }
                 }
             }
         }
     }
 
     private func ago(_ t: Double) -> String {
-        guard t > 0 else { return "never" }
+        guard t > 0 else { return tr("never") }
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
+        f.locale = Locale(identifier: I18n.shared.lang)
         return f.localizedString(for: Date(timeIntervalSince1970: t), relativeTo: Date())
     }
 }

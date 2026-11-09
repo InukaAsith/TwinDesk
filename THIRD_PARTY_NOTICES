@@ -12,6 +12,13 @@ Used in: web/vendor/jsQR.js (unchanged): TwinDesk Web's QR code scanner on the p
 License: Apache-2.0 — Copyright 2017 Cosmo Wolfe (full text: https://www.apache.org/licenses/LICENSE-2.0)
 
 
+Twemoji Country Flags
+---------------------
+Source:  https://github.com/talkjs/country-flag-emoji-polyfill (npm country-flag-emoji-polyfill 0.1.10, dist/TwemojiCountryFlags.woff2)
+Used in: shared/lang/flags.woff2 and web/lang/flags.woff2 (unchanged): the flags in the language picker on Windows and Linux
+License: flag art from Twemoji (https://github.com/twitter/twemoji), CC-BY-4.0 — Copyright Twitter, Inc and
+         other contributors (https://creativecommons.org/licenses/by/4.0/); font packaging MIT — Copyright (c) 2022 TalkJS
+
 Beamer
 ------
 Source:  https://github.com/kalkman-code/beamer

@@ -26,6 +26,7 @@ abstract class Feature(val core: Core) {
 
 class Core private constructor(val ctx: Context) : Link.Events {
     val store = Store(ctx)
+    init { I18n.init(ctx, store) }
     val version = MutableStateFlow(0)
     val bg = Executors.newScheduledThreadPool(2) { r -> Thread(r, "td-core").apply { isDaemon = true } }
     private val main = Handler(Looper.getMainLooper())
@@ -198,6 +199,14 @@ class Core private constructor(val ctx: Context) : Link.Events {
         get() = store.flag("background", true)
         set(on) { store.setFlag("background", on); changed() }
 
+    // General › Language: the pages redraw at once (tr() reads I18n.lang); the notification
+    // channels' names and the status notification follow.
+    fun setLanguage(code: String) {
+        I18n.choose(code, store)
+        Notify.channels(ctx)
+        changed()
+    }
+
     fun changed() {
         // (runCatching: discovery may report before every feature exists)
         runCatching { wifiFast.hold(link.connected && !link.wired && (screen.viewing || adb.viewed || remote.active)) }
@@ -337,7 +346,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
                 val port = blePipe(f.id)
                 if (link.pair?.phase != "connecting" || link.pair?.port != 0) return@execute // cancelled meanwhile
                 if (port != null) link.startPairing("127.0.0.1", port, f.name, viaBle = true)
-                else link.pairUnreachable("${f.name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.")
+                else link.pairUnreachable(tr("{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.", "name" to f.name))
             }
             return
         }

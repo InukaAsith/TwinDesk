@@ -233,15 +233,16 @@ class BankGuard(private val core: Core) {
     // Said once, after it happened: what was switched off and how to get it back.
     private fun notice(label: String, switched: Boolean) = runCatching {
         val nm = Notify.nm(ctx)
-        nm.createNotificationChannel(NotificationChannel(CH, "Banking apps", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "TwinDesk closed so a banking app could open"
+        nm.createNotificationChannel(NotificationChannel(CH, tr("Banking apps"), NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = tr("TwinDesk closed so a banking app could open")
         })
-        val text = if (switched) "Debugging${if (devOff) " and Developer options" else ""} are off while you use $label. Open TwinDesk to turn them back on."
-        else "Turn off USB and wireless debugging in Developer options if $label still refuses to open."
+        val text = if (switched) if (devOff) tr("Debugging and Developer options are off while you use {app}. Open TwinDesk to turn them back on.", "app" to label)
+            else tr("Debugging is off while you use {app}. Open TwinDesk to turn it back on.", "app" to label)
+        else tr("Turn off USB and wireless debugging in Developer options if {app} still refuses to open.", "app" to label)
         nm.notify(
             ID,
             Notification.Builder(ctx, CH).setSmallIcon(R.drawable.ic_stat)
-                .setContentTitle("TwinDesk closed for $label")
+                .setContentTitle(tr("TwinDesk closed for {app}", "app" to label))
                 .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text))
                 .setContentIntent(PendingIntent.getActivity(ctx, 19, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE))
                 .setAutoCancel(true).build(),

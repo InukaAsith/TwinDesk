@@ -425,7 +425,7 @@ class Link(
         val h = host ?: return
         raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "fx" to 1, "fxPlain" to 1).apply { if (!wired) put("fx2", 1) })
         helloTimer?.cancel(false)
-        helloTimer = exec.schedule({ if (state != "connected") { message = "No answer"; ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        helloTimer = exec.schedule({ if (state != "connected") { message = tr("No answer"); ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
 
     private fun onText(text: String) {
@@ -435,7 +435,7 @@ class Link(
         when (t) {
             Proto.T.PAIR_NONCE -> return onNonce(m)
             Proto.T.PAIR_OK -> return onPairOk(m)
-            Proto.T.PAIR_CANCEL -> return pairFailed("Pairing was cancelled on the computer.")
+            Proto.T.PAIR_CANCEL -> return pairFailed(tr("Pairing was cancelled on the computer."))
             Proto.T.WELCOME -> return onWelcome(m)
             Proto.T.ERROR -> return onError(m)
             Proto.T.PING -> { if (state == "connected") raw(msg(Proto.T.PONG, "ts" to m.opt("ts"))); return }
@@ -449,7 +449,7 @@ class Link(
         val p = pair ?: return
         val nonce = m.optString("nonce")
         if (mode != "pair" || nw.isEmpty() || !Regex("^[0-9a-f]{32,128}$").matches(nonce) || nonce.length % 2 != 0) {
-            return pairFailed("The computer sent an invalid pairing response.")
+            return pairFailed(tr("The computer sent an invalid pairing response."))
         }
         raw(msg(Proto.T.PAIR_REVEAL, "nonce" to nw))
         pair = p.copy(phase = "code", code = Proto.sasCode(seenFp, nw, nonce))
@@ -465,7 +465,7 @@ class Link(
         if (mode != "pair" || p.phase != "waiting") return
         val token = m.optString("token")
         val id = m.optString("macId")
-        if (token.isEmpty() || id.isEmpty()) return pairFailed("The computer sent an invalid pairing response.")
+        if (token.isEmpty() || id.isEmpty()) return pairFailed(tr("The computer sent an invalid pairing response."))
         // Through the cable the address is this phone's own end of adb reverse: the computer's
         // network address comes from discovery when it's seen (Core.connect), else the cable again.
         // Through Bluetooth likewise: no network address yet (Core keeps the pipe for it).
@@ -533,14 +533,14 @@ class Link(
                         else if (!probed) { probed = true; quietPing = now; w.send(msg(Proto.T.PING, "ts" to now).toString()); continue }
                         else if (now - probeAt > Proto.TIMEOUT_MS) {
                             Log.i("TwinDesk", "no answer on a quiet link, closing")
-                            if (alt == null) message = "Not responding"
+                            if (alt == null) message = tr("Not responding")
                             w.cancel()
                             continue
                         } else continue
                     }
                     if (now - rx > QUIET_TIMEOUT_MS) {
                         Log.i("TwinDesk", "network socket silent for ${now - rx} ms on a quiet link, closing")
-                        if (w === ws && alt == null) message = "Not responding"
+                        if (w === ws && alt == null) message = tr("Not responding")
                         w.cancel()
                     } else if (now - maxOf(quietPing, quietSince) >= QUIET_PING_MS) {
                         quietPing = now
@@ -550,31 +550,31 @@ class Link(
                 }
                 if (now - rx > limit) {
                     Log.i("TwinDesk", "${if (onBle) "Bluetooth" else "network"} socket silent for ${now - rx} ms, closing")
-                    if (w === ws && alt == null) message = "Not responding"
+                    if (w === ws && alt == null) message = tr("Not responding")
                     w.cancel()
                 } else w.send(msg(Proto.T.PING, "ts" to now).toString())
             }
         }
     }
 
-    private val pairErrors = mapOf(
-        Proto.E.PAIR_REFUSED to "Pairing was refused.",
-        Proto.E.PAIR_TIMEOUT to "Pairing timed out.",
-        Proto.E.BUSY to "That computer is busy pairing with another device.",
-        Proto.E.VERSION_MISMATCH to "That computer runs a different version of TwinDesk. Update both devices.",
+    private val pairErrors get() = mapOf(
+        Proto.E.PAIR_REFUSED to tr("Pairing was refused."),
+        Proto.E.PAIR_TIMEOUT to tr("Pairing timed out."),
+        Proto.E.BUSY to tr("That computer is busy pairing with another device."),
+        Proto.E.VERSION_MISMATCH to tr("That computer runs a different version of TwinDesk. Update both devices."),
     )
 
     private fun onError(m: JSONObject) {
         val code = m.optString("code")
         lastCode = code
-        if (mode == "pair") return pairFailed(pairErrors[code] ?: "Pairing failed ($code).")
+        if (mode == "pair") return pairFailed(pairErrors[code] ?: tr("Pairing failed ({code}).", "code" to code))
         message = when (code) {
-            Proto.E.BAD_TOKEN -> "${host?.name ?: "The computer"} forgot this phone. Pair again."
-            Proto.E.BUSY -> m.optString("message").ifEmpty { "Busy with another device" }
-            Proto.E.REPLACED -> m.optString("message").ifEmpty { "Another device connected" }
-            Proto.E.RELEASED -> "Disconnected from ${host?.name ?: "the computer"}"
-            Proto.E.ASLEEP -> "${host?.name ?: "The computer"} is asleep"
-            else -> "Closed ($code)"
+            Proto.E.BAD_TOKEN -> tr("{name} forgot this phone. Pair again.", "name" to (host?.name ?: tr("The computer")))
+            Proto.E.BUSY -> m.optString("message").ifEmpty { tr("Busy with another device") }
+            Proto.E.REPLACED -> m.optString("message").ifEmpty { tr("Another device connected") }
+            Proto.E.RELEASED -> tr("Disconnected from {name}", "name" to (host?.name ?: tr("the computer")))
+            Proto.E.ASLEEP -> tr("{name} is asleep", "name" to (host?.name ?: tr("The computer")))
+            else -> tr("Closed ({code})", "code" to code)
         }
         if (code == Proto.E.BAD_TOKEN) host?.let { store.forgetHost(it.id, hostsKey) }
     }
@@ -609,13 +609,13 @@ class Link(
         if (mode == "pair") {
             val p = pair
             if (p != null && p.phase != "failed") {
-                pairFailed(if (p.phase == "connecting") "Couldn’t connect to ${p.address}${failure?.let { " ($it)" } ?: ""}." else "The connection closed.")
+                pairFailed(if (p.phase == "connecting") tr("Couldn’t connect to {address}{reason}.", "address" to p.address, "reason" to (failure?.let { " ($it)" } ?: "")) else tr("The connection closed."))
             }
             return
         }
         val was = state
         if (failure == "identity") {
-            setState("failed", "${host?.name ?: "The computer"} looks different now. Forget it and pair again.")
+            setState("failed", tr("{name} looks different now. Forget it and pair again.", "name" to (host?.name ?: tr("The computer"))))
         } else {
             if (message.isEmpty() && failure != null) message = failure
             setState(if (was == "connected" || was == "connecting") "idle" else was, message)

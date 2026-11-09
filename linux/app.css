@@ -20,12 +20,15 @@
     --nav-hover: rgba(255, 255, 255, 0.06); --shadow: none; --sidebar: #2b2b2e;
   }
 }
+/* Flag emoji in the language picker: Windows has no flag glyphs (it shows "GB"), and not every Linux
+   has an emoji font. Only the regional-indicator letters use it. Twemoji art, CC-BY 4.0. */
+@font-face { font-family: "TwinDesk Flags"; src: url("../shared/lang/flags.woff2") format("woff2"); unicode-range: U+1F1E6-1F1FF; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0; display: flex; overflow: hidden; background: var(--sidebar); color: var(--text);
-  font: 13px/1.4 system-ui, "Ubuntu", "Cantarell", "Noto Sans", sans-serif; user-select: none;
+  font: 13px/1.4 "TwinDesk Flags", system-ui, "Ubuntu", "Cantarell", "Noto Sans", sans-serif; user-select: none;
 }
 button, input, select { font: inherit; color: inherit; }
 

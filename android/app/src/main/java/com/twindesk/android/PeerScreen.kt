@@ -76,7 +76,7 @@ object PeerScreen {
         if (c != null) { c.sync(); if (peer.role == "host") peer.send(msg("screen.ready")); return }
         val i = Intent(peer.core.ctx, PeerGrantActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (android.provider.Settings.canDrawOverlays(peer.core.ctx) || MainActivity.shown) runCatching { peer.core.ctx.startActivity(i) }
-        Notify.peer(peer.core.ctx, "${peer.peerName} wants to see your screen", "Tap to share this screen with ${peer.peerName}.",
+        Notify.peer(peer.core.ctx, tr("{name} wants to see your screen", "name" to peer.peerName), tr("Tap to share this screen with {name}.", "name" to peer.peerName),
             PendingIntent.getActivity(peer.core.ctx, 19, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
     }
 
@@ -228,9 +228,9 @@ class PeerCaptureService : Service() {
         if (intent?.action == STOP) { stopSelf(); return START_NOT_STICKY }
         val stop = PendingIntent.getService(this, 20, Intent(this, PeerCaptureService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(this, Notify.CH_LINK).setSmallIcon(R.drawable.ic_stat)
-            .setContentTitle("Sharing this screen with ${peer.peerName}")
-            .setContentText("Only to look at: ${peer.peerName} can’t control this phone.")
-            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
+            .setContentTitle(tr("Sharing this screen with {name}", "name" to peer.peerName))
+            .setContentText(tr("Only to look at: {name} can’t control this phone.", "name" to peer.peerName))
+            .addAction(Notification.Action.Builder(null, tr("Stop"), stop).build())
             .setOngoing(true).build()
         try {
             startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
@@ -384,9 +384,9 @@ class PeerViewActivity : Activity(), SurfaceHolder.Callback {
         val peer = Core.get(this).peer
         if (!peer.connected) { finish(); return }
         PeerScreen.viewer = this
-        say("Waiting for ${peer.peerName}… Tap Start there.")
+        say(tr("Waiting for {name}… Tap Start there.", "name" to peer.peerName))
         val long = maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
-        peer.ask("screen.start", JSONObject().put("maxSize", long.coerceIn(720, 2400))) { r -> if (r.has("error")) say("Couldn’t ask: ${r.optString("error")}") }
+        peer.ask("screen.start", JSONObject().put("maxSize", long.coerceIn(720, 2400))) { r -> if (r.has("error")) say(tr("Couldn’t ask: {error}", "error" to r.optString("error"))) }
     }
 
     override fun onDestroy() {

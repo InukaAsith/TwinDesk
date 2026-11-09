@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- What Android itself shows (launcher shortcuts, the share sheet, Quick Settings, Accessibility),
+     in the phone's language: values-zh-rCN, values-ru, values-tr and values-pt-rBR have the translations. The app's own pages use I18n.kt. -->
 <resources>
     <string name="sc_adb_short">Wireless debugging</string>
     <string name="sc_adb_long">Turn on wireless debugging</string>
@@ -6,4 +8,10 @@
     <string name="sc_screen_long">Show the Mac’s screen</string>
     <string name="input_service">TwinDesk: your computer’s mouse and keyboard</string>
     <string name="input_service_desc">Lets the computer you paired in TwinDesk tap, scroll and type on this phone with its mouse and keyboard when wireless debugging isn’t available (for example over Bluetooth). TwinDesk only acts on what that computer sends while you share its cursor; it doesn’t read your screen.</string>
+    <string name="label_screen">Mac screen</string>
+    <string name="label_remote">Remote</string>
+    <string name="label_send">Send to computer</string>
+    <string name="label_copy">Copy to computer</string>
+    <string name="label_open">Open on computer</string>
+    <string name="label_clip_tile">Send clipboard</string>
 </resources>

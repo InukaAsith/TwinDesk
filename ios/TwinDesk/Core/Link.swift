@@ -365,7 +365,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         helloTimer?.cancel()
         let w = DispatchWorkItem { [weak self] in
             guard let self = self, self.state != "connected" else { return }
-            self.message = "No answer"
+            self.message = tr("No answer")
             self.ws?.cancel(with: .goingAway, reason: nil)
         }
         helloTimer = w
@@ -379,7 +379,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         switch t {
         case Proto.T.pairNonce: return onNonce(m)
         case Proto.T.pairOk: return onPairOk(m)
-        case Proto.T.pairCancel: return pairFailed("Pairing was cancelled on the computer.")
+        case Proto.T.pairCancel: return pairFailed(tr("Pairing was cancelled on the computer."))
         case Proto.T.welcome: return onWelcome(m)
         case Proto.T.error: return onError(m)
         case Proto.T.ping:
@@ -400,7 +400,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         guard var p = pair else { return }
         let nonce = m.str("nonce", max: 200)
         guard mode == "pair", !nw.isEmpty, Proto.isHex(nonce, min: 32, max: 128), nonce.count % 2 == 0 else {
-            return pairFailed("The computer sent a bad pairing message.")
+            return pairFailed(tr("The computer sent a bad pairing message."))
         }
         raw(msg(Proto.T.pairReveal, ["nonce": nw]))
         p.phase = "code"
@@ -417,7 +417,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         guard let p = pair, mode == "pair", p.phase == "waiting" else { return }
         let token = m.str("token")
         let id = m.str("macId", max: 128)
-        guard !token.isEmpty, !id.isEmpty else { return pairFailed("The computer sent a bad pairing message.") }
+        guard !token.isEmpty, !id.isEmpty else { return pairFailed(tr("The computer sent a bad pairing message.")) }
         let name = m.str("macName", max: 64)
         let h = Computer(id: id, name: name.isEmpty ? p.name : name, os: m.str("os").isEmpty ? "mac" : m.str("os"),
                      address: p.address, port: p.port, fp: seenFp, token: token, lastSeen: Date().timeIntervalSince1970)
@@ -487,7 +487,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
                         return
                     } else if now.timeIntervalSince(p) > Proto.timeout {
                         NSLog("TwinDesk: no answer on a quiet link, closing")
-                        self.message = "Stopped answering"
+                        self.message = tr("Stopped answering")
                         w.cancel(with: .goingAway, reason: nil)
                         self.onClose(nil)
                         return
@@ -495,7 +495,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
                 }
                 if now.timeIntervalSince(self.lastRx) > Link.quietTimeout {
                     NSLog("TwinDesk: silent on a quiet link, closing")
-                    self.message = "Stopped answering"
+                    self.message = tr("Stopped answering")
                     w.cancel(with: .goingAway, reason: nil)
                     self.onClose(nil)
                 } else if now.timeIntervalSince(max(self.quietPingAt, self.quietSince!)) >= Link.quietPing {
@@ -508,7 +508,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
             let quiet = now.timeIntervalSince(max(self.viaBle ? max(self.lastRx, self.bleRx()) : self.lastRx, self.quietEnd))
             if quiet > self.timeout {
                 NSLog("TwinDesk: socket silent for %.1f s, closing", quiet)
-                self.message = "Stopped answering"
+                self.message = tr("Stopped answering")
                 w.cancel(with: .goingAway, reason: nil)
                 self.onClose(nil)
             } else {
@@ -525,19 +525,19 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         let code = m.str("code")
         lastCode = code
         if mode == "pair" {
-            let known = [Proto.E.pairRefused: "Pairing was refused.", Proto.E.pairTimeout: "Pairing timed out.",
-                         Proto.E.busy: "That computer is busy pairing with another device.",
-                         Proto.E.versionMismatch: "That computer runs a different TwinDesk version. Update both."]
-            return pairFailed(known[code] ?? "Pairing failed (\(code)).")
+            let known = [Proto.E.pairRefused: tr("Pairing was refused."), Proto.E.pairTimeout: tr("Pairing timed out."),
+                         Proto.E.busy: tr("That computer is busy pairing with another device."),
+                         Proto.E.versionMismatch: tr("That computer runs a different TwinDesk version. Update both.")]
+            return pairFailed(known[code] ?? tr("Pairing failed ({code}).", ["code": code]))
         }
-        let name = host?.name ?? "The computer"
+        let name = host?.name ?? tr("The computer")
         switch code {
-        case Proto.E.badToken: message = "\(name) forgot this \(Device.word). Pair again."
-        case Proto.E.busy: message = m.str("message").isEmpty ? "Busy with another device" : m.str("message")
-        case Proto.E.replaced: message = m.str("message").isEmpty ? "Another device connected" : m.str("message")
-        case Proto.E.released: message = "Disconnected from \(name)"
-        case Proto.E.asleep: message = "\(name) is asleep"
-        default: message = "Closed (\(code))"
+        case Proto.E.badToken: message = tr("{name} forgot this {device}. Pair again.", ["name": name, "device": Device.word])
+        case Proto.E.busy: message = m.str("message").isEmpty ? tr("Busy with another device") : m.str("message")
+        case Proto.E.replaced: message = m.str("message").isEmpty ? tr("Another device connected") : m.str("message")
+        case Proto.E.released: message = tr("Disconnected from {name}", ["name": name])
+        case Proto.E.asleep: message = tr("{name} is asleep", ["name": name])
+        default: message = tr("Closed ({code})", ["code": code])
         }
         if code == Proto.E.badToken, let h = host { store.forgetHost(h.id, list) }
     }
@@ -563,13 +563,13 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         dropPending(false)
         if mode == "pair" {
             if let p = pair, p.phase != "failed" {
-                pairFailed(p.phase == "connecting" ? "Couldn’t connect to \(p.address)\(failure.map { " (\($0))" } ?? "")." : "The connection closed.")
+                pairFailed(p.phase == "connecting" ? tr("Couldn’t connect to {address}{reason}.", ["address": p.address, "reason": failure.map { " (\($0))" } ?? ""]) : tr("The connection closed."))
             }
             return
         }
         let was = state
         if failure == "identity" {
-            setState("failed", "\(host?.name ?? "The computer") looks different now. Forget it and pair again.")
+            setState("failed", tr("{name} looks different now. Forget it and pair again.", ["name": host?.name ?? tr("The computer")]))
         } else {
             if message.isEmpty, let f = failure { message = f }
             setState(was == "connected" || was == "connecting" ? "idle" : was, message)

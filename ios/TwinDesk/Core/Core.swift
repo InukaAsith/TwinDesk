@@ -273,8 +273,8 @@ final class Core: ObservableObject, LinkEvents {
     private func computerNeedsNetwork(_ m: JSON) {
         guard link.viaBle, link.connected, let h = link.host else { return }
         if inFront && !unfocused { return needNetwork() }
-        let what = m.str("why") == "screen" ? "wants to show its screen" : "is sending files"
-        Notifier.shared.note("net.need", "\(h.name) \(what)", "Open TwinDesk to receive them over Wi-Fi.", sound: true)
+        let title = m.str("why") == "screen" ? tr("{name} wants to show its screen", ["name": h.name]) : tr("{name} is sending files", ["name": h.name])
+        Notifier.shared.note("net.need", title, tr("Open TwinDesk to receive them over Wi-Fi."), sound: true)
     }
 
     // Something that needs the network started while on Bluetooth (Share Screen, files): back on it.
@@ -376,7 +376,7 @@ final class Core: ObservableObject, LinkEvents {
         guard !id.isEmpty, port > 0, !addrs.isEmpty else { return false }
         DispatchQueue.global().async {
             guard let address = addrs.first(where: { Self.reachable($0, port) }) else {
-                DispatchQueue.main.async { self.message = "Can’t reach \(name.isEmpty ? "the computer" : name). Is the \(Device.word) on the same network?" }
+                DispatchQueue.main.async { self.message = tr("Can’t reach {name}. Is the {device} on the same network?", ["name": name.isEmpty ? tr("the computer") : name, "device": Device.word]) }
                 return
             }
             DispatchQueue.main.async {

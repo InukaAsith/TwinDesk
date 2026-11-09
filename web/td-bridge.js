@@ -37,12 +37,14 @@
     pad() {}, // a Bluetooth gamepad: only the Android app
     tick() {},
     haptic: () => haptic(),
+    // The page's language (web/lang), as the app's TD.tr gives it: {name} parts from vars.
+    tr: (text, vars) => { const h = host(); return h && typeof h.tr === 'function' ? h.tr(text, vars) : text.replace(/^[^|]*\|/, ''); },
   };
   // iOS plays sound only after a touch: the first one on the page starts it (and a pill asks for it).
   if (kind === 'viewer') {
     const pill = document.createElement('button');
     pill.id = 'td-sound';
-    pill.textContent = '🔊 Tap for sound';
+    pill.textContent = '🔊 ' + window.TD.tr('Tap for sound');
     pill.hidden = true;
     const kick = () => {
       const a = document.getElementById('audio');

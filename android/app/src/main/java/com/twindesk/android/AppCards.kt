@@ -66,7 +66,7 @@ private fun AppRow(core: Core, pkg: String, label: String, hint: String, on: Boo
 
 @Composable
 private fun Search(q: String, onQ: (String) -> Unit) = OutlinedTextField(
-    q, onQ, singleLine = true, placeholder = { Text("Search apps", color = pal.muted) }, shape = RoundedCornerShape(50),
+    q, onQ, singleLine = true, placeholder = { Text(tr("Search apps"), color = pal.muted) }, shape = RoundedCornerShape(50),
     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = pal.accent, unfocusedBorderColor = pal.line, focusedTextColor = pal.text, unfocusedTextColor = pal.text),
     modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
 )
@@ -97,27 +97,27 @@ fun NotifAppsCard(core: Core, name: String) {
         // The ones that had notifications first, then the rest, each by name.
         .sortedWith(compareBy({ it.pkg !in seen }, { it.label.lowercase() }))
     val on = list.count { n.sends(it.pkg) }
-    MacCard("Apps", action = {
+    MacCard(tr("Apps"), action = {
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            TextButton(onClick = { n.setAll(list.map { it.pkg }, true) }) { Text("All", color = pal.accent, fontSize = 13.sp) }
-            TextButton(onClick = { n.setAll(list.map { it.pkg }, false) }) { Text("None", color = pal.accent, fontSize = 13.sp) }
+            TextButton(onClick = { n.setAll(list.map { it.pkg }, true) }) { Text(tr("All"), color = pal.accent, fontSize = 13.sp) }
+            TextButton(onClick = { n.setAll(list.map { it.pkg }, false) }) { Text(tr("None"), color = pal.accent, fontSize = 13.sp) }
         }
     }) {
-        Choice(listOf("block" to "Block list", "allow" to "Allow list"), if (n.allowMode) "allow" else "block") { n.setAllowMode(it == "allow") }
+        Choice(listOf("block" to tr("Block list"), "allow" to tr("Allow list")), if (n.allowMode) "allow" else "block") { n.setAllowMode(it == "allow") }
         Text(
-            if (n.allowMode) "Only the apps switched on send notifications to $name. New apps stay off."
-            else "Every app sends notifications to $name except the ones switched off. New apps are on.",
+            if (n.allowMode) tr("Only the apps switched on send notifications to {name}. New apps stay off.", "name" to name)
+            else tr("Every app sends notifications to {name} except the ones switched off. New apps are on.", "name" to name),
             color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(horizontal = 20.dp),
         )
         Search(q) { q = it }
-        if (apps.isEmpty()) MacRow("Loading apps…", first = true)
-        else if (list.isEmpty()) MacRow("No apps match “${q.trim()}”", first = true)
-        else Text("$on of ${list.size} send", color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
+        if (apps.isEmpty()) MacRow(tr("Loading apps…"), first = true)
+        else if (list.isEmpty()) MacRow(tr("No apps match “{q}”", "q" to q.trim()), first = true)
+        else Text(tr("{on} of {count} send", "on" to on, "count" to list.size), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
         val shown = if (all || q.isNotBlank()) list else list.take(FIRST)
         shown.forEachIndexed { i, a ->
-            AppRow(core, a.pkg, a.label, if (a.pkg in seen) "Has sent notifications" else "", n.sends(a.pkg), i == 0) { n.setSends(a.pkg, it) }
+            AppRow(core, a.pkg, a.label, if (a.pkg in seen) tr("Has sent notifications") else "", n.sends(a.pkg), i == 0) { n.setSends(a.pkg, it) }
         }
-        if (shown.size < list.size) MacRow("Show all ${list.size} apps", onClick = { all = true })
+        if (shown.size < list.size) MacRow(tr("Show all {count} apps", "count" to list.size), onClick = { all = true })
     }
 }
 
@@ -130,35 +130,35 @@ fun BankCard(core: Core) {
     var open by rememberSaveable { mutableStateOf(false) }
     var q by rememberSaveable { mutableStateOf("") }
     val banks = b.banks()
-    MacCard("Banking apps") {
+    MacCard(tr("Banking apps")) {
         SwitchRow(
-            "Close TwinDesk for banking apps",
-            "When a banking app opens, TwinDesk turns off USB and wireless debugging" + (if (b.devOff) ", Developer options" else "") +
-                " and its Accessibility service, then closes",
+            tr("Close TwinDesk for banking apps"),
+            if (b.devOff) tr("When a banking app opens, TwinDesk turns off USB and wireless debugging, Developer options and its Accessibility service, then closes")
+            else tr("When a banking app opens, TwinDesk turns off USB and wireless debugging and its Accessibility service, then closes"),
             b.on, first = true,
         ) { b.setOn(it) }
         if (b.on) {
-            SwitchRow("Turn off Developer options", "Checked by most banking apps", b.devOff) { b.setDevOff(it) }
-            SwitchRow("Restore when TwinDesk opens", "Turns these settings back on the next time TwinDesk opens", b.restoreOn) { b.setRestore(it) }
-            if (!core.adb.canEnable) MacRow("Wireless debugging required", "Without it, TwinDesk closes but can’t turn debugging off") { }
-            if (b.how.isEmpty()) MacRow("Usage access", "Detects when a banking app opens (or use the Accessibility service)") {
-                TextButton(onClick = { runCatching { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("Allow", color = pal.accent) }
+            SwitchRow(tr("Turn off Developer options"), tr("Checked by most banking apps"), b.devOff) { b.setDevOff(it) }
+            SwitchRow(tr("Restore when TwinDesk opens"), tr("Turns these settings back on the next time TwinDesk opens"), b.restoreOn) { b.setRestore(it) }
+            if (!core.adb.canEnable) MacRow(tr("Wireless debugging required"), tr("Without it, TwinDesk closes but can’t turn debugging off")) { }
+            if (b.how.isEmpty()) MacRow(tr("Usage access"), tr("Detects when a banking app opens (or use the Accessibility service)")) {
+                TextButton(onClick = { runCatching { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text(tr("Allow"), color = pal.accent) }
             }
-            if (b.last.isNotEmpty()) MacRow("Last closed for", b.last)
+            if (b.last.isNotEmpty()) MacRow(tr("Last closed for"), b.last)
             MacRow(
-                "Banking apps",
-                if (banks.isEmpty()) "None selected" else banks.take(4).joinToString(", ") { it.label } + if (banks.size > 4) " and ${banks.size - 4} more" else "",
+                tr("Banking apps"),
+                if (banks.isEmpty()) tr("None selected") else banks.take(4).joinToString(", ") { it.label } + if (banks.size > 4) tr(" and {count} more", "count" to banks.size - 4) else "",
                 onClick = { open = !open },
-            ) { Text(if (open) "Done" else "Choose", color = pal.accent, fontSize = 14.sp) }
+            ) { Text(if (open) tr("Done") else tr("Choose"), color = pal.accent, fontSize = 14.sp) }
             if (open) {
                 Search(q) { q = it }
                 val apps = core.appList.get().filter { q.isBlank() || it.label.contains(q.trim(), true) || it.pkg.contains(q.trim(), true) }
                     .sortedWith(compareBy({ !b.isBank(it.pkg) }, { it.label.lowercase() }))
                 val list = if (q.isBlank()) apps.take(FIRST + banks.size) else apps
                 list.forEachIndexed { i, a ->
-                    AppRow(core, a.pkg, a.label, if (b.auto(a.pkg)) "Detected as a banking app" else "", b.isBank(a.pkg), i == 0) { b.setBank(a.pkg, it) }
+                    AppRow(core, a.pkg, a.label, if (b.auto(a.pkg)) tr("Detected as a banking app") else "", b.isBank(a.pkg), i == 0) { b.setBank(a.pkg, it) }
                 }
-                if (q.isBlank() && list.size < apps.size) Text("Search to find more apps", color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(20.dp))
+                if (q.isBlank() && list.size < apps.size) Text(tr("Search to find more apps"), color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(20.dp))
             }
         }
     }
@@ -170,14 +170,14 @@ fun BankCard(core: Core) {
 fun NotifButtonsCard(core: Core) {
     val ctx = LocalContext.current
     val chosen = QuickActions.chosen(core)
-    MacCard("Notification buttons") {
+    MacCard(tr("Notification buttons")) {
         Text(
-            "Shown on TwinDesk’s notification while connected · ${chosen.size} of ${QuickActions.MAX} selected",
+            tr("Shown on TwinDesk’s notification while connected · {count} of {max} selected", "count" to chosen.size, "max" to QuickActions.MAX),
             color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp),
         )
         QuickActions.ALL.forEach { btn ->
             SwitchRow(btn.label, btn.hint, btn.id in chosen) { on ->
-                if (!QuickActions.set(core, btn.id, on)) Toast.makeText(ctx, "You can select up to ${QuickActions.MAX} buttons", Toast.LENGTH_SHORT).show()
+                if (!QuickActions.set(core, btn.id, on)) Toast.makeText(ctx, tr("You can select up to {max} buttons", "max" to QuickActions.MAX), Toast.LENGTH_SHORT).show()
             }
         }
     }

@@ -143,7 +143,7 @@ class Clip(core: Core) : Feature(core) {
             core.send(msg(Proto.T.CLIP_IMAGE_PART, "id" to id, "i" to i, "data" to Base64.encodeToString(p.bytes, from, min(part, p.bytes.size - from), Base64.NO_WRAP)))
         }
         if (outId == id) outId = ""
-        remember(Item("out", "${if (shot) "Screenshot" else "Picture"} · ${p.w} × ${p.h}"))
+        remember(Item("out", "${if (shot) tr("Screenshot") else tr("Picture")} · ${p.w} × ${p.h}"))
         core.changed()
         return true
     }
@@ -230,7 +230,7 @@ class Clip(core: Core) : Feature(core) {
                     .onFailure { Log.w("TwinDesk", "picture from the computer: ${it.message}") }
             }
             val size = if (w > 0 && h > 0) "$w × $h" else "${png.size / 1024} KB"
-            remember(Item("in", "${if (shot) "Screenshot" else "Picture"} · $size", uri))
+            remember(Item("in", "${if (shot) tr("Screenshot") else tr("Picture")} · $size", uri))
         } catch (e: Exception) {
             Log.w("TwinDesk", "picture from the computer: ${e.message}")
         }

@@ -60,7 +60,7 @@ class Remote(core: Core) : Feature(core) {
 
     fun opts(): JSONObject {
         ble = core.link.ble
-        return msg("opts", "mode" to mode, "name" to (core.host?.name ?: "the computer"), "me" to core.store.deviceName, "connected" to (core.host != null),
+        return msg("opts", "mode" to mode, "name" to (core.host?.name ?: tr("the computer")), "me" to core.store.deviceName, "connected" to (core.host != null),
             "os" to (core.host?.os ?: ""), "ble" to core.link.ble, "speed" to speed.toDouble(), "tap" to tapClick, "smooth" to smooth, "pad" to padMap(), "layout" to layout(),
             "bt" to (core.btPadMade && core.btPad.connected), "btName" to (if (core.btPadMade) core.btPad.hostName else ""),
             // The gamepad's Keys: its controls and what each can press.
@@ -127,13 +127,13 @@ class Remote(core: Core) : Feature(core) {
 
     companion object {
         // The gamepad's controls, in the order the Remote page lists them.
-        val CONTROLS = listOf(
-            "lsUp" to "Left stick up", "lsLeft" to "Left stick left", "lsDown" to "Left stick down", "lsRight" to "Left stick right",
+        val CONTROLS get() = listOf(
+            "lsUp" to tr("Left stick up"), "lsLeft" to tr("Left stick left"), "lsDown" to tr("Left stick down"), "lsRight" to tr("Left stick right"),
             "l3" to "L3", "r3" to "R3",
             "a" to "A", "b" to "B", "x" to "X", "y" to "Y",
             "lb" to "LB", "rb" to "RB", "lt" to "LT", "rt" to "RT",
-            "up" to "D-pad up", "down" to "D-pad down", "left" to "D-pad left", "right" to "D-pad right",
-            "back" to "Back", "start" to "Start",
+            "up" to tr("D-pad up"), "down" to tr("D-pad down"), "left" to tr("D-pad left"), "right" to tr("D-pad right"),
+            "back" to tr("gamepad|Back"), "start" to tr("gamepad|Start"),
         )
 
         // Common PC game keys: move on WASD, jump on A, aim and fire on the triggers.
@@ -147,15 +147,15 @@ class Remote(core: Core) : Feature(core) {
         )
 
         // What a control can press (the picker's list).
-        val KEYS: List<Pair<String, String>> = buildList {
-            add("" to "Nothing")
-            add("Mouse0" to "Left click"); add("Mouse1" to "Right click"); add("Mouse2" to "Middle click")
+        val KEYS: List<Pair<String, String>> get() = buildList {
+            add("" to tr("Nothing"))
+            add("Mouse0" to tr("Left click")); add("Mouse1" to tr("Right click")); add("Mouse2" to tr("Middle click"))
             for (c in 'A'..'Z') add("Key$c" to "$c")
             for (d in 0..9) add("Digit$d" to "$d")
             addAll(listOf(
-                "Space" to "Space", "Enter" to "Enter", "Escape" to "Esc", "Tab" to "Tab", "Backspace" to "Backspace",
+                "Space" to tr("Space"), "Enter" to "Enter", "Escape" to "Esc", "Tab" to "Tab", "Backspace" to "Backspace",
                 "ShiftLeft" to "Shift", "ControlLeft" to "Ctrl", "AltLeft" to "Alt",
-                "ArrowUp" to "Up arrow", "ArrowDown" to "Down arrow", "ArrowLeft" to "Left arrow", "ArrowRight" to "Right arrow",
+                "ArrowUp" to tr("Up arrow"), "ArrowDown" to tr("Down arrow"), "ArrowLeft" to tr("Left arrow"), "ArrowRight" to tr("Right arrow"),
                 "Minus" to "-", "Equal" to "=", "BracketLeft" to "[", "BracketRight" to "]", "Semicolon" to ";", "Quote" to "'",
                 "Comma" to ",", "Period" to ".", "Slash" to "/", "Backquote" to "`",
             ))

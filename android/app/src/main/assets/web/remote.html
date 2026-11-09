@@ -9,23 +9,23 @@
 </head>
 <body>
   <header id="top">
-    <span id="name">Remote</span>
-    <button id="b-rotate" class="pad-only" aria-label="Rotate">Rotate</button>
-    <button id="b-kbd" class="pad-only" aria-label="Keyboard">Keyboard</button>
-    <button id="b-map" class="game-only" aria-label="Keys">Keys</button>
-    <button id="b-edit" class="game-only" aria-label="Edit layout">Edit</button>
-    <button id="v-clear" class="voice-only" aria-label="Clear">Clear</button>
+    <span id="name" data-i18n>Remote</span>
+    <button id="b-rotate" class="pad-only" aria-label="Rotate" data-i18n>Rotate</button>
+    <button id="b-kbd" class="pad-only" aria-label="Keyboard" data-i18n>Keyboard</button>
+    <button id="b-map" class="game-only" aria-label="Keys" data-i18n>Keys</button>
+    <button id="b-edit" class="game-only" aria-label="Edit layout" data-i18n>Edit</button>
+    <button id="v-clear" class="voice-only" aria-label="Clear" data-i18n>Clear</button>
     <button id="b-close" aria-label="Close">✕</button>
   </header>
-  <div id="note" hidden><span id="note-text"></span><button id="note-on" hidden>Turn on Remote</button></div>
+  <div id="note" hidden><span id="note-text"></span><button id="note-on" hidden data-i18n>Turn on Remote</button></div>
 
   <!-- Touchpad and keyboard -->
   <section id="pad-view" class="pad-only">
     <div id="keys"></div>
-    <div id="pad"><span>Slide to move · tap to click · hold to right click<br>two fingers to scroll · two-finger tap to right click</span></div>
+    <div id="pad"><span><span data-i18n>Slide to move · tap to click · hold to right click</span><br><span data-i18n>two fingers to scroll · two-finger tap to right click</span></span></div>
     <div id="clicks">
-      <button id="b-left">Left click</button>
-      <button id="b-right">Right click</button>
+      <button id="b-left" data-i18n>Left click</button>
+      <button id="b-right" data-i18n>Right click</button>
     </div>
   </section>
 
@@ -38,12 +38,12 @@
       <div id="voice-status"><span id="voice-dot"></span><span id="voice-hint"></span></div>
     </div>
     <div id="voice-keys">
-      <button id="v-word" aria-label="Delete word">⌫ Word</button>
-      <button id="v-space" aria-label="Space">Space</button>
+      <button id="v-word" aria-label="Delete word">⌫ <span data-i18n>Word</span></button>
+      <button id="v-space" aria-label="Space" data-i18n>Space</button>
       <button id="v-tab" aria-label="Tab">Tab</button>
-      <button id="v-enter" class="primary" aria-label="Enter">Enter ⏎</button>
+      <button id="v-enter" class="primary" aria-label="Enter"><span data-i18n>Enter</span> ⏎</button>
     </div>
-    <p id="voice-help">Uses your keyboard's own voice typing: Gboard's microphone, or Dictation on iPhone. Each word appears on the computer as it shows here; fixes are typed there too. Clear starts a new box without deleting anything on the computer.</p>
+    <p id="voice-help" data-i18n>Uses your keyboard's own voice typing: Gboard's microphone, or Dictation on iPhone. Each word appears on the computer as it shows here; fixes are typed there too. Clear starts a new box without deleting anything on the computer.</p>
   </section>
 
   <!-- Gamepad: each button presses the key set for it (Keys), or is a real controller's -->
@@ -52,8 +52,8 @@
     <button class="g shoulder bumper" id="g-lb" data-id="lb">LB</button>
     <button class="g shoulder bumper" id="g-rb" data-id="rb">RB</button>
     <button class="g shoulder trigger" id="g-rt" data-id="rt">RT</button>
-    <button class="g small" id="g-back" data-id="back">Back</button>
-    <button class="g small" id="g-start" data-id="start">Start</button>
+    <button class="g small" id="g-back" data-id="back" data-i18n="gamepad|Back">Back</button>
+    <button class="g small" id="g-start" data-id="start" data-i18n="gamepad|Start">Start</button>
     <div class="stick" id="ls"><div class="knob"></div></div>
     <div class="stick" id="rs"><div class="knob"></div></div>
     <div id="dpad">
@@ -76,23 +76,23 @@
   <!-- Editing the gamepad (Edit): drag a control to move it; tap one to size it, hide it, rename it or
        set its key; add buttons of your own. Saved as you go (Remote.kt's layout). -->
   <div id="edit-top" class="game-only" hidden>
-    <span>Drag to move · tap to change</span>
-    <button id="edit-add">+ Button</button>
-    <button id="edit-reset">Reset</button>
-    <button id="edit-done">Done</button>
+    <span data-i18n>Drag to move · tap to change</span>
+    <button id="edit-add">+ <span data-i18n>Button</span></button>
+    <button id="edit-reset" data-i18n>Reset</button>
+    <button id="edit-done" data-i18n>Done</button>
   </div>
   <div id="edit-bar" class="game-only" hidden>
     <b id="edit-name"></b>
-    <label class="edit-size">Size <input id="edit-size" type="range" min="0.5" max="2" step="0.05"></label>
-    <label id="edit-key-row">Key <select id="edit-key"></select></label>
-    <label id="edit-label-row">Label <input id="edit-label" maxlength="12" autocomplete="off"></label>
-    <button id="edit-hide">Hide</button>
-    <button id="edit-del">Delete</button>
+    <label class="edit-size"><span data-i18n>Size</span> <input id="edit-size" type="range" min="0.5" max="2" step="0.05"></label>
+    <label id="edit-key-row"><span data-i18n>Key</span> <select id="edit-key"></select></label>
+    <label id="edit-label-row"><span data-i18n>Label</span> <input id="edit-label" maxlength="12" autocomplete="off"></label>
+    <button id="edit-hide" data-i18n>Hide</button>
+    <button id="edit-del" data-i18n>Delete</button>
   </div>
 
   <!-- The gamepad's keys: what each control presses (Remote.kt keeps them) -->
   <div id="map" class="game-only" hidden>
-    <header><b>Gamepad keys</b><button id="map-reset">Reset</button><button id="map-done">Done</button></header>
+    <header><b data-i18n>Gamepad keys</b><button id="map-reset" data-i18n>Reset</button><button id="map-done" data-i18n>Done</button></header>
     <p class="hint" id="map-hint"></p>
     <div id="map-list"></div>
   </div>

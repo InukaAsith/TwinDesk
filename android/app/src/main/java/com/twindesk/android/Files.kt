@@ -107,7 +107,7 @@ class Files(core: Core) : Feature(core) {
                 core.send(msg(Proto.T.FILE_CANCEL, "id" to f.id))
             }
             Notify.cancelFiles(core.ctx, b.key)
-            recent.add(0, "Cancelled sending ${b.name}")
+            recent.add(0, tr("Cancelled sending {file}", "file" to b.name))
             while (recent.size > 20) recent.removeAt(recent.size - 1)
             core.changed()
         }
@@ -116,7 +116,7 @@ class Files(core: Core) : Feature(core) {
             for (f in incoming.values.filter { it.batch == batchId }) abort(f.id, "cancelled here", true)
             while (batches[batchId] === b) fileFinished(b, false) // the files not offered yet: the batch ends now
             Notify.cancelFiles(core.ctx, b.key)
-            recent[0] = "Cancelled receiving ${plural(b.count, "file")}"
+            recent[0] = tr("Cancelled receiving {files}", "files" to trCount(b.count, "file"))
             core.changed()
         }
     }
@@ -133,9 +133,9 @@ class Files(core: Core) : Feature(core) {
     // One line for the ongoing notification while something moves.
     fun activeLine(): String? {
         val inb = batches.values.firstOrNull()
-        if (inb != null) return "Receiving ${plural(inb.count, "file")} · ${pct(inb.got, inb.bytes)}%"
+        if (inb != null) return tr("Receiving {files} · {percent}%", "files" to trCount(inb.count, "file"), "percent" to pct(inb.got, inb.bytes))
         val outb = outBatches.values.firstOrNull()
-        if (outb != null) return "Sending ${outb.name} · ${pct(outb.sent, outb.bytes)}%"
+        if (outb != null) return tr("Sending {file} · {percent}%", "file" to outb.name, "percent" to pct(outb.sent, outb.bytes))
         return null
     }
 
@@ -519,18 +519,18 @@ class Files(core: Core) : Feature(core) {
         val where = b.target.where.ifEmpty { "Download/TwinDesk" }
         if (drags.remove(b.id) != null) core.send(msg("drag.end", "drag" to b.id, "result" to if (b.ok) "dropped" else "failed", "where" to where))
         else core.send(msg(Proto.T.FILES_DONE, "batch" to b.id, "ok" to b.ok, "where" to where, "files" to b.done))
-        val from = core.host?.name ?: "your computer"
-        val what = if (b.tops.size == 1) b.tops.first() else plural(b.tops.size, "item")
-        recent.add(0, "${if (b.ok) "Received" else "Some of"} $what from $from")
+        val from = core.host?.name ?: tr("your computer")
+        val what = if (b.tops.size == 1) b.tops.first() else trCount(b.tops.size, "item")
+        recent.add(0, if (b.ok) tr("Received {what} from {from}", "what" to what, "from" to from) else tr("Some of {what} from {from}", "what" to what, "from" to from))
         while (recent.size > 20) recent.removeAt(recent.size - 1)
         if (b.target.onDone != null) {
             Notify.cancelFiles(core.ctx, b.key)
             b.target.onDone.invoke(b)
-            if (b.target.where.isNotEmpty()) Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Some files didn’t arrive from $from", "In ${b.target.where}", null, null)
+            if (b.target.where.isNotEmpty()) Notify.files(core.ctx, b.key, if (b.ok) tr("{what} from {from}", "what" to what, "from" to from) else tr("Some files didn’t arrive from {from}", "from" to from), tr("In {where}", "where" to b.target.where), null, null)
         } else {
             val open = if (b.placed.size == 1) Notify.viewIntent(b.placed[0].first, b.placed[0].second)
             else Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Some files didn’t arrive from $from", if (b.ok) "In Downloads › TwinDesk. Tap to open." else "$what is incomplete", null, open)
+            Notify.files(core.ctx, b.key, if (b.ok) tr("{what} from {from}", "what" to what, "from" to from) else tr("Some files didn’t arrive from {from}", "from" to from), if (b.ok) tr("In Downloads › TwinDesk. Tap to open.") else tr("{what} is incomplete", "what" to what), null, open)
         }
         core.changed()
     }
@@ -539,8 +539,8 @@ class Files(core: Core) : Feature(core) {
         val now = System.currentTimeMillis()
         if (!force && now - b.lastNote < 500) return
         b.lastNote = now
-        if (b.target.onDone != null && b.target.where.isEmpty()) Notify.fclipProgress(core.ctx, "Copying ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", pct(b.got, b.bytes))
-        else Notify.files(core.ctx, b.key, "Receiving ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", "${pct(b.got, b.bytes)}%", pct(b.got, b.bytes), null, cancel = b.id)
+        if (b.target.onDone != null && b.target.where.isEmpty()) Notify.fclipProgress(core.ctx, tr("Copying {files} from {name}", "files" to trCount(b.count, "file"), "name" to (core.host?.name ?: tr("your computer"))), pct(b.got, b.bytes))
+        else Notify.files(core.ctx, b.key, tr("Receiving {files} from {name}", "files" to trCount(b.count, "file"), "name" to (core.host?.name ?: tr("your computer"))), "${pct(b.got, b.bytes)}%", pct(b.got, b.bytes), null, cancel = b.id)
         core.changed()
     }
 
@@ -570,7 +570,7 @@ class Files(core: Core) : Feature(core) {
         val seen = mutableSetOf<String>()
         val unique = items.map { if (it.rel.contains('/')) return@map it; var n = it.name; var i = 2; while (!seen.add(n)) { n = it.name.substringBeforeLast('.') + " ${i++}" + it.name.substringAfterLast('.', "").let { e -> if (e.isEmpty()) "" else ".$e" } }; it.copy(name = n) }
         val bytes = unique.sumOf { it.size }
-        outBatches[batch] = OutBatch(batch, kind, if (unique.size == 1) unique[0].name else plural(unique.size, "item"), unique.size, bytes)
+        outBatches[batch] = OutBatch(batch, kind, if (unique.size == 1) unique[0].name else trCount(unique.size, "item"), unique.size, bytes)
         unique.forEachIndexed { index, it ->
             val id = UUID.randomUUID().toString()
             outgoing.add(Outgoing(id, it.uri, it.name, it.size, batch))
@@ -782,7 +782,7 @@ class Files(core: Core) : Feature(core) {
         // Over 5 MB: a notification with a live progress bar, as for files coming in.
         if (b.bytes > 5L * 1024 * 1024) {
             b.shown = true
-            Notify.files(core.ctx, b.key, "Sending ${b.name} to ${core.host?.name ?: "your computer"}", "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true, cancel = b.id)
+            Notify.files(core.ctx, b.key, tr("Sending {file} to {name}", "file" to b.name, "name" to (core.host?.name ?: tr("your computer"))), "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true, cancel = b.id)
             if (outBatches[b.id] == null) Notify.cancelFiles(core.ctx, b.key) // cancelled meanwhile
         }
     }
@@ -794,9 +794,9 @@ class Files(core: Core) : Feature(core) {
     private fun outDone(m: JSONObject) {
         val b = outBatches.remove(m.optString("batch")) ?: return
         outgoing.removeIf { it.batch == b.id }
-        val to = core.host?.name ?: "your computer"
-        if (b.shown) Notify.files(core.ctx, b.key, if (m.optBoolean("ok")) "Sent ${b.name}" else "Some files weren’t delivered", "On $to", null, null, up = true)
-        recent.add(0, if (m.optBoolean("ok")) "Sent ${b.name} to $to" else "${b.name} didn’t all arrive on $to")
+        val to = core.host?.name ?: tr("your computer")
+        if (b.shown) Notify.files(core.ctx, b.key, if (m.optBoolean("ok")) tr("Sent {file}", "file" to b.name) else tr("Some files weren’t delivered"), tr("On {name}", "name" to to), null, null, up = true)
+        recent.add(0, if (m.optBoolean("ok")) tr("Sent {file} to {name}", "file" to b.name, "name" to to) else tr("{file} didn’t all arrive on {name}", "file" to b.name, "name" to to))
         while (recent.size > 20) recent.removeAt(recent.size - 1)
         core.changed()
     }

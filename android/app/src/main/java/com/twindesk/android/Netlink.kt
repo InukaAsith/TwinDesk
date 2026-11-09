@@ -225,14 +225,14 @@ class Netlink(core: Core) : Feature(core) {
             }
             Proto.T.NET_JOIN -> {
                 val s = m.optString("ssid")
-                if (m.has("error") || s.isEmpty()) fail("${core.host?.name ?: "The computer"} can’t host Wi-Fi")
+                if (m.has("error") || s.isEmpty()) fail(tr("{name} can’t host Wi-Fi", "name" to (core.host?.name ?: tr("The computer"))))
                 else core.bg.execute { join(s.take(32), m.optString("pass").take(63)) }
             }
-            Proto.T.NET_JOINED -> if (!m.optBoolean("ok")) fail(m.optString("error").ifEmpty { "The computer couldn’t join" }.take(200))
+            Proto.T.NET_JOINED -> if (!m.optBoolean("ok")) fail(m.optString("error").ifEmpty { tr("The computer couldn’t join") }.take(200))
             Proto.T.NET_RELEASE -> if (m.optBoolean("all")) dropped() else { synchronized(this) { peerNeeds.remove(m.optString("why")) }; maybeDown() }
             Proto.T.NET_HOTSPOT -> {
                 hotspotAsked = m.optBoolean("on")
-                if (hotspotAsked) Notify.hotspot(core.ctx, core.host?.name ?: "The computer") else Notify.cancelHotspot(core.ctx)
+                if (hotspotAsked) Notify.hotspot(core.ctx, core.host?.name ?: tr("The computer")) else Notify.cancelHotspot(core.ctx)
                 core.changed()
             }
             else -> return false
@@ -294,7 +294,7 @@ class Netlink(core: Core) : Feature(core) {
         if (state in setOf("asking", "hosting", "joining", "joined")) return
         // Seen on the network already (the phone's Wi-Fi came back): Core moves the session there.
         if (core.host?.let { core.discovery.found[it.id] } != null) return
-        val p = plan() ?: return fail("Neither side can host Wi-Fi")
+        val p = plan() ?: return fail(tr("Neither side can host Wi-Fi"))
         error = ""
         if (p == "me") return startHost()
         set("asking", "")
@@ -312,7 +312,7 @@ class Netlink(core: Core) : Feature(core) {
             direct.host(ssid, pass, core.host?.name ?: "The computer", band2)
         } catch (e: Exception) {
             core.link.send(msg(Proto.T.NET_JOIN, "error" to (e.message ?: "failed")))
-            return fail("Couldn’t start Wi-Fi Direct: ${e.message}")
+            return fail(tr("Couldn’t start Wi-Fi Direct: {error}", "error" to e.message))
         }
         if (state == "hosting") sendJoin()
     }
@@ -340,7 +340,7 @@ class Netlink(core: Core) : Feature(core) {
                 return startHost()
             }
             core.link.send(msg(Proto.T.NET_JOINED, "ok" to false, "error" to (e.message ?: "failed")))
-            return fail("Couldn’t join $s: ${e.message}")
+            return fail(tr("Couldn’t join {network}: {error}", "network" to s, "error" to e.message))
         }
         core.link.send(msg(Proto.T.NET_JOINED, "ok" to true))
         set("joined", "")

@@ -1,0 +1,7 @@
+/* Siri and Spotlight phrases. */
+"Send clipboard with ${applicationName}" = "用 ${applicationName} 发送剪贴板";
+"Save copied files with ${applicationName}" = "用 ${applicationName} 保存复制的文件";
+"Connect with ${applicationName}" = "用 ${applicationName} 连接";
+"Show computer screen with ${applicationName}" = "用 ${applicationName} 显示电脑屏幕";
+"Play or pause with ${applicationName}" = "用 ${applicationName} 播放或暂停";
+"Lock computer with ${applicationName}" = "用 ${applicationName} 锁定电脑";

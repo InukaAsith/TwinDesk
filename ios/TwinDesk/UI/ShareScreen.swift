@@ -49,15 +49,15 @@ struct ShareScreenCard: View {
 
     private func words(_ on: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(on ? "Sharing this screen" : "Share Screen").font(.body.weight(.semibold))
-            Text(on ? "On \(core.host?.name ?? "the computer") · Entire screen until you stop" : "Show this \(Device.word)’s screen on \(core.host?.name ?? "the computer"), as in a video call")
+            Text(on ? tr("Sharing this screen") : tr("Share Screen")).font(.body.weight(.semibold))
+            Text(on ? tr("On {name} · Entire screen until you stop", ["name": core.host?.name ?? tr("the computer")]) : tr("Show this {device}’s screen on {name}, as in a video call", ["device": Device.word, "name": core.host?.name ?? tr("the computer")]))
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
     @ViewBuilder
     private func button(_ on: Bool) -> some View {
-        if on { Button("Stop") { core.mirror.stop() }.secondaryButton() }
-        else { Button("Share") { ShareScreen.open() }.primaryButton() }
+        if on { Button(tr("Stop")) { core.mirror.stop() }.secondaryButton() }
+        else { Button(tr("Share")) { ShareScreen.open() }.primaryButton() }
     }
 }

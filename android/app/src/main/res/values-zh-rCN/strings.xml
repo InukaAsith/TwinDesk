@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simplified Chinese for what Android itself shows (values/strings.xml). -->
+<resources>
+    <string name="sc_adb_short">无线调试</string>
+    <string name="sc_adb_long">开启无线调试</string>
+    <string name="sc_screen_short">Mac 屏幕</string>
+    <string name="sc_screen_long">显示 Mac 的屏幕</string>
+    <string name="input_service">TwinDesk：电脑的鼠标和键盘</string>
+    <string name="input_service_desc">在无法使用无线调试时（例如通过蓝牙），让你在 TwinDesk 中配对的电脑用其鼠标和键盘在这台手机上点按、滚动和输入。TwinDesk 只在你共享其光标时执行该电脑发送的操作；它不会读取你的屏幕。</string>
+    <string name="label_screen">Mac 屏幕</string>
+    <string name="label_remote">远程控制</string>
+    <string name="label_send">发送到电脑</string>
+    <string name="label_copy">复制到电脑</string>
+    <string name="label_open">在电脑上打开</string>
+    <string name="label_clip_tile">发送剪贴板</string>
+</resources>

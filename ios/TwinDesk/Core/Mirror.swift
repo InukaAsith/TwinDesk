@@ -27,7 +27,7 @@ final class Mirror: Feature {
     // A Mac whose AirPlay Receiver is off (want.airplayOff): the sheet says where to turn it on there.
     private(set) var airplayOff = false
     // Where Screen Mirroring goes: the receiver the computer named, else the computer's own name.
-    var airplayName: String { airplayTo ?? core.link.host?.name ?? "the computer" }
+    var airplayName: String { airplayTo ?? core.link.host?.name ?? tr("the computer") }
     private(set) var size: (w: Int, h: Int, sw: Int, sh: Int)?
     private var want: JSON? // the computer's phone.mirror.want, while its window is open
     private var key = ""
@@ -187,7 +187,7 @@ final class Mirror: Feature {
             core.send(msg("phone.mirror.state", ["on": false, "waiting": true, "key": key]))
             asking = true
             core.changed()
-            Notifier.shared.shareAsk(core.link.host?.name ?? "The computer", airplay: airplayTo)
+            Notifier.shared.shareAsk(core.link.host?.name ?? tr("The computer"), airplay: airplayTo)
         }
         return true
     }

@@ -46,6 +46,12 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
     }
 
     private inner class Bridge {
+        // The pages' text in the app's language (I18n.kt); vars: a JSON object for its {name} parts.
+        @JavascriptInterface fun tr(text: String, vars: String): String {
+            val o = runCatching { JSONObject(vars) }.getOrNull() ?: JSONObject()
+            return com.twindesk.android.tr(text, *o.keys().asSequence().map { it to o.opt(it) }.toList().toTypedArray())
+        }
+
         @JavascriptInterface fun send(json: String) {
             runCatching { core.send(JSONObject(json)) }
         }
@@ -178,7 +184,7 @@ class Screen(core: Core) : Feature(core) {
             val ok = runCatching { ctx.startActivity(android.content.Intent(ctx, ViewerActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
             if (ok) return
         }
-        Notify.screen(ctx, core.host?.name ?: "Your computer")
+        Notify.screen(ctx, core.host?.name ?: tr("Your computer"))
     }
 
     fun detach(h: WebHost) {

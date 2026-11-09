@@ -48,6 +48,7 @@ final class WebHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKU
         cfg.allowsPictureInPictureMediaPlayback = false
         let uc = WKUserContentController()
         uc.addUserScript(WKUserScript(source: Self.shim, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        uc.addUserScript(WKUserScript(source: I18n.shared.webScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         cfg.userContentController = uc
         view = WKWebView(frame: CGRect(x: 0, y: 0, width: 10, height: 10), configuration: cfg)
         super.init()

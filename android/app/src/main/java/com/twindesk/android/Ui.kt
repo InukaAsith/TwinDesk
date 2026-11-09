@@ -250,10 +250,10 @@ fun NavItem(icon: ImageVector, colors: List<Color>, label: String, selected: Boo
 // General › Appearance: Theme (System, Light, Dark) and the accent swatches, System first.
 @Composable
 fun AppearanceCard() {
-    MacCard("Appearance") {
-        MacRow("Theme", "System follows this phone’s light or dark setting", first = true) {
+    MacCard(tr("Appearance")) {
+        MacRow(tr("Theme"), tr("System follows this phone’s light or dark setting"), first = true) {
             Row(Modifier.clip(RoundedCornerShape(8.dp)).background(pal.trackOff).padding(2.dp)) {
-                for ((v, label) in listOf("system" to "System", "light" to "Light", "dark" to "Dark")) {
+                for ((v, label) in listOf("system" to tr("System"), "light" to tr("Light"), "dark" to tr("Dark"))) {
                     val on = Look.theme == v
                     Text(label, color = if (on) pal.text else pal.muted, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(if (on) pal.card else Color.Transparent)
@@ -262,8 +262,8 @@ fun AppearanceCard() {
             }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text("Accent colour", color = pal.text, fontSize = 15.sp)
-            Text("System uses this phone’s wallpaper colours", color = pal.muted, fontSize = 12.5.sp)
+            Text(tr("Accent colour"), color = pal.text, fontSize = 15.sp)
+            Text(tr("System uses this phone’s wallpaper colours"), color = pal.muted, fontSize = 12.5.sp)
             val ctx = androidx.compose.ui.platform.LocalContext.current
             val sys = Look.system(ctx, isSystemInDarkTheme())
             Row(Modifier.padding(top = 10.dp).horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -276,6 +276,29 @@ fun AppearanceCard() {
                             .background(if (c == 0L) Brush.sweepGradient(listOf(color, color, color.copy(alpha = 0.45f), color.copy(alpha = 0.45f))) else SolidColor(color))
                             .clickable { Look.pickAccent(c) },
                     )
+                }
+            }
+        }
+    }
+}
+
+// General › Language: the app's own language (I18n.kt); until one is picked, the phone's.
+@Composable
+fun LanguageCard(core: Core) {
+    MacCard(tr("Language")) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(tr("Language"), color = pal.text, fontSize = 15.sp)
+            Text(tr("The language TwinDesk uses on this phone"), color = pal.muted, fontSize = 12.5.sp)
+            // A list, not segments: five names don't fit side by side on a phone.
+            Column(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(pal.trackOff).padding(2.dp)) {
+                for ((code, label) in I18n.LANGUAGES) {
+                    val on = I18n.lang == code
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (on) pal.card else Color.Transparent)
+                        .clickable { core.setLanguage(code) }.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(I18n.FLAGS[code].orEmpty(), fontSize = 18.sp, modifier = Modifier.padding(end = 10.dp))
+                        Text(label, color = if (on) pal.text else pal.muted, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        if (on) Text("✓", color = pal.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -425,7 +448,7 @@ fun LayoutPicker(me: String, other: String, side: String, onPick: (String) -> Un
             Slot("right", Modifier.width(90.dp).height(100.dp))
         }
         Slot("bottom", Modifier.width(150.dp).height(44.dp))
-        val where = mapOf("left" to "to the left of", "right" to "to the right of", "top" to "above", "bottom" to "below")[side]
-        Text("$other is $where $me. Tap a side to move it.", color = pal.muted, fontSize = 13.sp, textAlign = TextAlign.Center)
+        val where = mapOf("left" to tr("to the left of"), "right" to tr("to the right of"), "top" to tr("above"), "bottom" to tr("below"))[side]
+        Text(tr("{other} is {where} {me}. Tap a side to move it.", "other" to other, "where" to where, "me" to me), color = pal.muted, fontSize = 13.sp, textAlign = TextAlign.Center)
     }
 }
