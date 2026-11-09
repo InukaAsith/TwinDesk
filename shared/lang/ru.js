@@ -2115,4 +2115,6 @@
   "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "Параметры системы › Дисплей и монитор: поместите новый экран с той стороны, где стоит другой компьютер.",
   "4. Share it": "4. Поделитесь им",
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Выберите выше «Повтор». Когда рабочий стол спросит, каким экраном поделиться, выберите новый.",
+  "Type as a hardware keyboard": "Печатать как физическая клавиатура",
+  "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "Клавиши приходят на телефон как с USB-клавиатуры, в раскладке, выбранной на телефоне (Настройки › Система › Клавиатура › Физическая клавиатура), поэтому все символы и буквы с диакритикой вводятся так же, как там. Нужна отладка по Wi-Fi. Выключено: клавиши передаются как коды клавиш Android в раскладке США",
 });

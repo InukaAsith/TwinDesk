@@ -2116,4 +2116,6 @@
   "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "System Settings › Display & Monitor: put the new screen on the side where the other computer is.",
   "4. Share it": "4. Share it",
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Choose Mirror above. When your desktop asks which screen to share, pick the new one.",
+  "Type as a hardware keyboard": "Type as a hardware keyboard",
+  "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout",
 });

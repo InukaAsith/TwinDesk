@@ -2116,4 +2116,6 @@
   "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "系统设置 › 显示和监视器：把新屏幕放在另一台电脑所在的一侧。",
   "4. Share it": "4. 共享它",
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "在上方选择“镜像”。当桌面询问要共享哪个屏幕时，选择新屏幕。",
+  "Type as a hardware keyboard": "作为实体键盘输入",
+  "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "按键像来自 USB 键盘一样到达手机，并使用手机上设置的布局（设置 › 系统 › 键盘 › 实体键盘），因此每个符号和带重音的字母都与手机上一致。需要无线调试。关闭时：按键以美式布局的 Android 键码发送",
 });

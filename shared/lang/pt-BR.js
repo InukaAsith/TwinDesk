@@ -2115,4 +2115,6 @@
   "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "Configurações do sistema › Tela e monitor: coloque a nova tela do lado em que fica o outro computador.",
   "4. Share it": "4. Compartilhe-a",
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Escolha Espelhar acima. Quando sua área de trabalho perguntar qual tela compartilhar, escolha a nova.",
+  "Type as a hardware keyboard": "Digitar como teclado físico",
+  "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "As teclas chegam ao celular como de um teclado USB, no layout definido nele (Configurações › Sistema › Teclado › Teclado físico), então cada símbolo e letra acentuada sai como sai lá. Requer depuração sem fio. Desligado: as teclas vão como códigos de tecla do Android no layout dos EUA",
 });

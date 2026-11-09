@@ -208,6 +208,7 @@ function normalize(s) {
       // Keys in a phone window and on the phone (shared/phonechat.js): Enter sends in WhatsApp,
       // Instagram and Telegram (Shift+Enter a new line); the arrow keys swipe the screen.
       enterSends: bool(ph.enterSends, true),
+      uhid: bool(ph.uhid, false), // Type as a hardware keyboard (shared/uhidkbd.js)
       arrowSwipe: bool(ph.arrowSwipe, false),
     },
     // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);

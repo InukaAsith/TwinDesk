@@ -2115,4 +2115,6 @@
   "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "Sistem Ayarları › Ekran ve Monitör: yeni ekranı diğer bilgisayarın bulunduğu tarafa koyun.",
   "4. Share it": "4. Paylaşın",
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Yukarıda Yansıt’ı seçin. Masaüstünüz hangi ekranın paylaşılacağını sorduğunda yenisini seçin.",
+  "Type as a hardware keyboard": "Donanım klavyesi gibi yaz",
+  "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "Tuşlar telefona bir USB klavyeden geliyormuş gibi, telefonda ayarlı düzende ulaşır (Ayarlar › Sistem › Klavye › Fiziksel klavye); böylece her sembol ve aksanlı harf orada olduğu gibi çıkar. Kablosuz hata ayıklama gerekir. Kapalı: tuşlar ABD düzeninde Android tuş kodları olarak gider",
 });
