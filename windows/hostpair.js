@@ -47,6 +47,9 @@ class Pairing extends EventEmitter {
   }
 
   forget(id) {
+    // A pairing from it still going would add it straight back when it finishes: it ends here.
+    const p = this.pending;
+    if (p && p.id === id) { this._clear(); this.server.fail(p.ctx, P.E.PAIR_REFUSED, 'The pairing was forgotten'); }
     this.paired = this.paired.filter((x) => x.id !== id);
     this._save();
     this.server.closeDevice(id, P.E.BAD_TOKEN, 'This computer forgot the pairing');
