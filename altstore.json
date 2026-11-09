@@ -1,0 +1,55 @@
+{
+  "name": "TwinDesk",
+  "identifier": "com.twindesk.source",
+  "subtitle": "Your iPhone and computers, working as one desk.",
+  "description": "The official TwinDesk source. TwinDesk connects an iPhone or iPad to a Mac, Windows or Linux computer: its screen, files, clipboard, notifications, sound, camera and remote control, over Wi-Fi, USB or Bluetooth. Free and open source, no account.",
+  "iconURL": "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/ios/TwinDesk/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "headerURL": "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/v30-banner.jpg",
+  "website": "https://twin-desk.vercel.app",
+  "tintColor": "#5E5CE6",
+  "featuredApps": ["com.twindesk.ios"],
+  "apps": [
+    {
+      "name": "TwinDesk",
+      "bundleIdentifier": "com.twindesk.ios",
+      "developerName": "Inuka Asith",
+      "subtitle": "Use your iPhone and computers together.",
+      "localizedDescription": "TwinDesk turns your iPhone or iPad and your Mac, Windows PC or Linux computer into one desk.\n\n• See and control the computer's screen, mirrored or as a second display, with touch, a touchpad mode and the Apple Pencil as a pen.\n• Share the iPhone's screen in a window on the computer.\n• Send files both ways, Send to Computer in the share sheet, and the computer's folder in Files.\n• The iPhone's photos on the computer.\n• Clipboard both ways, the computer's notifications, its sound on the iPhone, the iPhone's camera and microphone on the computer.\n• Remote: touchpad and keyboard, gamepad, voice typing. Media controls on the Lock Screen.\n• Pair over Wi-Fi, a USB cable or Bluetooth. Shortcuts and Back Tap actions.\n\nNeeds TwinDesk on the computer: https://github.com/InukaAsith/TwinDesk",
+      "iconURL": "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/ios/TwinDesk/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+      "tintColor": "#5E5CE6",
+      "category": "utilities",
+      "screenshots": [
+        "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/ios/screen-1.jpg",
+        "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/ios/screen-2.jpg",
+        "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/ios/screen-3.jpg",
+        "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/ios/screen-4.jpg",
+        "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/ios/screen-5.jpg",
+        "https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/.github/assets/ios/screen-6.jpg"
+      ],
+      "versions": [
+        {
+          "version": "3.0.0",
+          "buildVersion": "1",
+          "date": "2026-11-09",
+          "localizedDescription": "The first TwinDesk for iPhone and iPad: every page of the Android app, native on iOS. Pairs with Mac, Windows and Linux, and with other phones.",
+          "downloadURL": "https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa",
+          "size": 2732258,
+          "minOSVersion": "16.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSLocalNetworkUsageDescription": "TwinDesk finds your computers on this network and connects to them.",
+          "NSBluetoothAlwaysUsageDescription": "TwinDesk keeps a Bluetooth link to your computer, so its notifications reach you in the background and the session goes on away from Wi-Fi.",
+          "NSLocationWhenInUseUsageDescription": "TwinDesk uses your rough location (no GPS) only to stay connected to your computer while it isn't on screen. It never stores or sends where you are.",
+          "NSLocationAlwaysAndWhenInUseUsageDescription": "TwinDesk uses your rough location (no GPS) only to stay connected to your computer while it isn't on screen. It never stores or sends where you are.",
+          "NSPhotoLibraryUsageDescription": "Send photos and videos to your computer, and let it show and save them (Photos on the computer, while you have it on).",
+          "NSCameraUsageDescription": "Use this camera on your computer (its Camera tab and virtual camera), while you let it.",
+          "NSMicrophoneUsageDescription": "Send this microphone's sound to your computer, while you let it."
+        }
+      }
+    }
+  ],
+  "news": []
+}
