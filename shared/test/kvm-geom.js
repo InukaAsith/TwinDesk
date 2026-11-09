@@ -132,4 +132,32 @@ const pc = [{ id: 'pc', x: 0, y: 0, w: 1920, h: 1080 }];
   assert.deepStrictEqual(G.mirror({ side: 'top', along: 30 }), { side: 'bottom', along: -30 });
 }
 
+// Drag side follows the nearest possible placement, including a display tucked under another.
+{
+  const laptopAndTv = [
+    { id: 'laptop', x: 2300, y: 1190, w: 1620, h: 1040 },
+    { id: 'tv', x: 3500, y: 0, w: 2110, h: 1150 },
+  ];
+  const mini = [
+    { id: 'mini-1', x: 0, y: 500, w: 1370, h: 750 },
+    { id: 'arzopa', x: 1410, y: 0, w: 2070, h: 1150 },
+  ];
+  // The Arzopa is above the laptop and narrowly left of the TV. The centre-based selector
+  // considers this left of the entire local desktop and cannot select this top contact.
+  const x = 0, y = 40;
+  assert.strictEqual(G.closestSide(laptopAndTv, mini, x, y, 'left'), 'top');
+  const along = G.snap(laptopAndTv, mini, 'top', x - G.bounds(laptopAndTv).x);
+  assert.deepStrictEqual(G.contact(laptopAndTv, mini, { side: 'top', along }).map((c) => [c.mine.display, c.theirs.display]), [['laptop', 'arzopa']]);
+
+  const a = [{ id: 'a', x: 0, y: 0, w: 1000, h: 1000 }];
+  const b = [{ id: 'b', x: 0, y: 0, w: 600, h: 600 }];
+  assert.strictEqual(G.closestSide(a, b, -600, 200, 'top'), 'left');
+  assert.strictEqual(G.closestSide(a, b, 1000, 200, 'top'), 'right');
+  assert.strictEqual(G.closestSide(a, b, 200, -600, 'left'), 'top');
+  assert.strictEqual(G.closestSide(a, b, 200, 1000, 'left'), 'bottom');
+  assert.strictEqual(G.closestSide(a, b, -600, -600, 'left'), 'left', 'stable at a corner');
+  assert.strictEqual(G.closestSide(a, b, -600, -600, 'top'), 'top', 'stable at a corner from the other side');
+  assert.strictEqual(G.closestSide([], b, 0, 0, 'top'), 'top', 'unknown displays');
+}
+
 console.log('kvm-geom: ok');
