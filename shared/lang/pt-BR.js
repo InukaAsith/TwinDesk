@@ -2106,4 +2106,13 @@
   "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "Quando o outro dispositivo não está nesta rede, o TwinDesk tenta o endereço dele no Tailscale",
   "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "Para conectar fora de casa, inclusive de um celular nos dados móveis: instale o Tailscale nos dois dispositivos e entre na mesma conta. Pareie-os uma vez na mesma rede, ou com Conectar por endereço e o endereço Tailscale do outro (100.x.y.z). Depois, com o Tailscale ligado, o TwinDesk reconecta por ele quando o outro dispositivo não está nesta rede.",
   "How to set it up": "Como configurar",
+  "Extend on KDE Plasma": "Estender no KDE Plasma",
+  "1. Install krfb": "1. Instale o krfb",
+  "From Discover, or in a terminal: {command}": "Pelo Discover, ou em um terminal: {command}",
+  "2. Make the extra screen": "2. Crie a tela extra",
+  "Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.": "Execute {command} e deixe rodando: a tela dura enquanto ele rodar. Ele também inicia um servidor VNC nessa porta, então escolha sua própria senha e mantenha a porta fechada para outras redes. Use a resolução do outro computador.",
+  "3. Place it": "3. Posicione-a",
+  "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "Configurações do sistema › Tela e monitor: coloque a nova tela do lado em que fica o outro computador.",
+  "4. Share it": "4. Compartilhe-a",
+  "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Escolha Espelhar acima. Quando sua área de trabalho perguntar qual tela compartilhar, escolha a nova.",
 });

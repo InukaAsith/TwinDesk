@@ -2107,4 +2107,13 @@
   "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "当另一台设备不在此网络上时，TwinDesk 会尝试它的 Tailscale 地址",
   "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "要在外出时连接（包括使用移动数据的手机）：在两台设备上安装 Tailscale 并登录同一账户。在同一网络上配对一次，或使用“按地址连接”并输入另一台设备的 Tailscale 地址（100.x.y.z）。之后只要 Tailscale 开着，当另一台设备不在此网络上时，TwinDesk 会通过它重新连接。",
   "How to set it up": "如何设置",
+  "Extend on KDE Plasma": "在 KDE Plasma 上扩展",
+  "1. Install krfb": "1. 安装 krfb",
+  "From Discover, or in a terminal: {command}": "通过 Discover，或在终端中运行：{command}",
+  "2. Make the extra screen": "2. 创建额外的屏幕",
+  "Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.": "运行 {command} 并保持运行：屏幕在它运行期间一直存在。它还会在该端口启动 VNC 服务器，因此请设置你自己的密码，并且不要向其他网络开放该端口。分辨率请使用另一台电脑的分辨率。",
+  "3. Place it": "3. 摆放位置",
+  "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "系统设置 › 显示和监视器：把新屏幕放在另一台电脑所在的一侧。",
+  "4. Share it": "4. 共享它",
+  "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "在上方选择“镜像”。当桌面询问要共享哪个屏幕时，选择新屏幕。",
 });

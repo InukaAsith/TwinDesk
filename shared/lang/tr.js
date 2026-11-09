@@ -2106,4 +2106,13 @@
   "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "Diğer cihaz bu ağda değilse TwinDesk onun Tailscale adresini dener",
   "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "Evden uzakta, mobil verideki bir telefondan da bağlanmak için: Tailscale’i iki cihaza kurun ve aynı hesapla oturum açın. Onları bir kez aynı ağda ya da diğerinin Tailscale adresiyle (100.x.y.z) Adresle bağlan üzerinden eşleyin. Sonrasında Tailscale açıkken, diğer cihaz bu ağda değilse TwinDesk onun üzerinden yeniden bağlanır.",
   "How to set it up": "Nasıl kurulur",
+  "Extend on KDE Plasma": "KDE Plasma’da genişletme",
+  "1. Install krfb": "1. krfb’yi kurun",
+  "From Discover, or in a terminal: {command}": "Discover’dan ya da bir terminalde: {command}",
+  "2. Make the extra screen": "2. Ek ekranı oluşturun",
+  "Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.": "{command} komutunu çalıştırın ve açık bırakın: ekran o çalıştığı sürece kalır. Bu komut o bağlantı noktasında bir VNC sunucusu da başlatır; kendi parolanızı seçin ve bağlantı noktasını diğer ağlara kapalı tutun. Diğer bilgisayarın çözünürlüğünü kullanın.",
+  "3. Place it": "3. Yerleştirin",
+  "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "Sistem Ayarları › Ekran ve Monitör: yeni ekranı diğer bilgisayarın bulunduğu tarafa koyun.",
+  "4. Share it": "4. Paylaşın",
+  "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Yukarıda Yansıt’ı seçin. Masaüstünüz hangi ekranın paylaşılacağını sorduğunda yenisini seçin.",
 });

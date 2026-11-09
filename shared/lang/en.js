@@ -2107,4 +2107,13 @@
   "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "When the other device isn’t on this network, TwinDesk tries its Tailscale address",
   "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.",
   "How to set it up": "How to set it up",
+  "Extend on KDE Plasma": "Extend on KDE Plasma",
+  "1. Install krfb": "1. Install krfb",
+  "From Discover, or in a terminal: {command}": "From Discover, or in a terminal: {command}",
+  "2. Make the extra screen": "2. Make the extra screen",
+  "Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.": "Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.",
+  "3. Place it": "3. Place it",
+  "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "System Settings › Display & Monitor: put the new screen on the side where the other computer is.",
+  "4. Share it": "4. Share it",
+  "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Choose Mirror above. When your desktop asks which screen to share, pick the new one.",
 });

@@ -2106,4 +2106,13 @@
   "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "Если другое устройство не в этой сети, TwinDesk пробует его адрес в Tailscale",
   "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "Чтобы подключаться вне дома, в том числе с телефона через мобильный интернет: установите Tailscale на оба устройства и войдите в одну учётную запись. Один раз выполните сопряжение в одной сети или через «Подключиться по адресу» с адресом другого устройства в Tailscale (100.x.y.z). После этого, пока Tailscale включён, TwinDesk переподключается через него, если другого устройства нет в этой сети.",
   "How to set it up": "Как настроить",
+  "Extend on KDE Plasma": "Расширение в KDE Plasma",
+  "1. Install krfb": "1. Установите krfb",
+  "From Discover, or in a terminal: {command}": "Через Discover или в терминале: {command}",
+  "2. Make the extra screen": "2. Создайте дополнительный экран",
+  "Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.": "Запустите {command} и не закрывайте: экран существует, пока команда работает. Она также запускает VNC-сервер на этом порту, поэтому задайте свой пароль и не открывайте порт для других сетей. Укажите разрешение другого компьютера.",
+  "3. Place it": "3. Расположите его",
+  "System Settings › Display & Monitor: put the new screen on the side where the other computer is.": "Параметры системы › Дисплей и монитор: поместите новый экран с той стороны, где стоит другой компьютер.",
+  "4. Share it": "4. Поделитесь им",
+  "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Выберите выше «Повтор». Когда рабочий стол спросит, каким экраном поделиться, выберите новый.",
 });
