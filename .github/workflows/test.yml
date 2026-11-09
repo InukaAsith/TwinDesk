@@ -24,7 +24,11 @@ jobs:
         with:
           node-version: 22
 
-      # movebench.js is a benchmark, not part of the test run (it needs ws, which CI does not install).
+      # The apps' one dependency the tests load (fx2-welcome, quiet-servers), at the root so shared/ finds it.
+      - name: Install ws
+        run: npm install --no-save --no-package-lock --ignore-scripts ws@8.18.0
+
+      # movebench.js is a benchmark, not part of the test run.
       - name: Shared tests
         run: |
           fail=0

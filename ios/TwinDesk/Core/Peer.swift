@@ -67,6 +67,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let at = Date()
     }
     private(set) var pairing: PairReq? // a phone pairing with us: the code, Allow / Deny
+    fileprivate var pairFails: [String: [Date]] = [:] // failed pairings per address (pairFailed)
     private(set) var asked: Found? // a phone asked us to host, not paired yet
     private var guests: [String: JSON] {
         get { (UserDefaults.standard.dictionary(forKey: "peer.guests") as? [String: JSON]) ?? [:] }
@@ -685,7 +686,6 @@ extension Peer {
 
     // Failed pairings per address, as shared/pairfail.js: after 5 in 10 minutes that address can't
     // start another for a while, so a phone on the network can't keep popping the dialog.
-    private var pairFails: [String: [Date]] = [:]
     private func pairFailed(_ ws: PeerServer.Ws) {
         let a = ws.address
         guard !a.isEmpty, a != "127.0.0.1" else { return }
