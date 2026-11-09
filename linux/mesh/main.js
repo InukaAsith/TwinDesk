@@ -167,6 +167,7 @@ function loadDevice() {
 
 function start() {
   theme.start();
+  autostart.refresh(); // an older entry gets the output redirect (#162)
   device = loadDevice();
   settings = loadSettings(store); // settings.json and the mesh's own in multi.json (settings.js)
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
