@@ -254,7 +254,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // WiredReceiver): take the session through the cable, also from a Wi-Fi session with it. Not
     // paired with it yet: pair through the cable (no Wi-Fi needed), then the session follows.
     fun connectWired(id: String, port: Int, nonce: String, name: String) {
-        if (peer.connected) { Log.i("TwinDesk", "USB: ${name.ifEmpty { id }} found, but a phone holds the session"); return }
+        if (peer.connected) { Log.i("TwinDesk", "USB: ${name.ifEmpty { id }} found, but another phone is connected"); return }
         val h = store.hosts().find { it.id == id }
         if (h == null) {
             if (link.pair != null && link.pair?.phase != "failed") { Log.i("TwinDesk", "USB: already pairing"); return }

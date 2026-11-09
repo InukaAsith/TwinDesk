@@ -175,7 +175,7 @@ final class DevCtl: Feature {
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
             if n >= 30 { t.invalidate(); self?.stopRing() }
         }
-        Notifier.shared.note("ring", "\(core.host?.name ?? "Your computer") is looking for this \(Device.word)", "Open TwinDesk to stop the sound.", sound: true)
+        Notifier.shared.note("ring", "\(core.host?.name ?? "Your computer") is ringing this \(Device.word)", "Open TwinDesk to stop the sound.", sound: true)
         core.changed()
     }
 

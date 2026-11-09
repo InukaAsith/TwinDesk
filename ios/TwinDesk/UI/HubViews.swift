@@ -15,8 +15,8 @@ struct PhotosView: View {
             Columns {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "photo.fill.on.rectangle.fill", color: Page.photos.color, title: "Photos on the computer",
-                               detail: "Its Photos page shows this \(Device.word)’s photos and videos, newest first; Save copies them there")
-                    ToggleRow(title: "Let \(core.host?.name ?? "the computer") see them", detail: access,
+                               detail: "The Photos page on the computer shows this \(Device.word)’s photos and videos, newest first, and can save them")
+                    ToggleRow(title: "Allow \(core.host?.name ?? "the computer") to view photos", detail: access,
                               on: Binding(get: { _ = core.tick; return core.hub.mediaOn }, set: { core.hub.set("media", $0) }))
                         .disabled(!core.connected || !core.hub.peer)
                     if PhotoAccess.now == .ask {
@@ -29,8 +29,8 @@ struct PhotosView: View {
             } right: {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "folder.fill", color: TDColor.accent, title: "TwinDesk’s folder on the computer",
-                               detail: "Its Phone Files page browses Files › On My \(Device.word) › TwinDesk: open, copy there, upload into it, new folders, rename, delete")
-                    ToggleRow(title: "Let \(core.host?.name ?? "the computer") browse it", on: Binding(get: { _ = core.tick; return core.hub.filesOn }, set: { core.hub.set("files", $0) }))
+                               detail: "The Phone Files page on the computer browses Files › On My \(Device.word) › TwinDesk: open, copy, upload, create folders, rename and delete")
+                    ToggleRow(title: "Allow \(core.host?.name ?? "the computer") to browse this folder", on: Binding(get: { _ = core.tick; return core.hub.filesOn }, set: { core.hub.set("files", $0) }))
                         .disabled(!core.connected || !core.hub.peer)
                 }
                 .glassCard()
@@ -41,9 +41,9 @@ struct PhotosView: View {
     private var access: String {
         switch PhotoAccess.now {
         case .ok: return "All photos"
-        case .partial: return "Only the photos you picked (Settings › TwinDesk › Photos)"
+        case .partial: return "Limited to selected photos (Settings › TwinDesk › Photos)"
         case .ask: return "iOS asks first"
-        case .denied: return "Not allowed: Settings › TwinDesk › Photos"
+        case .denied: return "Not allowed. Change in Settings › TwinDesk › Photos"
         }
     }
 }
@@ -57,15 +57,15 @@ struct CameraView: View {
             Columns {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "video.fill", color: Page.camera.color, title: "This \(Device.word)’s camera on \(core.host?.name ?? "the computer")",
-                               detail: "Its Camera tab shows it, and with Virtual camera on there, Zoom, Teams, FaceTime and the browser can pick it")
-                    ToggleRow(title: "Let \(core.host?.name ?? "the computer") see this camera", detail: permission,
+                               detail: "Shown on the computer’s Camera tab. With Virtual camera on, it’s available in Zoom, Teams, FaceTime and browsers")
+                    ToggleRow(title: "Allow \(core.host?.name ?? "the computer") to use this camera", detail: permission,
                               on: Binding(get: { _ = core.tick; return core.camera.share }, set: { core.camera.setShare($0) }))
                     HStack {
                         Button { core.camera.flip() } label: { Label(core.camera.front ? "Front camera" : "Back camera", systemImage: "arrow.triangle.2.circlepath.camera") }
                             .secondaryButton()
                         if core.camera.on { Button("Stop") { core.camera.stop(tell: true) }.secondaryButton() }
                     }
-                    Text("Start it from the computer’s Camera tab. iOS runs the camera only while TwinDesk is on screen.").font(.caption).foregroundStyle(.secondary)
+                    Text("Start it from the Camera tab on the computer. iOS allows camera use only while TwinDesk is on screen.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
             } right: {
@@ -80,7 +80,7 @@ struct CameraView: View {
                         }
                         .onDisappear { if core.camera.on { HiddenWeb.attach(h) } }
                 } else if core.camera.status == "failed" {
-                    Label(core.camera.error.isEmpty ? "It didn’t start" : core.camera.error, systemImage: "exclamationmark.triangle")
+                    Label(core.camera.error.isEmpty ? "Couldn’t start the camera" : core.camera.error, systemImage: "exclamationmark.triangle")
                         .font(.footnote).foregroundStyle(TDColor.warn).glassCard()
                 }
             }
@@ -89,9 +89,9 @@ struct CameraView: View {
 
     private var permission: String {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: return "Off until the computer asks; then on while it shows it"
+        case .authorized: return "Turns on when the computer requests it, and off when it stops"
         case .notDetermined: return "iOS asks first"
-        default: return "Not allowed: Settings › TwinDesk › Camera"
+        default: return "Not allowed. Change in Settings › TwinDesk › Camera"
         }
     }
 }

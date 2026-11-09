@@ -526,11 +526,11 @@ class Files(core: Core) : Feature(core) {
         if (b.target.onDone != null) {
             Notify.cancelFiles(core.ctx, b.key)
             b.target.onDone.invoke(b)
-            if (b.target.where.isNotEmpty()) Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Not everything arrived from $from", "In ${b.target.where}", null, null)
+            if (b.target.where.isNotEmpty()) Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Some files didn’t arrive from $from", "In ${b.target.where}", null, null)
         } else {
             val open = if (b.placed.size == 1) Notify.viewIntent(b.placed[0].first, b.placed[0].second)
             else Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Not everything arrived from $from", if (b.ok) "In Downloads › TwinDesk. Tap to open." else "$what is incomplete", null, open)
+            Notify.files(core.ctx, b.key, if (b.ok) "$what from $from" else "Some files didn’t arrive from $from", if (b.ok) "In Downloads › TwinDesk. Tap to open." else "$what is incomplete", null, open)
         }
         core.changed()
     }
@@ -795,7 +795,7 @@ class Files(core: Core) : Feature(core) {
         val b = outBatches.remove(m.optString("batch")) ?: return
         outgoing.removeIf { it.batch == b.id }
         val to = core.host?.name ?: "your computer"
-        if (b.shown) Notify.files(core.ctx, b.key, if (m.optBoolean("ok")) "Sent ${b.name}" else "Not everything arrived", "On $to", null, null, up = true)
+        if (b.shown) Notify.files(core.ctx, b.key, if (m.optBoolean("ok")) "Sent ${b.name}" else "Some files weren’t delivered", "On $to", null, null, up = true)
         recent.add(0, if (m.optBoolean("ok")) "Sent ${b.name} to $to" else "${b.name} didn’t all arrive on $to")
         while (recent.size > 20) recent.removeAt(recent.size - 1)
         core.changed()

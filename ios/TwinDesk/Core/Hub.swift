@@ -84,7 +84,7 @@ final class Hub: Feature {
         case "hub.ask":
             if m.str("what") == "media" {
                 if PhotoAccess.now == .ask && UIApplication.shared.applicationState == .active { askPhotos() }
-                else { Notifier.shared.note("hub.ask", "Allow Photos for TwinDesk", "Open TwinDesk › Photos to let \(core.host?.name ?? "the computer") see your photos.", sound: true) }
+                else { Notifier.shared.note("hub.ask", "Allow Photos for TwinDesk", "Open TwinDesk › Photos to allow \(core.host?.name ?? "the computer") to view your photos.", sound: true) }
             }
         case "call.do": core.send(msg("call.done", ["a": m.str("a", max: 20), "ok": false, "error": "off"]))
         case "sms.send": core.send(msg("sms.sent", ["ref": m.str("ref", max: 60), "ok": false, "error": "off"]))

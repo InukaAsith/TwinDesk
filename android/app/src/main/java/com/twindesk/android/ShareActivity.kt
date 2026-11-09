@@ -70,7 +70,7 @@ class ShareActivity : Activity() {
                 toast(
                     when {
                         !ok -> "Couldn’t send to ${host.name}"
-                        copy -> "Copied for ${host.name}: paste there with ⌃⌥V"
+                        copy -> "Copied for ${host.name}. Paste on it with ⌃⌥V"
                         else -> "Sending ${Files.plural(items.size, "item")} to ${host.name}"
                     },
                 )
@@ -96,7 +96,7 @@ class ClipActivity : Activity() {
             core.host == null -> "Not connected to your computer"
             uri != null -> {
                 val items = core.files.describe((0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri })
-                if (core.fclip.copy(items)) "Copied for $name: paste there with ⌃⌥V" else "Couldn’t copy that"
+                if (core.fclip.copy(items)) "Copied for $name. Paste on it with ⌃⌥V" else "Couldn’t copy that"
             }
             text.isNullOrEmpty() -> "The clipboard is empty"
             core.clip.sendText(text) -> "Clipboard sent to $name"

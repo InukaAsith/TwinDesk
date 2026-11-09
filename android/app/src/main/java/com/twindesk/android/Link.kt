@@ -365,7 +365,7 @@ class Link(
         alt = null
         lastRxOf.remove(a)
         a.close(1000, null)
-        Log.i("TwinDesk", "Bluetooth fallback closed: the session stays on Wi-Fi")
+        Log.i("TwinDesk", "Bluetooth fallback closed. The connection remains on Wi-Fi")
         events.onChange()
     }
 
@@ -449,7 +449,7 @@ class Link(
         val p = pair ?: return
         val nonce = m.optString("nonce")
         if (mode != "pair" || nw.isEmpty() || !Regex("^[0-9a-f]{32,128}$").matches(nonce) || nonce.length % 2 != 0) {
-            return pairFailed("The computer sent a bad pairing message.")
+            return pairFailed("The computer sent an invalid pairing response.")
         }
         raw(msg(Proto.T.PAIR_REVEAL, "nonce" to nw))
         pair = p.copy(phase = "code", code = Proto.sasCode(seenFp, nw, nonce))
@@ -465,7 +465,7 @@ class Link(
         if (mode != "pair" || p.phase != "waiting") return
         val token = m.optString("token")
         val id = m.optString("macId")
-        if (token.isEmpty() || id.isEmpty()) return pairFailed("The computer sent a bad pairing message.")
+        if (token.isEmpty() || id.isEmpty()) return pairFailed("The computer sent an invalid pairing response.")
         // Through the cable the address is this phone's own end of adb reverse: the computer's
         // network address comes from discovery when it's seen (Core.connect), else the cable again.
         // Through Bluetooth likewise: no network address yet (Core keeps the pipe for it).
@@ -532,14 +532,14 @@ class Link(
                         else if (!probed) { probed = true; quietPing = now; w.send(msg(Proto.T.PING, "ts" to now).toString()); continue }
                         else if (now - probeAt > Proto.TIMEOUT_MS) {
                             Log.i("TwinDesk", "no answer on a quiet link, closing")
-                            if (alt == null) message = "Stopped answering"
+                            if (alt == null) message = "Not responding"
                             w.cancel()
                             continue
                         } else continue
                     }
                     if (now - rx > QUIET_TIMEOUT_MS) {
                         Log.i("TwinDesk", "network socket silent for ${now - rx} ms on a quiet link, closing")
-                        if (w === ws && alt == null) message = "Stopped answering"
+                        if (w === ws && alt == null) message = "Not responding"
                         w.cancel()
                     } else if (now - maxOf(quietPing, quietSince) >= QUIET_PING_MS) {
                         quietPing = now
@@ -549,7 +549,7 @@ class Link(
                 }
                 if (now - rx > limit) {
                     Log.i("TwinDesk", "${if (onBle) "Bluetooth" else "network"} socket silent for ${now - rx} ms, closing")
-                    if (w === ws && alt == null) message = "Stopped answering"
+                    if (w === ws && alt == null) message = "Not responding"
                     w.cancel()
                 } else w.send(msg(Proto.T.PING, "ts" to now).toString())
             }
@@ -560,7 +560,7 @@ class Link(
         Proto.E.PAIR_REFUSED to "Pairing was refused.",
         Proto.E.PAIR_TIMEOUT to "Pairing timed out.",
         Proto.E.BUSY to "That computer is busy pairing with another device.",
-        Proto.E.VERSION_MISMATCH to "That computer runs a different TwinDesk version. Update both.",
+        Proto.E.VERSION_MISMATCH to "That computer runs a different version of TwinDesk. Update both devices.",
     )
 
     private fun onError(m: JSONObject) {

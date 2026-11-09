@@ -392,7 +392,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 val last = asked
                 if (last != null && last.id == f.id) return
                 asked = f
-                Notify.peer(ctx, "${f.name} wants to connect", "Open TwinDesk to let it connect to this phone.")
+                Notify.peer(ctx, "${f.name} wants to connect", "Open TwinDesk to allow the connection.")
                 core.changed()
             }
             "peer.hosting" -> {

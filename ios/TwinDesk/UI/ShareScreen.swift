@@ -50,7 +50,7 @@ struct ShareScreenCard: View {
     private func words(_ on: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(on ? "Sharing this screen" : "Share Screen").font(.body.weight(.semibold))
-            Text(on ? "On \(core.host?.name ?? "the computer") · every app, until you stop" : "Show this \(Device.word) on \(core.host?.name ?? "the computer"), like presenting in a call")
+            Text(on ? "On \(core.host?.name ?? "the computer") · Entire screen until you stop" : "Show this \(Device.word)’s screen on \(core.host?.name ?? "the computer"), as in a video call")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

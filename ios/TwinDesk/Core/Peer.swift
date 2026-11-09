@@ -156,7 +156,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             if hostOn || guests[f.id] != nil || paired().contains(where: { $0.id == f.id }) { return allowHost(f) }
             if asked?.id == f.id { return }
             asked = f
-            Notifier.shared.note("peer.ask", "\(f.name) wants to connect", "Open TwinDesk to let it connect to this \(Device.word).")
+            Notifier.shared.note("peer.ask", "\(f.name) requests a connection", "Open TwinDesk to allow the connection.")
             changed()
         case "peer.hosting":
             let p = m.int("port")
@@ -550,7 +550,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             reply(["ok": true, "n": ids.count])
         case "screen.start":
             guard core.mirror.sharing else {
-                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk, then ask again there.")
+                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk, then request it again on that device.")
                 return reply(["error": "Start Share Screen on \(core.store.deviceName) first (TwinDesk › Share screen), then try again."])
             }
             reply(["ok": true])

@@ -20,7 +20,7 @@ struct MirrorAskSheet: View {
                 VStack(spacing: 6) {
                     Text("\(core.host?.name ?? "The computer") wants to see this screen")
                         .font(.title3.bold()).multilineTextAlignment(.center)
-                    Text("Share it with TwinDesk, or mirror it with AirPlay.")
+                    Text("Share it with TwinDesk, or mirror it using AirPlay.")
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 VStack(spacing: 10) {
@@ -78,7 +78,7 @@ struct MirrorGuide: View {
                         Text("\(i + 1)").font(.caption.bold()).foregroundStyle(.white)
                             .frame(width: 22, height: 22)
                             .background(step == i ? TDColor.accent : TDColor.muted.opacity(0.5), in: Circle())
-                        Text(i == 2 ? "Pick \(target)" : steps[i])
+                        Text(i == 2 ? "Select \(target)" : steps[i])
                             .font(.subheadline.weight(step == i ? .semibold : .regular))
                             .foregroundStyle(step == i ? TDColor.text : .secondary)
                     }
@@ -127,7 +127,7 @@ struct MirrorGuide: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
-        .accessibilityLabel("Open Control Center, tap Screen Mirroring, pick \(target)")
+        .accessibilityLabel("Open Control Center, tap Screen Mirroring, select \(target)")
     }
 
     private func fingerAt(_ w: CGFloat, _ h: CGFloat) -> CGPoint {

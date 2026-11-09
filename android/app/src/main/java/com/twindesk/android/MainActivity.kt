@@ -739,7 +739,7 @@ private fun WifiGate(core: Core, what: String) {
     Note(
         when {
             moving -> "$what is only available over Wi-Fi Direct. Connecting…"
-            n.state == "failed" -> "$what is only available over Wi-Fi Direct. ${n.error.ifEmpty { "Wi-Fi Direct didn’t come up" }}"
+            n.state == "failed" -> "$what is only available over Wi-Fi Direct. ${n.error.ifEmpty { "Wi-Fi Direct couldn’t start" }}"
             else -> "$what requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth."
         },
         "warn",
@@ -768,7 +768,7 @@ private fun HubHead(core: Core, v: Int, what: String, title: String, desc: Strin
     when {
         perm == "none" && what == "files" -> Note("File access requires Android 11 or later. You can still mount this phone on $name using ADB.", "warn")
         perm == "none" -> Note("$title requires the full version of TwinDesk, as Android restricts downloaded apps from reading messages. Once wireless debugging is set up, install it from the Phone page on $name. Your settings and pairings are kept.", "warn")
-        !on -> Note("Off. Turn it on here or on $name.")
+        !on -> Note("Off. Turn it on on this phone or on $name.")
         perm == "ask" -> {
             Note(
                 when (what) {
@@ -961,7 +961,7 @@ private fun CameraPage(core: Core, v: Int) {
             "On $name",
             when {
                 !canShow -> "Requires wireless debugging. Set it up from Overview."
-                cam.error.isNotEmpty() -> "It stopped: ${cam.error}"
+                cam.error.isNotEmpty() -> "Stopped: ${cam.error}"
                 cam.on && cam.virtual -> "Available as “TwinDesk Camera”. Choose it in Zoom, Teams or your browser."
                 cam.on -> "Shown on the Camera page in TwinDesk. Turn on Virtual camera there to use it in other apps."
                 else -> "Off"
