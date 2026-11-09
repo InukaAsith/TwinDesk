@@ -11,16 +11,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/android.png" width="300" alt="Get it for Android"></a>
-  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/altstore.png" width="300" alt="Add to AltStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/windows.png" width="300" alt="Download for Windows"></a>
-<br>
-  <a href="#homebrew"><img src=".github/assets/buttons/brew.png" width="300" alt="Install on Mac with Homebrew"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/dmg.png" width="300" alt="Download for macOS (Apple silicon)"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/android.png" width="280" alt="Get it for Android"></a>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/altstore.png" width="280" alt="Add to AltStore"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/windows.png" width="280" alt="Download for Windows"></a>
+  <br>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/dmg.png" width="280" alt="Download for macOS (Apple silicon)"></a>
+  <a href="#homebrew"><img src=".github/assets/buttons/brew.png" width="280" alt="Install with Homebrew"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src=".github/assets/buttons/linux.png" width="280" alt="Download for Linux (AppImage)"></a>
 </p>
 
 <p align="center">
-  <sub>Linux, Intel Macs, Windows on ARM and everything else: <a href="#download"><b>all downloads</b></a> · iPhone without an app: <a href="#twindesk-web"><b>TwinDesk Web</b></a></sub>
+  <sub>Intel Macs, Windows on ARM, .deb, Arch, NixOS and everything else: <a href="#download"><b>all downloads</b></a> · iPhone without an app: <a href="#twindesk-web"><b>TwinDesk Web</b></a></sub>
 </p>
 
 <p align="center">
