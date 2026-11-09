@@ -11,13 +11,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/android.png" width="280" alt="Get it for Android"></a>
-  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/altstore.png" width="280" alt="Add to AltStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/windows.png" width="280" alt="Download for Windows"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/get-android.png" width="240" alt="Get it for Android"></a>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/get-windows.png" width="240" alt="Download for Windows"></a>
   <br>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/dmg.png" width="280" alt="Download for macOS (Apple silicon)"></a>
-  <a href="#homebrew"><img src=".github/assets/buttons/brew.png" width="280" alt="Install with Homebrew"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src=".github/assets/buttons/linux.png" width="280" alt="Download for Linux (AppImage)"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/get-dmg.png" width="240" alt="Download for macOS (Apple silicon)"></a>
+  <a href="#homebrew"><img src=".github/assets/buttons/get-brew.png" width="240" alt="Install with Homebrew"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src=".github/assets/buttons/get-linux.png" width="240" alt="Download for Linux (AppImage)"></a>
 </p>
 
 <p align="center">
@@ -98,6 +98,128 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 </td>
 </tr>
 </table>
+
+---
+
+<a name="download"></a>
+
+# ⬇️ Download
+
+<table>
+<tr>
+<td width="20%" align="center" valign="top">
+
+**🍎 macOS**<br><sub>13 Ventura or later</sub>
+
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
+<a href="#homebrew"><img src="https://img.shields.io/badge/Homebrew-cask-fbb040?style=for-the-badge" alt="macOS, Homebrew"></a>
+
+</td>
+<td width="20%" align="center" valign="top">
+
+**🪟 Windows**<br><sub>10 and 11</sub>
+
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
+
+</td>
+<td width="20%" align="center" valign="top">
+
+**🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
+
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/twindesk-bin-3.0.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
+<sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
+
+</td>
+<td width="20%" align="center" valign="top">
+
+**🤖 Android**<br><sub>10 or later, phones and tablets</sub>
+
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
+<sub>The full app adds notifications, texts and Accessibility; the computer can install it for you</sub>
+
+</td>
+<td width="20%" align="center" valign="top">
+
+**📱 iPhone and iPad**<br><sub>iOS 16 or later</sub>
+
+<a href="#twindesk-web"><img src="https://img.shields.io/badge/No_app-twindesk.local-5e5ce6?style=for-the-badge" alt="TwinDesk Web, no app"></a><br>
+<a href="#altstore"><img src="https://img.shields.io/badge/AltStore-source-1c8bd6?style=for-the-badge" alt="AltStore source"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
+
+</td>
+</tr>
+</table>
+
+<a name="homebrew"></a>
+
+<p align="center">🍺 <b>Homebrew</b> on macOS:<br><code>brew install --cask inukaasith/twindesk/twindesk</code><br>
+<sub>Update with <code>brew upgrade --cask twindesk</code>: TwinDesk opens again by itself if it was running, so a Mac you drive only through it gets its mouse back. The <a href="https://github.com/InukaAsith/homebrew-twindesk">tap</a> follows every release.</sub></p>
+
+<p align="center"><sub>Already on 2.5? The in-app updater picks the right file. Update every device you pair: 3.0 still talks to 2.5, and the new features switch on when both sides have 3.0.<br>
+Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
+
+<a name="first-launch"></a>
+
+<details>
+<summary><b>⚠️ First launch: the apps aren't code-signed</b> <sub>how to allow them on macOS, Windows, Android and iPhone</sub></summary>
+
+TwinDesk is free and has no paid Apple Developer ID or Windows code-signing certificate, so
+macOS and Windows don't know who made it and ask once before opening it. The source is all here.
+
+**🍎 macOS**
+
+The easiest way is **Homebrew**, which installs it ready to open:
+`brew install --cask inukaasith/twindesk/twindesk`
+
+From the .dmg instead:
+
+1. Drag TwinDesk into Applications and open it. macOS says it can't verify TwinDesk: click **Done**
+   (not Move to Bin).
+2. Open **System Settings › Privacy & Security**, scroll down to Security and click **Open Anyway**
+   next to "TwinDesk was blocked". Enter your password, then click **Open Anyway** again.
+
+You do this once; updates open normally. If macOS says TwinDesk **is damaged and can't be
+opened**, it isn't: run this in Terminal, then open it again:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/TwinDesk.app
+```
+
+**🪟 Windows**
+
+1. If the browser warns that the file isn't commonly downloaded, choose **Keep** (in Edge: **⋯ ›
+   Keep › Show more › Keep anyway**).
+2. When the installer shows **Windows protected your PC** (SmartScreen), click **More info**, then
+   **Run anyway**.
+
+On Windows 11 with **Smart App Control** on, unsigned apps are blocked with no Run anyway button.
+The only way past it is turning it off (Windows Security › App & browser control › Smart App Control
+settings), and on many Windows 11 versions it can't be turned back on without reinstalling Windows.
+
+**🤖 Android**
+
+1. Open the downloaded .apk. Android asks to allow your browser or Files app to **install unknown
+   apps**: tap **Settings**, turn on **Allow from this source**, go back and tap **Install**.
+2. If Play Protect warns about an unrecognised developer, tap **More details › Install anyway**.
+
+The **full app** (notifications, texts and Accessibility) is easiest installed by the computer over
+[wireless debugging](#wireless-debugging) (Phone page › Notifications from the phone): Android then
+lets you turn those on. Installed by hand, Play Protect may block it, and Android 13 and later grey
+out notification access and Accessibility as a **restricted setting**: open **Settings › Apps ›
+TwinDesk**, tap **⋮ › Allow restricted settings**, then turn them on.
+
+**📱 iPhone and iPad**
+
+The IPA is unsigned: AltStore, SideStore or another signing tool signs it with your own Apple ID
+([how](#altstore)). The first time, iOS may ask you to trust your Apple ID as a developer in
+**Settings › General › VPN & Device Management**. TwinDesk Web needs none of this.
+
+</details>
 
 ---
 
@@ -249,7 +371,7 @@ TwinDesk isn't on the App Store yet (that's what [sponsoring](SPONSOR.md) pays f
 the IPA with your own Apple ID:
 
 <p>
-  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/altstore.png" width="300" alt="Add to AltStore"></a><br>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a><br>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-SideStore-8e5cf6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to SideStore"></a>
   <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
 </p>
@@ -261,128 +383,6 @@ the IPA with your own Apple ID:
 
 With a free Apple ID, apps installed this way have to be refreshed every 7 days; AltStore and
 SideStore do it for you in the background. Needs iOS or iPadOS 16 or later.
-
----
-
-<a name="download"></a>
-
-# ⬇️ Download
-
-<table>
-<tr>
-<td width="20%" align="center" valign="top">
-
-**🍎 macOS**<br><sub>13 Ventura or later</sub>
-
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
-<a href="#homebrew"><img src="https://img.shields.io/badge/Homebrew-cask-fbb040?style=for-the-badge" alt="macOS, Homebrew"></a>
-
-</td>
-<td width="20%" align="center" valign="top">
-
-**🪟 Windows**<br><sub>10 and 11</sub>
-
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
-
-</td>
-<td width="20%" align="center" valign="top">
-
-**🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
-
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/twindesk-bin-3.0.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
-<sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
-
-</td>
-<td width="20%" align="center" valign="top">
-
-**🤖 Android**<br><sub>10 or later, phones and tablets</sub>
-
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
-<sub>The full app adds notifications, texts and Accessibility; the computer can install it for you</sub>
-
-</td>
-<td width="20%" align="center" valign="top">
-
-**📱 iPhone and iPad**<br><sub>iOS 16 or later</sub>
-
-<a href="#twindesk-web"><img src="https://img.shields.io/badge/No_app-twindesk.local-5e5ce6?style=for-the-badge" alt="TwinDesk Web, no app"></a><br>
-<a href="#altstore"><img src="https://img.shields.io/badge/AltStore-source-1c8bd6?style=for-the-badge" alt="AltStore source"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
-
-</td>
-</tr>
-</table>
-
-<a name="homebrew"></a>
-
-<p align="center">🍺 <b>Homebrew</b> on macOS:<br><code>brew install --cask inukaasith/twindesk/twindesk</code><br>
-<sub>Update with <code>brew upgrade --cask twindesk</code>: TwinDesk opens again by itself if it was running, so a Mac you drive only through it gets its mouse back. The <a href="https://github.com/InukaAsith/homebrew-twindesk">tap</a> follows every release.</sub></p>
-
-<p align="center"><sub>Already on 2.5? The in-app updater picks the right file. Update every device you pair: 3.0 still talks to 2.5, and the new features switch on when both sides have 3.0.<br>
-Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
-
-<a name="first-launch"></a>
-
-<details>
-<summary><b>⚠️ First launch: the apps aren't code-signed</b> <sub>how to allow them on macOS, Windows, Android and iPhone</sub></summary>
-
-TwinDesk is free and has no paid Apple Developer ID or Windows code-signing certificate, so
-macOS and Windows don't know who made it and ask once before opening it. The source is all here.
-
-**🍎 macOS**
-
-The easiest way is **Homebrew**, which installs it ready to open:
-`brew install --cask inukaasith/twindesk/twindesk`
-
-From the .dmg instead:
-
-1. Drag TwinDesk into Applications and open it. macOS says it can't verify TwinDesk: click **Done**
-   (not Move to Bin).
-2. Open **System Settings › Privacy & Security**, scroll down to Security and click **Open Anyway**
-   next to "TwinDesk was blocked". Enter your password, then click **Open Anyway** again.
-
-You do this once; updates open normally. If macOS says TwinDesk **is damaged and can't be
-opened**, it isn't: run this in Terminal, then open it again:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/TwinDesk.app
-```
-
-**🪟 Windows**
-
-1. If the browser warns that the file isn't commonly downloaded, choose **Keep** (in Edge: **⋯ ›
-   Keep › Show more › Keep anyway**).
-2. When the installer shows **Windows protected your PC** (SmartScreen), click **More info**, then
-   **Run anyway**.
-
-On Windows 11 with **Smart App Control** on, unsigned apps are blocked with no Run anyway button.
-The only way past it is turning it off (Windows Security › App & browser control › Smart App Control
-settings), and on many Windows 11 versions it can't be turned back on without reinstalling Windows.
-
-**🤖 Android**
-
-1. Open the downloaded .apk. Android asks to allow your browser or Files app to **install unknown
-   apps**: tap **Settings**, turn on **Allow from this source**, go back and tap **Install**.
-2. If Play Protect warns about an unrecognised developer, tap **More details › Install anyway**.
-
-The **full app** (notifications, texts and Accessibility) is easiest installed by the computer over
-[wireless debugging](#wireless-debugging) (Phone page › Notifications from the phone): Android then
-lets you turn those on. Installed by hand, Play Protect may block it, and Android 13 and later grey
-out notification access and Accessibility as a **restricted setting**: open **Settings › Apps ›
-TwinDesk**, tap **⋮ › Allow restricted settings**, then turn them on.
-
-**📱 iPhone and iPad**
-
-The IPA is unsigned: AltStore, SideStore or another signing tool signs it with your own Apple ID
-([how](#altstore)). The first time, iOS may ask you to trust your Apple ID as a developer in
-**Settings › General › VPN & Device Management**. TwinDesk Web needs none of this.
-
-</details>
 
 ---
 
