@@ -571,8 +571,8 @@
         renderNav();
         break;
       case 'screen.state':
-        S.screen = { status: m.status || 'off', on: !!m.on, why: m.why || '' };
-        toFrame('viewer', { t: 'screen.state', on: S.screen.on });
+        S.screen = { status: m.status || 'off', on: !!m.on, why: m.why || '', touch: m.touch === true };
+        toFrame('viewer', { t: 'screen.state', on: S.screen.on, touch: S.screen.touch });
         if (m.status === 'off' && m.why) toast(m.why);
         if (S.screen.status.startsWith('error')) toast(S.screen.status.replace(/^error: /, ''));
         if (m.status === 'off') S.picture = null;

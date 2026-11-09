@@ -8,7 +8,10 @@
 //           (the Mac's pointer follows the finger, so it is a touch screen for the Mac)
 //   mouse   and a hardware keyboard work as on a computer
 //   stylus  a pen on the computer: where it points, with its pressure, tilt, eraser and side button
-//           (opts.pen; off: a mouse)
+//           (opts.pen; off: a mouse). A stroke's samples go each in its own in.mm, paced as the pen
+//           made them (Fast writing, opts.penFast: once per pointer event, in.mm `pts`), and the
+//           stroke is drawn here at once (the ink preview, opts.ink) until the picture
+//           shows the computer's own ink
 //   soft keyboard: what is typed goes as keys (the app's Keyboard button shows it)
 // The app talks to it through window.TD (send, ready, …) and window.tdRecv(message).
 'use strict';
@@ -35,6 +38,8 @@
   let speed = 1; // the touchpad's pointer speed (opts.speed)
   let tapClick = true; // a quick tap left-clicks (opts.tap)
   let penOn = true; // a stylus is a pen (opts.pen); off: a mouse
+  let penFast = false; // Fast writing (opts.penFast): a stroke's samples in one in.mm (pts); off: each its own, paced
+  let realTouch = false; // the computer injects real touch (screen.state touch): Direct sends in.tc
 
   function setOverlay(t) {
     overlay.textContent = t || '';
@@ -129,6 +134,7 @@
         setOverlay(`${name} isn’t sharing its screen`);
         break;
       case 'screen.state':
+        if ('touch' in msg) realTouch = msg.touch === true;
         if (!pc) setOverlay(msg.on ? `Waiting for ${name}…` : `${name} isn’t sharing its screen. Start it with the button below.`);
         break;
       case 'opts':
@@ -140,6 +146,9 @@
         tapClick = msg.tap === true;
         if (msg.pen === false && penOn) penLeave(); // switched off while it is near
         penOn = msg.pen !== false;
+        penFast = msg.penFast === true;
+        penPace.flush();
+        ink.set(msg.ink !== false);
         document.body.classList.toggle('pad', touchMode === 'pad');
         applyAudio();
         if (pc) for (const r of pc.getReceivers()) if (r.track.kind === 'video') pace(r);
@@ -176,8 +185,40 @@
   let two = null; // {x, y} average of the two fingers
   const SLOP = 10;
 
+  // Real touch (Direct, the computer takes in.tc): every finger as a finger on its touch screen, so
+  // a swipe scrolls, a pinch zooms, as the computer's own touch screen does. Moves go once a frame.
+  const slots = new Map(); // pointerId -> {id 0–9, x, y}
+  let tcQueued = false;
+  function tcSend() {
+    tcQueued = false;
+    send({ t: 'in.tc', p: [...slots.values()].map((s) => [s.id, s.x, s.y]) });
+  }
+  function tcDown(e) {
+    if (slots.size >= 10) return;
+    const p = norm(e.clientX, e.clientY, false);
+    if (!p) return;
+    let id = 0;
+    while ([...slots.values()].some((s) => s.id === id)) id++;
+    slots.set(e.pointerId, { id, ...p });
+    tcSend();
+  }
+  function tcMove(e) {
+    const s = slots.get(e.pointerId);
+    if (!s) return;
+    const p = norm(e.clientX, e.clientY, true);
+    if (!p) return;
+    s.x = p.x; s.y = p.y;
+    if (!tcQueued) { tcQueued = true; requestAnimationFrame(tcSend); }
+  }
+  function tcUp(e) {
+    if (!slots.delete(e.pointerId)) return;
+    tcSend();
+  }
+  const real = () => realTouch && touchMode === 'direct';
+
   function fingerDown(e) {
     if (penNear || performance.now() - Math.max(penAway, penAt) < PALM_MS) return; // the hand holding the pen
+    if (real()) return tcDown(e);
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (touchMode === 'pad') return padDown(e);
     if (touches.size === 1) {
@@ -204,6 +245,7 @@
   }
 
   function fingerMove(e) {
+    if (slots.size) return tcMove(e);
     if (!touches.has(e.pointerId)) return;
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (two && touches.size >= 2) {
@@ -233,6 +275,7 @@
   }
 
   function fingerUp(e) {
+    if (slots.has(e.pointerId)) return tcUp(e);
     touches.delete(e.pointerId);
     if (touches.size === 0) two = null;
     if (!one) return;
@@ -356,15 +399,129 @@
       one = null;
       two = null;
       touches.clear();
+      if (slots.size) { slots.clear(); tcSend(); }
     }
   }
   function penSend(t, e, b) {
+    penPace.flush(); // a down, up or hover after the stroke's samples, never before
     const p = norm(e.clientX, e.clientY, penHeld.size > 0 || t !== 'in.mm');
     if (!p) return penOut(); // hovering outside the picture
     penLast = { x: p.x, y: p.y, pen: penState(e) };
+    ink.at(e, penLast.pen);
     send(b === undefined ? { t, x: p.x, y: p.y, pen: penLast.pen } : { t, x: p.x, y: p.y, b, pen: penLast.pen });
   }
+  // A stroke's samples since the last event (120–240 a second) in one in.mm: the last one as x, y
+  // and pen, those before it in `pts` [[x, y, p, tx, ty], …] (P.penPoints; a computer that doesn't
+  // know `pts` takes the last). One message instead of several keeps up on a busy link.
+  function penSendAll(list) {
+    penPace.flush();
+    const pts = [];
+    let last = null;
+    for (const e of list) {
+      const p = norm(e.clientX, e.clientY, true);
+      if (!p) continue;
+      const st = penState(e);
+      ink.at(e, st);
+      if (last) pts.push([last.x, last.y, last.pen.p, last.pen.tx, last.pen.ty]);
+      last = { x: p.x, y: p.y, pen: st };
+    }
+    if (!last) return;
+    penLast = last;
+    send(pts.length ? { t: 'in.mm', x: last.x, y: last.y, pen: last.pen, pts } : { t: 'in.mm', x: last.x, y: last.y, pen: last.pen });
+  }
+
+  // Precise writing (Fast writing off, the default): every sample its own in.mm, sent as far apart
+  // as the pen made them (their timeStamps, at most a frame behind). Samples that arrive together
+  // are injected together, and macOS and Windows merge a burst of pen moves into its last one: the
+  // line on the computer loses the points between (the ink preview here still has them).
+  const penPace = (() => {
+    const GAP_MAX = 8; // ms between two samples, at most
+    const LAG_MAX = 20; // ms behind the pen, at most: past it the rest go at once
+    let q = [], timer = 0, due = 0, prevT = 0;
+    function run() {
+      timer = 0;
+      const now = performance.now();
+      while (q.length && q[0].due <= now + 0.5) send(q.shift().m);
+      if (q.length) timer = setTimeout(run, Math.max(0, q[0].due - now));
+    }
+    return {
+      add(m, t) {
+        const now = performance.now();
+        if (!q.length && due <= now) { due = now; prevT = t; send(m); return; }
+        due = Math.max(now, due + Math.min(GAP_MAX, Math.max(0, t - prevT)));
+        if (due - now > LAG_MAX) due = now;
+        prevT = t;
+        q.push({ m, due });
+        if (!timer) timer = setTimeout(run, Math.max(0, q[0].due - now));
+      },
+      flush() {
+        if (timer) { clearTimeout(timer); timer = 0; }
+        for (const x of q) send(x.m);
+        q = [];
+        due = 0;
+      },
+    };
+  })();
+  function penSendEach(list) {
+    for (const e of list) {
+      const p = norm(e.clientX, e.clientY, true);
+      if (!p) continue;
+      const st = penState(e);
+      ink.at(e, st);
+      penLast = { x: p.x, y: p.y, pen: st };
+      penPace.add({ t: 'in.mm', x: p.x, y: p.y, pen: st }, e.timeStamp);
+    }
+  }
+
+  // The ink preview: the stroke drawn under the pen at once, fading once the picture has had time
+  // to show the computer's own (the video comes back a frame or several later).
+  const ink = (() => {
+    const HOLD = 220, FADE = 260;
+    const cv = document.createElement('canvas');
+    cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1';
+    document.body.appendChild(cv);
+    const g = cv.getContext('2d');
+    let on = true, segs = [], prev = null, queued = false;
+    function size() {
+      const d = Math.min(window.devicePixelRatio || 1, 3);
+      cv.width = Math.round(window.innerWidth * d);
+      cv.height = Math.round(window.innerHeight * d);
+      g.setTransform(d, 0, 0, d, 0, 0);
+      g.lineCap = 'round';
+    }
+    size();
+    window.addEventListener('resize', size);
+    function frame() {
+      queued = false;
+      const now = performance.now();
+      segs = segs.filter((s) => now - s.t < HOLD + FADE);
+      g.clearRect(0, 0, cv.width, cv.height);
+      for (const s of segs) {
+        g.globalAlpha = Math.min(1, Math.max(0, 1 - (now - s.t - HOLD) / FADE));
+        g.lineWidth = s.w;
+        g.strokeStyle = s.er ? 'rgba(255,255,255,0.6)' : 'rgba(90,160,255,0.95)';
+        g.beginPath();
+        g.moveTo(s.x1, s.y1);
+        g.lineTo(s.x2, s.y2);
+        g.stroke();
+      }
+      if (segs.length) { queued = true; requestAnimationFrame(frame); }
+    }
+    return {
+      set(v) { on = v; if (!on) { segs = []; prev = null; g.clearRect(0, 0, cv.width, cv.height); } },
+      // A pen sample (client px) in its state: a segment from the last one while it touches.
+      at(e, st) {
+        if (!on || !st.c) { prev = null; return; }
+        const x = e.clientX, y = e.clientY;
+        if (prev) segs.push({ x1: prev.x, y1: prev.y, x2: x, y2: y, w: 1.2 + 3 * st.p, er: st.er, t: performance.now() });
+        prev = { x, y };
+        if (!queued) { queued = true; requestAnimationFrame(frame); }
+      },
+    };
+  })();
   function penOut() {
+    penPace.flush();
+    ink.at(null, { c: false });
     if (penLast && !penLast.pen.out) {
       for (const b of penHeld) send({ t: 'in.mu', x: penLast.x, y: penLast.y, b, pen: { ...penLast.pen, c: false, p: 0 } });
       penHeld.clear();
@@ -383,9 +540,12 @@
   }
   function penMove(e) {
     penNearNow();
-    // Every sample since the last frame (a pen reports 120–240 a second): strokes stay smooth.
+    // Every sample since the last event (a pen reports 120–240 a second): strokes stay smooth.
+    // Hovering, only where it is now.
     const all = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-    for (const s of all.length ? all : [e]) penSend('in.mm', s);
+    if (!penHeld.size) return penSend('in.mm', e);
+    if (penFast) return all.length ? penSendAll(all) : penSend('in.mm', e);
+    penSendEach(all.length ? all : [e]);
   }
   function penUp(e) {
     const b = PEN_BUTTON[e.button];
@@ -414,8 +574,12 @@
     held.add(b);
     send({ t: 'in.md', x: p.x, y: p.y, b });
   });
+  // pointerrawupdate comes as soon as the system has the sample, not once a frame (Chromium; Safari
+  // has none): the pen goes from there, a frame sooner.
+  const RAW = 'onpointerrawupdate' in window;
+  if (RAW) window.addEventListener('pointerrawupdate', (e) => { if (e.pointerType === 'pen' && penOn) penMove(e); });
   window.addEventListener('pointermove', (e) => {
-    if (e.pointerType === 'pen' && penOn) return penMove(e);
+    if (e.pointerType === 'pen' && penOn) return RAW ? undefined : penMove(e);
     if (e.pointerType === 'touch') return fingerMove(e);
     const p = norm(e.clientX, e.clientY, held.size > 0);
     if (p) sendAt(p.x, p.y);

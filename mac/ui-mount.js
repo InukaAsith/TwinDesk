@@ -5,7 +5,7 @@
 
 UI.tab({
   id: 'mount',
-  hidden: (s) => !UI.isPhone(s) || UI.isIphone(s), // only while an Android phone is connected
+  for: ['android'], // its storage through ADB (shared/ui-kinds.js)
   wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
   group: 'Share',
   order: 55,

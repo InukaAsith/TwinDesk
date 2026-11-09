@@ -2,7 +2,7 @@
 // Connection page (was Overview): this PC's address and Connect by address, pairing a phone with a
 // QR code, the computers and phones found nearby, the link itself (connect, take over, Wi-Fi
 // Direct, a phone's hotspot), the phone's wireless debugging and what is paired. The start page
-// until something is connected; then Overview (shared/ui-device.js) shows the device.
+// until something is connected; then Overview (shared/ui-device-*.js) shows the device.
 'use strict';
 
 UI.tab({
@@ -30,6 +30,8 @@ UI.tab({
     const sessionBtns = el('div', { class: 'hero-actions' }, [againBtn, discBtn]);
     const peerDev = el('div', { class: 'device mac' });
     const netCancel = UI.button(t('Cancel'), () => api.netCancel(), 'small');
+    const bandNote = UI.note('info', ''); // a phone on this computer's Wi-Fi Direct: its own hotspot is faster (#143)
+    bandNote.hidden = true;
     netCancel.hidden = true;
     // A session on Bluetooth: onto a direct Wi-Fi link on request, until Back to Bluetooth.
     let wifiOn = false;
@@ -54,6 +56,7 @@ UI.tab({
       status,
       hsForm,
       netCancel,
+      bandNote,
       el('div', { class: 'hero-actions' }, [wifiBtn, hotspotBtn]),
       sessionBtns,
     ]);
@@ -213,6 +216,7 @@ UI.tab({
       wifiBtn.textContent = wifiOn ? t('Back to Bluetooth') : t('Connect with Wi-Fi Direct');
       wifiBtn.hidden = !connected || !netCancel.hidden || !(wifiOn || ble);
       hotspotBtn.hidden = !connected || !netCancel.hidden || wifiOn || !ble || !UI.isPhone(s);
+      bandNote.set(connected && n.state === 'hosting' && n.onGroup && UI.isPhone(s) ? t('Files are often several times faster through the phone’s own 5 GHz hotspot than through this computer’s Wi-Fi Direct, which often runs on a narrower channel. Back to Bluetooth, then Connect with hotspot.') : '');
 
 
       adb.update(s);

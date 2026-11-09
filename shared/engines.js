@@ -32,8 +32,9 @@ function snapshot(o) {
   }
   const files = o.fx ? o.fx.describe() : { next: 'chunk', why: 'off', plain: false, last: null };
   const engine = o.fx2 ? o.fx2.state : 'off';
+  const engineWhy = o.fx2 && o.fx2.crashed && engine === 'in-process' ? String(o.fx2.crashed) : ''; // its process stopped: in the app's now
   const screen = o.screen && (o.screen.codec || o.screen.encoder) ? { codec: String(o.screen.codec || ''), encoder: String(o.screen.encoder || '') } : null;
-  return { link: { kind: link, address: ble ? '' : String(c.address || '').replace(/^::ffff:/, ''), lan: o.lan || '' }, input, files, engine, screen };
+  return { link: { kind: link, address: ble ? '' : String(c.address || '').replace(/^::ffff:/, ''), lan: o.lan || '' }, input, files, engine, engineWhy, screen };
 }
 
 module.exports = { snapshot };

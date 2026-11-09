@@ -106,8 +106,11 @@ static void dispatch(const char *line) {
     } else if (!strcmp(cmd, "pen")) { // a phone's stylus (pen.c)
       JObj *pen = jobj(c, "pen");
       if (pen) pen_at(1, (int)jnum(c, "x", 0), (int)jnum(c, "y", 0), pen);
+    } else if (!strcmp(cmd, "touch")) { // a viewer's fingers (touch.c)
+      touch_set(1, jstr(c, "p", ""));
     } else if (!strcmp(cmd, "releaseAll")) {
       pen_leave(1);
+      touch_leave(1);
       wl_release_all();
     } else if (!strcmp(cmd, "watchRelease")) {
       wl_watch_release(!jbool(c, "off", 0));
@@ -188,8 +191,11 @@ static void dispatch(const char *line) {
   } else if (!strcmp(cmd, "pen")) { // a phone's stylus (pen.c)
     JObj *pen = jobj(c, "pen");
     if (pen) pen_at(0, (int)jnum(c, "x", 0), (int)jnum(c, "y", 0), pen);
+  } else if (!strcmp(cmd, "touch")) { // a viewer's fingers (touch.c)
+    touch_set(0, jstr(c, "p", ""));
   } else if (!strcmp(cmd, "releaseAll")) {
     pen_leave(0);
+    touch_leave(0);
     inject_release_all();
   } else if (!strcmp(cmd, "watchRelease")) {
     capture_watch_release(!jbool(c, "off", 0));

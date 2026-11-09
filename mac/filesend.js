@@ -159,13 +159,25 @@ class FileSend extends EventEmitter {
     return { batch, files: plan.files, bytes: plan.bytes, name: this.batches.get(batch).name };
   }
 
+  // Files › Send files › Cancel: every file on its way that isn't a drag (a drag ends with its
+  // own drag.cancel): the other side is told (file.cancel), and each batch is listed as cancelled.
+  cancelSending() {
+    for (const f of [...this.outgoing.values()]) {
+      if (f.drag) continue;
+      if (this.server.fx) this.server.fx.cancel(f.id);
+      this.server.sendToClient({ t: P.T.FILE_CANCEL, id: f.id });
+      this._finish(f.id, false, 'cancelled');
+    }
+    for (const batch of [...this.batches.keys()]) this._batchDone({ batch, ok: false, cancelled: true });
+  }
+
   _batchDone(m) {
     const b = this.batches.get(m.batch);
     if (!b) return;
     this.batches.delete(m.batch);
     for (const f of [...this.outgoing.values()]) if (f.batch === m.batch) this.outgoing.delete(f.id);
     const where = typeof m.where === 'string' ? m.where.slice(0, 300) : '';
-    this.recent.unshift({ name: b.name, size: b.bytes, at: Date.now(), ok: !!m.ok, ...(m.ok ? { where } : { error: 'not everything arrived' }) });
+    this.recent.unshift({ name: b.name, size: b.bytes, at: Date.now(), ok: !!m.ok, ...(m.ok ? { where } : { error: m.cancelled ? 'cancelled' : 'not everything arrived' }) });
     this.recent.length = Math.min(this.recent.length, 20);
     this.emit('batchDone', { ...b, batch: m.batch, ok: !!m.ok });
     this._changed();
@@ -286,6 +298,12 @@ class FileSend extends EventEmitter {
     if (f.drag || f.batch) return this._changed(); // listed once, on drag.end / files.done
     this.recent.unshift({ name: f.name, size: f.size, at: Date.now(), ok, ...(ok ? { where: info } : { error: info }) });
     this.recent.length = Math.min(this.recent.length, 20);
+    this._changed();
+  }
+
+  // Files › Recent › Clear: only the list; the files stay where they are.
+  clearRecent() {
+    this.recent.length = 0;
     this._changed();
   }
 

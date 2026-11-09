@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Staying connected with TwinDesk in the background. iOS suspends an app a few seconds after it
 // leaves the screen, which would end the session. iOS's own way comes first: the session moves onto
-// the Bluetooth link (Core.backgrounded), which iOS keeps and wakes the app for. The microphone,
+// the Bluetooth link (Core.backgrounded, unless Off screen is set to Wi-Fi), which iOS keeps and
+// wakes the app for; back on Wi-Fi when TwinDesk is open again. The microphone,
 // once recording, keeps going on its own (Mic). Two backups keep the whole app running instead, each
 // a switch in Settings › Background, off unless turned on:
 //
@@ -27,6 +28,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var locating = false
+    private var lastWake = Date.distantPast // a location update's look at the session, at most every 30 s
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private let store = Store.shared
 
@@ -85,7 +87,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
             bgTask = UIApplication.shared.beginBackgroundTask(withName: "TwinDesk") { [weak self] in self?.endTask() }
         }
         apply()
-        Core.shared.backgrounded() // iOS's own way: onto Bluetooth (when the backups aren't keeping us up)
+        Core.shared.backgrounded() // General › Background › Off screen: Bluetooth (the default)
         DispatchQueue.main.asyncAfter(deadline: .now() + 20) { self.endTask() }
     }
 
@@ -127,7 +129,14 @@ final class Background: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // Nothing to do with where we are: each update is only a moment awake to look at the session.
-        Core.shared.wake()
+        // Connected on the network: nothing to look at (the link watches itself; a sweep of the subnet
+        // here was radio time for nothing). Otherwise at most every 30 s. The location settings above
+        // stay as they are: they are what keeps the app running (no distance filter with low accuracy).
+        let core = Core.shared
+        if core.link.connected && !core.link.viaBle { return }
+        if Date().timeIntervalSince(lastWake) < 30 { return }
+        lastWake = Date()
+        core.wake()
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}

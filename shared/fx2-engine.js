@@ -147,12 +147,12 @@ class Engine {
   handle(m) {
     try {
       switch (m && m.op) {
-        case 'listen': return this._listen(m.tls);
+        case 'listen': return this._listen(m.tls, m.port);
         case 'tokens':
           this.tokens = Array.isArray(m.list) ? m.list.filter((t) => typeof t === 'string' && t) : [];
           this.plainTokens = Array.isArray(m.plain) ? m.plain.filter((t) => typeof t === 'string' && t) : [];
           return;
-        case 'plain': return this._plain(!!m.on);
+        case 'plain': return this._plain(!!m.on, m.port);
         case 'serve': return this._serve(m);
         case 'put': return this._put(m);
         case 'pull': return this._pull(m);
@@ -167,7 +167,8 @@ class Engine {
 
   // ---- the server (as the host) ----
 
-  _listen(tls) {
+  // want: the port to take again (the engine restarted: the other side still has it), else any.
+  _listen(tls, want = 0) {
     if (this.server) return this.post({ ev: 'port', port: this.port });
     const opts = {};
     for (const k of ['key', 'cert', 'pfx', 'ca']) if (tls && tls[k]) opts[k] = typeof tls[k] === 'string' ? tls[k] : Buffer.from(tls[k]);
@@ -177,21 +178,24 @@ class Engine {
       console.warn(`[fx2] no server: ${e.message}`);
       return this.post({ ev: 'port', port: 0 });
     }
+    let tryPort = Number.isInteger(want) && want > 0 && want < 65536 ? want : 0;
     s.on('error', (e) => {
+      if (tryPort && !this.port && e.code === 'EADDRINUSE') { tryPort = 0; return s.listen(0, '0.0.0.0'); } // taken: any port
       console.warn(`[fx2] server: ${e.code || e.message}`);
       if (!this.port) this.post({ ev: 'port', port: 0 });
     });
     s.keepAliveTimeout = 60000;
     s.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
-    s.listen(0, '0.0.0.0', () => {
+    s.on('listening', () => {
       this.server = s;
       this.port = s.address().port;
       this.post({ ev: 'port', port: this.port });
     });
+    s.listen(tryPort, '0.0.0.0');
   }
 
   // Unencrypted file transfers (fxPlain): a plain HTTP server beside the HTTPS one, its own tokens.
-  _plain(on) {
+  _plain(on, want = 0) {
     if (!on) {
       if (this.plainServer) this.plainServer.close();
       this.plainServer = null;
@@ -204,8 +208,12 @@ class Engine {
     this.plainServer = s;
     s.keepAliveTimeout = 60000;
     s.requestTimeout = 0; // not Node's 5-min cap on a whole request: a big upload outlasts it; idle timeouts catch stalls
-    s.on('error', (e) => console.warn(`[fx2] plain server: ${e.code || e.message}`));
-    s.listen(0, '0.0.0.0', () => {
+    let tryPort = Number.isInteger(want) && want > 0 && want < 65536 ? want : 0;
+    s.on('error', (e) => {
+      if (tryPort && !this.plainPort && e.code === 'EADDRINUSE') { tryPort = 0; return s.listen(0, '0.0.0.0'); }
+      console.warn(`[fx2] plain server: ${e.code || e.message}`);
+    });
+    s.listen(tryPort, '0.0.0.0', () => {
       if (this.plainServer !== s) return s.close();
       this.plainPort = s.address().port;
       this.post({ ev: 'plainPort', port: this.plainPort });

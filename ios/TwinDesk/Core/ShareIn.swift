@@ -6,6 +6,7 @@
 //   out: {"ok":true,"to","connected"} after hello, {"done":true,"sent"} after end
 import Foundation
 import Network
+import UIKit
 
 final class ShareIn: Feature {
     static let port: UInt16 = 47831
@@ -48,6 +49,21 @@ final class ShareIn: Feature {
 
     private func serve(_ c: NWConnection) {
         let s = Session()
+        // Shared from another app (Photos in front, TwinDesk behind it): iOS would suspend us part
+        // way through the bytes and the share sheet waited forever. Kept running while it lasts.
+        var task = UIBackgroundTaskIdentifier.invalid
+        DispatchQueue.main.async {
+            task = UIApplication.shared.beginBackgroundTask(withName: "TwinDesk share") { c.cancel() }
+        }
+        c.stateUpdateHandler = { st in
+            switch st {
+            case .cancelled, .failed:
+                DispatchQueue.main.async {
+                    if task != .invalid { UIApplication.shared.endBackgroundTask(task); task = .invalid }
+                }
+            default: break
+            }
+        }
         c.start(queue: q)
         func reply(_ o: JSON) {
             guard var d = try? JSONSerialization.data(withJSONObject: o) else { return }

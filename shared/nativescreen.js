@@ -9,6 +9,11 @@
 //   phone.mirror.want {on, key, maxSize, bitrate, fps}  computer -> phone: share it (key: a secret
 //                                                       of this window, for the stream)
 //   phone.mirror.want {on: true, sync: true}            a keyframe now (the window skipped frames)
+//   phone.mirror.want {..., airplay: name}              an iPhone or iPad: this computer's AirPlay
+//                                                       receiver, on (or being turned on), by the name
+//                                                       Screen Mirroring lists it under, for when its
+//                                                       Share Screen can't start (the app shows where)
+//   phone.mirror.state {on: false, airplay: true}       it mirrors over AirPlay instead: this window closes
 //   phone.mirror.state {on, waiting, error, w, h, sw, sh}  phone -> computer: sharing, waiting for
 //                                                       Start there, or why not; the picture's
 //                                                       size, and the screen's (phone.in's pixels)
@@ -36,6 +41,28 @@ const KEYCODE_NOTIFICATION = 83;
 
 const live = new Map(); // key -> NativeScreen, while it waits for or takes its stream
 
+// The AirPlay receiver an iPhone or iPad can mirror to instead: () → its name ('' for none), turning
+// it on. A PC or Linux computer sets it (its web.js: TwinDesk's receiver); the Mac's is its own
+// (System Settings › AirDrop & Handoff › AirPlay Receiver, listed under the Mac's name), opened
+// there when it's off, and the phone says to turn it on (want.airplayOff).
+let macAir = null;
+let macAirOff = false;
+function macAirplay() {
+  const { execFileSync, execFile } = require('child_process');
+  macAirOff = parseInt(require('os').release(), 10) < 21; // before macOS 12 (Darwin 21): no receiver to turn on
+  try {
+    const on = execFileSync('defaults', ['read', 'com.apple.controlcenter', 'AirplayRecieverEnabled'], { encoding: 'utf8', timeout: 2000 }).trim();
+    if (on === '0') {
+      macAirOff = true;
+      execFile('open', ['x-apple.systempreferences:com.apple.AirDrop-Handoff-Settings.extension'], () => {});
+    }
+  } catch (_) { /* never set: on (macOS's default) */ }
+  if (macAir == null) {
+    try { macAir = execFileSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8', timeout: 2000 }).trim(); } catch (_) { macAir = require('os').hostname().replace(/\.local$/, ''); }
+  }
+  return macAir;
+}
+
 class NativeScreen extends EventEmitter {
   // server: the session's (sendToClient, current); opts: {maxSize, videoBitRate, maxFps, audio}
   constructor(server, opts = {}) {
@@ -43,7 +70,7 @@ class NativeScreen extends EventEmitter {
     this.server = server;
     this.opts = opts;
     this.closed = false;
-    this.key = crypto.randomBytes(16).toString('hex');
+    this.secret = crypto.randomBytes(16).toString('hex');
     this.size = null; // the picture's
     this.screen = null; // the phone's screen, for phone.in: {w, h}
     this.on_ = false;
@@ -56,10 +83,17 @@ class NativeScreen extends EventEmitter {
     const c = this.server.current;
     if (!c || !P.isPhoneOs(c.os)) return Promise.reject(err('the connection closed'));
     if (c.transport === 'ble') return Promise.reject(err('Screens need Wi-Fi: the phone is connected through Bluetooth'));
-    live.set(this.key, this);
+    live.set(this.secret, this);
+    let airplay = '';
+    macAirOff = false;
+    if (c.os === 'ios') {
+      try { airplay = NativeScreen.airplay ? NativeScreen.airplay() : process.platform === 'darwin' ? macAirplay() : ''; } catch (_) { airplay = ''; }
+    }
     this.server.sendToClient({
-      t: T.PHONE_MIRROR_WANT, on: true, key: this.key,
+      t: T.PHONE_MIRROR_WANT, on: true, key: this.secret,
       maxSize: this.opts.maxSize || 0, bitrate: this.opts.videoBitRate || 8000000, fps: this.opts.maxFps || 60,
+      ...(airplay ? { airplay: String(airplay).slice(0, 100) } : {}),
+      ...(airplay && macAirOff ? { airplayOff: true } : {}),
     });
     return new Promise((resolve, reject) => {
       this._started = { resolve, reject };
@@ -80,6 +114,7 @@ class NativeScreen extends EventEmitter {
     if (this.closed) return;
     if (num(m.sw) && num(m.sh)) this.screen = { w: num(m.sw), h: num(m.sh) };
     if (m.waiting) this.emit('waiting');
+    if (m.airplay && !m.on) return this._fail(err('Mirroring over AirPlay instead'));
     if (typeof m.error === 'string' && m.error && !m.on) return this._fail(err(m.error.slice(0, 200)));
     if (m.on) {
       this.on_ = true;
@@ -141,7 +176,7 @@ class NativeScreen extends EventEmitter {
   _close(why, metadata) {
     if (this.closed) return;
     this.closed = true;
-    live.delete(this.key);
+    live.delete(this.secret);
     clearTimeout(this._timer);
     if (this.req) this.req.destroy();
     this.req = null;
@@ -149,7 +184,7 @@ class NativeScreen extends EventEmitter {
   }
 
   stop() {
-    if (!this.closed && this.server.current && P.isPhoneOs(this.server.current.os)) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: false, key: this.key });
+    if (!this.closed && this.server.current && P.isPhoneOs(this.server.current.os)) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: false, key: this.secret });
     this._close('stopped');
   }
 
@@ -184,7 +219,7 @@ class NativeScreen extends EventEmitter {
   text() {} // typing goes key by key
 
   simple(type) {
-    if (type === TYPE.RESET_VIDEO) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: true, key: this.key, sync: true });
+    if (type === TYPE.RESET_VIDEO) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: true, key: this.secret, sync: true });
     else if (type === TYPE.EXPAND_NOTIFICATIONS) this.tap(KEYCODE_NOTIFICATION);
   }
 
@@ -212,7 +247,7 @@ class NativeScreen extends EventEmitter {
   // phone.mirror.state from the phone: to the window it's for (the newest asked).
   static state(m) {
     const all = [...live.values()];
-    const s = all.find((x) => x.key === m.key) || all[all.length - 1];
+    const s = all.find((x) => x.secret === m.key) || all[all.length - 1];
     if (s) s.state(m);
   }
 

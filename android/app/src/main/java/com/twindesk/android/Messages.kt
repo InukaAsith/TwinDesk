@@ -60,7 +60,7 @@ class Messages(private val hub: Hub, private val core: Core) {
                         Activity.RESULT_OK -> null
                         SmsManager.MMS_ERROR_NO_DATA_NETWORK -> "Mobile data is off"
                         SmsManager.MMS_ERROR_INVALID_APN, SmsManager.MMS_ERROR_CONFIGURATION_ERROR -> "The phone isn't set up for MMS"
-                        SmsManager.MMS_ERROR_HTTP_FAILURE -> "The carrier refused it"
+                        SmsManager.MMS_ERROR_HTTP_FAILURE -> "Rejected by the carrier"
                         SmsManager.MMS_ERROR_UNABLE_CONNECT_MMS, SmsManager.MMS_ERROR_IO_ERROR, SmsManager.MMS_ERROR_RETRY -> "Couldn't reach the carrier"
                         else -> "Not sent"
                     }

@@ -19,22 +19,26 @@ struct TwinDeskApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @Environment(\.scenePhase) private var phase
     @StateObject private var core = Core.shared
+    @AppStorage("appearance") private var appearance = Appearance.system.rawValue
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(core)
                 .onOpenURL { core.openURL($0) }
-                .preferredColorScheme(.dark)
+                .preferredColorScheme((Appearance(rawValue: appearance) ?? .system).scheme)
         }
         .onChange(of: phase) { p in
             switch p {
             case .active:
+                core.setFront(true)
                 core.wake()
                 core.clip.appBecameActive()
                 core.hub.appBecameActive()
                 core.files.importInbox()
-            case .background: Background.shared.enteredBackground()
+            case .background:
+                core.setFront(false)
+                Background.shared.enteredBackground()
             default: break
             }
         }

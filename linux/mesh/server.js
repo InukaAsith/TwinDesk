@@ -25,6 +25,7 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const { WebSocketServer } = require('ws');
 const P = require('../../shared/protocol.js');
+const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { LanePool } = require('../../shared/inputlane.js');
 
 const ICE_OFFERS = new Set([P.T.RTC_OFFER, P.T.AUDIO_OFFER]);
@@ -69,6 +70,7 @@ class Server extends EventEmitter {
       this.emit('listening');
     });
     this.tick = tick ? setInterval(() => this.liveness(), TICK_MS) : null;
+    this.unquiet = tick ? Quiet.onChange(() => this.liveness()) : null; // a hold reaches the other end at once
   }
 
   // The primary client: setPrimary()'s device while it is connected; else the most recently
@@ -198,6 +200,7 @@ class Server extends EventEmitter {
       if (msg.t === P.T.HELLO || msg.t.startsWith('pair.')) return this.emit('preauth', ctx, msg);
       return this.fail(ctx, P.E.BAD_MESSAGE, `"${msg.t}" is not allowed before welcome`);
     }
+    if (ws && Quiet.seen(ws, msg)) return; // `idle {on}`: the other end's side of a quiet link
 
     if (msg.t === P.T.PING) return this.send(ctx, { t: P.T.PONG, ts: msg.ts });
     if (msg.t === P.T.BYE) { // Disconnect there: nothing to wait for
@@ -232,7 +235,18 @@ class Server extends EventEmitter {
           const primary = ws === ctx.ws; // the session's own socket: its times are the client's (ctx)
           const ble = ws.transport === 'ble';
           // through Bluetooth a big message takes seconds: bytes still arriving count as a sign of life
-          const rx = Math.max(primary ? ctx.lastRx || 0 : ws.lastRx || 0, (ws.blePort && this.blePorts.get(ws.blePort)) || 0);
+          let rx = Math.max(primary ? ctx.lastRx || 0 : ws.lastRx || 0, (ws.blePort && this.blePorts.get(ws.blePort)) || 0);
+          // Quiet links (shared/quiet.js): both ends idle, a ping every few minutes. Not through Bluetooth;
+          // never the input partner's link (setBusy true).
+          if (!ble && ws.readyState === ws.OPEN) {
+            const q = Quiet.tick(ws, now, rx, (m) => this._raw(ws, m), this.busyFlags.get(ctx.deviceId) === true);
+            if (q.quiet) {
+              if (q.dead) { console.log(`[server] ${ctx.name || ctx.address} silent on a quiet link, closing`); ws.terminate(); }
+              else if (q.ping) { ws.lastPing = now; this._raw(ws, { t: P.T.PING, ts: now }); }
+              continue;
+            }
+            rx = q.rx;
+          }
           const timeout = busy ? (ble ? P.BLE_TIMEOUT_MS : P.TIMEOUT_MS) : (ble ? P.BLE_TIMEOUT_MS : P.IDLE_TIMEOUT_MS);
           const every = busy ? P.PING_MS : P.IDLE_PING_MS;
           const tx = primary ? ctx.lastTx || 0 : ws.lastTx || 0;
@@ -262,6 +276,7 @@ class Server extends EventEmitter {
     if (!ctx || ctx.ws.readyState !== ctx.ws.OPEN) return;
     // A phone on the USB cable: its WebRTC goes through the relay too (wired.js).
     if (ctx.ice && ICE_OFFERS.has(msg.t)) msg = { ...msg, ice: ctx.ice };
+    Quiet.sent(ctx.ws, msg);
     this._raw(ctx.ws, msg);
     ctx.lastTx = ctx.ws.lastTx;
   }
@@ -366,6 +381,7 @@ class Server extends EventEmitter {
 
   close() {
     clearInterval(this.tick);
+    if (this.unquiet) this.unquiet();
     this.ilPool.close();
     clearTimeout(this.graceTimer);
     for (const ctx of this.sockets) {

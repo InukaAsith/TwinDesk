@@ -11,12 +11,12 @@
   const PHONE_ONLY = ['calls', 'messages', 'media', 'pfiles', 'mount', 'phone', 'remote', 'mirror', 'papps'];
   const COMPUTER_ONLY = ['mac-pc', 'receive', 'apps', 'terminal'];
   // Global sections: the same whichever device is selected.
-  // Overview is the selected device's own page (shared/ui-device.js); Connection is everyone's.
+  // Overview is the selected device's own page (shared/ui-device-*.js); Connection is everyone's.
   const GLOBAL = ['connection', 'general', 'about', 'clipboard', 'notifications', 'setup'];
   // Where a device's own sections begin (the first one the app has).
   const FIRST = { phone: ['overview', 'phone', 'calls'], computer: ['overview', 'mac-pc', 'receive', 'pc-mac', 'share', 'cursor', 'files'], none: ['connection', 'overview'] };
 
-  const kindOf = (os) => (os === 'android' ? 'phone' : 'computer');
+  const kindOf = (os) => (os === 'android' || os === 'ios' ? 'phone' : 'computer'); // an iPhone or iPad is a phone
 
   // kind: 'phone' | 'computer' | 'none' (no connected selected device: everything but the phone pages).
   function sectionVisible(id, kind) {
@@ -67,7 +67,7 @@
     const phoneT = (d) => {
       const connected = !!d.connected;
       return {
-        id: d.id, kind: 'phone', os: 'android', name: d.name || 'Phone', connected, via: [], forget: [],
+        id: d.id, kind: 'phone', os: d.os || 'android', name: d.name || 'Phone', connected, via: [], forget: [],
         state: connected ? 'connected' : d.connecting ? 'connecting' : 'nearby',
         selected: connected && (!selId || selId === d.id),
         action: connected ? 'select' : 'connect',

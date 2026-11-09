@@ -7,7 +7,7 @@ UI.tab({
   id: 'keyboard',
   group: 'Input',
   order: 30,
-  hidden: (s) => UI.isIphone(s), // iOS takes no mouse or keyboard from an app
+  for: ['computer', 'android'], // iOS takes no mouse or keyboard from an app (shared/ui-kinds.js)
   title: I18n.t('Keyboard'),
   desc: I18n.t('Type on whichever computer the pointer is on.'),
   color: 'linear-gradient(#d1d1d6, #8e8e93)',

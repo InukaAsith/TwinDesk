@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Connect with Android (Peer.kt): its section at the bottom of Connect (Host for other phones, the
-// phones found and paired, and what to do with the one connected), its dialogs (a phone asks to connect, the
-// pairing code on either side), and PeerActivity: the other phone's Messages, Photos and Files.
+// Connect with Android (Peer.kt): its section at the bottom of Connect (the phones found and paired,
+// the one connected), its dialogs (a phone asks to connect, the pairing code on either side), the
+// pages while a phone holds the session (PeerPage: MainActivity's tabs, only what both can do), and
+// PeerActivity: the other phone's Messages, Photos and Files.
 package com.twindesk.android
 
 import android.content.Context
@@ -102,21 +103,14 @@ fun AndroidSection(core: Core, v: Int) {
         }
     }
 
+    // Connected: who, and Disconnect. What to do with it is on the pages (PeerPage), which show only
+    // what both phones can do while it holds the session.
     if (peer.connected) {
         val name = peer.peerName
-        val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) peer.sendUris(uris) }
         MacCard(name, action = { TextButton(onClick = { peer.disconnect() }) { Text("Disconnect", color = pal.bad, fontSize = 14.sp) } }) {
-            MacRow("Connected", listOfNotNull(peer.peerModel.ifEmpty { null }, if (peer.role == "host") "It connected to this phone" else "This phone connected to it").joinToString(" · "), true)
+            MacRow("Connected", listOfNotNull(peer.peerModel.ifEmpty { null }, if (peer.role == "host") "Incoming connection" else "Outgoing connection").joinToString(" · "), true)
             peer.busyLine?.let { MacRow(it, "") }
-            MacRow("Send files", "Saved in Downloads › TwinDesk on $name. Or share from any app to TwinDesk.") { PButton("Choose…", true) { pick.launch("*/*") } }
-            MacRow("Screen", "See $name’s screen here. $name taps Start to share it.") { PButton("View") { PeerScreen.view(peer, ctx) } }
-            MacRow("Messages", "$name’s texts: read them and answer.") { PButton("Open") { PeerActivity.open(ctx, "messages") } }
-            MacRow("Photos", "$name’s photos and videos, to look at and save here.") { PButton("Open") { PeerActivity.open(ctx, "photos") } }
-            MacRow("Files", "$name’s storage, folder by folder, to save here.") { PButton("Open") { PeerActivity.open(ctx, "files") } }
-        }
-        MacCard("Shared with $name") {
-            SwitchRow("Clipboard", "What you copy on one phone can be pasted on the other (Android lets apps read the clipboard only while open: copy, then open TwinDesk, or share the text to it).", peer.clipOn, first = true) { peer.setClipOn(it) }
-            SwitchRow("Notifications", if (core.notifs.hasAccess) "This phone’s notifications show on $name, and theirs here." else "Theirs show here. Yours go there with notification access for TwinDesk.", peer.notifsOn) { peer.setNotifsOn(it) }
+            MacRow("Pages", "Overview, Screen, Files and other pages now apply to $name. Pages it doesn’t support are hidden while connected.")
         }
     }
 
@@ -130,15 +124,15 @@ fun AndroidSection(core: Core, v: Int) {
             Text(if (looking) "Looking…" else "Refresh", color = pal.accent, fontSize = 14.sp)
         }
     }) {
-        SwitchRow("Connect with Android", if (peer.on) "Other phones and tablets with TwinDesk nearby see this one, and it sees them" else "Off: other phones don’t see this one", peer.on, first = true) { peer.setOn(it) }
+        SwitchRow("Connect with Android", if (peer.on) "Discoverable by nearby phones and tablets with TwinDesk" else "Off: hidden from other phones", peer.on, first = true) { peer.setOn(it) }
         if (peer.on) for (f in near) {
             val isPaired = peer.isPaired(f.id)
             val here = peer.connected && peer.peerId == f.id
             val hint = when {
                 here -> "Connected"
-                peer.waitingFor == f.id -> "Asking it to host…"
+                peer.waitingFor == f.id -> "Requesting connection…"
                 f.port > 0 -> if (isPaired) "Paired · Ready" else "Ready to pair"
-                else -> if (isPaired) "Paired · Nearby" else "Nearby · it will ask its owner first"
+                else -> if (isPaired) "Paired · Nearby" else "Nearby · Requires approval on that device"
             }
             MacRow(f.name, hint) {
                 if (isPaired && !here) PButton("Forget", color = pal.muted) { peer.forget(f.id) }
@@ -149,7 +143,93 @@ fun AndroidSection(core: Core, v: Int) {
         if (peer.on) for (h in paired.filter { h -> near.none { it.id == h.id } }) {
             MacRow(h.name, "Paired · Not nearby") { PButton("Forget", color = pal.muted) { peer.forget(h.id) } }
         }
-        if (peer.on && near.isEmpty() && paired.isEmpty()) MacRow("Looking for phones…", "Open TwinDesk on the other phone, on the same Wi-Fi (or one’s hotspot).")
+        if (peer.on && near.isEmpty() && paired.isEmpty()) MacRow("Looking for phones…", "Open TwinDesk on the other phone, on the same Wi-Fi network or hotspot.")
+    }
+}
+
+// ---- the pages while a phone holds the session (MainActivity's tabs by name) ----
+
+@Composable
+fun PeerPage(core: Core, v: Int, tab: String) {
+    @Suppress("UNUSED_EXPRESSION") v
+    val peer = core.peer
+    val name = peer.peerName.ifEmpty { "Phone" }
+    val ctx = LocalContext.current
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) peer.sendUris(uris) }
+    val mine = peer.myCaps()
+    when (tab) {
+        "Overview" -> {
+            PageHead(name, listOfNotNull("Connected", peer.peerModel.ifEmpty { null }).joinToString(" · "))
+            peer.busyLine?.let { Note(it) }
+            MacCard(name, action = { TextButton(onClick = { peer.disconnect() }) { Text("Disconnect", color = pal.bad, fontSize = 14.sp) } }) {
+                var first = true
+                val row = @Composable { label: String, hint: String, button: String, go: () -> Unit ->
+                    MacRow(label, hint, first) { PButton(button, first) { go() } }
+                    first = false
+                }
+                if (peer.can("files")) row("Send files", "Saved in Downloads › TwinDesk on $name", "Choose…") { pick.launch("*/*") }
+                if (peer.can("screen")) row("Screen", "View $name’s screen on this phone", "View") { PeerScreen.view(peer, ctx) }
+                if (peer.can("messages")) row("Messages", "Text messages on $name", "Open") { PeerActivity.open(ctx, "messages") }
+                if (peer.can("photos")) row("Photos", "$name’s photos and videos", "Open") { PeerActivity.open(ctx, "photos") }
+                if (peer.can("fs")) row("Files on $name", "Browse its storage", "Open") { PeerActivity.open(ctx, "files") }
+            }
+            MacCard("Shared with $name") {
+                var first = true
+                if (peer.can("clip")) { SwitchRow("Clipboard", "Copy on one phone, paste on the other", peer.clipOn, first = true) { peer.setClipOn(it) }; first = false }
+                if (peer.can("notifs")) SwitchRow("Notifications", "Show each phone’s notifications on the other", peer.notifsOn, first = first) { peer.setNotifsOn(it) }
+            }
+        }
+        "Screen" -> {
+            PageHead("Screen", "View $name’s screen on this phone.")
+            MacCard {
+                MacRow("$name’s screen", if (peer.peerOs == "ios") "$name starts Share Screen in TwinDesk, then you tap View." else "$name is asked to start sharing when you tap View.", true) { PButton("View", true) { PeerScreen.view(peer, ctx) } }
+                MacRow("This screen on $name", "Android asks for confirmation before sharing this screen with $name.")
+            }
+        }
+        "Clipboard" -> {
+            PageHead("Clipboard", "Copy on one phone and paste on the other.", peer.clipOn) { peer.setClipOn(it) }
+            Note(if (peer.clipOn) "On. Android allows clipboard access only while TwinDesk is open: copy, then open TwinDesk, or share the text to TwinDesk." else "Off. The clipboard isn’t shared with $name.")
+        }
+        "Notifications" -> {
+            PageHead("Notifications", "See each phone’s notifications on the other.", peer.notifsOn) { peer.setNotifsOn(it) }
+            Note(when {
+                !peer.notifsOn -> "Off."
+                core.notifs.hasAccess -> "On. Each phone’s notifications appear on the other."
+                else -> "$name’s notifications show here. Yours go there with notification access for TwinDesk (the full version)."
+            })
+        }
+        "Files" -> {
+            PageHead("Files", "Send files between this phone and $name.")
+            peer.busyLine?.let { Note(it) }
+            MacCard {
+                MacRow("Send files", "Saved in Downloads › TwinDesk on $name. Or share from any app to TwinDesk.", true) { PButton("Choose…", true) { pick.launch("*/*") } }
+                MacRow("Received", "Files from $name are saved to Downloads › TwinDesk on this phone.")
+                if (peer.can("fs")) MacRow("Files on $name", "Browse its storage and save files to this phone.") { PButton("Open") { PeerActivity.open(ctx, "files") } }
+            }
+        }
+        "Messages" -> HubBoth(core, peer, name, "messages", "Messages", "Read and reply to text messages on $name.", "Allows $name to read and send this phone’s text messages.", "messages" in mine)
+        "Photos" -> HubBoth(core, peer, name, "photos", "Photos", "View and save photos and videos from $name.", "Allows $name to view this phone’s photos and videos.", "photos" in mine)
+        "FileAccess" -> HubBoth(core, peer, name, "fs", "File access", "Browse $name’s storage and save files to this phone.", "Allows $name to browse this phone’s storage.", "fs" in mine)
+        else -> Note("$name can’t do this.", "warn")
+    }
+}
+
+// Messages, Photos, File access with a phone: theirs to open here (when it can), ours for it (when we can).
+@Composable
+private fun HubBoth(core: Core, peer: Peer, name: String, cap: String, title: String, theirs: String, ours: String, weCan: Boolean) {
+    val ctx = LocalContext.current
+    val what = when (cap) { "photos" -> "media"; "fs" -> "files"; else -> cap } // Hub's names
+    val open = when (cap) { "fs" -> "files"; else -> cap } // PeerActivity's
+    PageHead(title, "")
+    MacCard {
+        var first = true
+        if (peer.can(cap)) { MacRow("On $name", theirs, true) { PButton("Open", true) { PeerActivity.open(ctx, open) } }; first = false }
+        if (weCan) {
+            val p = core.hub.perm(what)
+            MacRow("On this phone", when (p) { "ok" -> "Allowed. $ours"; "partial" -> "Partially allowed. $ours"; else -> "Not allowed. $ours" }, first) {
+                if (p != "ok") PButton(if (p == "partial") "Allow more" else "Allow") { core.hub.askHere(what) }
+            }
+        }
     }
 }
 
@@ -162,7 +242,7 @@ fun PeerDialogs(core: Core, v: Int) {
         AlertDialog(
             onDismissRequest = {}, containerColor = pal.card,
             title = { Text("${f.name} wants to connect", color = pal.text) },
-            text = { Text("Allow to let ${f.name} pair with this phone. You’ll check that both show the same code.", color = pal.muted) },
+            text = { Text("Allow ${f.name} to pair with this phone. Both devices will show a code to confirm.", color = pal.muted) },
             confirmButton = { TextButton(onClick = { peer.answerAsk(true) }) { Text("Allow", color = pal.accent) } },
             dismissButton = { TextButton(onClick = { peer.answerAsk(false) }) { Text("Not now", color = pal.muted) } },
         )
@@ -318,7 +398,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Conversation(peer: Pe
     }
     Note(sending, if (sending.startsWith("Not")) "bad" else "info")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-        OutlinedTextField(text, { text = it }, placeholder = { Text("Text through ${peer.peerName}", color = pal.faint) }, modifier = Modifier.weight(1f),
+        OutlinedTextField(text, { text = it }, placeholder = { Text("Message via ${peer.peerName}", color = pal.faint) }, modifier = Modifier.weight(1f),
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = pal.text), shape = RoundedCornerShape(20.dp))
         PButton("Send", true) {
             val body = text.trim()
@@ -327,7 +407,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Conversation(peer: Pe
             sending = "Sending…"
             peer.ask("sms.send", JSONObject().put("to", to).put("body", body)) { res ->
                 if (res.optBoolean("ok")) { text = ""; sending = ""; items.add(0, JSONObject().put("out", true).put("body", body)) }
-                else sending = "Not sent: ${res.optString("error").let { if (it == "perm") "allow Messages on ${peer.peerName}" else it }}"
+                else sending = "Not sent: ${res.optString("error").let { if (it == "perm") "Messages access is required on ${peer.peerName}" else it }}"
             }
         }
     }
@@ -385,7 +465,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.BigPhoto(peer: Peer, 
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = back) { Text("‹ Back", color = pal.accent) }
         Text(m.optString("name"), color = pal.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        PButton("Save here", true) {
+        PButton("Save to this phone", true) {
             peer.ask("media.save", JSONObject().put("ids", JSONArray().put(m.optString("id")))) { r -> said(if (r.optBoolean("ok")) "Saving ${m.optString("name")} in Downloads › TwinDesk…" else r.optString("error")) }
             back()
         }
@@ -393,7 +473,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.BigPhoto(peer: Peer, 
     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
         val i = img
         if (i != null) Image(i, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-        else Text(if (failed) "Couldn’t load it" else "Loading…", color = pal.muted)
+        else Text(if (failed) "Couldn’t load" else "Loading…", color = pal.muted)
     }
 }
 

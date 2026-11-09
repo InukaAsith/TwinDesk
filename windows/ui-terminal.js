@@ -7,7 +7,7 @@
 UI.tab({
   id: 'terminal',
   wifiOnly: true, // over Bluetooth it can't work and doesn't move the session onto Wi-Fi: says so, with Connect with Wi-Fi Direct
-  hidden: (s) => UI.isPhone(s), // the Phone page has the phone's screen, sound and apps
+  for: ['computer'], // another computer's (shared/ui-kinds.js)
   order: 60,
   title: I18n.t('Terminal'),
   color: 'linear-gradient(#3a3a3c, #1c1c1e)',

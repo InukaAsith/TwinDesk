@@ -153,6 +153,9 @@ int wl_devices(void);
 // ---- pen.c: a phone's stylus as a uinput tablet pen (both backends; wl: on Wayland) ----
 void pen_at(int wl, int x, int y, const JObj *pen);
 void pen_leave(int wl);
+// ---- touch.c: a viewer's fingers as a uinput touch screen (both backends) ----
+void touch_set(int wl, const char *p);
+void touch_leave(int wl);
 
 // ---- ble.c: Bluetooth LE through BlueZ (Ble.cs's commands and events), its own thread ----
 int ble_handle(const char *line); // 1: a ble*/blp* command, taken

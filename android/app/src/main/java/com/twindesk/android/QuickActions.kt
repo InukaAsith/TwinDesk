@@ -18,14 +18,14 @@ object QuickActions {
 
     const val MAX = 3
     val ALL = listOf(
-        Btn("clip", "Send clipboard", "This phone’s clipboard to the computer"),
-        Btn("files", "Send files", "Pick files to send"),
-        Btn("remote", "Touchpad", "The Remote’s touchpad and keyboard"),
-        Btn("media", "Play/Pause", "What plays on the computer"),
-        Btn("ring", "Ring computer", "Find it by its sound"),
-        Btn("lock", "Lock computer", "Lock its screen"),
-        Btn("disconnect", "Disconnect", "End the connection"),
-        Btn("exit", "Exit", "Close TwinDesk until it’s opened again"),
+        Btn("clip", "Send clipboard", "Sends this phone’s clipboard to the computer"),
+        Btn("files", "Send files", "Opens the file picker"),
+        Btn("remote", "Touchpad", "Opens the Remote’s touchpad and keyboard"),
+        Btn("media", "Play/Pause", "Media playing on the computer"),
+        Btn("ring", "Ring computer", "Plays a sound on the computer"),
+        Btn("lock", "Lock computer", "Locks the computer’s screen"),
+        Btn("disconnect", "Disconnect", "Ends the connection"),
+        Btn("exit", "Exit", "Closes TwinDesk until it’s opened again"),
     )
     private val DEFAULT = listOf("clip", "disconnect", "exit")
 

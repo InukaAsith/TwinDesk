@@ -9,6 +9,7 @@
 // Calls and Messages: iOS gives no app either, so they say so (perm "none").
 import Foundation
 import Photos
+import ImageIO
 import UIKit
 
 final class Hub: Feature {
@@ -84,7 +85,7 @@ final class Hub: Feature {
         case "hub.ask":
             if m.str("what") == "media" {
                 if PhotoAccess.now == .ask && UIApplication.shared.applicationState == .active { askPhotos() }
-                else { Notifier.shared.note("hub.ask", "Allow Photos for TwinDesk", "Open TwinDesk › Photos to let \(core.host?.name ?? "the computer") see your photos.", sound: true) }
+                else { Notifier.shared.note("hub.ask", "Allow Photos for TwinDesk", "Open TwinDesk › Photos to allow \(core.host?.name ?? "the computer") to view your photos.", sound: true) }
             }
         case "call.do": core.send(msg("call.done", ["a": m.str("a", max: 20), "ok": false, "error": "off"]))
         case "sms.send": core.send(msg("sms.sent", ["ref": m.str("ref", max: 60), "ok": false, "error": "off"]))
@@ -180,8 +181,10 @@ final class Hub: Feature {
 
     private func view(_ id: String) {
         DispatchQueue.main.async {
+            let done = self.keepUp("TwinDesk photo")
             self.image(id, 1600, quality: 0.85, fast: false) { data in
                 self.core.send(msg("media.view", ["id": id, "data": data ?? NSNull()]))
+                done()
             }
         }
     }
@@ -198,38 +201,97 @@ final class Hub: Feature {
             if answered { return }
             if (info?[PHImageResultIsDegradedKey] as? Bool) == true && !fast { return }
             answered = true
-            guard let img = img, let jpg = img.jpegData(compressionQuality: quality) else { return done(nil) }
+            if let img = img, let jpg = img.jpegData(compressionQuality: quality) { return done("data:image/jpeg;base64," + jpg.base64EncodedString()) }
+            if fast { return done(nil) }
+            // No picture at that size (an iCloud download that failed, an odd format): the photo's own
+            // data, scaled here.
+            NSLog("TwinDesk: photo %@: no image (%@), trying its data", id, String(describing: info?[PHImageErrorKey] ?? "none"))
+            self.fromData(a, side, quality, done)
+        }
+    }
+
+    // The photo's full data (downloaded from iCloud if need be), scaled to `side` and made a JPEG.
+    private func fromData(_ a: PHAsset, _ side: CGFloat, _ quality: CGFloat, _ done: @escaping (String?) -> Void) {
+        guard a.mediaType == .image else { return done(nil) }
+        let o = PHImageRequestOptions()
+        o.isNetworkAccessAllowed = true
+        o.deliveryMode = .highQualityFormat
+        o.version = .current
+        PHImageManager.default().requestImageDataAndOrientation(for: a, options: o) { data, _, _, info in
+            guard let data = data, let src = CGImageSourceCreateWithData(data as CFData, nil) else {
+                NSLog("TwinDesk: photo data: none (%@)", String(describing: info?[PHImageErrorKey] ?? "none"))
+                return done(nil)
+            }
+            let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+                                         kCGImageSourceThumbnailMaxPixelSize: Int(side)]
+            guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary),
+                  let jpg = UIImage(cgImage: cg).jpegData(compressionQuality: quality) else { return done(nil) }
             done("data:image/jpeg;base64," + jpg.base64EncodedString())
         }
     }
 
-    // The files themselves (the originals, with their names), to the computer.
-    private func save(_ list: [String]) { originals(list) { urls in self.core.files.send(urls) } }
+    // A minute to finish (an iCloud download, the files' handover) when TwinDesk leaves the screen
+    // meanwhile: the computer is often what's in front then.
+    private func keepUp(_ name: String) -> () -> Void {
+        var t = UIBackgroundTaskIdentifier.invalid
+        let end = { if t != .invalid { UIApplication.shared.endBackgroundTask(t); t = .invalid } }
+        t = UIApplication.shared.beginBackgroundTask(withName: name) { end() }
+        return { DispatchQueue.main.async { end() } }
+    }
 
-    // The originals of these, as files in a temporary folder (main).
+    // The files themselves (the originals, with their names), to the computer.
+    private func save(_ list: [String]) {
+        let done = keepUp("TwinDesk photos")
+        originals(list) { urls in
+            if urls.isEmpty { NSLog("TwinDesk: photos: none of %d could be read", list.count) }
+            else { self.core.files.send(urls) }
+            done()
+        }
+    }
+
+    // The originals of these, as files in a temporary folder (main). Each: its original resource
+    // (downloaded from iCloud if need be), else, for a photo, its image data as Photos hands it out.
+    // Always calls back (an empty list when none could be read).
     func originals(_ list: [String], _ done: @escaping ([URL]) -> Void) {
         let assets = list.prefix(500).compactMap { asset($0) }
-        guard !assets.isEmpty else { return }
+        guard !assets.isEmpty else { return done([]) }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("photos-" + UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var urls: [URL] = []
+        var names = Set<String>()
         let group = DispatchGroup()
         let lock = NSLock()
-        for a in assets {
+        for (n, a) in assets.enumerated() {
             let res = PHAssetResource.assetResources(for: a)
-            guard let r = res.first(where: { $0.type == .photo || $0.type == .video || $0.type == .fullSizePhoto }) ?? res.first else { continue }
-            var name = r.originalFilename.isEmpty ? "IMG_\(urls.count + 1)" : r.originalFilename
-            lock.lock(); if urls.contains(where: { $0.lastPathComponent == name }) { name = "\(urls.count + 1)-" + name }; lock.unlock()
+            let r = res.first(where: { $0.type == .fullSizePhoto || $0.type == .fullSizeVideo })
+                ?? res.first(where: { $0.type == .photo || $0.type == .video }) ?? res.first
+            var name = r?.originalFilename ?? ""
+            if name.isEmpty { name = "IMG_\(n + 1)" + (a.mediaType == .video ? ".mov" : ".jpg") }
+            if !names.insert(name).inserted { name = "\(n + 1)-" + name; names.insert(name) }
             let to = dir.appendingPathComponent(name)
+            let got = { (ok: Bool) in if ok { lock.lock(); urls.append(to); lock.unlock() }; group.leave() }
+            group.enter()
+            let viaData = {
+                guard a.mediaType == .image else { return got(false) }
+                let o = PHImageRequestOptions()
+                o.isNetworkAccessAllowed = true
+                o.deliveryMode = .highQualityFormat
+                o.version = .current
+                PHImageManager.default().requestImageDataAndOrientation(for: a, options: o) { data, _, _, _ in
+                    got(data.map { (try? $0.write(to: to)) != nil } ?? false)
+                }
+            }
+            guard let res1 = r else { viaData(); continue }
             let o = PHAssetResourceRequestOptions()
             o.isNetworkAccessAllowed = true
-            group.enter()
-            PHAssetResourceManager.default().writeData(for: r, toFile: to, options: o) { err in
-                if err == nil { lock.lock(); urls.append(to); lock.unlock() }
-                group.leave()
+            PHAssetResourceManager.default().writeData(for: res1, toFile: to, options: o) { err in
+                if err == nil { return got(true) }
+                NSLog("TwinDesk: photo original %@: %@", name, err!.localizedDescription)
+                try? FileManager.default.removeItem(at: to)
+                viaData()
             }
         }
-        group.notify(queue: .main) { if !urls.isEmpty { done(urls.sorted { $0.path < $1.path }) } }
+        group.notify(queue: .main) { done(urls.sorted { $0.path < $1.path }) }
     }
 
     // Removed from the library: iOS asks here first (Delete), so it waits for this app to be in front.

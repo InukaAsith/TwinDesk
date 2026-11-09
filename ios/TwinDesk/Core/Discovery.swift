@@ -25,6 +25,11 @@ final class Discovery {
     private var source: DispatchSourceRead?
     private var beaconTimer: DispatchSourceTimer?
     private var lastSweep = Date.distantPast
+    // Connected with TwinDesk off screen (kept running by Location or silent audio): a beacon a minute,
+    // no subnet sweeps. The beacons every 2 s woke the Wi-Fi radio all day (#143); the session doesn't
+    // need them and the computer lists a connected phone anyway. Back to 2 s as soon as it isn't.
+    static let slowInterval: TimeInterval = 60
+    private var slow = false // q only
     private(set) var found: [String: Found] = [:] // q only; read with list()
     // Android phones with TwinDesk (their beacon's `ap`, Peer.swift): port is their phone server's
     // (`phost`), 0 while they don't host. They answer our probes; their beacons are broadcasts.
@@ -77,6 +82,16 @@ final class Discovery {
     // Look now (the app came to the front, the network changed, Pull to refresh).
     func refresh() { q.async { self.lastSweep = .distantPast; self.tick() } }
 
+    func setSlow(_ on: Bool) {
+        q.async {
+            guard on != self.slow else { return }
+            self.slow = on
+            NSLog("TwinDesk: discovery %@", on ? "slow (connected, off screen)" : "every 2 s")
+            if on { self.beaconTimer?.schedule(deadline: .now() + Discovery.slowInterval, repeating: Discovery.slowInterval, leeway: .seconds(10)) }
+            else { self.beaconTimer?.schedule(deadline: .now(), repeating: Proto.beaconInterval) }
+        }
+    }
+
     // A computer at this address, typed in or from a QR code: ask it directly.
     func probe(_ address: String) { q.async { self.send(self.probeMsg(), to: address) } }
 
@@ -114,7 +129,7 @@ final class Discovery {
         src.resume()
         source = src
         let t = DispatchSource.makeTimerSource(queue: q)
-        t.schedule(deadline: .now(), repeating: Proto.beaconInterval)
+        t.schedule(deadline: .now(), repeating: slow ? Discovery.slowInterval : Proto.beaconInterval)
         t.setEventHandler { [weak self] in self?.tick() }
         t.resume()
         beaconTimer = t
@@ -133,7 +148,7 @@ final class Discovery {
         }
         // The subnet sweep: every 10 s while looking, else every 60 s (a computer that moved).
         let every: TimeInterval = wantSweep() ? 10 : 60
-        if Date().timeIntervalSince(lastSweep) >= every {
+        if !slow, Date().timeIntervalSince(lastSweep) >= every {
             lastSweep = Date()
             sweep()
         }

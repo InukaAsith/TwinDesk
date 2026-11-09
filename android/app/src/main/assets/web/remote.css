@@ -6,7 +6,7 @@ html, body {
 }
 button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0; touch-action: none; }
 button.down, button.on { background: var(--accent); border-color: var(--accent); }
-body:not(.pad) .pad-only, body:not(.gamepad) .game-only { display: none !important; }
+body:not(.pad) .pad-only, body:not(.gamepad) .game-only, body:not(.voice) .voice-only { display: none !important; }
 
 #top { position: fixed; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; box-sizing: border-box; background: var(--card); z-index: 2; }
 #name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -32,6 +32,7 @@ body:not(.pad) .pad-only, body:not(.gamepad) .game-only { display: none !importa
    top corners, where the index fingers (or the thumbs, reaching up) find them ---- */
 body.gamepad #top { left: 50%; right: auto; transform: translateX(-50%); width: 44vw; height: 40px; border-radius: 0 0 14px 14px; }
 body.gamepad #note { top: 96px; left: 28vw; right: 28vw; }
+body.voice #note { top: auto; bottom: 14px; background: #3a2a10; } /* under the keys, never over the words */
 #game { position: fixed; inset: 0; }
 .g { position: absolute; display: grid; place-items: center; font-weight: 600; }
 .shoulder { width: 26vw; font-size: 17px; letter-spacing: 0.04em; }
@@ -101,3 +102,22 @@ body.editing #top, body.editing #note, body.editing #pad-note { display: none !i
 #edit-bar input:not([type]) { width: 80px; }
 #edit-bar [hidden] { display: none !important; }
 #edit-del { color: #ff6961; }
+
+/* ---- voice typing: a real box at the top (the keyboard comes up under it), the keys a box can't send ---- */
+body.voice { touch-action: auto; }
+#voice-view { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 14px 14px; box-sizing: border-box; overflow-y: auto; }
+#voice-card { flex: 1 1 auto; min-height: 140px; max-height: 46vh; display: flex; flex-direction: column; border-radius: 20px; background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+#voice-card:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22); }
+#voice { flex: 1; width: 100%; box-sizing: border-box; resize: none; border: 0; outline: 0; background: transparent; color: var(--text); font: 20px/1.45 system-ui, sans-serif; padding: 16px 18px 6px;
+  user-select: text; -webkit-user-select: text; touch-action: auto; }
+#voice::placeholder { color: #6c6c70; }
+#voice-status { display: flex; align-items: center; gap: 8px; padding: 8px 18px 12px; font-size: 12.5px; color: var(--muted); }
+#voice-dot { width: 8px; height: 8px; border-radius: 50%; background: #48484a; flex: none; transition: background-color 0.2s; }
+#voice-dot.live { background: #30d158; box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.18); }
+#voice-dot.bad { background: #ff9f0a; }
+#voice-keys { flex: none; display: grid; grid-template-columns: 1fr 1.3fr 0.9fr 1.5fr; gap: 8px; }
+#voice-keys button { height: 50px; font-size: 15px; border-radius: 14px; touch-action: manipulation; }
+#voice-keys button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+#voice-keys button:active { filter: brightness(1.25); }
+#voice-help { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+#v-clear { touch-action: manipulation; }

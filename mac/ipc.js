@@ -41,7 +41,7 @@ const SCHEMA = {
     resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac) },
-  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp') },
+  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
   audio: { send: bool, receive: bool, muteLocal: bool, engine: oneOf(['helper', 'system'], 'helper'), volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
@@ -347,6 +347,7 @@ function setupIpc(ctx) {
       ctx.kvm.settingsChanged(prev);
       if (partial && typeof partial.shared === 'boolean') ctx.kvm.setShared(partial.shared); // the Cursor tab's switch (Over Bluetooth through it)
       if (partial && typeof partial.locked === 'boolean') ctx.kvm.setLocked(partial.locked); // cursor lock: not a setting
+      if (partial && 'keyboard' in partial) (ctx.remote() ? ctx.remote().refresh() : ctx.loadRemote()); // voice typing follows Keyboard
     },
     setTerminal(partial) {
       const prev = settings.terminal.connectPc;
@@ -401,6 +402,13 @@ function setupIpc(ctx) {
     },
     revealDrop(index) {
       ctx.drop.reveal(Number(index));
+    },
+    clearFiles() {
+      ctx.drop.clearRecent();
+      if (ctx.fileSend) ctx.fileSend.clearRecent();
+    },
+    cancelSend() {
+      if (ctx.fileSend) ctx.fileSend.cancelSending();
     },
     setSmb(partial) {
       setGroup('smb', partial);
@@ -637,10 +645,11 @@ function setupIpc(ctx) {
     adbQr(on) {
       if (ctx.adbQr) ctx.adbQr(on === true);
     },
-    // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.
+    // General › Appearance: { style }, { theme } and/or { accent } ('' follows the system); local only.
     setLook(o) {
       if (!o || typeof o !== 'object') return;
       const Look = require('../shared/look.js');
+      if (typeof o.style === 'string') settings.ui.style = Look.style(o.style);
       if (typeof o.theme === 'string') settings.ui.theme = Look.theme(o.theme);
       if (typeof o.accent === 'string') settings.ui.accent = Look.accent(o.accent);
       store.saveSettings(settings);

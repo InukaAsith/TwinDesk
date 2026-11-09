@@ -18,7 +18,7 @@ UI.tab({
   icon: 'photo',
   color: 'linear-gradient(#ffd60a, #ff9f0a)',
   desc: tr('See your phone’s photos and videos and copy them here.'),
-  hidden: (s) => !UI.isPhone(s), // only while a phone is connected
+  for: ['android', 'ios'], // a phone's: Android, iPhone or iPad (shared/ui-kinds.js)
   wifiOnly: true, // pictures are too big for Bluetooth: Connect with Wi-Fi Direct on top, nothing loads
   master: { get: (s) => !!(s.hub && s.hub.media), set: (v) => UI.api.hub({ do: 'set', what: 'media', on: v }) },
   badge: (s) => (s.hub && s.hub.media ? 'on' : ''),

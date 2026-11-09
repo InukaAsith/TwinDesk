@@ -26,7 +26,8 @@ class Awake(ctx: Context) {
         )
     }.orEmpty().onEach { it.setReferenceCounted(false) }
     private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "td-awake").apply { isDaemon = true } }
-    private var held = false
+    @Volatile private var held = false
+    val busy: Boolean get() = held // file bytes moved in the last HOLD_MS: the session pings every second (Link quiet)
     private var last = 0L
     private var off: ScheduledFuture<*>? = null
 

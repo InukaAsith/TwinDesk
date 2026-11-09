@@ -74,7 +74,7 @@ UI.tab({
   icon: 'message',
   color: 'linear-gradient(#64d2ff, #0a84ff)',
   desc: tr('Read and send your phone’s texts here.'),
-  hidden: (s) => !UI.isPhone(s), // only while a phone is connected
+  for: ['android'], // iOS gives no app its calls or texts (shared/ui-kinds.js)
   master: { get: (s) => !!(s.hub && s.hub.messages), set: (v) => UI.api.hub({ do: 'set', what: 'messages', on: v }) },
   badge: (s) => (s.hub && s.hub.messages ? (s.hub.unread ? String(s.hub.unread) : 'on') : ''),
   build(body, page) {

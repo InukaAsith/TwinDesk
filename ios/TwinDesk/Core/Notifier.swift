@@ -52,12 +52,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func clipOut(to: String, picture: Bool) {
-        post("clip.out", "You copied \(picture ? "a picture" : "something")", "Send it to \(to)?", cat: Cat.clipOut)
+        post("clip.out", "Copied \(picture ? "a picture" : "text")", "Send to \(to)?", cat: Cat.clipOut)
     }
 
     func fclip(id: String, names: [String], files: Int, from: String) {
         let what = files == 1 ? (names.first ?? "1 file") : "\(files) items"
-        post("fclip", "Copied on \(from)", "\(what) — Save to this \(Device.word)?", cat: Cat.fclip, info: ["id": id], sound: true)
+        post("fclip", "Copied on \(from)", "\(what). Save to this \(Device.word)?", cat: Cat.fclip, info: ["id": id], sound: true)
     }
 
     func cancelFclip() { c.removeDeliveredNotifications(withIdentifiers: ["fclip"]) }
@@ -66,13 +66,13 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post("n." + id, title.isEmpty ? app : title, body, info: [:], sound: true, thread: computer + "|" + app)
     }
 
-    func shareAsk(_ name: String) {
-        post("share", "\(name) wants to see this screen", "Open TwinDesk and tap Share Screen.", sound: true)
+    func shareAsk(_ name: String, airplay: String? = nil) {
+        post("share", "\(name) wants to see this screen", airplay.map { "Tap to share, or select \($0) in Control Center › Screen Mirroring." } ?? "Open TwinDesk and tap Share Screen.", sound: true)
     }
 
     // The computer started sharing its screen while TwinDesk wasn't in front.
     func screen(_ name: String) {
-        post("screen", "\(name) is sharing its screen", "Tap to see it on this \(Device.word).", cat: Cat.screen, sound: true)
+        post("screen", "\(name) is sharing its screen", "Tap to view.", cat: Cat.screen, sound: true)
     }
 
     func cancel(_ id: String) { c.removeDeliveredNotifications(withIdentifiers: [id]) }
@@ -81,7 +81,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     func note(_ id: String, _ title: String, _ body: String, sound: Bool = false) { post(id, title, body, sound: sound) }
 
     func invite(_ name: String) {
-        post("invite", "\(name) wants to connect", "Pair this \(Device.word) with it?", cat: Cat.invite, sound: true)
+        post("invite", "\(name) wants to connect", "Tap to pair this \(Device.word).", cat: Cat.invite, sound: true)
     }
 
     func filesIn(_ name: String, ok: Bool, from: String) {

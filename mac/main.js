@@ -277,7 +277,7 @@ function pushState() {
     if (svc) state.wake = svc.wake.view;
     if (svc && svc.phone) {
       // A phone's controls on Overview (dev.state): quick settings, volume and ringer, most used apps.
-      const v = svc.devctl && state.client && state.client.os === 'android' ? svc.devctl.view : null;
+      const v = svc.devctl && state.client && P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // an iPhone's too: Ring (its Overview, shared/ui-device-ios.js)
       state.phone = { ...svc.phone.view, settings: settings.phone, ctl: v, qs: v ? v.qs || null : null, top: v ? v.top || [] : [] };
     }
     state.peerCtl = svc && svc.devctl && state.client && !P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // a computer's controls on Overview
@@ -406,7 +406,14 @@ function changeLanguage() {
   }
   trayKey = '';
   updateTray();
-  if (win && !win.isDestroyed()) win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale } });
+  if (win && !win.isDestroyed()) win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+}
+
+// General › Appearance changed: the theme; the window's vibrancy only for Simple (Glass paints its
+// gradient over the whole window, the sidebar a frosted pane on it, so a blur under it would show nothing).
+function applyLook() {
+  Look.applyTheme(nativeTheme, settings.ui.theme);
+  if (win && !win.isDestroyed()) win.setVibrancy(Look.style(settings.ui.style) === 'glass' ? null : 'sidebar');
 }
 
 function createWindow() {
@@ -418,7 +425,7 @@ function createWindow() {
     title: 'TwinDesk',
     show: false,
     titleBarStyle: 'hiddenInset', // the sidebar runs up under the traffic lights
-    vibrancy: 'sidebar',
+    vibrancy: Look.style(settings.ui.style) === 'glass' ? undefined : 'sidebar', // Simple's (applyLook)
     visualEffectState: 'active',
     backgroundColor: '#00000000',
     webPreferences: {
@@ -430,7 +437,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'warning' || e.level === 'error') console.log(`[window] ${e.level}: ${e.message}`);
   });
-  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale } });
+  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
   win.once('ready-to-show', showWindow);
   // In the Dock and ⌘-Tab only while the window is open; menu bar only otherwise.
   const w = win;
@@ -569,6 +576,8 @@ app.whenReady().then(() => {
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
+  // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
+  require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
   id = identity.load(settings);
   Object.assign(state, { macName: id.macName, macId: id.macId, fp: id.fp, version: app.getVersion(), about: aboutInfo(app) });
@@ -830,9 +839,9 @@ app.whenReady().then(() => {
   svc.kvm.local = svc.phone.bridge;
   // The phone's Remote page: touchpad, keyboard and gamepad here, taken only with the mouse at home.
   // No Real gamepad: a virtual controller on macOS needs a DriverKit driver, which needs Apple's paid signing.
-  // Loaded only while Remote is on (off, its page hears so); ipc reaches it through svc.remote().
+  // Loaded only while Remote or Keyboard (voice typing) is on (both off, its page hears so); ipc reaches it through svc.remote().
   svc.loadRemote = () => {
-    if (svc.phoneRemote || settings.remote.allow === false) return svc.phoneRemote || null;
+    if (svc.phoneRemote || (settings.remote.allow === false && !settings.kvm.keyboard)) return svc.phoneRemote || null;
     const { PhoneRemote } = require('../shared/phone-remote.js');
     svc.phoneRemote = new PhoneRemote({ server: peer, helper: svc.helper, getSettings: () => settings, atHome: () => svc.kvm.mode === 'home', onChange: pushState,
       padNote: 'Real gamepad isn’t on the Mac. To use {name} as a gamepad, turn on Remote › As a Bluetooth gamepad on {name}, then pair it with this Mac in System Settings › Bluetooth' });
@@ -841,7 +850,7 @@ app.whenReady().then(() => {
   };
   svc.remote = () => svc.phoneRemote || null;
   peer.on(`t:${P.T.REMOTE_HELLO}`, () => !svc.phoneRemote && peer.current && P.isPhoneOs(peer.current.os)
-    && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there' }));
+    && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there', voice: false, voiceWhy: P.KEYBOARD_OFF }));
   svc.loadRemote();
   // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js), its
   // offers in the Dock (a Dock icon of their app, dockstub.js), the menu bar and a notification.
@@ -945,6 +954,7 @@ app.whenReady().then(() => {
     cursor: (dir, on) => actions.setKvm({ [dir === 'out' ? 'driveOther' : 'beDriven']: on }),
     rezume: (dir, on) => actions.setRezume({ [dir === 'out' ? 'send' : 'receive']: on }),
     remote: (dir, on) => actions.setRemote({ allow: on }),
+    mic: (dir, on) => actions.setAudio({ micReceive: on }),
     terminal: (dir, on) => { actions.setTerminal({ [dir === 'out' ? 'allowPc' : 'connectPc']: on }); if (dir === 'in') svc.sshClient.applySettings(); }, // already set: setTerminal sees no change
     files: (dir, on) => actions.setFiles({ acceptDrops: on }),
   };
@@ -970,7 +980,7 @@ app.whenReady().then(() => {
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
   setupWeb();
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   hud.keep = () => !!peer.current; // the popup's window lives while a session is on (mac/hud.js)
@@ -1195,6 +1205,22 @@ function setupNet() {
   peer.hold = (m) => svc.net.holdOut(m, (x) => peer.sendNow(x));
   peer.tap = (m) => svc.net.onMessage(m);
   peer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+
+  // A faster way to move files failed and a slower one took over (#143): said once per way per run,
+  // with why (also in Settings › General › Advanced › Engines in use).
+  const fellBack = new Set();
+  peer.fx.onFallback = (o) => {
+    const key = o.from + '>' + o.to;
+    if (fellBack.has(key)) return;
+    fellBack.add(key);
+    const slow = { fx: t('the older fast way'), 'file.chunk': t('the slowest way, through the session') }[o.to] || o.to;
+    const title = t('Files go {way} for now', { way: slow });
+    const why = { why: o.why || t('no reason given') };
+    const body = o.to === 'file.chunk'
+      ? t('The faster way failed: {why}. TwinDesk tries it again when it next connects. Settings › General › Advanced › Engines in use', why)
+      : t('The faster way failed: {why}. TwinDesk tries it again in a minute. Settings › General › Advanced › Engines in use', why);
+    try { new Notification({ title, body }).show(); } catch {}
+  };
   peer.on('client', () => svc.net.started());
   peer.on('closed', () => svc.net.ended());
   peer.on('transport', () => {

@@ -348,7 +348,7 @@ class Netlink(core: Core) : Feature(core) {
 
     private fun armDeadline() {
         deadline?.cancel(false)
-        deadline = core.bg.schedule({ if (onBle && state != "idle") fail("Wi-Fi didn’t come up in time") }, 60, TimeUnit.SECONDS)
+        deadline = core.bg.schedule({ if (onBle && state != "idle") fail("Wi-Fi didn’t start in time") }, 60, TimeUnit.SECONDS)
     }
 
     private fun fail(why: String) {

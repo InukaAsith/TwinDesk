@@ -26,6 +26,7 @@ final class ShareViewController: UIViewController {
     private var total: Int64 = 0
     private var sent: Int64 = 0
     private var finished = false
+    private var lastProgress = Date() // q: when bytes last went (a stall ends it with a message)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -97,7 +98,9 @@ final class ShareViewController: UIViewController {
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         for (i, p) in providers.enumerated() {
             g.enter()
-            let isFile = p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+            // A photo or video is always the file (Photos' items can say URL too).
+            let media = p.hasItemConformingToTypeIdentifier(UTType.image.identifier) || p.hasItemConformingToTypeIdentifier(UTType.audiovisualContent.identifier)
+            let isFile = media || p.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
             if !isFile, p.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                 p.loadItem(forTypeIdentifier: UTType.url.identifier) { v, _ in
                     if let u = v as? URL { out[i] = .text(u.absoluteString) }
@@ -112,23 +115,42 @@ final class ShareViewController: UIViewController {
                 }
                 continue
             }
-            // A file: its own type first (a photo as the photo, not a converted copy).
-            let type = p.registeredTypeIdentifiers.first { id in
-                guard let t = UTType(id) else { return false }
-                return t.conforms(to: .data) || t.conforms(to: .package)
-            } ?? UTType.data.identifier
+            // A file: its own type first (a photo as the photo, not a converted copy). Photos lists
+            // private types too (a Live Photo's bundle, thumbnails): those give a folder or nothing,
+            // so a public image or video type comes first, then any other file type.
+            let ids = p.registeredTypeIdentifiers
+            let usable = ids.filter { !$0.hasPrefix("com.apple.private") && $0 != "com.apple.live-photo-bundle" }
+            func pick(_ ok: (UTType) -> Bool) -> String? { usable.first { UTType($0).map(ok) ?? false } }
+            let type = pick { $0.conforms(to: .image) || $0.conforms(to: .movie) || $0.conforms(to: .audiovisualContent) }
+                ?? pick { $0.conforms(to: .data) && !$0.conforms(to: .directory) }
+                ?? (p.hasItemConformingToTypeIdentifier(UTType.image.identifier) ? UTType.image.identifier : UTType.data.identifier)
+            let dir = tmp.appendingPathComponent(String(i), isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let suggested = p.suggestedName ?? ""
+            func named(_ ext: String, _ fallback: String) -> URL {
+                var name = suggested.isEmpty ? fallback : suggested
+                if !ext.isEmpty, !name.lowercased().hasSuffix("." + ext.lowercased()) { name = "\(name).\(ext)" }
+                return dir.appendingPathComponent(name.replacingOccurrences(of: "/", with: "_"))
+            }
+            let ext = UTType(type)?.preferredFilenameExtension ?? ""
             p.loadFileRepresentation(forTypeIdentifier: type) { url, _ in
-                defer { g.leave() }
-                guard let url = url else { return }
-                var name = url.lastPathComponent
-                if let s = p.suggestedName, !s.isEmpty {
-                    let ext = url.pathExtension
-                    name = ext.isEmpty || s.lowercased().hasSuffix("." + ext.lowercased()) ? s : "\(s).\(ext)"
+                if let url = url, !((try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false) {
+                    let dest = suggested.isEmpty ? dir.appendingPathComponent(url.lastPathComponent) : named(url.pathExtension, url.lastPathComponent)
+                    if (try? FileManager.default.copyItem(at: url, to: dest)) != nil { out[i] = .file(dest, dest.lastPathComponent); g.leave(); return }
                 }
-                let dir = tmp.appendingPathComponent(String(i), isDirectory: true)
-                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let dest = dir.appendingPathComponent(name.replacingOccurrences(of: "/", with: "_"))
-                if (try? FileManager.default.copyItem(at: url, to: dest)) != nil { out[i] = .file(dest, dest.lastPathComponent) }
+                // No file for it: what the item gives as such (a URL, its bytes or a picture).
+                p.loadItem(forTypeIdentifier: type) { v, _ in
+                    defer { g.leave() }
+                    let dest = named(ext, "Shared item")
+                    if let u = v as? URL, u.isFileURL, case let d = named(u.pathExtension, u.lastPathComponent), (try? FileManager.default.copyItem(at: u, to: d)) != nil {
+                        out[i] = .file(d, d.lastPathComponent)
+                    } else if let d = v as? Data, (try? d.write(to: dest)) != nil {
+                        out[i] = .file(dest, dest.lastPathComponent)
+                    } else if let img = v as? UIImage, let d = img.jpegData(compressionQuality: 0.92) {
+                        let j = named("jpg", "Photo")
+                        if (try? d.write(to: j)) != nil { out[i] = .file(j, j.lastPathComponent) }
+                    }
+                }
             }
         }
         g.notify(queue: .main) { done(out.compactMap { $0 }) }
@@ -202,6 +224,8 @@ final class ShareViewController: UIViewController {
             let size = Int64((try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
             guard let fh = try? FileHandle(forReadingFrom: u) else { return send(items, i + 1) }
             line(["t": "file", "name": name, "size": size])
+            lastProgress = Date()
+            watchStall()
             var left = size
             func pump() {
                 if left <= 0 { try? fh.close(); try? FileManager.default.removeItem(at: u); return send(items, i + 1) }
@@ -213,6 +237,7 @@ final class ShareViewController: UIViewController {
                     guard let self = self else { return }
                     if e != nil { return self.show("Something went wrong", "TwinDesk stopped answering.", done: true) }
                     self.sent += Int64(n)
+                    self.lastProgress = Date()
                     let p = self.total > 0 ? Float(Double(self.sent) / Double(self.total)) : 0
                     DispatchQueue.main.async { self.bar.setProgress(p, animated: true) }
                     pump()
@@ -220,6 +245,24 @@ final class ShareViewController: UIViewController {
             }
             pump()
         }
+    }
+
+    // TwinDesk stopped taking the bytes (iOS suspended it behind this app): said, not waited on forever.
+    private var watching = false
+    private func watchStall() {
+        if watching { return }
+        watching = true
+        func check() {
+            q.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self = self, !self.finished else { return }
+                if Date().timeIntervalSince(self.lastProgress) > 20 {
+                    self.conn?.cancel()
+                    return self.show("TwinDesk stopped answering", "iOS paused it in the background. Open TwinDesk, then share again.", done: true)
+                }
+                check()
+            }
+        }
+        check()
     }
 
     private func readLine(timeout: TimeInterval, _ done: @escaping ([String: Any]?) -> Void) {

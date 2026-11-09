@@ -6,7 +6,7 @@
 
 UI.tab({
   id: 'keyboard',
-  hidden: (s) => UI.isIphone(s), // iOS takes no mouse or keyboard from an app
+  for: ['computer', 'android'], // iOS takes no mouse or keyboard from an app (shared/ui-kinds.js)
   order: 30,
   title: 'Keyboard',
   color: 'linear-gradient(#d1d1d6, #8e8e93)',

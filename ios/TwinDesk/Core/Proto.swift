@@ -23,8 +23,6 @@ enum Proto {
     static let fileMaxBytes: Int64 = 16 * 1024 * 1024 * 1024 * 1024
     static let fxPath = "/twindesk/fx/"
     static let fxHeader = "x-twindesk-fx"
-    // Wi-Fi Direct groups and hotspots: never fast files there (netlink.js GROUP_NETS).
-    static let groupNets = ["192.168.49.", "10.42.", "192.168.137.", "192.168.43.", "172.20.10."]
     static let maxPayload = 16 * 1024 * 1024
     static let os = "ios"
     private static let sasLabel = "macshare-sas-v1"

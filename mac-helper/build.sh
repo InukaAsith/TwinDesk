@@ -56,6 +56,11 @@ echo "built .build/release/macshare-dockstub"
 swiftc -O -swift-version 5 -target "$TARGET" -framework AVFoundation -framework CoreMediaIO -framework VideoToolbox -framework CoreMedia \
   Sources/macshare-iosusb/main.swift -o .build/release/macshare-iosusb
 echo "built .build/release/macshare-iosusb"
+# What plays on this Mac, any app, with its artwork (shared/web/pcmedia.js): a library run inside
+# /usr/bin/perl, as macOS's MediaRemote answers only Apple's own processes.
+clang -O2 -fobjc-arc -dynamiclib -target "$TARGET" -framework Foundation -framework AppKit -framework ImageIO \
+  Sources/twindesk-nowplaying/nowplaying.m -o .build/release/libtwindesk-nowplaying.dylib
+echo "built .build/release/libtwindesk-nowplaying.dylib"
 # The calls' sound over Bluetooth (mac/callaudio.js), its own process: only it loads IOBluetooth.
 swiftc -O -swift-version 5 -target "$TARGET" -framework IOBluetooth \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Sources/macshare-calls/Info.plist \

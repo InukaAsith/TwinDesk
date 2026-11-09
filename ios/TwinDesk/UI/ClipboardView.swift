@@ -16,25 +16,25 @@ struct ClipboardView: View {
 
                     SectionTitle(text: "Sync")
                     VStack(spacing: 12) {
-                        ToggleRow(title: "This \(Device.word)’s copies go to the computer", on: sync("clipboard", "out"))
+                        ToggleRow(title: "Copies on this \(Device.word) are available on the computer", on: sync("clipboard", "out"))
                         Divider()
-                        ToggleRow(title: "The computer’s copies come here", on: sync("clipboard", "in"))
+                        ToggleRow(title: "Copies on the computer are available on this \(Device.word)", on: sync("clipboard", "in"))
                         Divider()
-                        ToggleRow(title: "Pictures", detail: "Copied pictures too, up to 10 MB", on: opt("clip.images"))
+                        ToggleRow(title: "Pictures", detail: "Includes pictures up to 10 MB", on: opt("clip.images"))
                     }
                     .glassCard()
 
-                    SectionTitle(text: "The computer’s copies")
+                    SectionTitle(text: "From the computer")
                     VStack(spacing: 12) {
-                        ToggleRow(title: "Put on the clipboard at once", detail: "Else only in the notification, with Copy", on: opt("clip.auto"))
+                        ToggleRow(title: "Copy to the clipboard immediately", detail: "When off, a notification offers Copy", on: opt("clip.auto"))
                         Divider()
                         ToggleRow(title: "Notify", detail: "While TwinDesk is in the background", on: opt("clip.notify"))
                     }
                     .glassCard()
 
-                    SectionTitle(text: "This \(Device.word)’s copies")
+                    SectionTitle(text: "From this \(Device.word)")
                     VStack(alignment: .leading, spacing: 12) {
-                        ToggleRow(title: "Ask to send what I copy", detail: "A notification with Send while TwinDesk runs in the background", on: opt("clip.notifyOwn"))
+                        ToggleRow(title: "Offer to send copied items", detail: "Shows a notification with Send while TwinDesk is in the background", on: opt("clip.notifyOwn"))
                         Text("iOS lets only the app on screen read the clipboard, so Send opens TwinDesk for a moment. Set Settings › TwinDesk › Paste from Other Apps to Allow, so iOS doesn’t ask each time. The Send Clipboard shortcut works from Back Tap and the Action button.")
                             .font(.caption).foregroundStyle(.secondary)
                     }

@@ -1,6 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Phones (Android's Peer.kt, the same protocol): this iPhone and another phone with TwinDesk, an
-// Android phone or an iPhone, side by side with the computer's session and never in its way.
+// Android phone or an iPhone. One session at a time, as on the computers: a phone's ends the
+// computer's and a computer's ends the phone's (Core.linkWelcome), and while a phone holds it the
+// app's pages are that phone's, only what both can do (peer.info's caps; RootView's pages).
 // Roles: the phone that taps Connect is the guest, the other the host. The guest's side is a second
 // Link (pairing by code, hello, pings) with its own paired list ("peerHosts"); the host runs
 // PeerServer (with Host for other phones on, or for a while when asked: peer.ask over discovery,
@@ -34,6 +36,21 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
     private var key = ""
     private var resumeUntil = Date.distantPast
     var connected: Bool { !role.isEmpty }
+    // The other phone: its os (pairing, its hello) and what it can do (peer.info's caps).
+    private(set) var peerOs = ""
+    private var peerCaps: Set<String>?
+    func can(_ c: String) -> Bool { (peerCaps ?? Peer.defaultCaps(peerOs)).contains(c) }
+    // What this iPhone offers (the same names in our peer.info): no messages or storage to browse.
+    var myCaps: Set<String> { photosOn ? ["clip", "notifs", "files", "screen", "photos"] : ["clip", "notifs", "files", "screen"] }
+    // A phone older than caps: an iPhone has no messages or storage to browse; an Android phone has all.
+    static func defaultCaps(_ os: String) -> Set<String> {
+        os == "ios" ? ["clip", "notifs", "files", "screen", "photos"] : ["clip", "notifs", "files", "screen", "photos", "messages", "fs"]
+    }
+    private func info() -> JSON { ["model": core.store.model, "os": Proto.os, "caps": Array(myCaps).sorted()] }
+    // One session: the computer's ends as a phone's starts.
+    private func takeOver() {
+        if core.connected || core.state == "connecting" { NSLog("TwinDesk: peer: ending the computer's session for %@", peerName); core.disconnect() }
+    }
 
     // ---- hosting ----
     let server = PeerServer()
@@ -64,6 +81,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
     func set(_ k: String, _ v: Bool) {
         core.store.setFlag(k, v)
         if k == "peer.on" && !v { disconnect(); asked = nil }
+        if k == "peer.photos" && connected { send(msg("peer.info", info())) } // what it can do here changed
         hosting()
         changed()
     }
@@ -86,6 +104,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
 
     func paired() -> [Computer] { core.store.hosts(Self.hostsList) }
     func nearby() -> [Found] { core.discovery.phoneList() }
+    func isPaired(_ id: String) -> Bool { guests[id] != nil || paired().contains { $0.id == id } }
     var pair: PairState? { link.pair }
     var linkState: String { link.state }
 
@@ -138,7 +157,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             if hostOn || guests[f.id] != nil || paired().contains(where: { $0.id == f.id }) { return allowHost(f) }
             if asked?.id == f.id { return }
             asked = f
-            Notifier.shared.note("peer.ask", "\(f.name) wants to connect", "Open TwinDesk to let it connect to this \(Device.word).")
+            Notifier.shared.note("peer.ask", "\(f.name) requests a connection", "Open TwinDesk to allow the connection.")
             changed()
         case "peer.hosting":
             let p = m.int("port")
@@ -185,6 +204,8 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             self.role = "guest"
             self.peerId = host.id
             self.peerName = host.name
+            self.peerOs = host.os
+            self.peerCaps = nil
             self.key = ""
             NSLog("TwinDesk: peer: session with %@", host.name)
             // A token for the other way (it can connect to us later), and our certificate.
@@ -195,7 +216,8 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
                 self.guests = g
                 self.send(msg("peer.rev", ["token": token, "fp": self.myFp, "port": Int(PeerServer.port)]))
             }
-            self.send(msg("peer.info", ["model": self.core.store.model]))
+            self.send(msg("peer.info", self.info()))
+            self.takeOver()
             self.message = ""
             self.changed()
         }
@@ -223,6 +245,8 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         NSLog("TwinDesk: peer: session with %@ ended", peerName)
         role = ""
         key = ""
+        peerCaps = nil
+        screenAsked = nil
         let waiting = calls
         calls.removeAll()
         for (_, cb) in waiting { cb(["error": "Disconnected"]) }
@@ -243,7 +267,12 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
     private func dispatch(_ t: String, _ m: JSON) {
         switch t {
         case "peer.key": key = m.str("key", max: 64)
-        case "peer.info": peerModel = m.str("model", max: 80); changed()
+        case "peer.info":
+            peerModel = m.str("model", max: 80)
+            let os = m.str("os", max: 20)
+            if !os.isEmpty { peerOs = os }
+            if let a = m["caps"] as? [Any] { peerCaps = Set(a.compactMap { ($0 as? String).map { String($0.prefix(20)) } }) }
+            changed()
         case "peer.forget": forget(peerId)
         case "peer.rev":
             guard role == "host" else { return }
@@ -283,7 +312,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let pb = UIPasteboard.general
         guard pb.changeCount != clipCount else { return }
         clipCount = pb.changeCount
-        guard pb.hasStrings, let text = pb.string else { return }
+        guard !core.clip.ownOnBoard, pb.hasStrings, let text = pb.string else { return } // TwinDesk's own copy: never read
         clipOut(text)
     }
 
@@ -297,7 +326,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let text = m.str("text", max: Proto.clipMaxBytes)
         guard clipOn, !text.isEmpty else { return }
         clipLastIn = text
-        UIPasteboard.general.string = text
+        core.clip.write(text) // marked as TwinDesk's, kept on this device (Clip.put)
         clipCount = UIPasteboard.general.changeCount
     }
 
@@ -522,16 +551,34 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             core.hub.originals(ids) { urls in self.sendFiles(urls) }
             reply(["ok": true, "n": ids.count])
         case "screen.start":
+            let size = min(1920, max(480, m.int("maxSize", 1600)))
             guard core.mirror.sharing else {
-                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk, then ask again there.")
-                return reply(["error": "Start Share Screen on \(core.store.deviceName) first (TwinDesk › Share screen), then try again."])
+                // Remembered: starting Share Screen here sends it straight away (shareStarted).
+                screenAsked = size
+                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk to show it.")
+                return reply(["error": "Start Share Screen on \(core.store.deviceName) (TwinDesk › Share screen). It appears here once started."])
             }
             reply(["ok": true])
-            core.mirror.peerWant(min(1920, max(480, m.int("maxSize", 1600))))
-            if role == "host" { send(msg("screen.ready")) } // it GETs our screen
-            else if let r = request("/peer/screen", "POST"), let fp = link.host?.fp { screenOut.post(r, pin: fp) } // we POST it
+            sendScreen(size)
         default: reply(["error": "unknown"])
         }
+    }
+
+    // ---- our screen, there ----
+
+    private var screenAsked: Int? // it asked before Share Screen was started here (its maxSize)
+
+    private func sendScreen(_ size: Int) {
+        screenAsked = nil
+        core.mirror.peerWant(size)
+        if role == "host" { send(msg("screen.ready")) } // it GETs our screen
+        else if let r = request("/peer/screen", "POST"), let fp = link.host?.fp { screenOut.post(r, pin: fp) } // we POST it
+    }
+
+    // Share Screen started here while a phone holds the session: to it, if it asked already.
+    func shareStarted() {
+        guard connected else { return }
+        if let size = screenAsked { sendScreen(size) }
     }
 
     // ---- its screen, here ----
@@ -688,6 +735,8 @@ extension Peer {
         peerId = id
         let n = m.str("name", max: 64)
         peerName = n.isEmpty ? ((e["name"] as? String) ?? "Phone") : n
+        peerOs = m.str("os", max: 20)
+        peerCaps = nil
         var g = guests; var en = e; en["name"] = peerName; g[id] = en; guests = g
         key = Proto.randomHex(16)
         ws.send(text(msg(Proto.T.welcome, ["v": Proto.version, "macId": core.store.deviceId, "macName": core.store.deviceName, "os": Proto.os])))
@@ -696,7 +745,8 @@ extension Peer {
         message = ""
         asked = nil
         NSLog("TwinDesk: peer: session with %@ as host", peerName)
-        send(msg("peer.info", ["model": core.store.model]))
+        send(msg("peer.info", info()))
+        takeOver()
         hosting()
         changed()
     }

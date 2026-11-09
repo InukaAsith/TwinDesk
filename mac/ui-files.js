@@ -40,7 +40,8 @@ UI.tab({
     const zoneText = el('div', { class: 'big', text: I18n.t('Drop files or folders here') });
     const zone = el('div', { class: 'dropzone' }, [el('div', {}, [zoneText, el('div', { class: 'hint', text: I18n.t('They go to the other computer’s Downloads') })])]);
     const sendBtn = UI.button(I18n.t('Choose…'), () => api.chooseSendFiles(), 'small');
-    const sendRow = UI.row(I18n.t('Send files'), '', [sendBtn], { literalHint: true });
+    const cancelSendBtn = UI.button(I18n.t('Cancel'), () => api.cancelSend(), 'small'); // what's on its way (not a drag)
+    const sendRow = UI.row(I18n.t('Send files'), '', [cancelSendBtn, sendBtn], { literalHint: true });
     const sendBar = el('div', { class: 'bar' }, [el('span')]);
     sendBar.hidden = true;
     sendRow.querySelector('.text').append(sendBar);
@@ -78,7 +79,7 @@ UI.tab({
         folderRow,
         UI.row(I18n.t('Show in Finder'), '', [reveal]),
       ]),
-      UI.card(I18n.t('Recent'), [list]),
+      UI.card(I18n.t('Recent'), [list], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
     );
 
     let key = '';
@@ -98,6 +99,7 @@ UI.tab({
       const out = outB.reduce((a, b) => [a[0] + b.sent, a[1] + b.bytes], f.sending.reduce((a, r) => [a[0] + r.sent, a[1] + r.size], [0, 0]));
       const outCount = f.sending.length + (f.sendingMore || 0) + outB.reduce((n, b) => n + b.left, 0);
       sendBar.hidden = !outCount;
+      cancelSendBtn.hidden = !(outB.length || f.sending.length || f.sendingMore);
       sendBar.firstChild.style.width = `${Math.floor((100 * out[0]) / Math.max(1, out[1]))}%`;
       sendRow.setHint(outCount ? I18n.t(outCount === 1 ? 'Sending {count} file to {device}' : 'Sending {count} files to {device}', { count: outCount, device: pc }) : canSend ? I18n.t('To {device}', { device: pc }) : '');
       // Shortcuts

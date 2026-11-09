@@ -90,9 +90,9 @@ val pal: Palette @Composable get() = LocalPalette.current
 // The look (General › Appearance, as on the computers: shared/look.js): the theme (system, light,
 // dark) and the accent colour, "" following the phone's own (Material You, Android 12+; else blue).
 // A local preference, never synchronized.
-// The phone's look (set by App: not on a tablet, which keeps the Mac-like one): bigger soft cards
-// without borders, a faint shadow, pill buttons.
-object Modern { var on = false }
+// The Material 3 Expressive look, on the phone and the tablet alike (TwinDesk Web has it too): bigger
+// soft cards without borders, a faint shadow, pill buttons. Off: the older Mac-like one.
+object Modern { var on = true }
 
 object Look {
     val THEMES = listOf("system", "light", "dark")
@@ -123,7 +123,6 @@ object Look {
 fun Theme(content: @Composable () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     Look.load(ctx)
-    Modern.on = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 600
     val dark = when (Look.theme) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
     val a = if (Look.accent != 0L) Color(Look.accent) else Look.system(ctx, dark)
     val base = (if (dark) Dark else Light)
@@ -135,12 +134,14 @@ fun Theme(content: @Composable () -> Unit) {
     val up = { c: Color, f: Float -> androidx.compose.ui.graphics.lerp(c, Color.White, f) }
     val sheet = if (dark) up(outer, 0.05f) else up(outer, 0.65f)
     val card = if (dark) up(sheet, 0.06f) else Color.White
-    val p = if (Modern.on) base.copy(
+    // The tablet has the same (its sidebar on the tinted background, the page in the sheet beside it:
+    // MainActivity).
+    val p = base.copy(
         accent = a, accentSoft = a.copy(alpha = if (dark) 0.22f else 0.12f),
-        content = outer, sheet = sheet, card = card,
+        content = outer, sidebar = outer, sheet = sheet, card = card,
         chip = if (dark) up(card, 0.07f) else androidx.compose.ui.graphics.lerp(sheet, Color.Black, 0.03f),
         line = if (dark) Color(0x14FFFFFF) else Color(0x0F000000),
-    ) else base.copy(accent = a, accentSoft = a.copy(alpha = if (dark) 0.22f else 0.12f), chip = if (dark) Color(0xFF333336) else Color(0xFFF3F3F7))
+    )
     val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
         primary = p.accent, onPrimary = Color.White, surface = p.content, background = p.content,
         onSurface = p.text, onSurfaceVariant = p.muted, outline = p.faint, surfaceContainer = p.card,
@@ -184,6 +185,20 @@ object Ico {
     val pause = lineIcon("pause", "M7 4.5v11 M13 4.5v11")
     val prev = lineIcon("prev", "M4.5 4.5v11 M16 4.5l-8 5.5 8 5.5z")
     val next = lineIcon("next", "M15.5 4.5v11 M4 4.5l8 5.5-8 5.5z")
+    // The Overview's shortcuts (Shortcuts.kt).
+    val mic = lineIcon("mic", "M10 2.5a2.5 2.5 0 0 1 2.5 2.5v5a2.5 2.5 0 0 1-5 0V5A2.5 2.5 0 0 1 10 2.5z M5 9.5a5 5 0 0 0 10 0 M10 14.5v3 M7.5 17.5h5")
+    val touchpad = lineIcon("touchpad", "M3 4h14v9.5H3z M3 13.5h14v2.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z M10 13.5V17")
+    val gamepad = lineIcon("gamepad", "M6.5 6.5h7a4 4 0 0 1 4 4v1.5a2.8 2.8 0 0 1-5 1.7L11.4 12H8.6l-1.1 1.7a2.8 2.8 0 0 1-5-1.7v-1.5a4 4 0 0 1 4-4z M6 8.5v3 M4.5 10h3 M13 9.5h0 M14.5 11h0")
+    val send = lineIcon("send", "M3 5h5l1.5 2H17v9H3z M10 14.5v-5 M7.8 11.5 10 9.3l2.2 2.2")
+    val lock = lineIcon("lock", "M5 9h10v8H5z M7 9V6.5a3 3 0 0 1 6 0V9 M10 12v2")
+    val sleep = lineIcon("sleep", "M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z")
+    val dnd = lineIcon("dnd", "M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M6.5 10h7")
+    val bluetooth = lineIcon("bluetooth", "M6 6.5l8 7-4 3.5V3l4 3.5-8 7")
+    val pencil = lineIcon("pencil", "M4 16l1-4 8.5-8.5 3 3L8 15z M11.5 5.5l3 3")
+    val plus = lineIcon("plus", "M10 4.5v11 M4.5 10h11")
+    val minus = lineIcon("minus", "M5 10h10")
+    val left = lineIcon("left", "M12.5 4.5 7 10l5.5 5.5")
+    val right = lineIcon("right", "M7.5 4.5 13 10l-5.5 5.5")
     val shield = lineIcon("shield", "M10 2.5l6 2.5v4.5c0 4-2.7 6.7-6 8-3.3-1.3-6-4-6-8V5z M7.5 10l2 2 3.5-3.5")
 }
 
@@ -206,6 +221,18 @@ fun Dot(color: Color, size: Int = 8) = Box(Modifier.size(size.dp).clip(CircleSha
 // One sidebar entry (the Mac's `.nav-item`): tile, label, and a green dot when the feature is on.
 @Composable
 fun NavItem(icon: ImageVector, colors: List<Color>, label: String, selected: Boolean, on: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    // Material 3 Expressive, as a navigation drawer has it: a pill, the selected one in the accent's
+    // soft tint; the icons stay the coloured tiles (as More's list has them).
+    if (Modern.on) return Row(
+        Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(50)).alpha(if (enabled) 1f else 0.4f)
+            .background(if (selected) pal.accentSoft else Color.Transparent).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Tile(icon, colors, 28)
+        Text(label, color = pal.text, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 12.dp).weight(1f))
+        if (on) Dot(pal.good, 7)
+    }
     Row(
         Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(8.dp)).alpha(if (enabled) 1f else 0.4f)
             .background(if (selected) pal.accent else Color.Transparent).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 8.dp),
