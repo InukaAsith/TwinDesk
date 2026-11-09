@@ -65,6 +65,9 @@ func handle(_ line: String) {
   let num = { (k: String, d: Double) in (msg[k] as? NSNumber)?.doubleValue ?? d }
   switch cmd {
   case "kvmConfig":
+#if !MULTI
+    Capture.shared.emergencyShortcut = EmergencyShortcut((msg["emergencyKeys"] as? String) ?? EmergencyShortcut.fallback)
+#endif
     Capture.shared.edgeZones = zones(msg["zones"])
     Capture.shared.takeBack = (msg["takeBack"] as? Bool) ?? true
     guard Capture.shared.startTap() else { return replyError(id, "event tap failed (Accessibility / Input Monitoring)") }

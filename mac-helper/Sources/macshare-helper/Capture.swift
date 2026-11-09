@@ -76,6 +76,7 @@ final class Capture {
   private var ret = (push: 0.0, at: 0.0, since: 0.0)
   private var returnSide: String?
   var emergencyActive = false
+  var emergencyShortcut = EmergencyShortcut(EmergencyShortcut.fallback)
 #endif
   private var returnResistance = 120.0
   // Driven (armReturn on): the first input from this Mac's own mouse or trackpad takes the Mac back
@@ -577,7 +578,7 @@ final class Capture {
     // Stop locally before asking main to release the peer. This still works if main is delayed,
     // provided the event tap and helper are responsive. Never intercept the chord at home.
     if emergencyActive || capturing {
-      if emergencyShortcutPressed(keyCode: kc, flags: e.flags, down: down) {
+      if emergencyShortcut.matches(keyCode: kc, flags: e.flags, down: down, kbType: e.getIntegerValueField(.keyboardEventKeyboardType)) {
         let wasCapturing = capturing
         if wasCapturing { stopCapture(side: nil, offset: nil) }
         else { injector.releaseAll() }

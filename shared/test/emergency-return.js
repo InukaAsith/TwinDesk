@@ -23,7 +23,7 @@ const server = Object.assign(new EventEmitter(), {
   messages: [], sendToClient(msg) { this.messages.push(msg); },
 });
 const helper = Object.assign(new EventEmitter(), {
-  commands: [], send(cmd, args) { this.commands.push({ cmd, args }); }, request() { return Promise.resolve({ ok: true }); },
+  commands: [], send(cmd, args) { this.commands.push({ cmd, args }); }, request(cmd, args) { this.commands.push({ cmd, args }); return Promise.resolve({ ok: true }); },
 });
 const settings = { kvm: { pcSide: 'right', mouse: true, keyboard: true, driveOther: true, beDriven: true,
   linked: true, linkedBy: {}, resistancePx: 10, speed: 1, ble: true }, keys: { hotkey: 'AltRight', lockKeys: 'F14' } };
@@ -32,6 +32,15 @@ const drop = { dragIn: { dragging: false, onDriven() {}, cancel() {} }, cancelDr
 const kvm = new Kvm({ server, helper, getSettings: () => settings, clipboard: { sendIfChanged() {} }, input: { releaseAll() {} }, drop, fileSend });
 global.setInterval = oldInterval;
 Module._load = originalLoad;
+
+kvm.config();
+assert.equal(helper.commands.filter((c) => c.cmd === 'kvmConfig').at(-1).args.emergencyKeys, 'Control+Alt+Command+Escape');
+settings.keys.emergencyKeys = 'Control+Alt+R';
+kvm.config();
+assert.equal(helper.commands.filter((c) => c.cmd === 'kvmConfig').at(-1).args.emergencyKeys, 'Control+Alt+R');
+settings.keys.emergencyKeys = 'unsupported';
+kvm.config();
+assert.equal(helper.commands.filter((c) => c.cmd === 'kvmConfig').at(-1).args.emergencyKeys, 'Control+Alt+Command+Escape');
 
 kvm._setMode('driving', '');
 assert.deepEqual(helper.commands.at(-1), { cmd: 'emergencyActive', args: { on: true } });
