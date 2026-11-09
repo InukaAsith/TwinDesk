@@ -48,6 +48,7 @@ const EVENTS_KEEP = 4;
 const WINDOW = 64; // replay window, as WireGuard's
 const RESEND_FOR_MS = 3000; // … and with each ping this long after the last move
 const HOLD_MAX = 512; // events held for a gap, at most (the WSS copy always fills it)
+const WSS_HOLD_MAX = 4096; // a gap on WSS itself that never fills: past this many held, skip it
 
 // General › Advanced › Input protocol: "tcp" (tdv1) keeps every move and event on the TCP session, "udp"
 // (tdv2, the default) uses this lane. Read at startup (main.js), so a change applies after a restart.
@@ -676,6 +677,9 @@ class EventOrder {
     if (!Number.isInteger(es) || es <= this.done || this.held.has(es)) return [];
     if (lane && es - this.done > HOLD_MAX) return [];
     this.held.set(es, msg);
+    // WSS is in order, so a gap there is a number the other side never sent: rather than hold
+    // every later click and key for ever (input frozen, memory growing), go on from what came.
+    if (!lane && this.held.size > WSS_HOLD_MAX) this.done = Math.min(...this.held.keys()) - 1;
     const out = [];
     while (this.held.has(this.done + 1)) {
       out.push(this.held.get(this.done + 1));
@@ -752,12 +756,15 @@ class LaneDrive {
   // An event the helper numbered that this side won't send (a copy/paste shortcut done over there, no
   // longer driving): a key-up with no key in its place, which every app ignores, so the other side's
   // order doesn't wait for that number for ever.
+  // With no lane (Bluetooth, the lane gone) it still goes on WSS: the helper keeps numbering and
+  // event() sends its numbered events there, so a missing number would hold every later one.
   skip(e, sendWss) {
+    if (!e || !Number.isInteger(e.es)) return;
     const lane = this.getLane();
-    if (!lane || !lane.native || !e || !Number.isInteger(e.es)) return;
+    if (lane && !lane.native) return; // our own lane numbers here: nothing of the helper's to fill
     const m = { t: 'k.ku', es: e.es, route: e.route, mn: e.mn, mc: e.mc };
     sendWss(m);
-    if (lane.up) lane.sendEvent(m);
+    if (lane && lane.up) lane.sendEvent(m);
   }
 
   // Moves never wait for the WSS backlog while they go on the lane.

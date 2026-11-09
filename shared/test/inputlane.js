@@ -99,6 +99,18 @@ const keepAlive = setInterval(() => {}, 1000); // the lane's own timers don't ho
   assert.deepStrictEqual(eo.push({ es: 3 }).map((m) => m.es), [3]);
   assert.deepStrictEqual(eo.push({ es: 3 + 600 }, true), [], 'far ahead from the lane: dropped');
   assert.strictEqual(eo.held.size, 0);
+  {
+    // A WSS gap that never fills: past the bound it goes on from what came instead of holding for ever.
+    const w = new L.EventOrder();
+    let out = [];
+    for (let es = 2; es <= 4097; es++) out = out.concat(w.push({ es }));
+    assert.strictEqual(out.length, 0, 'held while within the bound');
+    out = w.push({ es: 4098 });
+    assert.strictEqual(out.length, 4097, 'past it: everything held goes, in order');
+    assert.strictEqual(out[0].es, 2);
+    assert.strictEqual(w.held.size, 0);
+    assert.deepStrictEqual(w.push({ es: 1 }), [], 'the late one is old now');
+  }
 
   // ---- LaneDrive + LaneDriven, end to end without sockets ----
   {
@@ -145,6 +157,14 @@ const keepAlive = setInterval(() => {}, 1000); // the lane's own timers don't ho
     const plain = [];
     none.event({ t: 'k.kd', code: 'KeyA' }, (m) => plain.push(m));
     assert.deepStrictEqual(plain, [{ t: 'k.kd', code: 'KeyA' }], 'no es, no fence');
+    // The helper's numbered events with the lane gone (Bluetooth): a skipped one still fills its
+    // number on WSS, so the other side doesn't hold every later event for it.
+    const filled = [];
+    none.event({ t: 'k.kd', code: 'KeyA', es: 7, route: 1, mn: 3, mc: [0, 0] }, (m) => filled.push(m));
+    none.skip({ es: 8, route: 1, mn: 3, mc: [0, 0] }, (m) => filled.push(m));
+    assert.deepStrictEqual(filled.map((m) => [m.t, m.es]), [['k.kd', 7], ['k.ku', 8]]);
+    const own = new L.LaneDrive(() => ({ native: false, up: true, sendEvent() { throw new Error('not for our own lane'); } }));
+    own.skip({ es: 9 }, () => { throw new Error('our own lane numbers its events'); });
   }
 
   // ---- the kill switch ----
