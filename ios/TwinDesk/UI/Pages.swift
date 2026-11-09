@@ -207,6 +207,14 @@ struct ShareScreenView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .glassCard()
             } right: {
+                VStack(alignment: .leading, spacing: 12) {
+                    CardHeader(symbol: "airplayvideo", color: Page.airplay.color, title: "Or Screen Mirroring", detail: "AirPlay, from Control Center")
+                    Text("If Share Screen doesn’t start, mirror with AirPlay: \(core.host?.name ?? "the computer")’s Show screen turns its AirPlay receiver on. Then:")
+                        .font(.caption).foregroundStyle(.secondary)
+                    MirrorGuide(target: core.mirror.airplayName)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassCard()
                 VStack(alignment: .leading, spacing: 10) {
                     CardHeader(symbol: "cable.connector", color: TDColor.good, title: "On a Mac’s USB cable", detail: "Nothing to start")
                     Text("Plugged into a Mac, its \(Device.word) window shows this screen through the cable at 60 frames a second, without Share Screen (the way QuickTime does). Trust the Mac when the \(Device.word) asks.")

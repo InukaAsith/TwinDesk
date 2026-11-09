@@ -48,7 +48,7 @@
         showRow.label.textContent = name;
         showBtn.disabled = ble;
         showRow.setHint(ble ? tr('Screens need Wi-Fi: {phone} is connected through Bluetooth', { phone: name })
-          : tr('Asks {phone} to share its screen: tap Start Broadcast there. It shows here in its own window.', { phone: name }));
+          : tr('Asks {phone} to share its screen: Start Broadcast there, or Screen Mirroring to {computer} (its AirPlay receiver is turned on for it).', { phone: name, computer: here }));
         soundRow.setHint(tr('Its sound plays here over AirPlay: Control Center on {phone}, Screen Mirroring or the AirPlay button, then {computer}.', { phone: name, computer: here }));
         quality.set(String((ph.settings || {}).bitrateMbps || 8));
         const wins = br.windows || [];

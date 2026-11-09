@@ -66,8 +66,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post("n." + id, title.isEmpty ? app : title, body, info: [:], sound: true, thread: computer + "|" + app)
     }
 
-    func shareAsk(_ name: String) {
-        post("share", "\(name) wants to see this screen", "Open TwinDesk and tap Share Screen.", sound: true)
+    func shareAsk(_ name: String, airplay: String? = nil) {
+        post("share", "\(name) wants to see this screen", airplay.map { "Tap to share it, or use Screen Mirroring in Control Center and pick \($0)." } ?? "Open TwinDesk and tap Share Screen.", sound: true)
     }
 
     // The computer started sharing its screen while TwinDesk wasn't in front.

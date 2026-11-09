@@ -132,6 +132,10 @@ struct RootView: View {
             .overlay { if dropping { DropOverlay(name: core.host?.name, connected: core.connected) } }
             .background(shortcuts)
             .modifier(Covers(ui: ui))
+            .sheet(isPresented: Binding(get: { _ = core.tick; return core.mirror.asking && core.pair == nil && ui.cover == nil },
+                                        set: { if !$0 && core.mirror.asking { core.mirror.decline() } })) {
+                MirrorAskSheet().environmentObject(core).presentationDetents([.large])
+            }
             .modifier(PairPrompts())
     }
 
@@ -230,15 +234,20 @@ struct Sidebar: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Backdrop())
-        .navigationTitle("TwinDesk")
-        .navigationBarTitleDisplayMode(selection == nil ? .large : .inline)
-        .toolbar { ToolbarItem(placement: .navigationBarTrailing) { AppMark(size: 30) } }
+        // TwinDesk's own header (the mark, the name, the state) in place of a bar title: on iPhone
+        // no bar over it at all; on iPad the bar keeps only the sidebar's button.
+        .navigationTitle(selection == nil ? "TwinDesk" : "")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(selection == nil ? .hidden : .automatic, for: .navigationBar)
         .refreshable { core.discovery.refresh() }
     }
 
     @ViewBuilder
     private var content: some View {
         Section {
+            BrandHeader()
+                .listRowInsets(EdgeInsets(top: 4, leading: 6, bottom: 10, trailing: 6))
+                .listRowBackground(Color.clear)
             deviceRow
         }
         ForEach(Array(Page.groups.enumerated()), id: \.offset) { _, group in

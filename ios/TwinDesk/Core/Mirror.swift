@@ -8,6 +8,9 @@
 //   phone.mirror.want {on, key, maxSize, bitrate, fps} | {on, sync}   from it
 //   phone.mirror.state {on, waiting, error, w, h, sw, sh, key}        to it
 //   POST /twindesk/mirror (x-twindesk-mirror: key), the session's HTTPS port: scrcpy's packets
+// When the computer asks (its Show screen), it names its AirPlay receiver too (want.airplay, turned
+// on there): the app asks here, Share Screen or Screen Mirroring to it (UI/MirrorGuide.swift shows
+// where that is), and phone.mirror.state {on: false, airplay: true} closes its window for AirPlay's.
 import Foundation
 import Network
 import UIKit
@@ -18,7 +21,11 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     private var listener: NWListener?
     private var ext: NWConnection? // the broadcast extension, while it shares
     private var rx = Data()
-    private(set) var sharing = false // the extension is running
+    private(set) var sharing = false { didSet { if sharing { asking = false } } } // the extension is running
+    var asking = false // the computer asked to see this screen: the app asks how (MirrorAskSheet)
+    private(set) var airplayTo: String? // the computer's AirPlay receiver (Screen Mirroring lists it so)
+    // Where Screen Mirroring goes: the receiver the computer named, else the computer's own name.
+    var airplayName: String { airplayTo ?? core.link.host?.name ?? "the computer" }
     private(set) var size: (w: Int, h: Int, sw: Int, sh: Int)?
     private var want: JSON? // the computer's phone.mirror.want, while its window is open
     private var key = ""
@@ -149,6 +156,8 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     override func onMessage(_ t: String, _ m: JSON) -> Bool {
         guard t == "phone.mirror.want" else { return false }
         if !m.bool("on") {
+            asking = false
+            core.changed()
             want = nil
             endUpload()
             if sharing { sendExt(["stop": 1]) }
@@ -160,16 +169,44 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
         }
         want = m
         key = m.str("key", max: 64)
+        let air = m.str("airplay", max: 100)
+        if !air.isEmpty { airplayTo = air }
         if sharing { configure() }
         else {
             // The computer asked first (its Show Phone Screen): Start is the person's, on this iPhone.
             core.send(msg("phone.mirror.state", ["on": false, "waiting": true, "key": key]))
-            Notifier.shared.shareAsk(core.link.host?.name ?? "The computer")
+            asking = true
+            core.changed()
+            Notifier.shared.shareAsk(core.link.host?.name ?? "The computer", airplay: airplayTo)
         }
         return true
     }
 
+    // Screen Mirroring (AirPlay) in place of Share Screen: the computer's waiting window closes,
+    // its AirPlay receiver shows the screen.
+    func useAirPlay() {
+        asking = false
+        if want != nil && !sharing {
+            core.send(msg("phone.mirror.state", ["on": false, "airplay": true, "key": key]))
+            want = nil
+        }
+        Notifier.shared.cancel("share")
+        core.changed()
+    }
+
+    // Not now: the computer's window says so and closes.
+    func decline() {
+        asking = false
+        if want != nil && !sharing {
+            core.send(msg("phone.mirror.state", ["on": false, "error": "Not shared from the \(Device.word)", "key": key]))
+            want = nil
+        }
+        Notifier.shared.cancel("share")
+        core.changed()
+    }
+
     override func onClosed() {
+        asking = false
         want = nil
         endUpload()
         if sharing { sendExt(["stop": 1]) }

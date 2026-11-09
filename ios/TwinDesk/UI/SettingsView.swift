@@ -13,10 +13,21 @@ struct SettingsView: View {
     @EnvironmentObject var core: Core
     @State private var name = Store.shared.deviceName
     @State private var notifs: UNAuthorizationStatus = .notDetermined
+    @AppStorage("appearance") private var appearance = Appearance.system.rawValue
 
     var body: some View {
         PageScroll(title: "General") {
             Columns {
+                SectionTitle(text: "Appearance")
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(Appearance.allCases) { a in Text(a.title).tag(a.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Light or dark, or as this \(Device.word) is set (Automatic).").font(.caption).foregroundStyle(.secondary)
+                }
+                .glassCard()
+
                 SectionTitle(text: "This \(Device.word)")
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("Name", text: $name).font(.title3.weight(.semibold))

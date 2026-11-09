@@ -119,6 +119,11 @@ function setupWeb(c) {
       opts: () => { const w = settings().web; return { music: w.airplayMusic !== false, sound: w.airplaySound !== false, full: w.airplayFull === true }; } }),
     fileClip: c.fileClip && c.fileClip.offerLocal ? c.fileClip : null,
   });
+  // An iPhone's or iPad's Show screen: its Screen Mirroring can come here instead (shared/nativescreen.js).
+  require('../shared/nativescreen.js').NativeScreen.airplay = () => {
+    if (!settings().web.airplay) web.actions.webAirplaySet(true);
+    return c.device().name;
+  };
   for (const [name, fn] of Object.entries(web.actions)) ipcMain.handle(name, (_e, arg) => fn(arg));
   return web;
 }

@@ -1,6 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Liquid Glass on iOS 26, frosted material before it: one set of modifiers for every page.
 import SwiftUI
+import UIKit
 
 extension View {
     // A card: glass on iOS 26, thin material with a hairline before.
@@ -8,7 +9,7 @@ extension View {
     func glassCard(_ radius: CGFloat = 26, tint: Color? = nil) -> some View {
         if #available(iOS 26.0, *) {
             self.padding(18)
-                .glassEffect(tint.map { Glass.regular.tint($0.opacity(0.25)) } ?? .regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .glassEffect(tint.map { Glass.regular.tint($0.opacity(0.14)) } ?? .regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
         } else {
             self.padding(18)
                 .background {
@@ -53,41 +54,97 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
-// TwinDesk's colours: deep blacks (OLED black behind, near-black cards), the computers' accents.
+// TwinDesk's colours, light and dark as the computers have them: deep blacks (OLED black behind,
+// near-black cards) in dark; the computers' light grey with white cards in light. The accents stay.
 enum TDColor {
-    static let bg = Color.black
-    static let content = Color(red: 0.02, green: 0.02, blue: 0.024) // #050506
-    static let card = Color(red: 0.082, green: 0.082, blue: 0.09) // #151517
-    static let control = Color(red: 0.16, green: 0.16, blue: 0.17) // #29292b
-    static let line = Color.white.opacity(0.08)
-    static let text = Color(red: 0.96, green: 0.96, blue: 0.97)
-    static let muted = Color(red: 0.58, green: 0.58, blue: 0.6)
+    private static func dyn(_ light: UIColor, _ dark: UIColor) -> Color {
+        Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+    private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> UIColor { UIColor(red: r, green: g, blue: b, alpha: a) }
+
+    static let bg = dyn(rgb(0.95, 0.95, 0.97), .black)
+    static let content = dyn(rgb(0.949, 0.949, 0.969), rgb(0.02, 0.02, 0.024)) // #f2f2f7 / #050506
+    // Translucent, so the backdrop's glows show through (the glass on iOS 26 does it itself).
+    static let card = dyn(UIColor.white.withAlphaComponent(0.78), UIColor.white.withAlphaComponent(0.065))
+    static let control = dyn(rgb(0.9, 0.9, 0.92), rgb(0.16, 0.16, 0.17)) // #e5e5ea / #29292b
+    static let line = dyn(UIColor.black.withAlphaComponent(0.08), UIColor.white.withAlphaComponent(0.08))
+    static let text = dyn(rgb(0.07, 0.07, 0.08), rgb(0.96, 0.96, 0.97))
+    static let muted = dyn(rgb(0.42, 0.42, 0.45), rgb(0.58, 0.58, 0.6))
+    static let sheen = dyn(UIColor.white.withAlphaComponent(0.6), UIColor.white.withAlphaComponent(0.045))
     static let accent = Color(red: 0.04, green: 0.52, blue: 1) // #0a84ff
     static let good = Color(red: 0.2, green: 0.84, blue: 0.29) // #32d74b
     static let warn = Color(red: 1, green: 0.7, blue: 0.25)
     static let bad = Color(red: 1, green: 0.27, blue: 0.23)
 }
 
-// The background every page sits on: black, with a faint neutral sheen at the top for the glass.
+// Light, dark or as the system is (General › Appearance).
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var title: String { switch self { case .system: return "Automatic"; case .light: return "Light"; case .dark: return "Dark" } }
+    var scheme: ColorScheme? { switch self { case .system: return nil; case .light: return .light; case .dark: return .dark } }
+}
+
+// The background every page sits on: not flat black but a deep night with soft glows under the
+// glass (violet from the top left, teal from the right, a warm ember low on the right), as the
+// computers' windows have; in light, the same glows as pale washes. Still, so it costs nothing.
 struct Backdrop: View {
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        ZStack(alignment: .top) {
-            TDColor.content
-            LinearGradient(colors: [Color.white.opacity(0.045), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 360)
+        let dark = scheme == .dark
+        ZStack {
+            (dark ? Color(red: 0.035, green: 0.035, blue: 0.055) : TDColor.content)
+            RadialGradient(colors: [Color(red: 0.42, green: 0.26, blue: 0.78).opacity(dark ? 0.30 : 0.16), .clear],
+                           center: UnitPoint(x: 0.2, y: -0.05), startRadius: 0, endRadius: 620)
+            RadialGradient(colors: [Color(red: 0.12, green: 0.55, blue: 0.58).opacity(dark ? 0.20 : 0.12), .clear],
+                           center: UnitPoint(x: 1.05, y: 0.35), startRadius: 0, endRadius: 560)
+            RadialGradient(colors: [Color(red: 0.62, green: 0.30, blue: 0.12).opacity(dark ? 0.16 : 0.08), .clear],
+                           center: UnitPoint(x: 0.85, y: 1.05), startRadius: 0, endRadius: 520)
+            RadialGradient(colors: [Color(red: 0.55, green: 0.18, blue: 0.40).opacity(dark ? 0.12 : 0.06), .clear],
+                           center: UnitPoint(x: -0.1, y: 0.9), startRadius: 0, endRadius: 460)
+            LinearGradient(colors: [TDColor.sheen, .clear], startPoint: .top, endPoint: .center)
         }
         .ignoresSafeArea()
     }
 }
 
-// TwinDesk's mark beside a title (top right).
+// TwinDesk's mark, as the computers' sidebar shows it: the icon in the page itself (no frame, no
+// button around it), with a soft shadow so it sits on the glass.
 struct AppMark: View {
     var size: CGFloat = 30
     var body: some View {
         Image("Mark").resizable().interpolation(.high).frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous).strokeBorder(.white.opacity(0.12)))
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+            .shadow(color: .black.opacity(0.25), radius: size * 0.12, y: size * 0.05)
             .accessibilityLabel("TwinDesk")
+    }
+}
+
+// The top of the sidebar, as the computers' is: the mark, TwinDesk, and how it's connected.
+struct BrandHeader: View {
+    @EnvironmentObject var core: Core
+    var body: some View {
+        HStack(spacing: 14) {
+            AppMark(size: 58)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("TwinDesk").font(.title2.weight(.bold)).foregroundStyle(TDColor.text)
+                HStack(spacing: 6) {
+                    if core.connected { LiveDot(size: 8) }
+                    else { Circle().fill(core.state == "connecting" ? TDColor.warn : TDColor.muted.opacity(0.6)).frame(width: 8, height: 8) }
+                    Text(line).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+    private var line: String {
+        switch core.state {
+        case "connected": return "Connected"
+        case "connecting": return "Connecting…"
+        default: return "Not connected"
+        }
     }
 }
 
@@ -275,12 +332,14 @@ struct PageScroll<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content
     var body: some View {
-        ScrollView {
-            GlassGroup { VStack(spacing: 16) { content() }.pageWidth().rise() }
+        GeometryReader { g in
+            ScrollView {
+                GlassGroup { VStack(spacing: 16) { content() }.pageWidth().rise() }
+            }
+            .environment(\.pageWide, g.size.width >= twoColumnsAt)
         }
         .background(Backdrop())
         .navigationTitle(title)
-        .toolbar { ToolbarItem(placement: .navigationBarTrailing) { AppMark(size: 28) } }
     }
 }
 
@@ -323,14 +382,27 @@ struct ToggleRow: View {
     }
 }
 
-// Two columns side by side on a wide screen (iPad), one under the other on a narrow one.
+// Is the page wide enough for two columns (PageScroll measures it)?
+private struct PageWideKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var pageWide: Bool {
+        get { self[PageWideKey.self] }
+        set { self[PageWideKey.self] = newValue }
+    }
+}
+
+// Two columns side by side when the page is wide (an iPad sideways, or upright without the
+// sidebar on a big one), one under the other otherwise: an upright iPad beside its sidebar gets
+// one column, its cards at full width, as the computers' narrow windows do.
+let twoColumnsAt: CGFloat = 900
+
 struct Columns<Left: View, Right: View>: View {
-    @Environment(\.horizontalSizeClass) private var width
+    @Environment(\.pageWide) private var wide
     @ViewBuilder var left: () -> Left
     @ViewBuilder var right: () -> Right
 
     var body: some View {
-        if width == .regular {
+        if wide {
             HStack(alignment: .top, spacing: 20) {
                 VStack(spacing: 16) { left() }.frame(maxWidth: .infinity)
                 VStack(spacing: 16) { right() }.frame(maxWidth: .infinity)
