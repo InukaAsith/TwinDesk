@@ -152,7 +152,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         val now = System.currentTimeMillis()
         // The host's liveness: the guest pings every second (Link).
         hostWs?.let { w -> if (now - w.lastRx > Proto.TIMEOUT_MS) { Log.i("TwinDesk", "peer: $peerName stopped answering"); w.close() } else w.send(msg(Proto.T.PING, "ts" to now).toString()) }
-        pairing?.let { p -> if (now - p.at > 60_000) { fail(p.ws, Proto.E.PAIR_TIMEOUT, "Pairing timed out"); pairing = null; core.changed() } }
+        pairing?.let { p -> if (now - p.at > 60_000) { pairing = null; pairFailed(p.ws); fail(p.ws, Proto.E.PAIR_TIMEOUT, "Pairing timed out"); core.changed() } }
         // Waiting for the other phone to host: it's in its beacon (or peer.hosting) now.
         if (waitingFor.isNotEmpty()) {
             val f = core.discovery.phones[waitingFor]
@@ -262,7 +262,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
             Proto.T.PAIR_START -> pairStart(ws, m)
             Proto.T.PAIR_REVEAL -> pairing?.takeIf { it.ws === ws }?.let { p ->
                 val nonce = m.optString("nonce")
-                if (p.nw.isNotEmpty() || !Regex("^[0-9a-f]{32}$").matches(nonce) || Proto.commitOf(nonce) != p.commit) { pairing = null; fail(ws, Proto.E.PAIR_REFUSED, "Nonce does not match"); core.changed(); return }
+                if (p.nw.isNotEmpty() || !Regex("^[0-9a-f]{32}$").matches(nonce) || Proto.commitOf(nonce) != p.commit) { pairing = null; pairFailed(ws); fail(ws, Proto.E.PAIR_REFUSED, "Nonce does not match"); core.changed(); return }
                 p.nw = nonce
                 p.code = Proto.sasCode(myFp, p.nw, p.nm)
                 Log.i("TwinDesk", "peer: pairing code ready for ${p.name}")
@@ -270,14 +270,14 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 main.post { Notify.peer(ctx, "Pair with ${p.name}?", "Check that both phones show the same code in TwinDesk.") }
             }
             Proto.T.PAIR_CONFIRM -> pairing?.takeIf { it.ws === ws && it.code.isNotEmpty() }?.let { it.confirmed = true; finishPair() }
-            Proto.T.PAIR_CANCEL -> { if (pairing?.ws === ws) { pairing = null; core.changed() }; ws.close() }
+            Proto.T.PAIR_CANCEL -> { if (pairing?.ws === ws) { pairing = null; pairFailed(ws); core.changed() }; ws.close() }
             Proto.T.HELLO -> hello(ws, m)
             else -> fail(ws, "bad_message", "\"$t\" before welcome")
         }
     }
 
     override fun onClose(ws: PeerServer.Ws) {
-        if (pairing?.ws === ws) { pairing = null; core.changed() }
+        if (pairing?.ws === ws) { pairing = null; pairFailed(ws); core.changed() }
         if (ws === hostWs) { hostWs = null; ended() }
     }
 
@@ -286,13 +286,31 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         ws.close()
     }
 
+    // Failed pairings per address, as shared/pairfail.js: after 5 in 10 minutes that address can't
+    // start another for a while, so a phone on the network can't keep popping the dialog.
+    private val pairFails = HashMap<String, MutableList<Long>>()
+    private fun pairFailed(ws: PeerServer.Ws) {
+        val a = ws.address
+        if (a.isEmpty() || a == "127.0.0.1") return
+        val now = System.currentTimeMillis()
+        synchronized(pairFails) { pairFails.getOrPut(a) { mutableListOf() }.apply { removeAll { now - it >= 600_000 }; add(now) } }
+    }
+    private fun pairLocked(ws: PeerServer.Ws): Boolean = synchronized(pairFails) {
+        val l = pairFails[ws.address] ?: return false
+        val now = System.currentTimeMillis()
+        l.removeAll { now - it >= 600_000 }
+        if (l.isEmpty()) pairFails.remove(ws.address)
+        l.size >= 5
+    }
+
     private fun pairStart(ws: PeerServer.Ws, m: JSONObject) {
+        if (pairLocked(ws)) return fail(ws, Proto.E.PAIR_REFUSED, "Too many failed pairing attempts; wait a few minutes and try again")
         val p = pairing
         if (p != null && p.ws !== ws) return fail(ws, Proto.E.BUSY, "Another pairing is in progress")
         if (m.optInt("v") != Proto.VERSION) return fail(ws, Proto.E.VERSION_MISMATCH, "Different TwinDesk version")
         val id = m.optString("id")
         val commit = m.optString("commit")
-        if (id.isEmpty() || !Regex("^[0-9a-f]{64}$").matches(commit)) return fail(ws, "bad_message", "pair.start needs id and commit")
+        if (id.isEmpty() || !Regex("^[0-9a-f]{64}$").matches(commit)) { pairFailed(ws); return fail(ws, "bad_message", "pair.start needs id and commit") }
         val nm = Proto.randomHex(16)
         pairing = PairReq(ws, id.take(64), m.optString("name").take(64).ifEmpty { "Phone" }, commit, nm)
         ws.send(msg(Proto.T.PAIR_NONCE, "nonce" to nm, "os" to Proto.OS).toString())
@@ -303,7 +321,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     // Allow / Deny here (the dialog).
     fun respondPair(allow: Boolean) {
         val p = pairing ?: return
-        if (!allow) { pairing = null; fail(p.ws, Proto.E.PAIR_REFUSED, "Refused"); core.changed(); return }
+        if (!allow) { pairing = null; pairFailed(p.ws); fail(p.ws, Proto.E.PAIR_REFUSED, "Refused"); core.changed(); return }
         if (p.code.isEmpty()) return
         p.allowed = true
         finishPair()
@@ -319,6 +337,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         store.setPrefsString(GUESTS, g.toString())
         p.ws.send(msg(Proto.T.PAIR_OK, "token" to token, "macId" to store.deviceId, "macName" to store.deviceName, "os" to Proto.OS).toString())
         pairing = null
+        synchronized(pairFails) { pairFails.remove(p.ws.address) }
         Log.i("TwinDesk", "peer: paired with ${p.name}")
         core.changed()
     }

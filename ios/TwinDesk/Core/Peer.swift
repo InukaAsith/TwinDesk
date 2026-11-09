@@ -181,7 +181,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             if Date().timeIntervalSince(w.lastRx) > Proto.timeout { NSLog("TwinDesk: peer: %@ stopped answering", peerName); w.close(); wsClose(w) }
             else { w.send(text(msg(Proto.T.ping, ["ts": Int(Date().timeIntervalSince1970 * 1000)]))) }
         }
-        if let p = pairing, Date().timeIntervalSince(p.at) > 60 { fail(p.ws, Proto.E.pairTimeout, "Pairing timed out"); pairing = nil; changed() }
+        if let p = pairing, Date().timeIntervalSince(p.at) > 60 { pairing = nil; pairFailed(p.ws); fail(p.ws, Proto.E.pairTimeout, "Pairing timed out"); changed() }
         if ticks % 5 == 0 { hosting() }
         if !waitingFor.isEmpty {
             if let f = core.discovery.phone(waitingFor), f.port > 0 { waitingFor = ""; connect(f) }
@@ -652,7 +652,7 @@ extension Peer {
             guard var p = pairing, p.ws === ws else { return }
             let nonce = m.str("nonce", max: 64)
             guard p.nw.isEmpty, Proto.isHex(nonce, min: 32, max: 32), Proto.commitOf(nonce) == p.commit else {
-                pairing = nil; changed()
+                pairing = nil; pairFailed(ws); changed()
                 return fail(ws, Proto.E.pairRefused, "Nonce does not match")
             }
             p.nw = nonce
@@ -666,7 +666,7 @@ extension Peer {
             pairing = p
             finishPair()
         case Proto.T.pairCancel:
-            if pairing?.ws === ws { pairing = nil; changed() }
+            if pairing?.ws === ws { pairing = nil; pairFailed(ws); changed() }
             ws.close()
         case Proto.T.hello: hello(ws, m)
         default: fail(ws, "bad_message", "\"\(type)\" before welcome")
@@ -674,7 +674,7 @@ extension Peer {
     }
 
     func wsClose(_ ws: PeerServer.Ws) {
-        if pairing?.ws === ws { pairing = nil; changed() }
+        if pairing?.ws === ws { pairing = nil; pairFailed(ws); changed() }
         if ws === hostWs { hostWs = nil; ended() }
     }
 
@@ -683,11 +683,26 @@ extension Peer {
         ws.close()
     }
 
+    // Failed pairings per address, as shared/pairfail.js: after 5 in 10 minutes that address can't
+    // start another for a while, so a phone on the network can't keep popping the dialog.
+    private var pairFails: [String: [Date]] = [:]
+    private func pairFailed(_ ws: PeerServer.Ws) {
+        let a = ws.address
+        guard !a.isEmpty, a != "127.0.0.1" else { return }
+        pairFails[a] = (pairFails[a] ?? []).filter { Date().timeIntervalSince($0) < 600 } + [Date()]
+    }
+    private func pairLocked(_ ws: PeerServer.Ws) -> Bool {
+        let live = (pairFails[ws.address] ?? []).filter { Date().timeIntervalSince($0) < 600 }
+        pairFails[ws.address] = live.isEmpty ? nil : live
+        return live.count >= 5
+    }
+
     private func pairStart(_ ws: PeerServer.Ws, _ m: JSON) {
+        if pairLocked(ws) { return fail(ws, Proto.E.pairRefused, "Too many failed pairing attempts; wait a few minutes and try again") }
         if let p = pairing, p.ws !== ws { return fail(ws, Proto.E.busy, "Another pairing is in progress") }
         if m.int("v") != Proto.version { return fail(ws, Proto.E.versionMismatch, "Different TwinDesk version") }
         let id = m.str("id", max: 64), commit = m.str("commit", max: 64)
-        guard !id.isEmpty, Proto.isHex(commit, min: 64, max: 64) else { return fail(ws, "bad_message", "pair.start needs id and commit") }
+        guard !id.isEmpty, Proto.isHex(commit, min: 64, max: 64) else { pairFailed(ws); return fail(ws, "bad_message", "pair.start needs id and commit") }
         guard !myFp.isEmpty else { return fail(ws, Proto.E.busy, "This iPhone can’t host") }
         let nm = Proto.randomHex(16)
         let name = m.str("name", max: 64)
@@ -700,7 +715,7 @@ extension Peer {
     // Allow / Deny here.
     func respondPair(_ allow: Bool) {
         guard var p = pairing else { return }
-        if !allow { pairing = nil; fail(p.ws, Proto.E.pairRefused, "Refused"); return changed() }
+        if !allow { pairing = nil; pairFailed(p.ws); fail(p.ws, Proto.E.pairRefused, "Refused"); return changed() }
         guard !p.code.isEmpty else { return }
         p.allowed = true
         pairing = p
@@ -717,6 +732,7 @@ extension Peer {
         guests = g
         p.ws.send(text(msg(Proto.T.pairOk, ["token": token, "macId": core.store.deviceId, "macName": core.store.deviceName, "os": Proto.os])))
         pairing = nil
+        pairFails[p.ws.address] = nil
         NSLog("TwinDesk: peer: paired with %@", p.name)
         changed()
     }
