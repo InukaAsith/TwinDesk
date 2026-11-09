@@ -15,6 +15,8 @@
   <a href="https://twin-desk.vercel.app"><b>Website</b></a> ·
   <a href="#new-in-25"><b>What's new</b></a> ·
   <a href="#what-it-does"><b>What it does</b></a> ·
+  <a href="#apps"><b>Every app</b></a> ·
+  <a href="#compare"><b>How it compares</b></a> ·
   <a href="#get-started"><b>Get started</b></a>
 </p>
 
@@ -579,6 +581,141 @@ needed, then goes back.
 
 Who can turn up over Bluetooth is up to you: **Bluetooth with phones** (on) and **Bluetooth with
 computers** (off until you want it), on the Connection page.
+
+</details>
+
+---
+
+<a name="apps"></a>
+
+# 🧭 Every TwinDesk app
+
+The same TwinDesk runs on Mac, Windows and Linux. The phone apps and TwinDesk Web connect to any of
+them. The iPhone and iPad app and TwinDesk Web are new in 2.6 (beta).
+
+✅ yes · ◐ partly · ✗ no · — doesn't apply
+
+<details open>
+<summary><b>What each app can do</b></summary>
+
+| | Mac | Windows | Linux | Android | iPhone and iPad | TwinDesk Web |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Get it** | .dmg | installer | .deb, AppImage, Arch, Nix | .apk | .ipa, sideloaded | nothing to install: a browser, or add it to the Home Screen |
+| **Connecting** | | | | | | |
+| Same Wi-Fi | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| USB cable | ✅ phones | ✅ Android | ✅ Android | ✅ | ◐ to a Mac | ✗ |
+| Bluetooth | ✅ | ✅ | ✅ | ✅ | ✅ | ✗ |
+| Wi-Fi Direct or hotspot | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+| Several devices at once ([Mesh](#mesh)) | ✅ | ✅ | ◐ same Wi-Fi only | ◐ one computer at a time | ◐ one computer at a time | ◐ one computer at a time |
+| Phone to phone | — | — | — | ✅ | ✅ | — |
+| **Mouse and keyboard** | | | | | | |
+| Shares its mouse and keyboard | ✅ | ✅ | ✅ | — | — | — |
+| The pointer carries onto it | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+| Drag windows to another computer | ✅ | ✅ | ◐ Xorg | — | — | — |
+| Remote: touchpad, keyboard and gamepad | — | — | — | ✅ | ✅ | ✅ |
+| Real gamepad on the computer | — | — | — | ✅ | ✅ | ✅ |
+| Bluetooth gamepad, no TwinDesk on the computer | — | — | — | ✅ | ✗ | ✗ |
+| **Screens and apps** | | | | | | |
+| Shows its screen on another device | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ not in Safari on iPhone |
+| Extends onto another device | ✅ | ✅ | ◐ GNOME, X11 | — | — | — |
+| Sees and controls a computer's screen | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Apple Pencil as a pen on the computer | — | — | — | — | ✅ iPad | ✅ iPad |
+| Its apps in windows on another computer | ✅ | ✅ | ◐ Xorg | ✅ | ✗ | — |
+| **Files and clipboard** | | | | | | |
+| Clipboard, text and pictures | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Send files both ways | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Drag files across the screen edge | ✅ | ✅ | ◐ out of Linux on Xorg | ✅ | ✗ | ✗ |
+| Shared folder | ✅ | ✅ | ✅ | ✅ both ways | ◐ the computer's, in Files | ◐ the computer's |
+| Its photos and files on the computer | — | — | — | ✅ | ◐ photos, the app's files | ✗ |
+| Drop: messages and files, like a chat | — | — | — | ✗ | ✗ | ✅ |
+| Terminal (`ssh twindesk`) | ✅ | ✅ | ✅ | — | — | — |
+| **Camera and sound** | | | | | | |
+| Its camera as a webcam on a computer | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Its microphone on a computer | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Plays a computer's sound | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Its sound on the computer | ✅ | ✅ | ✅ | ✅ | ◐ through AirPlay | ✗ |
+| **Phone and more** | | | | | | |
+| Calls answered on the computer | — | — | — | ✅ | ✗ | ✗ |
+| Texts, WhatsApp, Instagram, Telegram | — | — | — | ✅ | ✗ | ✗ |
+| Its notifications on the computer | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+| The computer's notifications here | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ when added to the Home Screen |
+| Media controls | ✅ | ✅ | ✅ | ✅ both ways | ◐ the computer's, on the Lock Screen | ✗ |
+| [ReZume](#rezume) | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+
+Most of the ✗ on iPhone and iPad come from iOS itself: an app there can't read other apps'
+notifications, handle calls or texts, or be driven by another device's mouse.
+
+</details>
+
+---
+
+<a name="compare"></a>
+
+# ⚖️ How it compares
+
+Most tools do one part of this: a shared mouse and keyboard, a phone link, a second screen or file
+sending. TwinDesk does all of them in one app, on every platform. These tables were made in
+November 2026. If something here is out of date or wrong, please
+[open an issue](https://github.com/InukaAsith/TwinDesk/issues) and it will be fixed.
+
+✅ yes · ◐ partly · ✗ no · — not confirmed
+
+<details open>
+<summary><b>Computer to computer</b></summary>
+
+| | **TwinDesk** | Synergy 3 | Deskflow | ShareMouse | Mouse without Borders | Universal Control |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Platforms | Mac, Windows, Linux | Mac, Windows, Linux | Mac, Windows, Linux | Mac, Windows | Windows | Mac, iPad |
+| Linux on Wayland | ✅ | ◐ | ✅ | ✗ | ✗ | ✗ |
+| Mouse and keyboard across the edge | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Trackpad gestures and media keys carry over | ✅ | ✗ | ✗ | ✗ | ✗ | ✅ |
+| Shared clipboard, text | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Shared clipboard, pictures | ✅ | ◐ | ◐ | — | ✅ | ✅ |
+| Drag files across the edge | ✅ | — | ✗ | ✅ | ✅ (small files) | ✅ |
+| Drag windows to the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| The other computer's apps in windows of their own | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Extended display and remote screen | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Camera as a webcam on the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Sound and microphone between computers | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Notifications from the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Shared folders and a terminal | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Wake-on-LAN | ✅ | ✗ | ✗ | — | ✗ | ✗ |
+| Three or more computers | ✅ ([Mesh](#mesh), beta) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
+| Works without a shared network | ✅ Bluetooth, Wi-Fi Direct | ✗ | ✗ | ✗ | ✗ | ✅ |
+| At the login and lock screen | ✗ | ✅ | ✅ | ✅ | ◐ | ✗ |
+| Works with Barrier and Input Leap | ✗ | ✗ | ✅ | ✗ | ✗ | ✗ |
+| Input travels over | UDP ([tdv2](#speed)), TCP fallback | TCP | TCP | TCP | TCP | Apple's own |
+| Account or licence | none | licence | none | licence | none | Apple ID |
+| Price | free | paid | free | free and paid | free | free |
+
+</details>
+
+<details open>
+<summary><b>Phone to computer</b></summary>
+
+| | **TwinDesk** | Phone Link | KDE Connect | Apple Continuity | scrcpy | LocalSend |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Computers | Mac, Windows, Linux | Windows | Linux, Windows, Mac | Mac | Mac, Windows, Linux | all |
+| Phones | Android (iPhone and iPad in 2.6 beta) | Android, iPhone (fewer features) | Android, iPhone (fewer features) | iPhone, iPad | Android | all |
+| Notifications | ✅ both ways | ✅ | ✅ both ways | ✅ | ✗ | ✗ |
+| Answer calls, talk through the computer | ✅ | ✅ | ◐ alerts, mute | ✅ | ✗ | ✗ |
+| Texts | ✅ SMS, WhatsApp, Instagram, Telegram | ✅ SMS | ✅ SMS | ✅ iMessage, SMS | ✗ | ✗ |
+| Phone screen mirroring and control | ✅ | ✅ some phones | ✗ | ✅ not in the EU | ✅ | ✗ |
+| Phone apps in windows of their own | ✅ | ✅ some phones | ✗ | ✗ | ◐ | ✗ |
+| Photos | ✅ | ✅ | ◐ | ✅ iCloud | ✗ | ✗ |
+| The phone's whole storage | ✅ | ◐ | ✅ | ✗ | ✗ | ✗ |
+| Send files both ways | ✅ | ✅ | ✅ | ✅ AirDrop | ◐ | ✅ |
+| Clipboard | ✅ text and pictures | ✅ | ✅ text | ✅ | ✅ | ✗ |
+| Phone as a webcam | ✅ | ✅ | ✗ | ✅ | ✅ | ✗ |
+| Phone as a microphone | ✅ | ✗ | ✗ | ✅ | ◐ | ✗ |
+| Tablet as a second screen | ✅ | ✗ | ✗ | ✅ Sidecar, iPad | ✗ | ✗ |
+| Phone as touchpad, keyboard or remote | ✅ | ◐ | ✅ | ✗ | ✗ | ✗ |
+| Phone as a gamepad, or a real controller | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| The computer's mouse carries onto the phone | ✅ | ✗ | ✗ | ✅ iPad | ◐ in its window | ✗ |
+| Media controls | ✅ | ✅ | ✅ | ◐ | ✗ | ✗ |
+| USB, Bluetooth, Wi-Fi Direct | ✅ all three | ◐ | ◐ | ✅ | USB, Wi-Fi | ✗ same network |
+| Setup | an app; wireless debugging for screen, apps and camera | built into Windows | an app | built in | USB debugging | an app |
+| Account | none | Microsoft account | none | Apple ID | none | none |
 
 </details>
 
