@@ -408,6 +408,9 @@ async function startHost(tries = 0) {
       accept: (g) => bleAccepts(g.os),
       // Quiet on Wi-Fi with an iPhone or iPad in the session or linked: its link stays (the helper's bleHold).
       hold: () => blePhonesOn() && (iosNow() || bleHost.list().some((g) => g.os === P.OS.IOS)),
+      // …but advertising until the iPhone or iPad in the session has linked (another device's link
+      // kept it silent: an iPhone paired over Wi-Fi never found it, and fell back to nothing).
+      holdAds: () => iosSessions().some((s) => !bleHost.list().some((g) => g.id === s.id)),
     });
     bleHost.on('change', pushState);
     discovery.extras.unshift(bleHost);

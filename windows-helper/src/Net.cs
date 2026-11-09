@@ -91,7 +91,7 @@ namespace MacShare
                         Async(id, async () => { await host.Start(info); return null; });
                         break;
                     case "bleStop": host.Stop(); Reply(id, null); break;
-                    case "bleHold": host.Hold(); Reply(id, null); break;
+                    case "bleHold": host.Hold(Json.Bool(m, "advertise", false)); Reply(id, null); break;
                     case "bleCtrl": host.Ctrl(dev, Json.Str(m, "msg", "{}")); break;
                     case "bleSend":
                         byte[] data = Convert.FromBase64String(Json.Str(m, "data", ""));

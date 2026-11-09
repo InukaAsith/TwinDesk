@@ -800,6 +800,9 @@ function setupNet() {
     // advertising: the helper's bleHold), as it's what wakes TwinDesk there when iOS suspends it and
     // what the session falls back to. Advertising comes back only if that link drops.
     hold: () => settings.net.ble !== false && (iosNow() || svc.ble.list().some((g) => g.os === P.OS.IOS)),
+    // …but advertising until every iPhone or iPad in a session has linked (another device's link
+    // kept it silent: an iPhone paired over Wi-Fi never found it, and fell back to nothing).
+    holdAds: () => iosSessions().some((s) => !svc.ble.list().some((g) => g.id === s.id)),
   });
   svc.ble.on('change', pushState);
   // PCs nearby that aren't on this network (not paired yet: they haven't connected to say hello).

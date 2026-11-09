@@ -185,7 +185,12 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         pinFp = fp
         self.address = address
         let h = address.contains(":") ? "[\(address)]" : address
-        guard let url = URL(string: "wss://\(h):\(port)") else { return }
+        // No address (a computer never seen on a network): nothing to open; URLSession throws on a URL
+        // without a host.
+        guard !address.isEmpty, port > 0, let url = URL(string: "wss://\(h):\(port)"), url.host?.isEmpty == false else {
+            ws = nil
+            return q.async { self.onClose("No address for the computer") }
+        }
         let t = session.webSocketTask(with: url)
         t.maximumMessageSize = Proto.maxPayload
         ws = t

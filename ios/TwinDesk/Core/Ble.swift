@@ -45,6 +45,10 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
     private(set) var near: [String: String] = [:] // main: host id -> name, linked and paired
     private(set) var unpaired: [String: String] = [:] // main: host id -> name, linked, not paired (Pair over Bluetooth)
     private var looking = false // q: Connection is on screen: unpaired computers are kept linked, for Pair
+    // q: when the scan last (re)started. iOS reports a peripheral once per scan, so one that was read
+    // and let go (unpaired then, a failed connect) is seen again only after a fresh scan.
+    private var scanAt = Date.distantPast
+    private var rescan: DispatchSourceTimer?
     private var downAt = Date.distantPast
     private let lock = NSLock()
 
@@ -62,7 +66,8 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
     func start() {
         guard on, !core.store.hosts().isEmpty else { return }
         q.async {
-            if self.cm != nil { return }
+            // Already up: a computer paired since is linked to (a stopped scan starts again).
+            if let cm = self.cm { if cm.state == .poweredOn { self.relink(); self.scan() }; return }
             self.cm = CBCentralManager(delegate: self, queue: self.q, options: [
                 CBCentralManagerOptionRestoreIdentifierKey: "td.ble",
                 CBCentralManagerOptionShowPowerAlertKey: false,
@@ -128,12 +133,19 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
             publish()
             return
         }
-        // The computers we linked to before: connected again directly (a pending connection never
-        // times out, so it waits for them, in the background too).
+        relink()
+        scan()
+    }
+
+    // The computers we linked to before: connected again directly (a pending connection never
+    // times out, so it waits for them, in the background too). Restored ones (willRestoreState) too:
+    // left as they came back, they'd sit in conns and keep didDiscover from ever linking them.
+    private func relink() {
+        guard let cm = cm, cm.state == .poweredOn else { return }
         let ids = known.keys.compactMap(UUID.init(uuidString:))
         for p in cm.retrievePeripherals(withIdentifiers: ids) where conns[p.identifier]?.ready != true { link(p) }
         for p in cm.retrieveConnectedPeripherals(withServices: [Self.serviceId]) where conns[p.identifier]?.ready != true { link(p) }
-        scan()
+        for c in conns.values where !c.ready && !c.guest && c.p.state != .connecting { link(c.p) }
     }
 
     func centralManager(_ cm: CBCentralManager, willRestoreState dict: [String: Any]) {
@@ -148,13 +160,30 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
         guard let cm = cm, cm.state == .poweredOn else { return }
         let paired = Set(Store.shared.hosts().map { $0.id })
         let linked = Set(conns.values.filter { $0.ready }.map { $0.hostId })
-        if paired.subtracting(linked).isEmpty && !looking { cm.stopScan() }
-        else if !cm.isScanning { cm.scanForPeripherals(withServices: [Self.serviceId], options: nil) }
+        if paired.subtracting(linked).isEmpty && !looking {
+            cm.stopScan()
+            rescan?.cancel()
+            rescan = nil
+            return
+        }
+        // Started afresh now and then while something is still missing (see scanAt).
+        if !cm.isScanning || Date().timeIntervalSince(scanAt) > 20 {
+            cm.stopScan()
+            cm.scanForPeripherals(withServices: [Self.serviceId], options: nil)
+            scanAt = Date()
+        }
+        if rescan == nil {
+            let t = DispatchSource.makeTimerSource(queue: q)
+            t.schedule(deadline: .now() + 20, repeating: 20)
+            t.setEventHandler { [weak self] in self?.scan() }
+            t.resume()
+            rescan = t
+        }
     }
 
     func centralManager(_ cm: CBCentralManager, didDiscover p: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
-        if conns[p.identifier] != nil { return }
-        if known[p.identifier.uuidString] == nil, let t = tried[p.identifier], Date().timeIntervalSince(t) < 30 { return }
+        if let c = conns[p.identifier], c.ready || c.guest || p.state != .disconnected { return }
+        if known[p.identifier.uuidString] == nil, let t = tried[p.identifier], Date().timeIntervalSince(t) < 15 { return }
         tried[p.identifier] = Date()
         link(p)
     }
@@ -163,6 +192,7 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
         let c = conns[p.identifier] ?? Conn(p)
         conns[p.identifier] = c
         p.delegate = self
+        if p.state == .connecting { return } // asked already: it waits
         if p.state == .connected { p.discoverServices([Self.serviceId]) }
         else { cm?.connect(p, options: [CBConnectPeripheralOptionNotifyOnNotificationKey: false]) }
     }
@@ -263,6 +293,7 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
         NSLog("TwinDesk: Bluetooth link to %@", (o["name"] as? String) ?? id)
         publish()
         scan()
+        DispatchQueue.main.async { self.core.bleLinked(id) }
     }
 
     private func ctrl(_ c: Conn, _ o: JSON) {
@@ -293,7 +324,12 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
     // Paired through Bluetooth (or with one linked here as unpaired): the link becomes a paired one.
     override func onWelcome(_ host: Computer, _ m: JSON) {
         q.async {
-            guard let c = self.conns.values.first(where: { $0.guest && $0.hostId == host.id }) else { return }
+            guard let c = self.conns.values.first(where: { $0.guest && $0.hostId == host.id }) else {
+                // Not linked as a guest (paired over Wi-Fi, Connection left): look for it now.
+                self.tried.removeAll()
+                self.relink()
+                return self.scan()
+            }
             c.guest = false
             c.ready = true
             var k = self.known
@@ -311,6 +347,7 @@ final class Ble: Feature, CBCentralManagerDelegate, CBPeripheralDelegate {
     func openPipe(_ hostId: String, _ done: @escaping (UInt16?) -> Void) {
         q.async {
             guard let c = self.conns.values.first(where: { ($0.ready || $0.guest) && $0.hostId == hostId }) else {
+                self.scan()
                 return DispatchQueue.main.async { done(nil) }
             }
             self.closePipe(c, tell: true)

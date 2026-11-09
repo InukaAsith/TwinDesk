@@ -481,6 +481,9 @@ async function startHost(guest) {
       accept: (g) => (P.isPhoneOs(g.os) ? settings.net.ble : settings.net.blePc), // General's two Bluetooth switches
       // Quiet on Wi-Fi with an iPhone or iPad in the session or linked: its link stays (the helper's bleHold).
       hold: () => settings.net.ble && (iosNow() || bleHost.list().some((g) => g.os === P.OS.IOS)),
+      // …but advertising until the iPhone or iPad in the session has linked (another device's link
+      // kept it silent: an iPhone paired over Wi-Fi never found it, and fell back to nothing).
+      holdAds: () => iosNow() && !bleHost.list().some((g) => g.id === link.current.deviceId),
     });
     bleHost.on('change', pushState);
     discovery.extras.unshift(bleHost);

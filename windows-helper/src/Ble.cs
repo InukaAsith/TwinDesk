@@ -50,7 +50,7 @@ namespace MacShare
         // bleHold (the session on Wi-Fi, an iPhone linked): no advertising, the service and the linked
         // guests kept; advertising comes back while none is left. If a link drops right after going
         // quiet, this PC's Bluetooth takes the service down with the advertising: advertising stays on.
-        bool holding, holdBroken;
+        bool holding, holdBroken, holdAds; // holdAds: bleHold {advertise}, the session's iPhone not linked yet
         string infoNow = "";
         GattServiceProviderAdvertisingParameters adParams;
         DateTime quietAt = DateTime.MinValue;
@@ -68,6 +68,7 @@ namespace MacShare
             if (held != null && holding && info == infoNow)
             {
                 holding = false; // back from bleHold: the links stay
+                holdAds = false;
                 Advertise(true);
                 State("on");
                 return;
@@ -138,11 +139,12 @@ namespace MacShare
             catch (Exception) { }
         }
 
-        public void Hold()
+        public void Hold(bool ads)
         {
             if (provider == null) return;
             holding = true;
-            Advertise(clients.IsEmpty || holdBroken);
+            holdAds = ads;
+            Advertise(clients.IsEmpty || holdBroken || ads);
         }
 
         public void Stop()
@@ -186,7 +188,7 @@ namespace MacShare
                 now.Add(dev);
                 clients[dev] = c;
             }
-            if (holding && now.Count > 0 && !holdBroken) Advertise(false); // found again: quiet once more
+            if (holding && now.Count > 0 && !holdBroken && !holdAds) Advertise(false); // found again: quiet once more
             foreach (string dev in new List<string>(clients.Keys))
             {
                 if (now.Contains(dev)) continue;

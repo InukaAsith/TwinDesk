@@ -169,9 +169,18 @@ final class Core: ObservableObject, LinkEvents {
         if usb.computerId == h.id { return connectWired(h, user: true) } // on the cable to it: through the cable
         resumeUntil = .distantPast
         var h = h
+        // Linked over Bluetooth and not on this network (or no network at all: discovery keeps what it
+        // saw a while after Wi-Fi goes off): the session through it.
+        if ble.has(h.id), discovery.get(h.id) == nil || Discovery.interfaces().isEmpty { return connectBle(h) }
         if let f = discovery.get(h.id) { h.address = f.address; h.port = f.port; store.putHost(h) }
-        // Not seen on this network but linked over Bluetooth: the session through it.
-        else if ble.has(h.id) { return connectBle(h) }
+        // Saved at the cable's address (paired over Bluetooth or the cable, never seen on a network)
+        // and the cable isn't in: 127.0.0.1 would only reach our own cable listener, a TLS error each
+        // time. It waits for its Bluetooth link instead (linking connects it: bleLinked).
+        else if h.address == "127.0.0.1" || h.address.isEmpty {
+            NSLog("TwinDesk: %@ not on this network or the cable: waiting for Bluetooth", h.name)
+            ble.start()
+            return
+        }
         if h.address == "127.0.0.1" { usb.aim(h.id) } // saved at the cable's address: only that computer's cable
         link.connect(h)
     }
@@ -181,13 +190,23 @@ final class Core: ObservableObject, LinkEvents {
         resumeUntil = .distantPast
         ble.openPipe(h.id) { [weak self] port in
             guard let self = self else { return }
-            guard let port = port else { return self.link.connect(h) } // no link after all: try the network
+            guard let port = port else { // no link after all: the network, if it was ever seen on one
+                if h.address != "127.0.0.1", !h.address.isEmpty { self.link.connect(h) }
+                return
+            }
             var b = h
             b.address = "127.0.0.1"
             b.port = port
             NSLog("TwinDesk: session through Bluetooth")
             self.link.connect(b, force: true, ble: true)
         }
+    }
+
+    // A paired computer just linked over Bluetooth: connected through it if we're waiting for it
+    // (not on this network: offBle moves it onto the network as soon as it's seen there).
+    func bleLinked(_ id: String) {
+        guard !link.connected, link.state != "connecting", discovery.get(id) == nil else { return }
+        bleInvite(id)
     }
 
     // The computer asked over Bluetooth (its invite on CTRL, which also wakes the app): back on it
@@ -238,12 +257,15 @@ final class Core: ObservableObject, LinkEvents {
         offBle()
     }
 
-    // On Bluetooth and the computer showed up on the network: the session moves back to it.
+    // On Bluetooth and the computer showed up on the network: the session moves back to it. Only
+    // once discovery sees it here: its saved address on another network (or with Wi-Fi off) broke a
+    // working Bluetooth session for one that can't connect, again at every discovery change.
     private func offBle() {
-        guard link.viaBle, link.connected, let h = link.host, let saved = store.host(h.id) else { return }
+        guard link.viaBle, link.connected, let h = link.host, let saved = store.host(h.id), let f = discovery.get(h.id) else { return }
         var w = saved
-        // Where discovery last saw it, else where it was before Bluetooth.
-        if let f = discovery.get(h.id) { w.address = f.address; w.port = f.port; store.putHost(w) }
+        w.address = f.address
+        w.port = f.port
+        store.putHost(w)
         guard !w.address.isEmpty, w.address != "127.0.0.1" else { return }
         NSLog("TwinDesk: back on the network from Bluetooth")
         link.connect(w, force: true)
@@ -439,7 +461,11 @@ final class Core: ObservableObject, LinkEvents {
             return
         }
         let until = resumeUntil
-        if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { connect(store.host(h.id) ?? h) }
+        if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) }
+        // Dropped and linked over Bluetooth: back through it at once (offBle moves it onto the network
+        // again as soon as discovery sees the computer there).
+        else if ble.has(h.id) { connectBle(store.host(h.id) ?? h) }
+        else { connect(store.host(h.id) ?? h) }
         resumeUntil = until
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.resume() }
     }
