@@ -41,6 +41,27 @@ private func sendPicked(_ r: Result<[URL], Error>, _ peer: Peer) {
     peer.sendFiles(out)
 }
 
+// A phone pairing with this one: the code both show, Allow / Deny. On the Connection page and, from
+// any page, as a sheet (RootView's PairPrompts).
+struct PeerPairAsk: View {
+    @EnvironmentObject var core: Core
+    let p: Peer.PairReq
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "lock.shield.fill", color: TDColor.accent, title: "\(p.name) wants to pair",
+                       detail: p.code.isEmpty ? "Waiting for its code…" : "Allow if it shows the same code")
+            if !p.code.isEmpty {
+                Text(p.code).font(.system(size: 40, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity)
+                HStack {
+                    Button("Deny", role: .destructive) { core.peer.respondPair(false) }.secondaryButton()
+                    Spacer()
+                    Button(p.allowed ? "Waiting for it…" : "Allow") { core.peer.respondPair(true) }.primaryButton().disabled(p.allowed)
+                }
+            }
+        }
+    }
+}
+
 // ---- at the bottom of Connection: phones nearby, paired, the one connected ----
 
 struct PhonesSection: View {
@@ -79,19 +100,7 @@ struct PhonesSection: View {
 
     // A phone pairing with us: the code both show, Allow / Deny here.
     private func hostPairCard(_ p: Peer.PairReq) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            CardHeader(symbol: "lock.shield.fill", color: TDColor.accent, title: "\(p.name) wants to pair",
-                       detail: p.code.isEmpty ? "Waiting for its code…" : "Allow if it shows the same code")
-            if !p.code.isEmpty {
-                Text(p.code).font(.system(size: 40, weight: .bold, design: .monospaced)).frame(maxWidth: .infinity)
-                HStack {
-                    Button("Deny", role: .destructive) { peer.respondPair(false) }.secondaryButton()
-                    Spacer()
-                    Button(p.allowed ? "Waiting for it…" : "Allow") { peer.respondPair(true) }.primaryButton().disabled(p.allowed)
-                }
-            }
-        }
-        .glassCard()
+        PeerPairAsk(p: p).glassCard()
     }
 
     private func askedCard(_ f: Found) -> some View {

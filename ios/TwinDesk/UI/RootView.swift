@@ -281,6 +281,22 @@ private struct PairPrompts: ViewModifier {
             } message: {
                 Text("Pair this \(Device.word) with it to share the clipboard, files and screens.")
             }
+            // A phone (Android or iPhone) pairing with this one, or asking it to host: a popup on any
+            // page, not only the card at the bottom of Connection. Swiping the sheet away denies.
+            .sheet(isPresented: Binding(get: { _ = core.tick; return core.peer.hostPairing != nil && core.pair == nil },
+                                        set: { if !$0, core.peer.hostPairing != nil { core.peer.respondPair(false) } })) {
+                if let p = core.peer.hostPairing {
+                    PeerPairAsk(p: p).padding(24).environmentObject(core).presentationDetents([.medium])
+                }
+            }
+            .alert(core.peer.asked.map { "\($0.name) wants to connect" } ?? "",
+                   isPresented: Binding(get: { _ = core.tick; return core.peer.asked != nil && core.peer.hostPairing == nil && core.pair == nil },
+                                        set: { if !$0, core.peer.asked != nil { core.peer.answerAsk(false) } })) {
+                Button("Allow") { core.peer.answerAsk(true) }
+                Button("Not Now", role: .cancel) { core.peer.answerAsk(false) }
+            } message: {
+                Text("Let it connect to this \(Device.word)?")
+            }
     }
 }
 

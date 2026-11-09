@@ -334,7 +334,9 @@ struct DenseRow<Trailing: View>: View {
                     if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(hintColor).lineLimit(2) }
                 }
                 Spacer(minLength: 8)
-                HStack(spacing: 8) { trailing() }.controlSize(.small)
+                // Buttons keep their size (two capsules beside a long hint were squeezed into circles);
+                // the title and hint give way instead.
+                HStack(spacing: 8) { trailing() }.controlSize(.small).lineLimit(1).fixedSize().layoutPriority(1)
             }
             .padding(.vertical, 9)
         }
