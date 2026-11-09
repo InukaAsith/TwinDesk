@@ -24,6 +24,8 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     private(set) var sharing = false { didSet { if sharing { asking = false } } } // the extension is running
     var asking = false // the computer asked to see this screen: the app asks how (MirrorAskSheet)
     private(set) var airplayTo: String? // the computer's AirPlay receiver (Screen Mirroring lists it so)
+    // A Mac whose AirPlay Receiver is off (want.airplayOff): the sheet says where to turn it on there.
+    private(set) var airplayOff = false
     // Where Screen Mirroring goes: the receiver the computer named, else the computer's own name.
     var airplayName: String { airplayTo ?? core.link.host?.name ?? "the computer" }
     private(set) var size: (w: Int, h: Int, sw: Int, sh: Int)?
@@ -171,6 +173,7 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
         key = m.str("key", max: 64)
         let air = m.str("airplay", max: 100)
         if !air.isEmpty { airplayTo = air }
+        airplayOff = m.bool("airplayOff")
         if sharing { configure() }
         else {
             // The computer asked first (its Show Phone Screen): Start is the person's, on this iPhone.

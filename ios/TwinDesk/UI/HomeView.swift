@@ -210,6 +210,17 @@ struct ConnectionView: View {
             }
         }
         .refreshable { core.discovery.refresh() }
+        // While it's on screen, computers not paired yet are found over Bluetooth too (Pair through it).
+        .onAppear { core.ble.look(true) }
+        .onDisappear { core.ble.look(false) }
+    }
+
+    // Computers found over Bluetooth only (not on this network), not paired: Pair goes through Bluetooth.
+    private struct BleFound: Identifiable { let id: String; let name: String }
+    private var bleOnly: [BleFound] {
+        _ = core.tick
+        let seen = Set(core.nearby.map(\.id)).union(core.hosts.map(\.id))
+        return core.ble.unpaired.filter { !seen.contains($0.key) }.map { BleFound(id: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
     }
 
     // ---- Nearby: every computer TwinDesk sees, paired or not ----
@@ -227,13 +238,23 @@ struct ConnectionView: View {
                 DenseRow(symbol: "exclamationmark.triangle", title: "Can’t look for computers on this network",
                          hint: core.discovery.error, hintColor: TDColor.warn, divider: false) { EmptyView() }
             }
-            if list.isEmpty {
+            let viaBle = bleOnly
+            if list.isEmpty && viaBle.isEmpty {
                 DenseRow(title: "Looking for computers…", hint: "Open TwinDesk on the computer, on the same Wi-Fi.", divider: !core.discovery.error.isEmpty) {
                     ProgressView()
                 }
             }
             ForEach(Array(list.enumerated()), id: \.element.id) { i, f in
                 nearbyRow(f, first: i == 0 && core.discovery.error.isEmpty)
+            }
+            ForEach(Array(viaBle.enumerated()), id: \.element.id) { i, b in
+                let going = core.pair?.name == b.name
+                DenseRow(symbol: "dot.radiowaves.left.and.right", title: b.name,
+                         hint: going ? "Pairing…" : "Over Bluetooth · not on this network",
+                         divider: !(list.isEmpty && i == 0 && core.discovery.error.isEmpty)) {
+                    if going { ProgressView() } else { Button("Pair") { core.pairBle(b.id) }.primaryButton() }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
@@ -318,6 +339,14 @@ struct ConnectionView: View {
                      hint: "On a cable the session, the screen and files go through it: faster than Wi-Fi. TwinDesk moves onto it by itself.",
                      divider: false) {
                 if core.link.wired { Pill(text: "In use") } else if core.usb.ready { Pill(text: "Ready", color: TDColor.accent) }
+            }
+            // On the cable to a computer not paired yet: pair through it (no Wi-Fi needed).
+            if let u = core.usb.unpaired, !core.link.wired {
+                let going = core.pair?.name == u.name
+                DenseRow(symbol: "link", title: "\(u.name) isn’t paired yet",
+                         hint: going ? "Pairing through the cable…" : "Pair through the cable, whatever network each is on. Compare the code on both.") {
+                    if going { ProgressView() } else { Button("Pair") { core.pairUsb() }.primaryButton() }
+                }
             }
         }
     }

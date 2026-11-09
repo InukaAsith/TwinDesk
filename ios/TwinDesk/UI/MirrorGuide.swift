@@ -39,6 +39,12 @@ struct MirrorAskSheet: View {
                     }
                     .secondaryButton().controlSize(.large)
                 }
+                if how && core.mirror.airplayOff {
+                    // The Mac's own receiver is off: macOS's switch, opened there by TwinDesk.
+                    Label("Turn on AirPlay Receiver on \(core.host?.name ?? "the Mac"): System Settings › General › AirDrop & Handoff › AirPlay Receiver (macOS 12 or later). TwinDesk opened it there.",
+                          systemImage: "exclamationmark.circle")
+                        .font(.footnote).foregroundStyle(TDColor.warn).multilineTextAlignment(.leading)
+                }
                 if how {
                     MirrorGuide(target: core.mirror.airplayName)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))

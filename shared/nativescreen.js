@@ -44,13 +44,18 @@ const live = new Map(); // key -> NativeScreen, while it waits for or takes its 
 // The AirPlay receiver an iPhone or iPad can mirror to instead: () → its name ('' for none), turning
 // it on. A PC or Linux computer sets it (its web.js: TwinDesk's receiver); the Mac's is its own
 // (System Settings › AirDrop & Handoff › AirPlay Receiver, listed under the Mac's name), opened
-// there when it's off.
+// there when it's off, and the phone says to turn it on (want.airplayOff).
 let macAir = null;
+let macAirOff = false;
 function macAirplay() {
   const { execFileSync, execFile } = require('child_process');
+  macAirOff = parseInt(require('os').release(), 10) < 21; // before macOS 12 (Darwin 21): no receiver to turn on
   try {
     const on = execFileSync('defaults', ['read', 'com.apple.controlcenter', 'AirplayRecieverEnabled'], { encoding: 'utf8', timeout: 2000 }).trim();
-    if (on === '0') execFile('open', ['x-apple.systempreferences:com.apple.AirDrop-Handoff-Settings.extension'], () => {});
+    if (on === '0') {
+      macAirOff = true;
+      execFile('open', ['x-apple.systempreferences:com.apple.AirDrop-Handoff-Settings.extension'], () => {});
+    }
   } catch (_) { /* never set: on (macOS's default) */ }
   if (macAir == null) {
     try { macAir = execFileSync('scutil', ['--get', 'ComputerName'], { encoding: 'utf8', timeout: 2000 }).trim(); } catch (_) { macAir = require('os').hostname().replace(/\.local$/, ''); }
@@ -80,6 +85,7 @@ class NativeScreen extends EventEmitter {
     if (c.transport === 'ble') return Promise.reject(err('Screens need Wi-Fi: the phone is connected through Bluetooth'));
     live.set(this.secret, this);
     let airplay = '';
+    macAirOff = false;
     if (c.os === 'ios') {
       try { airplay = NativeScreen.airplay ? NativeScreen.airplay() : process.platform === 'darwin' ? macAirplay() : ''; } catch (_) { airplay = ''; }
     }
@@ -87,6 +93,7 @@ class NativeScreen extends EventEmitter {
       t: T.PHONE_MIRROR_WANT, on: true, key: this.secret,
       maxSize: this.opts.maxSize || 0, bitrate: this.opts.videoBitRate || 8000000, fps: this.opts.maxFps || 60,
       ...(airplay ? { airplay: String(airplay).slice(0, 100) } : {}),
+      ...(airplay && macAirOff ? { airplayOff: true } : {}),
     });
     return new Promise((resolve, reject) => {
       this._started = { resolve, reject };

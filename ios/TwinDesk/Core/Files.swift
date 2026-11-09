@@ -5,6 +5,7 @@
 // Files › On My \(Device.word) › TwinDesk › Received (UIFileSharingEnabled).
 import Foundation
 import CryptoKit
+import UIKit
 
 final class Files: Feature {
     struct Batch: Identifiable {
@@ -45,8 +46,24 @@ final class Files: Feature {
     }
 
     private(set) var batches: [Batch] = [] // newest first, for the Files page
-    private var incoming: [String: Incoming] = [:]
-    private var outgoing: [Outgoing] = []
+    private var incoming: [String: Incoming] = [:] { didSet { keepRunning() } }
+    private var outgoing: [Outgoing] = [] { didSet { keepRunning() } }
+    // While a file goes either way, iOS is asked to keep the app running (a background task, about
+    // 30 s once off screen): a file sent from the computer's Share menu or Send files while this
+    // screen is off was never pulled (the app suspended: the computer's 10 s wait for file.pull ran
+    // out) and its file.chunk stopped when the session dropped.
+    private var task: UIBackgroundTaskIdentifier = .invalid
+    private func keepRunning() {
+        let busy = !incoming.isEmpty || !outgoing.isEmpty
+        if busy, task == .invalid {
+            task = UIApplication.shared.beginBackgroundTask(withName: "TwinDesk files") { [weak self] in self?.letGo() }
+        } else if !busy { letGo() }
+    }
+    private func letGo() {
+        guard task != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(task)
+        task = .invalid
+    }
     private var expected: Set<String> = [] // batches asked for (fclip.paste)
     private var fxBroken = false
     private var fx2Broken = false // fx2 failed before a byte went: the fx way for the rest of the session

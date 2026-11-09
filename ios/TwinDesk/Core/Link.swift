@@ -132,10 +132,11 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     }
 
     // nonce: from the computer's QR code: no code to compare, only Allow there.
-    func startPairing(address: String, port: UInt16, name: String, nonce: String = "") {
+    // ble: through a Bluetooth pipe on 127.0.0.1 (the longer timeout).
+    func startPairing(address: String, port: UInt16, name: String, nonce: String = "", ble: Bool = false) {
         q.async {
             self.closeSocket()
-            self.viaBle = false
+            self.viaBle = ble
             self.host = nil
             self.pairNonce = nonce
             self.pair = PairState(phase: "connecting", address: address, port: port, name: name, qr: !nonce.isEmpty)
@@ -336,7 +337,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         let name = m.str("macName", max: 64)
         let h = Computer(id: id, name: name.isEmpty ? p.name : name, os: m.str("os").isEmpty ? "mac" : m.str("os"),
                      address: p.address, port: p.port, fp: seenFp, token: token, lastSeen: Date().timeIntervalSince1970)
-        store.putHost(h, list)
+        store.putHost(findable(h), list)
         pair = nil
         mode = "session"
         host = h
@@ -345,15 +346,31 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         hello()
     }
 
+    // What's saved of a computer reached through the cable or a Bluetooth pipe (127.0.0.1, and the
+    // pipe's own port): where it was last seen on a network instead, else 127.0.0.1 on the session's
+    // port (the cable's, if it's plugged in). Saving the pipe's address made every later Connect go
+    // to it, off the cable too, until the computer was forgotten and paired again.
+    private func findable(_ h: Computer) -> Computer {
+        guard h.address == "127.0.0.1" else { return h }
+        var w = h
+        if let old = store.host(h.id, list), old.address != "127.0.0.1", !old.address.isEmpty {
+            w.address = old.address
+            w.port = old.port
+        } else {
+            w.port = Proto.port
+        }
+        return w
+    }
+
     private func onWelcome(_ m: JSON) {
         guard mode == "session", state != "connected", var h = host else { return }
         helloTimer?.cancel()
         let name = m.str("macName", max: 64)
         if !name.isEmpty { h.name = name }
         h.lastSeen = Date().timeIntervalSince1970
-        if address != "127.0.0.1" { h.address = address } // the cable's address isn't where to find it next time
+        if address != "127.0.0.1" { h.address = address }
         host = h
-        store.putHost(h, list)
+        store.putHost(findable(h), list)
         if list == "hosts" { store.lastHostId = h.id }
         rttMs = nil
         let fx = m.str("fx", max: 64)

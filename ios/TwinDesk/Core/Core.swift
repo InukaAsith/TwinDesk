@@ -171,6 +171,7 @@ final class Core: ObservableObject, LinkEvents {
         if let f = discovery.get(h.id) { h.address = f.address; h.port = f.port; store.putHost(h) }
         // Not seen on this network but linked over Bluetooth: the session through it.
         else if ble.has(h.id) { return connectBle(h) }
+        if h.address == "127.0.0.1" { usb.aim(h.id) } // saved at the cable's address: only that computer's cable
         link.connect(h)
     }
 
@@ -227,6 +228,7 @@ final class Core: ObservableObject, LinkEvents {
         var w = h
         w.address = "127.0.0.1"
         w.port = Proto.port
+        usb.aim(h.id)
         link.connect(w, force: true)
     }
 
@@ -241,6 +243,21 @@ final class Core: ObservableObject, LinkEvents {
         discovery.clearInvite(f.id)
         if let h = store.host(f.id) { return connect(h) }
         link.startPairing(address: f.address, port: f.port, name: f.name)
+    }
+
+    // Pair with a computer on the USB cable (Usb.unpaired): through the cable, any network or none.
+    func pairUsb() { usb.pair() }
+
+    // Pair with a computer found over Bluetooth (Ble.unpaired): through a Bluetooth pipe, for two
+    // devices on different networks. The code is compared as over Wi-Fi; the session then stays on
+    // Bluetooth until the computer turns up on this network (or the cable).
+    func pairBle(_ id: String) {
+        guard link.pair == nil, let name = ble.unpaired[id] else { return }
+        ble.openPipe(id) { [weak self] port in
+            guard let self = self, let port = port, self.link.pair == nil else { return }
+            NSLog("TwinDesk: pairing through Bluetooth")
+            self.link.startPairing(address: "127.0.0.1", port: port, name: name, ble: true)
+        }
     }
 
     func pairAddress(_ address: String) {
