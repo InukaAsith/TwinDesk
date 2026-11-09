@@ -108,7 +108,7 @@ UI.tab({
         media.el,
       ]),
       UI.card(t('Language'), [
-        UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language]),
+        UI.row(t('Language'), t('Some pages are still in English. Changing the language restarts TwinDesk.'), [language]),
       ]),
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, sendToRow]),

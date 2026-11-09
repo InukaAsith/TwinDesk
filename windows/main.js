@@ -1372,17 +1372,11 @@ function createMainWindow(tab) {
   win.on('closed', () => { if (mainWin === win) mainWin = null; });
 }
 
-// Refresh only the settings window: active links, streams and native helpers keep running.
+// A new language restarts TwinDesk: every window then loads English and that language only
+// (shared/lang/pick.js), not every catalog. Settings are already saved (synchronously).
 function changeLanguage() {
-  i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
-  for (const player of BrowserWindow.getAllWindows()) {
-    if (!player.isDestroyed()) player.webContents.send('ui-language', i18n.locale);
-  }
-  trayKey = '';
-  updateTray();
-  if (mainWin && !mainWin.isDestroyed()) {
-    mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
-  }
+  app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); // the window shows
+  app.quit();
 }
 
 function saveBounds() {

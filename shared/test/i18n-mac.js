@@ -62,7 +62,7 @@ try {
     });
     assert.strictEqual(typeof exposed.setLanguage, 'function');
     const html = fs.readFileSync(path.join(ROOT, mode, 'control.html'), 'utf8');
-    for (const file of ['lang/en.js', 'lang/zh-CN.js', 'i18n.js']) assert.ok(html.includes('../shared/' + file), `${mode} loads shared ${file}`);
+    for (const file of ['lang/en.js', 'lang/pick.js', 'i18n.js']) assert.ok(html.includes('../shared/' + file), `${mode} loads shared ${file}`);
   }
   const build = fs.readFileSync(path.join(ROOT, 'mac/build-app.sh'), 'utf8');
   assert.ok(build.includes('"$ROOT/shared/lang" "$STAGE/shared/"'), 'Mac packages include the shared catalogs');

@@ -375,13 +375,11 @@ function setupSeen() {
   store.saveSettings(settings);
 }
 
+// A new language restarts TwinDesk: every window then loads English and that language only
+// (shared/lang/pick.js), not every catalog. Settings are already saved (synchronously).
 function changeLanguage() {
-  i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
-  for (const player of BrowserWindow.getAllWindows()) {
-    if (!player.isDestroyed()) player.webContents.send('ui-language', i18n.locale);
-  }
-  updateTray();
-  if (win && !win.isDestroyed()) win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+  app.relaunch();
+  app.quit(); // as Quit does: before-quit gives everything back (KVM, calls, the helper)
 }
 
 // General › Appearance changed: the theme; the window's vibrancy only for Simple (Glass paints its

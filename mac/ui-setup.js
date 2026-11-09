@@ -27,7 +27,7 @@ UI.setup = (() => {
     el('div', { class: 'app-mark', attrs: { 'aria-hidden': 'true' } }),
     el('h1', { text: t('Set up TwinDesk') }),
     el('p', { text: t('macOS needs your OK for a few things.') }),
-    UI.card('', [UI.row(t('Language'), t('Changing the language reloads this window.'), [language])]),
+    UI.card('', [UI.row(t('Language'), t('Changing the language restarts TwinDesk.'), [language])]),
     UI.card('', rows.map((r) => r.row)),
     el('div', { class: 'setup-foot' }, [
       UI.button(t('Restart TwinDesk'), () => api.relaunch(), ''),

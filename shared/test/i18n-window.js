@@ -54,9 +54,9 @@ async function testMode(mode) {
   const push = () => win.webContents.send('state', { ...state, ui: settings.ui });
   const mainSource = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
   const reloadCode = mainSource.slice(mainSource.indexOf('function changeLanguage()'), mainSource.indexOf('function saveBounds()'));
-  const reload = vm.createContext({ I18n, settings, BrowserWindow, app: { getLocale: () => 'zh-CN' },
-    i18n: I18n.create('en'), trayKey: '', updateTray() {}, mainWin: win, path, __dirname: dir,
-  });
+  // A new language restarts TwinDesk: the real handler relaunches and quits; the "restarted" app
+  // opens the settings window in the saved language, as startup does.
+  const reload = vm.createContext({ process: { argv: ['TwinDesk.exe'] }, app: { relaunch() {}, quit: () => win.loadFile(path.join(dir, 'app.html'), { query: { language: settings.ui.language } }) } });
   const ctx = {
     settings,
     buildState: () => ({ ...state, ui: settings.ui }),

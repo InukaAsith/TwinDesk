@@ -627,7 +627,7 @@ function setupIpc(ctx) {
     },
     relaunch() {
       app.relaunch();
-      app.exit(0);
+      app.quit(); // not exit: before-quit sends the cursor home and lets the helper release input
     },
     setMulti(on) {
       require('../multi').set(on === true); // Multi-device off: TwinDesk restarts one to one

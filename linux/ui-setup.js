@@ -32,7 +32,7 @@ UI.setup = (() => {
     el('div', { class: 'app-mark', attrs: { 'aria-hidden': 'true' } }),
     el('h1', { text: t('Set up TwinDesk') }),
     el('p', { text: t('A few things before {me} can share with the other computer.') }),
-    UI.card('', [UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language])]),
+    UI.card('', [UI.row(t('Language'), t('Some pages are still in English. Changing the language restarts TwinDesk.'), [language])]),
     UI.card('', [sessRow, inRow, fwRow, helperRow]),
     el('div', { class: 'setup-foot' }, [
       el('span', { class: 'hint', text: t('You can change these later in General.') }),

@@ -20,6 +20,8 @@ app.whenReady().then(async () => {
     win.webContents.on('console-message', (event) => { if (event.level === 'error') errors.push(event.message); });
     const read = (code) => win.webContents.executeJavaScript(code);
     await win.loadFile(path.join(root, platform, 'hud.html'), { query: { language: locale } });
+    // English and the page's own language only (shared/lang/pick.js, written in under the page's CSP).
+    assert.deepEqual(await read('Object.keys(TwinDeskLanguages).sort()'), [...new Set(['en', locale])].sort(), 'the HUD loads one language');
     const literal = '{me} {name} $& <b>raw</b>';
     for (const [kind, key, vars] of [['away', 'Using {name}', { name: literal }], ['driven', '{name} is using {me}', { name: literal, me: literal }], ['home', 'Back on {me}', { me: literal }], ['lock', 'Cursor locked on {name}', { name: literal }], ['lock', 'Cursor unlocked', {}], ['linkOn', 'Cursor sharing on', {}], ['linkOff', 'Cursor sharing off over Bluetooth', {}], ['driven', 'Receiving {count} files from {name} · {percent} %', { count: 2, name: literal, percent: 50 }], ['away', 'Sending {file} to {name} · {percent} %', { file: literal, name: literal, percent: 75 }], ['away', 'Sent {file} to {name}', { file: literal, name: literal }], ['home', 'Opening it when the phone is ready…', {}]]) {
       const big = kind.startsWith('link');
@@ -29,14 +31,6 @@ app.whenReady().then(async () => {
       const selector = big ? 'card-text' : 'text';
       assert.equal(await read(`document.getElementById('${selector}').textContent`), I18n.create(locale).t(key, vars));
       if (locale === 'zh-CN') assert.match(await read(`document.getElementById('${selector}').textContent`), /[\u3400-\u9fff]/, 'HUD source messages have Chinese translations');
-      await read(`window.__hudMutations = []; window.__hudObserver && window.__hudObserver.disconnect(); window.__hudObserver = new MutationObserver(records => window.__hudMutations.push(...records.map(r => r.attributeName))); window.__hudObserver.observe(document.getElementById('${big ? 'card' : 'pill'}'), { attributes: true });`);
-      const other = locale === 'en' ? 'zh-CN' : 'en';
-      win.webContents.send('ui-language', other); await delay(30);
-      assert.equal(await read('document.documentElement.lang'), other);
-      assert.equal(await read(`document.getElementById('${selector}').textContent`), I18n.create(other).t(key, vars));
-      if (big) assert.equal(await read("document.getElementById('card-sub').textContent"), I18n.create(other).t(sub.key, sub.vars));
-      assert.deepEqual(await read('window.__hudMutations'), [], 'language changes preserve animation state');
-      win.webContents.send('ui-language', locale); await delay(20);
     }
     win.setContentSize(460, 230);
     const longName = 'StudioMacBookPro'.repeat(4);
@@ -49,13 +43,11 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(process.env.TWINDESK_I18N_SCREENSHOTS, platform + '-hud-' + locale + '.png'), (await win.webContents.capturePage()).toPNG());
     }
     win.webContents.send('hud', { kind: 'home', text: literal }); await delay(20);
-    win.webContents.send('ui-language', locale === 'en' ? 'zh-CN' : 'en'); await delay(20);
     assert.equal(await read("document.getElementById('text').textContent"), literal, 'raw native/user text remains literal');
     win.webContents.send('hud', { kind: 'home', text: 'Not connected' }); await delay(20);
     assert.equal(await read("document.getElementById('text').textContent"), 'Not connected', 'raw/native strings are not translated by catalog coincidence');
     win.webContents.send('hud', { kind: 'hide' }); await delay(20);
-    win.webContents.send('ui-language', locale); await delay(20);
-    assert.equal(await read("document.getElementById('pill').classList.contains('on')"), false, 'language change keeps dismissed HUD hidden');
+    assert.equal(await read("document.getElementById('pill').classList.contains('on')"), false, 'a dismissed HUD stays hidden');
     assert.deepEqual(errors, [], platform + ' preload/renderer errors');
     win.destroy();
   }
