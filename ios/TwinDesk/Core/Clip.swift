@@ -15,8 +15,8 @@
 // No loops: what TwinDesk writes carries its own type (Clip.mark) and stays on this device
 // (localOnly: Universal Clipboard doesn't carry it back to a Mac on the same Apple Account), and a
 // clipboard holding TwinDesk's own copy is never read or sent. Universal Clipboard still echoes
-// what goes between the two (the computer's copy reaching here on its own too; ours, written there,
-// coming back): after each copy either way, the one change that echo makes isn't read (no "Allow
+// what goes between this device and a Mac (the Mac's copy reaching here on its own too; ours,
+// written there, coming back): with a Mac only, after each copy either way, the one change that echo makes isn't read (no "Allow
 // Paste" for something already on both). Seen once, it's expected for 15 s after each copy; never
 // seen (Universal Clipboard off, another Apple Account), nothing is skipped past the first 5 s.
 import Foundation
@@ -37,7 +37,12 @@ final class Clip: Feature {
     private var ucEchoes: Bool { core.store.flag("clip.ucEcho", false) }
 
     // A copy went between the two: its echo (one change) is expected.
-    private func expectEcho() { echoUntil = Date().addingTimeInterval(ucEchoes ? 15 : 5) }
+    // Only with a Mac: Universal Clipboard is Apple's, a Windows or Linux computer never echoes, so
+    // with those nothing is ever skipped.
+    private func expectEcho() {
+        guard (core.link.host?.os ?? "") == "mac" else { echoUntil = .distantPast; return }
+        echoUntil = Date().addingTimeInterval(ucEchoes ? 15 : 5)
+    }
     static let mark = "com.twindesk.clip" // on everything TwinDesk writes to the clipboard
     private var watch: Timer?
     private var pic: (id: String, w: Int, h: Int, bytes: Int, parts: Int, got: Int, data: Data, at: Date)?
