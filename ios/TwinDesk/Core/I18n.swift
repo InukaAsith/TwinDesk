@@ -108,7 +108,7 @@ func tr(_ text: String, _ vars: [String: Any] = [:]) -> String {
 
 // A value as text; an optional shows what it holds, not "Optional(…)".
 private func plain(_ v: Any) -> String {
-    let m = Mirror(reflecting: v)
+    let m = Swift.Mirror(reflecting: v)
     if m.displayStyle == .optional { return m.children.first.map { plain($0.value) } ?? "" }
     return "\(v)"
 }
