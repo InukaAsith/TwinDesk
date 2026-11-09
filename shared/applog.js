@@ -5,7 +5,8 @@
 // folder, %APPDATA%\MacShare\logs, ~/.config/MacShare/logs), kept to 5 MB × 3 (TwinDesk.log, .1.log,
 // .2.log). Crashes
 // (an uncaught exception or rejection here, a window's renderer or another Electron process gone)
-// go to crash.log as well, and the app goes on as before. With TWINDESK_LINK_STATS=1, while connected,
+// go to crash.log as well (1 MB × 2: crash.log, crash.1.log; the same crash again is a count), and
+// the app goes on as before. With TWINDESK_LINK_STATS=1, while connected,
 // once every 30 s, one line on the link: round trip p50/p95/p99/max, the input lane's (shared/inputlane.js) when it's
 // up, pointer moves a second, bytes queued on the socket, and how long the main thread's event loop
 // was held up (p99 and max: garbage collection, sync writes, IPC).
@@ -23,6 +24,7 @@ let maxBytes = 5 * 1024 * 1024;
 const KEEP = 3; // TwinDesk.log and two older ones
 const LEVELS = ['log', 'info', 'warn', 'error', 'debug'];
 const STATS_MS = 30000;
+let crashMax = 1024 * 1024; // crash.log, then crash.1.log: two files at most, whatever loops
 
 let folder = '';
 let fd = null; // TwinDesk.log, written in order with crash()'s lines (a stream's end() is too late to rename on Windows)
@@ -100,10 +102,14 @@ function watchPipe(stream) {
   });
 }
 
-// crash.log keeps everything (it is what people send with a bug report), TwinDesk.log keeps the same
-// line under its own cap.
+// crash.log (what people send with a bug report) is kept to crashMax × 2 (crash.log, crash.1.log),
+// TwinDesk.log keeps the same line under its own cap.
 function crashLine(line) {
-  try { fs.appendFileSync(path.join(folder, 'crash.log'), line); } catch (_) { /* no folder */ }
+  const f = path.join(folder, 'crash.log');
+  try {
+    if (fs.statSync(f).size + Buffer.byteLength(line) > crashMax) fs.renameSync(f, path.join(folder, 'crash.1.log'));
+  } catch (_) { /* not there yet */ }
+  try { fs.appendFileSync(f, line); } catch (_) { /* no folder */ }
   write(line);
 }
 
@@ -133,6 +139,7 @@ function start(app, opts = {}) {
   if (started) return;
   started = true;
   if (opts.maxBytes) maxBytes = opts.maxBytes;
+  if (opts.crashBytes) crashMax = opts.crashBytes;
   try {
     folder = app.getPath('logs');
   } catch (_) {

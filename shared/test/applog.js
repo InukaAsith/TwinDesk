@@ -22,7 +22,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
   process.stdout.write = () => true; // the test's own console stays quiet
   process.stderr.write = () => true;
   try {
-    applog.start(app, { maxBytes: 4000 });
+    applog.start(app, { maxBytes: 4000, crashBytes: 3000 });
     assert.strictEqual(applog.dir(), dir);
     console.log('hello %s', 'world');
     console.warn('[helper] something');
@@ -97,6 +97,13 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     assert.ok(/uncaughtException: Error: same thing again \(repeated 10 times since /.test(dedup), dedup.slice(-500));
     process.emit('uncaughtException', new Error('something else'));
     assert.ok(/\[crash\] uncaughtException: Error: something else\n\s+at /.test(read('crash.log')), 'a new one keeps its stack');
+
+    // Different crashes, many of them: crash.log stays capped, one older file kept.
+    for (let i = 0; i < 60; i++) process.emit('uncaughtException', new Error(`crash number ${i}`));
+    assert.ok(fs.statSync(path.join(dir, 'crash.log')).size <= 3000, 'crash.log capped');
+    assert.ok(fs.statSync(path.join(dir, 'crash.1.log')).size <= 3000, 'crash.1.log capped');
+    assert.ok(/crash number 59/.test(read('crash.log')), 'the newest is kept');
+    assert.ok(!fs.existsSync(path.join(dir, 'crash.2.log')), 'two files at most');
   } finally {
     process.stdout.write = realOut;
     process.stderr.write = realErr;
