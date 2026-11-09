@@ -23,6 +23,7 @@ final class Usb: Feature {
     private(set) var computerId: String? // main
     private(set) var computerName: String?
     private var lastSeen = Date.distantPast
+    private var droppedAt = Date.distantPast // main: when a session on the cable last failed
     var ready: Bool { computerId != nil }
 
     override init(_ core: Core) {
@@ -66,7 +67,8 @@ final class Usb: Feature {
             c.stateUpdateHandler = { [weak self, weak c] st in
                 guard let self = self, let c = c else { return }
                 switch st {
-                case .failed, .cancelled:
+                case .failed, .cancelled, .waiting:
+                    if case .waiting = st { c.cancel() } // its path went away (the cable out)
                     self.waiting.removeAll { $0.conn === c }
                     self.checkGone()
                 default: break
@@ -172,7 +174,31 @@ final class Usb: Feature {
         computerId = id
         computerName = name
         if was != id { NSLog("TwinDesk: on the USB cable to %@", name); core.changed() }
+        // A session on the cable just failed: not straight back onto it (a cable that's in but not
+        // working would keep the network from being tried); Connect or the next plug-in still does.
+        if Date().timeIntervalSince(droppedAt) < 20 { return }
         moveOn()
+    }
+
+    // A session through the cable closed or never opened. Unplugged, the cable's waiting connections
+    // often don't fail here (nothing comes back through usbmuxd to say so), so computerId would stay
+    // set and every reconnect, Connect included, would go to 127.0.0.1 again. So they're all dropped
+    // and the cable counts as gone: the Mac opens new ones within a moment if it's still plugged in
+    // (shared/iosnet.js refills its pool when one closes), and the session comes back over Wi-Fi or
+    // Bluetooth meanwhile.
+    // Main, from Core.linkClosed (not for a session closed here on purpose: a move, Disconnect).
+    func sessionFailed() {
+        guard computerId != nil else { return }
+        NSLog("TwinDesk: the session on the cable closed: the cable counts as gone until the Mac's back")
+        droppedAt = Date()
+        computerId = nil
+        computerName = nil
+        q.async {
+            let all = self.waiting
+            self.waiting.removeAll()
+            for w in all { w.conn.stateUpdateHandler = nil; w.conn.cancel() }
+        }
+        core.changed()
     }
 
     func moveOn() {

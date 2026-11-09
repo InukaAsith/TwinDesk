@@ -134,20 +134,20 @@ fun BankCard(core: Core) {
         SwitchRow(
             "Close TwinDesk for banking apps",
             "When a banking app opens, TwinDesk turns off USB and wireless debugging" + (if (b.devOff) ", Developer options" else "") +
-                " and its Accessibility service, then closes, so the app doesn’t refuse to run.",
+                " and its Accessibility service, then closes",
             b.on, first = true,
         ) { b.setOn(it) }
         if (b.on) {
-            SwitchRow("Turn off Developer options too", "Most banking apps also check this", b.devOff) { b.setDevOff(it) }
-            SwitchRow("Turn back on when TwinDesk opens", "What was on comes back the next time you open TwinDesk", b.restoreOn) { b.setRestore(it) }
-            if (!core.adb.canEnable) MacRow("Needs wireless debugging set up once", "Without it TwinDesk can close, but can’t switch debugging off") { }
-            if (b.how.isEmpty()) MacRow("Allow Usage access", "So TwinDesk sees a banking app open (or turn on the mouse and keyboard Accessibility service)") {
+            SwitchRow("Turn off Developer options", "Checked by most banking apps", b.devOff) { b.setDevOff(it) }
+            SwitchRow("Restore when TwinDesk opens", "Turns these settings back on the next time TwinDesk opens", b.restoreOn) { b.setRestore(it) }
+            if (!core.adb.canEnable) MacRow("Wireless debugging required", "Without it, TwinDesk closes but can’t turn debugging off") { }
+            if (b.how.isEmpty()) MacRow("Usage access", "Detects when a banking app opens (or use the Accessibility service)") {
                 TextButton(onClick = { runCatching { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("Allow", color = pal.accent) }
             }
             if (b.last.isNotEmpty()) MacRow("Last closed for", b.last)
             MacRow(
-                "Apps it watches",
-                if (banks.isEmpty()) "None yet: choose them" else banks.take(4).joinToString(", ") { it.label } + if (banks.size > 4) " and ${banks.size - 4} more" else "",
+                "Banking apps",
+                if (banks.isEmpty()) "None selected" else banks.take(4).joinToString(", ") { it.label } + if (banks.size > 4) " and ${banks.size - 4} more" else "",
                 onClick = { open = !open },
             ) { Text(if (open) "Done" else "Choose", color = pal.accent, fontSize = 14.sp) }
             if (open) {
@@ -156,7 +156,7 @@ fun BankCard(core: Core) {
                     .sortedWith(compareBy({ !b.isBank(it.pkg) }, { it.label.lowercase() }))
                 val list = if (q.isBlank()) apps.take(FIRST + banks.size) else apps
                 list.forEachIndexed { i, a ->
-                    AppRow(core, a.pkg, a.label, if (b.auto(a.pkg)) "Looks like a banking app" else "", b.isBank(a.pkg), i == 0) { b.setBank(a.pkg, it) }
+                    AppRow(core, a.pkg, a.label, if (b.auto(a.pkg)) "Detected as a banking app" else "", b.isBank(a.pkg), i == 0) { b.setBank(a.pkg, it) }
                 }
                 if (q.isBlank() && list.size < apps.size) Text("Search to find more apps", color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(20.dp))
             }
@@ -172,12 +172,12 @@ fun NotifButtonsCard(core: Core) {
     val chosen = QuickActions.chosen(core)
     MacCard("Notification buttons") {
         Text(
-            "Choose up to ${QuickActions.MAX} buttons for TwinDesk’s notification while connected (${chosen.size} on).",
+            "Shown on TwinDesk’s notification while connected · ${chosen.size} of ${QuickActions.MAX} selected",
             color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp),
         )
         QuickActions.ALL.forEach { btn ->
             SwitchRow(btn.label, btn.hint, btn.id in chosen) { on ->
-                if (!QuickActions.set(core, btn.id, on)) Toast.makeText(ctx, "Up to ${QuickActions.MAX} buttons: turn one off first", Toast.LENGTH_SHORT).show()
+                if (!QuickActions.set(core, btn.id, on)) Toast.makeText(ctx, "You can select up to ${QuickActions.MAX} buttons", Toast.LENGTH_SHORT).show()
             }
         }
     }

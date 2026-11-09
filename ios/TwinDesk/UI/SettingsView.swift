@@ -25,35 +25,35 @@ struct SettingsView: View {
                         ForEach(Appearance.allCases) { a in Text(a.title).tag(a.rawValue) }
                     }
                     .pickerStyle(.segmented)
-                    Text("Light or dark, or as this \(Device.word) is set (Automatic).").font(.caption).foregroundStyle(.secondary)
+                    Text("Automatic follows this \(Device.word)’s light or dark setting").font(.caption).foregroundStyle(.secondary)
                     Divider()
                     Text("Accent colour").font(.subheadline.weight(.semibold))
                     AccentPicker()
-                    Text("Buttons, switches and the background’s glow take it.").font(.caption).foregroundStyle(.secondary)
+                    Text("Used for buttons, switches and the background").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
 
-                SectionTitle(text: "This \(Device.word)")
+                SectionTitle(text: "Device name")
                 VStack(alignment: .leading, spacing: 8) {
                     TextField("Name", text: $name).font(.title3.weight(.semibold))
                         .onSubmit { core.rename(name) }
-                    Text("How the computers list it. iOS doesn’t tell apps the name you gave the \(Device.word).").font(.caption).foregroundStyle(.secondary)
+                    Text("How other devices see this one").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
 
-                SectionTitle(text: "Shared with \(core.host?.name ?? core.hosts.first?.name ?? "the computer")")
+                SectionTitle(text: "Synced with \(core.host?.name ?? core.hosts.first?.name ?? "the computer")")
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "Send the clipboard", detail: "What you copy here can be pasted there", on: sync("clipboard", "out"))
+                    ToggleRow(title: "Send clipboard", detail: "Copies on this \(Device.word) are available on the computer", on: sync("clipboard", "out"))
                     Divider()
-                    ToggleRow(title: "Receive the clipboard", detail: "What's copied there can be pasted here", on: sync("clipboard", "in"))
+                    ToggleRow(title: "Receive clipboard", detail: "Copies on the computer are available on this \(Device.word)", on: sync("clipboard", "in"))
                     Divider()
-                    ToggleRow(title: "Its notifications here", detail: "The computer's notifications show on this \(Device.word)", on: sync("notifs", "in"))
+                    ToggleRow(title: "Show notifications", detail: "The computer’s notifications on this \(Device.word)", on: sync("notifs", "in"))
                     Divider()
-                    ToggleRow(title: "Its sound here", detail: "The computer sends what it plays to this \(Device.word)", on: sync("audio", "in"))
+                    ToggleRow(title: "Play the computer’s sound", detail: "Audio from the computer plays on this \(Device.word)", on: sync("audio", "in"))
                     Divider()
-                    ToggleRow(title: "Control it from here", detail: "The Remote's touchpad, keyboard and gamepad move the computer", on: sync("remote", "out"))
+                    ToggleRow(title: "Remote control", detail: "The touchpad, keyboard and gamepad control the computer", on: sync("remote", "out"))
                     Divider()
-                    ToggleRow(title: "Send files to it", detail: "The computer takes files and photos sent from here", on: sync("files", "out"))
+                    ToggleRow(title: "Send files", detail: "The computer accepts files and photos from this \(Device.word)", on: sync("files", "out"))
                     Divider()
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Playback of shared screens")
@@ -65,7 +65,7 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         Text(paceDetail).font(.caption).foregroundStyle(.secondary)
                     }
-                    Text(core.connected ? "The same on both: change one here or on the computer and the other follows. Kept for each computer." : "Connect to change these: they're kept with each computer, the same on both.")
+                    Text(core.connected ? "Synced with the computer: a change on either device applies to both. Saved for each computer." : "Available while connected. Saved for each computer.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .disabled(!core.connected)
@@ -73,50 +73,50 @@ struct SettingsView: View {
 
                 SectionTitle(text: "Background")
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "Stay connected", detail: "The session stays on Wi-Fi; if it drops, Bluetooth brings TwinDesk back", on: bg("bg.on"))
+                    ToggleRow(title: "Stay connected", detail: "Keeps the connection in the background. Bluetooth restores it if Wi-Fi drops", on: bg("bg.on"))
                     Divider()
-                    Text("Backups").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-                    ToggleRow(title: "Use location", detail: locationDetail, on: bg("bg.location", false))
+                    Text("Keep TwinDesk running with").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    ToggleRow(title: "Location", detail: locationDetail, on: bg("bg.location", false))
                     Divider()
-                    ToggleRow(title: "Use silent audio", detail: "Plays silence alongside your music", on: bg("bg.audio", false))
+                    ToggleRow(title: "Silent audio", detail: "Plays silent audio alongside other audio", on: bg("bg.audio", false))
                     Divider()
-                    ToggleRow(title: "Reconnect on its own", detail: "To the last computer, when TwinDesk wakes", on: flag("autoConnect"))
-                    Text("iOS pauses TwinDesk soon after it leaves the screen. Turn one of these on to keep it running (Wi-Fi speed, Share Screen, files) with TwinDesk off screen. Each uses some battery.").font(.caption).foregroundStyle(.secondary)
+                    ToggleRow(title: "Reconnect automatically", detail: "To the last computer when TwinDesk resumes", on: flag("autoConnect"))
+                    Text("iOS suspends apps shortly after they leave the screen. These options keep TwinDesk running in the background for transfers, Share Screen and files, at some cost in battery.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
 
-                SectionTitle(text: "Connection")
+                SectionTitle(text: "Network and Bluetooth")
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "Use the USB cable", detail: "Plugged into the computer, the session moves onto the cable by itself", on: flag("usb.auto"))
+                    ToggleRow(title: "USB", detail: "Moves the connection to the USB cable when one is plugged in", on: flag("usb.auto"))
                     Divider()
-                    ToggleRow(title: "Use Bluetooth", detail: bleDetail, on: Binding(get: { _ = core.tick; return core.ble.on }, set: { core.ble.setOn($0) }))
+                    ToggleRow(title: "Bluetooth", detail: bleDetail, on: Binding(get: { _ = core.tick; return core.ble.on }, set: { core.ble.setOn($0) }))
                     Divider()
-                    ToggleRow(title: "Prioritize performance over battery life", detail: core.performance ? "The connection is checked every second, even when nothing is in use" : "An idle connection is checked every few minutes, and at once when something starts. Saves battery", on: Binding(get: { _ = core.tick; return core.performance }, set: { core.performance = $0 }))
+                    ToggleRow(title: "Prioritize performance over battery life", detail: core.performance ? "Checks the connection every second, even when nothing is in use" : "Checks an idle connection every few minutes, and immediately when a feature starts", on: Binding(get: { _ = core.tick; return core.performance }, set: { core.performance = $0 }))
                     Divider()
-                    ToggleRow(title: "Reconnect in the background", detail: core.reconnectBg ? "A connection that drops is taken up again with TwinDesk off screen" : "A connection that drops comes back when you open TwinDesk", on: Binding(get: { _ = core.tick; return core.reconnectBg }, set: { core.reconnectBg = $0 }))
+                    ToggleRow(title: "Reconnect in the background", detail: core.reconnectBg ? "Restores a dropped connection while TwinDesk is in the background" : "Restores a dropped connection when TwinDesk opens", on: Binding(get: { _ = core.tick; return core.reconnectBg }, set: { core.reconnectBg = $0 }))
                 }
                 .glassCard()
 
                 SectionTitle(text: "Permissions")
                 VStack(spacing: 0) {
-                    perm("bell.fill", Page.notifications.color, "Notifications", "The computer’s notifications, copies and files", notifState) { askNotifications() }
+                    perm("bell.fill", Page.notifications.color, "Notifications", "Notifications, clipboard and file alerts from the computer", notifState) { askNotifications() }
                     Divider().padding(.leading, 46)
-                    perm("location.fill", TDColor.accent, "Location", "Staying connected in the background", locationState) { Background.shared.askLocation() }
+                    perm("location.fill", TDColor.accent, "Location", "Keeps TwinDesk running in the background", locationState) { Background.shared.askLocation() }
                     Divider().padding(.leading, 46)
-                    perm("dot.radiowaves.left.and.right", Color.blue, "Bluetooth", "Notifications and the session away from Wi-Fi", bleState) { core.ble.setOn(true) }
+                    perm("dot.radiowaves.left.and.right", Color.blue, "Bluetooth", "Connection when not on the same Wi-Fi", bleState) { core.ble.setOn(true) }
                     Divider().padding(.leading, 46)
-                    perm("photo.fill", Page.photos.color, "Photos", "Sending photos, and Photos on the computer", photosState) { core.hub.askPhotos() }
+                    perm("photo.fill", Page.photos.color, "Photos", "Sending photos and browsing them from the computer", photosState) { core.hub.askPhotos() }
                     Divider().padding(.leading, 46)
-                    perm("camera.fill", Page.camera.color, "Camera", "This camera on the computer", avState(.video)) { AVCaptureDevice.requestAccess(for: .video) { _ in DispatchQueue.main.async { core.changed() } } }
+                    perm("camera.fill", Page.camera.color, "Camera", "Using this camera on the computer", avState(.video)) { AVCaptureDevice.requestAccess(for: .video) { _ in DispatchQueue.main.async { core.changed() } } }
                     Divider().padding(.leading, 46)
-                    perm("mic.fill", Page.audio.color, "Microphone", "This microphone on the computer", avState(.audio)) { AVCaptureDevice.requestAccess(for: .audio) { _ in DispatchQueue.main.async { core.changed() } } }
+                    perm("mic.fill", Page.audio.color, "Microphone", "Using this microphone on the computer", avState(.audio)) { AVCaptureDevice.requestAccess(for: .audio) { _ in DispatchQueue.main.async { core.changed() } } }
                     Divider().padding(.leading, 46)
-                    perm("network", TDColor.good, "Local Network", "Finding and reaching your computers", core.nearby.isEmpty && !core.connected ? .unknown : .ok) {}
+                    perm("network", TDColor.good, "Local Network", "Finding computers on this network", core.nearby.isEmpty && !core.connected ? .unknown : .ok) {}
                 }
                 .glassCard()
                 Button("Open TwinDesk’s Settings") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
                     .secondaryButton().frame(maxWidth: .infinity, alignment: .leading)
-                Text("Local Network can’t be read by an app: if no computer shows up, check Settings › TwinDesk › Local Network. Paste from Other Apps set to Allow stops iOS asking each time you send the clipboard.")
+                Text("Apps can’t check Local Network access. If no computer appears, check Settings › TwinDesk › Local Network. Set Paste from Other Apps to Allow so iOS doesn’t ask each time the clipboard is sent.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -149,7 +149,7 @@ struct SettingsView: View {
             Spacer()
             switch st {
             case .ok: Label("Allowed", systemImage: "checkmark.circle.fill").labelStyle(.iconOnly).foregroundStyle(TDColor.good).font(.title3)
-            case .partial: Text("Some").font(.caption.bold()).foregroundStyle(TDColor.warn)
+            case .partial: Text("Partial").font(.caption.bold()).foregroundStyle(TDColor.warn)
             case .ask: Button("Allow") { ask() }.primaryButton().controlSize(.small)
             case .denied: Button("Settings") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }.secondaryButton().controlSize(.small)
             case .unknown: Image(systemName: "questionmark.circle").foregroundStyle(.secondary).font(.title3)
@@ -195,11 +195,11 @@ struct SettingsView: View {
 
     private var bleDetail: String {
         _ = core.tick
-        if !core.ble.near.isEmpty { return "Linked to \(core.ble.near.values.sorted().joined(separator: ", ")) · wakes TwinDesk, and carries the session off Wi-Fi" }
+        if !core.ble.near.isEmpty { return "Linked to \(core.ble.near.values.sorted().joined(separator: ", ")) · Wakes TwinDesk and keeps the connection off Wi-Fi" }
         switch core.ble.radio {
         case "unauthorized": return "Not allowed · Settings › TwinDesk › Bluetooth"
         case "off": return core.ble.on ? "Bluetooth is off" : "Off"
-        default: return "Keeps TwinDesk woken in the background, and the session off Wi-Fi"
+        default: return "Wakes TwinDesk in the background and keeps the connection off Wi-Fi"
         }
     }
 
@@ -219,10 +219,10 @@ struct SettingsView: View {
 
     private var locationDetail: String {
         switch Background.shared.authorization {
-        case .authorizedAlways: return "Allowed · the blue pill shows while it runs"
-        case .authorizedWhenInUse: return ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17 ? "Allowed · the blue pill shows while it runs" : "Needs Always on iOS 16"
+        case .authorizedAlways: return "Allowed · A blue indicator shows while in use"
+        case .authorizedWhenInUse: return ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17 ? "Allowed · A blue indicator shows while in use" : "Requires Always on iOS 16"
         case .denied, .restricted: return "Not allowed · Settings › TwinDesk › Location"
-        default: return "Cell and Wi-Fi only, no GPS"
+        default: return "Cellular and Wi-Fi positioning only (no GPS)"
         }
     }
 

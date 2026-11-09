@@ -704,11 +704,11 @@ private fun BleSwitch(core: Core, askHint: String, first: Boolean = false) {
     val link = core.link
     val allowed = (Ble.permissions() + BleServe.permissions() + Direct.permission()).all { ctx.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
     SwitchRow("Bluetooth with computers", when {
-        !core.bleOn -> "Only computers on this network or connected by USB can connect"
+        !core.bleOn -> "Off: only computers on this network or on USB"
         !core.ble.radioOn -> "Bluetooth is off on this device"
         !allowed -> askHint
-        core.bleWifiOff && link.connected && core.net.via == "Wi-Fi" -> "Paused while you’re on the same Wi-Fi as $name. Resumes if Wi-Fi drops."
-        else -> "Connects to $name over Bluetooth when it isn’t on this network. Files and screen sharing use a temporary Wi-Fi Direct link."
+        core.bleWifiOff && link.connected && core.net.via == "Wi-Fi" -> "Paused while on the same Wi-Fi as $name; resumes if Wi-Fi drops"
+        else -> "Connects to $name when it isn’t on this network. Files and screens use a temporary Wi-Fi Direct link"
     }, core.bleOn, first = first) { core.store.setFlag("ble", it); core.changed() }
 }
 
@@ -1500,13 +1500,13 @@ private fun GeneralPage(core: Core, v: Int) {
     val name = them(core)
     var dev by remember { mutableStateOf(core.store.deviceName) }
     PageHead("General", "")
-    MacCard {
-        SwitchRow("Run in the background", if (core.background) "Stays connected with TwinDesk closed, and starts with the phone" else "Only while TwinDesk is open: swiping it away from Recent apps stops it", core.background, first = true) { core.background = it }
+    MacCard("Startup") {
+        SwitchRow("Run in the background", if (core.background) "Stays connected while TwinDesk is closed, and starts with the phone" else "Connected only while TwinDesk is open", core.background, first = true) { core.background = it }
     }
     // Connections (#143): quiet links (Link.kt) and reconnecting with TwinDesk closed.
     MacCard("Connections") {
-        SwitchRow("Prioritize performance over battery life", if (core.performance) "The connection is checked every second, even when nothing is in use" else "An idle connection is checked every few minutes, and at once when something starts. Saves battery", core.performance, first = true) { core.performance = it }
-        SwitchRow("Reconnect in the background", if (core.reconnectBg) "A connection that drops is taken up again with TwinDesk closed" else "A connection that drops comes back when you open TwinDesk", core.reconnectBg) { core.reconnectBg = it }
+        SwitchRow("Prioritize performance over battery life", if (core.performance) "Checks the connection every second, even when nothing is in use" else "Checks an idle connection every few minutes, and immediately when a feature starts", core.performance, first = true) { core.performance = it }
+        SwitchRow("Reconnect in the background", if (core.reconnectBg) "Restores a dropped connection while TwinDesk is closed" else "Restores a dropped connection when TwinDesk opens", core.reconnectBg) { core.reconnectBg = it }
     }
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
@@ -1536,13 +1536,13 @@ private fun GeneralPage(core: Core, v: Int) {
             "files" to "Browse this device’s storage and shared folders on $name",
         )) {
             val perm = core.hub.perm(what)
-            if (perm == "none") MacRow(Hub.label(what), if (what == "files") "Requires Android 11 or later" else "Requires the full version of TwinDesk, which you can install from $name")
-            else Setup(Hub.label(what), if (perm == "partial") "Some permissions are missing: $hint" else hint, perm == "ok", "Allow") { core.hub.askHere(what) }
+            if (perm == "none") MacRow(Hub.label(what), if (what == "files") "Requires Android 11 or later" else "Requires the full version of TwinDesk (install it from $name)")
+            else Setup(Hub.label(what), if (perm == "partial") "Partially allowed · $hint" else hint, perm == "ok", "Allow") { core.hub.askHere(what) }
         }
         if (core.notifs.supported) Setup("Notification access", "Show this device’s notifications on $name", core.notifs.hasAccess, "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        } else MacRow("Notification access", "Available in the full version of TwinDesk, which you can install from $name")
-        Setup("Run in the background", "Lets $name connect to this device at any time", pm.isIgnoringBatteryOptimizations(ctx.packageName), "Allow") {
+        } else MacRow("Notification access", "Requires the full version of TwinDesk (install it from $name)")
+        Setup("Battery optimization", "Exempts TwinDesk so $name can connect at any time", pm.isIgnoringBatteryOptimizations(ctx.packageName), "Allow") {
             @Suppress("BatteryLife")
             ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
         }
@@ -1550,9 +1550,9 @@ private fun GeneralPage(core: Core, v: Int) {
             "Wireless debugging",
             when {
                 core.adb.paired -> "Paired with $name for screen, sound, mouse and keyboard"
-                core.link.ble -> "Requires Wi-Fi. You’re connected over Bluetooth."
-                core.adb.wifiDebugging && !core.adb.setupNeeded -> "Paired with $name, reconnecting…"
-                core.adb.wifiDebugging -> "On. Pair it with $name once using the guide."
+                core.link.ble -> "Requires Wi-Fi (currently connected over Bluetooth)"
+                core.adb.wifiDebugging && !core.adb.setupNeeded -> "Paired with $name · Reconnecting…"
+                core.adb.wifiDebugging -> "On · Not yet paired with $name"
                 else -> "Used for screen, sound, mouse and keyboard with $name"
             },
         ) {
@@ -1567,21 +1567,21 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow(
             "Turn off wireless debugging when disconnected",
             when {
-                !core.adb.canEnable -> "Turns off 2 minutes after $name disconnects, if TwinDesk turned it on"
-                core.adb.autoOffEnabled -> "Turns off 2 minutes after $name disconnects and back on when it reconnects. Stays on if you turned it on yourself."
-                else -> "Wireless debugging stays on after $name disconnects"
+                !core.adb.canEnable -> "2 minutes after $name disconnects, when TwinDesk turned it on"
+                core.adb.autoOffEnabled -> "Off 2 minutes after $name disconnects, on again when it reconnects. Not applied when you turned it on yourself"
+                else -> "Stays on after $name disconnects"
             },
             core.adb.autoOffEnabled, enabled = core.adb.canEnable,
         ) { core.adb.setAutoOff(it) }
-        Setup("Nearby devices", "Use Bluetooth and Wi-Fi Direct when $name isn’t on this network", nearbyAllowed, "Allow") {
+        Setup("Nearby devices", "Bluetooth and Wi-Fi Direct, when $name isn’t on this network", nearbyAllowed, "Allow") {
             askNearby.launch(nearbyPerms)
         }
-        if (core.input.supported) Setup("Mouse and keyboard", "Lets $name control this phone on any network without wireless debugging", core.input.on, "Allow") { core.input.openSettings() }
-        else MacRow("Mouse and keyboard", "Uses wireless debugging. Accessibility control is available in the full version of TwinDesk.")
-        Setup("Show the pointer", "Shows the pointer from $name over other apps", core.pointer.allowed, "Allow") {
+        if (core.input.supported) Setup("Mouse and keyboard", "Accessibility service: control from $name without wireless debugging", core.input.on, "Allow") { core.input.openSettings() }
+        else MacRow("Mouse and keyboard", "Uses wireless debugging. The Accessibility service requires the full version of TwinDesk")
+        Setup("Display over other apps", "Shows the pointer from $name", core.pointer.allowed, "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
         }
-        if (Build.VERSION.SDK_INT >= 30) Setup("All files access", "Used for your wallpaper on $name, Files and shared folders", android.os.Environment.isExternalStorageManager(), "Allow") {
+        if (Build.VERSION.SDK_INT >= 30) Setup("All files access", "Wallpaper on $name, Files and shared folders", android.os.Environment.isExternalStorageManager(), "Allow") {
             ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")))
         }
     }
@@ -1590,8 +1590,8 @@ private fun GeneralPage(core: Core, v: Int) {
     AppearanceCard()
     MacCard("This device") {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Name", color = pal.text, fontSize = 15.sp)
-            Text("How this device appears on your computers", color = pal.muted, fontSize = 12.5.sp)
+            Text("Device name", color = pal.text, fontSize = 15.sp)
+            Text("How other devices see this one", color = pal.muted, fontSize = 12.5.sp)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(dev, { dev = it }, singleLine = true, modifier = Modifier.weight(1f),
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, color = pal.text), shape = RoundedCornerShape(8.dp))
@@ -1599,22 +1599,22 @@ private fun GeneralPage(core: Core, v: Int) {
             }
         }
     }
-    MacCard("Not on the same network") {
-        BleSwitch(core, "Allow Nearby devices permission above", first = true)
-        SwitchRow("Turn off Bluetooth on Wi-Fi connections", if (core.bleWifiOff) "Turns Bluetooth off while connected to $name over the same Wi-Fi network"
-            else "Bluetooth stays on as a backup if Wi-Fi drops", core.bleWifiOff) { core.store.setFlag("bleWifiOff", it); core.changed() }
+    MacCard("Network and Bluetooth") {
+        BleSwitch(core, "Requires the Nearby devices permission", first = true)
+        SwitchRow("Turn off Bluetooth on Wi-Fi connections", if (core.bleWifiOff) "While connected to $name over the same Wi-Fi network"
+            else "Bluetooth stays on as a fallback if Wi-Fi drops", core.bleWifiOff) { core.store.setFlag("bleWifiOff", it); core.changed() }
         val n = core.net
-        if (n.state != "idle") MacRow("Wi-Fi", when (n.state) {
+        if (n.state != "idle") MacRow("Wi-Fi Direct", when (n.state) {
             "asking", "hosting" -> "Starting a direct Wi-Fi link…"
-            "joining" -> "Joining $name’s Wi-Fi…"
-            "joined" -> "On a direct Wi-Fi link with $name"
+            "joining" -> "Joining $name’s Wi-Fi Direct link…"
+            "joined" -> "Connected to $name over Wi-Fi Direct"
             "failed" -> n.error
             else -> ""
         })
     }
-    if (core.hosts().isNotEmpty()) MacCard("Paired") {
+    if (core.hosts().isNotEmpty()) MacCard("Paired computers") {
         core.hosts().forEachIndexed { i, h ->
-            MacRow(h.name, if (core.host?.id == h.id) (if (core.link.wired) "Connected over USB" else if (core.link.ble) "Connected over Bluetooth" else "Connected") else "Last address ${h.address}", first = i == 0) {
+            MacRow(h.name, if (core.host?.id == h.id) (if (core.link.wired) "Connected over USB" else if (core.link.ble) "Connected over Bluetooth" else "Connected") else "Last address: ${h.address}", first = i == 0) {
                 if (core.host?.id == h.id) Pill("Online", "good")
                 TextButton(onClick = { core.forget(h.id) }) { Text("Forget", color = pal.muted) }
             }

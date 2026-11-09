@@ -40,7 +40,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
     lazy var mic = Mic(self)
-    lazy var peer = Peer(self) // Connect with Android: its own link, beside the computer's
+    lazy var peer = Peer(self) // another phone: its own link, one session with the computer's (Peer.swift)
 
     // Published copies for the UI (main thread).
     @Published private(set) var state = "idle"
@@ -89,7 +89,7 @@ final class Core: ObservableObject, LinkEvents {
             link.wake()
             if let h = resumeLater {
                 resumeLater = nil
-                if link.state == "idle", link.pair == nil {
+                if link.state == "idle", link.pair == nil, !peer.connected {
                     NSLog("TwinDesk: on screen: reconnecting")
                     if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { connect(store.host(h.id) ?? h) }
                 }
@@ -135,7 +135,7 @@ final class Core: ObservableObject, LinkEvents {
             if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { offBle() }
         }
         if link.state == "idle", link.pair == nil, let id = store.lastHostId, let h = store.host(id),
-           store.flag("autoConnect", true), !held {
+           store.flag("autoConnect", true), !held, !peer.connected {
             if usb.computerId == id { connectWired(h) } else { connect(h) }
         }
     }
@@ -162,8 +162,10 @@ final class Core: ObservableObject, LinkEvents {
 
     // ---- actions ----
 
+    // One session at a time: a phone's (Peer) ends when this one is welcomed (linkWelcome), and
+    // nothing brings a computer back by itself while a phone holds it (resume, invites, the cable).
     func connect(_ h: Computer) {
-        if usb.computerId == h.id { return connectWired(h) } // on the cable to it: through the cable
+        if usb.computerId == h.id { return connectWired(h, user: true) } // on the cable to it: through the cable
         resumeUntil = .distantPast
         var h = h
         if let f = discovery.get(h.id) { h.address = f.address; h.port = f.port; store.putHost(h) }
@@ -191,7 +193,7 @@ final class Core: ObservableObject, LinkEvents {
     func bleInvite(_ id: String) {
         guard let h = store.host(id), link.pair == nil, store.lastHostId == id || store.lastHostId == nil && store.flag("autoConnect", true) else { return }
         if link.host?.id == id && (link.state == "connected" || link.state == "connecting") { return }
-        if link.connected { return }
+        if link.connected || peer.connected { return }
         connect(h)
     }
 
@@ -219,7 +221,8 @@ final class Core: ObservableObject, LinkEvents {
     }
 
     // Onto the USB cable (Usb): the same computer at 127.0.0.1, the session moved there.
-    func connectWired(_ h: Computer) {
+    func connectWired(_ h: Computer, user: Bool = false) {
+        if peer.connected && !user { NSLog("TwinDesk: USB: a phone holds the session"); return }
         resumeUntil = .distantPast
         var w = h
         w.address = "127.0.0.1"
@@ -331,6 +334,7 @@ final class Core: ObservableObject, LinkEvents {
     private func onInvite(_ f: Found) {
         if let h = store.host(f.id) {
             if link.host?.id == h.id && (link.state == "connected" || link.state == "connecting") { return }
+            if peer.connected { return } // a phone holds the session: Connect here takes it back
             var h = h
             h.address = f.address
             h.port = f.port
@@ -351,6 +355,7 @@ final class Core: ObservableObject, LinkEvents {
         DispatchQueue.main.async {
             self.resumeUntil = .distantPast
             self.invite = nil
+            if self.peer.connected { NSLog("TwinDesk: ending the phone session for %@", host.name); self.peer.disconnect() }
             for f in self.features { f.onWelcome(host, m) }
             self.refresh()
             Background.shared.apply()
@@ -366,6 +371,8 @@ final class Core: ObservableObject, LinkEvents {
     func linkClosed(_ host: Computer, _ code: String?) {
         DispatchQueue.main.async {
             for f in self.features { f.onClosed() }
+            // The session on the cable (not Bluetooth's pipe, also on 127.0.0.1) failed: maybe unplugged.
+            if code != "local", host.address == "127.0.0.1", host.port == Proto.port { self.usb.sessionFailed() }
             self.refresh()
             // An accident (Wi-Fi blip, the computer restarting): back within the grace, as Android does.
             let deliberate = [Proto.E.badToken, Proto.E.busy, Proto.E.replaced, Proto.E.released, Proto.E.asleep, "local", "identity"]
@@ -379,7 +386,7 @@ final class Core: ObservableObject, LinkEvents {
 
     private func resume() {
         if held, let h = resumeHost { resumeLater = h; return }
-        guard let h = resumeHost, Date() < resumeUntil, link.state == "idle", link.pair == nil else {
+        guard let h = resumeHost, Date() < resumeUntil, link.state == "idle", link.pair == nil, !peer.connected else {
             // Past the grace: keep trying now and then while kept alive in the background.
             if let h = resumeHost, link.state == "idle", link.pair == nil, Background.shared.active, store.lastHostId == h.id {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 15) { self.retryLater(h) }
@@ -394,7 +401,7 @@ final class Core: ObservableObject, LinkEvents {
 
     private func retryLater(_ h: Computer) {
         if held { resumeLater = h; return }
-        guard link.state == "idle", link.pair == nil, store.lastHostId == h.id, let fresh = store.host(h.id) else { return }
+        guard link.state == "idle", link.pair == nil, !peer.connected, store.lastHostId == h.id, let fresh = store.host(h.id) else { return }
         if discovery.get(h.id) != nil || Discovery.interfaces().isEmpty == false { connect(fresh) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { self.retryLater(h) }
     }
