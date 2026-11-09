@@ -293,7 +293,12 @@ function setupIpc(ctx) {
     clipboard: () => clip.applySettings(),
     monitor: () => { screen.applyAudio(); pcScreen.apply(); }, // pacing (pair.sync 'pace'); Steady: a new session
     notifs: () => notifs.applySettings(),
-    audio: () => sound.apply(),
+    audio: () => { // pair.sync: the sound, and a phone's microphone (its Audio page's switch)
+      sound.apply();
+      const mic = ctx.loadMic && ctx.loadMic();
+      if (mic) mic.apply();
+      if (ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound();
+    },
     kvm: () => kvm.applyConfig(),
     pcApps: () => { pcApps.apply(); pcApps.input.release(); },
     macApps: () => peerApps.apply(),

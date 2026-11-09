@@ -259,7 +259,7 @@
       PHONE_MEDIA_CTL: 'phone.media.ctl', // computer->phone {a: 'play'|'pause'|'toggle'|'next'|'prev'|'seek', pos?}
       // …and the other way: what plays on the computer, for the phone's Media page and its media notification (shared/pcnow.js, PcMedia.kt):
       PC_MEDIA_WANT: 'pc.media.want', // phone->computer {on}: send pc.media while on
-      PC_MEDIA: 'pc.media', // computer->phone {title, artist, album, app, playing} or {none: true}
+      PC_MEDIA: 'pc.media', // computer->phone {title, artist, album, app, playing, art?: data: URL ('' none; left out: unchanged)} or {none: true}
       PC_MEDIA_CTL: 'pc.media.ctl', // phone->computer {a: 'play'|'pause'|'toggle'|'next'|'previous'}
       // The phone as the computer's remote (its Remote page: touchpad, keyboard, gamepad), phone->computer.
       // Relative like k.*, applied only while the computer lets the phone control it (Windows for now):

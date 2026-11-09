@@ -947,6 +947,7 @@ app.whenReady().then(() => {
     cursor: (dir, on) => actions.setKvm({ [dir === 'out' ? 'driveOther' : 'beDriven']: on }),
     rezume: (dir, on) => actions.setRezume({ [dir === 'out' ? 'send' : 'receive']: on }),
     remote: (dir, on) => actions.setRemote({ allow: on }),
+    mic: (dir, on) => actions.setAudio({ micReceive: on }),
     terminal: (dir, on) => { actions.setTerminal({ [dir === 'out' ? 'allowPc' : 'connectPc']: on }); if (dir === 'in') svc.sshClient.applySettings(); }, // already set: setTerminal sees no change
     files: (dir, on) => actions.setFiles({ acceptDrops: on }),
   };

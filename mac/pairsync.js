@@ -24,6 +24,7 @@ const FEATURES = {
   cursor: { out: ['kvm', 'driveOther'], in: ['kvm', 'beDriven'] },
   rezume: { out: ['rezume', 'send'], in: ['rezume', 'receive'] },
   remote: { in: ['remote', 'allow'] },
+  mic: { in: ['audio', 'micReceive'] }, // a phone's microphone here (its Audio page's switch; a computer's own is its mic card's)
   terminal: { out: ['terminal', 'allowPc'], in: ['terminal', 'connectPc'] },
   files: { in: ['files', 'acceptDrops'] },
 };
