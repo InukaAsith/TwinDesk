@@ -84,7 +84,7 @@ final class Core: ObservableObject, LinkEvents {
 
     func setFront(_ on: Bool) {
         inFront = on
-        if on { offScreenWork?.cancel(); offScreenWork = nil }
+        if on { offScreenWork?.cancel(); offScreenWork = nil; unfocused = false; Notifier.shared.cancel("net.need") }
         quietCheck()
         if on {
             link.wake()
@@ -197,6 +197,13 @@ final class Core: ObservableObject, LinkEvents {
             var b = h
             b.address = "127.0.0.1"
             b.port = port
+            // Connected on the network: the session moves onto the pipe without ending.
+            if self.link.connected, self.link.host?.id == h.id {
+                self.link.move(to: "127.0.0.1", port: port, ble: true) { ok in
+                    if !ok { NSLog("TwinDesk: the session stays on the network (the move onto Bluetooth didn’t work)") }
+                }
+                return
+            }
             NSLog("TwinDesk: session through Bluetooth")
             self.link.connect(b, force: true, ble: true)
         }
@@ -234,41 +241,73 @@ final class Core: ObservableObject, LinkEvents {
         mirror.sharing || screen.viewing || sound.playing || camera.on || files.busy || mic.running || peer.screenOn
     }
 
-    // Off screen for a while first (8 s): a quick look at another app and back costs no move.
+    // Off screen (closed, in the background, locked) or out of focus: onto Bluetooth at once. The
+    // session moves without ending (Link.move), so it costs nothing to go and come back. Out of focus
+    // (the scene inactive: an iPad window that isn't the one in use, the app switcher) waits a moment,
+    // so Control Center or a notification pulled down over TwinDesk doesn't move it.
     private var offScreenWork: DispatchWorkItem?
+    private var unfocused = false
     func backgrounded() {
+        offScreenWork?.cancel()
+        offScreenWork = nil
+        moveOffScreen()
+    }
+
+    func outOfFocus() {
+        unfocused = true
         offScreenWork?.cancel()
         let w = DispatchWorkItem { [weak self] in self?.moveOffScreen() }
         offScreenWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: w)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: w)
     }
 
     private func moveOffScreen() {
-        guard !inFront, Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
+        guard !inFront || unfocused, Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
               !Background.shared.active, !networkBusy else { return }
         NSLog("TwinDesk: off screen: the session onto Bluetooth")
         connectBle(h)
     }
 
+    // The computer holds files back until the session is on Wi-Fi (net.need, netlink.js): on screen,
+    // the session moves now; off screen, a notification: opening TwinDesk moves it (wake).
+    private func computerNeedsNetwork(_ m: JSON) {
+        guard link.viaBle, link.connected, let h = link.host else { return }
+        if inFront && !unfocused { return needNetwork() }
+        let what = m.str("why") == "screen" ? "wants to show its screen" : "is sending files"
+        Notifier.shared.note("net.need", "\(h.name) \(what)", "Open TwinDesk to receive them over Wi-Fi.", sound: true)
+    }
+
     // Something that needs the network started while on Bluetooth (Share Screen, files): back on it.
     func needNetwork() {
         guard link.viaBle, link.connected else { return }
+        wantNetwork = true
         discovery.refresh()
         offBle()
     }
+    private var wantNetwork = false // needNetwork asked: off Bluetooth even off screen, once it's seen
 
     // On Bluetooth and the computer showed up on the network: the session moves back to it. Only
     // once discovery sees it here: its saved address on another network (or with Wi-Fi off) broke a
     // working Bluetooth session for one that can't connect, again at every discovery change.
+    // Off screen (General › Background: Bluetooth) it stays on Bluetooth unless something needs the
+    // network (needNetwork).
     private func offBle() {
         guard link.viaBle, link.connected, let h = link.host, let saved = store.host(h.id), let f = discovery.get(h.id) else { return }
+        guard wantNetwork || (inFront && !unfocused) || !bleOffScreen || !Background.shared.enabled else { return }
+        wantNetwork = false
         var w = saved
         w.address = f.address
         w.port = f.port
         store.putHost(w)
         guard !w.address.isEmpty, w.address != "127.0.0.1" else { return }
         NSLog("TwinDesk: back on the network from Bluetooth")
-        link.connect(w, force: true)
+        // Without ending the session (what's under way on it carries on); a computer that can't
+        // resume (an older one): a new session there, as before.
+        link.move(to: w.address, port: w.port, ble: false) { [weak self] ok in
+            guard let self = self, !ok, self.link.viaBle, self.link.connected, self.link.host?.id == w.id else { return }
+            if self.link.resumable { return } // it can, the network just didn't answer: stays on Bluetooth
+            self.link.connect(w, force: true)
+        }
     }
 
     // Onto the USB cable (Usb): the same computer at 127.0.0.1, the session moved there.
@@ -431,6 +470,8 @@ final class Core: ObservableObject, LinkEvents {
 
     func linkMessage(_ t: String, _ m: JSON) {
         DispatchQueue.main.async {
+            if t == "net.need" { return self.computerNeedsNetwork(m) }
+            if t.hasPrefix("net.") { return } // the computers' Wi-Fi links (netlink.js): nothing more here
             for f in self.features where f.onMessage(t, m) { return }
         }
     }

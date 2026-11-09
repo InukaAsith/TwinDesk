@@ -235,6 +235,13 @@ the fx way, then as `file.chunk`. That holds on the network, a Wi-Fi Direct grou
 `172.20.10.x` or the computer's), and on the cable, where `Usb.swift` mirrors the files engine's port
 from welcome too. Bluetooth keeps `file.chunk`. It used to keep `file.chunk` on groups and hotspots.
 
+Files to an iPhone or iPad whose session is on Bluetooth wait for Wi-Fi (netlink.js `holdOut`): the
+computer sends `net.need {why}`, and the app moves the session onto the network both are on with
+`hello {resume}` (`Link.move`), at once when it's on screen, else once its notification is tapped and
+TwinDesk opens. The held offer then goes on the moved session. Nothing in 5 minutes: it goes through
+Bluetooth as `file.chunk`. Off screen or out of focus the app moves the session back onto its Bluetooth
+pipe the same way (`hello {resume}` over the pipe), so neither move ends the session.
+
 ### Fast files on a link made for them
 
 Wi-Fi Direct groups and hotspots made by netlink.js carry fx and fx2 as the network does (they used

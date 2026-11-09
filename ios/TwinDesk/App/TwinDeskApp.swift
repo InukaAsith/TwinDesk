@@ -39,6 +39,8 @@ struct TwinDeskApp: App {
             case .background:
                 core.setFront(false)
                 Background.shared.enteredBackground()
+            case .inactive:
+                core.outOfFocus() // an iPad window out of focus, the app switcher: onto Bluetooth too
             default: break
             }
         }
