@@ -51,7 +51,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<false/>
+	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UISupportsDocumentBrowser</key>

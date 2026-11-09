@@ -337,7 +337,11 @@ final class Files: Feature {
         let target = dest.appendingPathComponent(url.lastPathComponent)
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        if (try? fm.moveItem(at: url, to: target)) == nil { try? fm.copyItem(at: url, to: target) }
+        // Ours (Inbox, a temporary copy): moved. Anyone else's (opened in place from the Files app,
+        // LSSupportsOpeningDocumentsInPlace): copied, the original stays where it is.
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+        let mine = url.resolvingSymlinksInPath().path.hasPrefix(home + "/") || url.path.hasPrefix(FileManager.default.temporaryDirectory.path)
+        if !mine || (try? fm.moveItem(at: url, to: target)) == nil { try? fm.copyItem(at: url, to: target) }
         if fm.fileExists(atPath: target.path) { pendingShares.append(target) }
     }
 

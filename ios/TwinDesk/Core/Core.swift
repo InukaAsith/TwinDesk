@@ -114,6 +114,7 @@ final class Core: ObservableObject, LinkEvents {
     func start() {
         if started { return }
         started = true
+        _ = Files.receivedDir // Files › On My iPad › TwinDesk › Received, there from the start
         discovery.start()
         remote.watchControllers()
         ble.start()
@@ -129,7 +130,7 @@ final class Core: ObservableObject, LinkEvents {
     func wake() {
         start()
         discovery.refresh()
-        // Back in front after the session went onto Bluetooth (backgrounded): onto the cable or the network again.
+        // Back in front on Bluetooth (the network session dropped): onto the cable or the network again.
         if link.viaBle, link.connected, let h = link.host {
             if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { offBle() }
         }
@@ -199,20 +200,20 @@ final class Core: ObservableObject, LinkEvents {
     // thing that comes on it (bluetooth-central), the computer's pings included, so the session lives
     // on. Not while the backups keep the app running (the network stays), the microphone is recording
     // (iOS keeps it running) or the screen is shared.
-    func backgrounded() {
-        guard Background.shared.enabled, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
-              !Background.shared.active, !mic.running, !mirror.sharing else { return }
-        NSLog("TwinDesk: off screen: the session onto Bluetooth")
-        connectBle(h)
+    // Something that needs the network started while on Bluetooth (Share Screen, files): back on it.
+    func needNetwork() {
+        guard link.viaBle, link.connected else { return }
+        discovery.refresh()
+        offBle()
     }
 
     // On Bluetooth and the computer showed up on the network: the session moves back to it.
     private func offBle() {
-        guard link.viaBle, link.connected, let h = link.host, let f = discovery.get(h.id), let saved = store.host(h.id) else { return }
+        guard link.viaBle, link.connected, let h = link.host, let saved = store.host(h.id) else { return }
         var w = saved
-        w.address = f.address
-        w.port = f.port
-        store.putHost(w)
+        // Where discovery last saw it, else where it was before Bluetooth.
+        if let f = discovery.get(h.id) { w.address = f.address; w.port = f.port; store.putHost(w) }
+        guard !w.address.isEmpty, w.address != "127.0.0.1" else { return }
         NSLog("TwinDesk: back on the network from Bluetooth")
         link.connect(w, force: true)
     }

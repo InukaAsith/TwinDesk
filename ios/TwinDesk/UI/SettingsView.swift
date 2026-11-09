@@ -27,7 +27,7 @@ struct SettingsView: View {
 
                 SectionTitle(text: "Background")
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "Stay connected", detail: "Off screen, the session moves onto Bluetooth, the way iOS allows", on: bg("bg.on"))
+                    ToggleRow(title: "Stay connected", detail: "The session stays on Wi-Fi; if it drops, Bluetooth brings TwinDesk back", on: bg("bg.on"))
                     Divider()
                     Text("Backups").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                     ToggleRow(title: "Use location", detail: locationDetail, on: bg("bg.location", false))
@@ -35,7 +35,7 @@ struct SettingsView: View {
                     ToggleRow(title: "Use silent audio", detail: "Plays silence alongside your music", on: bg("bg.audio", false))
                     Divider()
                     ToggleRow(title: "Reconnect on its own", detail: "To the last computer, when TwinDesk wakes", on: flag("autoConnect"))
-                    Text("Bluetooth needs no backup. Turn one on if the computer has no Bluetooth, or to keep Wi-Fi speed with TwinDesk off screen. Each uses some battery.").font(.caption).foregroundStyle(.secondary)
+                    Text("iOS pauses TwinDesk soon after it leaves the screen. Turn one of these on to keep it running (Wi-Fi speed, Share Screen, files) with TwinDesk off screen. Each uses some battery.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
 

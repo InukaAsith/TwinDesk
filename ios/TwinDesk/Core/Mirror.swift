@@ -72,6 +72,7 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
             sendExt(["stop": 1])
             return
         }
+        core.needNetwork() // gone onto Bluetooth on the way out: the picture needs the network
         if want == nil {
             // Started here: the computer opens its window and asks (phone.mirror.want).
             core.send(msg("phone.mirror", ["open": true]))

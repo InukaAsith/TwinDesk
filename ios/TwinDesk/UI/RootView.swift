@@ -152,7 +152,7 @@ struct RootView: View {
             Sidebar(selection: $ui.page)
                 .navigationSplitViewColumnWidth(min: 250, ideal: 280, max: 320)
         } detail: {
-            NavigationStack { PageView(page: ui.page ?? .overview) }
+            NavigationStack { PageView(page: ui.page ?? .overview) }.id(ui.page)
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -224,13 +224,9 @@ struct Sidebar: View {
     var selection: Binding<Page?>?
 
     var body: some View {
-        Group {
-            if let sel = selection {
-                List(selection: sel) { content }
-            } else {
-                List { content }
-            }
-        }
+        // No List(selection:) on iPad: its rows only answer when a row's tag is exactly the
+        // selection's type, and a mismatch leaves every row dead. Plain buttons always answer.
+        List { content }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Backdrop())
@@ -247,14 +243,17 @@ struct Sidebar: View {
         ForEach(Array(Page.groups.enumerated()), id: \.offset) { _, group in
             Section {
                 ForEach(group) { p in
-                    if selection != nil {
-                        row(p).tag(Optional(p))
+                    if let sel = selection {
+                        Button { sel.wrappedValue = p; ui.open(p) } label: { row(p).contentShape(Rectangle()) }
+                            .buttonStyle(.plain)
+                            .hoverLift()
+                            .listRowBackground(sel.wrappedValue == p ? TDColor.accent.opacity(0.35) : TDColor.card)
                     } else {
                         NavigationLink(value: p) { row(p) }
+                            .listRowBackground(TDColor.card)
                     }
                 }
             }
-            .listRowBackground(TDColor.card)
         }
     }
 
@@ -273,15 +272,24 @@ struct Sidebar: View {
                 Circle().fill(core.connected ? TDColor.good : core.state == "connecting" ? TDColor.warn : Color.secondary.opacity(0.4))
                     .frame(width: 9, height: 9)
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            // The card is the row's own (not the list's row background, whose section corners cut
+            // its border off): inset by the stroke's width so all four corners show.
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+                ZStack {
+                    shape.fill(core.connected ? TDColor.accent.opacity(0.18) : TDColor.card)
+                    shape.strokeBorder(core.connected ? TDColor.accent.opacity(0.8) : TDColor.line, lineWidth: 1.5)
+                }
+                .padding(1)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .listRowBackground(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(core.connected ? TDColor.accent.opacity(0.18) : TDColor.card)
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(core.connected ? TDColor.accent.opacity(0.8) : TDColor.line, lineWidth: 1.5))
-        )
+        .hoverLift()
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
     }
 
     private var statusLine: String {

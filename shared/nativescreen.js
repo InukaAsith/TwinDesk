@@ -43,7 +43,7 @@ class NativeScreen extends EventEmitter {
     this.server = server;
     this.opts = opts;
     this.closed = false;
-    this.key = crypto.randomBytes(16).toString('hex');
+    this.secret = crypto.randomBytes(16).toString('hex');
     this.size = null; // the picture's
     this.screen = null; // the phone's screen, for phone.in: {w, h}
     this.on_ = false;
@@ -56,9 +56,9 @@ class NativeScreen extends EventEmitter {
     const c = this.server.current;
     if (!c || !P.isPhoneOs(c.os)) return Promise.reject(err('the connection closed'));
     if (c.transport === 'ble') return Promise.reject(err('Screens need Wi-Fi: the phone is connected through Bluetooth'));
-    live.set(this.key, this);
+    live.set(this.secret, this);
     this.server.sendToClient({
-      t: T.PHONE_MIRROR_WANT, on: true, key: this.key,
+      t: T.PHONE_MIRROR_WANT, on: true, key: this.secret,
       maxSize: this.opts.maxSize || 0, bitrate: this.opts.videoBitRate || 8000000, fps: this.opts.maxFps || 60,
     });
     return new Promise((resolve, reject) => {
@@ -141,7 +141,7 @@ class NativeScreen extends EventEmitter {
   _close(why, metadata) {
     if (this.closed) return;
     this.closed = true;
-    live.delete(this.key);
+    live.delete(this.secret);
     clearTimeout(this._timer);
     if (this.req) this.req.destroy();
     this.req = null;
@@ -149,7 +149,7 @@ class NativeScreen extends EventEmitter {
   }
 
   stop() {
-    if (!this.closed && this.server.current && P.isPhoneOs(this.server.current.os)) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: false, key: this.key });
+    if (!this.closed && this.server.current && P.isPhoneOs(this.server.current.os)) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: false, key: this.secret });
     this._close('stopped');
   }
 
@@ -184,7 +184,7 @@ class NativeScreen extends EventEmitter {
   text() {} // typing goes key by key
 
   simple(type) {
-    if (type === TYPE.RESET_VIDEO) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: true, key: this.key, sync: true });
+    if (type === TYPE.RESET_VIDEO) this.server.sendToClient({ t: T.PHONE_MIRROR_WANT, on: true, key: this.secret, sync: true });
     else if (type === TYPE.EXPAND_NOTIFICATIONS) this.tap(KEYCODE_NOTIFICATION);
   }
 
@@ -212,7 +212,7 @@ class NativeScreen extends EventEmitter {
   // phone.mirror.state from the phone: to the window it's for (the newest asked).
   static state(m) {
     const all = [...live.values()];
-    const s = all.find((x) => x.key === m.key) || all[all.length - 1];
+    const s = all.find((x) => x.secret === m.key) || all[all.length - 1];
     if (s) s.state(m);
   }
 
