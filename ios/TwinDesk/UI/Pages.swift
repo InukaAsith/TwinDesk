@@ -25,6 +25,22 @@ struct ReceiveScreenView: View {
                 }
                 .glassCard()
 
+                // The same setting as Share screen › Resolution on the computer (pair.sync "res"): either side changes both.
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(tr("Resolution")).font(.headline)
+                    Picker(tr("Resolution"), selection: Binding<Int>(get: { _ = core.tick; return Int(core.sync.value("res")) ?? 1080 },
+                                                                       set: { core.sync.setValue("res", $0 as Any) })) {
+                        Text("1080p").tag(1080)
+                        Text("1440p").tag(1440)
+                        Text("4K").tag(2160)
+                        Text(tr("Full")).tag(0)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(tr("The same as Share screen › Resolution on {name}", ["name": core.host?.name ?? tr("the computer")]))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .glassCard()
+
                 VStack(alignment: .leading, spacing: 12) {
                     Text(tr("Touch")).font(.headline)
                     Picker(tr("Touch"), selection: Binding(get: { core.screen.touchpad }, set: { core.screen.setOpt("screen.touchpad", $0) })) {
@@ -41,7 +57,7 @@ struct ReceiveScreenView: View {
                     Divider()
                     ToggleRow(title: tr("Fast writing"), detail: tr("Lines reach the computer a little sooner but can lose points along the way. Leave off for smooth drawing and handwriting"), on: opt("screen.penFast", false))
                     Divider()
-                    ToggleRow(title: tr("Play the computer’s sound"), detail: tr("Along with the screen"), on: opt("screen.sound", true))
+                    ToggleRow(title: tr("Play the computer’s sound"), detail: tr("Along with the screen"), on: opt("screen.sound", false))
                     Divider()
                     ToggleRow(title: tr("Smooth"), detail: tr("Smoother playback with about one frame of added delay"), on: opt("screen.smooth", false))
                 }
@@ -651,6 +667,19 @@ struct AboutView: View {
                         Button(copied ? tr("Copied") : tr("Copy")) { core.clip.write(core.store.deviceId); copied = true }.secondaryButton()
                     }
                 }
+                DenseCard(title: tr("Updates")) {
+                    let u = core.updates
+                    DenseRow(symbol: "arrow.triangle.2.circlepath", title: "TwinDesk", hint: updateHint, divider: false) {
+                        HStack(spacing: 8) {
+                            if u.available { Button(tr("Download")) { u.open() }.primaryButton() }
+                            if u.checking { ProgressView() } else { Button(tr("Check now")) { u.checkNow() }.secondaryButton() }
+                        }
+                    }
+                    Divider().overlay(TDColor.line)
+                    ToggleRow(title: tr("Check automatically"), detail: tr("Looks for new releases on GitHub every few hours"),
+                              on: Binding(get: { _ = core.tick; return core.updates.auto }, set: { core.updates.auto = $0 }))
+                        .font(.subheadline).padding(.vertical, 9)
+                }
                 DenseCard(title: tr("This app")) {
                     fact("app.badge", tr("Version"), version, first: true)
                     fact("hammer", tr("Build"), build)
@@ -664,6 +693,17 @@ struct AboutView: View {
                 }
             }
         }
+    }
+
+    private var updateHint: String {
+        _ = core.tick
+        let u = core.updates
+        if u.checking { return tr("Checking…") }
+        if !u.error.isEmpty { return tr("Couldn’t check: {error}", ["error": u.error]) }
+        if u.available { return tr("{latest} is available. You have {current}. ", ["latest": u.latest, "current": u.current]) + (u.download != nil ? tr("Download {name}", ["name": u.download!.lastPathComponent]) : tr("Opens the release page")) }
+        if u.noReleases { return tr("Version {current}. No releases are available yet.", ["current": u.current]) }
+        if let at = u.checkedAt { return tr("Up to date · checked {time}", ["time": DateFormatter.localizedString(from: at, dateStyle: .none, timeStyle: .short)]) }
+        return tr("Version {current}", ["current": u.current])
     }
 
     private var hero: some View {

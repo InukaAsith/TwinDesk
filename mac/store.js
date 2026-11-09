@@ -33,15 +33,8 @@ function write(name, data) {
   fs.renameSync(tmp, target);
 }
 
-// Settings with defaults; missing keys are filled in. Every feature is off until it's turned on (a
-// fresh install); settings saved before keep theirs, and features off here were on for them (WAS_ON).
-// The features that defaulted to on before they all started off: a settings file saved then has
-// them on where it doesn't say.
-const WAS_ON = {
-  kvm: ['mouse', 'keyboard'], clipboard: ['enabled'], audio: ['phoneMedia'], remote: ['allow'],
-  files: ['acceptDrops', 'dragEdge', 'shortcuts'], notifs: ['receive'], apps: ['offer'], papps: ['on'], receive: ['on'], smb: ['connectPc'],
-};
-
+// Settings with defaults; missing keys are filled in. Every feature is off until it's turned on:
+// a setting the file doesn't hold is off, whatever wrote the file.
 const DEFAULT_SETTINGS = {
   macId: null,
   macName: null,
@@ -130,9 +123,6 @@ function loadSettings() {
   out.rezume = require('../shared/rezume.js').normalize(s.rezume);
   out.ui.language = require('../shared/i18n.js').savedLanguage(out.ui.language);
   { const Look = require('../shared/look.js'); out.ui.style = Look.style(out.ui.style); out.ui.theme = Look.theme(out.ui.theme); out.ui.accent = Look.accent(out.ui.accent); }
-  if (Object.keys(s).length) {
-    for (const [k, keys] of Object.entries(WAS_ON)) for (const f of keys) if (!s[k] || s[k][f] === undefined) out[k][f] = true;
-  }
   if (s.ui && s.ui.setupSkipped && s.ui.setupDone === undefined) out.ui.setupDone = true;
   if ((s.rev || 0) < 7) { // Clipboard instant by default
     out.clipboard.mode = 'instant';

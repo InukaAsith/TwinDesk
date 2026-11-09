@@ -978,7 +978,7 @@
     const feat = el('div', { class: 'feat' }, F.map(([i, c, t, d]) => el('div', {}, [tile(i, c, 34), el('b', { text: t }), el('span', { text: d })])));
     const dl = downloads();
     const peers = peerBar();
-    if (wideQ.matches) page.replaceChildren(peers, el('div', { class: 'promo-grid' }, [el('div', {}, [promo, feat, dl]), el('div', { class: 'aside' }, [el('div', { style: 'height:30px' }), connect])]));
+    if (wideQ.matches) page.replaceChildren(peers, el('div', { class: 'promo-grid' }, [el('div', { class: 'promo-main' }, [promo, feat, dl]), el('div', { class: 'aside' }, [el('div', { class: 'aside-gap' }), connect])]));
     else page.replaceChildren(peers, promo, connect, feat, dl);
     return () => {
       serve.textContent = S.serving ? tr('{name} is ready to pair. You only need to pair once.', { name: S.serving.name }) : tr('You only need to pair once.');

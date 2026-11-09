@@ -1101,7 +1101,17 @@ private fun ScreenPage(core: Core, v: Int) {
         SwitchRow(tr("Fast writing"), tr("Lines reach {name} a little sooner but can lose points along the way. Leave off for smooth drawing and handwriting.", "name" to name), core.store.flag("screen.penFast", false), enabled = core.store.flag("screen.pen", true)) { s.setOpt("screen.penFast", it) }
     }
     MacCard(tr("Playback")) {
-        SwitchRow(tr("{name}’s sound with the screen", "name" to name), tr("When {name} shares audio with its screen", "name" to name), core.store.flag("screen.sound", false), first = true) { s.setOpt("screen.sound", it) }
+        // The same setting as Share screen › Resolution on the computer (pair.sync "res"): either side changes both.
+        MacRow(tr("Resolution"), tr("The same as Share screen › Resolution on {name}", "name" to name), first = true) {
+            SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
+                val res = core.sync.value("res")
+                val sizes = listOf(1080 to "1080p", 1440 to "1440p", 2160 to "4K", 0 to tr("Full"))
+                sizes.forEachIndexed { i, (h, label) ->
+                    SegmentedButton(selected = res == h.toString(), onClick = { core.sync.setValue("res", h) }, shape = SegmentedButtonDefaults.itemShape(i, sizes.size)) { Text(label, maxLines = 1) }
+                }
+            }
+        }
+        SwitchRow(tr("{name}’s sound with the screen", "name" to name), tr("When {name} shares audio with its screen", "name" to name), core.store.flag("screen.sound", false)) { s.setOpt("screen.sound", it) }
         SwitchRow(tr("Smooth motion"), tr("Smoother playback with about one frame of added delay"), core.store.flag("screen.smooth", false)) { s.setOpt("screen.smooth", it) }
     }
 }

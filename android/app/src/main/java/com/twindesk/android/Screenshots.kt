@@ -28,7 +28,7 @@ class Screenshots(core: Core) : Feature(core) {
     @Volatile var lastSent = ""; private set // the last one's name, for the Clipboard page
 
     // This device's screenshots to the computer (with Pictures on).
-    val on: Boolean get() = core.store.flag("screenshots.out", core.store.was)
+    val on: Boolean get() = core.store.flag("screenshots.out", false)
     fun setOn(v: Boolean) { core.store.setFlag("screenshots.out", v); watch(); core.changed() }
 
     // The photo permission this Android asks for (13 and later: Photos; before: storage).

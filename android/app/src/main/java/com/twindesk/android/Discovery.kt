@@ -57,7 +57,7 @@ class Discovery(
     @Volatile var peerPort = 0 // ours, in our beacon as `phost` while we host
     // Connect with Android on (Peer.kt): our beacon says `ap` (every phone app lists only a phone that
     // does), and other phones are listed and heard. Off: phones don't see this one at all.
-    @Volatile var peerOn = true
+    @Volatile var peerOn = false
     @Volatile var onPeerAsk: ((Found, JSONObject) -> Unit)? = null // another phone's peer.* (Peer.kt)
     @Volatile var error = ""
     @Volatile private var sock: DatagramSocket? = null

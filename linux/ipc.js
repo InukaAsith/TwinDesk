@@ -302,6 +302,7 @@ function setupIpc(ctx) {
     },
     kvm: () => kvm.applyConfig(),
     pcApps: () => { pcApps.apply(); pcApps.input.release(); },
+    pcScreen: () => pcScreen.apply(), // Resolution (pair.sync 'res', with a phone): a new session at that size
     macApps: () => peerApps.apply(),
     rezume: () => (ctx.rezume ? ctx.rezume.apply() : ctx.loadReZume()),
     remote: () => (ctx.phoneRemote ? ctx.phoneRemote.setAllow(settings.remote.allow) : ctx.loadRemote()),

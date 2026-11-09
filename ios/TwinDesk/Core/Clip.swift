@@ -50,7 +50,7 @@ final class Clip: Feature {
     var autoCopy: Bool { core.store.flag("clip.auto", true) }
     var notify: Bool { core.store.flag("clip.notify", true) }
     var notifyOwn: Bool { core.store.flag("clip.notifyOwn", true) }
-    var pictures: Bool { core.store.flag("clip.images", true) }
+    var pictures: Bool { core.store.flag("clip.images", false) }
 
     func setOption(_ key: String, _ on: Bool) {
         core.store.setFlag(key, on)
@@ -169,6 +169,7 @@ final class Clip: Feature {
     private func startWatching() {
         if watch != nil { return }
         watch = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.check() }
+        watch?.tolerance = 0.5 // iOS may fold it into other wakeups (battery)
     }
 
     func appBecameActive() { check() }

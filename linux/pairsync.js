@@ -34,6 +34,8 @@ const FEATURES = {
 const VALUES = {
   rezume: { path: ['rezume', 'on'], allowed: [true, false], feature: 'rezume' }, // only where the app has ReZume
   pace: { path: ['monitor', 'pacing'], allowed: ['fast', 'smooth', 'steady'] },
+  // Share screen › Resolution, the same as a phone's Receive screen page (only with a phone).
+  res: { path: ['pcScreen', 'maxHeight'], allowed: [0, 1080, 1440, 2160], phone: true },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
   syncPads: { path: ['kvm', 'syncPads'], allowed: [true, false] }, // one pointer for every mouse (kvm.js 'local')
   ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)

@@ -32,6 +32,8 @@ const FEATURES = {
 const VALUES = {
   rezume: { path: ['rezume', 'on'], allowed: [true, false], feature: 'rezume' }, // only where the app has ReZume
   pace: { path: ['sharing', 'pace'], allowed: ['fast', 'smooth', 'steady'] },
+  // Share screen › Resolution, the same as a phone's Receive screen page (only with a phone).
+  res: { path: ['streamMaxHeight'], allowed: [0, 1080, 1440, 2160], phone: true },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
   syncPads: { path: ['kvm', 'syncPads'], allowed: [true, false] }, // one pointer for every mouse (kvm.js 'local')
   ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)
@@ -121,7 +123,7 @@ class PairSync {
     const out = {};
     for (const [f, d] of Object.entries(this.features)) out[f] = { out: this._get(s, d, 'out'), in: this._get(s, d, 'in') };
     out.values = {};
-    for (const [k, d] of Object.entries(this._values())) out.values[k] = s[d.path[0]][d.path[1]];
+    for (const [k, d] of Object.entries(this._values())) out.values[k] = d.path.length === 1 ? s[d.path[0]] : s[d.path[0]][d.path[1]];
     return out;
   }
 
@@ -133,7 +135,7 @@ class PairSync {
     for (const [k, v] of Object.entries(vals.values || {})) {
       const d = known[k];
       if (!d || now.values[k] === v) continue;
-      s[d.path[0]][d.path[1]] = v;
+      if (d.path.length === 1) s[d.path[0]] = v; else s[d.path[0]][d.path[1]] = v;
       now.values[k] = v;
       this.apply('value', k, v);
     }

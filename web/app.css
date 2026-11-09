@@ -236,6 +236,7 @@ html.solo .page { overflow: visible; padding: 8px 32px 48px; max-width: 1120px; 
 .promo-grid .promo h1 { font-size: 44px; letter-spacing: -0.03em; }
 .promo-grid .feat { grid-template-columns: repeat(3, 1fr); }
 .promo-grid .aside { position: sticky; top: 20px; display: grid; gap: 0; }
+.promo-grid .aside-gap { height: 30px; }
 
 /* ---- Files and the Drop ---- */
 .dropzone {
@@ -334,6 +335,13 @@ html.wide .toast { bottom: 28px; }
   .promo-grid .promo { text-align: center; }
   .promo-grid .promo p { margin: 0 auto; }
   .promo-grid .feat { grid-template-columns: 1fr 1fr; }
+  /* One column (an iPad held upright): pairing right under the title, as on a phone, not below
+     the features and downloads. */
+  .promo-grid .promo-main { display: contents; }
+  .promo-grid .promo { order: 0; }
+  .promo-grid .aside { order: 1; position: static; }
+  .promo-grid .aside-gap { display: none; }
+  .promo-grid .promo-main > :not(.promo) { order: 2; }
 }
 @media (min-width: 560px) { .tiles { grid-template-columns: repeat(6, 1fr); } }
 

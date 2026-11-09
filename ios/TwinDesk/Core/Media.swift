@@ -138,7 +138,8 @@ final class DevCtl: Feature {
 
     private func sendState() {
         core.send(msg("dev.state", ["can": ["ring": true, "ringStop": true], "ringing": ringing,
-                                     "v": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""]))
+                                     // which TwinDesk (shared/appinfo.js): the computer warns when it's older
+                                     "app": ["v": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""]]))
     }
 
     override func onMessage(_ t: String, _ m: JSON) -> Bool {

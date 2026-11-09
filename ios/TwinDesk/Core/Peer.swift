@@ -75,7 +75,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
     }
     private var myFp: String { PeerKey.fingerprint }
 
-    var on: Bool { core.store.flag("peer.on", true) }
+    var on: Bool { core.store.flag("peer.on", false) }
     var clipOn: Bool { core.store.flag("peer.clip", true) }
     var notifsOn: Bool { core.store.flag("peer.notifs", true) }
     var photosOn: Bool { core.store.flag("peer.photos", true) }

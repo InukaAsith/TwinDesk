@@ -37,10 +37,8 @@ data class Host(
 class Store(private val ctx: Context) {
     private val prefs = ctx.getSharedPreferences("twindesk", Context.MODE_PRIVATE)
 
-    // Every feature is off on a fresh install until it's turned on; a phone that had TwinDesk before
-    // keeps what it had (a switch it never saved was on for it). Decided once, before anything is saved.
-    val was: Boolean = if (prefs.contains("was")) prefs.getBoolean("was", false)
-    else prefs.contains("deviceId").also { prefs.edit().putBoolean("was", it).apply() }
+    // Every feature is off until it's turned on: a switch that was never saved is off (a fresh
+    // install has them all off; an update keeps what was saved).
 
     val deviceId: String = prefs.getString("deviceId", null) ?: Proto.randomHex(16).also {
         prefs.edit().putString("deviceId", it).apply()

@@ -29,7 +29,7 @@ final class Screen: Feature {
 
     // ---- options (General › Receive screen, and the viewer's bar) ----
     var touchpad: Bool { core.store.flag("screen.touchpad", false) } // off: touch screen (the pointer is where the finger is)
-    var sound: Bool { core.store.flag("screen.sound", true) }
+    var sound: Bool { core.store.flag("screen.sound", false) }
     var smooth: Bool { core.store.flag("screen.smooth", false) }
     var pen: Bool { core.store.flag("screen.pen", true) }
     var penFast: Bool { core.store.flag("screen.penFast", false) } // Fast writing: the Pencil's samples batched (viewer.js)

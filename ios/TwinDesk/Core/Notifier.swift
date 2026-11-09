@@ -120,6 +120,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             core.changed()
         case (Cat.invite, _):
             if let f = core.invite { core.pair(f) }
+        case (_, UNNotificationDefaultActionIdentifier) where response.notification.request.identifier == "update":
+            core.updates.open() // a new release (Updates.swift): its IPA or page in Safari
         default: break
         }
         done()

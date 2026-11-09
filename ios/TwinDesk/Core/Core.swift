@@ -40,6 +40,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
     lazy var mic = Mic(self)
+    lazy var updates = Updates(self) // new releases on GitHub (About › Updates)
     lazy var peer = Peer(self) // another phone: its own link, one session with the computer's (Peer.swift)
 
     // Published copies for the UI (main thread).
@@ -79,7 +80,7 @@ final class Core: ObservableObject, LinkEvents {
     func quietCheck() {
         let busy = inFront || screen.viewing || screen.sharing || remote.active || mic.running || mirror.sharing
         if busy != busySnapshot { busySnapshot = busy; link.nudge() }
-        discovery.setSlow(!inFront && link.connected) // off screen and connected: a beacon a minute
+        discovery.setSlow(!inFront) // off screen: a beacon a minute, no subnet sweeps (the radio stays asleep)
     }
 
     func setFront(_ on: Bool) {
@@ -88,6 +89,7 @@ final class Core: ObservableObject, LinkEvents {
         quietCheck()
         if on {
             link.wake()
+            updates.onScreen()
             if let h = resumeLater {
                 resumeLater = nil
                 if link.state == "idle", link.pair == nil, !peer.connected {
@@ -153,7 +155,7 @@ final class Core: ObservableObject, LinkEvents {
             self.rttMs = l.rttMs
             self.nearby = self.discovery.list()
             self.hosts = self.store.hosts().sorted { $0.lastSeen > $1.lastSeen }
-            self.discovery.setSlow(!self.inFront && l.connected)
+            self.discovery.setSlow(!self.inFront)
         }
         if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
     }
@@ -238,7 +240,7 @@ final class Core: ObservableObject, LinkEvents {
     // (Share Screen here, the computer's or a phone's screen watched here), the computer's sound
     // playing here, the camera, files, the microphone.
     private var networkBusy: Bool {
-        mirror.sharing || screen.viewing || sound.playing || camera.on || files.busy || mic.running || peer.screenOn
+        mirror.sharing || mirror.starting || screen.viewing || sound.playing || camera.on || files.busy || mic.running || peer.screenOn
     }
 
     // Off screen (closed, in the background, locked) or out of focus: onto Bluetooth at once. The
@@ -272,7 +274,7 @@ final class Core: ObservableObject, LinkEvents {
     // the session moves now; off screen, a notification: opening TwinDesk moves it (wake).
     private func computerNeedsNetwork(_ m: JSON) {
         guard link.viaBle, link.connected, let h = link.host else { return }
-        if inFront && !unfocused { return needNetwork() }
+        if (inFront && !unfocused) || mirror.sharing { return needNetwork() } // sharing this screen: its picture needs it now
         let title = m.str("why") == "screen" ? tr("{name} wants to show its screen", ["name": h.name]) : tr("{name} is sending files", ["name": h.name])
         Notifier.shared.note("net.need", title, tr("Open TwinDesk to receive them over Wi-Fi."), sound: true)
     }
@@ -304,6 +306,7 @@ final class Core: ObservableObject, LinkEvents {
         // Without ending the session (what's under way on it carries on); a computer that can't
         // resume (an older one): a new session there, as before.
         link.move(to: w.address, port: w.port, ble: false) { [weak self] ok in
+            if ok { self?.mirror.networkBack(); return }
             guard let self = self, !ok, self.link.viaBle, self.link.connected, self.link.host?.id == w.id else { return }
             if self.link.resumable { return } // it can, the network just didn't answer: stays on Bluetooth
             self.link.connect(w, force: true)

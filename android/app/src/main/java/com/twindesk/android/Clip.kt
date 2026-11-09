@@ -58,7 +58,7 @@ class Clip(core: Core) : Feature(core) {
     }
 
     // Clipboard › Pictures here: the computer's pictures land on this clipboard, and this device's go there.
-    val picturesOn: Boolean get() = core.store.flag("clip.images", core.store.was)
+    val picturesOn: Boolean get() = core.store.flag("clip.images", false)
     fun setPictures(v: Boolean) {
         core.store.setFlag("clip.images", v)
         sendPolicy()

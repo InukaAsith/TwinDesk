@@ -34,9 +34,8 @@ const num = (v, d, min, max) => (Number.isFinite(Number(v)) && v !== null && v !
 
 function normalize(s) {
   s = s || {};
-  // Every feature is off on a fresh install until it's turned on; settings saved before keep theirs
-  // (and a feature added since is on for them, as it was before it had a switch).
-  const was = Object.keys(s).length > 0;
+  // Every feature is off until it's turned on: a setting a file doesn't hold is off, whatever wrote
+  // the file (an old version, the mesh, a half-written one).
   const kvm = s.kvm || {};
   const keys = s.keys || {};
   const c = s.clipboard || {};
@@ -60,8 +59,8 @@ function normalize(s) {
   return {
     rev: 11, // settings revision (upgrades in normalize, like the Mac's store.js)
     kvm: {
-      mouse: bool(kvm.mouse, was),
-      keyboard: bool(kvm.keyboard, was),
+      mouse: bool(kvm.mouse, false),
+      keyboard: bool(kvm.keyboard, false),
       driveOther: bool(kvm.driveOther, true),
       beDriven: bool(kvm.beDriven, true),
       resistancePx: Math.round(num(kvm.resistancePx, P.RESISTANCE_PX, 0, 400)),
@@ -86,7 +85,7 @@ function normalize(s) {
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored
     updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '' },
     clipboard: {
-      enabled: bool(c.enabled, was),
+      enabled: bool(c.enabled, false),
       send: bool(c.send, true),
       receive: bool(c.receive, true),
       // Pictures too, up to 10 MB (shared/clipimage.js), screenshots put on the clipboard among them
@@ -108,7 +107,7 @@ function normalize(s) {
     },
     // Remote tab (shared/phone-remote.js): the phone's Remote page moves the pointer and types here
     // Real gamepad (pad): its sticks and buttons as a controller here, off until turned on
-    remote: { allow: bool((s.remote || {}).allow, was), pad: bool((s.remote || {}).pad, false) },
+    remote: { allow: bool((s.remote || {}).allow, false), pad: bool((s.remote || {}).pad, false) },
     // TwinDesk Web (shared/web/webwire.js): off until turned on; what new web devices may do.
     web: (() => {
       const w = s.web || {};
@@ -134,13 +133,13 @@ function normalize(s) {
       device: typeof (s.camera || {}).device === 'string' ? s.camera.device.slice(0, 200) : '',
     },
     audio: {
-      receive: bool(audio.receive, was), // play the Mac's sound here (audio.policy W→M)
+      receive: bool(audio.receive, false), // play the Mac's sound here (audio.policy W→M)
       volume: Math.round(num(audio.volume, 1, 0, 1) * 100) / 100,
       send: bool(audio.send, false), // send this PC's sound to the Mac (dir w2m)
       muteLocal: bool(audio.muteLocal, false), // silence this PC while sending
       // A phone: its media controls on Overview (shared/nowplaying.js), and its sound here over
       // Bluetooth, this computer as its speaker (shared/btaudio.js), off until turned on
-      phoneMedia: bool(audio.phoneMedia, was),
+      phoneMedia: bool(audio.phoneMedia, false),
       phoneBt: bool(audio.phoneBt, false),
       // Microphone (shared/mic.js): this computer's to the other (micSend), the other's here (micReceive),
       // off until turned on; micDevice: the microphone sent, micOut: where the other's plays ('' = found)
@@ -156,14 +155,14 @@ function normalize(s) {
       installedKey: typeof term.installedKey === 'string' ? term.installedKey : '', // digest of the Mac key line we installed
     },
     files: {
-      dropToMac: bool(files.dropToMac, was),
+      dropToMac: bool(files.dropToMac, false),
       shareOn: bool(files.shareOn, false), // set only by a successful share setup (smb.js)
       shareFolder: typeof files.shareFolder === 'string' ? files.shareFolder : '',
-      mountMac: bool(files.mountMac, was),
-      acceptFromMac: bool(files.acceptFromMac, was), // files dragged from the Mac across the edge
-      edgeDrag: bool(files.edgeDrag, was), // drag files/folders across the screen edge, both ways (drag.policy)
+      mountMac: bool(files.mountMac, false),
+      acceptFromMac: bool(files.acceptFromMac, false), // files dragged from the Mac across the edge
+      edgeDrag: bool(files.edgeDrag, false), // drag files/folders across the screen edge, both ways (drag.policy)
       // Copy and paste files with two global shortcuts (fclip.js)
-      shortcuts: bool(files.shortcuts, was),
+      shortcuts: bool(files.shortcuts, false),
       copyKeys: accel(files.copyKeys, 'Control+Alt+C'),
       pasteKeys: accel(files.pasteKeys, 'Control+Alt+V'),
       plain: bool(files.plain, false), // Encrypt file transfers off: plain HTTP for file bytes where both allow it (shared/fastfile.js fxPlain)
@@ -171,7 +170,7 @@ function normalize(s) {
     },
     notifs: { // (notifs.js): muted = apps never sent
       send: bool(nf.send, false),
-      receive: bool(nf.receive, was),
+      receive: bool(nf.receive, false),
       hideText: bool(nf.hideText, false),
       muted: Array.isArray(nf.muted) ? nf.muted.filter((x) => typeof x === 'string').map((x) => x.slice(0, 300)).slice(0, 500) : [],
     },
@@ -190,7 +189,7 @@ function normalize(s) {
     wake: { peers: wakePeers(wk.peers) }, // {deviceId: {name, os, macs, address, at}} from wol.info
     // moveWindows: a window dragged past the shared edge with moveKey held goes to the other
     // computer (pcapps.js moveOut), off until switched on; moveKey: which modifier.
-    pcApps: { allow: bool(pca.allow, was), moveWindows: bool(pca.moveWindows, false), moveKey: MOVE_KEYS.includes(pca.moveKey) ? pca.moveKey : 'ControlRight' },
+    pcApps: { allow: bool(pca.allow, false), moveWindows: bool(pca.moveWindows, false), moveKey: MOVE_KEYS.includes(pca.moveKey) ? pca.moveKey : 'ControlRight' },
     // A phone as the peer: its screen window, apps and setup
     phone: {
       sound: bool(ph.sound, false),
@@ -224,7 +223,7 @@ function normalize(s) {
       // Shared folders (shared/foldershare.js), both ways, off until switched on.
       shareMount: bool(hub.shareMount, false), shareServe: bool(hub.shareServe, false), shareFolder: typeof hub.shareFolder === 'string' ? hub.shareFolder.slice(0, 1000) : '',
     },
-    macApps: { on: bool(mca.on, was) }, // The other computer's apps open here (pair.sync 'apps' in) // The Mac may open this PC's apps (it shows them only if it accepts)
+    macApps: { on: bool(mca.on, false) }, // The other computer's apps open here (pair.sync 'apps' in) // The Mac may open this PC's apps (it shows them only if it accepts)
     // Setup screen: shown once. done: everything was ready, or 'Skip for now' was pressed; after that
     // General and Display show what's missing (a firewall that changes with the network, a helper
     // that restarts, a phone connecting don't bring the screen back).

@@ -58,9 +58,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private val xfer = Executors.newCachedThreadPool { r -> Thread(r, "td-peer-x").apply { isDaemon = true } }
 
     // ---- settings ----
-    // Connect with Android itself (on by default): off, other phones don't see this one (Discovery's
+    // Connect with Android itself (off until turned on): off, other phones don't see this one (Discovery's
     // peerOn), nothing hosts, a session with a phone ends.
-    val on get() = store.flag("peer.on", true)
+    val on get() = store.flag("peer.on", false)
     fun setOn(v: Boolean) {
         store.setFlag("peer.on", v)
         core.discovery.peerOn = v

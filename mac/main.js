@@ -956,6 +956,7 @@ app.whenReady().then(() => {
   pairSync = new PairSync({ server: peer, getSettings: () => settings, saveSettings: () => store.saveSettings(settings),
     apply: (f, dir, on) => (f !== 'value' ? SYNC_ACTIONS[f](dir, on)
       : dir === 'rezume' ? actions.setRezume({ on })
+        : dir === 'res' ? actions.setStreamMaxHeight(on)
         : ['gestures', 'ble', 'keyboard', 'speed', 'reverseScroll', 'syncPads'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
