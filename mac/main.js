@@ -376,16 +376,14 @@ function clearStalePermissions() {
       !p.accessibility && 'Accessibility',
       p.inputMonitoring === false && 'ListenEvent',
     ].filter(Boolean);
-    const id = 'org.macshare.mac';
-    let left = services.length;
-    const done = () => {
+    const done = (resetErr) => {
+      if (resetErr) return console.warn(`[permissions] reset skipped or failed: ${resetErr.message}`);
       settings.app.signature = m[1];
       store.saveSettings(settings);
       refreshPermissions();
     };
-    if (!left) return done();
-    console.log(`[permissions] new signature: resetting ${services.join(', ')}`);
-    for (const svcName of services) require('child_process').execFile('/usr/bin/tccutil', ['reset', svcName, id], () => --left || done());
+    if (services.length) console.log(`[permissions] new signature: resetting ${services.join(', ')}`);
+    require('./permission-reset').resetMissing(bundle, services, require('child_process').execFile, done);
   });
 }
 
