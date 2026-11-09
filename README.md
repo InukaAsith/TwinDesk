@@ -11,11 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src="https://img.shields.io/badge/Download-Android-3ddc84?style=for-the-badge&logo=android&logoColor=white" alt="Download for Android"></a>
-  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-AltStore-1c8bd6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to AltStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src="https://img.shields.io/badge/Download-Windows-0078d4?style=for-the-badge" alt="Download for Windows"></a>
-  <a href="#homebrew"><img src="https://img.shields.io/badge/brew_install-macOS-fbb040?style=for-the-badge&logo=homebrew&logoColor=white" alt="Install on macOS with Homebrew"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src="https://img.shields.io/badge/Download-macOS_.dmg-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/android.png" width="300" alt="Get it for Android"></a>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/altstore.png" width="300" alt="Add to AltStore"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/windows.png" width="300" alt="Download for Windows"></a>
+<br>
+  <a href="#homebrew"><img src=".github/assets/buttons/brew.png" width="300" alt="Install on Mac with Homebrew"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/dmg.png" width="300" alt="Download for macOS (Apple silicon)"></a>
 </p>
 
 <p align="center">
@@ -247,7 +248,7 @@ TwinDesk isn't on the App Store yet (that's what [sponsoring](SPONSOR.md) pays f
 the IPA with your own Apple ID:
 
 <p>
-  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-AltStore-1c8bd6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to AltStore"></a>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/altstore.png" width="300" alt="Add to AltStore"></a><br>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-SideStore-8e5cf6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to SideStore"></a>
   <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
 </p>
