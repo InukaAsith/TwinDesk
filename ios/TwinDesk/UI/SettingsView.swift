@@ -57,7 +57,7 @@ struct SettingsView: View {
                     Divider()
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Playback of shared screens")
-                        Picker("Playback", selection: Binding(get: { _ = core.tick; return core.sync.value("pace") }, set: { core.sync.setValue("pace", $0) })) {
+                        Picker("Playback", selection: Binding<String>(get: { _ = core.tick; return core.sync.value("pace") }, set: { (v: String) in core.sync.setValue("pace", v as Any) })) {
                             Text("Fastest").tag("fast")
                             Text("Smooth").tag("smooth")
                             Text("Steady").tag("steady")
