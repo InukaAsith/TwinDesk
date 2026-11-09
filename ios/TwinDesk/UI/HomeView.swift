@@ -11,6 +11,7 @@ struct OverviewView: View {
     @EnvironmentObject var core: Core
     @EnvironmentObject var ui: AppUI
     @State private var picking = false
+    @State private var pickingPhotos = false
     @State private var photos: [PhotosPickerItem] = []
 
     var body: some View {
@@ -36,36 +37,40 @@ struct OverviewView: View {
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }
         }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos]))
         .onChange(of: photos) { items in sendPhotos(items) }
     }
 
+    // Quick actions (Tiles.swift): what to do with the computer in a tap, edited in place.
     private var actions: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 12) {
-            tileButton("Clipboard", "doc.on.clipboard", Page.clipboard.color) { core.clip.sendCurrent(force: true) }
-            PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) {
-                tile("Photos", "photo.on.rectangle", Page.photos.color)
-            }
-            .buttonStyle(.plain)
-            tileButton("Files", "folder.badge.plus", Page.files.color) { picking = true }
-            tileButton("Its screen", "display", Page.receive.color) { ui.cover = .viewer }
-            tileButton("Touchpad", "hand.point.up.left", Page.remote.color) { ui.cover = .remote("pad") }
-            tileButton("Gamepad", "gamecontroller", Page.remote.color) { ui.cover = .remote("gamepad") }
-            if core.fclip.offer != nil { tileButton("Save copied", "square.and.arrow.down", TDColor.good) { core.fclip.save() } }
+        let name = core.host?.name ?? "the computer"
+        let can = core.dev.can
+        let now = core.media.now
+        let playing = now?.playing == true
+        var defs: [TileDef] = [
+            TileDef(id: "screen", label: "Its screen", symbol: "display", color: Page.receive.color, state: name) { ui.cover = .viewer },
+            TileDef(id: "voice", label: "Voice typing", symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), state: "Speak, it types on \(name)") { ui.cover = .remote("voice") },
+            TileDef(id: "touchpad", label: "Touchpad", symbol: "hand.point.up.left.fill", color: .orange, state: "And keyboard") { ui.cover = .remote("pad") },
+            TileDef(id: "gamepad", label: "Gamepad", symbol: "gamecontroller.fill", color: Color(red: 0.69, green: 0.32, blue: 0.87), state: "Keys or a controller") { ui.cover = .remote("gamepad") },
+            TileDef(id: "photos", label: "Send photos", symbol: "photo.on.rectangle", color: Page.photos.color, state: "To \(name)") { pickingPhotos = true },
+            TileDef(id: "files", label: "Send files", symbol: "folder.fill.badge.plus", color: Page.files.color, state: "To Downloads") { picking = true },
+            TileDef(id: "clipboard", label: "Send clipboard", symbol: "doc.on.clipboard.fill", color: Page.clipboard.color, state: "What’s copied here") { _ = core.clip.sendCurrent(force: true) },
+            TileDef(id: "media", label: playing ? "Pause" : "Play", symbol: playing ? "pause.fill" : "play.fill", color: Page.media.color, on: playing,
+                    state: now.map { [$0.title, $0.artist].filter { !$0.isEmpty }.joined(separator: " · ") } ?? "Nothing playing") { core.media.ctl("toggle") },
+            TileDef(id: "next", label: "Next track", symbol: "forward.fill", color: Page.media.color, state: now?.title ?? "") { core.media.ctl("next") },
+            TileDef(id: "lock", label: "Lock", symbol: "lock.fill", color: Color(white: 0.45), has: can.contains(.lock), state: name) { core.dev.act("lock") },
+            TileDef(id: "sleep", label: "Sleep", symbol: "moon.zzz.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: can.contains(.sleep), state: name) { core.dev.act("sleep") },
+            TileDef(id: "dnd", label: "Focus", symbol: "moon.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: can.contains(.dnd), on: core.dev.dnd == true,
+                    state: core.dev.dnd == true ? "On" : "Off") { core.dev.act("dnd", ["on": !(core.dev.dnd ?? false)]) },
+            TileDef(id: "ring", label: "Ring", symbol: "bell.and.waves.left.and.right.fill", color: TDColor.bad, has: can.contains(.ring), state: "Find \(name)") { core.dev.act("ring") },
+            TileDef(id: "sound", label: "Sound", symbol: "speaker.wave.2.fill", color: Page.audio.color, state: "\(name)’s sound") { ui.open(.audio) },
+            TileDef(id: "camera", label: "Webcam", symbol: "video.fill", color: Page.camera.color, state: "This camera on \(name)") { ui.open(.camera) },
+            TileDef(id: "notifications", label: "Notifications", symbol: "bell.badge.fill", color: Page.notifications.color, state: "Both ways") { ui.open(.notifications) },
+        ]
+        if core.fclip.offer != nil { // what the computer copied: kept first while it's there
+            defs.insert(TileDef(id: "auto.savecopied", label: "Save copied", symbol: "square.and.arrow.down.fill", color: TDColor.good, state: "Copied on \(name)") { core.fclip.save() }, at: 0)
         }
-    }
-
-    private func tileButton(_ title: String, _ icon: String, _ color: Color, _ run: @escaping () -> Void) -> some View {
-        Button(action: run) { tile(title, icon, color) }.buttonStyle(.plain).hoverLift()
-    }
-
-    private func tile(_ title: String, _ icon: String, _ color: Color) -> some View {
-        VStack(spacing: 8) {
-            FeatureIcon(symbol: icon, color: color, size: 36)
-            Text(title).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, -4)
-        .glassCard(20)
+        return TilesCard(defs: defs)
     }
 
     // The computer's own controls (shared/devctl.js there).

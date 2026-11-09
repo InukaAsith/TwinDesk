@@ -159,6 +159,249 @@
     },
 
     // What plays there (shared/ui-nowplaying.js): { el, update(s, ov) }.
+    // The tiles' icons (20×20 strokes, white on each tile's colour).
+    GLYPH: {
+      show: 'M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2',
+      screen: 'M3 4h14v9H3z M7 17h6 M10 13v4',
+      ring: 'M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0',
+      lock: 'M5 9h10v8H5z M7 9V6.5a3 3 0 0 1 6 0V9 M10 12v2',
+      sleep: 'M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z',
+      send: 'M3 5h5l1.5 2H17v9H3z M10 14.5v-5 M7.8 11.5 10 9.3l2.2 2.2',
+      play: 'M6.5 4.5v11l9-5.5z',
+      pause: 'M7 4.5v11 M13 4.5v11',
+      next: 'M15.5 4.5v11 M4 4.5l8 5.5-8 5.5z',
+      bluetooth: 'M6 6.5l8 7-4 3.5V3l4 3.5-8 7',
+      dnd: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M6.5 10h7',
+      wifi: 'M2.5 7.5a11 11 0 0 1 15 0 M5 10.3a7.3 7.3 0 0 1 10 0 M7.6 13a3.5 3.5 0 0 1 4.8 0 M10 15.8v.1',
+    },
+
+    // A page as a tile, with its sidebar icon and colour (left out where there's no such page);
+    // has: shown for this device now.
+    // Every page in the sidebar for the device in session (Overview aside), as tiles: shortcuts to any of them.
+    pageTiles(s) {
+      return UI.tabs.filter((d) => UI.baseOf(d) !== 'overview' && !d.navHidden && !(d.hidden && d.hidden(s)))
+        .sort((a, b) => (a.order ?? 50) - (b.order ?? 50)).map((d) => P.pageTile(d.id, s));
+    },
+    pageTile(id, s) {
+      const def = UI.tabs.find((d) => d.id === id);
+      return def ? { id: 'p.' + id, label: t(def.title), icon: UI.icon(def.icon), color: def.color, has: !(def.hidden && def.hidden(s)), run: () => UI.go(id) } : null;
+    },
+
+    // ---- tiles, the way Control Center has them (the phones' Overview has the same: Tiles.kt,
+    // Tiles.swift) ----
+    // One or two rows that scroll sideways; each tile small (one cell), wide (two across) or, with
+    // two rows, large (two by two). Customize: add and remove them, size them, drag them (or ← →)
+    // into place, one row or two. Kept in this window's storage under key, a view preference
+    // of this computer's.
+    //   key       where the layout is kept
+    //   standard  {rows, items: [{id, s}]}: the layout until it's customized (and after Reset)
+    // → {grid, editor, toggle(), editing(), render(defs)}; defs: [{id, label, icon: path | el,
+    // color: a CSS gradient, has, on, state, title (its tooltip), run}], drawn again only when something in them changed.
+    tiles({ key, standard, onDraw = () => {} }) {
+      const { el } = UI;
+      const store = 'twindesk.tiles.' + key;
+      const load = () => {
+        try {
+          const o = JSON.parse(localStorage.getItem(store) || 'null');
+          if (o && Array.isArray(o.items)) {
+            const seen = new Set();
+            return {
+              rows: o.rows === 2 ? 2 : 1,
+              items: o.items.filter((x) => x && typeof x.id === 'string' && !seen.has(x.id) && seen.add(x.id))
+                .map((x) => ({ id: x.id, s: ['s', 'w', 'b'].includes(x.s) ? x.s : 's' })),
+            };
+          }
+        } catch (_) { /* none kept, or storage closed */ }
+        return JSON.parse(JSON.stringify(standard));
+      };
+      let layout = load();
+      const save = () => { try { localStorage.setItem(store, JSON.stringify(layout)); } catch (_) { /* kept for this session */ } };
+      let editing = false;
+      let sel = null;
+      let defs = [];
+      let drawn = '';
+
+      const grid = el('div', { class: 'dv-tiles' });
+      const editor = el('div', { class: 'dv-tiles-edit' });
+      editor.hidden = true;
+      const rowsSeg = UI.segmented([{ value: 1, label: t('One row') }, { value: 2, label: t('Two rows') }], (v) => { layout.rows = v; save(); draw(); });
+      const sizeSeg = UI.segmented([{ value: 's', label: t('Small') }, { value: 'w', label: t('Wide') }, { value: 'b', label: t('Large') }], (v) => {
+        const it = layout.items.find((x) => x.id === sel);
+        if (it) { it.s = v; save(); draw(); }
+      });
+      const selName = el('b', { class: 'dv-tiles-sel' });
+      const moveBy = (d) => {
+        const i = layout.items.findIndex((x) => x.id === sel);
+        const j = i + d;
+        if (i < 0 || j < 0 || j >= layout.items.length) return;
+        layout.items.splice(j, 0, layout.items.splice(i, 1)[0]);
+        save(); draw();
+      };
+      const earlier = UI.button('←', () => moveBy(-1), 'small');
+      const later = UI.button('→', () => moveBy(1), 'small');
+      earlier.title = t('Earlier'); later.title = t('Later');
+      const selRow = el('div', { class: 'dv-tiles-row' }, [selName, earlier, later, el('span', { class: 'dv-tiles-gap' }), el('span', { class: 'hint', text: t('Size') }), sizeSeg.el]);
+      const selHint = el('div', { class: 'hint', text: t('Click a tile to size it, drag it into place, or − to remove it.') });
+      const addList = el('div', { class: 'dv-tiles-add' });
+      const addHead = el('div', { class: 'hint', text: t('Add') });
+      const reset = UI.button(t('Reset'), () => { try { localStorage.removeItem(store); } catch (_) { /* */ } layout = JSON.parse(JSON.stringify(standard)); sel = null; draw(); }, 'small');
+      editor.append(
+        el('div', { class: 'dv-tiles-row' }, [el('span', { text: t('Rows') }), rowsSeg.el, el('span', { class: 'dv-tiles-gap' }), reset]),
+        selRow, selHint, addHead, addList,
+      );
+
+      // Column by column, each tile in the first place it fits, in order; a large one with one row is wide.
+      const pack = (items, rows) => {
+        const taken = new Set();
+        return items.map((it) => {
+          const w = it.s === 's' ? 1 : 2;
+          const h = it.s === 'b' && rows === 2 ? 2 : 1;
+          for (let col = 0; ; col++) {
+            for (let r = 0; r + h <= rows; r++) {
+              let free = true;
+              for (let dx = 0; dx < w && free; dx++) for (let dy = 0; dy < h; dy++) if (taken.has(`${col + dx},${r + dy}`)) { free = false; break; }
+              if (!free) continue;
+              for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) taken.add(`${col + dx},${r + dy}`);
+              return { it, col, row: r, w, h };
+            }
+          }
+        });
+      };
+
+      const badge = (d) => {
+        const b = el('span', { class: 'dv-tile-ico' });
+        b.style.background = d.color || 'linear-gradient(#8e8e93, #636366)';
+        b.append(typeof d.icon === 'string' ? glyph(d.icon) : d.icon ? d.icon.cloneNode(true) : glyph(''));
+        return b;
+      };
+
+      let dragId = null;
+      let lastCols = 1;
+      function draw() {
+        try { drawTiles(); } finally { onDraw(); }
+      }
+      function drawTiles() {
+        const byId = new Map(defs.map((d) => [d.id, d]));
+        const shown = layout.items.filter((x) => byId.has(x.id) && (editing || byId.get(x.id).has !== false));
+        const placed = pack(shown, layout.rows);
+        const cols = placed.reduce((m, p) => Math.max(m, p.col + p.w), 0);
+        grid.classList.toggle('editing', editing);
+        grid.style.setProperty('--rows', String(layout.rows));
+        grid.style.setProperty('--cols', String(Math.max(cols, 1)));
+        lastCols = Math.max(cols, 1);
+        grid.replaceChildren(...(placed.length ? placed.map(({ it, col, row, w, h }) => {
+          const d = byId.get(it.id);
+          const size = w === 1 ? 'small' : h === 1 ? 'wide' : 'large';
+          const b = el('button', { class: `dv-tile ${size}${d.on ? ' on' : ''}${sel === d.id ? ' sel' : ''}${d.has === false ? ' missing' : ''}`, attrs: { 'aria-pressed': d.on ? 'true' : 'false', 'aria-label': d.label } },
+            [badge(d), el('span', { class: 'dv-tile-text' }, [el('span', { class: 'dv-tile-label', text: d.label }), d.state ? el('span', { class: 'dv-tile-state', text: d.state }) : null])]);
+          b.style.gridColumn = `${col + 1} / span ${w}`;
+          b.style.gridRow = `${row + 1} / span ${h}`;
+          b.title = d.title || (d.state && size === 'small' ? d.state : '');
+          b.onclick = () => {
+            if (editing) { sel = sel === d.id ? null : d.id; draw(); } else if (d.has !== false) d.run();
+          };
+          if (editing) {
+            const x = el('span', { class: 'dv-tile-x', attrs: { role: 'button', 'aria-label': t('Remove {name}', { name: d.label }) }, text: '−' });
+            // on press: the wiggle could move it out from under the pointer before the click
+            x.onpointerdown = (e) => { e.preventDefault(); e.stopPropagation(); layout.items = layout.items.filter((y) => y.id !== d.id); if (sel === d.id) sel = null; save(); draw(); };
+            x.onclick = (e) => e.stopPropagation();
+            x.draggable = false;
+            b.append(x);
+            // Dragged onto another: in its place.
+            b.draggable = true;
+            b.ondragstart = (e) => { dragId = d.id; e.dataTransfer.effectAllowed = 'move'; b.classList.add('dragging'); };
+            b.ondragend = () => { dragId = null; b.classList.remove('dragging'); };
+            b.ondragover = (e) => { if (dragId && dragId !== d.id) { e.preventDefault(); b.classList.add('drop'); } };
+            b.ondragleave = () => b.classList.remove('drop');
+            b.ondrop = (e) => {
+              e.preventDefault();
+              const from = layout.items.findIndex((y) => y.id === dragId);
+              const to = layout.items.findIndex((y) => y.id === d.id);
+              if (from < 0 || to < 0) return;
+              layout.items.splice(to, 0, layout.items.splice(from, 1)[0]);
+              save(); draw();
+            };
+          }
+          return b;
+        }) : [el('div', { class: 'hint dv-tiles-empty', text: editing ? t('Add tiles below.') : t('Nothing here. Customize to add some.') })]));
+
+        // the editor
+        editor.hidden = !editing;
+        if (!editing) return;
+        rowsSeg.set(layout.rows);
+        const it = layout.items.find((x) => x.id === sel);
+        const d = it && byId.get(it.id);
+        selRow.hidden = !d;
+        selHint.hidden = !!d;
+        if (d) {
+          selName.textContent = d.label;
+          const i = layout.items.indexOf(it);
+          earlier.disabled = i <= 0;
+          later.disabled = i >= layout.items.length - 1;
+          // Large is two by two: with one row, small or wide.
+          sizeSeg.el.querySelectorAll('button')[2].hidden = layout.rows === 1;
+          sizeSeg.set(it.s === 'b' && layout.rows === 1 ? 'w' : it.s);
+        }
+        const rest = defs.filter((x) => x.has !== false && !layout.items.some((y) => y.id === x.id));
+        addHead.hidden = !rest.length;
+        addList.replaceChildren(...rest.map((x) => {
+          const c = el('button', { class: 'dv-tiles-chip' }, [badge(x), el('span', { text: x.label }), el('span', { class: 'dv-tiles-plus', text: '+' })]);
+          c.onclick = () => { layout.items.push({ id: x.id, s: 's' }); sel = x.id; save(); draw(); };
+          return c;
+        }));
+      }
+
+      return {
+        grid, editor,
+        editing: () => editing,
+        cols: () => lastCols, // the columns drawn, for the width they need
+        toggle() { editing = !editing; sel = null; drawn = ''; draw(); return editing; },
+        render(next) {
+          defs = next;
+          const k = JSON.stringify([next.map((d) => [d.id, d.label, d.has !== false, !!d.on, d.state || '', d.title || '']), editing]);
+          if (k === drawn) return;
+          drawn = k;
+          draw();
+        },
+      };
+    },
+
+    // A card whose tiles are customized in place: Customize (Done while editing) in its header.
+    // → {el, render(defs)}; more: what goes under the tiles (the Quick actions' volume row).
+    // → {el, render(defs), need(): the width its tiles take at full size, editing(), onDraw}.
+    tilesCard(title, { key, standard, more = [] }) {
+      const out = { onDraw: () => {} };
+      const tiles = P.tiles({ key, standard, onDraw: () => out.onDraw() });
+      const btn = UI.button(t('Customize'), () => { btn.textContent = tiles.toggle() ? t('Done') : t('Customize'); }, 'small link');
+      const card = UI.card(title, [tiles.grid, tiles.editor, ...more], { actions: [btn] });
+      return Object.assign(out, {
+        el: card,
+        render: (defs) => tiles.render(defs),
+        editing: () => tiles.editing(),
+        // a row under them (volume) wraps, but wants ~400 across all the same
+        need: () => Math.max(tiles.cols() * 100 + (tiles.cols() - 1) * 8 + 24, more.some((m) => !m.hidden) ? 400 : 0),
+      });
+    },
+
+    // Two tile cards side by side when the page is wide enough for both at full size, else one
+    // under the other (and while either is being customized: its editor gets the width).
+    // → {el, update()}; update() after the cards are shown or hidden.
+    tilePair(a, b) {
+      const el = UI.el('div', { class: 'dv-pair' }, [a.el, b.el]);
+      const update = () => {
+        const both = !a.el.hidden && !b.el.hidden;
+        const na = a.need(), nb = b.need();
+        const two = both && el.clientWidth >= na + nb + 14 && !a.editing() && !b.editing();
+        el.classList.toggle('two', two);
+        // each as wide as its tiles want, the room left shared alike: a card of few tiles isn't stretched
+        el.style.gridTemplateColumns = two ? `minmax(0, ${na}fr) minmax(0, ${nb}fr)` : '';
+      };
+      a.onDraw = update;
+      b.onDraw = update;
+      new ResizeObserver(update).observe(el);
+      return { el, update };
+    },
+
     media() {
       const media = UI.nowPlaying ? UI.nowPlaying() : null;
       const card = UI.el('div', { class: 'card dv-media' }, media ? [media.el] : []);
@@ -268,6 +511,8 @@
               const x = phone && api.notifReply ? UI.button('×', () => api.notifReply({ id: item.id, dismiss: true }), 'small') : null;
               if (x) { x.title = t('Dismiss'); x.setAttribute('aria-label', t('Dismiss')); }
               const r = row([item.appName || item.app, item.title].filter(Boolean).join(' · '), (text || t('Notification')) + ' · ' + UI.ago(item.at), [copy, ...acts, x]);
+              // Its buttons on a line of their own under the words, which keep the row's width.
+              if (copy || acts.length || x) r.classList.add('dv-notif');
               const icon = (nf.historyIcons || {})[item.app];
               if (icon) {
                 r.querySelector('.text').prepend(el('img', { class: 'dv-nicon', src: icon, alt: '' }));

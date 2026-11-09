@@ -5,6 +5,10 @@
 // switch is on (settings.remote.allow, on until turned off) and this computer's own mouse is at home
 // (not driving the phone or another computer). When it isn't taken, the phone is told why
 // (remote.state {allowed, why}), and the Remote tab says it too.
+// Voice typing (the phone's Remote › Voice typing; its keys and text come with voice: true) goes by
+// the Keyboard tab's switch instead (settings.kvm.keyboard): typing on this computer from the phone
+// is the keyboard's (remote.state {voice, voiceWhy}). Loaded while Remote or Keyboard is on (main.js
+// loadRemote); with both off nothing of it is loaded and the phone hears why from a stub.
 // Real gamepad (settings.remote.pad, off until turned on): the gamepad page's sticks, triggers and
 // buttons as a real controller here instead of keys (remote.pad; remote.state {pad: true} while it's
 // taken). Its driver (windows/gamepad.js, linux/gamepad.js) is loaded only when it's turned on and
@@ -67,13 +71,13 @@ class PhoneRemote {
     on(T.REMOTE_DOWN, (m) => BUTTONS.has(m.b) && this._ev({ t: T.K_DOWN, b: m.b }));
     on(T.REMOTE_UP, (m) => BUTTONS.has(m.b) && this._ev({ t: T.K_UP, b: m.b }));
     on(T.REMOTE_WHEEL, (m) => this._ev({ t: T.K_WHEEL, dx: num(m.dx, 4000), dy: num(m.dy, 4000), mode: 'pixel' }));
-    on(T.REMOTE_KEY_DOWN, (m) => typeof m.code === 'string' && CODE.test(m.code) && this._ev({ t: T.K_KEY_DOWN, code: m.code }));
-    on(T.REMOTE_KEY_UP, (m) => typeof m.code === 'string' && CODE.test(m.code) && this._ev({ t: T.K_KEY_UP, code: m.code }));
+    on(T.REMOTE_KEY_DOWN, (m) => typeof m.code === 'string' && CODE.test(m.code) && this._ev({ t: T.K_KEY_DOWN, code: m.code }, m.voice === true));
+    on(T.REMOTE_KEY_UP, (m) => typeof m.code === 'string' && CODE.test(m.code) && this._ev({ t: T.K_KEY_UP, code: m.code }, m.voice === true));
     // Characters no key types here (Cyrillic, accents…): typed as they are. Control characters don't go.
     on(T.REMOTE_TEXT, (m) => {
       if (!this.canType || typeof m.text !== 'string') return;
       const text = [...m.text.replace(/\p{Cc}/gu, '')].slice(0, 64).join('');
-      if (text && this._take()) this.helper.send('type', { text });
+      if (text && this._take(m.voice === true)) this.helper.send('type', { text });
     });
     on(T.REMOTE_PAD, (m) => this.padProc && this._take() && this.padProc.stdin.write(padBytes(m)));
     on(T.REMOTE_RELEASE, () => {
@@ -98,6 +102,14 @@ class PhoneRemote {
   // Why it isn't taken now, '' when it is.
   get why() {
     if (!this.allow) return 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there';
+    if (!this.atHome()) return 'This computer’s mouse is on another device now (Cursor): bring it back first';
+    return '';
+  }
+
+  // Voice typing: the Keyboard tab's switch, '' when it types here.
+  get voiceWhy() {
+    const k = this.getSettings().kvm;
+    if (!(k && k.keyboard)) return P.KEYBOARD_OFF;
     if (!this.atHome()) return 'This computer’s mouse is on another device now (Cursor): bring it back first';
     return '';
   }
@@ -188,7 +200,7 @@ class PhoneRemote {
   _state() {
     if (!isPhone(this.server.current)) return;
     const why = this.why;
-    this.server.sendToClient({ t: T.REMOTE_STATE, allowed: !why, off: !this.allow, why, pad: !why && !!this.padProc, text: this.canType }); // off: the page offers Turn on (pair.sync)
+    this.server.sendToClient({ t: T.REMOTE_STATE, allowed: !why, off: !this.allow, why, pad: !why && !!this.padProc, text: this.canType, voice: !this.voiceWhy, voiceWhy: this.voiceWhy }); // off: the page offers Turn on (pair.sync)
   }
 
   // Whether the helper types text (an older one doesn't; nor does Linux on Wayland): the phone sends
@@ -206,8 +218,9 @@ class PhoneRemote {
   }
 
   // Input from the phone is taken now (or the phone hears why not); it's "in use".
-  _take() {
-    if (this.why) {
+  _take(voice = false) {
+    if (voice ? this.voiceWhy : this.why) {
+      this.refused = true;
       // Tell the phone (it says why on its Remote page), at most once a second.
       const now = Date.now();
       if (now - this.refusedAt > 1000) {
@@ -217,6 +230,7 @@ class PhoneRemote {
       }
       return false;
     }
+    if (this.refused) { this.refused = false; this._state(); } // taken again: the phone hears it
     const was = this.lastInput;
     this.lastInput = Date.now();
     if (this.lastInput - was > USING_MS) this.onChange(); // "in use now"
@@ -225,8 +239,8 @@ class PhoneRemote {
     return true;
   }
 
-  _ev(ev) {
-    if (!this._take()) return;
+  _ev(ev, voice = false) {
+    if (!this._take(voice)) return;
     if (ev.t === T.K_DOWN || ev.t === T.K_KEY_DOWN) this.held = true;
     this.helper.send('inject', { ev });
   }

@@ -30,6 +30,7 @@ function render(locale) {
     mediaControlsRow: () => ({ el: el('media'), update() {} }),
     enginesRows: () => ({ rows: [], update() {} }), // shared/ui-engines.js
     // shared/ui-look.js
+    styleRow: () => Object.assign(el('row'), { render() {} }),
     themeRow: () => Object.assign(el('row'), { render() {} }),
     accentRow: () => Object.assign(el('row'), { render() {} }),
     sections: (cards) => Object.assign(el('sections', {}, cards), { spy() {} }),

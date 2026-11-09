@@ -257,6 +257,13 @@ struct RemoteView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
+                VStack(alignment: .leading, spacing: 14) {
+                    CardHeader(symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), title: "Voice typing",
+                               detail: "Speak with Dictation (the keyboard’s microphone): each word is typed on \(core.host?.name ?? "the computer") as it appears, and fixes are typed there too")
+                    Button { ui.cover = .remote("voice") } label: { Label("Open Voice typing", systemImage: "mic").frame(maxWidth: .infinity) }
+                        .primaryButton().controlSize(.large).disabled(!core.connected)
+                }
+                .glassCard()
                 if let a = core.remote.allowed, !a, !core.remote.why.isEmpty {
                     Label(core.remote.why, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.warn).glassCard()
                 }
@@ -295,10 +302,14 @@ struct RemoteScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let h = host { WebPageView(host: h).ignoresSafeArea() }
+            // Voice typing keeps inside the safe area and above the keyboard (its box and keys in
+            // sight while Dictation listens); the touchpad and gamepad take the whole screen.
+            if let h = host {
+                if mode == "voice" { WebPageView(host: h) } else { WebPageView(host: h).ignoresSafeArea() }
+            }
         }
-        .statusBarHidden(true)
-        .persistentSystemOverlays(.hidden)
+        .statusBarHidden(mode != "voice")
+        .persistentSystemOverlays(mode == "voice" ? .automatic : .hidden)
         .onAppear {
             let h = host ?? WebHost("remote.html", core: core)
             host = h

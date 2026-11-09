@@ -545,6 +545,8 @@
 
   // A phone holds the session the same way whichever it is (it connects when asked, takes over from a
   // computer, gets the grace to resume). Android's extras (adb, scrcpy, its hub) check OS.ANDROID itself.
+  // Voice typing refused: the Keyboard switch is off here (remote.state voiceWhy).
+  P.KEYBOARD_OFF = 'Keyboard is off on this computer: turn it on in TwinDesk’s Keyboard page there';
   P.isPhoneOs = (os) => os === P.OS.ANDROID || os === P.OS.IOS;
 
   if (typeof module !== 'undefined' && module.exports) module.exports = P;

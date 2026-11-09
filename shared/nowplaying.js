@@ -44,6 +44,8 @@ class NowPlaying extends EventEmitter {
   }
 
   _got(m) {
+    // TwinDesk on the phone playing this computer's sound: not shown again (older phones sent it).
+    if (!m.none && typeof m.app === 'string' && m.app.startsWith('com.twindesk.')) m = { none: true };
     if (m.none) {
       this.now = null;
       this.why = str(m.why, 40);

@@ -26,9 +26,9 @@ function setupIpc(ctx) {
     if (!require('../shared/i18n.js').savedLanguage(language)) return;
     change('ui', { language }, () => ctx.onLanguage());
   });
-  // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.
+  // General › Appearance: { style }, { theme } and/or { accent } ('' follows the system); local only.
   handle('setLook', (o) => o && typeof o === 'object' && change('ui', {
-    ...(typeof o.theme === 'string' ? { theme: o.theme } : {}), ...(typeof o.accent === 'string' ? { accent: o.accent } : {}),
+    ...(typeof o.style === 'string' ? { style: o.style } : {}), ...(typeof o.theme === 'string' ? { theme: o.theme } : {}), ...(typeof o.accent === 'string' ? { accent: o.accent } : {}),
   }, () => ctx.onLook && ctx.onLook()));
   // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
   handle('hub', (r) => ctx.hub().act(r));
@@ -98,6 +98,7 @@ function setupIpc(ctx) {
     if (partial && typeof partial.locked === 'boolean') kvm.setLocked(partial.locked); // cursor lock: not a setting
     const { linked, shared, locked, ...rest } = partial && typeof partial === 'object' ? partial : {};
     change('kvm', rest, () => kvm.applyConfig());
+    if ('keyboard' in rest) (ctx.phoneRemote ? ctx.phoneRemote.refresh() : ctx.loadRemote()); // voice typing follows Keyboard
   });
   handle('setLayout', (side) => kvm.setLayout(side));
   handle('moveKvm', (arg) => arg && typeof arg === 'object' && kvm.moveTo(arg.side, Number(arg.along))); // the crossing map

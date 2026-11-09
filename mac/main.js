@@ -406,7 +406,14 @@ function changeLanguage() {
   }
   trayKey = '';
   updateTray();
-  if (win && !win.isDestroyed()) win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale } });
+  if (win && !win.isDestroyed()) win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+}
+
+// General › Appearance changed: the theme; the window's vibrancy only for Simple (Glass paints its
+// gradient over the whole window, the sidebar a frosted pane on it, so a blur under it would show nothing).
+function applyLook() {
+  Look.applyTheme(nativeTheme, settings.ui.theme);
+  if (win && !win.isDestroyed()) win.setVibrancy(Look.style(settings.ui.style) === 'glass' ? null : 'sidebar');
 }
 
 function createWindow() {
@@ -418,7 +425,7 @@ function createWindow() {
     title: 'TwinDesk',
     show: false,
     titleBarStyle: 'hiddenInset', // the sidebar runs up under the traffic lights
-    vibrancy: 'sidebar',
+    vibrancy: Look.style(settings.ui.style) === 'glass' ? undefined : 'sidebar', // Simple's (applyLook)
     visualEffectState: 'active',
     backgroundColor: '#00000000',
     webPreferences: {
@@ -430,7 +437,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'warning' || e.level === 'error') console.log(`[window] ${e.level}: ${e.message}`);
   });
-  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale } });
+  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
   win.once('ready-to-show', showWindow);
   // In the Dock and ⌘-Tab only while the window is open; menu bar only otherwise.
   const w = win;
@@ -832,9 +839,9 @@ app.whenReady().then(() => {
   svc.kvm.local = svc.phone.bridge;
   // The phone's Remote page: touchpad, keyboard and gamepad here, taken only with the mouse at home.
   // No Real gamepad: a virtual controller on macOS needs a DriverKit driver, which needs Apple's paid signing.
-  // Loaded only while Remote is on (off, its page hears so); ipc reaches it through svc.remote().
+  // Loaded only while Remote or Keyboard (voice typing) is on (both off, its page hears so); ipc reaches it through svc.remote().
   svc.loadRemote = () => {
-    if (svc.phoneRemote || settings.remote.allow === false) return svc.phoneRemote || null;
+    if (svc.phoneRemote || (settings.remote.allow === false && !settings.kvm.keyboard)) return svc.phoneRemote || null;
     const { PhoneRemote } = require('../shared/phone-remote.js');
     svc.phoneRemote = new PhoneRemote({ server: peer, helper: svc.helper, getSettings: () => settings, atHome: () => svc.kvm.mode === 'home', onChange: pushState,
       padNote: 'Real gamepad isn’t on the Mac. To use {name} as a gamepad, turn on Remote › As a Bluetooth gamepad on {name}, then pair it with this Mac in System Settings › Bluetooth' });
@@ -843,7 +850,7 @@ app.whenReady().then(() => {
   };
   svc.remote = () => svc.phoneRemote || null;
   peer.on(`t:${P.T.REMOTE_HELLO}`, () => !svc.phoneRemote && peer.current && P.isPhoneOs(peer.current.os)
-    && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there' }));
+    && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there', voice: false, voiceWhy: P.KEYBOARD_OFF }));
   svc.loadRemote();
   // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js), its
   // offers in the Dock (a Dock icon of their app, dockstub.js), the menu bar and a notification.
@@ -973,7 +980,7 @@ app.whenReady().then(() => {
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
   setupWeb();
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme), t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   hud.keep = () => !!peer.current; // the popup's window lives while a session is on (mac/hud.js)

@@ -2094,4 +2094,8 @@
   "Last file: {way}, {dir}": "Последний файл: {way}, {dir}",
   "received": "получен",
   "sent": "отправлен",
+  "Style": "Стиль",
+  "Glass: soft colours from the accent behind translucent cards": "«Стекло»: мягкие оттенки акцентного цвета за полупрозрачными карточками",
+  "look.glass": "Стекло",
+  "look.simple": "Простой",
 });

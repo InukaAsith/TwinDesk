@@ -2095,4 +2095,8 @@
   "Last file: {way}, {dir}": "Last file: {way}, {dir}",
   "received": "received",
   "sent": "sent",
+  "Style": "Style",
+  "Glass: soft colours from the accent behind translucent cards": "Glass: soft colours from the accent behind translucent cards",
+  "look.glass": "Glass",
+  "look.simple": "Simple",
 });

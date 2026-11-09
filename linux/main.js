@@ -545,7 +545,7 @@ function startPhone(server, pairing) {
   loadBtAudio();
   // Remote off: its page hears so; on, PhoneRemote answers instead.
   pl.on(`t:${P.T.REMOTE_HELLO}`, () => !phoneRemote && pl.current && P.isPhoneOs(pl.current.os)
-    && pl.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there' }));
+    && pl.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there', voice: false, voiceWhy: P.KEYBOARD_OFF }));
   loadRemote();
   phoneViews.on('change', pushState);
   viaWifi(phoneViews, 'openScreen', 'phone');
@@ -645,7 +645,7 @@ function setCamera(on) {
 
 // Remote: the phone's Remote page here (shared/phone-remote.js). Off, the page hears why (remote.state).
 function loadRemote() {
-  if (phoneRemote || !phoneServer || !settings.remote.allow) return phoneRemote;
+  if (phoneRemote || !phoneServer || (!settings.remote.allow && !settings.kvm.keyboard)) return phoneRemote; // Keyboard: voice typing
   const { PhoneRemote } = require('../shared/phone-remote.js');
   phoneRemote = new PhoneRemote({ server: phoneServer, helper, getSettings: () => settings, atHome: () => !kvm || kvm.mode === 'home', onChange: pushState,
     loadPad: () => require('./gamepad'), save: saveSettings }); // Real gamepad: loaded when turned on
@@ -1401,7 +1401,7 @@ function createMainWindow(tab) {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1433,7 +1433,7 @@ function changeLanguage() {
   trayKey = '';
   updateTray(buildState());
   if (mainWin && !mainWin.isDestroyed()) {
-    mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale } });
+    mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
   }
 }
 

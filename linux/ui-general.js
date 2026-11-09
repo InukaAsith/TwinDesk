@@ -77,6 +77,7 @@ UI.tab({
       return UI.row(label, hint, [partSw[k]]);
     });
     // Theme and accent colour (shared/look.js, shared/ui-look.js).
+    const styleRow = UI.styleRow((v) => api.setLook({ style: v })); // Glass or Simple (shared/ui-glass.css)
     const themeRow = UI.themeRow((v) => api.setLook({ theme: v }));
     const accentRow = UI.accentRow((v) => api.setLook({ accent: v }));
     // One page that scrolls, its sections listed beside it; Permissions first.
@@ -101,6 +102,7 @@ UI.tab({
         recvRow,
       ]),
       UI.card(t('Appearance'), [
+        styleRow,
         themeRow,
         accentRow,
         UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
@@ -129,6 +131,7 @@ UI.tab({
         protoSel.set(proto);
         protoRestart.hidden = proto === protoStart;
       }
+      styleRow.render(s.look && s.look.style);
       themeRow.render(s.look && s.look.theme);
       accentRow.render(s.look);
       sections.spy();

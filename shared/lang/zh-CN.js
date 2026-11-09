@@ -2095,4 +2095,8 @@
   "Last file: {way}, {dir}": "上一个文件：{way}，{dir}",
   "received": "已接收",
   "sent": "已发送",
+  "Style": "风格",
+  "Glass: soft colours from the accent behind translucent cards": "玻璃：半透明卡片后透出强调色的柔和光晕",
+  "look.glass": "玻璃",
+  "look.simple": "简洁",
 });

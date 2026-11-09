@@ -2094,4 +2094,8 @@
   "Last file: {way}, {dir}": "Son dosya: {way}, {dir}",
   "received": "alındı",
   "sent": "gönderildi",
+  "Style": "Stil",
+  "Glass: soft colours from the accent behind translucent cards": "Cam: yarı saydam kartların arkasında vurgu renginden yumuşak tonlar",
+  "look.glass": "Cam",
+  "look.simple": "Sade",
 });

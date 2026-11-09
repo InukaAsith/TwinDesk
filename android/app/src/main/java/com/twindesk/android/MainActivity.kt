@@ -320,7 +320,10 @@ fun App(core: Core, resumed: Int) {
         if (wide) {
             Row(Modifier.safeDrawingPadding()) {
                 Sidebar(core, v, tab) { tab = it }
-                Page(core, v, tab, Modifier.weight(1f))
+                // the page in a rounded sheet beside the sidebar, as the phone's under its branding
+                Box(Modifier.weight(1f).fillMaxHeight().padding(top = 10.dp, end = 10.dp, bottom = 10.dp).clip(RoundedCornerShape(28.dp)).background(pal.sheet)) {
+                    Page(core, v, tab, Modifier.fillMaxSize())
+                }
             }
         } else {
             // Back: through the pages visited, in order (More counts as one); with none left,
@@ -627,6 +630,9 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
 
     // The computer's own controls (dev.state, DevCtl.kt): ring, lock, sleep, Bluetooth, Do not disturb, volume.
     if (!connection && host != null) ComputerCard(core, host.name)
+
+    // Shortcuts (Tiles.kt): its screen, voice typing, the touchpad, files… as tiles, edited here.
+    if (!connection && host != null) TilesCard(core)
 
     // The other paired computers, while connected: Switch (Take over when nearby) lets this one go and connects that one.
     if (connection && host != null) {
@@ -1268,7 +1274,7 @@ private fun RemotePage(core: Core, v: Int) {
     val ctx = LocalContext.current
     val name = them(core)
     val me = core.store.deviceName
-    PageHead("Remote", "Use this device as $name’s touchpad and keyboard, or as a gamepad.")
+    PageHead("Remote", "Use this device as $name’s touchpad and keyboard, a gamepad, or to type by voice.")
     if (core.host == null) {
         NotConnected(core, v)
         return BtPadCard(core) // works without TwinDesk on the computer
@@ -1282,6 +1288,9 @@ private fun RemotePage(core: Core, v: Int) {
         }
         MacRow("Gamepad", "Hold the phone sideways like a controller. The left stick acts as WASD and the right stick as the mouse. Customise buttons with Keys.") {
             Primary("Open") { open("gamepad") }
+        }
+        MacRow("Voice typing", "Speak with your keyboard’s voice typing (Gboard’s microphone). Each word is typed on $name as it appears, and fixes are typed there too.") {
+            Primary("Open") { open("voice") }
         }
     }
     MacCard("Touchpad") {
