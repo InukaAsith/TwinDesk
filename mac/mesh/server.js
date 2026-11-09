@@ -127,10 +127,13 @@ class Server extends EventEmitter {
     if (isLoopback(ctx.address) && this.blePorts.has(req.socket.remotePort)) ctx.transport = 'ble';
     Object.assign(ws, { ctx, lastRx: now, lastTx: now, transport: ctx.transport, address: ctx.address, blePort: ctx.transport === 'ble' ? req.socket.remotePort : 0 });
     // At most 16 sockets from one address that haven't authenticated (a LAN peer can't open
-    // thousands and hold each for UNAUTH_TIMEOUT_MS). Our own Bluetooth/wired pipes are loopback.
-    let unauthed = 0;
-    for (const c of this.sockets) if (!c.authed && c.address === ctx.address) unauthed++;
-    if (unauthed >= 16 && !isLoopback(ctx.address)) { ws.close(1008, 'Too many connections'); return; }
+    // thousands and hold each for UNAUTH_TIMEOUT_MS): past that the oldest goes, never the new one,
+    // so a phone retrying on flaky Wi-Fi always gets in. Our own Bluetooth/wired pipes are loopback.
+    if (!isLoopback(ctx.address)) {
+      const waiting = [];
+      for (const c of this.sockets) if (!c.authed && c.address === ctx.address) waiting.push(c);
+      if (waiting.length >= 16) waiting[0].ws.terminate(); // a Set keeps insertion order: the oldest
+    }
     this.sockets.add(ctx);
     ws.on('message', (data, isBinary) => this._onMessage(ws.ctx, data, isBinary, ws));
     ws.on('close', () => this._onSocketClose(ws));
