@@ -84,6 +84,7 @@ final class Core: ObservableObject, LinkEvents {
 
     func setFront(_ on: Bool) {
         inFront = on
+        if on { offScreenWork?.cancel(); offScreenWork = nil }
         quietCheck()
         if on {
             link.wake()
@@ -207,9 +208,25 @@ final class Core: ObservableObject, LinkEvents {
     // on the network for as long as iOS lets the app run, Bluetooth only once it drops.
     var bleOffScreen: Bool { store.string("bg.mode", "ble") == "ble" }
 
+    // Something that needs the network is going: the session stays on it. A screen either way
+    // (Share Screen here, the computer's or a phone's screen watched here), the computer's sound
+    // playing here, the camera, files, the microphone.
+    private var networkBusy: Bool {
+        mirror.sharing || screen.viewing || sound.playing || camera.on || files.busy || mic.running || peer.screenOn
+    }
+
+    // Off screen for a while first (8 s): a quick look at another app and back costs no move.
+    private var offScreenWork: DispatchWorkItem?
     func backgrounded() {
-        guard Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
-              !Background.shared.active, !mic.running, !mirror.sharing, !files.busy else { return }
+        offScreenWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.moveOffScreen() }
+        offScreenWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: w)
+    }
+
+    private func moveOffScreen() {
+        guard !inFront, Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
+              !Background.shared.active, !networkBusy else { return }
         NSLog("TwinDesk: off screen: the session onto Bluetooth")
         connectBle(h)
     }

@@ -14,9 +14,11 @@
 //
 // No loops: what TwinDesk writes carries its own type (Clip.mark) and stays on this device
 // (localOnly: Universal Clipboard doesn't carry it back to a Mac on the same Apple Account), and a
-// clipboard holding TwinDesk's own copy is never read or sent. A change within a few seconds of the
-// computer's copy arriving is that copy again (Universal Clipboard), so it isn't read either: no
-// "Allow Paste" for something that came from the computer.
+// clipboard holding TwinDesk's own copy is never read or sent. Universal Clipboard still echoes
+// what goes between the two (the computer's copy reaching here on its own too; ours, written there,
+// coming back): after each copy either way, the one change that echo makes isn't read (no "Allow
+// Paste" for something already on both). Seen once, it's expected for 15 s after each copy; never
+// seen (Universal Clipboard off, another Apple Account), nothing is skipped past the first 5 s.
 import Foundation
 import UIKit
 import UniformTypeIdentifiers
@@ -31,7 +33,11 @@ final class Clip: Feature {
     private var lastOut: String?
     private var ownCount = -1 // the change count right after we wrote the clipboard ourselves
     private var seenCount = UIPasteboard.general.changeCount
-    private var lastInAt = Date.distantPast // when the computer's last copy arrived
+    private var echoUntil = Date.distantPast // one Universal Clipboard echo expected until then
+    private var ucEchoes: Bool { core.store.flag("clip.ucEcho", false) }
+
+    // A copy went between the two: its echo (one change) is expected.
+    private func expectEcho() { echoUntil = Date().addingTimeInterval(ucEchoes ? 15 : 5) }
     static let mark = "com.twindesk.clip" // on everything TwinDesk writes to the clipboard
     private var watch: Timer?
     private var pic: (id: String, w: Int, h: Int, bytes: Int, parts: Int, got: Int, data: Data, at: Date)?
@@ -85,7 +91,7 @@ final class Clip: Feature {
 
     func receiveText(_ text: String) {
         lastIn = text
-        lastInAt = Date()
+        expectEcho()
         remember(Item(dir: "in", text: text))
         if autoCopy || UIApplication.shared.applicationState == .active { write(text) }
         if notify && UIApplication.shared.applicationState != .active {
@@ -144,7 +150,7 @@ final class Clip: Feature {
 
     private func receivePicture(_ png: Data, _ w: Int, _ h: Int) {
         guard let img = UIImage(data: png) else { return }
-        lastInAt = Date()
+        expectEcho()
         remember(Item(dir: "in", text: "Picture · \(w) × \(h)"))
         writeImage(img)
         if notify && UIApplication.shared.applicationState != .active {
@@ -167,8 +173,12 @@ final class Clip: Feature {
         guard n != seenCount else { return }
         seenCount = n
         guard n != ownCount, !ownOnBoard, core.connected, core.sync.get("clipboard", "out") else { return }
-        // The computer's copy coming back through Universal Clipboard: not read (it would ask to paste).
-        if Date().timeIntervalSince(lastInAt) < 5 { return }
+        // The copy that just went between the two, through Universal Clipboard: not read (it would ask to paste).
+        if Date() < echoUntil {
+            echoUntil = .distantPast
+            if !ucEchoes { core.store.setFlag("clip.ucEcho", true) }
+            return
+        }
         if UIApplication.shared.applicationState == .active {
             sendCurrent(force: false)
         } else if notifyOwn {
@@ -192,6 +202,7 @@ final class Clip: Feature {
         guard core.connected, !text.isEmpty, text.utf8.count <= Proto.clipMaxBytes else { return false }
         if !force && (text == lastOut || text == lastIn) { return false }
         lastOut = text
+        expectEcho()
         remember(Item(dir: "out", text: text))
         return core.send(msg(Proto.T.clip, ["text": text]))
     }
@@ -213,6 +224,7 @@ final class Clip: Feature {
                 self.core.send(msg(Proto.T.clipImagePart, ["id": id, "i": i, "data": chunk.base64EncodedString()]))
             }
         }
+        expectEcho()
         remember(Item(dir: "out", text: "Picture · \(w) × \(h)"))
         return true
     }

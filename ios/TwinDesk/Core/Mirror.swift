@@ -15,7 +15,7 @@ import Foundation
 import Network
 import UIKit
 
-final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
+final class Mirror: Feature {
     static let port: UInt16 = 47830
 
     private var listener: NWListener?
@@ -31,12 +31,11 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     private(set) var size: (w: Int, h: Int, sw: Int, sh: Int)?
     private var want: JSON? // the computer's phone.mirror.want, while its window is open
     private var key = ""
-    private var session: URLSession?
-    private var upload: URLSessionUploadTask?
-    private var out: OutputStream?
-    private var pendingIn: InputStream?
+    private var upload: NWConnection? // io only: the stream to the computer, while it goes
+    private var uploadGen = 0 // main: which stream is current (an old one's end restarts nothing)
+    private var inflight = 0 // io only: bytes handed to the connection, not sent yet
+    private var skipToKey = false // io only: frames dropped, so the rest wait for the next keyframe
     private let io = DispatchQueue(label: "td.mirror")
-    private var backlog = [Data]() // io only: packets waiting for room in the body stream
     private var sessionPacket: Data? // the size packet: first in every new request
     private var configPacket: Data? // SPS/PPS: next, so the window can decode from the first frame
     var peerTap: ((Data) -> Void)? // a phone watching (Peer.swift): every packet, as it comes
@@ -236,107 +235,113 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
     }
 
     // ---- the stream: one long POST, its body fed as packets come ----
+    //
+    // A TLS connection of our own (the computer's certificate pinned as the session's), the request
+    // written by hand with a chunked body: each packet one chunk, sent as it comes. (It was a
+    // URLSession upload fed through bound streams whose run loop held the queue the packets came in
+    // on, so after the first two packets nothing more reached the computer.)
 
     private func startUpload() {
         endUpload()
-        guard var req = core.link.sessionRequest("/twindesk/mirror", method: "POST") else {
+        guard let req = core.link.sessionRequest("/twindesk/mirror", method: "POST"), let u = req.url, let host = u.host, let port = u.port,
+              let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else {
             core.send(msg("phone.mirror.state", ["on": false, "error": "the connection closed", "key": key]))
             return
         }
-        req.setValue(key, forHTTPHeaderField: "x-twindesk-mirror")
-        req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 3600
-        var i: InputStream?
-        var o: OutputStream?
-        Stream.getBoundStreams(withBufferSize: 1 << 20, inputStream: &i, outputStream: &o)
-        guard let ins = i, let outs = o else { return }
-        pendingIn = ins
-        let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 3600
-        let s = URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
-        session = s
-        io.async {
-            outs.delegate = self
-            outs.schedule(in: .current, forMode: .default)
-            outs.open()
-            self.out = outs
-            self.backlog = [self.sessionPacket, self.configPacket].compactMap { $0 }
-            self.pump()
-            // The stream's run loop: io's thread for as long as the body is fed.
-            while self.out === outs { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.25)) }
+        let pin = core.link.seenFp.isEmpty ? (core.link.host?.fp ?? "") : core.link.seenFp
+        let tls = NWProtocolTLS.Options()
+        sec_protocol_options_set_verify_block(tls.securityProtocolOptions, { _, trust, done in
+            let fp = Link.leafFingerprint(sec_trust_copy_ref(trust).takeRetainedValue())
+            done(fp != nil && (pin.isEmpty || fp == pin))
+        }, io)
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        let c = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: NWParameters(tls: tls, tcp: tcp))
+        uploadGen += 1
+        let gen = uploadGen
+        let head = "POST /twindesk/mirror HTTP/1.1\r\nHost: \(host):\(port)\r\nContent-Type: application/octet-stream\r\n"
+            + "x-twindesk-mirror: \(key)\r\nTransfer-Encoding: chunked\r\n\r\n"
+        let first = [sessionPacket, configPacket].compactMap { $0 }
+        c.stateUpdateHandler = { [weak self] st in
+            guard let self = self else { return }
+            switch st {
+            case .ready:
+                c.send(content: Data(head.utf8), completion: .contentProcessed { _ in })
+                self.upload = c
+                self.inflight = 0
+                self.skipToKey = true // from a keyframe on (the extension is asked for one)
+                for p in first { self.chunk(c, p) }
+                DispatchQueue.main.async { self.sendExt(["sync": 1]) }
+                self.drain(c, gen)
+            case .failed(let e):
+                NSLog("TwinDesk: screen stream: %@", e.localizedDescription)
+                c.cancel()
+                self.uploadEnded(c, gen)
+            case .cancelled: self.uploadEnded(c, gen)
+            default: break
+            }
         }
-        let t = s.uploadTask(withStreamedRequest: req)
-        upload = t
-        t.resume()
+        c.start(queue: io)
+    }
+
+    // The computer's answer: read and dropped; its end is the stream's.
+    private func drain(_ c: NWConnection, _ gen: Int) {
+        c.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] _, _, done, err in
+            if done || err != nil { c.cancel(); self?.uploadEnded(c, gen); return }
+            self?.drain(c, gen)
+        }
+    }
+
+    // io: gone (the computer closed it, the network dropped). Still sharing and still wanted: again.
+    private func uploadEnded(_ c: NWConnection, _ gen: Int) {
+        if upload === c { upload = nil }
+        DispatchQueue.main.async {
+            guard gen == self.uploadGen else { return }
+            NSLog("TwinDesk: screen stream ended")
+            if self.sharing, self.want != nil, self.core.connected {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if gen == self.uploadGen && self.sharing && self.want != nil { self.startUpload() } }
+            }
+        }
     }
 
     private func endUpload() {
-        upload?.cancel()
-        upload = nil
-        session?.invalidateAndCancel()
-        session = nil
+        uploadGen += 1
         io.async {
-            self.out?.close()
-            self.out = nil
-            self.backlog.removeAll()
+            guard let c = self.upload else { return }
+            self.upload = nil
+            c.send(content: Data("0\r\n\r\n".utf8), completion: .contentProcessed { _ in c.cancel() })
         }
+    }
+
+    // io: one packet as one chunk.
+    private func chunk(_ c: NWConnection, _ p: Data) {
+        var d = Data(String(p.count, radix: 16).utf8)
+        d.append(contentsOf: [13, 10])
+        d.append(p)
+        d.append(contentsOf: [13, 10])
+        let n = d.count
+        inflight += n
+        c.send(content: d, completion: .contentProcessed { [weak self] _ in self?.io.async { self?.inflight -= n } })
     }
 
     // A packet from the extension: kept if it's the size or SPS/PPS, then on to the computer.
     private func packet(_ p: Data) {
         guard p.count >= 12 else { return }
         peerTap?(p)
-        if p[p.startIndex] & 0x80 != 0 { sessionPacket = p; configPacket = nil }
-        else if p[p.startIndex] & 0x40 != 0 { configPacket = p } // bit 62: config
+        let b = p[p.startIndex]
+        if b & 0x80 != 0 { sessionPacket = p; configPacket = nil }
+        else if b & 0x40 != 0 { configPacket = p } // bit 62: config
         io.async {
-            guard self.out != nil else { return }
-            // Behind by more than ~2 s of picture: drop what's waiting and ask for a keyframe.
-            if self.backlog.reduce(0, { $0 + $1.count }) > 4 << 20 {
-                self.backlog = [self.configPacket].compactMap { $0 }
-                DispatchQueue.main.async { self.sendExt(["sync": 1]) }
+            guard let c = self.upload else { return }
+            let special = b & 0xC0 != 0 // the size or SPS/PPS: always
+            let key = b & 0x20 != 0 // bit 61: a keyframe
+            // Behind by more than ~2 s of picture: frames dropped until a keyframe (asked for now).
+            if !special && self.inflight > 4 << 20 {
+                if !self.skipToKey { self.skipToKey = true; DispatchQueue.main.async { self.sendExt(["sync": 1]) } }
+                return
             }
-            self.backlog.append(p)
-            self.pump()
-        }
-    }
-
-    private func pump() {
-        guard let o = out else { return }
-        while !backlog.isEmpty, o.hasSpaceAvailable {
-            let d = backlog[0]
-            let n = d.withUnsafeBytes { o.write($0.bindMemory(to: UInt8.self).baseAddress!, maxLength: d.count) }
-            if n <= 0 { return }
-            if n < d.count { backlog[0] = d.subdata(in: (d.startIndex + n)..<d.endIndex) } else { backlog.removeFirst() }
-        }
-    }
-
-    func stream(_ s: Stream, handle e: Stream.Event) {
-        if e == .hasSpaceAvailable { pump() }
-        if e == .errorOccurred || e == .endEncountered { DispatchQueue.main.async { self.endUpload() } }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, needNewBodyStream completionHandler: @escaping (InputStream?) -> Void) {
-        completionHandler(pendingIn)
-        pendingIn = nil
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        guard let trust = challenge.protectionSpace.serverTrust, let fp = Link.leafFingerprint(trust), fp == core.link.host?.fp else {
-            return completionHandler(.cancelAuthenticationChallenge, nil)
-        }
-        completionHandler(.useCredential, URLCredential(trust: trust))
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        DispatchQueue.main.async {
-            guard self.upload === task else { return }
-            NSLog("TwinDesk: screen stream ended: %@", error?.localizedDescription ?? "done")
-            self.upload = nil
-            // Still sharing and still wanted: a new request (the window keeps its decoder).
-            if self.sharing, self.want != nil, self.core.connected {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if self.upload == nil && self.sharing { self.configure() } }
-            }
+            if !special && self.skipToKey { if key { self.skipToKey = false } else { return } }
+            self.chunk(c, p)
         }
     }
 }
