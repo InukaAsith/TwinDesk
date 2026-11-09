@@ -2118,4 +2118,12 @@
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Choose Mirror above. When your desktop asks which screen to share, pick the new one.",
   "Type as a hardware keyboard": "Type as a hardware keyboard",
   "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout",
+  "Mouse and keyboard over Bluetooth?": "Mouse and keyboard over Bluetooth?",
+  "Mouse and keyboard over Bluetooth": "Mouse and keyboard over Bluetooth",
+  "Crowded Wi-Fi": "Crowded Wi-Fi",
+  "The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.": "The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.",
+  "Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.": "Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.",
+  "Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.": "Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.",
+  "On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers": "On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers",
+  "For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi": "For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi",
 });

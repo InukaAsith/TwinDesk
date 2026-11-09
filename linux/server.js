@@ -213,8 +213,10 @@ class Server extends EventEmitter {
     if (!ctx || ctx.ws.readyState !== ctx.ws.OPEN) return;
     // A phone on the USB cable: its WebRTC goes through the relay too (wired.js).
     if (ctx.ice && ICE_OFFERS.has(msg.t)) msg = { ...msg, ice: ctx.ice };
-    Quiet.sent(ctx.ws, msg);
-    ctx.ws.send(JSON.stringify(msg));
+    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
+    const ws = this.bleInput ? this.bleInput.route(ctx.ws, ctx.alt, msg) : ctx.ws;
+    Quiet.sent(ws, msg);
+    ws.send(JSON.stringify(msg));
   }
 
   // Send to the authenticated client, if any.

@@ -2117,4 +2117,12 @@
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Escolha Espelhar acima. Quando sua área de trabalho perguntar qual tela compartilhar, escolha a nova.",
   "Type as a hardware keyboard": "Digitar como teclado físico",
   "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "As teclas chegam ao celular como de um teclado USB, no layout definido nele (Configurações › Sistema › Teclado › Teclado físico), então cada símbolo e letra acentuada sai como sai lá. Requer depuração sem fio. Desligado: as teclas vão como códigos de tecla do Android no layout dos EUA",
+  "Mouse and keyboard over Bluetooth?": "Mouse e teclado pelo Bluetooth?",
+  "Mouse and keyboard over Bluetooth": "Mouse e teclado pelo Bluetooth",
+  "Crowded Wi-Fi": "Wi-Fi congestionado",
+  "The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.": "O ponteiro e as teclas vão pelo Bluetooth; telas, arquivos e a área de transferência ficam no Wi-Fi. Para Wi-Fi congestionado, onde o ponteiro trava ou atrasa aos trancos.",
+  "Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.": "O Bluetooth fica então ligado junto com o Wi-Fi durante toda a sessão. Em muitos computadores os dois dividem um rádio e podem interferir, deixando o Wi-Fi mais lento (principalmente em 2,4 GHz), e o ponteiro se move no ritmo do Bluetooth.",
+  "Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.": "Ligue nos dois computadores, com Bluetooth com computadores ligado (Geral). A sessão se reconecta pelo Bluetooth para começar.",
+  "On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers": "Ligado: o ponteiro e as teclas vão pelo Bluetooth sempre que a sessão o tem, o resto pelo Wi-Fi. Precisa estar ligado nos dois computadores",
+  "For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi": "Para Wi-Fi congestionado onde o ponteiro trava. Desligado: tudo vai pelo Wi-Fi",
 });

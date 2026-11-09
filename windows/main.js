@@ -926,7 +926,8 @@ function setupNet(guest) {
     if (!peerApps.view().open && !screen.watching()) net.release('apps');
     if (phoneViews && !phoneViews.list().length && !pendingView) net.release('phone');
     if (!smb.drive && !smbWait) net.release('smb');
-    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => net.onGroup }));
+    link.useBleInput(settings.net.bleInput === true); // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js)
+    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !settings.net.bleInput, current: () => link.current, onGroup: () => net.onGroup }));
     inviteIos();
     const near = link.snapshot().link.state !== 'connected' && !link.hosting && !bleOff;
     bleGuest.scan(near && settings.net.blePc); // looking for a host only while there's no session
@@ -966,7 +967,7 @@ function applyQuiet(off) {
 
 // Bluetooth on or off (General), or the helper restarted.
 function applyNet() {
-  if (!settings.net.bleWifiOff) applyQuiet(false);
+  if (!settings.net.bleWifiOff || settings.net.bleInput) applyQuiet(false);
   if (bleHost) bleHost.apply();
   if (bleGuest && !settings.net.blePc) bleGuest.scan(false);
   if (blePhones && !settings.net.ble) blePhones.stop();

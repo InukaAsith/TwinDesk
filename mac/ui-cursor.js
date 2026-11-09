@@ -36,6 +36,22 @@ UI.tab({
     const shakeRow = UI.row(I18n.t('Shake to bring the pointer back'), I18n.t('While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here'), [shake]);
     const ble = UI.switch((v) => api.setKvm({ ble: v }), { label: I18n.t('Over Bluetooth') });
     const bleRow = UI.row(I18n.t('Over Bluetooth'), I18n.t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
+    // #158: the pointer and keys over Bluetooth while the rest stays on Wi-Fi (shared/bleinput.js), for
+    // crowded Wi-Fi. Off by default; turning it on asks first (Bluetooth beside Wi-Fi can slow both).
+    let bleInputOn = false;
+    const bleInput = UI.switch((v) => {
+      if (!v) return api.setNet({ bleInput: false });
+      bleInput.set(bleInputOn);
+      window.MeshIntro.ask({
+        title: I18n.t('Mouse and keyboard over Bluetooth?'),
+        lines: [I18n.t('The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.'),
+          I18n.t('Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.')],
+        hint: I18n.t('Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.'),
+        ok: I18n.t('Turn on'),
+      }, () => api.setNet({ bleInput: true }));
+    }, { label: I18n.t('Mouse and keyboard over Bluetooth') });
+    const bleInputRow = UI.row(I18n.t('Mouse and keyboard over Bluetooth'), '', [bleInput]);
+    bleInputRow.hidden = !(window.MeshIntro && window.MeshIntro.ask); // Multi-device: not there
 
     // A phone as the peer: how the pointer and keys reach it (settings.phone.input, the phone's own toggle too).
     const via = UI.segmented([{ value: 'auto', label: I18n.t('Auto') }, { value: 'adb', label: I18n.t('Full (ADB)') }, { value: 'phone', label: I18n.t('Limited (Accessibility)') }],
@@ -70,9 +86,16 @@ UI.tab({
         shakeRow,
       ]),
       UI.card(I18n.t('Not on the same network'), [bleRow]),
+      UI.card(I18n.t('Crowded Wi-Fi'), [bleInputRow]),
     );
 
     return (s) => {
+      if (s.net) {
+        bleInputOn = s.net.bleInput === true;
+        bleInput.set(bleInputOn);
+        bleInputRow.setHint(bleInputOn ? I18n.t('On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers')
+          : I18n.t('For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi'));
+      }
       const k = s.kvm;
       if (!k) return;
       const p = UI.peer(s);

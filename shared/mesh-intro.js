@@ -80,5 +80,34 @@
     ok.focus();
   }
 
-  window.MeshIntro = { art, confirm };
+  // A yes/no pop like confirm's, for any switch that needs one: {title, lines, hint, ok}; onOk on yes,
+  // onNo on Cancel or Escape (Cursor › Mouse and keyboard over Bluetooth).
+  function ask({ title, lines = [], hint = '', ok }, onOk, onNo = () => {}) {
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text) e.textContent = text;
+      return e;
+    };
+    const pop = el('div', 'pair-pop mesh-pop');
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-modal', 'true');
+    const body = el('div', 'pop-body');
+    body.append(el('strong', '', title), ...lines.map((l) => el('p', '', l)));
+    if (hint) body.append(el('div', 'hint', hint));
+    const no = el('button', 'btn', t('Cancel'));
+    const yes = el('button', 'btn primary', ok);
+    const actions = el('div', 'banner-actions');
+    actions.append(no, yes);
+    pop.append(body, actions);
+    const close = () => { document.removeEventListener('keydown', onKey, true); pop.remove(); };
+    function onKey(e) { if (e.key === 'Escape') { close(); onNo(); } }
+    no.onclick = () => { close(); onNo(); };
+    yes.onclick = () => { close(); onOk(); };
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(pop);
+    yes.focus();
+  }
+
+  window.MeshIntro = { art, confirm, ask };
 })();

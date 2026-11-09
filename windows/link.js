@@ -78,8 +78,19 @@ class Link {
 
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    Quiet.sent(this.ws, obj);
-    this.ws.send(JSON.stringify(obj));
+    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
+    const ws = this.bleInput ? this.bleInput.route(this.ws, this.alt, obj) : this.ws;
+    Quiet.sent(ws, obj);
+    ws.send(JSON.stringify(obj));
+    return true;
+  }
+
+  // Mouse and keyboard over Bluetooth just went on: a session on the network alone, with the host
+  // near over Bluetooth, starts again through it (then moves to the network), so it has both.
+  bleAgain() {
+    if (!this.authed || this.transport !== 'ip' || this.alt || !this.pairing || !this.ble || !this.ble.get(this.pairing.macId)) return false;
+    console.log('[link] mouse and keyboard over Bluetooth: connecting again through it');
+    this._connect('session');
     return true;
   }
 
@@ -190,7 +201,9 @@ class Link {
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
     const hostId = mode === 'pair' ? target.id : target.macId;
     const near = this.ble && hostId && this.ble.get(hostId);
-    const viaBle = isBle(target.address) || (mode === 'session' && near && (!this.resolveAddress(hostId) || Date.now() < this.networkRetryAt));
+    // Mouse and keyboard over Bluetooth (shared/bleinput.js): through it first even on the same network,
+    // so the session keeps it beside the network one once it moves there.
+    const viaBle = isBle(target.address) || (mode === 'session' && near && (!this.resolveAddress(hostId) || Date.now() < this.networkRetryAt || !!this.bleInput));
     if (!viaBle) return this._open(target.address, target.port, 'ip');
     if (!near) {
       this.lastError = '{Name} isn’t nearby';

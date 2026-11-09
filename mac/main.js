@@ -1143,7 +1143,8 @@ function setupNet() {
     // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
     // blepolicy.js wifiQuiet): no advertising, its pipes and the session's Bluetooth fallback closed;
     // back as it was when the session ends.
-    const off = bleQuiet({ on: settings.net.bleWifiOff !== false, current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
+    peer.useBleInput(settings.net.bleInput === true); // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js)
+    const off = bleQuiet({ on: settings.net.bleWifiOff !== false && settings.net.bleInput !== true, current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
     if (off !== bleOff) {
       bleOff = off;
       console.log(`[ble] ${off ? 'off: the session is on the same Wi-Fi' : 'on again'}`);

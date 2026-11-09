@@ -2118,4 +2118,12 @@
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "在上方选择“镜像”。当桌面询问要共享哪个屏幕时，选择新屏幕。",
   "Type as a hardware keyboard": "作为实体键盘输入",
   "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "按键像来自 USB 键盘一样到达手机，并使用手机上设置的布局（设置 › 系统 › 键盘 › 实体键盘），因此每个符号和带重音的字母都与手机上一致。需要无线调试。关闭时：按键以美式布局的 Android 键码发送",
+  "Mouse and keyboard over Bluetooth?": "通过蓝牙传输鼠标和键盘？",
+  "Mouse and keyboard over Bluetooth": "通过蓝牙传输鼠标和键盘",
+  "Crowded Wi-Fi": "拥挤的 Wi-Fi",
+  "The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.": "指针和按键通过蓝牙传输；屏幕、文件和剪贴板仍走 Wi-Fi。适用于拥挤的 Wi-Fi，即指针卡顿或阵发性延迟的情况。",
+  "Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.": "之后整个会话期间蓝牙会与 Wi-Fi 同时开启。在许多电脑上，两者共用一个无线电，可能互相干扰，使 Wi-Fi 变慢（尤其是 2.4 GHz），且指针的速度取决于蓝牙。",
+  "Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.": "请在两台电脑上都开启，并开启“通用”中的“与电脑使用蓝牙”。会话会通过蓝牙重新连接以启用它。",
+  "On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers": "开启：只要会话有蓝牙连接，指针和按键就走蓝牙，其余走 Wi-Fi。需要两台电脑都开启",
+  "For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi": "适用于指针卡顿的拥挤 Wi-Fi。关闭时：全部走 Wi-Fi",
 });

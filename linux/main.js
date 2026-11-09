@@ -952,7 +952,8 @@ function bleHostOn() {
 }
 
 function applyBle() {
-  applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => !!net && net.onGroup }));
+  link.useBleInput(settings.net.bleInput === true); // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js)
+  applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !settings.net.bleInput, current: () => link.current, onGroup: () => !!net && net.onGroup }));
   const p = bleNow();
   if (bleHost) bleHost.apply();
   if (bleOff) {

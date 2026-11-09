@@ -2117,4 +2117,12 @@
   "Choose Mirror above. When your desktop asks which screen to share, pick the new one.": "Выберите выше «Повтор». Когда рабочий стол спросит, каким экраном поделиться, выберите новый.",
   "Type as a hardware keyboard": "Печатать как физическая клавиатура",
   "Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout": "Клавиши приходят на телефон как с USB-клавиатуры, в раскладке, выбранной на телефоне (Настройки › Система › Клавиатура › Физическая клавиатура), поэтому все символы и буквы с диакритикой вводятся так же, как там. Нужна отладка по Wi-Fi. Выключено: клавиши передаются как коды клавиш Android в раскладке США",
+  "Mouse and keyboard over Bluetooth?": "Мышь и клавиатура через Bluetooth?",
+  "Mouse and keyboard over Bluetooth": "Мышь и клавиатура через Bluetooth",
+  "Crowded Wi-Fi": "Загруженная сеть Wi-Fi",
+  "The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.": "Указатель и клавиши идут через Bluetooth, а экраны, файлы и буфер обмена остаются в Wi-Fi. Для загруженного Wi-Fi, где указатель дёргается или запаздывает рывками.",
+  "Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.": "Тогда Bluetooth остаётся включённым рядом с Wi-Fi на всё время сеанса. На многих компьютерах они используют один радиомодуль и могут мешать друг другу, замедляя Wi-Fi (особенно на 2,4 ГГц), а указатель движется со скоростью Bluetooth.",
+  "Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.": "Включите на обоих компьютерах вместе с «Bluetooth с компьютерами» (Основные). Чтобы начать, сеанс переподключится через Bluetooth.",
+  "On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers": "Включено: указатель и клавиши идут через Bluetooth, когда он есть в сеансе, остальное через Wi-Fi. Нужно включить на обоих компьютерах",
+  "For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi": "Для загруженного Wi-Fi, где указатель дёргается. Выключено: всё идёт через Wi-Fi",
 });
