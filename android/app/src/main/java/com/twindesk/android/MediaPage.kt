@@ -116,7 +116,7 @@ private fun PlayTab(core: Core, name: String) {
     }
     Note(
         when (core.host?.os) {
-            "mac" -> "On a Mac, TwinDesk sees Music and Spotify. Other players still take Play/Pause, Next and Previous as media keys."
+            "mac" -> "On a Mac, TwinDesk sees any app in its Now Playing, YouTube in a browser too."
             "linux" -> "On Linux, TwinDesk sees any player that supports MPRIS (most do), through playerctl."
             else -> "TwinDesk controls the player shown in Windows media controls, such as browsers, Spotify and Media Player."
         },

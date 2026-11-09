@@ -8,8 +8,9 @@
 //           (the Mac's pointer follows the finger, so it is a touch screen for the Mac)
 //   mouse   and a hardware keyboard work as on a computer
 //   stylus  a pen on the computer: where it points, with its pressure, tilt, eraser and side button
-//           (opts.pen; off: a mouse). A stroke's samples go once per pointer event (in.mm `pts`),
-//           and the stroke is drawn here at once (the ink preview, opts.ink) until the picture
+//           (opts.pen; off: a mouse). A stroke's samples go each in its own in.mm, paced as the pen
+//           made them (Fast writing, opts.penFast: once per pointer event, in.mm `pts`), and the
+//           stroke is drawn here at once (the ink preview, opts.ink) until the picture
 //           shows the computer's own ink
 //   soft keyboard: what is typed goes as keys (the app's Keyboard button shows it)
 // The app talks to it through window.TD (send, ready, …) and window.tdRecv(message).
@@ -37,6 +38,7 @@
   let speed = 1; // the touchpad's pointer speed (opts.speed)
   let tapClick = true; // a quick tap left-clicks (opts.tap)
   let penOn = true; // a stylus is a pen (opts.pen); off: a mouse
+  let penFast = false; // Fast writing (opts.penFast): a stroke's samples in one in.mm (pts); off: each its own, paced
   let realTouch = false; // the computer injects real touch (screen.state touch): Direct sends in.tc
 
   function setOverlay(t) {
@@ -144,6 +146,8 @@
         tapClick = msg.tap === true;
         if (msg.pen === false && penOn) penLeave(); // switched off while it is near
         penOn = msg.pen !== false;
+        penFast = msg.penFast === true;
+        penPace.flush();
         ink.set(msg.ink !== false);
         document.body.classList.toggle('pad', touchMode === 'pad');
         applyAudio();
@@ -399,6 +403,7 @@
     }
   }
   function penSend(t, e, b) {
+    penPace.flush(); // a down, up or hover after the stroke's samples, never before
     const p = norm(e.clientX, e.clientY, penHeld.size > 0 || t !== 'in.mm');
     if (!p) return penOut(); // hovering outside the picture
     penLast = { x: p.x, y: p.y, pen: penState(e) };
@@ -409,6 +414,7 @@
   // and pen, those before it in `pts` [[x, y, p, tx, ty], …] (P.penPoints; a computer that doesn't
   // know `pts` takes the last). One message instead of several keeps up on a busy link.
   function penSendAll(list) {
+    penPace.flush();
     const pts = [];
     let last = null;
     for (const e of list) {
@@ -422,6 +428,49 @@
     if (!last) return;
     penLast = last;
     send(pts.length ? { t: 'in.mm', x: last.x, y: last.y, pen: last.pen, pts } : { t: 'in.mm', x: last.x, y: last.y, pen: last.pen });
+  }
+
+  // Precise writing (Fast writing off, the default): every sample its own in.mm, sent as far apart
+  // as the pen made them (their timeStamps, at most a frame behind). Samples that arrive together
+  // are injected together, and macOS and Windows merge a burst of pen moves into its last one: the
+  // line on the computer loses the points between (the ink preview here still has them).
+  const penPace = (() => {
+    const GAP_MAX = 8; // ms between two samples, at most
+    const LAG_MAX = 20; // ms behind the pen, at most: past it the rest go at once
+    let q = [], timer = 0, due = 0, prevT = 0;
+    function run() {
+      timer = 0;
+      const now = performance.now();
+      while (q.length && q[0].due <= now + 0.5) send(q.shift().m);
+      if (q.length) timer = setTimeout(run, Math.max(0, q[0].due - now));
+    }
+    return {
+      add(m, t) {
+        const now = performance.now();
+        if (!q.length && due <= now) { due = now; prevT = t; send(m); return; }
+        due = Math.max(now, due + Math.min(GAP_MAX, Math.max(0, t - prevT)));
+        if (due - now > LAG_MAX) due = now;
+        prevT = t;
+        q.push({ m, due });
+        if (!timer) timer = setTimeout(run, Math.max(0, q[0].due - now));
+      },
+      flush() {
+        if (timer) { clearTimeout(timer); timer = 0; }
+        for (const x of q) send(x.m);
+        q = [];
+        due = 0;
+      },
+    };
+  })();
+  function penSendEach(list) {
+    for (const e of list) {
+      const p = norm(e.clientX, e.clientY, true);
+      if (!p) continue;
+      const st = penState(e);
+      ink.at(e, st);
+      penLast = { x: p.x, y: p.y, pen: st };
+      penPace.add({ t: 'in.mm', x: p.x, y: p.y, pen: st }, e.timeStamp);
+    }
   }
 
   // The ink preview: the stroke drawn under the pen at once, fading once the picture has had time
@@ -471,6 +520,7 @@
     };
   })();
   function penOut() {
+    penPace.flush();
     ink.at(null, { c: false });
     if (penLast && !penLast.pen.out) {
       for (const b of penHeld) send({ t: 'in.mu', x: penLast.x, y: penLast.y, b, pen: { ...penLast.pen, c: false, p: 0 } });
@@ -493,8 +543,9 @@
     // Every sample since the last event (a pen reports 120–240 a second): strokes stay smooth.
     // Hovering, only where it is now.
     const all = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-    if (!penHeld.size || !all.length) return penSend('in.mm', e);
-    penSendAll(all);
+    if (!penHeld.size) return penSend('in.mm', e);
+    if (penFast) return all.length ? penSendAll(all) : penSend('in.mm', e);
+    penSendEach(all.length ? all : [e]);
   }
   function penUp(e) {
     const b = PEN_BUTTON[e.button];

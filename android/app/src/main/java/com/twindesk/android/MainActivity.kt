@@ -411,12 +411,62 @@ private fun Sidebar(core: Core, v: Int, tab: Tab, go: (Tab) -> Unit) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(Modifier.width(250.dp).fillMaxHeight().background(pal.sidebar).verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 14.dp)) {
         Box(Modifier.padding(start = 4.dp, bottom = 18.dp)) { Identity(core, v, 54) }
+        Devices(core, v) { go(Tab.Overview) }
         var group: String? = null
         for (t in Tab.entries.filter { shown(core, it) }) {
             if (t.group == "bottom" && group != "bottom") Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(pal.line))
             else if (group != null && t.group != group) Spacer(Modifier.height(10.dp))
             group = t.group
             NavItem(t.icon, t.colors, t.title, tab == t, isOn(core, t)) { go(t) }
+        }
+    }
+}
+
+// Under the identity, as the computers' sidebars have them: the connected computer or phone, then
+// the paired ones nearby. Tap the connected one: Overview; another: connect it (the session moves).
+@Composable
+private fun Devices(core: Core, v: Int, open: () -> Unit) {
+    @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
+    val link = core.link
+    val peer = core.peer
+    val host = core.host
+    val phone = peer.connected && host == null
+    class Dev(val id: String, val name: String, val isPhone: Boolean, val connected: Boolean, val sub: String, val go: () -> Unit)
+    val list = mutableListOf<Dev>()
+    if (host != null) list += Dev(host.id, host.name, false, true, core.net.via + (link.rttMs?.let { " · $it ms" } ?: ""), open)
+    if (phone) list += Dev(peer.peerId, peer.peerName, true, true, "Phone · Connected", open)
+    for (h in core.hosts()) {
+        if (h.id == host?.id || !core.isNear(h.id)) continue
+        val connecting = link.state == "connecting" && link.host?.id == h.id
+        list += Dev(h.id, h.name, false, false, if (connecting) "Connecting…" else "Nearby · Tap to connect") {
+            if (peer.connected) peer.disconnect()
+            if (host != null) core.switchTo(h) else core.connect(h)
+        }
+    }
+    if (peer.on) for (f in peer.nearby()) {
+        if (!peer.isPaired(f.id) || (phone && f.id == peer.peerId)) continue
+        list += Dev(f.id, f.name, true, false, if (peer.waitingFor == f.id) "Requesting connection…" else "Nearby · Tap to connect") { peer.connect(f) }
+    }
+    if (list.isEmpty()) return
+    Column(Modifier.padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (d in list) {
+            val shape = RoundedCornerShape(12.dp)
+            Row(
+                Modifier.fillMaxWidth().clip(shape)
+                    .background(if (d.connected) pal.accentSoft else pal.card)
+                    .border(1.dp, if (d.connected) pal.accent.copy(alpha = 0.7f) else pal.line, shape)
+                    .clickable(onClick = d.go).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(pal.content), contentAlignment = Alignment.Center) {
+                    Icon(if (d.isPhone) Ico.phone else Ico.display, null, tint = if (d.connected) pal.accent else pal.muted, modifier = Modifier.size(20.dp))
+                }
+                Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                    Text(d.name, color = pal.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(d.sub, color = pal.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (d.connected) Dot(pal.good, 7)
+            }
         }
     }
 }
@@ -1042,6 +1092,7 @@ private fun ScreenPage(core: Core, v: Int) {
     }
     MacCard("Stylus") {
         SwitchRow("Pen", "Use the stylus as a drawing tablet on $name, with pressure, tilt, eraser and side button. Touch is ignored while the pen is near. When off, the stylus acts as a mouse.", core.store.flag("screen.pen", true), first = true) { s.setOpt("screen.pen", it) }
+        SwitchRow("Fast writing", "Lines reach $name a little sooner but can lose points along the way. Leave off for smooth drawing and handwriting.", core.store.flag("screen.penFast", false), enabled = core.store.flag("screen.pen", true)) { s.setOpt("screen.penFast", it) }
     }
     MacCard("Playback") {
         SwitchRow("$name’s sound with the screen", "When $name shares audio with its screen", core.store.flag("screen.sound", false), first = true) { s.setOpt("screen.sound", it) }
