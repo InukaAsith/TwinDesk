@@ -1,0 +1,82 @@
+name: Release Windows (unsigned)
+
+# The Windows installers built and put straight onto a release, with no code signing (no SignPath,
+# no Authenticode): for betas and anything SignPath isn't set up for yet. Build Windows stays the
+# signed path. The input lane (native/tdfast) is required here: the run fails rather than ship an
+# installer without tdfast.dll for x64 and arm64 (windows-helper/tdfast.cmd skips it quietly).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to put the installers on (e.g. v2.6.0-beta.1; made as a draft if it isn't there)
+        required: true
+      ref:
+        description: Branch to build (releases come from main)
+        required: false
+        default: main
+
+# Write: the installers go onto the release, and the full Android APK can come from a draft one.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: ./.github/actions/android-full
+        with:
+          keystore: ${{ secrets.ANDROID_KEYSTORE }}
+
+      # Rust for the input lane, both architectures, and cargo on PATH for tdfast.cmd.
+      - name: Rust (x64 and arm64 targets)
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+          cargo --version
+
+      - name: Install dependencies
+        working-directory: windows
+        run: npm install
+
+      # No WIN_CSC_* here: unsigned on purpose.
+      - name: Build the installers (x64 and arm64)
+        working-directory: windows
+        run: npm run dist -- x64 arm64
+
+      - name: Check the input lane is in
+        shell: bash
+        run: |
+          for a in x64 arm64; do
+            f=windows-helper/bin/$a/tdfast.dll
+            if [ ! -s "$f" ]; then echo "::error::$f is missing: tdfast didn't build for $a"; exit 1; fi
+            ls -l "$f"
+          done
+          ls -l windows/dist/TwinDesk-Setup-*.exe
+
+      - name: Keep the installers with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: twindesk-windows-unsigned
+          path: windows/dist/TwinDesk-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Upload to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes ""
+          gh release upload "${{ inputs.tag }}" windows/dist/TwinDesk-Setup-*.exe --clobber
