@@ -156,11 +156,8 @@ final class PcSound: Feature {
     private(set) var playing = false
     var on: Bool { core.store.flag("audio.in", false) }
 
-    func set(_ v: Bool) {
-        core.store.setFlag("audio.in", v)
-        sendPolicy()
-        core.changed()
-    }
+    // Shared with the computer (PairSync "audio"): its Send this computer's sound follows.
+    func set(_ v: Bool) { core.sync.set("audio", "in", v) }
 
     func sendPolicy() {
         core.send(msg("audio.policy", ["accept": on]))

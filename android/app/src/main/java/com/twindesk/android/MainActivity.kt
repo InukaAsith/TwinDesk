@@ -163,13 +163,42 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     About("About", Ico.about, grad(0xFF64D2FF, 0xFF0A84FF), "bottom"),
 }
 
+// Another phone holds the session (Peer.kt; one at a time, so no computer): the pages are that
+// phone's, and only those both phones can do (its caps in peer.info), as a computer's pages adapt to a phone.
+private fun peerMode(core: Core) = core.host == null && core.peer.connected
+private fun peerShown(core: Core, t: Tab): Boolean {
+    val p = core.peer
+    val mine = p.myCaps()
+    return when (t) {
+        Tab.Overview, Tab.Connection, Tab.General, Tab.About -> true
+        Tab.Screen -> p.can("screen")
+        Tab.Clipboard -> p.can("clip")
+        Tab.Notifications -> p.can("notifs")
+        Tab.Files -> p.can("files")
+        Tab.Messages -> p.can("messages") || "messages" in mine
+        Tab.Photos -> p.can("photos") || "photos" in mine
+        Tab.FileAccess -> p.can("fs") || "fs" in mine
+        else -> false // Calls, Mouse, Keyboard, Remote, ReZume, Sound, Media, Camera: a computer's
+    }
+}
+
 // The bottom bar: Overview first while connected, Connection second; before that Connection first.
-private fun bottom(core: Core) = if (core.host != null) listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files) else listOf(Tab.Connection, Tab.Screen, Tab.Files)
-// Overview only while connected (elsewhere, Connection shows).
-private fun shown(core: Core, t: Tab) = t != Tab.Overview || core.host != null
+private fun bottom(core: Core) = when {
+    core.host != null -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files)
+    peerMode(core) -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files).filter { peerShown(core, it) }
+    else -> listOf(Tab.Connection, Tab.Screen, Tab.Files)
+}
+// Overview only while connected (elsewhere, Connection shows); with a phone, only what it can do.
+private fun shown(core: Core, t: Tab) = if (peerMode(core)) peerShown(core, t) else t != Tab.Overview || core.host != null
 
 // The sidebar's green dot: the page's feature is on.
-private fun isOn(core: Core, t: Tab): Boolean = if (t == Tab.Connection && core.peer.connected) true else isOnPc(core, t) // Connect: another phone too
+private fun isOn(core: Core, t: Tab): Boolean = if (peerMode(core)) when (t) {
+    Tab.Connection -> true
+    Tab.Clipboard -> core.peer.clipOn
+    Tab.Notifications -> core.peer.notifsOn
+    Tab.Files -> core.peer.busyLine != null
+    else -> false
+} else isOnPc(core, t)
 
 private fun isOnPc(core: Core, t: Tab): Boolean = when (t) {
     Tab.Screen -> core.screen.viewing
@@ -201,12 +230,13 @@ fun App(core: Core, resumed: Int) {
     val v by core.version.collectAsState()
     @Suppress("UNUSED_EXPRESSION") v; @Suppress("UNUSED_EXPRESSION") resumed // re-read Core on every bump
     var tab by rememberSaveable { mutableStateOf(Tab.Connection) }
-    // Connected: its Overview (from Connection); not connected: Connection in its place.
-    val connected = core.host != null
+    // Connected (to a computer or a phone): its Overview (from Connection); not connected: Connection in its place.
+    val connected = core.host != null || core.peer.connected
     var wasConnected by rememberSaveable { mutableStateOf(false) }
     if (connected && !wasConnected && tab == Tab.Connection) tab = Tab.Overview
     wasConnected = connected
     if (!connected && tab == Tab.Overview) tab = Tab.Connection
+    if (!shown(core, tab)) tab = if (connected) Tab.Overview else Tab.Connection // a page the other device can't do
     val BOTTOM = bottom(core)
     var more by rememberSaveable { mutableStateOf(false) }
     MainActivity.openTab.value?.let { name ->
@@ -359,10 +389,12 @@ private fun Identity(core: Core, v: Int, logo: Int) {
             Text("TwinDesk", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = pal.text)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val h = core.host
-                Dot(when { h != null -> pal.good; core.link.pair != null || core.link.state == "connecting" -> pal.warn; else -> pal.faint }, 7)
+                val ph = core.peer.takeIf { h == null && it.connected }
+                Dot(when { h != null || ph != null -> pal.good; core.link.pair != null || core.link.state == "connecting" -> pal.warn; else -> pal.faint }, 7)
                 Text(
                     when {
                         h != null -> h.name + " · " + core.net.via + (core.link.rttMs?.let { " · $it ms" } ?: "")
+                        ph != null -> ph.peerName + " · Phone"
                         core.link.pair != null -> "Pairing…"
                         core.link.state == "connecting" -> "Connecting…"
                         else -> "Not connected"
@@ -422,7 +454,8 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
         Column(Modifier.widthIn(max = 820.dp)) {
-            when (tab) {
+            if (peerMode(core) && tab != Tab.Connection && tab != Tab.General && tab != Tab.About) PeerPage(core, v, tab.name)
+            else when (tab) {
                 Tab.Overview -> OverviewPage(core, v, connection = false)
                 Tab.Connection -> OverviewPage(core, v, connection = true)
                 Tab.Calls -> CallsPage(core, v)
@@ -573,7 +606,8 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
         val hosts = core.hosts()
         // The computer's QR code (Connection there): an extra way, next to these.
         val act = LocalContext.current
-        MacRow("Scan a QR code", "On your computer, open Connection › Pair a phone with a QR code", true) { Secondary("Scan") { scanQr(act) } }
+        if (core.peer.connected) MacRow("Connected to ${core.peer.peerName}", "Connecting to a computer ends the session with ${core.peer.peerName}", true)
+        MacRow("Scan a QR code", "On your computer, open Connection › Pair a phone with a QR code", !core.peer.connected) { Secondary("Scan") { scanQr(act) } }
         var first = false
         for (h in hosts) {
             val near = core.isNear(h.id)
@@ -1605,6 +1639,8 @@ private fun HeroCard(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, link: Link, accent: Color) {
     @Suppress("UNUSED_EXPRESSION") v
+    // Another phone holds the session: this phone, the link, that phone.
+    val ph = core.peer.takeIf { host == null && it.connected }
 
         Row(
             Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp).fillMaxWidth()
@@ -1615,18 +1651,20 @@ private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, li
             Device(me, phone = true, Modifier.weight(1f))
             Column(Modifier.weight(0.9f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(
-                    if (host != null) Brush.horizontalGradient(listOf(pal.good, pal.accent)) else Brush.horizontalGradient(listOf(pal.trackOff, pal.trackOff)),
+                    if (host != null || ph != null) Brush.horizontalGradient(listOf(pal.good, pal.accent)) else Brush.horizontalGradient(listOf(pal.trackOff, pal.trackOff)),
                 ))
                 Text(
-                    when { host != null -> listOfNotNull(core.net.via, link.rttMs?.let { "$it ms" }).joinToString(" · ").ifEmpty { "Connected" }; link.state == "connecting" -> "Connecting…"; link.pair != null -> "Pairing…"; else -> "Not connected" },
+                    when { host != null -> listOfNotNull(core.net.via, link.rttMs?.let { "$it ms" }).joinToString(" · ").ifEmpty { "Connected" }; ph != null -> "Connected"; link.state == "connecting" -> "Connecting…"; link.pair != null -> "Pairing…"; else -> "Not connected" },
                     color = pal.muted, fontSize = 11.sp, maxLines = 2, lineHeight = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp),
                 )
             }
-            Device(them(core), phone = false, Modifier.weight(1f))
+            if (ph != null) Device(ph.peerName, phone = true, Modifier.weight(1f))
+            else Device(them(core), phone = false, Modifier.weight(1f))
         }
-        if (!(Modern.on && host != null)) Text(
+        if (!(Modern.on && (host != null || ph != null))) Text(
             when {
                 host != null -> "Connected"
+                ph != null -> "Connected" + (if (ph.role == "host") " · It connected to this phone" else "")
                 link.message.isNotEmpty() -> link.message
                 core.hosts().isNotEmpty() -> "Tap Connect, or select this device on your computer."
                 else -> "Choose a computer below, or pair by address."
@@ -1650,6 +1688,13 @@ private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, li
                 color = if (adbBle) pal.muted else pal.text, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
             if (!adbBle) { if (core.adb.setupNeeded) Secondary("Set up") { Guide.open.value = true } else Secondary("Turn on") { core.adb.turnOn() } }
+        }
+        if (ph != null) Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (ph.can("screen")) Button(onClick = { PeerScreen.view(ph, core.ctx) }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(containerColor = if (Modern.on) pal.accentSoft else pal.accent, contentColor = if (Modern.on) pal.accent else Color.White), elevation = if (Modern.on) null else ButtonDefaults.buttonElevation()) {
+                Text("Show ${ph.peerName}’s screen", fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Button(onClick = { ph.disconnect() }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(50), elevation = null, colors = ButtonDefaults.buttonColors(containerColor = pal.chip, contentColor = pal.text)) { Text("Disconnect") }
         }
         if (host != null) {
             val show = { core.ctx.startActivity(Intent(core.ctx, ViewerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

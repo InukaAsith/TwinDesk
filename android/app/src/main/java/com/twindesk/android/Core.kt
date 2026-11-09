@@ -138,7 +138,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         link.wake()
         val h = resumeLater ?: return
         resumeLater = null
-        if (link.connected || link.state == "connecting" || link.pair != null) return
+        if (link.connected || link.state == "connecting" || link.pair != null || peer.connected) return
         val known = store.hosts().find { it.id == h.id } ?: return
         Log.i("TwinDesk", "opened: reconnecting to ${known.name}")
         bg.execute { connect(known) }
@@ -162,7 +162,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         val want = bleOn && ble.allowed() && ble.radioOn && (!link.connected || link.ble)
         ble.scan(want)
         if (!bleOn && ble.found.isNotEmpty()) ble.stop()
-        serve.advertise(bleOn && serve.allowed() && ble.radioOn && !link.connected)
+        serve.advertise(bleOn && serve.allowed() && ble.radioOn && !link.connected && !peer.connected) // a phone holds the session: computers wait
         if (!bleOn && serve.found.isNotEmpty()) serve.stop()
         val h = link.host
         if (link.connected && !link.ble) screen.onWifi()
@@ -240,7 +240,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // it now, an unpaired one is shown as an invite (Pair asks it for a pipe again).
     private fun onServeOpen(f: Found, port: Int): Boolean {
         val h = store.hosts().find { it.id == f.id }
-        if (h == null || link.connected || link.state == "connecting" || link.pair != null) {
+        if (h == null || link.connected || link.state == "connecting" || link.pair != null || peer.connected) {
             if (h == null) onInvite(f.copy(invited = true))
             return false
         }
@@ -254,6 +254,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // WiredReceiver): take the session through the cable, also from a Wi-Fi session with it. Not
     // paired with it yet: pair through the cable (no Wi-Fi needed), then the session follows.
     fun connectWired(id: String, port: Int, nonce: String, name: String) {
+        if (peer.connected) { Log.i("TwinDesk", "USB: ${name.ifEmpty { id }} found, but a phone holds the session"); return }
         val h = store.hosts().find { it.id == id }
         if (h == null) {
             if (link.pair != null && link.pair?.phase != "failed") { Log.i("TwinDesk", "USB: already pairing"); return }
@@ -348,6 +349,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
     private fun onInvite(f: Found) {
         val h = store.hosts().find { it.id == f.id }
         if (h != null) {
+            // A phone holds the session (one at a time): the computer waits; Connect here takes it back.
+            if (peer.connected) { Log.i("TwinDesk", "invite from ${f.name}: a phone holds the session"); return }
             Log.i("TwinDesk", "invite from ${f.name}: connecting")
             if (link.host?.id == h.id && (link.state == "connected" || link.state == "connecting")) return
             if (!f.address.startsWith("ble:") && !f.address.startsWith("blp:")) {
@@ -375,6 +378,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
         Log.i("TwinDesk", "session with ${host.name}")
         resumeUntil = 0
         Notify.cancelInvite(ctx)
+        // One session: a phone's ends (Peer.started ends ours the other way).
+        if (peer.connected) { Log.i("TwinDesk", "ending the phone session for ${host.name}"); peer.disconnect() }
         // Tells the computer which of its USB devices this is (its screen and input use that one).
         if (link.wired) link.send(JSONObject().put("t", "phone.wired").put("nonce", wiredNonce))
         // Paired through the cable: its network address once discovery has seen it.
@@ -416,7 +421,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     private fun resume() {
         val h = resumeHost ?: return
-        if (System.currentTimeMillis() > resumeUntil || link.connected || link.state == "connecting" || link.pair != null) return
+        if (System.currentTimeMillis() > resumeUntil || link.connected || link.state == "connecting" || link.pair != null || peer.connected) return
         if (inBackground()) { resumeLater = h; return }
         Log.i("TwinDesk", "resuming the session with ${h.name}")
         val until = resumeUntil

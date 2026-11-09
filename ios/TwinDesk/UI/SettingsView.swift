@@ -17,7 +17,8 @@ struct SettingsView: View {
 
     var body: some View {
         PageScroll(title: "General") {
-            Columns {
+            // One column on every screen: settings read top to bottom, as the computers' General.
+            VStack(spacing: 16) {
                 SectionTitle(text: "Appearance")
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("Appearance", selection: $appearance) {
@@ -38,6 +39,36 @@ struct SettingsView: View {
                         .onSubmit { core.rename(name) }
                     Text("How the computers list it. iOS doesn’t tell apps the name you gave the \(Device.word).").font(.caption).foregroundStyle(.secondary)
                 }
+                .glassCard()
+
+                SectionTitle(text: "Shared with \(core.host?.name ?? core.hosts.first?.name ?? "the computer")")
+                VStack(alignment: .leading, spacing: 12) {
+                    ToggleRow(title: "Send the clipboard", detail: "What you copy here can be pasted there", on: sync("clipboard", "out"))
+                    Divider()
+                    ToggleRow(title: "Receive the clipboard", detail: "What's copied there can be pasted here", on: sync("clipboard", "in"))
+                    Divider()
+                    ToggleRow(title: "Its notifications here", detail: "The computer's notifications show on this \(Device.word)", on: sync("notifs", "in"))
+                    Divider()
+                    ToggleRow(title: "Its sound here", detail: "The computer sends what it plays to this \(Device.word)", on: sync("audio", "in"))
+                    Divider()
+                    ToggleRow(title: "Control it from here", detail: "The Remote's touchpad, keyboard and gamepad move the computer", on: sync("remote", "out"))
+                    Divider()
+                    ToggleRow(title: "Send files to it", detail: "The computer takes files and photos sent from here", on: sync("files", "out"))
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Playback of shared screens")
+                        Picker("Playback", selection: Binding(get: { _ = core.tick; return core.sync.value("pace") }, set: { core.sync.setValue("pace", $0) })) {
+                            Text("Fastest").tag("fast")
+                            Text("Smooth").tag("smooth")
+                            Text("Steady").tag("steady")
+                        }
+                        .pickerStyle(.segmented)
+                        Text(paceDetail).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text(core.connected ? "The same on both: change one here or on the computer and the other follows. Kept for each computer." : "Connect to change these: they're kept with each computer, the same on both.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .disabled(!core.connected)
                 .glassCard()
 
                 SectionTitle(text: "Background")
@@ -65,7 +96,7 @@ struct SettingsView: View {
                     ToggleRow(title: "Reconnect in the background", detail: core.reconnectBg ? "A connection that drops is taken up again with TwinDesk off screen" : "A connection that drops comes back when you open TwinDesk", on: Binding(get: { _ = core.tick; return core.reconnectBg }, set: { core.reconnectBg = $0 }))
                 }
                 .glassCard()
-            } right: {
+
                 SectionTitle(text: "Permissions")
                 VStack(spacing: 0) {
                     perm("bell.fill", Page.notifications.color, "Notifications", "The computer’s notifications, copies and files", notifState) { askNotifications() }
@@ -92,6 +123,18 @@ struct SettingsView: View {
         .onAppear { refreshNotifs() }
         .onDisappear { if name != core.store.deviceName { core.rename(name) } }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in refreshNotifs(); core.changed() }
+    }
+
+    private func sync(_ f: String, _ d: String) -> Binding<Bool> {
+        Binding(get: { _ = core.tick; return core.sync.get(f, d) }, set: { core.sync.set(f, d, $0) })
+    }
+
+    private var paceDetail: String {
+        switch core.sync.value("pace") {
+        case "smooth": return "Even motion, about one frame later"
+        case "steady": return "The steadiest motion, paced as a web browser plays it, a few frames later"
+        default: return "Each frame the moment it arrives"
+        }
     }
 
     enum PermState { case ok, partial, ask, denied, unknown }
