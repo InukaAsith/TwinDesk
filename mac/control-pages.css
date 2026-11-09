@@ -103,7 +103,7 @@ input[type="text"]:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ac
 .value.addr { color: var(--text); font-variant-numeric: tabular-nums; user-select: text; }
 .row .hint.bad { color: var(--bad); }
 .row.with-ico .text { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; }
-.row.with-ico .os-ico { grid-row: span 2; }
+.row.with-ico .text > :first-child { grid-row: span 2; } /* the icon (a computer's, an app's) beside both lines */
 .os-ico { display: inline-block; position: relative; width: 22px; height: 14px; border: 2px solid var(--muted); border-radius: 3px; margin-bottom: 4px; }
 .os-ico.mac::after { content: ""; position: absolute; left: -5px; right: -5px; bottom: -5px; height: 2px; border-radius: 0 0 2px 2px; background: var(--muted); }
 .os-ico.phone { width: 11px; height: 17px; border-radius: 3px; margin: 0 5px 1px; }

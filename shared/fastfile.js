@@ -48,6 +48,7 @@ const READ_BYTES = 1024 * 1024; // read from disk at a time
 const CHUNK_BYTES = 512 * 1024; // bytes per file.chunk handed to the receiver
 const PULL_MS = 10000; // the guest didn't come for a file: it goes the old way
 const IDLE_MS = 30000; // no bytes this long: the transfer failed
+const RETRY2_MS = 60000; // fx2 failed before a byte went: the fx way this long, then fx2 is tried again (#143)
 
 // No TLS session resumption: a resumed connection has no peer certificate to pin.
 const agent = () => new https.Agent({ keepAlive: true, maxSockets: PARALLEL_SMALL + 2, rejectUnauthorized: false, maxCachedSessions: 0 });
@@ -76,7 +77,9 @@ class FastFiles {
     // guest's GETs); in2 id -> {hook, hashes, end} (a file the engine brings in); ends id -> hashes for
     // file.end; hooks: the receivers'.
     this.fx2 = opts.fx2 || null;
-    this.broken2 = false;
+    this.broken2Until = 0; // broken2 (below): fx2 failed early, the fx way until then
+    this.why2 = ''; // … and why, for Engines in use and the fallback notice
+    this.onFallback = null; // (info {from, to, why}) the app says it once (main.js)
     this.out2 = new Map();
     this.in2 = new Map();
     this.ends = new Map();
@@ -130,7 +133,17 @@ class FastFiles {
     if (this.broken) return { ...out, why: 'failed' };
     out.plain = this._plainNow(s);
     if (this.usable2()) return { ...out, next: 'fx2' };
-    return { ...out, next: 'fx', why: !this.fx2 ? 'off' : this.broken2 ? 'failed' : !s.fx2 ? 'peer' : 'engine' };
+    return { ...out, next: 'fx', why: !this.fx2 ? 'off' : this.broken2 ? 'failed' : !s.fx2 ? 'peer' : 'engine', detail: this.broken2 ? this.why2 : '' };
+  }
+
+  // fx2 failed before a byte went: the fx way for RETRY2_MS, not for the whole session (a passing
+  // hiccup, the engine restarting, doesn't keep a session slow).
+  get broken2() { return Date.now() < this.broken2Until; }
+  set broken2(v) { this.broken2Until = v ? Date.now() + RETRY2_MS : 0; if (!v) this.why2 = ''; }
+
+  _fellBack(from, to, why) {
+    console.warn(`[files] ${from} -> ${to}: ${why}`);
+    if (this.onFallback) try { this.onFallback({ from, to, why: String(why || '').slice(0, 200) }); } catch (_) { /* the app's */ }
   }
 
   _active() {
@@ -302,8 +315,9 @@ class FastFiles {
     if (this.usable2()) {
       return this._send2(s, id, path, size, onBytes).catch((e) => {
         if (!e.early) throw e;
-        console.warn(`[fx2] ${e.message}: files go the fx way for this session`);
         this.broken2 = true;
+        this.why2 = e.message;
+        this._fellBack('fx2', 'fx', e.message);
         return this.send(id, path, size, onBytes);
       });
     }
@@ -449,7 +463,7 @@ class FastFiles {
         if (this.outgoing.get(id) === w) this.outgoing.delete(id);
         if (w.rs) w.rs.destroy();
         if (!err) { this._note('fx', 'send'); return resolve(sha); }
-        if (err.early) this.broken = true;
+        if (err.early) { if (!this.broken) this._fellBack('fx', 'file.chunk', err.message); this.broken = true; }
         reject(err);
       };
       const to = this._to(s);
@@ -534,7 +548,7 @@ class FastFiles {
     clearTimeout(w.timer);
     if (w.rs) w.rs.destroy();
     if (w.res) w.res.destroy();
-    if (err.early && !w.sent) this.broken = true;
+    if (err.early && !w.sent) { if (!this.broken) this._fellBack('fx', 'file.chunk', err.message); this.broken = true; }
     else delete err.early;
     w.reject(err);
   }

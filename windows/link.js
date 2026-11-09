@@ -6,6 +6,7 @@
 // takes the session over (hello {resume}); the Bluetooth one stays as the fallback (alt).
 const WebSocket = require('ws');
 const P = require('../shared/protocol.js');
+const Quiet = require('../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { PairLimit, versionMessage } = require('../shared/pairlimit.js');
 
 const T = P.T;
@@ -76,6 +77,7 @@ class Link {
 
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    Quiet.sent(this.ws, obj);
     this.ws.send(JSON.stringify(obj));
     return true;
   }
@@ -340,6 +342,7 @@ class Link {
     }
     if (!msg || typeof msg.t !== 'string') return;
     this.lastRx = Date.now();
+    if (this.authed && Quiet.seen(ws, msg)) return; // `idle {on}`: the other end's side of a quiet link
     switch (msg.t) {
       case T.PAIR_NONCE: return this._onNonce(msg);
       case T.PAIR_OK: return this._onPairOk(msg);
@@ -417,11 +420,21 @@ class Link {
     }
     this.status.rtt = null;
     // Each socket on its own: a quiet fallback goes, the session lives on.
-    this.timers.ping = setInterval(() => {
+    const beat = () => {
       const now = Date.now();
       for (const ws of [this.ws, this.alt]) {
         if (!ws || !ws.transport) continue;
-        const rx = Math.max(ws.lastRx, (ws.transport === 'ble' && this.ble && this.ble.lastDown) || 0); // a big message's bytes count too
+        let rx = Math.max(ws.lastRx, (ws.transport === 'ble' && this.ble && this.ble.lastDown) || 0); // a big message's bytes count too
+        // Quiet links (shared/quiet.js): both ends idle, a ping every few minutes. Not through Bluetooth.
+        if (ws.transport !== 'ble' && ws.readyState === WebSocket.OPEN) {
+          const q = Quiet.tick(ws, now, rx, (m) => ws.send(JSON.stringify(m)));
+          if (q.quiet) {
+            if (q.dead) { if (ws === this.ws) this.lastError = '{Name} stopped answering'; ws.terminate(); }
+            else if (q.ping) ws.send(JSON.stringify({ t: T.PING, ts: now }));
+            continue;
+          }
+          rx = q.rx;
+        }
         if (now - rx > (ws.transport === 'ble' ? P.BLE_TIMEOUT_MS : P.TIMEOUT_MS)) {
           if (ws === this.ws) this.lastError = '{Name} stopped answering';
           ws.terminate();
@@ -430,7 +443,10 @@ class Link {
         }
       }
       this._tryResume();
-    }, P.PING_MS);
+    };
+    this._beat = beat;
+    if (!this.unquiet) this.unquiet = Quiet.onChange(() => { if (this.authed && this._beat) this._beat(); }); // a hold reaches the other end at once
+    this.timers.ping = setInterval(beat, P.PING_MS);
     this.takeover = false;
     this.busyBy = '';
     this._setStatus('connected', '');
@@ -542,6 +558,7 @@ class Link {
 
   _clearSocketTimers() {
     clearInterval(this.timers.ping);
+    this._beat = null;
     clearTimeout(this.timers.hello);
   }
 

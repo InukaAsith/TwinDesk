@@ -84,6 +84,7 @@ function setupWeb(c) {
       },
     } : null,
     // The viewer's mouse, keyboard and pen, aimed at the display it watches (the helper's screen pixels).
+    touch: true, // the viewer's fingers are real touch here (in.tc → the helper's `touch`)
     input: (bus, target) => {
       const ri = new RemoteInput({
         link: { get peerOs() { return apple(bus.current) ? P.OS.MAC : P.OS.WIN; } },
@@ -97,7 +98,8 @@ function setupWeb(c) {
         const d = target();
         if (!d) return;
         const r = rectOf(d);
-        ri.handle(m, (x, y) => helper.send('moveTo', at(r, x, y)), null, (x, y, pen) => helper.send('pen', { ...at(r, x, y), pen }));
+        ri.handle(m, (x, y) => helper.send('moveTo', at(r, x, y)), null, (x, y, pen) => helper.send('pen', { ...at(r, x, y), pen }),
+          false, (list) => helper.send('touch', RemoteInput.touchCmd(list, (x, y) => at(r, x, y))));
       });
       bus.on('closed', () => ri.release());
       return ri;
@@ -117,6 +119,11 @@ function setupWeb(c) {
       opts: () => { const w = settings().web; return { music: w.airplayMusic !== false, sound: w.airplaySound !== false, full: w.airplayFull === true }; } }),
     fileClip: c.fileClip && c.fileClip.offerLocal ? c.fileClip : null,
   });
+  // An iPhone's or iPad's Show screen: its Screen Mirroring can come here instead (shared/nativescreen.js).
+  require('../shared/nativescreen.js').NativeScreen.airplay = () => {
+    if (!settings().web.airplay) web.actions.webAirplaySet(true);
+    return c.device().name;
+  };
   for (const [name, fn] of Object.entries(web.actions)) ipcMain.handle(name, (_e, arg) => fn(arg));
   return web;
 }

@@ -245,7 +245,7 @@ const send = (m) => inputOn && session !== null && api.send(m);
 function onMove(e) {
   pokeBar(e.clientY);
   if (e.target && bar.contains(e.target)) return;
-  if (!inputOn) return;
+  if (!inputOn || e.pointerType === 'pen' || window.TDViewerPen.recent()) return; // a pen's mouse: viewer-pen.js sent it
   const p = norm(e, heldButtons.size > 0);
   if (!p) return;
   lastPos = p;
@@ -257,7 +257,7 @@ window.addEventListener('mousedown', (e) => {
   e.preventDefault();
   const b = BUTTONS[e.button];
   const p = norm(e, false);
-  if (!inputOn || b === undefined || !p) return;
+  if (!inputOn || b === undefined || !p || window.TDViewerPen.recent()) return;
   heldButtons.add(b);
   lastPos = p;
   send({ t: T.IN_DOWN, x: p.x, y: p.y, b });
@@ -266,12 +266,15 @@ window.addEventListener('mousedown', (e) => {
 window.addEventListener('mouseup', (e) => {
   e.preventDefault();
   const b = BUTTONS[e.button];
-  if (!inputOn || b === undefined || !heldButtons.has(b)) return;
+  if (!inputOn || b === undefined || !heldButtons.has(b) || window.TDViewerPen.recent()) return;
   const p = norm(e, true) || lastPos;
   heldButtons.delete(b);
   lastPos = p;
   send({ t: T.IN_UP, x: p.x, y: p.y, b });
 });
+
+// A pen (an Apple Pencil over Sidecar, a tablet): a pen on the PC too (shared/viewer-pen.js).
+window.TDViewerPen.attach({ norm, send, enabled: () => inputOn && session !== null });
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('auxclick', (e) => e.preventDefault());

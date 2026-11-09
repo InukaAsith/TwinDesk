@@ -203,6 +203,7 @@ function setupIpc(ctx) {
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));
   handle('cancelDrop', () => fileDrop.cancel());
+  handle('clearFiles', () => ctx.clearFiles && ctx.clearFiles());
   handle('setPcScreen', (partial) => {
     const size = settings.pcScreen.extendSize;
     change('pcScreen', partial, () => { pcScreen.applyInput(); if (!settings.pcScreen.input) pcApps.input.release(); if (settings.pcScreen.extendSize !== size) pcScreen.sizeExtend(); else pcScreen.apply(); });

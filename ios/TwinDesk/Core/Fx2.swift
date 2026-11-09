@@ -46,8 +46,12 @@ enum Fx2 {
     }
 
     // Our file, PUT in its ranges at once. progress and done come on the main queue.
-    static func put(_ to: To, id: String, url: URL, size: Int64, progress: @escaping (Int64) -> Void, done: @escaping Done) {
-        Job(to, id: id, url: url, size: size, put: true, progress: progress, done: done).start()
+    // Returns its stop (Cancel on the Files page): done then fails with "cancelled".
+    @discardableResult
+    static func put(_ to: To, id: String, url: URL, size: Int64, progress: @escaping (Int64) -> Void, done: @escaping Done) -> () -> Void {
+        let j = Job(to, id: id, url: url, size: size, put: true, progress: progress, done: done)
+        j.start()
+        return { j.cancel() }
     }
 
     // The computer's file, its ranges fetched at once into `url` (truncated to `size` first).
@@ -84,6 +88,8 @@ enum Fx2 {
             }
             for r in plan { open(r) }
         }
+
+        func cancel() { fail("cancelled") }
 
         private func fail(_ why: String) {
             q.async {

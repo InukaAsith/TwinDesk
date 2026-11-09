@@ -48,6 +48,8 @@
   }
 
   window.monitorNorm = (e) => norm(e, false); // also used by monitor-drop.js
+  // A pen: a pen on the Mac too (shared/viewer-pen.js).
+  window.TDViewerPen.attach({ norm, send, enabled: () => enabled });
   window.monitorInputEnabled = () => enabled; // also used by monitor-apps.js
 
   function flushMove() {
@@ -59,7 +61,7 @@
   }
 
   window.addEventListener('mousemove', (e) => {
-    if (!enabled) return;
+    if (!enabled || window.TDViewerPen.recent()) return; // a pen's mouse: viewer-pen.js sent it
     const p = norm(e, heldButtons.size > 0);
     if (!p) return;
     pendingMove = p; // latest position wins
@@ -67,7 +69,7 @@
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (!enabled) return;
+    if (!enabled || window.TDViewerPen.recent()) return; // a pen's mouse: viewer-pen.js sent it
     e.preventDefault();
     const b = BUTTONS[e.button];
     const p = norm(e, false);
@@ -80,7 +82,7 @@
   });
 
   window.addEventListener('mouseup', (e) => {
-    if (!enabled) return;
+    if (!enabled || window.TDViewerPen.recent()) return; // a pen's mouse: viewer-pen.js sent it
     e.preventDefault();
     const b = BUTTONS[e.button];
     if (b === undefined || !heldButtons.has(b)) return;

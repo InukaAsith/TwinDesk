@@ -14,6 +14,7 @@
     <button id="b-kbd" class="pad-only" aria-label="Keyboard">Keyboard</button>
     <button id="b-map" class="game-only" aria-label="Keys">Keys</button>
     <button id="b-edit" class="game-only" aria-label="Edit layout">Edit</button>
+    <button id="v-clear" class="voice-only" aria-label="Clear">Clear</button>
     <button id="b-close" aria-label="Close">✕</button>
   </header>
   <div id="note" hidden><span id="note-text"></span><button id="note-on" hidden>Turn on Remote</button></div>
@@ -26,6 +27,23 @@
       <button id="b-left">Left click</button>
       <button id="b-right">Right click</button>
     </div>
+  </section>
+
+  <!-- Voice typing: the phone's own keyboard dictation (Gboard's microphone, iOS Dictation) types
+       into this box, and what it types goes to the computer as it appears (remote.js, voiceSync). -->
+  <section id="voice-view" class="voice-only">
+    <div id="voice-card">
+      <textarea id="voice" autocapitalize="sentences" autocomplete="off" autocorrect="on" spellcheck="true" enterkeyhint="enter"
+        placeholder="Tap here, then the microphone on your keyboard, and speak"></textarea>
+      <div id="voice-status"><span id="voice-dot"></span><span id="voice-hint"></span></div>
+    </div>
+    <div id="voice-keys">
+      <button id="v-word" aria-label="Delete word">⌫ Word</button>
+      <button id="v-space" aria-label="Space">Space</button>
+      <button id="v-tab" aria-label="Tab">Tab</button>
+      <button id="v-enter" class="primary" aria-label="Enter">Enter ⏎</button>
+    </div>
+    <p id="voice-help">Uses your keyboard's own voice typing: Gboard's microphone, or Dictation on iPhone. Each word appears on the computer as it shows here; fixes are typed there too. Clear starts a new box without deleting anything on the computer.</p>
   </section>
 
   <!-- Gamepad: each button presses the key set for it (Keys), or is a real controller's -->

@@ -7,13 +7,19 @@ import Foundation
 import UIKit
 
 final class Notifs: Feature {
+    struct Item: Identifiable { let id = UUID(); let app: String; let title: String; let body: String; let at = Date() }
     private(set) var shown = 0
+    private(set) var recent: [Item] = [] // this session's, newest first (the Overview's card)
 
     func sendPolicy() {
         core.send(msg(Proto.T.notifPolicy, ["accept": core.sync.get("notifs", "in")]))
     }
 
-    override func onWelcome(_ host: Computer, _ m: JSON) { sendPolicy() }
+    override func onWelcome(_ host: Computer, _ m: JSON) {
+        if host.id != lastHost { recent = []; lastHost = host.id } // another computer's aren't its
+        sendPolicy()
+    }
+    private var lastHost: String?
 
     override func onMessage(_ t: String, _ m: JSON) -> Bool {
         guard t == Proto.T.notif else { return t == Proto.T.notifPolicy }
@@ -23,6 +29,8 @@ final class Notifs: Feature {
         Notifier.shared.fromComputer(id: m.str("id", max: 200), app: app, title: m.str("title", max: 300), body: body,
                                      computer: core.link.host?.name ?? "Computer")
         shown += 1
+        recent.insert(Item(app: app, title: m.str("title", max: 300), body: body), at: 0)
+        if recent.count > 20 { recent.removeLast(recent.count - 20) }
         core.changed()
         return true
     }

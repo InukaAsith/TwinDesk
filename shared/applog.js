@@ -6,7 +6,7 @@
 // .2.log). Crashes
 // (an uncaught exception or rejection here, a window's renderer or another Electron process gone)
 // go to crash.log as well (1 MB × 2: crash.log, crash.1.log; the same crash again is a count), and
-// the app goes on as before. With TWINDESK_LINK_STATS=1, while connected,
+// the app goes on as before. With TWINDESK_LINK_STATS=1, while connected (to link-stats.log, not TwinDesk.log),
 // once every 30 s, one line on the link: round trip p50/p95/p99/max, the input lane's (shared/inputlane.js) when it's
 // up, pointer moves a second, bytes queued on the socket, and how long the main thread's event loop
 // was held up (p99 and max: garbage collection, sync writes, IPC).
@@ -189,6 +189,19 @@ function pct(sorted, p) {
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p + 0.5))];
 }
 
+// The link line goes to its own file (link-stats.log, 1 MB × 2), apart from TwinDesk.log's events (#143:
+// a log full of measurements hid what happened). Before start() (no folder): the console.
+function statsLine(line) {
+  if (!folder) return void console.log(line);
+  const f = path.join(folder, 'link-stats.log');
+  try {
+    let n = 0;
+    try { n = fs.statSync(f).size; } catch (_) { /* none yet */ }
+    if (n > crashMax) fs.renameSync(f, path.join(folder, 'link-stats.1.log'));
+    fs.appendFileSync(f, `${stamp()} ${line}\n`);
+  } catch (_) { /* a full disk: no stats */ }
+}
+
 // The link line every 30 s while connected (sample: see above). Moves: shared/kvm-moves.js counts them.
 // Off unless TWINDESK_LINK_STATS=1 (a developer's measurement): its sampling (a 10 ms event-loop
 // monitor and a 1 s timer) would wake the app all day, and its line would go to disk every 30 s.
@@ -224,7 +237,7 @@ function linkStats(sample, everyMs = STATS_MS, sampleMs = 1000) {
       const lane = ls.length ? `, lane p50 ${ls[Math.floor((ls.length - 1) / 2)].toFixed(1)} ms / max ${ls[ls.length - 1].toFixed(1)} ms` : '';
       const perSec = Math.round((KvmMoves.count - moves) / ((now - since) / 1000));
       const lp = loop && loop.count ? `, loop p99 ${(loop.percentile(99) / 1e6).toFixed(1)} ms / max ${(loop.max / 1e6).toFixed(1)} ms` : '';
-      console.log(`[link] ${rtt}${lane}, kvm moves ${perSec}/s, queued max ${queuedMax} bytes${lp}`);
+      statsLine(`[link] ${rtt}${lane}, kvm moves ${perSec}/s, queued max ${queuedMax} bytes${lp}`);
     }
     if (loop) loop.reset();
     rtts = [];

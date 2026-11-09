@@ -85,7 +85,7 @@ private fun Segments(items: List<Pair<String, String>>, selected: String, onPick
 private fun PlayTab(core: Core, name: String) {
     val m = core.pcMedia
     val now = m.now
-    if (core.host == null) Note("Connect to $name to see and control what plays there.")
+    if (core.host == null) Note("Connect to $name to view and control its media.")
     MacCard {
         Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             // The art: the computer doesn't send any, so the app's place in TwinDesk's colours.
@@ -116,9 +116,9 @@ private fun PlayTab(core: Core, name: String) {
     }
     Note(
         when (core.host?.os) {
-            "mac" -> "On a Mac, TwinDesk sees Music and Spotify. Other players still take Play/Pause, Next and Previous as media keys."
+            "mac" -> "On a Mac, TwinDesk sees any app in its Now Playing, YouTube in a browser too."
             "linux" -> "On Linux, TwinDesk sees any player that supports MPRIS (most do), through playerctl."
-            else -> "TwinDesk sees the player Windows shows in its own media controls: browsers, Spotify, Media Player and others."
+            else -> "TwinDesk controls the player shown in Windows media controls, such as browsers, Spotify and Media Player."
         },
     )
 }
@@ -143,7 +143,7 @@ private fun ComputerVolume(core: Core, name: String, first: Boolean = true, inCa
         when {
             core.host == null -> MacRow(name, "Not connected", first = first)
             c == null -> MacRow(name, "Waiting for $name…", first = first)
-            !can || level < 0 -> MacRow(name, "Its volume can’t be changed from here. Update TwinDesk on $name.", first = first)
+            !can || level < 0 -> MacRow(name, "Volume control requires a newer version of TwinDesk on $name.", first = first)
             else -> VolumeRow(name, Ico.display, level.toFloat(), first) { core.dev.ask("volume", "level" to it.toDouble()) }
         }
     }
@@ -200,5 +200,5 @@ private fun DevicesTab(core: Core, name: String) {
             }
         }
     }
-    Note("Changes on $name apply to its main output. The phone’s own volume keys move these sliders too.")
+    Note("Changes apply to the main output on $name. The phone’s volume buttons also adjust these sliders.")
 }

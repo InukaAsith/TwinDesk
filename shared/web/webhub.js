@@ -170,7 +170,7 @@ class WebHub extends EventEmitter {
       this.capture.on('out', (m) => this.screenDev && this._sendRtc(this.screenDev, m));
       this.capture.on('status', (status) => {
         this.screen.status = status;
-        if (this.screenDev) this._send(this.screenDev, { t: 'screen.state', status, on: status !== 'off', video: this.screen.video, audio: this.screen.audio });
+        if (this.screenDev) this._send(this.screenDev, { t: 'screen.state', status, on: status !== 'off', video: this.screen.video, audio: this.screen.audio, touch: !!this.touch });
         this.emit('change');
       });
     }
@@ -613,7 +613,7 @@ class WebHub extends EventEmitter {
       this._sendWs(ws, { t: 'notifs.all', items: this.notifs });
       this._wantNotifs();
     }
-    this._sendWs(ws, { t: 'screen.state', status: this.screenDev === dev.id ? this.screen.status : 'off' });
+    this._sendWs(ws, { t: 'screen.state', status: this.screenDev === dev.id ? this.screen.status : 'off', touch: !!this.touch });
     this._sendWs(ws, this._alertsMsg(dev));
     if (this.devLocal) this._devState().then((x) => this._sendWs(ws, x));
     if (this.smbInfo) this._sendWs(ws, this._mount());

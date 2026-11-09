@@ -167,20 +167,25 @@ class Remote(core: Core) : Feature(core) {
     }
 }
 
-// Full screen: the touchpad and keyboard (any way up), or the gamepad (held sideways).
+// Full screen: the touchpad and keyboard (any way up), the gamepad (held sideways), or voice typing.
 class RemoteActivity : ComponentActivity() {
     private var host: WebHost? = null
     private var mode = "pad"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        mode = if (intent.getStringExtra("mode") == "gamepad") "gamepad" else "pad"
+        mode = when (intent.getStringExtra("mode")) { "gamepad" -> "gamepad"; "voice" -> "voice"; else -> "pad" }
         if (mode == "gamepad") requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        // Voice typing keeps the system bars, and the page sits inside them and above the keyboard
+        // (edge to edge is enforced, so by the insets: below), its box and keys in sight while
+        // Gboard's microphone listens.
+        if (mode != "voice") {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowInsetsControllerCompat(window, window.decorView).apply {
+                hide(WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
         }
         val h = WebHost(this, "remote.html", Core.get(this)) { ev, _ ->
             when (ev) {
@@ -195,7 +200,16 @@ class RemoteActivity : ComponentActivity() {
             }
         }
         host = h
-        setContentView(h.view)
+        if (mode == "voice") {
+            val frame = android.widget.FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.rgb(11, 11, 13)) }
+            frame.addView(h.view, android.widget.FrameLayout.LayoutParams(-1, -1))
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(frame) { v, ins ->
+                val b = ins.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime() or WindowInsetsCompat.Type.displayCutout())
+                v.setPadding(b.left, b.top, b.right, b.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+            setContentView(frame)
+        } else setContentView(h.view)
     }
 
     override fun onStart() {

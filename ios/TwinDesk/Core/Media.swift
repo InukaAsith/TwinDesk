@@ -17,6 +17,7 @@ import AudioToolbox
 final class PcMedia: Feature {
     struct Now: Equatable { var title = "", artist = "", album = "", app = "", playing = false }
     private(set) var now: Now?
+    private(set) var art: UIImage? // the computer's artwork for what plays (pc.media's art; left out there: unchanged)
     private var pageOpen = false
 
     var lockScreen: Bool { core.store.flag("media.lockScreen", true) }
@@ -35,7 +36,7 @@ final class PcMedia: Feature {
         if w == wanted { return }
         wanted = w
         core.send(msg(Proto.T.pcMediaWant, ["on": w]))
-        if !w && !pageOpen { now = nil; show() }
+        if !w && !pageOpen { now = nil; art = nil; show() }
     }
 
     func ctl(_ a: String) { core.send(msg(Proto.T.pcMediaCtl, ["a": a])) }
@@ -49,12 +50,17 @@ final class PcMedia: Feature {
     override func onClosed() {
         wanted = false
         now = nil
+        art = nil
         show()
     }
 
     override func onMessage(_ t: String, _ m: JSON) -> Bool {
         guard t == Proto.T.pcMedia else { return false }
-        if m.bool("none") || m.str("title").isEmpty { now = nil }
+        if let a = m["art"] as? String {
+            art = nil
+            if a.hasPrefix("data:image/"), let comma = a.firstIndex(of: ","), let d = Data(base64Encoded: String(a[a.index(after: comma)...])) { art = UIImage(data: d) }
+        }
+        if m.bool("none") || m.str("title").isEmpty { now = nil; art = nil }
         else { now = Now(title: m.str("title", max: 300), artist: m.str("artist", max: 300), album: m.str("album", max: 300), app: m.str("app", max: 60), playing: m.bool("playing")) }
         show()
         core.changed()
@@ -82,13 +88,15 @@ final class PcMedia: Feature {
             Background.shared.setNowPlaying(false)
             return
         }
-        center.nowPlayingInfo = [
+        var info: [String: Any] = [
             MPMediaItemPropertyTitle: n.title,
             MPMediaItemPropertyArtist: n.artist.isEmpty ? (core.host?.name ?? "Computer") : n.artist,
             MPMediaItemPropertyAlbumTitle: n.album.isEmpty ? "\(n.app) on \(core.host?.name ?? "the computer")" : n.album,
             MPNowPlayingInfoPropertyPlaybackRate: n.playing ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyIsLiveStream: true,
         ]
+        if let img = art { info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: img.size) { _ in img } }
+        center.nowPlayingInfo = info
         // iOS shows Now Playing for the app whose sound doesn't mix with others: ours, while the
         // computer plays (the silent sound, not mixed then).
         if n.playing { Background.shared.setNowPlaying(true) }
@@ -175,7 +183,7 @@ final class DevCtl: Feature {
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
             if n >= 30 { t.invalidate(); self?.stopRing() }
         }
-        Notifier.shared.note("ring", "\(core.host?.name ?? "Your computer") is looking for this \(Device.word)", "Open TwinDesk to stop the sound.", sound: true)
+        Notifier.shared.note("ring", "\(core.host?.name ?? "Your computer") is ringing this \(Device.word)", "Open TwinDesk to stop the sound.", sound: true)
         core.changed()
     }
 

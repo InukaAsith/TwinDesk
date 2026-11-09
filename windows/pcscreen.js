@@ -290,7 +290,7 @@ class PcScreen {
   // screen.state after welcome and whenever any of it changes (called with every state push).
   sendState() {
     if (this.link.status.state !== 'connected') return void (this.stateKey = '');
-    const msg = { t: T.SCREEN_STATE, on: this.mode !== 'off', mode: this.mode, remote: this.cfg.remote, modes: this._modes() };
+    const msg = { t: T.SCREEN_STATE, on: this.mode !== 'off', mode: this.mode, remote: this.cfg.remote, modes: this._modes(), touch: true };
     const key = JSON.stringify(msg);
     if (key === this.stateKey) return;
     this.stateKey = key;
@@ -336,7 +336,8 @@ class PcScreen {
     if (!this.sending || m.wid != null) return;
     const r = this.sending.rect;
     const at = (x, y) => ({ x: Math.round(r.x + x * (r.width - 1)), y: Math.round(r.y + y * (r.height - 1)) });
-    this.input.handle(m, (x, y) => this.helper.send('moveTo', at(x, y)), null, (x, y, pen) => this.helper.send('pen', { ...at(x, y), pen }));
+    this.input.handle(m, (x, y) => this.helper.send('moveTo', at(x, y)), null, (x, y, pen) => this.helper.send('pen', { ...at(x, y), pen }),
+      false, (list) => this.helper.send('touch', RemoteInput.touchCmd(list, at)));
   }
 
   applyInput() {

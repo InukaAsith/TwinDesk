@@ -145,4 +145,15 @@ assert.strictEqual(M.targetSection('connection', 'phone', winIds), 'overview', '
 assert.strictEqual(M.targetSection('overview', 'computer', winIds), 'overview', 'a device’s Overview stays one');
 assert.strictEqual(M.targetSection(null, 'computer', ['general']), 'general', 'last resort: whatever exists');
 
+
+// an iPhone or iPad is a phone: its tile and its sections, not a computer's
+assert.strictEqual(M.kindOf('ios'), 'phone');
+assert.strictEqual(M.selectedKind([{ id: 'i', os: 'ios', connected: true, selected: true }]), 'phone');
+{
+  const t = M.buildTiles({ peers: [{ id: 'i', name: 'iPad', os: 'ios', state: 'connected', connected: true, selected: true }], phones: [{ id: 'i', name: 'iPad', os: 'ios', connected: true }] });
+  assert.strictEqual(t.length, 1, 'one tile for the iPad');
+  assert.strictEqual(t[0].kind, 'phone');
+  assert.strictEqual(t[0].os, 'ios');
+}
+
 console.log('sidebar-model: all passed');

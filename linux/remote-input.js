@@ -24,16 +24,28 @@ class RemoteInput {
   // without it, the stylus is a mouse.
   // force: a window moved there with Move windows (shared/movewin.js), whose copy takes input even
   // while this computer drives the other one (it is the only place that window is used).
-  handle(m, move, before, pen, force) {
+  // touch(list): in.tc's fingers [[id, x, y], …] normalized (P.touchesOf), [] = all lifted; without
+  // it (an app window) touch is ignored (the viewer only sends it where screen.state says touch).
+  handle(m, move, before, pen, force, touch) {
     if (!force && !this.allowed) return;
     if (force) this.forced = true;
     const ev = (e) => this.helper.send('inject', { ev: e });
+    if (m.t === T.IN_TOUCH) {
+      const list = touch && P.touchesOf(m.p);
+      if (!list) return;
+      if (list.length && !this.touching && before) before();
+      this.touching = list.length > 0;
+      touch(list);
+      this.held = true;
+      return;
+    }
     if (POINTER.has(m.t)) {
       const x = Number(m.x), y = Number(m.y);
       const st = pen && P.penOf(m.pen);
       if (st) {
         if (!Number.isFinite(x) || !Number.isFinite(y)) return;
         if (m.t === T.IN_DOWN && before) before();
+        if (m.t === T.IN_MOVE) for (const q of P.penPoints(m.pts, st)) pen(q.x, q.y, q.pen); // the stroke's samples before this one
         pen(Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y)), st);
         if (m.t === T.IN_DOWN) this.held = true;
         return;
@@ -65,5 +77,9 @@ class RemoteInput {
   }
 }
 
-RemoteInput.TYPES = [T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL, T.IN_KEY_DOWN, T.IN_KEY_UP];
+// The helper's `touch` command: in.tc's fingers at the helper's pixels (at(x, y) → {x, y}), as
+// "id,x,y;id,x,y" (the helpers' JSON readers take no arrays).
+RemoteInput.touchCmd = (list, at) => ({ p: list.map(([i, x, y]) => { const a = at(x, y); return `${i},${a.x},${a.y}`; }).join(';') });
+
+RemoteInput.TYPES = [T.IN_TOUCH, T.IN_MOVE, T.IN_DOWN, T.IN_UP, T.IN_WHEEL, T.IN_KEY_DOWN, T.IN_KEY_UP];
 module.exports = RemoteInput;

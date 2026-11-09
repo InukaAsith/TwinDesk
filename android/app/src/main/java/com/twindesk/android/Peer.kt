@@ -1,6 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Connect with Android: this phone and another phone with TwinDesk, side by side with the computer's
-// session (Core.link) and never in its way. Its own link, its own paired list, its own port.
+// Connect with Android: this phone and another phone with TwinDesk. One session at a time, as on the
+// computers: a phone's session ends the computer's (Core.link) and a computer's ends the phone's, and
+// while a phone is connected the app's pages are that phone's (only what both can do: peer.info's
+// caps). Its own link, its own paired list, its own port.
 //
 // Roles: the phone that taps Connect is the guest, the other the host. The host runs PeerServer
 // (always, with "Host for other phones" on; else only when asked: peer.ask over discovery, which a
@@ -88,6 +90,19 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     @Volatile private var hostWs: PeerServer.Ws? = null
     @Volatile private var key = "" // the session's key for its HTTPS requests
     val connected get() = role.isNotEmpty()
+    // The other phone: its os (from pairing or its hello) and what it can do (peer.info's caps).
+    @Volatile var peerOs = ""; private set
+    @Volatile private var peerCaps: Set<String>? = null
+    fun can(c: String): Boolean = c in (peerCaps ?: defaultCaps(peerOs))
+    // What this phone offers the other: the same names in our peer.info.
+    fun myCaps(): Set<String> = buildSet {
+        addAll(listOf("clip", "notifs", "files", "screen", "photos"))
+        if (core.hub.perm("messages") != "none") add("messages")
+        if (core.hub.perm("files") != "none") add("fs")
+    }
+    // A phone older than caps: an iPhone has no messages or storage to browse; an Android phone has all.
+    private fun defaultCaps(os: String) = if (os == "ios") setOf("clip", "notifs", "files", "screen", "photos")
+        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs")
     @Volatile var message = ""; private set
 
     // ---- pairing, as the host (mac/pairing.js) ----
@@ -199,6 +214,8 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         role = "guest"
         peerId = host.id
         peerName = host.name
+        peerOs = host.os
+        peerCaps = null
         key = ""
         // A token for the other way (it can connect to us later, without pairing again), and our certificate.
         val token = Proto.randomHex(32)
@@ -321,6 +338,8 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         role = "host"
         peerId = id
         peerName = m.optString("name").take(64).ifEmpty { e.optString("name") }
+        peerOs = m.optString("os").take(20)
+        peerCaps = null
         e.put("name", peerName); val g = guests(); g.put(id, e); store.setPrefsString(GUESTS, g.toString())
         key = Proto.randomHex(16)
         ws.send(msg(Proto.T.WELCOME, "v" to Proto.VERSION, "macId" to store.deviceId, "macName" to store.deviceName, "os" to Proto.OS).toString())
@@ -343,7 +362,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private fun started() {
         Log.i("TwinDesk", "peer: session with $peerName as $role")
         message = ""
-        send(msg("peer.info", "model" to android.os.Build.MODEL))
+        send(msg("peer.info", "model" to android.os.Build.MODEL, "os" to Proto.OS, "caps" to JSONArray(myCaps().toList())))
+        // One session: the computer's ends (Core.connect and Core.onWelcome end ours the other way).
+        if (core.link.connected || core.link.state == "connecting") { Log.i("TwinDesk", "peer: ending the computer's session for $peerName"); core.disconnect() }
         core.changed()
     }
 
@@ -351,6 +372,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         Log.i("TwinDesk", "peer: session with $peerName ended")
         role = ""
         key = ""
+        peerCaps = null
         val waiting = calls.values.toList()
         calls.clear()
         main.post { for (cb in waiting) runCatching { cb(JSONObject().put("error", "Disconnected")) } }
@@ -370,7 +392,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 val last = asked
                 if (last != null && last.id == f.id) return
                 asked = f
-                Notify.peer(ctx, "${f.name} wants to connect", "Open TwinDesk to let it connect to this phone.")
+                Notify.peer(ctx, "${f.name} wants to connect", "Open TwinDesk to allow the connection.")
                 core.changed()
             }
             "peer.hosting" -> {
@@ -406,7 +428,12 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private fun dispatch(m: JSONObject) {
         when (m.optString("t")) {
             "peer.key" -> key = m.optString("key").take(64)
-            "peer.info" -> { peerModel = m.optString("model").take(80); core.changed() }
+            "peer.info" -> {
+                peerModel = m.optString("model").take(80)
+                m.optString("os").take(20).takeIf { it.isNotEmpty() }?.let { peerOs = it }
+                m.optJSONArray("caps")?.let { a -> peerCaps = (0 until a.length()).map { a.optString(it).take(20) }.toSet() }
+                core.changed()
+            }
             // The other way: the guest can be reached as a host too, with this token.
             "peer.rev" -> if (role == "host") {
                 val token = m.optString("token")

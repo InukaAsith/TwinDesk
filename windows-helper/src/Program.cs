@@ -27,6 +27,7 @@ namespace MacShare
         static Capture capture;
         static Injector injector;
         static Stylus stylus; // a phone's stylus (Stylus.cs)
+        static Touch touch; // a viewer's fingers (Touch.cs)
         static Smoother smoother; // the phone Remote's moves, eased out (k.mm with smooth)
         static ClipWatch clipWatch; // "clipboard" events: something was copied (ClipWatch.cs)
         static DropEdge dropEdge;
@@ -55,6 +56,7 @@ namespace MacShare
             capture = new Capture(Emit);
             injector = new Injector();
             stylus = new Stylus(injector);
+            touch = new Touch(injector);
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
@@ -308,7 +310,7 @@ namespace MacShare
                         injector.Apply(ev);
                         break;
                     case "lane": Lane.Handle(c); break; // the input lane in the helper (Lane.cs)
-                    case "releaseAll": smoother.Clear(); stylus.Leave(); injector.ReleaseAll(); break;
+                    case "releaseAll": smoother.Clear(); stylus.Leave(); touch.Leave(); injector.ReleaseAll(); break;
                     case "toastProgress": // a live toast with a progress bar (Toast.cs)
                         Toast.Progress(Json.Str(c, "aumid", ""), Json.Str(c, "tag", "files"), Json.Str(c, "title", ""), Json.Str(c, "status", ""), Json.Num(c, "value", -1), Json.Str(c, "label", ""));
                         break;
@@ -320,6 +322,7 @@ namespace MacShare
                         Dictionary<string, object> st = Json.Obj(c, "pen");
                         if (st != null) stylus.At((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0), st);
                         break;
+                    case "touch": touch.Set(Json.Str(c, "p", "")); break; // a viewer's fingers on this PC's screen (Touch.cs)
                     case "displays": c["displays"] = Display.List(); break;
                     case "usbWatch": c["present"] = UsbWatch.Present(); break; // current ADB phone state; UsbWatch.cs fires usbAdb events on change
                     case "wlanProfile": // add a Wi-Fi profile from inline XML — no temp file (wifi.js)

@@ -43,7 +43,7 @@ UI.tab({
   icon: 'call',
   color: 'linear-gradient(#5ee07a, #30b94d)',
   desc: tr('Answer and make your phone’s calls here.'),
-  hidden: (s) => !UI.isPhone(s), // only while a phone is connected
+  for: ['android'], // iOS gives no app its calls or texts (shared/ui-kinds.js)
   master: { get: (s) => !!(s.hub && s.hub.calls), set: (v) => UI.api.hub({ do: 'set', what: 'calls', on: v }) },
   badge: (s) => (s.hub && s.hub.call ? 'warn' : s.hub && s.hub.calls ? 'on' : ''),
   build(body, page) {

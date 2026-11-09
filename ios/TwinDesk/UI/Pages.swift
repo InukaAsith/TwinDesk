@@ -20,7 +20,7 @@ struct ReceiveScreenView: View {
                                detail: statusLine)
                     Button { ui.cover = .viewer } label: { Label("Show It Here", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity) }
                         .primaryButton().controlSize(.large).disabled(!core.connected)
-                    Text("Mirror shows its screen as it is; Extend makes this \(Device.word) a second screen for it, sized to this one. Switch in the bar at the top (tap the handle).")
+                    Text("Mirror shows the computer’s screen. Extend uses this \(Device.word) as a second display, sized to fit. Switch modes from the bar at the top (tap the handle).")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
@@ -33,28 +33,30 @@ struct ReceiveScreenView: View {
                     }
                     .pickerStyle(.segmented)
                     Text(core.screen.touchpad
-                         ? "Slide to move the pointer, tap to click, hold for a right click, two fingers to scroll."
-                         : "Your finger is the pointer: tap to click, drag to drag, hold for a right click, two fingers to scroll. No cursor to steer.")
+                         ? "Slide to move the pointer, tap to click, touch and hold to right-click, and scroll with two fingers."
+                         : "The pointer follows your finger: tap to click, drag to drag, touch and hold to right-click, and scroll with two fingers.")
                         .font(.caption).foregroundStyle(.secondary)
                     Divider()
-                    ToggleRow(title: "Apple Pencil as a pen", detail: "Its pressure, tilt and eraser, as a drawing tablet's pen there. Off: a mouse", on: opt("screen.pen", true))
+                    ToggleRow(title: "Apple Pencil as a pen", detail: "Pressure, tilt and eraser, as a drawing tablet on the computer. When off, Apple Pencil acts as a mouse", on: opt("screen.pen", true))
                     Divider()
-                    ToggleRow(title: "Play its sound", detail: "With the picture", on: opt("screen.sound", true))
+                    ToggleRow(title: "Fast writing", detail: "Lines reach the computer a little sooner but can lose points along the way. Leave off for smooth drawing and handwriting", on: opt("screen.penFast", false))
                     Divider()
-                    ToggleRow(title: "Smooth", detail: "Evener motion, a frame later. Off: the least delay", on: opt("screen.smooth", false))
+                    ToggleRow(title: "Play the computer’s sound", detail: "Along with the screen", on: opt("screen.sound", true))
+                    Divider()
+                    ToggleRow(title: "Smooth", detail: "Smoother playback with about one frame of added delay", on: opt("screen.smooth", false))
                 }
                 .glassCard()
             } right: {
                 VStack(alignment: .leading, spacing: 10) {
                     CardHeader(symbol: "keyboard", color: Color(white: 0.45), title: "Keyboard and mouse")
-                    Text("A keyboard, mouse or trackpad on this \(Device.word) works on the computer while its screen is here; the Keyboard button in the bar shows the on-screen one.")
+                    Text("A keyboard, mouse or trackpad connected to this \(Device.word) controls the computer while its screen is shown. The Keyboard button in the bar opens the on-screen keyboard.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .glassCard()
                 VStack(alignment: .leading, spacing: 10) {
-                    CardHeader(symbol: "cable.connector", color: TDColor.good, title: "Smoothest on the cable")
-                    Text("Plugged into the computer, the picture goes through the USB cable: no Wi-Fi in the way.")
+                    CardHeader(symbol: "cable.connector", color: TDColor.good, title: "Best over USB")
+                    Text("When connected by USB, the screen is sent over the cable instead of Wi-Fi.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -65,9 +67,9 @@ struct ReceiveScreenView: View {
 
     private var statusLine: String {
         guard core.connected else { return "Not connected" }
-        if core.screen.viewing { return "Showing here" }
+        if core.screen.viewing { return "Showing on this \(Device.word)" }
         if core.screen.sharing { return "Sharing (\(core.screen.mode == "extend" ? "Extend" : "Mirror"))" }
-        return core.screen.remote ? "Starts when you open it" : "Start sharing on the computer"
+        return core.screen.remote ? "Starts when opened" : "Start sharing on the computer"
     }
 
     private func opt(_ k: String, _ def: Bool) -> Binding<Bool> {
@@ -200,20 +202,30 @@ struct ShareScreenView: View {
                 ShareScreenCard()
                 VStack(alignment: .leading, spacing: 10) {
                     Text("How it works").font(.headline)
-                    Text("Like presenting in a call: everything on this \(Device.word)’s screen, in every app, shows in a window on \(core.host?.name ?? "the computer") until you stop it (the red pill at the top, or Control Center).")
+                    Text("Like presenting in a video call: this \(Device.word)’s entire screen appears in a window on \(core.host?.name ?? "the computer") until you stop sharing (the red indicator at the top, or Control Center).")
                         .font(.subheadline).foregroundStyle(.secondary)
-                    Text("iOS asks each time: tap Start Broadcast with TwinDesk picked.").font(.caption).foregroundStyle(.secondary)
+                    Text("iOS asks each time. Select TwinDesk, then tap Start Broadcast.").font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .glassCard()
             } right: {
-                VStack(alignment: .leading, spacing: 10) {
-                    CardHeader(symbol: "cable.connector", color: TDColor.good, title: "On a Mac’s USB cable", detail: "Nothing to start")
-                    Text("Plugged into a Mac, its \(Device.word) window shows this screen through the cable at 60 frames a second, without Share Screen (the way QuickTime does). Trust the Mac when the \(Device.word) asks.")
+                VStack(alignment: .leading, spacing: 12) {
+                    CardHeader(symbol: "airplayvideo", color: Page.airplay.color, title: "Or Screen Mirroring", detail: "Using AirPlay from Control Center")
+                    Text("If Share Screen doesn’t start, use AirPlay instead. Show screen on \(core.host?.name ?? "the computer") turns on its AirPlay receiver. Then:")
                         .font(.caption).foregroundStyle(.secondary)
+                    MirrorGuide(target: core.mirror.airplayName)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .glassCard()
+                if core.connected && core.host?.os == "mac" { // only a Mac takes the screen over the cable
+                    VStack(alignment: .leading, spacing: 10) {
+                        CardHeader(symbol: "cable.connector", color: TDColor.good, title: "Over USB with a Mac", detail: "Starts automatically")
+                        Text("When connected to a Mac by USB, the \(Device.word) window on the Mac shows this screen at 60 frames per second without Share Screen. Tap Trust when this \(Device.word) asks.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
+                }
             }
         }
     }
@@ -231,18 +243,25 @@ struct RemoteView: View {
             Columns {
                 VStack(alignment: .leading, spacing: 14) {
                     CardHeader(symbol: "hand.point.up.left.fill", color: Page.remote.color, title: "Touchpad and keyboard",
-                               detail: "Move \(core.host?.name ?? "the computer")’s pointer, click, scroll and type")
+                               detail: "Control the pointer, click, scroll and type on \(core.host?.name ?? "the computer")")
                     Button { ui.cover = .remote("pad") } label: { Label("Open Touchpad", systemImage: "rectangle.and.hand.point.up.left.fill").frame(maxWidth: .infinity) }
                         .primaryButton().controlSize(.large).disabled(!core.connected)
                 }
                 .glassCard()
                 VStack(alignment: .leading, spacing: 14) {
                     CardHeader(symbol: "gamecontroller.fill", color: Page.remote.color, title: "Gamepad",
-                               detail: "Sticks and buttons that press the computer’s keys, or a real controller there (Windows, Linux: Remote › Real gamepad)")
+                               detail: "Sticks and buttons mapped to the computer’s keys, or a virtual controller on Windows and Linux (Remote › Real gamepad)")
                     Button { ui.cover = .remote("gamepad") } label: { Label("Open Gamepad", systemImage: "gamecontroller").frame(maxWidth: .infinity) }
                         .primaryButton().controlSize(.large).disabled(!core.connected)
-                    Text("Make it yours: Edit in the gamepad moves, resizes and hides any control and adds buttons of your own; Keys sets what each one presses.")
+                    Text("To customize the layout, use Edit in the gamepad to move, resize, hide or add controls, and Keys to assign what each one presses.")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                .glassCard()
+                VStack(alignment: .leading, spacing: 14) {
+                    CardHeader(symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), title: "Voice typing",
+                               detail: "Speak with Dictation (the keyboard’s microphone): each word is typed on \(core.host?.name ?? "the computer") as it appears, and fixes are typed there too")
+                    Button { ui.cover = .remote("voice") } label: { Label("Open Voice typing", systemImage: "mic").frame(maxWidth: .infinity) }
+                        .primaryButton().controlSize(.large).disabled(!core.connected)
                 }
                 .glassCard()
                 if let a = core.remote.allowed, !a, !core.remote.why.isEmpty {
@@ -256,15 +275,15 @@ struct RemoteView: View {
                         Slider(value: Binding(get: { core.remote.speed }, set: { core.remote.setSpeed($0) }), in: 0.3...3)
                     }
                     Divider()
-                    ToggleRow(title: "Tap to click", detail: "A quick tap is a left click", on: Binding(get: { _ = core.tick; return core.remote.tapClick }, set: { core.remote.setTapClick($0) }))
+                    ToggleRow(title: "Tap to click", detail: "A quick tap performs a left click", on: Binding(get: { _ = core.tick; return core.remote.tapClick }, set: { core.remote.setTapClick($0) }))
                     Divider()
-                    ToggleRow(title: "Smooth pointer", detail: "Each move eased out over a frame there", on: Binding(get: { _ = core.tick; return core.remote.smooth }, set: { core.remote.setSmooth($0) }))
+                    ToggleRow(title: "Smooth pointer", detail: "Smoother pointer movement with about one frame of added delay", on: Binding(get: { _ = core.tick; return core.remote.smooth }, set: { core.remote.setSmooth($0) }))
                 }
                 .glassCard()
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "gamecontroller", color: Color(red: 0.2, green: 0.7, blue: 0.4), title: "Game controller",
-                               detail: core.remote.controllerName.map { "\($0) connected" } ?? "Pair one in Settings › Bluetooth")
-                    ToggleRow(title: "Use it on the computer", detail: "An Xbox, PlayStation or MFi controller connected to this \(Device.word) plays on the computer: as a real controller where it has Real gamepad on, else as the gamepad’s keys",
+                               detail: core.remote.controllerName.map { "\($0) connected" } ?? "Pair a controller in Settings › Bluetooth")
+                    ToggleRow(title: "Use on the computer", detail: "An Xbox, PlayStation or MFi controller connected to this \(Device.word) works on the computer, as a controller when Real gamepad is on there, otherwise as the gamepad’s keys",
                               on: Binding(get: { _ = core.tick; return core.remote.controllerOn }, set: { core.remote.setControllerOn($0) }))
                 }
                 .glassCard()
@@ -283,10 +302,14 @@ struct RemoteScreen: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let h = host { WebPageView(host: h).ignoresSafeArea() }
+            // Voice typing keeps inside the safe area and above the keyboard (its box and keys in
+            // sight while Dictation listens); the touchpad and gamepad take the whole screen.
+            if let h = host {
+                if mode == "voice" { WebPageView(host: h) } else { WebPageView(host: h).ignoresSafeArea() }
+            }
         }
-        .statusBarHidden(true)
-        .persistentSystemOverlays(.hidden)
+        .statusBarHidden(mode != "voice")
+        .persistentSystemOverlays(mode == "voice" ? .automatic : .hidden)
         .onAppear {
             let h = host ?? WebHost("remote.html", core: core)
             host = h
@@ -342,7 +365,7 @@ struct NotificationsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "bell.badge.fill", color: Page.notifications.color, title: "The computer’s notifications",
                                detail: core.notifs.shown > 0 ? "\(core.notifs.shown) shown this session" : nil)
-                    ToggleRow(title: "Show them here", detail: "Messages, mail, reminders… from \(core.host?.name ?? "the computer"), while connected",
+                    ToggleRow(title: "Show notifications", detail: "Messages, mail and reminders from \(core.host?.name ?? "the computer"), while connected",
                               on: Binding(get: { _ = core.tick; return core.sync.get("notifs", "in") }, set: { core.sync.set("notifs", "in", $0) }))
                     Button("Notification Settings") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
                         .secondaryButton()
@@ -372,22 +395,41 @@ struct AudioView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "speaker.wave.2.fill", color: Page.audio.color, title: "The computer’s sound here",
                                detail: core.sound.playing ? "Playing" : nil)
-                    ToggleRow(title: "Play \(core.host?.name ?? "the computer")’s sound on this \(Device.word)", detail: "Turn on Send this computer’s sound in TwinDesk’s Audio page there",
+                    ToggleRow(title: "Play \(core.host?.name ?? "the computer")’s sound on this \(Device.word)", detail: "Turns on Send this computer’s sound on the computer too",
                               on: Binding(get: { _ = core.tick; return core.sound.on }, set: { core.sound.set($0) }))
                 }
                 .glassCard()
             } right: {
                 VStack(alignment: .leading, spacing: 12) {
-                    CardHeader(symbol: "airplayaudio", color: Page.airplay.color, title: "This \(Device.word)’s sound there",
-                               detail: "Through AirPlay: TwinDesk on the computer is an AirPlay receiver")
+                    CardHeader(symbol: "airplayaudio", color: Page.airplay.color, title: "This \(Device.word)’s sound on the computer",
+                               detail: "Via AirPlay: TwinDesk on the computer acts as an AirPlay receiver")
                     HStack {
                         RoutePicker().frame(width: 44, height: 44)
-                        Text("Pick \(core.host?.name ?? "the computer") here, in Control Center or in any app’s AirPlay button.").font(.caption).foregroundStyle(.secondary)
+                        Text("Select \(core.host?.name ?? "the computer") here, in Control Center or from any app’s AirPlay button.").font(.caption).foregroundStyle(.secondary)
                     }
-                    Text("With Share Screen on, the apps’ sound goes with the picture too.").font(.caption).foregroundStyle(.secondary)
+                    Text("While Share Screen is on, app audio is included with the screen.").font(.caption).foregroundStyle(.secondary)
+                }
+                .glassCard()
+                VStack(alignment: .leading, spacing: 12) {
+                    CardHeader(symbol: "mic.fill", color: Page.audio.color, title: "Microphone",
+                               detail: core.mic.running ? "Live on \(core.host?.name ?? "the computer")" : nil)
+                    ToggleRow(title: "Use this \(Device.word)’s microphone on \(core.host?.name ?? "the computer")",
+                              detail: micDetail,
+                              on: Binding(get: { _ = core.tick; return core.sync.get("mic", "out") }, set: { core.sync.set("mic", "out", $0) }))
+                        .disabled(!core.connected)
                 }
                 .glassCard()
             }
+        }
+    }
+}
+
+extension AudioView {
+    private var micDetail: String {
+        if core.mic.running { return "Calls and recordings on \(core.host?.name ?? "the computer") hear this \(Device.word). TwinDesk keeps it on in the background (the orange dot)" }
+        switch core.host?.os {
+        case "linux": return "Apps there pick “TwinDesk Microphone”"
+        default: return "Apps there pick it through a virtual audio cable (BlackHole on a Mac, VB-CABLE on Windows)"
         }
     }
 }
@@ -414,7 +456,7 @@ struct MediaView: View {
             if !core.connected { NeedsComputer(what: "its media") }
             Columns {
                 VStack(spacing: 16) {
-                    FeatureIcon(symbol: "music.note", color: Page.media.color, size: 96)
+                    Artwork(image: core.media.art, size: core.media.art == nil ? 96 : 180)
                     VStack(spacing: 4) {
                         Text(core.media.now?.title ?? "Nothing playing").font(.title3.bold()).multilineTextAlignment(.center)
                         Text(subtitle).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -438,9 +480,9 @@ struct MediaView: View {
                 .glassCard()
             } right: {
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "On the Lock Screen", detail: "What plays on the computer, with its controls, in Control Center and on the Lock Screen. While it plays there, this \(Device.word)’s own music pauses (iOS shows one app’s).",
+                    ToggleRow(title: "On the Lock Screen", detail: "Media playing on the computer, with controls in Control Center and on the Lock Screen. This \(Device.word)’s own audio pauses while it’s shown, as iOS shows one app at a time.",
                               on: Binding(get: { _ = core.tick; return core.media.lockScreen }, set: { core.media.setLockScreen($0) }))
-                    Text("On a Mac: Music and Spotify. Windows: any app in its media controls. Linux: any MPRIS player.").font(.caption).foregroundStyle(.secondary)
+                    Text("On a Mac: any app in its Now Playing, YouTube in a browser too. Windows: any app in its media controls. Linux: any MPRIS player.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
             }
@@ -466,20 +508,20 @@ struct AirPlayView: View {
             Columns {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "airplayvideo", color: Page.airplay.color, title: "AirPlay to the computer",
-                               detail: "TwinDesk there is an AirPlay receiver: no app needed for it here")
+                               detail: "TwinDesk on the computer acts as an AirPlay receiver. No extra app is required")
                     step(1, "Turn on AirPlay in TwinDesk’s AirPlay & SMB page on \(core.host?.name ?? "the computer").")
-                    step(2, "Mirror this screen: open Control Center, tap Screen Mirroring, pick \(core.host?.name ?? "the computer").")
-                    step(3, "Or just a video or the sound: tap AirPlay in the app (Photos, Safari, Music, YouTube…) and pick it.")
+                    step(2, "To mirror this screen, open Control Center, tap Screen Mirroring and select \(core.host?.name ?? "the computer").")
+                    step(3, "For a video or audio only, tap AirPlay in the app (Photos, Safari, Music, YouTube) and select the computer.")
                     HStack {
                         RoutePicker().frame(width: 44, height: 44)
-                        Text("Sound only, from here").font(.caption).foregroundStyle(.secondary)
+                        Text("Audio only").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 .glassCard()
             } right: {
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(symbol: "externaldrive.connected.to.line.below.fill", color: TDColor.accent, title: "The computer’s folder in Files",
-                               detail: core.smb.offer != nil ? "Shared over SMB" : "Not shared now")
+                               detail: core.smb.offer != nil ? "Shared over SMB" : "Not shared")
                     if let o = core.smb.offer {
                         info("Server", core.smb.url?.absoluteString ?? "smb://\(o.address)/\(o.share)")
                         info("Name", o.user)
@@ -490,12 +532,12 @@ struct AirPlayView: View {
                         }
                         Button { core.smb.connectInFiles() } label: { Label("Connect in Files", systemImage: "folder.badge.plus").frame(maxWidth: .infinity) }
                             .primaryButton()
-                        Text("Files opens Connect to Server with it filled in: Connect, Registered User, the name above and paste the password. After that it’s under Shared in Files, and in every app’s file picker, like a drive.")
+                        Text("Files opens Connect to Server with the address filled in. Choose Connect, then Registered User, enter the name above and paste the password. The folder then appears under Shared in Files and in every app’s file picker.")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Text("Turn on Share a folder in TwinDesk’s AirPlay & SMB page on \(core.host?.name ?? "the computer"); its address, name and password show here, and Files connects to it.")
+                        Text("Turn on Share a folder in the AirPlay & SMB page of TwinDesk on \(core.host?.name ?? "the computer"). Its address, user name and password then appear here.")
                             .font(.caption).foregroundStyle(.secondary)
-                        Text("Any SMB share works the same way: Files › ··· › Connect to Server.").font(.caption).foregroundStyle(.secondary)
+                        Text("Other SMB shares can be added the same way: Files › ··· › Connect to Server.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 .glassCard()
@@ -543,10 +585,10 @@ struct ShortcutsView: View {
             } right: {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Back Tap").font(.headline)
-                    Text("Settings › Accessibility › Touch › Back Tap › Double Tap › Send Clipboard to Computer: copy anything, tap the back of the \(Device.word) twice, and it’s on the computer.")
+                    Text("Settings › Accessibility › Touch › Back Tap › Double Tap › Send Clipboard to Computer. Copy something, then double-tap the back of the \(Device.word) to send it.")
                         .font(.caption).foregroundStyle(.secondary)
                     Text("Share sheet").font(.headline).padding(.top, 6)
-                    Text("Send to Computer is in every app’s Share sheet, for photos, files, links and text.")
+                    Text("Send to Computer is available in the Share sheet of every app, for photos, files, links and text.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -556,13 +598,13 @@ struct ShortcutsView: View {
     }
 
     static let actions: [(String, String, String)] = [
-        ("Send Clipboard to Computer", "What you copied, on the computer’s clipboard", "doc.on.clipboard"),
-        ("Send Files to Computer", "Photos or files from a shortcut, to its Downloads", "square.and.arrow.up"),
-        ("Save Files Copied on Computer", "What was copied there (⌃⌥C), into Files › TwinDesk", "square.and.arrow.down"),
-        ("Show Computer’s Screen", "Its screen, full screen", "display"),
-        ("Play or Pause on Computer", "Its music or video", "playpause"),
-        ("Lock Computer", "Its screen locks", "lock"),
-        ("Connect to Computer", "The last one", "link"),
+        ("Send Clipboard to Computer", "Copies this device’s clipboard to the computer", "doc.on.clipboard"),
+        ("Send Files to Computer", "Sends photos or files to the computer’s Downloads folder", "square.and.arrow.up"),
+        ("Save Files Copied on Computer", "Saves files copied on the computer (⌃⌥C) to Files › TwinDesk", "square.and.arrow.down"),
+        ("Show Computer’s Screen", "Opens the computer’s screen in full screen", "display"),
+        ("Play or Pause on Computer", "Toggles media playback on the computer", "playpause"),
+        ("Lock Computer", "Locks the computer’s screen", "lock"),
+        ("Connect to Computer", "Connects to the last computer", "link"),
     ]
 }
 
@@ -570,19 +612,88 @@ struct ShortcutsView: View {
 
 struct AboutView: View {
     @EnvironmentObject var core: Core
+    @Environment(\.openURL) private var openURL
+    @State private var copied = false
+
+    private static let portfolio = URL(string: "https://inukaasith.vercel.app")!
+    private static let github = URL(string: "https://github.com/InukaAsith/TwinDesk")!
+    private static let releases = URL(string: "https://github.com/InukaAsith/TwinDesk/releases")!
+    private static let issues = URL(string: "https://github.com/InukaAsith/TwinDesk/issues")!
+    private static let licence = URL(string: "https://github.com/InukaAsith/TwinDesk/blob/main/LICENSE")!
+
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
+    private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "" }
+
     var body: some View {
         PageScroll(title: "About") {
-            VStack(spacing: 10) {
-                Image("Mark").resizable().frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                Text("TwinDesk").font(.title.bold())
-                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""))")
-                    .foregroundStyle(.secondary)
-                Text("Your \(Device.word) and computers as one: clipboard, files, screens, remote, sound.").font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
-                SwiftUI.Link("github.com/InukaAsith/TwinDesk", destination: URL(string: "https://github.com/InukaAsith/TwinDesk")!).font(.subheadline)
-                Text("GPL-3.0 · ID \(core.store.deviceId.prefix(8))").font(.caption2.monospaced()).foregroundStyle(.tertiary)
+            Columns {
+                hero
+                DenseCard(title: "Made by") {
+                    DenseRow(symbol: "person.crop.circle", title: "Inuka Asith", hint: "Designed and built TwinDesk · inukaasith.vercel.app", divider: false) {
+                        Button("Portfolio") { openURL(Self.portfolio) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "chevron.left.forwardslash.chevron.right", title: "Source code", hint: "github.com/InukaAsith/TwinDesk") {
+                        Button("GitHub") { openURL(Self.github) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "arrow.down.circle", title: "All releases", hint: "TwinDesk for macOS, Windows and Linux") {
+                        Button("Releases") { openURL(Self.releases) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "ladybug", title: "Report a problem", hint: "Issues on GitHub") {
+                        Button("Report") { openURL(Self.issues) }.secondaryButton()
+                    }
+                }
+            } right: {
+                DenseCard(title: "This \(Device.word)") {
+                    fact("iphone", "Name", UIDevice.current.name, first: true)
+                    fact("cpu", "Model", Self.model)
+                    fact("gearshape", "System", "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+                    DenseRow(symbol: "number", title: "TwinDesk ID", hint: String(core.store.deviceId.prefix(16))) {
+                        Button(copied ? "Copied" : "Copy") { core.clip.write(core.store.deviceId); copied = true }.secondaryButton()
+                    }
+                }
+                DenseCard(title: "This app") {
+                    fact("app.badge", "Version", version, first: true)
+                    fact("hammer", "Build", build)
+                    if let h = core.host, core.connected { fact(osSymbol(h.os), "Connected to", "\(h.name) · \(osName(h.os))") }
+                }
+                DenseCard(title: "Licence") {
+                    DenseRow(symbol: "doc.text", title: "GNU General Public License v3", hint: "Free and open source. Copyright © 2026 inukaasith", divider: false) {
+                        Button("Read") { openURL(Self.licence) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "heart", title: "Crafted with ☕ and ❤️ in Sri Lanka 🇱🇰") { EmptyView() }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .glassCard()
         }
     }
+
+    private var hero: some View {
+        VStack(spacing: 10) {
+            Image("Mark").resizable().frame(width: 104, height: 104).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: TDColor.accent.opacity(0.35), radius: 18, y: 6)
+            Text("TwinDesk").font(.largeTitle.bold())
+            Text("Version \(version) (\(build))").font(.subheadline).foregroundStyle(.secondary)
+            Text("Use your \(Device.word) and computers together: clipboard, files, screens, remote control and audio.")
+                .font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Text("by Inuka Asith").font(.footnote.weight(.semibold)).foregroundStyle(TDColor.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .glassCard(tint: TDColor.accent)
+    }
+
+    private func fact(_ symbol: String, _ title: String, _ value: String, first: Bool = false) -> some View {
+        DenseRow(symbol: symbol, title: title, divider: !first) {
+            Text(value).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).textSelection(.enabled)
+        }
+    }
+
+    private func osName(_ os: String) -> String { os == "mac" ? "macOS" : os == "linux" ? "Linux" : "Windows" }
+
+    // The hardware's own name (iPad14,3), as Settings › General › About lists it.
+    private static let model: String = {
+        var u = utsname()
+        uname(&u)
+        let id = withUnsafeBytes(of: &u.machine) { raw in String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self) }
+        return "\(UIDevice.current.model) · \(id)"
+    }()
 }

@@ -20,7 +20,7 @@ UI.tab({
   icon: 'remote',
   color: 'linear-gradient(#bf5af2, #8944ab)',
   desc: tr('Use the phone as this computer’s touchpad, keyboard or gamepad.'),
-  hidden: (s) => !UI.isPhone(s), // only while a phone is connected
+  for: ['android', 'ios'], // a phone's: Android, iPhone or iPad (shared/ui-kinds.js)
   badge: (s) => (s.remote && s.remote.using ? 'on' : ''),
   master: {
     get: (s) => !!(s.remote && s.remote.allow),

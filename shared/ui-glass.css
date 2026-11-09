@@ -1,0 +1,114 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* General › Appearance › Style › Glass (html.glass; shared/look-early.js and UI.look set it): the
+   iPad app's look on the computers. One soft gradient of the accent behind the whole window (into
+   its neighbour on the colour wheel, as the iPad's backdrop); the sidebar a frosted pane over it;
+   cards a touch translucent with a lit top edge; what the accent fills (the selection, tiles that
+   are on, switches, the main button) a deep gradient of it with a lit rim, so it reads as chosen.
+   Only the pinned title of a long page blurs (it has to hide what scrolls under it); elsewhere the gradient is smooth, so a frosted tint over it looks the same as a blur and
+   costs nothing; it's painted once, nothing animates. On the Mac the window's own vibrancy is off
+   with Glass (main.js applyLook), as nothing would show through. Simple (no class) is untouched. */
+
+:root.glass {
+  --glow-a: rgb(from var(--accent) r g b / var(--ga));
+  --glow-b: rgb(from hsl(from var(--accent) calc(h + var(--hue-b)) s l) r g b / var(--gb));
+  --ga: 0.2; --gb: 0.12;
+  /* The second glow only a step round the wheel in light: blue stays blue, never into pink. */
+  --hue-b: 15;
+  --base: #f2f2f5;
+  --backdrop: radial-gradient(130% 95% at 0% 0%, var(--glow-a), transparent 75%),
+    radial-gradient(120% 95% at 100% 100%, var(--glow-b), transparent 78%), var(--base);
+  /* Liquid glass, not gloss: panes clear enough to carry the backdrop's colour, told apart by a
+     specular rim (bright along the top-left edge, fainter bottom-right) and a soft lift, no sheen. */
+  --frost: rgba(255, 255, 255, 0.3);
+  --card: rgba(255, 255, 255, 0.5);
+  --control: rgba(255, 255, 255, 0.55); --control-line: rgba(255, 255, 255, 0.6);
+  --lit: rgba(255, 255, 255, 0.9); --sheen: transparent;
+  --rim: inset 1px 1px 0 rgba(255, 255, 255, 0.95), inset -1px -1px 0 rgba(255, 255, 255, 0.4), inset 0 0 0 0.5px rgba(0, 0, 0, 0.03);
+  --shadow: var(--rim), 0 1px 3px rgba(0, 0, 0, 0.07);
+  --card-shadow: var(--rim), 0 6px 20px rgba(0, 0, 0, 0.05);
+  /* The selection: a brighter pane of the same glass, tinted by the accent, no coloured outline. */
+  --sel-bg: linear-gradient(rgb(from var(--accent) r g b / 0.5), rgb(from var(--accent) r g b / 0.5)), rgba(255, 255, 255, 0.2);
+  --sel-shadow: var(--rim), 0 2px 10px rgba(0, 0, 0, 0.07);
+  /* The accent as it is, with a gentle sheen: a touch lighter at the top, the colour itself below. */
+  --accent-top: hsl(from var(--accent) h s min(100, calc(l + 6)));
+  --accent-low: var(--accent);
+  --accent-fill: linear-gradient(180deg, var(--accent-top), var(--accent-low));
+  --accent-rim: transparent;
+  --accent-lift: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgb(from var(--accent) r g b / 0.25);
+  --icon-dim: inset 0 0 0 40px rgba(0, 0, 0, 0.04);
+  --accent-text: hsl(from var(--accent) h s calc(l * 0.9));
+  --on-a: 0.55;
+}
+@media (prefers-color-scheme: dark) {
+  :root.glass {
+    /* The light look's soft glow, under a greyish black veil: the colour shows through, muted, as if
+       blurred (wide radial gradients, painted once: no filter, nothing to redraw). */
+    --ga: 0.6; --gb: 0.45; --hue-b: 50;
+    --base: #18181c;
+    --backdrop: linear-gradient(rgba(20, 20, 23, 0.83), rgba(20, 20, 23, 0.83)),
+      radial-gradient(130% 95% at 0% 0%, var(--glow-a), transparent 70%),
+      radial-gradient(120% 95% at 100% 100%, var(--glow-b), transparent 72%), var(--base);
+    --frost: rgba(255, 255, 255, 0.012);
+    --card: rgba(255, 255, 255, 0.022);
+    --control: rgba(255, 255, 255, 0.05); --control-line: rgba(255, 255, 255, 0.08);
+    --lit: rgba(255, 255, 255, 0.07); --sheen: transparent;
+    --rim: inset 1px 1px 0 rgba(255, 255, 255, 0.13), inset -1px -1px 0 rgba(255, 255, 255, 0.04);
+    --shadow: var(--rim);
+    --card-shadow: var(--rim), 0 6px 20px rgba(0, 0, 0, 0.18);
+    --sel-bg: linear-gradient(rgb(from var(--accent) r g b / 0.42), rgb(from var(--accent) r g b / 0.42)), rgba(255, 255, 255, 0.06);
+    --sel-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.2), inset -1px -1px 0 rgba(255, 255, 255, 0.06), 0 2px 10px rgba(0, 0, 0, 0.2);
+    --accent-top: hsl(from var(--accent) h s min(100, calc(l + 4)));
+    --accent-low: hsl(from var(--accent) h s calc(l - 4));
+    --accent-lift: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    --icon-dim: inset 0 0 0 40px rgba(0, 0, 0, 0.06);
+    --accent-text: hsl(from var(--accent) h s min(78, calc(l * 1.2)));
+    --on-a: 0.9;
+  }
+}
+
+/* ---------- the window: the gradient behind everything, the sidebar frosted over it ---------- */
+.glass body { background: var(--base); }
+/* The gradient on a layer pinned to the window. */
+.glass body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--backdrop); pointer-events: none; }
+.glass #content { background: transparent; }
+.glass #sidebar { background: linear-gradient(180deg, var(--sheen), transparent 30%), var(--frost); border-right: 1px solid var(--line); box-shadow: inset -1px 0 0 var(--lit); }
+/* A page in sections pins its title: a blur of what's under it (the iPad's bar), so it melts into the
+   gradient and frosts the cards passing beneath. The one blur in Glass, the size of the title strip. */
+.glass .page:has(.sections) .page-head { background: transparent; -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+
+/* ---------- surfaces ---------- */
+.glass .card, .glass .dir-card { border-color: transparent; background: linear-gradient(180deg, var(--sheen), transparent 40%), var(--card); box-shadow: var(--card-shadow); }
+.glass .feature-art .fa-hero { background: linear-gradient(165deg, color-mix(in srgb, var(--fa1) 18%, transparent), transparent 70%), var(--card); box-shadow: var(--card-shadow); }
+/* Over the page, not in it: solid (no blur to read through). */
+.glass .banner, .glass .pair-pop, .glass .updater-pop { background: var(--base); }
+
+/* ---------- controls: a faint sheen, a lit edge ---------- */
+.glass .btn:not(.link), .glass select { background: linear-gradient(180deg, var(--sheen), transparent), var(--control); box-shadow: var(--shadow); }
+.glass .seg button.on { background: linear-gradient(180deg, var(--sheen), transparent), var(--control); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1px 0 var(--lit); }
+
+/* Text buttons (See all, Customize): just the words, in an accent that reads on the dark. */
+.glass .btn.link, .glass .card-title .btn.link { background: none; border-color: transparent; box-shadow: none; color: var(--accent-text); }
+
+/* ---------- the accent: deep, lit, chosen ---------- */
+.glass .btn.primary, .glass .dv-qs-tile.on, .glass .msg-pill.on {
+  background: var(--accent-fill); border-color: var(--accent-rim); box-shadow: var(--accent-lift);
+}
+.glass .switch:checked { background: var(--accent-fill); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+/* The sidebar's selection: a brighter pane of glass, tinted by the accent; the text stays the text. */
+.glass .nav-item.active, .glass .phone-tile.active {
+  background: var(--sel-bg); box-shadow: var(--sel-shadow); color: var(--text);
+}
+.glass .nav-item.active .state, .glass .phone-tile.active .phone-sub { color: var(--muted); }
+.glass .nav-item.active .state.on::before { background: var(--good, #30d158); }
+/* A tile that's on, the way Control Center has it: the accent itself (a faint sheen, no haze or
+   glow), its icon a white disc with the glyph in the accent. */
+.glass .dv-tile.on {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 60%), var(--accent);
+  border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 3px rgba(0, 0, 0, 0.25); color: #fff;
+}
+.glass .dv-tile.on .dv-tile-state { color: rgba(255, 255, 255, 0.8); }
+.glass .dv-tile.on .dv-tile-ico { background: #fff !important; color: var(--accent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
+
+/* The coloured icons, a shade deeper so they sit with the accent rather than shout over it. */
+.glass .tile { box-shadow: var(--icon-dim), inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 0.5px rgba(255, 255, 255, 0.15); }
+.glass .dv-tile:not(.on) .dv-tile-ico { box-shadow: var(--icon-dim), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.18); }

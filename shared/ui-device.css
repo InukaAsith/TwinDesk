@@ -46,7 +46,12 @@
 .dv-col > .card-wrap[hidden], .dv-col[hidden] { display: none; }
 .dv-col .history { max-height: 260px; }
 .dv-drop { height: 84px; cursor: copy; }
-.dv-nicon { width: 20px; height: 20px; border-radius: 5px; margin-right: 8px; flex: none; }
+.dv-nicon { width: 22px; height: 22px; border-radius: 6px; flex: none; align-self: start; margin-top: 1px; }
+/* A notification with buttons: the words take the whole width, the buttons a line under them. */
+.row.dv-notif { flex-wrap: wrap; row-gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+.row.dv-notif .text { flex: 1 1 100%; }
+.row.dv-notif .hint { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.row.dv-notif .controls { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
 .dv-apps { max-height: none; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 .btn.link { background: none; border-color: transparent; color: var(--accent); box-shadow: none; }
@@ -126,3 +131,70 @@
 .btn.ico { display: inline-flex; align-items: center; gap: 7px; }
 .btn.ico svg { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .btn.danger.ico, .btn.ico.danger { color: var(--bad); }
+
+/* ---- tiles, the way Control Center has them (D.tiles): one or two rows that scroll sideways;
+   small (one cell), wide (two across), large (two by two). Each with its icon on its colour;
+   on: the accent behind it. ---- */
+/* A row fits the icon and two lines of words inside the tile's padding, the same space above and below; never less. */
+.dv-tiles { display: grid; grid-template-rows: repeat(var(--rows, 2), minmax(84px, auto)); grid-template-columns: repeat(var(--cols, 4), minmax(100px, 1fr));
+  gap: 8px; padding: 12px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.dv-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 6px; min-width: 0;
+  padding: 11px 12px; border-radius: 14px; border: 1px solid var(--control-line); background: var(--control); color: var(--text); text-align: left;
+  cursor: default; transition: background-color 0.15s, border-color 0.15s, transform 0.12s, box-shadow 0.15s; }
+.dv-tile:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--control-line)); }
+.dv-tile:active { transform: scale(0.97); }
+.dv-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dv-tile.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dv-tile-ico { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 8px; color: #fff;
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 1px 2px rgba(0, 0, 0, 0.18); }
+.dv-tile-ico svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.dv-tile.on .dv-tile-ico { background: rgba(255, 255, 255, 0.22) !important; box-shadow: none; }
+.dv-tile-text { display: flex; flex-direction: column; min-width: 0; max-width: 100%; }
+.dv-tile-label { font-size: 12.5px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dv-tile-state { font-size: 11px; line-height: 1.3; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dv-tile.on .dv-tile-state { color: rgba(255, 255, 255, 0.82); }
+/* Wide: the icon beside the words. Large: a big icon, the words at the bottom, two lines of state. */
+.dv-tile.wide { flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; }
+.dv-tile.wide .dv-tile-ico { width: 32px; height: 32px; border-radius: 9px; }
+.dv-tile.wide .dv-tile-label { font-size: 13px; }
+.dv-tile.large { padding: 14px; }
+.dv-tile.large .dv-tile-ico { width: 42px; height: 42px; border-radius: 12px; }
+.dv-tile.large .dv-tile-ico svg { width: 24px; height: 24px; stroke-width: 1.6; }
+.dv-tile.large .dv-tile-label { font-size: 15px; }
+.dv-tile.large .dv-tile-state { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; }
+.dv-tile.missing { opacity: 0.4; }
+/* Customizing: each tile outlined, the chosen one in the accent, − to take it off, dragged into place. */
+.dv-tiles.editing { padding-top: 18px; padding-left: 18px; }
+.dv-tiles.editing .dv-tile { border-style: dashed; animation: dv-wiggle 0.32s ease-in-out infinite alternate; cursor: grab; }
+.dv-tiles.editing .dv-tile:nth-child(2n) { animation-delay: -0.16s; }
+.dv-tiles.editing .dv-tile:hover { animation-play-state: paused; }
+.dv-tiles.editing .dv-tile.sel { border: 2px solid var(--accent); animation: none; }
+.dv-tiles.editing .dv-tile.dragging { opacity: 0.35; }
+.dv-tiles.editing .dv-tile.drop { box-shadow: 0 0 0 2px var(--accent); }
+@keyframes dv-wiggle { from { transform: rotate(-0.6deg); } to { transform: rotate(0.6deg); } }
+@media (prefers-reduced-motion: reduce) { .dv-tiles.editing .dv-tile { animation: none; } }
+.dv-tile-x { position: absolute; top: -8px; left: -8px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: #8e8e93; color: #fff; font-size: 15px; font-weight: 700; line-height: 1; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); cursor: default; z-index: 2; }
+.dv-tile-x:hover { background: var(--bad); }
+.dv-tiles-empty { grid-column: 1 / -1; align-self: center; }
+.dv-tiles-edit { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; border-top: 1px solid var(--row-line); }
+.dv-tiles-edit[hidden] { display: none; }
+.dv-tiles-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dv-tiles-row[hidden], .dv-tiles-edit .hint[hidden] { display: none; }
+.dv-tiles-gap { flex: 1; }
+.dv-tiles-sel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-tiles-edit .seg button[hidden] { display: none; }
+.dv-tiles-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.dv-tiles-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; border: 1px solid var(--control-line);
+  background: var(--control); color: var(--text); font-size: 12.5px; cursor: default; }
+.dv-tiles-chip:hover { border-color: var(--accent); }
+.dv-tiles-chip .dv-tile-ico { width: 24px; height: 24px; border-radius: 7px; }
+.dv-tiles-chip .dv-tile-ico svg { width: 15px; height: 15px; }
+.dv-tiles-plus { color: var(--accent); font-weight: 700; font-size: 15px; }
+
+/* The Shortcuts and Quick actions cards: side by side when both fit at full size (D.tilePair). */
+.dv-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 14px; align-items: start; }
+.dv-pair.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dv-pair > [hidden] { display: none; }
+.dv-pair.two .row { flex-wrap: wrap; row-gap: 8px; } /* the volume row under narrower tiles */
+.dv-pair.two .row .controls { flex-wrap: wrap; }

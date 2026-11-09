@@ -9,6 +9,7 @@
 //   [{id, label, hint, mute}], get(), set(id), mute(), setMute(v), restart()}} for shared/web/webcap.js and Audio,
 //   o.extend → {can(), display(dev) → Promise<Display|null>, release()} (a screen of its own: Extend) or null,
 //   o.input(bus, target) (the viewer's in.* onto this computer, aimed at target() → {bounds}),
+//   o.touch (its helper injects in.tc as real touch: Windows, Linux),
 //   o.remote(bus, cfg) → shared/phone-remote.js (the Remote page's touchpad, keyboard and gamepad),
 //   o.notifs (want(on), 'notif'), o.devLocal (shared/devlocal.js), o.smbInfo() → {on, host, share, user,
 //   password, path} | null, o.key(code) (a media key), o.vcam() (the virtual camera loaded: the web
@@ -100,7 +101,7 @@ function startWeb(o) {
     },
     say: (title, body) => o.say(title, body),
     capture, camRecv, notifSource: o.notifs || null, devLocal: o.devLocal || null,
-    smbInfo: o.smbInfo || null, media, extendable: () => !!(o.extend && o.extend.can()),
+    smbInfo: o.smbInfo || null, media, touch: o.touch === true, extendable: () => !!(o.extend && o.extend.can()),
   });
   fs.mkdirSync(hub.dir, { recursive: true });
 

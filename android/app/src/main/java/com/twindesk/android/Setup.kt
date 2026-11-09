@@ -56,7 +56,7 @@ object SetupCheck {
         if (core.notifs.supported) list += Item("listener", "Notification access", "Show this device’s notifications on your computer", Ico.bell, c(0xFFFFB340, 0xFFFF9500), true, core.notifs.hasAccess)
         list += Item("battery", "Run in the background", "Lets your computer connect to this device at any time", Ico.general, c(0xFFAEAEB2, 0xFF636366), true, pm.isIgnoringBatteryOptimizations(ctx.packageName))
         list += Item("overlay", "Show the pointer", "Shows your computer’s pointer over other apps", Ico.cursor, c(0xFFFFB340, 0xFFFF9500), true, core.pointer.allowed)
-        list += Item("adb", "Wireless debugging", "Show this screen on your computer and control it with its mouse and keyboard. Pairing is needed only once.", Ico.display, c(0xFF5AC8FA, 0xFF0A84FF), false, core.adb.wifiDebugging)
+        list += Item("adb", "Wireless debugging", "Show this screen on your computer and control it with a mouse and keyboard. Pairing is required only once.", Ico.display, c(0xFF5AC8FA, 0xFF0A84FF), false, core.adb.wifiDebugging)
         if (Build.VERSION.SDK_INT >= 30) list += Item("wallpaper", "Wallpaper on your computer", "Optional. Android requires All files access to share the wallpaper.", Ico.files, c(0xFF64D2FF, 0xFF0A84FF), false, android.os.Environment.isExternalStorageManager())
         return list
     }
@@ -129,7 +129,7 @@ fun SetupScreen(core: Core, ctx: Context, v: Int, done: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White),
             ) { Text(if (ready) "Continue" else "Skip for now", modifier = Modifier.padding(vertical = 4.dp)) }
-            if (!ready) Text("TwinDesk works without these, but some features will be unavailable.", color = pal.faint, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
+            if (!ready) Text("These are optional. Without them, some features are unavailable.", color = pal.faint, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

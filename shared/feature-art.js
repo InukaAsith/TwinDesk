@@ -13,7 +13,7 @@
 //     keep: Dismiss is remembered
 (function () {
   const t = (text) => window.I18n ? window.I18n.t(text) : text;
-  const FREE = ['overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles', 'web', 'airplay', 'wd-overview', 'wd-share', 'wd-receive', 'wd-remote', 'wd-clipboard', 'wd-notifications', 'wd-files', 'wd-drop', 'wd-audio', 'wd-camera']; // web, airplay, wd-*: TwinDesk Web (shared/ui-web.js), its own server
+  const FREE = ['overview', 'android-overview', 'ios-overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles', 'web', 'airplay', 'wd-overview', 'wd-share', 'wd-receive', 'wd-remote', 'wd-clipboard', 'wd-notifications', 'wd-files', 'wd-drop', 'wd-audio', 'wd-camera']; // web, airplay, wd-*: TwinDesk Web (shared/ui-web.js), its own server
 
   // Nothing connected: a switch of a feature can't be turned on or off (it shows dimmed, styled from
   // .no-peer). Held here, before the page's own handler, so each page keeps setting its switches as it does.
@@ -374,7 +374,12 @@
     rezume: ['ReZume', 'Like Handoff on Apple devices: go on here with the page, document or phone app you were using on the other device, and the other way round.'],
   };
 
-  const has = (id) => id in SCENE;
+  // A kind's own version of a page (variantOf, shared/ui-kinds.js): its family's introduction.
+  const base = (id) => {
+    const def = window.UI && UI.tabs ? UI.tabs.find((d) => d.id === id) : null;
+    return (def && def.variantOf) || id;
+  };
+  const has = (id) => base(id) in SCENE;
 
   const KEY = 'twindesk.featureArt.dismissed';
   function dismissedList() {
@@ -392,7 +397,8 @@
     } catch (e) { /* not kept: it comes back next time */ }
   }
 
-  function create(id, { color, keep = false, onDismiss }) {
+  function create(tabId, { color, keep = false, onDismiss }) {
+    const id = base(tabId); // the scene, words and dismissal; tabId: this page's own (the SVG's ids are unique per page)
     const el = document.createElement('div');
     el.className = 'feature-art';
     el.hidden = true;
@@ -408,8 +414,8 @@
       const pic = document.createElement('div');
       pic.className = 'fa-pic';
       pic.setAttribute('aria-hidden', 'true');
-      pic.innerHTML = `<svg viewBox="0 0 400 240"><defs><linearGradient id="fa-g-${id}" x1="0" y1="0" x2="0.4" y2="1">`
-        + `<stop class="fa-s1" offset="0"/><stop class="fa-s2" offset="1"/></linearGradient></defs>${SCENES[SCENE[id]](id)}</svg>`;
+      pic.innerHTML = `<svg viewBox="0 0 400 240"><defs><linearGradient id="fa-g-${tabId}" x1="0" y1="0" x2="0.4" y2="1">`
+        + `<stop class="fa-s1" offset="0"/><stop class="fa-s2" offset="1"/></linearGradient></defs>${SCENES[SCENE[id]](tabId)}</svg>`;
       const svg = pic.firstChild;
       if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches && svg.pauseAnimations) {
         svg.pauseAnimations(); // one still frame, part way through

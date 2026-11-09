@@ -211,6 +211,8 @@ function start() {
   device = loadDevice();
   settings = normalize(store.read('settings.json', {}));
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
+  // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
+  require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
 
   discovery = new Discovery(device);
@@ -428,7 +430,8 @@ function start() {
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
   web = require('./web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, explorer: () => explorer, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
+  const ipc = setupIpc({ clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+    devctl: () => devctl, chats: () => chats, explorer: () => explorer, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, applyNet, joinHotspot,
@@ -549,7 +552,7 @@ function startPhone(server, pairing) {
   phoneViews.on('change', pushState);
   // Remote off: its page hears so; on, PhoneRemote answers instead.
   pl.on(`t:${P.T.REMOTE_HELLO}`, () => !phoneRemote && pl.current && P.isPhoneOs(pl.current.os)
-    && pl.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there' }));
+    && pl.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there', voice: false, voiceWhy: P.KEYBOARD_OFF }));
   loadRemote();
   viaWifi(phoneViews, 'openScreen', 'phone');
   viaWifi(phoneViews, 'openApp', 'phone');
@@ -663,7 +666,7 @@ function setCamera(on) {
 
 // Remote: the phone's Remote page here (shared/phone-remote.js). Off, the page hears why (remote.state).
 function loadRemote() {
-  if (phoneRemote || !phoneServer || !settings.remote.allow) return phoneRemote;
+  if (phoneRemote || !phoneServer || (!settings.remote.allow && !settings.kvm.keyboard)) return phoneRemote; // Keyboard: voice typing
   const { PhoneRemote } = require('../shared/phone-remote.js');
   phoneRemote = new PhoneRemote({ server: phoneServer, helper, getSettings: () => settings, atHome: () => !kvm || kvm.mode === 'home', onChange: pushState,
     loadPad: () => require('./gamepad'), save: saveSettings }); // Real gamepad: loaded when turned on
@@ -854,6 +857,22 @@ function setupNet(guest) {
   link.hold = (m) => net.holdOut(m, (x) => link.sendNow(x));
   link.tap = (m) => net.onMessage(m);
   link.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+
+  // A faster way to move files failed and a slower one took over (#143): said once per way per run,
+  // with why (also in Settings › General › Advanced › Engines in use).
+  const fellBack = new Set();
+  link.fx.onFallback = (o) => {
+    const key = o.from + '>' + o.to;
+    if (fellBack.has(key)) return;
+    fellBack.add(key);
+    const slow = { fx: t('the older fast way'), 'file.chunk': t('the slowest way, through the session') }[o.to] || o.to;
+    const title = t('Files go {way} for now', { way: slow });
+    const why = { why: o.why || t('no reason given') };
+    const body = o.to === 'file.chunk'
+      ? t('The faster way failed: {why}. TwinDesk tries it again when it next connects. Settings › General › Advanced › Engines in use', why)
+      : t('The faster way failed: {why}. TwinDesk tries it again in a minute. Settings › General › Advanced › Engines in use', why);
+    try { new Notification({ title, body }).show(); } catch {}
+  };
   link.on('welcome', () => {
     net.started();
     recheck();
@@ -1205,7 +1224,7 @@ function buildState() {
 
 // A phone's controls on Overview (dev.state): its quick settings, volume and ringer, most used apps.
 function phoneCtl() {
-  const v = devctl && link.peerOs === P.OS.ANDROID ? devctl.view : null;
+  const v = devctl && P.isPhoneOs(link.peerOs) ? devctl.view : null; // an iPhone's too: Ring (its Overview, shared/ui-device-ios.js)
   return v ? { ctl: v, qs: v.qs || null, top: v.top || [] } : { ctl: null, qs: null, top: [] };
 }
 
@@ -1332,7 +1351,7 @@ function createMainWindow(tab) {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1358,7 +1377,7 @@ function changeLanguage() {
   trayKey = '';
   updateTray();
   if (mainWin && !mainWin.isDestroyed()) {
-    mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale } });
+    mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
   }
 }
 

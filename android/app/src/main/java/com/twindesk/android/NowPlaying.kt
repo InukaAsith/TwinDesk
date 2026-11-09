@@ -74,9 +74,11 @@ class NowPlaying(core: Core) : Feature(core) {
         controller = null
     }
 
-    // The session to show: one that plays, else the first (the most recent).
-    private fun pick(list: List<MediaController>?) {
-        val c = list.orEmpty().firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.orEmpty().firstOrNull()
+    // The session to show: one that plays, else the first (the most recent). Never TwinDesk's own
+    // (the computer's sound playing here): the computer knows what it plays.
+    private fun pick(all: List<MediaController>?) {
+        val list = all.orEmpty().filter { it.packageName != core.ctx.packageName }
+        val c = list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.firstOrNull()
         if (c?.sessionToken != controller?.sessionToken) {
             controller?.unregisterCallback(callback)
             controller = c

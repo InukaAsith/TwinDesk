@@ -196,6 +196,7 @@ function setupIpc(ctx) {
   handle('removeShare', () => smb.unshare());
   handle('openMacDrive', () => (smb.drive ? shell.openPath(smb.drive + '\\') : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
   handle('cancelDrop', () => fileDrop.cancel());
+  handle('clearFiles', () => ctx.clearFiles && ctx.clearFiles());
   // With another PC the apps come through peerapps.js (no Monitor 2 or Start pinning).
   const pcPeer = () => link.peerOs !== P.OS.MAC; // a PC or a Linux computer
   handle('listApps', () => (pcPeer() ? peerApps.refresh() : apps.refresh()));

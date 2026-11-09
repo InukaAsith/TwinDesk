@@ -12,7 +12,8 @@
 'use strict';
 
 (() => {
-  const send = (m) => TD.send(JSON.stringify(m));
+  // Voice typing's keys and text say so: the computer takes them by its Keyboard switch, not Remote's.
+  const send = (m) => TD.send(JSON.stringify(opts.mode === 'voice' && /^remote\.(kd|ku|text)$/.test(m.t) ? { ...m, voice: true } : m));
   // Moves and wheel steps straight to the socket (WebHost's TD.move): no object or JSON per frame.
   const hot = typeof TD.move === 'function';
   const tick = () => { try { TD.tick(); } catch (_) { /* older app */ } };
@@ -23,6 +24,10 @@
   let off = false; // …because its Remote is off: Turn on, here
   let real = false; // the computer takes the gamepad as a real one (remote.pad)
   let canText = false; // the computer types characters no key there types (remote.state text: remote.text)
+  let voiceOk = null; // the computer takes voice typing (its Keyboard switch; remote.state voice), null: it doesn't say (older)
+  let voiceWhy = ''; // …and why not
+  const keyboardOff = () => voiceOk === false && /^Keyboard is off/.test(voiceWhy);
+  const voiceBlocked = () => !opts.connected || (voiceOk === null ? allowed === false : !voiceOk);
   const asPad = () => opts.bt === true || real; // the gamepad as a real one, here or through Bluetooth
 
   // ---- keys and buttons held down: counted (two controls may press the same key), all let go on close ----
@@ -53,19 +58,27 @@
   // ---- what the page shows ----
   function render() {
     const game = opts.mode === 'gamepad';
+    const voice = opts.mode === 'voice';
     document.body.classList.toggle('gamepad', game);
-    document.body.classList.toggle('pad', !game);
+    document.body.classList.toggle('voice', voice);
+    document.body.classList.toggle('pad', !game && !voice);
     $('name').textContent = game && opts.bt ? `Bluetooth gamepad · ${opts.btName || 'connected'}`
-      : `${game ? (real ? 'Gamepad (real)' : 'Gamepad') : 'Touchpad'} · ${opts.name}`;
+      : `${game ? (real ? 'Gamepad (real)' : 'Gamepad') : voice ? 'Voice typing' : 'Touchpad'} · ${opts.name}`;
+    if (voice) voiceStatus();
     const note = game && opts.bt ? ''
       : !opts.connected ? `Not connected to ${opts.name}. Connect from TwinDesk’s Overview.`
+      : voice && keyboardOff() ? `Keyboard is off on ${opts.name}: voice typing types there with it. Turn it on in TwinDesk’s Keyboard page there, or here.`
+      : voice && voiceOk === false ? (voiceWhy || `Not typing on ${opts.name}.`)
+      : voice && voiceOk === true ? ''
       : allowed === false && off ? `Remote is off on ${opts.name}.`
       : allowed === false ? (why || `${opts.name} doesn’t take input from ${opts.me}. On ${opts.name}, turn on Remote in TwinDesk.`)
         : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? `${opts.name} doesn’t answer the remote: update TwinDesk there.`
           : '';
     $('note-text').textContent = note;
     $('note').hidden = !note;
-    $('note-on').hidden = !(note && allowed === false && off && opts.connected);
+    const turnOn = voice && voiceOk !== null ? keyboardOff() : allowed === false && off;
+    $('note-on').textContent = voice && voiceOk !== null ? 'Turn on Keyboard' : 'Turn on Remote';
+    $('note-on').hidden = !(note && turnOn && opts.connected);
     // A real controller: what the computer sees it as.
     const sees = !game ? ''
       : opts.bt ? `${opts.btName || 'The computer'} sees ${opts.me} as “TwinDesk Gamepad”, a Bluetooth game controller`
@@ -103,14 +116,16 @@
       if ((m.bt === true) !== (opts.bt === true)) releaseAll(); // what's held goes the old way
       opts = { ...opts, ...m };
       if (m.layout && !layoutIn) { layoutIn = true; layoutApply(m.layout); }
-      if (!opts.connected && !opts.bt) { allowed = null; releaseAll(); }
+      if (!opts.connected && !opts.bt) { allowed = null; voiceOk = null; releaseAll(); }
       if (opts.bt || !opts.connected) canText = false; // a Bluetooth keyboard has only keys
     } else if (m.t === 'remote.state') {
       allowed = m.allowed === true;
       why = typeof m.why === 'string' ? m.why : '';
       off = m.off === true;
       canText = m.text === true && !opts.bt;
-      if (!allowed) releaseAll();
+      voiceOk = typeof m.voice === 'boolean' ? m.voice : null;
+      voiceWhy = typeof m.voiceWhy === 'string' ? m.voiceWhy : '';
+      if (opts.mode === 'voice' ? voiceBlocked() : !allowed) releaseAll();
       if ((m.pad === true) !== real) { releaseAll(); real = m.pad === true; } // what's held goes the old way
     } else return;
     render();
@@ -118,11 +133,12 @@
 
   $('b-close').onclick = () => { releaseAll(); TD.event('close'); };
   // The computer's Remote switch, turned on from here: our out is its in (pair.sync, its pairsync.js).
-  $('note-on').onclick = () => send({ t: 'pair.sync', feature: 'remote', dir: 'out', on: true });
+  $('note-on').onclick = () => send(opts.mode === 'voice' && voiceOk !== null ? { t: 'pair.sync', key: 'keyboard', value: true } // Share Keyboard: one switch for both sides
+    : { t: 'pair.sync', feature: 'remote', dir: 'out', on: true });
   // The touchpad held sideways (or upright again): the activity turns, the page follows.
   $('b-rotate').onclick = () => TD.event('rotate');
   document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
-  window.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('contextmenu', (e) => { if (e.target !== vbox) e.preventDefault(); }); // the voice box keeps its own (select, paste)
 
   // ---- pointer movement and scrolling: added up and sent once a frame (through Bluetooth, where
   // every message is a round trip on the radio, about 30 times a second) ----
@@ -355,17 +371,82 @@
     sync();
     if (!e.isComposing && !composing) settle();
   });
+  // ---- voice typing: the keyboard's own dictation (Gboard's microphone, iOS Dictation) writes into
+  // a real box, and the box is mirrored on the computer as it changes: the same difference as the
+  // keyboard above (Backspaces for what went, then what came), so a word the dictation fixes is fixed
+  // there too, letter by letter. The box keeps its words (they're what the next change is measured
+  // against) until Clear, which starts afresh without touching what the computer has. ----
+  const vbox = $('voice');
+  let vsent = '';
+  let vlast = 0;
+  function voiceSync() {
+    const v = vbox.value;
+    let i = 0;
+    while (i < vsent.length && i < v.length && vsent[i] === v[i]) i++;
+    const low = (c) => /[\udc00-\udfff]/.test(c || '');
+    while (i > 0 && (low(v[i]) || low(vsent[i]))) i--;
+    let gone = 0;
+    for (const ch of vsent.slice(i)) if (keyFor(ch) || asText(ch)) gone++;
+    for (let k = 0; k < gone; k++) type('Backspace', false);
+    let text = '';
+    const flush = () => { if (text) send({ t: 'remote.text', text }); text = ''; };
+    for (const ch of v.slice(i)) {
+      const k = keyFor(ch);
+      if (k) { flush(); type(k.code, k.shift); } else if (asText(ch)) { text += ch; if (text.length >= 60) flush(); }
+    }
+    flush();
+    if (v !== vsent) { vlast = Date.now(); tick(); }
+    vsent = v;
+    voiceStatus();
+  }
+  function voiceClear() { vbox.value = ''; vsent = ''; voiceStatus(); vbox.focus(); }
+  function voiceStatus() {
+    const dot = $('voice-dot');
+    const hint = $('voice-hint');
+    if (!dot) return;
+    const blocked = voiceBlocked();
+    const live = !blocked && Date.now() - vlast < 1500;
+    dot.className = blocked ? 'bad' : live ? 'live' : '';
+    const words = vbox.value.trim() ? vbox.value.trim().split(/\s+/).length : 0;
+    hint.textContent = blocked ? (keyboardOff() ? `Keyboard is off on ${opts.name}` : `Not typing on ${opts.name}`) : live ? `Typing on ${opts.name}…`
+      : words ? `${words} word${words === 1 ? '' : 's'} typed on ${opts.name}` : `Click where you want to type on ${opts.name}, then speak`;
+  }
+  setInterval(() => { if (opts.mode === 'voice') voiceStatus(); }, 700);
+  vbox.addEventListener('input', voiceSync);
+  vbox.addEventListener('compositionend', voiceSync);
+  // A key the box can't send by changing: Backspace with nothing left in it goes to the computer.
+  vbox.addEventListener('keydown', (e) => {
+    if ((e.key === 'Backspace' || e.keyCode === 8) && !vbox.value) { e.preventDefault(); type('Backspace', false); }
+  });
+  const vkey = (id, fn) => {
+    $(id).addEventListener('pointerdown', (e) => e.preventDefault()); // the keyboard (and its microphone) stays up
+    $(id).addEventListener('click', () => { tick(); fn(); });
+  };
+  // Enter: sent, and the box starts afresh (a message sent, a line done).
+  vkey('v-enter', () => { voiceSync(); type('Enter', false); vbox.value = ''; vsent = ''; voiceStatus(); });
+  vkey('v-space', () => { vbox.setRangeText(' ', vbox.selectionStart, vbox.selectionEnd, 'end'); voiceSync(); });
+  vkey('v-tab', () => type('Tab', false));
+  // The last word, here and there.
+  vkey('v-word', () => {
+    if (!vbox.value) { press('ControlLeft', true); tapKey('Backspace'); press('ControlLeft', false); return; }
+    vbox.value = vbox.value.replace(/\S*\s*$/, '');
+    voiceSync();
+  });
+  vkey('v-clear', voiceClear);
+  // Opened (the Overview's Voice typing): the box takes the keyboard straight away.
+  setTimeout(() => { if (opts.mode === 'voice') { vbox.focus(); TD.event('keyboard'); } }, 250);
+
   // A hardware keyboard on the phone (and the soft keyboard's Backspace or Enter on an empty field):
   // its keys as they are; the field doesn't change, so nothing is sent twice.
   const keyCode = (e) => e.code || ({ Backspace: 'Backspace', Enter: 'Enter' })[e.key] || '';
   window.addEventListener('keydown', (e) => {
-    if (editing) return; // typing a button's label (Edit)
+    if (editing || e.target === vbox) return; // typing a button's label (Edit), or into the voice box (its own changes go)
     if (!keyCode(e) || e.keyCode === 229 || e.isComposing || e.repeat) return; // composing: see input
     e.preventDefault();
     press(keyCode(e), true);
   });
   window.addEventListener('keyup', (e) => {
-    if (editing) return; // typing a button's label (Edit)
+    if (editing || e.target === vbox) return; // typing a button's label (Edit), or into the voice box
     if (!keyCode(e) || e.keyCode === 229 || e.isComposing) return;
     e.preventDefault();
     press(keyCode(e), false);

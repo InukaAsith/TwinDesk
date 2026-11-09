@@ -56,6 +56,43 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private var queuedBytes = 0 // sent but not yet written (file sending waits while it is high)
     private let qLock = NSLock()
 
+    // Quiet links (shared/quiet.js, #143): while nothing is live here and the computer says the same
+    // (`idle {on}`), the session stops pinging every second: one ping every quietPing, closed after
+    // quietTimeout of silence. A message sent while quiet is followed by one ping (a probe): no answer
+    // within the timeout and the socket closes (and the session comes back). Messages don't end the
+    // quiet; busyHere (Core: something live here), the computer saying busy or wake() do. A computer
+    // that never says idle (an older app) keeps today's pings. Not through Bluetooth. All on q.
+    static let quietIdle = "idle"
+    static let quietActive: TimeInterval = 15
+    static let quietPing: TimeInterval = 5 * 60
+    static let quietTimeout: TimeInterval = 11 * 60
+    var busyHere: () -> Bool = { false }
+    var keepPinging = false
+    private var peerIdle = false
+    private var saidIdle = false
+    private var lastUse = Date() // the session's start: active for quietActive
+    private var probeAt: Date?
+    private var probed = false
+    private var wokeAt = Date.distantPast
+    private var quietSince: Date?
+    private var quietEnd = Date.distantPast
+    private var quietPingAt = Date.distantPast
+
+    // The app came to the front, a hold started or ended: look at the session now.
+    func wake() { q.async { self.wokeAt = Date(); self.sayIdle() } }
+    func nudge() { q.async { self.sayIdle() } }
+
+    @discardableResult
+    private func sayIdle() -> Bool {
+        guard state == "connected" else { return false }
+        let mine = !keepPinging && !busyHere() && Date().timeIntervalSince(max(lastUse, wokeAt)) >= Link.quietActive
+        if mine != saidIdle, !viaBle, let text = encodeJSON(msg(Link.quietIdle, ["on": mine])) {
+            write(text)
+            saidIdle = mine
+        }
+        return mine
+    }
+
     let list: String // the store's list its hosts go in: "hosts", or "peerHosts" (Peer.swift)
 
     init(list: String = "hosts") {
@@ -95,10 +132,11 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     }
 
     // nonce: from the computer's QR code: no code to compare, only Allow there.
-    func startPairing(address: String, port: UInt16, name: String, nonce: String = "") {
+    // ble: through a Bluetooth pipe on 127.0.0.1 (the longer timeout).
+    func startPairing(address: String, port: UInt16, name: String, nonce: String = "", ble: Bool = false) {
         q.async {
             self.closeSocket()
-            self.viaBle = false
+            self.viaBle = ble
             self.host = nil
             self.pairNonce = nonce
             self.pair = PairState(phase: "connecting", address: address, port: port, name: name, qr: !nonce.isEmpty)
@@ -130,7 +168,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     @discardableResult
     func send(_ m: JSON) -> Bool {
         guard state == "connected", let text = encodeJSON(m) else { return false }
-        q.async { self.write(text) }
+        q.async { if self.quietSince != nil && self.probeAt == nil { self.probeAt = Date() }; self.write(text) }
         return true
     }
 
@@ -266,6 +304,9 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         case Proto.T.pong:
             if let ts = m["ts"] as? NSNumber { rttMs = max(0, Int(Date().timeIntervalSince1970 * 1000) - ts.intValue) }
             return
+        case Link.quietIdle:
+            if state == "connected" { peerIdle = (m["on"] as? Bool) == true }
+            return
         default: break
         }
         if state == "connected" { events?.linkMessage(t, m) }
@@ -296,7 +337,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         let name = m.str("macName", max: 64)
         let h = Computer(id: id, name: name.isEmpty ? p.name : name, os: m.str("os").isEmpty ? "mac" : m.str("os"),
                      address: p.address, port: p.port, fp: seenFp, token: token, lastSeen: Date().timeIntervalSince1970)
-        store.putHost(h, list)
+        store.putHost(findable(h), list)
         pair = nil
         mode = "session"
         host = h
@@ -305,15 +346,31 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         hello()
     }
 
+    // What's saved of a computer reached through the cable or a Bluetooth pipe (127.0.0.1, and the
+    // pipe's own port): where it was last seen on a network instead, else 127.0.0.1 on the session's
+    // port (the cable's, if it's plugged in). Saving the pipe's address made every later Connect go
+    // to it, off the cable too, until the computer was forgotten and paired again.
+    private func findable(_ h: Computer) -> Computer {
+        guard h.address == "127.0.0.1" else { return h }
+        var w = h
+        if let old = store.host(h.id, list), old.address != "127.0.0.1", !old.address.isEmpty {
+            w.address = old.address
+            w.port = old.port
+        } else {
+            w.port = Proto.port
+        }
+        return w
+    }
+
     private func onWelcome(_ m: JSON) {
         guard mode == "session", state != "connected", var h = host else { return }
         helloTimer?.cancel()
         let name = m.str("macName", max: 64)
         if !name.isEmpty { h.name = name }
         h.lastSeen = Date().timeIntervalSince1970
-        if address != "127.0.0.1" { h.address = address } // the cable's address isn't where to find it next time
+        if address != "127.0.0.1" { h.address = address }
         host = h
-        store.putHost(h, list)
+        store.putHost(findable(h), list)
         if list == "hosts" { store.lastHostId = h.id }
         rttMs = nil
         let fx = m.str("fx", max: 64)
@@ -322,9 +379,48 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         fx2Port = p2.map { $0.intValue > 0 && $0.intValue < 65536 ? UInt16($0.intValue) : 0 } ?? 0
         let t = DispatchSource.makeTimerSource(queue: q)
         t.schedule(deadline: .now() + Proto.pingInterval, repeating: Proto.pingInterval)
+        peerIdle = false
+        saidIdle = false
+        quietSince = nil
+        quietEnd = .distantPast
+        probeAt = nil
+        probed = false
+        lastUse = Date()
         t.setEventHandler { [weak self] in
             guard let self = self, let w = self.ws else { return }
-            let quiet = Date().timeIntervalSince(self.viaBle ? max(self.lastRx, self.bleRx()) : self.lastRx)
+            let now = Date()
+            let mine = self.sayIdle()
+            // Quiet (both ends idle, on the network): a ping every few minutes, a long silence limit.
+            if mine && self.peerIdle && !self.viaBle {
+                if self.quietSince == nil { self.quietSince = now; NSLog("TwinDesk: link quiet") }
+                if let p = self.probeAt { // something went out while quiet: is anyone there?
+                    if self.lastRx >= p { self.probeAt = nil; self.probed = false }
+                    else if !self.probed {
+                        self.probed = true
+                        self.quietPingAt = now
+                        self.raw(msg(Proto.T.ping, ["ts": Int(now.timeIntervalSince1970 * 1000)]))
+                        return
+                    } else if now.timeIntervalSince(p) > Proto.timeout {
+                        NSLog("TwinDesk: no answer on a quiet link, closing")
+                        self.message = "Stopped answering"
+                        w.cancel(with: .goingAway, reason: nil)
+                        self.onClose(nil)
+                        return
+                    } else { return }
+                }
+                if now.timeIntervalSince(self.lastRx) > Link.quietTimeout {
+                    NSLog("TwinDesk: silent on a quiet link, closing")
+                    self.message = "Stopped answering"
+                    w.cancel(with: .goingAway, reason: nil)
+                    self.onClose(nil)
+                } else if now.timeIntervalSince(max(self.quietPingAt, self.quietSince!)) >= Link.quietPing {
+                    self.quietPingAt = now
+                    self.raw(msg(Proto.T.ping, ["ts": Int(now.timeIntervalSince1970 * 1000)]))
+                }
+                return
+            }
+            if self.quietSince != nil { self.quietSince = nil; self.quietEnd = now; self.probeAt = nil; self.probed = false; NSLog("TwinDesk: link active") }
+            let quiet = now.timeIntervalSince(max(self.viaBle ? max(self.lastRx, self.bleRx()) : self.lastRx, self.quietEnd))
             if quiet > self.timeout {
                 NSLog("TwinDesk: socket silent for %.1f s, closing", quiet)
                 self.message = "Stopped answering"
@@ -417,10 +513,11 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
 
     // ---- fast files (fx): the file's bytes as one HTTPS stream on the session's port ----
 
-    // A request for /twindesk/fx/<id>, or nil when fast files can't be used (no token, a group network).
+    // A request for /twindesk/fx/<id>, or nil when fast files can't be used (no token, Bluetooth). On
+    // the network, the cable, a Wi-Fi Direct group or a hotspot (this phone's or the computer's) alike,
+    // as the computers' fastfile.js usable(); anything wrong before a byte: file.chunk (Files.swift).
     func fxRequest(_ id: String, method: String) -> URLRequest? {
         guard state == "connected", !viaBle, !fxToken.isEmpty, let h = host else { return nil }
-        if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
         let a = address.contains(":") ? "[\(address)]" : address
         let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         guard let url = URL(string: "https://\(a):\(h.port)\(Proto.fxPath)\(enc)") else { return nil }
@@ -431,10 +528,10 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         return r
     }
 
-    // Where fast files v2 go (Fx2.swift), or nil when they can't (no engine there, a group network).
+    // Where fast files v2 go (Fx2.swift), or nil when they can't (no engine there, Bluetooth). Anything
+    // wrong before a byte: the fx way, then file.chunk (Files.swift).
     func fx2Target() -> Fx2.To? {
         guard state == "connected", !viaBle, !fxToken.isEmpty, fx2Port > 0, let h = host, !h.fp.isEmpty else { return nil }
-        if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
         return Fx2.To(host: address, port: fx2Port, fp: h.fp, token: fxToken)
     }
 

@@ -1,41 +1,61 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Phones (Core/Peer.swift): Android phones and iPhones nearby with TwinDesk, pairing by code as
-// with a computer, then the clipboard, notifications and files both ways, its Photos and Messages
-// here, and the screens both ways.
+// Phones (Core/Peer.swift): Android phones and iPhones nearby with TwinDesk, at the bottom of
+// Connection as on Android (PhonesSection), pairing by code as with a computer. One session at a
+// time: while a phone holds it, the pages are that phone's (PeerPageView, only what both can do:
+// its caps), as a computer's pages adapt to a phone.
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct PhonesView: View {
-    @EnvironmentObject var core: Core
-    @EnvironmentObject var ui: AppUI
-    @State private var picking = false
+extension Core {
+    // Another phone holds the session (and so no computer does).
+    var peerMode: Bool { !connected && peer.connected }
+}
 
+// Which pages show while a phone holds the session.
+func peerShows(_ p: Page, _ peer: Peer) -> Bool {
+    switch p {
+    case .overview, .connection, .general, .about: return true
+    case .receive: return peer.can("screen")
+    case .share: return true // it views this screen (Share Screen first)
+    case .clipboard: return peer.can("clip")
+    case .notifications: return peer.can("notifs")
+    case .files: return peer.can("files")
+    case .photos: return peer.can("photos") || peer.myCaps.contains("photos")
+    case .messages: return peer.can("messages")
+    default: return false // Remote, Audio, Camera, Media, AirPlay & SMB, Shortcuts: a computer's
+    }
+}
+
+// Files picked here, copied out of their providers, to the other phone.
+private func sendPicked(_ r: Result<[URL], Error>, _ peer: Peer) {
+    guard case .success(let urls) = r else { return }
+    var out: [URL] = []
+    for u in urls {
+        let scoped = u.startAccessingSecurityScopedResource()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let to = dir.appendingPathComponent(u.lastPathComponent)
+        if (try? FileManager.default.copyItem(at: u, to: to)) != nil { out.append(to) }
+        if scoped { u.stopAccessingSecurityScopedResource() }
+    }
+    peer.sendFiles(out)
+}
+
+// ---- at the bottom of Connection: phones nearby, paired, the one connected ----
+
+struct PhonesSection: View {
+    @EnvironmentObject var core: Core
     private var peer: Peer { core.peer }
 
     var body: some View {
         let _ = core.tick
-        PageScroll(title: "Phones") {
+        VStack(spacing: 16) {
             if let p = peer.pair { pairCard(p) }
             if let h = peer.hostPairing { hostPairCard(h) }
             if let a = peer.asked { askedCard(a) }
-            if peer.connected { sessionCard } else { nearbyCard }
-            if !peer.batches.isEmpty { transfersCard }
-            settingsCard
-            Text("A phone with TwinDesk (Android or iPhone) on the same Wi-Fi. The one you connect to hosts: if it isn’t, Connect asks it to (Allow there). To show this \(Device.word)’s screen, start Share Screen first.")
-                .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
-            guard case .success(let urls) = r else { return }
-            var out: [URL] = []
-            for u in urls {
-                let scoped = u.startAccessingSecurityScopedResource()
-                let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let to = dir.appendingPathComponent(u.lastPathComponent)
-                if (try? FileManager.default.copyItem(at: u, to: to)) != nil { out.append(to) }
-                if scoped { u.stopAccessingSecurityScopedResource() }
-            }
-            peer.sendFiles(out)
+            if peer.connected { sessionCard }
+            if !peer.batches.isEmpty { PeerTransfers() }
+            phonesCard
         }
     }
 
@@ -86,100 +106,213 @@ struct PhonesView: View {
         .glassCard()
     }
 
+    // Connected: who, and Disconnect. What to do with it is on the pages.
     private var sessionCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            CardHeader(symbol: "iphone.gen2", color: TDColor.good, title: peer.peerName, detail: peer.peerModel.isEmpty ? "Connected" : "Connected · \(peer.peerModel)")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], spacing: 10) {
-                tile("Its screen", "rectangle.on.rectangle", TDColor.accent) { peer.startScreen(); ui.cover = .peerScreen }
-                NavigationLink { PeerPhotosView() } label: { tileLabel("Its photos", "photo.on.rectangle", Page.photos.color) }
-                NavigationLink { PeerThreadsView() } label: { tileLabel("Its messages", "message.fill", TDColor.good) }
-                tile("Send files", "paperplane.fill", Color.blue) { picking = true }
-                tile("Send clipboard", "doc.on.clipboard", Page.clipboard.color) {
-                    if let t = UIPasteboard.general.string { peer.clipOut(t) }
-                }
-            }
-            if !peer.screenError.isEmpty { Text(peer.screenError).font(.caption).foregroundStyle(TDColor.warn) }
-            Button("Disconnect", role: .destructive) { peer.disconnect() }.secondaryButton()
+        DenseCard(title: peer.peerName) {
+            Button("Disconnect", role: .destructive) { peer.disconnect() }.secondaryButton().controlSize(.small)
+        } content: {
+            DenseRow(symbol: peer.peerOs == "ios" ? "iphone" : "iphone.gen2", title: "Connected",
+                     hint: [peer.peerModel.isEmpty ? nil : peer.peerModel, peer.role == "host" ? "It connected to this \(Device.word)" : "This \(Device.word) connected to it"].compactMap { $0 }.joined(separator: " · "),
+                     divider: false) { LiveDot(size: 9) }
+            DenseRow(symbol: "square.grid.2x2", title: "Its pages",
+                     hint: "Overview, screens, files and the rest now work with \(peer.peerName). Pages it can’t do are hidden until it disconnects.") { EmptyView() }
         }
-        .glassCard()
     }
 
-    private func tile(_ t: String, _ icon: String, _ c: Color, _ a: @escaping () -> Void) -> some View {
-        Button(action: a) { tileLabel(t, icon, c) }.buttonStyle(.plain)
-    }
-
-    private func tileLabel(_ t: String, _ icon: String, _ c: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FeatureIcon(symbol: icon, color: c, size: 30)
-            Text(t).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
-        .padding(12)
-        .background(TDColor.control, in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    private var nearbyCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            CardHeader(symbol: "antenna.radiowaves.left.and.right", color: TDColor.good, title: "Phones nearby",
-                       detail: peer.waitingFor.isEmpty ? (peer.message.isEmpty ? nil : peer.message) : "Waiting for it to allow this iPhone…")
-            let near = peer.nearby()
-            let paired = Set(peer.paired().map { $0.id })
-            if near.isEmpty {
-                Text(peer.on ? "Looking… Open TwinDesk on the other phone, on the same Wi-Fi." : "Phones is off.").font(.subheadline).foregroundStyle(.secondary)
-            }
-            ForEach(near) { f in
-                HStack {
-                    Image(systemName: f.os == "ios" ? "iphone" : "iphone.gen2").foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(f.name)
-                        Text(paired.contains(f.id) ? "Paired" : f.port > 0 ? "Ready" : "Asks first").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if peer.waitingFor == f.id { Button("Cancel") { peer.cancelWait() }.secondaryButton() }
-                    else { Button(paired.contains(f.id) ? "Connect" : "Pair") { peer.connect(f) }.primaryButton().disabled(peer.linkState == "connecting") }
+    // One card: the switch, then the phones found (nearby first, then paired ones that aren't).
+    private var phonesCard: some View {
+        DenseCard(title: "Phones and tablets") {
+            if peer.on { Button { core.discovery.refresh() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless).accessibilityLabel("Look again") }
+        } content: {
+            ToggleRow(title: "Connect with phones", detail: peer.on ? "Android phones and iPhones nearby with TwinDesk see this one, and it sees them" : "Off: other phones don’t see this one", on: bind("peer.on"))
+                .padding(.vertical, 6)
+            if peer.on {
+                if !peer.message.isEmpty || !peer.waitingFor.isEmpty {
+                    DenseRow(title: peer.waitingFor.isEmpty ? peer.message : "Waiting for it to allow this \(Device.word)…", hintColor: TDColor.warn) { EmptyView() }
                 }
-            }
-            let gone = peer.paired().filter { h in !near.contains { $0.id == h.id } }
-            if !gone.isEmpty {
-                Divider()
-                ForEach(gone) { h in
-                    HStack {
-                        Text(h.name).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Forget", role: .destructive) { peer.forget(h.id) }.font(.caption)
+                let near = peer.nearby()
+                let paired = Set(peer.paired().map { $0.id })
+                ForEach(near) { f in
+                    let here = peer.connected && peer.peerId == f.id
+                    DenseRow(symbol: f.os == "ios" ? "iphone" : "iphone.gen2", title: f.name,
+                             hint: here ? "Connected" : peer.waitingFor == f.id ? "Asking it to host…" : paired.contains(f.id) ? (f.port > 0 ? "Paired · Ready" : "Paired · Nearby") : (f.port > 0 ? "Ready to pair" : "Nearby · it asks its owner first")) {
+                        if here { Pill(text: "Connected") }
+                        else if peer.waitingFor == f.id { Button("Cancel") { peer.cancelWait() }.secondaryButton() }
+                        else {
+                            if paired.contains(f.id) { Button("Forget") { peer.forget(f.id) }.secondaryButton() }
+                            Button(paired.contains(f.id) ? "Connect" : "Pair") { peer.connect(f) }.primaryButton().disabled(peer.linkState == "connecting")
+                        }
                     }
                 }
+                ForEach(peer.paired().filter { h in !near.contains { $0.id == h.id } }) { h in
+                    DenseRow(symbol: "iphone", title: h.name, hint: "Paired · Not nearby") { Button("Forget") { peer.forget(h.id) }.secondaryButton() }
+                }
+                if near.isEmpty && peer.paired().isEmpty {
+                    DenseRow(title: "Looking for phones…", hint: "Open TwinDesk on the other phone, on the same Wi-Fi (or one’s hotspot).") { ProgressView() }
+                }
+                DenseRow(title: "Host for other phones", hint: peer.hostPort > 0 ? "They connect without asking · port \(peer.hostPort)" : "Paired phones connect without asking first") {
+                    Toggle("", isOn: Binding(get: { _ = core.tick; return peer.hostOn }, set: { peer.setHostOn($0) })).labelsHidden()
+                }
+                if core.connected {
+                    DenseRow(title: "Connected to \(core.host?.name ?? "a computer")", hint: "Connecting to a phone ends the session with the computer") { EmptyView() }
+                }
             }
         }
-        .glassCard()
     }
 
-    private var transfersCard: some View {
+    private func bind(_ k: String) -> Binding<Bool> {
+        Binding(get: { _ = core.tick; return core.store.flag(k, true) }, set: { peer.set(k, $0) })
+    }
+}
+
+struct PeerTransfers: View {
+    @EnvironmentObject var core: Core
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(peer.batches.values)) { b in
+            ForEach(Array(core.peer.batches.values)) { b in
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(b.up ? "Sending" : "Receiving") \(b.name)").font(.subheadline)
                     ProgressView(value: b.progress)
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard()
     }
+}
 
-    private var settingsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ToggleRow(title: "Phones", detail: "Android phones and iPhones nearby with TwinDesk", on: bind("peer.on"))
-            Divider()
-            ToggleRow(title: "Host for other phones", detail: peer.hostPort > 0 ? "They connect without asking · port \(peer.hostPort)" : "They connect without asking first",
-                      on: Binding(get: { _ = core.tick; return peer.hostOn }, set: { peer.setHostOn($0) }))
-            Divider()
-            ToggleRow(title: "Clipboard", detail: "Copies go both ways while TwinDesk is open here", on: bind("peer.clip"))
-            Divider()
-            ToggleRow(title: "Its notifications", detail: "Shown here", on: bind("peer.notifs"))
-            Divider()
-            ToggleRow(title: "Photos on it", detail: "It can see and save this iPhone’s photos", on: bind("peer.photos"))
+// ---- the pages while a phone holds the session ----
+
+struct PeerPageView: View {
+    @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
+    let page: Page
+    @State private var picking = false
+    private var peer: Peer { core.peer }
+
+    var body: some View {
+        let _ = core.tick
+        Group {
+            if !peerShows(page, peer) {
+                PageScroll(title: page.title) { note("\(peer.peerName) can’t do this. It’s back when you connect to a computer.") }
+            } else {
+                switch page {
+                case .receive: receive
+                case .share: share
+                case .clipboard: clipboard
+                case .notifications: notifications
+                case .files: files
+                case .photos: photos
+                case .messages: PeerThreadsView()
+                default: overview
+                }
+            }
         }
-        .glassCard()
+        .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in sendPicked(r, peer) }
+    }
+
+    private func note(_ t: String) -> some View {
+        Text(t).font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).glassCard()
+    }
+
+    private var overview: some View {
+        PageScroll(title: peer.peerName) {
+            Columns {
+                Hero()
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 12) {
+                    if peer.can("screen") { tile("Its screen", "rectangle.on.rectangle", Page.receive.color) { peer.startScreen(); ui.cover = .peerScreen } }
+                    if peer.can("files") { tile("Send files", "paperplane.fill", Page.files.color) { picking = true } }
+                    if peer.can("clip") { tile("Clipboard", "doc.on.clipboard", Page.clipboard.color) { if let t = UIPasteboard.general.string { peer.clipOut(t) } } }
+                    if peer.can("photos") { tile("Its photos", "photo.on.rectangle", Page.photos.color) { ui.open(.photos) } }
+                    if peer.can("messages") { tile("Its messages", "message.fill", Page.messages.color) { ui.open(.messages) } }
+                }
+            } right: {
+                if !peer.batches.isEmpty { PeerTransfers() }
+                if !peer.screenError.isEmpty { note(peer.screenError) }
+                ShareScreenCard()
+            }
+        }
+    }
+
+    private func tile(_ title: String, _ icon: String, _ color: Color, _ run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            VStack(spacing: 8) {
+                FeatureIcon(symbol: icon, color: color, size: 36)
+                Text(title).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, -4)
+            .glassCard(20)
+        }
+        .buttonStyle(.plain).hoverLift()
+    }
+
+    private var receive: some View {
+        PageScroll(title: "Receive screen") {
+            DenseCard(title: "\(peer.peerName)’s screen") {
+                DenseRow(symbol: "rectangle.on.rectangle", title: "Show it here",
+                         hint: peer.peerOs == "ios" ? "\(peer.peerName) starts Share Screen in TwinDesk first." : "\(peer.peerName) is asked to start sharing.", divider: false) {
+                    Button("Show") { peer.startScreen(); ui.cover = .peerScreen }.primaryButton()
+                }
+                if !peer.screenError.isEmpty { DenseRow(title: peer.screenError, hintColor: TDColor.warn) { EmptyView() } }
+            }
+        }
+    }
+
+    private var share: some View {
+        PageScroll(title: "Share screen") {
+            ShareScreenCard()
+            note("Start Share Screen, then \(peer.peerName) shows this \(Device.word)’s screen from its Screen page. iOS asks each time: tap Start Broadcast with TwinDesk picked.")
+        }
+    }
+
+    private var clipboard: some View {
+        PageScroll(title: "Clipboard") {
+            DenseCard(title: "With \(peer.peerName)") {
+                ToggleRow(title: "Clipboard", detail: "Copies go both ways while TwinDesk is open here", on: bind("peer.clip")).padding(.vertical, 6)
+                DenseRow(symbol: "doc.on.clipboard", title: "Send what’s copied", hint: "This \(Device.word)’s clipboard to \(peer.peerName) now") {
+                    Button("Send") { if let t = UIPasteboard.general.string { peer.clipOut(t) } }.primaryButton()
+                }
+            }
+        }
+    }
+
+    private var notifications: some View {
+        PageScroll(title: "Notifications") {
+            DenseCard(title: "With \(peer.peerName)") {
+                ToggleRow(title: "Its notifications", detail: "\(peer.peerName)’s notifications shown here", on: bind("peer.notifs")).padding(.vertical, 6)
+            }
+            note("iOS doesn’t let apps read other apps’ notifications, so this \(Device.word)’s don’t go to \(peer.peerName).")
+        }
+    }
+
+    private var files: some View {
+        PageScroll(title: "File Sharing") {
+            DenseCard(title: "With \(peer.peerName)") {
+                DenseRow(symbol: "paperplane.fill", title: "Send files", hint: "To \(peer.peerName). Or share from any app to TwinDesk.", divider: false) {
+                    Button("Choose…") { picking = true }.primaryButton()
+                }
+                DenseRow(symbol: "tray.and.arrow.down", title: "Received", hint: "What \(peer.peerName) sends is in Files › On My \(Device.word) › TwinDesk › Received.") { EmptyView() }
+            }
+            if !peer.batches.isEmpty { PeerTransfers() }
+        }
+    }
+
+    @ViewBuilder
+    private var photos: some View {
+        if peer.can("photos") {
+            PeerPhotosView()
+                .safeAreaInset(edge: .bottom) {
+                    ToggleRow(title: "Photos here on \(peer.peerName)", detail: "It can see and save this \(Device.word)’s photos", on: bind("peer.photos"))
+                        .glassCard().padding(.horizontal, 16)
+                }
+        } else {
+            PageScroll(title: "Photos") {
+                DenseCard(title: "With \(peer.peerName)") {
+                    ToggleRow(title: "Photos here on \(peer.peerName)", detail: "It can see and save this \(Device.word)’s photos", on: bind("peer.photos")).padding(.vertical, 6)
+                }
+            }
+        }
     }
 
     private func bind(_ k: String) -> Binding<Bool> {

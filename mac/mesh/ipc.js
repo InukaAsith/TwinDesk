@@ -40,7 +40,7 @@ const SCHEMA = {
     resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac) },
-  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp') },
+  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
   mesh: { autoJoin: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
@@ -415,6 +415,10 @@ function setupIpc(ctx) {
     revealDrop(index) {
       ctx.drop.reveal(Number(index));
     },
+    clearFiles() {
+      ctx.drop.clearRecent();
+      if (ctx.fileSend) ctx.fileSend.clearRecent();
+    },
     setSmb(partial) {
       setGroup('smb', partial);
       if (settings.smb.connectPc) ctx.smb.mountPc();
@@ -588,10 +592,11 @@ function setupIpc(ctx) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
       if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
     },
-    // General › Appearance: { theme } and/or { accent } ('' follows the system); local only.
+    // General › Appearance: { style }, { theme } and/or { accent } ('' follows the system); local only.
     setLook(o) {
       if (!o || typeof o !== 'object') return;
       const Look = require('../../shared/look.js');
+      if (typeof o.style === 'string') settings.ui.style = Look.style(o.style);
       if (typeof o.theme === 'string') settings.ui.theme = Look.theme(o.theme);
       if (typeof o.accent === 'string') settings.ui.accent = Look.accent(o.accent);
       store.saveSettings(settings);

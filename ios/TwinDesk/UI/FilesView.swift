@@ -88,7 +88,10 @@ struct FilesView: View {
                 Image(systemName: b.dir == "in" ? "arrow.down.circle.fill" : "arrow.up.circle.fill").foregroundStyle(b.dir == "in" ? .green : .blue)
                 Text(b.name).lineLimit(1)
                 Spacer()
-                Text(b.finished ? (b.ok ? "Done" : "Failed") : "\(Int(b.progress * 100))%").font(.caption).foregroundStyle(b.ok ? Color.secondary : Color.orange)
+                Text(b.finished ? (b.ok ? "Done" : b.cancelled ? "Cancelled" : "Failed") : "\(Int(b.progress * 100))%").font(.caption).foregroundStyle(b.ok || b.cancelled ? Color.secondary : Color.orange)
+                if b.dir == "out" && !b.finished {
+                    Button("Cancel", role: .destructive) { core.files.cancel(b.id) }.secondaryButton().controlSize(.mini)
+                }
             }
             if !b.finished { ProgressView(value: b.progress) }
             Text(ByteCountFormatter.string(fromByteCount: b.bytes, countStyle: .file) + (b.count > 1 ? " · \(b.count) items" : ""))

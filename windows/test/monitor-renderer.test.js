@@ -12,7 +12,7 @@ function inputFixture() {
   let enable;
   const video = { videoWidth: 100, videoHeight: 100, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../monitor-input.js'), 'utf8'), {
-    window: { PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, monitor: { send: m => sent.push(m), onInputEnabled: fn => { enable = fn; } }, addEventListener: (n, fn) => { events[n] = fn; } },
+    window: { PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, TDViewerPen: { attach() {}, recent: () => false }, monitor: { send: m => sent.push(m), onInputEnabled: fn => { enable = fn; } }, addEventListener: (n, fn) => { events[n] = fn; } },
     document: { getElementById: () => video, body: { classList: { toggle() {} } } }, location: { search: '' }, URLSearchParams,
     requestAnimationFrame: fn => frames.push(fn),
   });

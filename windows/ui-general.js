@@ -70,6 +70,7 @@ UI.tab({
     });
 
     // Theme and accent colour (shared/look.js, shared/ui-look.js).
+    const styleRow = UI.styleRow((v) => api.setLook({ style: v })); // Glass or Simple (shared/ui-glass.css)
     const themeRow = UI.themeRow((v) => api.setLook({ theme: v }));
     const accentRow = UI.accentRow((v) => api.setLook({ accent: v }));
     // One page that scrolls, its sections listed beside it; Permissions first.
@@ -87,6 +88,10 @@ UI.tab({
     encRestart.hidden = true;
     const encSw = UI.switch((v) => api.setEncoder(v), { label: t('Hardware encoder') });
     const encRow = UI.row(t('Hardware encoder'), t('Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart'), [encSw, encRestart]);
+    // Prioritize performance over battery life (settings.app.keepPinging, shared/quiet.js, #143): off, a
+    // session nothing uses stops pinging every second so a phone or laptop can sleep; on, as before.
+    const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
+    const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, locRow]),
@@ -95,6 +100,7 @@ UI.tab({
         recvRow,
       ]),
       UI.card(t('Appearance'), [
+        styleRow,
         themeRow,
         accentRow,
         UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
@@ -107,6 +113,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, sendToRow]),
       UI.card(t('This computer'), [deviceRow, helperRow, vddRow]),
+      UI.card(t('Connections'), [pingRow]),
       UI.card(t('Advanced'), [protoRow, ...(api.setEncoder ? [encRow] : []), ...engines.rows]),
     ]);
     body.append(sections);
@@ -126,6 +133,7 @@ UI.tab({
         else if (s.encoder.auto) encRow.setHint(t('Turned off by itself: the hardware encoder stopped sending. Restart to use the software encoder (OpenH264)'));
         else encRow.setHint(t('Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart'));
       }
+      styleRow.render(s.look && s.look.style);
       themeRow.render(s.look && s.look.theme);
       accentRow.render(s.look);
       sections.spy();
@@ -135,6 +143,7 @@ UI.tab({
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);
       startup.set(s.startup);
       hudSw.set(s.app.hud);
+      pingSw.set(s.app.keepPinging === true);
       const f = s.files || {};
       recvReset.hidden = !f.receivedFolder;
       const receivedDescription = t('Files sent to {me} from another computer or a phone, and what’s saved from a phone’s Files and Photos', { me: s.device.name });
