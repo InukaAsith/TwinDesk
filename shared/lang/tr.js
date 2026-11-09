@@ -2098,4 +2098,12 @@
   "Glass: soft colours from the accent behind translucent cards": "Cam: yarı saydam kartların arkasında vurgu renginden yumuşak tonlar",
   "look.glass": "Cam",
   "look.simple": "Sade",
+  "Tailscale": "Tailscale",
+  "Connect through Tailscale": "Tailscale üzerinden bağlan",
+  "This computer on Tailscale": "Bu bilgisayar Tailscale’de",
+  "Not on Tailscale now": "Şu an Tailscale’de değil",
+  "Off: only this network, Bluetooth and the cable": "Kapalı: yalnızca bu ağ, Bluetooth ve kablo",
+  "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "Diğer cihaz bu ağda değilse TwinDesk onun Tailscale adresini dener",
+  "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "Evden uzakta, mobil verideki bir telefondan da bağlanmak için: Tailscale’i iki cihaza kurun ve aynı hesapla oturum açın. Onları bir kez aynı ağda ya da diğerinin Tailscale adresiyle (100.x.y.z) Adresle bağlan üzerinden eşleyin. Sonrasında Tailscale açıkken, diğer cihaz bu ağda değilse TwinDesk onun üzerinden yeniden bağlanır.",
+  "How to set it up": "Nasıl kurulur",
 });

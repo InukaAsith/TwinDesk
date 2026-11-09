@@ -127,6 +127,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     // General › Connections › Reconnect in the background (on): a session that dropped by accident is
     // taken up again with TwinDesk closed. Off: only once TwinDesk is opened (foreground()).
+    // General › Tailscale (Tailnet.kt): on unless switched off.
+    var tailscale: Boolean
+        get() = store.flag("tailscale", true)
+        set(on) { store.setFlag("tailscale", on); changed() }
     var reconnectBg: Boolean
         get() = store.flag("reconnectBg", true)
         set(on) { store.setFlag("reconnectBg", on); changed() }
@@ -233,8 +237,20 @@ class Core private constructor(val ctx: Context) : Link.Events {
             }
             return
         }
+        // Not seen on this network: every other Connect through Tailscale, when both are on it (#161).
+        // The address is for this attempt only (a copy); discovery puts the network's back.
+        if (seen == null && tailscale) {
+            tailTurn = !tailTurn
+            val t = Tailnet.address(h)
+            if (tailTurn && t != null && t != h.address && Tailnet.onIt()) {
+                Log.i("TwinDesk", "${h.name} isn’t on this network: through Tailscale")
+                link.connect(h.copy(address = t))
+                return
+            }
+        }
         link.connect(h)
     }
+    @Volatile private var tailTurn = false
 
     // A PC opened a pipe on its own (its Pair or Connect, an invite): a paired one connects through
     // it now, an unpaired one is shown as an invite (Pair asks it for a pipe again).

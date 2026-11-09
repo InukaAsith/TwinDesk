@@ -2099,4 +2099,12 @@
   "Glass: soft colours from the accent behind translucent cards": "玻璃：半透明卡片后透出强调色的柔和光晕",
   "look.glass": "玻璃",
   "look.simple": "简洁",
+  "Tailscale": "Tailscale",
+  "Connect through Tailscale": "通过 Tailscale 连接",
+  "This computer on Tailscale": "此电脑的 Tailscale 地址",
+  "Not on Tailscale now": "当前未连接 Tailscale",
+  "Off: only this network, Bluetooth and the cable": "已关闭：仅使用此网络、蓝牙和数据线",
+  "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "当另一台设备不在此网络上时，TwinDesk 会尝试它的 Tailscale 地址",
+  "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "要在外出时连接（包括使用移动数据的手机）：在两台设备上安装 Tailscale 并登录同一账户。在同一网络上配对一次，或使用“按地址连接”并输入另一台设备的 Tailscale 地址（100.x.y.z）。之后只要 Tailscale 开着，当另一台设备不在此网络上时，TwinDesk 会通过它重新连接。",
+  "How to set it up": "如何设置",
 });

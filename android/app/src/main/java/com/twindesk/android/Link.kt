@@ -486,6 +486,7 @@ class Link(
         helloTimer?.cancel(false)
         val h = host ?: return
         m.optString("macName").takeIf { it.isNotEmpty() }?.let { h.name = it.take(64) }
+        if (m.has("tail")) h.tail = Tailnet.clean(m.optJSONArray("tail")) // its Tailscale addresses (Tailnet.kt)
         h.lastSeen = System.currentTimeMillis()
         store.putHost(h, hostsKey)
         rttMs = null

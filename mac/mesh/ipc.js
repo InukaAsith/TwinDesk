@@ -478,6 +478,8 @@ function setupIpc(ctx) {
       if (typeof partial.ble === 'boolean') settings.net.ble = partial.ble;
       if (typeof partial.blePc === 'boolean') settings.net.blePc = partial.blePc;
       if (typeof partial.bleWifiOff === 'boolean') settings.net.bleWifiOff = partial.bleWifiOff; // blepolicy.js wifiQuiet
+      if (typeof partial.tailscale === 'boolean') settings.net.tailscale = partial.tailscale; // shared/tailnet.js
+      if (typeof partial.bleInput === 'boolean') settings.net.bleInput = partial.bleInput; // shared/bleinput.js
       save();
       ctx.ble.apply();
       if (partial.blePc === false && ctx.bleLook) ctx.bleLook.look(false); // computers off: stop looking now, not at the next tick

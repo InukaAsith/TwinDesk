@@ -18,15 +18,18 @@ data class Host(
     val fp: String,
     val token: String,
     var lastSeen: Long,
+    var tail: List<String> = emptyList(), // its Tailscale addresses (Tailnet.kt)
 ) {
     fun json(): JSONObject = JSONObject()
         .put("id", id).put("name", name).put("os", os).put("address", address)
         .put("port", port).put("fp", fp).put("token", token).put("lastSeen", lastSeen)
+        .apply { if (tail.isNotEmpty()) put("tail", JSONArray(tail)) }
 
     companion object {
         fun from(o: JSONObject) = Host(
             o.getString("id"), o.optString("name", "Mac"), o.optString("os", "mac"), o.optString("address"),
             o.optInt("port", Proto.PORT), o.getString("fp"), o.getString("token"), o.optLong("lastSeen"),
+            Tailnet.clean(o.optJSONArray("tail")),
         )
     }
 }

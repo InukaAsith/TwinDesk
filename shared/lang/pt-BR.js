@@ -2098,4 +2098,12 @@
   "Glass: soft colours from the accent behind translucent cards": "Vidro: cores suaves do destaque atrás de cartões translúcidos",
   "look.glass": "Vidro",
   "look.simple": "Simples",
+  "Tailscale": "Tailscale",
+  "Connect through Tailscale": "Conectar pelo Tailscale",
+  "This computer on Tailscale": "Este computador no Tailscale",
+  "Not on Tailscale now": "Fora do Tailscale agora",
+  "Off: only this network, Bluetooth and the cable": "Desligado: só esta rede, Bluetooth e o cabo",
+  "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "Quando o outro dispositivo não está nesta rede, o TwinDesk tenta o endereço dele no Tailscale",
+  "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "Para conectar fora de casa, inclusive de um celular nos dados móveis: instale o Tailscale nos dois dispositivos e entre na mesma conta. Pareie-os uma vez na mesma rede, ou com Conectar por endereço e o endereço Tailscale do outro (100.x.y.z). Depois, com o Tailscale ligado, o TwinDesk reconecta por ele quando o outro dispositivo não está nesta rede.",
+  "How to set it up": "Como configurar",
 });

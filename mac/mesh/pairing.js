@@ -183,6 +183,7 @@ class Pairing extends EventEmitter {
     ctx.mesh = !!msg.mesh; // the device speaks the mesh (docs/mesh.md): it gets the roster
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC, mesh: 1,
+      tail: require('../../shared/tailnet.js').mine(), // its Tailscale addresses, for reconnecting away from this network (#161)
     });
     this.emit('change');
   }

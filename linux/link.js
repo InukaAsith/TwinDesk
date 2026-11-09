@@ -7,6 +7,7 @@
 // the session again if the network goes. A move that doesn't last is tried again later and later (resumeBackoff).
 const WebSocket = require('ws');
 const P = require('../shared/protocol.js');
+const Tailnet = require('../shared/tailnet.js'); // away from its network: its Tailscale address (#161)
 const Quiet = require('../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { PairLimit, versionMessage } = require('../shared/pairlimit.js');
 
@@ -173,7 +174,9 @@ class Link {
     if (mode === 'session' && this.blocked()) return this._scheduleReconnect(); // hosting: try again later
     this.mode = mode;
     this.nw = this.nm = null;
-    const target = mode === 'pair' ? this.pairState : this.pairing;
+    let target = mode === 'pair' ? this.pairState : this.pairing;
+    if (mode === 'session' && this.dialAt) target = { ...target, address: this.dialAt }; // this attempt only (Tailnet.pick)
+    this.dialAt = '';
     const seq = ++this.seq;
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
     const hostId = mode === 'pair' ? target.id : target.macId;
@@ -398,6 +401,8 @@ class Link {
     clearTimeout(this.timers.hello);
     this.authed = true;
     this.attempt = 0;
+    const tail = Tailnet.clean(msg.tail); // its Tailscale addresses (none: older, or not on it)
+    if (!Tailnet.same(tail, this.pairing.tail) && (tail.length || this.pairing.tail)) { this.pairing.tail = tail; this.store.save(this.pairing); }
     this.resumeKey = typeof msg.resume === 'string' ? msg.resume : ''; // older hosts: none, no moving
     this.fxToken = typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : ''; // fast files (shared/fastfile.js); older hosts: none
     this.fx2Port = msg.fx2 && typeof msg.fx2 === 'object' && Number.isInteger(msg.fx2.port) && msg.fx2.port > 0 && msg.fx2.port < 65536 ? msg.fx2.port : 0; // fast files v2 (shared/fx2.js); older hosts: none
@@ -528,6 +533,9 @@ class Link {
         this.pairing.port = seen.port;
         this.store.save(this.pairing);
       }
+      // Not seen here: every other attempt through Tailscale, when both are on it.
+      const at = Tailnet.pick({ address: this.pairing.address, seen, tail: this.pairing.tail, attempt: this.attempt });
+      this.dialAt = at !== this.pairing.address ? at : '';
       this._connect('session');
     }, delay);
   }

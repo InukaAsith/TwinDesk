@@ -2098,4 +2098,12 @@
   "Glass: soft colours from the accent behind translucent cards": "«Стекло»: мягкие оттенки акцентного цвета за полупрозрачными карточками",
   "look.glass": "Стекло",
   "look.simple": "Простой",
+  "Tailscale": "Tailscale",
+  "Connect through Tailscale": "Подключаться через Tailscale",
+  "This computer on Tailscale": "Этот компьютер в Tailscale",
+  "Not on Tailscale now": "Сейчас не в Tailscale",
+  "Off: only this network, Bluetooth and the cable": "Выключено: только эта сеть, Bluetooth и кабель",
+  "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "Если другое устройство не в этой сети, TwinDesk пробует его адрес в Tailscale",
+  "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "Чтобы подключаться вне дома, в том числе с телефона через мобильный интернет: установите Tailscale на оба устройства и войдите в одну учётную запись. Один раз выполните сопряжение в одной сети или через «Подключиться по адресу» с адресом другого устройства в Tailscale (100.x.y.z). После этого, пока Tailscale включён, TwinDesk переподключается через него, если другого устройства нет в этой сети.",
+  "How to set it up": "Как настроить",
 });

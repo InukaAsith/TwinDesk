@@ -2099,4 +2099,12 @@
   "Glass: soft colours from the accent behind translucent cards": "Glass: soft colours from the accent behind translucent cards",
   "look.glass": "Glass",
   "look.simple": "Simple",
+  "Tailscale": "Tailscale",
+  "Connect through Tailscale": "Connect through Tailscale",
+  "This computer on Tailscale": "This computer on Tailscale",
+  "Not on Tailscale now": "Not on Tailscale now",
+  "Off: only this network, Bluetooth and the cable": "Off: only this network, Bluetooth and the cable",
+  "When the other device isn’t on this network, TwinDesk tries its Tailscale address": "When the other device isn’t on this network, TwinDesk tries its Tailscale address",
+  "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.": "To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.",
+  "How to set it up": "How to set it up",
 });

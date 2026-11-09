@@ -1568,6 +1568,7 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow("Prioritize performance over battery life", if (core.performance) "Checks the connection every second, even when nothing is in use" else "Checks an idle connection every few minutes, and immediately when a feature starts", core.performance, first = true) { core.performance = it }
         SwitchRow("Reconnect in the background", if (core.reconnectBg) "Restores a dropped connection while TwinDesk is closed" else "Restores a dropped connection when TwinDesk opens", core.reconnectBg) { core.reconnectBg = it }
     }
+    TailscaleCard(core) // #161 (Tailnet.kt)
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
     fun Setup(label: String, hint: String, done: Boolean, action: String, first: Boolean = false, onClick: () -> Unit) =

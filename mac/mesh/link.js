@@ -11,6 +11,7 @@
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const Tailnet = require('../../shared/tailnet.js'); // away from its network: its Tailscale address (#161)
 const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { linkLane, peerIp } = require('../../shared/inputlane.js');
 
@@ -180,7 +181,9 @@ class Link extends EventEmitter {
     if (mode === 'session' && this.blocked()) return this._scheduleReconnect(); // mesh: wait our turn
     this.mode = mode;
     this.nw = this.nm = null;
-    const target = mode === 'pair' ? this.pairState : this.pairing;
+    let target = mode === 'pair' ? this.pairState : this.pairing;
+    if (mode === 'session' && this.dialAt) target = { ...target, address: this.dialAt }; // this attempt only (Tailnet.pick)
+    this.dialAt = '';
     const ws = new WebSocket(`wss://${target.address}:${target.port}`, {
       rejectUnauthorized: false, // self-signed; the fingerprint is pinned instead
       maxPayload: P.MAX_PAYLOAD,
@@ -299,6 +302,8 @@ class Link extends EventEmitter {
     clearTimeout(this.timers.hello);
     this.authed = true;
     this.attempt = 0;
+    const tail = Tailnet.clean(msg.tail); // its Tailscale addresses (none: older, or not on it)
+    if (!Tailnet.same(tail, this.pairing.tail) && (tail.length || this.pairing.tail)) { this.pairing.tail = tail; this.store.save(this.pairing); }
     const os = osOf(msg.os || this.pairing.os);
     if ((typeof msg.macName === 'string' && msg.macName && msg.macName !== this.pairing.macName) || os !== this.pairing.os) {
       if (typeof msg.macName === 'string' && msg.macName) this.pairing.macName = msg.macName.slice(0, 64);
@@ -389,6 +394,9 @@ class Link extends EventEmitter {
         this.pairing.port = seen.port;
         this.store.save(this.pairing);
       }
+      // Not seen here: every other attempt through Tailscale, when both are on it.
+      const at = Tailnet.pick({ address: this.pairing.address, seen, tail: this.pairing.tail, attempt: this.attempt });
+      this.dialAt = at !== this.pairing.address ? at : '';
       this._connect('session');
     }, delay);
   }
