@@ -33,6 +33,7 @@
   <a href="#iphone"><b>iPhone and iPad</b></a> ·
   <a href="#computers"><b>Computers</b></a> ·
   <a href="#android"><b>Android</b></a> ·
+  <a href="#airplay"><b>AirPlay</b></a> ·
   <a href="#apps"><b>Every app</b></a> ·
   <a href="#compare"><b>How it compares</b></a> ·
   <a href="#get-started"><b>Get started</b></a> ·
@@ -264,7 +265,7 @@ A new default style on every computer, with your accent's glow behind the window
 </td>
 <td valign="top">
 
-**📺 AirPlay on Windows and Linux**<br>
+**📺 [AirPlay on Windows and Linux](#airplay)**<br>
 Mirror an iPhone, iPad or Mac to a PC, with sound.
 
 </td>
@@ -395,22 +396,38 @@ SideStore do it for you in the background. Needs iOS or iPadOS 16 or later.
   <img src=".github/assets/v25-computers.jpg" alt="The Clipboard, File Sharing, Receive screen and Share screen pages on the Mac, connected to a Windows PC" width="100%">
 </p>
 
+A Mac and a Windows PC. Two Macs. A gaming PC and a Linux laptop. Pair any two computers and they
+behave like one: one mouse and keyboard, one clipboard, files that go where you drag them, and each
+other's screens, apps, cameras and speakers whenever you want them. Every feature has its own page
+and its own switch, and nothing runs until you turn it on.
+
 ## 🖱 One mouse and keyboard
 
 Push the pointer off the edge of your screen and **keep working on the other computer**, as if they
 were one. Your keyboard follows the pointer, and so do Caps Lock, media keys, volume and brightness.
 Trackpad gestures (Spaces swipes, pinch to zoom, show desktop) carry over. Each computer's own
 trackpad takes its pointer back, shake the mouse to find the pointer, and a double-tap of the hotkey
-brings everything home. **Cursor lock** (Scroll Lock, or F14 on a Mac) keeps the pointer where it is.
+brings everything home.
+
+- **Where the other computer is:** drag the screens on the Mouse page to match your desk.
+- **Cursor lock** keeps the pointer on the computer it's on: **Scroll Lock** (F14 on a Mac), the
+  Mouse page, or the tray and menu bar.
+- **Over Bluetooth on busy Wi-Fi** (new in 3.0, off by default): the pointer and keys ride Bluetooth
+  while screens, files and the clipboard stay on Wi-Fi.
 
 <a name="move-windows"></a>
 
-## 🪟 Move windows, and the other computer's apps in windows of their own
+## 🪟 Move windows
 
-Hold **Right Ctrl** (**Right Command** on a Mac), grab a window and drag it past the edge: it moves
-to the other computer and keeps working there. Or open a **Windows app on your Mac** (or a Mac app on
-your PC) in **a window of its own**, with its own Dock icon or Start-menu pin. No full remote desktop,
-just the app you need, next to your own.
+Hold **Right Ctrl** (**Right Command** on a Mac), grab a window and drag it past the edge of the
+screen. It moves to the other computer and keeps working there. Let go of it on the way back and it
+returns to where you grabbed it.
+
+## 🧩 The other computer's apps, in windows of their own
+
+Open a **Windows app on your Mac** (or a Mac app on your PC) and it gets **a window of its own**,
+with its own Dock icon or Start-menu pin. No full remote desktop, just the app you need, next to
+your own.
 
 <p align="center">
   <img src=".github/assets/mac-apps.jpg" alt="Chess, Clock and Calculator from one Mac running in their own windows on the other Mac" width="100%">
@@ -419,30 +436,65 @@ just the app you need, next to your own.
 ## 🖥 Extended display and remote screen
 
 Extend your Mac onto a PC or another Mac with a **real virtual display**, or mirror it. Or bring the
-other computer's screen into a window and control it from there. Low-latency **H.264 or H.265**,
-hardware encoding, up to **4K**, *Fastest*, *Smooth* and *Steady* playback, a frame-rate cap, and
-**pens**: a stylus, a drawing tablet or an Apple Pencil over Sidecar draws on the other computer with
-pressure, tilt and eraser.
+other computer's screen into a window and control it from there.
+
+- **Low-latency H.264 or H.265,** hardware encoding with a fallback, up to **4K**.
+- **Fastest, Smooth or Steady** playback, a frame-rate cap, and optional frame generation.
+- **Pens** (new in 3.0): a stylus, a drawing tablet or an Apple Pencil over Sidecar draws on the other
+  computer with pressure, tilt and eraser. Real multitouch on Windows.
+- **Linux:** Extend on GNOME and X11, and a guide for KDE Plasma on Wayland.
 
 <p align="center">
   <img src=".github/assets/mac-screen-window.jpg" alt="The MacBook Pro's extended screen in a window on the Studio Mac, with the Receive screen settings" width="100%">
 </p>
 
-## 📁 Files, clipboard, camera, sound and more
+## 📁 Files, shared folders and terminal
 
-- **Files.** Drag them across the screen edge, or copy with <kbd>⌃⌥C</kbd> and paste with
-  <kbd>⌃⌥V</kbd> (<kbd>Ctrl+Alt+C/V</kbd> on Windows and Linux) into a folder or straight into the app
-  in front. Send from the Share menu or Explorer's *Send to*, or **share a folder** that shows up as a
-  network drive. Need a shell? `ssh twindesk` opens one on the other computer, no password needed.
-- **Clipboard.** Copy on one, paste on the other, **pictures** included (up to 10 MB). Password
-  manager entries are skipped.
-- **Camera.** The other computer's camera in a window, or as **TwinDesk Camera**, a webcam Zoom,
-  Teams, Meet and the browser can pick. A popup on the sharing side says who is watching.
-- <a name="sound-and-microphone"></a>**Sound and microphone.** One computer's sound on the other, and
-  one computer's microphone on the other, each way on its own switch.
-- **Notifications** as native notifications, and **Wake-on-LAN** for a sleeping computer.
-- **AirPlay receiver.** Mirror an iPhone, iPad or Mac to the computer, with sound. New in 3.0 on
-  Windows and Linux.
+**Drag files across the screen edge** and drop them anywhere, or copy with <kbd>⌃⌥C</kbd> and
+paste with <kbd>⌃⌥V</kbd> (<kbd>Ctrl+Alt+C/V</kbd> on Windows and Linux), into a folder or straight
+into the app in front. Send from the macOS Share menu or Explorer's *Send to*, or **share a folder**
+that shows up as a network drive on the other side. Big and small, files move on [fx2](#speed).
+Need a shell? `ssh twindesk` opens one on the other computer, no passwords needed.
+
+## 📋 Shared clipboard
+
+Copy on one computer and paste on the other, instantly or when you switch over. **Pictures** go too,
+up to 10 MB: take a screenshot with <kbd>Win+Shift+S</kbd> on the PC and paste it on the Mac.
+Entries from password managers are skipped, and a Recent list keeps the last few things you copied.
+
+<p align="center">
+  <img src=".github/assets/v30-features.jpg" alt="TwinDesk's feature pages: Sound sharing, Camera sharing, Second screen, Notification sync, ReZume and Phone drive" width="100%">
+</p>
+
+## 📷 Camera sharing
+
+Show the other computer's camera in a window, or send it to **a webcam every app can pick**:
+**TwinDesk Camera** in Zoom, Teams, Meet or the browser. A computer shares its camera only when you
+allow it, and a popup there says who is watching. The same works with a [phone's camera](#phone-camera).
+
+<a name="sound-and-microphone"></a>
+
+## 🔊 Sound, microphone, notifications and Wake-on-LAN
+
+Hear one computer's sound on the other, and **use one computer's microphone on the other**, each
+way on its own switch. See one computer's notifications on the other as native notifications. Wake
+a sleeping computer with Wake-on-LAN.
+
+## 🧭 Every page on a computer
+
+| Page | What it's for |
+|---|---|
+| **Overview** | The other computer at a glance: Ring, Lock, Sleep, Bluetooth, Do not disturb, volume, its clipboard and a drop zone |
+| **Connection** | Nearby devices, pairing by code or QR, Bluetooth and Wi-Fi Direct |
+| **Share screen / Receive screen** | Extend or mirror onto the other computer, or see and control its screen |
+| **Apps** | The other computer's apps in windows of their own |
+| **Mouse / Keyboard** | The screen layout, cursor lock, the hotkey, shortcuts that follow the pointer |
+| **Clipboard / Notifications / File Sharing** | Each way on its own switch, with Recent, per-app rules and shared folders |
+| **Audio / Camera** | Sound and microphone both ways, the camera in a window or as TwinDesk Camera |
+| **ReZume** | Continue the other computer's tab, video or document here |
+| **TwinDesk Web / AirPlay & SMB** | Phones and browsers with no app, AirPlay mirroring and a folder for the Files app |
+| **Multi-device** | [TwinDesk Mesh](#mesh): every device at once |
+| **General** | Appearance (Glass or Simple, light or dark, accent), language, Tailscale, permissions, engines in use |
 
 <a name="mesh"></a>
 
@@ -453,10 +505,12 @@ pressure, tilt and eraser.
 </p>
 
 Your laptop, your desktop, the Linux box in the corner and your phone, **all connected at once**,
-each talking straight to the others with no hub in between. Line them up on the map once and the
-pointer goes from the PC to the Mac to the Linux laptop to the phone. Copy on any of them, paste on
-any other. Your phone buzzes, and every computer shows it. Pair a new device with one computer and it
-meets the rest by itself.
+each talking straight to the others with no hub in between.
+
+- **One mouse, every screen.** Line your devices up on the map once, and the pointer goes from the PC to the Mac to the Linux laptop to the phone.
+- **One clipboard.** Copy on any of them, paste on any other. The newest copy wins.
+- **One notification pool.** Your phone buzzes, and every computer shows it.
+- **Pair once, join all.** A new device paired with one computer meets the rest by itself.
 
 <details>
 <summary><b>Mesh is in beta: what's in and what's still coming</b></summary>
@@ -471,6 +525,31 @@ See [docs/mesh.md](docs/mesh.md).
 
 ---
 
+<a name="airplay"></a>
+
+# 📺 AirPlay receiver: mirror an iPhone to any computer
+
+<p align="center">
+  <img src=".github/assets/v30-airplay.jpg" alt="The AirPlay & SMB page on the Mac with the Screen Mirroring guide, and the iPhone app's AirPlay & SMB and Share screen pages" width="100%">
+</p>
+
+AirPlay used to stop at Apple TVs and Macs. **With TwinDesk 3.0, a Windows PC and a Linux box are
+AirPlay receivers too.** Open Control Center on an iPhone or iPad, tap **Screen Mirroring**, and your
+PC is in the list, right next to the Apple TV. Pick it, and the whole iPhone screen appears on the
+computer, **with its sound**. A Mac mirrors to it the same way.
+
+- **No app on the iPhone.** It's the AirPlay already built into iOS, iPadOS and macOS.
+- **Screen and sound,** for presenting, demos, a game on the big screen, or a video from any app.
+- **Video or music only:** tap AirPlay in Photos, Safari, Music or YouTube and pick the computer.
+- **On a Mac,** macOS has its own AirPlay Receiver; the page shows where to switch it on and the three taps on the iPhone.
+- **Pairs with everything else:** with the iPhone app or [TwinDesk Web](#twindesk-web), mirroring is
+  how the iPhone shares its screen; the TwinDesk app can also do it with **Share Screen**.
+
+**Plus SMB for the Files app.** The same page shares a folder on the computer that an iPhone or iPad
+adds in **Files › ⋯ › Connect to Server**, so the computer's files sit right next to iCloud Drive.
+
+---
+
 <a name="android"></a>
 
 # 🤖 Android: a full peer
@@ -479,33 +558,99 @@ See [docs/mesh.md](docs/mesh.md).
   <img src=".github/assets/v30-android-connected.jpg" alt="The Mac's page for a connected Pixel 9 Pro with Shortcuts, Quick actions, battery, signal and storage, next to the Android app's Overview and More pages" width="100%">
 </p>
 
-Most phone links stop at notifications and a file drop. In TwinDesk your Android phone or tablet
-pairs like a computer and gets the same features, plus its calls, texts, photos, files, apps and
-camera. On the computer, its page is **one tap from everything**: customizable **Shortcuts** (show
-its screen, send files, notifications, apps) and **Quick actions** (Wi-Fi, Bluetooth, Do not disturb,
-torch, ring mode and volume), with its battery, signal, storage, clipboard and most-used apps.
+Most phone links stop at notifications and a file drop. In TwinDesk your Android phone or tablet is a
+**full peer**: it pairs like a computer and gets the same features, plus its calls, texts, photos,
+files, apps and camera. On the computer, the phone's **Overview** is one tap from everything:
+customizable **Shortcuts** (show its screen, send files, notifications, apps), **Quick actions**
+(Wi-Fi, Bluetooth, Do not disturb, torch, ring mode and volume), its battery, signal, network and
+storage, the latest clipboard and its most-used apps.
+
+<p align="center">
+  <img src=".github/assets/v30-phone-pages.jpg" alt="The Mac's Phone apps, Photos, Mouse and Phone Files pages for a connected Pixel 9 Pro" width="100%">
+</p>
+
+## 📞 Calls and messages
+
+Answer, decline and make your phone's calls from the computer. When it rings, a small window shows
+who's calling with **Answer** and **Decline**. With Bluetooth, the computer becomes **the phone's
+headset**, so you talk and listen right there. Read and reply to your texts, WhatsApp, Instagram and
+Telegram on **Messages**, pictures included.
 
 <p align="center">
   <img src=".github/assets/v25-phone.jpg" alt="The Mac's Calls, Phone apps, Mirroring and Remote pages for the connected phone" width="100%">
 </p>
 
-- 📞 **Calls and messages.** Answer, decline and make calls from the computer; with Bluetooth the
-  computer is **the phone's headset**. Read and reply to texts, WhatsApp, Instagram and Telegram.
-- 📲 **Phone apps in windows** of their own, pinned to the Dock or Start menu, used with your real
-  mouse and keyboard. Install .apk files from the computer.
-- 🖼 **Photos and phone files.** The gallery big on the computer; **Phone Files** browses the whole
-  storage. Shared folders work both ways.
-- <a name="phone-camera"></a>📷 **Camera and microphone.** The phone's camera as the **TwinDesk
-  Camera** webcam in any video call, and the phone as a microphone.
-- 🎮 **Remote and gamepad.** Touchpad and keyboard for the couch, a gamepad laid out like an Xbox
-  controller (or a **real gamepad** on the computer), and a **Bluetooth gamepad** for any computer,
-  no TwinDesk needed there.
-- 🖥 **Tablet as a second screen,** extended or mirrored, with touch or touchpad mode.
-- 🖱 **Mouse and keyboard.** Push the pointer past the screen edge and it **carries on onto the
-  phone**. Type in any Android app with your real keyboard, now optionally as **a real USB keyboard**
-  so every symbol in the phone's layout comes out right.
-- 📤 **Files, clipboard, notifications and media** both ways, from the share sheet, Quick Settings
-  tiles or a drag across the edge.
+## 📲 Phone apps in windows
+
+Open **single Android apps in windows of their own**, side by side with your desktop apps. Pin them
+to the Dock or the Start menu and use them like any other app, with your mouse and real keyboard.
+**Mirroring** shows the whole phone in a window instead, with touch, mouse, keyboard and its sound.
+Install .apk files on the phone straight from the computer.
+
+<p align="center">
+  <img src=".github/assets/phone-on-mac.jpg" alt="The tablet's home screen in a Mac window, and Calculator, Calendar and Clock open as separate Mac windows" width="100%">
+</p>
+
+## 🖼 Photos, phone files and Mount
+
+Browse the phone's **photos and videos**, open any of them big, save or remove one or many.
+**Phone Files** browses the phone's whole storage: save, upload, rename, delete, or just drop files
+on the page. **Shared folders work both ways.** On a Mac, **Mount** puts the phone in Finder like
+any drive.
+
+<a name="phone-camera"></a>
+
+## 📷 Phone camera and microphone
+
+The phone's **back or front camera** in a window on the computer or as the **TwinDesk Camera**
+webcam in any video call, and the phone **as a microphone** for the computer.
+
+## 🖱 Your mouse and keyboard on the phone
+
+Push the pointer past the screen edge and it **carries on onto the phone**. Type in any Android app
+with your real keyboard. New in 3.0: **the phone keyboard as a real USB keyboard**, so every symbol
+and accent in the phone's own layout comes out right.
+
+## 🎮 Remote and gamepad
+
+<p align="center">
+  <img src=".github/assets/v23-remote.jpg" alt="The phone's Remote: a touchpad with a row of keys, and the gamepad laid out like an Xbox controller" width="100%">
+</p>
+
+- **Touchpad and keyboard** for the couch or a presentation, with the keys a phone keyboard lacks.
+- **Gamepad,** laid out like an Xbox controller. Its buttons press the keys you choose, or turn on
+  **Real gamepad** and the computer sees an actual controller (Windows and Linux).
+- **A Bluetooth gamepad for any computer**, the Mac included, with no TwinDesk and no driver there.
+
+## 🖥 Tablet as a second screen
+
+Turn a tablet or phone into an **extra monitor**. **Extend** for more desktop space, or **Mirror**
+to show what's on your screen. Use touch as the mouse, or switch on touchpad mode.
+
+<p align="center">
+  <img src=".github/assets/second-screen.jpg" alt="Share screen settings on the Mac, and the tablet showing the extended Mac desktop" width="100%">
+</p>
+
+## 📤 Files, clipboard, notifications, media and sound
+
+- **Files.** *Send to computer* or *Copy to computer* from any Android app's share menu; from the
+  computer, the Share menu, *Send to*, a drag across the screen edge or <kbd>⌃⌥C</kbd> / <kbd>Ctrl+Alt+C</kbd>.
+- **Clipboard.** Text and pictures both ways, the phone's screenshots included.
+- **Notifications.** The phone's on the computer as native notifications, per app, and the other way around.
+- **Media.** What's playing on the phone, with play, pause, skip and seek on the computer, and the
+  computer's Now Playing on the phone.
+- **Sound.** The phone's sound on the computer, or the computer's on the phone.
+
+## 🧭 Every page for a phone
+
+| On the computer | On the phone |
+|---|---|
+| **Overview** with Shortcuts and Quick actions, **Connection** | **Overview** with the computer's Ring, Lock, Sleep and volume, **Connect** |
+| **Messages, Calls, Photos, Apps** | **Screen:** be the computer's second screen, or see its screen |
+| **Mirroring, Share screen** | **Files:** send, copy and receive |
+| **Mouse, Keyboard, Remote** | **Remote:** touchpad, keyboard, gamepad |
+| **Clipboard, Notifications, File Sharing, Phone Files, Mount** | **ReZume, Clipboard, Notifications, Sound, Media, Camera** |
+| **Audio, Camera, ReZume** | **General:** name, theme and accent, language, background, permissions |
 
 <p align="center">
   <img src=".github/assets/v30-android.jpg" alt="The Android app: Overview, Screen, Files and More" width="100%">
