@@ -51,6 +51,9 @@ class Input {
     }
     const pen = msg.t === P.T.IN_MOVE || msg.t === P.T.IN_DOWN || msg.t === P.T.IN_UP ? P.penOf(msg.pen) : null;
     if (pen) ev.pen = pen; // a phone's stylus: a tablet pen (Inject.swift)
+    if (pen && msg.t === P.T.IN_MOVE) { // the stroke's samples before this one, in order
+      for (const q of P.penPoints(msg.pts, pen)) this.helper.send('input', { ev: { t: msg.t, x: q.x, y: q.y, pen: q.pen }, bounds: target.bounds });
+    }
     if (msg.t !== P.T.IN_MOVE && msg.t !== P.T.IN_WHEEL) this.dirty = true;
     this.helper.send('input', { ev, bounds: target.bounds });
   }

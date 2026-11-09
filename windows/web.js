@@ -76,6 +76,7 @@ function setupWeb(c) {
       },
     } : null,
     // The viewer's mouse, keyboard and pen, aimed at the display it watches (the helper's screen pixels).
+    touch: true, // the viewer's fingers are real touch here (in.tc → the helper's `touch`)
     input: (bus, target) => {
       const ri = new RemoteInput({
         link: { get peerOs() { return apple(bus.current) ? P.OS.MAC : P.OS.WIN; } },
@@ -89,7 +90,8 @@ function setupWeb(c) {
         const d = target();
         if (!d) return;
         const r = displays.dipToScreenRect(null, d.bounds);
-        ri.handle(m, (x, y) => helper.send('moveTo', at(r, x, y)), null, (x, y, pen) => helper.send('pen', { ...at(r, x, y), pen }));
+        ri.handle(m, (x, y) => helper.send('moveTo', at(r, x, y)), null, (x, y, pen) => helper.send('pen', { ...at(r, x, y), pen }),
+          false, (list) => helper.send('touch', RemoteInput.touchCmd(list, (x, y) => at(r, x, y))));
       });
       bus.on('closed', () => ri.release());
       return ri;

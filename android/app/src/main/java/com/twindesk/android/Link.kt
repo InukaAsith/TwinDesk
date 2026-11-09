@@ -311,6 +311,7 @@ class Link(
         }
         val ssl = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
         return OkHttpClient.Builder()
+            .socketFactory(NoDelaySockets)
             .sslSocketFactory(ssl.socketFactory, trust)
             .hostnameVerifier { _, _ -> true }
             .connectTimeout(5, TimeUnit.SECONDS)
@@ -645,4 +646,17 @@ class Link(
         message = msg
         events.onChange()
     }
+}
+
+// The session's sockets without Nagle: input (a pen's 120–240 samples a second, pointer moves) goes
+// out at once instead of waiting for the computer to acknowledge what went before (40–200 ms with
+// its delayed ACKs). OkHttp leaves Nagle on; the TLS socket is layered over these.
+private object NoDelaySockets : javax.net.SocketFactory() {
+    private val base = javax.net.SocketFactory.getDefault()
+    private fun nd(s: java.net.Socket) = s.apply { runCatching { tcpNoDelay = true } }
+    override fun createSocket() = nd(base.createSocket())
+    override fun createSocket(host: String?, port: Int) = nd(base.createSocket(host, port))
+    override fun createSocket(host: String?, port: Int, localHost: java.net.InetAddress?, localPort: Int) = nd(base.createSocket(host, port, localHost, localPort))
+    override fun createSocket(host: java.net.InetAddress?, port: Int) = nd(base.createSocket(host, port))
+    override fun createSocket(address: java.net.InetAddress?, port: Int, localAddress: java.net.InetAddress?, localPort: Int) = nd(base.createSocket(address, port, localAddress, localPort))
 }

@@ -101,6 +101,9 @@
       IN_WHEEL: 'in.wh',
       IN_KEY_DOWN: 'in.kd',
       IN_KEY_UP: 'in.ku',
+      // real touch (a viewer's Touch/Direct mode, when the sharer's screen.state says touch: true):
+      // {p: [[id 0–9, x, y], …]} every finger touching now, normalized; p: [] = all lifted (P.touchesOf)
+      IN_TOUCH: 'in.tc',
       // mouse & keyboard sharing across the two physical screens (relative), either way
       KVM_LAYOUT: 'kvm.layout',
       KVM_TAKE: 'kvm.take',
@@ -455,6 +458,35 @@
     // A stylus's state on in.mm/md/mu (android viewer.js), checked: {p pressure 0–1, tx/ty tilt
     // degrees −90…90, tw twist degrees 0–359, c the tip or the eraser touches, er the eraser end,
     // bar the side button held, out it left the screen's range}; null when there is none.
+    touchesOf(v) {
+      if (!Array.isArray(v) || v.length > 10) return null;
+      const out = [], seen = new Set();
+      for (const c of v) {
+        if (!Array.isArray(c) || !Number.isInteger(c[0]) || c[0] < 0 || c[0] > 9 || seen.has(c[0])) return null;
+        const x = Number(c[1]), y = Number(c[2]);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        seen.add(c[0]);
+        out.push([c[0], Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))]);
+      }
+      return out;
+    },
+
+    // A stroke's earlier samples on a pen's in.mm (`pts`, android viewer.js): [[x, y, p, tx, ty], …]
+    // normalized x/y, pressure 0–1, tilt degrees; as [{x, y, pen}] with the rest of `pen` (P.penOf's),
+    // in order, before the message's own x, y. At most 32; [] when there are none or they don't check.
+    penPoints(v, pen) {
+      if (!Array.isArray(v) || !pen || !pen.c || v.length > 32) return [];
+      const n = (x, lo, hi) => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : null);
+      const out = [];
+      for (const a of v) {
+        if (!Array.isArray(a)) return [];
+        const x = n(a[0], 0, 1), y = n(a[1], 0, 1);
+        if (x === null || y === null) return [];
+        out.push({ x, y, pen: { ...pen, p: n(a[2], 0, 1) ?? pen.p, tx: n(a[3], -90, 90) ?? pen.tx, ty: n(a[4], -90, 90) ?? pen.ty } });
+      }
+      return out;
+    },
+
     penOf(v) {
       if (!v || typeof v !== 'object') return null;
       const n = (x, lo, hi) => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : 0);
