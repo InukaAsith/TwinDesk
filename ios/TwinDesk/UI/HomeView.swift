@@ -106,42 +106,70 @@ struct OverviewView: View {
 }
 
 // The connected computer, or what we're doing about it.
+// This device, the line, the computer (as the computers' Connection page draws it), what's going on
+// under it, Disconnect / Connect.
 struct Hero: View {
     @EnvironmentObject var core: Core
 
     var body: some View {
-        let h = core.host
+        let h = core.host ?? core.hosts.first
         let st = core.state
-        VStack(spacing: 14) {
-            HStack(spacing: 14) {
-                Image(systemName: osSymbol(h?.os ?? "mac")).font(.system(size: 24, weight: .semibold))
-                    .glassChip(56, tint: core.connected ? TDColor.good : TDColor.accent)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(core.connected || st == "connecting" ? (h?.name ?? "Computer") : "Not connected").font(.title3.bold())
-                    Text(statusLine).font(.subheadline).foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 6) {
+                device(Device.isPad ? "ipad.landscape" : "iphone", "This \(Device.word)")
+                VStack(spacing: 7) {
+                    LinkLine(up: core.connected)
+                    Text(linkText).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                 }
-                Spacer()
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 4)
+                device(osSymbol(h?.os ?? "mac"), h?.name ?? "Computer")
+                    .opacity(core.connected || st == "connecting" ? 1 : 0.55)
+                    .animation(.easeInOut(duration: 0.4), value: core.connected)
             }
-            if core.connected {
-                Button(role: .destructive) { core.disconnect() } label: { Label("Disconnect", systemImage: "xmark").frame(maxWidth: .infinity) }
-                    .secondaryButton()
-            } else if st == "connecting" {
-                ProgressView().frame(maxWidth: .infinity)
-            } else if !core.message.isEmpty {
-                Text(core.message).font(.footnote).foregroundStyle(TDColor.warn).frame(maxWidth: .infinity, alignment: .leading)
+            Divider().overlay(TDColor.line).padding(.top, 16)
+            Text(statusText).font(.subheadline).foregroundStyle(core.message.isEmpty || core.connected ? Color.secondary : TDColor.warn)
+                .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 11)
+            HStack(spacing: 10) {
+                if core.connected {
+                    Button("Disconnect", role: .destructive) { core.disconnect() }.secondaryButton()
+                } else if st == "connecting" {
+                    ProgressView()
+                } else if let h = core.hosts.first {
+                    Button("Connect to \(h.name)") { core.connect(h) }.primaryButton()
+                }
             }
+            .controlSize(.small)
+            .padding(.top, 10)
         }
-        .glassCard(28, tint: core.connected ? TDColor.good : nil)
+        .glassCard(26, tint: core.connected ? TDColor.good : nil)
+        .animation(.easeInOut(duration: 0.3), value: st)
     }
 
-    private var statusLine: String {
+    private func device(_ symbol: String, _ name: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: symbol).font(.system(size: 40, weight: .light)).foregroundStyle(TDColor.text.opacity(0.88))
+                .frame(height: 48)
+            Text(name).font(.footnote.weight(.semibold)).lineLimit(1).truncationMode(.middle)
+        }
+        .frame(width: 104)
+    }
+
+    private var linkText: String {
         switch core.state {
         case "connected":
-            let via = core.link.wired ? "USB cable" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi"
-            return [via, core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
-        case "connecting": return "Connecting…"
-        default: return core.hosts.isEmpty ? "Pair a computer in Connection" : "Tap a computer in Connection"
+            let via = core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi"
+            return [core.rttMs.map { "\($0) ms" }, via].compactMap { $0 }.joined(separator: " · ")
+        case "connecting": return core.pair != nil ? "Pairing…" : "Connecting…"
+        default: return "Not connected"
         }
+    }
+
+    private var statusText: String {
+        if core.connected { return "Connected. Clipboard, files and screens go both ways." }
+        if core.state == "connecting" { return "Connecting to \(core.host?.name ?? "the computer")…" }
+        if !core.message.isEmpty { return core.message }
+        return core.hosts.isEmpty ? "Pick a computer in Nearby, or connect by address." : "Open TwinDesk on the computer to connect."
     }
 }
 
@@ -167,94 +195,138 @@ struct NowPlayingCard: View {
 struct ConnectionView: View {
     @EnvironmentObject var core: Core
     @State private var address = ""
+    @State private var sure: String? // the paired computer whose Forget was pressed once (Forget? to confirm)
+    @State private var spin = 0.0
 
     var body: some View {
         PageScroll(title: "Connection") {
             Columns {
                 Hero()
-                nearbyList
-                pairedList
+                nearbyCard
+                pairedCard
             } right: {
-                byAddress
-                VStack(alignment: .leading, spacing: 10) {
-                    CardHeader(symbol: "cable.connector", color: TDColor.good, title: "USB cable",
-                               detail: core.link.wired ? "Connected through the cable" : (core.usb.ready ? "\(core.usb.computerName ?? "A computer") is on the cable" : "Plug this \(Device.word) into the computer"))
-                    Text("On a cable the session, the screen and files go through it: faster than Wi-Fi, and nothing on the network. TwinDesk moves onto it by itself when it’s plugged in.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard()
+                addressCard
+                usbCard
             }
         }
         .refreshable { core.discovery.refresh() }
     }
 
-    @ViewBuilder
-    private var nearbyList: some View {
-        let unpaired = core.nearby.filter { f in !core.hosts.contains { $0.id == f.id } }
-        if !unpaired.isEmpty {
-            SectionTitle(text: "Nearby")
-            VStack(spacing: 0) {
-                ForEach(unpaired) { f in
-                    Button { core.pair(f) } label: { row(f.name, f.os, f.invited ? "Wants to connect · Tap to pair" : "Tap to pair · \(f.address)") }
-                        .buttonStyle(.plain).hoverLift()
-                    if f.id != unpaired.last?.id { Divider().padding(.leading, 58) }
+    // ---- Nearby: every computer TwinDesk sees, paired or not ----
+
+    private var nearbyCard: some View {
+        DenseCard(title: "Nearby") {
+            Button {
+                core.discovery.refresh()
+                withAnimation(.easeInOut(duration: 0.6)) { spin += 360 }
+            } label: { Image(systemName: "arrow.clockwise").rotationEffect(.degrees(spin)) }
+                .buttonStyle(.borderless).accessibilityLabel("Look again")
+        } content: {
+            let list = core.nearby
+            if !core.discovery.error.isEmpty {
+                DenseRow(symbol: "exclamationmark.triangle", title: "Can’t look for computers on this network",
+                         hint: core.discovery.error, hintColor: TDColor.warn, divider: false) { EmptyView() }
+            }
+            if list.isEmpty {
+                DenseRow(title: "Looking for computers…", hint: "Open TwinDesk on the computer, on the same Wi-Fi.", divider: !core.discovery.error.isEmpty) {
+                    ProgressView()
                 }
             }
-            .glassCard()
+            ForEach(Array(list.enumerated()), id: \.element.id) { i, f in
+                nearbyRow(f, first: i == 0 && core.discovery.error.isEmpty)
+            }
         }
     }
 
     @ViewBuilder
-    private var pairedList: some View {
-        if !core.hosts.isEmpty {
-            SectionTitle(text: "Paired")
-            VStack(spacing: 0) {
-                ForEach(core.hosts) { h in
-                    let here = core.nearby.contains { $0.id == h.id }
-                    let current = core.host?.id == h.id && core.state != "idle"
-                    Button { if !current { core.connect(h) } } label: {
-                        row(h.name, h.os, current ? (core.connected ? "Connected" : "Connecting…") : here ? "Nearby · Tap to connect" : "Last at \(h.address)")
+    private func nearbyRow(_ f: Found, first: Bool) -> some View {
+        let known = core.hosts.first { $0.id == f.id }
+        let mine = core.host?.id == f.id
+        let online = mine && core.connected
+        let going = (mine && core.state == "connecting") || core.pair?.name == f.name
+        DenseRow(symbol: osSymbol(f.os), title: f.name,
+                 hint: going ? (core.pair != nil ? "Pairing…" : "Connecting…") : f.invited ? "\(f.address) · wants to connect" : f.address,
+                 divider: !first) {
+            if going { ProgressView() }
+            if online { Pill(text: "Connected") }
+            else if known != nil && !going { Pill(text: "Paired", color: TDColor.muted) }
+            if !online && !going {
+                if let h = known {
+                    Button(core.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton()
+                } else {
+                    Button("Pair") { core.pair(f) }.primaryButton()
+                }
+            }
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    // ---- Paired: computers this device has paired with, Forget each ----
+
+    private var pairedCard: some View {
+        DenseCard(title: "Paired") {
+            if core.hosts.isEmpty {
+                DenseRow(title: "Nothing paired yet", hint: "Pair with a computer in Nearby.", divider: false) { EmptyView() }
+            }
+            ForEach(Array(core.hosts.enumerated()), id: \.element.id) { i, h in
+                let online = core.host?.id == h.id && core.connected
+                let near = core.nearby.contains { $0.id == h.id }
+                DenseRow(symbol: osSymbol(h.os), title: h.name,
+                         hint: online ? "Connected" : near ? "Nearby · last seen \(ago(h.lastSeen))" : "Last seen \(ago(h.lastSeen)) at \(h.address)",
+                         divider: i > 0) {
+                    if online { Pill(text: "Online") }
+                    else { Button(core.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton() }
+                    Button(sure == h.id ? "Forget?" : "Forget", role: sure == h.id ? .destructive : nil) {
+                        if sure == h.id { sure = nil; withAnimation { core.forget(h.id) } }
+                        else {
+                            withAnimation { sure = h.id }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { if sure == h.id { withAnimation { sure = nil } } }
+                        }
                     }
-                    .buttonStyle(.plain).hoverLift()
-                    .contextMenu { Button("Forget", role: .destructive) { core.forget(h.id) } }
-                    if h.id != core.hosts.last?.id { Divider().padding(.leading, 58) }
+                    .secondaryButton()
+                    .tint(sure == h.id ? TDColor.bad : nil)
                 }
             }
-            .glassCard()
-            Text("Touch and hold a computer to forget it.").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 6)
         }
+        .animation(.easeInOut(duration: 0.25), value: core.hosts.map(\.id))
     }
 
-    private func row(_ name: String, _ os: String, _ sub: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: osSymbol(os)).font(.body.weight(.semibold)).glassChip(42)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.body.weight(.semibold))
-                Text(sub).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-    }
+    // ---- by address, or a QR code ----
 
-    private var byAddress: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionTitle(text: "Pair")
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Scan the QR code in TwinDesk on the computer (Connection › Pair with a QR code) with the Camera app.", systemImage: "qrcode.viewfinder")
-                    .font(.subheadline)
-                HStack {
+    private var addressCard: some View {
+        DenseCard(title: "Pair") {
+            DenseRow(symbol: "qrcode.viewfinder", title: "Scan the computer’s QR code",
+                     hint: "In TwinDesk on the computer: Connection › Pair with a QR code. Scan it with the Camera app.", divider: false) { EmptyView() }
+            VStack(spacing: 0) {
+                Divider().overlay(TDColor.line)
+                HStack(spacing: 10) {
+                    Image(systemName: "number").font(.system(size: 17, weight: .medium)).foregroundStyle(TDColor.text.opacity(0.85)).frame(width: 30)
                     TextField("Computer’s address, e.g. 192.168.1.20", text: $address)
+                        .font(.subheadline)
                         .keyboardType(.numbersAndPunctuation).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("Pair") { core.pairAddress(address) }.primaryButton().disabled(address.isEmpty)
+                        .onSubmit { if !address.isEmpty { core.pairAddress(address) } }
+                    Button("Connect") { core.pairAddress(address) }.primaryButton().controlSize(.small).disabled(address.isEmpty)
                 }
-                if !core.discovery.error.isEmpty { Text(core.discovery.error).font(.caption).foregroundStyle(TDColor.warn) }
+                .padding(.vertical, 9)
             }
-            .glassCard()
         }
+    }
+
+    private var usbCard: some View {
+        DenseCard(title: "USB cable") {
+            DenseRow(symbol: "cable.connector", title: core.link.wired ? "Connected through the cable" : core.usb.ready ? "\(core.usb.computerName ?? "A computer") is on the cable" : "Not plugged in",
+                     hint: "On a cable the session, the screen and files go through it: faster than Wi-Fi. TwinDesk moves onto it by itself.",
+                     divider: false) {
+                if core.link.wired { Pill(text: "In use") } else if core.usb.ready { Pill(text: "Ready", color: TDColor.accent) }
+            }
+        }
+    }
+
+    private func ago(_ t: Double) -> String {
+        guard t > 0 else { return "never" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: Date(timeIntervalSince1970: t), relativeTo: Date())
     }
 }
 

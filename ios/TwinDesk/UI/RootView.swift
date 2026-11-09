@@ -232,6 +232,7 @@ struct Sidebar: View {
         .background(Backdrop())
         .navigationTitle("TwinDesk")
         .navigationBarTitleDisplayMode(selection == nil ? .large : .inline)
+        .toolbar { ToolbarItem(placement: .navigationBarTrailing) { AppMark(size: 30) } }
         .refreshable { core.discovery.refresh() }
     }
 
@@ -244,8 +245,8 @@ struct Sidebar: View {
             Section {
                 ForEach(group) { p in
                     if let sel = selection {
-                        Button { sel.wrappedValue = p; ui.open(p) } label: { row(p).contentShape(Rectangle()) }
-                            .buttonStyle(.plain)
+                        Button { withAnimation(.easeOut(duration: 0.18)) { sel.wrappedValue = p; ui.open(p) } } label: { row(p).contentShape(Rectangle()) }
+                            .buttonStyle(PressScale())
                             .hoverLift()
                             .listRowBackground(sel.wrappedValue == p ? TDColor.accent.opacity(0.35) : TDColor.card)
                     } else {
@@ -269,8 +270,8 @@ struct Sidebar: View {
                     Text(statusLine).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Circle().fill(core.connected ? TDColor.good : core.state == "connecting" ? TDColor.warn : Color.secondary.opacity(0.4))
-                    .frame(width: 9, height: 9)
+                if core.connected { LiveDot(size: 9) }
+                else { Circle().fill(core.state == "connecting" ? TDColor.warn : Color.secondary.opacity(0.4)).frame(width: 9, height: 9) }
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 14)
@@ -286,7 +287,7 @@ struct Sidebar: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScale())
         .hoverLift()
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
@@ -306,7 +307,7 @@ struct Sidebar: View {
             FeatureIcon(symbol: p.icon, color: p.color)
             Text(p.title).foregroundStyle(TDColor.text)
             Spacer()
-            if inUse(p) { Circle().fill(TDColor.good).frame(width: 8, height: 8) }
+            if inUse(p) { LiveDot().transition(.scale.combined(with: .opacity)) }
         }
         .padding(.vertical, 1)
     }
