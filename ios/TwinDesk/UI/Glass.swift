@@ -184,20 +184,21 @@ struct AppMark: View {
 // The top of the sidebar, as the computers' is: the mark, TwinDesk, and how it's connected.
 struct BrandHeader: View {
     @EnvironmentObject var core: Core
+    var compact = false // in a bar (iPad's sidebar): smaller, the bar's height
     var body: some View {
-        HStack(spacing: 14) {
-            AppMark(size: 58)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("TwinDesk").font(.title2.weight(.bold)).foregroundStyle(TDColor.text)
+        HStack(spacing: compact ? 10 : 14) {
+            AppMark(size: compact ? 34 : 58)
+            VStack(alignment: .leading, spacing: compact ? 1 : 3) {
+                Text("TwinDesk").font(compact ? .headline : .title2.weight(.bold)).foregroundStyle(TDColor.text)
                 HStack(spacing: 6) {
-                    if core.connected { LiveDot(size: 8) }
-                    else { Circle().fill(core.state == "connecting" ? TDColor.warn : TDColor.muted.opacity(0.6)).frame(width: 8, height: 8) }
-                    Text(line).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    if core.connected { LiveDot(size: compact ? 7 : 8) }
+                    else { Circle().fill(core.state == "connecting" ? TDColor.warn : TDColor.muted.opacity(0.6)).frame(width: compact ? 7 : 8, height: compact ? 7 : 8) }
+                    Text(line).font(compact ? .caption : .subheadline).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
-            Spacer(minLength: 0)
+            if !compact { Spacer(minLength: 0) }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, compact ? 0 : 6)
         .accessibilityElement(children: .combine)
     }
     private var line: String {

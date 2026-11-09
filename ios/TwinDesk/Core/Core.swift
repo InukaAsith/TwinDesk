@@ -198,11 +198,22 @@ final class Core: ObservableObject, LinkEvents {
         connect(h)
     }
 
-    // Off the screen, iOS's own way (no location or silent audio keeping the app running): the session
-    // moves onto the Bluetooth link, which iOS keeps while TwinDesk is suspended and wakes it for each
-    // thing that comes on it (bluetooth-central), the computer's pings included, so the session lives
-    // on. Not while the backups keep the app running (the network stays), the microphone is recording
-    // (iOS keeps it running) or the screen is shared.
+    // Off the screen, iOS's own way (General › Background › Off screen: Bluetooth, the default): the
+    // session moves onto the Bluetooth link, which iOS keeps while TwinDesk is suspended and wakes it
+    // for each thing that comes on it (bluetooth-central), the computer's pings included, so the
+    // session lives on; back on Wi-Fi when TwinDesk is open again (wake). Not while the backups keep
+    // the app running (the network stays), the microphone is recording (iOS keeps it running), the
+    // screen is shared or files are on their way (they need the network). "Wi-Fi" keeps the session
+    // on the network for as long as iOS lets the app run, Bluetooth only once it drops.
+    var bleOffScreen: Bool { store.string("bg.mode", "ble") == "ble" }
+
+    func backgrounded() {
+        guard Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
+              !Background.shared.active, !mic.running, !mirror.sharing, !files.busy else { return }
+        NSLog("TwinDesk: off screen: the session onto Bluetooth")
+        connectBle(h)
+    }
+
     // Something that needs the network started while on Bluetooth (Share Screen, files): back on it.
     func needNetwork() {
         guard link.viaBle, link.connected else { return }

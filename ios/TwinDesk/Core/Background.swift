@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Staying connected with TwinDesk in the background. iOS suspends an app a few seconds after it
-// leaves the screen, which would end the session. The session isn't moved off the network on the way
-// out; if it drops, the computer invites the app back over Bluetooth, which iOS wakes the app for. The microphone,
+// leaves the screen, which would end the session. iOS's own way comes first: the session moves onto
+// the Bluetooth link (Core.backgrounded, unless Off screen is set to Wi-Fi), which iOS keeps and
+// wakes the app for; back on Wi-Fi when TwinDesk is open again. The microphone,
 // once recording, keeps going on its own (Mic). Two backups keep the whole app running instead, each
 // a switch in Settings › Background, off unless turned on:
 //
@@ -86,6 +87,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
             bgTask = UIApplication.shared.beginBackgroundTask(withName: "TwinDesk") { [weak self] in self?.endTask() }
         }
         apply()
+        Core.shared.backgrounded() // General › Background › Off screen: Bluetooth (the default)
         DispatchQueue.main.asyncAfter(deadline: .now() + 20) { self.endTask() }
     }
 

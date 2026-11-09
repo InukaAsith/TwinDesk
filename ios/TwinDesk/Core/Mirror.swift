@@ -76,6 +76,12 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
         Background.shared.apply() // the app stays up while it relays the screen
         read(c)
         core.changed()
+        // A phone holds the session (Peer, phone to phone: no computer then): the screen goes to it,
+        // once it asks (screen.start) or at once if it asked before Share Screen was started.
+        if core.peer.connected {
+            core.peer.shareStarted()
+            return
+        }
         if !core.connected {
             // Nothing to share with: the broadcast stops itself and says why.
             sendExt(["stop": 1])
@@ -130,6 +136,8 @@ final class Mirror: Feature, URLSessionTaskDelegate, StreamDelegate {
             core.send(msg("phone.mirror", ["open": false]))
         }
         core.changed()
+        // Shared off screen and done: onto Bluetooth now (Core.backgrounded waited for it).
+        DispatchQueue.main.async { if !self.core.inFront { self.core.backgrounded() } }
     }
 
     private func sendExt(_ m: JSON) {

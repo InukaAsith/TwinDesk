@@ -73,7 +73,21 @@ struct SettingsView: View {
 
                 SectionTitle(text: "Background")
                 VStack(alignment: .leading, spacing: 12) {
-                    ToggleRow(title: "Stay connected", detail: "Keeps the connection in the background. Bluetooth restores it if Wi-Fi drops", on: bg("bg.on"))
+                    ToggleRow(title: "Stay connected", detail: "Keeps the connection in the background", on: bg("bg.on"))
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("When TwinDesk is in the background")
+                        Picker("When TwinDesk is in the background", selection: Binding<String>(get: { _ = core.tick; return core.store.string("bg.mode", "ble") }, set: { (v: String) in core.store.setString("bg.mode", v); core.changed() })) {
+                            Text("Bluetooth").tag("ble")
+                            Text("Wi-Fi").tag("wifi")
+                        }
+                        .pickerStyle(.segmented)
+                        Text(core.store.string("bg.mode", "ble") == "ble"
+                             ? "The connection moves to Bluetooth when TwinDesk leaves the screen and back to Wi-Fi when it opens. Uses the least battery and survives the screen locking."
+                             : "The connection stays on Wi-Fi while iOS keeps TwinDesk running, usually while the screen is on. Bluetooth restores it if Wi-Fi drops.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .disabled(!core.store.flag("bg.on", true))
                     Divider()
                     Text("Keep TwinDesk running with").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                     ToggleRow(title: "Location", detail: locationDetail, on: bg("bg.location", false))

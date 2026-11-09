@@ -224,6 +224,20 @@ private struct PairPrompts: ViewModifier {
     }
 }
 
+// iPad: TwinDesk's mark, name and state in the sidebar's bar (beside its button), no glass pill
+// around them on iOS 26.
+private struct BrandBar: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if !on { content }
+        else if #available(iOS 26.0, *) {
+            content.toolbar { ToolbarItem(placement: .navigationBarLeading) { BrandHeader(compact: true) }.sharedBackgroundVisibility(.hidden) }
+        } else {
+            content.toolbar { ToolbarItem(placement: .navigationBarLeading) { BrandHeader(compact: true) } }
+        }
+    }
+}
+
 // The sidebar: who we're connected to, then the features.
 struct Sidebar: View {
     @EnvironmentObject var core: Core
@@ -242,16 +256,24 @@ struct Sidebar: View {
         .navigationTitle(selection == nil ? "TwinDesk" : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(selection == nil ? .hidden : .automatic, for: .navigationBar)
+        .modifier(BrandBar(on: selection != nil)) // iPad: the mark and name in the bar, level with the sidebar button
         .refreshable { core.discovery.refresh() }
     }
 
     @ViewBuilder
     private var content: some View {
+        // The header and the connected device as the section's header, not its rows: an inset
+        // grouped section clips its rows to its own (large, on iOS 26) corners, which cut the card's.
         Section {
-            BrandHeader()
-                .listRowInsets(EdgeInsets(top: 4, leading: 6, bottom: 10, trailing: 6))
-                .listRowBackground(Color.clear)
-            deviceRow
+        } header: {
+            VStack(spacing: 12) {
+                if selection == nil { BrandHeader().padding(.horizontal, 6) } // iPhone: no bar, the header here
+                deviceRow
+            }
+            .textCase(nil)
+            .padding(.top, selection == nil ? 4 : 8)
+            .padding(.bottom, 4)
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
         // With a phone: only what it and this one can do (PeerViews' peerShows); Messages only then.
         let groups = Page.groups.map { g in g.filter { core.peerMode ? peerShows($0, core.peer) : $0 != .messages } }.filter { !$0.isEmpty }
@@ -306,8 +328,6 @@ struct Sidebar: View {
         }
         .buttonStyle(PressScale())
         .hoverLift()
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
     }
 
     private var statusLine: String {

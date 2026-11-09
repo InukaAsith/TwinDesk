@@ -53,11 +53,16 @@ final class Files: Feature {
     // screen is off was never pulled (the app suspended: the computer's 10 s wait for file.pull ran
     // out) and its file.chunk stopped when the session dropped.
     private var task: UIBackgroundTaskIdentifier = .invalid
+    var busy: Bool { !incoming.isEmpty || !outgoing.isEmpty }
     private func keepRunning() {
-        let busy = !incoming.isEmpty || !outgoing.isEmpty
+        let busy = self.busy
         if busy, task == .invalid {
             task = UIApplication.shared.beginBackgroundTask(withName: "TwinDesk files") { [weak self] in self?.letGo() }
-        } else if !busy { letGo() }
+        } else if !busy {
+            // Done off screen: onto Bluetooth now (Core.backgrounded waited for the files).
+            if task != .invalid { DispatchQueue.main.async { if !Core.shared.inFront { Core.shared.backgrounded() } } }
+            letGo()
+        }
     }
     private func letGo() {
         guard task != .invalid else { return }

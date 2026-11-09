@@ -245,6 +245,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         role = ""
         key = ""
         peerCaps = nil
+        screenAsked = nil
         let waiting = calls
         calls.removeAll()
         for (_, cb) in waiting { cb(["error": "Disconnected"]) }
@@ -310,7 +311,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let pb = UIPasteboard.general
         guard pb.changeCount != clipCount else { return }
         clipCount = pb.changeCount
-        guard pb.hasStrings, let text = pb.string else { return }
+        guard !core.clip.ownOnBoard, pb.hasStrings, let text = pb.string else { return } // TwinDesk's own copy: never read
         clipOut(text)
     }
 
@@ -324,7 +325,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let text = m.str("text", max: Proto.clipMaxBytes)
         guard clipOn, !text.isEmpty else { return }
         clipLastIn = text
-        UIPasteboard.general.string = text
+        core.clip.write(text) // marked as TwinDesk's, kept on this device (Clip.put)
         clipCount = UIPasteboard.general.changeCount
     }
 
@@ -549,16 +550,34 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             core.hub.originals(ids) { urls in self.sendFiles(urls) }
             reply(["ok": true, "n": ids.count])
         case "screen.start":
+            let size = min(1920, max(480, m.int("maxSize", 1600)))
             guard core.mirror.sharing else {
-                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk, then request it again on that device.")
-                return reply(["error": "Start Share Screen on \(core.store.deviceName) first (TwinDesk › Share screen), then try again."])
+                // Remembered: starting Share Screen here sends it straight away (shareStarted).
+                screenAsked = size
+                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk to show it.")
+                return reply(["error": "Start Share Screen on \(core.store.deviceName) (TwinDesk › Share screen). It appears here once started."])
             }
             reply(["ok": true])
-            core.mirror.peerWant(min(1920, max(480, m.int("maxSize", 1600))))
-            if role == "host" { send(msg("screen.ready")) } // it GETs our screen
-            else if let r = request("/peer/screen", "POST"), let fp = link.host?.fp { screenOut.post(r, pin: fp) } // we POST it
+            sendScreen(size)
         default: reply(["error": "unknown"])
         }
+    }
+
+    // ---- our screen, there ----
+
+    private var screenAsked: Int? // it asked before Share Screen was started here (its maxSize)
+
+    private func sendScreen(_ size: Int) {
+        screenAsked = nil
+        core.mirror.peerWant(size)
+        if role == "host" { send(msg("screen.ready")) } // it GETs our screen
+        else if let r = request("/peer/screen", "POST"), let fp = link.host?.fp { screenOut.post(r, pin: fp) } // we POST it
+    }
+
+    // Share Screen started here while a phone holds the session: to it, if it asked already.
+    func shareStarted() {
+        guard connected else { return }
+        if let size = screenAsked { sendScreen(size) }
     }
 
     // ---- its screen, here ----
