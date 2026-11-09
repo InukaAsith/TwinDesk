@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS = {
     reverseScroll: false,
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
     linkedBy: {}, // The last `linked` per paired device id, restored on connect
+    portalsByPeer: {}, // opt-in directional display-edge portals, stored per paired device
     gestures: true, // Trackpad gestures work on the other computer (synced per pair)
     shakeHome: false, // shake this Mac's mouse while driving: the pointer comes home (the helper's Shake.swift)
     syncPads: false, // every mouse and trackpad moves the one pointer; off: a computer's own takes it back (synced per pair)

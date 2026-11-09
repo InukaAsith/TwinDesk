@@ -5,6 +5,7 @@
 const { ipcMain, shell, app, screen, dialog, clipboard, Menu, systemPreferences } = require('electron');
 const P = require('../shared/protocol.js');
 const CL = require('../shared/cursorlock.js');
+const Portals = require('../shared/cursor-portals.js');
 const { LINKS } = require('../shared/about.js');
 const store = require('./store');
 const { planConnect, settleConnect, sessionIsUp } = require('./connect-plan');
@@ -330,6 +331,15 @@ function setupIpc(ctx) {
     },
     identifyDisplays() {
       ctx.kvm.map.identify();
+    },
+    setPortals(value) {
+      const peer = ctx.server.current;
+      const rules = Portals.normalize(value);
+      if (!peer || !rules || ctx.kvm.mode !== 'home') return;
+      if (rules.some((r) => !Portals.usableSource(ctx.kvm.map.mine, r) || !Portals.usableTarget(ctx.kvm.map.theirs, r.target))) return;
+      settings.kvm.portalsByPeer = { ...(settings.kvm.portalsByPeer || {}), [peer.deviceId]: rules };
+      save();
+      ctx.kvm.config();
     },
     setKvm(partial) {
       const prev = { ...settings.kvm };
