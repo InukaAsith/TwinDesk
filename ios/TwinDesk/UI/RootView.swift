@@ -7,14 +7,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case overview, connection, phones, receive, share, remote, clipboard, notifications, files, photos, audio, camera, media, airplay, shortcuts, general, about
+    case overview, connection, receive, share, remote, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, general, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .overview: return "Overview"
         case .connection: return "Connection"
-        case .phones: return "Phones"
         case .receive: return "Receive screen"
         case .share: return "Share screen"
         case .remote: return "Remote"
@@ -22,6 +21,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .notifications: return "Notifications"
         case .files: return "File Sharing"
         case .photos: return "Photos"
+        case .messages: return "Messages"
         case .audio: return "Audio"
         case .camera: return "Camera"
         case .media: return "Media"
@@ -36,7 +36,6 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .overview: return "house.fill"
         case .connection: return "link"
-        case .phones: return "iphone.gen2"
         case .receive: return "display"
         case .share: return "rectangle.on.rectangle"
         case .remote: return "gamecontroller.fill"
@@ -44,6 +43,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .notifications: return "bell.fill"
         case .files: return "folder.fill"
         case .photos: return "photo.fill.on.rectangle.fill"
+        case .messages: return "message.fill"
         case .audio: return "speaker.wave.2.fill"
         case .camera: return "video.fill"
         case .media: return "play.fill"
@@ -59,7 +59,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .overview: return Color(white: 0.45)
         case .connection, .receive, .share, .files, .about: return TDColor.accent
         case .remote: return .orange
-        case .phones: return TDColor.good
+        case .messages: return TDColor.good
         case .clipboard: return Color(red: 0.35, green: 0.78, blue: 0.85)
         case .notifications: return TDColor.bad
         case .photos: return Color(red: 1, green: 0.58, blue: 0.2)
@@ -74,9 +74,9 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
     // The sidebar's groups, as the computers have them.
     static let groups: [[Page]] = [
-        [.overview, .connection, .phones],
+        [.overview, .connection],
         [.receive, .share, .remote],
-        [.clipboard, .notifications, .files, .photos],
+        [.clipboard, .notifications, .files, .photos, .messages],
         [.audio, .camera, .media],
         [.airplay, .shortcuts],
         [.general, .about],
@@ -253,7 +253,9 @@ struct Sidebar: View {
                 .listRowBackground(Color.clear)
             deviceRow
         }
-        ForEach(Array(Page.groups.enumerated()), id: \.offset) { _, group in
+        // With a phone: only what it and this one can do (PeerViews' peerShows); Messages only then.
+        let groups = Page.groups.map { g in g.filter { core.peerMode ? peerShows($0, core.peer) : $0 != .messages } }.filter { !$0.isEmpty }
+        ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
             Section {
                 ForEach(group) { p in
                     if let sel = selection {
@@ -272,17 +274,20 @@ struct Sidebar: View {
 
     // The connected computer (or the one we'd connect to), as the computers show the phone.
     private var deviceRow: some View {
-        Button { ui.open(.connection) } label: {
+        // A phone holds the session: that phone in its place.
+        let phone = core.peerMode ? core.peer : nil
+        let live = core.connected || phone != nil
+        return Button { ui.open(.connection) } label: {
             HStack(spacing: 14) {
-                Image(systemName: osSymbol(core.host?.os ?? (core.hosts.first?.os ?? "mac")))
+                Image(systemName: phone.map { $0.peerOs == "ios" ? "iphone" : "iphone.gen2" } ?? osSymbol(core.host?.os ?? (core.hosts.first?.os ?? "mac")))
                     .font(.system(size: 22, weight: .regular)).foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(core.host?.name ?? core.hosts.first?.name ?? "No computer").font(.headline).foregroundStyle(TDColor.text)
-                    Text(statusLine).font(.subheadline).foregroundStyle(.secondary)
+                    Text(phone?.peerName ?? core.host?.name ?? core.hosts.first?.name ?? "No computer").font(.headline).foregroundStyle(TDColor.text)
+                    Text(phone != nil ? "Phone · Connected" : statusLine).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if core.connected { LiveDot(size: 9) }
+                if live { LiveDot(size: 9) }
                 else { Circle().fill(core.state == "connecting" ? TDColor.warn : Color.secondary.opacity(0.4)).frame(width: 9, height: 9) }
             }
             .padding(.vertical, 10)
@@ -292,8 +297,8 @@ struct Sidebar: View {
             .background {
                 let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
                 ZStack {
-                    shape.fill(core.connected ? TDColor.accent.opacity(0.18) : TDColor.card)
-                    shape.strokeBorder(core.connected ? TDColor.accent.opacity(0.8) : TDColor.line, lineWidth: 1.5)
+                    shape.fill(live ? TDColor.accent.opacity(0.18) : TDColor.card)
+                    shape.strokeBorder(live ? TDColor.accent.opacity(0.8) : TDColor.line, lineWidth: 1.5)
                 }
                 .padding(1)
             }
@@ -326,7 +331,16 @@ struct Sidebar: View {
 
     private func inUse(_ p: Page) -> Bool {
         _ = core.tick
-        if p == .phones { return core.peer.connected }
+        if core.peerMode {
+            switch p {
+            case .connection: return true
+            case .share: return core.mirror.sharing
+            case .clipboard: return core.peer.clipOn
+            case .notifications: return core.peer.notifsOn
+            case .files: return !core.peer.batches.isEmpty
+            default: return false
+            }
+        }
         guard core.connected else { return false }
         switch p {
         case .receive: return core.screen.viewing
@@ -346,12 +360,19 @@ struct Sidebar: View {
 
 // One page by name.
 struct PageView: View {
+    @EnvironmentObject var core: Core
     let page: Page
     var body: some View {
+        let _ = core.tick
+        if core.peerMode && ![.connection, .general, .about].contains(page) { PeerPageView(page: page) }
+        else { pc }
+    }
+
+    @ViewBuilder
+    private var pc: some View {
         switch page {
         case .overview: OverviewView()
         case .connection: ConnectionView()
-        case .phones: PhonesView()
         case .receive: ReceiveScreenView()
         case .share: ShareScreenView()
         case .remote: RemoteView()
@@ -359,6 +380,7 @@ struct PageView: View {
         case .notifications: NotificationsView()
         case .files: FilesView()
         case .photos: PhotosView()
+        case .messages: PeerThreadsView() // only a phone's (the sidebar hides it otherwise)
         case .audio: AudioView()
         case .camera: CameraView()
         case .media: MediaView()

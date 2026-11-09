@@ -513,10 +513,11 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
 
     // ---- fast files (fx): the file's bytes as one HTTPS stream on the session's port ----
 
-    // A request for /twindesk/fx/<id>, or nil when fast files can't be used (no token, a group network).
+    // A request for /twindesk/fx/<id>, or nil when fast files can't be used (no token, Bluetooth). On
+    // the network, the cable, a Wi-Fi Direct group or a hotspot (this phone's or the computer's) alike,
+    // as the computers' fastfile.js usable(); anything wrong before a byte: file.chunk (Files.swift).
     func fxRequest(_ id: String, method: String) -> URLRequest? {
         guard state == "connected", !viaBle, !fxToken.isEmpty, let h = host else { return nil }
-        if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
         let a = address.contains(":") ? "[\(address)]" : address
         let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         guard let url = URL(string: "https://\(a):\(h.port)\(Proto.fxPath)\(enc)") else { return nil }
@@ -527,10 +528,10 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         return r
     }
 
-    // Where fast files v2 go (Fx2.swift), or nil when they can't (no engine there, a group network).
+    // Where fast files v2 go (Fx2.swift), or nil when they can't (no engine there, Bluetooth). Anything
+    // wrong before a byte: the fx way, then file.chunk (Files.swift).
     func fx2Target() -> Fx2.To? {
         guard state == "connected", !viaBle, !fxToken.isEmpty, fx2Port > 0, let h = host, !h.fp.isEmpty else { return nil }
-        if Proto.groupNets.contains(where: { address.hasPrefix($0) }) { return nil }
         return Fx2.To(host: address, port: fx2Port, fp: h.fp, token: fxToken)
     }
 

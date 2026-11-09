@@ -227,6 +227,14 @@ does fx2 both ways (`Fx2.kt`): its ranges in parallel, each read or written at i
 hashes in `file.end`. A file it can't read at offsets (a stream, not a file) goes the fx way alone;
 anything else wrong before a byte went: that file and the rest of the session go the fx way.
 
+### The iPhone and iPad and fx2
+
+The iPhone and iPad app says `fx: 1, fx2: 1` in hello and does fx2 both ways (`Fx2.swift`), with the
+same fallbacks as the phone: anything wrong before a byte sends that file and the rest of the session
+the fx way, then as `file.chunk`. That holds on the network, a Wi-Fi Direct group or a hotspot (its own
+`172.20.10.x` or the computer's), and on the cable, where `Usb.swift` mirrors the files engine's port
+from welcome too. Bluetooth keeps `file.chunk`. It used to keep `file.chunk` on groups and hotspots.
+
 ### Fast files on a link made for them
 
 Wi-Fi Direct groups and hotspots made by netlink.js carry fx and fx2 as the network does (they used
@@ -274,3 +282,5 @@ with `too_big`, as before.
 | Computer ↔ Android, cable | tdv1 | fx |
 | Computer ↔ Android 2.5.2+ (older) | tdv1 | fx on the network or a cable, else file.chunk |
 | Computer ↔ Android, Bluetooth, or an older side | tdv1 | file.chunk |
+| Computer ↔ iPhone or iPad, network, cable, Wi-Fi Direct or hotspot | tdv1 | fx2, else fx, else file.chunk |
+| Computer ↔ iPhone or iPad, Bluetooth | tdv1 | file.chunk |

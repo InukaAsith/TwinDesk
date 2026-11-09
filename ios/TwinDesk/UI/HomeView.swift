@@ -114,24 +114,31 @@ struct Hero: View {
     var body: some View {
         let h = core.host ?? core.hosts.first
         let st = core.state
+        let phone = core.peerMode ? core.peer : nil // another phone holds the session: it on the right
+        let up = core.connected || phone != nil
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 6) {
                 device(Device.isPad ? "ipad.landscape" : "iphone", "This \(Device.word)")
                 VStack(spacing: 7) {
-                    LinkLine(up: core.connected)
+                    LinkLine(up: up)
                     Text(linkText).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 4)
-                device(osSymbol(h?.os ?? "mac"), h?.name ?? "Computer")
-                    .opacity(core.connected || st == "connecting" ? 1 : 0.55)
-                    .animation(.easeInOut(duration: 0.4), value: core.connected)
+                Group {
+                    if let p = phone { device(p.peerOs == "ios" ? "iphone" : "iphone.gen2", p.peerName) }
+                    else { device(osSymbol(h?.os ?? "mac"), h?.name ?? "Computer") }
+                }
+                    .opacity(up || st == "connecting" ? 1 : 0.55)
+                    .animation(.easeInOut(duration: 0.4), value: up)
             }
             Divider().overlay(TDColor.line).padding(.top, 16)
-            Text(statusText).font(.subheadline).foregroundStyle(core.message.isEmpty || core.connected ? Color.secondary : TDColor.warn)
+            Text(phone.map { "Connected to \($0.peerName). The pages show what it can do." } ?? statusText).font(.subheadline).foregroundStyle(core.message.isEmpty || up ? Color.secondary : TDColor.warn)
                 .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 11)
             HStack(spacing: 10) {
-                if core.connected {
+                if let p = phone {
+                    Button("Disconnect", role: .destructive) { p.disconnect() }.secondaryButton()
+                } else if core.connected {
                     Button("Disconnect", role: .destructive) { core.disconnect() }.secondaryButton()
                 } else if st == "connecting" {
                     ProgressView()
@@ -142,7 +149,7 @@ struct Hero: View {
             .controlSize(.small)
             .padding(.top, 10)
         }
-        .glassCard(26, tint: core.connected ? TDColor.good : nil)
+        .glassCard(26, tint: up ? TDColor.good : nil)
         .animation(.easeInOut(duration: 0.3), value: st)
     }
 
@@ -156,6 +163,7 @@ struct Hero: View {
     }
 
     private var linkText: String {
+        if core.peerMode { return "Phone" }
         switch core.state {
         case "connected":
             let via = core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi"
@@ -208,6 +216,8 @@ struct ConnectionView: View {
                 addressCard
                 usbCard
             }
+            // Phones and tablets (Peer), at the bottom as on Android.
+            PhonesSection()
         }
         .refreshable { core.discovery.refresh() }
         // While it's on screen, computers not paired yet are found over Bluetooth too (Pair through it).
@@ -234,6 +244,9 @@ struct ConnectionView: View {
                 .buttonStyle(.borderless).accessibilityLabel("Look again")
         } content: {
             let list = core.nearby
+            if core.peerMode {
+                DenseRow(symbol: "iphone", title: "Connected to \(core.peer.peerName)", hint: "Connecting to a computer ends the session with \(core.peer.peerName).", divider: false) { EmptyView() }
+            }
             if !core.discovery.error.isEmpty {
                 DenseRow(symbol: "exclamationmark.triangle", title: "Can’t look for computers on this network",
                          hint: core.discovery.error, hintColor: TDColor.warn, divider: false) { EmptyView() }
@@ -273,7 +286,7 @@ struct ConnectionView: View {
             else if known != nil && !going { Pill(text: "Paired", color: TDColor.muted) }
             if !online && !going {
                 if let h = known {
-                    Button(core.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton()
+                    Button(core.connected || core.peer.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton()
                 } else {
                     Button("Pair") { core.pair(f) }.primaryButton()
                 }
@@ -296,7 +309,7 @@ struct ConnectionView: View {
                          hint: online ? "Connected" : near ? "Nearby · last seen \(ago(h.lastSeen))" : "Last seen \(ago(h.lastSeen)) at \(h.address)",
                          divider: i > 0) {
                     if online { Pill(text: "Online") }
-                    else { Button(core.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton() }
+                    else { Button(core.connected || core.peer.connected ? "Switch" : "Connect") { core.connect(h) }.secondaryButton() }
                     Button(sure == h.id ? "Forget?" : "Forget", role: sure == h.id ? .destructive : nil) {
                         if sure == h.id { sure = nil; withAnimation { core.forget(h.id) } }
                         else {
