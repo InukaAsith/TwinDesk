@@ -199,6 +199,9 @@ struct BrandHeader: View {
             if !compact { Spacer(minLength: 0) }
         }
         .padding(.vertical, compact ? 0 : 6)
+        // In the bar its full width: a toolbar item is offered less than it needs, and the name and
+        // state were cut to a faded "T" (iPad's sidebar).
+        .fixedSize(horizontal: compact, vertical: false)
         .accessibilityElement(children: .combine)
     }
     private var line: String {
