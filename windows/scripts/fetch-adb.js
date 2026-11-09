@@ -12,9 +12,9 @@ const https = require('https');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
-const ZIP_URL = 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip';
-// The zip's SHA-256, as vdd.js and gamepad.js pin their downloads. The URL always serves the
-// newest platform-tools (r37.0.1 now), so the pin wants the new zip's hash when Google ships one.
+// A fixed release (not platform-tools-latest, which changes under the pin) and its SHA-256, as
+// vdd.js and gamepad.js pin their downloads. A newer adb: bump both together.
+const ZIP_URL = 'https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip';
 const ZIP_SHA256 = '45F4D63113E895EBDE0C90F194099A4676B6AC653BD28D54314A9E022BBC1A99';
 const FILES = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'];
 
