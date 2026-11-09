@@ -71,10 +71,68 @@ enum TDColor {
     static let text = dyn(rgb(0.07, 0.07, 0.08), rgb(0.96, 0.96, 0.97))
     static let muted = dyn(rgb(0.42, 0.42, 0.45), rgb(0.58, 0.58, 0.6))
     static let sheen = dyn(UIColor.white.withAlphaComponent(0.6), UIColor.white.withAlphaComponent(0.045))
-    static let accent = Color(red: 0.04, green: 0.52, blue: 1) // #0a84ff
+    // The accent colour (General › Appearance, the computers' swatches; "" = System: iOS has no
+    // accent of its own to follow, so the computers' blue). RootView redraws when it changes.
+    static var accent: Color { Color(uiAccent) }
+    static var uiAccent: UIColor { Accent.color(UserDefaults.standard.string(forKey: Accent.key) ?? "") }
     static let good = Color(red: 0.2, green: 0.84, blue: 0.29) // #32d74b
     static let warn = Color(red: 1, green: 0.7, blue: 0.25)
     static let bad = Color(red: 1, green: 0.27, blue: 0.23)
+}
+
+// The computers' accent swatches (shared/look.js ACCENTS), any #rrggbb.
+enum Accent {
+    static let key = "accent"
+    static let fallback = "#0a84ff"
+    static let swatches = ["#0a84ff", "#5e5ce6", "#bf5af2", "#ff375f", "#ff453a", "#ff9f0a", "#30d158", "#00c7be", "#8e8e93"]
+
+    static func color(_ hex: String) -> UIColor {
+        let h = hex.lowercased()
+        let v = (h.count == 7 && h.hasPrefix("#")) ? UInt32(h.dropFirst(), radix: 16) : nil
+        guard let n = v ?? UInt32(fallback.dropFirst(), radix: 16) else { return .systemBlue }
+        return UIColor(red: CGFloat(n >> 16 & 255) / 255, green: CGFloat(n >> 8 & 255) / 255, blue: CGFloat(n & 255) / 255, alpha: 1)
+    }
+
+    // The accent turned round the colour wheel (the backdrop's other glows), as saturated as it is.
+    static func shifted(_ turn: CGFloat, brightness: CGFloat = 1) -> Color {
+        var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, a: CGFloat = 0
+        TDColor.uiAccent.getHue(&hue, saturation: &sat, brightness: &bri, alpha: &a)
+        let h2 = (hue + turn).truncatingRemainder(dividingBy: 1)
+        return Color(UIColor(hue: h2 < 0 ? h2 + 1 : h2, saturation: sat, brightness: min(1, bri * brightness), alpha: 1))
+    }
+}
+
+// General › Appearance's accent: System first (half of it lighter), then the swatches.
+struct AccentPicker: View {
+    @AppStorage(Accent.key) private var accent = ""
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 34), spacing: 10)], spacing: 10) {
+            swatch("", Color(Accent.color(Accent.fallback)), label: "System")
+            ForEach(Accent.swatches, id: \.self) { h in swatch(h, Color(Accent.color(h)), label: h) }
+        }
+    }
+
+    private func swatch(_ value: String, _ c: Color, label: String) -> some View {
+        let on = accent == value
+        return Button {
+            withAnimation(.easeInOut(duration: 0.25)) { accent = value }
+        } label: {
+            ZStack {
+                if value.isEmpty {
+                    Circle().fill(AngularGradient(colors: [c, c, c.opacity(0.45), c.opacity(0.45)], center: .center))
+                } else {
+                    Circle().fill(c)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .padding(3)
+            .overlay(Circle().strokeBorder(on ? c : .clear, lineWidth: 2))
+            .scaleEffect(on ? 1.06 : 1)
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
 }
 
 // Light, dark or as the system is (General › Appearance).
@@ -90,17 +148,20 @@ enum Appearance: String, CaseIterable, Identifiable {
 // computers' windows have; in light, the same glows as pale washes. Still, so it costs nothing.
 struct Backdrop: View {
     @Environment(\.colorScheme) private var scheme
+    @AppStorage(Accent.key) private var accent = "" // redraws when it changes
     var body: some View {
         let dark = scheme == .dark
         ZStack {
             (dark ? Color(red: 0.035, green: 0.035, blue: 0.055) : TDColor.content)
-            RadialGradient(colors: [Color(red: 0.42, green: 0.26, blue: 0.78).opacity(dark ? 0.30 : 0.16), .clear],
+            // The accent's glow from the top left; the colours beside it on the wheel to the right
+            // and low down (a blue accent: violet, teal and ember, as the computers have it).
+            RadialGradient(colors: [Accent.shifted(0.15, brightness: 0.85).opacity(dark ? 0.30 : 0.16), .clear],
                            center: UnitPoint(x: 0.2, y: -0.05), startRadius: 0, endRadius: 620)
-            RadialGradient(colors: [Color(red: 0.12, green: 0.55, blue: 0.58).opacity(dark ? 0.20 : 0.12), .clear],
+            RadialGradient(colors: [Accent.shifted(-0.12, brightness: 0.7).opacity(dark ? 0.20 : 0.12), .clear],
                            center: UnitPoint(x: 1.05, y: 0.35), startRadius: 0, endRadius: 560)
-            RadialGradient(colors: [Color(red: 0.62, green: 0.30, blue: 0.12).opacity(dark ? 0.16 : 0.08), .clear],
+            RadialGradient(colors: [Accent.shifted(0.45, brightness: 0.75).opacity(dark ? 0.16 : 0.08), .clear],
                            center: UnitPoint(x: 0.85, y: 1.05), startRadius: 0, endRadius: 520)
-            RadialGradient(colors: [Color(red: 0.55, green: 0.18, blue: 0.40).opacity(dark ? 0.12 : 0.06), .clear],
+            RadialGradient(colors: [Accent.shifted(0.25, brightness: 0.65).opacity(dark ? 0.12 : 0.06), .clear],
                            center: UnitPoint(x: -0.1, y: 0.9), startRadius: 0, endRadius: 460)
             LinearGradient(colors: [TDColor.sheen, .clear], startPoint: .top, endPoint: .center)
         }

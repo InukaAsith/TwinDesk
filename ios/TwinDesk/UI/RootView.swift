@@ -120,9 +120,12 @@ struct RootView: View {
     @StateObject private var ui = AppUI.shared
     @Environment(\.horizontalSizeClass) private var width
     @State private var dropping = false
+    @AppStorage(Accent.key) private var accent = ""
 
     var body: some View {
         layout
+            // A new accent: everything drawn again in it (the page open stays: AppUI keeps it).
+            .id(accent)
             .environmentObject(ui)
             .tint(TDColor.accent)
             .onDrop(of: [.fileURL, .item], isTargeted: $dropping) { providers in

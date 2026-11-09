@@ -25,6 +25,10 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     Text("Light or dark, or as this \(Device.word) is set (Automatic).").font(.caption).foregroundStyle(.secondary)
+                    Divider()
+                    Text("Accent colour").font(.subheadline.weight(.semibold))
+                    AccentPicker()
+                    Text("Buttons, switches and the background’s glow take it.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
 
