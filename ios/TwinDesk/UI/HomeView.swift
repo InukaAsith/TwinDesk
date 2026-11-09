@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Overview: the connected computer (how it's reached, Disconnect), what to do with it in a tap
-// (send the clipboard, photos, files; see its screen; the Remote; share this screen), its controls
-// (volume, Lock, Sleep) and what plays there.
+// (send the clipboard, photos, files; see its screen; the Remote), its controls (volume, Lock,
+// Sleep), what plays there, what it copied last and its latest notifications.
 // Connection: the computers nearby, the paired ones, pairing by QR code or address.
 import SwiftUI
 import PhotosUI
@@ -21,7 +21,7 @@ struct OverviewView: View {
                 if core.connected && (core.dev.can.contains(.volume) || core.dev.can.contains(.lock)) { controls }
             } right: {
                 if core.connected, let n = core.media.now { NowPlayingCard(now: n) }
-                if core.connected { ShareScreenCard() }
+                if core.connected { PcClipCard(); PcNotifsCard() }
                 if !core.connected {
                     VStack(alignment: .leading, spacing: 10) {
                         CardHeader(symbol: "link", color: TDColor.accent, title: core.hosts.isEmpty ? "Pair a computer" : "Connect",
@@ -149,7 +149,7 @@ struct Hero: View {
             .controlSize(.small)
             .padding(.top, 10)
         }
-        .glassCard(26, tint: up ? TDColor.good : nil)
+        .glassCard(26, tint: up ? TDColor.accent : nil) // the accent picked in General, not a fixed green
         .animation(.easeInOut(duration: 0.3), value: st)
     }
 
@@ -181,12 +181,75 @@ struct Hero: View {
     }
 }
 
+// What the computer copied, newest first (tap one: on this device's clipboard again).
+struct PcClipCard: View {
+    @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
+    var body: some View {
+        let name = core.host?.name ?? "the computer"
+        let list = Array(core.clip.history.filter { $0.dir == "in" }.prefix(3))
+        DenseCard(title: "\(name)’s clipboard") {
+            Button("All") { ui.open(.clipboard) }.buttonStyle(.borderless).font(.subheadline)
+        } content: {
+            if list.isEmpty {
+                DenseRow(symbol: "doc.on.clipboard", title: "Nothing copied yet",
+                         hint: core.sync.get("clipboard", "in") ? "What you copy on \(name) shows here." : "Turn on Receive in Clipboard to get what \(name) copies.",
+                         divider: false) { EmptyView() }
+            }
+            ForEach(Array(list.enumerated()), id: \.element.id) { i, item in
+                Button { if !item.pic { core.clip.write(item.text) } } label: {
+                    DenseRow(symbol: item.pic ? "photo" : "doc.on.clipboard", title: item.text, hint: ago(item.at), divider: i > 0) {
+                        if !item.pic { Image(systemName: "doc.on.doc").foregroundStyle(.secondary) }
+                    }
+                    .lineLimit(2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(item.pic)
+            }
+        }
+    }
+}
+
+// The computer's latest notifications, this session.
+struct PcNotifsCard: View {
+    @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
+    var body: some View {
+        let name = core.host?.name ?? "the computer"
+        let list = Array(core.notifs.recent.prefix(4))
+        DenseCard(title: "\(name)’s notifications") {
+            Button("Settings") { ui.open(.notifications) }.buttonStyle(.borderless).font(.subheadline)
+        } content: {
+            if list.isEmpty {
+                DenseRow(symbol: "bell", title: "No notifications yet",
+                         hint: core.sync.get("notifs", "in") ? "Notifications from \(name) show here while connected." : "Turn on Show notifications in Notifications to get them.",
+                         divider: false) { EmptyView() }
+            }
+            ForEach(Array(list.enumerated()), id: \.element.id) { i, n in
+                DenseRow(symbol: "bell.fill",
+                         title: n.title.isEmpty ? n.app : n.title,
+                         hint: [n.title.isEmpty ? "" : n.app, n.body, ago(n.at)].filter { !$0.isEmpty }.joined(separator: " · "),
+                         divider: i > 0) { EmptyView() }
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+private func ago(_ d: Date) -> String {
+    if Date().timeIntervalSince(d) < 60 { return "Just now" }
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .short
+    return f.localizedString(for: d, relativeTo: Date())
+}
+
 struct NowPlayingCard: View {
     @EnvironmentObject var core: Core
     let now: PcMedia.Now
     var body: some View {
         HStack(spacing: 14) {
-            FeatureIcon(symbol: "music.note", color: Page.media.color, size: 44)
+            Artwork(image: core.media.art, size: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(now.title).font(.body.weight(.semibold)).lineLimit(1)
                 Text([now.artist, now.app].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -197,6 +260,22 @@ struct NowPlayingCard: View {
             Button { core.media.ctl("next") } label: { Image(systemName: "forward.fill") }.buttonStyle(.plain)
         }
         .glassCard()
+    }
+}
+
+// What plays on the computer: its artwork when it sent one, else the Media icon.
+struct Artwork: View {
+    let image: UIImage?
+    var size: CGFloat = 44
+    var body: some View {
+        if let img = image {
+            Image(uiImage: img).resizable().scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: size * 0.18, style: .continuous).strokeBorder(.white.opacity(0.12)))
+        } else {
+            FeatureIcon(symbol: "music.note", color: Page.media.color, size: size)
+        }
     }
 }
 

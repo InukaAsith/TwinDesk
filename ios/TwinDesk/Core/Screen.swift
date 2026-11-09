@@ -32,6 +32,7 @@ final class Screen: Feature {
     var sound: Bool { core.store.flag("screen.sound", true) }
     var smooth: Bool { core.store.flag("screen.smooth", false) }
     var pen: Bool { core.store.flag("screen.pen", true) }
+    var penFast: Bool { core.store.flag("screen.penFast", false) } // Fast writing: the Pencil's samples batched (viewer.js)
 
     func setOpt(_ key: String, _ on: Bool) {
         core.store.setFlag(key, on)
@@ -41,7 +42,7 @@ final class Screen: Feature {
 
     func opts() -> JSON {
         msg("opts", ["sound": sound, "pacing": smooth ? "smooth" : "fast", "name": core.host?.name ?? "the computer",
-                     "touch": touchpad ? "pad" : "direct", "speed": core.remote.speed, "tap": core.remote.tapClick, "pen": pen])
+                     "touch": touchpad ? "pad" : "direct", "speed": core.remote.speed, "tap": core.remote.tapClick, "pen": pen, "penFast": penFast])
     }
 
     func repost() { host?.post(opts()) }

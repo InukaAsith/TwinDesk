@@ -251,7 +251,7 @@ struct LinkLine: View {
                 let now = t.date.timeIntervalSinceReferenceDate
                 ZStack(alignment: .leading) {
                     if up {
-                        Capsule().fill(LinearGradient(colors: [TDColor.good, TDColor.accent], startPoint: .leading, endPoint: .trailing))
+                        Capsule().fill(LinearGradient(colors: [TDColor.accent.opacity(0.55), TDColor.accent], startPoint: .leading, endPoint: .trailing))
                         let p = CGFloat(now.truncatingRemainder(dividingBy: 2.2) / 2.2)
                         LinearGradient(colors: [.clear, .white.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: 40).offset(x: -40 + p * (g.size.width + 40))
@@ -265,7 +265,7 @@ struct LinkLine: View {
             }
         }
         .frame(height: 3)
-        .shadow(color: up ? TDColor.good.opacity(0.35) : .clear, radius: 4)
+        .shadow(color: up ? TDColor.accent.opacity(0.4) : .clear, radius: 4)
     }
 }
 
@@ -393,15 +393,23 @@ struct CardHeader: View {
 struct PageScroll<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content
+    @Environment(\.branded) private var branded
     var body: some View {
         GeometryReader { g in
             ScrollView {
-                GlassGroup { VStack(spacing: 16) { content() }.pageWidth().rise() }
+                GlassGroup {
+                    VStack(spacing: 16) {
+                        // iPhone's Overview tab: TwinDesk's mark, name and state at the top (as Android's), no bar title.
+                        if branded { BrandHeader().padding(.horizontal, 4).padding(.top, 4) }
+                        content()
+                    }.pageWidth().rise()
+                }
             }
             .environment(\.pageWide, g.size.width >= twoColumnsAt)
         }
         .background(Backdrop())
-        .navigationTitle(title)
+        .navigationTitle(branded ? "" : title)
+        .toolbar(branded ? .hidden : .automatic, for: .navigationBar)
     }
 }
 
@@ -441,6 +449,15 @@ struct ToggleRow: View {
                 if let d = detail { Text(d).font(.caption).foregroundStyle(.secondary) }
             }
         }
+    }
+}
+
+// The page opens iPhone's Overview tab: TwinDesk's header on it in place of a bar.
+private struct BrandedKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var branded: Bool {
+        get { self[BrandedKey.self] }
+        set { self[BrandedKey.self] = newValue }
     }
 }
 

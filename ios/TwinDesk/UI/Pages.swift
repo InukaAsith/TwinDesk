@@ -39,6 +39,8 @@ struct ReceiveScreenView: View {
                     Divider()
                     ToggleRow(title: "Apple Pencil as a pen", detail: "Pressure, tilt and eraser, as a drawing tablet on the computer. When off, Apple Pencil acts as a mouse", on: opt("screen.pen", true))
                     Divider()
+                    ToggleRow(title: "Fast writing", detail: "Lines reach the computer a little sooner but can lose points along the way. Leave off for smooth drawing and handwriting", on: opt("screen.penFast", false))
+                    Divider()
                     ToggleRow(title: "Play the computer’s sound", detail: "Along with the screen", on: opt("screen.sound", true))
                     Divider()
                     ToggleRow(title: "Smooth", detail: "Smoother playback with about one frame of added delay", on: opt("screen.smooth", false))
@@ -215,13 +217,15 @@ struct ShareScreenView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .glassCard()
-                VStack(alignment: .leading, spacing: 10) {
-                    CardHeader(symbol: "cable.connector", color: TDColor.good, title: "Over USB with a Mac", detail: "Starts automatically")
-                    Text("When connected to a Mac by USB, the \(Device.word) window on the Mac shows this screen at 60 frames per second without Share Screen. Tap Trust when this \(Device.word) asks.")
-                        .font(.caption).foregroundStyle(.secondary)
+                if core.connected && core.host?.os == "mac" { // only a Mac takes the screen over the cable
+                    VStack(alignment: .leading, spacing: 10) {
+                        CardHeader(symbol: "cable.connector", color: TDColor.good, title: "Over USB with a Mac", detail: "Starts automatically")
+                        Text("When connected to a Mac by USB, the \(Device.word) window on the Mac shows this screen at 60 frames per second without Share Screen. Tap Trust when this \(Device.word) asks.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassCard()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard()
             }
         }
     }
@@ -395,7 +399,26 @@ struct AudioView: View {
                     Text("While Share Screen is on, app audio is included with the screen.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
+                VStack(alignment: .leading, spacing: 12) {
+                    CardHeader(symbol: "mic.fill", color: Page.audio.color, title: "Microphone",
+                               detail: core.mic.running ? "Live on \(core.host?.name ?? "the computer")" : nil)
+                    ToggleRow(title: "Use this \(Device.word)’s microphone on \(core.host?.name ?? "the computer")",
+                              detail: micDetail,
+                              on: Binding(get: { _ = core.tick; return core.sync.get("mic", "out") }, set: { core.sync.set("mic", "out", $0) }))
+                        .disabled(!core.connected)
+                }
+                .glassCard()
             }
+        }
+    }
+}
+
+extension AudioView {
+    private var micDetail: String {
+        if core.mic.running { return "Calls and recordings on \(core.host?.name ?? "the computer") hear this \(Device.word). TwinDesk keeps it on in the background (the orange dot)" }
+        switch core.host?.os {
+        case "linux": return "Apps there pick “TwinDesk Microphone”"
+        default: return "Apps there pick it through a virtual audio cable (BlackHole on a Mac, VB-CABLE on Windows)"
         }
     }
 }
@@ -422,7 +445,7 @@ struct MediaView: View {
             if !core.connected { NeedsComputer(what: "its media") }
             Columns {
                 VStack(spacing: 16) {
-                    FeatureIcon(symbol: "music.note", color: Page.media.color, size: 96)
+                    Artwork(image: core.media.art, size: core.media.art == nil ? 96 : 180)
                     VStack(spacing: 4) {
                         Text(core.media.now?.title ?? "Nothing playing").font(.title3.bold()).multilineTextAlignment(.center)
                         Text(subtitle).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -448,7 +471,7 @@ struct MediaView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ToggleRow(title: "On the Lock Screen", detail: "Media playing on the computer, with controls in Control Center and on the Lock Screen. This \(Device.word)’s own audio pauses while it’s shown, as iOS shows one app at a time.",
                               on: Binding(get: { _ = core.tick; return core.media.lockScreen }, set: { core.media.setLockScreen($0) }))
-                    Text("On a Mac: Music and Spotify. Windows: any app in its media controls. Linux: any MPRIS player.").font(.caption).foregroundStyle(.secondary)
+                    Text("On a Mac: any app in its Now Playing, YouTube in a browser too. Windows: any app in its media controls. Linux: any MPRIS player.").font(.caption).foregroundStyle(.secondary)
                 }
                 .glassCard()
             }
@@ -578,19 +601,88 @@ struct ShortcutsView: View {
 
 struct AboutView: View {
     @EnvironmentObject var core: Core
+    @Environment(\.openURL) private var openURL
+    @State private var copied = false
+
+    private static let portfolio = URL(string: "https://inukaasith.vercel.app")!
+    private static let github = URL(string: "https://github.com/InukaAsith/TwinDesk")!
+    private static let releases = URL(string: "https://github.com/InukaAsith/TwinDesk/releases")!
+    private static let issues = URL(string: "https://github.com/InukaAsith/TwinDesk/issues")!
+    private static let licence = URL(string: "https://github.com/InukaAsith/TwinDesk/blob/main/LICENSE")!
+
+    private var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "" }
+    private var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "" }
+
     var body: some View {
         PageScroll(title: "About") {
-            VStack(spacing: 10) {
-                Image("Mark").resizable().frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                Text("TwinDesk").font(.title.bold())
-                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""))")
-                    .foregroundStyle(.secondary)
-                Text("Use your \(Device.word) and computers together: clipboard, files, screens, remote control and audio.").font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
-                SwiftUI.Link("github.com/InukaAsith/TwinDesk", destination: URL(string: "https://github.com/InukaAsith/TwinDesk")!).font(.subheadline)
-                Text("GPL-3.0 · ID \(core.store.deviceId.prefix(8))").font(.caption2.monospaced()).foregroundStyle(.tertiary)
+            Columns {
+                hero
+                DenseCard(title: "Made by") {
+                    DenseRow(symbol: "person.crop.circle", title: "Inuka Asith", hint: "Designed and built TwinDesk · inukaasith.vercel.app", divider: false) {
+                        Button("Portfolio") { openURL(Self.portfolio) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "chevron.left.forwardslash.chevron.right", title: "Source code", hint: "github.com/InukaAsith/TwinDesk") {
+                        Button("GitHub") { openURL(Self.github) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "arrow.down.circle", title: "All releases", hint: "TwinDesk for macOS, Windows and Linux") {
+                        Button("Releases") { openURL(Self.releases) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "ladybug", title: "Report a problem", hint: "Issues on GitHub") {
+                        Button("Report") { openURL(Self.issues) }.secondaryButton()
+                    }
+                }
+            } right: {
+                DenseCard(title: "This \(Device.word)") {
+                    fact("iphone", "Name", UIDevice.current.name, first: true)
+                    fact("cpu", "Model", Self.model)
+                    fact("gearshape", "System", "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+                    DenseRow(symbol: "number", title: "TwinDesk ID", hint: String(core.store.deviceId.prefix(16))) {
+                        Button(copied ? "Copied" : "Copy") { core.clip.write(core.store.deviceId); copied = true }.secondaryButton()
+                    }
+                }
+                DenseCard(title: "This app") {
+                    fact("app.badge", "Version", version, first: true)
+                    fact("hammer", "Build", build)
+                    if let h = core.host, core.connected { fact(osSymbol(h.os), "Connected to", "\(h.name) · \(osName(h.os))") }
+                }
+                DenseCard(title: "Licence") {
+                    DenseRow(symbol: "doc.text", title: "GNU General Public License v3", hint: "Free and open source. Copyright © 2026 inukaasith", divider: false) {
+                        Button("Read") { openURL(Self.licence) }.secondaryButton()
+                    }
+                    DenseRow(symbol: "heart", title: "Crafted with ☕ and ❤️ in Sri Lanka 🇱🇰") { EmptyView() }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .glassCard()
         }
     }
+
+    private var hero: some View {
+        VStack(spacing: 10) {
+            Image("Mark").resizable().frame(width: 104, height: 104).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: TDColor.accent.opacity(0.35), radius: 18, y: 6)
+            Text("TwinDesk").font(.largeTitle.bold())
+            Text("Version \(version) (\(build))").font(.subheadline).foregroundStyle(.secondary)
+            Text("Use your \(Device.word) and computers together: clipboard, files, screens, remote control and audio.")
+                .font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Text("by Inuka Asith").font(.footnote.weight(.semibold)).foregroundStyle(TDColor.accent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .glassCard(tint: TDColor.accent)
+    }
+
+    private func fact(_ symbol: String, _ title: String, _ value: String, first: Bool = false) -> some View {
+        DenseRow(symbol: symbol, title: title, divider: !first) {
+            Text(value).font(.subheadline).foregroundStyle(.secondary).lineLimit(1).textSelection(.enabled)
+        }
+    }
+
+    private func osName(_ os: String) -> String { os == "mac" ? "macOS" : os == "linux" ? "Linux" : "Windows" }
+
+    // The hardware's own name (iPad14,3), as Settings › General › About lists it.
+    private static let model: String = {
+        var u = utsname()
+        uname(&u)
+        let id = withUnsafeBytes(of: &u.machine) { raw in String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self) }
+        return "\(UIDevice.current.model) · \(id)"
+    }()
 }

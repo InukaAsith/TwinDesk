@@ -19,6 +19,29 @@ struct SettingsView: View {
         PageScroll(title: "General") {
             // One column on every screen: settings read top to bottom, as the computers' General.
             VStack(spacing: 16) {
+                // What TwinDesk may use, first: what's missing is the first thing seen.
+                SectionTitle(text: "Permissions")
+                VStack(spacing: 0) {
+                    perm("bell.fill", Page.notifications.color, "Notifications", "Notifications, clipboard and file alerts from the computer", notifState) { askNotifications() }
+                    Divider().padding(.leading, 46)
+                    perm("location.fill", TDColor.accent, "Location", "Keeps TwinDesk running in the background", locationState) { Background.shared.askLocation() }
+                    Divider().padding(.leading, 46)
+                    perm("dot.radiowaves.left.and.right", Color.blue, "Bluetooth", "Connection when not on the same Wi-Fi", bleState) { core.ble.setOn(true) }
+                    Divider().padding(.leading, 46)
+                    perm("photo.fill", Page.photos.color, "Photos", "Sending photos and browsing them from the computer", photosState) { core.hub.askPhotos() }
+                    Divider().padding(.leading, 46)
+                    perm("camera.fill", Page.camera.color, "Camera", "Using this camera on the computer", avState(.video)) { AVCaptureDevice.requestAccess(for: .video) { _ in DispatchQueue.main.async { core.changed() } } }
+                    Divider().padding(.leading, 46)
+                    perm("mic.fill", Page.audio.color, "Microphone", "Using this microphone on the computer", avState(.audio)) { AVCaptureDevice.requestAccess(for: .audio) { _ in DispatchQueue.main.async { core.changed() } } }
+                    Divider().padding(.leading, 46)
+                    perm("network", TDColor.good, "Local Network", "Finding computers on this network", core.nearby.isEmpty && !core.connected ? .unknown : .ok) {}
+                }
+                .glassCard()
+                Button("Open TwinDesk’s Settings") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
+                    .secondaryButton().frame(maxWidth: .infinity, alignment: .leading)
+                Text("Apps can’t check Local Network access. If no computer appears, check Settings › TwinDesk › Local Network. Set Paste from Other Apps to Allow so iOS doesn’t ask each time the clipboard is sent.")
+                    .font(.caption).foregroundStyle(.secondary)
+
                 SectionTitle(text: "Appearance")
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("Appearance", selection: $appearance) {
@@ -111,27 +134,6 @@ struct SettingsView: View {
                 }
                 .glassCard()
 
-                SectionTitle(text: "Permissions")
-                VStack(spacing: 0) {
-                    perm("bell.fill", Page.notifications.color, "Notifications", "Notifications, clipboard and file alerts from the computer", notifState) { askNotifications() }
-                    Divider().padding(.leading, 46)
-                    perm("location.fill", TDColor.accent, "Location", "Keeps TwinDesk running in the background", locationState) { Background.shared.askLocation() }
-                    Divider().padding(.leading, 46)
-                    perm("dot.radiowaves.left.and.right", Color.blue, "Bluetooth", "Connection when not on the same Wi-Fi", bleState) { core.ble.setOn(true) }
-                    Divider().padding(.leading, 46)
-                    perm("photo.fill", Page.photos.color, "Photos", "Sending photos and browsing them from the computer", photosState) { core.hub.askPhotos() }
-                    Divider().padding(.leading, 46)
-                    perm("camera.fill", Page.camera.color, "Camera", "Using this camera on the computer", avState(.video)) { AVCaptureDevice.requestAccess(for: .video) { _ in DispatchQueue.main.async { core.changed() } } }
-                    Divider().padding(.leading, 46)
-                    perm("mic.fill", Page.audio.color, "Microphone", "Using this microphone on the computer", avState(.audio)) { AVCaptureDevice.requestAccess(for: .audio) { _ in DispatchQueue.main.async { core.changed() } } }
-                    Divider().padding(.leading, 46)
-                    perm("network", TDColor.good, "Local Network", "Finding computers on this network", core.nearby.isEmpty && !core.connected ? .unknown : .ok) {}
-                }
-                .glassCard()
-                Button("Open TwinDesk’s Settings") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
-                    .secondaryButton().frame(maxWidth: .infinity, alignment: .leading)
-                Text("Apps can’t check Local Network access. If no computer appears, check Settings › TwinDesk › Local Network. Set Paste from Other Apps to Allow so iOS doesn’t ask each time the clipboard is sent.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .onAppear { refreshNotifs() }

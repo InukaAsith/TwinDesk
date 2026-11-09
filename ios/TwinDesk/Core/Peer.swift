@@ -104,6 +104,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
 
     func paired() -> [Computer] { core.store.hosts(Self.hostsList) }
     func nearby() -> [Found] { core.discovery.phoneList() }
+    func isPaired(_ id: String) -> Bool { guests[id] != nil || paired().contains { $0.id == id } }
     var pair: PairState? { link.pair }
     var linkState: String { link.state }
 

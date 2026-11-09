@@ -14,8 +14,9 @@ final class PairSync: Feature {
         "audio": ("", "audio.in"), // in: the computer's sound here (its Send this computer's sound follows)
         "remote": ("remote.allow", ""), // out: this device's Remote may move the computer (its Remote › Allow)
         "files": ("files.send", ""), // out: the computer takes files dropped from here (its Accept files)
+        "mic": ("mic.send", ""), // out: this device's microphone on the computer (its Use the iPhone's microphone)
     ]
-    private let defaults: [String: Bool] = ["audio.in": false]
+    private let defaults: [String: Bool] = ["audio.in": false, "mic.send": false]
 
     // Shared values, the same on both sides (the computers' VALUES): stored as strings.
     static let valueDefaults: [String: String] = ["pace": "fast"]

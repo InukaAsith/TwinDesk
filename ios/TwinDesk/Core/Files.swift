@@ -18,6 +18,7 @@ final class Files: Feature {
         var done = 0
         var ok = true
         var finished = false
+        var cancelled = false
         var at = Date()
         var progress: Double { bytes > 0 ? min(1, Double(got) / Double(bytes)) : (finished ? 1 : 0) }
     }
@@ -39,7 +40,8 @@ final class Files: Feature {
 
     private final class Outgoing {
         let id: String, url: URL, name: String, size: Int64, batch: String
-        var state = "offered"
+        var state = "offered" // offered, accepted, sending, cancelled
+        var stop: (() -> Void)? // the transfer under way (fx2's ranges, fx's upload)
         init(id: String, url: URL, name: String, size: Int64, batch: String) {
             self.id = id; self.url = url; self.name = name; self.size = size; self.batch = batch
         }
@@ -426,8 +428,9 @@ final class Files: Feature {
             self.pump()
         }
         if !fxBroken, !fx2Broken, let to = core.link.fx2Target() {
-            Fx2.put(to, id: f.id, url: f.url, size: f.size, progress: { [weak self] n in self?.addGot(f.batch, n) }) { [weak self] r in
+            f.stop = Fx2.put(to, id: f.id, url: f.url, size: f.size, progress: { [weak self] n in self?.addGot(f.batch, n) }) { [weak self] r in
                 guard let self = self else { return }
+                if f.state == "cancelled" { return done() }
                 switch r {
                 case .success(let hs):
                     self.core.send(msg(Proto.T.fileEnd, ["id": f.id, "sha256": Fx2.joined(hs), "fx2": hs]))
@@ -457,8 +460,10 @@ final class Files: Feature {
                     var r = req
                     r.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
                     r.setValue(String(f.size), forHTTPHeaderField: "Content-Length")
+                    if f.state == "cancelled" { return done() }
                     let task = self.core.link.urlSession.uploadTask(with: r, fromFile: f.url) { _, res, err in
                         DispatchQueue.main.async {
+                            if f.state == "cancelled" { return done() }
                             let code = (res as? HTTPURLResponse)?.statusCode ?? 0
                             if err == nil && (200..<300).contains(code) {
                                 self.addGot(f.batch, f.size)
@@ -471,6 +476,7 @@ final class Files: Feature {
                             }
                         }
                     }
+                    f.stop = { task.cancel() }
                     task.resume()
                 }
             }
@@ -490,7 +496,7 @@ final class Files: Feature {
             }
             defer { try? r.close() }
             while true {
-                if !self.core.link.connected { DispatchQueue.main.async(execute: done); return }
+                if !self.core.link.connected || f.state == "cancelled" { DispatchQueue.main.async(execute: done); return }
                 while self.core.link.queued() > 1 << 20 { usleep(5000) }
                 let d = r.readData(ofLength: Proto.fileChunkBytes)
                 if d.isEmpty { break }
@@ -508,6 +514,23 @@ final class Files: Feature {
         }
     }
 
+    // Files › Cancel on a batch on its way: each of its files stopped and the computer told
+    // (file.cancel); the batch ends as cancelled.
+    func cancel(_ batch: String) {
+        guard let i = batches.firstIndex(where: { $0.id == batch && $0.dir == "out" && !$0.finished }) else { return }
+        for f in outgoing where f.batch == batch {
+            let was = f.state
+            f.state = "cancelled"
+            f.stop?()
+            core.send(msg(Proto.T.fileCancel, ["id": f.id]))
+            if was != "sending" { outgoing.removeAll { $0 === f } } // a sending one leaves when its transfer stops
+        }
+        batches[i].finished = true
+        batches[i].ok = false
+        batches[i].cancelled = true
+        core.changed()
+    }
+
     private static func hashFile(_ url: URL) -> String? {
         guard let r = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? r.close() }
@@ -522,7 +545,7 @@ final class Files: Feature {
 
     private func outDone(_ m: JSON) {
         let id = m.str("batch", max: 128)
-        guard let i = batches.firstIndex(where: { $0.id == id }) else { return }
+        guard let i = batches.firstIndex(where: { $0.id == id }), !batches[i].cancelled else { return }
         batches[i].finished = true
         batches[i].ok = m.bool("ok")
         batches[i].done = batches[i].count
