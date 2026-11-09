@@ -30,8 +30,8 @@ for (const mode of ['windows', 'windows/mesh']) {
           show() { this.shows++; }
           focus() { this.focuses++; }
         }
-        const ctx = vm.createContext({ BrowserWindow: Window, settings: { windows: {} },
-          path, __dirname: dir, nativeTheme: { shouldUseDarkColors: false }, i18n: { locale: 'zh-CN' },
+        const ctx = vm.createContext({ BrowserWindow: Window,
+          path, __dirname: dir, nativeTheme: { shouldUseDarkColors: false }, i18n: { locale: 'zh-CN' }, Look: { style: () => 'default' }, settings: { windows: {}, ui: {} },
           mainWin: null, startHidden: hidden, quitting: false, saveBounds() {},
         });
         vm.runInContext(factory + '\ncreateMainWindow("general");', ctx);
