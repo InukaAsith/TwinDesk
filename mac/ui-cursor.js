@@ -60,6 +60,7 @@ UI.tab({
         UI.dir('w2m', [driven2 = peerRow(I18n.t('Use {name}’s mouse and keyboard on {me}'), '', [driven])]),
       ),
       lock.el,
+      UI.card(I18n.t('Emergency return'), [UI.row(I18n.t('Control + Option + Command + Escape'), I18n.t('Stops input sharing and returns the pointer if the input helper responds.'), [])]),
       UI.card(I18n.t('Where the other computer is'), [map.el]),
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),

@@ -371,6 +371,7 @@ class Kvm extends EventEmitter {
       if (prev === 'home') this.config();
     }
     if (prev !== mode) this.lockKey.reset();
+    if (prev !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' });
     if (prev !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();
@@ -575,6 +576,10 @@ class Kvm extends EventEmitter {
         break;
       case 'captureEnded':
         if (this.mode === 'driving') this.goHome(ev.reason === 'deadman' ? 'Input came back by itself (safety timeout)' : '');
+        break;
+      case 'emergency':
+        this.home(); // helper has already stopped capturing or released injected keys locally
+        if (this.linked) this.setLinked(false); // keep it off until explicitly re-enabled
         break;
       // This computer's own mouse or trackpad moved or clicked while driven (the helper's return
       // watch): it takes the computer back. The driver's pointer comes back where it left, ours stays

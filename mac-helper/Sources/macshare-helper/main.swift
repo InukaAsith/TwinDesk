@@ -97,6 +97,11 @@ func handle(_ line: String) {
     reply(id)
   case "keepalive":
     break
+#if !MULTI
+  case "emergencyActive":
+    Capture.shared.emergencyActive = (msg["on"] as? Bool) ?? false
+    reply(id)
+#endif
   case "place":
     let center = (msg["center"] as? Bool) == true
     let side = center ? nil : msg["side"] as? String
