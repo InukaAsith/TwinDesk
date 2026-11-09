@@ -205,6 +205,7 @@ class LinkManager extends EventEmitter {
       ble: this.ble,
       blocked: () => this._blocked(link),
       busy: () => this._busy(link),
+      partner: () => { const id = this._idOf(link); return !!id && this.busyFlags.get(id) === true; }, // input shared over it: never quiet (#143)
       resolveAddress: (id) => this._resolve(id),
       store: {
         load: () => entry,

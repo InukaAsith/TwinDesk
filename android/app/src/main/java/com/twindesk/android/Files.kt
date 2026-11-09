@@ -80,6 +80,7 @@ class Files(core: Core) : Feature(core) {
     }
 
     private val awake = Awake(core.ctx) // the phone stays awake while file bytes move
+    val moving: Boolean get() = awake.busy
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "td-files-in").apply { isDaemon = true } }
     private val pump = Executors.newSingleThreadExecutor { r -> Thread(r, "td-files-out").apply { isDaemon = true } }
     private val pulls = Executors.newCachedThreadPool { r -> Thread(r, "td-files-fx").apply { isDaemon = true } }
@@ -94,6 +95,36 @@ class Files(core: Core) : Feature(core) {
     private val outBatches = ConcurrentHashMap<String, OutBatch>()
     val recent = java.util.concurrent.CopyOnWriteArrayList<String>() // newest first, one line each
     private val drags = ConcurrentHashMap<String, Int>() // drag id -> files announced (drag.start)
+    private val dropped = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>()) // batches cancelled here: the rest of their offers refused
+
+    // Cancel (the notification, the Files page): stops a batch either way. Each file gets file.cancel,
+    // which the computer already takes as cancelled here (as when one end disconnects).
+    fun cancel(batchId: String) = io.execute {
+        if (batchId.isEmpty()) return@execute
+        outBatches.remove(batchId)?.let { b ->
+            for (f in outgoing.filter { it.batch == batchId }) {
+                outgoing.remove(f) // its upload thread sees it gone and stops
+                core.send(msg(Proto.T.FILE_CANCEL, "id" to f.id))
+            }
+            Notify.cancelFiles(core.ctx, b.key)
+            recent.add(0, "Cancelled sending ${b.name}")
+            while (recent.size > 20) recent.removeAt(recent.size - 1)
+            core.changed()
+        }
+        batches[batchId]?.let { b ->
+            dropped.add(batchId)
+            for (f in incoming.values.filter { it.batch == batchId }) abort(f.id, "cancelled here", true)
+            while (batches[batchId] === b) fileFinished(b, false) // the files not offered yet: the batch ends now
+            Notify.cancelFiles(core.ctx, b.key)
+            recent[0] = "Cancelled receiving ${plural(b.count, "file")}"
+            core.changed()
+        }
+    }
+
+    fun clearRecent() {
+        recent.clear()
+        core.changed()
+    }
 
     fun expect(batch: String, target: Target) {
         expected[batch] = target
@@ -155,6 +186,7 @@ class Files(core: Core) : Feature(core) {
             for (id in incoming.keys.toList()) abort(id, "disconnected", false)
             for (b in batches.values) Notify.cancelFiles(core.ctx, b.key)
             batches.clear()
+            dropped.clear()
         }
         for (o in outgoing) cancelOut(o.id)
         outBatches.clear()
@@ -180,6 +212,7 @@ class Files(core: Core) : Feature(core) {
         val size = m.optLong("size", -1)
         if (size < 0 || size > Proto.FILE_MAX_BYTES) return refuse(id, "too_big")
         val batchId = (if (drop == "drag") m.optString("drag") else m.optString("batch")).ifEmpty { id }
+        if (batchId in dropped) return refuse(id, "cancelled")
         val rel = m.optString("rel").ifEmpty { m.optString("name") }.split('/').filter { it.isNotEmpty() }.map(::cleanSegment)
         if (rel.isEmpty()) return refuse(id, "bad_name")
         var batch = batches[batchId]
@@ -507,7 +540,7 @@ class Files(core: Core) : Feature(core) {
         if (!force && now - b.lastNote < 500) return
         b.lastNote = now
         if (b.target.onDone != null && b.target.where.isEmpty()) Notify.fclipProgress(core.ctx, "Copying ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", pct(b.got, b.bytes))
-        else Notify.files(core.ctx, b.key, "Receiving ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", "${pct(b.got, b.bytes)}%", pct(b.got, b.bytes), null)
+        else Notify.files(core.ctx, b.key, "Receiving ${plural(b.count, "file")} from ${core.host?.name ?: "your computer"}", "${pct(b.got, b.bytes)}%", pct(b.got, b.bytes), null, cancel = b.id)
         core.changed()
     }
 
@@ -749,7 +782,8 @@ class Files(core: Core) : Feature(core) {
         // Over 5 MB: a notification with a live progress bar, as for files coming in.
         if (b.bytes > 5L * 1024 * 1024) {
             b.shown = true
-            Notify.files(core.ctx, b.key, "Sending ${b.name} to ${core.host?.name ?: "your computer"}", "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true)
+            Notify.files(core.ctx, b.key, "Sending ${b.name} to ${core.host?.name ?: "your computer"}", "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true, cancel = b.id)
+            if (outBatches[b.id] == null) Notify.cancelFiles(core.ctx, b.key) // cancelled meanwhile
         }
     }
 

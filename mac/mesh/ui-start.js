@@ -58,7 +58,7 @@
     ]);
     let master = null;
     if (def.master) {
-      master = UI.switch((v) => def.master.set(v), { label: tr(def.title), disabled: !!def.master.disabled });
+      master = UI.switch((v) => def.master.set(v), { label: tr(def.title), disabled: def.master.disabled === true }); // a function is looked at with the state (below)
     }
     page.append(el('header', { class: 'page-head' }, [titles, master ? master.el : null]));
     // Over Bluetooth, a page that needs Wi-Fi (and doesn't move the session onto it) says so, with
@@ -127,7 +127,8 @@
     if (v.master) {
       const on = !!v.def.master.get(s);
       v.master.set(on);
-      v.master.disable(!!v.def.master.disabled);
+      const d = v.def.master.disabled; // a boolean, or (s) => boolean: a function itself isn't "disabled"
+      v.master.disable(!!(typeof d === 'function' ? d(s) : d));
       v.page.classList.toggle('off', !on);
     }
     if (v.art) { // while the page's switch is off; on a page without one, until dismissed

@@ -89,6 +89,10 @@ UI.tab({
       { value: 'udp', label: t('UDP (tdv2)') }, { value: 'tcp', label: t('TCP (tdv1)') },
     ], (v) => { api.setApp({ inputProtocol: v }); protoRestart.hidden = v === protoStart; });
     const protoRow = UI.row(t('Input protocol'), t('UDP moves the pointer faster. TCP works on networks that block UDP. Applies after a restart'), [protoSel, protoRestart]);
+    // Prioritize performance over battery life (settings.app.keepPinging, shared/quiet.js, #143): off, a
+    // session nothing uses stops pinging every second so a phone or laptop can sleep; on, as before.
+    const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
+    const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, steadyRow]),
@@ -109,6 +113,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, keepRow]),
       UI.card(t('This computer'), [deviceRow, sessRow, inRow, helperRow]),
+      UI.card(t('Connections'), [pingRow]),
       UI.card(t('Advanced'), [protoRow, ...engines.rows]),
       UI.card(t('Quit'), [
         UI.row(t('Quit TwinDesk'), t('Stops sharing until you open it again'), [UI.button(t('Quit'), () => api.quit(), 'small')]),
@@ -133,6 +138,7 @@ UI.tab({
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);
       startup.set(s.startup);
       hudSw.set(s.app.hud);
+      pingSw.set(s.app.keepPinging === true);
       const f = s.files || {};
       recvReset.hidden = !f.receivedFolder;
       const receivedDescription = t('Files sent to {me} from another computer or a phone, and what’s saved from a phone’s Files and Photos', { me: s.device.name });

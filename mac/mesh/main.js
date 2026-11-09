@@ -501,6 +501,8 @@ app.whenReady().then(() => {
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
+  // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
+  require('../../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
   id = identity.load(settings);
   Object.assign(state, { macName: id.macName, macId: id.macId, fp: id.fp, version: app.getVersion(), about: aboutInfo(app) });

@@ -569,6 +569,8 @@ app.whenReady().then(() => {
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
+  // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
+  require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
   id = identity.load(settings);
   Object.assign(state, { macName: id.macName, macId: id.macId, fp: id.fp, version: app.getVersion(), about: aboutInfo(app) });
@@ -1195,6 +1197,22 @@ function setupNet() {
   peer.hold = (m) => svc.net.holdOut(m, (x) => peer.sendNow(x));
   peer.tap = (m) => svc.net.onMessage(m);
   peer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
+
+  // A faster way to move files failed and a slower one took over (#143): said once per way per run,
+  // with why (also in Settings › General › Advanced › Engines in use).
+  const fellBack = new Set();
+  peer.fx.onFallback = (o) => {
+    const key = o.from + '>' + o.to;
+    if (fellBack.has(key)) return;
+    fellBack.add(key);
+    const slow = { fx: t('the older fast way'), 'file.chunk': t('the slowest way, through the session') }[o.to] || o.to;
+    const title = t('Files go {way} for now', { way: slow });
+    const why = { why: o.why || t('no reason given') };
+    const body = o.to === 'file.chunk'
+      ? t('The faster way failed: {why}. TwinDesk tries it again when it next connects. Settings › General › Advanced › Engines in use', why)
+      : t('The faster way failed: {why}. TwinDesk tries it again in a minute. Settings › General › Advanced › Engines in use', why);
+    try { new Notification({ title, body }).show(); } catch {}
+  };
   peer.on('client', () => svc.net.started());
   peer.on('closed', () => svc.net.ended());
   peer.on('transport', () => {

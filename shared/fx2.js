@@ -173,20 +173,32 @@ class Fx2 extends EventEmitter {
       child.on('exit', (code) => {
         if (child.stopped) return; // stopped on purpose (_stop): the next need starts another
         if (this.child !== child) return;
-        if (!this.closing) console.warn(`[fx2] the files process stopped (${code}): files go the fx way`);
+        const was = { port: this.port, plain: this.plainPort }; // taken again in this process: the other side has them
         this.port = 0;
         this.plainPort = 0;
-        this.dead = true;
-        this.running = false;
         this.child = null;
-        this.post = () => {};
-        this._settleWaiters();
         for (const [k, j] of this.jobs) {
           this.jobs.delete(k);
           const e = new Error('the files process stopped');
-          if (!j.moved) e.early = true; // nothing went yet: the fx way
+          if (!j.moved) e.early = true; // nothing went yet: the fx way for this file
           j.reject(e);
         }
+        if (this.closing) {
+          this.dead = true;
+          this.running = false;
+          this.post = () => {};
+          this._settleWaiters();
+          this.emit('exit');
+          return;
+        }
+        // It crashed (#143: an ARM64 laptop fell back to the old way for good): the engine goes on in
+        // this process instead, as fast, only on the main thread. The next files use it again.
+        console.warn(`[fx2] the files process stopped (${code}): the engine goes on in this process`);
+        this.crashed = `the files process stopped (${code})`;
+        this._inProcess();
+        if (this.tls) this.post({ op: 'listen', tls: this.tls, port: was.port });
+        if (this.plainOn) this.post({ op: 'plain', on: true, port: was.plain });
+        if (this.tokens.list.length || this.tokens.plain.length) this.post({ op: 'tokens', ...this.tokens });
         this.emit('exit');
       });
     } catch (e) {

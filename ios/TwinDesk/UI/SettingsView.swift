@@ -44,6 +44,10 @@ struct SettingsView: View {
                     ToggleRow(title: "Use the USB cable", detail: "Plugged into the computer, the session moves onto the cable by itself", on: flag("usb.auto"))
                     Divider()
                     ToggleRow(title: "Use Bluetooth", detail: bleDetail, on: Binding(get: { _ = core.tick; return core.ble.on }, set: { core.ble.setOn($0) }))
+                    Divider()
+                    ToggleRow(title: "Prioritize performance over battery life", detail: core.performance ? "The connection is checked every second, even when nothing is in use" : "An idle connection is checked every few minutes, and at once when something starts. Saves battery", on: Binding(get: { _ = core.tick; return core.performance }, set: { core.performance = $0 }))
+                    Divider()
+                    ToggleRow(title: "Reconnect in the background", detail: core.reconnectBg ? "A connection that drops is taken up again with TwinDesk off screen" : "A connection that drops comes back when you open TwinDesk", on: Binding(get: { _ = core.tick; return core.reconnectBg }, set: { core.reconnectBg = $0 }))
                 }
                 .glassCard()
             } right: {

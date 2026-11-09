@@ -30,11 +30,14 @@ struct TwinDeskApp: App {
         .onChange(of: phase) { p in
             switch p {
             case .active:
+                core.setFront(true)
                 core.wake()
                 core.clip.appBecameActive()
                 core.hub.appBecameActive()
                 core.files.importInbox()
-            case .background: Background.shared.enteredBackground()
+            case .background:
+                core.setFront(false)
+                Background.shared.enteredBackground()
             default: break
             }
         }

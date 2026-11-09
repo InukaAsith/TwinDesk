@@ -58,7 +58,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     const stop = applog.linkStats(() => (connected ? { rtt: (rtt = (rtt % 10) + 1), lane: 1.5, queued: rtt * 100 } : null), 200, 10);
     const moves = new KvmMoves({ send: () => {} });
     for (let i = 0; i < 100; i++) moves.add(1, 0);
-    const linkLines = () => read('TwinDesk.log').split('\n').filter((l) => l.includes('[link]'));
+    const linkLines = () => read('link-stats.log').split('\n').filter((l) => l.includes('[link]')); // its own file (#143)
     await wait(230);
     connected = false;
     await wait(250); // the window it went in
@@ -69,6 +69,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     const lines = linkLines();
     assert.ok(lines.length >= 1, 'a line while connected');
     assert.strictEqual(lines.length, after, 'none once not connected');
+    assert.ok(!read('TwinDesk.log').includes('[link] rtt'), 'TwinDesk.log keeps to events');
     assert.ok(/\[link\] rtt p50 \d+ ms \/ p95 (9|10) ms \/ p99 (9|10) ms \/ max 10 ms, lane p50 1\.5 ms \/ max 1\.5 ms, kvm moves (4\d\d|5\d\d)\/s, queued max (900|1000) bytes, loop p99 [\d.]+ ms \/ max [\d.]+ ms/.test(lines[0]), lines[0]);
 
     // Launched from the desktop menu on Linux there is no terminal: the pipe behind stdout is gone.

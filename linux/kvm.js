@@ -741,6 +741,7 @@ class Kvm {
   _setMode(mode, message) {
     const was = this.mode;
     this.mode = mode;
+    require('../shared/quiet.js').hold('kvm', mode !== 'home'); // input shared either way: the session pings every second (#143)
     if (this.link.il) this.link.il.active(mode !== 'home');
     if (was === 'driving' && mode !== 'driving') this.lane.idle(); // the helper's lane: no more moves from the tap
     if (was === 'driven' && mode !== 'driven') this.laneIn.home(); // … and none injected

@@ -57,11 +57,12 @@ UI.enginesRows = () => {
 
       const f = e.files || {};
       files.v.textContent = `${WAY[f.next] || f.next}${f.plain ? ` · ${t('unencrypted')}` : ''}`;
-      const why = WHY_FILES[f.why] ? WHY_FILES[f.why]() : '';
+      const why = (WHY_FILES[f.why] ? WHY_FILES[f.why]() : '') + (f.detail ? ` (${f.detail})` : ''); // the error that made it fall back (#143)
       const last = f.last ? t('Last file: {way}, {dir}', { way: WAY[f.last.way] || f.last.way, dir: f.last.dir === 'recv' ? t('received') : t('sent') }) : '';
       files.row.setHint([why, last].filter(Boolean).join(' · '));
 
       engine.v.textContent = ENGINE[e.engine] ? ENGINE[e.engine]() : String(e.engine || '');
+      engine.row.setHint(e.engineWhy ? t('In TwinDesk itself: {why}', { why: e.engineWhy }) : '');
       screen.row.hidden = !e.screen;
       if (e.screen) screen.v.textContent = [e.screen.codec, e.screen.encoder].filter(Boolean).join(' · ');
     },

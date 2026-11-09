@@ -107,6 +107,7 @@ class ActionReceiver : BroadcastReceiver() {
             REZUME_DISMISS -> core.rezume.dismiss() // ReZume's notification: Dismiss
             PC_MEDIA -> core.pcMedia.control(arg.ifEmpty { "toggle" }) // the computer's media notification, or Play/Pause on ours
             RING_PC -> core.dev.ask("ring")
+            FILES_CANCEL -> core.files.cancel(arg) // a transfer's notification: Cancel
             LOCK_PC -> core.dev.ask("lock")
             PAIR_CODE -> {
                 val code = android.app.RemoteInput.getResultsFromIntent(intent)?.getCharSequence("code")?.toString() ?: ""
@@ -130,6 +131,7 @@ class ActionReceiver : BroadcastReceiver() {
         const val PC_MEDIA = "com.twindesk.android.PC_MEDIA"
         const val RING_PC = "com.twindesk.android.RING_PC"
         const val LOCK_PC = "com.twindesk.android.LOCK_PC"
+        const val FILES_CANCEL = "com.twindesk.android.FILES_CANCEL"
     }
 }
 

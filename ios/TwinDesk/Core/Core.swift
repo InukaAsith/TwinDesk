@@ -55,6 +55,46 @@ final class Core: ObservableObject, LinkEvents {
 
     private var resumeUntil = Date.distantPast
     private var resumeHost: Computer?
+
+    // Quiet links (Link.swift, #143): what keeps the session pinging every second. Clipboard,
+    // notifications and cursor sharing switched on don't (their messages make it active at once).
+    // inFront: on screen (the scene is active); read on the link's queue.
+    private(set) var inFront = true
+    private var busySnapshot = false
+    // General › Connection › Prioritize performance over battery life (off): pings every second as before.
+    var performance: Bool {
+        get { store.flag("performance", false) }
+        set { store.setFlag("performance", newValue); link.keepPinging = newValue; link.nudge(); changed() }
+    }
+    // General › Connection › Reconnect in the background (on). Off: a session that dropped is taken up
+    // again only once TwinDesk is on screen.
+    var reconnectBg: Bool {
+        get { store.flag("reconnectBg", true) }
+        set { store.setFlag("reconnectBg", newValue); changed() }
+    }
+    private var held: Bool { !reconnectBg && !inFront }
+    private var resumeLater: Computer?
+
+    // Main: what's live here, copied for the link's queue (Swift's main-thread state isn't read off it).
+    func quietCheck() {
+        let busy = inFront || screen.viewing || screen.sharing || remote.active || mic.running || mirror.sharing
+        if busy != busySnapshot { busySnapshot = busy; link.nudge() }
+    }
+
+    func setFront(_ on: Bool) {
+        inFront = on
+        quietCheck()
+        if on {
+            link.wake()
+            if let h = resumeLater {
+                resumeLater = nil
+                if link.state == "idle", link.pair == nil {
+                    NSLog("TwinDesk: on screen: reconnecting")
+                    if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { connect(store.host(h.id) ?? h) }
+                }
+            }
+        }
+    }
     private var started = false
 
     var connected: Bool { state == "connected" }
@@ -79,6 +119,8 @@ final class Core: ObservableObject, LinkEvents {
         _ = peer
         refresh()
         Background.shared.apply()
+        link.keepPinging = performance
+        link.busyHere = { [weak self] in self?.busySnapshot ?? true }
     }
 
     // The app woke (foreground, or in the background by location / audio / an intent): back on the
@@ -91,12 +133,12 @@ final class Core: ObservableObject, LinkEvents {
             if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { offBle() }
         }
         if link.state == "idle", link.pair == nil, let id = store.lastHostId, let h = store.host(id),
-           store.flag("autoConnect", true) {
+           store.flag("autoConnect", true), !held {
             if usb.computerId == id { connectWired(h) } else { connect(h) }
         }
     }
 
-    func changed() { DispatchQueue.main.async { self.tick &+= 1 } }
+    func changed() { DispatchQueue.main.async { self.tick &+= 1; self.quietCheck() } }
 
     private func refresh() {
         let l = link
@@ -325,6 +367,7 @@ final class Core: ObservableObject, LinkEvents {
             // An accident (Wi-Fi blip, the computer restarting): back within the grace, as Android does.
             let deliberate = [Proto.E.badToken, Proto.E.busy, Proto.E.replaced, Proto.E.released, Proto.E.asleep, "local", "identity"]
             if let c = code, deliberate.contains(c) { return }
+            if self.held { self.resumeLater = host; NSLog("TwinDesk: dropped in the background: reconnecting when on screen"); return }
             if self.resumeUntil == .distantPast { self.resumeUntil = Date().addingTimeInterval(Proto.phoneGrace) }
             self.resumeHost = host
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.resume() }
@@ -332,6 +375,7 @@ final class Core: ObservableObject, LinkEvents {
     }
 
     private func resume() {
+        if held, let h = resumeHost { resumeLater = h; return }
         guard let h = resumeHost, Date() < resumeUntil, link.state == "idle", link.pair == nil else {
             // Past the grace: keep trying now and then while kept alive in the background.
             if let h = resumeHost, link.state == "idle", link.pair == nil, Background.shared.active, store.lastHostId == h.id {
@@ -346,6 +390,7 @@ final class Core: ObservableObject, LinkEvents {
     }
 
     private func retryLater(_ h: Computer) {
+        if held { resumeLater = h; return }
         guard link.state == "idle", link.pair == nil, store.lastHostId == h.id, let fresh = store.host(h.id) else { return }
         if discovery.get(h.id) != nil || Discovery.interfaces().isEmpty == false { connect(fresh) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { self.retryLater(h) }

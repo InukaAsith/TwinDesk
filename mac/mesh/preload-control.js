@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const ACTIONS = [
   'setSharing', 'setStreamTarget', 'setStreamInput', 'selectDisplay', 'setDisplayMode', 'setVirtual', 'setStreamMaxHeight',
-  'setBitrate', 'setKvm', 'setApp', 'setAudio', 'setTerminal', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
+  'setBitrate', 'setKvm', 'setApp', 'setAudio', 'setTerminal', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
   'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'selectPeer', 'forgetPeer', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost',

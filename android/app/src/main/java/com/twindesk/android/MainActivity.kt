@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         shown = true
         resumed.value++ // permissions may have changed in Settings
+        Core.get(this).foreground() // a look at the session; one put off by Reconnect in the background
         Core.get(this).adb.check() // back from Settings: is wireless debugging on now?
         Core.get(this).hub.let { if (it.callsOn || it.messagesOn || it.mediaOn || it.filesOn) it.permsChanged() }
         Core.get(this).share.let { if (it.on && it.serving != it.allowed) it.core.bg.execute { it.sync() } } // All files access just allowed (or taken away)
@@ -1395,12 +1396,15 @@ private fun FilesPage(core: Core, v: Int) {
         MacRow("Drop on the phone window", "Files dropped on this phone’s window on $name are saved to this device")
     }
 
-    val moving = core.files.sending.map { "Sending ${it.name}" to Files.pct(it.sent, it.bytes) } +
-        core.files.receiving.map { "Receiving ${Files.plural(it.count, "file")}" to Files.pct(it.got, it.bytes) }
+    val moving = core.files.sending.map { Triple("Sending ${it.name}", Files.pct(it.sent, it.bytes), it.id) } +
+        core.files.receiving.map { Triple("Receiving ${Files.plural(it.count, "file")}", Files.pct(it.got, it.bytes), it.id) }
     if (moving.isNotEmpty() || core.fclip.status.isNotEmpty()) MacCard("In progress") {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for ((label, pct) in moving) {
-                Text("$label · $pct%", color = pal.text)
+            for ((label, pct, id) in moving) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("$label · $pct%", color = pal.text, modifier = Modifier.weight(1f))
+                    Secondary("Cancel") { core.files.cancel(id) }
+                }
                 LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth(), color = pal.accent, trackColor = pal.trackOff)
             }
             if (core.fclip.status.isNotEmpty()) Text(core.fclip.status, color = pal.muted)
@@ -1408,6 +1412,7 @@ private fun FilesPage(core: Core, v: Int) {
     }
     if (core.files.recent.isNotEmpty()) MacCard("Recent") {
         core.files.recent.take(10).forEachIndexed { i, r -> MacRow(r, "", first = i == 0) }
+        MacRow("Clear this list", "Only the list here. The files stay where they are.") { Secondary("Clear") { core.files.clearRecent() } }
         MacRow("Downloads", "") { Secondary("Show") { ctx.startActivity(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 }
@@ -1463,6 +1468,11 @@ private fun GeneralPage(core: Core, v: Int) {
     PageHead("General", "")
     MacCard {
         SwitchRow("Run in the background", if (core.background) "Stays connected with TwinDesk closed, and starts with the phone" else "Only while TwinDesk is open: swiping it away from Recent apps stops it", core.background, first = true) { core.background = it }
+    }
+    // Connections (#143): quiet links (Link.kt) and reconnecting with TwinDesk closed.
+    MacCard("Connections") {
+        SwitchRow("Prioritize performance over battery life", if (core.performance) "The connection is checked every second, even when nothing is in use" else "An idle connection is checked every few minutes, and at once when something starts. Saves battery", core.performance, first = true) { core.performance = it }
+        SwitchRow("Reconnect in the background", if (core.reconnectBg) "A connection that drops is taken up again with TwinDesk closed" else "A connection that drops comes back when you open TwinDesk", core.reconnectBg) { core.reconnectBg = it }
     }
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable

@@ -289,6 +289,12 @@ class FileSend extends EventEmitter {
     this._changed();
   }
 
+  // Files › Recent › Clear: only the list; the files stay where they are.
+  clearRecent() {
+    this.recent.length = 0;
+    this._changed();
+  }
+
   // 'change', at most every 250 ms (the last one always goes): 10,000 small files redrew the window
   // for each one.
   _changed() {

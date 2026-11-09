@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setupSshd: call('setupSshd'),
   setFiles: call('setFiles'),
   cancelDrop: call('cancelDrop'),
+  clearFiles: call('clearFiles'),
   setShareOn: call('setShareOn'),
   chooseReceivedFolder: call('chooseReceivedFolder'),
   resetReceivedFolder: call('resetReceivedFolder'),

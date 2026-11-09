@@ -364,6 +364,7 @@ class Kvm extends EventEmitter {
     const prev = this.mode;
     if (process.env.TWINDESK_DEBUG_KVM && prev !== mode) console.log(`[kvm] ${prev} -> ${mode}${message ? ` (${message})` : ''}`);
     this.mode = mode;
+    require('../shared/quiet.js').hold('kvm', mode !== 'home'); // input shared either way: the session pings every second (#143)
     if (mode === 'home') { clearInterval(this.ticker); this.ticker = null; }
     else if (!this.ticker) this.ticker = setInterval(() => this._tick(), 250);
     if (prev !== mode && this.locked) { // moved by the hotkey, the menu bar or a disconnect: the lock was for where it was

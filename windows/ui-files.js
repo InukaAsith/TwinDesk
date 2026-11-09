@@ -75,7 +75,7 @@ UI.tab({
       UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
       pair.el,
       UI.card('', [edgeRow, encryptRow]),
-      UI.card(I18n.t('Recent'), [outRow, inRow]),
+      UI.card(I18n.t('Recent'), [outRow, inRow], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
     );
     const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
     return (s) => {

@@ -20,6 +20,25 @@ Bluetooth LE. Discovery uses UDP **47801**. Control messages are JSON (`shared/p
 guest sends **hello**, and the host answers with **welcome**. New capabilities are added as fields in
 those two messages, so an app that doesn't know a field ignores it.
 
+### Quiet links (#143)
+
+Each side pings every **PING_MS** (1 s) and closes the socket after **TIMEOUT_MS** (8 s) of silence.
+A session that nothing uses goes quiet, so a phone's radio and CPU (and a laptop's) can
+sleep (`shared/quiet.js`, `Link.kt`, `Link.swift`):
+
+- Each side sends **`idle {on}`** whenever its own side changes. A socket is quiet only while both
+  sides have said `on: true`. An older app never says it (and ignores it), so it keeps the 1 s pings.
+- A side is busy while input is shared either way (the KVM silence watch runs on pings), file bytes
+  move, a screen or the Remote is in use, the phone app is on screen, within 15 s of a session
+  starting or of waking (sleep, unlock, screen on), or with **General › Connections › Prioritize
+  performance over battery life** on. In multi-device mode only the input partner's link counts as
+  busy. Clipboard, notifications and status messages don't make a side busy.
+- Quiet: one ping every **5 min** (a computer that restarted can't leave a dead session up), closed
+  after **11 min** of silence. A message sent while quiet is followed by one ping (a **probe**). With
+  no answer within 8 s the socket closes, and the session comes back as after any drop.
+- Leaving quiet, the 8 s limit counts from then. Bluetooth sockets never go quiet.
+- The input lane (tdv2) between computers keeps its own 1 s idle ping.
+
 ## Input
 
 ### tdv1: everything on the session

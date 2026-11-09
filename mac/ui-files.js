@@ -78,7 +78,7 @@ UI.tab({
         folderRow,
         UI.row(I18n.t('Show in Finder'), '', [reveal]),
       ]),
-      UI.card(I18n.t('Recent'), [list]),
+      UI.card(I18n.t('Recent'), [list], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
     );
 
     let key = '';

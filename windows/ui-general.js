@@ -87,6 +87,10 @@ UI.tab({
     encRestart.hidden = true;
     const encSw = UI.switch((v) => api.setEncoder(v), { label: t('Hardware encoder') });
     const encRow = UI.row(t('Hardware encoder'), t('Shares the screen and app windows with the graphics card. Off: in software (OpenH264), for a picture that stalls or goes black. Applies after a restart'), [encSw, encRestart]);
+    // Prioritize performance over battery life (settings.app.keepPinging, shared/quiet.js, #143): off, a
+    // session nothing uses stops pinging every second so a phone or laptop can sleep; on, as before.
+    const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
+    const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, locRow]),
@@ -107,6 +111,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, sendToRow]),
       UI.card(t('This computer'), [deviceRow, helperRow, vddRow]),
+      UI.card(t('Connections'), [pingRow]),
       UI.card(t('Advanced'), [protoRow, ...(api.setEncoder ? [encRow] : []), ...engines.rows]),
     ]);
     body.append(sections);
@@ -135,6 +140,7 @@ UI.tab({
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);
       startup.set(s.startup);
       hudSw.set(s.app.hud);
+      pingSw.set(s.app.keepPinging === true);
       const f = s.files || {};
       recvReset.hidden = !f.receivedFolder;
       const receivedDescription = t('Files sent to {me} from another computer or a phone, and what’s saved from a phone’s Files and Photos', { me: s.device.name });

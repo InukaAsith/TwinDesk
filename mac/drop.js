@@ -439,6 +439,12 @@ class Drop extends EventEmitter {
     this._changed();
   }
 
+  // Files › Recent › Clear: only the list; the files stay where they are.
+  clearRecent() {
+    this.recent.length = 0;
+    this._changed();
+  }
+
   reveal(index) {
     const r = this.recent[index];
     if (r && r.path && fs.existsSync(r.path)) shell.showItemInFolder(r.path);

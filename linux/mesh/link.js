@@ -7,6 +7,7 @@
 // the session again if the network goes. A move that doesn't last is tried again later and later (resumeBackoff).
 const WebSocket = require('ws');
 const P = require('../../shared/protocol.js');
+const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { linkLane, peerIp } = require('../../shared/inputlane.js');
 
 const T = P.T;
@@ -35,6 +36,7 @@ class Link {
     this.device = opts.device;
     this.blocked = opts.blocked || (() => false);
     this.busy = opts.busy || (() => true);
+    this.partner = opts.partner || (() => false); // input shared over this link: it never goes quiet (shared/quiet.js)
     this.destroyed = false;
     this.ilLane = linkLane(); // the input lane (shared/inputlane.js) of this device's sessions; null: none
     this.lastTx = 0;
@@ -82,6 +84,7 @@ class Link {
 
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    Quiet.sent(this.ws, obj);
     this.ws.send(JSON.stringify(obj));
     this.lastTx = this.ws.lastTx = Date.now();
     return true;
@@ -355,6 +358,7 @@ class Link {
     }
     if (!msg || typeof msg.t !== 'string') return;
     this.lastRx = Date.now();
+    if (this.authed && Quiet.seen(ws, msg)) return; // `idle {on}`: the other end's side of a quiet link
     switch (msg.t) {
       case T.PAIR_NONCE: return this._onNonce(msg);
       case T.PAIR_OK: return this._onPairOk(msg);
@@ -427,6 +431,7 @@ class Link {
     this.status.rtt = null;
     this.lastTx = Date.now();
     this.timers.ping = setInterval(() => this._keepalive(), KEEPALIVE_TICK_MS);
+    if (!this.unquiet) this.unquiet = Quiet.onChange(() => { if (this.authed) this._keepalive(); }); // a hold reaches the other end at once
     this.takeover = false;
     this.busyBy = '';
     this._setStatus('connected', '');
@@ -562,7 +567,17 @@ class Link {
     for (const ws of [this.ws, this.alt]) {
       if (!ws || !ws.transport) continue;
       const ble = ws.transport === 'ble';
-      const rx = Math.max(ws.lastRx || 0, (ble && this.ble && this.ble.lastDown) || 0);
+      let rx = Math.max(ws.lastRx || 0, (ble && this.ble && this.ble.lastDown) || 0);
+      // Quiet links (shared/quiet.js): both ends idle, a ping every few minutes. Not through Bluetooth.
+      if (!ble && ws.readyState === WebSocket.OPEN) {
+        const q = Quiet.tick(ws, now, rx, (m) => { ws.send(JSON.stringify(m)); ws.lastTx = Date.now(); }, this.partner());
+        if (q.quiet) {
+          if (q.dead) { if (ws === this.ws) this.lastError = '{Name} stopped answering'; ws.terminate(); }
+          else if (q.ping) { ws.lastPing = now; ws.lastTx = now; ws.send(JSON.stringify({ t: T.PING, ts: now })); }
+          continue;
+        }
+        rx = q.rx;
+      }
       if (now - rx > (ble ? P.BLE_TIMEOUT_MS : busy ? P.TIMEOUT_MS : P.IDLE_TIMEOUT_MS)) {
         if (ws === this.ws) this.lastError = '{Name} stopped answering';
         ws.terminate();

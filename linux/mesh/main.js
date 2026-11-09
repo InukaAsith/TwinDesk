@@ -171,6 +171,8 @@ function start() {
   device = loadDevice();
   settings = loadSettings(store); // settings.json and the mesh's own in multi.json (settings.js)
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
+  // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
+  require('../../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
   theme.setPref(settings.ui.theme);
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
 
@@ -358,7 +360,8 @@ function start() {
   // TwinDesk Web (../web.js): the same server and pairings as the one-to-one app (one userData).
   web = require('../web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip,
     kvm: () => kvm, devctl: () => devctl });
-  const ipc = setupIpc({ devctl: () => devctl, chats: () => chats, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
+  const ipc = setupIpc({ clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+    devctl: () => devctl, chats: () => chats, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,

@@ -21,6 +21,11 @@ import javax.net.ssl.X509TrustManager
 
 private const val FALLBACK_MS = 5000L // on the network this long, answering: its Bluetooth fallback goes (dropAlt)
 private const val ANSWERING_MS = 3000L // … answering = something came through it this recently
+// Quiet links (shared/quiet.js): the same numbers as the computers'.
+private const val QUIET_IDLE = "idle"
+private const val QUIET_ACTIVE_MS = 15000L
+private const val QUIET_PING_MS = 5 * 60 * 1000L
+private const val QUIET_TIMEOUT_MS = 11 * 60 * 1000L
 
 data class PairState(
     val phase: String, // connecting | starting | code | waiting | failed
@@ -78,6 +83,40 @@ class Link(
     private var pendingAddress = ""
     private val lastRxOf = java.util.concurrent.ConcurrentHashMap<WebSocket, Long>()
     private var helloTimer: ScheduledFuture<*>? = null
+
+    // Quiet links (shared/quiet.js, #143): while nothing is live here and the computer says the same
+    // (`idle {on}`), the session stops pinging every second and the radio and CPU can sleep: one ping
+    // every QUIET_PING_MS, closed after QUIET_TIMEOUT_MS of silence. A message sent while quiet is
+    // followed by one ping (a probe): no answer within TIMEOUT_MS and the socket closes (and the
+    // session comes back). Messages don't end the quiet; busyHere (Core: something live here), the
+    // computer saying busy or wake() do. A computer that never says idle (an older app) keeps today's
+    // pings. Not through Bluetooth.
+    @Volatile var busyHere: () -> Boolean = { false }
+    @Volatile var keepPinging = false
+    @Volatile private var peerIdle = false
+    @Volatile private var saidIdle = false
+    @Volatile private var lastUse = 0L // the session's start: active for QUIET_ACTIVE_MS
+    @Volatile private var probeAt = 0L
+    private var probed = false
+    @Volatile private var wokeAt = 0L
+    @Volatile private var quietSince = 0L
+    private var quietEnd = 0L
+    private var quietPing = 0L
+    val quiet: Boolean get() = quietSince != 0L
+
+    // The screen came on, the network changed, the app opened: active again for a while, so a session
+    // that died in the quiet is found within TIMEOUT_MS. Also when a hold starts or ends (Core.changed).
+    fun wake() { wokeAt = System.currentTimeMillis(); if (pinger != null) runCatching { exec.execute { beat() } } }
+    // Only says this side's idle state if it changed (no pings: Core.changed() calls this often).
+    fun nudge() { if (pinger != null) runCatching { exec.execute { if (state == "connected") sayIdle(System.currentTimeMillis()) } } }
+
+    private fun idleHere(now: Long) = !keepPinging && !runCatching { busyHere() }.getOrDefault(true) && now - maxOf(lastUse, wokeAt) >= QUIET_ACTIVE_MS
+
+    private fun sayIdle(now: Long): Boolean {
+        val mine = idleHere(now)
+        if (mine != saidIdle) { ws?.let { w -> if (!ble && w.send(msg(QUIET_IDLE, "on" to mine).toString())) saidIdle = mine } }
+        return mine
+    }
     var bleRx: () -> Long = { 0L } // Ble.lastDown: bytes arriving through Bluetooth count as alive
     // Fast files (Proto.FX_PATH): the session's token from welcome {fx}; none from a computer that can't.
     @Volatile private var fxToken = ""
@@ -171,6 +210,7 @@ class Link(
     fun send(m: JSONObject): Boolean {
         val w = ws ?: return false
         if (state != "connected") return false
+        if (quietSince != 0L && probeAt == 0L) probeAt = System.currentTimeMillis()
         return w.send(m.toString())
     }
 
@@ -399,6 +439,7 @@ class Link(
             Proto.T.ERROR -> return onError(m)
             Proto.T.PING -> { if (state == "connected") raw(msg(Proto.T.PONG, "ts" to m.opt("ts"))); return }
             Proto.T.PONG -> { if (m.has("ts")) rttMs = maxOf(0, System.currentTimeMillis() - m.optLong("ts")); return }
+            QUIET_IDLE -> { if (state == "connected") { val was = peerIdle; peerIdle = m.optBoolean("on"); if (was != peerIdle) nudge() }; return }
         }
         if (state == "connected") events.onMessage(m)
     }
@@ -458,21 +499,60 @@ class Link(
         fx2Port = m.optJSONObject("fx2")?.optInt("port", 0)?.takeIf { it in 1..65535 && fxToken.isNotEmpty() } ?: 0
         ws?.let { lastRxOf[it] = System.currentTimeMillis() }
         // Each of the session's sockets on its own: a quiet fallback goes, the session lives on.
-        pinger = exec.scheduleWithFixedDelay({
-            val now = System.currentTimeMillis()
+        peerIdle = false
+        saidIdle = false
+        quietSince = 0L
+        quietEnd = 0L
+        probeAt = 0L
+        probed = false
+        lastUse = System.currentTimeMillis()
+        pinger = exec.scheduleWithFixedDelay({ beat() }, Proto.PING_MS, Proto.PING_MS, TimeUnit.MILLISECONDS)
+        setState("connected", "")
+        events.onWelcome(h)
+    }
+
+    // Each of the session's sockets on its own: a quiet fallback goes, the session lives on.
+    private fun beat() {
+        if (state != "connected") return
+        val now = System.currentTimeMillis()
+        // Quiet (both ends idle): only the network socket's own rule changes; Bluetooth as before.
+        val mine = sayIdle(now)
+        val quietNow = mine && peerIdle && !ble
+        if (quietNow && quietSince == 0L) { quietSince = now; Log.i("TwinDesk", "link quiet: pings every ${QUIET_PING_MS / 60000} min") }
+        if (!quietNow && quietSince != 0L) { quietSince = 0L; quietEnd = now; probeAt = 0L; probed = false; Log.i("TwinDesk", "link active: pings every second") }
+        run {
             for (w in listOfNotNull(ws, alt)) {
                 val onBle = if (w === ws) ble else altBle
                 val limit = if (onBle) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS
-                val rx = maxOf(lastRxOf[w] ?: lastRx, if (onBle) bleRx() else 0L)
+                val rx = maxOf(lastRxOf[w] ?: lastRx, if (onBle) bleRx() else 0L, if (onBle) 0L else quietEnd)
+                if (!onBle && quietNow) {
+                    if (w === ws && probeAt != 0L) { // something went out while quiet: is anyone there?
+                        if (rx >= probeAt) { probeAt = 0L; probed = false }
+                        else if (!probed) { probed = true; quietPing = now; w.send(msg(Proto.T.PING, "ts" to now).toString()); continue }
+                        else if (now - probeAt > Proto.TIMEOUT_MS) {
+                            Log.i("TwinDesk", "no answer on a quiet link, closing")
+                            if (alt == null) message = "Stopped answering"
+                            w.cancel()
+                            continue
+                        } else continue
+                    }
+                    if (now - rx > QUIET_TIMEOUT_MS) {
+                        Log.i("TwinDesk", "network socket silent for ${now - rx} ms on a quiet link, closing")
+                        if (w === ws && alt == null) message = "Stopped answering"
+                        w.cancel()
+                    } else if (now - maxOf(quietPing, quietSince) >= QUIET_PING_MS) {
+                        quietPing = now
+                        w.send(msg(Proto.T.PING, "ts" to now).toString())
+                    }
+                    continue
+                }
                 if (now - rx > limit) {
                     Log.i("TwinDesk", "${if (onBle) "Bluetooth" else "network"} socket silent for ${now - rx} ms, closing")
                     if (w === ws && alt == null) message = "Stopped answering"
                     w.cancel()
                 } else w.send(msg(Proto.T.PING, "ts" to now).toString())
             }
-        }, Proto.PING_MS, Proto.PING_MS, TimeUnit.MILLISECONDS)
-        setState("connected", "")
-        events.onWelcome(h)
+        }
     }
 
     private val pairErrors = mapOf(
@@ -516,6 +596,8 @@ class Link(
     private fun onClose(failure: String?) {
         Log.i("TwinDesk", "link closed: mode=$mode state=$state ble=$ble failure=$failure code=$lastCode")
         pinger?.cancel(false)
+        pinger = null
+        quietSince = 0L
         helloTimer?.cancel(false)
         ws = null
         fxToken = ""

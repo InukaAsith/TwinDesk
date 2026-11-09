@@ -397,7 +397,7 @@ object Notify {
 
     // Files on their way (progress) and when they are here (open / show).
     // up: going to the computer (the upload arrow).
-    fun files(ctx: Context, key: Int, title: String, text: String, progress: Int?, open: Intent?, up: Boolean = false) {
+    fun files(ctx: Context, key: Int, title: String, text: String, progress: Int?, open: Intent?, up: Boolean = false, cancel: String? = null) {
         val b = Notification.Builder(ctx, CH_FILES)
             .setSmallIcon(if (up) (if (progress != null) android.R.drawable.stat_sys_upload else android.R.drawable.stat_sys_upload_done)
                 else if (progress != null) android.R.drawable.stat_sys_download else android.R.drawable.stat_sys_download_done)
@@ -407,6 +407,8 @@ object Notify {
             .setOngoing(progress != null)
             .setAutoCancel(progress == null)
         if (progress != null) b.setProgress(100, progress, progress < 0)
+        // cancel: the batch id; Cancel stops it on both ends (Files.cancel)
+        if (progress != null && cancel != null) b.addAction(Notification.Action.Builder(null, "Cancel", action(ctx, ActionReceiver.FILES_CANCEL, 0x10000 + key, cancel)).build())
         if (open != null) b.setContentIntent(PendingIntent.getActivity(ctx, key, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
         nm(ctx).notify(ID_FILES_BASE + key, b.build())
     }

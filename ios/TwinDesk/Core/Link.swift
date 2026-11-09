@@ -56,6 +56,43 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     private var queuedBytes = 0 // sent but not yet written (file sending waits while it is high)
     private let qLock = NSLock()
 
+    // Quiet links (shared/quiet.js, #143): while nothing is live here and the computer says the same
+    // (`idle {on}`), the session stops pinging every second: one ping every quietPing, closed after
+    // quietTimeout of silence. A message sent while quiet is followed by one ping (a probe): no answer
+    // within the timeout and the socket closes (and the session comes back). Messages don't end the
+    // quiet; busyHere (Core: something live here), the computer saying busy or wake() do. A computer
+    // that never says idle (an older app) keeps today's pings. Not through Bluetooth. All on q.
+    static let quietIdle = "idle"
+    static let quietActive: TimeInterval = 15
+    static let quietPing: TimeInterval = 5 * 60
+    static let quietTimeout: TimeInterval = 11 * 60
+    var busyHere: () -> Bool = { false }
+    var keepPinging = false
+    private var peerIdle = false
+    private var saidIdle = false
+    private var lastUse = Date() // the session's start: active for quietActive
+    private var probeAt: Date?
+    private var probed = false
+    private var wokeAt = Date.distantPast
+    private var quietSince: Date?
+    private var quietEnd = Date.distantPast
+    private var quietPingAt = Date.distantPast
+
+    // The app came to the front, a hold started or ended: look at the session now.
+    func wake() { q.async { self.wokeAt = Date(); self.sayIdle() } }
+    func nudge() { q.async { self.sayIdle() } }
+
+    @discardableResult
+    private func sayIdle() -> Bool {
+        guard state == "connected" else { return false }
+        let mine = !keepPinging && !busyHere() && Date().timeIntervalSince(max(lastUse, wokeAt)) >= Link.quietActive
+        if mine != saidIdle, !viaBle, let text = encodeJSON(msg(Link.quietIdle, ["on": mine])) {
+            write(text)
+            saidIdle = mine
+        }
+        return mine
+    }
+
     let list: String // the store's list its hosts go in: "hosts", or "peerHosts" (Peer.swift)
 
     init(list: String = "hosts") {
@@ -130,7 +167,7 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
     @discardableResult
     func send(_ m: JSON) -> Bool {
         guard state == "connected", let text = encodeJSON(m) else { return false }
-        q.async { self.write(text) }
+        q.async { if self.quietSince != nil && self.probeAt == nil { self.probeAt = Date() }; self.write(text) }
         return true
     }
 
@@ -266,6 +303,9 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         case Proto.T.pong:
             if let ts = m["ts"] as? NSNumber { rttMs = max(0, Int(Date().timeIntervalSince1970 * 1000) - ts.intValue) }
             return
+        case Link.quietIdle:
+            if state == "connected" { peerIdle = (m["on"] as? Bool) == true }
+            return
         default: break
         }
         if state == "connected" { events?.linkMessage(t, m) }
@@ -322,9 +362,48 @@ final class Link: NSObject, URLSessionWebSocketDelegate {
         fx2Port = p2.map { $0.intValue > 0 && $0.intValue < 65536 ? UInt16($0.intValue) : 0 } ?? 0
         let t = DispatchSource.makeTimerSource(queue: q)
         t.schedule(deadline: .now() + Proto.pingInterval, repeating: Proto.pingInterval)
+        peerIdle = false
+        saidIdle = false
+        quietSince = nil
+        quietEnd = .distantPast
+        probeAt = nil
+        probed = false
+        lastUse = Date()
         t.setEventHandler { [weak self] in
             guard let self = self, let w = self.ws else { return }
-            let quiet = Date().timeIntervalSince(self.viaBle ? max(self.lastRx, self.bleRx()) : self.lastRx)
+            let now = Date()
+            let mine = self.sayIdle()
+            // Quiet (both ends idle, on the network): a ping every few minutes, a long silence limit.
+            if mine && self.peerIdle && !self.viaBle {
+                if self.quietSince == nil { self.quietSince = now; NSLog("TwinDesk: link quiet") }
+                if let p = self.probeAt { // something went out while quiet: is anyone there?
+                    if self.lastRx >= p { self.probeAt = nil; self.probed = false }
+                    else if !self.probed {
+                        self.probed = true
+                        self.quietPingAt = now
+                        self.raw(msg(Proto.T.ping, ["ts": Int(now.timeIntervalSince1970 * 1000)]))
+                        return
+                    } else if now.timeIntervalSince(p) > Proto.timeout {
+                        NSLog("TwinDesk: no answer on a quiet link, closing")
+                        self.message = "Stopped answering"
+                        w.cancel(with: .goingAway, reason: nil)
+                        self.onClose(nil)
+                        return
+                    } else { return }
+                }
+                if now.timeIntervalSince(self.lastRx) > Link.quietTimeout {
+                    NSLog("TwinDesk: silent on a quiet link, closing")
+                    self.message = "Stopped answering"
+                    w.cancel(with: .goingAway, reason: nil)
+                    self.onClose(nil)
+                } else if now.timeIntervalSince(max(self.quietPingAt, self.quietSince!)) >= Link.quietPing {
+                    self.quietPingAt = now
+                    self.raw(msg(Proto.T.ping, ["ts": Int(now.timeIntervalSince1970 * 1000)]))
+                }
+                return
+            }
+            if self.quietSince != nil { self.quietSince = nil; self.quietEnd = now; self.probeAt = nil; self.probed = false; NSLog("TwinDesk: link active") }
+            let quiet = now.timeIntervalSince(max(self.viaBle ? max(self.lastRx, self.bleRx()) : self.lastRx, self.quietEnd))
             if quiet > self.timeout {
                 NSLog("TwinDesk: socket silent for %.1f s, closing", quiet)
                 self.message = "Stopped answering"

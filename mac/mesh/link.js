@@ -11,6 +11,7 @@
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { linkLane, peerIp } = require('../../shared/inputlane.js');
 
 const T = P.T;
@@ -35,6 +36,7 @@ class Link extends EventEmitter {
     this.device = opts.device;
     this.blocked = opts.blocked || (() => false);
     this.busy = opts.busy || (() => true);
+    this.partner = opts.partner || (() => false); // input shared over this link: it never goes quiet (shared/quiet.js)
     this.store = opts.store;
     this.resolveAddress = opts.resolveAddress || (() => null);
     this.pairing = this.store.load(); // {macId, macName, address, port, fp, token, os} or null
@@ -72,6 +74,7 @@ class Link extends EventEmitter {
 
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
+    Quiet.sent(this.ws, obj);
     this.ws.send(JSON.stringify(obj));
     this.lastTx = Date.now();
     return true;
@@ -237,6 +240,7 @@ class Link extends EventEmitter {
     }
     if (!msg || typeof msg.t !== 'string') return;
     this.lastRx = Date.now();
+    if (this.authed && Quiet.seen(this.ws, msg)) return; // `idle {on}`: the other end's side of a quiet link
     switch (msg.t) {
       case T.PAIR_NONCE: return this._onNonce(msg);
       case T.PAIR_OK: return this._onPairOk(msg);
@@ -304,6 +308,7 @@ class Link extends EventEmitter {
     this.status.rtt = null;
     this.lastTx = Date.now();
     this.timers.ping = setInterval(() => this._keepalive(), KEEPALIVE_TICK_MS);
+    if (!this.unquiet) this.unquiet = Quiet.onChange(() => { if (this.authed) this._keepalive(); }); // a hold reaches the other end at once
     this.takeover = false;
     this.busyBy = '';
     this._setStatus('connected', '');
@@ -417,7 +422,19 @@ class Link extends EventEmitter {
   _keepalive() {
     const now = Date.now();
     const busy = this.busy();
-    if (now - this.lastRx > (busy ? P.TIMEOUT_MS : P.IDLE_TIMEOUT_MS)) {
+    let rx = this.lastRx;
+    // Quiet links (shared/quiet.js): both ends idle, a ping every few minutes.
+    const ws = this.ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const q = Quiet.tick(ws, now, rx, (m) => this._raw(m), this.partner());
+      if (q.quiet) {
+        if (q.dead) { this.lastError = 'Stopped answering'; ws.terminate(); }
+        else if (q.ping) this._raw({ t: T.PING, ts: now });
+        return;
+      }
+      rx = q.rx;
+    }
+    if (now - rx > (busy ? P.TIMEOUT_MS : P.IDLE_TIMEOUT_MS)) {
       this.lastError = 'Stopped answering';
       if (this.ws) this.ws.terminate();
       return;
