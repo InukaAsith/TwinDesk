@@ -75,20 +75,6 @@
 @keyframes web-glow { 0% { box-shadow: 0 0 0 0 rgba(48, 209, 88, 0.6); } 100% { box-shadow: 0 0 0 14px rgba(48, 209, 88, 0); } }
 @media (prefers-reduced-motion: reduce) { .web-hero.just .hero-link.up, .web-hero.just .device { animation: none; } }
 
-/* Its quick actions: compact rows, the icon in a disc that takes the accent when on (not a wall of blue tiles). */
-.dv-qs.web-qs { gap: 8px; }
-.web-qs .dv-qs-tile { flex-direction: row; align-items: center; gap: 10px; min-height: 0; padding: 8px 10px; border-radius: 10px;
-  background: var(--control); border-color: var(--control-line); color: var(--text); }
-.web-qs .dv-qs-tile svg { flex: none; box-sizing: content-box; width: 16px; height: 16px; padding: 7px; border-radius: 50%;
-  background: rgba(127, 127, 127, 0.2); color: var(--muted); transition: background-color 0.15s, color 0.15s; }
-.web-qs .dv-qs-tile.on { background: var(--control); border-color: var(--control-line); color: var(--text); }
-.web-qs .dv-qs-tile.on svg { background: var(--accent); color: #fff; }
-.web-qs .dv-qs-tile:hover { border-color: var(--accent); }
-.web-qs .dv-qs-label { min-width: 0; font-size: 12.5px; font-weight: 500; }
-.web-qs .dv-qs-label > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.web-qs .dv-qs-state { font-weight: 400; color: var(--muted); opacity: 1; }
-.web-qs .dv-qs-tile:not(.on) .dv-qs-label > span:first-child { color: var(--muted); }
-
 /* Receive screen with a Mac: mirror it with AirPlay (UI.airplayMacTip, shared/ui-web.js) */
 .apt { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
 .apt-pic { flex: 0 0 240px; max-width: 42%; }
@@ -108,3 +94,56 @@
 .apt-state.on { color: var(--text); }
 .apt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 620px) { .apt { flex-direction: column; align-items: stretch; } .apt-pic { max-width: 100%; flex-basis: auto; } }
+
+/* Visit twindesk.local: an address bar typing it out (UI.typingBar) */
+.wt { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 16px 16px; text-align: center; }
+.wt .hint { max-width: 460px; }
+.wt .hint, .mg-note { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.wt-bar { display: flex; align-items: center; gap: 8px; width: min(340px, 100%); height: 40px; padding: 0 14px; border-radius: 12px;
+  background: var(--control); border: 1px solid var(--control-line); box-shadow: var(--shadow); font-size: 17px; font-weight: 500; color: var(--text); }
+.wt-lock { width: 14px; height: 14px; flex: none; border-radius: 50%; background: radial-gradient(circle, transparent 3.5px, var(--muted) 4px, var(--muted) 5px, transparent 5.5px);
+  opacity: 0.8; }
+.wt-typed { white-space: nowrap; letter-spacing: 0.01em; }
+.wt-caret { width: 2px; height: 20px; margin-left: -6px; background: var(--accent); border-radius: 1px; animation: wt-blink 1s steps(1) infinite; }
+@keyframes wt-blink { 50% { opacity: 0; } }
+
+/* Screen Mirroring on an iPhone or iPad, on a loop (UI.mirrorGuide) */
+.mg { display: flex; gap: 20px; align-items: center; padding: 14px 16px 16px; flex-wrap: wrap; }
+.mg-phone { position: relative; width: 132px; height: 228px; flex: none; border-radius: 22px; background: #141416;
+  box-shadow: inset 0 0 0 3px #4a4a4e; overflow: hidden; }
+.mg-apps { display: grid; grid-template-columns: repeat(4, 18px); gap: 9px; justify-content: center; padding-top: 30px; transition: filter .35s; }
+.mg-apps i { width: 18px; height: 18px; border-radius: 5px; background: hsl(var(--h) 70% 55% / 0.65); }
+.mg-phone[data-step="1"] .mg-apps, .mg-phone[data-step="2"] .mg-apps { filter: blur(4px) brightness(0.6); }
+.mg-cc { position: absolute; inset: 0; padding: 26px 12px; display: flex; flex-direction: column; gap: 7px; background: rgba(40, 40, 44, 0.55);
+  opacity: 0; transform: translateY(-24px); transition: opacity .35s, transform .35s; }
+.mg-phone[data-step="1"] .mg-cc, .mg-phone[data-step="2"] .mg-cc { opacity: 1; transform: none; }
+.mg-row { display: flex; gap: 6px; }
+.mg-tile { display: block; flex: 1; height: 22px; border-radius: 7px; background: rgba(255, 255, 255, 0.18); }
+.mg-tile.blue { background: #0a84ff; } .mg-tile.green { background: #30d158; } .mg-tile.orange { background: #ff9f0a; }
+.mg-tile.wide { height: 34px; }
+.mg-mirror { display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 7px; color: #fff; font-size: 8.5px; font-weight: 600; transition: background .2s; }
+.mg-mirror-ic { width: 12px; height: 9px; flex: none; border: 1.5px solid #fff; border-radius: 2px; }
+.mg-phone[data-step="1"] .mg-mirror { background: rgba(255, 255, 255, 0.42); animation: mg-pulse 1.2s ease-in-out infinite; }
+@keyframes mg-pulse { 50% { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.7); } }
+.mg-list { position: absolute; left: 12px; right: 12px; top: 74px; padding: 8px; border-radius: 12px; background: rgba(60, 60, 64, 0.96); color: #fff;
+  font-size: 9px; opacity: 0; transform: scale(0.9); transition: opacity .3s, transform .3s; }
+.mg-list b { display: block; text-align: center; margin-bottom: 6px; }
+.mg-item { display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 7px; background: rgba(10, 132, 255, 0.85);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mg-tv { width: 11px; height: 8px; flex: none; border: 1.5px solid #fff; border-radius: 2px; }
+.mg-phone[data-step="2"] .mg-list { opacity: 1; transform: none; }
+.mg-finger { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.5); left: 108px; top: 14px; transition: left .5s, top .5s; }
+.mg-phone[data-step="0"] .mg-finger { animation: mg-swipe 1.9s ease-in-out infinite; }
+@keyframes mg-swipe { 0%, 15% { top: 14px; opacity: 0.5; } 70% { top: 100px; opacity: 1; } 100% { top: 100px; opacity: 0; } }
+.mg-phone[data-step="1"] .mg-finger { left: 34px; top: 74px; }
+.mg-phone[data-step="2"] .mg-finger { left: 80px; top: 112px; }
+.mg-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 8px; }
+.mg-head { font-weight: 600; color: var(--text); }
+.mg-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.mg-steps li { display: flex; align-items: center; gap: 9px; color: var(--muted); transition: color .25s; }
+.mg-steps li b { width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #fff;
+  background: var(--faint); transition: background .25s; }
+.mg-steps li.on { color: var(--text); font-weight: 500; }
+.mg-steps li.on b { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .mg-finger, .mg-mirror, .wt-caret { animation: none !important; } }

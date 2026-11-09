@@ -36,6 +36,71 @@
   const status = (d) => !d.online ? tr('Last seen {when}', { when: ago(d.lastSeen) })
     : d.background ? tr('Connected · in the background') : tr('Connected');
 
+  // Motion only where it's welcome, and only while it can be seen (a hidden tab costs nothing).
+  const still = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const seen = (e) => e.isConnected && !document.hidden && e.offsetParent !== null;
+
+  // A browser's address bar typing `text`, again and again: what to type on the device.
+  // UI.typingBar(text) → element.
+  UI.typingBar = (text) => {
+    const typed = el('span', { class: 'wt-typed' });
+    const bar = el('div', { class: 'wt-bar', attrs: { role: 'img', 'aria-label': text } }, [
+      el('span', { class: 'wt-lock', attrs: { 'aria-hidden': 'true' } }), typed, el('i', { class: 'wt-caret', attrs: { 'aria-hidden': 'true' } }),
+    ]);
+    if (still()) { typed.textContent = text; return bar; }
+    let n = 0;
+    const tick = () => {
+      if (!bar.isConnected && n > 0) return; // left the page for good
+      let wait = 120;
+      if (!seen(bar)) wait = 800;
+      else if (n < text.length) typed.textContent = text.slice(0, ++n);
+      else { wait = 2200; n = 0; setTimeout(() => { typed.textContent = ''; }, 2000); }
+      if (n === 0) wait += 500;
+      setTimeout(tick, wait);
+    };
+    setTimeout(tick, 400);
+    return bar;
+  };
+
+  // Where Screen Mirroring is on an iPhone or iPad, playing on a loop (the iPhone app's MirrorGuide):
+  // 1 swipe down from the top right corner, 2 Screen Mirroring in Control Center, 3 this computer in
+  // the list. UI.mirrorGuide() → {el, target(name)}.
+  UI.mirrorGuide = () => {
+    const apps = el('div', { class: 'mg-apps' }, Array.from({ length: 16 }, (_, i) => el('i', { style: `--h:${(i * 47) % 360}` })));
+    const tile = (cls) => el('i', { class: 'mg-tile ' + cls });
+    const mirror = el('div', { class: 'mg-tile mg-mirror' }, [el('span', { class: 'mg-mirror-ic' }), el('span', { text: tr('Screen Mirroring') })]);
+    const cc = el('div', { class: 'mg-cc' }, [el('div', { class: 'mg-row' }, [tile('blue'), tile('green'), tile('orange'), tile('blue')]), mirror,
+      el('div', { class: 'mg-row' }, [tile('wide'), tile('wide')])]);
+    const name = el('span');
+    const list = el('div', { class: 'mg-list' }, [el('b', { text: tr('Screen Mirroring') }), el('div', { class: 'mg-item' }, [el('span', { class: 'mg-tv' }), name])]);
+    const finger = el('i', { class: 'mg-finger' });
+    const phone = el('div', { class: 'mg-phone', attrs: { 'aria-hidden': 'true' } }, [apps, cc, list, finger]);
+    const labels = [tr('Swipe down from the top right corner'), tr('Tap Screen Mirroring'), ''];
+    const items = labels.map((t, i) => el('li', {}, [el('b', { text: String(i + 1) }), el('span', { text: t })]));
+    const card = el('div', { class: 'mg' }, [phone, el('div', { class: 'mg-text' }, [
+      el('div', { class: 'mg-head', text: tr('On the iPhone or iPad') }), el('ol', { class: 'mg-steps' }, items),
+      el('div', { class: 'hint mg-note', text: tr('On an iPhone with a Home button, swipe up from the bottom edge instead.') }),
+    ])]);
+    let step = 0;
+    const show = (k) => {
+      step = k;
+      phone.dataset.step = String(k);
+      items.forEach((li, i) => li.classList.toggle('on', i === k));
+    };
+    show(still() ? 2 : 0);
+    if (!still()) {
+      const tick = () => { if (seen(card)) show((step + 1) % 3); setTimeout(tick, step === 2 ? 2600 : 1900); };
+      setTimeout(tick, 1900);
+    }
+    return {
+      el: card,
+      target(n) {
+        name.textContent = n;
+        items[2].lastChild.textContent = tr('Select {target}', { target: n });
+      },
+    };
+  };
+
   // ---------------------------------------------------------------- TwinDesk Web
   UI.tab({
     id: 'web',
@@ -43,6 +108,7 @@
     order: 90,
     icon: 'globe',
     title: 'TwinDesk Web',
+    heading: 'twindesk.local (TwinDesk Web)', // the page's title; the sidebar keeps TwinDesk Web
     desc: 'Use an iPhone, iPad or any device with a web browser with this computer: no app to install. Pair it once with the QR code.',
     color: 'linear-gradient(#5ac8fa, #007aff)',
     master: { get: (s) => !!W(s).cfg.on, set: (v) => api().webSet({ on: v }) },
@@ -74,7 +140,10 @@
       ]);
       const list = el('div');
       const devCard = UI.card(tr('Paired devices'), [list]);
-      body.append(err, pairCard, addrCard, allowCard, devCard);
+      // The short name to type, typing itself out: on or off (off, it says to turn it on first).
+      const visitHint = el('div', { class: 'hint' });
+      const visitCard = UI.card(tr('Visit twindesk.local'), [el('div', { class: 'wt' }, [UI.typingBar('twindesk.local'), visitHint])], { cls: 'keep-on' });
+      body.append(err, visitCard, pairCard, addrCard, allowCard, devCard);
       let last = {};
       let qrKey = '';
       let listKey = '';
@@ -84,6 +153,9 @@
         err.hidden = !w.error;
         err.textContent = w.error || '';
         pairCard.hidden = addrCard.hidden = !w.running;
+        visitHint.textContent = !w.running ? tr('Turn on TwinDesk Web, then type it in the browser on an iPhone, iPad or any device on this network.')
+          : w.links && !w.links.short ? tr('Another computer on this network answers to twindesk.local now: open one of the addresses below instead.')
+            : tr('Type it in the browser on an iPhone, iPad or any device on this network: it opens the pairing page.');
         if (w.running && w.links && w.links.qr !== qrKey) {
           qrKey = w.links.qr;
           qrBox.replaceChildren(window.Qr ? window.Qr.canvas(w.links.qr, 176) : el('div', { class: 'mono', text: w.links.qr }));
@@ -238,7 +310,9 @@
         UI.row(tr('Open full screen'), tr('The mirrored screen fills the display. Esc leaves full screen, F11 goes back.'), [fullSw.el]),
       ];
       const airErr = el('div', { class: 'note warn', hidden: true });
-      const airCard = UI.card(tr('AirPlay'), mac ? [airRow] : [airRow, liveRow, ...optRows]);
+      // Where Screen Mirroring is on the iPhone or iPad, right under the switch.
+      const guide = UI.mirrorGuide();
+      const airCard = UI.card(tr('AirPlay'), mac ? [airRow, guide.el] : [airRow, guide.el, liveRow, ...optRows]);
       // What a device plays here (music from an app), with its controls (shared/ui-nowplaying.js).
       const playing = !mac && UI.airplayPlaying ? UI.airplayPlaying() : null;
       body.append(shareErr, ...(playing ? [playing.el] : []), smbCard, howCard, airErr, airCard);
@@ -258,6 +332,7 @@
         addrRow.hidden = userRow.hidden = pwRow.hidden = howCard.hidden = !on;
         addrRow.setHint(addr || tr('Turn on TwinDesk Web to get this computer’s network name'));
         userRow.setHint(m.user || 'macshare');
+        guide.target((w.airplay && w.airplay.name) || me(s));
         if (!mac) {
           const a = w.airplay || {};
           airSw.set(!!a.on);
@@ -353,32 +428,14 @@
       const offBtn = iconed(UI.button(tr('Disconnect'), () => UI.webDev && api().webDisconnect(UI.webDev)), 'disconnect');
       const hero = el('div', { class: 'card dv-hero' }, [pic, el('div', { class: 'dv-hero-main' }, [name, sub, el('div', { class: 'dv-actions' }, [dropBtn, chatBtn, stopBtn, offBtn])]), facts]);
 
-      // Quick actions: each tile turns that permission on or off; its page has the rest.
-      const FEATS = [['screen', 'Share screen', 'screen'], ['share', 'Receive screen', 'receive'], ['extend', 'Extend', 'extend'], ['control', 'Control', 'control'],
-        ['sound', 'Audio', 'sound'], ['mic', 'Microphone', 'mic'], ['clipOut', 'Clipboard', 'clip'], ['notifs', 'Notifications', 'notifs'],
-        ['files', 'Files', 'files'], ['camera', 'Camera', 'camera']];
-      const tiles = {};
-      const grid = el('div', { class: 'dv-qs web-qs' });
-      for (const [key, label, ic] of FEATS) {
-        const state = el('span', { class: 'dv-qs-state' });
-        const b = el('button', { class: 'dv-qs-tile', attrs: { 'aria-pressed': 'false' } }, [glyph(GL[ic]), el('span', { class: 'dv-qs-label' }, [el('span', { text: tr(label) }), state])]);
-        b.onclick = () => {
-          const d = UI.webDevOf(UI.state);
-          if (!d) return;
-          const on = (d.allow || {})[key] !== false;
-          api().webAllow({ id: d.id, [key]: !on, ...(key === 'clipOut' ? { clipIn: !on } : {}) });
-        };
-        tiles[key] = { b, state };
-        grid.append(b);
-      }
-      const cols = () => {
-        const n = [...grid.children].filter((x) => !x.hidden).length || 1;
-        const w = grid.clientWidth - 28;
-        const per = Math.max(1, Math.floor((w + 8) / 148)); // a tile wants 140 px and the 8 px gap
-        grid.style.setProperty('--cols', String(n <= per ? n : Math.ceil(n / Math.ceil(n / per))));
-      };
-      new ResizeObserver(cols).observe(grid);
-      const qsCard = UI.card(tr('Quick actions'), [grid], { actions: [UI.button(tr('Settings'), () => UI.go('wd-share'), 'small link')] });
+      // Shortcuts, as a phone's or a computer's Overview has them (shared/ui-device-parts.js tiles):
+      // what's done with the device from here in a click, and its pages, customized in place. What it
+      // may do (screen, control, files…) is switched on its pages.
+      const D = UI.deviceParts;
+      const shortcuts = D.tilesCard(tr('Shortcuts'), { key: 'web.shortcuts', standard: { rows: 1,
+        items: [{ id: 'files', s: 's' }, { id: 'p.wd-share', s: 's' }, { id: 'p.wd-drop', s: 's' }, { id: 'p.wd-clipboard', s: 's' }] } });
+      const webPages = (s) => UI.tabs.filter((x) => x.web && x.id !== 'wd-overview' && !x.navHidden)
+        .sort((x, y) => (x.order ?? 50) - (y.order ?? 50)).map((x) => D.pageTile(x.id, s)).filter(Boolean);
 
       // Drop and Send files on the left; the clipboard on the right.
       const dropList = el('div', { class: 'history web-ov-drop' });
@@ -408,7 +465,7 @@
         UI.row(tr('Forget this device'), tr('Removes the pairing on both devices, with its messages and file list. Connecting again requires a new pairing code.'), [UI.button(tr('Forget'), () => UI.webDev && api().webForget(UI.webDev), 'small')]),
       ]);
       const airplay = UI.airplayPlaying ? UI.airplayPlaying() : null; // music this device plays here (AirPlay)
-      body.append(hero, ...(airplay ? [airplay.el] : []), qsCard, lower, pairCard);
+      body.append(hero, ...(airplay ? [airplay.el] : []), shortcuts.el, lower, pairCard);
       const fact = (k, v) => (v ? [el('dt', { text: k }), el('dd', { text: v })] : []);
       const tablet = (d) => /ipad|tablet|tab\b|pad/i.test(`${d.model || ''} ${d.os || ''}`);
       let dropKey = '';
@@ -421,17 +478,13 @@
         pic.className = `device big ${['mac', 'win', 'linux'].includes(d.os) ? (d.os === 'mac' ? 'mac' : 'pc') : 'phone'}${tablet(d) ? ' tablet' : ''}`;
         const al = d.allow || {};
         const w = W(s);
-        for (const [key] of FEATS) {
-          const { b, state } = tiles[key];
-          const on = al[key] !== false;
-          b.hidden = key === 'extend' && !w.extend && !(d.watching && d.watching.mode === 'extend');
-          b.classList.toggle('on', on);
-          b.setAttribute('aria-pressed', String(on));
-          const now = key === 'screen' && d.watching ? (d.watching.mode === 'extend' ? tr('Extending') : tr('Viewing'))
-            : key === 'control' && d.remote ? tr('In use') : '';
-          state.textContent = now || (on ? tr('On') : tr('Off'));
-        }
-        cols();
+        shortcuts.render([
+          { id: 'files', label: tr('Send files'), icon: GL.files, color: 'linear-gradient(#64d2ff, #0a84ff)', has: !!d.online && al.files !== false,
+            state: tr('To {name}', { name: d.name }), run: () => api().webChooseFiles({ id: d.id, kind: 'files' }) },
+          { id: 'stop', label: tr('Stop screen'), icon: GL.stop, color: 'linear-gradient(#ff6961, #ff3b30)', has: !!d.watching, run: () => api().webStopScreen(d.id) },
+          { id: 'disconnect', label: tr('Disconnect'), icon: GL.disconnect, color: 'linear-gradient(#8e8e93, #636366)', has: !!d.online, run: () => api().webDisconnect(d.id) },
+          ...webPages(s),
+        ]);
         stopBtn.hidden = !d.watching;
         offBtn.hidden = !d.online;
         dropBtn.disabled = !d.online;
