@@ -79,6 +79,7 @@ final class Core: ObservableObject, LinkEvents {
     func quietCheck() {
         let busy = inFront || screen.viewing || screen.sharing || remote.active || mic.running || mirror.sharing
         if busy != busySnapshot { busySnapshot = busy; link.nudge() }
+        discovery.setSlow(!inFront && link.connected) // off screen and connected: a beacon a minute
     }
 
     func setFront(_ on: Bool) {
@@ -150,6 +151,7 @@ final class Core: ObservableObject, LinkEvents {
             self.rttMs = l.rttMs
             self.nearby = self.discovery.list()
             self.hosts = self.store.hosts().sorted { $0.lastSeen > $1.lastSeen }
+            self.discovery.setSlow(!self.inFront && l.connected)
         }
         if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
     }

@@ -27,6 +27,7 @@ final class Background: NSObject, CLLocationManagerDelegate {
     private var engine: AVAudioEngine?
     private var player: AVAudioPlayerNode?
     private var locating = false
+    private var lastWake = Date.distantPast // a location update's look at the session, at most every 30 s
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private let store = Store.shared
 
@@ -127,7 +128,14 @@ final class Background: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         // Nothing to do with where we are: each update is only a moment awake to look at the session.
-        Core.shared.wake()
+        // Connected on the network: nothing to look at (the link watches itself; a sweep of the subnet
+        // here was radio time for nothing). Otherwise at most every 30 s. The location settings above
+        // stay as they are: they are what keeps the app running (no distance filter with low accuracy).
+        let core = Core.shared
+        if core.link.connected && !core.link.viaBle { return }
+        if Date().timeIntervalSince(lastWake) < 30 { return }
+        lastWake = Date()
+        core.wake()
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
