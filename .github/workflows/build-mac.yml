@@ -79,6 +79,9 @@ jobs:
               echo "Configured Developer ID signing identity: $ID"
             fi
           fi
+          if [ -z "$ID" ]; then
+            echo "::notice title=Not notarized::No Developer ID certificate: this build is signed with TwinDesk's own certificate, not notarized. Gatekeeper asks once (or brew install --cask inukaasith/twindesk/twindesk clears it)."
+          fi
 
       - name: Install dependencies
         working-directory: mac

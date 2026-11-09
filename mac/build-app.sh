@@ -213,7 +213,10 @@ if [ -n "$MAC_IDENTITY" ]; then
   find "$APP/Contents" -type f ! -path "$APP/Contents/MacOS/*" ! -path "$APPEX/*" ! -path "$SYSEXT/*" | while IFS= read -r f; do
     file -b "$f" | grep -q 'Mach-O' && printf '%s\t%s\n' "$(printf '%s' "$f" | tr -cd / | wc -c)" "$f"
   done | sort -rn | cut -f2- | while IFS= read -r f; do
-    codesign --force $OPTIONS $SIGN "$ID" --entitlements "$ENTITLEMENTS" "$f"
+    # A library gets none: entitlements belong to executables (a dylib's are meaningless, and
+    # notarization can flag them); executables (adb, the helpers) keep them.
+    if file -b "$f" | grep -q 'shared library'; then codesign --force $OPTIONS $SIGN "$ID" "$f"
+    else codesign --force $OPTIONS $SIGN "$ID" --entitlements "$ENTITLEMENTS" "$f"; fi
   done
   for b in "$APP"/Contents/Frameworks/*.framework "$APP"/Contents/Frameworks/*.app; do
     [ -e "$b" ] && codesign --force $OPTIONS $SIGN "$ID" --entitlements "$ENTITLEMENTS" "$b"
