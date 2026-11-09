@@ -275,18 +275,23 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     // The computer's pairing QR code, scanned here (QrActivity): the first of its addresses that
     // answers, then pairing with its nonce (only Allow there, as on the cable). A computer already
-    // paired connects at its own stored address: a browsable link cannot re-point it.
+    // paired connects where discovery sees it or at its stored address; only when neither answers,
+    // at the code's address for this one attempt, never stored: a browsable link can't re-point it,
+    // and the session pins the computer's certificate, so another machine there fails.
     // false: none of them answers from this network.
     fun connectQr(id: String, addrs: List<String>, port: Int, nonce: String, name: String): Boolean {
+        val answers = { a: String, p: Int ->
+            runCatching { java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(a, p), 800) }; true }.getOrDefault(false)
+        }
         resumeUntil = 0
         store.hosts().find { it.id == id }?.let { h ->
+            val use = if (discovery.found[h.id] != null || answers(h.address, h.port)) h
+                else addrs.firstOrNull { answers(it, port) }?.let { h.copy(address = it, port = port) } ?: h
             Log.i("TwinDesk", "QR: connecting to ${h.name}")
-            connect(h)
+            connect(use)
             return true
         }
-        val address = addrs.firstOrNull { a ->
-            runCatching { java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(a, port), 800) }; true }.getOrDefault(false)
-        } ?: return false
+        val address = addrs.firstOrNull { answers(it, port) } ?: return false
         Log.i("TwinDesk", "QR: pairing with ${name.ifEmpty { id }} at $address")
         invite?.let { discovery.clearInvite(it.id) }
         invite = null
