@@ -21,16 +21,18 @@ struct SignerView: View {
     var body: some View {
         let _ = core.tick
         PageScroll(title: tr("App refresh")) {
+            // The switch works with or without a computer; off, only the warning and How this works.
+            toggle
             warning
-            altstore
-            if !s.on { turnOn }
-            else if !core.connected { NeedsComputer(what: tr("App refresh")) }
-            else if !s.available { unavailable }
-            else {
-                Columns {
-                    VStack(spacing: 16) { status; if s.running || s.need != nil { runCard }; if !s.running, s.error != nil || s.doneUntil != nil { resultCard }; if showSignIn { signInCard } }
-                } right: {
-                    VStack(spacing: 16) { appsCard; options }
+            if s.on {
+                if !core.connected { NeedsComputer(what: tr("App refresh")) }
+                else if !s.available { unavailable }
+                else {
+                    Columns {
+                        VStack(spacing: 16) { status; if s.running || s.need != nil { runCard }; if !s.running, s.error != nil || s.doneUntil != nil { resultCard }; if showSignIn { signInCard } }
+                    } right: {
+                        VStack(spacing: 16) { appsCard; options }
+                    }
                 }
             }
             how
@@ -46,7 +48,7 @@ struct SignerView: View {
             if scoped { u.stopAccessingSecurityScopedResource() }
             if ok { s.install(to) }
         }
-        .alert(tr("Not recommended!"), isPresented: $askOn) {
+        .alert(tr("Not recommended"), isPresented: $askOn) {
             Button(tr("Turn on anyway"), role: .destructive) { s.on = true }
             Button(tr("Cancel"), role: .cancel) {}
         } message: {
@@ -61,38 +63,32 @@ struct SignerView: View {
 
     private var showSignIn: Bool { !s.running && (!s.facts.signedIn || s.needsSignIn) }
 
+    private var toggle: some View {
+        ToggleRow(title: tr("App refresh"), detail: tr("TwinDesk is signed again by the computer before its 7 days run out."),
+                  on: Binding(get: { s.on }, set: { if $0 { askOn = true } else { s.on = false } }))
+            .glassCard()
+    }
+
+    // One warning, AltStore recommended in it.
     private var warning: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(tr("Not recommended!"), systemImage: "exclamationmark.circle.fill").font(.headline).foregroundStyle(TDColor.bad)
-            Text(tr("Sign-ins from tools like this one have been refused, Apple IDs have been locked for a while, and some can no longer sign apps at all. Use an Apple ID made for this, not your main one."))
-                .font(.subheadline)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.title2).foregroundStyle(TDColor.bad)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(tr("Not recommended")).font(.headline).foregroundStyle(TDColor.bad)
+                Text(tr("Apple has refused sign-ins from tools like this one, locked Apple IDs for a while, and stopped some from signing apps at all. Use an Apple ID made for this, not your main one."))
+                    .font(.subheadline)
+                Divider()
+                Text(tr("We recommend AltStore. If you already use it, keep using it.")).font(.subheadline)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(tint: .red)
     }
 
-    private var altstore: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CardHeader(symbol: "hand.thumbsup.fill", color: TDColor.good, title: tr("We recommend AltStore"))
-            Text(tr("AltStore is made for this: it installs and refreshes apps by itself. If you already have AltStore, keep using it, and use this only if you can’t or don’t want to. TwinDesk Web in Safari needs no install at all."))
-                .font(.subheadline)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
-    }
-
-    private var turnOn: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(tr("App refresh is off.")).font(.headline)
-            Button { askOn = true } label: { Text(tr("Turn on App refresh…")).frame(maxWidth: .infinity) }.secondaryButton()
-        }
-        .glassCard()
-    }
-
     private var unavailable: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardHeader(symbol: "signature", color: Page.signing.color, title: tr("{name} can’t sign yet", ["name": pc]))
-            Text(tr("TwinDesk on {name} has to see this device: connect the cable once, unlock and tap Trust. After that Wi-Fi is enough when Wi-Fi sync is on. Its TwinDesk also has to be a version with TwinDesk iPhone.", ["name": pc]))
+            Text(tr("Turn it on in TwinDesk on {name}: TwinDesk iPhone › Install TwinDesk and refresh it with the iOS app. Its TwinDesk has to be a version with TwinDesk iPhone.", ["name": pc]))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .glassCard()
@@ -110,6 +106,10 @@ struct SignerView: View {
             } else {
                 Text(tr("Not signed in.")).font(.caption).foregroundStyle(.secondary)
             }
+            if !s.seen {
+                Text(tr("{name} doesn’t see this device for installing right now. It looks again when a refresh starts; if it still can’t, connect the cable once, unlock and tap Trust, and turn on Wi-Fi sync.", ["name": pc]))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if f.signedIn && !s.running {
                 Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
             }
@@ -122,7 +122,7 @@ struct SignerView: View {
     private static let order = ["upload", "find", "download", "signin", "session", "register", "cert", "appid", "profile", "sign", "install"]
 
     private var runCard: some View {
-        let steps = Self.order.filter { s.seen.contains($0) || Self.ahead.contains($0) }
+        let steps = Self.order.filter { s.done.contains($0) || Self.ahead.contains($0) }
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 CardHeader(symbol: "signature", color: Page.signing.color, title: tr("Progress"))
@@ -132,7 +132,7 @@ struct SignerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(steps, id: \.self) { k in
                     let now = k == s.step
-                    let done = !now && s.seen.contains(k)
+                    let done = !now && s.done.contains(k)
                     HStack(spacing: 10) {
                         if now { ProgressView().controlSize(.small).frame(width: 18) }
                         else { Image(systemName: done ? "checkmark.circle.fill" : "circle").foregroundStyle(done ? TDColor.good : Color.secondary.opacity(0.5)).frame(width: 18) }
@@ -235,7 +235,6 @@ struct SignerView: View {
             if s.facts.signedIn || !s.facts.email.isEmpty {
                 Button(tr("Sign out…"), role: .destructive) { askSignOut = true }.secondaryButton()
             }
-            Button(tr("Turn off App refresh")) { s.on = false }.secondaryButton()
         }
         .glassCard()
     }

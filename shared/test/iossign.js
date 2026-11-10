@@ -161,6 +161,8 @@ const until = async (what, fn) => {
   await until('the helper', () => r.sign.view.available);
   void r.sign.view;
   assert.strictEqual(r.sign.view.devices.length, 0, 'off: no device is looked at');
+  await new Promise((res) => setTimeout(res, 300));
+  assert.strictEqual(r.sign.view.ready, false, 'off: the helper isn’t even run');
   r.sign.set({ on: true });
   await until('the device', () => r.sign.view.udid === UDID);
   assert.strictEqual(r.loads(), 0, 'the vault is never read with Keep a copy off');

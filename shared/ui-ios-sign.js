@@ -203,6 +203,7 @@
         const run = v.run;
         const last = v.last || {};
         missing.set(v.available ? '' : tr('The signing helper isn’t part of this build of TwinDesk.'));
+        // Off: only the switch, the warning and How this works. The helper isn't even run.
         onCard.hidden = !v.available;
         onSw.set(v.on);
         const on = !!(v.available && v.on);

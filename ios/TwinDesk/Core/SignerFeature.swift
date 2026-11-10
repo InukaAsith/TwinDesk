@@ -28,13 +28,14 @@ final class Signer: Feature {
 
     // What the computer said (sign.info).
     private(set) var available = false
+    private(set) var seen = false // the computer sees this device for installing right now (cable or Wi-Fi sync)
     private(set) var anyIpa = false
     private(set) var anisette = ""
     private(set) var computerKeeps = false
     private(set) var apps: [App] = []
     // A run: step nil when none.
     private(set) var step: String?
-    private(set) var seen: [String] = [] // the run's steps so far, in order
+    private(set) var done: [String] = [] // the run's steps so far, in order
     private(set) var percent = 0
     private(set) var need: Need?
     private(set) var error: String?
@@ -90,7 +91,7 @@ final class Signer: Feature {
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
-        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; percent = 0; seen = []
+        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; percent = 0; done = []
         error = e
         doneUntil = until
         core.changed()
@@ -134,7 +135,7 @@ final class Signer: Feature {
     }
 
     private func begin() {
-        error = nil; doneUntil = nil; needsSignIn = false; need = nil; percent = 0; seen = []
+        error = nil; doneUntil = nil; needsSignIn = false; need = nil; percent = 0; done = []
         step = "start"
         var m: JSON = [:]
         if let i = ipa, let p = i.path { m["ipa"] = ["path": p, "size": i.size] }
@@ -211,6 +212,7 @@ final class Signer: Feature {
             return false // Files' too
         case "sign.info":
             available = m.bool("available")
+            seen = m.bool("seen")
             anyIpa = m.bool("anyIpa")
             anisette = m.str("anisette", max: 200)
             computerKeeps = m.bool("keep")
@@ -262,12 +264,12 @@ final class Signer: Feature {
         case "step":
             let st = m.str("step", max: 20)
             step = st; need = nil; percent = 0
-            if !seen.contains(st) { seen.append(st) }
+            if !done.contains(st) { done.append(st) }
         case "progress":
             let st = m.str("step", max: 20).isEmpty ? "install" : m.str("step", max: 20)
             if st != step { need = nil }
             step = st
-            if !seen.contains(st) { seen.append(st) }
+            if !done.contains(st) { done.append(st) }
             percent = m.int("percent")
         case "need2fa": need = .code(m.str("error", max: 200))
         case "needcert":

@@ -127,11 +127,19 @@ class IosSign extends EventEmitter {
     });
     on(T.STOP, () => { if (this.run && this.run.from === 'phone') this.stop(); });
 
-    if (this.bin) {
-      this._once({ op: 'info' }).then((v) => {
-        if (v && v.ev === 'info') this.info = { anyIpa: v.anyIpa === true, anisette: str(v.anisette), version: str(v.version, 20) };
-        this._look();
-      });
+    // Off: the helper isn't run at all (not even to ask what it can do). On: it is, now and then.
+    if (this.bin && this.cfg().on === true) this._boot();
+  }
+
+  _boot() {
+    if (this.booted || !this.bin || this.stopped) return;
+    this.booted = true;
+    this._once({ op: 'info' }).then((v) => {
+      if (v && v.ev === 'info') this.info = { anyIpa: v.anyIpa === true, anisette: str(v.anisette), version: str(v.version, 20) };
+      else this.booted = false; // tried again when switched on again
+      this._look();
+    });
+    if (!this.timer) {
       this.timer = setInterval(() => this._look(), LOOK_MS);
       if (this.timer.unref) this.timer.unref();
     }
@@ -189,7 +197,8 @@ class IosSign extends EventEmitter {
     const udid = this._udid();
     const r = this.run;
     return {
-      on: c.on === true, available: !!this.info, anyIpa: !!(this.info && this.info.anyIpa), anisette: this.info ? this.info.anisette : '',
+      // available: this build has the helper (known without running it); ready: it answered.
+      on: c.on === true, available: !!this.bin, ready: !!this.info, anyIpa: !!(this.info && this.info.anyIpa), anisette: this.info ? this.info.anisette : '',
       auto: c.auto !== false, days: c.days || 3, how: c.how === 'ask' ? 'ask' : 'self', which: c.which === 'twindesk' ? 'twindesk' : 'all',
       retry: RETRY_HOURS.includes(c.retry) ? c.retry : 6, retries: RETRY_HOURS,
       keep: !!c.keep, canKeep: !!(this.vault && this.vault.possible !== false), cache: c.cache !== false,
@@ -240,7 +249,9 @@ class IosSign extends EventEmitter {
     if (!this._ios()) return;
     const v = this.view;
     this.link.send({
-      t: T.INFO, available: v.on && v.available && !!v.udid, anyIpa: v.anyIpa, anisette: v.anisette, keep: v.keep, days: v.days,
+      // Available once switched on here: the device is looked for when a refresh starts (it may be
+      // seen over Wi-Fi only then). seen: the system sees it now (cable or Wi-Fi sync).
+      t: T.INFO, available: v.on && v.ready, seen: !!v.udid, anyIpa: v.anyIpa, anisette: v.anisette, keep: v.keep, days: v.days,
       apps: v.apps, busy: !!v.run,
     });
   }
@@ -600,6 +611,8 @@ class IosSign extends EventEmitter {
     const patch = {};
     if (typeof o.on === 'boolean') {
       patch.on = o.on;
+      if (o.on) setImmediate(() => this._boot());
+      else if (this.run) this._end({ kind: 'stopped', message: 'Stopped' });
       if (!o.on) { patch.keep = false; this._kept = {}; this._saveKept(); this.pending = null; this.queued = null; } // off: nothing of it stays here
     }
     if (typeof o.auto === 'boolean') patch.auto = o.auto;
