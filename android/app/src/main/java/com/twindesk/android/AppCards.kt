@@ -89,25 +89,29 @@ private fun Choice(items: List<Pair<String, String>>, selected: String, onPick: 
 
 @Composable
 fun NotifAppsCard(core: Core, name: String) {
-    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
+    val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val n = core.notifs
     var q by rememberSaveable { mutableStateOf("") }
     var all by rememberSaveable { mutableStateOf(false) }
-    val seen = remember(core) { n.apps().map { it.first }.toSet() }
+    val seen = remember(v) { n.apps().map { it.first }.toSet() } // the set changes; the Core object does not
     val apps = core.appList.get()
     val list = apps.filter { q.isBlank() || it.label.contains(q.trim(), true) || it.pkg.contains(q.trim(), true) }
         // The ones that had notifications first, then the rest, each by name.
         .sortedWith(compareBy({ it.pkg !in seen }, { it.label.lowercase() }))
     val on = list.count { n.sends(it.pkg) }
+    // Captures of the card lambda. Allow mode can change while the app list and the send count do
+    // not, and Show all is local state the lambda would not treat as a new capture.
+    val allow = n.allowMode
+    val shown = if (all || q.isNotBlank()) list else list.take(FIRST)
     MacCard(tr("Apps"), action = {
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             TextButton(onClick = { n.setAll(list.map { it.pkg }, true) }) { Text(tr("All"), color = pal.accent, fontSize = 13.sp) }
             TextButton(onClick = { n.setAll(list.map { it.pkg }, false) }) { Text(tr("None"), color = pal.accent, fontSize = 13.sp) }
         }
     }) {
-        Choice(listOf("block" to tr("Block list"), "allow" to tr("Allow list")), if (n.allowMode) "allow" else "block") { n.setAllowMode(it == "allow") }
+        Choice(listOf("block" to tr("Block list"), "allow" to tr("Allow list")), if (allow) "allow" else "block") { n.setAllowMode(it == "allow") }
         Text(
-            if (n.allowMode) tr("Only the apps switched on send notifications to {name}. New apps stay off.", "name" to name)
+            if (allow) tr("Only the apps switched on send notifications to {name}. New apps stay off.", "name" to name)
             else tr("Every app sends notifications to {name} except the ones switched off. New apps are on.", "name" to name),
             color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(horizontal = 20.dp),
         )
@@ -115,7 +119,6 @@ fun NotifAppsCard(core: Core, name: String) {
         if (apps.isEmpty()) MacRow(tr("Loading apps…"), first = true)
         else if (list.isEmpty()) MacRow(tr("No apps match “{q}”", "q" to q.trim()), first = true)
         else Text(tr("{on} of {count} send", "on" to on, "count" to list.size), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
-        val shown = if (all || q.isNotBlank()) list else list.take(FIRST)
         shown.forEachIndexed { i, a ->
             AppRow(core, a.pkg, a.label, if (a.pkg in seen) tr("Has sent notifications") else "", n.sends(a.pkg), i == 0) { n.setSends(a.pkg, it) }
         }

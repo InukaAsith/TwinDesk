@@ -19,6 +19,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1415,22 +1417,34 @@ private fun NotificationsPage(core: Core, v: Int) {
     val ctx = LocalContext.current
     PageHead(tr("Notifications"), tr("See notifications from both devices."))
     if (core.host == null) NotConnected(core, v)
-    if (!core.notifs.supported) Note(
+    // Read here, outside the card lambdas. Those lambdas are remembered, and their only capture was
+    // this same Core, so a switch, a count or an access row stayed put until the page was left.
+    // Back from Settings does not bump Core.version; the lifecycle state redraws access and pairing.
+    @Suppress("UNUSED_VARIABLE") val life = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value
+    val supported = core.notifs.supported
+    val access = core.notifs.hasAccess
+    val outOn = core.sync.get("notifs", "out")
+    val sent = core.notifs.sent
+    val hideText = core.store.flag("notifs.hideText", false)
+    val paired = core.adb.paired
+    val inOn = core.sync.get("notifs", "in")
+    val shown = core.notifs.shown
+    if (!supported) Note(
         tr("This version of TwinDesk can’t read notifications, as Play Protect restricts downloaded apps. ") +
             tr("Once wireless debugging is set up, install the full version from the Phone page on {name}. Your settings and pairings are kept.", "name" to name),
         "warn",
     )
-    else if (!core.notifs.hasAccess) Note(tr("Allow Notification access to show this device’s notifications on {name}.", "name" to name), "warn")
+    else if (!access) Note(tr("Allow Notification access to show this device’s notifications on {name}.", "name" to name), "warn")
     MacCard {
         DirHead(me, true, name, false)
-        SwitchRow(tr("Show this device’s notifications on {name}", "name" to name), tr("{count} sent", "count" to core.notifs.sent), core.sync.get("notifs", "out"), first = true) { core.sync.set("notifs", "out", it) }
-        SwitchRow(tr("Hide the message text"), tr("Only the app name and title are shown on {name}", "name" to name), core.store.flag("notifs.hideText", false)) { core.store.setFlag("notifs.hideText", it); core.changed() }
-        if (core.notifs.supported && !core.notifs.hasAccess) MacRow(tr("Notification access"), tr("Required to read notifications")) { Primary(tr("Allow")) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-        if (!core.notifs.supported && !core.adb.paired) MacRow(tr("Wireless debugging"), tr("Set it up, then install the full version from {name}", "name" to name)) { Primary(tr("Guide")) { Guide.open.value = true } }
+        SwitchRow(tr("Show this device’s notifications on {name}", "name" to name), tr("{count} sent", "count" to sent), outOn, first = true) { core.sync.set("notifs", "out", it) }
+        SwitchRow(tr("Hide the message text"), tr("Only the app name and title are shown on {name}", "name" to name), hideText) { core.store.setFlag("notifs.hideText", it); core.changed() }
+        if (supported && !access) MacRow(tr("Notification access"), tr("Required to read notifications")) { Primary(tr("Allow")) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+        if (!supported && !paired) MacRow(tr("Wireless debugging"), tr("Set it up, then install the full version from {name}", "name" to name)) { Primary(tr("Guide")) { Guide.open.value = true } }
     }
     MacCard {
         DirHead(name, false, me, true)
-        SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to core.notifs.shown), core.sync.get("notifs", "in"), first = true) { core.sync.set("notifs", "in", it) }
+        SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to shown), inOn, first = true) { core.sync.set("notifs", "in", it) }
     }
     // Each app on its own (#102): every app on the phone, as a block list or an allow list (AppCards.kt).
     if (core.notifs.supported) NotifAppsCard(core, name)
