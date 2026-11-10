@@ -376,7 +376,10 @@ class IosSign extends EventEmitter {
     const udid = this._ready(fail);
     if (!udid) return;
     const req = { op: 'install', sealed: true, udid };
-    const again = this._cached(str(m.app)); // an app installed from here before, by its kept IPA
+    // An app installed from here before, by its kept IPA; TwinDesk itself too when its IPA is kept
+    // (a build installed from a file stays that build), else TwinDesk's latest release.
+    const mine = ((this.apps[udid] || []).find((a) => a.twindesk) || {}).bundleId;
+    const again = this._cached(str(m.app)) || (!m.app && !m.ipa ? this._cached(mine) : '');
     if (again && this.info.anyIpa) req.ipa = again;
     else if (m.app) return fail({ kind: 'other', message: 'This computer doesn’t have that app’s IPA' });
     else if (m.ipa) {
@@ -405,7 +408,9 @@ class IosSign extends EventEmitter {
     if (!udid) return;
     if (!this.kept[udid]) return;
     const req = { op: 'install', udid, state: this.kept[udid] };
+    const mine = this._cached(((this.apps[udid] || []).find((a) => a.twindesk) || {}).bundleId);
     if (this.ipa) req.ipa = this.ipa;
+    else if (mine && this.info.anyIpa) req.ipa = mine;
     this.ipa = '';
     this._start({ from: 'kept', udid }, req);
   }
