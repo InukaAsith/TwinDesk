@@ -46,7 +46,8 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
   if (!vault) { cfg.keep = false; try { fs.rmSync(vaultFile, { force: true }); } catch {} }
   // A developer's test run (ios-signer/try.sh) left its state in a file: the iPhone's app takes it
   // over the first time it is connected, and the file goes. Never there in a packaged app.
-  const seedFile = path.join(ROOT, '.try-state.json');
+  // (Next to the helper's sources, or as ios-signing-seed.json in this app's settings folder.)
+  const seedFile = [path.join(ROOT, '.try-state.json'), path.join(dir, 'ios-signing-seed.json')].find((f) => fs.existsSync(f)) || '';
   let seed = null;
   try { seed = JSON.parse(fs.readFileSync(seedFile, 'utf8')); } catch {}
   const sign = new IosSign({
