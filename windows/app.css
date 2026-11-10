@@ -360,3 +360,21 @@ select option, select optgroup { background-color: #ffffff; color: #1d1d1f; }
 .ios-more > summary { color: var(--muted); font-weight: 500; padding: 10px 0 4px; }
 .ios-more > summary[hidden] { display: none; }
 .ios-how p { margin: 0 0 10px; line-height: 1.55; color: var(--muted); }
+/* TwinDesk iPhone while off: the picture and the TwinDesk Web note */
+.ios-hero { display: flex; justify-content: center; margin: 4px 0 2px; }
+.ios-hero svg { width: 150px; height: 112px; }
+.ios-hero .arc { fill: none; stroke: var(--accent, #5e5ce6); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.ios-hero .ring { transform-origin: 80px 60px; animation: ios-turn 6s linear infinite; }
+.ios-hero .phone { fill: var(--card, rgba(127,127,127,.12)); stroke: var(--muted); stroke-width: 2; }
+.ios-hero .notch { fill: var(--muted); opacity: .5; }
+.ios-hero .app { fill: #5e5ce6; animation: ios-pulse 3s ease-in-out infinite; transform-origin: 80px 60px; }
+.ios-hero .tick { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 16; animation: ios-draw 3s ease-in-out infinite; }
+@keyframes ios-turn { to { transform: rotate(360deg); } }
+@keyframes ios-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes ios-draw { 0%, 20% { stroke-dashoffset: 16; } 55%, 100% { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .ios-hero .ring, .ios-hero .app, .ios-hero .tick { animation: none; } .ios-hero .tick { stroke-dashoffset: 0; } }
+.ios-alt { display: flex; align-items: center; gap: 14px; margin: 10px 0 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line, rgba(127,127,127,.25)); }
+.ios-alt .body { flex: 1; min-width: 0; }
+.ios-alt .title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.ios-alt p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+@media (max-width: 560px) { .ios-alt { flex-direction: column; align-items: flex-start; } }

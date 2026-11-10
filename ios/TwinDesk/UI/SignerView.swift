@@ -14,6 +14,8 @@ struct SignerView: View {
     @State private var askSignOut = false
     @State private var showHow = false
     @State private var askOn = false
+    @State private var askStartOver = false
+    @State private var revoking: Signer.Cert?
 
     private var s: Signer { core.signer }
     private var pc: String { core.host?.name ?? tr("the computer") }
@@ -53,6 +55,18 @@ struct SignerView: View {
             Button(tr("Cancel"), role: .cancel) {}
         } message: {
             Text(tr("This signs in to Apple with your Apple ID from TwinDesk. Apple can refuse the sign-in, lock the Apple ID for a while, or stop it from signing apps. We recommend AltStore: if you already use it, keep using it."))
+        }
+        .alert(tr("Revoke the certificate made by {name}?", ["name": revoking?.name ?? ""]), isPresented: Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } })) {
+            Button(tr("Revoke"), role: .destructive) { if let c = revoking { s.revoke(c.id) }; revoking = nil }
+            Button(tr("Cancel"), role: .cancel) { revoking = nil }
+        } message: {
+            Text(tr("Apps signed with this certificate stop launching until they are signed again with a new certificate. The tool that made it has to make a new one the next time it runs. This cannot be undone."))
+        }
+        .confirmationDialog(tr("Start over with a new certificate?"), isPresented: $askStartOver, titleVisibility: .visible) {
+            Button(tr("Revoke and start over"), role: .destructive) { s.startOver() }
+            Button(tr("Cancel"), role: .cancel) {}
+        } message: {
+            Text(tr("TwinDesk’s certificate is revoked at Apple and a new one is made, then TwinDesk is signed and installed again. Other apps installed with TwinDesk need to be refreshed again."))
         }
         .confirmationDialog(tr("Sign out of App refresh?"), isPresented: $askSignOut, titleVisibility: .visible) {
             Button(tr("Sign out")) { s.signOut(everything: false) }
@@ -112,6 +126,7 @@ struct SignerView: View {
             }
             if f.signedIn && !s.running {
                 Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
+                Button(tr("Start over…")) { askStartOver = true }.secondaryButton().controlSize(.small)
             }
         }
         .glassCard()
@@ -119,7 +134,7 @@ struct SignerView: View {
 
     // The run's steps: done ones ticked, the one running with a spinner (and its percent), the ones to come dimmed.
     private static let ahead = ["register", "cert", "appid", "profile", "installprofile", "sign", "install"]
-    private static let order = ["upload", "find", "cached", "download", "signin", "session", "register", "cert", "appid", "profile", "installprofile", "sign", "install"]
+    private static let order = ["upload", "find", "cached", "download", "signin", "session", "register", "revoke", "cert", "appid", "profile", "installprofile", "sign", "install"]
 
     private var runCard: some View {
         let steps = Self.order.filter { s.done.contains($0) || Self.ahead.contains($0) }
@@ -152,16 +167,16 @@ struct SignerView: View {
                     Button(tr("Continue")) { s.answer(code: code); code = "" }.primaryButton().disabled(code.count < 6)
                 }
             case .certs(let certs):
-                Text(tr("This Apple ID has as many development certificates as Apple allows. Only one TwinDesk made can be revoked here: the apps signed with it stop until they are signed again. The others belong to other tools."))
+                Text(tr("This Apple ID has the maximum number of development certificates. Revoke one to continue: apps signed with it stop launching until they are signed again. Nothing is revoked unless you choose it here."))
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(certs) { c in
                     HStack {
                         VStack(alignment: .leading) {
                             Text(c.name)
-                            Text(c.ours ? day(c.expires) : tr("Not TwinDesk’s: can’t be revoked here")).font(.caption).foregroundStyle(.secondary)
+                            Text(c.ours ? day(c.expires) : tr("Created by another tool: the apps it signed stop launching")).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if c.ours { Button(tr("Revoke"), role: .destructive) { s.revoke(c.id) }.secondaryButton().controlSize(.small) }
+                        Button(tr("Revoke"), role: .destructive) { if c.ours { s.revoke(c.id) } else { revoking = c } }.secondaryButton().controlSize(.small)
                     }
                 }
                 Button(tr("Cancel")) { s.cancelQuestion() }.secondaryButton()
@@ -266,6 +281,7 @@ struct SignerView: View {
         case "find": return tr("Waiting for the computer to see this device…")
         case "session": return tr("Opening the Apple session…")
         case "register": return tr("Registering the device…")
+        case "revoke": return tr("Revoking TwinDesk’s certificate…")
         case "cert": return tr("Getting the certificate…")
         case "appid": return tr("Registering the app ID…")
         case "profile": return tr("Getting the provisioning profile…")

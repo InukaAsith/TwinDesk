@@ -50,6 +50,7 @@ final class Signer: Feature {
     private var ipa: (name: String, size: Int64, path: String?)?
     private var gaveCopy = false
     private var app: String? // a run for this app, from the IPA the computer keeps
+    private var fresh = false // Start over: TwinDesk's certificate revoked at Apple, a new one made
     private var tapped: String? // the notification was tapped: this refresh ("" TwinDesk) runs once it can
 
     // When TwinDesk here runs out: its own provisioning profile's ExpirationDate (0 unknown).
@@ -117,7 +118,7 @@ final class Signer: Feature {
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
-        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; percent = 0; done = []
+        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; fresh = false; percent = 0; done = []
         error = e
         doneUntil = until
         core.changed()
@@ -136,6 +137,14 @@ final class Signer: Feature {
     func refresh(app id: String) {
         guard !running, core.connected, available, facts.signedIn else { return }
         app = id
+        begin()
+    }
+
+    // Start over: TwinDesk's certificate is revoked at Apple and a new one made, then TwinDesk signed
+    // and installed with it (the page asks first).
+    func startOver() {
+        guard !running, core.connected, available, facts.signedIn else { return }
+        fresh = true
         begin()
     }
 
@@ -166,14 +175,15 @@ final class Signer: Feature {
         var m: JSON = [:]
         if let i = ipa, let p = i.path { m["ipa"] = ["path": p, "size": i.size] }
         if let a = app { m["app"] = a }
+        if fresh { m["fresh"] = true }
         core.send(msg("sign.start", m))
         core.changed()
     }
 
     func answer(code: String) { answer(["code": code]) }
-    // Only a certificate TwinDesk made: the others sign other tools' apps (the helper checks too).
+    // One the person picked (another tool's after the page's warning: the apps it signed stop).
     func revoke(_ serial: String) {
-        guard case .certs(let certs)? = need, certs.contains(where: { $0.id == serial && $0.ours }) else { return }
+        guard case .certs(let certs)? = need, certs.contains(where: { $0.id == serial }) else { return }
         answer(["revoke": [serial]])
     }
     func cancelQuestion() { answer(["abort": true]) }
@@ -307,7 +317,7 @@ final class Signer: Feature {
             need = .certs(((m["certs"] as? [JSON]) ?? []).prefix(20).map {
                 Cert(id: $0.str("serial", max: 80), name: [$0.str("machine", max: 100), $0.str("name", max: 100)].first { !$0.isEmpty } ?? "", expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0,
                      ours: $0.bool("ours") || $0.str("machine", max: 100) == "TwinDesk")
-            })
+            }.sorted { $0.ours && !$1.ours }) // TwinDesk's own first
         case "state":
             if let s = seal?.open(state: m.str("box", max: 400_000)) {
                 SignerVault.save(state: s)

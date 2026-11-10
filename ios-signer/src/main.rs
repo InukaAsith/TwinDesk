@@ -6,7 +6,7 @@
 //   {"op":"devices"}               the iPhones and iPads usbmuxd sees
 //   {"op":"apps","udid":…}         the sideloaded apps on a device and when each expires
 //   {"op":"appids","state":{…}}    the Apple ID's app IDs, with a kept developer session (no password)
-//   {"op":"install","udid":…[,"ipa":path][,"twindesk_ipa":path][,"save_ipa":path][,"profile_only":bundleId[,"no_ipa":true]][,"anisette":url] and either
+//   {"op":"install","udid":…[,"ipa":path][,"twindesk_ipa":path][,"save_ipa":path][,"profile_only":bundleId[,"no_ipa":true]][,"new_cert":true][,"anisette":url] and either
 //        "sealed":true             the Apple ID comes from the iPhone, sealed for this run (below)
 //     or "email":…,"password":…[,"state":{…}]   typed on this computer, for this run only}
 //
@@ -14,7 +14,8 @@
 // named "TwinDesk", registers the device and the app's ids, signs the app and installs it. While it
 // runs it may ask: {"ev":"need2fa",…} wants {"code":"123456"} (or {"sms":id}, {"devices":true},
 // {"resend":true}, {"abort":true}); {"ev":"needcert","certs":[…]} (no free certificate slot) wants
-// {"revoke":["serial",…]} or {"abort":true}. A certificate is only ever revoked by that answer.
+// {"revoke":["serial",…]} or {"abort":true}. A certificate is only ever revoked by that answer, or
+// with "new_cert" (Start over: TwinDesk's own, asked for by the person).
 //
 // NOTHING IS KEPT ON THE COMPUTER. No keychain, no file, no log: this process has what it needs
 // while it runs and then it is gone. What has to last from one refresh to the next (the
@@ -64,7 +65,7 @@ use isideload::{
     auth::apple_account::{AppToken, AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse},
     dev::{
         certificates::DevelopmentCertificate, developer_session::DeveloperSession,
-        app_ids::AppIdsApi, devices::DevicesApi, teams::TeamsApi,
+        app_ids::AppIdsApi, certificates::CertificatesApi, devices::DevicesApi, teams::TeamsApi,
     },
     sideload::{SideloaderBuilder, TeamSelection, builder::MaxCertsBehavior, install},
     util::{
@@ -120,6 +121,8 @@ struct Request {
     profile_only: Option<String>,
     #[serde(default)]
     no_ipa: bool,
+    #[serde(default)]
+    new_cert: bool,
     anisette: Option<String>,
 }
 
@@ -539,7 +542,7 @@ async fn install_op(req: Request, lines: Lines, tmp: &Path) -> Result<Value, Rep
         None if req.no_ipa => Source::Nothing,
         None => Source::TwinDesk { cached: req.twindesk_ipa.map(PathBuf::from), save: req.save_ipa.map(PathBuf::from) },
     };
-    let result = sign_and_install(&io, &mem, &email, password, &req.udid, source, req.profile_only, req.anisette, tmp).await;
+    let result = sign_and_install(&io, &mem, &email, password, &req.udid, source, if req.new_cert { None } else { req.profile_only }, req.new_cert, req.anisette, tmp).await;
     // Whatever happened: a certificate made, or an identity Apple now knows, has to be kept.
     let state = mem.map().clone();
     if !state.is_empty() {
@@ -557,6 +560,7 @@ async fn sign_and_install(
     udid: &str,
     source: Source,
     profile_only: Option<String>,
+    new_cert: bool,
     anisette: Option<String>,
     tmp: &Path,
 ) -> Result<Value, Report> {
@@ -654,31 +658,32 @@ async fn sign_and_install(
         DeveloperSession::new(token, adsid, account.grandslam_client.clone(), account.anisette_generator.clone())
     };
 
-    // No free certificate: only one TwinDesk made may be revoked (AltStore's, Sideloadly's or Xcode's
-    // would stop the apps they signed). None of TwinDesk's there: nothing is asked, the run ends.
+    // No free certificate: the person picks one to revoke, never this on its own. Another tool's
+    // (AltStore's, Sideloadly's, Xcode's) stops the apps it signed: the app warns before sending that.
     let io3 = io.clone();
-    let none_ours = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let none_ours2 = none_ours.clone();
+    let declined = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let declined2 = declined.clone();
     let pick_certs = move |certs: Vec<DevelopmentCertificate>| {
         let io = io3.clone();
-        let none_ours = none_ours2.clone();
+        let declined = declined2.clone();
         async move {
-            let ours = |c: &DevelopmentCertificate| c.machine_name.as_deref() == Some(MACHINE_NAME);
-            if !certs.iter().any(ours) {
-                none_ours.store(true, std::sync::atomic::Ordering::Relaxed);
+            emit(json!({"ev": "needcert", "certs": certs.iter().map(cert_view).collect::<Vec<_>>()}));
+            let chosen: Vec<String> = match io.ask().await {
+                // Only serials that were offered.
+                Some(a) => a.get("revoke").and_then(|v| v.as_array()).map(|list| {
+                    list.iter()
+                        .filter_map(|v| v.as_str())
+                        .filter(|s| certs.iter().any(|c| c.serial_number.as_deref() == Some(*s)))
+                        .map(str::to_string)
+                        .collect()
+                }).unwrap_or_default(),
+                None => Vec::new(),
+            };
+            if chosen.is_empty() {
+                declined.store(true, std::sync::atomic::Ordering::Relaxed);
                 return Ok(None);
             }
-            emit(json!({"ev": "needcert", "certs": certs.iter().map(cert_view).collect::<Vec<_>>()}));
-            let Some(a) = io.ask().await else { return Ok(None) };
-            let Some(list) = a.get("revoke").and_then(|v| v.as_array()) else { return Ok(None) };
-            // Only serials that were offered, and only TwinDesk's own.
-            let chosen: Vec<String> = list
-                .iter()
-                .filter_map(|v| v.as_str())
-                .filter(|s| certs.iter().any(|c| ours(c) && c.serial_number.as_deref() == Some(*s)))
-                .map(str::to_string)
-                .collect();
-            Ok(if chosen.is_empty() { None } else { Some(chosen) })
+            Ok(Some(chosen))
         }
     };
 
@@ -707,6 +712,21 @@ async fn sign_and_install(
         .ensure_device_registered(&team, &info.name, &info.udid, None)
         .await
         .context("Apple didn't register the device")?;
+
+    // Start over: TwinDesk's certificates at Apple are revoked and the key kept for them is dropped,
+    // so a new certificate is made below (apps signed with the old one need signing again).
+    if new_cert {
+        emit(json!({"ev": "step", "step": "revoke"}));
+        let dev = sideloader.get_dev_session();
+        let certs = dev.list_all_development_certs(&team, None).await.context("Apple didn't list the certificates")?;
+        for c in certs.iter().filter(|c| c.machine_name.as_deref() == Some(MACHINE_NAME)) {
+            if let Some(serial) = &c.serial_number {
+                dev.revoke_development_cert(&team, serial, None).await.context("Apple didn't revoke the certificate")?;
+            }
+        }
+        let hash = hex::encode(ring::digest::digest(&ring::digest::SHA256, email.as_bytes()));
+        mem.delete(&format!("{hash}/key"))?;
+    }
 
     // A refresh: new profiles only, when they can be (the app keeps running as it is).
     let mut why = "";
@@ -772,9 +792,9 @@ async fn sign_and_install(
         .sign_app(ipa, Some(team.clone()), false, Some(progress), None, Some(&info.udid))
         .await;
     let (signed, _) = match signed {
-        Err(_) if none_ours.load(std::sync::atomic::Ordering::Relaxed) => {
+        Err(_) if declined.load(std::sync::atomic::Ordering::Relaxed) => {
             return Ok(json!({"ev": "error", "kind": "certs", "message": "This Apple ID has no free certificate",
-                "detail": "Its certificates belong to other tools (AltStore, Sideloadly or Xcode), and TwinDesk doesn’t revoke those. Free one in that tool, or use another Apple ID."}));
+                "detail": "No certificate was revoked. Try again and revoke one, free one in the tool that made it, or use another Apple ID."}));
         }
         r => r?,
     };

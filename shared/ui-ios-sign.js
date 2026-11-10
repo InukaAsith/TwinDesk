@@ -30,7 +30,7 @@
   // A run's steps, in order (signin or session: one of the two).
   const STEPS = [
     ['find', 'Locating the device'], ['cached', 'Using the stored TwinDesk IPA'], ['download', 'Downloading TwinDesk'], ['signin', 'Signing in to Apple'],
-    ['session', 'Restoring the Apple session'], ['register', 'Registering the device'], ['cert', 'Getting the certificate'],
+    ['session', 'Restoring the Apple session'], ['register', 'Registering the device'], ['revoke', 'Revoking TwinDesk’s certificate'], ['cert', 'Getting the certificate'],
     ['appid', 'Registering the app ID'], ['profile', 'Getting the provisioning profile'], ['installprofile', 'Installing the provisioning profiles'], ['sign', 'Signing the app'], ['install', 'Installing'],
   ];
   const AHEAD = ['register', 'cert', 'appid', 'profile', 'sign', 'install']; // always still to come until seen
@@ -56,6 +56,28 @@
   };
   const check = () => svg('M5 12.5l4.5 4.5L19 7.5');
   const dot = () => svg('M12 11.9v.2');
+
+  // The page's picture while off: a phone with TwinDesk on it and a refresh arrow going round it.
+  const heroArt = () => {
+    const s = document.createElementNS(SVG, 'svg');
+    s.setAttribute('viewBox', '0 0 160 120');
+    const add = (tag, attrs, parent = s) => {
+      const n = document.createElementNS(SVG, tag);
+      for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+      parent.append(n);
+      return n;
+    };
+    const ring = add('g', { class: 'ring' });
+    add('path', { d: 'M80 14a46 46 0 0 1 44.6 34.7', class: 'arc' }, ring);
+    add('path', { d: 'M126.5 40.5l-1.6 8.6-8.2-3', class: 'arc' }, ring);
+    add('path', { d: 'M80 106a46 46 0 0 1-44.6-34.7', class: 'arc' }, ring);
+    add('path', { d: 'M33.5 79.5l1.6-8.6 8.2 3', class: 'arc' }, ring);
+    add('rect', { x: 62, y: 28, width: 36, height: 64, rx: 7, class: 'phone' });
+    add('rect', { x: 73, y: 32, width: 14, height: 3, rx: 1.5, class: 'notch' });
+    add('rect', { x: 70, y: 50, width: 20, height: 20, rx: 5, class: 'app' });
+    add('path', { d: 'M75.5 60.2l3.2 3.2 6-6.4', class: 'tick' });
+    return s;
+  };
 
   UI.tab({
     id: 'iossign',
@@ -93,6 +115,17 @@
         ]),
       ]);
 
+      // While off: what it does, drawn (a phone whose app is signed again, round and round), and for
+      // anyone new to sideloading, TwinDesk Web, which needs nothing installed or signed.
+      const hero = el('div', { class: 'ios-hero', attrs: { 'aria-hidden': 'true' } }, [heroArt()]);
+      const webNote = el('div', { class: 'ios-alt' }, [
+        el('div', { class: 'body' }, [
+          el('div', { class: 'title', text: tr('New to iOS sideloading?') }),
+          el('p', { text: tr('Use TwinDesk Web instead. It runs in Safari on the iPhone or iPad, with nothing to install, sign or refresh.') }),
+        ]),
+        UI.button(tr('Open TwinDesk Web'), () => UI.go('web'), 'small primary'),
+      ]);
+
       // ---- a run's progress (at the top while one runs), and Apple's questions ----
       const steps = el('ol', { class: 'ios-steps' });
       const bar = el('div', { class: 'ios-bar' }, [el('div')]);
@@ -102,7 +135,7 @@
       const sendCode = () => { if (code.value.trim()) { act({ a: 'answer', code: code.value }); code.value = ''; } };
       code.onkeydown = (e) => { if (e.key === 'Enter') sendCode(); };
       const codeRow = UI.row(tr('Verification code'), tr('Enter the code Apple sent to your trusted devices.'), [code, UI.button(tr('Continue'), sendCode, 'primary'), UI.button(tr('Resend'), () => act({ a: 'answer', resend: true }), 'small')]);
-      const certRow = UI.row(tr('Certificate limit reached'), tr('This Apple ID has the maximum number of development certificates. Only certificates created by TwinDesk can be revoked here. Apps signed with a revoked certificate stop launching until they are signed again.'), [UI.button(tr('Cancel'), () => act({ a: 'answer', abort: true }), 'small')]);
+      const certRow = UI.row(tr('Certificate limit reached'), tr('This Apple ID has the maximum number of development certificates. Revoke one to continue: apps signed with it stop launching until they are signed again. Nothing is revoked unless you choose it here.'), [UI.button(tr('Cancel'), () => act({ a: 'answer', abort: true }), 'small')]);
       const certList = el('div');
       const phoneAsks = UI.row(tr('Action required on the iPhone'), tr('Apple requested additional information. Respond on the iPhone to continue.'), [], { literal: true });
       const progCard = UI.card(tr('Progress'), [steps, bar, codeRow, certRow, certList, phoneAsks, result], { actions: [stopBtn] });
@@ -191,7 +224,7 @@
         anisette,
       ]);
 
-      body.append(missing, onCard, warn, progCard, devCard, installCard, refreshCard, autoCard, keepCard, how);
+      body.append(missing, onCard, hero, warn, webNote, progCard, devCard, installCard, refreshCard, autoCard, keepCard, how);
 
       let devKey = '';
       let appKey = '';
@@ -206,7 +239,7 @@
         onCard.hidden = !v.available;
         onSw.set(v.on);
         const on = !!(v.available && v.on);
-        warn.hidden = on;
+        warn.hidden = hero.hidden = webNote.hidden = on;
         for (const c of [installCard, devCard, progCard, refreshCard, autoCard, keepCard]) c.hidden = !on;
         anisette.textContent = tr('Your Apple ID and password are sent only to Apple. Apple’s sign-in also requires an anisette server ({server}). It never receives your credentials, but it does hold the device identity Apple trusts after two-factor verification.', { server: v.anisette || 'ani.iloader.app' });
         if (!on) return;
@@ -305,9 +338,11 @@
         const ck = JSON.stringify((need && need.certs) || []);
         if (ck !== certKey) {
           certKey = ck;
-          certList.replaceChildren(...((need && need.certs) || []).map((c) => UI.row(c.machine || c.name || c.serial,
-            [c.ours ? '' : tr('Created by another tool; cannot be revoked here'), c.expires ? tr('Until {date}', { date: new Date(c.expires * 1000).toLocaleDateString() }) : ''].filter(Boolean).join(' · '),
-            [c.ours ? UI.button(tr('Revoke'), () => act({ a: 'answer', revoke: [c.serial] }), 'small') : null].filter(Boolean), { literal: true })));
+          // TwinDesk's own first; another tool's asks for confirmation before it goes (the app's dialog).
+          const certs = ((need && need.certs) || []).slice().sort((p, q) => (q.ours ? 1 : 0) - (p.ours ? 1 : 0));
+          certList.replaceChildren(...certs.map((c) => UI.row(c.machine || c.name || c.serial,
+            [c.ours ? tr('Created by TwinDesk') : tr('Created by another tool: the apps it signed stop launching'), c.expires ? tr('Until {date}', { date: new Date(c.expires * 1000).toLocaleDateString() }) : ''].filter(Boolean).join(' · '),
+            [UI.button(tr('Revoke'), () => act({ a: 'answer', revoke: [c.serial] }), c.ours ? 'small' : 'small danger')], { literal: true })));
         }
 
         // ---- on the device ----

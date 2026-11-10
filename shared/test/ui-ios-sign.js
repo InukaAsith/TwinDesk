@@ -32,8 +32,9 @@ const tabs = [];
 global.window = {};
 global.document = { createElementNS: (ns, tag) => new El(tag) };
 Object.defineProperty(global, 'navigator', { value: { platform: 'MacIntel' }, configurable: true });
+const went = [];
 global.UI = {
-  el, tab: (d) => tabs.push(d),
+  el, tab: (d) => tabs.push(d), go: (id) => went.push(id),
   api: { iosSign: (o) => sent.push(o), iosSignIpa: () => sent.push({ a: 'pick' }) },
   note: (kind, text) => { const n = el('div', { class: `note ${kind}`, text }); n.set = (t) => { n.textContent = t || ''; n.hidden = !t; }; return n; },
   button: (label, onClick) => { const b = el('button', { text: label }); b.click = onClick; return b; },
@@ -81,21 +82,28 @@ assert.ok(order().indexOf('Devices') < order().indexOf('Install TwinDesk'), orde
 assert.ok(order().indexOf('Install TwinDesk') < order().indexOf('Automatic refresh'), order().join());
 update(states[8]);
 assert.ok(order().indexOf('Reinstall') > order().indexOf('Apple developer account'), order().join());
-// The warning: right under the switch while off, gone once on
+// While off: the picture, the warning and TwinDesk Web under the switch; gone once on
 const warnEl = find(body, (n) => n.className === 'ios-warn')[0];
-assert.strictEqual(body.children.indexOf(warnEl), 2);
-assert.strictEqual(warnEl.hidden, true);
+const heroEl = find(body, (n) => n.className === 'ios-hero')[0];
+const webEl = find(body, (n) => n.className === 'ios-alt')[0];
+assert.deepStrictEqual([heroEl, warnEl, webEl].map((n) => body.children.indexOf(n)), [2, 3, 4]);
+assert.ok(warnEl.hidden && heroEl.hidden && webEl.hidden);
 update({ iosSign: { ...base, on: false } });
-assert.strictEqual(warnEl.hidden, false);
+assert.ok(!warnEl.hidden && !heroEl.hidden && !webEl.hidden);
+button('Open TwinDesk Web').click();
+assert.strictEqual(went.pop(), 'web');
 // A run: Progress at the top, above the devices
 update(states[11]);
 assert.ok(order().indexOf('Progress') < order().indexOf('Devices'), order().join());
 
-// Revoke: only TwinDesk's own certificate offers it
+// Revoke: every certificate offers it, TwinDesk's own first (another tool's is confirmed by the app's dialog)
 update(states[11]);
-assert.strictEqual(find(body, (n) => n.tag === 'button' && n.textContent === 'Revoke').length, 1);
-button('Revoke').click();
+const revokes = find(body, (n) => n.tag === 'button' && n.textContent === 'Revoke');
+assert.strictEqual(revokes.length, 2);
+revokes[0].click();
 assert.deepStrictEqual(sent.pop(), { a: 'answer', revoke: ['S2'] });
+revokes[1].click();
+assert.deepStrictEqual(sent.pop(), { a: 'answer', revoke: ['S1'] });
 // Progress lists the steps seen and the ones to come
 assert.ok(/Getting the certificate/.test(card('Progress').text) && /Installing/.test(card('Progress').text));
 

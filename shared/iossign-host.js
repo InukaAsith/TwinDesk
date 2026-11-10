@@ -88,7 +88,26 @@ function act(sign, dialog, o) {
   if (!sign || !o || typeof o !== 'object') return;
   if (o.a === 'enable') return void enable(sign, dialog);
   if (o.a === 'set' && o.on === true) return; // only through the dialog
+  if (o.a === 'answer' && Array.isArray(o.revoke)) return void revoke(sign, dialog, o.revoke[0]);
   sign.act(o);
+}
+
+// Revoking a certificate: TwinDesk's own as asked; another tool's after a warning of what it stops.
+async function revoke(sign, dialog, serial) {
+  const need = sign.run && sign.run.need;
+  const cert = need && need.what === 'cert' && need.certs.find((c) => c.serial === serial);
+  if (!cert) return;
+  if (!cert.ours) {
+    const by = cert.machine || cert.name || 'another tool';
+    const r = await dialog.showMessageBox({
+      type: 'warning',
+      message: `Revoke the certificate made by ${by}?`,
+      detail: `Apps signed with this certificate, by ${by} or any other tool, stop launching until they are signed again with a new certificate. If ${by} refreshes apps on this device, it has to make a new certificate the next time it runs.\n\nThis cannot be undone.`,
+      buttons: ['Cancel', 'Revoke'], defaultId: 0, cancelId: 0,
+    });
+    if (r.response !== 1 || !sign.run || sign.run.need !== need) return;
+  }
+  sign.answer({ revoke: [serial] });
 }
 
 // Choose an IPA… (builds that install other apps).

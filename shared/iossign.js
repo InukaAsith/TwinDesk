@@ -453,7 +453,7 @@ class IosSign extends EventEmitter {
         r.need = { what: 'code', sms: ev.sms === true, error: str(ev.error), numbers: Array.isArray(ev.numbers) ? ev.numbers.slice(0, 10).map((n) => ({ id: Number(n.id) || 0, number: str(n.number, 40) })) : [] };
         break;
       case 'needcert':
-        // Only TwinDesk's own may be revoked (the helper checks too): the others sign other tools' apps.
+        // Any of them may be revoked, when the person picks it: another tool's only after a warning.
         r.need = { what: 'cert', certs: Array.isArray(ev.certs) ? ev.certs.slice(0, 20).map((c) => ({ serial: str(c.serial, 80), name: str(c.name, 100), machine: str(c.machine, 100), expires: Number(c.expires) || 0, ours: c.ours === true || c.machine === 'TwinDesk' })) : [] };
         break;
       case 'state':
@@ -555,6 +555,7 @@ class IosSign extends EventEmitter {
     const udid = this._ready(fail);
     if (!udid) return;
     const req = { op: 'install', sealed: true, udid };
+    if (m.fresh === true) req.new_cert = true; // Start over, from the iPhone: TwinDesk's certificate revoked, a new one made
     // An app installed from here before, by its kept IPA; TwinDesk itself too when its IPA is kept
     // (a build installed from a file stays that build), else TwinDesk's latest release.
     const again = m.app ? this._cached(str(m.app)) : '';
@@ -656,7 +657,7 @@ class IosSign extends EventEmitter {
     else if (Number.isInteger(a.sms)) out.sms = a.sms;
     else if (a.devices === true) out.devices = true;
     else if (a.resend === true) out.resend = true;
-    else if (Array.isArray(a.revoke)) out.revoke = a.revoke.filter((s) => r.need.certs && r.need.certs.some((c) => c.ours && c.serial === s));
+    else if (Array.isArray(a.revoke)) out.revoke = a.revoke.filter((s) => r.need.certs && r.need.certs.some((c) => c.serial === s)); // another tool's only after its warning (the window's dialog)
     else out.abort = true;
     r.need = null;
     this._write(out);

@@ -181,12 +181,12 @@ const until = async (what, fn) => {
   assert.ok(r.of(T.WANT)[0].expires > 0);
   r.sign.close();
 
-  // Only TwinDesk's own certificate can be revoked
+  // Any offered certificate can be revoked when picked (another tool's after the window's warning); nothing else
   r = rig();
   await until('the device', () => r.sign.view.udid === UDID && r.sign.view.available);
   r.sign.run = { from: 'here', need: { what: 'cert', certs: [{ serial: 'A', ours: false }, { serial: 'T', ours: true }] }, proc: { stdin: { writable: true, write: (l) => { r.wrote = l; } } } };
-  r.sign.answer({ revoke: ['A', 'T'] });
-  assert.deepStrictEqual(JSON.parse(r.wrote), { revoke: ['T'] });
+  r.sign.answer({ revoke: ['A', 'X'] });
+  assert.deepStrictEqual(JSON.parse(r.wrote), { revoke: ['A'] });
   r.sign.run = null;
   r.sign.close();
 
