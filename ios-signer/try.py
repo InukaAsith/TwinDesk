@@ -16,6 +16,9 @@ import sys
 
 here = os.path.dirname(os.path.abspath(__file__))
 helper = os.path.join(here, "target", "debug", "twindesk-ios-signer")
+if "--ipa" in sys.argv:
+    arch = "arm64" if os.uname().machine in ("arm64", "aarch64") else "x64"
+    helper = os.path.join(here, "bin", arch, "twindesk-ios-signer")
 state_path = os.path.join(here, ".try-state.json")
 
 
@@ -48,6 +51,10 @@ def send(obj):
 
 
 request = {"op": "install", "udid": devices[0]["udid"], "email": email, "state": state}
+# --ipa <file>: that IPA in place of TwinDesk's latest release (a build that installs other apps:
+# TWINDESK_SIGNER_ANY_IPA=1 ./build.sh, which try.sh then runs from bin/).
+if "--ipa" in sys.argv:
+    request["ipa"] = os.path.abspath(sys.argv[sys.argv.index("--ipa") + 1])
 if password:
     request["password"] = password
 send(request)
