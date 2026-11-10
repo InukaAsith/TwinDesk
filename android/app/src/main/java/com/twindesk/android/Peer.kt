@@ -82,6 +82,28 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun setClipOn(v: Boolean) { store.setFlag("peer.clip", v); core.changed() }
     val notifsOn get() = store.flag("peer.notifs", true)
     fun setNotifsOn(v: Boolean) { store.setFlag("peer.notifs", v); core.changed() }
+    val screenSound get() = store.flag("peer.screen.sound", true)
+    fun setScreenSound(v: Boolean) {
+        store.setFlag("peer.screen.sound", v)
+        if (v) PeerScreen.ensureAudioPlayer() else PeerScreen.stopAudio()
+        if (connected) send(msg(Proto.T.PEER_SOUND_WANT, "on" to v))
+        core.changed()
+    }
+    val shareSound get() = store.flag("peer.share.sound", true)
+    fun setShareSound(v: Boolean) {
+        store.setFlag("peer.share.sound", v)
+        PeerScreen.standaloneSoundActive = v
+        if (v) {
+            if (PeerScreen.capture == null) PeerScreen.startCapture(ctx)
+            else PeerScreen.capture?.update()
+        } else {
+            PeerScreen.capture?.update()
+        }
+        core.changed()
+    }
+    val isCapturingAudio get() = PeerScreen.capture?.capturingAudio == true
+    val isPlayingAudio get() = PeerScreen.audioPlayer?.isPlaying == true
+    val soundError get() = PeerScreen.soundError
 
     // ---- the session ----
     @Volatile var role = "" ; private set // "" | host | guest
@@ -96,13 +118,13 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun can(c: String): Boolean = c in (peerCaps ?: defaultCaps(peerOs))
     // What this phone offers the other: the same names in our peer.info.
     fun myCaps(): Set<String> = buildSet {
-        addAll(listOf("clip", "notifs", "files", "screen", "photos"))
+        addAll(listOf("clip", "notifs", "files", "screen", "photos", "sound"))
         if (core.hub.perm("messages") != "none") add("messages")
         if (core.hub.perm("files") != "none") add("fs")
     }
     // A phone older than caps: an iPhone has no messages or storage to browse; an Android phone has all.
     private fun defaultCaps(os: String) = if (os == "ios") setOf("clip", "notifs", "files", "screen", "photos")
-        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs")
+        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs", "sound")
     @Volatile var message = ""; private set
 
     // ---- pairing, as the host (mac/pairing.js) ----
@@ -475,6 +497,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
             "screen.ready" -> PeerScreen.ready(this)
             "screen.stop" -> PeerScreen.remoteStop(this)
             "screen.state" -> PeerScreen.state(this, m)
+            Proto.T.PEER_SOUND, "peer.sound" -> PeerScreen.onSound(this, m)
+            Proto.T.PEER_SOUND_WANT, "peer.sound.want" -> PeerScreen.onSoundWant(this, m)
+            Proto.T.PEER_SOUND_STATE, "peer.sound.state" -> PeerScreen.onSoundState(this, m)
         }
     }
 
@@ -788,7 +813,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 JSONObject().put("ok", true).put("n", items.size)
             }
         }
-        "screen.start" -> { main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600)) }; JSONObject().put("ok", true) }
+        "screen.start" -> { main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600), m.optBoolean("audio", true)) }; JSONObject().put("ok", true) }
         else -> JSONObject().put("error", "unknown")
     }
 
