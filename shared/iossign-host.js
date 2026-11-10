@@ -1,10 +1,12 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // shared/iossign.js in an app (Mac, PC and Linux): where the signing helper is, this feature's own
 // settings file, and the vault for a kept copy.
-//   ios-signing.json  {auto, days, keep, device, alone}: plain, nothing secret in it.
-//   ios-signing.bin   the kept copy (only with Keep a copy on), sealed by the system through
-//                     Electron's safeStorage: the Keychain on a Mac, DPAPI on Windows, the Secret
-//                     Service on Linux. Without one of those there is no vault and no Keep a copy.
+//   ios-signing.json  {on, auto, days, how, which, retry, cache, keep, device, alone}: plain, nothing secret in it.
+//   ios-signing.bin   the kept copy (Keep a copy, on by default while the feature is on), sealed by the
+//                     system through Electron's safeStorage: the Keychain on a Mac (an item only
+//                     TwinDesk may read without asking), DPAPI on Windows and the Secret Service on
+//                     Linux (both open to any program of the same user). Without one of those there
+//                     is no vault and no Keep a copy.
 // create({app, safeStorage, link, near, usbSerials, onChange}) → an IosSign; pickIpa(sign, dialog, win).
 'use strict';
 
@@ -74,8 +76,8 @@ async function enable(sign, dialog, win) {
   const r = await dialog.showMessageBox(win || undefined, {
     type: 'warning',
     message: 'Not recommended',
-    detail: 'TwinDesk signs in to Apple with your Apple ID to install and refresh apps on your iPhone. Apple can refuse the sign-in, lock the Apple ID for a while, or stop it from signing apps.\n\nWe recommend AltStore. If you already use it, keep using it.\n\nOnly turn this on with an Apple ID made for it, not your main one.',
-    buttons: ['Cancel', 'Turn on anyway'], defaultId: 0, cancelId: 0,
+    detail: 'TwinDesk will sign in to Apple with your Apple ID to request development certificates and provisioning profiles for your iPhone or iPad. Apple may reject the sign-in, temporarily lock the account, or prevent it from signing apps.\n\nWe recommend AltStore for installing and refreshing TwinDesk.\n\nUse a dedicated Apple ID rather than your primary account.',
+    buttons: ['Cancel', 'Turn On'], defaultId: 0, cancelId: 0,
   });
   if (r.response === 1) sign.set({ on: true });
 }

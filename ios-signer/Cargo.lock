@@ -3150,6 +3150,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zeroize",
+ "zip",
 ]
 
 [[package]]

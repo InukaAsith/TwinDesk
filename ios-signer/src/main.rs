@@ -5,7 +5,8 @@
 //   {"op":"info"}                  what this build does (anyIpa) and its default anisette server
 //   {"op":"devices"}               the iPhones and iPads usbmuxd sees
 //   {"op":"apps","udid":…}         the sideloaded apps on a device and when each expires
-//   {"op":"install","udid":…[,"ipa":path][,"anisette":url] and either
+//   {"op":"appids","state":{…}}    the Apple ID's app IDs, with a kept developer session (no password)
+//   {"op":"install","udid":…[,"ipa":path][,"twindesk_ipa":path][,"save_ipa":path][,"anisette":url] and either
 //        "sealed":true             the Apple ID comes from the iPhone, sealed for this run (below)
 //     or "email":…,"password":…[,"state":{…}]   typed on this computer, for this run only}
 //
@@ -34,7 +35,9 @@
 // it, never the Apple ID, the password, a code or a token.
 //
 // Without the any-ipa feature the only app this signs is TwinDesk's own, which it downloads itself
-// from the project's releases; a path from outside is refused.
+// from the project's releases; a path from outside is refused. twindesk_ipa: a copy of TwinDesk the
+// app keeps (checked: its main app must be com.twindesk.ios), used in place of the download;
+// save_ipa: where a download is copied to, so the next refresh needn't download it again.
 
 use std::{
     collections::BTreeMap,
@@ -58,7 +61,7 @@ use isideload::{
     auth::apple_account::{AppToken, AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse},
     dev::{
         certificates::DevelopmentCertificate, developer_session::DeveloperSession,
-        devices::DevicesApi,
+        app_ids::AppIdsApi, devices::DevicesApi, teams::TeamsApi,
     },
     sideload::{SideloaderBuilder, TeamSelection, builder::MaxCertsBehavior, install},
     util::{
@@ -109,6 +112,8 @@ struct Request {
     password: Option<String>,
     state: Option<State>,
     ipa: Option<String>,
+    twindesk_ipa: Option<String>,
+    save_ipa: Option<String>,
     anisette: Option<String>,
 }
 
@@ -389,6 +394,31 @@ async fn download(to: &Path) -> Result<(), Report> {
     Ok(())
 }
 
+enum Source {
+    Ipa(PathBuf),
+    TwinDesk { cached: Option<PathBuf>, save: Option<PathBuf> },
+}
+
+// An IPA whose main app is TwinDesk (its bundle id as built: com.twindesk.ios).
+fn is_twindesk(path: &Path) -> bool {
+    let check = || -> Option<bool> {
+        let file = std::fs::File::open(path).ok()?;
+        if file.metadata().ok()?.len() > MAX_IPA {
+            return Some(false);
+        }
+        let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file)).ok()?;
+        let name = (0..zip.len()).filter_map(|i| zip.name_for_index(i).map(str::to_string)).find(|n| {
+            let parts: Vec<&str> = n.split('/').collect();
+            parts.len() == 3 && parts[0] == "Payload" && parts[1].ends_with(".app") && parts[2] == "Info.plist"
+        })?;
+        let mut raw = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::Read::take(zip.by_name(&name).ok()?, 4 << 20), &mut raw).ok()?;
+        let info: plist::Dictionary = plist::from_bytes(&raw).ok()?;
+        Some(info.get("CFBundleIdentifier").and_then(|v| v.as_string()) == Some("com.twindesk.ios"))
+    };
+    check().unwrap_or(false)
+}
+
 fn cert_view(c: &DevelopmentCertificate) -> Value {
     json!({
         "serial": c.serial_number,
@@ -416,7 +446,11 @@ async fn install_op(req: Request, lines: Lines, tmp: &Path) -> Result<Value, Rep
     let mem = Mem(Arc::new(std::sync::Mutex::new(secret.state.unwrap_or_default())));
     let password = secret.password.map(Zeroizing::new);
     let email = Some(secret.email.trim().to_string()).filter(|e| !e.is_empty()).or_else(|| mem.get(KEY_EMAIL)).unwrap_or_default();
-    let result = sign_and_install(&io, &mem, &email, password, &req.udid, req.ipa, req.anisette, tmp).await;
+    let source = match req.ipa {
+        Some(p) => Source::Ipa(PathBuf::from(p)),
+        None => Source::TwinDesk { cached: req.twindesk_ipa.map(PathBuf::from), save: req.save_ipa.map(PathBuf::from) },
+    };
+    let result = sign_and_install(&io, &mem, &email, password, &req.udid, source, req.anisette, tmp).await;
     // Whatever happened: a certificate made, or an identity Apple now knows, has to be kept.
     let state = mem.map().clone();
     if !state.is_empty() {
@@ -432,7 +466,7 @@ async fn sign_and_install(
     email: &str,
     password: Option<Zeroizing<String>>,
     udid: &str,
-    ipa: Option<String>,
+    source: Source,
     anisette: Option<String>,
     tmp: &Path,
 ) -> Result<Value, Report> {
@@ -453,12 +487,23 @@ async fn sign_and_install(
     let device = provider(udid).await?;
     let info = IdeviceInfo::from_device(&device).await.context("Couldn't talk to the device: unlock it and tap Trust")?;
 
-    let ipa: PathBuf = match ipa {
-        Some(path) => PathBuf::from(path),
-        None => {
+    let ipa: PathBuf = match source {
+        Source::Ipa(path) => path,
+        Source::TwinDesk { cached: Some(path), .. } if is_twindesk(&path) => {
+            emit(json!({"ev": "step", "step": "cached"}));
+            path
+        }
+        Source::TwinDesk { save, .. } => {
             emit(json!({"ev": "step", "step": "download"}));
             let to = tmp.join("TwinDesk.ipa");
             download(&to).await.context("Couldn't download TwinDesk for iPhone")?;
+            if let Some(save) = save {
+                // Kept for the next refresh; a failed copy only means downloading again then.
+                let part = save.with_extension("part");
+                if save.parent().is_some_and(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::copy(&to, &part).is_ok() {
+                    let _ = std::fs::rename(&part, &save);
+                }
+            }
             to
         }
     };
@@ -646,6 +691,51 @@ async fn sign_and_install(
     Ok(json!({"ev": "done", "bundleId": bundle_id, "expires": expires, "team": team.team_id, "device": info.name}))
 }
 
+// The app IDs registered for this Apple ID, read with the developer session kept in the state (only
+// that: no password, no question, nothing changed at Apple). The state comes back, as the anisette
+// identity in it can change.
+async fn appids_op(req: Request) -> Result<Value, Report> {
+    let mem = Mem(Arc::new(std::sync::Mutex::new(req.state.unwrap_or_default())));
+    let result = list_ids(&mem).await;
+    let state = mem.map().clone();
+    if !state.is_empty() {
+        emit(json!({"ev": "state", "state": state}));
+    }
+    result
+}
+
+async fn list_ids(mem: &Mem) -> Result<Value, Report> {
+    let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let (Some(email), Some(token), Some(adsid), Some(expiry)) =
+        (mem.get(KEY_EMAIL), mem.get(KEY_TOKEN), mem.get(KEY_ADSID), mem.get(KEY_TOKEN_EXPIRY).and_then(|e| e.parse::<u64>().ok()))
+    else {
+        return Ok(json!({"ev": "error", "kind": "password", "message": "No developer session is stored"}));
+    };
+    if expiry <= now_ms {
+        return Ok(json!({"ev": "error", "kind": "session", "message": "The developer session has expired: sign in again"}));
+    }
+    let duration = mem.get(KEY_TOKEN_DURATION).and_then(|d| d.parse().ok()).unwrap_or(0);
+    let url = mem.get(KEY_ANISETTE_URL).filter(|u| u.starts_with("https://")).unwrap_or_else(|| DEFAULT_ANISETTE_V3_URL.to_string());
+    let anisette = RemoteV3AnisetteProvider::new(&url, Box::new(mem.clone()), "0".to_string())?;
+    let account = AppleAccount::builder(&email).anisette_provider(anisette).err_429_retries(Some(2)).build().await?;
+    let mut session = DeveloperSession::new(AppToken { token, duration, expiry }, adsid, account.grandslam_client.clone(), account.anisette_generator.clone());
+    let teams = session.list_teams().await.context("Apple didn't list the developer teams")?;
+    let Some(team) = teams.into_iter().next() else { bail!("This Apple ID has no developer team") };
+    let list = session.list_app_ids(&team, None).await.context("Apple didn't list the app IDs")?;
+    Ok(json!({
+        "ev": "appids",
+        "team": team.team_id,
+        "teamName": team.name,
+        "max": list.max_quantity,
+        "available": list.available_quantity,
+        "ids": list.app_ids.iter().map(|a| json!({
+            "id": a.identifier,
+            "name": a.name,
+            "expires": a.expiration_date.as_ref().map(secs),
+        })).collect::<Vec<_>>(),
+    }))
+}
+
 async fn run(tmp: &Path) -> Result<Value, Report> {
     let (tx, rx) = mpsc::channel::<String>(4);
     tokio::spawn(async move {
@@ -671,6 +761,7 @@ async fn run(tmp: &Path) -> Result<Value, Report> {
         "devices" => devices().await,
         "apps" => apps(&req.udid).await,
         "install" => install_op(req, lines, tmp).await,
+        "appids" => appids_op(req).await,
         _ => Err(report!("Unknown request")),
     }
 }
@@ -736,4 +827,16 @@ fn main() {
         let _ = std::fs::remove_dir_all(t);
     }
     std::process::exit(code);
+}
+
+#[cfg(test)]
+mod tests {
+    // TWINDESK_TEST_IPA=path/to/TwinDesk.ipa cargo test: that one is TwinDesk, nothing else is.
+    #[test]
+    fn twindesk_ipa() {
+        if let Ok(p) = std::env::var("TWINDESK_TEST_IPA") {
+            assert!(super::is_twindesk(std::path::Path::new(&p)));
+        }
+        assert!(!super::is_twindesk(std::path::Path::new("Cargo.toml")));
+    }
 }

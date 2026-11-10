@@ -75,13 +75,21 @@ for (const s of states) update(s);
 
 const card = (title) => find(body, (n) => n.tag === 'section' && n.titleSpan && n.titleSpan.textContent === title)[0];
 const order = () => body.children.map((c) => (c.titleSpan ? c.titleSpan.textContent : c.className));
-// TwinDesk not on the device: Install first, above the devices; there: after the options
+// TwinDesk not on the device: Install right under the devices; there: Reinstall after the options
 update({ iosSign: base });
-assert.ok(order().indexOf('Install TwinDesk') < order().indexOf('iPhone and iPad'), order().join());
+assert.ok(order().indexOf('Devices') < order().indexOf('Install TwinDesk'), order().join());
+assert.ok(order().indexOf('Install TwinDesk') < order().indexOf('Automatic refresh'), order().join());
 update(states[8]);
-assert.ok(order().indexOf('Install from this Mac') > order().indexOf('Automatic refresh'), order().join());
-// The warning sits right under the switch
-assert.strictEqual(body.children.indexOf(find(body, (n) => n.className === 'ios-warn')[0]), 2);
+assert.ok(order().indexOf('Reinstall') > order().indexOf('Apple developer account'), order().join());
+// The warning: right under the switch while off, gone once on
+const warnEl = find(body, (n) => n.className === 'ios-warn')[0];
+assert.strictEqual(body.children.indexOf(warnEl), 2);
+assert.strictEqual(warnEl.hidden, true);
+update({ iosSign: { ...base, on: false } });
+assert.strictEqual(warnEl.hidden, false);
+// A run: Progress at the top, above the devices
+update(states[11]);
+assert.ok(order().indexOf('Progress') < order().indexOf('Devices'), order().join());
 
 // Revoke: only TwinDesk's own certificate offers it
 update(states[11]);
@@ -108,10 +116,12 @@ assert.strictEqual(inputs[1].value, '');
 button('Install TwinDesk').click();
 assert.strictEqual(sent.length, 0, 'nothing without a password');
 
-// Keep a copy: the warning first, the switch stays off until "anyway"
-const keep = card('Without the iPhone’s app');
-const danger = find(keep, (n) => n.className === 'ios-warn')[0];
-assert.strictEqual(danger.hidden, true);
-assert.ok(find(keep, (n) => n.tag === 'input')[0]);
-assert.ok(/Any program running as you/.test(danger.text));
+// Keep a copy: a plain switch; App IDs once the session is stored here
+const keep = card('Apple developer account');
+assert.ok(/Keep a copy of the Apple developer session/.test(keep.text));
+update({ iosSign: { ...base, keep: true, kept: { email: 'a@b.c', until: 1, signedIn: true } } });
+button('View app IDs').click();
+assert.deepStrictEqual(sent.pop(), { a: 'appids' });
+update({ iosSign: { ...base, keep: true, kept: { email: 'a@b.c', until: 1, signedIn: true }, ids: { list: [{ id: 'com.twindesk.ios.T', name: 'TwinDesk', expires: soon }], available: 9, teamName: 'Me' } } });
+assert.ok(/Reload/.test(keep.text) && /TwinDesk/.test(keep.text), keep.text);
 console.log('ui-ios-sign: ok');

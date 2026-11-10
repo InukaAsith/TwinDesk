@@ -97,7 +97,7 @@ const until = async (what, fn) => {
   r.sign.close();
 
   // Typed here: the code is asked for, the state waits for the iPhone's app, nothing is kept
-  r = rig();
+  r = rig({ keep: false });
   await until('the device', () => r.sign.view.udid === UDID && r.sign.view.available);
   r.sign.signIn({ email: 'a@b.c', password: 'hunter2 "x"' });
   await until('the code is asked', () => r.sign.view.run && r.sign.view.run.need);
@@ -159,6 +159,11 @@ const until = async (what, fn) => {
   // The vault (a Keychain prompt on a Mac) isn't read while Keep a copy is off, nor while it's all off
   r = rig({ on: false });
   await until('the helper', () => r.sign.view.available);
+  assert.strictEqual(r.sign.view.keep, true, 'Keep a copy is on by default');
+  assert.strictEqual(r.loads(), 0, 'but the vault isn’t read while it’s all off');
+  r.sign.close();
+  r = rig({ on: false, keep: false });
+  await until('the helper', () => r.sign.view.available);
   void r.sign.view;
   assert.strictEqual(r.sign.view.devices.length, 0, 'off: no device is looked at');
   await new Promise((res) => setTimeout(res, 300));
@@ -196,6 +201,26 @@ const until = async (what, fn) => {
   r.link.current = { os: 'ios', id: 'phone-1', name: 'An iPhone' };
   r.link.emit(T.STATE, { signedIn: true, email: 'a@b.c', until: FUTURE, auto: true });
   assert.strictEqual(r.of(T.WANT)[0].now, true);
+  r.sign.close();
+
+  // TwinDesk's IPA: downloaded once and kept (save_ipa), then refreshed from the kept copy
+  const cacheDir = path.join(dir, 'ipas');
+  r = rig({ keep: true }, { cacheDir });
+  await until('the device', () => r.sign.view.udid === UDID && r.sign.view.available);
+  const reqs = [];
+  r.sign._start = (run, req) => reqs.push(req);
+  r.sign.kept[UDID] = { email: 'a@b.c', xcode_token: 't', xcode_token_expiry: String(FUTURE) };
+  r.sign.refreshKept();
+  assert.strictEqual(reqs[0].save_ipa, path.join(cacheDir, 'TwinDesk.ipa'));
+  assert.ok(!reqs[0].twindesk_ipa && !reqs[0].ipa);
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(path.join(cacheDir, 'TwinDesk.ipa'), 'x');
+  r.sign.refreshKept();
+  assert.strictEqual(reqs[1].twindesk_ipa, path.join(cacheDir, 'TwinDesk.ipa'), 'refreshed from the kept IPA, not downloaded');
+  assert.ok(!reqs[1].save_ipa && !reqs[1].ipa);
+  r.sign.set({ cache: false });
+  r.sign.refreshKept();
+  assert.ok(!reqs[2].twindesk_ipa && !reqs[2].save_ipa, 'Store IPAs off: nothing kept');
   r.sign.close();
 
   fs.rmSync(dir, { recursive: true, force: true });

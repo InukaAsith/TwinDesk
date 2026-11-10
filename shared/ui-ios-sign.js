@@ -2,11 +2,11 @@
 // TwinDesk iPhone (Mac, PC and Linux): TwinDesk for iPhone and iPad signed with the person's own
 // Apple ID and installed from this computer, in place of AltStore or Sideloadly (shared/iossign.js,
 // ios-signer/). Opt in, and said plainly. Top to bottom:
-//   the switch, and under it the warning (with AltStore recommended);
-//   on: Install TwinDesk first when it isn't on the device; the iPhones and iPads this computer can
-//   reach (cable, Wi-Fi sync, Bluetooth), one picked when there are several; a run's progress, step by
-//   step, with Apple's questions in it; TwinDesk on the device and Refresh now; automatic refresh and
-//   its options; a copy kept on this computer (off, behind a warning);
+//   the switch, and under it (only while off) the warning, with AltStore recommended;
+//   on: a run's progress, step by step, with Apple's questions in it (at the top); the iPhones and
+//   iPads this computer can reach (cable, Wi-Fi sync, Bluetooth), one picked when there are several;
+//   Install TwinDesk when it isn't on the device; TwinDesk on the device and Refresh now; automatic
+//   refresh and its options; the encrypted copy of Apple's session (on by default); Reinstall;
 //   How this works, as plain paragraphs.
 'use strict';
 
@@ -29,8 +29,8 @@
 
   // A run's steps, in order (signin or session: one of the two).
   const STEPS = [
-    ['find', 'Looking for the iPhone'], ['download', 'Downloading TwinDesk'], ['signin', 'Signing in to Apple'],
-    ['session', 'Opening the Apple session'], ['register', 'Registering the device'], ['cert', 'Getting the certificate'],
+    ['find', 'Locating the device'], ['cached', 'Using the stored TwinDesk IPA'], ['download', 'Downloading TwinDesk'], ['signin', 'Signing in to Apple'],
+    ['session', 'Restoring the Apple session'], ['register', 'Registering the device'], ['cert', 'Getting the certificate'],
     ['appid', 'Registering the app ID'], ['profile', 'Getting the provisioning profile'], ['sign', 'Signing the app'], ['install', 'Installing'],
   ];
   const AHEAD = ['register', 'cert', 'appid', 'profile', 'sign', 'install']; // always still to come until seen
@@ -73,26 +73,46 @@
       const act = (o) => api().iosSign(o);
 
       const missing = UI.note('warn', '');
+      const store = mac ? tr('the macOS Keychain') : linux ? tr('the system keyring') : tr('Windows Data Protection (DPAPI)');
 
-      // ---- the switch, then the warning ----
+      // ---- the switch; the warning under it while it's off ----
       const onSw = UI.switch((v) => { if (v) { onSw.set(false); act({ a: 'enable' }); } else act({ a: 'set', on: false }); },
         { label: tr('Install TwinDesk and refresh it with the iOS app') });
       const onCard = UI.card('', [UI.row(tr('Install TwinDesk and refresh it with the iOS app'),
-        tr('{Computer} installs TwinDesk on your iPhone or iPad and signs it again before its 7 days run out, asked by TwinDesk there. Turning this off removes what {computer} kept.', { Computer: Here, computer: here }),
+        tr('{Computer} installs TwinDesk on your iPhone or iPad and re-signs it before its 7-day provisioning profile expires, on request from the TwinDesk iOS app. Turning this off deletes all signing data stored on {computer}.', { Computer: Here, computer: here }),
         [onSw.el], { literal: true })]);
       const warn = el('div', { class: 'ios-warn', attrs: { role: 'note' } }, [
         warnIcon(),
         el('div', { class: 'body' }, [
           el('div', { class: 'title', text: tr('Not recommended') }),
-          el('p', { text: tr('Apple has refused sign-ins from tools like this one, locked Apple IDs for a while, and stopped some from signing apps at all. Use an Apple ID made for this, not your main one.') }),
+          el('p', { text: tr('This feature signs in to Apple with your Apple ID to request development certificates and provisioning profiles. Apple may reject the sign-in, temporarily lock the account, or prevent it from signing apps. Use a dedicated Apple ID rather than your primary account.') }),
           el('div', { class: 'alt' }, [
-            el('span', { text: tr('We recommend AltStore. If you already use it, keep using it.') }),
+            el('span', { text: tr('We recommend AltStore for installing and refreshing TwinDesk.') }),
             UI.button('altstore.io', () => api().openLink && api().openLink('https://altstore.io'), 'small'),
           ]),
         ]),
       ]);
 
-      // ---- install (at the top when TwinDesk isn't on the device) ----
+      // ---- a run's progress (at the top while one runs), and Apple's questions ----
+      const steps = el('ol', { class: 'ios-steps' });
+      const bar = el('div', { class: 'ios-bar' }, [el('div')]);
+      const result = el('div', { class: 'ios-result' });
+      const stopBtn = UI.button(tr('Stop'), () => act({ a: 'stop' }), 'small');
+      const code = el('input', { type: 'text', attrs: { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', 'aria-label': tr('Verification code') } });
+      const sendCode = () => { if (code.value.trim()) { act({ a: 'answer', code: code.value }); code.value = ''; } };
+      code.onkeydown = (e) => { if (e.key === 'Enter') sendCode(); };
+      const codeRow = UI.row(tr('Verification code'), tr('Enter the code Apple sent to your trusted devices.'), [code, UI.button(tr('Continue'), sendCode, 'primary'), UI.button(tr('Resend'), () => act({ a: 'answer', resend: true }), 'small')]);
+      const certRow = UI.row(tr('Certificate limit reached'), tr('This Apple ID has the maximum number of development certificates. Only certificates created by TwinDesk can be revoked here. Apps signed with a revoked certificate stop launching until they are signed again.'), [UI.button(tr('Cancel'), () => act({ a: 'answer', abort: true }), 'small')]);
+      const certList = el('div');
+      const phoneAsks = UI.row(tr('Action required on the iPhone'), tr('Apple requested additional information. Respond on the iPhone to continue.'), [], { literal: true });
+      const progCard = UI.card(tr('Progress'), [steps, bar, codeRow, certRow, certList, phoneAsks, result], { actions: [stopBtn] });
+
+      // ---- the devices ----
+      const devList = el('div');
+      const lookBtn = UI.button(tr('Search again'), () => act({ a: 'look' }), 'small');
+      const devCard = UI.card(tr('Devices'), [devList], { actions: [lookBtn] });
+
+      // ---- install (under the devices; before the options while TwinDesk isn't on the device) ----
       const email = el('input', { type: 'email', attrs: { autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Apple ID', placeholder: 'name@example.com' } });
       const pass = el('input', { type: 'password', attrs: { autocomplete: 'off', 'aria-label': tr('Password') } });
       const go = () => {
@@ -103,113 +123,86 @@
       pass.onkeydown = (e) => { if (e.key === 'Enter') go(); };
       const installBtn = UI.button(tr('Install'), go, 'primary');
       const ipaBtn = UI.button(tr('Choose an IPA…'), () => api().iosSignIpa(), 'small');
-      const ipaClear = UI.button(tr('TwinDesk instead'), () => act({ a: 'ipa' }), 'small');
+      const ipaClear = UI.button(tr('Use TwinDesk'), () => act({ a: 'ipa' }), 'small');
       const ipaRow = UI.row(tr('App to install'), '', [ipaBtn, ipaClear], { literalHint: true });
       const installHead = UI.row('', '', [], { literal: true });
       const installCard = UI.card(tr('Install TwinDesk'), [
         installHead,
-        UI.row('Apple ID', tr('Sent to Apple only, and not kept on {computer}.', { computer: here }), [email], { literal: true }),
-        UI.row(tr('Password'), tr('Used once, to sign in. Apple’s developer session that comes back is kept on the iPhone.'), [pass], { literal: true }),
+        UI.row('Apple ID', tr('Sent only to Apple. Not stored on {computer}.', { computer: here }), [email], { literal: true }),
+        UI.row(tr('Password'), tr('Used once to sign in and never stored.'), [pass], { literal: true }),
         ipaRow,
         UI.row('', '', [installBtn]),
       ]);
-
-      // ---- the devices ----
-      const devList = el('div');
-      const lookBtn = UI.button(tr('Look again'), () => act({ a: 'look' }), 'small');
-      const devCard = UI.card(tr('iPhone and iPad'), [devList], { actions: [lookBtn] });
-
-      // ---- a run's progress, and Apple's questions ----
-      const steps = el('ol', { class: 'ios-steps' });
-      const bar = el('div', { class: 'ios-bar' }, [el('div')]);
-      const result = el('div', { class: 'ios-result' });
-      const stopBtn = UI.button(tr('Stop'), () => act({ a: 'stop' }), 'small');
-      const code = el('input', { type: 'text', attrs: { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', 'aria-label': tr('Verification code') } });
-      const sendCode = () => { if (code.value.trim()) { act({ a: 'answer', code: code.value }); code.value = ''; } };
-      code.onkeydown = (e) => { if (e.key === 'Enter') sendCode(); };
-      const codeRow = UI.row(tr('Verification code'), tr('Apple sent a code to your devices.'), [code, UI.button(tr('Continue'), sendCode, 'primary'), UI.button(tr('Send again'), () => act({ a: 'answer', resend: true }), 'small')]);
-      const certRow = UI.row(tr('No free certificate'), tr('This Apple ID has as many development certificates as Apple allows. Only one TwinDesk made can be revoked here: the apps signed with it stop until they are signed again. The others belong to other tools.'), [UI.button(tr('Cancel'), () => act({ a: 'answer', abort: true }), 'small')]);
-      const certList = el('div');
-      const phoneAsks = UI.row(tr('Apple asks something'), tr('Answer it on the iPhone.'), [], { literal: true });
-      const progCard = UI.card(tr('Progress'), [steps, bar, codeRow, certRow, certList, phoneAsks, result], { actions: [stopBtn] });
 
       // ---- TwinDesk on the device ----
       const refreshBtn = UI.button(tr('Refresh now'), () => act({ a: 'refresh' }), 'primary');
       const refreshRow = UI.row(tr('TwinDesk'), '', [refreshBtn], { literalHint: true });
       const appList = el('div');
-      const refreshCard = UI.card(tr('On the device'), [refreshRow, appList]);
+      const refreshCard = UI.card(tr('Installed apps'), [refreshRow, appList]);
 
       // ---- automatic refresh ----
       const autoSw = UI.switch((v) => act({ a: 'set', auto: v }));
-      const autoRow = UI.row(tr('Refresh automatically'), tr('{computer} asks TwinDesk on the iPhone, over Wi-Fi or, when it’s asleep, Bluetooth.', { computer: Here }), [autoSw.el]);
+      const autoRow = UI.row(tr('Refresh automatically'), tr('{computer} sends refresh requests to TwinDesk on the iPhone over Wi-Fi, or over Bluetooth when the app is suspended.', { computer: Here }), [autoSw.el]);
       const daysSel = UI.select([1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: n === 1 ? tr('Less than 1 day') : tr('Less than {count} days', { count: n }) })), (v) => act({ a: 'set', days: Number(v) }));
-      const daysRow = UI.row(tr('When an app has left'), '', [daysSel.el]);
+      const daysRow = UI.row(tr('Refresh when the remaining time is'), '', [daysSel.el]);
       const howSeg = UI.segmented([
-        { value: 'self', label: tr('By itself') },
+        { value: 'self', label: tr('Automatic') },
         { value: 'ask', label: tr('Ask first') },
       ], (v) => act({ a: 'set', how: v }));
-      const howRow = UI.row(tr('On the iPhone'), '', [howSeg]);
+      const howRow = UI.row(tr('Confirmation on the iPhone'), '', [howSeg]);
       const whichSel = UI.select([
         { value: 'all', label: tr('TwinDesk and installed IPAs') },
         { value: 'twindesk', label: tr('TwinDesk only') },
       ], (v) => act({ a: 'set', which: v }));
-      const whichRow = UI.row(tr('Apps'), tr('Installed IPAs can be refreshed when {computer} keeps them (below).', { computer: here }), [whichSel.el]);
+      const whichRow = UI.row(tr('Apps'), tr('Apps installed from an IPA can be refreshed only if {computer} stores the IPA.', { computer: here }), [whichSel.el]);
       const retrySel = UI.select([], (v) => act({ a: 'set', retry: Number(v) }));
-      const retryRow = UI.row(tr('After one didn’t work, try again'), '', [retrySel.el]);
+      const retryRow = UI.row(tr('Retry after a failed refresh'), '', [retrySel.el]);
       const cacheSw = UI.switch((v) => act({ a: 'set', cache: v }));
-      const cacheRow = UI.row(tr('Keep installed IPAs on {computer}', { computer: here }), tr('An app installed from an IPA can then be refreshed from here. Switching this off deletes the kept IPAs.'), [cacheSw.el], { literal: true });
+      const cacheRow = UI.row(tr('Store IPAs on {computer}', { computer: here }), tr('TwinDesk and apps installed from an IPA are installed and refreshed from the stored copy instead of being downloaded again. Turning this off deletes the stored IPAs.'), [cacheSw.el], { literal: true });
       const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, howRow, whichRow, retryRow, cacheRow]);
 
-      // ---- keep a copy ----
-      const keepSw = UI.switch((v) => {
-        if (!v) return act({ a: 'set', keep: false });
-        keepSw.set(false); // not yet: the warning first
-        danger.hidden = false;
-      });
-      const keepRow = UI.row(tr('Keep a copy on {computer}', { computer: here }), tr('Refreshes without the iPhone’s app: closed, locked or already expired. {computer} asks for its Keychain once, when you turn this on.', { computer: Here }), [keepSw.el], { literal: true });
-      const danger = el('div', { class: 'ios-warn', hidden: true }, [
-        warnIcon(),
-        el('div', { class: 'body' }, [
-          el('p', { text: tr('{computer} will keep Apple’s developer session and the certificate’s key. Any program running as you can read them, and with them manage this Apple ID’s certificates, app IDs and devices for up to a year. They can’t open iCloud and don’t include your password.', { computer: Here }) }),
-          el('div', { class: 'alt' }, [
-            el('span', { text: tr('Only with an Apple ID made for this.') }),
-            el('span', {}, [
-              UI.button(tr('Cancel'), () => { danger.hidden = true; }, 'small'),
-              UI.button(tr('Keep a copy anyway'), () => { danger.hidden = true; act({ a: 'set', keep: true }); }, 'small'),
-            ]),
-          ]),
-        ]),
-      ]);
-      const keepCard = UI.card(tr('Without the iPhone’s app'), [keepRow, danger]);
+      // ---- keep a copy (on by default) ----
+      const keepSw = UI.switch((v) => act({ a: 'set', keep: v }));
+      // Said as it is: the Keychain limits the item to TwinDesk; DPAPI and the keyring only to the user account.
+      const scope = mac ? tr('Other apps cannot read it without your permission.')
+        : tr('Other apps running under your user account can decrypt it.');
+      const keepRow = UI.row(tr('Keep a copy of the Apple developer session on {computer} (encrypted)', { computer: here }),
+        tr('Allows refreshes when the iOS app is closed, locked or expired. Encrypted with {store}. {scope} The session can manage this Apple ID’s certificates, app IDs and devices for up to a year; it cannot access iCloud and does not include your password. Turning this off deletes the copy.', { store, scope }),
+        [keepSw.el], { literal: true });
+      const idsBtn = UI.button(tr('View app IDs'), () => act({ a: 'appids' }), 'small');
+      const idsRow = UI.row(tr('App IDs'), '', [idsBtn], { literalHint: true });
+      const idsList = el('div');
+      const keepCard = UI.card(tr('Apple developer account'), [keepRow, idsRow, idsList]);
 
       // ---- how this works ----
       const anisette = el('p');
       const how = el('section', { class: 'ios-how' }, [
         el('h3', { text: tr('How this works') }),
-        el('p', { text: tr('An app from outside the App Store runs for 7 days when it is signed with a free Apple ID, and then has to be signed again. AltStore and Sideloadly do that. This does the same from TwinDesk.') }),
-        el('p', { text: tr('{computer} signs in to Apple with your Apple ID the way Xcode does, asks Apple for a development certificate named “TwinDesk”, signs the app with it and installs it through the cable or Wi-Fi sync.', { computer: Here }) }),
-        el('p', { text: tr('Your password is used once, to sign in, and is not kept. What is kept is Apple’s developer session (about a year; it can manage certificates and app IDs, not iCloud or purchases), the certificate’s key and a device identity, in the Keychain of the iPhone. {computer} keeps none of it unless you turn on Keep a copy.', { computer: Here }) }),
-        el('p', { text: tr('When an app is close to running out, {computer} asks TwinDesk on the iPhone, waking it over Bluetooth when it’s asleep. The iPhone refreshes by itself while it’s unlocked, or shows a notification: tap it and the rest happens on its own.', { computer: here }) }),
+        el('p', { text: tr('Apps installed outside the App Store with a free Apple ID use a provisioning profile that is valid for 7 days, after which they must be signed again. AltStore and Sideloadly automate this; this feature does the same from TwinDesk.') }),
+        el('p', { text: tr('{computer} authenticates with Apple through the same developer services Xcode uses, requests a development certificate named “TwinDesk”, registers the device and the app ID, signs the app and installs it over USB or Wi-Fi sync.', { computer: Here }) }),
+        el('p', { text: tr('Your password is used only to sign in and is never stored. Apple returns a developer session valid for about a year, which can manage certificates, app IDs and devices but cannot access iCloud or purchases. The session, the certificate’s private key and a device identity are stored in the iPhone’s Keychain and, with Keep a copy on, encrypted on {computer}.', { computer: here }) }),
+        el('p', { text: tr('When an app approaches expiry, {computer} sends a refresh request to TwinDesk on the iPhone, waking it over Bluetooth if necessary. The iPhone refreshes while it is unlocked; otherwise it shows a notification, and tapping it starts the refresh.', { computer: here }) }),
         anisette,
       ]);
 
-      // Above the devices while TwinDesk isn't on the chosen one; after the options once it is.
-      body.append(missing, onCard, warn, installCard, devCard, progCard, refreshCard, autoCard, keepCard, how);
+      body.append(missing, onCard, warn, progCard, devCard, installCard, refreshCard, autoCard, keepCard, how);
 
       let devKey = '';
       let appKey = '';
       let certKey = '';
+      let idsKey = '';
       return (s) => {
         const v = s.iosSign || {};
         const run = v.run;
         const last = v.last || {};
-        missing.set(v.available ? '' : tr('The signing helper isn’t part of this build of TwinDesk.'));
+        missing.set(v.available ? '' : tr('The signing helper is not included in this build of TwinDesk.'));
         // Off: only the switch, the warning and How this works. The helper isn't even run.
         onCard.hidden = !v.available;
         onSw.set(v.on);
         const on = !!(v.available && v.on);
+        warn.hidden = on;
         for (const c of [installCard, devCard, progCard, refreshCard, autoCard, keepCard]) c.hidden = !on;
-        anisette.textContent = tr('The Apple ID and password go to Apple only. One more server is used: an “anisette” server ({server}), which Apple’s sign-in needs. It never gets the Apple ID or the password, but it does hold the identity Apple trusts after your verification code.', { server: v.anisette || 'ani.iloader.app' });
+        anisette.textContent = tr('Your Apple ID and password are sent only to Apple. Apple’s sign-in also requires an anisette server ({server}). It never receives your credentials, but it does hold the device identity Apple trusts after two-factor verification.', { server: v.anisette || 'ani.iloader.app' });
         if (!on) return;
 
         // ---- the devices ----
@@ -234,10 +227,10 @@
             return r;
           });
           // TwinDesk on an iPhone this computer can't install to right now.
-          if (sess && !devs.length) rows.push(UI.row(sess.name, tr('Connected to TwinDesk, but {computer} can’t install to it yet: connect its cable once and tap Trust. After that Wi-Fi is enough with “Show this iPhone when on Wi-Fi” in Finder.', { computer: here }), [], { literal: true }));
-          for (const n of near) rows.push(UI.row(n.name, tr('Near, over Bluetooth. TwinDesk there wakes up for a refresh.'), [el('span', { class: 'pill muted', text: 'Bluetooth' })], { literal: true }));
-          if (!rows.length) rows.push(UI.row(tr('None found'), tr('Connect the iPhone or iPad with its cable, unlock it and tap Trust. After that Wi-Fi is enough when “Show this iPhone when on Wi-Fi” is on in Finder, or Wi-Fi sync in Apple Devices or iTunes.'), [], { literal: true }));
-          if (pick && !v.udid) rows.unshift(UI.row(tr('Choose one'), tr('More than one is here: pick the one this is for.'), [], { literal: true }));
+          if (sess && !devs.length) rows.push(UI.row(sess.name, tr('Connected to TwinDesk but not available for installation. Connect it to {computer} by cable once and tap Trust; Wi-Fi sync then works without the cable.', { computer: here }), [], { literal: true }));
+          for (const n of near) rows.push(UI.row(n.name, tr('Nearby over Bluetooth. TwinDesk can be woken for a refresh.'), [el('span', { class: 'pill muted', text: 'Bluetooth' })], { literal: true }));
+          if (!rows.length) rows.push(UI.row(tr('No devices found'), tr('Connect the iPhone or iPad by cable, unlock it and tap Trust. It is then also reachable over Wi-Fi if Wi-Fi sync is enabled in Finder, Apple Devices or iTunes.'), [], { literal: true }));
+          if (pick && !v.udid) rows.unshift(UI.row(tr('Select a device'), tr('Several devices are available. Select the one to install to.'), [], { literal: true }));
           devList.replaceChildren(...rows);
         }
 
@@ -246,15 +239,15 @@
         const td = apps.find((a) => a.twindesk);
         const devName = ((devs.find((d) => d.udid === v.udid) || {}).name) || tr('the device');
         const missingTd = !td;
-        // Not found: Install first, at the top. Found: after the options, for an IPA or a fresh install.
-        const before = missingTd ? devCard : keepCard;
+        // Not found: Install right under the devices. Found: after the options, for an IPA or a reinstall.
+        const before = missingTd ? refreshCard : how;
         if (installCard.nextSibling !== before) body.insertBefore(installCard, before);
-        installCard.querySelector('.card-title span').textContent = missingTd ? tr('Install TwinDesk') : tr('Install from {computer}', { computer: here });
-        installHead.label.textContent = !v.udid ? (devs.length ? tr('Choose the iPhone or iPad below') : tr('Connect the iPhone or iPad'))
-          : missingTd ? tr('TwinDesk isn’t on {device}', { device: devName }) : tr('Install again, or another app');
-        installHead.setHint(!v.udid ? tr('Then sign in with the Apple ID to install TwinDesk on it.')
-          : missingTd ? tr('Sign in with the Apple ID to install it. After that TwinDesk on the iPhone keeps itself refreshed through {computer}.', { computer: here })
-            : tr('Usually not needed: TwinDesk refreshes from the iPhone. For a first install with another Apple ID, or when TwinDesk there has expired.'));
+        installCard.querySelector('.card-title span').textContent = missingTd ? tr('Install TwinDesk') : tr('Reinstall');
+        installHead.label.textContent = !v.udid ? (devs.length ? tr('Select a device above') : tr('No device connected'))
+          : missingTd ? tr('TwinDesk is not installed on {device}', { device: devName }) : tr('Reinstall TwinDesk or install another app');
+        installHead.setHint(!v.udid ? tr('Then sign in with your Apple ID to install TwinDesk.')
+          : missingTd ? tr('Sign in with your Apple ID to install it. The TwinDesk iOS app then requests future refreshes through {computer}.', { computer: here })
+            : tr('Not normally required, as TwinDesk refreshes itself through the iOS app. Use this for a first install with a different Apple ID, or if the app has expired.'));
         installBtn.disabled = !!run || !v.udid;
         installBtn.textContent = v.ipa ? tr('Install {name}', { name: v.ipa }) : missingTd ? tr('Install TwinDesk') : tr('Install');
         ipaRow.hidden = !v.anyIpa;
@@ -264,6 +257,7 @@
         // ---- progress ----
         const shown = run || last.done || last.error || last.info;
         progCard.hidden = !shown;
+        // Running: at the top, under the switch. Finished: its result stays above the devices too.
         stopBtn.hidden = !run;
         if (shown) {
           const seen = run ? run.seen || [] : [];
@@ -282,14 +276,14 @@
           if (run) {
             result.hidden = run.from !== 'phone';
             result.className = 'ios-result';
-            result.textContent = run.from === 'phone' ? tr('Asked by TwinDesk on the iPhone.') : '';
+            result.textContent = run.from === 'phone' ? tr('Requested by TwinDesk on the iPhone.') : '';
           } else {
             result.hidden = false;
             result.className = `ios-result ${last.error ? 'bad' : last.done ? 'good' : ''}`;
             const e = last.error;
-            result.replaceChildren(...(e ? [el('strong', { text: tr(e.message || 'It didn’t work') }),
-              e.detail && e.detail !== e.message ? el('div', { text: tr(e.detail) }) : null, e.code != null ? el('div', { text: tr('Apple’s code: {code}', { code: e.code }) }) : null].filter(Boolean)
-              : last.done ? [el('div', { text: tr('Installed on {device}. It runs until {date}.', { device: last.done.device || devName, date: new Date((last.done.expires || 0) * 1000).toLocaleString() }) })]
+            result.replaceChildren(...(e ? [el('strong', { text: tr(e.message || 'The operation failed') }),
+              e.detail && e.detail !== e.message ? el('div', { text: tr(e.detail) }) : null, e.code != null ? el('div', { text: tr('Apple error code: {code}', { code: e.code }) }) : null].filter(Boolean)
+              : last.done ? [el('div', { text: tr('Installed on {device}. Valid until {date}.', { device: last.done.device || devName, date: new Date((last.done.expires || 0) * 1000).toLocaleString() }) })]
                 : [el('div', { text: tr(last.info) })]));
           }
         }
@@ -302,7 +296,7 @@
         if (ck !== certKey) {
           certKey = ck;
           certList.replaceChildren(...((need && need.certs) || []).map((c) => UI.row(c.machine || c.name || c.serial,
-            [c.ours ? '' : tr('Not TwinDesk’s: can’t be revoked here'), c.expires ? tr('Until {date}', { date: new Date(c.expires * 1000).toLocaleDateString() }) : ''].filter(Boolean).join(' · '),
+            [c.ours ? '' : tr('Created by another tool; cannot be revoked here'), c.expires ? tr('Until {date}', { date: new Date(c.expires * 1000).toLocaleDateString() }) : ''].filter(Boolean).join(' · '),
             [c.ours ? UI.button(tr('Revoke'), () => act({ a: 'answer', revoke: [c.serial] }), 'small') : null].filter(Boolean), { literal: true })));
         }
 
@@ -311,9 +305,9 @@
         const phone = v.phone;
         const kept = v.keep && v.kept && v.kept.signedIn;
         refreshBtn.disabled = !!run || !(kept || (phone && phone.signedIn) || (!sess && near.length));
-        refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('signed in as {account}', { account: phone.email }) : kept ? tr('{computer} keeps a copy for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(' · ')
-          : !sess && near.length ? tr('Near over Bluetooth: Refresh now wakes TwinDesk there.')
-            : sess && !(phone && phone.signedIn) ? tr('Not signed in on the iPhone: TwinDesk › App refresh there.') : v.udid ? tr('Not installed') : '');
+        refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('Apple ID: {account}', { account: phone.email }) : kept ? tr('Session stored on {computer} for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(' · ')
+          : !sess && near.length ? tr('Nearby over Bluetooth. Refresh now wakes TwinDesk on the device.')
+            : sess && !(phone && phone.signedIn) ? tr('Not signed in. Sign in on the iPhone under TwinDesk › App refresh.') : v.udid ? tr('Not installed') : '');
         const ak = JSON.stringify(apps.filter((a) => !a.twindesk)) + Math.floor(Date.now() / 3600000);
         if (ak !== appKey) {
           appKey = ak;
@@ -327,19 +321,34 @@
         autoSw.set(v.auto);
         daysSel.set(String(v.days || 3));
         howSeg.set(v.how || 'self');
-        howRow.setHint(v.how === 'ask' ? tr('A notification there says how long is left. Tap it and the refresh runs.')
-          : tr('While the iPhone is unlocked it refreshes on its own; locked, it shows a notification to tap.'));
+        howRow.setHint(v.how === 'ask' ? tr('The iPhone shows a notification with the remaining time. Tapping it starts the refresh.')
+          : tr('Refreshes without confirmation while the iPhone is unlocked. When it is locked, a notification is shown instead.'));
         whichSel.set(v.which || 'all');
         retrySel.options((v.retries || [1, 3, 6, 12, 24]).map((h) => ({ value: String(h), label: h === 1 ? tr('After 1 hour') : tr('After {count} hours', { count: h }) })));
         retrySel.set(String(v.retry || 6));
         for (const r of [daysRow, howRow, whichRow, retryRow]) r.hidden = !v.auto;
         whichRow.hidden = !v.auto || !v.anyIpa;
-        cacheRow.hidden = !v.anyIpa;
         cacheSw.set(v.cache);
 
-        // ---- keep a copy ----
-        keepCard.hidden = !v.canKeep;
+        // ---- keep a copy, app IDs ----
+        keepRow.hidden = !v.canKeep;
         keepSw.set(v.keep);
+        const ids = v.ids;
+        const canIds = !!(v.keep && v.kept && v.kept.signedIn);
+        idsBtn.disabled = !canIds || !!(ids && ids.loading);
+        idsBtn.textContent = ids && ids.list ? tr('Reload') : tr('View app IDs');
+        idsRow.setHint(ids && ids.loading ? tr('Loading from Apple…')
+          : ids && ids.error ? tr(ids.error)
+            : ids && ids.list ? [tr('{count} registered', { count: ids.list.length }), ids.available != null ? tr('{count} more can be created this week', { count: ids.available }) : '', ids.teamName ? tr('Team: {team}', { team: ids.teamName }) : ''].filter(Boolean).join(' · ')
+              : canIds ? tr('The app IDs registered for this Apple ID. Free accounts can create 10 app IDs per 7 days.')
+                : tr('Requires the developer session stored on {computer}.', { computer: here }));
+        const ik = JSON.stringify(ids && ids.list || []);
+        if (ik !== idsKey) {
+          idsKey = ik;
+          idsList.replaceChildren(...((ids && ids.list) || []).map((a) => UI.row(a.name || a.id, a.id, [
+            a.expires ? el('span', { class: daysLeft(a.expires) < 2 ? 'pill bad' : 'pill muted', text: leftText(a.expires) }) : null,
+          ].filter(Boolean), { literal: true })));
+        }
       };
     },
   });
