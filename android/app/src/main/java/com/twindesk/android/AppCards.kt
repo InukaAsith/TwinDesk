@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -88,6 +89,7 @@ private fun Choice(items: List<Pair<String, String>>, selected: String, onPick: 
 
 @Composable
 fun NotifAppsCard(core: Core, name: String) {
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val n = core.notifs
     var q by rememberSaveable { mutableStateOf("") }
     var all by rememberSaveable { mutableStateOf(false) }
