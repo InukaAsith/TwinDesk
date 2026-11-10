@@ -30,6 +30,7 @@
 // Events: 'change' (this.view).
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -87,6 +88,7 @@ class IosSign extends EventEmitter {
     this.pending = null; // {udid, state}: made here, for the iPhone's app when it's connected
     this.tried = new Map(); // udid -> when an automatic refresh last started
     this._kept = null; // udid -> state, read from the vault the first time it's needed (kept)
+    this.only = ''; // refreshKept: the app it refreshes (its kept IPA in this.ipa)
     this.queued = null; // a refresh asked for while the iPhone was only near: {now, app}, sent once it connects
     this.invitedAt = 0;
     this.ipa = ''; // an IPA chosen in this window for the next run (builds that install other apps)
@@ -122,8 +124,7 @@ class IosSign extends EventEmitter {
       const state = cleanState(m.state);
       const udid = this._udid();
       if (!state || !udid || !this._keep()) return;
-      this.kept[udid] = state;
-      this._saveKept();
+      this._putKept(udid, state);
       this.emit('change');
     });
     on(T.STOP, () => { if (this.run && this.run.from === 'phone') this.stop(); });
@@ -156,6 +157,28 @@ class IosSign extends EventEmitter {
   }
 
   set kept(v) { this._kept = v; }
+
+  // What the window and the timers need about a kept copy (the Apple ID, how long the session lasts)
+  // is kept in the plain settings, so the vault itself (a Keychain prompt on a Mac) is only opened
+  // when a refresh actually uses the copy, or a new one is stored.
+  _factsOf(udid) {
+    if (!udid || !this._keep()) return null;
+    const all = this.cfg().keptFacts;
+    if (all && typeof all === 'object') return all[udid] || null;
+    if (this._kept) return this._kept[udid] ? stateFacts(this._kept[udid]) : null;
+    // Kept before these facts were: there is a copy when the vault file is there.
+    return this.vault && this.vault.exists && this.vault.exists() ? { signedIn: true, email: '', until: 0 } : null;
+  }
+
+  _hasKept(udid) { return !!this._factsOf(udid); }
+
+  // A state to keep: the vault is written only when it changed (the iPhone sends its copy each time).
+  _putKept(udid, state) {
+    const h = crypto.createHash('sha256').update(JSON.stringify(state)).digest('hex');
+    if ((this.cfg().keptHash || {})[udid] === h) return;
+    this.kept[udid] = state;
+    this._saveKept();
+  }
 
   // Keep a copy: on by default, but only ever while TwinDesk iPhone is on and there is a vault.
   _keep() {
@@ -213,7 +236,7 @@ class IosSign extends EventEmitter {
       session: this._ios() ? { id: str(this.link.current.id, 64), name: str(this.link.current.name, 80) } : null,
       apps: ((udid && this.apps[udid]) || []).map((a) => ({ ...a, cached: !!this._cached(a.bundleId) })),
       phone: this.phone,
-      kept: udid && this.kept[udid] ? stateFacts(this.kept[udid]) : null,
+      kept: this._factsOf(udid),
       pending: !!(this.pending && this.pending.udid === udid),
       ids: this.ids || null, twindeskIpa: !!this._twindeskIpa(udid),
       ipa: this.ipa ? path.basename(this.ipa) : '',
@@ -299,7 +322,7 @@ class IosSign extends EventEmitter {
   // The Apple ID's app IDs, read with this computer's copy of the session (nothing is changed at Apple).
   async listIds() {
     const udid = this._udid();
-    const state = udid && this._keep() ? this.kept[udid] : null;
+    const state = this._hasKept(udid) ? this.kept[udid] : null;
     if (!this.info || this.idsBusy) return;
     if (!state) { this.ids = { error: 'View app IDs needs the developer session stored on this computer' }; return this._changed(); }
     this.idsBusy = true;
@@ -308,7 +331,7 @@ class IosSign extends EventEmitter {
     try {
       const out = await this._lines({ op: 'appids', state });
       const st = out.find((x) => x.ev === 'state');
-      if (st && cleanState(st.state) && this._keep()) { this.kept[udid] = cleanState(st.state); this._saveKept(); }
+      if (st && cleanState(st.state) && this._keep()) this._putKept(udid, cleanState(st.state));
       const v = out[out.length - 1] || {};
       this.ids = v.ev === 'appids' ? {
         at: Date.now(), team: str(v.team, 20), teamName: str(v.teamName, 100),
@@ -328,6 +351,15 @@ class IosSign extends EventEmitter {
     const f = path.join(this.cacheDir, TWINDESK_IPA);
     try { if (fs.statSync(f).isFile()) return f; } catch {}
     return this._cached(((this.apps[udid] || []).find((a) => a.twindesk) || {}).bundleId);
+  }
+
+  // A refresh of an app that is on the device: the helper installs Apple's new profiles only, and
+  // signs and installs the app again only when that can't be done (AltStore refreshes the same way).
+  _refreshOnly(req, udid, bundleId) {
+    const apps = this.apps[udid] || [];
+    const app = bundleId ? apps.find((a) => a.bundleId === bundleId) : apps.find((a) => a.twindesk);
+    if (app) req.profile_only = app.bundleId;
+    return req;
   }
 
   // A run that installs TwinDesk itself: from the kept copy, else downloaded and then kept.
@@ -420,7 +452,7 @@ class IosSign extends EventEmitter {
         if (toPhone) break; // sealed: the iPhone's to open
         this._gotState(r.udid, cleanState(ev.state));
         return;
-      case 'done': r.finished = { expires: Number(ev.expires) || 0, bundleId: str(ev.bundleId), device: str(ev.device, 80) }; break;
+      case 'done': r.finished = { expires: Number(ev.expires) || 0, bundleId: str(ev.bundleId), device: str(ev.device, 80), profileOnly: ev.profileOnly === true }; break;
       case 'error': r.failed = { kind: str(ev.kind, 20) || 'other', code: Number.isFinite(ev.code) ? ev.code : null, message: str(ev.message, 300), detail: str(ev.detail, 300) }; break;
       default: return;
     }
@@ -444,10 +476,7 @@ class IosSign extends EventEmitter {
   _gotState(udid, state) {
     if (!state || !udid) return;
     this.pending = { udid, state };
-    if (this._keep()) {
-      this.kept[udid] = state;
-      this._saveKept();
-    }
+    if (this._keep()) this._putKept(udid, state);
     this._handOver();
   }
 
@@ -520,8 +549,8 @@ class IosSign extends EventEmitter {
     // An app installed from here before, by its kept IPA; TwinDesk itself too when its IPA is kept
     // (a build installed from a file stays that build), else TwinDesk's latest release.
     const again = m.app ? this._cached(str(m.app)) : '';
-    if (!m.app && !m.ipa) this._twinDesk(req, udid);
-    else if (again && this.info.anyIpa) req.ipa = again;
+    if (!m.app && !m.ipa) { this._twinDesk(req, udid); this._refreshOnly(req, udid); }
+    else if (again && this.info.anyIpa) { req.ipa = again; this._refreshOnly(req, udid, str(m.app)); }
     else if (m.app) return fail({ kind: 'other', message: 'This computer doesn’t have that app’s IPA' });
     else if (m.ipa) {
       if (!this.info.anyIpa) return fail({ kind: 'other', message: 'This computer’s TwinDesk only installs TwinDesk' });
@@ -536,7 +565,7 @@ class IosSign extends EventEmitter {
     const udid = this._ready((e) => { this.last = { error: e, from: 'here' }; this.emit('change'); });
     if (!udid) return;
     const req = { op: 'install', udid, email: str(email, 200), password: str(password, 500) };
-    const known = (this.pending && this.pending.udid === udid && this.pending.state) || this.kept[udid];
+    const known = (this.pending && this.pending.udid === udid && this.pending.state) || (this._hasKept(udid) ? this.kept[udid] : null);
     if (known) req.state = known; // the same certificate and identity as before
     if (this.ipa) req.ipa = this.ipa;
     else this._twinDesk(req, udid);
@@ -549,17 +578,20 @@ class IosSign extends EventEmitter {
     const udid = this._ready((e) => { this.last = { error: e, from: 'kept' }; this.emit('change'); });
     if (!udid) return;
     if (!this.kept[udid]) return;
+    if (!this.cfg().keptFacts) this._saveFacts(); // a copy kept before the facts were
     const req = { op: 'install', udid, state: this.kept[udid] };
     if (this.ipa) req.ipa = this.ipa;
     else this._twinDesk(req, udid);
+    if (!this.ipa || this.only) this._refreshOnly(req, udid, this.only); // a new IPA chosen: installed as it is
     this.ipa = '';
+    this.only = '';
     this._start({ from: 'kept', udid }, req);
   }
 
   // Refresh now, whichever way there is: the kept copy, or the iPhone's app.
   refresh() {
     const udid = this._udid();
-    if (udid && this._keep() && this.kept[udid]) return this.refreshKept();
+    if (this._hasKept(udid)) return this.refreshKept();
     if (this._ios() && this.phone && this.phone.signedIn && !this.ipa) return this._want({ now: true });
     // The iPhone is only near over Bluetooth: it's invited, and asked once it's back.
     if (!this._ios() && this._near().length) {
@@ -577,7 +609,7 @@ class IosSign extends EventEmitter {
     const udid = this._udid();
     if (!file || !udid || this.run || !this.info || !this.info.anyIpa) return;
     this.tried.set(`${udid} ${bundleId}`, Date.now());
-    if (this._keep() && this.kept[udid] && stateFacts(this.kept[udid]).signedIn) { this.ipa = file; return this.refreshKept(); }
+    if ((this._factsOf(udid) || {}).signedIn) { this.ipa = file; this.only = bundleId; return this.refreshKept(); }
     if (this._ios() && this.phone && this.phone.signedIn) this._want({ now: true, app: bundleId });
   }
 
@@ -644,7 +676,7 @@ class IosSign extends EventEmitter {
       return;
     }
     const viaPhone = this._ios() && this.phone && this.phone.signedIn && this.phone.auto;
-    const viaCopy = !!udid && this._keep() && this.kept[udid] && stateFacts(this.kept[udid]).signedIn;
+    const viaCopy = !!(this._factsOf(udid) || {}).signedIn;
     if (!viaPhone && !viaCopy) return;
     if (phoneDue) {
       this.tried.set(`phone ${this.link.current.id}`, Date.now());
@@ -653,7 +685,7 @@ class IosSign extends EventEmitter {
     if (!due.twindesk && this._cached(due.bundleId) && this.info.anyIpa) {
       this.tried.set(`${udid} ${due.bundleId}`, Date.now());
       const file = this._cached(due.bundleId);
-      if (viaCopy) { this.ipa = file; return this.refreshKept(); }
+      if (viaCopy) { this.ipa = file; this.only = due.bundleId; return this.refreshKept(); }
       return this._want({ app: due.bundleId, expires: due.expires });
     }
     if (!due.twindesk) return;
@@ -710,9 +742,21 @@ class IosSign extends EventEmitter {
     }
   }
 
+  _saveFacts() {
+    const kept = this._kept || {};
+    const facts = {};
+    const hash = {};
+    for (const [u, st] of Object.entries(kept)) {
+      facts[u] = stateFacts(st);
+      hash[u] = crypto.createHash('sha256').update(JSON.stringify(st)).digest('hex');
+    }
+    this.setCfg({ keptFacts: facts, keptHash: hash });
+  }
+
   _saveKept() {
     if (!this.vault) return;
     const kept = this._kept || {};
+    this._saveFacts();
     this.vault.save(Object.keys(kept).length ? JSON.stringify(kept) : '');
   }
 

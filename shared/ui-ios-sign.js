@@ -31,7 +31,7 @@
   const STEPS = [
     ['find', 'Locating the device'], ['cached', 'Using the stored TwinDesk IPA'], ['download', 'Downloading TwinDesk'], ['signin', 'Signing in to Apple'],
     ['session', 'Restoring the Apple session'], ['register', 'Registering the device'], ['cert', 'Getting the certificate'],
-    ['appid', 'Registering the app ID'], ['profile', 'Getting the provisioning profile'], ['sign', 'Signing the app'], ['install', 'Installing'],
+    ['appid', 'Registering the app ID'], ['profile', 'Getting the provisioning profile'], ['installprofile', 'Installing the provisioning profiles'], ['sign', 'Signing the app'], ['install', 'Installing'],
   ];
   const AHEAD = ['register', 'cert', 'appid', 'profile', 'sign', 'install']; // always still to come until seen
 
@@ -283,7 +283,7 @@
             const e = last.error;
             result.replaceChildren(...(e ? [el('strong', { text: tr(e.message || 'The operation failed') }),
               e.detail && e.detail !== e.message ? el('div', { text: tr(e.detail) }) : null, e.code != null ? el('div', { text: tr('Apple error code: {code}', { code: e.code }) }) : null].filter(Boolean)
-              : last.done ? [el('div', { text: tr('Installed on {device}. Valid until {date}.', { device: last.done.device || devName, date: new Date((last.done.expires || 0) * 1000).toLocaleString() }) })]
+              : last.done ? [el('div', { text: tr(last.done.profileOnly ? 'Refreshed on {device} without reinstalling. Valid until {date}.' : 'Installed on {device}. Valid until {date}.', { device: last.done.device || devName, date: new Date((last.done.expires || 0) * 1000).toLocaleString() }) })]
                 : [el('div', { text: tr(last.info) })]));
           }
         }

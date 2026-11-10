@@ -118,8 +118,8 @@ struct SignerView: View {
     }
 
     // The run's steps: done ones ticked, the one running with a spinner (and its percent), the ones to come dimmed.
-    private static let ahead = ["register", "cert", "appid", "profile", "sign", "install"]
-    private static let order = ["upload", "find", "cached", "download", "signin", "session", "register", "cert", "appid", "profile", "sign", "install"]
+    private static let ahead = ["register", "cert", "appid", "profile", "installprofile", "sign", "install"]
+    private static let order = ["upload", "find", "cached", "download", "signin", "session", "register", "cert", "appid", "profile", "installprofile", "sign", "install"]
 
     private var runCard: some View {
         let steps = Self.order.filter { s.done.contains($0) || Self.ahead.contains($0) }
@@ -269,6 +269,7 @@ struct SignerView: View {
         case "cert": return tr("Getting the certificate…")
         case "appid": return tr("Registering the app ID…")
         case "profile": return tr("Getting the provisioning profile…")
+        case "installprofile": return tr("Installing the provisioning profiles…")
         case "sign": return tr("Signing the app…")
         case "install": return tr("Installing…")
         default: return tr("Working…")

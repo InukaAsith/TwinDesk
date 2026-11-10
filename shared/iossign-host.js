@@ -40,6 +40,7 @@ function create({ app, safeStorage, link, near, usbSerials, onChange }) {
   const possible = process.platform !== 'linux' || sealed();
   const vault = possible ? {
     possible,
+    exists: () => fs.existsSync(vaultFile), // no Keychain asked
     load() {
       try { return fs.existsSync(vaultFile) && sealed() ? safeStorage.decryptString(fs.readFileSync(vaultFile)) : ''; } catch { return ''; }
     },

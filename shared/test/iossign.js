@@ -223,6 +223,31 @@ const until = async (what, fn) => {
   assert.ok(!reqs[2].twindesk_ipa && !reqs[2].save_ipa, 'Store IPAs off: nothing kept');
   r.sign.close();
 
+  // Refresh of an installed TwinDesk: profiles only (the helper reinstalls when it can't)
+  r = rig({ keep: true }, { cacheDir });
+  await until('the apps', () => r.sign.view.apps.length === 1);
+  const reqs2 = [];
+  r.sign._start = (run, req) => reqs2.push(req);
+  r.sign.kept[UDID] = { email: 'a@b.c', xcode_token: 't', xcode_token_expiry: String(FUTURE) };
+  r.sign.refreshKept();
+  assert.strictEqual(reqs2[0].profile_only, 'com.twindesk.ios.ABCDEF1234');
+  r.sign.close();
+
+  // The vault is opened only to use or change the copy: the window reads the facts from the settings
+  r = rig({ keep: true });
+  await until('the device', () => r.sign.view.udid === UDID && r.sign.view.available);
+  r.link.emit(T.KEEP, { state: { email: 'a@b.c', xcode_token: 'p', xcode_token_expiry: String(FUTURE) } });
+  const saved = r.vault();
+  assert.ok(saved.includes('"p"'));
+  const later = rig({ ...r.cfg() });
+  await until('the device', () => later.sign.view.udid === UDID && later.sign.view.available);
+  assert.strictEqual(later.sign.view.kept.signedIn, true);
+  assert.strictEqual(later.sign.view.kept.email, 'a@b.c');
+  later.link.emit(T.KEEP, { state: { email: 'a@b.c', xcode_token: 'p', xcode_token_expiry: String(FUTURE) } });
+  assert.strictEqual(later.loads(), 0, 'the same copy again: the vault isn’t opened');
+  r.sign.close();
+  later.sign.close();
+
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('iossign: ok');
   process.exit(0);
