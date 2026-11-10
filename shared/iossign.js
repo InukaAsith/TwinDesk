@@ -67,7 +67,8 @@ function stateFacts(state) {
 }
 
 class IosSign extends EventEmitter {
-  constructor({ link, bins, usbSerials, cfg, setCfg, vault }) {
+  // seed: a state made outside the app (ios-signer/try.sh), handed to the iPhone's app like one made here.
+  constructor({ link, bins, usbSerials, cfg, setCfg, vault, seed }) {
     super();
     Object.assign(this, { link, usbSerials: usbSerials || (() => []), cfg, setCfg, vault: vault || null });
     this.bin = (bins || []).find((b) => { try { return fs.statSync(b).isFile(); } catch { return false; } }) || '';
@@ -81,6 +82,7 @@ class IosSign extends EventEmitter {
     this.tried = new Map(); // udid -> when an automatic refresh last started
     this.kept = this._loadKept(); // udid -> state
     this.ipa = ''; // an IPA chosen in this window for the next run (builds that install other apps)
+    this.seed = cleanState(seed);
     this.stopped = false;
 
     link.on('welcome', () => { this.phone = null; this._look(); });
@@ -204,6 +206,7 @@ class IosSign extends EventEmitter {
       this.devices = d && Array.isArray(d.devices) ? d.devices.slice(0, 20).filter((x) => x && typeof x.udid === 'string' && /^[0-9A-Fa-f-]{20,64}$/.test(x.udid))
         .map((x) => ({ udid: x.udid, name: str(x.name, 80), usb: x.usb === true })) : [];
       const udid = this._udid();
+      if (udid && this.seed && !this.pending) { this.pending = { udid, state: this.seed }; this.seed = null; this._handOver(); }
       if (udid) {
         const a = await this._once({ op: 'apps', udid });
         if (a && Array.isArray(a.apps)) {
@@ -304,6 +307,7 @@ class IosSign extends EventEmitter {
     if (!this.pending || !this._ios() || this._udid() !== this.pending.udid) return;
     this.link.send({ t: T.KEEP, state: this.pending.state });
     this.pending = null;
+    this.emit('handed');
   }
 
   _end(failed, done) {

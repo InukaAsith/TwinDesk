@@ -44,8 +44,13 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
     },
   } : null;
   if (!vault) { cfg.keep = false; try { fs.rmSync(vaultFile, { force: true }); } catch {} }
+  // A developer's test run (ios-signer/try.sh) left its state in a file: the iPhone's app takes it
+  // over the first time it is connected, and the file goes. Never there in a packaged app.
+  const seedFile = path.join(ROOT, '.try-state.json');
+  let seed = null;
+  try { seed = JSON.parse(fs.readFileSync(seedFile, 'utf8')); } catch {}
   const sign = new IosSign({
-    link, bins: BINS, usbSerials, vault,
+    link, bins: BINS, usbSerials, vault, seed,
     cfg: () => cfg,
     setCfg: (patch) => {
       cfg = { ...cfg, ...patch };
@@ -53,6 +58,7 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
     },
   });
   sign.on('change', onChange);
+  if (seed) sign.once('handed', () => { try { fs.rmSync(seedFile, { force: true }); } catch {} });
   return sign;
 }
 
