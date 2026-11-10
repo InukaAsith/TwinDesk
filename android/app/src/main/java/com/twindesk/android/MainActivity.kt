@@ -19,8 +19,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -324,7 +322,7 @@ fun App(core: Core, resumed: Int) {
                 Sidebar(core, v, tab) { tab = it }
                 // the page in a rounded sheet beside the sidebar, as the phone's under its branding
                 Box(Modifier.weight(1f).fillMaxHeight().padding(top = 10.dp, end = 10.dp, bottom = 10.dp).clip(RoundedCornerShape(28.dp)).background(pal.sheet)) {
-                    Page(core, v, tab, Modifier.fillMaxSize())
+                    Page(core, v, resumed, tab, Modifier.fillMaxSize())
                 }
             }
         } else {
@@ -349,7 +347,7 @@ fun App(core: Core, resumed: Int) {
                 // The page in a big rounded sheet under the branding; the bar floats at its bottom.
                 Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(pal.sheet)) {
                 if (more) MoreList(core, v, BOTTOM, Modifier.weight(1f)) { go(it, false) }
-                else Page(core, v, tab, Modifier.weight(1f))
+                else Page(core, v, resumed, tab, Modifier.weight(1f))
                 // A Material navigation bar, as Google's own apps have it: line icons, the selected
                 // one in a pill of the accent colour, labels under them, the bar itself rounded and
                 // floating off the edges (the tablet keeps the Mac-like sidebar with coloured tiles).
@@ -505,7 +503,7 @@ private fun MoreList(core: Core, v: Int, BOTTOM: List<Tab>, modifier: Modifier, 
 }
 
 @Composable
-private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
+private fun Page(core: Core, v: Int, resumed: Int, tab: Tab, modifier: Modifier) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
         Column(Modifier.widthIn(max = 820.dp)) {
@@ -522,7 +520,7 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
                 Tab.Keyboard -> KeyboardPage(core, v)
                 Tab.Remote -> RemotePage(core, v)
                 Tab.Clipboard -> ClipboardPage(core, v)
-                Tab.Notifications -> NotificationsPage(core, v)
+                Tab.Notifications -> NotificationsPage(core, v + resumed)
                 Tab.Files -> FilesPage(core, v)
                 Tab.Rezume -> RezumePage(core, v)
                 Tab.Sound -> SoundPage(core, v)
@@ -1419,8 +1417,6 @@ private fun NotificationsPage(core: Core, v: Int) {
     if (core.host == null) NotConnected(core, v)
     // Read here, outside the card lambdas. Those lambdas are remembered, and their only capture was
     // this same Core, so a switch, a count or an access row stayed put until the page was left.
-    // Back from Settings does not bump Core.version; the lifecycle state redraws access and pairing.
-    @Suppress("UNUSED_VARIABLE") val life = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value
     val supported = core.notifs.supported
     val access = core.notifs.hasAccess
     val outOn = core.sync.get("notifs", "out")

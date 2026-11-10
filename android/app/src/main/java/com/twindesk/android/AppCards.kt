@@ -89,11 +89,11 @@ private fun Choice(items: List<Pair<String, String>>, selected: String, onPick: 
 
 @Composable
 fun NotifAppsCard(core: Core, name: String) {
-    val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes
     val n = core.notifs
     var q by rememberSaveable { mutableStateOf("") }
     var all by rememberSaveable { mutableStateOf(false) }
-    val seen = remember(v) { n.apps().map { it.first }.toSet() } // the set changes; the Core object does not
+    val seen = core.store.prefsSet("notifs.apps")
     val apps = core.appList.get()
     val list = apps.filter { q.isBlank() || it.label.contains(q.trim(), true) || it.pkg.contains(q.trim(), true) }
         // The ones that had notifications first, then the rest, each by name.
