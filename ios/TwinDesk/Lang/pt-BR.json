@@ -762,8 +762,8 @@
   "Progress": "Progresso",
   "Apple has refused sign-ins from tools like this one, locked Apple IDs for a while, and stopped some from signing apps at all. Use an Apple ID made for this, not your main one.": "A Apple já recusou logins de ferramentas como esta, bloqueou Apple IDs por um tempo e impediu alguns de assinar apps. Use um Apple ID criado para isso, não o principal.",
   "Not recommended": "Não recomendado",
-  "Turn it on in TwinDesk on {name}: TwinDesk iPhone › Install TwinDesk and refresh it with the iOS app. Its TwinDesk has to be a version with TwinDesk iPhone.": "Ative no TwinDesk do {name}: TwinDesk iPhone › Instalar o TwinDesk e renová-lo pelo app iOS. O TwinDesk de lá precisa ser uma versão com TwinDesk iPhone.",
-  "TwinDesk is signed again by the computer before its 7 days run out.": "O computador assina o TwinDesk de novo antes que os 7 dias acabem.",
+  "TwinDesk on {name} turns this on as well once it is connected. If it doesn’t, update TwinDesk on {name} to a version that includes TwinDesk iPhone.": "O TwinDesk em {name} também ativa isto quando estiver conectado. Se não ativar, atualize o TwinDesk em {name} para uma versão que inclua o TwinDesk iPhone.",
+  "The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer.": "O computador assina o TwinDesk de novo antes que o perfil de provisionamento de 7 dias expire. Ligar ou desligar aqui faz o mesmo no TwinDesk do computador.",
   "We recommend AltStore. If you already use it, keep using it.": "Recomendamos o AltStore. Se você já usa, continue usando.",
   "{name} doesn’t see this device for installing right now. It looks again when a refresh starts; if it still can’t, connect the cable once, unlock and tap Trust, and turn on Wi-Fi sync.": "O {name} não vê este dispositivo para instalar agora. Ele procura de novo quando a renovação começa; se ainda não vir, conecte o cabo uma vez, desbloqueie, toque em Confiar e ative a sincronização por Wi‑Fi."
 }

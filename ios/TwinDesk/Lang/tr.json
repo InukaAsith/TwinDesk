@@ -762,8 +762,8 @@
   "Progress": "İlerleme",
   "Apple has refused sign-ins from tools like this one, locked Apple IDs for a while, and stopped some from signing apps at all. Use an Apple ID made for this, not your main one.": "Apple bu tür araçlardan gelen girişleri reddetti, Apple Kimliklerini bir süre kilitledi ve bazılarının uygulama imzalamasını tamamen durdurdu. Ana Apple Kimliğinizi değil, bunun için açılmış bir tane kullanın.",
   "Not recommended": "Önerilmez",
-  "Turn it on in TwinDesk on {name}: TwinDesk iPhone › Install TwinDesk and refresh it with the iOS app. Its TwinDesk has to be a version with TwinDesk iPhone.": "{name} üzerindeki TwinDesk’te açın: TwinDesk iPhone › TwinDesk’i yükle ve iOS uygulamasıyla yenile. Oradaki TwinDesk, TwinDesk iPhone içeren bir sürüm olmalı.",
-  "TwinDesk is signed again by the computer before its 7 days run out.": "TwinDesk, 7 günü dolmadan bilgisayar tarafından yeniden imzalanır.",
+  "TwinDesk on {name} turns this on as well once it is connected. If it doesn’t, update TwinDesk on {name} to a version that includes TwinDesk iPhone.": "{name} üzerindeki TwinDesk, bağlandığında bunu da açar. Açmazsa {name} üzerindeki TwinDesk'i TwinDesk iPhone içeren bir sürüme güncelleyin.",
+  "The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer.": "Bilgisayar, 7 günlük hazırlık profilinin süresi dolmadan TwinDesk'i yeniden imzalar. Bunu açıp kapatmak, bilgisayardaki TwinDesk'te de aynısını yapar.",
   "We recommend AltStore. If you already use it, keep using it.": "AltStore’u öneriyoruz. Zaten kullanıyorsanız kullanmaya devam edin.",
   "{name} doesn’t see this device for installing right now. It looks again when a refresh starts; if it still can’t, connect the cable once, unlock and tap Trust, and turn on Wi-Fi sync.": "{name} şu anda bu aygıtı yükleme için göremiyor. Yenileme başladığında yeniden bakar; yine göremezse kabloyu bir kez bağlayın, kilidi açıp Güven’e dokunun ve Wi‑Fi eşzamanlamayı açın."
 }

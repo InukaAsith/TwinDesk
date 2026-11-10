@@ -762,8 +762,8 @@
   "Progress": "进度",
   "Apple has refused sign-ins from tools like this one, locked Apple IDs for a while, and stopped some from signing apps at all. Use an Apple ID made for this, not your main one.": "Apple 曾拒绝此类工具的登录、暂时锁定 Apple ID，甚至让部分 Apple ID 无法再签名应用。请使用专门为此创建的 Apple ID，而不是你的主 Apple ID。",
   "Not recommended": "不推荐",
-  "Turn it on in TwinDesk on {name}: TwinDesk iPhone › Install TwinDesk and refresh it with the iOS app. Its TwinDesk has to be a version with TwinDesk iPhone.": "请在 {name} 上的 TwinDesk 中打开：TwinDesk iPhone › 安装 TwinDesk 并通过 iOS 应用刷新。那里的 TwinDesk 必须是带有 TwinDesk iPhone 的版本。",
-  "TwinDesk is signed again by the computer before its 7 days run out.": "在 7 天到期之前，由电脑重新为 TwinDesk 签名。",
+  "TwinDesk on {name} turns this on as well once it is connected. If it doesn’t, update TwinDesk on {name} to a version that includes TwinDesk iPhone.": "连接后，{name} 上的 TwinDesk 也会打开此功能。如果没有，请将 {name} 上的 TwinDesk 更新到包含 TwinDesk iPhone 的版本。",
+  "The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer.": "电脑会在 7 天描述文件到期之前重新为 TwinDesk 签名。在此处打开或关闭，电脑上的 TwinDesk 也会同步打开或关闭。",
   "We recommend AltStore. If you already use it, keep using it.": "我们推荐 AltStore。如果你已经在用，请继续使用。",
   "{name} doesn’t see this device for installing right now. It looks again when a refresh starts; if it still can’t, connect the cable once, unlock and tap Trust, and turn on Wi-Fi sync.": "{name} 现在还看不到此设备，无法安装。刷新开始时会再找一次；如果仍然找不到，请连接一次数据线、解锁并轻点“信任”，然后打开无线同步。"
 }

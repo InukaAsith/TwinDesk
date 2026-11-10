@@ -762,8 +762,8 @@
   "Progress": "Ход",
   "Apple has refused sign-ins from tools like this one, locked Apple IDs for a while, and stopped some from signing apps at all. Use an Apple ID made for this, not your main one.": "Apple отклоняла входы из подобных инструментов, временно блокировала Apple ID, а некоторым совсем запрещала подписывать приложения. Используйте Apple ID, созданный для этого, а не основной.",
   "Not recommended": "Не рекомендуется",
-  "Turn it on in TwinDesk on {name}: TwinDesk iPhone › Install TwinDesk and refresh it with the iOS app. Its TwinDesk has to be a version with TwinDesk iPhone.": "Включите это в TwinDesk на {name}: TwinDesk iPhone › Установить TwinDesk и обновлять его из приложения iOS. TwinDesk там должен быть версией с TwinDesk iPhone.",
-  "TwinDesk is signed again by the computer before its 7 days run out.": "Компьютер заново подписывает TwinDesk до истечения его 7 дней.",
+  "TwinDesk on {name} turns this on as well once it is connected. If it doesn’t, update TwinDesk on {name} to a version that includes TwinDesk iPhone.": "TwinDesk на {name} тоже включит это после подключения. Если этого не произошло, обновите TwinDesk на {name} до версии с TwinDesk iPhone.",
+  "The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer.": "Компьютер заново подписывает TwinDesk до истечения 7-дневного профиля обеспечения. Включение или выключение здесь делает то же самое в TwinDesk на компьютере.",
   "We recommend AltStore. If you already use it, keep using it.": "Мы рекомендуем AltStore. Если вы уже им пользуетесь, продолжайте.",
   "{name} doesn’t see this device for installing right now. It looks again when a refresh starts; if it still can’t, connect the cable once, unlock and tap Trust, and turn on Wi-Fi sync.": "{name} сейчас не видит это устройство для установки. Он поищет снова, когда начнётся обновление; если не найдёт, подключите кабель один раз, разблокируйте, нажмите «Доверять» и включите синхронизацию по Wi‑Fi."
 }

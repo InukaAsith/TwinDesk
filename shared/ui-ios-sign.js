@@ -77,9 +77,9 @@
 
       // ---- the switch; the warning under it while it's off ----
       const onSw = UI.switch((v) => { if (v) { onSw.set(false); act({ a: 'enable' }); } else act({ a: 'set', on: false }); },
-        { label: tr('Install TwinDesk and refresh it with the iOS app') });
-      const onCard = UI.card('', [UI.row(tr('Install TwinDesk and refresh it with the iOS app'),
-        tr('{Computer} installs TwinDesk on your iPhone or iPad and re-signs it before its 7-day provisioning profile expires, on request from the TwinDesk iOS app. Turning this off deletes all signing data stored on {computer}.', { Computer: Here, computer: here }),
+        { label: tr('Install TwinDesk on iOS (free Apple ID) and auto-refresh it with {computer}', { computer: here }) });
+      const onCard = UI.card('', [UI.row(tr('Install TwinDesk on iOS (free Apple ID) and auto-refresh it with {computer}', { computer: here }),
+        tr('{Computer} installs TwinDesk on your iPhone or iPad and re-signs it before its 7-day provisioning profile expires, on request from the TwinDesk iOS app. Switching this on or off does the same in the iOS app; turning it off deletes all signing data stored on {computer}.', { Computer: Here, computer: here }),
         [onSw.el], { literal: true })]);
       const warn = el('div', { class: 'ios-warn', attrs: { role: 'note' } }, [
         warnIcon(),

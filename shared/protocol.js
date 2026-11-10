@@ -349,6 +349,7 @@
       SIGN_WANT: 'sign.want', // computer->iPhone {now?, app?: bundleId}: TwinDesk there runs out soon (now: Refresh was clicked here)
       SIGN_KEEP: 'sign.keep', // either way {state}: the signing state, for the other side to keep (the computer only with Keep a copy on)
       SIGN_STOP: 'sign.stop', // iPhone->computer: stop the run
+      SIGN_SET: 'sign.set', // iPhone->computer {on}: App refresh switched there; the computer's TwinDesk iPhone follows (and sign.info {on, switched} the other way)
       // Resume: `welcome` carries {resume: key}; the guest opens a second socket (another path to the
       // host, e.g. the network once both are on one) with hello {..., resume: key} and gets welcome
       // {resumed: true}: from then on both sides send on it, and the first socket stays as the

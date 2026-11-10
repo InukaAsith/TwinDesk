@@ -39,7 +39,7 @@ const { EventEmitter } = require('events');
 
 const T = {
   STATE: 'sign.state', INFO: 'sign.info', START: 'sign.start', KEY: 'sign.key', BOX: 'sign.box',
-  EV: 'sign.ev', WANT: 'sign.want', KEEP: 'sign.keep', STOP: 'sign.stop',
+  EV: 'sign.ev', WANT: 'sign.want', KEEP: 'sign.keep', STOP: 'sign.stop', SET: 'sign.set',
 };
 const TWINDESK = /^com\.twindesk\.ios\.[A-Z0-9]{6,20}$/; // as signed: its bundle id and the team's
 const TWINDESK_IPA = 'TwinDesk.ipa'; // TwinDesk's own IPA in the kept IPAs (cacheDir)
@@ -89,6 +89,7 @@ class IosSign extends EventEmitter {
     this.tried = new Map(); // udid -> when an automatic refresh last started
     this._kept = null; // udid -> state, read from the vault the first time it's needed (kept)
     this.only = ''; // refreshKept: the app it refreshes (its kept IPA in this.ipa)
+    this.switched = false; // on/off was just changed here: said to the iPhone once (sign.info)
     this.queued = null; // a refresh asked for while the iPhone was only near: {now, app}, sent once it connects
     this.invitedAt = 0;
     this.ipa = ''; // an IPA chosen in this window for the next run (builds that install other apps)
@@ -111,6 +112,8 @@ class IosSign extends EventEmitter {
       this.emit('change');
     });
     on(T.START, (m) => this._phoneStart(m));
+    // Switched on or off in the iPhone's app (after its own warning): the same here, so the two agree.
+    on(T.SET, (m) => { if (m && typeof m.on === 'boolean') this.set({ on: m.on }, { fromPhone: true }); });
     on(T.BOX, (m) => {
       const r = this.run;
       if (!r || r.from !== 'phone' || !r.proc) return;
@@ -283,6 +286,9 @@ class IosSign extends EventEmitter {
     this.link.send({
       // Available once switched on here: the device is looked for when a refresh starts (it may be
       // seen over Wi-Fi only then). seen: the system sees it now (cable or Wi-Fi sync).
+      // on: switched on here (the iPhone's app follows it); switched: just now, by the person here
+      // (only then does an iPhone that is on follow it off).
+      on: v.on, switched: this.switched,
       t: T.INFO, available: v.on && v.ready, seen: !!v.udid, anyIpa: v.anyIpa, anisette: v.anisette, keep: v.on && v.keep, days: v.days,
       apps: v.apps, busy: !!v.run,
     });
@@ -290,6 +296,7 @@ class IosSign extends EventEmitter {
 
   _changed() {
     this._tellPhone();
+    this.switched = false;
     this.emit('change');
   }
 
@@ -696,11 +703,12 @@ class IosSign extends EventEmitter {
 
   // ---- settings ----
 
-  set(o) {
+  set(o, { fromPhone = false } = {}) {
     if (!o || typeof o !== 'object') return;
     const patch = {};
     if (typeof o.on === 'boolean') {
       patch.on = o.on;
+      if (!fromPhone && o.on !== (this.cfg().on === true)) this.switched = true;
       if (o.on) setImmediate(() => this._boot());
       else if (this.run) this._end({ kind: 'stopped', message: 'Stopped' });
       if (!o.on) { this._kept = {}; this._saveKept(); this.pending = null; this.queued = null; } // off: nothing of it stays here (the Keep a copy setting does)

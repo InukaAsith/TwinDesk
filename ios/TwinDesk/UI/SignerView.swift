@@ -64,7 +64,7 @@ struct SignerView: View {
     private var showSignIn: Bool { !s.running && (!s.facts.signedIn || s.needsSignIn) }
 
     private var toggle: some View {
-        ToggleRow(title: tr("App refresh"), detail: tr("TwinDesk is signed again by the computer before its 7 days run out."),
+        ToggleRow(title: tr("App refresh"), detail: tr("The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer."),
                   on: Binding(get: { s.on }, set: { if $0 { askOn = true } else { s.on = false } }))
             .glassCard()
     }
@@ -88,7 +88,7 @@ struct SignerView: View {
     private var unavailable: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardHeader(symbol: "signature", color: Page.signing.color, title: tr("{name} can’t sign yet", ["name": pc]))
-            Text(tr("Turn it on in TwinDesk on {name}: TwinDesk iPhone › Install TwinDesk and refresh it with the iOS app. Its TwinDesk has to be a version with TwinDesk iPhone.", ["name": pc]))
+            Text(tr("TwinDesk on {name} turns this on as well once it is connected. If it doesn’t, update TwinDesk on {name} to a version that includes TwinDesk iPhone.", ["name": pc]))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .glassCard()

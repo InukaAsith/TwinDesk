@@ -14,6 +14,9 @@
 //                            TwinDesk, which connects and runs the refresh by itself.
 //   sign.keep   ↔            the state: from a run typed on the computer, for this to keep; to a
 //                            computer with Keep a copy on (said in sign.info), its copy
+//   sign.set    → computer   App refresh switched here {on}: the computer's TwinDesk iPhone follows.
+//                            The other way, sign.info {on, switched}: on there turns it on here;
+//                            switched off there just now turns it off here.
 import Foundation
 import UIKit
 
@@ -65,10 +68,32 @@ final class Signer: Feature {
         set { core.store.setFlag("sign.auto", newValue); tell(); core.changed() }
     }
 
-    // Off until turned on in its page, behind its warning. Off: nothing is asked of the computer.
+    // Off until turned on, here (behind its warning) or on the computer (behind the same warning
+    // there): the two follow each other. Off: nothing is asked of the computer.
     var on: Bool {
         get { core.store.flag("sign.on", false) }
-        set { core.store.setFlag("sign.on", newValue); if !newValue { SignerVault.signOut(everything: false) }; tell(); core.changed() }
+        set { switchOn(newValue, here: true) }
+    }
+
+    // Switched here: the computer is told (now, or when it next connects). Switched there: followed,
+    // and the session here stays (turning it off here is what signs out).
+    private var told = Date.distantPast
+    private func switchOn(_ v: Bool, here: Bool) {
+        guard v != on else { return }
+        core.store.setFlag("sign.on", v)
+        if here {
+            if !v { SignerVault.signOut(everything: false) }
+            core.store.setFlag("sign.sync", true) // to tell the computer
+            sendSwitch()
+        }
+        tell()
+        core.changed()
+    }
+
+    private func sendSwitch() {
+        guard core.store.flag("sign.sync", false), core.send(msg("sign.set", ["on": on])) else { return }
+        core.store.setFlag("sign.sync", false)
+        told = Date()
     }
 
     var running: Bool { step != nil }
@@ -76,6 +101,7 @@ final class Signer: Feature {
 
     override func onWelcome(_ host: Computer, _ m: JSON) {
         available = false; apps = []; gaveCopy = false
+        sendSwitch() // switched here while it wasn't connected
         tell()
     }
 
@@ -211,6 +237,11 @@ final class Signer: Feature {
             }
             return false // Files' too
         case "sign.info":
+            // On there: on here too. Off there: only when switched off there just now (another
+            // computer that never turned it on doesn't turn it off here). Just told it ourselves: ours stands.
+            if m["on"] != nil, Date().timeIntervalSince(told) > 5 {
+                if m.bool("on") { switchOn(true, here: false) } else if m.bool("switched") { switchOn(false, here: false) }
+            }
             available = m.bool("available")
             seen = m.bool("seen")
             anyIpa = m.bool("anyIpa")

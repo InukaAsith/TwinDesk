@@ -248,6 +248,23 @@ const until = async (what, fn) => {
   r.sign.close();
   later.sign.close();
 
+  // On and off in step with the iPhone's App refresh
+  r = rig({ on: false });
+  r.link.emit(T.STATE, { signedIn: false });
+  assert.strictEqual(r.of(T.INFO).pop().on, false);
+  r.link.emit(T.SET, { on: true }); // switched on there (after its warning)
+  assert.strictEqual(r.cfg().on, true);
+  let info = r.of(T.INFO).pop();
+  assert.ok(info.on === true && info.switched === false, 'the iPhone did it: not echoed as a switch');
+  r.sign.set({ on: false }); // switched off here
+  info = r.of(T.INFO).find((m) => m.switched);
+  assert.ok(info && info.on === false, 'the iPhone is told it was switched off here');
+  r.link.emit(T.STATE, { signedIn: false });
+  assert.strictEqual(r.of(T.INFO).pop().switched, false, 'said once');
+  r.link.emit(T.SET, { on: 'yes' });
+  assert.strictEqual(r.cfg().on, false, 'only a real on/off');
+  r.sign.close();
+
   fs.rmSync(dir, { recursive: true, force: true });
   console.log('iossign: ok');
   process.exit(0);
