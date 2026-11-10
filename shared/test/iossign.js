@@ -231,6 +231,14 @@ const until = async (what, fn) => {
   r.sign.kept[UDID] = { email: 'a@b.c', xcode_token: 't', xcode_token_expiry: String(FUTURE) };
   r.sign.refreshKept();
   assert.strictEqual(reqs2[0].profile_only, 'com.twindesk.ios.ABCDEF1234');
+  // Another app without its IPA: refreshed with new profiles only, no download, no TwinDesk
+  r.sign.info.anyIpa = true;
+  r.sign.apps[UDID].push({ bundleId: 'com.example.App', name: 'App', expires: 1, twindesk: false });
+  r.sign.refreshApp('com.example.App');
+  assert.strictEqual(reqs2[1].profile_only, 'com.example.App');
+  assert.ok(reqs2[1].no_ipa === true && !reqs2[1].ipa && !reqs2[1].twindesk_ipa && !reqs2[1].save_ipa);
+  r.sign.refreshApp('com.not.there');
+  assert.strictEqual(reqs2.length, 2, 'only an app that is on the device');
   r.sign.close();
 
   // The vault is opened only to use or change the copy: the window reads the facts from the settings

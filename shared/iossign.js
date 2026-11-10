@@ -88,7 +88,8 @@ class IosSign extends EventEmitter {
     this.pending = null; // {udid, state}: made here, for the iPhone's app when it's connected
     this.tried = new Map(); // udid -> when an automatic refresh last started
     this._kept = null; // udid -> state, read from the vault the first time it's needed (kept)
-    this.only = ''; // refreshKept: the app it refreshes (its kept IPA in this.ipa)
+    this.only = ''; // refreshKept: the app it refreshes (its kept IPA in this.ipa, or noIpa)
+    this.noIpa = false;
     this.switched = false; // on/off was just changed here: said to the iPhone once (sign.info)
     this.queued = null; // a refresh asked for while the iPhone was only near: {now, app}, sent once it connects
     this.invitedAt = 0;
@@ -243,7 +244,7 @@ class IosSign extends EventEmitter {
       pending: !!(this.pending && this.pending.udid === udid),
       ids: this.ids || null, twindeskIpa: !!this._twindeskIpa(udid),
       ipa: this.ipa ? path.basename(this.ipa) : '',
-      run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need, seen: r.seen.slice(), ipa: r.ipa ? path.basename(r.ipa) : '' } : null,
+      run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need, seen: r.seen.slice(), note: r.note || '', ipa: r.ipa ? path.basename(r.ipa) : '' } : null,
       last: this.last,
     };
   }
@@ -459,6 +460,7 @@ class IosSign extends EventEmitter {
         if (toPhone) break; // sealed: the iPhone's to open
         this._gotState(r.udid, cleanState(ev.state));
         return;
+      case 'note': r.note = str(ev.message, 300); this._changed(); return; // said on this page only
       case 'done': r.finished = { expires: Number(ev.expires) || 0, bundleId: str(ev.bundleId), device: str(ev.device, 80), profileOnly: ev.profileOnly === true }; break;
       case 'error': r.failed = { kind: str(ev.kind, 20) || 'other', code: Number.isFinite(ev.code) ? ev.code : null, message: str(ev.message, 300), detail: str(ev.detail, 300) }; break;
       default: return;
@@ -503,7 +505,7 @@ class IosSign extends EventEmitter {
       this._cache(r, done);
       // The device this iPhone's app is on, for the next time it isn't on its cable.
       const cur = this.link.current;
-      if (r.from === 'phone' && cur && this._ios() && r.udid) this.setCfg({ device: { ...(this.cfg().device || {}), [cur.id]: r.udid } });
+      if (r.from === 'phone' && cur && cur.id && this._ios() && r.udid) this.setCfg({ device: { ...(this.cfg().device || {}), [cur.id]: r.udid } });
     }
     this.last = failed ? { error: failed, from: r.from } : { done: done || {}, from: r.from, at: Date.now() };
     if (failed && r.from === 'phone' && failed.kind === 'gone') this.last = null;
@@ -558,7 +560,8 @@ class IosSign extends EventEmitter {
     const again = m.app ? this._cached(str(m.app)) : '';
     if (!m.app && !m.ipa) { this._twinDesk(req, udid); this._refreshOnly(req, udid); }
     else if (again && this.info.anyIpa) { req.ipa = again; this._refreshOnly(req, udid, str(m.app)); }
-    else if (m.app) return fail({ kind: 'other', message: 'This computer doesn’t have that app’s IPA' });
+    else if (m.app && this.info.anyIpa && (this.apps[udid] || []).some((a) => a.bundleId === str(m.app))) { req.no_ipa = true; this._refreshOnly(req, udid, str(m.app)); }
+    else if (m.app) return fail({ kind: 'other', message: 'That app isn’t on the device' });
     else if (m.ipa) {
       if (!this.info.anyIpa) return fail({ kind: 'other', message: 'This computer’s TwinDesk only installs TwinDesk' });
       req.ipa = this._ipa({ path: str(m.ipa.path, 1000), size: Number(m.ipa.size) || 0, fromPhone: true });
@@ -588,10 +591,12 @@ class IosSign extends EventEmitter {
     if (!this.cfg().keptFacts) this._saveFacts(); // a copy kept before the facts were
     const req = { op: 'install', udid, state: this.kept[udid] };
     if (this.ipa) req.ipa = this.ipa;
+    else if (this.noIpa) req.no_ipa = true;
     else this._twinDesk(req, udid);
     if (!this.ipa || this.only) this._refreshOnly(req, udid, this.only); // a new IPA chosen: installed as it is
     this.ipa = '';
     this.only = '';
+    this.noIpa = false;
     this._start({ from: 'kept', udid }, req);
   }
 
@@ -611,12 +616,14 @@ class IosSign extends EventEmitter {
   }
 
   // One app again, from its kept IPA: with this computer's copy of the session, or by asking the iPhone.
+  // Without its IPA too: a refresh installs Apple's new profiles only, and the IPA is needed only
+  // when the app has to be signed again (the helper says so then).
   refreshApp(bundleId) {
     const file = this._cached(bundleId);
     const udid = this._udid();
-    if (!file || !udid || this.run || !this.info || !this.info.anyIpa) return;
+    if (!udid || this.run || !this.info || !this.info.anyIpa || !(this.apps[udid] || []).some((a) => a.bundleId === bundleId)) return;
     this.tried.set(`${udid} ${bundleId}`, Date.now());
-    if ((this._factsOf(udid) || {}).signedIn) { this.ipa = file; this.only = bundleId; return this.refreshKept(); }
+    if ((this._factsOf(udid) || {}).signedIn) { this.ipa = file; this.only = bundleId; this.noIpa = !file; return this.refreshKept(); }
     if (this._ios() && this.phone && this.phone.signedIn) this._want({ now: true, app: bundleId });
   }
 
@@ -689,10 +696,10 @@ class IosSign extends EventEmitter {
       this.tried.set(`phone ${this.link.current.id}`, Date.now());
       return this._want({ expires: this.phone.expires });
     }
-    if (!due.twindesk && this._cached(due.bundleId) && this.info.anyIpa) {
+    if (!due.twindesk && this.info.anyIpa) {
       this.tried.set(`${udid} ${due.bundleId}`, Date.now());
       const file = this._cached(due.bundleId);
-      if (viaCopy) { this.ipa = file; this.only = due.bundleId; return this.refreshKept(); }
+      if (viaCopy) { this.ipa = file; this.only = due.bundleId; this.noIpa = !file; return this.refreshKept(); }
       return this._want({ app: due.bundleId, expires: due.expires });
     }
     if (!due.twindesk) return;
@@ -728,7 +735,7 @@ class IosSign extends EventEmitter {
     }
     if (typeof o.udid === 'string' && this.devices.some((d) => d.udid === o.udid)) {
       const cur = this.link.current;
-      if (cur && this._ios()) patch.device = { ...(this.cfg().device || {}), [cur.id]: o.udid };
+      if (cur && cur.id && this._ios()) patch.device = { ...(this.cfg().device || {}), [cur.id]: o.udid };
       else patch.alone = o.udid;
     }
     this.setCfg(patch);

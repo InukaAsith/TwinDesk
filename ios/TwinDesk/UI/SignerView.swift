@@ -212,7 +212,7 @@ struct SignerView: View {
                         Text([a.version, a.teamName].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if a.cached && s.anyIpa && s.facts.signedIn && !s.running {
+                    if s.anyIpa && s.facts.signedIn && !s.running {
                         Button { s.refresh(app: a.id) } label: { Image(systemName: "arrow.clockwise") }.secondaryButton().controlSize(.small).accessibilityLabel(tr("Refresh now"))
                     }
                     Text(left(a.expires)).font(.caption.monospacedDigit()).foregroundStyle(a.expires - Date().timeIntervalSince1970 < 2 * 86400 ? TDColor.bad : .secondary)

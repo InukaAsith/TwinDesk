@@ -126,13 +126,17 @@
       const ipaClear = UI.button(tr('Use TwinDesk'), () => act({ a: 'ipa' }), 'small');
       const ipaRow = UI.row(tr('App to install'), '', [ipaBtn, ipaClear], { literalHint: true });
       const installHead = UI.row('', '', [], { literal: true });
-      const installCard = UI.card(tr('Install TwinDesk'), [
+      // TwinDesk already there: folded away behind one line (open while it isn't).
+      const installSum = el('summary', { text: tr('Reinstall TwinDesk or install another app') });
+      const installMore = el('details', { class: 'ios-more' }, [
+        installSum,
         installHead,
         UI.row('Apple ID', tr('Sent only to Apple. Not stored on {computer}.', { computer: here }), [email], { literal: true }),
         UI.row(tr('Password'), tr('Used once to sign in and never stored.'), [pass], { literal: true }),
         ipaRow,
         UI.row('', '', [installBtn]),
       ]);
+      const installCard = UI.card(tr('Install TwinDesk'), [installMore]);
 
       // ---- TwinDesk on the device ----
       const refreshBtn = UI.button(tr('Refresh now'), () => act({ a: 'refresh' }), 'primary');
@@ -154,12 +158,13 @@
         { value: 'all', label: tr('TwinDesk and installed IPAs') },
         { value: 'twindesk', label: tr('TwinDesk only') },
       ], (v) => act({ a: 'set', which: v }));
-      const whichRow = UI.row(tr('Apps'), tr('Apps installed from an IPA can be refreshed only if {computer} stores the IPA.', { computer: here }), [whichSel.el]);
+      const whichRow = UI.row(tr('Apps'), tr('Other apps get new profiles; their stored IPA is used only if they must be signed again.'), [whichSel.el]);
       const retrySel = UI.select([], (v) => act({ a: 'set', retry: Number(v) }));
       const retryRow = UI.row(tr('Retry after a failed refresh'), '', [retrySel.el]);
       const cacheSw = UI.switch((v) => act({ a: 'set', cache: v }));
-      const cacheRow = UI.row(tr('Store IPAs on {computer}', { computer: here }), tr('TwinDesk and apps installed from an IPA are installed and refreshed from the stored copy instead of being downloaded again. Turning this off deletes the stored IPAs.'), [cacheSw.el], { literal: true });
-      const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, howRow, whichRow, retryRow, cacheRow]);
+      const cacheRow = UI.row(tr('Store IPAs on {computer}', { computer: here }), tr('Each IPA installed from here is kept, so TwinDesk and other apps are signed again from it instead of being downloaded again. Turning this off deletes the stored IPAs.'), [cacheSw.el], { literal: true });
+      const autoMore = el('details', { class: 'ios-more' }, [el('summary', { text: tr('More options') }), howRow, whichRow, retryRow, cacheRow]);
+      const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, autoMore]);
 
       // ---- keep a copy (on by default) ----
       const keepSw = UI.switch((v) => act({ a: 'set', keep: v }));
@@ -176,10 +181,11 @@
 
       // ---- how this works ----
       const anisette = el('p');
-      const how = el('section', { class: 'ios-how' }, [
-        el('h3', { text: tr('How this works') }),
+      const how = el('details', { class: 'ios-how' }, [
+        el('summary', { text: tr('How this works') }),
         el('p', { text: tr('Apps installed outside the App Store with a free Apple ID use a provisioning profile that is valid for 7 days, after which they must be signed again. AltStore and Sideloadly automate this; this feature does the same from TwinDesk.') }),
         el('p', { text: tr('{computer} authenticates with Apple through the same developer services Xcode uses, requests a development certificate named “TwinDesk”, registers the device and the app ID, signs the app and installs it over USB or Wi-Fi sync.', { computer: Here }) }),
+        el('p', { text: tr('A refresh, like AltStore’s, only installs Apple’s new provisioning profiles: the app and its data stay as they are. The app is signed and installed again only when its certificate has changed.') }),
         el('p', { text: tr('Your password is used only to sign in and is never stored. Apple returns a developer session valid for about a year, which can manage certificates, app IDs and devices but cannot access iCloud or purchases. The session, the certificate’s private key and a device identity are stored in the iPhone’s Keychain and, with Keep a copy on, encrypted on {computer}.', { computer: here }) }),
         el('p', { text: tr('When an app approaches expiry, {computer} sends a refresh request to TwinDesk on the iPhone, waking it over Bluetooth if necessary. The iPhone refreshes while it is unlocked; otherwise it shows a notification, and tapping it starts the refresh.', { computer: here }) }),
         anisette,
@@ -243,6 +249,10 @@
         const before = missingTd ? refreshCard : how;
         if (installCard.nextSibling !== before) body.insertBefore(installCard, before);
         installCard.querySelector('.card-title span').textContent = missingTd ? tr('Install TwinDesk') : tr('Reinstall');
+        installSum.hidden = missingTd;
+        if (missingTd) installMore.open = true;
+        else if (installMore.dataset.td !== '1') installMore.open = !!v.ipa; // folded once TwinDesk is there (open with an IPA chosen)
+        installMore.dataset.td = missingTd ? '0' : '1';
         installHead.label.textContent = !v.udid ? (devs.length ? tr('Select a device above') : tr('No device connected'))
           : missingTd ? tr('TwinDesk is not installed on {device}', { device: devName }) : tr('Reinstall TwinDesk or install another app');
         installHead.setHint(!v.udid ? tr('Then sign in with your Apple ID to install TwinDesk.')
@@ -274,9 +284,9 @@
           bar.hidden = !run || !(now === 'sign' || now === 'install');
           bar.firstChild.style.width = `${pctNow}%`;
           if (run) {
-            result.hidden = run.from !== 'phone';
             result.className = 'ios-result';
-            result.textContent = run.from === 'phone' ? tr('Requested by TwinDesk on the iPhone.') : '';
+            result.textContent = [run.from === 'phone' ? tr('Requested by TwinDesk on the iPhone.') : '', run.note ? tr(run.note) : ''].filter(Boolean).join(' ');
+            result.hidden = !result.textContent;
           } else {
             result.hidden = false;
             result.className = `ios-result ${last.error ? 'bad' : last.done ? 'good' : ''}`;
@@ -308,11 +318,12 @@
         refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('Apple ID: {account}', { account: phone.email }) : kept ? tr('Session stored on {computer} for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(' · ')
           : !sess && near.length ? tr('Nearby over Bluetooth. Refresh now wakes TwinDesk on the device.')
             : sess && !(phone && phone.signedIn) ? tr('Not signed in. Sign in on the iPhone under TwinDesk › App refresh.') : v.udid ? tr('Not installed') : '');
-        const ak = JSON.stringify(apps.filter((a) => !a.twindesk)) + Math.floor(Date.now() / 3600000);
+        const ak = JSON.stringify([apps.filter((a) => !a.twindesk), v.anyIpa, !!(kept || (phone && phone.signedIn))]) + Math.floor(Date.now() / 3600000);
         if (ak !== appKey) {
           appKey = ak;
           appList.replaceChildren(...apps.filter((a) => !a.twindesk).map((a) => UI.row(a.name, [a.version, a.teamName].filter(Boolean).join(' · '), [
-            a.cached && v.anyIpa ? UI.button(tr('Refresh'), () => act({ a: 'app', bundleId: a.bundleId }), 'small') : null,
+            // No stored IPA needed: new profiles are enough unless it has to be signed again.
+            v.anyIpa && (kept || (phone && phone.signedIn)) ? UI.button(tr('Refresh'), () => act({ a: 'app', bundleId: a.bundleId }), 'small') : null,
             el('span', { class: daysLeft(a.expires) < 2 ? 'pill bad' : 'pill muted', text: leftText(a.expires) }),
           ].filter(Boolean), { literal: true })));
         }

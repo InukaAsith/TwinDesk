@@ -327,5 +327,11 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .ios-result.good { color: var(--good); }
 .ios-result.bad { color: var(--bad); }
 .ios-how { margin: 6px 2px 28px; max-width: 760px; }
-.ios-how h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.ios-how > summary, .ios-more > summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 6px 0; list-style: none; display: flex; align-items: center; gap: 6px; }
+.ios-how > summary::-webkit-details-marker, .ios-more > summary::-webkit-details-marker { display: none; }
+.ios-how > summary::before, .ios-more > summary::before { content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; margin: 0 3px; }
+.ios-how[open] > summary::before, .ios-more[open] > summary::before { transform: rotate(45deg); }
+.ios-how[open] > summary { margin-bottom: 6px; }
+.ios-more > summary { color: var(--muted); font-weight: 500; padding: 10px 0 4px; }
+.ios-more > summary[hidden] { display: none; }
 .ios-how p { margin: 0 0 10px; line-height: 1.55; color: var(--muted); }
