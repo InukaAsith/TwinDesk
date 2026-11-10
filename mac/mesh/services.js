@@ -27,6 +27,7 @@ const { Notifs } = require('./notifs');
 const { FileClip } = require('../fclip');
 const { Wake } = require('../wake');
 const { AppSend } = require('../appsend');
+const { Peer } = require('./peer');
 const store = require('./store');
 
 // hub: the mesh hub (hub.js) for the pooled features; mesh: the shared/mesh.js registry; selfName():
@@ -54,7 +55,8 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
 
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
   const sshClient = new SshClient(server, s);
-  const audio = new Audio({ server, hub, stream, getSettings: s });
+  const audioPeer = new Peer(meshHub.audioRoute(), meshHub.server);
+  const audio = new Audio({ server: audioPeer, hub, stream, getSettings: s, meshHub });
   const pcView = new PcView({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   const pcApps = new PcApps({ server, getSettings: s });
   const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, saveSettings: () => store.saveSettings(s()), selfName });
@@ -105,7 +107,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   helper.start();
 
   return {
-    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, pcView, pcApps, hub, fileSend, notifs, fileClip, wake, appSend, updateAwake,
+    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, audioPeer, pcView, pcApps, hub, fileSend, notifs, fileClip, wake, appSend, updateAwake,
     shutdown() {
       pcView.shutdown();
       pcApps.shutdown();

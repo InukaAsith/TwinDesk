@@ -220,7 +220,7 @@ function start() {
   });
   fileDrop = new FileDrop({ link, settings, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
   screen.fileDrop = fileDrop;
-  sound = new Sound({ link, settings, onChange: pushState });
+  sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   terminal = new Terminal({ link, settings, onChange: pushState });
@@ -1253,7 +1253,7 @@ function updateTray(s) {
 function loadMic() {
   if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
   const { Mic } = require('../../shared/mic.js');
-  mic = new Mic({ link, cfg: () => settings.audio, onChange: pushState });
+  mic = new Mic({ link: hub.audioLink(), cfg: () => settings.audio, onChange: pushState, meshHub: hub });
   return mic;
 }
 

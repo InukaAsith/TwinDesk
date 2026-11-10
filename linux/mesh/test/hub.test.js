@@ -565,6 +565,32 @@ test('(g) a hub that gets its server late (attachHost): safe before, then the pe
   }
 });
 
+test('three devices: audio route stays on B when selection moves to C until the session ends', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  try {
+    const route = N.A.hub.audioRoute();
+    const closed = [];
+    route.on('closed', () => closed.push(1));
+    N.A.hub.select(N.B.id);
+    route.refresh();
+    assert.strictEqual(route.targetId, N.B.id);
+    N.A.hub.setAudioSticky('sound', N.B.id);
+    route.refresh();
+    assert.strictEqual(route.targetId, N.B.id);
+    N.A.hub.select(N.C.id);
+    assert.strictEqual(N.A.hub.selectedId, N.C.id);
+    route.refresh();
+    assert.strictEqual(route.targetId, N.B.id, 'sticky sound: still on B');
+    assert.strictEqual(closed.length, 0, 'no closed while sound stays on B');
+    N.A.hub.setAudioSticky('sound', null);
+    route.refresh();
+    assert.strictEqual(route.targetId, N.C.id, 'follows selection when the session ends');
+    assert.strictEqual(closed.length, 1);
+  } finally {
+    close3(N);
+  }
+});
+
 async function main() {
   await runTests(tests);
 }

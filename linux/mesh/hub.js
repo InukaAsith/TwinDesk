@@ -19,6 +19,7 @@
 
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { Route } = require('../../shared/hub-route.js');
 const { Sessions } = require('./session.js');
 
 const ROSTER = 'mesh.roster';
@@ -47,6 +48,9 @@ class Hub extends EventEmitter {
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this._facadeHandlers = new Map(); // type | 'welcome' | 'closed' -> [fn(arg)]
     this._facadeStateFns = [];
+    this._audioSticky = {};
+    this._audioRoute = null;
+    this._audioLink = null;
     this._host = { on: false, error: '' };
 
     links.on('add', () => this._change());
@@ -128,6 +132,74 @@ class Hub extends EventEmitter {
 
   forgetGuest(id) {
     if (this.pairing) this.pairing.forget(id);
+  }
+
+  // Sound and microphone (mesh #194): same target rules as mac/mesh/hub.js audioRoute().
+  audioRoute() {
+    if (!this._audioRoute) {
+      this._audioRoute = new Route(this, (hub) => hub._pickAudioRoute());
+      this._audioRoute.refresh();
+    }
+    return this._audioRoute;
+  }
+
+  setAudioSticky(which, id) {
+    if (id) this._audioSticky[which] = id;
+    else delete this._audioSticky[which];
+    if (this._audioRoute) this._audioRoute.refresh();
+  }
+
+  _pickAudioRoute() {
+    for (const id of Object.values(this._audioSticky)) {
+      const s = id ? this.sessions.get(id) : null;
+      if (s && s.connected) return id;
+    }
+    return this.selectedId;
+  }
+
+  // One-to-one link shape (welcome/closed) over audioRoute().
+  audioLink() {
+    if (this._audioLink) return this._audioLink;
+    const hub = this;
+    const route = this.audioRoute();
+    this._audioLink = {
+      on(type, fn) {
+        if (type === 'welcome') route.on('client', (v) => fn(hub._welcomeInfo(hub.sessions.get(v.deviceId))));
+        else if (type === 'closed') route.on('closed', (v) => fn(v));
+        else route.on(`t:${type}`, (m) => fn(m));
+      },
+      send: (obj) => route.send(obj),
+      get status() {
+        const s = route.session;
+        return s ? s.status : { state: hub._nothingState(), rtt: null, message: '' };
+      },
+      get lastRx() {
+        const s = route.session;
+        return s ? s.lastRx : 0;
+      },
+      get bufferedAmount() {
+        const s = route.session;
+        return s ? s.bufferedAmount : 0;
+      },
+      get hosting() {
+        const s = route.session;
+        return !!s && s.hosting;
+      },
+      get peerOs() {
+        const s = route.session;
+        return s ? s.peerOs : P.OS.MAC;
+      },
+      get server() {
+        return hub.server;
+      },
+      get pairing() {
+        return hub.pairing;
+      },
+      get current() {
+        return route.current;
+      },
+    };
+    return this._audioLink;
   }
 
   // Makes `id` the selected device. False when that device is not connected.
@@ -259,6 +331,11 @@ class Hub extends EventEmitter {
       consumed = true;
       if (s.id === this.selectedId) this._facadeEmit(msg.t, msg);
     }
+    if (this._audioRoute && this._audioRoute.targetId === s.id
+      && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
+      consumed = true;
+      this._audioRoute.deliver(msg);
+    }
     return consumed;
   }
 
@@ -268,6 +345,7 @@ class Hub extends EventEmitter {
     this._peerEvent('welcome', s.id, this._welcomeInfo(s));
     if (this.selectedId === s.id) this._facadeEmit('welcome', this._welcomeInfo(s)); // the selected device came back (replaced)
     else if (this.selectedId === null) this._select(s.id);
+    if (this._audioRoute) this._audioRoute.refresh();
     this.emit('peerAdded', s.id);
     this._change();
   }
@@ -277,10 +355,11 @@ class Hub extends EventEmitter {
     this.mesh.removePeer(s.id);
     this._rosterAll();
     this._peerEvent('closed', s.id, {});
+    if (this._audioRoute) this._audioRoute.drop(s.id);
     if (this.selectedId === s.id) {
       if (replaced) this._facadeEmit('closed', {});
       else this._select(this._pickConnected());
-    }
+    } else if (this._audioRoute) this._audioRoute.refresh();
     this.emit('peerRemoved', s.id);
     this._change();
   }
@@ -298,6 +377,7 @@ class Hub extends EventEmitter {
       e.name = s.displayName();
     }
     if (s.id === this.selectedId) this._facadeState();
+    if (this._audioRoute) this._audioRoute.refresh();
     this._change();
   }
 
@@ -335,6 +415,7 @@ class Hub extends EventEmitter {
       if (s) this._facadeEmit('welcome', this._welcomeInfo(s));
     }
     this._facadeState();
+    if (this._audioRoute) this._audioRoute.refresh();
     this.emit('selected', next);
     this._change();
   }
