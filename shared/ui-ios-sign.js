@@ -16,6 +16,7 @@
   const mac = /Mac/.test(navigator.platform);
   const linux = /Linux/.test(navigator.platform);
   const here = mac ? tr('this Mac') : linux ? tr('this computer') : tr('this PC');
+  const Here = here.charAt(0).toUpperCase() + here.slice(1); // at the start of a sentence
 
   const daysLeft = (expires) => Math.floor((expires * 1000 - Date.now()) / 86400000);
   const leftText = (expires) => {
@@ -77,7 +78,7 @@
       const onSw = UI.switch((v) => { if (v) { onSw.set(false); act({ a: 'enable' }); } else act({ a: 'set', on: false }); },
         { label: tr('Install TwinDesk and refresh it with the iOS app') });
       const onCard = UI.card('', [UI.row(tr('Install TwinDesk and refresh it with the iOS app'),
-        tr('{computer} installs TwinDesk on your iPhone or iPad and signs it again before its 7 days run out, asked by TwinDesk there. Turning this off removes what {computer} kept.', { computer: here }),
+        tr('{computer} installs TwinDesk on your iPhone or iPad and signs it again before its 7 days run out, asked by TwinDesk there. Turning this off removes what {computer} kept.', { computer: Here }),
         [onSw.el], { literal: true })]);
       const warn = el('div', { class: 'ios-warn', attrs: { role: 'note' } }, [
         warnIcon(),
@@ -140,7 +141,7 @@
 
       // ---- automatic refresh ----
       const autoSw = UI.switch((v) => act({ a: 'set', auto: v }));
-      const autoRow = UI.row(tr('Refresh automatically'), tr('{computer} asks TwinDesk on the iPhone, over Wi-Fi or, when it’s asleep, Bluetooth.', { computer: here }), [autoSw.el]);
+      const autoRow = UI.row(tr('Refresh automatically'), tr('{computer} asks TwinDesk on the iPhone, over Wi-Fi or, when it’s asleep, Bluetooth.', { computer: Here }), [autoSw.el]);
       const daysSel = UI.select([1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: n === 1 ? tr('Less than 1 day') : tr('Less than {count} days', { count: n }) })), (v) => act({ a: 'set', days: Number(v) }));
       const daysRow = UI.row(tr('When an app has left'), '', [daysSel.el]);
       const howSeg = UI.segmented([
@@ -165,11 +166,11 @@
         keepSw.set(false); // not yet: the warning first
         danger.hidden = false;
       });
-      const keepRow = UI.row(tr('Keep a copy on {computer}', { computer: here }), tr('Refreshes without the iPhone’s app: closed, locked or already expired. {computer} asks for its Keychain once, when you turn this on.', { computer: here }), [keepSw.el], { literal: true });
+      const keepRow = UI.row(tr('Keep a copy on {computer}', { computer: here }), tr('Refreshes without the iPhone’s app: closed, locked or already expired. {computer} asks for its Keychain once, when you turn this on.', { computer: Here }), [keepSw.el], { literal: true });
       const danger = el('div', { class: 'ios-warn', hidden: true }, [
         warnIcon(),
         el('div', { class: 'body' }, [
-          el('p', { text: tr('{computer} will keep Apple’s developer session and the certificate’s key. Any program running as you can read them, and with them manage this Apple ID’s certificates, app IDs and devices for up to a year. They can’t open iCloud and don’t include your password.', { computer: here }) }),
+          el('p', { text: tr('{computer} will keep Apple’s developer session and the certificate’s key. Any program running as you can read them, and with them manage this Apple ID’s certificates, app IDs and devices for up to a year. They can’t open iCloud and don’t include your password.', { computer: Here }) }),
           el('div', { class: 'alt' }, [
             el('span', { text: tr('Only with an Apple ID made for this.') }),
             el('span', {}, [
@@ -186,8 +187,8 @@
       const how = el('section', { class: 'ios-how' }, [
         el('h3', { text: tr('How this works') }),
         el('p', { text: tr('An app from outside the App Store runs for 7 days when it is signed with a free Apple ID, and then has to be signed again. AltStore and Sideloadly do that. This does the same from TwinDesk.') }),
-        el('p', { text: tr('{computer} signs in to Apple with your Apple ID the way Xcode does, asks Apple for a development certificate named “TwinDesk”, signs the app with it and installs it through the cable or Wi-Fi sync.', { computer: here.charAt(0).toUpperCase() + here.slice(1) }) }),
-        el('p', { text: tr('Your password is used once, to sign in, and is not kept. What is kept is Apple’s developer session (about a year; it can manage certificates and app IDs, not iCloud or purchases), the certificate’s key and a device identity, in the Keychain of the iPhone. {computer} keeps none of it unless you turn on Keep a copy.', { computer: here.charAt(0).toUpperCase() + here.slice(1) }) }),
+        el('p', { text: tr('{computer} signs in to Apple with your Apple ID the way Xcode does, asks Apple for a development certificate named “TwinDesk”, signs the app with it and installs it through the cable or Wi-Fi sync.', { computer: Here }) }),
+        el('p', { text: tr('Your password is used once, to sign in, and is not kept. What is kept is Apple’s developer session (about a year; it can manage certificates and app IDs, not iCloud or purchases), the certificate’s key and a device identity, in the Keychain of the iPhone. {computer} keeps none of it unless you turn on Keep a copy.', { computer: Here }) }),
         el('p', { text: tr('When an app is close to running out, {computer} asks TwinDesk on the iPhone, waking it over Bluetooth when it’s asleep. The iPhone refreshes by itself while it’s unlocked, or shows a notification: tap it and the rest happens on its own.', { computer: here }) }),
         anisette,
       ]);
