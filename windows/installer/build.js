@@ -70,6 +70,12 @@ async function main() {
   copy(path.join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'web'), path.join(STAGE, 'android-web'));
   copy(path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper.exe'),
     path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper.exe'));
+  // iPhone app signing's helper (ios-signer/, shared/iossign.js): optional, built with cargo.
+  if (process.platform === 'win32') {
+    try { execFileSync('cmd.exe', ['/c', path.join(ROOT, 'ios-signer', 'build.cmd')], { stdio: 'inherit' }); } catch { console.log('note: the iOS signing helper didn’t build'); }
+  }
+  if (fs.existsSync(path.join(ROOT, 'ios-signer', 'bin'))) copy(path.join(ROOT, 'ios-signer', 'bin'), path.join(STAGE, 'ios-signer', 'bin'));
+  else console.log('note: no ios-signer/bin — iPhone app signing is left out (ios-signer/build.cmd, with cargo)');
   // Multi-device's helper (several watched sides, docs/multi-device.md): the same sources built with MULTI.
   const multiHelper = path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper-multi.exe');
   if (fs.existsSync(multiHelper)) copy(multiHelper, path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper-multi.exe'));

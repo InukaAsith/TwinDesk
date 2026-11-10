@@ -275,6 +275,7 @@ function pushState() {
       state.papps = { ...settings.papps, ...svc.pcApps.view };
     }
     if (svc) state.wake = svc.wake.view;
+    if (svc && svc.iosSign) state.iosSign = svc.iosSign.view;
     if (svc && svc.phone) {
       // A phone's controls on Overview (dev.state): quick settings, volume and ringer, most used apps.
       const v = svc.devctl && state.client && P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // an iPhone's too: Ring (its Overview, shared/ui-device-ios.js)
@@ -691,6 +692,17 @@ app.whenReady().then(() => {
     },
   });
   svc.devctl.on('change', pushState);
+  // iPhone app signing (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
+  svc.iosSign = require('../shared/iossign-host.js').create({
+    app, safeStorage: require('electron').safeStorage,
+    link: {
+      on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
+      send: (m) => peer.sendToClient(m),
+      get current() { return peer.current; },
+    },
+    usbSerials: () => (svc.iosNet ? svc.iosNet.view.devices.filter((d) => d.app).map((d) => d.serial) : []),
+    onChange: pushState,
+  });
   // ReZume off here (not loaded): still answer the other side's policy, so it shows ReZume as off
   // here, not missing, and offers nothing.
   peer.on(`t:${P.T.RZ_POLICY}`, () => { if (!svc.rz && peer.current) peer.sendToClient({ t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });

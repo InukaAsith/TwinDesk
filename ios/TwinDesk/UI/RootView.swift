@@ -7,7 +7,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case overview, connection, receive, share, remote, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, general, about
+    case overview, connection, receive, share, remote, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, signing, general, about
     var id: String { rawValue }
 
     var title: String {
@@ -27,6 +27,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .media: return tr("Media")
         case .airplay: return tr("AirPlay & SMB")
         case .shortcuts: return tr("Shortcuts")
+        case .signing: return tr("App signing")
         case .general: return tr("General")
         case .about: return tr("About")
         }
@@ -49,6 +50,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .media: return "play.fill"
         case .airplay: return "airplayvideo"
         case .shortcuts: return "square.stack.3d.up.fill"
+        case .signing: return "signature"
         case .general: return "gearshape.fill"
         case .about: return "info"
         }
@@ -68,6 +70,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .media: return Color(red: 0.98, green: 0.24, blue: 0.5)
         case .airplay: return Color(red: 1, green: 0.8, blue: 0.0)
         case .shortcuts: return Color(red: 0.37, green: 0.36, blue: 0.9)
+        case .signing: return Color(red: 0.25, green: 0.52, blue: 0.56)
         case .general: return Color(white: 0.5)
         }
     }
@@ -78,7 +81,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         [.receive, .share, .remote],
         [.clipboard, .notifications, .files, .photos, .messages],
         [.audio, .camera, .media],
-        [.airplay, .shortcuts],
+        [.airplay, .shortcuts, .signing],
         [.general, .about],
     ]
 
@@ -506,7 +509,7 @@ struct PageView: View {
     let page: Page
     var body: some View {
         let _ = core.tick
-        if core.peerMode && ![.connection, .general, .about].contains(page) { PeerPageView(page: page) }
+        if core.peerMode && ![.connection, .signing, .general, .about].contains(page) { PeerPageView(page: page) }
         else { pc }
     }
 
@@ -528,6 +531,7 @@ struct PageView: View {
         case .media: MediaView()
         case .airplay: AirPlayView()
         case .shortcuts: ShortcutsView()
+        case .signing: SignerView()
         case .general: SettingsView()
         case .about: AboutView()
         }

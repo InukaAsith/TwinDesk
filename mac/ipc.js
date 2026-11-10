@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -604,6 +604,13 @@ function setupIpc(ctx) {
     // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
     hub(r) {
       ctx.hub().act(r);
+    },
+    // iPhone app signing (shared/iossign.js): one action, and Choose an IPA….
+    iosSign(o) {
+      if (ctx.iosSign) ctx.iosSign.act(o);
+    },
+    iosSignIpa() {
+      require('../shared/iossign-host.js').pickIpa(ctx.iosSign, dialog);
     },
     // Overview: the other device's controls (shared/devctl.js): ring, lock, quick settings…
     deviceDo(c) {

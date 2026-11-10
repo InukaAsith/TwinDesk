@@ -1,0 +1,220 @@
+// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+// App signing: TwinDesk (and, with a computer that allows it, another IPA) signed with the person's
+// own Apple ID by the connected computer (Core/SignerFeature.swift). Opt in, and said plainly: the
+// warning first, how it works, what's sideloaded here and when each runs out.
+import SwiftUI
+import UniformTypeIdentifiers
+
+struct SignerView: View {
+    @EnvironmentObject var core: Core
+    @State private var email = ""
+    @State private var password = ""
+    @State private var code = ""
+    @State private var picking = false
+    @State private var askSignOut = false
+    @State private var showHow = false
+
+    private var s: Signer { core.signer }
+    private var pc: String { core.host?.name ?? tr("the computer") }
+
+    var body: some View {
+        let _ = core.tick
+        PageScroll(title: tr("App signing")) {
+            warning
+            if !core.connected { NeedsComputer(what: tr("App signing")) }
+            else if !s.available { unavailable }
+            else {
+                Columns {
+                    VStack(spacing: 16) { status; if s.running || s.need != nil { runCard }; if showSignIn { signInCard } }
+                } right: {
+                    VStack(spacing: 16) { appsCard; options }
+                }
+            }
+            how
+        }
+        .fileImporter(isPresented: $picking, allowedContentTypes: [UTType(filenameExtension: "ipa") ?? .item], allowsMultipleSelection: false) { r in
+            guard case .success(let urls) = r, let u = urls.first else { return }
+            // A copy of its own: the picked file is only readable while this runs.
+            let scoped = u.startAccessingSecurityScopedResource()
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let to = dir.appendingPathComponent(u.lastPathComponent)
+            let ok = (try? FileManager.default.copyItem(at: u, to: to)) != nil
+            if scoped { u.stopAccessingSecurityScopedResource() }
+            if ok { s.install(to) }
+        }
+        .confirmationDialog(tr("Sign out of app signing?"), isPresented: $askSignOut, titleVisibility: .visible) {
+            Button(tr("Sign out")) { s.signOut(everything: false) }
+            Button(tr("Sign out and forget the certificate"), role: .destructive) { s.signOut(everything: true) }
+            Button(tr("Cancel"), role: .cancel) {}
+        }
+    }
+
+    private var showSignIn: Bool { !s.running && (!s.facts.signedIn || s.needsSignIn) }
+
+    private var warning: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(tr("Apple doesn’t support this"), systemImage: "exclamationmark.triangle.fill").font(.headline).foregroundStyle(.orange)
+            Text(tr("Sign-ins from tools like this one have been refused, accounts have been locked for a while, and some Apple IDs can no longer sign apps at all. Use an Apple ID made for this, not your main one. If you’d rather not, use TwinDesk Web in Safari, or AltStore."))
+                .font(.subheadline)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(tint: .orange)
+    }
+
+    private var unavailable: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardHeader(symbol: "signature", color: Page.signing.color, title: tr("{name} can’t sign yet", ["name": pc]))
+            Text(tr("TwinDesk on {name} has to see this device: connect the cable once, unlock and tap Trust. After that Wi-Fi is enough when Wi-Fi sync is on. Its TwinDesk also has to be a version with app signing.", ["name": pc]))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .glassCard()
+    }
+
+    private var status: some View {
+        let f = s.facts
+        let mine = s.apps.first { $0.twindesk }
+        return VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "signature", color: Page.signing.color, title: tr("TwinDesk on this device"),
+                       detail: mine.map { left($0.expires) } ?? "")
+            if f.signedIn {
+                Text(tr("Signed in as {account}. Apple’s session lasts until {date}.", ["account": f.email, "date": day(f.until / 1000)]))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text(tr("Not signed in.")).font(.caption).foregroundStyle(.secondary)
+            }
+            if let e = s.error { Text(e).font(.caption).foregroundStyle(TDColor.bad).textSelection(.enabled) }
+            if let d = s.doneUntil { Text(tr("Installed. It runs until {date}.", ["date": day(d.timeIntervalSince1970)])).font(.caption).foregroundStyle(TDColor.good) }
+            if f.signedIn && !s.running {
+                Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
+            }
+        }
+        .glassCard()
+    }
+
+    private var runCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text(stepText).font(.subheadline)
+                Spacer()
+                Button(tr("Stop")) { s.stop() }.secondaryButton().controlSize(.small)
+            }
+            if s.step == "install" && s.percent > 0 { ProgressView(value: Double(s.percent), total: 100) }
+            switch s.need {
+            case .code(let err):
+                Text(tr("Apple sent a code to your devices.")).font(.caption).foregroundStyle(.secondary)
+                if !err.isEmpty { Text(err).font(.caption).foregroundStyle(TDColor.bad) }
+                HStack {
+                    TextField(tr("Verification code"), text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode).textFieldStyle(.roundedBorder)
+                    Button(tr("Continue")) { s.answer(code: code); code = "" }.primaryButton().disabled(code.count < 6)
+                }
+            case .certs(let certs):
+                Text(tr("This Apple ID has as many development certificates as it may. Revoking one stops the apps signed with it until they are signed again."))
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(certs) { c in
+                    HStack {
+                        VStack(alignment: .leading) { Text(c.name); Text(day(c.expires)).font(.caption).foregroundStyle(.secondary) }
+                        Spacer()
+                        Button(tr("Revoke"), role: .destructive) { s.revoke(c.id) }.secondaryButton().controlSize(.small)
+                    }
+                }
+                Button(tr("Cancel")) { s.cancelQuestion() }.secondaryButton()
+            case nil: EmptyView()
+            }
+        }
+        .glassCard()
+    }
+
+    private var signInCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "person.badge.key.fill", color: Page.signing.color, title: tr("Sign in with an Apple ID"),
+                       detail: tr("The password is used once, to sign in, and is not kept."))
+            TextField("Apple ID", text: $email).textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
+            SecureField(tr("Password"), text: $password).textContentType(.password).textFieldStyle(.roundedBorder)
+            Button {
+                s.signIn(email: email.trimmingCharacters(in: .whitespaces), password: password)
+                password = ""
+            } label: { Text(tr("Sign in and refresh")).frame(maxWidth: .infinity) }
+                .primaryButton().disabled(email.isEmpty || password.isEmpty)
+        }
+        .glassCard()
+    }
+
+    private var appsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "square.grid.2x2.fill", color: TDColor.accent, title: tr("Sideloaded apps"), detail: tr("Each runs until its date, then has to be signed again."))
+            if s.apps.isEmpty { Text(tr("None found")).font(.caption).foregroundStyle(.secondary) }
+            ForEach(s.apps) { a in
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(a.name)
+                        Text([a.version, a.teamName].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(left(a.expires)).font(.caption.monospacedDigit()).foregroundStyle(a.expires - Date().timeIntervalSince1970 < 2 * 86400 ? TDColor.bad : .secondary)
+                }
+            }
+            if s.anyIpa && s.facts.signedIn && !s.running {
+                Button { picking = true } label: { Label(tr("Install an IPA…"), systemImage: "plus").frame(maxWidth: .infinity) }.secondaryButton()
+            }
+        }
+        .glassCard()
+    }
+
+    private var options: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ToggleRow(title: tr("Refresh automatically"), detail: tr("When {name} says TwinDesk here has few days left, while this device is unlocked.", ["name": pc]),
+                      on: Binding(get: { s.auto }, set: { s.auto = $0 }))
+            if s.computerKeeps {
+                Label(tr("{name} keeps a copy of the signing session (switched on there).", ["name": pc]), systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+            }
+            if s.facts.signedIn || !s.facts.email.isEmpty {
+                Button(tr("Sign out…"), role: .destructive) { askSignOut = true }.secondaryButton()
+            }
+        }
+        .glassCard()
+    }
+
+    private var how: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button { withAnimation { showHow.toggle() } } label: {
+                HStack { Text(tr("How this works")).font(.headline); Spacer(); Image(systemName: showHow ? "chevron.up" : "chevron.down") }.foregroundStyle(TDColor.text)
+            }
+            if showHow {
+                Group {
+                    Text(tr("An app from outside the App Store runs for 7 days when it is signed with a free Apple ID, and then has to be signed again. AltStore and Sideloadly do that. This does the same from TwinDesk."))
+                    Text(tr("The computer signs in to Apple with your Apple ID the way Xcode does, asks for a development certificate named “TwinDesk”, signs the app with it and installs it through the cable or Wi-Fi sync."))
+                    Text(tr("Your password is used once and kept nowhere. What is kept, in this device’s Keychain only, is Apple’s developer session (about a year; it can manage certificates and app IDs, not iCloud or purchases), the certificate’s key and a device identity. For each refresh they are sealed for the computer’s signing helper, which keeps nothing."))
+                    Text(tr("The Apple ID and password go to Apple only. One more server is used, an “anisette” server ({server}), which Apple’s sign-in needs. It never gets the Apple ID or the password, but it does hold the identity Apple trusts after your verification code.", ["server": s.anisette]))
+                }
+                .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .glassCard()
+    }
+
+    private var stepText: String {
+        switch s.step ?? "" {
+        case "upload": return tr("Sending the file to the computer…")
+        case "download": return tr("Downloading TwinDesk…")
+        case "signin": return tr("Signing in to Apple…")
+        case "register": return tr("Registering the device…")
+        case "sign": return tr("Signing…")
+        case "install": return tr("Installing…")
+        default: return tr("Working…")
+        }
+    }
+
+    private func day(_ seconds: Double) -> String {
+        seconds > 0 ? Date(timeIntervalSince1970: seconds).formatted(date: .abbreviated, time: .shortened) : ""
+    }
+
+    private func left(_ expires: Double) -> String {
+        let secs = expires - Date().timeIntervalSince1970
+        if expires <= 0 { return "" }
+        if secs <= 0 { return tr("Expired") }
+        let days = Int(secs / 86400)
+        return days >= 1 ? tr("{count} days left", ["count": "\(days)"]) : tr("{count} hours left", ["count": "\(max(1, Int(secs / 3600)))"])
+    }
+}
