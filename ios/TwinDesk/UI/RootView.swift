@@ -27,7 +27,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .media: return tr("Media")
         case .airplay: return tr("AirPlay & SMB")
         case .shortcuts: return tr("Shortcuts")
-        case .signing: return tr("App signing")
+        case .signing: return tr("App refresh")
         case .general: return tr("General")
         case .about: return tr("About")
         }

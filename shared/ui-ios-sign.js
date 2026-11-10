@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// iPhone app signing (Mac, PC and Linux): TwinDesk for iPhone and iPad signed with the person's own
+// TwinDesk iPhone (Mac, PC and Linux): TwinDesk for iPhone and iPad signed with the person's own
 // Apple ID and installed from this computer, in place of AltStore or Sideloadly (shared/iossign.js,
 // ios-signer/). Opt in, and said plainly: what it does, where the Apple ID goes, what can go wrong.
 //   The iPhone or iPad the computer sees and what's sideloaded on it, each with the day it runs out.
@@ -33,7 +33,7 @@
     group: 7,
     order: 92,
     icon: 'phone',
-    title: tr('iPhone app signing'),
+    title: tr('TwinDesk iPhone'),
     desc: tr('Install and refresh TwinDesk on an iPhone or iPad from {computer}, signed with your own Apple ID.', { computer: here }),
     color: 'linear-gradient(#5e5ce6, #3634a3)',
     hidden: (s) => !(s && s.iosSign),
@@ -69,7 +69,9 @@
       const autoSw = UI.switch((v) => act({ a: 'set', auto: v }));
       const daysSel = UI.select([1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: tr('{count} days left', { count: n }) })), (v) => act({ a: 'set', days: Number(v) }));
       const autoRow = UI.row(tr('Refresh automatically'), tr('When TwinDesk on the device has this long left and it is connected.'), [daysSel.el, autoSw.el]);
-      const refreshCard = UI.card(tr('Refresh'), [refreshRow, autoRow]);
+      const cacheSw = UI.switch((v) => act({ a: 'set', cache: v }));
+      const cacheRow = UI.row(tr('Keep installed IPAs on {computer}', { computer: here }), tr('An app installed from an IPA can then be refreshed from here, by itself too. Switching this off deletes the kept IPAs.'), [cacheSw.el]);
+      const refreshCard = UI.card(tr('Refresh'), [refreshRow, autoRow, cacheRow]);
 
       // ---- a question from a run answered here ----
       const code = el('input', { type: 'text', attrs: { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', 'aria-label': tr('Verification code') } });
@@ -141,7 +143,7 @@
         const ak = JSON.stringify(apps) + Math.floor(Date.now() / 3600000);
         if (ak !== appKey) {
           appKey = ak;
-          appList.replaceChildren(...apps.map((a) => UI.row(a.name, [a.version, a.teamName].filter(Boolean).join(' · '), [el('span', { class: daysLeft(a.expires) < 2 ? 'pill bad' : 'pill muted', text: leftText(a.expires) })], { literal: true })));
+          appList.replaceChildren(...apps.map((a) => UI.row(a.name, [a.version, a.teamName].filter(Boolean).join(' · '), [a.cached && v.anyIpa ? UI.button(tr('Refresh'), () => act({ a: 'app', bundleId: a.bundleId }), 'small') : null, el('span', { class: daysLeft(a.expires) < 2 ? 'pill bad' : 'pill muted', text: leftText(a.expires) })].filter(Boolean), { literal: true })));
         }
 
         // refresh
@@ -153,6 +155,8 @@
         stopBtn.hidden = !run;
         refreshRow.setHint(td ? leftText(td.expires) : v.udid ? tr('Not installed') : '');
         autoSw.set(v.auto);
+        cacheSw.set(v.cache);
+        cacheRow.hidden = !v.anyIpa;
         daysSel.set(String(v.days || 3));
         daysSel.el.disabled = !v.auto;
         const last = v.last || {};
@@ -163,7 +167,7 @@
               : v.pending ? tr('Signed. Open TwinDesk on the iPhone and connect it: it takes over the signing state from here.')
                 : kept ? tr('{computer} keeps a copy for {account}.', { computer: here, account: v.kept.email })
                   : phone && phone.signedIn ? tr('The iPhone is signed in as {account}.', { account: phone.email })
-                    : tr('Not signed in. Sign in on the iPhone (TwinDesk › App signing), or install from here below.'));
+                    : tr('Not signed in. Sign in on the iPhone (TwinDesk › App refresh), or install from here below.'));
 
         // Apple asks
         codeRow.hidden = !(need && need.what === 'code');

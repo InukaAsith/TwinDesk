@@ -145,7 +145,7 @@ let sendTo = null;
 let vdd = null;
 let pcScreen = null;
 let notifs = null;
-let iosSign = null; // shared/iossign.js: iPhone app signing
+let iosSign = null; // shared/iossign.js: TwinDesk iPhone
 let devctl = null; // Overview's controls of the other device, and this computer's for it (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let wake = null;
@@ -252,7 +252,7 @@ function start() {
     return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
   } });
   devctl.on('change', pushState);
-  // iPhone app signing (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
+  // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
   iosSign = require('../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage, link,
     usbSerials: () => (iosNet ? iosNet.view.devices.filter((x) => x.app).map((x) => x.serial) : []),
@@ -1254,7 +1254,7 @@ function buildState() {
     phone: phone ? { ...phone.view, settings: settings.phone, ...phoneCtl() } : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     peerCtl: !P.isPhoneOs(link.peerOs) && devctl ? devctl.view : null, // a computer's controls on Overview
-    iosSign: iosSign ? iosSign.view : null, // iPhone app signing
+    iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },

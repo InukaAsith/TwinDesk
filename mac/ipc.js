@@ -605,7 +605,7 @@ function setupIpc(ctx) {
     hub(r) {
       ctx.hub().act(r);
     },
-    // iPhone app signing (shared/iossign.js): one action, and Choose an IPA….
+    // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
     iosSign(o) {
       if (ctx.iosSign) ctx.iosSign.act(o);
     },

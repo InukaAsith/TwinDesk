@@ -341,12 +341,12 @@
       // Signing TwinDesk for iPhone with the person's own Apple ID (shared/iossign.js, ios-signer/,
       // Signer.swift): the iPhone keeps the signing state, the computer's helper does the work.
       SIGN_STATE: 'sign.state', // iPhone->computer {signedIn, email, until (ms: its session's end), auto}
-      SIGN_INFO: 'sign.info', // computer->iPhone {available, anyIpa, anisette, keep, days, busy, apps: [{bundleId, name, version, team, teamName, expires (s), twindesk}]}
-      SIGN_START: 'sign.start', // iPhone->computer {ipa?: {path (as file.done gave it), size}}: a sealed run
+      SIGN_INFO: 'sign.info', // computer->iPhone {available, anyIpa, anisette, keep, days, busy, apps: [{bundleId, name, version, team, teamName, expires (s), twindesk, cached (its IPA is kept on the computer)}]}
+      SIGN_START: 'sign.start', // iPhone->computer {ipa?: {path (as file.done gave it), size} | app?: bundleId (its IPA is kept on the computer)}: a sealed run
       SIGN_KEY: 'sign.key', // computer->iPhone {pub}: the helper's key for this run
       SIGN_BOX: 'sign.box', // iPhone->computer {pub?, box}: its key and sealed request, then its sealed answers
       SIGN_EV: 'sign.ev', // computer->iPhone {ev: 'step'|'progress'|'need2fa'|'needcert'|'state'|'done'|'error', …}; state's box is sealed for it
-      SIGN_WANT: 'sign.want', // computer->iPhone {now?}: TwinDesk there runs out soon (now: Refresh was clicked here)
+      SIGN_WANT: 'sign.want', // computer->iPhone {now?, app?: bundleId}: TwinDesk there runs out soon (now: Refresh was clicked here)
       SIGN_KEEP: 'sign.keep', // either way {state}: the signing state, for the other side to keep (the computer only with Keep a copy on)
       SIGN_STOP: 'sign.stop', // iPhone->computer: stop the run
       // Resume: `welcome` carries {resume: key}; the guest opens a second socket (another path to the

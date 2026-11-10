@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// App signing (opt in): TwinDesk on this iPhone signed again with the person's own Apple ID by the
+// App refresh (opt in): TwinDesk on this iPhone signed again with the person's own Apple ID by the
 // computer it is connected to (shared/iossign.js and ios-signer/ there), in place of AltStore.
 // This keeps the signing state (Signer.swift: SignerVault) and answers the computer's helper
 // through a seal made for each run (SignerSeal), so any paired computer can do a refresh and none
@@ -15,7 +15,7 @@ import Foundation
 
 final class Signer: Feature {
     struct App: Identifiable {
-        let id: String, name: String, version: String, teamName: String, expires: Double, twindesk: Bool
+        let id: String, name: String, version: String, teamName: String, expires: Double, twindesk: Bool, cached: Bool
     }
     struct Cert: Identifiable {
         let id: String, name: String, expires: Double
@@ -40,6 +40,7 @@ final class Signer: Feature {
     private var typed: (email: String, password: String)?
     private var ipa: (name: String, size: Int64, path: String?)?
     private var gaveCopy = false
+    private var app: String? // a run for this app, from the IPA the computer keeps
 
     // Refresh by itself when the computer says it's time (on).
     var auto: Bool {
@@ -67,7 +68,7 @@ final class Signer: Feature {
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
-        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; percent = 0
+        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; percent = 0
         error = e
         doneUntil = until
         core.changed()
@@ -79,6 +80,13 @@ final class Signer: Feature {
     func refresh() {
         guard !running, core.connected, available else { return }
         guard facts.signedIn else { needsSignIn = true; core.changed(); return }
+        begin()
+    }
+
+    // One app again, from the IPA the computer keeps for it.
+    func refresh(app id: String) {
+        guard !running, core.connected, available, facts.signedIn else { return }
+        app = id
         begin()
     }
 
@@ -108,6 +116,7 @@ final class Signer: Feature {
         step = "start"
         var m: JSON = [:]
         if let i = ipa, let p = i.path { m["ipa"] = ["path": p, "size": i.size] }
+        if let a = app { m["app"] = a }
         core.send(msg("sign.start", m))
         core.changed()
     }
@@ -155,13 +164,16 @@ final class Signer: Feature {
             computerKeeps = m.bool("keep")
             apps = ((m["apps"] as? [JSON]) ?? []).prefix(50).map {
                 App(id: $0.str("bundleId"), name: $0.str("name", max: 100), version: $0.str("version", max: 40), teamName: $0.str("teamName", max: 100),
-                    expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0, twindesk: $0.bool("twindesk"))
+                    expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0, twindesk: $0.bool("twindesk"), cached: $0.bool("cached"))
             }
             // A computer that keeps a copy (switched on there, behind its warning) gets it once a session.
             if computerKeeps, !gaveCopy, facts.signedIn { gaveCopy = true; core.send(msg("sign.keep", ["state": SignerVault.state])) }
             core.changed()
         case "sign.want":
-            if !running, facts.signedIn, m.bool("now") || auto { refresh() }
+            if !running, facts.signedIn, m.bool("now") || auto {
+                let id = m.str("app", max: 200)
+                if id.isEmpty { refresh() } else { refresh(app: id) }
+            }
         case "sign.key":
             guard step != nil, let s = SignerSeal(helperKey: m.str("pub", max: 64)),
                   let first = SignerVault.request(for: s, email: typed?.email, password: typed?.password) else {

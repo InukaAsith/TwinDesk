@@ -66,7 +66,7 @@ function setupIpc(ctx) {
   handle('qrPair', () => ctx.qrPair());
   handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code // Connection: the phone pairing QR code's link
   handle('importCancel', () => ctx.explorer() && ctx.explorer().cancel()); // Phone Files: stop importing into Explorer's folder
-  // iPhone app signing (shared/iossign.js): one action, and Choose an IPA….
+  // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
   handle('iosSign', (o) => { const s = ctx.iosSign && ctx.iosSign(); if (s) s.act(o); });
   handle('iosSignIpa', () => require('../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), dialog));
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)

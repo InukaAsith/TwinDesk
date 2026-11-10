@@ -50,7 +50,7 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
   let seed = null;
   try { seed = JSON.parse(fs.readFileSync(seedFile, 'utf8')); } catch {}
   const sign = new IosSign({
-    link, bins: BINS, usbSerials, vault, seed,
+    link, bins: BINS, usbSerials, vault, seed, cacheDir: path.join(dir, 'ios-ipas'),
     cfg: () => cfg,
     setCfg: (patch) => {
       cfg = { ...cfg, ...patch };

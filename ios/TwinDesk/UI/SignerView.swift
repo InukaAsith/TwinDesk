@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// App signing: TwinDesk (and, with a computer that allows it, another IPA) signed with the person's
+// App refresh: TwinDesk (and, with a computer that allows it, another IPA) signed with the person's
 // own Apple ID by the connected computer (Core/SignerFeature.swift). Opt in, and said plainly: the
 // warning first, how it works, what's sideloaded here and when each runs out.
 import SwiftUI
@@ -19,9 +19,9 @@ struct SignerView: View {
 
     var body: some View {
         let _ = core.tick
-        PageScroll(title: tr("App signing")) {
+        PageScroll(title: tr("App refresh")) {
             warning
-            if !core.connected { NeedsComputer(what: tr("App signing")) }
+            if !core.connected { NeedsComputer(what: tr("App refresh")) }
             else if !s.available { unavailable }
             else {
                 Columns {
@@ -43,7 +43,7 @@ struct SignerView: View {
             if scoped { u.stopAccessingSecurityScopedResource() }
             if ok { s.install(to) }
         }
-        .confirmationDialog(tr("Sign out of app signing?"), isPresented: $askSignOut, titleVisibility: .visible) {
+        .confirmationDialog(tr("Sign out of App refresh?"), isPresented: $askSignOut, titleVisibility: .visible) {
             Button(tr("Sign out")) { s.signOut(everything: false) }
             Button(tr("Sign out and forget the certificate"), role: .destructive) { s.signOut(everything: true) }
             Button(tr("Cancel"), role: .cancel) {}
@@ -65,7 +65,7 @@ struct SignerView: View {
     private var unavailable: some View {
         VStack(alignment: .leading, spacing: 8) {
             CardHeader(symbol: "signature", color: Page.signing.color, title: tr("{name} can’t sign yet", ["name": pc]))
-            Text(tr("TwinDesk on {name} has to see this device: connect the cable once, unlock and tap Trust. After that Wi-Fi is enough when Wi-Fi sync is on. Its TwinDesk also has to be a version with app signing.", ["name": pc]))
+            Text(tr("TwinDesk on {name} has to see this device: connect the cable once, unlock and tap Trust. After that Wi-Fi is enough when Wi-Fi sync is on. Its TwinDesk also has to be a version with TwinDesk iPhone.", ["name": pc]))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .glassCard()
@@ -152,6 +152,9 @@ struct SignerView: View {
                         Text([a.version, a.teamName].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    if a.cached && s.anyIpa && s.facts.signedIn && !s.running {
+                        Button { s.refresh(app: a.id) } label: { Image(systemName: "arrow.clockwise") }.secondaryButton().controlSize(.small).accessibilityLabel(tr("Refresh now"))
+                    }
                     Text(left(a.expires)).font(.caption.monospacedDigit()).foregroundStyle(a.expires - Date().timeIntervalSince1970 < 2 * 86400 ? TDColor.bad : .secondary)
                 }
             }

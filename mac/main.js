@@ -692,7 +692,7 @@ app.whenReady().then(() => {
     },
   });
   svc.devctl.on('change', pushState);
-  // iPhone app signing (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
+  // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
   svc.iosSign = require('../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage,
     link: {
