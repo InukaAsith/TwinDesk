@@ -78,7 +78,7 @@
       const onSw = UI.switch((v) => { if (v) { onSw.set(false); act({ a: 'enable' }); } else act({ a: 'set', on: false }); },
         { label: tr('Install TwinDesk and refresh it with the iOS app') });
       const onCard = UI.card('', [UI.row(tr('Install TwinDesk and refresh it with the iOS app'),
-        tr('{computer} installs TwinDesk on your iPhone or iPad and signs it again before its 7 days run out, asked by TwinDesk there. Turning this off removes what {computer} kept.', { computer: Here }),
+        tr('{Computer} installs TwinDesk on your iPhone or iPad and signs it again before its 7 days run out, asked by TwinDesk there. Turning this off removes what {computer} kept.', { Computer: Here, computer: here }),
         [onSw.el], { literal: true })]);
       const warn = el('div', { class: 'ios-warn', attrs: { role: 'note' } }, [
         warnIcon(),
