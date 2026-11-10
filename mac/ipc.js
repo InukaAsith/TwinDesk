@@ -607,7 +607,7 @@ function setupIpc(ctx) {
     },
     // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
     iosSign(o) {
-      if (ctx.iosSign) ctx.iosSign.act(o);
+      require('../shared/iossign-host.js').act(ctx.iosSign, dialog, o);
     },
     iosSignIpa() {
       require('../shared/iossign-host.js').pickIpa(ctx.iosSign, dialog);

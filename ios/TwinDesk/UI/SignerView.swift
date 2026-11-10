@@ -13,6 +13,7 @@ struct SignerView: View {
     @State private var picking = false
     @State private var askSignOut = false
     @State private var showHow = false
+    @State private var askOn = false
 
     private var s: Signer { core.signer }
     private var pc: String { core.host?.name ?? tr("the computer") }
@@ -21,7 +22,9 @@ struct SignerView: View {
         let _ = core.tick
         PageScroll(title: tr("App refresh")) {
             warning
-            if !core.connected { NeedsComputer(what: tr("App refresh")) }
+            altstore
+            if !s.on { turnOn }
+            else if !core.connected { NeedsComputer(what: tr("App refresh")) }
             else if !s.available { unavailable }
             else {
                 Columns {
@@ -43,6 +46,12 @@ struct SignerView: View {
             if scoped { u.stopAccessingSecurityScopedResource() }
             if ok { s.install(to) }
         }
+        .alert(tr("Not recommended!"), isPresented: $askOn) {
+            Button(tr("Turn on anyway"), role: .destructive) { s.on = true }
+            Button(tr("Cancel"), role: .cancel) {}
+        } message: {
+            Text(tr("This signs in to Apple with your Apple ID from TwinDesk. Apple can refuse the sign-in, lock the Apple ID for a while, or stop it from signing apps. We recommend AltStore: if you already use it, keep using it."))
+        }
         .confirmationDialog(tr("Sign out of App refresh?"), isPresented: $askSignOut, titleVisibility: .visible) {
             Button(tr("Sign out")) { s.signOut(everything: false) }
             Button(tr("Sign out and forget the certificate"), role: .destructive) { s.signOut(everything: true) }
@@ -54,12 +63,30 @@ struct SignerView: View {
 
     private var warning: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(tr("Apple doesn’t support this"), systemImage: "exclamationmark.triangle.fill").font(.headline).foregroundStyle(.orange)
-            Text(tr("Sign-ins from tools like this one have been refused, accounts have been locked for a while, and some Apple IDs can no longer sign apps at all. Use an Apple ID made for this, not your main one. If you’d rather not, use TwinDesk Web in Safari, or AltStore."))
+            Label(tr("Not recommended!"), systemImage: "exclamationmark.circle.fill").font(.headline).foregroundStyle(TDColor.bad)
+            Text(tr("Sign-ins from tools like this one have been refused, Apple IDs have been locked for a while, and some can no longer sign apps at all. Use an Apple ID made for this, not your main one."))
                 .font(.subheadline)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(tint: .orange)
+        .glassCard(tint: .red)
+    }
+
+    private var altstore: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardHeader(symbol: "hand.thumbsup.fill", color: TDColor.good, title: tr("We recommend AltStore"))
+            Text(tr("AltStore is made for this: it installs and refreshes apps by itself. If you already have AltStore, keep using it, and use this only if you can’t or don’t want to. TwinDesk Web in Safari needs no install at all."))
+                .font(.subheadline)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private var turnOn: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(tr("App refresh is off.")).font(.headline)
+            Button { askOn = true } label: { Text(tr("Turn on App refresh…")).frame(maxWidth: .infinity) }.secondaryButton()
+        }
+        .glassCard()
     }
 
     private var unavailable: some View {
@@ -175,6 +202,7 @@ struct SignerView: View {
             if s.facts.signedIn || !s.facts.email.isEmpty {
                 Button(tr("Sign out…"), role: .destructive) { askSignOut = true }.secondaryButton()
             }
+            Button(tr("Turn off App refresh")) { s.on = false }.secondaryButton()
         }
         .glassCard()
     }

@@ -53,7 +53,13 @@
         para(tr('The Apple ID and password go to Apple only. One more server is used: an “anisette” server ({server}), which Apple’s sign-in needs. It never gets the Apple ID or the password, but it does hold the identity Apple trusts after your verification code.', { server: '' })),
       ])]);
       const anisetteLine = how.querySelector('p:last-child');
-      const risks = UI.note('warn', tr('Apple doesn’t support this. Sign-ins from tools like this one have been refused, accounts have been locked for a while, and some Apple IDs can no longer sign apps at all. Use an Apple ID made for this, not your main one. If you’d rather not, use TwinDesk Web in Safari, or AltStore.'));
+      const risks = el('div', { class: 'note bad' }, [
+        el('strong', { text: `❗ ${tr('Not recommended!')}` }),
+        el('div', { text: tr('Sign-ins from tools like this one have been refused, Apple IDs have been locked for a while, and some can no longer sign apps at all. Use an Apple ID made for this, not your main one.') }),
+      ]);
+      const altstore = UI.card(tr('We recommend AltStore'), [UI.row(tr('AltStore is made for this'), tr('It installs and refreshes apps on the iPhone by itself. If you already have AltStore, keep using it, and use this only if you can’t or don’t want to. TwinDesk Web in Safari needs no install at all.'), [UI.button('altstore.io', () => api().openLink && api().openLink('https://altstore.io'), 'small')])]);
+      const onSw = UI.switch((v) => { if (v) { onSw.set(false); act({ a: 'enable' }); } else act({ a: 'set', on: false }); });
+      const onCard = UI.card('', [UI.row(tr('Use TwinDesk iPhone on {computer}', { computer: here }), tr('Off until you turn it on. Turning it off removes what this computer kept.'), [onSw.el])]);
 
       // ---- the device and its apps ----
       const devSel = UI.select([], (v) => act({ a: 'set', udid: v }));
@@ -118,7 +124,7 @@
       ]);
       const keepCard = UI.card(tr('Without the iPhone’s app'), [keepRow, danger]);
 
-      body.append(missing, risks, devCard, status, refreshCard, askCard, hereCard, keepCard, how);
+      body.append(missing, risks, altstore, onCard, devCard, status, refreshCard, askCard, hereCard, keepCard, how);
 
       let appKey = '';
       let certKey = '';
@@ -127,9 +133,11 @@
         const run = v.run;
         const need = run && run.from !== 'phone' ? run.need : null;
         missing.set(v.available ? '' : tr('The signing helper isn’t part of this build of TwinDesk.'));
-        for (const c of [devCard, refreshCard, hereCard, keepCard, status]) c.hidden = !v.available;
+        onCard.hidden = !v.available;
+        onSw.set(v.on);
+        for (const c of [devCard, refreshCard, hereCard, keepCard, status]) c.hidden = !v.available || !v.on;
         askCard.hidden = !need;
-        if (!v.available) return;
+        if (!v.available || !v.on) return;
         anisetteLine.textContent = tr('The Apple ID and password go to Apple only. One more server is used: an “anisette” server ({server}), which Apple’s sign-in needs. It never gets the Apple ID or the password, but it does hold the identity Apple trusts after your verification code.', { server: v.anisette || '' });
 
         // the device

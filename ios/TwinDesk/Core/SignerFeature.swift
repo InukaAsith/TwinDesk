@@ -48,6 +48,12 @@ final class Signer: Feature {
         set { core.store.setFlag("sign.auto", newValue); tell(); core.changed() }
     }
 
+    // Off until turned on in its page, behind its warning. Off: nothing is asked of the computer.
+    var on: Bool {
+        get { core.store.flag("sign.on", false) }
+        set { core.store.setFlag("sign.on", newValue); if !newValue { SignerVault.signOut(everything: false) }; tell(); core.changed() }
+    }
+
     var running: Bool { step != nil }
     var facts: (email: String, until: Double, signedIn: Bool) { SignerVault.facts }
 
@@ -64,7 +70,7 @@ final class Signer: Feature {
 
     private func tell() {
         let f = facts
-        core.send(msg("sign.state", ["signedIn": f.signedIn, "email": f.email, "until": f.until, "auto": auto]))
+        core.send(msg("sign.state", ["signedIn": on && f.signedIn, "email": on ? f.email : "", "until": f.until, "auto": on && auto]))
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
@@ -167,10 +173,10 @@ final class Signer: Feature {
                     expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0, twindesk: $0.bool("twindesk"), cached: $0.bool("cached"))
             }
             // A computer that keeps a copy (switched on there, behind its warning) gets it once a session.
-            if computerKeeps, !gaveCopy, facts.signedIn { gaveCopy = true; core.send(msg("sign.keep", ["state": SignerVault.state])) }
+            if on, computerKeeps, !gaveCopy, facts.signedIn { gaveCopy = true; core.send(msg("sign.keep", ["state": SignerVault.state])) }
             core.changed()
         case "sign.want":
-            if !running, facts.signedIn, m.bool("now") || auto {
+            if on, !running, facts.signedIn, m.bool("now") || auto {
                 let id = m.str("app", max: 200)
                 if id.isEmpty { refresh() } else { refresh(app: id) }
             }
@@ -188,7 +194,7 @@ final class Signer: Feature {
             // A state made on the computer (signed in there): kept when there's no session here, or it's the same Apple ID's.
             guard let s = m["state"] as? [String: String], !s.isEmpty, s.count < 40 else { return true }
             let f = facts
-            if !f.signedIn || f.email == (s["email"] ?? "") { SignerVault.save(state: s); tell(); core.changed() }
+            if on || !f.signedIn, !f.signedIn || f.email == (s["email"] ?? "") { SignerVault.save(state: s); tell(); core.changed() }
         case "sign.ev":
             event(m)
         default:

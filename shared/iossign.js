@@ -139,7 +139,7 @@ class IosSign extends EventEmitter {
     const udid = this._udid();
     const r = this.run;
     return {
-      available: !!this.info, anyIpa: !!(this.info && this.info.anyIpa), anisette: this.info ? this.info.anisette : '',
+      on: c.on === true, available: !!this.info, anyIpa: !!(this.info && this.info.anyIpa), anisette: this.info ? this.info.anisette : '',
       auto: c.auto !== false, days: c.days || 3, keep: !!c.keep, canKeep: !!this.vault, cache: c.cache !== false,
       devices: this.devices, udid,
       apps: ((udid && this.apps[udid]) || []).map((a) => ({ ...a, cached: !!this._cached(a.bundleId) })),
@@ -187,7 +187,7 @@ class IosSign extends EventEmitter {
     if (!this._ios()) return;
     const v = this.view;
     this.link.send({
-      t: T.INFO, available: v.available && !!v.udid, anyIpa: v.anyIpa, anisette: v.anisette, keep: v.keep, days: v.days,
+      t: T.INFO, available: v.on && v.available && !!v.udid, anyIpa: v.anyIpa, anisette: v.anisette, keep: v.keep, days: v.days,
       apps: v.apps, busy: !!v.run,
     });
   }
@@ -363,6 +363,7 @@ class IosSign extends EventEmitter {
   _ready(reply) {
     const no = (message, kind = 'other') => { reply({ kind, message }); return ''; };
     if (!this.info) return no('The signing helper isn’t in this build');
+    if (this.cfg().on !== true) return no('TwinDesk iPhone is off on this computer');
     if (this.run) return no('A refresh is already running', 'busy');
     const udid = this._udid();
     if (!udid) return no(this.devices.length ? 'Choose which iPhone this is on the computer' : 'This computer doesn’t see the iPhone: connect its cable once and tap Trust', 'device');
@@ -470,7 +471,7 @@ class IosSign extends EventEmitter {
   _auto() {
     const c = this.cfg();
     const udid = this._udid();
-    if (c.auto === false || this.run || !udid || !this.info) return;
+    if (c.on !== true || c.auto === false || this.run || !udid || !this.info) return;
     // TwinDesk, and every app whose IPA is kept here: the one that runs out first.
     const due = (this.apps[udid] || []).filter((a) => a.expires && (a.twindesk || this._cached(a.bundleId))
       && a.expires * 1000 - Date.now() <= (c.days || 3) * 86400000
@@ -491,6 +492,10 @@ class IosSign extends EventEmitter {
   set(o) {
     if (!o || typeof o !== 'object') return;
     const patch = {};
+    if (typeof o.on === 'boolean') {
+      patch.on = o.on;
+      if (!o.on) { patch.keep = false; this.kept = {}; this._saveKept(); this.pending = null; } // off: nothing of it stays here
+    }
     if (typeof o.auto === 'boolean') patch.auto = o.auto;
     if (Number.isInteger(o.days) && o.days >= 1 && o.days <= 6) patch.days = o.days;
     if (typeof o.cache === 'boolean') {

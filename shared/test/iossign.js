@@ -56,7 +56,7 @@ function rig(cfg0 = {}) {
   link.sent = [];
   link.send = (m) => link.sent.push(m);
   link.current = { os: 'ios', id: 'phone-1', name: 'An iPhone' };
-  let cfg = { auto: false, ...cfg0 };
+  let cfg = { on: true, auto: false, ...cfg0 };
   let vault = '';
   const sign = new IosSign({ link, bins: ['/nowhere', fake], cfg: () => cfg, setCfg: (p) => { cfg = { ...cfg, ...p }; }, vault: { load: () => vault, save: (s) => { vault = s; } } });
   return { link, sign, vault: () => vault, of: (t) => link.sent.filter((m) => m.t === t) };

@@ -61,7 +61,7 @@ function setupIpc(ctx) {
   });
   handle('refreshFound', () => discovery.refresh());
   // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
-  handle('iosSign', (o) => { const s = ctx.iosSign && ctx.iosSign(); if (s) s.act(o); });
+  handle('iosSign', (o) => require('../shared/iossign-host.js').act(ctx.iosSign && ctx.iosSign(), dialog, o));
   handle('iosSignIpa', () => require('../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), dialog));
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.

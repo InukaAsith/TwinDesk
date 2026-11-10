@@ -62,6 +62,26 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
   return sign;
 }
 
+// Turning it on: said once more, in a dialog of its own, before anything is switched.
+async function enable(sign, dialog, win) {
+  if (!sign) return;
+  const r = await dialog.showMessageBox(win || undefined, {
+    type: 'warning',
+    message: 'Not recommended!',
+    detail: 'This signs in to Apple with your Apple ID from TwinDesk to install and refresh apps on your iPhone. Apple can refuse the sign-in, lock the Apple ID for a while, or stop it from signing apps.\n\nWe recommend AltStore. If you already use AltStore, keep using it.\n\nOnly turn this on with an Apple ID made for it, not your main one.',
+    buttons: ['Cancel', 'Turn on anyway'], defaultId: 0, cancelId: 0,
+  });
+  if (r.response === 1) sign.set({ on: true });
+}
+
+// One action from the window ({a: 'enable'} asks first).
+function act(sign, dialog, o) {
+  if (!sign || !o || typeof o !== 'object') return;
+  if (o.a === 'enable') return void enable(sign, dialog);
+  if (o.a === 'set' && o.on === true) return; // only through the dialog
+  sign.act(o);
+}
+
 // Choose an IPA… (builds that install other apps).
 async function pickIpa(sign, dialog, win) {
   if (!sign) return;
@@ -69,4 +89,4 @@ async function pickIpa(sign, dialog, win) {
   if (!r.canceled && r.filePaths[0]) sign.setIpa(r.filePaths[0]);
 }
 
-module.exports = { create, pickIpa, BINS };
+module.exports = { create, pickIpa, act, BINS };

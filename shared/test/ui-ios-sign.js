@@ -42,10 +42,10 @@ const body = el('div');
 const update = tab.build(body);
 const find = (node, pred, out = []) => { if (node instanceof El) { if (pred(node)) out.push(node); node.children.forEach((c) => find(c, pred, out)); } return out; };
 const button = (label) => find(body, (n) => n.tag === 'button' && n.textContent === label)[0];
-const base = { available: true, anyIpa: true, anisette: 'https://a.example', auto: true, days: 3, keep: false, canKeep: true, devices: [{ udid: 'U1', name: 'An iPhone', usb: false }], udid: 'U1', apps: [], phone: null, kept: null, pending: false, ipa: '', run: null, last: null };
+const base = { on: true, available: true, anyIpa: true, anisette: 'https://a.example', auto: true, days: 3, keep: false, canKeep: true, devices: [{ udid: 'U1', name: 'An iPhone', usb: false }], udid: 'U1', apps: [], phone: null, kept: null, pending: false, ipa: '', run: null, last: null };
 const soon = Math.floor(Date.now() / 1000) + 3600;
 const states = [
-  {}, { iosSign: { available: false } }, { iosSign: base },
+  {}, { iosSign: { available: false } }, { iosSign: { ...base, on: false } }, { iosSign: base },
   { iosSign: { ...base, devices: [], udid: '' } },
   { iosSign: { ...base, apps: [{ bundleId: 'com.twindesk.ios.T', name: 'TwinDesk', version: '3', teamName: 'T', expires: soon, twindesk: true }, { bundleId: 'x', name: 'Other', version: '', teamName: '', expires: 0 }] } },
   { iosSign: { ...base, phone: { signedIn: true, email: 'a@b.c', until: 1, auto: true } } },
@@ -59,10 +59,10 @@ const states = [
 for (const s of states) update(s);
 
 // A question for the iPhone isn't asked here
-update(states[8]);
+update(states[9]);
 assert.ok(find(body, (n) => n.tag === 'section' && n.textContent === 'Apple asks')[0].hidden);
 // Revoke names the one clicked
-update(states[7]);
+update(states[8]);
 button('Revoke').click();
 assert.deepStrictEqual(sent.pop(), { a: 'answer', revoke: ['S1'] });
 
