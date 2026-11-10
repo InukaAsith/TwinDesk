@@ -255,6 +255,7 @@ function start() {
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
   iosSign = require('../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage, link,
+    near: { list: () => (bleHost ? bleHost.list() : []), invite: (devId) => bleHost && bleHost.invite(devId) }, // iPhones linked over Bluetooth
     usbSerials: () => (iosNet ? iosNet.view.devices.filter((x) => x.app).map((x) => x.serial) : []),
     onChange: pushState,
   });

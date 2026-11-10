@@ -28,7 +28,7 @@ struct SignerView: View {
             else if !s.available { unavailable }
             else {
                 Columns {
-                    VStack(spacing: 16) { status; if s.running || s.need != nil { runCard }; if showSignIn { signInCard } }
+                    VStack(spacing: 16) { status; if s.running || s.need != nil { runCard }; if !s.running, s.error != nil || s.doneUntil != nil { resultCard }; if showSignIn { signInCard } }
                 } right: {
                     VStack(spacing: 16) { appsCard; options }
                 }
@@ -110,8 +110,6 @@ struct SignerView: View {
             } else {
                 Text(tr("Not signed in.")).font(.caption).foregroundStyle(.secondary)
             }
-            if let e = s.error { Text(e).font(.caption).foregroundStyle(TDColor.bad).textSelection(.enabled) }
-            if let d = s.doneUntil { Text(tr("Installed. It runs until {date}.", ["date": day(d.timeIntervalSince1970)])).font(.caption).foregroundStyle(TDColor.good) }
             if f.signedIn && !s.running {
                 Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
             }
@@ -119,15 +117,32 @@ struct SignerView: View {
         .glassCard()
     }
 
+    // The run's steps: done ones ticked, the one running with a spinner (and its percent), the ones to come dimmed.
+    private static let ahead = ["register", "cert", "appid", "profile", "sign", "install"]
+    private static let order = ["upload", "find", "download", "signin", "session", "register", "cert", "appid", "profile", "sign", "install"]
+
     private var runCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text(stepText).font(.subheadline)
+        let steps = Self.order.filter { s.seen.contains($0) || Self.ahead.contains($0) }
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                CardHeader(symbol: "signature", color: Page.signing.color, title: tr("Progress"))
                 Spacer()
                 Button(tr("Stop")) { s.stop() }.secondaryButton().controlSize(.small)
             }
-            if s.step == "install" && s.percent > 0 { ProgressView(value: Double(s.percent), total: 100) }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(steps, id: \.self) { k in
+                    let now = k == s.step
+                    let done = !now && s.seen.contains(k)
+                    HStack(spacing: 10) {
+                        if now { ProgressView().controlSize(.small).frame(width: 18) }
+                        else { Image(systemName: done ? "checkmark.circle.fill" : "circle").foregroundStyle(done ? TDColor.good : Color.secondary.opacity(0.5)).frame(width: 18) }
+                        Text(label(k)).font(.subheadline).fontWeight(now ? .semibold : .regular).foregroundStyle(now ? TDColor.text : done ? Color.secondary : Color.secondary.opacity(0.6))
+                        Spacer()
+                        if now && (k == "sign" || k == "install") && s.percent > 0 { Text("\(s.percent)%").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+            if (s.step == "install" || s.step == "sign") && s.percent > 0 { ProgressView(value: Double(s.percent), total: 100) }
             switch s.need {
             case .code(let err):
                 Text(tr("Apple sent a code to your devices.")).font(.caption).foregroundStyle(.secondary)
@@ -137,13 +152,16 @@ struct SignerView: View {
                     Button(tr("Continue")) { s.answer(code: code); code = "" }.primaryButton().disabled(code.count < 6)
                 }
             case .certs(let certs):
-                Text(tr("This Apple ID has as many development certificates as it may. Revoking one stops the apps signed with it until they are signed again."))
+                Text(tr("This Apple ID has as many development certificates as Apple allows. Only one TwinDesk made can be revoked here: the apps signed with it stop until they are signed again. The others belong to other tools."))
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(certs) { c in
                     HStack {
-                        VStack(alignment: .leading) { Text(c.name); Text(day(c.expires)).font(.caption).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading) {
+                            Text(c.name)
+                            Text(c.ours ? day(c.expires) : tr("Not TwinDesk’s: can’t be revoked here")).font(.caption).foregroundStyle(.secondary)
+                        }
                         Spacer()
-                        Button(tr("Revoke"), role: .destructive) { s.revoke(c.id) }.secondaryButton().controlSize(.small)
+                        if c.ours { Button(tr("Revoke"), role: .destructive) { s.revoke(c.id) }.secondaryButton().controlSize(.small) }
                     }
                 }
                 Button(tr("Cancel")) { s.cancelQuestion() }.secondaryButton()
@@ -151,6 +169,21 @@ struct SignerView: View {
             }
         }
         .glassCard()
+    }
+
+    // How the last run ended: what went wrong (Apple's words and code), or until when it runs now.
+    private var resultCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let e = s.error {
+                Label(tr("It didn’t work"), systemImage: "exclamationmark.triangle.fill").font(.headline).foregroundStyle(TDColor.bad)
+                Text(e).font(.subheadline).textSelection(.enabled)
+            } else if let d = s.doneUntil {
+                Label(tr("Installed"), systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(TDColor.good)
+                Text(tr("Installed. It runs until {date}.", ["date": day(d.timeIntervalSince1970)])).font(.subheadline)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(tint: s.error != nil ? .red : nil)
     }
 
     private var signInCard: some View {
@@ -194,7 +227,7 @@ struct SignerView: View {
 
     private var options: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ToggleRow(title: tr("Refresh automatically"), detail: tr("When {name} says TwinDesk here has few days left, while this device is unlocked.", ["name": pc]),
+            ToggleRow(title: tr("Refresh automatically"), detail: tr("When {name} says an app here has few days left: by itself while this device is unlocked, else a notification to tap.", ["name": pc]),
                       on: Binding(get: { s.auto }, set: { s.auto = $0 }))
             if s.computerKeeps {
                 Label(tr("{name} keeps a copy of the signing session (switched on there).", ["name": pc]), systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
@@ -225,13 +258,18 @@ struct SignerView: View {
         .glassCard()
     }
 
-    private var stepText: String {
-        switch s.step ?? "" {
+    private func label(_ k: String) -> String {
+        switch k {
         case "upload": return tr("Sending the file to the computer…")
         case "download": return tr("Downloading TwinDesk…")
         case "signin": return tr("Signing in to Apple…")
+        case "find": return tr("Waiting for the computer to see this device…")
+        case "session": return tr("Opening the Apple session…")
         case "register": return tr("Registering the device…")
-        case "sign": return tr("Signing…")
+        case "cert": return tr("Getting the certificate…")
+        case "appid": return tr("Registering the app ID…")
+        case "profile": return tr("Getting the provisioning profile…")
+        case "sign": return tr("Signing the app…")
         case "install": return tr("Installing…")
         default: return tr("Working…")
         }

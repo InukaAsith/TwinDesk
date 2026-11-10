@@ -22,6 +22,8 @@
 // sign.want (time to refresh), sign.keep (the state, to keep), sign.stop.
 //
 // link: on(type | 'welcome' | 'closed', fn), send(msg), current (the session's ctx: os, id, name).
+// near: {list() → [{id, name, os}], invite(id)}: devices linked over Bluetooth (blepipe.js BleHost),
+// for an iPhone that isn't in a session: an invite wakes TwinDesk there, which comes back (Ble.swift).
 // bins: where the helper may be (the first that exists). usbSerials(): UDIDs on a cable whose app
 // is on this session (shared/iosnet.js). cfg()/setCfg(patch): {auto, days, keep, device: {phoneId: udid}}.
 // vault: {load() → string, save(string)} sealed by the system, or null where it can't.
@@ -40,7 +42,9 @@ const T = {
 };
 const TWINDESK = /^com\.twindesk\.ios\.[A-Z0-9]{6,20}$/; // as signed: its bundle id and the team's
 const LOOK_MS = 30 * 60 * 1000; // how often the devices and their apps are looked at
-const AGAIN_MS = 6 * 3600 * 1000; // an automatic refresh that failed isn't tried again sooner
+const RETRY_HOURS = [1, 3, 6, 12, 24]; // an automatic refresh isn't tried again sooner (cfg.retry)
+const INVITE_MS = 60 * 1000; // an iPhone near over Bluetooth is invited at most this often for a refresh
+const DEVICE_WAIT_MS = 30 * 1000; // a refresh the iPhone asked for waits this long for the system to see it
 const MAX_LINE = 256 * 1024;
 const MAX_STATE = 64 * 1024;
 const MAX_IPA = 4 * 1024 * 1024 * 1024;
@@ -69,9 +73,9 @@ function stateFacts(state) {
 class IosSign extends EventEmitter {
   // seed: a state made outside the app (ios-signer/try.sh), handed to the iPhone's app like one made here.
   // cacheDir: where the IPAs installed from here are kept (cfg.cache, on), so each can be signed again.
-  constructor({ link, bins, usbSerials, cfg, setCfg, vault, seed, cacheDir }) {
+  constructor({ link, near, bins, usbSerials, cfg, setCfg, vault, seed, cacheDir }) {
     super();
-    Object.assign(this, { link, usbSerials: usbSerials || (() => []), cfg, setCfg, vault: vault || null, cacheDir: cacheDir || '' });
+    Object.assign(this, { link, near: near || null, usbSerials: usbSerials || (() => []), cfg, setCfg, vault: vault || null, cacheDir: cacheDir || '' });
     this.bin = (bins || []).find((b) => { try { return fs.statSync(b).isFile(); } catch { return false; } }) || '';
     this.info = null; // the helper's {anyIpa, anisette, version}
     this.devices = []; // [{udid, name, usb}]
@@ -81,7 +85,9 @@ class IosSign extends EventEmitter {
     this.last = null; // how the last run ended: {error} | {done}
     this.pending = null; // {udid, state}: made here, for the iPhone's app when it's connected
     this.tried = new Map(); // udid -> when an automatic refresh last started
-    this.kept = this._loadKept(); // udid -> state
+    this._kept = null; // udid -> state, read from the vault the first time it's needed (kept)
+    this.queued = null; // a refresh asked for while the iPhone was only near: {now, app}, sent once it connects
+    this.invitedAt = 0;
     this.ipa = ''; // an IPA chosen in this window for the next run (builds that install other apps)
     this.seed = cleanState(seed);
     this.stopped = false;
@@ -94,8 +100,9 @@ class IosSign extends EventEmitter {
     });
     const on = (t, fn) => link.on(t, (m) => this._ios() && m && typeof m === 'object' && fn(m));
     on(T.STATE, (m) => {
-      this.phone = { signedIn: m.signedIn === true, email: str(m.email), until: Number(m.until) || 0, auto: m.auto !== false };
+      this.phone = { signedIn: m.signedIn === true, email: str(m.email), until: Number(m.until) || 0, auto: m.auto !== false, expires: Number(m.expires) || 0 };
       this._handOver();
+      if (this.queued && this.phone.signedIn) { this._want(this.queued); this.queued = null; }
       this._tellPhone();
       this._auto();
       this.emit('change');
@@ -132,6 +139,49 @@ class IosSign extends EventEmitter {
 
   _ios() { return !!(this.link.current && this.link.current.os === 'ios'); }
 
+  // This computer's copies, from the vault (sealed by the system: the Keychain on a Mac). Read only
+  // with Keep a copy on, so the system isn't asked for the vault at all otherwise.
+  get kept() {
+    if (!this._kept) this._kept = this.cfg().keep ? this._loadKept() : {};
+    return this._kept;
+  }
+
+  set kept(v) { this._kept = v; }
+
+  // iPhones linked over Bluetooth (paired with this computer, not in a session here).
+  _near() {
+    try {
+      const cur = this.link.current;
+      return ((this.near && this.near.list()) || []).filter((d) => d && d.os === 'ios' && !(cur && cur.id === d.id)).map((d) => ({ id: str(d.id, 64), name: str(d.name, 80) }));
+    } catch {
+      return [];
+    }
+  }
+
+  _invite() {
+    if (!this.near || Date.now() - this.invitedAt < INVITE_MS) return false;
+    const list = this._near();
+    if (!list.length) return false;
+    this.invitedAt = Date.now();
+    for (const d of list) { try { this.near.invite(d.id); } catch {} }
+    return true;
+  }
+
+  // The iPhone's app is asked for a refresh: now (Refresh now here), or by itself (cfg.how: 'ask'
+  // shows a notification there to tap; 'self' refreshes while it's unlocked, else the notification).
+  _want({ now = false, app = '', expires = 0 } = {}) {
+    const c = this.cfg();
+    const m = { t: T.WANT, ask: c.how === 'ask', name: '' };
+    if (now) m.now = true;
+    if (app) {
+      m.app = app;
+      const a = Object.values(this.apps).flat().find((x) => x.bundleId === app);
+      if (a) m.name = a.name;
+    }
+    if (expires) m.expires = expires;
+    this.link.send(m);
+  }
+
   // ---- what the pages show ----
 
   get view() {
@@ -140,14 +190,17 @@ class IosSign extends EventEmitter {
     const r = this.run;
     return {
       on: c.on === true, available: !!this.info, anyIpa: !!(this.info && this.info.anyIpa), anisette: this.info ? this.info.anisette : '',
-      auto: c.auto !== false, days: c.days || 3, keep: !!c.keep, canKeep: !!this.vault, cache: c.cache !== false,
-      devices: this.devices, udid,
+      auto: c.auto !== false, days: c.days || 3, how: c.how === 'ask' ? 'ask' : 'self', which: c.which === 'twindesk' ? 'twindesk' : 'all',
+      retry: RETRY_HOURS.includes(c.retry) ? c.retry : 6, retries: RETRY_HOURS,
+      keep: !!c.keep, canKeep: !!(this.vault && this.vault.possible !== false), cache: c.cache !== false,
+      devices: this.devices, udid, near: c.on === true ? this._near() : [],
+      session: this._ios() ? { id: str(this.link.current.id, 64), name: str(this.link.current.name, 80) } : null,
       apps: ((udid && this.apps[udid]) || []).map((a) => ({ ...a, cached: !!this._cached(a.bundleId) })),
       phone: this.phone,
       kept: udid && this.kept[udid] ? stateFacts(this.kept[udid]) : null,
       pending: !!(this.pending && this.pending.udid === udid),
       ipa: this.ipa ? path.basename(this.ipa) : '',
-      run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need } : null,
+      run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need, seen: r.seen.slice(), ipa: r.ipa ? path.basename(r.ipa) : '' } : null,
       last: this.last,
     };
   }
@@ -220,11 +273,12 @@ class IosSign extends EventEmitter {
   // The devices the system sees and what's sideloaded on the one this session is with.
   async _look() {
     if (!this.bin || this.stopped || this.looking) return;
+    if (this.cfg().on !== true) { this.devices = []; this.apps = {}; return this._changed(); } // off: nothing is looked at
     this.looking = true;
     try {
       const d = await this._once({ op: 'devices' });
       this.devices = d && Array.isArray(d.devices) ? d.devices.slice(0, 20).filter((x) => x && typeof x.udid === 'string' && /^[0-9A-Fa-f-]{20,64}$/.test(x.udid))
-        .map((x) => ({ udid: x.udid, name: str(x.name, 80), usb: x.usb === true })) : [];
+        .map((x) => ({ udid: x.udid, name: str(x.name, 80), usb: x.usb === true, wifi: !!x.ip })) : [];
       const udid = this._udid();
       if (udid && this.seed && !this.pending) { this.pending = { udid, state: this.seed }; this.seed = null; this._handOver(); }
       if (udid) {
@@ -251,7 +305,7 @@ class IosSign extends EventEmitter {
   // A signing run: the request's first line in, its events out to onEvent until it ends.
   _start(run, req) {
     this.last = null;
-    this.run = { step: 'start', percent: 0, need: null, ipa: req.ipa || '', ...run };
+    this.run = { step: 'start', percent: 0, need: null, seen: [], ipa: req.ipa || '', ...run };
     const r = this.run;
     let buf = '';
     let p;
@@ -280,13 +334,19 @@ class IosSign extends EventEmitter {
     const toPhone = r.from === 'phone';
     switch (ev.ev) {
       case 'key': if (toPhone) this.link.send({ t: T.KEY, pub: b64(ev.pub, 64) }); return;
-      case 'step': r.step = str(ev.step, 20); r.need = null; break;
-      case 'progress': r.step = 'install'; r.percent = Math.max(0, Math.min(100, Number(ev.percent) || 0)); break;
+      case 'step': r.step = str(ev.step, 20); r.percent = 0; r.need = null; if (!r.seen.includes(r.step)) r.seen.push(r.step); break;
+      case 'progress': {
+        const step = str(ev.step, 20) || 'install';
+        if (step !== r.step) { r.step = step; r.need = null; if (!r.seen.includes(step)) r.seen.push(step); }
+        r.percent = Math.max(0, Math.min(100, Number(ev.percent) || 0));
+        break;
+      }
       case 'need2fa':
         r.need = { what: 'code', sms: ev.sms === true, error: str(ev.error), numbers: Array.isArray(ev.numbers) ? ev.numbers.slice(0, 10).map((n) => ({ id: Number(n.id) || 0, number: str(n.number, 40) })) : [] };
         break;
       case 'needcert':
-        r.need = { what: 'cert', certs: Array.isArray(ev.certs) ? ev.certs.slice(0, 20).map((c) => ({ serial: str(c.serial, 80), name: str(c.name, 100), machine: str(c.machine, 100), expires: Number(c.expires) || 0 })) : [] };
+        // Only TwinDesk's own may be revoked (the helper checks too): the others sign other tools' apps.
+        r.need = { what: 'cert', certs: Array.isArray(ev.certs) ? ev.certs.slice(0, 20).map((c) => ({ serial: str(c.serial, 80), name: str(c.name, 100), machine: str(c.machine, 100), expires: Number(c.expires) || 0, ours: c.ours === true || c.machine === 'TwinDesk' })) : [] };
         break;
       case 'state':
         if (toPhone) break; // sealed: the iPhone's to open
@@ -335,7 +395,12 @@ class IosSign extends EventEmitter {
     if (!r) return;
     this.run = null;
     if (r.proc && r.proc.exitCode === null) r.proc.kill();
-    if (!failed && done) this._cache(r, done);
+    if (!failed && done) {
+      this._cache(r, done);
+      // The device this iPhone's app is on, for the next time it isn't on its cable.
+      const cur = this.link.current;
+      if (r.from === 'phone' && cur && this._ios() && r.udid) this.setCfg({ device: { ...(this.cfg().device || {}), [cur.id]: r.udid } });
+    }
     this.last = failed ? { error: failed, from: r.from } : { done: done || {}, from: r.from, at: Date.now() };
     if (failed && r.from === 'phone' && failed.kind === 'gone') this.last = null;
     this._changed();
@@ -371,8 +436,16 @@ class IosSign extends EventEmitter {
   }
 
   // The iPhone asks for a refresh (or an install of a file it sent): sealed from here on.
-  _phoneStart(m) {
+  // The iPhone just came to the front for it (a notification tapped): the system may see it over
+  // Wi-Fi only a moment later, so it's looked for a while first.
+  async _phoneStart(m) {
     const fail = (e) => this.link.send({ t: T.EV, ev: 'error', ...e });
+    const until = Date.now() + DEVICE_WAIT_MS;
+    while (this.info && this.cfg().on === true && !this.run && !this._udid() && this._ios() && Date.now() < until) {
+      this.link.send({ t: T.EV, ev: 'step', step: 'find', percent: 0 });
+      await this._look();
+      if (!this._udid()) await new Promise((res) => setTimeout(res, 4000));
+    }
     const udid = this._ready(fail);
     if (!udid) return;
     const req = { op: 'install', sealed: true, udid };
@@ -419,7 +492,15 @@ class IosSign extends EventEmitter {
   refresh() {
     const udid = this._udid();
     if (udid && this.kept[udid] && this.cfg().keep) return this.refreshKept();
-    if (this._ios() && this.phone && this.phone.signedIn && !this.ipa) this.link.send({ t: T.WANT, now: true });
+    if (this._ios() && this.phone && this.phone.signedIn && !this.ipa) return this._want({ now: true });
+    // The iPhone is only near over Bluetooth: it's invited, and asked once it's back.
+    if (!this._ios() && this._near().length) {
+      this.queued = { now: true };
+      this.invitedAt = 0;
+      this._invite();
+      this.last = { info: 'Waking TwinDesk on the iPhone over Bluetooth…' };
+      this.emit('change');
+    }
   }
 
   // One app again, from its kept IPA: with this computer's copy of the session, or by asking the iPhone.
@@ -429,7 +510,7 @@ class IosSign extends EventEmitter {
     if (!file || !udid || this.run || !this.info || !this.info.anyIpa) return;
     this.tried.set(`${udid} ${bundleId}`, Date.now());
     if (this.cfg().keep && this.kept[udid] && stateFacts(this.kept[udid]).signedIn) { this.ipa = file; return this.refreshKept(); }
-    if (this._ios() && this.phone && this.phone.signedIn) this.link.send({ t: T.WANT, now: true, app: bundleId });
+    if (this._ios() && this.phone && this.phone.signedIn) this._want({ now: true, app: bundleId });
   }
 
   // An IPA chosen in this window ('' none): the next run typed here, or with the kept copy, installs it.
@@ -460,7 +541,7 @@ class IosSign extends EventEmitter {
     else if (Number.isInteger(a.sms)) out.sms = a.sms;
     else if (a.devices === true) out.devices = true;
     else if (a.resend === true) out.resend = true;
-    else if (Array.isArray(a.revoke)) out.revoke = a.revoke.filter((s) => r.need.certs && r.need.certs.some((c) => c.serial === s));
+    else if (Array.isArray(a.revoke)) out.revoke = a.revoke.filter((s) => r.need.certs && r.need.certs.some((c) => c.ours && c.serial === s));
     else out.abort = true;
     r.need = null;
     this._write(out);
@@ -471,25 +552,45 @@ class IosSign extends EventEmitter {
     if (this.run) this._end({ kind: 'stopped', message: 'Stopped' });
   }
 
-  // Time for it? TwinDesk on the device runs out within cfg.days: this computer's copy does it, or
-  // the iPhone's app is asked (it decides: its own switch, and only while it's unlocked).
+  // Time for it? An app runs out within cfg.days (TwinDesk, and with cfg.which 'all' every app whose
+  // IPA is kept here): this computer's copy does it, or the iPhone's app is asked (it decides: its
+  // own switch, cfg.how, and only while it's unlocked). Not in a session but near over Bluetooth:
+  // invited, and asked once it's back.
   _auto() {
     const c = this.cfg();
+    if (c.on !== true || c.auto === false || this.run || !this.info) return;
     const udid = this._udid();
-    if (c.on !== true || c.auto === false || this.run || !udid || !this.info) return;
-    // TwinDesk, and every app whose IPA is kept here: the one that runs out first.
-    const due = (this.apps[udid] || []).filter((a) => a.expires && (a.twindesk || this._cached(a.bundleId))
-      && a.expires * 1000 - Date.now() <= (c.days || 3) * 86400000
-      && Date.now() - (this.tried.get(`${udid} ${a.bundleId}`) || 0) >= AGAIN_MS)[0];
-    if (!due) return;
+    const soon = (expires) => expires && expires * 1000 - Date.now() <= (c.days || 3) * 86400000;
+    const again = (RETRY_HOURS.includes(c.retry) ? c.retry : 6) * 3600 * 1000;
+    const rested = (key) => Date.now() - (this.tried.get(key) || 0) >= again;
+    const apps = udid ? this.apps[udid] || [] : [];
+    const due = apps.filter((a) => soon(a.expires) && (a.twindesk || (c.which !== 'twindesk' && this._cached(a.bundleId))) && rested(`${udid} ${a.bundleId}`))[0];
+    // The system doesn't see the device (no cable, no Wi-Fi sync right now), but the iPhone said
+    // when its TwinDesk runs out: asked anyway, as it comes to the front for it and is seen then.
+    const phoneDue = !udid && this._ios() && this.phone && soon(this.phone.expires) && rested(`phone ${this.link.current.id}`);
+    if (!due && !phoneDue) {
+      // Not in a session: an iPhone near over Bluetooth is woken when this computer has a copy of
+      // its apps' dates and one is due (its session then comes back, and with it this check).
+      if (!this._ios() && Object.values(this.apps).flat().some((a) => a.twindesk && soon(a.expires))) this._invite();
+      return;
+    }
     const viaPhone = this._ios() && this.phone && this.phone.signedIn && this.phone.auto;
-    const viaCopy = c.keep && this.kept[udid] && stateFacts(this.kept[udid]).signedIn;
+    const viaCopy = !!udid && c.keep && this.kept[udid] && stateFacts(this.kept[udid]).signedIn;
     if (!viaPhone && !viaCopy) return;
-    if (this._cached(due.bundleId) && this.info.anyIpa) return this.refreshApp(due.bundleId);
+    if (phoneDue) {
+      this.tried.set(`phone ${this.link.current.id}`, Date.now());
+      return this._want({ expires: this.phone.expires });
+    }
+    if (this._cached(due.bundleId) && this.info.anyIpa && !(due.twindesk && !viaCopy && !viaPhone)) {
+      this.tried.set(`${udid} ${due.bundleId}`, Date.now());
+      const file = this._cached(due.bundleId);
+      if (viaCopy) { this.ipa = file; return this.refreshKept(); }
+      return this._want({ app: due.bundleId, expires: due.expires });
+    }
     if (!due.twindesk) return;
     this.tried.set(`${udid} ${due.bundleId}`, Date.now());
     if (viaCopy) return this.refreshKept();
-    this.link.send({ t: T.WANT });
+    this._want({ expires: due.expires });
   }
 
   // ---- settings ----
@@ -499,17 +600,20 @@ class IosSign extends EventEmitter {
     const patch = {};
     if (typeof o.on === 'boolean') {
       patch.on = o.on;
-      if (!o.on) { patch.keep = false; this.kept = {}; this._saveKept(); this.pending = null; } // off: nothing of it stays here
+      if (!o.on) { patch.keep = false; this._kept = {}; this._saveKept(); this.pending = null; this.queued = null; } // off: nothing of it stays here
     }
     if (typeof o.auto === 'boolean') patch.auto = o.auto;
     if (Number.isInteger(o.days) && o.days >= 1 && o.days <= 6) patch.days = o.days;
+    if (o.how === 'ask' || o.how === 'self') patch.how = o.how;
+    if (o.which === 'all' || o.which === 'twindesk') patch.which = o.which;
+    if (RETRY_HOURS.includes(o.retry)) { patch.retry = o.retry; this.tried.clear(); }
     if (typeof o.cache === 'boolean') {
       patch.cache = o.cache;
       if (!o.cache && this.cacheDir) { try { fs.rmSync(this.cacheDir, { recursive: true, force: true }); } catch {} } // switched off: the kept IPAs go
     }
     if (typeof o.keep === 'boolean' && (this.vault || !o.keep)) {
       patch.keep = o.keep;
-      if (!o.keep) { this.kept = {}; this._saveKept(); } // switched off: this computer's copies go
+      if (!o.keep) { this._kept = {}; this._saveKept(); } // switched off: this computer's copies go
     }
     if (typeof o.udid === 'string' && this.devices.some((d) => d.udid === o.udid)) {
       const cur = this.link.current;
@@ -536,7 +640,9 @@ class IosSign extends EventEmitter {
   }
 
   _saveKept() {
-    if (this.vault) this.vault.save(Object.keys(this.kept).length ? JSON.stringify(this.kept) : '');
+    if (!this.vault) return;
+    const kept = this._kept || {};
+    this.vault.save(Object.keys(kept).length ? JSON.stringify(kept) : '');
   }
 
   close() {

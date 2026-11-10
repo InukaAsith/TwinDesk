@@ -700,6 +700,7 @@ app.whenReady().then(() => {
       send: (m) => peer.sendToClient(m),
       get current() { return peer.current; },
     },
+    near: { list: () => (svc.ble ? svc.ble.list() : []), invite: (devId) => svc.ble && svc.ble.invite(devId) }, // iPhones linked over Bluetooth
     usbSerials: () => (svc.iosNet ? svc.iosNet.view.devices.filter((d) => d.app).map((d) => d.serial) : []),
     onChange: pushState,
   });

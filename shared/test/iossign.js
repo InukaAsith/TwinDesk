@@ -51,15 +51,16 @@ const next = () => new Promise((r) => (lines.length ? r(lines.shift()) : (wait =
 `);
 fs.chmodSync(fake, 0o755);
 
-function rig(cfg0 = {}) {
+function rig(cfg0 = {}, extra = {}) {
   const link = new EventEmitter();
   link.sent = [];
   link.send = (m) => link.sent.push(m);
   link.current = { os: 'ios', id: 'phone-1', name: 'An iPhone' };
   let cfg = { on: true, auto: false, ...cfg0 };
   let vault = '';
-  const sign = new IosSign({ link, bins: ['/nowhere', fake], cfg: () => cfg, setCfg: (p) => { cfg = { ...cfg, ...p }; }, vault: { load: () => vault, save: (s) => { vault = s; } } });
-  return { link, sign, vault: () => vault, of: (t) => link.sent.filter((m) => m.t === t) };
+  let loads = 0;
+  const sign = new IosSign({ link, bins: ['/nowhere', fake], cfg: () => cfg, setCfg: (p) => { cfg = { ...cfg, ...p }; }, vault: { load: () => { loads++; return vault; }, save: (s) => { vault = s; } }, ...extra });
+  return { link, sign, vault: () => vault, loads: () => loads, cfg: () => cfg, of: (t) => link.sent.filter((m) => m.t === t) };
 }
 const until = async (what, fn) => {
   for (let i = 0; i < 400; i++) { if (fn()) return; await new Promise((r) => setTimeout(r, 10)); }
@@ -153,6 +154,46 @@ const until = async (what, fn) => {
   assert.strictEqual(r.of(T.WANT).length, 1);
   r.link.emit(T.STATE, { signedIn: true, email: 'a@b.c', until: FUTURE, auto: true });
   assert.strictEqual(r.of(T.WANT).length, 1);
+  r.sign.close();
+
+  // The vault (a Keychain prompt on a Mac) isn't read while Keep a copy is off, nor while it's all off
+  r = rig({ on: false });
+  await until('the helper', () => r.sign.view.available);
+  void r.sign.view;
+  assert.strictEqual(r.sign.view.devices.length, 0, 'off: no device is looked at');
+  r.sign.set({ on: true });
+  await until('the device', () => r.sign.view.udid === UDID);
+  assert.strictEqual(r.loads(), 0, 'the vault is never read with Keep a copy off');
+  r.sign.close();
+
+  // Ask first: the iPhone is told to show its notification
+  r = rig({ auto: true, days: 6, how: 'ask' });
+  await until('the apps', () => r.sign.view.apps.length === 1);
+  r.link.emit(T.STATE, { signedIn: true, email: 'a@b.c', until: FUTURE, auto: true });
+  assert.strictEqual(r.of(T.WANT)[0].ask, true);
+  assert.ok(r.of(T.WANT)[0].expires > 0);
+  r.sign.close();
+
+  // Only TwinDesk's own certificate can be revoked
+  r = rig();
+  await until('the device', () => r.sign.view.udid === UDID && r.sign.view.available);
+  r.sign.run = { from: 'here', need: { what: 'cert', certs: [{ serial: 'A', ours: false }, { serial: 'T', ours: true }] }, proc: { stdin: { writable: true, write: (l) => { r.wrote = l; } } } };
+  r.sign.answer({ revoke: ['A', 'T'] });
+  assert.deepStrictEqual(JSON.parse(r.wrote), { revoke: ['T'] });
+  r.sign.run = null;
+  r.sign.close();
+
+  // Not in a session, only near over Bluetooth: Refresh now invites it and asks once it's back
+  const invited = [];
+  r = rig({}, { near: { list: () => [{ id: 'phone-1', name: 'An iPhone', os: 'ios' }], invite: (id) => invited.push(id) } });
+  r.link.current = null;
+  await until('the helper', () => r.sign.view.available);
+  assert.strictEqual(r.sign.view.near.length, 1);
+  r.sign.refresh();
+  assert.deepStrictEqual(invited, ['phone-1']);
+  r.link.current = { os: 'ios', id: 'phone-1', name: 'An iPhone' };
+  r.link.emit(T.STATE, { signedIn: true, email: 'a@b.c', until: FUTURE, auto: true });
+  assert.strictEqual(r.of(T.WANT)[0].now, true);
   r.sign.close();
 
   fs.rmSync(dir, { recursive: true, force: true });

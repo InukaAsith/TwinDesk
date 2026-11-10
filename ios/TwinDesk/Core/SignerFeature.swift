@@ -8,17 +8,21 @@
 //   sign.info   ← computer   what it can do and what's sideloaded here, each with its last day
 //   sign.start  → computer   a run: it answers sign.key {pub}; this sends sign.box {pub, box}
 //   sign.ev     ← computer   the helper's events; its questions are answered with sign.box {box}
-//   sign.want   ← computer   TwinDesk here runs out soon (or Refresh was clicked there)
+//   sign.want   ← computer   an app here runs out soon (or Refresh was clicked there): {now, app,
+//                            name, expires, ask}. Now, or in front and unlocked: the refresh runs.
+//                            Otherwise a notification says how long is left; tapping it opens
+//                            TwinDesk, which connects and runs the refresh by itself.
 //   sign.keep   ↔            the state: from a run typed on the computer, for this to keep; to a
 //                            computer with Keep a copy on (said in sign.info), its copy
 import Foundation
+import UIKit
 
 final class Signer: Feature {
     struct App: Identifiable {
         let id: String, name: String, version: String, teamName: String, expires: Double, twindesk: Bool, cached: Bool
     }
     struct Cert: Identifiable {
-        let id: String, name: String, expires: Double
+        let id: String, name: String, expires: Double, ours: Bool
     }
     enum Need { case code(String), certs([Cert]) }
 
@@ -30,6 +34,7 @@ final class Signer: Feature {
     private(set) var apps: [App] = []
     // A run: step nil when none.
     private(set) var step: String?
+    private(set) var seen: [String] = [] // the run's steps so far, in order
     private(set) var percent = 0
     private(set) var need: Need?
     private(set) var error: String?
@@ -41,6 +46,17 @@ final class Signer: Feature {
     private var ipa: (name: String, size: Int64, path: String?)?
     private var gaveCopy = false
     private var app: String? // a run for this app, from the IPA the computer keeps
+    private var tapped: String? // the notification was tapped: this refresh ("" TwinDesk) runs once it can
+
+    // When TwinDesk here runs out: its own provisioning profile's ExpirationDate (0 unknown).
+    static let expires: Double = {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let raw = try? Data(contentsOf: url),
+              let start = raw.range(of: Data("<?xml".utf8)), let end = raw.range(of: Data("</plist>".utf8), in: start.lowerBound..<raw.endIndex),
+              let d = try? PropertyListSerialization.propertyList(from: raw[start.lowerBound..<end.upperBound], format: nil) as? [String: Any],
+              let date = d["ExpirationDate"] as? Date else { return 0 }
+        return date.timeIntervalSince1970
+    }()
 
     // Refresh by itself when the computer says it's time (on).
     var auto: Bool {
@@ -70,11 +86,11 @@ final class Signer: Feature {
 
     private func tell() {
         let f = facts
-        core.send(msg("sign.state", ["signedIn": on && f.signedIn, "email": on ? f.email : "", "until": f.until, "auto": on && auto]))
+        core.send(msg("sign.state", ["signedIn": on && f.signedIn, "email": on ? f.email : "", "until": f.until, "auto": on && auto, "expires": Self.expires]))
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
-        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; percent = 0
+        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; percent = 0; seen = []
         error = e
         doneUntil = until
         core.changed()
@@ -118,7 +134,7 @@ final class Signer: Feature {
     }
 
     private func begin() {
-        error = nil; doneUntil = nil; needsSignIn = false; need = nil; percent = 0
+        error = nil; doneUntil = nil; needsSignIn = false; need = nil; percent = 0; seen = []
         step = "start"
         var m: JSON = [:]
         if let i = ipa, let p = i.path { m["ipa"] = ["path": p, "size": i.size] }
@@ -128,7 +144,11 @@ final class Signer: Feature {
     }
 
     func answer(code: String) { answer(["code": code]) }
-    func revoke(_ serial: String) { answer(["revoke": [serial]]) }
+    // Only a certificate TwinDesk made: the others sign other tools' apps (the helper checks too).
+    func revoke(_ serial: String) {
+        guard case .certs(let certs)? = need, certs.contains(where: { $0.id == serial && $0.ours }) else { return }
+        answer(["revoke": [serial]])
+    }
     func cancelQuestion() { answer(["abort": true]) }
 
     private func answer(_ a: [String: Any]) {
@@ -149,6 +169,32 @@ final class Signer: Feature {
         needsSignIn = false
         tell()
         core.changed()
+    }
+
+    // The notification was tapped: TwinDesk is in front now. The refresh runs as soon as the computer
+    // is connected and has said it can sign (sign.info), with nothing else to tap.
+    func tappedNotification(app id: String?) {
+        guard on else { return }
+        tapped = id ?? ""
+        AppUI.shared.open(.signing)
+        core.wake()
+        runTapped()
+    }
+
+    private func runTapped() {
+        guard let id = tapped, on, !running, core.connected, available else { return }
+        tapped = nil
+        guard facts.signedIn else { needsSignIn = true; core.changed(); return }
+        if id.isEmpty { refresh() } else { refresh(app: id) }
+    }
+
+    // Asked by the computer while not in front (or locked): a notification to tap.
+    private func notify(_ m: JSON) {
+        let name = m.str("name", max: 100)
+        let exp = (m["expires"] as? NSNumber)?.doubleValue ?? Self.expires
+        let secs = exp - Date().timeIntervalSince1970
+        let left = exp <= 0 ? "" : secs <= 0 ? tr("It has expired.") : secs >= 86400 ? tr("{count} days left.", ["count": "\(Int(secs / 86400))"]) : tr("{count} hours left.", ["count": "\(max(1, Int(secs / 3600)))"])
+        Notifier.shared.signRefresh(app: m.str("app", max: 200), name: name.isEmpty ? "TwinDesk" : name, left: left, computer: core.host?.name ?? tr("the computer"))
     }
 
     // ---- the computer ----
@@ -175,10 +221,18 @@ final class Signer: Feature {
             // A computer that keeps a copy (switched on there, behind its warning) gets it once a session.
             if on, computerKeeps, !gaveCopy, facts.signedIn { gaveCopy = true; core.send(msg("sign.keep", ["state": SignerVault.state])) }
             core.changed()
+            runTapped()
         case "sign.want":
-            if on, !running, facts.signedIn, m.bool("now") || auto {
-                let id = m.str("app", max: 200)
+            guard on, !running, facts.signedIn, m.bool("now") || auto else { return true }
+            let id = m.str("app", max: 200)
+            let state = UIApplication.shared.applicationState
+            let unlocked = UIApplication.shared.isProtectedDataAvailable
+            // Clicked on the computer, or TwinDesk in front: now. By itself (not Ask first) and
+            // unlocked: now too, in the background. Otherwise the notification, to tap.
+            if m.bool("now") && unlocked || state == .active || (!m.bool("ask") && unlocked) {
                 if id.isEmpty { refresh() } else { refresh(app: id) }
+            } else {
+                notify(m)
             }
         case "sign.key":
             guard step != nil, let s = SignerSeal(helperKey: m.str("pub", max: 64)),
@@ -205,12 +259,21 @@ final class Signer: Feature {
 
     private func event(_ m: JSON) {
         switch m.str("ev", max: 20) {
-        case "step": step = m.str("step", max: 20); need = nil
-        case "progress": step = "install"; percent = m.int("percent")
+        case "step":
+            let st = m.str("step", max: 20)
+            step = st; need = nil; percent = 0
+            if !seen.contains(st) { seen.append(st) }
+        case "progress":
+            let st = m.str("step", max: 20).isEmpty ? "install" : m.str("step", max: 20)
+            if st != step { need = nil }
+            step = st
+            if !seen.contains(st) { seen.append(st) }
+            percent = m.int("percent")
         case "need2fa": need = .code(m.str("error", max: 200))
         case "needcert":
             need = .certs(((m["certs"] as? [JSON]) ?? []).prefix(20).map {
-                Cert(id: $0.str("serial", max: 80), name: [$0.str("machine", max: 100), $0.str("name", max: 100)].first { !$0.isEmpty } ?? "", expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0)
+                Cert(id: $0.str("serial", max: 80), name: [$0.str("machine", max: 100), $0.str("name", max: 100)].first { !$0.isEmpty } ?? "", expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0,
+                     ours: $0.bool("ours") || $0.str("machine", max: 100) == "TwinDesk")
             })
         case "state":
             if let s = seal?.open(state: m.str("box", max: 400_000)) {

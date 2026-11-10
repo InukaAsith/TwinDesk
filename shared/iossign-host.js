@@ -5,7 +5,7 @@
 //   ios-signing.bin   the kept copy (only with Keep a copy on), sealed by the system through
 //                     Electron's safeStorage: the Keychain on a Mac, DPAPI on Windows, the Secret
 //                     Service on Linux. Without one of those there is no vault and no Keep a copy.
-// create({app, safeStorage, link, usbSerials, onChange}) → an IosSign; pickIpa(sign, dialog, win).
+// create({app, safeStorage, link, near, usbSerials, onChange}) → an IosSign; pickIpa(sign, dialog, win).
 'use strict';
 
 const fs = require('fs');
@@ -17,13 +17,15 @@ const ROOT = path.join(__dirname, '..', 'ios-signer');
 // As packaged (bin/<x64|arm64>/, ios-signer/build.sh), then a developer's own build.
 const BINS = [path.join(ROOT, 'bin', process.arch, EXE), path.join(ROOT, 'target', 'release', EXE), path.join(ROOT, 'target', 'debug', EXE)];
 
-function create({ app, safeStorage, link, usbSerials, onChange }) {
+function create({ app, safeStorage, link, near, usbSerials, onChange }) {
   const dir = app.getPath('userData');
   const cfgFile = path.join(dir, 'ios-signing.json');
   const vaultFile = path.join(dir, 'ios-signing.bin');
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8')) || {}; } catch {}
   // Only a real system store counts: Linux's "basic_text" fallback is a fixed key, which is no vault.
+  // Asked only when the vault is used (Keep a copy on): on a Mac, asking at all is a Keychain prompt,
+  // so nothing here touches safeStorage while TwinDesk iPhone is off or keeps no copy.
   const sealed = () => {
     try {
       if (!safeStorage.isEncryptionAvailable()) return false;
@@ -32,14 +34,17 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
       return false;
     }
   };
-  const vault = sealed() ? {
+  // Whether there can be one, without asking the Keychain: a Mac and Windows always have theirs.
+  const possible = process.platform !== 'linux' || sealed();
+  const vault = possible ? {
+    possible,
     load() {
-      try { return safeStorage.decryptString(fs.readFileSync(vaultFile)); } catch { return ''; }
+      try { return fs.existsSync(vaultFile) && sealed() ? safeStorage.decryptString(fs.readFileSync(vaultFile)) : ''; } catch { return ''; }
     },
     save(text) {
       try {
         if (!text) return fs.rmSync(vaultFile, { force: true });
-        fs.writeFileSync(vaultFile, safeStorage.encryptString(text), { mode: 0o600 });
+        if (sealed()) fs.writeFileSync(vaultFile, safeStorage.encryptString(text), { mode: 0o600 });
       } catch {}
     },
   } : null;
@@ -51,7 +56,7 @@ function create({ app, safeStorage, link, usbSerials, onChange }) {
   let seed = null;
   try { seed = JSON.parse(fs.readFileSync(seedFile, 'utf8')); } catch {}
   const sign = new IosSign({
-    link, bins: BINS, usbSerials, vault, seed, cacheDir: path.join(dir, 'ios-ipas'),
+    link, near, bins: BINS, usbSerials, vault, seed, cacheDir: path.join(dir, 'ios-ipas'),
     cfg: () => cfg,
     setCfg: (patch) => {
       cfg = { ...cfg, ...patch };
@@ -68,8 +73,8 @@ async function enable(sign, dialog, win) {
   if (!sign) return;
   const r = await dialog.showMessageBox(win || undefined, {
     type: 'warning',
-    message: 'Not recommended!',
-    detail: 'This signs in to Apple with your Apple ID from TwinDesk to install and refresh apps on your iPhone. Apple can refuse the sign-in, lock the Apple ID for a while, or stop it from signing apps.\n\nWe recommend AltStore. If you already use AltStore, keep using it.\n\nOnly turn this on with an Apple ID made for it, not your main one.',
+    message: 'Not recommended',
+    detail: 'TwinDesk signs in to Apple with your Apple ID to install and refresh apps on your iPhone. Apple can refuse the sign-in, lock the Apple ID for a while, or stop it from signing apps.\n\nWe recommend AltStore. If you already use it, keep using it.\n\nOnly turn this on with an Apple ID made for it, not your main one.',
     buttons: ['Cancel', 'Turn on anyway'], defaultId: 0, cancelId: 0,
   });
   if (r.response === 1) sign.set({ on: true });

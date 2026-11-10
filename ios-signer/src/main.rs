@@ -82,6 +82,7 @@ const MACHINE_NAME: &str = "TwinDesk";
 const TWINDESK_IPA: &str = "https://github.com/InukaAsith/TwinDesk/releases/latest/download/TwinDesk.ipa";
 const MAX_IPA: u64 = 1 << 30;
 const MAX_LINE: usize = 64 * 1024;
+const ASK_SECS: u64 = 10 * 60;
 const KEY_ANISETTE_URL: &str = "anisette_url";
 const KEY_ANISETTE_STATE: &str = "anisette_state"; // isideload's name for it
 // The developer session, kept in the state in place of the password: Apple's token for Xcode's
@@ -210,8 +211,9 @@ struct Io {
 impl Io {
     // In a sealed run only a sealed answer counts: the pipe in between can't answer for the iPhone
     // (which certificate to revoke, say). Anything else reads as no answer, and that as "stop".
+    // Unanswered for ASK_SECS (nobody at either screen): no answer, and the run ends.
     async fn ask(&self) -> Option<Value> {
-        let v = line(&self.lines).await?;
+        let v = tokio::time::timeout(std::time::Duration::from_secs(ASK_SECS), line(&self.lines)).await.ok()??;
         match &self.seal {
             None => Some(v),
             Some(s) => {
@@ -393,6 +395,7 @@ fn cert_view(c: &DevelopmentCertificate) -> Value {
         "name": c.name,
         "machine": c.machine_name,
         "expires": c.expiration_date.as_ref().map(secs),
+        "ours": c.machine_name.as_deref() == Some(MACHINE_NAME),
     })
 }
 
@@ -536,18 +539,28 @@ async fn sign_and_install(
         DeveloperSession::new(token, adsid, account.grandslam_client.clone(), account.anisette_generator.clone())
     };
 
+    // No free certificate: only one TwinDesk made may be revoked (AltStore's, Sideloadly's or Xcode's
+    // would stop the apps they signed). None of TwinDesk's there: nothing is asked, the run ends.
     let io3 = io.clone();
+    let none_ours = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let none_ours2 = none_ours.clone();
     let pick_certs = move |certs: Vec<DevelopmentCertificate>| {
         let io = io3.clone();
+        let none_ours = none_ours2.clone();
         async move {
+            let ours = |c: &DevelopmentCertificate| c.machine_name.as_deref() == Some(MACHINE_NAME);
+            if !certs.iter().any(ours) {
+                none_ours.store(true, std::sync::atomic::Ordering::Relaxed);
+                return Ok(None);
+            }
             emit(json!({"ev": "needcert", "certs": certs.iter().map(cert_view).collect::<Vec<_>>()}));
             let Some(a) = io.ask().await else { return Ok(None) };
             let Some(list) = a.get("revoke").and_then(|v| v.as_array()) else { return Ok(None) };
-            // Only serials that were offered.
+            // Only serials that were offered, and only TwinDesk's own.
             let chosen: Vec<String> = list
                 .iter()
                 .filter_map(|v| v.as_str())
-                .filter(|s| certs.iter().any(|c| c.serial_number.as_deref() == Some(*s)))
+                .filter(|s| certs.iter().any(|c| ours(c) && c.serial_number.as_deref() == Some(*s)))
                 .map(str::to_string)
                 .collect();
             Ok(if chosen.is_empty() { None } else { Some(chosen) })
@@ -580,10 +593,32 @@ async fn sign_and_install(
         .await
         .context("Apple didn't register the device")?;
 
-    emit(json!({"ev": "step", "step": "sign"}));
-    let (signed, _) = sideloader
-        .sign_app(ipa, Some(team.clone()), false, None::<fn(f32) -> std::future::Ready<()>>, None, Some(&info.udid))
-        .await?;
+    // Signing is several of Apple's steps and then the signature itself: each is said as it starts,
+    // so a slow one shows where it is (isideload calls back at 0.1, 0.15, 0.2, then 0.3 … 1).
+    emit(json!({"ev": "step", "step": "cert"}));
+    let said = std::sync::atomic::AtomicU32::new(0);
+    let progress = |f: f32| {
+        let (step, percent) = match f {
+            f if f < 0.15 => ("appid", 0),
+            f if f < 0.2 => ("profile", 0),
+            f => ("sign", (((f - 0.3).max(0.0) / 0.7) * 100.0).round() as u32),
+        };
+        let key = match step { "appid" => 1000, "profile" => 2000, _ => 3000 + percent };
+        if said.swap(key, std::sync::atomic::Ordering::Relaxed) != key {
+            emit(json!({"ev": "progress", "step": step, "percent": percent}));
+        }
+        std::future::ready(())
+    };
+    let signed = sideloader
+        .sign_app(ipa, Some(team.clone()), false, Some(progress), None, Some(&info.udid))
+        .await;
+    let (signed, _) = match signed {
+        Err(_) if none_ours.load(std::sync::atomic::Ordering::Relaxed) => {
+            return Ok(json!({"ev": "error", "kind": "certs", "message": "This Apple ID has no free certificate",
+                "detail": "Its certificates belong to other tools (AltStore, Sideloadly or Xcode), and TwinDesk doesn’t revoke those. Free one in that tool, or use another Apple ID."}));
+        }
+        r => r?,
+    };
 
     let profile = std::fs::read(signed.join("embedded.mobileprovision")).ok().and_then(|raw| profile_plist(&raw));
     let expires = profile.as_ref().and_then(|d| d.get("ExpirationDate")).and_then(|v| v.as_date()).map(|x| secs(&x)).unwrap_or(0);
@@ -601,7 +636,7 @@ async fn sign_and_install(
     let installed = install::install_app(&device, &signed, |p| {
         if p >= last.load(std::sync::atomic::Ordering::Relaxed) + 5 {
             last.store(p, std::sync::atomic::Ordering::Relaxed);
-            emit(json!({"ev": "progress", "percent": p}));
+            emit(json!({"ev": "progress", "step": "install", "percent": p}));
         }
     })
     .await;
