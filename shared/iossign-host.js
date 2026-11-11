@@ -36,10 +36,16 @@ function create({ app, safeStorage, link, near, usbSerials, onChange }) {
       return false;
     }
   };
-  // Whether there can be one, without asking the Keychain: a Mac and Windows always have theirs.
-  const possible = process.platform !== 'linux' || sealed();
-  const vault = possible ? {
-    possible,
+  // Whether there can be one: a Mac and Windows always have theirs. On Linux, asking at all opens the
+  // login keyring (an unlock prompt when it's locked), so it is asked only once TwinDesk iPhone is on
+  // and wants the vault (shared/iossign.js reads vault.possible only then), never at start.
+  let possibleSeen;
+  const vault = {
+    get possible() {
+      if (process.platform !== 'linux') return true;
+      if (possibleSeen === undefined) possibleSeen = sealed();
+      return possibleSeen;
+    },
     exists: () => fs.existsSync(vaultFile), // no Keychain asked
     load() {
       try { return fs.existsSync(vaultFile) && sealed() ? safeStorage.decryptString(fs.readFileSync(vaultFile)) : ''; } catch { return ''; }
@@ -50,8 +56,7 @@ function create({ app, safeStorage, link, near, usbSerials, onChange }) {
         if (sealed()) fs.writeFileSync(vaultFile, safeStorage.encryptString(text), { mode: 0o600 });
       } catch {}
     },
-  } : null;
-  if (!vault) { cfg.keep = false; try { fs.rmSync(vaultFile, { force: true }); } catch {} }
+  };
   // A developer's test run (ios-signer/try.sh) left its state in a file: the iPhone's app takes it
   // over the first time it is connected, and the file goes. Never there in a packaged app.
   // (Next to the helper's sources, or as ios-signing-seed.json in this app's settings folder.)

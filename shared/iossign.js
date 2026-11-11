@@ -187,8 +187,12 @@ class IosSign extends EventEmitter {
   // Keep a copy: on by default, but only ever while TwinDesk iPhone is on and there is a vault.
   _keep() {
     const c = this.cfg();
-    return c.on === true && c.keep !== false && !!this.vault;
+    return c.on === true && c.keep !== false && this._vaultOk();
   }
+
+  // A vault this computer can use. vault.possible may ask the system (Linux: the login keyring), so
+  // it is read only while TwinDesk iPhone is on.
+  _vaultOk() { return !!this.vault && this.vault.possible !== false; }
 
   // iPhones linked over Bluetooth (paired with this computer, not in a session here).
   _near() {
@@ -235,7 +239,7 @@ class IosSign extends EventEmitter {
       on: c.on === true, available: !!this.bin, ready: !!this.info, anyIpa: !!(this.info && this.info.anyIpa), anisette: this.info ? this.info.anisette : '',
       auto: c.auto !== false, days: c.days || 3, how: c.how === 'ask' ? 'ask' : 'self', which: c.which === 'twindesk' ? 'twindesk' : 'all',
       retry: RETRY_HOURS.includes(c.retry) ? c.retry : 6, retries: RETRY_HOURS,
-      keep: c.keep !== false && !!this.vault, canKeep: !!(this.vault && this.vault.possible !== false), cache: c.cache !== false,
+      keep: c.keep !== false && (c.on === true ? this._vaultOk() : !!this.vault), canKeep: c.on === true ? this._vaultOk() : !!this.vault, cache: c.cache !== false,
       devices: this.devices, udid, near: c.on === true ? this._near() : [],
       session: this._ios() ? { id: str(this.link.current.id, 64), name: str(this.link.current.name, 80) } : null,
       apps: ((udid && this.apps[udid]) || []).map((a) => ({ ...a, cached: !!this._cached(a.bundleId) })),
@@ -730,7 +734,7 @@ class IosSign extends EventEmitter {
       patch.cache = o.cache;
       if (!o.cache && this.cacheDir) { try { fs.rmSync(this.cacheDir, { recursive: true, force: true }); } catch {} } // switched off: the kept IPAs go
     }
-    if (typeof o.keep === 'boolean' && (this.vault || !o.keep)) {
+    if (typeof o.keep === 'boolean' && (this._vaultOk() || !o.keep)) {
       patch.keep = o.keep;
       if (!o.keep) { this._kept = {}; this._saveKept(); } // switched off: this computer's copies go
     }
