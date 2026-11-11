@@ -972,5 +972,10 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "{what}需要 WLAN 直连或同一 Wi-Fi 网络。你当前通过蓝牙连接。",
   "‹ Back": "‹ 返回",
   "‹ Up": "‹ 上一级",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "关闭的模块完全不会加载：没有页面、没有菜单项、不运行任何内容。通用、关于、连接和概览始终开启。",
+  "Modules": "模块",
+  "Modules load or unload when TwinDesk starts": "模块在 TwinDesk 启动时加载或卸载",
+  "Restart": "重启",
+  "Restart to apply": "重新启动以应用"
 }

@@ -972,5 +972,10 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "{what} için Wi-Fi Direct veya aynı Wi-Fi ağı gerekir. Bluetooth ile bağlısınız.",
   "‹ Back": "‹ Geri",
   "‹ Up": "‹ Yukarı",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘, Ctrl gibi çalışır; ⌘C kopyalar, ⌘V yapıştırır"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘, Ctrl gibi çalışır; ⌘C kopyalar, ⌘V yapıştırır",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "Kapalı bir modül hiç yüklenmez: sayfası, menü öğesi yoktur, hiçbir şey çalışmaz. Genel, Hakkında, Bağlantı ve Genel Bakış her zaman açıktır.",
+  "Modules": "Modüller",
+  "Modules load or unload when TwinDesk starts": "Modüller TwinDesk başlarken yüklenir veya kaldırılır",
+  "Restart": "Yeniden başlat",
+  "Restart to apply": "Uygulamak için yeniden başlatın"
 }

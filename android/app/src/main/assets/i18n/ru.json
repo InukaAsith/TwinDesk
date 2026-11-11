@@ -972,5 +972,10 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "Для «{what}» нужен Wi-Fi Direct или та же сеть Wi-Fi. Вы подключены по Bluetooth.",
   "‹ Back": "‹ Назад",
   "‹ Up": "‹ Вверх",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ работает как Ctrl: ⌘C копирует, ⌘V вставляет"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ работает как Ctrl: ⌘C копирует, ⌘V вставляет",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "Выключенный модуль вообще не загружается: нет страницы, нет пунктов меню, ничего не работает. Основные, «О программе», «Подключение» и «Обзор» включены всегда.",
+  "Modules": "Модули",
+  "Modules load or unload when TwinDesk starts": "Модули загружаются и выгружаются при запуске TwinDesk",
+  "Restart": "Перезапустить",
+  "Restart to apply": "Перезапустите, чтобы применить"
 }

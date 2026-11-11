@@ -189,7 +189,8 @@ private fun bottom(core: Core) = when {
     else -> listOf(Tab.Connection, Tab.Screen, Tab.Files)
 }
 // Overview only while connected (elsewhere, Connection shows); with a phone, only what it can do.
-private fun shown(core: Core, t: Tab) = if (peerMode(core)) peerShown(core, t) else t != Tab.Overview || core.host != null
+private fun shown(core: Core, t: Tab) = core.moduleOn(t.name.lowercase()) && // General › Modules (Modules.kt)
+    if (peerMode(core)) peerShown(core, t) else t != Tab.Overview || core.host != null
 
 // The sidebar's green dot: the page's feature is on.
 private fun isOn(core: Core, t: Tab): Boolean = if (peerMode(core)) when (t) {
@@ -237,7 +238,7 @@ fun App(core: Core, resumed: Int) {
     wasConnected = connected
     if (!connected && tab == Tab.Overview) tab = Tab.Connection
     if (!shown(core, tab)) tab = if (connected) Tab.Overview else Tab.Connection // a page the other device can't do
-    val BOTTOM = bottom(core)
+    val BOTTOM = bottom(core).filter { core.moduleOn(it.name.lowercase()) } // General › Modules
     var more by rememberSaveable { mutableStateOf(false) }
     MainActivity.openTab.value?.let { name ->
         Tab.entries.firstOrNull { it.name == name }?.takeIf { shown(core, it) }?.let { tab = it; more = false }
@@ -1563,6 +1564,23 @@ private fun SoundStart(core: Core) {
 
 // ---- General ----
 
+// General › Modules (Modules.kt): a switch per page but Overview, Connection, General and About.
+// Exit-and-start-again applies them (the process holds the set it started with).
+@Composable
+private fun ModulesCard(core: Core) {
+    val ctx = LocalContext.current
+    var off by remember { mutableStateOf(Modules.off(core.store)) }
+    MacCard(tr("Modules")) {
+        MacRow(tr("Modules"), tr("A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on."), first = true)
+        if (off != core.modulesAtStart) MacRow(tr("Restart to apply"), tr("Modules load or unload when TwinDesk starts")) { Primary(tr("Restart")) { Modules.restart(ctx) } }
+        for (t in Tab.entries) {
+            val id = t.name.lowercase()
+            if (id in Modules.FIXED) continue
+            SwitchRow(tr(t.title), "", id !in off) { Modules.set(core.store, id, it); off = Modules.off(core.store) }
+        }
+    }
+}
+
 @Composable
 private fun GeneralPage(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
@@ -1579,6 +1597,7 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow(tr("Reconnect in the background"), if (core.reconnectBg) tr("Restores a dropped connection while TwinDesk is closed") else tr("Restores a dropped connection when TwinDesk opens"), core.reconnectBg) { core.reconnectBg = it }
     }
     TailscaleCard(core) // #161 (Tailnet.kt)
+    ModulesCard(core)
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
     fun Setup(label: String, hint: String, done: Boolean, action: String, first: Boolean = false, onClick: () -> Unit) =

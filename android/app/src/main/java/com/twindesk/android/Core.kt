@@ -85,7 +85,23 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // Connect with Android: another phone, on a session of its own beside the computer's (Peer.kt).
     // Not a Feature: the computer's messages never reach it, nor its the computer.
     val peer = Peer(this)
+    // General › Modules (Modules.kt): the modules off when this process started; a page off isn't
+    // shown and its features hear nothing from the computer.
+    val modulesAtStart: Set<String> = Modules.off(store)
+    fun moduleOn(id: String) = id in Modules.FIXED || id !in modulesAtStart
     private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia)
+        .filter { f ->
+            when (f) {
+                clip, fclip -> moduleOn("clipboard")
+                notifs -> moduleOn("notifications")
+                rezume -> moduleOn("rezume")
+                remote -> moduleOn("remote")
+                pcMedia, nowPlaying -> moduleOn("media")
+                sound, macSound -> moduleOn("sound")
+                hub -> listOf("calls", "messages", "photos", "fileaccess").any(::moduleOn)
+                else -> true
+            }
+        }
 
     val host: Host? get() = if (link.connected) link.host else null
 
