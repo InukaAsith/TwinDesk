@@ -1,0 +1,25 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The Deck page (shared/ui-deck.js), loaded with it. Colours from the page's own variables. */
+.deck-where { margin: 0 0 10px; opacity: 0.7; }
+.deck-board { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.deck-pages { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.deck-page { border: 1px solid rgba(127, 127, 127, 0.35); background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px; font: inherit; cursor: pointer; }
+.deck-page.active { background: rgba(127, 127, 127, 0.25); font-weight: 600; }
+.deck-page.over, .deck-slot.over { outline: 2px solid #0a84ff; outline-offset: 2px; }
+.deck-grid { display: grid; gap: 8px; max-width: 560px; }
+.deck-slot { aspect-ratio: 1; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; user-select: none; border: 1px dashed rgba(127, 127, 127, 0.4); min-width: 0; padding: 4px; box-sizing: border-box; }
+.deck-slot.filled { border: none; color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2); }
+.deck-slot.selected { outline: 3px solid #fff; box-shadow: 0 0 0 5px #0a84ff; }
+.deck-slot.dragging { opacity: 0.4; }
+.deck-slot.cant { filter: grayscale(1); opacity: 0.6; }
+.deck-icon { font-size: 26px; line-height: 1; }
+.deck-label { font-size: 11px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.deck-plus { font-size: 22px; opacity: 0.4; }
+.deck-colors { display: flex; gap: 6px; flex-wrap: wrap; }
+.deck-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.deck-color.on { border-color: #fff; box-shadow: 0 0 0 2px #0a84ff; }
+.deck-icon-input { width: 5em; font-size: 18px; text-align: center; }
+.deck-combo { padding: 2px 8px; border-radius: 6px; background: rgba(127, 127, 127, 0.18); }
+.deck-combo-input { width: 12em; }
+.deck-inspector textarea { width: 100%; min-width: 220px; font: inherit; }
+.deck-tip { opacity: 0.6; font-size: 12px; }

@@ -272,6 +272,15 @@
       REMOTE_KEY_DOWN: 'remote.kd', // {code} (KeyboardEvent.code)
       REMOTE_KEY_UP: 'remote.ku', // {code}
       REMOTE_TEXT: 'remote.text', // {text}: characters no key here types (Cyrillic, accents…), typed as they are; only while remote.state says text
+      // The Deck (shared/deck.js): a phone's or web device's buttons that this computer runs.
+      DECK_OFFER: 'deck.offer', // computer->phone {v}: this computer has the Deck on (none: no Deck page anywhere)
+      DECK_HELLO: 'deck.hello', // device->computer {}: it has a Deck
+      DECK_LAYOUT: 'deck.layout', // computer->device {layout, can: [action kinds], mac} | {off: true} (TwinDesk Web, module off)
+      DECK_RUN: 'deck.run', // device->computer {page, id}
+      DECK_DONE: 'deck.done', // computer->device {id, ok, why?}
+      DECK_SAVE: 'deck.save', // device->computer {layout}: edited there
+      DECK_APPS: 'deck.apps', // device->computer {} / computer->device {apps: [{id, name, icon}]}
+      DECK_CLIP: 'deck.clip', // computer->device {text}: Clipboard › Send
       REMOTE_RELEASE: 'remote.release', // let go of every key and button the remote holds
       // {b, lx, ly, rx, ry, lt, rt}, only while remote.state says pad: b the buttons (bits 0..13: A B X Y LB RB
       // Back Start L3 R3 Up Down Left Right), the sticks -1..1 (y down), the triggers 0..1; on change, at most every 8 ms

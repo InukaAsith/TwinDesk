@@ -406,9 +406,9 @@ function start() {
   });
   updates.start();
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
-  web = require('./web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
+  web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -543,6 +543,7 @@ function startPhone(server, pairing) {
   phoneViews = new PhoneViews({ bridge: phone.bridge, phone, getSettings: () => settings, server: pl, fileSend: fileDrop });
   phoneViews.vcam = vcam;
   phoneServer = pl;
+  loadDeck(); // the phones' Deck (General › Modules: not while it's off)
   loadNowPlaying(); // each only while it's on
   // What plays on this computer, for the phone's Media page and its media notification (shared/pcnow.js).
   new (require('../shared/pcnow.js').PcNow)({ server: pl, key: (code) => {
@@ -659,6 +660,21 @@ function loadRemote() {
     loadPad: () => require('./gamepad'), save: saveSettings }); // Real gamepad: loaded when turned on
   phoneRemote.refresh(); // its page may be open already
   return phoneRemote;
+}
+
+// The Deck (shared/deck.js): a phone's or web device's buttons run here. Never loaded while its module
+// is off (General › Modules); TwinDesk Web asks for it first, the phones' session joins when it's made.
+let deck = null;
+function loadDeck() {
+  if (modulesAtStart.includes('deck')) return null;
+  if (!deck) {
+    const { shell: sh, clipboard: cb } = require('electron');
+    deck = require('../shared/deck.js').startDeck({
+      platform: 'linux', helper: () => helper, server: null, settings: () => settings, saveSettings,
+      devLocal: () => devctl && devctl.local, openUrl: (u) => sh.openExternal(u), readClipboard: () => cb.readText(), onChange: pushState,
+    });
+  }
+  return deck.attach(phoneServer);
 }
 
 // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js).
@@ -1204,6 +1220,7 @@ function buildState() {
   return {
     device,
     modules: Mods.view(settings.modules, modulesAtStart), // General › Modules
+    deck: deck ? deck.view() : null, // the Deck page: shown while a device has a Deck
     ...snap,
     // The device in session (link.snapshot's `session`): `session` below is this desktop's (X11 or
     // Wayland) and replaces it, which hid every phone page (Calls, Messages, Photos, Phone Files).

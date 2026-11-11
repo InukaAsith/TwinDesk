@@ -204,6 +204,7 @@ function pushState() {
     state.addresses = interfaces().sort((a, b) => rank(a) - rank(b)).map((i) => i.address);
     state.pairing = pairing ? pairing.pendingView() : null;
     if (settings) state.modules = Mods.view(settings.modules, modulesAtStart); // General › Modules
+    state.deck = svc && svc.deck ? svc.deck.view() : null; // the Deck page: shown while a device has a Deck
     state.paired = pairing ? pairing.list() : [];
     if (discovery) {
       state.discovery = { ...discovery.status };
@@ -852,6 +853,15 @@ app.whenReady().then(() => {
   peer.on(`t:${P.T.REMOTE_HELLO}`, () => !svc.phoneRemote && peer.current && P.isPhoneOs(peer.current.os)
     && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there', voice: false, voiceWhy: P.KEYBOARD_OFF }));
   svc.loadRemote();
+  // The Deck (shared/deck.js): a phone's or web device's buttons run here. Not loaded at all while its
+  // module is off (General › Modules).
+  if (!modulesAtStart.includes('deck')) {
+    const { shell: sh, clipboard: cb } = require('electron');
+    svc.deck = require('../shared/deck.js').startDeck({
+      platform: 'mac', helper: svc.helper, server: peer, settings: () => settings, saveSettings: () => store.saveSettings(settings),
+      devLocal: () => svc.devctl && svc.devctl.local, openUrl: (u) => sh.openExternal(u), readClipboard: () => cb.readText(), onChange: pushState,
+    });
+  }
   // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js), its
   // offers in the Dock (a Dock icon of their app, dockstub.js), the menu bar and a notification.
   // Loaded the first time it's turned on: until then nothing is looked at; ipc reaches it through svc.rezume().
@@ -1375,6 +1385,7 @@ function setupWeb() {
       enabled: () => settings.web.control !== false,
       swapKeys: () => !apple(bus.current) && settings.keys.swapCtrlCmd !== false, // an iPhone's keyboard has ⌘ already
     }),
+    deck: svc.deck ? (bus) => svc.deck.web(bus) : null, // the Deck module off: TwinDesk Web shows none
     remote: (bus, getSettings) => new PhoneRemote({ server: bus, helper: svc.helper, getSettings, atHome: () => svc.kvm.mode === 'home', onChange: pushState,
       padNote: 'Real gamepad isn’t on the Mac: the gamepad’s buttons work as keys' }),
     notifs: svc.notifs,

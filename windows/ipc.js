@@ -119,6 +119,10 @@ function setupIpc(ctx) {
   handle('setChats', (on) => { change('ui', { chats: on === true }); if (ctx.chats && ctx.chats()) ctx.chats().sync(); }); // Messages: WhatsApp, Telegram and Instagram there too
   handle('setOverview', (o) => o && typeof o === 'object' && change('ui', { overview: { ...settings.ui.overview, ...o } })); // General › Overview // invalid names fall back in normalize()
   handle('setMulti', (on) => require('./multi').set(on === true)); // Multi-device: TwinDesk restarts
+  // The Deck page (shared/ui-deck.js): the layout, Try (runs a button here), the app picker.
+  handle('deckSave', (layout) => { const d = ctx.deck && ctx.deck(); if (d && layout && typeof layout === 'object') d.save(layout); });
+  handle('deckTry', (action) => { const d = ctx.deck && ctx.deck(); if (d && action && typeof action === 'object') d.exec(action).catch(() => {}); });
+  handle('deckApps', () => { const d = ctx.deck && ctx.deck(); return d ? d.apps().catch(() => []) : []; });
   // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
   handle('setModules', (m) => {
     if (!m || typeof m !== 'object') return;

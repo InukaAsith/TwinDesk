@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'apps', 'rezume', 'multi', 'web', 'airplay', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -677,6 +677,13 @@ function setupIpc(ctx) {
     setMulti(on) {
       require('./multi').set(on === true); // Multi-device: TwinDesk restarts
     },
+    // The Deck page (shared/ui-deck.js): the layout, and Try (runs a button here).
+    deckSave(layout) {
+      if (ctx.deck && layout && typeof layout === 'object') ctx.deck.save(layout);
+    },
+    deckTry(action) {
+      if (ctx.deck && action && typeof action === 'object') ctx.deck.exec(action).catch(() => {});
+    },
     // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
     setModules(m) {
       if (!m || typeof m !== 'object') return;
@@ -687,6 +694,7 @@ function setupIpc(ctx) {
   };
 
   ipcMain.handle('getState', () => ctx.state);
+  ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));

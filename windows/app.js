@@ -15,8 +15,8 @@
   // Sidebar groups: no headings, one icon column, a small gap between groups: the device and
   // Connection, the phone's own things, screens, input, sharing, media; Multi-device, General and
   // About below a line. ORDER places each tab (the tab files' own order is the fallback).
-  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, 'mac-pc': 2, 'pc-mac': 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
-  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
+  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, 'mac-pc': 2, 'pc-mac': 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, deck: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
+  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, deck: 23, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
   // Older names for a page (saved in settings, sent by the tray or a popup).
   const ALIAS = { phone: 'overview' };
   const orderOf = (d) => ORDER[UI.baseOf(d)] ?? d.order ?? 50; // a kind's own version of a page (variantOf): the page's place

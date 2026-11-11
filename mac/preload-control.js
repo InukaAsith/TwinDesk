@@ -7,7 +7,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const ACTIONS = [
   'setSharing', 'setStreamInput', 'selectDisplay', 'setDisplayMode', 'setVirtual', 'setStreamMaxHeight',
   'setBitrate', 'setKvm', 'moveKvm', 'identifyDisplays', 'setApp', 'setAudio', 'camera', 'phoneMedia', 'phoneBtPick', 'setTerminal', 'setRemote', 'setRezume', 'rezumeDo', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'cancelSend', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
-  'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti', 'setModules',
+  'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti', 'setModules', 'deckSave', 'deckTry',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost', 'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup',
   'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneCamera', 'phoneListCameras', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
@@ -19,6 +19,7 @@ const ACTIONS = [
 const api = {
   getState: () => ipcRenderer.invoke('getState'),
   phoneAssets: () => ipcRenderer.invoke('phoneAssets'),
+  deckApps: () => ipcRenderer.invoke('deckApps'), // the Deck page's app picker
   onState: (fn) => ipcRenderer.on('state', (_e, s) => fn(s)),
   onShowUpdate: (fn) => ipcRenderer.on('show-update', () => fn()),
   onHub: (fn) => ipcRenderer.on('hub', (_e, m) => fn(m)), // the phone's answers for Calls, Messages and Photos
