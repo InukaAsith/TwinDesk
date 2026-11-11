@@ -152,6 +152,7 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     Cursor("Mouse", Ico.cursor, grad(0xFFFFB340, 0xFFFF9500), "Input"),
     Keyboard("Keyboard", Ico.keyboard, grad(0xFFD1D1D6, 0xFF8E8E93), "Input"),
     Remote("Remote", Ico.remote, grad(0xFFBF5AF2, 0xFF8944AB), "Input"),
+    Deck("Deck", Ico.deck, grad(0xFFBF5AF2, 0xFF5E5CE6), "Input"), // only while the computer offers it (Deck.kt)
     Clipboard("Clipboard", Ico.clipboard, grad(0xFF64D2FF, 0xFF30B0C7), "Share"),
     Notifications("Notifications", Ico.bell, grad(0xFFFF6961, 0xFFFF3B30), "Share"),
     Files("Files", Ico.files, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
@@ -190,6 +191,7 @@ private fun bottom(core: Core) = when {
 }
 // Overview only while connected (elsewhere, Connection shows); with a phone, only what it can do.
 private fun shown(core: Core, t: Tab) = core.moduleOn(t.name.lowercase()) && // General › Modules (Modules.kt)
+    (t != Tab.Deck || (core.host != null && core.deck.offered)) && // the computer has the Deck on
     if (peerMode(core)) peerShown(core, t) else t != Tab.Overview || core.host != null
 
 // The sidebar's green dot: the page's feature is on.
@@ -520,6 +522,7 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
                 Tab.Cursor -> CursorPage(core, v)
                 Tab.Keyboard -> KeyboardPage(core, v)
                 Tab.Remote -> RemotePage(core, v)
+                Tab.Deck -> DeckPage(core, v)
                 Tab.Clipboard -> ClipboardPage(core, v)
                 Tab.Notifications -> NotificationsPage(core, v)
                 Tab.Files -> FilesPage(core, v)

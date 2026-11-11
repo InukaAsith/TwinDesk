@@ -85,6 +85,15 @@ object Tiles {
 
     fun reset(store: Store) = store.setPrefsString(KEY, "")
 
+    // A Deck tile in the shortcuts ("deck:<its id>"): on or off from the Deck page's tile editor.
+    fun pinned(store: Store, tile: String) = load(store).items.any { it.id == "deck:$tile" }
+    fun pin(store: Store, tile: String, on: Boolean) {
+        val l = load(store)
+        val has = l.items.any { it.id == "deck:$tile" }
+        if (on && !has) save(store, l.copy(items = l.items + Item("deck:$tile", "s")))
+        else if (!on && has) save(store, l.copy(items = l.items.filter { it.id != "deck:$tile" }))
+    }
+
     // Column by column, each tile in the first place it fits, in order: a large tile with one row
     // is a wide one. The computers and the iPhone pack the same way.
     fun pack(items: List<Item>, rows: Int): List<Placed> {
@@ -157,7 +166,17 @@ fun TilesCard(core: Core) {
         Def("mouse", tr("Mouse"), Ico.cursor, g(0xFFFFB340, 0xFFFF9500), state = { tr("{name}’s mouse here", "name" to name) }) { page("Cursor") },
         Def("notifications", tr("Notifications"), Ico.bell, g(0xFFFF6961, 0xFFFF3B30), state = { tr("Both ways") }) { page("Notifications") },
     )
-    val byId = defs.associateBy { it.id }
+    // Deck tiles pinned here: they run on the computer as on the Deck page.
+    val deckDefs = Tiles.load(core.store).items.filter { it.id.startsWith("deck:") }.map { item ->
+        val tid = item.id.removePrefix("deck:")
+        val found = core.deck.find(tid)?.first
+        val a = found?.optJSONObject("action")
+        val col = deckColor(found?.optString("color") ?: "#0a84ff")
+        Def(item.id, found?.let { deckLabel(it, core.deck.platform) } ?: tr("Deck"), found?.let { DeckCatalog.symbol(deckIcon(it)) } ?: Ico.deck, listOf(col, col),
+            has = { core.deck.offered && a != null && a.optString("k") !in listOf("nav", "none", "slider") && core.deck.runs(a) },
+        ) { core.deck.run(tid) }
+    }
+    val byId = (defs + deckDefs).associateBy { it.id }
 
     var layout by remember { mutableStateOf(Tiles.load(core.store)) }
     var editing by rememberSaveable { mutableStateOf(false) }

@@ -64,6 +64,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val macSound = MacSound(this)
     val shortcuts = Shortcuts(this)
     val kvm = Kvm(this)
+    val deck = Deck(this) // the Deck: buttons here the computer runs (only when it offers it)
     val remote = Remote(this) // this phone as the computer's touchpad, keyboard and gamepad (the Remote page)
     // …and as a Bluetooth gamepad for any computer: made only when it's on or the Remote page asks.
     private val btPadLazy = lazy { BtPad(this) }
@@ -89,7 +90,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // shown and its features hear nothing from the computer.
     val modulesAtStart: Set<String> = Modules.off(store)
     fun moduleOn(id: String) = id in Modules.FIXED || id !in modulesAtStart
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia)
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia, deck)
         .filter { f ->
             when (f) {
                 clip, fclip -> moduleOn("clipboard")
@@ -99,6 +100,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
                 pcMedia, nowPlaying -> moduleOn("media")
                 sound, macSound -> moduleOn("sound")
                 hub -> listOf("calls", "messages", "photos", "fileaccess").any(::moduleOn)
+                deck -> moduleOn("deck")
                 else -> true
             }
         }
