@@ -562,6 +562,12 @@ private fun TileEditor(core: Core, d: Deck, t: JSONObject, page: JSONObject, clo
     var action by remember(id) { mutableStateOf(JSONObject((t.optJSONObject("action") ?: JSONObject().put("k", "none")).toString())) }
     var picking by remember(id) { mutableStateOf(action.optString("k") == "none" && t.str("label", 40).isEmpty()) }
     var pinned by remember(id) { mutableStateOf(Tiles.pinned(core.store, id)) }
+    // A tile just added in an empty place: cancelling takes it away again instead of leaving a blank tile.
+    val fresh = remember(id) { picking }
+    fun cancel() {
+        if (fresh) d.edit { l -> pageIn(l, page.optString("id"))?.optJSONArray("tiles")?.removeWhere { it.optString("id") == id } }
+        close()
+    }
     val k = action.optString("k")
     fun put(vararg kv: Pair<String, Any>) { action = JSONObject(action.toString()).apply { kv.forEach { put(it.first, it.second) } } }
     // Whether a size fits on the page from where the tile is, past no other tile.
@@ -573,7 +579,7 @@ private fun TileEditor(core: Core, d: Deck, t: JSONObject, page: JSONObject, clo
             x0 < o.optInt("x") + o.optInt("w", 1) && o.optInt("x") < x0 + nw && y0 < o.optInt("y") + o.optInt("h", 1) && o.optInt("y") < y0 + nh }
     }
 
-    if (picking) { ActionPicker(d, { picking = false }) { e ->
+    if (picking) { ActionPicker(d, { if (fresh && action.optString("k") == "none") cancel() else picking = false }) { e ->
         action = e.action()
         if (e.wide && w == 1 && fits(2, 1)) w = 2
         if (e.k == "app") d.askApps()
@@ -581,7 +587,7 @@ private fun TileEditor(core: Core, d: Deck, t: JSONObject, page: JSONObject, clo
     }; return }
 
     AlertDialog(
-        onDismissRequest = close,
+        onDismissRequest = ::cancel,
         containerColor = pal.card,
         title = { Text(tr("Tile"), color = pal.text) },
         text = {
@@ -643,7 +649,7 @@ private fun TileEditor(core: Core, d: Deck, t: JSONObject, page: JSONObject, clo
                     Tiles.pin(core.store, id, false)
                     close()
                 }) { Text(tr("Delete"), color = pal.bad) }
-                TextButton(onClick = close) { Text(tr("Cancel"), color = pal.muted) }
+                TextButton(onClick = ::cancel) { Text(tr("Cancel"), color = pal.muted) }
             }
         },
     )

@@ -595,6 +595,8 @@ struct DeckTileEditor: View {
     @State private var action: JSON = ["k": "none"]
     @State private var pinned = false
     @State private var picking = false
+    @State private var fresh = false // just added in an empty place: leaving without Save takes it away again
+    @State private var saved = false
 
     var body: some View {
         let d = core.deck
@@ -659,9 +661,9 @@ struct DeckTileEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(tr("Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button(tr("Save")) { save(); dismiss() }.fontWeight(.semibold) }
+                ToolbarItem(placement: .confirmationAction) { Button(tr("Save")) { save(); saved = true; dismiss() }.fontWeight(.semibold) }
             }
-            .sheet(isPresented: $picking) {
+            .sheet(isPresented: $picking, onDismiss: { if fresh && action.str("k") == "none" { dismiss() } }) {
                 DeckActionPicker { entry in
                     action = entry.action
                     if entry.wide && w == 1 && fits(2, h) { w = 2 }
@@ -671,6 +673,13 @@ struct DeckTileEditor: View {
             }
         }
         .onAppear(perform: load)
+        .onDisappear {
+            let id = tileId
+            guard fresh, !saved, core.deck.find(id) != nil else { return }
+            core.deck.edit { l in Deck.mapPages(&l) { p in
+                if var ts = p["tiles"] as? [JSON], ts.contains(where: { $0.str("id") == id }) { ts.removeAll { $0.str("id") == id }; p["tiles"] = ts }
+            } }
+        }
     }
 
     private func symbolCell(_ s: String?) -> some View {
@@ -694,7 +703,7 @@ struct DeckTileEditor: View {
         w = t.int("w", 1); h = t.int("h", 1)
         action = t.obj("action") ?? ["k": "none"]
         pinned = TileLayout.pinned(core.store, tileId)
-        if action.str("k") == "none" && label.isEmpty { picking = true }
+        if action.str("k") == "none" && label.isEmpty { picking = true; fresh = true }
     }
 
     // Whether a size fits on the page from where the tile is, past no other tile.
