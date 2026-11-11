@@ -33,6 +33,8 @@ struct OverviewView: View {
                     .glassCard()
                 }
             }
+            // At the bottom: this TwinDesk runs out within 7 days (its own provisioning profile).
+            if Signer.expires > 0, Signer.expires - Date().timeIntervalSince1970 < 7 * 86400 { ExpiryCard() }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }
@@ -107,6 +109,39 @@ struct OverviewView: View {
             }
             await MainActor.run { core.files.flushShares() }
         }
+    }
+}
+
+// When this TwinDesk stops opening (a sideloaded build's 7 days), and Refresh: through the computer
+// when App refresh is set up, else to its page to set it up.
+struct ExpiryCard: View {
+    @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
+
+    var body: some View {
+        let s = core.signer
+        let secs = Signer.expires - Date().timeIntervalSince1970
+        let days = Int(secs / 86400)
+        let title = secs <= 0 ? tr("TwinDesk has expired")
+            : days >= 1 ? tr("TwinDesk expires in {count} days", ["count": "\(days)"])
+            : tr("TwinDesk expires in {count} hours", ["count": "\(max(1, Int(secs / 3600)))"])
+        let date = Date(timeIntervalSince1970: Signer.expires).formatted(date: .abbreviated, time: .shortened)
+        let ready = s.on && core.connected && s.available && s.facts.signedIn
+        return VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "clock.badge.exclamationmark", color: days < 2 ? TDColor.bad : Page.signing.color, title: title,
+                       detail: tr("Until {date}", ["date": date]))
+            if s.running {
+                Button { ui.open(.signing) } label: {
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text(tr("Refreshing…")) }.frame(maxWidth: .infinity)
+                }.secondaryButton()
+            } else if ready {
+                Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
+            } else {
+                Button { ui.open(.signing) } label: { Label(tr("Set up App refresh"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.secondaryButton()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
     }
 }
 
