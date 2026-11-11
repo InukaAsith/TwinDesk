@@ -78,9 +78,14 @@ struct SignerView: View {
     private var showSignIn: Bool { !s.running && (!s.facts.signedIn || s.needsSignIn) }
 
     private var toggle: some View {
-        ToggleRow(title: tr("App refresh"), detail: tr("The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer."),
-                  on: Binding(get: { s.on }, set: { if $0 { askOn = true } else { s.on = false } }))
-            .glassCard()
+        VStack(alignment: .leading, spacing: 12) {
+            ToggleRow(title: tr("App refresh"), detail: tr("The computer re-signs TwinDesk before its 7-day provisioning profile expires. Switching this on or off does the same in TwinDesk on the computer."),
+                      on: Binding(get: { s.on }, set: { if $0 { askOn = true } else { s.on = false } }))
+            Divider()
+            ToggleRow(title: tr("Expiry on Overview"), detail: tr("In TwinDesk’s last 7 days, Overview shows when it expires, with Refresh now."),
+                      on: Binding(get: { s.homeCard }, set: { s.homeCard = $0 }))
+        }
+        .glassCard()
     }
 
     // One warning, AltStore recommended in it.

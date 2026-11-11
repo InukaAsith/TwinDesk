@@ -63,6 +63,12 @@ final class Signer: Feature {
         return date.timeIntervalSince1970
     }()
 
+    // The card on Overview in TwinDesk's last 7 days (on unless switched off in App refresh).
+    var homeCard: Bool {
+        get { core.store.flag("sign.home", true) }
+        set { core.store.setFlag("sign.home", newValue); core.changed() }
+    }
+
     // Refresh by itself when the computer says it's time (on).
     var auto: Bool {
         get { core.store.flag("sign.auto", true) }

@@ -33,8 +33,8 @@ struct OverviewView: View {
                     .glassCard()
                 }
             }
-            // At the bottom: this TwinDesk runs out within 7 days (its own provisioning profile).
-            if Signer.expires > 0, Signer.expires - Date().timeIntervalSince1970 < 7 * 86400 { ExpiryCard() }
+            // At the bottom: this TwinDesk runs out within 7 days (its own provisioning profile); off in App refresh.
+            if core.signer.homeCard, Signer.expires > 0, Signer.expires - Date().timeIntervalSince1970 < 7 * 86400 { ExpiryCard() }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }
