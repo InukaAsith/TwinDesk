@@ -5,6 +5,8 @@ try {
   const m = require('module');
   if (typeof m.enableCompileCache === 'function') m.enableCompileCache();
 } catch {}
+const Mods = require('../shared/modules.js'); // General › Modules: the ones off at start aren't loaded
+let modulesAtStart = [];
 const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, Notification, shell, globalShortcut, systemPreferences } = require('electron');
@@ -210,6 +212,7 @@ function loadDevice() {
 function start() {
   device = loadDevice();
   settings = normalize(store.read('settings.json', {}));
+  modulesAtStart = settings.modules.off; // fixed for this run: the window's scripts are
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -1177,6 +1180,7 @@ function buildState() {
   const miss = missing();
   return {
     device,
+    modules: Mods.view(settings.modules, modulesAtStart), // General › Modules
     ...link.snapshot(),
     peer: peerView(),
     found: discovery.list(),
@@ -1357,7 +1361,7 @@ function createMainWindow(tab) {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: Mods.offQuery({ off: modulesAtStart }) } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1463,6 +1467,7 @@ function updateTray(s = buildState()) {
   };
   const kind = (os) => (os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'ios' ? 'iPhone' : os === 'android' ? t('Phone') : 'PC');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    off: modulesAtStart, // General › Modules
     t,
     connected,
     status: connected ? t('Connected to {name}', { name }) + rtt : t('Not connected'),

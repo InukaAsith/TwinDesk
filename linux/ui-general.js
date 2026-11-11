@@ -100,6 +100,7 @@ UI.tab({
     const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
     const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
+    const modules = UI.modulesCard ? UI.modulesCard() : { card: null, update() {} }; // General › Modules (shared/ui-modules.js; not in Multi-device)
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, steadyRow]),
       UI.card(t('Startup'), [
@@ -122,6 +123,7 @@ UI.tab({
       UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
       UI.card(t('This computer'), [deviceRow, sessRow, inRow, helperRow]),
       UI.card(t('Connections'), [pingRow]),
+      ...(modules.card ? [modules.card] : []),
       UI.card(t('Advanced'), [protoRow, ...engines.rows]),
       UI.card(t('Quit'), [
         UI.row(t('Quit TwinDesk'), t('Stops sharing until you open it again'), [UI.button(t('Quit'), () => api.quit(), 'small')]),
@@ -131,6 +133,7 @@ UI.tab({
 
     return (s) => {
       engines.update(s);
+      modules.update(s);
       if (s.app) {
         const proto = s.app.inputProtocol === 'tcp' ? 'tcp' : 'udp';
         if (protoStart === null) protoStart = proto;

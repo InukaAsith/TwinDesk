@@ -12,6 +12,8 @@ UI.tab({
   desc: I18n.t('Open a shell on the other computer. No passwords needed.'),
   color: 'linear-gradient(#3a3a3c, #1c1c1e)',
   badge: (s) => (s.terminal && (s.terminal.allowPc || s.terminal.connectPc) ? 'on' : ''),
+  // General › Modules: switched off with the module (shared/ui-modules.js), back on with it.
+  moduleSwitch: { get: (s) => !!(s.terminal && (s.terminal.allowPc || s.terminal.connectPc)), set: (v) => UI.api.setTerminal({ allowPc: v, connectPc: v }) },
   build(body) {
     const { el, api } = UI;
     const outSw = UI.switch((v) => api.setTerminal({ connectPc: v }), { label: I18n.t('Open shells there') });

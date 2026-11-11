@@ -232,6 +232,7 @@ function normalize(s) {
     ui: { tab: OLD_TABS[ui.tab] || (TABS.includes(ui.tab) ? ui.tab : 'overview'), overview: overviewParts(ui.overview), chats: bool(ui.chats, false), language: savedLanguage(ui.language),
       style: Look.style(ui.style), theme: Look.theme(ui.theme), accent: Look.accent(ui.accent) }, // General › Appearance (shared/look.js)
     windows: s.windows && typeof s.windows === 'object' ? s.windows : {},
+    modules: require('../shared/modules.js').normalize(s.modules), // General › Modules
   };
 }
 

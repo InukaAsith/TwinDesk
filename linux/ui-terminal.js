@@ -13,6 +13,8 @@ UI.tab({
   color: 'linear-gradient(#3a3a3c, #1c1c1e)',
   desc: I18n.t('Open a terminal on the other computer.'),
   badge: (s) => (s.terminal.status === 'unavailable' || s.terminal.status === 'error' ? 'warn' : s.terminal.status === 'ready' || (s.terminal.server.info && s.terminal.server.info.enabled) ? 'on' : ''),
+  // General › Modules: switched off with the module (shared/ui-modules.js), back on with it.
+  moduleSwitch: { get: (s) => !!(s.terminal && (s.terminal.allowMac || s.terminal.enabled)), set: (v) => UI.api.setTerminal({ allowMac: v, enabled: v }) },
   build(body) {
     const { el, api } = UI;
     // Mac → PC (server here)

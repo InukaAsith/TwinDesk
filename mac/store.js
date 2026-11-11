@@ -121,6 +121,7 @@ function loadSettings() {
   const out = { ...DEFAULT_SETTINGS, ...s };
   for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub', 'camera', 'remote', 'web']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
   out.rezume = require('../shared/rezume.js').normalize(s.rezume);
+  out.modules = require('../shared/modules.js').normalize(s.modules); // General › Modules
   out.ui.language = require('../shared/i18n.js').savedLanguage(out.ui.language);
   { const Look = require('../shared/look.js'); out.ui.style = Look.style(out.ui.style); out.ui.theme = Look.theme(out.ui.theme); out.ui.accent = Look.accent(out.ui.accent); }
   if (s.ui && s.ui.setupSkipped && s.ui.setupDone === undefined) out.ui.setupDone = true;

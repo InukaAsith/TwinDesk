@@ -677,6 +677,13 @@ function setupIpc(ctx) {
     setMulti(on) {
       require('./multi').set(on === true); // Multi-device: TwinDesk restarts
     },
+    // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
+    setModules(m) {
+      if (!m || typeof m !== 'object') return;
+      const Mods = require('../shared/modules.js');
+      settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+      save();
+    },
   };
 
   ipcMain.handle('getState', () => ctx.state);

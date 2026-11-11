@@ -45,6 +45,8 @@ let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
 let adbQr = null; // wireless debugging's pairing QR code while shown (shared/adbqr.js)
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
+const Mods = require('../shared/modules.js'); // General › Modules: the ones off at start aren't loaded
+let modulesAtStart = [];
 const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const path = require('path');
@@ -201,6 +203,7 @@ function pushState() {
       : /^(utun|bridge|vmnet|vnic|llw|awdl)/.test(i.name) ? 4 : i.name === defaultIf ? 2 : 3);
     state.addresses = interfaces().sort((a, b) => rank(a) - rank(b)).map((i) => i.address);
     state.pairing = pairing ? pairing.pendingView() : null;
+    if (settings) state.modules = Mods.view(settings.modules, modulesAtStart); // General › Modules
     state.paired = pairing ? pairing.list() : [];
     if (discovery) {
       state.discovery = { ...discovery.status };
@@ -430,7 +433,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'warning' || e.level === 'error') console.log(`[window] ${e.level}: ${e.message}`);
   });
-  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: Mods.offQuery({ off: modulesAtStart }) } });
   win.once('ready-to-show', showWindow);
   // In the Dock and ⌘-Tab only while the window is open; menu bar only otherwise.
   const w = win;
@@ -518,6 +521,7 @@ function updateTray() {
   trayKey = key;
   tray.setToolTip(c ? `TwinDesk: ${c.name}` : 'TwinDesk');
   const model = {
+    off: modulesAtStart, // General › Modules
     t,
     connected: !!c,
     status: c ? t('Connected to {name}', { name: c.name }) + (c.transport === 'ble' ? ' · ' + t('Bluetooth') : '') : t('Not connected'),
@@ -568,6 +572,7 @@ app.whenReady().then(() => {
   if (app.dock && !app.isPackaged) app.dock.setIcon(path.join(__dirname, '..', 'shared', 'icon', 'teindesk-dark-mac.png'));
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
+  modulesAtStart = Mods.normalize(settings.modules).off; // fixed for this run: the window's scripts are
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));

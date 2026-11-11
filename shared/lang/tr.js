@@ -2137,4 +2137,10 @@
   "Select {target}": "{target} seçin",
   "On an iPhone with a Home button, swipe up from the bottom edge instead.": "Ana Ekran düğmeli bir iPhone’da bunun yerine alt kenardan yukarı kaydırın.",
   "Shortcuts": "Kısayollar",
+  "Modules": "Modüller",
+  "Restart to apply": "Uygulamak için yeniden başlatın",
+  "Modules load or unload when TwinDesk starts": "Modüller TwinDesk başlarken yüklenir veya kaldırılır",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "Kapalı bir modül hiç yüklenmez: sayfası, menü öğesi yoktur, hiçbir şey çalışmaz. Genel, Hakkında, Bağlantı ve Genel Bakış her zaman açıktır.",
+  "Media": "Medya",
+  "Deck": "Düğme Paneli",
 });

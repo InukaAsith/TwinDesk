@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('macshare', {
   clearHistory: call('clearHistory'),
   setTab: call('setTab'),
   setMulti: call('setMulti'),
+  setModules: call('setModules'), // General › Modules
   relaunch: call('relaunch'),
   setAudio: call('setAudio'),
   camera: call('camera'),

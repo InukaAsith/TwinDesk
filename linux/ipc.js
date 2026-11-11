@@ -119,6 +119,14 @@ function setupIpc(ctx) {
   handle('setChats', (on) => { change('ui', { chats: on === true }); if (ctx.chats && ctx.chats()) ctx.chats().sync(); }); // Messages: WhatsApp, Telegram and Instagram there too
   handle('setOverview', (o) => o && typeof o === 'object' && change('ui', { overview: { ...settings.ui.overview, ...o } })); // General › Overview // invalid names fall back in normalize()
   handle('setMulti', (on) => require('./multi').set(on === true)); // Multi-device: TwinDesk restarts
+  // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
+  handle('setModules', (m) => {
+    if (!m || typeof m !== 'object') return;
+    const Mods = require('../shared/modules.js');
+    settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+    ctx.save();
+    ctx.push();
+  });
   handle('relaunch', () => { app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); app.quit(); }); // General › Advanced: a setting read at startup
   handle('setAudio', (partial) => change('audio', partial, () => {
     sound.apply();

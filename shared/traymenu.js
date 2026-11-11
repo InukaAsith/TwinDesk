@@ -10,7 +10,8 @@
 //       sound: {checked, set}, drag: {checked, set}, shortcuts: {label, checked, set},
 //       found: [{label, click}], byAddress(), lookAgain(), again?: {label, click},
 //       disconnect?: {label, click}, update?: {label, click}, windowsBack?: {label, click}, open(), quit(),
-//       rezume?: [{label, click}] (Continue …, Send … to: shared/rezume.js)}
+//       rezume?: [{label, click}] (Continue …, Send … to: shared/rezume.js),
+//       off?: [module ids] (General › Modules, shared/modules.js: their items aren't there)}
 'use strict';
 
 const check = (label, o) => ({ label, type: 'checkbox', checked: !!o.checked, click: (i) => o.set(i.checked) });
@@ -30,23 +31,29 @@ function connectTo(m, t) {
 
 // The menus by kind, the same in the tray and the Mac's own menu bar (appMenu).
 // short: the Mac's menu bar, where the names sit side by side ("Mouse & Keyboard").
+const on = (m, id) => !(m.off || []).includes(id); // General › Modules
 function kinds(m, t, short = false) {
+  const cursor = on(m, 'cursor');
+  const keyboard = on(m, 'keyboard');
+  const clipSound = [...(on(m, 'clipboard') ? [check(t('Share Clipboard'), m.clipboard)] : []), ...(on(m, 'audio') ? [check(t('Send Sound'), m.sound)] : [])];
   return [
-    {
+    ...(cursor || keyboard ? [{
       label: t(short ? 'Mouse & Keyboard' : 'Mouse and Keyboard'),
       submenu: [
-        check(t('Share Keyboard'), m.keyboard),
-        ...(m.lock ? [check(m.lock.label, m.lock)] : []),
-        sep,
-        check(m.drive.label, m.drive),
-        ...(m.driven ? [check(m.driven.label, m.driven)] : []),
-        sep,
-        check(t('Show a Popup When Switching'), m.popup),
+        ...(keyboard ? [check(t('Share Keyboard'), m.keyboard)] : []),
+        ...(cursor ? [
+          ...(m.lock ? [check(m.lock.label, m.lock)] : []),
+          ...(keyboard ? [sep] : []),
+          check(m.drive.label, m.drive),
+          ...(m.driven ? [check(m.driven.label, m.driven)] : []),
+          sep,
+          check(t('Show a Popup When Switching'), m.popup),
+        ] : []),
       ],
-    },
-    { label: t('Screen'), submenu: m.screen.map((x) => (x.sep ? sep : check(x.label, x))) },
-    { label: t(short ? 'Clipboard & Sound' : 'Clipboard and Sound'), submenu: [check(t('Share Clipboard'), m.clipboard), check(t('Send Sound'), m.sound)] },
-    { label: t('Files'), submenu: [check(t('Drag Files Across the Screen Edge'), m.drag), check(m.shortcuts.label, m.shortcuts)] },
+    }] : []),
+    ...(on(m, 'share') || on(m, 'receive') ? [{ label: t('Screen'), submenu: m.screen.map((x) => (x.sep ? sep : check(x.label, x))) }] : []),
+    ...(clipSound.length ? [{ label: t(short ? 'Clipboard & Sound' : 'Clipboard and Sound'), submenu: clipSound }] : []),
+    ...(on(m, 'files') ? [{ label: t('Files'), submenu: [check(t('Drag Files Across the Screen Edge'), m.drag), check(m.shortcuts.label, m.shortcuts)] }] : []),
     { label: t('Connection'), submenu: [...(m.disconnect ? [m.disconnect, sep] : []), connectTo(m, t)] },
   ];
 }
@@ -61,8 +68,8 @@ function template(m) {
     status,
     ...(m.home ? [{ label: t('Bring Mouse and Keyboard Back'), click: m.home }] : []),
     ...(m.windowsBack ? [m.windowsBack] : []), // windows moved to the other computer (Apps › Move windows)
-    ...(m.rezume && m.rezume.length ? [...m.rezume, sep] : []),
-    check(t('Cursor Sharing'), m.shared),
+    ...(m.rezume && m.rezume.length && on(m, 'rezume') ? [...m.rezume, sep] : []),
+    ...(on(m, 'cursor') ? [check(t('Cursor Sharing'), m.shared)] : []),
     sep,
     ...kinds(m, t),
     sep,
@@ -83,7 +90,7 @@ function appMenu(m) {
       { label: m.status, enabled: false },
       ...(m.again ? [m.again] : []),
       ...(m.home ? [{ label: t('Bring Mouse and Keyboard Back'), click: m.home }] : []),
-      ...(m.connected ? [check(t('Cursor Sharing'), m.shared)] : []),
+      ...(m.connected && on(m, 'cursor') ? [check(t('Cursor Sharing'), m.shared)] : []),
       sep,
       ...(m.update ? [m.update] : []),
       { label: t('Settings…'), accelerator: 'CmdOrCtrl+,', click: m.open },
@@ -95,7 +102,7 @@ function appMenu(m) {
     ],
   };
   const menus = m.connected ? kinds(m, t, true) : [{ label: t('Connection'), submenu: [connectTo(m, t)] }];
-  const rezume = m.connected && m.rezume && m.rezume.length ? [{ label: 'ReZume', submenu: m.rezume }] : [];
+  const rezume = m.connected && m.rezume && m.rezume.length && on(m, 'rezume') ? [{ label: 'ReZume', submenu: m.rezume }] : [];
   return [app, ...menus, ...rezume, { role: 'windowMenu' }];
 }
 

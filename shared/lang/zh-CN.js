@@ -2138,4 +2138,10 @@
   "Select {target}": "选择 {target}",
   "On an iPhone with a Home button, swipe up from the bottom edge instead.": "在有主屏幕按钮的 iPhone 上，请改为从底部边缘向上轻扫。",
   "Shortcuts": "快捷方式",
+  "Modules": "模块",
+  "Restart to apply": "重新启动以应用",
+  "Modules load or unload when TwinDesk starts": "模块在 TwinDesk 启动时加载或卸载",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "关闭的模块完全不会加载：没有页面、没有菜单项、不运行任何内容。通用、关于、连接和概览始终开启。",
+  "Media": "媒体",
+  "Deck": "按键面板",
 });

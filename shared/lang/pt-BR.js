@@ -2137,4 +2137,10 @@
   "Select {target}": "Selecione {target}",
   "On an iPhone with a Home button, swipe up from the bottom edge instead.": "Num iPhone com botão de Início, deslize de baixo para cima.",
   "Shortcuts": "Atalhos",
+  "Modules": "Módulos",
+  "Restart to apply": "Reinicie para aplicar",
+  "Modules load or unload when TwinDesk starts": "Os módulos são carregados ou descarregados quando o TwinDesk inicia",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "Um módulo desligado não é carregado: sem página, sem itens de menu, nada em execução. Geral, Sobre, Conexão e Visão geral estão sempre ligados.",
+  "Media": "Mídia",
+  "Deck": "Painel de botões",
 });

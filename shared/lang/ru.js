@@ -2137,4 +2137,10 @@
   "Select {target}": "Выберите {target}",
   "On an iPhone with a Home button, swipe up from the bottom edge instead.": "На iPhone с кнопкой «Домой» смахните вверх от нижнего края.",
   "Shortcuts": "Ярлыки",
+  "Modules": "Модули",
+  "Restart to apply": "Перезапустите, чтобы применить",
+  "Modules load or unload when TwinDesk starts": "Модули загружаются и выгружаются при запуске TwinDesk",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "Выключенный модуль вообще не загружается: нет страницы, нет пунктов меню, ничего не работает. Основные, «О программе», «Подключение» и «Обзор» включены всегда.",
+  "Media": "Медиа",
+  "Deck": "Панель кнопок",
 });

@@ -96,6 +96,7 @@ UI.tab({
     const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
     const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
+    const modules = UI.modulesCard ? UI.modulesCard() : { card: null, update() {} }; // General › Modules (shared/ui-modules.js; not in Multi-device)
     const sections = UI.sections([
       UI.card(t('Permissions'), [
         ...perms.map((x) => x.row),
@@ -121,6 +122,7 @@ UI.tab({
       UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
       UI.card(t('This computer'), [deviceRow, helperRow]),
       UI.card(t('Connections'), [pingRow]),
+      ...(modules.card ? [modules.card] : []),
       UI.card(t('Advanced'), [protoRow, ...engines.rows]),
     ]);
     body.append(sections);
@@ -138,6 +140,7 @@ UI.tab({
       sections.spy();
       media.update(s);
       engines.update(s);
+      modules.update(s);
       wallSw.set(!s.phone || !s.phone.settings || s.phone.settings.wallpaper !== false);
       const ov = (s.ui && s.ui.overview) || {};
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);

@@ -88,7 +88,7 @@ try {
       Menu: { buildFromTemplate: (x) => x, setApplicationMenu() {} }, P: require('../protocol'),
       CL: require('../cursorlock'), trayMenu: require('../traymenu'),
       i18n, t: (...args) => i18n.t(...args), rezumeItems: () => [], displayMode: () => 'mirror', shareAs() {},
-      actions: {}, showWindow() {}, showUpdateWindow() {}, app: {},
+      actions: {}, showWindow() {}, showUpdateWindow() {}, app: {}, modulesAtStart: [],
     };
     vm.runInNewContext(code + '\nupdateTray();', context);
     const labels = (items) => items.flatMap((x) => [x.label, ...(x.submenu ? labels(x.submenu) : [])]).filter(Boolean);

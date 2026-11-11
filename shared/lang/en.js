@@ -2138,4 +2138,10 @@
   "Select {target}": "Select {target}",
   "On an iPhone with a Home button, swipe up from the bottom edge instead.": "On an iPhone with a Home button, swipe up from the bottom edge instead.",
   "Shortcuts": "Shortcuts",
+  "Modules": "Modules",
+  "Restart to apply": "Restart to apply",
+  "Modules load or unload when TwinDesk starts": "Modules load or unload when TwinDesk starts",
+  "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.": "A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.",
+  "Media": "Media",
+  "Deck": "Deck",
 });
