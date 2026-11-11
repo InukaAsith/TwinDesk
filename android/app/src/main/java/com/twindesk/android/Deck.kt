@@ -95,18 +95,20 @@ class Deck(core: Core) : Feature(core) {
     class App(val id: String, val name: String)
 
     private val main = Handler(Looper.getMainLooper())
-    @Volatile var offered = false; private set
-    @Volatile var layout: JSONObject? = null; private set
-    @Volatile var can: Set<String> = emptySet(); private set
-    @Volatile var caps: JSONObject? = null; private set
-    @Volatile var platform = ""; private set
-    @Volatile var apps: List<App>? = null; private set
+    // Compose state, written on the main thread: whatever reads a field redraws when it changes
+    // (the page's parts are skipped when their arguments are the same objects).
+    var offered by mutableStateOf(false); private set
+    var layout by mutableStateOf<JSONObject?>(null); private set
+    var can by mutableStateOf<Set<String>>(emptySet()); private set
+    var caps by mutableStateOf<JSONObject?>(null); private set
+    var platform by mutableStateOf(""); private set
+    var apps by mutableStateOf<List<App>?>(null); private set
     // Levels, devices and switches on the computer (deck.state): volume, muted, outputs, bt, displays…
-    @Volatile var state: JSONObject? = null; private set
+    var state by mutableStateOf<JSONObject?>(null); private set
     // The window space's running apps, their windows and the displays (deck.wins).
-    @Volatile var wins: JSONObject? = null; private set
+    var wins by mutableStateOf<JSONObject?>(null); private set
     // The last tile's answer: its id and why it didn't run ("" when it did).
-    @Volatile var done: Pair<String, String>? = null; private set
+    var done by mutableStateOf<Pair<String, String>?>(null); private set
 
     val mac get() = platform == "mac"
     val spaces: List<JSONObject> get() = layout?.optJSONArray("spaces").objs()

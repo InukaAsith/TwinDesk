@@ -252,9 +252,10 @@ enum Deck {
     }
     if wid == 0 { if let f = front() { return f.1 }; throw HelperError(message: "No window in front") }
     let all = Apps.windows(pids: Set(NSWorkspace.shared.runningApplications.map { Int($0.processIdentifier) }))
-    guard let w = all.first(where: { ($0["wid"] as? Int) == wid }), let pid = w["pid"] as? Int,
-          let ax = Apps.axWindow(pid: pid, frame: CGRect(x: w["x"] as? Double ?? 0, y: w["y"] as? Double ?? 0, width: w["w"] as? Double ?? 0, height: w["h"] as? Double ?? 0))
-    else { throw HelperError(message: "That window is gone") }
+    guard let w = all.first(where: { ($0["wid"] as? Int) == wid }), let pid = w["pid"] as? Int else { throw HelperError(message: "That window is gone") }
+    // Accessibility sees only this desktop's windows: one on another desktop or in full screen is still there.
+    guard let ax = Apps.axWindow(pid: pid, frame: CGRect(x: w["x"] as? Double ?? 0, y: w["y"] as? Double ?? 0, width: w["w"] as? Double ?? 0, height: w["h"] as? Double ?? 0))
+    else { throw HelperError(message: "That window is on another desktop or in full screen") }
     return ax
   }
 
