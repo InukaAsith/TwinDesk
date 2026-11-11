@@ -18,7 +18,8 @@ contextBridge.exposeInMainWorld('macshare', {
   connectAddress: call('connectAddress'),
   refreshFound: call('refreshFound'),
   copyText: call('copyText'),
-  deviceDo: call('deviceDo'), // Overview: the other device's controls
+  deviceDo: call('deviceDo'),
+  iosSign: call('iosSign'), iosSignIpa: call('iosSignIpa'), // TwinDesk iPhone (shared/iossign.js) // Overview: the other device's controls
   setOverview: call('setOverview'), // General › Overview: what it shows
   setChats: call('setChats'), // Messages: chat apps in one inbox
   qrPair: call('qrPair'), // Connection: pair a phone with a QR code

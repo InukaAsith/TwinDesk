@@ -56,7 +56,8 @@ jobs:
             curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
             . "$HOME/.cargo/env"
             sh linux-helper/build.sh
-            chown -R '"$(id -u):$(id -g)"' linux-helper native/tdfast/target
+            TWINDESK_SIGNER_ANY_IPA=1 sh ios-signer/build.sh || echo "note: no iOS signing helper"
+            chown -R '"$(id -u):$(id -g)"' linux-helper native/tdfast/target ios-signer
           '
 
       # Fails the build if a helper needs a newer glibc than 2.27, or went without the tdfast lane.

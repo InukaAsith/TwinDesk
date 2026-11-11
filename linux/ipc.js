@@ -60,6 +60,9 @@ function setupIpc(ctx) {
     if (port >= 1 && port <= 65535) link.startPairing({ address: m[1], port, macName: m[1] });
   });
   handle('refreshFound', () => discovery.refresh());
+  // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+  handle('iosSign', (o) => require('../shared/iossign-host.js').act(ctx.iosSign && ctx.iosSign(), dialog, o));
+  handle('iosSignIpa', () => require('../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), dialog));
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
   handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))

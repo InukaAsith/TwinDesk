@@ -49,6 +49,8 @@ async function main() {
   } else {
     console.log('Building the helper…');
     execFileSync('sh', [path.join(ROOT, 'linux-helper', 'build.sh')], { stdio: 'inherit' });
+    // iPhone app signing's helper (ios-signer/): optional, the app leaves the page's work out without it.
+    try { execFileSync('sh', [path.join(ROOT, 'ios-signer', 'build.sh')], { stdio: 'inherit', env: { ...process.env, TWINDESK_SIGNER_ANY_IPA: '1' } }); } catch { console.log('note: the iOS signing helper didn’t build'); }
   }
 
   console.log('Staging…');
@@ -64,6 +66,8 @@ async function main() {
   copy(path.join(ROOT, 'web'), path.join(STAGE, 'web'), (name) => name !== 'shortcuts-src');
   copy(path.join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'web'), path.join(STAGE, 'android-web'));
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper'));
+  if (fs.existsSync(path.join(ROOT, 'ios-signer', 'bin'))) copy(path.join(ROOT, 'ios-signer', 'bin'), path.join(STAGE, 'ios-signer', 'bin'));
+  else console.log('note: no ios-signer/bin — iPhone app signing is left out (ios-signer/build.sh, with cargo)');
   // Multi-device's helper (several watched edges, docs/multi-device.md): the same sources built with -DMULTI.
   copy(path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper-multi'), path.join(STAGE, 'linux-helper', 'bin', 'macshare-linuxhelper-multi'));
   copy(path.join(ROOT, 'linux-helper', 'bin', 'twindesk-wifiap'), path.join(STAGE, 'linux-helper', 'bin', 'twindesk-wifiap'));

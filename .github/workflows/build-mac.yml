@@ -83,6 +83,11 @@ jobs:
             echo "::notice title=Not notarized::No Developer ID certificate: this build is signed with TwinDesk's own certificate, not notarized. Gatekeeper asks once (or brew install --cask inukaasith/twindesk/twindesk clears it)."
           fi
 
+      # iPhone app signing's helper (ios-signer/build.sh, from build-app.sh) is Rust, built for each
+      # architecture the app is.
+      - name: Rust targets for both Mac architectures
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin || true
+
       - name: Install dependencies
         working-directory: mac
         run: npm install

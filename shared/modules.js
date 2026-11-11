@@ -37,6 +37,7 @@
     { id: 'deck', label: 'Deck', pages: ['deck'] },
     { id: 'web', label: 'TwinDesk Web', pages: ['web', 'wd-overview', 'wd-drop'] },
     { id: 'airplay', label: 'AirPlay', pages: ['airplay'] },
+    { id: 'iossign', label: 'TwinDesk iPhone', pages: ['iossign'] },
     { id: 'multi', label: 'Multi-device', pages: ['multi'] },
   ];
   // Always there: not modules.
@@ -52,6 +53,7 @@
     'ui-mirror.js': ['mirror', 'papps'], 'ui-ios-screen.js': ['mirror'], 'ui-multi.js': ['multi'],
     'ui-calls.js': ['calls'], 'ui-messages.js': ['messages'], 'ui-media.js': ['media'], 'ui-pfiles.js': ['pfiles'],
     'ui-deck.js': ['deck'], 'deck-model.js': ['deck'], 'deck-catalog.js': ['deck'], 'deck-icons.js': ['deck'],
+    'ui-ios-sign.js': ['iossign'],
   };
   const IDS = LIST.map((m) => m.id);
   const byPage = {};
