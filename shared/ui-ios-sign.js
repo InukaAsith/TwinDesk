@@ -159,17 +159,13 @@
       const ipaClear = UI.button(tr('Use TwinDesk'), () => act({ a: 'ipa' }), 'small');
       const ipaRow = UI.row(tr('App to install'), '', [ipaBtn, ipaClear], { literalHint: true });
       const installHead = UI.row('', '', [], { literal: true });
-      // TwinDesk already there: folded away behind one line (open while it isn't).
-      const installSum = el('summary', { text: tr('Reinstall TwinDesk or install another app') });
-      const installMore = el('details', { class: 'ios-more' }, [
-        installSum,
+      const installCard = UI.card(tr('Install TwinDesk'), [
         installHead,
         UI.row('Apple ID', tr('Sent only to Apple. Not stored on {computer}.', { computer: here }), [email], { literal: true }),
         UI.row(tr('Password'), tr('Used once to sign in and never stored.'), [pass], { literal: true }),
         ipaRow,
         UI.row('', '', [installBtn]),
       ]);
-      const installCard = UI.card(tr('Install TwinDesk'), [installMore]);
 
       // ---- TwinDesk on the device ----
       const refreshBtn = UI.button(tr('Refresh now'), () => act({ a: 'refresh' }), 'primary');
@@ -196,8 +192,7 @@
       const retryRow = UI.row(tr('Retry after a failed refresh'), '', [retrySel.el]);
       const cacheSw = UI.switch((v) => act({ a: 'set', cache: v }));
       const cacheRow = UI.row(tr('Store IPAs on {computer}', { computer: here }), tr('Each IPA installed from here is kept, so TwinDesk and other apps are signed again from it instead of being downloaded again. Turning this off deletes the stored IPAs.'), [cacheSw.el], { literal: true });
-      const autoMore = el('details', { class: 'ios-more' }, [el('summary', { text: tr('More options') }), howRow, whichRow, retryRow, cacheRow]);
-      const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, autoMore]);
+      const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, howRow, whichRow, retryRow, cacheRow]);
 
       // ---- keep a copy (on by default) ----
       const keepSw = UI.switch((v) => act({ a: 'set', keep: v }));
@@ -282,10 +277,6 @@
         const before = missingTd ? refreshCard : how;
         if (installCard.nextSibling !== before) body.insertBefore(installCard, before);
         installCard.querySelector('.card-title span').textContent = missingTd ? tr('Install TwinDesk') : tr('Reinstall');
-        installSum.hidden = missingTd;
-        if (missingTd) installMore.open = true;
-        else if (installMore.dataset.td !== '1') installMore.open = !!v.ipa; // folded once TwinDesk is there (open with an IPA chosen)
-        installMore.dataset.td = missingTd ? '0' : '1';
         installHead.label.textContent = !v.udid ? (devs.length ? tr('Select a device above') : tr('No device connected'))
           : missingTd ? tr('TwinDesk is not installed on {device}', { device: devName }) : tr('Reinstall TwinDesk or install another app');
         installHead.setHint(!v.udid ? tr('Then sign in with your Apple ID to install TwinDesk.')
