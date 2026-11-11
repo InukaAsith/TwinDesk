@@ -7,7 +7,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case overview, connection, receive, share, remote, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, signing, general, about
+    case overview, connection, receive, share, remote, deck, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, signing, general, about
     var id: String { rawValue }
 
     var title: String {
@@ -17,6 +17,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .receive: return tr("Receive screen")
         case .share: return tr("Share screen")
         case .remote: return tr("Remote")
+        case .deck: return tr("Deck")
         case .clipboard: return tr("Clipboard")
         case .notifications: return tr("Notifications")
         case .files: return tr("File Sharing")
@@ -40,6 +41,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .receive: return "display"
         case .share: return "rectangle.on.rectangle"
         case .remote: return "gamecontroller.fill"
+        case .deck: return "square.grid.3x3.fill"
         case .clipboard: return "doc.on.clipboard.fill"
         case .notifications: return "bell.fill"
         case .files: return "folder.fill"
@@ -61,6 +63,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .overview: return Color(white: 0.45)
         case .connection, .receive, .share, .files, .about: return TDColor.accent
         case .remote: return .orange
+        case .deck: return Color(red: 0.62, green: 0.38, blue: 0.95)
         case .messages: return TDColor.good
         case .clipboard: return Color(red: 0.35, green: 0.78, blue: 0.85)
         case .notifications: return TDColor.bad
@@ -78,7 +81,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
     // The sidebar's groups, as the computers have them.
     static let groups: [[Page]] = [
         [.overview, .connection],
-        [.receive, .share, .remote],
+        [.receive, .share, .remote, .deck],
         [.clipboard, .notifications, .files, .photos, .messages],
         [.audio, .camera, .media],
         [.airplay, .shortcuts, .signing],
@@ -380,7 +383,7 @@ struct Sidebar: View {
             } header: { Text(tr("Nearby")) }
         }
         // With a phone: only what it and this one can do (PeerViews' peerShows); Messages only then.
-        let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && (core.peerMode ? peerShows($0, core.peer) : $0 != .messages) } }.filter { !$0.isEmpty }
+        let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && (core.peerMode ? peerShows($0, core.peer) : $0 != .messages && ($0 != .deck || core.deck.offered)) } }.filter { !$0.isEmpty }
         ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
             Section {
                 ForEach(group) { p in
@@ -521,6 +524,7 @@ struct PageView: View {
         case .receive: ReceiveScreenView()
         case .share: ShareScreenView()
         case .remote: RemoteView()
+        case .deck: DeckView()
         case .clipboard: ClipboardView()
         case .notifications: NotificationsView()
         case .files: FilesView()

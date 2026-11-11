@@ -69,6 +69,16 @@ struct OverviewView: View {
             TileDef(id: "camera", label: tr("Webcam"), symbol: "video.fill", color: Page.camera.color, state: tr("This camera on {name}", ["name": name])) { ui.open(.camera) },
             TileDef(id: "notifications", label: tr("Notifications"), symbol: "bell.badge.fill", color: Page.notifications.color, state: tr("Both ways")) { ui.open(.notifications) },
         ]
+        // Deck tiles added to the quick actions (the Deck's tile editor): they run there as on the Deck page.
+        for item in TileLayout.load(core.store).items where item.id.hasPrefix("deck:") {
+            let tid = String(item.id.dropFirst(5))
+            let found = core.deck.find(tid)?.tile
+            let a = found?.obj("action") ?? [:]
+            let runs = found != nil && core.deck.offered && !["nav", "none", "slider"].contains(a.str("k")) && core.deck.runs(a)
+            defs.append(TileDef(id: item.id, label: found.map { deckLabel($0, core.deck.platform) } ?? tr("Deck"),
+                                symbol: found.flatMap { DeckCatalog.sf[deckIcon($0)] } ?? "square.grid.3x3.fill",
+                                color: deckColor(found?.str("color", max: 7) ?? "#0a84ff"), has: runs, state: name) { core.deck.run(tid) })
+        }
         if core.fclip.offer != nil { // what the computer copied: kept first while it's there
             defs.insert(TileDef(id: "auto.savecopied", label: tr("Save copied"), symbol: "square.and.arrow.down.fill", color: TDColor.good, state: tr("Copied on {name}", ["name": name])) { core.fclip.save() }, at: 0)
         }

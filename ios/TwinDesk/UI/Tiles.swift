@@ -32,6 +32,16 @@ struct TileLayout: Equatable {
         return TileLayout(rows: (o["rows"] as? Int) == 2 ? 2 : 1, items: items)
     }
 
+    // A Deck tile among the quick actions ("deck:<its id>"): on or off from the Deck's tile editor.
+    static func pinned(_ store: Store, _ tile: String) -> Bool { load(store).items.contains { $0.id == "deck:" + tile } }
+    static func pin(_ store: Store, _ tile: String, _ on: Bool) {
+        var l = load(store)
+        let id = "deck:" + tile
+        let has = l.items.contains { $0.id == id }
+        if on && !has { l.items.append(TileItem(id: id, size: "s")); l.save(store) }
+        else if !on && has { l.items.removeAll { $0.id == id }; l.save(store) }
+    }
+
     func save(_ store: Store) {
         let o: [String: Any] = ["rows": rows, "items": items.map { ["id": $0.id, "s": $0.size] }]
         if let d = try? JSONSerialization.data(withJSONObject: o), let s = String(data: d, encoding: .utf8) { store.setString(TileLayout.key, s) }
@@ -241,7 +251,7 @@ struct TilesCard: View {
             } else {
                 Text(tr("Tap a quick action to move or resize it, or − to remove it.")).font(.footnote).foregroundStyle(.secondary)
             }
-            let rest = defs.filter { d in d.has && !d.id.hasPrefix("auto.") && !layout.items.contains { $0.id == d.id } }
+            let rest = defs.filter { d in d.has && !d.id.hasPrefix("auto.") && !d.id.hasPrefix("deck:") && !layout.items.contains { $0.id == d.id } }
             if !rest.isEmpty {
                 Text(tr("Add")).font(.footnote.weight(.medium)).foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
