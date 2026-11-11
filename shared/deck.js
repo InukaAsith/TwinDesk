@@ -1,36 +1,40 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The Deck on this computer (Mac, Windows, Linux): a phone or a TwinDesk Web device shows the
-// buttons, this computer keeps the layout (settings.deck, shared/deck-model.js) and runs them. Loaded
-// only while the Deck module is on (shared/modules.js); nothing else of it runs.
+// The Deck on this computer (Mac, Windows, Linux): a phone or a TwinDesk Web device shows the tiles,
+// this computer keeps the layout (settings.deck, shared/deck-model.js) and runs them through
+// shared/deck-sys.js (no command lines, nothing an antivirus could take for malware). Loaded only
+// while the Deck module is on (shared/modules.js); nothing else of it runs.
 //
 // Wire (shared/protocol.js DECK_*), only between this computer and a phone or web device:
-//   computer → device  deck.offer {v}: on its welcome. A device without a Deck (an older app, its
-//                      Deck module off) says nothing back, and this computer shows no Deck page.
-//   device → computer  deck.hello {}: it has a Deck → deck.layout {layout, can: [kinds], mac}
-//                      deck.run {page, id}: a button → deck.done {id, ok, why?}
-//                      deck.save {layout}: edited on the device → deck.layout to it
-//                      deck.apps {}: for its editor → deck.apps {apps: [{id, name, icon}]}
-//   computer → device  deck.clip {text}: Clipboard › Send, this computer's clipboard for the device's
-//
-// new Deck({ server, helper, platform: 'mac'|'win'|'linux', load() → saved layout, save(layout),
-//   devLocal() → shared/devlocal.js instance, apps: {list(), open(id)} (shared/deck-apps.js),
-//   bright: {can(), step(up)} (shared/deck-apps.js), openUrl(url), readClipboard() → text,
-//   onChange(), web: true for TwinDesk Web's bus (its pages ask without an offer) })
-// One per session kind (the phones', TwinDesk Web's): a layout saved through one goes to the others'
-// devices too. Deck.view() → {surface: names of the devices with a Deck, layout, can}
+//   computer → device  deck.offer {v}: on its welcome. A device without a Deck says nothing back,
+//                      and this computer shows no Deck page.
+//   device → computer  deck.hello {}: it has a Deck → deck.layout {layout, can, caps, mac}
+//                      deck.run {id}: a tile → deck.done {id, ok, why?}
+//                      deck.set {id, value}: a slider tile being dragged (the last one wins)
+//                      deck.state {}: → deck.state {state}: levels, devices, switches, for its tiles
+//                      deck.save {layout}: edited on the device → deck.layout to every device
+//                      deck.apps {}: → deck.apps {apps: [{id, name, icon}]}
+//                      deck.wins {}: the window space → deck.wins {apps, displays, front}
+//                      deck.place {wid, display, zone?}: a window into a zone, or onto a display
+//   computer → device  deck.clip {text}: Clipboard › Send to the device
+// One Deck per session kind (the phones', TwinDesk Web's): a layout saved through one goes to the
+// others' devices too. Deck.view() → {surface: names of the devices with a Deck, layout, can, caps}
 'use strict';
 
 const P = require('./protocol.js');
 const M = require('./deck-model.js');
 
 const T = P.T;
-const RUN_GAP_MS = 60; // one button at a time: a burst of taps can't pile up key presses
+const RUN_GAP_MS = 40; // one tile at a time: a burst of taps can't pile up key presses
+const SET_GAP_MS = 60; // a dragged slider: at most this often, the last value always
+const ZG = M.ZONE_GRID;
 
 class Deck {
   constructor(o) {
     Object.assign(this, o);
     this.surface = null; // {name} of the device with a Deck, while one is connected
     this.busy = false;
+    this.slide = new Map(); // tile id → {value, timer, at}
+    this.micLevel = null;
     Deck.all.add(this);
     const on = (t, fn) => this.server.on(`t:${t}`, (m) => fn(m || {}));
     this.server.on('client', (ctx) => this.offer(ctx));
@@ -41,28 +45,34 @@ class Deck {
       this._layout();
       this.onChange();
     });
-    on(T.DECK_RUN, (m) => this.surface && this.run(String(m.page || ''), String(m.id || '')));
-    on(T.DECK_SAVE, (m) => this.surface && m.layout && this.setLayout(m.layout));
+    on(T.DECK_RUN, (m) => this.surface && this.run(String(m.id || '')));
+    on(T.DECK_SET, (m) => this.surface && this.set(String(m.id || ''), Number(m.value)));
+    on(T.DECK_STATE, () => this.surface && this.pushState());
+    on(T.DECK_SAVE, (m) => this.surface && m.layout && this.setLayout(M.fromDevice(this.layout, m.layout)));
     on(T.DECK_APPS, () => this.surface && this._apps());
+    on(T.DECK_WINS, () => this.surface && this._wins());
+    on(T.DECK_PLACE, (m) => this.surface && this._place(m));
     if (this.server.current) this.offer(this.server.current); // loaded with a device already there
   }
 
   offer(ctx) {
-    if (!this.web && ctx && P.isPhoneOs(ctx.os)) this.server.sendToClient({ t: T.DECK_OFFER, v: 1 }); // a computer has no Deck to show
+    if (!this.web && ctx && P.isPhoneOs(ctx.os)) this.server.sendToClient({ t: T.DECK_OFFER, v: 2 }); // a computer has no Deck to show
   }
 
   get layout() { return M.normalize(this.load ? this.load() : null); }
+  get caps() { return this.sys.caps(); }
+  // The kinds of action this computer runs (the editor offers only these).
   get can() {
-    const all = ['keys', 'text', 'media', 'url', 'app', 'clip', 'page', 'none'];
-    if (this.bright && this.bright.can()) all.push('bright');
-    const d = this.devLocal && this.devLocal();
-    if (d && d.can && ['lock', 'sleep'].some((x) => (d.can() || {})[x])) all.push('sys');
-    return all;
+    const c = this.caps;
+    return M.KINDS.filter((k) => ({
+      volume: c.audio, mic: c.mic, output: c.outputs, input: c.outputs, bt: c.bt, bright: c.bright,
+      slider: c.audio || c.bright,
+    }[k] !== false));
   }
   static view() {
     const all = [...Deck.all];
     if (!all.length) return null;
-    return { surface: all.filter((d) => d.surface).map((d) => d.surface.name), layout: all[0].layout, can: all[0].can };
+    return { surface: all.filter((d) => d.surface).map((d) => d.surface.name), layout: all[0].layout, can: all[0].can, caps: all[0].caps, platform: all[0].platform };
   }
 
   // From this computer's Deck page or a device's editor.
@@ -75,52 +85,242 @@ class Deck {
   }
 
   _layout() {
-    if (this.surface) this.server.sendToClient({ t: T.DECK_LAYOUT, layout: this.layout, can: this.can, mac: this.platform === 'mac' });
+    if (!this.surface) return;
+    this.server.sendToClient({ t: T.DECK_LAYOUT, layout: M.forDevice(this.layout, { windows: this.caps.windows }), can: this.can, caps: this.caps, mac: this.platform === 'mac', platform: this.platform });
   }
 
   async _apps() {
     let apps = [];
-    try { apps = await this.apps.list(); } catch (_) { /* none */ }
-    this.server.sendToClient({ t: T.DECK_APPS, apps: apps.slice(0, 400) });
+    try { apps = await this.sys.apps(); } catch (_) { /* none */ }
+    this.server.sendToClient({ t: T.DECK_APPS, apps: apps.slice(0, 400).map((a) => ({ id: a.id, name: a.name, icon: a.icon || '' })) });
   }
 
-  async run(pageId, id) {
-    const b = M.find(this.layout, pageId, id);
+  // Levels, devices and switches for the device's tiles (and its pickers).
+  async state() {
+    const c = this.caps;
+    const [audio, bt, bright, st] = await Promise.all([
+      c.audio ? this.sys.audio().catch(() => null) : null,
+      c.bt ? this.sys.bt().catch(() => null) : null,
+      c.bright ? this.sys.bright().catch(() => null) : null,
+      this.sys.state().catch(() => ({})),
+    ]);
+    return {
+      ...(audio || {}),
+      ...(bt ? { bt: { radio: bt.radio, devices: (bt.devices || []).slice(0, 60) } } : {}),
+      ...(bright ? { displays: bright.displays || [] } : {}),
+      dark: !!(st && st.dark), ...(st && st.dnd !== undefined ? { dnd: !!st.dnd } : {}),
+    };
+  }
+  async pushState() {
+    const state = await this.state();
+    if (this.surface) this.server.sendToClient({ t: T.DECK_STATE, state });
+    return state;
+  }
+
+  async run(id) {
+    const t = M.find(this.layout, id);
     const done = (ok, why) => this.server.sendToClient({ t: T.DECK_DONE, id, ok, ...(why ? { why } : {}) });
-    if (!b) return done(false, 'This button isn’t on this computer’s Deck any more');
+    if (!t) return done(false, 'This tile isn’t on this computer’s Deck any more');
     if (this.busy) return done(false, 'busy');
     this.busy = true;
     try {
-      await this.exec(b.action);
+      await this.exec(t.action);
       done(true);
     } catch (e) {
-      done(false, e.message);
+      done(false, (e && e.message) || 'It didn’t work');
     } finally {
       setTimeout(() => { this.busy = false; }, RUN_GAP_MS);
     }
+    if (['volume', 'mic', 'output', 'input', 'bt', 'bright', 'sys'].includes(t.action.k)) this.pushState().catch(() => {});
+  }
+
+  // A slider tile: its level now, then at most every SET_GAP_MS while it's dragged.
+  set(id, value) {
+    const t = M.find(this.layout, id);
+    if (!t || t.action.k !== 'slider' || !Number.isFinite(value)) return;
+    const s = this.slide.get(id) || {};
+    s.value = Math.max(0, Math.min(1, value));
+    this.slide.set(id, s);
+    if (s.busy) return;
+    const go = () => {
+      const v = s.value;
+      s.value = undefined;
+      s.busy = true; // until the level is set and the gap after it is over
+      this.level(t.action, v).catch(() => {}).finally(() => {
+        s.timer = setTimeout(() => { s.timer = null; s.busy = false; if (s.value !== undefined) go(); }, SET_GAP_MS);
+      });
+    };
+    go();
+  }
+
+  level(a, v) {
+    if (a.what === 'volume') return this.sys.volume({ level: v });
+    if (a.what === 'mic') return this.sys.volume({ input: true, level: v });
+    return this.sys.setBright(a.display || '', v);
   }
 
   // Runs one action here (also from this computer's own Deck page: Try).
   async exec(a) {
     a = M.action(a);
+    const mac = this.platform === 'mac';
+    const s = this.sys;
     switch (a.k) {
-      case 'keys': return this._press(M.codesOf(a.combo, this.platform === 'mac'));
+      case 'keys': if (!a.combo) throw new Error('No shortcut set for this tile'); return this._press(M.codesOf(a.combo, mac));
+      case 'text':
+        if (a.text) this.helper.send('type', { text: a.text });
+        if (a.enter) this._press(['Enter']);
+        return undefined;
+      case 'macro':
+        for (const st of a.steps) {
+          if (st.wait) await new Promise((r) => setTimeout(r, st.wait));
+          await this.exec(st.action);
+        }
+        return undefined;
       case 'media': return this._press([M.MEDIA[a.what]]);
-      case 'text': return a.text ? this.helper.send('type', { text: a.text }) : undefined;
-      case 'url': if (!a.url) throw new Error('No website set for this button'); return this.openUrl(a.url);
-      case 'app': if (!a.id) throw new Error('No app set for this button'); return this.apps.open(a.id);
-      case 'bright':
-        if (!this.bright || !this.bright.can()) throw new Error('Brightness can’t be changed on this computer');
-        return this.bright.step(a.what === 'up');
-      case 'sys': {
-        const d = this.devLocal && this.devLocal();
-        if (!d) throw new Error('Not on this computer');
-        return d.do({ do: a.what });
+      case 'volume': {
+        if (a.what === 'mute' || a.what === 'unmute') return s.volume({ mute: a.what === 'mute' });
+        const cur = await s.audio();
+        if (a.what === 'toggle') return s.volume({ mute: !cur.muted });
+        if (a.what === 'set') return s.volume({ level: a.level / 100 });
+        const v = Number(cur.volume) || 0;
+        return s.volume({ level: v + (a.what === 'up' ? 1 : -1) * (a.step / 100), ...(a.what === 'up' && cur.muted ? { mute: false } : {}) });
       }
+      case 'mic': {
+        const on = a.what === 'toggle' ? !(await s.audio()).micMuted : a.what === 'mute';
+        return s.volume({ input: true, mute: on });
+      }
+      case 'output': case 'input': {
+        const input = a.k === 'input';
+        if (a.id) return s.setDefault(a.id, input);
+        const list = (await s.audio())[input ? 'inputs' : 'outputs'] || [];
+        if (list.length < 2) throw new Error(input ? 'Only one microphone here' : 'Only one sound output here');
+        const i = list.findIndex((d) => d.on);
+        return s.setDefault(list[(i + 1) % list.length].id, input);
+      }
+      case 'bt': {
+        if (a.what === 'on' || a.what === 'off') return s.btRadio(a.what === 'on');
+        if (a.what === 'toggle') return s.btRadio(!(await s.bt()).radio);
+        if (!a.id) throw new Error('No Bluetooth device set for this tile');
+        let on = a.what === 'connect';
+        if (a.what === 'toggleconn') { const d = ((await s.bt()).devices || []).find((x) => x.id === a.id); on = !(d && d.connected); }
+        return s.btConnect(a.id, on);
+      }
+      case 'bright': {
+        if (a.what === 'set') return s.setBright(a.display, a.level / 100);
+        const ds = ((await s.bright()).displays || []).filter((d) => !a.display || d.id === a.display);
+        if (!ds.length) {
+          if (mac) return this._press([a.what === 'up' ? 'BrightnessUp' : 'BrightnessDown']); // a monitor macOS doesn't dim: the keys, as the keyboard has them
+          throw new Error('No display here lets its brightness be changed');
+        }
+        for (const d of ds) await s.setBright(d.id, d.level + (a.what === 'up' ? 0.1 : -0.1));
+        return undefined;
+      }
+      case 'slider': throw new Error('Drag it on the device');
+      case 'app': if (!a.id) throw new Error('No app set for this tile'); return s.openApp(a.id);
+      case 'url': if (!a.url) throw new Error('No website set for this tile'); return s.url(a.url);
+      case 'open': if (!a.path) throw new Error('No file or folder set for this tile'); return s.open(a.path);
+      case 'script': if (!a.path) throw new Error('No script set for this tile'); return s.script(a.path);
+      case 'sys': return this._sys(a.what);
+      case 'win': return this._win(a.what);
       case 'clip':
         if (a.what === 'send') return this.server.sendToClient({ t: T.DECK_CLIP, text: String(this.readClipboard() || '').slice(0, 100000) });
-        return this._press(M.codesOf(`Mod+Key${{ copy: 'C', cut: 'X', paste: 'V' }[a.what]}`, this.platform === 'mac'));
-      default: return undefined; // page (the device's), none
+        return this._press(M.codesOf(`Mod+Key${{ copy: 'C', cut: 'X', paste: 'V' }[a.what]}`, mac));
+      default: return undefined; // nav (the device's), none
+    }
+  }
+
+  async _sys(what) {
+    if ((what === 'dnd' && !this.caps.dnd) || (what === 'screenoff' && !this.caps.screenoff) || (what === 'darkmode' && !this.caps.darkmode)) throw new Error('Not on this computer');
+    return this.sys.sys(what);
+  }
+
+  // The window in front: snapped to a part of its display, moved to the next one, or minimized,
+  // full screen, closed. Linux: the desktop's own keys.
+  async _win(what) {
+    const keys = this.sys.winKeys(what);
+    if (this.platform === 'linux') { if (!keys) throw new Error('Not on this computer'); return this._press(keys); }
+    if (what === 'min' || what === 'close') return this.sys.winOp(0, what);
+    if (what === 'full') return this.sys.winOp(0, this.platform === 'mac' ? 'full' : 'max');
+    const { windows, front } = await this.sys.wins();
+    const w = windows.find((x) => x.wid === front) || null;
+    const ds = this.sys.displays();
+    if (!ds.length) throw new Error('No display');
+    const at = w ? displayOf(ds, w) : ds.find((d) => d.main) || ds[0];
+    if (what === 'nextdisplay') {
+      if (ds.length < 2 || !w) throw new Error(ds.length < 2 ? 'Only one display here' : 'No window in front');
+      const to = ds[(ds.indexOf(at) + 1) % ds.length];
+      const fx = (w.x - at.x) / at.w, fy = (w.y - at.y) / at.h;
+      return this.sys.frame(0, { x: to.x + fx * to.w, y: to.y + fy * to.h, w: Math.min(w.w, to.w), h: Math.min(w.h, to.h) });
+    }
+    if (what === 'center') {
+      const ww = w ? Math.min(w.w, at.w) : at.w * 0.6, hh = w ? Math.min(w.h, at.h) : at.h * 0.7;
+      return this.sys.frame(0, { x: at.x + (at.w - ww) / 2, y: at.y + (at.h - hh) / 2, w: ww, h: hh });
+    }
+    const z = SNAP[what];
+    if (!z) throw new Error('Not a window action');
+    return this.sys.frame(0, zoneRect(at, { x: z[0], y: z[1], w: z[2], h: z[3] }));
+  }
+
+  // The window space: running apps with their windows, and the displays.
+  async _wins() {
+    let out = { apps: [], displays: [], front: 0 };
+    try {
+      const { windows, front } = await this.sys.wins();
+      const ds = this.sys.displays();
+      const icons = await this._appIcons().catch(() => new Map());
+      const apps = new Map();
+      for (const w of windows) {
+        const key = w.bundle || w.aumid || w.exe || w.app || String(w.pid);
+        const name = w.app || (w.exe ? w.exe.split(/[\\/]/).pop().replace(/\.exe$/i, '') : '') || w.title;
+        if (!apps.has(key)) apps.set(key, { key, name, icon: icons.get(key) || '', windows: [] });
+        const d = displayOf(ds, w);
+        apps.get(key).windows.push({ wid: w.wid, title: String(w.title || '').slice(0, 120), display: d ? d.id : '' });
+      }
+      out = { apps: [...apps.values()].slice(0, 60), displays: ds.map((d) => ({ id: d.id, name: d.name, main: d.main, w: d.w, h: d.h })), front };
+    } catch (e) {
+      out.why = e.message;
+    }
+    this.server.sendToClient({ t: T.DECK_WINS, ...out });
+  }
+
+  // App icons by the key _wins() groups windows by (Mac: bundle id; Windows: the exe's path).
+  async _appIcons() {
+    const map = new Map();
+    if (this.platform === 'mac') {
+      for (const a of await this.sys.apps()) if (a.icon) map.set(a.id, a.icon);
+    } else if (this.platform === 'win') {
+      const { windows } = await this.sys.wins();
+      const exes = [...new Set(windows.map((w) => w.exe).filter(Boolean))].slice(0, 40);
+      const r = await this.helper.request('icons', { size: 64, paths: exes }).catch(() => null);
+      if (r && r.icons) exes.forEach((e, i) => { if (r.icons[i]) map.set(e, r.icons[i]); });
+    }
+    return map;
+  }
+
+  async _place(m) {
+    const done = (ok, why) => this.server.sendToClient({ t: T.DECK_DONE, id: 'place', ok, ...(why ? { why } : {}) });
+    try {
+      if (!this.caps.windows) throw new Error('Not on this computer');
+      const wid = Number(m.wid);
+      const { windows } = await this.sys.wins();
+      const w = windows.find((x) => x.wid === wid);
+      if (!w) throw new Error('That window is gone');
+      const ds = this.sys.displays();
+      const to = ds.find((d) => d.id === String(m.display)) || displayOf(ds, w) || ds[0];
+      let r;
+      if (m.zone && typeof m.zone === 'object') {
+        const z = M.normalize({ spaces: [{ kind: 'windows', layouts: [{ zones: [m.zone] }] }] }).spaces[0].layouts[0].zones[0];
+        r = zoneRect(to, z);
+      } else { // onto that display, where it was on its own (relative), as big as it fits
+        const from = displayOf(ds, w) || to;
+        const fx = (w.x - from.x) / from.w, fy = (w.y - from.y) / from.h;
+        const ww = Math.min(w.w, to.w), hh = Math.min(w.h, to.h);
+        r = { x: to.x + Math.min(fx * to.w, to.w - ww), y: to.y + Math.min(fy * to.h, to.h - hh), w: ww, h: hh };
+      }
+      await this.sys.frame(wid, r);
+      done(true);
+    } catch (e) {
+      done(false, e.message);
     }
   }
 
@@ -130,42 +330,61 @@ class Deck {
     for (const c of codes.slice().reverse()) ev(T.K_KEY_UP, c);
   }
 
-  shutdown() { this.surface = null; Deck.all.delete(this); }
+  shutdown() { this.surface = null; for (const s of this.slide.values()) clearTimeout(s.timer); Deck.all.delete(this); }
 }
 
 Deck.all = new Set();
 
+// The window steps as zones on the 12 × 12 grid.
+const SNAP = {
+  left: [0, 0, 6, 12], right: [6, 0, 6, 12], top: [0, 0, 12, 6], bottom: [0, 6, 12, 6], max: [0, 0, 12, 12],
+  tl: [0, 0, 6, 6], tr: [6, 0, 6, 6], bl: [0, 6, 6, 6], br: [6, 6, 6, 6],
+  third1: [0, 0, 4, 12], third2: [4, 0, 4, 12], third3: [8, 0, 4, 12],
+};
+const zoneRect = (d, z) => ({ x: d.x + (d.w * z.x) / ZG, y: d.y + (d.h * z.y) / ZG, w: (d.w * z.w) / ZG, h: (d.h * z.h) / ZG });
+// The display a window is mostly on.
+function displayOf(ds, w) {
+  let best = null, area = -1;
+  for (const d of ds) {
+    const a = Math.max(0, Math.min(w.x + w.w, d.x + d.w) - Math.max(w.x, d.x)) * Math.max(0, Math.min(w.y + w.h, d.y + d.h) - Math.max(w.y, d.y));
+    if (a > area) { area = a; best = d; }
+  }
+  return best;
+}
+
 // The three apps' one call, only while the Deck module is on (main.js): the phones' Deck now, and
 // web(bus) for TwinDesk Web's (webwire o.deck). settings.deck holds the layout.
-//   o: {platform, helper (or () → helper), server (the phones' session), settings() → settings, saveSettings(),
-//       devLocal() → DevLocal, openUrl(url), readClipboard() → text, onChange()}
+//   o: {platform, helper (or () → helper), server (the phones' session), settings() → settings,
+//       saveSettings(), readClipboard() → text, onChange(), sys (tests: a stand-in for deck-sys)}
 function startDeck(o) {
-  const DA = require('./deck-apps.js');
   const h = typeof o.helper === 'function' ? o.helper : () => o.helper; // Windows and Linux start theirs later
   const helper = {
     send: (...a) => { if (!h()) throw new Error('TwinDesk’s helper isn’t running'); return h().send(...a); },
     request: (...a) => (h() ? h().request(...a) : Promise.reject(new Error('TwinDesk’s helper isn’t running'))),
   };
+  let deckOne = null;
+  const press = (codes) => (deckOne || [...Deck.all][0])._press(codes);
   const base = {
     helper, platform: o.platform,
     load: () => o.settings().deck,
     save: (l) => { o.settings().deck = l; o.saveSettings(); },
-    devLocal: o.devLocal, apps: DA.apps(o.platform, { helper }), bright: DA.bright(o.platform, { helper }),
-    openUrl: o.openUrl, readClipboard: o.readClipboard, onChange: o.onChange,
+    sys: o.sys || require('./deck-sys.js').sys(o.platform, { helper, press }),
+    readClipboard: o.readClipboard, onChange: o.onChange,
   };
+  const any = () => deckOne || [...Deck.all][0] || (deckOne = new Deck({ ...base, server: new (require('events').EventEmitter)() }));
   let phone = null;
-  const any = () => phone || [...Deck.all][0] || (phone = new Deck({ ...base, server: new (require('events').EventEmitter)() }));
   const api = {
     // The phones' session: now or once it's there (Windows and Linux make it after TwinDesk Web).
-    attach(server) { if (!phone && server) phone = new Deck({ ...base, server }); return api; },
+    attach(server) { if (!phone && server) { phone = new Deck({ ...base, server }); deckOne = deckOne || phone; } return api; },
     web: (bus) => new Deck({ ...base, server: bus, web: true }),
     view: () => Deck.view(),
-    // This computer's Deck page: save the layout, try a button here.
+    // This computer's Deck page: save the layout, try a tile here, its pickers' lists.
     save: (l) => any().setLayout(l),
     exec: (a) => any().exec(a),
-    apps: () => base.apps.list(),
+    apps: () => base.sys.apps(),
+    state: () => any().state(),
   };
   return api.attach(o.server);
 }
 
-module.exports = { Deck, startDeck };
+module.exports = { Deck, startDeck, SNAP, zoneRect, displayOf };

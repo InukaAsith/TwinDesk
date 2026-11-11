@@ -668,10 +668,10 @@ let deck = null;
 function loadDeck() {
   if (modulesAtStart.includes('deck')) return null;
   if (!deck) {
-    const { shell: sh, clipboard: cb } = require('electron');
+    const { clipboard: cb } = require('electron');
     deck = require('../shared/deck.js').startDeck({
       platform: 'linux', helper: () => helper, server: null, settings: () => settings, saveSettings,
-      devLocal: () => devctl && devctl.local, openUrl: (u) => sh.openExternal(u), readClipboard: () => cb.readText(), onChange: pushState,
+      readClipboard: () => cb.readText(), onChange: pushState,
     });
   }
   return deck.attach(phoneServer);

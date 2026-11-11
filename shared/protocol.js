@@ -275,12 +275,16 @@
       // The Deck (shared/deck.js): a phone's or web device's buttons that this computer runs.
       DECK_OFFER: 'deck.offer', // computer->phone {v}: this computer has the Deck on (none: no Deck page anywhere)
       DECK_HELLO: 'deck.hello', // device->computer {}: it has a Deck
-      DECK_LAYOUT: 'deck.layout', // computer->device {layout, can: [action kinds], mac} | {off: true} (TwinDesk Web, module off)
-      DECK_RUN: 'deck.run', // device->computer {page, id}
+      DECK_LAYOUT: 'deck.layout', // computer->device {layout (no paths), can: [action kinds], caps, mac} | {off: true} (TwinDesk Web, module off)
+      DECK_RUN: 'deck.run', // device->computer {id}: a tile
       DECK_DONE: 'deck.done', // computer->device {id, ok, why?}
       DECK_SAVE: 'deck.save', // device->computer {layout}: edited there
       DECK_APPS: 'deck.apps', // device->computer {} / computer->device {apps: [{id, name, icon}]}
       DECK_CLIP: 'deck.clip', // computer->device {text}: Clipboard › Send
+      DECK_SET: 'deck.set', // device->computer {id, value 0-1}: a slider tile, while it's dragged
+      DECK_STATE: 'deck.state', // device->computer {} / computer->device {state: {volume, muted, micVolume, micMuted, outputs, inputs, bt, displays, dark, dnd}}
+      DECK_WINS: 'deck.wins', // device->computer {} / computer->device {apps: [{key, name, icon, windows: [{wid, title, display}]}], displays, front}
+      DECK_PLACE: 'deck.place', // device->computer {wid, display, zone?: {x, y, w, h} of 12} -> deck.done {id: 'place'}
       REMOTE_RELEASE: 'remote.release', // let go of every key and button the remote holds
       // {b, lx, ly, rx, ry, lt, rt}, only while remote.state says pad: b the buttons (bits 0..13: A B X Y LB RB
       // Back Start L3 R3 Up Down Left Right), the sticks -1..1 (y down), the triggers 0..1; on change, at most every 8 ms

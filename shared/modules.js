@@ -51,7 +51,7 @@
     'ui-terminal.js': ['terminal'], 'ui-files.js': ['files'], 'ui-mount.js': ['mount'], 'ui-apps.js': ['apps'],
     'ui-mirror.js': ['mirror', 'papps'], 'ui-ios-screen.js': ['mirror'], 'ui-multi.js': ['multi'],
     'ui-calls.js': ['calls'], 'ui-messages.js': ['messages'], 'ui-media.js': ['media'], 'ui-pfiles.js': ['pfiles'],
-    'ui-deck.js': ['deck'], 'deck-model.js': ['deck'],
+    'ui-deck.js': ['deck'], 'deck-model.js': ['deck'], 'deck-catalog.js': ['deck'], 'deck-icons.js': ['deck'],
   };
   const IDS = LIST.map((m) => m.id);
   const byPage = {};

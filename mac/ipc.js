@@ -695,6 +695,17 @@ function setupIpc(ctx) {
 
   ipcMain.handle('getState', () => ctx.state);
   ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker
+  ipcMain.handle('deckPick', (_e, o) => (async () => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { dialog, BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  })(o));
+  ipcMain.handle('deckRun', (_e, a) => (ctx.deck && a && typeof a === 'object' ? ctx.deck.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false })); // Try
+  ipcMain.handle('deckState', () => (ctx.deck ? ctx.deck.state().catch(() => ({})) : {})); // its sound, Bluetooth and display pickers
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));

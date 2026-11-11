@@ -20,6 +20,9 @@ const api = {
   getState: () => ipcRenderer.invoke('getState'),
   phoneAssets: () => ipcRenderer.invoke('phoneAssets'),
   deckApps: () => ipcRenderer.invoke('deckApps'), // the Deck page's app picker
+  deckState: () => ipcRenderer.invoke('deckState'), // its sound, Bluetooth and display pickers
+  deckPick: (o) => ipcRenderer.invoke('deckPick', o), // a file, folder or script for a tile
+  deckRun: (action) => ipcRenderer.invoke('deckRun', action), // Try: {ok, why}
   onState: (fn) => ipcRenderer.on('state', (_e, s) => fn(s)),
   onShowUpdate: (fn) => ipcRenderer.on('show-update', () => fn()),
   onHub: (fn) => ipcRenderer.on('hub', (_e, m) => fn(m)), // the phone's answers for Calls, Messages and Photos

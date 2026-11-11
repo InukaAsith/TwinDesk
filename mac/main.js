@@ -856,10 +856,10 @@ app.whenReady().then(() => {
   // The Deck (shared/deck.js): a phone's or web device's buttons run here. Not loaded at all while its
   // module is off (General › Modules).
   if (!modulesAtStart.includes('deck')) {
-    const { shell: sh, clipboard: cb } = require('electron');
+    const { clipboard: cb } = require('electron');
     svc.deck = require('../shared/deck.js').startDeck({
       platform: 'mac', helper: svc.helper, server: peer, settings: () => settings, saveSettings: () => store.saveSettings(settings),
-      devLocal: () => svc.devctl && svc.devctl.local, openUrl: (u) => sh.openExternal(u), readClipboard: () => cb.readText(), onChange: pushState,
+      readClipboard: () => cb.readText(), onChange: pushState,
     });
   }
   // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js), its
