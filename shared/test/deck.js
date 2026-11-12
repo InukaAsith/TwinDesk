@@ -252,6 +252,46 @@ const fakeSys = {
   assert.deepStrictEqual(calls[1][2].w, 500, 'onto a display: its size kept');
   assert.strictEqual(server.last(T.DECK_DONE).id, 'place');
 
+  // Saved sets: kept by the model, their apps not running sent with names, arranged in one go.
+  const setLay = M.normalize({ spaces: [{ id: 'wsp', kind: 'windows', sets: [
+    { items: [{ key: 'com.apple.Notes', name: 'Notes', zone: { x: 0, y: 0, w: 6, h: 12 } }, { key: 'com.apple.Safari', name: 'Safari', zone: { x: 6, y: 0, w: 99, h: 12 } }] },
+    { items: [] }, 'junk'] }] });
+  const ws = setLay.spaces[0];
+  assert.strictEqual(ws.sets.length, 1, 'empty and broken sets dropped');
+  assert.strictEqual(ws.sets[0].name, 'Notes + Safari', 'named after its apps');
+  assert.deepStrictEqual(ws.sets[0].items[1].zone, { x: 6, y: 0, w: 6, h: 12 }, 'zones clamped');
+  settings.deck = setLay;
+  server.emit(`t:${T.DECK_WINS}`, {});
+  await new Promise((r) => setTimeout(r, 10));
+  const w2 = server.last(T.DECK_WINS);
+  assert.deepStrictEqual(w2.known.map((k) => k.key), ['com.apple.Safari'], 'only the set apps not running');
+  assert.deepStrictEqual(w2.apps[0].windows[0].f, [0.008, -0.019, 0.417, 0.516], 'its place on its display');
+  let safari = false;
+  const realWins = fakeSys.wins, realApps = fakeSys.apps, realOpen = fakeSys.openApp;
+  fakeSys.apps = async () => [{ id: 'com.apple.Notes', name: 'Notes' }, { id: 'com.apple.Safari', name: 'Safari' }];
+  fakeSys.openApp = async (id) => { calls.push(['app', id]); safari = true; };
+  fakeSys.wins = async () => ({ windows: [...(await realWins()).windows, ...(safari ? [{ wid: 9, pid: 2, app: 'Safari', bundle: 'com.apple.Safari', x: 0, y: 0, w: 900, h: 700 }] : [])], front: 7 });
+  for (const x of Deck.all) x.arrangeWait = 5;
+  calls.length = 0;
+  server.emit(`t:${T.DECK_ARRANGE}`, { display: 'd1', items: ws.sets[0].items.concat([{ key: 'com.evil', zone: { x: 0, y: 0, w: 12, h: 12 } }]) });
+  await new Promise((r) => setTimeout(r, 80));
+  assert.deepStrictEqual(calls.filter((c) => c[0] === 'app'), [['app', 'com.apple.Safari']], 'opens only an app this Mac lists');
+  assert.deepStrictEqual(calls.filter((c) => c[0] === 'frame').map((c) => [c[1], c[2].x]), [[9, 600], [7, 0]], 'each into its zone, the first last (in front)');
+  const ad = server.last(T.DECK_DONE);
+  assert.strictEqual(ad.id, 'arrange');
+  assert.strictEqual(ad.ok, true);
+  assert.strictEqual(ad.why, 'That app isn’t on this Mac');
+  fakeSys.wins = realWins; fakeSys.apps = realApps; fakeSys.openApp = realOpen;
+  // Windows: a program matched to the Start menu app that starts it, nothing else.
+  const opened = [];
+  const wd = new Deck({ platform: 'win', server: new EventEmitter(), load: () => null, save: () => {}, helper: fakeHelper, onChange: () => {},
+    sys: { ...fakeSys, apps: async () => [{ id: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Google\\Chrome\\Application\\chrome.exe', name: 'Chrome' }, { id: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App', name: 'Calculator' }], openApp: async (id) => opened.push(id) } });
+  await wd._launch('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe');
+  await wd._launch('Microsoft.WindowsCalculator_8wekyb3d8bbwe!App');
+  await assert.rejects(wd._launch('C:\\Users\\me\\evil.exe'));
+  assert.deepStrictEqual(opened, ['{6D809377-6AF0-444B-8957-A3773F02200E}\\Google\\Chrome\\Application\\chrome.exe', 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App']);
+  wd.shutdown();
+
   server.emit('closed');
   assert.deepStrictEqual(d.view().surface, []);
   assert.ok(changed > 0);

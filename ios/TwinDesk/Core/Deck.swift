@@ -68,6 +68,8 @@ final class Deck: Feature {
     func askState() { _ = core.send(msg("deck.state")) }
     func askWins() { _ = core.send(msg("deck.wins")) }
     func askApps() { if apps == nil { _ = core.send(msg("deck.apps")) } }
+    // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).
+    func arrange(display: String, items: [JSON]) { done = nil; _ = core.send(msg("deck.arrange", ["display": display, "items": items])) }
     func place(_ wid: Int64, display: String, zone: JSON?) {
         done = nil
         var m: JSON = ["wid": wid, "display": display]

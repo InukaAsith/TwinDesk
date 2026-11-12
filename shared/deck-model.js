@@ -9,7 +9,10 @@
 //             swipe.pages: a swipe across the grid turns the page; swipe.spaces: a three-finger
 //             swipe changes the space. Off, the device's own bar (and Navigate tiles) do it.
 //   space   { id, name, kind: 'tiles', pages: [page] }
-//           { id, name, kind: 'windows', layouts: [{id, name, zones: [rect]}] }: the window space
+//           { id, name, kind: 'windows', layouts: [{id, name, zones: [rect]}],
+//             sets: [{id, name, display, items: [{key, name, zone}]}] }: the window space; a set is
+//             apps saved together with their places (key: the app as deck.wins groups it), arranged
+//             in one go from the device's shelf, the ones not running opened first
 //             (Mac and Windows): a running app's window into a zone of a display, or to another display.
 //             rect: {x, y, w, h} on a 12 × 12 grid over the display's usable area.
 //   page    { id, name, cols 2–8, rows 2–8, tiles: [tile] }
@@ -68,7 +71,7 @@
   const MODS = ['Mod', 'Ctrl', 'Alt', 'Shift', 'Meta'];
   const MOD_CODE = { Ctrl: 'ControlLeft', Alt: 'AltLeft', Shift: 'ShiftLeft', Meta: 'MetaLeft' };
   const CODE = /^[A-Za-z0-9]{1,32}$/;
-  const MAX_SPACES = 12, MAX_PAGES = 20, MAX_STEPS = 20, MAX_LAYOUTS = 16, MAX_ZONES = 12;
+  const MAX_SPACES = 12, MAX_PAGES = 20, MAX_STEPS = 20, MAX_LAYOUTS = 16, MAX_ZONES = 12, MAX_SETS = 24, MAX_SET_APPS = 6;
   const GRID = [2, 8], SPAN = 4, ZONE_GRID = 12;
   const COLORS = ['#2c2c2e', '#0a84ff', '#30b94d', '#ff9f0a', '#ff3b30', '#bf5af2', '#5e5ce6', '#64d2ff', '#ff2d55', '#ffd60a', '#a2845e', '#8e8e93'];
   // The symbols every surface draws with its own icons; anything else in icon is shown as it is (an emoji).
@@ -237,7 +240,15 @@
           id: uniq(lids, 'l', x.id), name: line(x.name, 30) || `Layout ${j + 1}`,
           zones: (Array.isArray(x.zones) ? x.zones : []).slice(0, MAX_ZONES).map(zone),
         })).filter((x) => x && x.zones.length);
-        return { id, name, kind: 'windows', layouts: layouts.length ? layouts : starterLayouts() };
+        const sids = new Set();
+        const sets = (Array.isArray(s.sets) ? s.sets : []).slice(0, MAX_SETS).map((x) => {
+          if (!x || typeof x !== 'object') return null;
+          const items = (Array.isArray(x.items) ? x.items : []).slice(0, MAX_SET_APPS)
+            .map((it) => it && line(it.key, 300) && { key: line(it.key, 300), name: line(it.name, 60), zone: zone(it.zone) }).filter(Boolean);
+          if (!items.length) return null;
+          return { id: uniq(sids, 'w', x.id), name: line(x.name, 60) || items.map((it) => it.name || '?').join(' + ').slice(0, 60), display: line(x.display, 80), items };
+        }).filter(Boolean);
+        return { id, name, kind: 'windows', layouts: layouts.length ? layouts : starterLayouts(), sets };
       }
       const pages = (Array.isArray(s.pages) ? s.pages : []).slice(0, MAX_PAGES).map((p, j) => {
         if (!p || typeof p !== 'object') return null;
@@ -311,7 +322,7 @@
             t('back', 3, 3, 1, 1, 'Main', 'left', '#bf5af2', { k: 'nav', what: 'page', to: 'main' }),
           ] },
         ] },
-        { id: 'windows', name: 'Windows', kind: 'windows', layouts: starterLayouts() },
+        { id: 'windows', name: 'Windows', kind: 'windows', layouts: starterLayouts(), sets: [] },
       ],
     };
   }

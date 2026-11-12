@@ -164,7 +164,7 @@ struct DeckScreen: View {
             } else {
                 let space = spaces.first { $0.str("id") == spaceId } ?? spaces[0]
                 VStack(spacing: 4) {
-                    if space.str("kind") == "windows" { DeckWindowSpace(space: space).padding(.top, 30) }
+                    if space.str("kind") == "windows" { DeckWindowSpace(space: space) }
                     else {
                         DeckTileSpace(space: space, pageId: Binding(get: { pageOf[space.str("id")] ?? "" }, set: { pageOf[space.str("id")] = $0 }),
                                       editing: false, full: true, step: step.n, stepDir: step.dir, onPage: { flash = $0 }, toSpace: { go(to: $0) })
@@ -629,13 +629,18 @@ private func appIcon(_ data: String) -> UIImage? {
 struct DeckWindowSpace: View {
     @EnvironmentObject var core: Core
     let space: JSON
-    @State private var appKey: String?
+    // The apps picked, in order (tap to add, tap again to take out); a place tapped before any app;
+    // the display shown; the saved sets' shelf; what was arranged last (for Save).
+    @State private var sel: [String] = []
     @State private var wid: Int64?
     @State private var display: String?
-    @State private var layoutIdx = 0
-    @State private var armed: (key: String, n: Int, zone: JSON)? // a zone tapped first, waiting for an app
+    @State private var armed: JSON?
+    @State private var shelf = false
+    @State private var last: (keys: [String], zones: [JSON])?
     @State private var drag: (app: JSON, at: CGPoint)? // an app dragged from the bar, the finger in "ws"
-    @State private var pad: CGRect = .zero // the shown layout's pad in "ws"
+    @State private var pad: CGRect = .zero // the display's picture in "ws"
+
+    private let blue = Color(red: 0.04, green: 0.52, blue: 1), sky = Color(red: 0.39, green: 0.82, blue: 1), navy = Color(red: 0.08, green: 0.13, blue: 0.23)
 
     var body: some View {
         let d = core.deck
@@ -648,226 +653,394 @@ struct DeckWindowSpace: View {
         .task(id: space.str("id")) {
             while !Task.isCancelled {
                 core.deck.askWins()
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
             }
         }
     }
 
-    // The app chosen (none at first, and none again once it's placed) and a zone tapped before an
-    // app: either order works. Or an app dragged from the bar straight onto a zone, or an edge.
-    // Everything on one screen, never scrolled: held sideways the apps and displays beside the pad,
-    // upright above it; the pad takes what's left, 16:10.
+    private struct Ctx {
+        let apps: [JSON], known: [JSON], displays: [JSON], front: Int64
+        let picked: [JSON], shown: String
+        var one: JSON? { picked.count == 1 ? picked[0] : nil }
+    }
+
+    // The running apps along the top, the display as wide as the screen (its windows where they are
+    // now; a corner a quarter, a side a half, the middle all of it), the displays down the left side,
+    // the saved sets on a shelf at the right edge, and along the bottom how the picked apps fit.
     @ViewBuilder
     private func content(_ w: JSON) -> some View {
         let apps = (w["apps"] as? [JSON]) ?? []
         let displays = (w["displays"] as? [JSON]) ?? []
         let front = w.int64("front")
-        let app = apps.first { $0.str("key") == appKey }
-        let windows = (app?["windows"] as? [JSON]) ?? []
-        let win = windows.first { $0.int64("wid") == wid } ?? windows.first { $0.int64("wid") == front } ?? windows.first
-        let to = display ?? win?.str("display") ?? displays.first { $0.bool("main") }?.str("id") ?? displays.first?.str("id") ?? ""
-        if apps.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                if !w.str("why").isEmpty { Label(tr(w.str("why", max: 300)), systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.bad) }
-                Text(tr("No windows open")).foregroundStyle(.secondary)
-            }
-        } else {
-            GeometryReader { g in
-                ZStack(alignment: .topLeading) {
-                    if g.size.width > g.size.height {
-                        HStack(alignment: .top, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 10) { bar(w, apps, app, windows, win, front, to); screens(displays, win, to); Spacer(minLength: 0) }
-                                .frame(width: g.size.width * 0.34)
-                            VStack(alignment: .leading, spacing: 6) { pads(win, to) }
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) { bar(w, apps, app, windows, win, front, to); VStack(alignment: .leading, spacing: 6) { pads(win, to) }; screens(displays, win, to) }
+        let picked = sel.compactMap { k in apps.first { $0.str("key") == k } }
+        let one = picked.count == 1 ? picked[0] : nil
+        let mainId = displays.first { $0.bool("main") }?.str("id") ?? displays.first?.str("id") ?? ""
+        let fromWin = one.flatMap { windowOf($0, front)?.str("display") }.flatMap { $0.isEmpty ? nil : $0 }
+        let shown = display.flatMap { id in displays.contains { $0.str("id") == id } ? id : nil } ?? fromWin ?? mainId
+        let c = Ctx(apps: apps, known: (w["known"] as? [JSON]) ?? [], displays: displays, front: front, picked: picked, shown: shown)
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !w.str("why").isEmpty { Label(tr(w.str("why", max: 300)), systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.bad) }
+                    bar(c).padding(.trailing, 40)
+                    HStack(spacing: 10) {
+                        if displays.count > 1 { rail(c).frame(width: 96) }
+                        // The display from edge to edge: all the room there is (windows and places are fractions of it).
+                        screen(c, displays.first { $0.str("id") == shown }).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    // The app being dragged, under the finger.
-                    if let dr = drag { icon(dr.app, 52).opacity(0.9).position(dr.at).allowsHitTesting(false) }
+                    .frame(maxHeight: .infinity)
+                    row(c)
                 }
+                // The shelf over the display's right edge.
+                shelfView(c).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing).padding(.vertical, 90)
+                // The app being dragged, under the finger.
+                if let dr = drag { icon(dr.app, 52).opacity(0.9).position(dr.at).allowsHitTesting(false) }
             }
-            .coordinateSpace(name: "ws")
+            .frame(width: g.size.width, height: g.size.height)
         }
+        .coordinateSpace(name: "ws")
+        .onChange(of: apps.map { $0.str("key") }) { keys in sel = sel.filter { keys.contains($0) } }
     }
 
     private func windowOf(_ a: JSON, _ front: Int64) -> JSON? {
         let aw = (a["windows"] as? [JSON]) ?? []
+        if a.str("key") == sel.first, sel.count == 1, let x = aw.first(where: { $0.int64("wid") == wid }) { return x }
         return aw.first { $0.int64("wid") == front } ?? aw.first
     }
 
-    // Where a drop at p goes: the shown layout's zone under it, else an edge or a corner of the display.
-    private func target(_ p: CGPoint) -> JSON? {
-        guard pad.width > 0, pad.contains(p) else { return nil }
-        let fx = (p.x - pad.minX) / pad.width, fy = (p.y - pad.minY) / pad.height
-        let gx = Int(fx * 12), gy = Int(fy * 12)
-        let layouts = (space["layouts"] as? [JSON]) ?? []
-        let zones = layouts.indices.contains(layoutIdx) ? ((layouts[layoutIdx]["zones"] as? [JSON]) ?? []) : []
-        if let z = zones.first(where: { gx >= $0.int("x") && gx < $0.int("x") + $0.int("w", 1) && gy >= $0.int("y") && gy < $0.int("y") + $0.int("h", 1) }) { return z }
-        return deckSnapZone(fx, fy)
-    }
-
-    private func same(_ a: JSON?, _ b: JSON) -> Bool {
-        guard let a = a else { return false }
+    private func same(_ a: JSON?, _ b: JSON?) -> Bool {
+        guard let a = a, let b = b else { return false }
         return ["x", "y", "w", "h"].allSatisfy { a.int($0, 1) == b.int($0, 1) }
     }
 
     @ViewBuilder
-    private func icon(_ a: JSON, _ s: CGFloat) -> some View {
-        if let img = appIcon(a.str("icon", max: 400_000)) { Image(uiImage: img).resizable().frame(width: s, height: s) }
-        else {
-            Text(String(a.str("name").prefix(1)).uppercased()).font(.headline)
+    private func icon(_ a: JSON?, _ s: CGFloat) -> some View {
+        if let a = a, let img = appIcon(a.str("icon", max: 400_000)) { Image(uiImage: img).resizable().frame(width: s, height: s) }
+        else if let a = a {
+            Text(String(a.str("name").prefix(1)).uppercased()).font(.system(size: max(9, s * 0.45), weight: .semibold))
                 .frame(width: s, height: s).background(TDColor.control, in: RoundedRectangle(cornerRadius: s / 4, style: .continuous))
         }
     }
 
-    @ViewBuilder
-    private func bar(_ w: JSON, _ apps: [JSON], _ app: JSON?, _ windows: [JSON], _ win: JSON?, _ front: Int64, _ to: String) -> some View {
-        if !w.str("why").isEmpty { Label(tr(w.str("why", max: 300)), systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.bad) }
-        Text(armed.map { tr("Now choose the app for zone {n}", ["n": $0.n]) } ?? tr("App"))
-            .font(.caption.weight(armed == nil ? .regular : .semibold)).foregroundStyle(armed == nil ? Color.secondary : TDColor.accent)
-        // The running apps (a dot: the one in front): tap to choose, or drag one onto the pad.
-        DeckFlow(spacing: 6) {
-            ForEach(apps.indices, id: \.self) { i in
-                let a = apps[i]
-                let on = a.str("key") == app?.str("key")
-                let aw = (a["windows"] as? [JSON]) ?? []
-                let inFront = aw.contains { $0.int64("wid") == front }
-                VStack(spacing: 3) {
-                    ZStack(alignment: .topTrailing) {
-                        icon(a, 36)
-                        if inFront { Circle().fill(TDColor.accent).frame(width: 8, height: 8) }
-                    }
-                    Text(a.str("name", max: 40)).font(.caption2).lineLimit(1).foregroundStyle(TDColor.text)
-                }
-                .frame(width: 56).padding(5)
-                .background(on ? TDColor.accent.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if let z = armed, let t = windowOf(a, front) { put(t, z.zone, to) }
-                    else if on { appKey = nil; wid = nil } else { appKey = a.str("key"); wid = nil }
-                }
-                .gesture(DragGesture(minimumDistance: 8, coordinateSpace: .named("ws"))
-                    .onChanged { g in drag = (a, g.location) }
-                    .onEnded { g in
-                        let z = target(g.location)
-                        drag = nil
-                        let t = on ? win : windowOf(a, front)
-                        if let z = z, let t = t { put(t, z, to) }
-                    })
-            }
-        }
-        // Its windows, when it has more than one.
-        if app != nil && windows.count > 1 {
-            DeckFlow(spacing: 6) {
-                ForEach(windows.indices, id: \.self) { i in
-                    let x = windows[i]
-                    let on = x.int64("wid") == win?.int64("wid")
-                    Button { wid = x.int64("wid") } label: {
-                        Text(x.str("title", max: 50).isEmpty ? tr("Window") : x.str("title", max: 50)).font(.footnote).lineLimit(1)
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                            .foregroundStyle(on ? Color.white : TDColor.text)
-                            .background(on ? TDColor.accent : TDColor.control, in: Capsule())
-                    }.buttonStyle(PressScale())
-                }
-            }
-        }
-    }
-
-    // The displays: which one a zone goes on, or send the window there as it is.
-    @ViewBuilder
-    private func screens(_ displays: [JSON], _ win: JSON?, _ to: String) -> some View {
-        if displays.count > 1 {
-            Text(tr("Display")).font(.caption).foregroundStyle(.secondary)
-            DeckFlow(spacing: 8) {
-                ForEach(displays.indices, id: \.self) { i in
-                    let x = displays[i]
-                    let on = x.str("id") == to
-                    Button { display = x.str("id") } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(x.str("name", max: 40).isEmpty ? tr("Display") : x.str("name", max: 40)).font(.subheadline.weight(.medium)).lineLimit(1)
-                            Text("\(x.int("w")) × \(x.int("h"))" + (x.bool("main") ? " · " + tr("Main") : "")).font(.caption2).opacity(0.8)
-                        }
-                        .padding(.horizontal, 12).padding(.vertical, 7)
-                        .foregroundStyle(on ? Color.white : TDColor.text)
-                        .background(on ? TDColor.accent : TDColor.control, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }.buttonStyle(PressScale())
-                }
-            }
-            if let win = win, to != win.str("display") {
-                Button(tr("Move the window to this display")) { put(win, nil, to) }.secondaryButton()
-            }
-        }
-    }
-
-    private func put(_ win: JSON, _ zone: JSON?, _ to: String) {
+    private func clear() { sel = []; wid = nil; armed = nil }
+    private func put(_ a: JSON, _ zone: JSON, _ c: Ctx) {
+        guard let w = windowOf(a, c.front) else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        core.deck.place(win.int64("wid"), display: to, zone: zone)
-        appKey = nil; wid = nil; armed = nil
+        core.deck.place(w.int64("wid"), display: c.shown, zone: zone)
+        clear()
     }
-
-    // The layouts drawn on the computer, swiped (none yet: the display, for its edges): tap a zone,
-    // or drop an app on it.
-    @ViewBuilder
-    private func pads(_ win: JSON?, _ to: String) -> some View {
-        let layouts = (space["layouts"] as? [JSON]) ?? []
-        let hover = drag.flatMap { target($0.at) }
-        let blue = Color(red: 0.04, green: 0.52, blue: 1), sky = Color(red: 0.39, green: 0.82, blue: 1)
-        Text(layouts.indices.contains(layoutIdx) ? layouts[layoutIdx].str("name", max: 30) : tr("Drag to an edge")).font(.caption).foregroundStyle(.secondary)
-        TabView(selection: $layoutIdx) {
-            ForEach(0..<max(1, layouts.count), id: \.self) { n in
-                let zones = layouts.indices.contains(n) ? ((layouts[n]["zones"] as? [JSON]) ?? []) : []
-                GeometryReader { outer in
-                    let pw = min(outer.size.width, outer.size.height * 1.6), ph = pw / 1.6
-                    GeometryReader { g in
-                        let u = g.size.width / 12, v = g.size.height / 12
-                        ZStack(alignment: .topLeading) {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(red: 0.11, green: 0.16, blue: 0.27))
-                            ForEach(zones.indices, id: \.self) { z in
-                                let zone = zones[z]
-                                let lit = armed?.key == "\(n).\(z)" || (n == layoutIdx && same(hover, zone))
-                                Button {
-                                    if let w = win { put(w, zone, to) }
-                                    else { armed = armed?.key == "\(n).\(z)" ? nil : (key: "\(n).\(z)", n: z + 1, zone: zone) }
-                                } label: {
-                                    Text("\(z + 1)").font(.headline).foregroundStyle(.white)
-                                        .frame(width: max(1, u * CGFloat(zone.int("w", 1)) - 6), height: max(1, v * CGFloat(zone.int("h", 1)) - 6))
-                                        .background(blue.opacity(lit ? 0.75 : 0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(lit ? Color.white : sky, lineWidth: lit ? 2.5 : 1.5))
-                                }
-                                .buttonStyle(PressScale())
-                                .offset(x: u * CGFloat(zone.int("x")) + 3, y: v * CGFloat(zone.int("y")) + 3)
-                            }
-                            // Dropped off the zones: an edge or a corner, shown as the finger moves.
-                            if n == layoutIdx, let z = hover, !zones.contains(where: { same($0, z) }) {
-                                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(blue.opacity(0.45))
-                                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(sky, lineWidth: 2))
-                                    .frame(width: u * CGFloat(z.int("w")) - 8, height: v * CGFloat(z.int("h")) - 8)
-                                    .offset(x: u * CGFloat(z.int("x")) + 4, y: v * CGFloat(z.int("y")) + 4)
-                                    .allowsHitTesting(false)
-                            }
-                            if zones.isEmpty && drag == nil {
-                                Text(tr("Draw your own layouts on the computer’s Deck page.")).font(.footnote).foregroundStyle(.white.opacity(0.75)).multilineTextAlignment(.center)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity).padding(16)
-                            }
-                        }
-                        .onAppear { if n == layoutIdx { pad = g.frame(in: .named("ws")) } }
-                        .onChange(of: g.frame(in: .named("ws"))) { f in if n == layoutIdx { pad = f } }
-                        .onChange(of: layoutIdx) { i in if n == i { pad = g.frame(in: .named("ws")) } }
-                    }
-                    .frame(width: pw, height: ph)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .padding(.horizontal, 2)
-                .tag(n)
+    private func arrange(_ zones: [JSON], _ c: Ctx) {
+        let items: [JSON] = zip(c.picked, zones).map { a, z in ["key": a.str("key"), "wid": windowOf(a, c.front)?.int64("wid") ?? 0, "zone": z] }
+        guard !items.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        core.deck.arrange(display: c.shown, items: items)
+        last = (c.picked.map { $0.str("key") }, Array(zones.prefix(items.count)))
+    }
+    private func saveSet(_ c: Ctx) {
+        guard let l = last else { return }
+        let items: [JSON] = zip(l.keys, l.zones).map { k, z in
+            ["key": k, "name": (c.apps.first { $0.str("key") == k } ?? c.known.first { $0.str("key") == k })?.str("name", max: 60) ?? "", "zone": z]
+        }
+        let shown = c.shown
+        core.deck.edit { lay in
+            Deck.mapSpaces(&lay) { s in
+                guard s.str("kind") == "windows" else { return }
+                var sets = (s["sets"] as? [JSON]) ?? []
+                sets.append(["id": Deck.newId("w"), "display": shown, "items": items])
+                s["sets"] = sets
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: layouts.count > 1 ? .always : .never))
-        .frame(maxHeight: .infinity)
-        if armed == nil {
-            Text(tr("Drag an app onto a zone or an edge, or tap an app and then a zone.")).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+        last = nil
+        withAnimation(.easeOut(duration: 0.2)) { shelf = true }
+    }
+
+    // A drop or a tap at p of the display: the same on every page.
+    private func target(_ p: CGPoint) -> JSON? {
+        guard pad.width > 0, pad.contains(p) else { return nil }
+        return deckSnapZone((p.x - pad.minX) / pad.width, (p.y - pad.minY) / pad.height)
+    }
+
+    // The running apps: tap to pick (a number: its place in the order), drag one down onto the display.
+    @ViewBuilder
+    private func bar(_ c: Ctx) -> some View {
+        if c.apps.isEmpty { Text(tr("No windows open")).font(.footnote).foregroundStyle(.secondary).padding(8) }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(c.apps.indices, id: \.self) { i in
+                    let a = c.apps[i]
+                    let k = a.str("key")
+                    let n = sel.firstIndex(of: k)
+                    let inFront = ((a["windows"] as? [JSON]) ?? []).contains { $0.int64("wid") == c.front }
+                    VStack(spacing: 3) {
+                        ZStack(alignment: .topTrailing) {
+                            icon(a, 38)
+                            if let n = n {
+                                Text("\(n + 1)").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: 18, height: 18).background(TDColor.accent, in: Circle()).offset(x: 6, y: -4)
+                            } else if inFront { Circle().fill(TDColor.accent).frame(width: 8, height: 8) }
+                        }
+                        Text(a.str("name", max: 40)).font(.caption2).lineLimit(1).foregroundStyle(TDColor.text)
+                    }
+                    .frame(width: 58).padding(5)
+                    .background(n != nil ? TDColor.accent.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if let z = armed { put(a, z, c) }
+                        else if let n = n { sel.remove(at: n); wid = nil }
+                        else { sel = Array((sel + [k]).suffix(6)); wid = nil }
+                    }
+                    // Downwards: a drag onto the display. Sideways: the row scrolls.
+                    .simultaneousGesture(DragGesture(minimumDistance: 10, coordinateSpace: .named("ws"))
+                        .onChanged { g in
+                            if drag != nil || abs(g.translation.height) > abs(g.translation.width) { drag = (a, g.location) }
+                        }
+                        .onEnded { g in
+                            let was = drag != nil
+                            drag = nil
+                            if was, let z = target(g.location) { put(a, z, c) }
+                        })
+                }
+            }
+        }
+        .scrollDisabled(drag != nil)
+    }
+
+    // The displays, down the left side when there's more than one: which one the apps go on.
+    private func rail(_ c: Ctx) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 8) {
+                ForEach(c.displays.indices, id: \.self) { i in
+                    let x = c.displays[i]
+                    let on = x.str("id") == c.shown
+                    let ar = x.int("h") > 0 ? CGFloat(x.int("w")) / CGFloat(x.int("h")) : 1.6
+                    Button { display = x.str("id") } label: {
+                        VStack(spacing: 3) {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(navy)
+                                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(on ? TDColor.accent : Color.secondary.opacity(0.5), lineWidth: on ? 2 : 1))
+                                .aspectRatio(min(3, max(0.5, ar)), contentMode: .fit)
+                            Text(x.str("name", max: 40).isEmpty ? tr("Display") : x.str("name", max: 40)).font(.caption2).lineLimit(1).foregroundStyle(on ? TDColor.accent : TDColor.text)
+                            if x.bool("main") { Text(tr("Main")).font(.system(size: 10)).foregroundStyle(.secondary) }
+                        }
+                        .padding(6)
+                        .background(on ? TDColor.accent.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }.buttonStyle(PressScale())
+                }
+                if let one = c.one, let win = windowOf(one, c.front), c.shown != win.str("display") {
+                    Button(tr("Move here")) { core.deck.place(win.int64("wid"), display: c.shown, zone: nil); clear() }.font(.caption)
+                }
+            }
         }
     }
+
+    // The display: its windows where they are now, the place under the finger lit while an app is
+    // dragged; a tap places the picked app (or waits for one).
+    private func screen(_ c: Ctx, _ sd: JSON?) -> some View {
+        GeometryReader { g in
+            let u = g.size.width / 12, v = g.size.height / 12
+            let here: [(JSON, JSON)] = c.apps.flatMap { a in ((a["windows"] as? [JSON]) ?? []).filter { $0.str("display") == c.shown }.map { (a, $0) } }.reversed()
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(navy)
+                ForEach(here.indices, id: \.self) { i in
+                    let a = here[i].0, x = here[i].1
+                    if let f = x["f"] as? [NSNumber], f.count == 4 {
+                        let fx = min(1, max(0, CGFloat(f[0].doubleValue))), fy = min(1, max(0, CGFloat(f[1].doubleValue)))
+                        let fw = min(1 - fx, max(0.02, CGFloat(f[2].doubleValue))), fh = min(1 - fy, max(0.02, CGFloat(f[3].doubleValue)))
+                        let lit = sel.contains(a.str("key"))
+                        VStack(spacing: 2) {
+                            icon(a, 26)
+                            Text(x.str("title", max: 60).isEmpty ? a.str("name", max: 40) : x.str("title", max: 60)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.75)).lineLimit(1).padding(.horizontal, 6)
+                        }
+                        .frame(width: max(1, g.size.width * fw - 4), height: max(1, g.size.height * fh - 4))
+                        .background(Color(red: 0.16, green: 0.23, blue: 0.36), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(lit ? sky : Color.white.opacity(0.18), lineWidth: lit ? 2 : 1))
+                        .clipped()
+                        .offset(x: g.size.width * fx + 2, y: g.size.height * fy + 2)
+                    }
+                }
+                if let z = drag.flatMap({ target($0.at) }) ?? armed {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(blue.opacity(0.5))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white, lineWidth: 2))
+                        .frame(width: u * CGFloat(z.int("w")) - 8, height: v * CGFloat(z.int("h")) - 8)
+                        .offset(x: u * CGFloat(z.int("x")) + 4, y: v * CGFloat(z.int("y")) + 4)
+                }
+                Text(sd?.str("name", max: 40) ?? "").font(.caption2).foregroundStyle(.white.opacity(0.5)).padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { p in
+                guard let z = deckSnapZone(p.x / g.size.width, p.y / g.size.height) else { return }
+                if let one = c.one { put(one, z, c) }
+                else if c.picked.isEmpty { armed = same(armed, z) ? nil : z }
+            }
+            .onAppear { pad = g.frame(in: .named("ws")) }
+            .onChange(of: g.frame(in: .named("ws"))) { f in pad = f }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    // The saved sets, pulled out with the tab at the right edge: one tap arranges them (and opens
+    // the ones not running).
+    @ViewBuilder
+    private func shelfView(_ c: Ctx) -> some View {
+        let sets = core.deck.spaces.first { $0.str("kind") == "windows" }.flatMap { $0["sets"] as? [JSON] } ?? []
+        let look = { (k: String) -> JSON? in c.apps.first { $0.str("key") == k } ?? c.known.first { $0.str("key") == k } }
+        if !shelf {
+            Button { withAnimation(.easeOut(duration: 0.2)) { shelf = true } } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+                    if !sets.isEmpty { Text("\(sets.count)").font(.caption2).foregroundStyle(.secondary) }
+                }
+                .foregroundStyle(TDColor.text)
+                .frame(width: 30, height: 96)
+                .background(TDColor.control, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .accessibilityLabel(tr("Saved sets"))
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(tr("Saved sets")).font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button { withAnimation(.easeOut(duration: 0.2)) { shelf = false } } label: { Image(systemName: "chevron.right").foregroundStyle(.secondary).frame(width: 28, height: 28) }
+                        .accessibilityLabel(tr("Close"))
+                }
+                if sets.isEmpty {
+                    Text(tr("Pick apps, choose how they sit, then Save: they wait here, ready to arrange (and open) in one tap.")).font(.caption).foregroundStyle(.secondary)
+                }
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(sets.indices, id: \.self) { i in
+                            let s = sets[i]
+                            let items = (s["items"] as? [JSON]) ?? []
+                            HStack(spacing: 8) {
+                                mini(items.map { ($0["zone"] as? JSON) ?? [:] }, items.map { look($0.str("key")) }).frame(width: 64, height: 40)
+                                Text(s.str("name", max: 60)).font(.caption).lineLimit(2).foregroundStyle(TDColor.text).frame(maxWidth: .infinity, alignment: .leading)
+                                Button {
+                                    let id = s.str("id")
+                                    core.deck.edit { lay in Deck.mapSpaces(&lay) { sp in if var ss = sp["sets"] as? [JSON] { ss.removeAll { $0.str("id") == id }; sp["sets"] = ss } } }
+                                } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).frame(width: 26, height: 26) }
+                                .accessibilityLabel(tr("Remove"))
+                            }
+                            .padding(6)
+                            .background(TDColor.bg.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                let to = c.displays.contains { $0.str("id") == s.str("display") } ? s.str("display") : c.shown
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                core.deck.arrange(display: to, items: items.map { ["key": $0.str("key", max: 300), "zone": ($0["zone"] as? JSON) ?? [:]] })
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(10)
+            .frame(width: 220)
+            .frame(maxHeight: .infinity)
+            .background(TDColor.control, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    // A small picture of zones, each with its app's icon (a zone with no app left free).
+    private func mini(_ zones: [JSON], _ apps: [JSON?]) -> some View {
+        GeometryReader { g in
+            let u = g.size.width / 12, v = g.size.height / 12
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(navy)
+                ForEach(zones.indices, id: \.self) { i in
+                    let z = zones[i]
+                    let used = i < apps.count
+                    let zw = u * CGFloat(z.int("w", 12)), zh = v * CGFloat(z.int("h", 12))
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous).fill(used ? blue.opacity(0.4) : Color.white.opacity(0.06))
+                        RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(used ? sky : Color.white.opacity(0.2), lineWidth: 1)
+                        if used { icon(apps[i], min(26, min(zw, zh) * 0.6)) }
+                    }
+                    .frame(width: max(1, zw - 3), height: max(1, zh - 3))
+                    .offset(x: u * CGFloat(z.int("x")) + 1.5, y: v * CGFloat(z.int("y")) + 1.5)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    // Along the bottom: how the picked apps can sit side by side (more places than apps leave some
+    // free), the layouts drawn on the computer with as many too; a tap arranges them. Then Save, and
+    // the order turned round.
+    private func row(_ c: Ctx) -> some View {
+        let drawn = ((space["layouts"] as? [JSON]) ?? []).map { ($0["zones"] as? [JSON]) ?? [] }
+        let configs = c.picked.isEmpty ? [] : deckConfigs(c.picked.count, drawn)
+        let windows = (c.one?["windows"] as? [JSON]) ?? []
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                if c.picked.isEmpty {
+                    Text(armed != nil ? tr("Now tap the app for that place") : tr("Drag an app onto the display: a corner, a side or the middle. Or tap a few apps to see how they fit together."))
+                        .font(.caption).foregroundStyle(armed != nil ? TDColor.accent : Color.secondary).lineLimit(2).padding(.horizontal, 4)
+                }
+                if let one = c.one, windows.count > 1 {
+                    ForEach(windows.indices, id: \.self) { i in
+                        let x = windows[i]
+                        let on = x.int64("wid") == windowOf(one, c.front)?.int64("wid")
+                        chip(x.str("title", max: 40).isEmpty ? tr("Window") : x.str("title", max: 40), on) { wid = x.int64("wid") }
+                    }
+                }
+                ForEach(configs.indices, id: \.self) { i in
+                    let cz = configs[i]
+                    let now = last.map { $0.keys == sel && $0.zones.count == min(cz.count, c.picked.count) && zip($0.zones, cz).allSatisfy { same($0, $1) } } ?? false
+                    Button { arrange(cz, c) } label: {
+                        mini(cz, c.picked).frame(width: 112, height: 70)
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(now ? TDColor.accent : Color.clear, lineWidth: 2))
+                    }.buttonStyle(PressScale())
+                }
+                if c.picked.count > 1 { chip(tr("Swap order"), false) { sel = Array(sel.dropFirst()) + [sel[0]] } }
+                if let l = last, l.keys == sel { chip(tr("Save"), true) { saveSet(c) } }
+                if !c.picked.isEmpty { chip(tr("Clear"), false) { clear() } }
+            }
+            .frame(height: 84)
+        }
+    }
+
+    private func chip(_ text: String, _ on: Bool, _ fn: @escaping () -> Void) -> some View {
+        Button(action: fn) {
+            Text(text).font(.footnote.weight(.medium)).lineLimit(1).padding(.horizontal, 14).padding(.vertical, 8)
+                .foregroundStyle(on ? Color.white : TDColor.text)
+                .background(on ? TDColor.accent : TDColor.control, in: Capsule())
+        }.buttonStyle(PressScale())
+    }
+}
+
+// How n apps can sit side by side on the 12 × 12 grid, in their order. Some have a place more than
+// there are apps (three in the quarters); the computer's own drawn layouts with as many places follow.
+func deckConfigs(_ n: Int, _ drawn: [[JSON]] = []) -> [[JSON]] {
+    let z = { (x: Int, y: Int, w: Int, h: Int) -> JSON in ["x": x, "y": y, "w": w, "h": h] }
+    let q = [z(0, 0, 6, 6), z(6, 0, 6, 6), z(0, 6, 6, 6), z(6, 6, 6, 6)]
+    let six = [z(0, 0, 4, 6), z(4, 0, 4, 6), z(8, 0, 4, 6), z(0, 6, 4, 6), z(4, 6, 4, 6), z(8, 6, 4, 6)]
+    let made: [[JSON]]
+    switch n {
+    case 1: made = [[z(0, 0, 12, 12)], [z(0, 0, 6, 12)], [z(6, 0, 6, 12)], [z(2, 1, 8, 10)]]
+    case 2: made = [[z(0, 0, 6, 12), z(6, 0, 6, 12)], [z(0, 0, 8, 12), z(8, 0, 4, 12)], [z(0, 0, 4, 12), z(4, 0, 8, 12)], [z(0, 0, 12, 6), z(0, 6, 12, 6)]]
+    case 3: made = [
+        [z(0, 0, 4, 12), z(4, 0, 4, 12), z(8, 0, 4, 12)],
+        [z(0, 0, 6, 12), z(6, 0, 6, 6), z(6, 6, 6, 6)],
+        [z(0, 0, 6, 6), z(0, 6, 6, 6), z(6, 0, 6, 12)],
+        q,
+        [z(0, 0, 12, 6), z(0, 6, 6, 6), z(6, 6, 6, 6)],
+        [z(0, 0, 8, 12), z(8, 0, 4, 6), z(8, 6, 4, 6)],
+    ]
+    case 4: made = [q,
+        [z(0, 0, 3, 12), z(3, 0, 3, 12), z(6, 0, 3, 12), z(9, 0, 3, 12)],
+        [z(0, 0, 6, 12), z(6, 0, 6, 4), z(6, 4, 6, 4), z(6, 8, 6, 4)],
+        [z(0, 0, 12, 6), z(0, 6, 4, 6), z(4, 6, 4, 6), z(8, 6, 4, 6)],
+        six,
+    ]
+    case 5: made = [
+        [z(0, 0, 4, 6), z(4, 0, 4, 6), z(8, 0, 4, 6), z(0, 6, 6, 6), z(6, 6, 6, 6)],
+        [z(0, 0, 6, 12), z(6, 0, 3, 6), z(9, 0, 3, 6), z(6, 6, 3, 6), z(9, 6, 3, 6)],
+        six,
+    ]
+    default: made = [six, [z(0, 0, 6, 4), z(6, 0, 6, 4), z(0, 4, 6, 4), z(6, 4, 6, 4), z(0, 8, 6, 4), z(6, 8, 6, 4)]]
+    }
+    let key = { (c: [JSON]) -> String in c.map { "\($0.int("x")),\($0.int("y")),\($0.int("w")),\($0.int("h"))" }.joined(separator: ";") }
+    var seen = Set(made.map(key))
+    return made + drawn.filter { $0.count == n && seen.insert(key($0)).inserted }
 }
 
 // Views in rows, wrapped to the width.
@@ -894,10 +1067,11 @@ struct DeckFlow: Layout {
     }
 }
 
-// Where a drop at (fx, fy) of the display snaps a window on the 12 × 12 zone grid: a corner a
-// quarter, the left or right edge a half, the top the whole display, the bottom its lower half.
+// Where a drop or a tap at (fx, fy) of the display puts a window on the 12 × 12 zone grid, the
+// same on every page: a corner a quarter, a side a half, the middle the whole display.
 func deckSnapZone(_ fx: CGFloat, _ fy: CGFloat) -> JSON? {
-    let e: CGFloat = 0.18
+    guard fx >= 0, fx <= 1, fy >= 0, fy <= 1 else { return nil }
+    let e: CGFloat = 0.3
     let z = { (x: Int, y: Int, w: Int, h: Int) -> JSON in ["x": x, "y": y, "w": w, "h": h] }
     let l = fx < e, r = fx > 1 - e, t = fy < e, b = fy > 1 - e
     if l && t { return z(0, 0, 6, 6) }
@@ -906,9 +1080,9 @@ func deckSnapZone(_ fx: CGFloat, _ fy: CGFloat) -> JSON? {
     if r && b { return z(6, 6, 6, 6) }
     if l { return z(0, 0, 6, 12) }
     if r { return z(6, 0, 6, 12) }
-    if t { return z(0, 0, 12, 12) }
+    if t { return z(0, 0, 12, 6) }
     if b { return z(0, 6, 12, 6) }
-    return nil
+    return z(0, 0, 12, 12)
 }
 
 // ---- setting up a tile ----

@@ -154,3 +154,5 @@
 .deck-sheet-groups, .deck-sheet-search { background: var(--deck-solid-2); }
 @media (prefers-color-scheme: dark) { .deck-sheet, .deck-menu { --deck-solid: #252527; --deck-solid-2: #1d1d1f; } }
 .deck-sheet-shade { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); background: rgba(0, 0, 0, 0.42); }
+.deck-set { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.deck-set input { flex: 1; min-width: 0; }

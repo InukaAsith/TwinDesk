@@ -15,6 +15,8 @@
 //                      deck.apps {}: → deck.apps {apps: [{id, name, icon}]}
 //                      deck.wins {}: the window space → deck.wins {apps, displays, front}
 //                      deck.place {wid, display, zone?}: a window into a zone, or onto a display
+//                      deck.arrange {display, items: [{key, wid?, zone}]}: apps side by side, each into
+//                      its zone; one not running is opened first (a saved set from the shelf)
 //   computer → device  deck.clip {text}: Clipboard › Send to the device
 // One Deck per session kind (the phones', TwinDesk Web's): a layout saved through one goes to the
 // others' devices too. Deck.view() → {surface: names of the devices with a Deck, layout, can, caps}
@@ -52,6 +54,7 @@ class Deck {
     on(T.DECK_APPS, () => this.surface && this._apps());
     on(T.DECK_WINS, () => this.surface && this._wins());
     on(T.DECK_PLACE, (m) => this.surface && this._place(m));
+    on(T.DECK_ARRANGE, (m) => this.surface && this._arrange(m));
     if (this.server.current) this.offer(this.server.current); // loaded with a device already there
   }
 
@@ -270,14 +273,22 @@ class Deck {
       const ds = this.sys.displays();
       const icons = await this._appIcons().catch(() => new Map());
       const apps = new Map();
+      // Each window's place on its display (fractions, front first), for the device's picture of it.
+      const r3 = (v) => Math.round(Math.max(-1, Math.min(2, v)) * 1000) / 1000;
       for (const w of windows) {
-        const key = w.bundle || w.aumid || w.exe || w.app || String(w.pid);
-        const name = w.app || (w.exe ? w.exe.split(/[\\/]/).pop().replace(/\.exe$/i, '') : '') || w.title;
-        if (!apps.has(key)) apps.set(key, { key, name, icon: icons.get(key) || '', windows: [] });
+        const key = appKey(w);
+        if (!apps.has(key)) apps.set(key, { key, name: appName(w), icon: icons.get(key) || '', windows: [] });
         const d = displayOf(ds, w);
-        apps.get(key).windows.push({ wid: w.wid, title: String(w.title || '').slice(0, 120), display: d ? d.id : '' });
+        apps.get(key).windows.push({ wid: w.wid, title: String(w.title || '').slice(0, 120), display: d ? d.id : '',
+          ...(d ? { f: [r3((w.x - d.x) / d.w), r3((w.y - d.y) / d.h), r3(w.w / d.w), r3(w.h / d.h)] } : {}) });
       }
-      out = { apps: [...apps.values()].slice(0, 60), displays: ds.map((d) => ({ id: d.id, name: d.name, main: d.main, w: d.w, h: d.h })), front };
+      // The saved sets' apps that aren't running: their names and icons for the shelf.
+      const known = [];
+      for (const s of this._sets()) for (const it of s.items) {
+        if (apps.has(it.key) || known.some((k) => k.key === it.key)) continue;
+        known.push({ key: it.key, name: it.name, icon: icons.get(it.key) || '' });
+      }
+      out = { apps: [...apps.values()].slice(0, 60), known: known.slice(0, 60), displays: ds.map((d) => ({ id: d.id, name: d.name, main: d.main, w: d.w, h: d.h })), front };
     } catch (e) {
       out.why = e.message;
     }
@@ -291,7 +302,8 @@ class Deck {
       for (const a of await this.sys.apps()) if (a.icon) map.set(a.id, a.icon);
     } else if (this.platform === 'win') {
       const { windows } = await this.sys.wins();
-      const exes = [...new Set(windows.map((w) => w.exe).filter(Boolean))].slice(0, 40);
+      const saved = this._sets().flatMap((x) => x.items.map((it) => it.key)).filter((k) => /\.exe$/i.test(k));
+      const exes = [...new Set([...windows.map((w) => w.exe).filter(Boolean), ...saved])].slice(0, 50);
       const r = await this.helper.request('icons', { size: 64, paths: exes }).catch(() => null);
       if (r && r.icons) exes.forEach((e, i) => { if (r.icons[i]) map.set(e, r.icons[i]); });
     }
@@ -310,8 +322,7 @@ class Deck {
       const to = ds.find((d) => d.id === String(m.display)) || displayOf(ds, w) || ds[0];
       let r;
       if (m.zone && typeof m.zone === 'object') {
-        const z = M.normalize({ spaces: [{ kind: 'windows', layouts: [{ zones: [m.zone] }] }] }).spaces[0].layouts[0].zones[0];
-        r = zoneRect(to, z);
+        r = zoneRect(to, zoneOf(m.zone));
       } else { // onto that display, where it was on its own (relative), as big as it fits
         const from = displayOf(ds, w) || to;
         const fx = (w.x - from.x) / from.w, fy = (w.y - from.y) / from.h;
@@ -323,6 +334,69 @@ class Deck {
     } catch (e) {
       done(false, e.message);
     }
+  }
+
+  _sets() { return this.layout.spaces.filter((x) => x.kind === 'windows').flatMap((x) => x.sets || []); }
+
+  // Apps side by side: each item's window (the one asked for, else the app's first one not used
+  // yet) into its zone of the display. An app with no window is opened, and placed once one shows.
+  async _arrange(m) {
+    const done = (ok, why) => this.server.sendToClient({ t: T.DECK_DONE, id: 'arrange', ok, ...(why ? { why } : {}) });
+    try {
+      if (!this.caps.windows) throw new Error('Not on this computer');
+      const items = (Array.isArray(m.items) ? m.items : []).slice(0, 6).filter((it) => it && typeof it === 'object' && it.zone)
+        .map((it) => ({ key: String(it.key || '').slice(0, 300), wid: Number(it.wid) || 0, zone: zoneOf(it.zone) }));
+      if (!items.length) throw new Error('No apps to arrange');
+      const ds = this.sys.displays();
+      const to = ds.find((d) => d.id === String(m.display || '')) || ds.find((d) => d.main) || ds[0];
+      if (!to) throw new Error('No display');
+      const used = new Set();
+      const pick = (windows, it) => (it.wid && !used.has(it.wid) && windows.find((w) => w.wid === it.wid))
+        || windows.find((w) => !used.has(w.wid) && it.key && appKey(w) === it.key) || null;
+      let { windows } = await this.sys.wins();
+      const missing = [];
+      for (const it of items) {
+        const w = pick(windows, it);
+        if (w) { used.add(w.wid); it.w = w; } else missing.push(it);
+      }
+      // Not running: opened (only apps this computer lists), then waited for.
+      const failed = [];
+      for (const it of missing) {
+        try { await this._launch(it.key); } catch (e) { failed.push(e.message); it.skip = true; }
+      }
+      const waitFor = missing.filter((it) => !it.skip);
+      for (let i = 0; waitFor.some((it) => !it.w) && i < 30; i++) {
+        await new Promise((r) => setTimeout(r, this.arrangeWait || 400));
+        ({ windows } = await this.sys.wins());
+        for (const it of waitFor) if (!it.w) { const w = pick(windows, it); if (w) { used.add(w.wid); it.w = w; } }
+      }
+      // Last first: the first item ends up in front.
+      for (const it of items.slice().reverse()) if (it.w) await this.sys.frame(it.w.wid, zoneRect(to, it.zone)).catch((e) => failed.push(e.message));
+      if (items.every((it) => !it.w)) throw new Error(failed[0] || 'The apps didn’t open a window');
+      done(true, failed.length ? failed[0] : (waitFor.some((it) => !it.w) ? 'Some apps didn’t open a window in time' : ''));
+    } catch (e) {
+      done(false, e.message);
+    }
+  }
+
+  // An app by the key deck.wins groups it by: only one this computer lists as an app (Mac: its
+  // bundle id; Windows: a Start menu app, its id or the program it starts), opened as the Start
+  // menu or the Dock opens it.
+  async _launch(key) {
+    const apps = await this.sys.apps().catch(() => []);
+    if (this.platform === 'mac') {
+      if (!apps.some((a) => a.id === key)) throw new Error('That app isn’t on this Mac');
+      return this.sys.openApp(key);
+    }
+    if (this.platform === 'win') {
+      const k = key.toLowerCase();
+      // A Start menu id is a known folder's GUID and the path under it: matched by the path's end.
+      const a = apps.find((x) => x.id.toLowerCase() === k)
+        || apps.find((x) => { const tail = x.id.toLowerCase().replace(/^\{[0-9a-f-]+\}/, ''); return /\.exe$/.test(tail) && tail.length > 4 && k.endsWith(tail); });
+      if (!a) throw new Error('Open it on the PC once from the Start menu');
+      return this.sys.openApp(a.id);
+    }
+    throw new Error('Not on this computer');
   }
 
   _press(codes) {
@@ -342,6 +416,9 @@ const SNAP = {
   tl: [0, 0, 6, 6], tr: [6, 0, 6, 6], bl: [0, 6, 6, 6], br: [6, 6, 6, 6],
   third1: [0, 0, 4, 12], third2: [4, 0, 4, 12], third3: [8, 0, 4, 12],
 };
+const appKey = (w) => w.bundle || w.aumid || w.exe || w.app || String(w.pid);
+const appName = (w) => w.app || (w.exe ? w.exe.split(/[\\/]/).pop().replace(/\.exe$/i, '') : '') || w.title;
+const zoneOf = (z) => M.normalize({ spaces: [{ kind: 'windows', layouts: [{ zones: [z] }] }] }).spaces[0].layouts[0].zones[0];
 const zoneRect = (d, z) => ({ x: d.x + (d.w * z.x) / ZG, y: d.y + (d.h * z.y) / ZG, w: (d.w * z.w) / ZG, h: (d.h * z.h) / ZG });
 // The display a window is mostly on.
 function displayOf(ds, w) {

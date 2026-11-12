@@ -649,7 +649,7 @@
         plus.setAttribute('aria-label', t('Add a layout'));
         pagesBar.replaceChildren(...s.layouts.map((x) => chip(el('span', { class: 'deck-chip-in' }, [miniZones(x.zones), el('span', { text: x.name })]), x.id === layoutOf(s).id, () => { layoutId = x.id; draw(); })), plus);
         const lay = layoutOf(s);
-        stage.replaceChildren(zoneCanvas(lay), el('p', { class: 'deck-tip', text: t('Drag across the display to draw a zone; click a zone to remove it. On the phone: choose a running app, swipe to a layout and tap a zone, or send the window to another display.') }));
+        stage.replaceChildren(zoneCanvas(lay), el('p', { class: 'deck-tip', text: t('Drag across the display to draw a zone; click a zone to remove it. On the phone, drag an app onto a corner, a side or the middle of a display; pick a few apps and your layouts with as many zones show next to the ready-made ones.') }));
         if (!withSide) return;
         side.replaceChildren(
           panel(t('Layout'), [
@@ -663,8 +663,18 @@
               UI.button(t('Delete layout'), () => change(() => { const sp = space(); sp.layouts = sp.layouts.filter((x) => x.id !== lay.id); }), 'small destructive'),
             ]) : null,
           ]),
+          setsPanel(s),
           spacePanel(s),
         );
+      }
+      // The apps saved together on the phone (Save after arranging them): renamed or removed here.
+      function setsPanel(s) {
+        const sets = s.sets || [];
+        return panel(t('Saved sets'), sets.length ? sets.map((x) => el('div', { class: 'deck-set' }, [
+          miniZones(x.items.map((it) => it.zone)),
+          input(x.name, (v) => change(() => { const y = (space().sets || []).find((q) => q.id === x.id); if (y) y.name = v; }, { side: false }), { maxlength: 60 }),
+          UI.button(t('Remove'), () => change(() => { const sp = space(); sp.sets = (sp.sets || []).filter((q) => q.id !== x.id); }), 'small destructive'),
+        ])) : [el('p', { class: 'deck-tip', text: t('On the phone, pick a few apps, tap how they should sit and Save: the set waits on the shelf at the display’s edge, and one tap arranges the apps again, opening the ones not running.') })]);
       }
       const layoutOf = (s) => s.layouts.find((x) => x.id === layoutId) || s.layouts[0];
       const place = (n, z) => Object.assign(n.style, { left: `${(z.x / 12) * 100}%`, top: `${(z.y / 12) * 100}%`, width: `${(z.w / 12) * 100}%`, height: `${(z.h / 12) * 100}%` });

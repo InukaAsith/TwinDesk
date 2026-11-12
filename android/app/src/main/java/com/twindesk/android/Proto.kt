@@ -112,6 +112,7 @@ object Proto {
         const val DECK_STATE = "deck.state"
         const val DECK_WINS = "deck.wins"
         const val DECK_PLACE = "deck.place"
+        const val DECK_ARRANGE = "deck.arrange"
         const val REMOTE_HELLO = "remote.hello"
         const val REMOTE_STATE = "remote.state"
         const val REMOTE_RELEASE = "remote.release"
