@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('macshare', {
   deviceDo: call('deviceDo'), // Overview: the selected device's controls
   setOverview: call('setOverview'), // General › Overview: what it shows
   setChats: call('setChats'), // Messages: chat apps in one inbox
+  history: call('history'), // Keep history (shared/histkeeper.js)
   notifReply: call('notifReply'), // answer a phone chat's notification
   importCancel: call('importCancel'), // Explorer's Import / Capture from phone: stop
   skipSetup: call('skipSetup'),

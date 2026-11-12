@@ -591,6 +591,10 @@ function setupIpc(ctx) {
       ctx.pushState();
     },
     // A phone chat's notification answered here (its own Reply).
+    // Keep history: {do: 'set', save, days} | {do: 'unlock', what} | {do: 'clear'} (shared/histkeeper.js).
+    history(r) {
+      if (ctx.history && r && typeof r === 'object') ctx.history.act(r);
+    },
     notifReply(r) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
       if (!r || typeof r !== 'object' || !ctx.notifs) return;

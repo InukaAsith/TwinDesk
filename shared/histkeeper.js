@@ -43,8 +43,8 @@ class HistoryKeeper {
     const o = p.obj;
     if (typeof o._remember === 'function') {
       const orig = o._remember.bind(o);
-      o._remember = (dir, item) => {
-        const r = orig(dir, item);
+      o._remember = (...args) => { // (dir, item), or (dir, text, from) in Multi-device
+        const r = orig(...args);
         const h = o.history && o.history[0];
         const x = this.cfg.save && p.pick(h);
         if (x) p.keep.add([x]);
