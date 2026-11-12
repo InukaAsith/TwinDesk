@@ -3,6 +3,7 @@
 // (hello fx: 1, welcome fx), the bytes over HTTPS both ways on real loopback nodes, and a request with
 // another session's token or none goes nowhere.
 'use strict';
+process.env.TWINDESK_NO_FX2 = '1'; // the fx way (v1) here; fastfiles2.test.js has the files engine
 
 const assert = require('assert');
 const fs = require('fs');

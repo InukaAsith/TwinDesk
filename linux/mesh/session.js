@@ -257,6 +257,7 @@ class Session extends EventEmitter {
   _transition(up, msg, replaced = false) {
     this._up = up;
     this.fx.reset(); // a new session: its own token, nothing of the last one in flight
+    if (this.fx2v) this.fx2v.need(up); // the files engine stays up while the session is
     if (up) {
       this.meshCapable = this.linkUp ? this._linkMesh : !!(this.ctx && this.ctx.mesh);
       const welcome = this.hosting ? { macId: this.ctx.deviceId, macName: this.ctx.name, os: this.ctx.os } : msg || {};
@@ -300,6 +301,7 @@ class Sessions extends EventEmitter {
     this.server = server;
     for (const s of this.sessions.values()) s.server = server;
     server.fxRequest = (req, res) => MeshFx.route(this.sessions.values(), req, res); // fast files: to the session of the token
+    MeshFx.attachServer(this.fxShared, server); // the files engine (fx2) with the server's identity
     server.on('client', (ctx) => this.ensure(ctx.deviceId).setCtx(ctx));
     server.on('transport', (ctx) => {
       const s = this.sessions.get(ctx.deviceId);
@@ -337,6 +339,7 @@ class Sessions extends EventEmitter {
   }
 
   _linkAdded(link) {
+    MeshFx.attachLink(this.fxShared, link); // hello fx2 (shared/meshfx.js)
     const id = link.pairing && link.pairing.macId;
     if (id) this.ensure(id).setLink(link);
   }

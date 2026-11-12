@@ -281,7 +281,7 @@ function publishState() {
     // General › Advanced › Engines in use (shared/engines.js): the selected device's session.
     const sel = hub && hub.facade.session;
     state.engines = peer && sel && sel.connected ? require('../../shared/engines.js').snapshot({
-      current: peer.current, il: sel.il, lane: sel.lane(), fx: peer.fx, fx2: null, net: svc && svc.net ? svc.net.view : null,
+      current: peer.current, il: sel.il, lane: sel.lane(), fx: peer.fx, fx2: hub.sessions.fxShared.fx2 ? hub.sessions.fxShared.fx2.fx2 : null, net: svc && svc.net ? svc.net.view : null,
       lan: state.net ? state.net.lan : '', screen: stream && stream.active ? stream.view : null,
     }) : null;
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).

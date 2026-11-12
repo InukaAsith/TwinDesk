@@ -1046,7 +1046,7 @@ function enginesView() {
   const s = hub && hub.selected;
   if (!link || !s || !s.connected) return null;
   return require('../../shared/engines.js').snapshot({
-    current: link.current, il: s.il, lane: s.lane(), fx: link.fx, fx2: null, net: net ? net.view : null,
+    current: link.current, il: s.il, lane: s.lane(), fx: link.fx, fx2: hub.sessions.fxShared.fx2 ? hub.sessions.fxShared.fx2.fx2 : null, net: net ? net.view : null,
     lan: lanType(link.current && link.current.address), screen: null,
   });
 }

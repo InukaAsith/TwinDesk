@@ -310,7 +310,16 @@ class Server extends EventEmitter {
 
   // Mark ctx authenticated. A client with the same device id replaces the older socket of that
   // device only; other devices are untouched.
-  authenticate(ctx, { deviceId, name, os }, welcome) {
+  authenticate(ctx, who, welcome) {
+    // The files engine (fx2, shared/meshfx.js) starts on demand and its port goes in this welcome:
+    // when it isn't listening yet the welcome waits for it, a few tens of ms, never long.
+    const wait = ctx.fxWanted && ctx.fx2Wanted && !ctx.fx2Waited && this.fx2Wait ? this.fx2Wait(1500) : null;
+    if (wait) {
+      ctx.fx2Waited = true;
+      const go = () => { if (!ctx.authed && this.sockets.has(ctx) && ctx.ws.readyState === ctx.ws.OPEN) this.authenticate(ctx, who, welcome); };
+      return void wait.then(go, go);
+    }
+    const { deviceId, name, os } = who;
     const old = this.clients.get(deviceId);
     if (old && old !== ctx) {
       this.clients.delete(deviceId);
@@ -327,7 +336,8 @@ class Server extends EventEmitter {
     // The input lane (shared/inputlane.js): a lane of its own, when its hello asked, over the network only.
     const il = ctx.ilWanted && ctx.transport !== 'ble' ? this.ilPool.offer(ctx, ctx.ilWanted, ctx.address) : null;
     ctx.fx = ctx.fxWanted ? P.randomHex(16) : ''; // fast files: this session's token (session.js routes its requests)
-    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}), ...(ctx.fx ? { fx: ctx.fx } : {}) });
+    ctx.fx2 = ctx.fx && ctx.fx2Wanted && this.fx2Port ? this.fx2Port() || 0 : 0; // its files engine's port
+    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}), ...(ctx.fx ? { fx: ctx.fx } : {}), ...(ctx.fx2 ? { fx2: { port: ctx.fx2 } } : {}) });
     this.emit('client', ctx);
   }
 
