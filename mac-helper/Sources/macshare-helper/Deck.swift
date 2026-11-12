@@ -10,7 +10,7 @@
 //   deckWins -> {windows: [{wid, pid, app, bundle, title, x, y, w, h}], front}: regular apps' windows
 //   deckWinFrame {wid, x, y, w, h} (wid 0: the one in front); deckWinOp {wid, op: min|full|close|restore}
 //   deckSys {what: sleep|screenoff|lock|darkmode|desktop|overview}
-//   deckState -> {dark}
+//   deckState -> {dark, memUsed 0–1, temp °C (Apple silicon; absent when unknown)}
 import Cocoa
 import CoreAudio
 import IOBluetooth
@@ -330,7 +330,47 @@ enum Deck {
     return [:]
   }
 
-  static func state() -> [String: Any] { ["dark": darkOn()] }
+  static func state() -> [String: Any] {
+    var o: [String: Any] = ["dark": darkOn()]
+    if let m = memUsed() { o["memUsed"] = m }
+    if let t = temperature() { o["temp"] = t }
+    return o
+  }
+
+  // MARK: Use and heat (the Deck's widgets)
+  // Memory in use as Activity Monitor counts it: apps' memory, wired and compressed.
+  private static func memUsed() -> Double? {
+    var stats = vm_statistics64()
+    var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
+    let r = withUnsafeMutablePointer(to: &stats) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count) } }
+    guard r == KERN_SUCCESS else { return nil }
+    let page = Double(vm_kernel_page_size)
+    let used = (Double(stats.internal_page_count) - Double(stats.purgeable_count) + Double(stats.wire_count) + Double(stats.compressor_page_count)) * page
+    let total = Double(ProcessInfo.processInfo.physicalMemory)
+    return total > 0 ? max(0, min(1, used / total)) : nil
+  }
+
+  // The processor's temperature on Apple silicon: the hottest die sensor IOHID reports (Intel Macs
+  // keep theirs in the SMC, not read here: nil).
+  private static var hid: AnyObject?
+  private static func temperature() -> Double? {
+    if hid == nil {
+      guard let c = IOHIDEventSystemClientCreate(kCFAllocatorDefault)?.takeRetainedValue() else { return nil }
+      _ = IOHIDEventSystemClientSetMatching(c, ["PrimaryUsagePage": 0xff00, "PrimaryUsage": 5] as CFDictionary)
+      hid = c
+    }
+    guard let c = hid, let services = IOHIDEventSystemClientCopyServices(c)?.takeRetainedValue() as? [AnyObject] else { return nil }
+    var die: [Double] = [], any: [Double] = []
+    for sv in services {
+      guard let ev = IOHIDServiceClientCopyEvent(sv, 15, 0, 0)?.takeRetainedValue() else { continue }
+      let v = IOHIDEventGetFloatValue(ev, 15 << 16)
+      guard v > 5, v < 130 else { continue }
+      let prop: AnyObject? = IOHIDServiceClientCopyProperty(sv, "Product" as CFString)?.takeRetainedValue()
+      let name = (prop as? String) ?? ""
+      if name.contains("tdie") || name.contains("pACC") || name.contains("eACC") || name.contains("SOC") { die.append(v) } else { any.append(v) }
+    }
+    return (die.isEmpty ? any : die).max().map { ($0 * 10).rounded() / 10 }
+  }
 
   static func handle(_ cmd: String, _ msg: [String: Any], _ id: Any?) {
     // Off the reading thread: Bluetooth and the window server can take a moment.
@@ -338,13 +378,13 @@ enum Deck {
       do {
         switch cmd {
         case "deckAudio": reply(id, audio())
-        case "deckAudioDefault": try setDefault(uid: msg["id"] as? String ?? "", input: (msg["input"] as? Bool) ?? false); reply(id)
+        case "deckAudioDefault": try setDefault(uid: msg["dev"] as? String ?? "", input: (msg["input"] as? Bool) ?? false); reply(id)
         case "deckVolume": try volume(msg); reply(id)
         case "deckBt": reply(id, bt())
         case "deckBtRadio": btRadio((msg["on"] as? Bool) ?? true); reply(id)
-        case "deckBtConnect": try btConnect(id: msg["id"] as? String ?? "", on: (msg["on"] as? Bool) ?? true); reply(id)
+        case "deckBtConnect": try btConnect(id: msg["dev"] as? String ?? "", on: (msg["on"] as? Bool) ?? true); reply(id)
         case "deckBright": reply(id, bright())
-        case "deckBrightSet": try setBright(id: msg["id"] as? String ?? "", level: (msg["level"] as? NSNumber)?.doubleValue ?? 0.5); reply(id)
+        case "deckBrightSet": try setBright(id: msg["dev"] as? String ?? "", level: (msg["level"] as? NSNumber)?.doubleValue ?? 0.5); reply(id)
         case "deckWins": reply(id, wins())
         case "deckWinFrame":
           let n = { (k: String) in (msg[k] as? NSNumber)?.doubleValue ?? 0 }
@@ -364,4 +404,11 @@ enum Deck {
   }
 }
 
+// IOHID's sensor services (the temperatures on Apple silicon), as Activity Monitor-like tools read them.
+@_silgen_name("IOHIDEventSystemClientCreate") func IOHIDEventSystemClientCreate(_ a: CFAllocator?) -> Unmanaged<AnyObject>?
+@_silgen_name("IOHIDEventSystemClientSetMatching") func IOHIDEventSystemClientSetMatching(_ c: AnyObject, _ m: CFDictionary) -> Int32
+@_silgen_name("IOHIDEventSystemClientCopyServices") func IOHIDEventSystemClientCopyServices(_ c: AnyObject) -> Unmanaged<CFArray>?
+@_silgen_name("IOHIDServiceClientCopyEvent") func IOHIDServiceClientCopyEvent(_ s: AnyObject, _ type: Int64, _ a: Int32, _ b: Int64) -> Unmanaged<AnyObject>?
+@_silgen_name("IOHIDEventGetFloatValue") func IOHIDEventGetFloatValue(_ e: AnyObject, _ field: Int32) -> Double
+@_silgen_name("IOHIDServiceClientCopyProperty") func IOHIDServiceClientCopyProperty(_ s: AnyObject, _ key: CFString) -> Unmanaged<AnyObject>?
 @_silgen_name("_AXUIElementGetWindow") func _AXUIElementGetWindow(_ e: AXUIElement, _ wid: UnsafeMutablePointer<CGWindowID>) -> AXError

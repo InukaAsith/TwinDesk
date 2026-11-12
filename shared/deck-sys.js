@@ -47,6 +47,7 @@ const KEYS = {
 };
 
 function sys(platform, { helper, press }) {
+  // A device or app goes as `dev`: the helpers' `id` is the request's own number (helper.request sets it).
   const H = (cmd, args = {}, timeout = 15000) => helper.request(cmd, args, timeout);
   const linux = platform === 'linux';
   let appCache = null;
@@ -83,7 +84,7 @@ function sys(platform, { helper, press }) {
       };
     },
     async setDefault(id, input) {
-      if (!linux) return H('deckAudioDefault', { id, input: !!input });
+      if (!linux) return H('deckAudioDefault', { dev: id, input: !!input });
       return run('pactl', [input ? 'set-default-source' : 'set-default-sink', id]);
     },
     // {input, level?, mute?}
@@ -108,7 +109,7 @@ function sys(platform, { helper, press }) {
     },
     async btRadio(on) { return linux ? run('bluetoothctl', ['power', on ? 'on' : 'off']) : H('deckBtRadio', { on: !!on }); },
     async btConnect(id, on) {
-      if (!linux) return H('deckBtConnect', { id, on: !!on }, 30000);
+      if (!linux) return H('deckBtConnect', { dev: id, on: !!on }, 30000);
       if (!/^[0-9A-F:]{17}$/i.test(id)) throw new Error('That Bluetooth device isn’t paired with this computer');
       return run('bluetoothctl', [on ? 'connect' : 'disconnect', id], 30000);
     },
@@ -120,7 +121,7 @@ function sys(platform, { helper, press }) {
       return { displays: out.split('\n').map((l) => l.split(',')).filter((p) => p.length >= 5).map((p) => ({ id: p[0], name: 'Built-in display', level: parseInt(p[3], 10) / 100, internal: true })) };
     },
     async setBright(id, level) {
-      if (!linux) return H('deckBrightSet', { id: id || '', level: clamp01(level) }, 20000);
+      if (!linux) return H('deckBrightSet', { dev: id || '', level: clamp01(level) }, 20000);
       if (!which('brightnessctl')) throw new Error('Install brightnessctl to change the brightness from the Deck');
       return run('brightnessctl', [...(id ? ['-d', id] : []), 'set', `${Math.round(clamp01(level) * 100)}%`]);
     },
@@ -202,7 +203,7 @@ function sys(platform, { helper, press }) {
         if (!/^[A-Za-z0-9.-]{1,200}$/.test(id)) throw new Error('No such app on this Mac');
         return H('appLaunch', { appId: id }, 20000);
       }
-      if (platform === 'win') return H('deckAppOpen', { id }, 20000);
+      if (platform === 'win') return H('deckAppOpen', { dev: id }, 20000);
       const a = (await api.apps()).find((x) => x.id === id);
       if (!a) throw new Error('No such app on this computer');
       require('../linux/desktopapps.js').launch(a.entry);

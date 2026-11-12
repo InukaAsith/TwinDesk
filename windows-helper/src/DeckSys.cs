@@ -580,20 +580,20 @@ namespace MacShare
             switch (cmd)
             {
                 case "deckAudio": Audio(r); break;
-                case "deckAudioDefault": AudioDefault(Json.Str(c, "id", "")); break;
+                case "deckAudioDefault": AudioDefault(Json.Str(c, "dev", "")); break;
                 case "deckVolume": SetVolume(c); break;
                 case "deckBt": Bt(r); break;
                 case "deckBtRadio": BtRadio(Json.Bool(c, "on", true)); break;
-                case "deckBtConnect": BtConnect(Json.Str(c, "id", ""), Json.Bool(c, "on", true)); break;
+                case "deckBtConnect": BtConnect(Json.Str(c, "dev", ""), Json.Bool(c, "on", true)); break;
                 case "deckBright": Bright(r); break;
-                case "deckBrightSet": BrightSet(Json.Str(c, "id", ""), Json.Num(c, "level", 0.5)); break;
+                case "deckBrightSet": BrightSet(Json.Str(c, "dev", ""), Json.Num(c, "level", 0.5)); break;
                 case "deckWinFront": r["wid"] = Front(); break;
                 case "deckWinFrame": Frame(Json.Num(c, "wid", 0), (int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0), (int)Json.Num(c, "w", 800), (int)Json.Num(c, "h", 600)); break;
                 case "deckWinOp": Op(Json.Num(c, "wid", 0), Json.Str(c, "op", "")); break;
                 case "deckSys": Sys(Json.Str(c, "what", ""), c, r); break;
                 case "deckState": foreach (KeyValuePair<string, object> kv in State()) r[kv.Key] = kv.Value; break;
                 case "deckApps": r["apps"] = Apps(); break;
-                case "deckAppOpen": AppOpen(Json.Str(c, "id", "")); break;
+                case "deckAppOpen": AppOpen(Json.Str(c, "dev", "")); break;
                 default: throw new Exception("unknown");
             }
         }
