@@ -52,7 +52,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, enterSends: bool, arrowSwipe: bool, uhid: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -171,6 +171,8 @@ function setupIpc(ctx) {
     setPhone(partial) {
       setGroup('phone', partial);
       if (partial && 'input' in partial) ctx.phone.bridge.tellVia();
+      if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial)) ctx.phone.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js)
+      if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts(); // the open phone windows light their buttons
     },
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);
@@ -179,6 +181,12 @@ function setupIpc(ctx) {
       if (open === false) {
         for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
       } else ctx.phoneViews.openScreen();
+    },
+    phoneCamera(m) {
+      const { open, opts } = m && typeof m === 'object' ? m : { open: m }; // preload-control: {open, opts}
+      if (open === false) {
+        for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
+      } else ctx.phoneViews.openCamera(opts);
     },
     phoneOpenApp(arg) {
       if (arg && typeof arg.id === 'string') ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100));
@@ -206,7 +214,7 @@ function setupIpc(ctx) {
       if (ctx.phone) return require('../../shared/apkinstall.js').choose(ctx.phone.bridge, t);
     },
     phoneRetry() {
-      ctx.phone.bridge._kick();
+      ctx.phone.bridge.retry(); // also Set Up, when nothing used wireless debugging
     },
     // The phone in Finder (phonedrive.js).
     phoneMount() {
