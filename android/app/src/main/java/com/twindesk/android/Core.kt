@@ -4,8 +4,8 @@
 //
 // When to connect: only when asked — the Mac's phone tile (an invite from a paired computer),
 // Connect here, or Pair — and to resume a session that dropped by accident (for
-// PHONE_GRACE_MS, while the Mac keeps the session for us). Never on our own otherwise, since
-// connecting takes the Mac away from the computer it is paired with.
+// PHONE_GRACE_MS, while the Mac keeps the session for us). A capable paired Mac also allows a
+// durable, non-takeover return after sleep, outages and restarts. Disconnect and Forget end it.
 package com.twindesk.android
 
 import android.content.Context
@@ -40,13 +40,20 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val bleWifiOff get() = store.flag("bleWifiOff", true) // General's Turn off Bluetooth on Wi-Fi connections (bleTick)
     // … and PCs that connect to us: this phone advertises (BleServe.kt), as a PC's Bluetooth often can't.
     val serve = BleServe(ctx, { JSONObject().put("id", store.deviceId).put("name", store.deviceName).put("os", Proto.OS) }, ::changed, ::onServeOpen)
-    init { link.bleRx = { maxOf(ble.lastDown, serve.lastRx) } }
+    init {
+        link.bleRx = { maxOf(ble.lastDown, serve.lastRx) }
+        discovery.onHost = { returnTick() }
+    }
 
     // An unpaired computer asked us to pair (shown until acted on).
     @Volatile var invite: Found? = null; private set
     // Resume: until when we try to get a dropped session back.
     @Volatile private var resumeUntil = 0L
     @Volatile private var resumeHost: Host? = null
+    private val returnPrefs = ctx.getSharedPreferences("phone-return", Context.MODE_PRIVATE)
+    @Volatile private var returnGeneration = 0
+    @Volatile private var returnAfter = 0L
+    private var returnFailures = 0
 
     val sync = PairSync(this)
     val clip = Clip(this)
@@ -107,6 +114,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         }
 
     val host: Host? get() = if (link.connected) link.host else null
+    val returning: Host? get() = if (!link.connected) returnHost() else null
 
     // Not after Exit (the notification's): Android brings the process back for the notification
     // listener or the Accessibility service, and nothing should start or show then. wake() (TwinService.start:
@@ -116,6 +124,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         if (started || store.flag("exited", false)) return
         started = true
         discovery.start()
+        bg.scheduleWithFixedDelay({ runCatching { returnTick() }.onFailure { Log.e("TwinDesk", "reconnect", it) } }, 3, 3, TimeUnit.SECONDS)
         runCatching { peer.start() }.onFailure { Log.e("TwinDesk", "peer", it) }
         Notify.channels(ctx)
         updates.start()
@@ -160,6 +169,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // current one.
     fun foreground() {
         link.wake()
+        if (returnHost() != null) { returnAfter = 0L; returnTick(); return }
         val h = resumeLater ?: return
         resumeLater = null
         if (link.connected || link.state == "connecting" || link.pair != null || peer.connected) return
@@ -167,6 +177,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         Log.i("TwinDesk", "opened: reconnecting to ${known.name}")
         bg.execute { connect(known) }
     }
+    fun background() { if (inBackground() && returnHost() != null) link.pauseConnecting() }
     private fun inBackground() = !reconnectBg && !MainActivity.shown
 
     // Every 2 s: Bluetooth scans while it may be needed (not connected, or connected through it),
@@ -248,7 +259,11 @@ class Core private constructor(val ctx: Context) : Link.Events {
     fun hosts(): List<Host> = store.hosts()
 
     // The UI's Connect, or the Mac's invite: take the session.
-    fun connect(h: Host) = connect(h, false)
+    fun connect(h: Host) {
+        if (link.connected && link.host?.id == h.id && link.host?.fp == h.fp) return
+        stopReturn()
+        connect(h, false)
+    }
 
     // skipNet: the network just failed to reach it (a stale address after the Wi-Fi went): Bluetooth first.
     private fun connect(h: Host, skipNet: Boolean) {
@@ -297,6 +312,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
             return false
         }
         Log.i("TwinDesk", "${f.name} opened a Bluetooth pipe: connecting")
+        stopReturn()
         resumeUntil = 0
         link.connect(h, blePort = port)
         return true
@@ -306,11 +322,13 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // WiredReceiver): take the session through the cable, also from a Wi-Fi session with it. Not
     // paired with it yet: pair through the cable (no Wi-Fi needed), then the session follows.
     fun connectWired(id: String, port: Int, nonce: String, name: String) {
+        if (link.host?.id == id && link.wired && link.state in setOf("connected", "connecting")) return
         if (peer.connected) { Log.i("TwinDesk", "USB: ${name.ifEmpty { id }} found, but another phone is connected"); return }
         val h = store.hosts().find { it.id == id }
         if (h == null) {
             if (link.pair != null && link.pair?.phase != "failed") { Log.i("TwinDesk", "USB: already pairing"); return }
             Log.i("TwinDesk", "USB: pairing with ${name.ifEmpty { id }} through the cable")
+            stopReturn()
             resumeUntil = 0
             wiredNonce = nonce
             invite?.let { discovery.clearInvite(it.id) }
@@ -319,6 +337,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
             return
         }
         Log.i("TwinDesk", "USB: connecting to ${h.name} through the cable")
+        stopReturn()
         resumeUntil = 0
         wiredNonce = nonce
         link.connect(h, port)
@@ -332,18 +351,20 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // and the session pins the computer's certificate, so another machine there fails.
     // false: none of them answers from this network.
     fun connectQr(id: String, addrs: List<String>, port: Int, nonce: String, name: String): Boolean {
+        if (id.isBlank() || port !in 1..65535) return false
         val answers = { a: String, p: Int ->
             runCatching { java.net.Socket().use { s -> s.connect(java.net.InetSocketAddress(a, p), 800) }; true }.getOrDefault(false)
         }
-        resumeUntil = 0
         store.hosts().find { it.id == id }?.let { h ->
             val use = if (discovery.found[h.id] != null || answers(h.address, h.port)) h
-                else addrs.firstOrNull { answers(it, port) }?.let { h.copy(address = it, port = port) } ?: h
+                else addrs.firstOrNull { answers(it, port) }?.let { h.copy(address = it, port = port) } ?: return false
             Log.i("TwinDesk", "QR: connecting to ${h.name}")
             connect(use)
             return true
         }
         val address = addrs.firstOrNull { answers(it, port) } ?: return false
+        stopReturn()
+        resumeUntil = 0
         Log.i("TwinDesk", "QR: pairing with ${name.ifEmpty { id }} at $address")
         invite?.let { discovery.clearInvite(it.id) }
         invite = null
@@ -352,7 +373,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     fun disconnect() {
+        stopReturn()
         resumeUntil = 0
+        resumeHost = null
+        resumeLater = null
         link.disconnect()
     }
 
@@ -363,6 +387,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     fun pair(f: Found) {
+        if (f.address.isBlank() || (!f.address.startsWith("blp:") && !f.address.startsWith("ble:") && f.port !in 1..65535)) return
         invite = null
         discovery.clearInvite(f.id)
         if (f.address.startsWith("blp:") || f.address.startsWith("ble:")) {
@@ -372,11 +397,12 @@ class Core private constructor(val ctx: Context) : Link.Events {
             bg.execute {
                 val port = blePipe(f.id)
                 if (link.pair?.phase != "connecting" || link.pair?.port != 0) return@execute // cancelled meanwhile
-                if (port != null) link.startPairing("127.0.0.1", port, f.name, viaBle = true)
+                if (port != null) { stopReturn(); link.startPairing("127.0.0.1", port, f.name, viaBle = true) }
                 else link.pairUnreachable(tr("{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.", "name" to f.name))
             }
             return
         }
+        stopReturn()
         link.startPairing(f.address, f.port, f.name)
     }
 
@@ -386,7 +412,12 @@ class Core private constructor(val ctx: Context) : Link.Events {
     private fun blePipe(id: String): Int? =
         (if (serve.get(id) != null) serve.open(id) else null) ?: (if (ble.get(id) != null) ble.open(id) else null)
 
-    fun pairAddress(address: String) = link.startPairing(address.trim(), Proto.PORT, address.trim())
+    fun pairAddress(address: String) {
+        val use = address.trim()
+        if (use.isEmpty()) return
+        stopReturn()
+        link.startPairing(use, Proto.PORT, use)
+    }
 
     fun dismissInvite() {
         invite?.let { discovery.clearInvite(it.id) }
@@ -395,6 +426,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     fun forget(id: String) {
+        if (returnHost()?.id == id) stopReturn()
         if (link.host?.id == id) link.disconnect()
         store.forgetHost(id)
         changed()
@@ -430,6 +462,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     override fun onWelcome(host: Host) {
         Log.i("TwinDesk", "session with ${host.name}")
+        rememberReturn(host, link.sessionMarker())
         resumeUntil = 0
         Notify.cancelInvite(ctx)
         // One session: a phone's ends (Peer.started ends ours the other way).
@@ -462,13 +495,76 @@ class Core private constructor(val ctx: Context) : Link.Events {
             for (f in features) runCatching { f.onClosed() }
             changed()
         }
-        // Dropped by accident (not let go, replaced, forgotten or closed here): try to get it back.
-        val accidental = code == null || code !in setOf("local", Proto.E.RELEASED, Proto.E.REPLACED, Proto.E.BAD_TOKEN, Proto.E.BUSY, Proto.E.ASLEEP)
+        // Capable Macs can be reclaimed without taking another session. Keep this intent across
+        // outages, sleep and process death, until Disconnect/Forget/replacement explicitly ends it.
+        if (link.ble && returnHost()?.id == host.id) stopReturn()
+        if (returnHost()?.id == host.id) {
+            if (link.state == "failed" || code in setOf("local", "reclaim", "bad_message", Proto.E.VERSION_MISMATCH, Proto.E.RELEASED, Proto.E.REPLACED, Proto.E.BAD_TOKEN)) stopReturn()
+            else {
+                returnFailures = (returnFailures + 1).coerceAtMost(5)
+                returnAfter = System.currentTimeMillis() + (1000L shl returnFailures)
+            }
+            return
+        }
+        // Legacy peers retain the existing thirty-second retry behavior.
+        val accidental = code == null || code !in setOf("local", "paused", "reclaim", Proto.E.RELEASED, Proto.E.REPLACED, Proto.E.BAD_TOKEN, Proto.E.BUSY, Proto.E.ASLEEP)
         if (!accidental || link.state == "failed") return
         if (inBackground()) { resumeLater = host; Log.i("TwinDesk", "dropped in the background: reconnecting when TwinDesk opens"); return }
         if (resumeUntil == 0L) resumeUntil = System.currentTimeMillis() + Proto.PHONE_GRACE_MS
         resumeHost = host
         bg.schedule({ resume() }, 1500, TimeUnit.MILLISECONDS)
+    }
+
+    // This is only consent to return to one already-paired Mac, never permission to take over.
+    // Synchronous removal makes Disconnect survive an immediate process death.
+    @Synchronized private fun stopReturn() {
+        link.invalidateReturn()
+        returnGeneration++
+        returnAfter = 0L
+        returnFailures = 0
+        returnPrefs.edit().remove("host").commit()
+        changed()
+    }
+
+    @Synchronized private fun rememberReturn(h: Host, socket: Any?) {
+        if (!link.canRememberReturn(h, socket)) return
+        returnGeneration++
+        returnAfter = 0L
+        returnFailures = 0
+        returnPrefs.edit().remove("host").commit()
+        if (h.os == "mac" && link.canReclaim && !link.ble) {
+            returnPrefs.edit().putString("host", JSONObject().put("id", h.id).put("fp", h.fp).toString()).commit()
+        }
+    }
+
+    private fun returnHost(): Host? {
+        val saved = returnPrefs.getString("host", null) ?: return null
+        val o = runCatching { JSONObject(saved) }.getOrNull() ?: return null
+        return store.hosts().find { it.os == "mac" && it.id == o.optString("id") && it.fp == o.optString("fp") }
+    }
+
+    @Synchronized private fun returnTick() {
+        val h = returnHost() ?: return
+        if (inBackground() || link.connected || link.state == "connecting" || link.pair != null || peer.connected) return
+        val now = System.currentTimeMillis()
+        if (now < returnAfter) return
+        val seen = discovery.found[h.id]
+        if (seen != null && (seen.os != "mac" || !seen.rc)) return
+        val gen = returnGeneration
+        returnAfter = now + 5000L
+        // Discovery refreshes a roamed LAN address. Without broadcasts (screen off), a pinned
+        // stored-address dial still works; old hosts reject rc+resume rather than taking over.
+        val dial = if (seen != null) h.copy(address = seen.address, port = seen.port) else h
+        val address = dial.address.lowercase().removeSurrounding("[", "]")
+        if (dial.port !in 1..65535 || address.isBlank() || address == "localhost" || address == "::1" || address.startsWith("127.") || address.startsWith("::ffff:127.") || address.startsWith("ble:") || address.startsWith("blp:")) return
+        // A beacon only supplies a candidate for this dial. Link saves it after the pinned
+        // TLS handshake and the matching Mac welcome, never before authentication.
+        link.connect(dial, reclaim = true) {
+            val same = gen == returnGeneration && returnHost()?.let { it.id == h.id && it.fp == h.fp } == true
+            val paused = same && inBackground()
+            link.denyCode = if (paused) "paused" else "local"
+            same && !paused && !peer.connected
+        }
     }
 
     @Volatile private var triedNet = false
@@ -479,7 +575,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
         if (inBackground()) { resumeLater = h; return }
         Log.i("TwinDesk", "resuming the session with ${h.name}")
         val until = resumeUntil
-        connect(store.hosts().find { it.id == h.id } ?: return, triedNet)
+        val known = store.hosts().find { it.id == h.id } ?: return
+        val seen = discovery.found[h.id]
+        val changedAddress = seen != null && (seen.address != known.address || seen.port != known.port)
+        connect(known, triedNet && !changedAddress)
         resumeUntil = until // connect() clears it; keep the window open for the next drop
     }
 

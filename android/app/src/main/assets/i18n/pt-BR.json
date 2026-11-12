@@ -1109,6 +1109,7 @@
   "{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.": "{name} não respondeu por Bluetooth. Abra o TwinDesk nele ou coloque os dois no mesmo Wi-Fi e depois pareie novamente.",
   "{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.": "{name} não respondeu. Abra o TwinDesk nele ou ative Receber outros celulares lá.",
   "{name} didn’t arrive": "{name} não chegou",
+  "{name} didn’t confirm this pairing. Use Connect to try again.": "{name} não confirmou este emparelhamento. Use Conectar para tentar novamente.",
   "{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.": "{name} não aceita entrada deste dispositivo. Ative Receber entrada em Compartilhar tela em {name}.",
   "{name} doesn’t accept input from this device. Turn on Remote in TwinDesk on {name}.": "{name} não aceita entrada deste dispositivo. Ative o Remoto no TwinDesk em {name}.",
   "{name} doesn’t answer the remote: update TwinDesk there.": "{name} não responde ao controle remoto: atualize o TwinDesk lá.",

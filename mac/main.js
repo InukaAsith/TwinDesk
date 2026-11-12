@@ -604,7 +604,7 @@ app.whenReady().then(() => {
     pushState();
   });
 
-  discovery = new Discovery(id, server.port);
+  discovery = new Discovery(id, server.port, { rc: true }); // Android may reclaim after the grace window (#192)
   discovery.on('change', pushState);
   discovery.start();
   link = new Link(id, {
@@ -612,6 +612,7 @@ app.whenReady().then(() => {
     resolve: (hostId) => { const d = discovery.get(hostId); return d && !d.ble ? d : null; }, // a Mac host: on the network only
   });
   link.on('change', pushState);
+  link.on('welcome', () => pairing.clearReturn());
   link.on('request', showWindow);
   // Take over on a Mac we're a guest of: back to it, taking the session over (a device connected
   // to us goes first, as Take over here does).

@@ -1109,6 +1109,7 @@
   "{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.": "{name} не ответил по Bluetooth. Откройте на нём TwinDesk или подключите оба к одной сети Wi-Fi, затем повторите сопряжение.",
   "{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.": "{name} не ответил. Откройте на нём TwinDesk или включите там «Принимать другие телефоны».",
   "{name} didn’t arrive": "{name} не пришёл",
+  "{name} didn’t confirm this pairing. Use Connect to try again.": "{name} не подтвердил это сопряжение. Используйте «Подключить», чтобы попробовать снова.",
   "{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.": "{name} не принимает ввод с этого устройства. Включите «Принимать ввод» в «Демонстрации экрана» на {name}.",
   "{name} doesn’t accept input from this device. Turn on Remote in TwinDesk on {name}.": "{name} не принимает ввод с этого устройства. Включите «Пульт» в TwinDesk на {name}.",
   "{name} doesn’t answer the remote: update TwinDesk there.": "{name} не отвечает пульту: обновите там TwinDesk.",

@@ -42,6 +42,7 @@ data class Found(
     val fp: String,
     val lastSeen: Long,
     val invited: Boolean,
+    val rc: Boolean = false, // beacon rc:1: this host accepts a non-takeover reclaim (shared/reclaim.js)
 )
 
 class Discovery(
@@ -59,6 +60,7 @@ class Discovery(
     // does), and other phones are listed and heard. Off: phones don't see this one at all.
     @Volatile var peerOn = false
     @Volatile var onPeerAsk: ((Found, JSONObject) -> Unit)? = null // another phone's peer.* (Peer.kt)
+    @Volatile var onHost: ((Found) -> Unit)? = null // every computer beacon, including one whose fields did not change
     @Volatile var error = ""
     @Volatile private var sock: DatagramSocket? = null
     @Volatile private var running = false
@@ -247,10 +249,12 @@ class Discovery(
             fp = Proto.normFingerprint(m.optString("fp")),
             lastSeen = System.currentTimeMillis(),
             invited = (old?.invited ?: false) || t == Proto.T.INVITE,
+            rc = m.optInt("rc") == 1, // missing or any other value: this host cannot be reclaimed
         )
         found[id] = d
+        runCatching { onHost?.invoke(d) }
         if (t == Proto.T.INVITE) onInvite(d)
-        if (old == null || old.name != d.name || old.address != d.address || old.invited != d.invited) onChange()
+        if (old == null || old.name != d.name || old.address != d.address || old.invited != d.invited || old.rc != d.rc) onChange()
     }
 
     private fun prune() {

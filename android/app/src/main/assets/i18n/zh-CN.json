@@ -1109,6 +1109,7 @@
   "{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.": "{name} 未通过蓝牙响应。在其上打开 TwinDesk，或将两者连接到同一 Wi-Fi，然后重新配对。",
   "{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.": "{name} 没有响应。在其上打开 TwinDesk，或在那里开启“为其他手机提供连接”。",
   "{name} didn’t arrive": "{name} 未到达",
+  "{name} didn’t confirm this pairing. Use Connect to try again.": "{name} 未确认此配对。请使用“连接”再试一次。",
   "{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.": "{name} 不接受来自此设备的输入。请在 {name} 的“共享屏幕”中开启“接收输入”。",
   "{name} doesn’t accept input from this device. Turn on Remote in TwinDesk on {name}.": "{name} 不接受来自此设备的输入。请在 {name} 上的 TwinDesk 中开启“远程控制”。",
   "{name} doesn’t answer the remote: update TwinDesk there.": "{name} 不响应远程控制：请在那里更新 TwinDesk。",

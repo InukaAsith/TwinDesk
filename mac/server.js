@@ -15,6 +15,7 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const { WebSocketServer } = require('ws');
 const P = require('../shared/protocol.js');
+const { unauthRoute } = require('../shared/reclaim.js');
 const Quiet = require('../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 
 const ICE_OFFERS = new Set([P.T.RTC_OFFER, P.T.AUDIO_OFFER]);
@@ -140,8 +141,18 @@ class Server extends EventEmitter {
     }
 
     if (!ctx.authed) {
-      if (msg.t === P.T.HELLO && typeof msg.resume === 'string') return this._resume(ctx, msg);
-      if (msg.t === P.T.HELLO || msg.t.startsWith('pair.')) return this.emit('preauth', ctx, msg);
+      // Disconnect while hello is in flight (the phone is still "connecting"). Bye is allowed
+      // here so a deferred welcome cannot commit afterwards. Only a phone is remembered.
+      if (msg.t === P.T.BYE) {
+        ctx.released = true;
+        if (P.isPhoneOs(ctx.pendingOs) && (!ctx.canRevokeReturn || ctx.canRevokeReturn()) && (!this.current || this.current === ctx.returnBase) && !(ctx.automaticReturn && msg.retry === true)) this.noteReleased(ctx.pendingId);
+        return ctx.ws.close();
+      }
+      // rc:1 is a reclaim (shared/reclaim.js). Checked before resume so an older host, which
+      // does not do this, still lands on _resume and refuses it instead of taking the session.
+      const route = unauthRoute(msg, { reclaim: true });
+      if (route === 'resume') return this._resume(ctx, msg);
+      if (route === 'reclaim' || route === 'preauth') return this.emit('preauth', ctx, msg);
       return this.fail(ctx, P.E.BAD_MESSAGE, `"${msg.t}" is not allowed before welcome`);
     }
     if (Quiet.seen(ws, msg)) return; // `idle {on}`: the other end's side of a quiet link
@@ -149,6 +160,8 @@ class Server extends EventEmitter {
     if (msg.t === P.T.PING) return this.send(ctx, { t: P.T.PONG, ts: msg.ts });
     if (msg.t === P.T.BYE) { // Disconnect there: nothing to wait for
       ctx.released = true;
+      // A phone's own Disconnect. A Windows or Linux guest must not be written into noreclaim.json.
+      if (this.current === ctx && P.isPhoneOs(ctx.os) && !(ctx.automaticReturn && msg.retry === true)) this.noteReleased(ctx.deviceId);
       if (ctx.alt) { // the whole session goes, its fallback path too
         const alt = ctx.alt;
         ctx.alt = null;
@@ -236,15 +249,35 @@ class Server extends EventEmitter {
   }
 
   // Mark ctx authenticated; a newer client replaces the older one.
-  authenticate(ctx, who, welcome) {
+  // gate: reclaim only. Run at the commit, after the fast-files wait, before anyone is evicted.
+  // Not ok: this socket is refused and the session already held stays.
+  authenticate(ctx, who, welcome, gate) {
+    if (who && typeof who.deviceId === 'string') {
+      ctx.pendingId = who.deviceId;
+      ctx.pendingOs = who.os;
+    }
+    if (typeof gate === 'function') ctx.reclaimGate = gate;
+    // Bye already won (Disconnect while connecting). Do not commit, and do not evict whoever is current.
+    if (ctx.released) return this.fail(ctx, P.E.RELEASED, 'The Mac disconnected');
     // Fast files v2: the files engine starts on demand (shared/fx2.js) and its port goes in this
     // welcome, so when it isn't listening yet (it usually is: someone nearby, the socket coming in
     // started it) the welcome waits for it, a few tens of ms. Never long: without it, the fx way.
     const wait = ctx.fxWanted && ctx.fx2Wanted && this.fxOn && !ctx.fx2Waited && this.fx2Wait ? this.fx2Wait(1500) : null;
     if (wait) {
       ctx.fx2Waited = true;
-      const go = () => { if (!ctx.authed && this.sockets.has(ctx) && ctx.ws.readyState === ctx.ws.OPEN) this.authenticate(ctx, who, welcome); };
+      const go = () => {
+        if (ctx.released || ctx.authed || !this.sockets.has(ctx) || ctx.ws.readyState !== ctx.ws.OPEN) return;
+        this.authenticate(ctx, who, welcome);
+      };
       return void wait.then(go, go);
+    }
+    if (ctx.released) return this.fail(ctx, P.E.RELEASED, 'The Mac disconnected');
+    if (typeof ctx.reclaimGate === 'function') {
+      const decision = ctx.reclaimGate();
+      ctx.reclaimGate = null;
+      if (!decision || !decision.ok) {
+        return this.fail(ctx, (decision && decision.code) || P.E.BUSY, (decision && decision.message) || 'Reclaim refused');
+      }
     }
     const { deviceId, name, os } = who;
     if (this.current && this.current !== ctx) {
@@ -295,8 +328,28 @@ class Server extends EventEmitter {
 
   // Disconnect on purpose (a phone or a computer): it doesn't resume or reconnect by itself, and
   // a computer may connect at once.
+  // A phone's Disconnect / Forget / bye: pairing.js refuses a later reclaim from this id.
+  // Computers are not written there.
+  noteReleased(id) {
+    if (typeof id === 'string' && id) this.emit('noreclaim', id);
+  }
+
+  // A phone hello that has not committed yet (fast files can defer welcome). Disconnect during
+  // that wait must block reclaim and must not let the callback welcome.
+  releasePending(id) {
+    for (const ctx of [...this.sockets]) {
+      if (ctx.authed || ctx.released) continue;
+      if (typeof ctx.pendingId !== 'string' || !ctx.pendingId || !P.isPhoneOs(ctx.pendingOs)) continue;
+      if (typeof id === 'string' && id && ctx.pendingId !== id) continue;
+      ctx.released = true;
+      this.noteReleased(ctx.pendingId);
+      if (ctx.ws && ctx.ws.readyState === ctx.ws.OPEN) ctx.ws.close();
+    }
+  }
+
   release() {
     const c = this.current;
+    if (c && c.deviceId && P.isPhoneOs(c.os)) this.noteReleased(c.deviceId);
     if (c) {
       c.released = true;
       this.fail(c, P.E.RELEASED, 'The Mac disconnected');

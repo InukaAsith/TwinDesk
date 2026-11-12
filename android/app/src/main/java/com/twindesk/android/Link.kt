@@ -1,7 +1,8 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The phone's side of the session: a WSS client with the computer's certificate pinned, pairing as
 // the initiator (numeric comparison), hello, liveness. Like windows/link.js and mac/link.js, except
-// that a phone connects only when asked (or to resume a session that dropped by accident).
+// that a phone connects only when asked (or to resume a session that dropped by accident, or to
+// reclaim a paired Mac that advertises rc without taking another session).
 package com.twindesk.android
 
 import android.util.Log
@@ -83,6 +84,21 @@ class Link(
     private var pendingAddress = ""
     private val lastRxOf = java.util.concurrent.ConcurrentHashMap<WebSocket, Long>()
     private var helloTimer: ScheduledFuture<*>? = null
+    // The next hello is a reclaim (shared/reclaim.js): rc:1 plus a resume string older hosts refuse.
+    private var reclaimHello = false
+    // Read on this link's thread before opening, hello and welcome. Disconnect, Forget,
+    // replacement or a background pause invalidates a queued automatic return.
+    private var dialAdmit: (() -> Boolean)? = null
+    // Core sets this in the admit callback when it returns false. "paused" keeps the reclaim
+    // window (the screen went away). "local" does not.
+    @Volatile var denyCode: String = "local"
+    // hello() has been written. Disconnect sends bye even while still connecting, so a Mac that
+    // already committed the welcome does not keep a grace or forget the stop.
+    private var helloSent = false
+    // Disconnect owns the socket. Set on the caller thread, before this executor runs, so a welcome
+    // already queued still sees it and sends bye. A background pause must not close the socket first.
+    @Volatile private var parting = false
+    @Volatile var canReclaim = false; private set
 
     // Quiet links (shared/quiet.js, #143): while nothing is live here and the computer says the same
     // (`idle {on}`), the session stops pinging every second and the radio and CPU can sleep: one ping
@@ -133,11 +149,18 @@ class Link(
     // usbPort: connect through the cable (adb reverse) instead of the network; the host's own
     // address stays as it is, for when the cable comes out.
     // blePort: through a Bluetooth pipe on 127.0.0.1 instead.
-    fun connect(h: Host, usbPort: Int = 0, blePort: Int = 0) = run {
+    // admit: reclaim only. Checked here, on the link thread, before this dial can replace a socket,
+    // and again in hello(). The generation Core captured is already stale if Disconnect ran first.
+    fun connect(h: Host, usbPort: Int = 0, blePort: Int = 0, reclaim: Boolean = false, admit: (() -> Boolean)? = null) = run {
+        if (admit != null && !admit()) return@run
+        parting = false
         val viaUsb = usbPort > 0
         val viaBle = blePort > 0
-        if (ws != null && host?.id == h.id && wired == viaUsb && ble == viaBle && (state == "connecting" || state == "connected")) return@run
+        val wantReclaim = reclaim && !viaUsb && !viaBle
+        if (ws != null && host?.id == h.id && wired == viaUsb && ble == viaBle && reclaimHello == wantReclaim && (state == "connecting" || state == "connected")) return@run
         closeSocket()
+        dialAdmit = if (wantReclaim) admit else null
+        reclaimHello = wantReclaim
         pair = null
         host = h
         wired = viaUsb
@@ -161,10 +184,22 @@ class Link(
 
     val resuming get() = pending != null
 
-    fun disconnect() = run {
-        if (state == "connected") raw(msg(Proto.T.BYE))
+    fun disconnect() {
+        parting = true
+        run {
+            if (state == "connected" || helloSent) raw(msg(Proto.T.BYE))
+            closeSocket()
+            setState("idle", "")
+        }
+    }
+
+    // Reconnect in the background is off and the screen went away before hello. The reclaim window
+    // stays; this socket does not. After hello, leave the socket so Disconnect can still say bye.
+    fun pauseConnecting() = run {
+        if (parting || helloSent || state != "connecting") return@run
+        lastCode = "paused"
         closeSocket()
-        setState("idle", "")
+        if (state != "idle") setState("idle", "")
     }
 
     // nonce: through the USB cable (WiredReceiver): pair.start carries it, which tells the computer
@@ -172,6 +207,7 @@ class Link(
     // (only the computer the phone allowed USB debugging for could have sent the nonce).
     // qr: the nonce came in the computer's QR code instead: the same, over the network.
     fun startPairing(address: String, port: Int, name: String, nonce: String = "", viaBle: Boolean = false, qr: Boolean = false) = run {
+        parting = false // this is a newly requested pairing, after Core revoked the old return intent
         closeSocket()
         host = null
         wired = false
@@ -259,6 +295,12 @@ class Link(
 
     // The session's socket now: its address and port (127.0.0.1 through the cable or Bluetooth).
     fun endpoint(): Pair<String, Int>? = ws?.let { endOf[it] }
+
+    internal fun sessionMarker(): Any? = ws
+    // Called synchronously before Core removes durable return intent. An already queued welcome
+    // must not re-arm that intent after Stop, Forget or another explicit connection choice.
+    internal fun invalidateReturn() { parting = true }
+    internal fun canRememberReturn(h: Host, socket: Any?): Boolean = !parting && socket != null && ws === socket && state == "connected" && host?.id == h.id && host?.fp == h.fp
 
     // An HTTPS client for the session's computer, its certificate pinned as the session's is.
     fun https(): OkHttpClient? {
@@ -423,7 +465,21 @@ class Link(
 
     private fun hello() {
         val h = host ?: return
-        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "fx" to 1, "fxPlain" to 1).apply { if (!wired) put("fx2", 1) })
+        val allow = dialAdmit
+        // Disconnect or a background pause invalidated this automatic dial. Do not send.
+        // denyCode is "local" (do not retry) or "paused" (the screen left; the window stays).
+        if (allow != null && !allow()) {
+            lastCode = denyCode
+            ws?.cancel()
+            return
+        }
+        // rc and resume together: an older host treats hello+resume
+        // as a socket move and refuses it. A plain phone hello would take whatever session it holds.
+        raw(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "fx" to 1, "fxPlain" to 1).apply {
+            if (!wired) put("fx2", 1)
+            if (reclaimHello) { put("rc", 1); put("resume", "0") }
+        })
+        helloSent = true
         helloTimer?.cancel(false)
         helloTimer = exec.schedule({ if (state != "connected") { message = tr("No answer"); ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
@@ -485,6 +541,42 @@ class Link(
         if (mode != "session" || state == "connected") return
         helloTimer?.cancel(false)
         val h = host ?: return
+        if (parting) {
+            lastCode = "local"
+            if (helloSent) raw(msg(Proto.T.BYE))
+            val rejected = ws
+            rejected?.close(1000, "disconnected")
+            exec.schedule({ if (ws === rejected) rejected?.cancel() }, 2, TimeUnit.SECONDS)
+            return
+        }
+        // Check the current return intent before welcome becomes a session. A refused late
+        // welcome still closes gracefully after BYE, so the Mac can drop its temporary grace.
+        if (reclaimHello) {
+            val allow = dialAdmit
+            if (allow != null && !allow()) {
+                lastCode = denyCode
+                reclaimHello = false
+                dialAdmit = null
+                val rejected = ws
+                if (helloSent) {
+                    raw(msg(Proto.T.BYE, "retry" to !parting))
+                    rejected?.close(1000, "return cancelled")
+                    exec.schedule({ if (ws === rejected) rejected?.cancel() }, 2, TimeUnit.SECONDS)
+                } else rejected?.cancel()
+                return
+            }
+        }
+        // Reclaim must be the paired Mac we dialed. A welcome for anyone else is refused, and the
+        // pairing is kept (BAD_TOKEN is what forgets it).
+        if (reclaimHello && m.optString("macId") != h.id) {
+            lastCode = "reclaim"
+            message = tr("{name} didn’t confirm this pairing. Use Connect to try again.", "name" to h.name)
+            reclaimHello = false
+            ws?.cancel()
+            return
+        }
+        canReclaim = m.optInt("rc", 0) == 1 && h.os == "mac"
+        reclaimHello = false
         m.optString("macName").takeIf { it.isNotEmpty() }?.let { h.name = it.take(64) }
         if (m.has("tail")) h.tail = Tailnet.clean(m.optJSONArray("tail")) // its Tailscale addresses (Tailnet.kt)
         h.lastSeen = System.currentTimeMillis()
@@ -597,10 +689,14 @@ class Link(
 
     private fun onClose(failure: String?) {
         Log.i("TwinDesk", "link closed: mode=$mode state=$state ble=$ble failure=$failure code=$lastCode")
+        val wasReclaim = reclaimHello
         pinger?.cancel(false)
         pinger = null
         quietSince = 0L
         helloTimer?.cancel(false)
+        reclaimHello = false
+        dialAdmit = null
+        helloSent = false
         ws = null
         fxToken = ""
         fxPlain = null
@@ -614,10 +710,14 @@ class Link(
             return
         }
         val was = state
-        if (failure == "identity") {
+        if (failure == "identity" && !wasReclaim) {
             setState("failed", tr("{name} looks different now. Forget it and pair again.", "name" to (host?.name ?: tr("The computer"))))
+        } else if (failure == "identity") {
+            // Discovery is unauthenticated. An unrelated computer at a candidate address must
+            // not erase the saved pairing or its return intent; another candidate may be genuine.
+            setState("idle", tr("Reconnecting…"))
         } else {
-            if (message.isEmpty() && failure != null) message = failure
+            if (message.isEmpty() && failure != null && lastCode != "paused") message = failure
             setState(if (was == "connected" || was == "connecting") "idle" else was, message)
         }
         host?.let { events.onClosed(it, lastCode) }
@@ -626,6 +726,9 @@ class Link(
     private fun closeSocket() {
         pinger?.cancel(false)
         helloTimer?.cancel(false)
+        reclaimHello = false
+        dialAdmit = null
+        helloSent = false
         val w = ws
         ws = null
         fxToken = ""
