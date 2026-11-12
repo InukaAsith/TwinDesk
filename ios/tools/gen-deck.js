@@ -63,7 +63,8 @@ function make() {
   L.push('    static func available(_ e: Entry, _ caps: JSON?, _ platform: String) -> String? {');
   L.push('        if e.needs.isEmpty { return nil }');
   L.push('        if let v = caps?[e.needs] as? NSNumber, !v.boolValue {');
-  L.push('            if platform == "linux" && (e.needs == "windows" || e.needs == "screenoff") { return "Not on Linux" }');
+  L.push('            if platform == "linux" && e.needs == "screenoff" { return "Not on Linux" }');
+  L.push('            if platform == "linux" && e.needs == "windows" { return "Not on Wayland" }');
   L.push('            if platform == "mac" && e.needs == "dnd" { return "macOS has no switch for apps" }');
   L.push('            return "Not on this computer"');
   L.push('        }');

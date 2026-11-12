@@ -712,6 +712,7 @@
   "Not on Linux yet": "Пока нет в Linux",
   "Not on the same network": "Не в одной сети",
   "Not on this computer": "Нет на этом компьютере",
+  "Not on Wayland": "Нет в Wayland",
   "Not paired": "Нет сопряжения",
   "Not paired here": "Здесь нет сопряжения",
   "Not paired with {phone} over classic Bluetooth: pair them in Bluetooth settings, as below": "Нет сопряжения с {phone} по Bluetooth. Выполните сопряжение в настройках Bluetooth, как показано ниже.",

@@ -7,7 +7,7 @@
 //   deckBt -> {radio, devices: [{id, name, connected, audio}]}; deckBtRadio {on}; deckBtConnect {id, on}
 //   deckBright -> {displays: [{id, name, level, internal}]}: displays macOS sets the brightness of
 //     (built-in ones and Apple's own); deckBrightSet {id, level} (id "" = all of them)
-//   deckWins -> {windows: [{wid, pid, app, bundle, title, x, y, w, h}], front}: regular apps' windows
+//   deckWins -> {windows: [{wid, pid, app, bundle, title, x, y, w, h}], minimized: [{wid, pid, app, bundle, title}], front}: regular apps' windows
 //   deckWinFrame {wid, x, y, w, h} (wid 0: the one in front); deckWinOp {wid, op: min|full|close|restore}
 //   deckSys {what: sleep|screenoff|lock|darkmode|desktop|overview}
 //   deckState -> {dark, memUsed 0–1, temp °C (Apple silicon; absent when unknown)}
@@ -230,7 +230,41 @@ enum Deck {
       o["bundle"] = a?.bundleIdentifier ?? ""
       return o
     }
-    return ["windows": list, "front": front().map { Int($0.0) } ?? 0]
+    return ["windows": list, "minimized": minimized(apps), "front": front().map { Int($0.0) } ?? 0]
+  }
+
+  // The regular apps' minimized windows (Accessibility only: without it, none): {wid, pid, app, bundle, title}.
+  private static func minimized(_ apps: [NSRunningApplication]) -> [[String: Any]] {
+    guard AXIsProcessTrusted() else { return [] }
+    var out: [[String: Any]] = []
+    for a in apps {
+      for w in axAll(a.processIdentifier) {
+        var m: CFTypeRef?, t: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(w, kAXMinimizedAttribute as CFString, &m) == .success, (m as? Bool) == true else { continue }
+        var wid: CGWindowID = 0
+        guard _AXUIElementGetWindow(w, &wid) == .success, wid != 0 else { continue }
+        AXUIElementCopyAttributeValue(w, kAXTitleAttribute as CFString, &t)
+        out.append(["wid": Int(wid), "pid": Int(a.processIdentifier), "app": a.localizedName ?? "", "bundle": a.bundleIdentifier ?? "", "title": t as? String ?? ""])
+      }
+    }
+    return out
+  }
+
+  private static func axAll(_ pid: pid_t) -> [AXUIElement] {
+    var v: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid), kAXWindowsAttribute as CFString, &v) == .success, let ws = v as? [AXUIElement] else { return [] }
+    return ws
+  }
+
+  // A window by its id among every regular app's Accessibility windows (a minimized one isn't on screen).
+  private static func axByWid(_ wid: Int) -> AXUIElement? {
+    for a in NSWorkspace.shared.runningApplications where a.activationPolicy == .regular {
+      for w in axAll(a.processIdentifier) {
+        var id: CGWindowID = 0
+        if _AXUIElementGetWindow(w, &id) == .success, Int(id) == wid { return w }
+      }
+    }
+    return nil
   }
 
   // The focused window of the app in front, with its CG window id when it's known.
@@ -252,7 +286,10 @@ enum Deck {
     }
     if wid == 0 { if let f = front() { return f.1 }; throw HelperError(message: "No window in front") }
     let all = Apps.windows(pids: Set(NSWorkspace.shared.runningApplications.map { Int($0.processIdentifier) }))
-    guard let w = all.first(where: { ($0["wid"] as? Int) == wid }), let pid = w["pid"] as? Int else { throw HelperError(message: "That window is gone") }
+    guard let w = all.first(where: { ($0["wid"] as? Int) == wid }), let pid = w["pid"] as? Int else {
+      if let m = axByWid(wid) { return m } // minimized
+      throw HelperError(message: "That window is gone")
+    }
     // Accessibility sees only this desktop's windows: one on another desktop or in full screen is still there.
     guard let ax = Apps.axWindow(pid: pid, frame: CGRect(x: w["x"] as? Double ?? 0, y: w["y"] as? Double ?? 0, width: w["w"] as? Double ?? 0, height: w["h"] as? Double ?? 0))
     else { throw HelperError(message: "That window is on another desktop or in full screen") }
@@ -282,7 +319,12 @@ enum Deck {
     let w = try axWindow(wid)
     switch op {
     case "min": AXUIElementSetAttributeValue(w, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
-    case "restore": AXUIElementSetAttributeValue(w, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+    case "restore":
+      AXUIElementSetAttributeValue(w, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+      AXUIElementPerformAction(w, kAXRaiseAction as CFString)
+      var pid: pid_t = 0
+      AXUIElementGetPid(w, &pid)
+      NSRunningApplication(processIdentifier: pid)?.activate()
     case "full":
       var v: CFTypeRef?
       AXUIElementCopyAttributeValue(w, "AXFullScreen" as CFString, &v)

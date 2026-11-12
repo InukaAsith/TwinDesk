@@ -712,6 +712,7 @@
   "Not on Linux yet": "Linux'ta henüz yok",
   "Not on the same network": "Aynı ağda değil",
   "Not on this computer": "Bu bilgisayarda yok",
+  "Not on Wayland": "Wayland'de yok",
   "Not paired": "Eşlenmedi",
   "Not paired here": "Burada eşlenmedi",
   "Not paired with {phone} over classic Bluetooth: pair them in Bluetooth settings, as below": "{phone} ile Bluetooth üzerinden eşlenmedi. Aşağıda gösterildiği gibi Bluetooth ayarlarında eşleyin.",

@@ -111,7 +111,9 @@ void inject_release_all(void);
 void inject_button(int b, int down);
 
 // ---- wins.c: top-level windows for Apps (X11) ----
-void wins_list(double id);
+void wins_list(double id, int minimized);
+void wins_min(unsigned long wid);
+void wins_frame(unsigned long wid, int x, int y, int w, int h);
 void wins_raise(unsigned long wid);
 void wins_close(unsigned long wid);
 void wins_size(unsigned long wid, int w, int h);

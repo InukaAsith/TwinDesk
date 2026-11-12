@@ -242,11 +242,13 @@ class Deck {
   // full screen, closed. Linux: the desktop's own keys.
   async _win(what) {
     const keys = this.sys.winKeys(what);
-    if (this.platform === 'linux') { if (!keys) throw new Error('Not on this computer'); return this._press(keys); }
+    // Linux: the desktop's own keys where it has them (on Wayland, for everything it has).
+    if (this.platform === 'linux' && (!this.caps.windows || ['min', 'close', 'max', 'full'].includes(what))) { if (!keys) throw new Error('Not on this computer'); return this._press(keys); }
     if (what === 'min' || what === 'close') return this.sys.winOp(0, what);
     if (what === 'full') return this.sys.winOp(0, this.platform === 'mac' ? 'full' : 'max');
     const { windows, front } = await this.sys.wins();
     const w = windows.find((x) => x.wid === front) || null;
+    const fw = this.platform === 'linux' ? (w ? w.wid : 0) : 0; // Mac, Windows: 0 is the one in front
     const ds = this.sys.displays();
     if (!ds.length) throw new Error('No display');
     const at = w ? displayOf(ds, w) : ds.find((d) => d.main) || ds[0];
@@ -254,33 +256,44 @@ class Deck {
       if (ds.length < 2 || !w) throw new Error(ds.length < 2 ? 'Only one display here' : 'No window in front');
       const to = ds[(ds.indexOf(at) + 1) % ds.length];
       const fx = (w.x - at.x) / at.w, fy = (w.y - at.y) / at.h;
-      return this.sys.frame(0, { x: to.x + fx * to.w, y: to.y + fy * to.h, w: Math.min(w.w, to.w), h: Math.min(w.h, to.h) });
+      return this.sys.frame(fw, { x: to.x + fx * to.w, y: to.y + fy * to.h, w: Math.min(w.w, to.w), h: Math.min(w.h, to.h) });
     }
     if (what === 'center') {
       const ww = w ? Math.min(w.w, at.w) : at.w * 0.6, hh = w ? Math.min(w.h, at.h) : at.h * 0.7;
-      return this.sys.frame(0, { x: at.x + (at.w - ww) / 2, y: at.y + (at.h - hh) / 2, w: ww, h: hh });
+      return this.sys.frame(fw, { x: at.x + (at.w - ww) / 2, y: at.y + (at.h - hh) / 2, w: ww, h: hh });
     }
     const z = SNAP[what];
     if (!z) throw new Error('Not a window action');
-    return this.sys.frame(0, zoneRect(at, { x: z[0], y: z[1], w: z[2], h: z[3] }));
+    return this.sys.frame(fw, zoneRect(at, { x: z[0], y: z[1], w: z[2], h: z[3] }));
   }
 
   // The window space: running apps with their windows, and the displays.
   async _wins() {
     let out = { apps: [], displays: [], front: 0 };
     try {
-      const { windows, front } = await this.sys.wins();
+      const { windows, minimized = [], front } = await this.sys.wins();
       const ds = this.sys.displays();
       const icons = await this._appIcons().catch(() => new Map());
+      // Linux: an app's name from its desktop file, not its window class.
+      const names = new Map();
+      if (this.platform === 'linux') for (const a of await this.sys.apps().catch(() => [])) for (const k of linuxKeys(a)) if (!names.has(k)) names.set(k, a.name);
+      const nameOf = (w) => names.get(appKey(w)) || appName(w);
       const apps = new Map();
       // Each window's place on its display (fractions, front first), for the device's picture of it.
       const r3 = (v) => Math.round(Math.max(-1, Math.min(2, v)) * 1000) / 1000;
       for (const w of windows) {
         const key = appKey(w);
-        if (!apps.has(key)) apps.set(key, { key, name: appName(w), icon: icons.get(key) || '', windows: [] });
+        if (!apps.has(key)) apps.set(key, { key, name: nameOf(w), icon: icons.get(key) || '', windows: [] });
         const d = displayOf(ds, w);
         apps.get(key).windows.push({ wid: w.wid, title: String(w.title || '').slice(0, 120), display: d ? d.id : '',
           ...(d ? { f: [r3((w.x - d.x) / d.w), r3((w.y - d.y) / d.h), r3(w.w / d.w), r3(w.h / d.h)] } : {}) });
+      }
+      // Minimized windows: listed with their app, marked; an app with only those is marked too
+      // (the device shows it apart, grayed, a tap brings it back).
+      for (const w of minimized) {
+        const key = appKey(w);
+        if (!apps.has(key)) apps.set(key, { key, name: nameOf(w), icon: icons.get(key) || '', windows: [], min: true });
+        apps.get(key).windows.push({ wid: w.wid, title: String(w.title || '').slice(0, 120), display: '', min: true });
       }
       // The saved sets' apps that aren't running: their names and icons for the shelf.
       const known = [];
@@ -306,6 +319,8 @@ class Deck {
       const exes = [...new Set([...windows.map((w) => w.exe).filter(Boolean), ...saved])].slice(0, 50);
       const r = await this.helper.request('icons', { size: 64, paths: exes }).catch(() => null);
       if (r && r.icons) exes.forEach((e, i) => { if (r.icons[i]) map.set(e, r.icons[i]); });
+    } else if (this.platform === 'linux') {
+      for (const a of await this.sys.apps()) if (a.icon) for (const k of linuxKeys(a)) if (!map.has(k)) map.set(k, a.icon);
     }
     return map;
   }
@@ -315,8 +330,11 @@ class Deck {
     try {
       if (!this.caps.windows) throw new Error('Not on this computer');
       const wid = Number(m.wid);
-      const { windows } = await this.sys.wins();
-      const w = windows.find((x) => x.wid === wid);
+      const { windows, minimized = [] } = await this.sys.wins();
+      const min = minimized.find((x) => x.wid === wid);
+      // A minimized window brought back as it was (or straight into a zone, below).
+      if (min && (m.restore || !m.zone)) { await this.sys.winOp(wid, 'restore'); return done(true); }
+      const w = windows.find((x) => x.wid === wid) || min;
       if (!w) throw new Error('That window is gone');
       const ds = this.sys.displays();
       const to = ds.find((d) => d.id === String(m.display)) || displayOf(ds, w) || ds[0];
@@ -353,7 +371,9 @@ class Deck {
       const used = new Set();
       const pick = (windows, it) => (it.wid && !used.has(it.wid) && windows.find((w) => w.wid === it.wid))
         || windows.find((w) => !used.has(w.wid) && it.key && appKey(w) === it.key) || null;
-      let { windows } = await this.sys.wins();
+      // Minimized windows count too (placing one brings it back), after the ones showing.
+      const all = (r) => [...r.windows, ...(r.minimized || [])];
+      let windows = all(await this.sys.wins());
       const missing = [];
       for (const it of items) {
         const w = pick(windows, it);
@@ -367,7 +387,7 @@ class Deck {
       const waitFor = missing.filter((it) => !it.skip);
       for (let i = 0; waitFor.some((it) => !it.w) && i < 30; i++) {
         await new Promise((r) => setTimeout(r, this.arrangeWait || 400));
-        ({ windows } = await this.sys.wins());
+        windows = all(await this.sys.wins());
         for (const it of waitFor) if (!it.w) { const w = pick(windows, it); if (w) { used.add(w.wid); it.w = w; } }
       }
       // Last first: the first item ends up in front.
@@ -396,6 +416,11 @@ class Deck {
       if (!a) throw new Error('Open it on the PC once from the Start menu');
       return this.sys.openApp(a.id);
     }
+    if (this.platform === 'linux') {
+      const a = apps.find((x) => linuxKeys(x).includes(String(key).toLowerCase()));
+      if (!a) throw new Error('That app isn’t on this computer');
+      return this.sys.openApp(a.id);
+    }
     throw new Error('Not on this computer');
   }
 
@@ -416,7 +441,12 @@ const SNAP = {
   tl: [0, 0, 6, 6], tr: [6, 0, 6, 6], bl: [0, 6, 6, 6], br: [6, 6, 6, 6],
   third1: [0, 0, 4, 12], third2: [4, 0, 4, 12], third3: [8, 0, 4, 12],
 };
-const appKey = (w) => w.bundle || w.aumid || w.exe || w.app || String(w.pid);
+const appKey = (w) => w.bundle || w.aumid || w.exe || w.cls || w.app || String(w.pid); // Linux: the window's class
+// A Linux app's window classes (lower case): its StartupWMClass, else its desktop file's name.
+const linuxKeys = (a) => {
+  const id = String(a.id || '').replace(/\.desktop$/, '').toLowerCase();
+  return [String((a.entry && a.entry.wmClass) || '').toLowerCase(), id, id.split('.').pop()].filter(Boolean);
+};
 const appName = (w) => w.app || (w.exe ? w.exe.split(/[\\/]/).pop().replace(/\.exe$/i, '') : '') || w.title;
 const zoneOf = (z) => M.normalize({ spaces: [{ kind: 'windows', layouts: [{ zones: [z] }] }] }).spaces[0].layouts[0].zones[0];
 const zoneRect = (d, z) => ({ x: d.x + (d.w * z.x) / ZG, y: d.y + (d.h * z.y) / ZG, w: (d.w * z.w) / ZG, h: (d.h * z.h) / ZG });

@@ -704,6 +704,7 @@
   "Not on Linux yet": "Ainda não disponível no Linux",
   "Not on the same network": "Não está na mesma rede",
   "Not on this computer": "Não está neste computador",
+  "Not on Wayland": "Não no Wayland",
   "Not paired": "Não pareado",
   "Not paired here": "Não pareado aqui",
   "Not paired with {phone} over classic Bluetooth: pair them in Bluetooth settings, as below": "Não pareado com {phone} por Bluetooth. Pareie-os nas configurações de Bluetooth como mostrado abaixo.",

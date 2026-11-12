@@ -50,6 +50,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -186,6 +188,7 @@ class Deck(core: Core) : Feature(core) {
     fun askApps() { if (apps == null) core.send(msg(Proto.T.DECK_APPS)) }
     // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).
     fun arrange(display: String, items: List<JSONObject>) { done = null; core.send(msg(Proto.T.DECK_ARRANGE, "display" to display, "items" to JSONArray(items))) }
+    fun restore(wid: Long) { done = null; core.send(msg(Proto.T.DECK_PLACE, "wid" to wid, "restore" to true)) }
     fun place(wid: Long, display: String, zone: JSONObject?) {
         done = null
         core.send(if (zone != null) msg(Proto.T.DECK_PLACE, "wid" to wid, "display" to display, "zone" to zone) else msg(Proto.T.DECK_PLACE, "wid" to wid, "display" to display))
@@ -691,6 +694,7 @@ private fun appIcon(data: String): ImageBitmap? = if (data.isEmpty()) null else 
     runCatching { val b = Base64.decode(data.substringAfter(","), Base64.DEFAULT); BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() }.getOrNull()
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun WindowSpace(d: Deck, space: JSONObject) {
     LaunchedEffect(space.optString("id")) { while (true) { d.askWins(); delay(4000) } }
@@ -698,10 +702,14 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     if (d.caps?.optBoolean("windows", true) == false) { Text(tr("Not on this computer"), color = pal.muted); return }
     if (w == null) { Text(tr("Loading windows…"), color = pal.muted); return }
     val apps = w.optJSONArray("apps").objs()
+    // The apps with a window showing, then (apart, grayed) the ones whose windows are all minimized.
+    val showing = apps.filter { !it.optBoolean("min") }
+    val minimized = apps.filter { it.optBoolean("min") }
     val known = w.optJSONArray("known").objs()
     val displays = w.optJSONArray("displays").objs()
     val front = w.optLong("front")
-    // The apps picked, in order (tap to add, tap again to take out); a place tapped before any app;
+    val haptic = LocalHapticFeedback.current
+    // The apps picked, in order (a tap picks one, a hold adds more); a place tapped before any app;
     // the display shown; the saved sets' shelf; what was arranged last (for Save).
     var sel by remember { mutableStateOf(listOf<String>()) }
     var wid by remember { mutableStateOf<Long?>(null) }
@@ -714,16 +722,21 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     LaunchedEffect(apps.map { it.optString("key") }) { sel = sel.filter { k -> apps.any { it.optString("key") == k } } }
     val one = picked.singleOrNull()
     val windows = one?.optJSONArray("windows").objs()
-    val windowOf = { a: JSONObject -> a.optJSONArray("windows").objs().let { ws -> (if (a === one) ws.firstOrNull { it.optLong("wid") == wid } else null) ?: ws.firstOrNull { it.optLong("wid") == front } ?: ws.firstOrNull() } }
+    // An app's window: the one chosen, else the one in front, else one showing, else a minimized one.
+    val windowOf = { a: JSONObject -> a.optJSONArray("windows").objs().let { ws -> (if (a === one) ws.firstOrNull { it.optLong("wid") == wid } else null) ?: ws.firstOrNull { it.optLong("wid") == front } ?: ws.firstOrNull { !it.optBoolean("min") } ?: ws.firstOrNull() } }
     val mainId = displays.firstOrNull { it.optBoolean("main") }?.optString("id") ?: displays.firstOrNull()?.optString("id") ?: ""
     val shown = display.takeIf { id -> displays.any { it.optString("id") == id } } ?: one?.let { windowOf(it)?.optString("display") }?.takeIf { it.isNotEmpty() } ?: mainId
     val shownD = displays.firstOrNull { it.optString("id") == shown }
+    val ratio = shownD?.takeIf { it.optInt("h") > 0 }?.let { it.optInt("w").toFloat() / it.optInt("h") }?.coerceIn(0.5f, 3f) ?: 1.6f
 
     val clear = { sel = emptyList(); wid = null; armed = null }
     val put = { a: JSONObject, zone: JSONObject ->
         windowOf(a)?.let { d.place(it.optLong("wid"), shown, JSONObject(zone.toString())) }
         clear()
     }
+    // A tap picks that app alone (again: none); with a few picked, a tap adds or takes out. A hold adds.
+    val tap = { k: String -> sel = if (sel.size > 1) (if (k in sel) sel - k else (sel + k).takeLast(6)) else if (sel == listOf(k)) emptyList() else listOf(k); wid = null }
+    val hold = { k: String -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); sel = if (k in sel) sel - k else (sel + k).takeLast(6); wid = null }
     // The picked apps into a configuration's zones, in order; remembered for Save.
     val arrange = { zones: List<JSONObject> ->
         val items = picked.zip(zones).map { (a, z) -> JSONObject().put("key", a.optString("key")).put("wid", windowOf(a)?.optLong("wid") ?: 0).put("zone", JSONObject(z.toString())) }
@@ -744,7 +757,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     }
     val dropSet = { id: String -> d.edit { l -> l.optJSONArray("spaces").objs().forEach { s -> s.optJSONArray("sets")?.removeWhere { it.optString("id") == id } } } }
 
-    // A drag from the bar: the app and where the finger is; the pad's place on the screen.
+    // A drag from the bar: the app and where the finger is; the display's place on the screen.
     var dragging by remember { mutableStateOf<Pair<JSONObject, Offset>?>(null) }
     var pad by remember { mutableStateOf<Rect?>(null) }
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -754,43 +767,74 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     val dropNow by rememberUpdatedState({ a: JSONObject, p: Offset -> targetNow(p)?.let { z -> put(a, z) }; Unit })
     val hover = dragging?.let { target(it.second) }
 
-    // The running apps along the top: tap to pick (a number: its place in the order), drag one down onto the display.
+    // One app in the picker: its icon (bigger when there's room), its place in the order once picked.
+    // A minimized one is grayed: a tap brings it back (a hold still picks it, arranging brings it back too).
+    @Composable
+    fun AppItem(a: JSONObject, itemW: Dp, iconSize: Dp, min: Boolean) = key(a.optString("key")) {
+        val k = a.optString("key")
+        val n = sel.indexOf(k)
+        val inFront = a.optJSONArray("windows").objs().any { it.optLong("wid") == front }
+        var at by remember { mutableStateOf(Offset.Zero) }
+        Column(Modifier.width(itemW).onGloballyPositioned { at = it.positionInRoot() }
+            .pointerInput(k) {
+                // Downwards: a drag onto the display. Sideways: the row scrolls.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var down2 = false
+                    val ch = awaitTouchSlopOrCancellation(down.id) { c, over -> if (abs(over.y) > abs(over.x)) { down2 = true; c.consume() } }
+                    if (ch == null || !down2) return@awaitEachGesture
+                    dragging = a to (at + ch.position)
+                    val ended = drag(ch.id) { c -> dragging = dragging?.let { it.first to (at + c.position) }; c.consume() }
+                    if (ended) dragging?.let { (x, p) -> dropNow(x, p) }
+                    dragging = null
+                }
+            }
+            .clip(RoundedCornerShape(14.dp)).background(if (n >= 0) pal.accentSoft else Color.Transparent)
+            .combinedClickable(onLongClick = { hold(k) }) {
+                val z = armed
+                when {
+                    z != null -> put(a, z)
+                    min && sel.size < 2 -> { a.optJSONArray("windows").objs().firstOrNull()?.let { d.restore(it.optLong("wid")) }; clear() }
+                    else -> tap(k)
+                }
+            }.padding(5.dp).alpha(if (min && n < 0) 0.45f else 1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box {
+                AppIcon(a, iconSize)
+                if (n >= 0) Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp).size(18.dp).clip(CircleShape).background(pal.accent), contentAlignment = Alignment.Center) {
+                    Text("${n + 1}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                } else if (inFront) Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(pal.accent))
+            }
+            Text(a.str("name", 40), color = pal.text, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+        }
+    }
+
+    // The apps along the top, as big as the room allows; below them, after a line, the minimized
+    // ones; below those, the picked app's windows when it has more than one.
     val bar: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(end = 40.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (apps.isEmpty()) Text(tr("No windows open"), color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (a in apps) key(a.optString("key")) {
-                    val k = a.optString("key")
-                    val n = sel.indexOf(k)
-                    val inFront = a.optJSONArray("windows").objs().any { it.optLong("wid") == front }
-                    var at by remember { mutableStateOf(Offset.Zero) }
-                    Column(Modifier.width(62.dp).onGloballyPositioned { at = it.positionInRoot() }
-                        .pointerInput(k) {
-                            // Downwards: a drag onto the display. Sideways: the row scrolls.
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                var down2 = false
-                                val ch = awaitTouchSlopOrCancellation(down.id) { c, over -> if (abs(over.y) > abs(over.x)) { down2 = true; c.consume() } }
-                                if (ch == null || !down2) return@awaitEachGesture
-                                dragging = a to (at + ch.position)
-                                val ended = drag(ch.id) { c -> dragging = dragging?.let { it.first to (at + c.position) }; c.consume() }
-                                if (ended) dragging?.let { (x, p) -> dropNow(x, p) }
-                                dragging = null
-                            }
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(end = 40.dp)) {
+            val itemW = (maxWidth / maxOf(1, showing.size)).coerceIn(62.dp, 96.dp)
+            val iconSize = (itemW * 0.62f).coerceIn(38.dp, 58.dp)
+            Column {
+                if (apps.isEmpty()) Text(tr("No windows open"), color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (a in showing) AppItem(a, itemW, iconSize, false)
+                }
+                if (minimized.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(tr("Minimized"), color = pal.muted, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
+                        Box(Modifier.weight(1f).height(1.dp).background(pal.muted.copy(alpha = 0.3f)))
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (a in minimized) AppItem(a, (itemW * 0.8f).coerceAtLeast(58.dp), (iconSize * 0.8f).coerceAtLeast(32.dp), true)
+                    }
+                }
+                if (one != null && windows.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (x in windows) {
+                        val on = x === windowOf(one)
+                        Box(Modifier.clip(RoundedCornerShape(50)).background(if (on) pal.accent else pal.card).clickable { wid = x.optLong("wid") }.padding(horizontal = 12.dp, vertical = 6.dp)
+                            .alpha(if (x.optBoolean("min") && !on) 0.5f else 1f)) {
+                            Text(x.str("title", 40).ifEmpty { tr("Window") }, color = if (on) Color.White else pal.text, fontSize = 12.sp, maxLines = 1)
                         }
-                        .clip(RoundedCornerShape(12.dp)).background(if (n >= 0) pal.accentSoft else Color.Transparent)
-                        .clickable {
-                            val z = armed
-                            if (z != null) put(a, z)
-                            else { sel = if (n >= 0) sel - k else (sel + k).takeLast(6); wid = null }
-                        }.padding(5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box {
-                            AppIcon(a, 38.dp)
-                            if (n >= 0) Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp).size(18.dp).clip(CircleShape).background(pal.accent), contentAlignment = Alignment.Center) {
-                                Text("${n + 1}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            } else if (inFront) Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(pal.accent))
-                        }
-                        Text(a.str("name", 40), color = pal.text, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
                     }
                 }
             }
@@ -833,7 +877,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
             }) {
             val u = maxWidth / ZONE_GRID; val v = maxHeight / ZONE_GRID
             // The windows on this display, the one in front drawn last.
-            val here = apps.flatMap { a -> a.optJSONArray("windows").objs().filter { it.optString("display") == shown }.map { a to it } }.asReversed()
+            val here = apps.flatMap { a -> a.optJSONArray("windows").objs().filter { !it.optBoolean("min") && it.optString("display") == shown }.map { a to it } }.asReversed()
             for ((a, x) in here) {
                 val f = x.optJSONArray("f") ?: continue
                 val fx = f.optDouble(0).toFloat().coerceIn(0f, 1f); val fy = f.optDouble(1).toFloat().coerceIn(0f, 1f)
@@ -859,33 +903,32 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
         }
     }
 
-    // The saved sets on a shelf at the right edge, pulled out with its tab: one tap arranges them
-    // (and opens the ones not running).
-    val shelfView: @Composable () -> Unit = {
-        if (!shelf) Box(Modifier.width(30.dp).height(96.dp).clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)).background(pal.card).clickable { shelf = true },
-            contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Ico.left, tr("Saved sets"), tint = pal.text, modifier = Modifier.size(14.dp))
-                if (sets.isNotEmpty()) Text("${sets.size}", color = pal.muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+    // How the picked apps can sit side by side (more places than apps leave some free), the ones
+    // drawn on the computer with as many places first: in the middle, as big as they fit. A tap arranges.
+    val drawn = space.optJSONArray("layouts").objs()
+    val names = drawn.associate { it.optJSONArray("zones").objs().toString() to it.str("name", 30) }
+    val configs = if (picked.isEmpty()) emptyList() else deckConfigs(picked.size, drawn.map { it.optJSONArray("zones").objs() })
+    val choices: @Composable (Modifier) -> Unit = { m ->
+        BoxWithConstraints(m, contentAlignment = Alignment.Center) {
+            val gap = 12.dp
+            val count = maxOf(1, configs.size)
+            // The column count that gives each picture the most room.
+            var best = 1; var bestW = 0.dp
+            for (c in 1..count) {
+                val r = (count + c - 1) / c
+                val tw = minOf((maxWidth - gap * (c - 1)) / c, ((maxHeight - gap * (r - 1)) / r - 18.dp) * ratio)
+                if (tw > bestW) { bestW = tw; best = c }
             }
-        } else Column(Modifier.width(220.dp).fillMaxHeight().clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp)).background(pal.card).padding(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(tr("Saved sets"), color = pal.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Box(Modifier.size(28.dp).clip(CircleShape).clickable { shelf = false }, contentAlignment = Alignment.Center) { Icon(Ico.right, tr("Close"), tint = pal.muted, modifier = Modifier.size(14.dp)) }
-            }
-            if (sets.isEmpty()) Text(tr("Pick apps, choose how they sit, then Save: they wait here, ready to arrange (and open) in one tap."), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (s in sets) key(s.optString("id")) {
-                    val items = s.optJSONArray("items").objs()
-                    val look = { k: String -> byKey(k) ?: known.firstOrNull { it.optString("key") == k } }
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(pal.content.copy(alpha = 0.6f)).clickable {
-                        val to = s.optString("display").takeIf { id -> displays.any { it.optString("id") == id } } ?: shown
-                        d.arrange(to, items.map { JSONObject().put("key", it.optString("key")).put("zone", it.optJSONObject("zone")) })
-                    }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Mini(items.map { it.optJSONObject("zone") ?: JSONObject() }, items.map { look(it.optString("key")) }, Modifier.width(64.dp).aspectRatio(1.6f))
-                        Text(s.str("name", 60), color = pal.text, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
-                        Box(Modifier.size(26.dp).clip(CircleShape).clickable { dropSet(s.optString("id")) }, contentAlignment = Alignment.Center) {
-                            Icon(Ico.close, tr("Remove"), tint = pal.muted, modifier = Modifier.size(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(gap), horizontalAlignment = Alignment.CenterHorizontally) {
+                for (rowC in configs.chunked(best)) Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (c in rowC) {
+                        val now = last?.let { it.first == sel && it.second == c.take(picked.size) } == true
+                        Column(Modifier.width(bestW), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(12.dp))
+                                .border(if (now) 2.5.dp else 0.dp, if (now) pal.accent else Color.Transparent, RoundedCornerShape(12.dp)).clickable { arrange(c) }) {
+                                Mini(c, picked, Modifier.fillMaxSize(), 48.dp)
+                            }
+                            Text(names[c.toString()] ?: "", color = pal.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.height(18.dp).padding(top = 3.dp))
                         }
                     }
                 }
@@ -893,28 +936,11 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
         }
     }
 
-    // Along the bottom: how the picked apps can sit side by side (more places than apps leave
-    // some free), the ones drawn on the computer too; a tap arranges them. Then Save, and the
-    // order turned round.
-    val drawn = space.optJSONArray("layouts").objs()
-    val configs = if (picked.isEmpty()) emptyList() else deckConfigs(picked.size, drawn.map { it.optJSONArray("zones").objs() })
+    // Along the bottom: a hint, or what the picked apps can do: order turned round, Save, Clear.
     val row: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().height(84.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (picked.isEmpty()) Text(if (armed != null) tr("Now tap the app for that place") else tr("Drag an app onto the display: a corner, a side or the middle. Or tap a few apps to see how they fit together."),
+        Row(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (picked.isEmpty()) Text(if (armed != null) tr("Now tap the app for that place") else tr("Tap an app to see where it can go, hold one to pick more. Or drag it onto the display."),
                 color = if (armed != null) pal.accent else pal.muted, fontSize = 12.sp, maxLines = 2, modifier = Modifier.padding(horizontal = 4.dp))
-            if (one != null && windows.size > 1) for (x in windows) {
-                val on = x === windowOf(one)
-                Box(Modifier.clip(RoundedCornerShape(50)).background(if (on) pal.accent else pal.card).clickable { wid = x.optLong("wid") }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Text(x.str("title", 40).ifEmpty { tr("Window") }, color = if (on) Color.White else pal.text, fontSize = 12.sp, maxLines = 1)
-                }
-            }
-            for (c in configs) {
-                val now = last?.let { it.first == sel && it.second == c.take(picked.size) } == true
-                Box(Modifier.height(70.dp).aspectRatio(1.6f).clip(RoundedCornerShape(10.dp)).border(if (now) 2.dp else 0.dp, if (now) pal.accent else Color.Transparent, RoundedCornerShape(10.dp))
-                    .clickable { arrange(c) }) {
-                    Mini(c, picked, Modifier.fillMaxSize())
-                }
-            }
             if (picked.size > 1) Chip(tr("Swap order")) { sel = sel.drop(1) + sel.first() }
             if (last != null && last?.first == sel) Chip(tr("Save"), accent = true) { saveSet() }
             if (picked.isNotEmpty()) Chip(tr("Clear")) { clear() }
@@ -926,16 +952,53 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
             bar()
             Row(Modifier.weight(1f).fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (displays.size > 1) rail()
-                // The display from edge to edge: all the room there is (windows and places are fractions of it).
-                screen(Modifier.weight(1f).fillMaxHeight())
+                // Apps picked: their layouts here; the display back while one is dragged (or nothing's picked).
+                if (picked.isNotEmpty() && dragging == null) choices(Modifier.weight(1f).fillMaxHeight().padding(end = 36.dp))
+                else screen(Modifier.weight(1f).fillMaxHeight())
             }
             row()
         }
         // The shelf over the display's right edge.
-        Box(Modifier.align(Alignment.CenterEnd).padding(vertical = 90.dp)) { shelfView() }
+        Box(Modifier.align(Alignment.CenterEnd).padding(vertical = 90.dp)) { shelfView(d, sets, shelf, { shelf = it }, byKey, known, displays, shown, dropSet) }
         // The app being dragged, under the finger.
         dragging?.let { (a, p) ->
             Box(Modifier.offset { IntOffset((p.x - origin.x).roundToInt() - 26.dp.roundToPx(), (p.y - origin.y).roundToInt() - 26.dp.roundToPx()) }.alpha(0.9f)) { AppIcon(a, 52.dp) }
+        }
+    }
+}
+
+// The saved sets on a shelf at the right edge, pulled out with its tab: one tap arranges them
+// (and opens the ones not running).
+@Composable
+private fun shelfView(d: Deck, sets: List<JSONObject>, shelf: Boolean, setShelf: (Boolean) -> Unit, byKey: (String) -> JSONObject?, known: List<JSONObject>,
+                      displays: List<JSONObject>, shown: String, dropSet: (String) -> Unit) {
+    if (!shelf) Box(Modifier.width(30.dp).height(96.dp).clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)).background(pal.card).clickable { setShelf(true) },
+        contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Ico.left, tr("Saved sets"), tint = pal.text, modifier = Modifier.size(14.dp))
+            if (sets.isNotEmpty()) Text("${sets.size}", color = pal.muted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    } else Column(Modifier.width(220.dp).fillMaxHeight().clip(RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp)).background(pal.card).padding(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("Saved sets"), color = pal.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Box(Modifier.size(28.dp).clip(CircleShape).clickable { setShelf(false) }, contentAlignment = Alignment.Center) { Icon(Ico.right, tr("Close"), tint = pal.muted, modifier = Modifier.size(14.dp)) }
+        }
+        if (sets.isEmpty()) Text(tr("Pick apps, choose how they sit, then Save: they wait here, ready to arrange (and open) in one tap."), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (s in sets) key(s.optString("id")) {
+                val items = s.optJSONArray("items").objs()
+                val look = { k: String -> byKey(k) ?: known.firstOrNull { it.optString("key") == k } }
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(pal.content.copy(alpha = 0.6f)).clickable {
+                    val to = s.optString("display").takeIf { id -> displays.any { it.optString("id") == id } } ?: shown
+                    d.arrange(to, items.map { JSONObject().put("key", it.optString("key")).put("zone", it.optJSONObject("zone")) })
+                }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Mini(items.map { it.optJSONObject("zone") ?: JSONObject() }, items.map { look(it.optString("key")) }, Modifier.width(64.dp).aspectRatio(1.6f))
+                    Text(s.str("name", 60), color = pal.text, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+                    Box(Modifier.size(26.dp).clip(CircleShape).clickable { dropSet(s.optString("id")) }, contentAlignment = Alignment.Center) {
+                        Icon(Ico.close, tr("Remove"), tint = pal.muted, modifier = Modifier.size(12.dp))
+                    }
+                }
+            }
         }
     }
 }
@@ -947,20 +1010,20 @@ private fun Chip(text: String, accent: Boolean = false, onClick: () -> Unit) = B
 
 // A small picture of zones on a display, each with its app's icon (a zone with no app left free).
 @Composable
-private fun Mini(zones: List<JSONObject>, apps: List<JSONObject?>, m: Modifier) = BoxWithConstraints(m.clip(RoundedCornerShape(8.dp)).background(Color(0xFF14213A))) {
+private fun Mini(zones: List<JSONObject>, apps: List<JSONObject?>, m: Modifier, icon: Dp = 26.dp) = BoxWithConstraints(m.clip(RoundedCornerShape(8.dp)).background(Color(0xFF14213A))) {
     val u = maxWidth / ZONE_GRID; val v = maxHeight / ZONE_GRID
     zones.forEachIndexed { i, z ->
         val a = apps.getOrNull(i)
         Box(Modifier.offset(x = u * z.optInt("x"), y = v * z.optInt("y")).size(u * z.optInt("w", 12), v * z.optInt("h", 12)).padding(1.5.dp)
             .clip(RoundedCornerShape(4.dp)).background(if (i < apps.size) Color(0xFF0A84FF).copy(alpha = 0.4f) else Color.White.copy(alpha = 0.06f))
             .border(1.dp, if (i < apps.size) Color(0xFF64D2FF) else Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
-            if (a != null) AppIcon(a, minOf(minOf(u * z.optInt("w", 12), v * z.optInt("h", 12)) * 0.6f, 26.dp))
+            if (a != null) AppIcon(a, minOf(minOf(u * z.optInt("w", 12), v * z.optInt("h", 12)) * 0.6f, icon))
         }
     }
 }
 
 // How n apps can sit side by side on the 12 × 12 grid, in their order. Some have a place more than
-// there are apps (three in the quarters); the computer's own drawn layouts with as many places follow.
+// there are apps (three in the quarters); the computer's own drawn layouts with as many places come first.
 internal fun deckConfigs(n: Int, drawn: List<List<JSONObject>> = emptyList()): List<List<JSONObject>> {
     fun z(x: Int, y: Int, w: Int, h: Int) = JSONObject().put("x", x).put("y", y).put("w", w).put("h", h)
     val q = listOf(z(0, 0, 6, 6), z(6, 0, 6, 6), z(0, 6, 6, 6), z(6, 6, 6, 6))
@@ -991,8 +1054,10 @@ internal fun deckConfigs(n: Int, drawn: List<List<JSONObject>> = emptyList()): L
             listOf(z(0, 0, 6, 4), z(6, 0, 6, 4), z(0, 4, 6, 4), z(6, 4, 6, 4), z(0, 8, 6, 4), z(6, 8, 6, 4)),
         )
     }
-    val seen = made.map { it.toString() }.toMutableSet()
-    return made + drawn.filter { it.size == n && seen.add(it.toString()) }
+    // The person's own (with as many places as there are apps) first; the ready-made ones they match left out.
+    val own = drawn.filter { it.size == n }.distinctBy { it.toString() }
+    val seen = own.map { it.toString() }.toSet()
+    return own + made.filter { it.toString() !in seen }
 }
 
 // An app's icon, or its first letter.

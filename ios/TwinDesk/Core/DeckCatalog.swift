@@ -101,7 +101,8 @@ enum DeckCatalog {
     static func available(_ e: Entry, _ caps: JSON?, _ platform: String) -> String? {
         if e.needs.isEmpty { return nil }
         if let v = caps?[e.needs] as? NSNumber, !v.boolValue {
-            if platform == "linux" && (e.needs == "windows" || e.needs == "screenoff") { return "Not on Linux" }
+            if platform == "linux" && e.needs == "screenoff" { return "Not on Linux" }
+            if platform == "linux" && e.needs == "windows" { return "Not on Wayland" }
             if platform == "mac" && e.needs == "dnd" { return "macOS has no switch for apps" }
             return "Not on this computer"
         }

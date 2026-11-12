@@ -712,6 +712,7 @@
   "Not on Linux yet": "Not on Linux yet",
   "Not on the same network": "Not on the same network",
   "Not on this computer": "Not on this computer",
+  "Not on Wayland": "Not on Wayland",
   "Not paired": "Not paired",
   "Not paired here": "Not paired here",
   "Not paired with {phone} over classic Bluetooth: pair them in Bluetooth settings, as below": "Not paired with {phone} over Bluetooth. Pair them in Bluetooth settings as shown below.",

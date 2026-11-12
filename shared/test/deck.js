@@ -282,6 +282,29 @@ const fakeSys = {
   assert.strictEqual(ad.ok, true);
   assert.strictEqual(ad.why, 'That app isn’t on this Mac');
   fakeSys.wins = realWins; fakeSys.apps = realApps; fakeSys.openApp = realOpen;
+  // Minimized windows: listed with their app (marked), a tap brings one back, a zone puts it there.
+  fakeSys.wins = async () => ({ ...(await realWins()), minimized: [{ wid: 11, pid: 3, app: 'Code', bundle: 'com.microsoft.VSCode', title: 'main.js' }, { wid: 12, pid: 1, app: 'Notes', bundle: 'com.apple.Notes', title: 'B' }] });
+  server.emit(`t:${T.DECK_WINS}`, {});
+  await new Promise((r) => setTimeout(r, 10));
+  const w3 = server.last(T.DECK_WINS);
+  const code = w3.apps.find((a) => a.key === 'com.microsoft.VSCode');
+  assert.strictEqual(code.min, true, 'an app with only minimized windows is marked');
+  assert.deepStrictEqual(code.windows, [{ wid: 11, title: 'main.js', display: '', min: true }]);
+  const notes = w3.apps.find((a) => a.key === 'com.apple.Notes');
+  assert.strictEqual(notes.min, undefined, 'an app with a window showing is not');
+  assert.deepStrictEqual(notes.windows.map((x) => !!x.min), [false, true]);
+  calls.length = 0;
+  server.emit(`t:${T.DECK_PLACE}`, { wid: 11, restore: true });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepStrictEqual(calls, [['winop', 11, 'restore']]);
+  server.emit(`t:${T.DECK_PLACE}`, { wid: 11, display: 'd1', zone: { x: 0, y: 0, w: 6, h: 12 } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.strictEqual(calls[1][0], 'frame', 'into a zone: placed (which brings it back)');
+  calls.length = 0;
+  server.emit(`t:${T.DECK_ARRANGE}`, { display: 'd1', items: [{ key: 'com.microsoft.VSCode', zone: { x: 0, y: 0, w: 6, h: 12 } }] });
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepStrictEqual(calls.filter((c) => c[0] === 'frame').map((c) => c[1]), [11], 'arranged too');
+  fakeSys.wins = realWins;
   // Windows: a program matched to the Start menu app that starts it, nothing else.
   const opened = [];
   const wd = new Deck({ platform: 'win', server: new EventEmitter(), load: () => null, save: () => {}, helper: fakeHelper, onChange: () => {},

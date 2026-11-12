@@ -72,6 +72,8 @@ function sys(platform, { helper, press }) {
   // A device or app goes as `dev`: the helpers' `id` is the request's own number (helper.request sets it).
   const H = (cmd, args = {}, timeout = 15000) => helper.request(cmd, args, timeout);
   const linux = platform === 'linux';
+  // Linux moves other apps' windows only on X11 (Wayland keeps that to the compositor).
+  const X11 = linux && process.env.XDG_SESSION_TYPE !== 'wayland' && !!process.env.DISPLAY;
   let appCache = null;
   let appAt = 0;
 
@@ -79,7 +81,7 @@ function sys(platform, { helper, press }) {
     platform,
     // What this computer can do, for the editor and the device (sub-steps are checked when run).
     caps() {
-      const c = { audio: true, outputs: true, mic: true, bt: true, bright: true, win: true, windows: !linux, darkmode: true, dnd: platform !== 'mac', screenoff: !linux, perf: true, temp: platform === 'mac' || (linux && thermal().length > 0) };
+      const c = { audio: true, outputs: true, mic: true, bt: true, bright: true, win: true, windows: !linux || X11, darkmode: true, dnd: platform !== 'mac', screenoff: !linux, perf: true, temp: platform === 'mac' || (linux && thermal().length > 0) };
       if (linux) {
         c.audio = c.outputs = c.mic = which('pactl');
         c.bt = which('bluetoothctl');
@@ -148,23 +150,41 @@ function sys(platform, { helper, press }) {
       return run('brightnessctl', [...(id ? ['-d', id] : []), 'set', `${Math.round(clamp01(level) * 100)}%`]);
     },
 
-    // ---- Windows (Mac and Windows) ----
-    // {windows: [{wid, pid, app, title, x, y, w, h}], front} in screen coordinates (Windows: pixels).
+    // ---- Windows (Mac, Windows, Linux on X11) ----
+    // {windows: [{wid, pid, app, title, x, y, w, h}], minimized: [{wid, pid, app, title}], front} in
+    // screen coordinates (Windows and Linux: pixels). An older helper without the minimized list: none.
     async wins() {
-      if (platform === 'mac') return H('deckWins');
+      if (platform === 'mac') { const r = await H('deckWins'); return { windows: r.windows || [], minimized: r.minimized || [], front: r.front || 0 }; }
       if (platform === 'win') {
-        const [l, f] = await Promise.all([H('windows', {}, 15000), H('deckWinFront')]);
-        return { windows: (l.windows || []).filter((w) => !w.popup), front: f.wid || 0 };
+        const [l, f, m] = await Promise.all([H('windows', {}, 15000), H('deckWinFront'), H('deckMinWins', {}, 15000).catch(() => ({}))]);
+        return { windows: (l.windows || []).filter((w) => !w.popup), minimized: m.windows || [], front: f.wid || 0 };
       }
-      throw new Error('Not on Linux');
+      if (X11) {
+        const lx = (w) => ({ ...w, app: w.cls || w.inst || '', cls: String(w.cls || w.inst || '').toLowerCase() });
+        const [l, f, m] = await Promise.all([H('windows', {}, 15000), H('activeWindow').catch(() => ({})), H('windows', { minimized: true }, 15000).catch(() => ({}))]);
+        return { windows: (l.windows || []).filter((w) => !w.popup).map(lx), minimized: (m.windows || []).map(lx), front: f.wid || 0 };
+      }
+      throw new Error('Not on Wayland');
     },
-    frame(wid, r) { return H(platform === 'mac' ? 'deckWinFrame' : 'deckWinFrame', { wid: wid || 0, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) }); },
-    winOp(wid, op) { return H('deckWinOp', { wid: wid || 0, op }); },
+    frame(wid, r) {
+      const a = { wid: wid || 0, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) };
+      if (!linux) return H('deckWinFrame', a);
+      if (!a.wid) throw new Error('No window in front');
+      return H('winFrame', a);
+    },
+    winOp(wid, op) {
+      if (!linux) return H('deckWinOp', { wid: wid || 0, op });
+      const cmd = { min: 'winMin', restore: 'winRaise', close: 'winClose' }[op];
+      if (!cmd || !wid) throw new Error('Not a window action');
+      return H(cmd, { wid });
+    },
     // The displays' usable areas, in the coordinates wins() and frame() use.
     displays() {
       const { screen } = el();
       return screen.getAllDisplays().map((d, i) => {
-        const a = platform === 'win' && screen.dipToScreenRect ? screen.dipToScreenRect(null, d.workArea) : d.workArea;
+        const k = linux ? d.scaleFactor || 1 : 1; // X11: the windows' pixels
+        const w0 = d.workArea, a = platform === 'win' && screen.dipToScreenRect ? screen.dipToScreenRect(null, w0)
+          : { x: Math.round(w0.x * k), y: Math.round(w0.y * k), width: Math.round(w0.width * k), height: Math.round(w0.height * k) };
         return { id: String(d.id), name: d.label || `Display ${i + 1}`, main: d.id === screen.getPrimaryDisplay().id, x: a.x, y: a.y, w: a.width, h: a.height };
       });
     },

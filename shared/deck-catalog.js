@@ -119,7 +119,7 @@
   // Where this computer can run it: {ok, why}.
   function available(x, caps, platform) {
     if (x.needs && caps && caps[x.needs] === false) {
-      return { ok: false, why: platform === 'linux' && ['windows', 'screenoff'].includes(x.needs) ? 'Not on Linux' : platform === 'mac' && x.needs === 'dnd' ? 'macOS has no switch for apps' : 'Not on this computer' };
+      return { ok: false, why: platform === 'linux' && x.needs === 'screenoff' ? 'Not on Linux' : platform === 'linux' && x.needs === 'windows' ? 'Not on Wayland' : platform === 'mac' && x.needs === 'dnd' ? 'macOS has no switch for apps' : 'Not on this computer' };
     }
     return { ok: true };
   }

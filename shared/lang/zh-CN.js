@@ -712,6 +712,7 @@
   "Not on Linux yet": "Linux 暂不支持",
   "Not on the same network": "不在同一网络",
   "Not on this computer": "本机不支持",
+  "Not on Wayland": "Wayland 下不可用",
   "Not paired": "未配对",
   "Not paired here": "未与本机配对",
   "Not paired with {phone} over classic Bluetooth: pair them in Bluetooth settings, as below": "尚未通过经典蓝牙与 {phone} 配对：请按下方步骤在蓝牙设置中配对",

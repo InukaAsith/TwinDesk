@@ -55,7 +55,8 @@ function make() {
   lines.push('    fun available(e: Entry, caps: JSONObject?, platform: String): String? {');
   lines.push('        if (e.needs.isEmpty() || caps?.optBoolean(e.needs, true) != false) return null');
   lines.push('        return when {');
-  lines.push('            platform == "linux" && (e.needs == "windows" || e.needs == "screenoff") -> "Not on Linux"');
+  lines.push('            platform == "linux" && e.needs == "screenoff" -> "Not on Linux"');
+  lines.push('            platform == "linux" && e.needs == "windows" -> "Not on Wayland"');
   lines.push('            platform == "mac" && e.needs == "dnd" -> "macOS has no switch for apps"');
   lines.push('            else -> "Not on this computer"');
   lines.push('        }');

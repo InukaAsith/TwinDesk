@@ -284,7 +284,7 @@
       DECK_SET: 'deck.set', // device->computer {id, value 0-1}: a slider tile, while it's dragged
       DECK_STATE: 'deck.state', // device->computer {} / computer->device {state: {volume, muted, micVolume, micMuted, outputs, inputs, bt, displays, dark, dnd}}
       DECK_WINS: 'deck.wins', // device->computer {} / computer->device {apps: [{key, name, icon, windows: [{wid, title, display}]}], displays, front}
-      DECK_PLACE: 'deck.place', // device->computer {wid, display, zone?: {x, y, w, h} of 12} -> deck.done {id: 'place'}
+      DECK_PLACE: 'deck.place', // device->computer {wid, display, zone?: {x, y, w, h} of 12, restore?: a minimized one brought back} -> deck.done {id: 'place'}
       DECK_ARRANGE: 'deck.arrange', // device->computer {display, items: [{key, wid?, zone}]}: several apps at once, the ones not running opened -> deck.done {id: 'arrange'}
       REMOTE_LASER: 'remote.laser', // phone->computer {on}: the presentation remote's laser dot here, following the pointer (shared/laser.js)
       REMOTE_RELEASE: 'remote.release', // let go of every key and button the remote holds

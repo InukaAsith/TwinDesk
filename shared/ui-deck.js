@@ -117,7 +117,7 @@
             L.spaces.push({ id, name: t('Space {n}', { n: L.spaces.length + 1 }), kind: 'tiles', pages: [{ id: M.newId('p'), name: t('Page 1'), ...M.fit(4, L.orient), fit: L.orient, tiles: [] }] });
             spaceId = id;
           })),
-          item(t('Window space'), caps.windows === false ? t('Not on Linux') : hasWin ? t('There is one already') : t('Running apps, your window layouts, your displays'), () => change(() => {
+          item(t('Window space'), caps.windows === false ? t('Not on Wayland') : hasWin ? t('There is one already') : t('Running apps, your window layouts, your displays'), () => change(() => {
             const id = M.newId('s');
             L.spaces.push({ id, name: t('Windows'), kind: 'windows', layouts: M.starterLayouts() });
             spaceId = id;

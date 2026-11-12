@@ -109,7 +109,8 @@ object DeckCatalog {
     fun available(e: Entry, caps: JSONObject?, platform: String): String? {
         if (e.needs.isEmpty() || caps?.optBoolean(e.needs, true) != false) return null
         return when {
-            platform == "linux" && (e.needs == "windows" || e.needs == "screenoff") -> "Not on Linux"
+            platform == "linux" && e.needs == "screenoff" -> "Not on Linux"
+            platform == "linux" && e.needs == "windows" -> "Not on Wayland"
             platform == "mac" && e.needs == "dnd" -> "macOS has no switch for apps"
             else -> "Not on this computer"
         }

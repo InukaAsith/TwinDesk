@@ -9,7 +9,7 @@
 //     Connect and Disconnect do)
 //   deckBright -> {displays: [{id, name, level, internal}]}; deckBrightSet {id, level} (id "" = all):
 //     the built-in panel through the display driver, external monitors through DDC/CI
-//   deckWinFront -> {wid}; deckWinFrame {wid, x, y, w, h}: restored, then to that visible frame;
+//   deckWinFront -> {wid}; deckMinWins -> {windows}: the minimized ones; deckWinFrame {wid, x, y, w, h}: restored, then to that visible frame;
 //     deckWinOp {wid, op: min|max|close|restore}
 //   deckSys {what: lock|sleep|screenoff|darkmode|dnd, on?}
 //   deckApps -> {apps: [{id, name}]}: the Start menu's apps; deckAppOpen {id}: opened by the shell
@@ -470,7 +470,7 @@ namespace MacShare
             {
                 case "min": ShowWindow(h, 6); break;
                 case "max": ShowWindow(h, IsZoomed(h) ? 9 : 3); break;
-                case "restore": ShowWindow(h, 9); break;
+                case "restore": ShowWindow(h, 9); AppWindows.Raise(h.ToInt64()); break;
                 case "close": PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); break;
                 default: throw new Exception("Not a window action");
             }
@@ -588,6 +588,7 @@ namespace MacShare
                 case "deckBright": Bright(r); break;
                 case "deckBrightSet": BrightSet(Json.Str(c, "dev", ""), Json.Num(c, "level", 0.5)); break;
                 case "deckWinFront": r["wid"] = Front(); break;
+                case "deckMinWins": r["windows"] = AppWindows.List(true); break;
                 case "deckWinFrame": Frame(Json.Num(c, "wid", 0), (int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0), (int)Json.Num(c, "w", 800), (int)Json.Num(c, "h", 600)); break;
                 case "deckWinOp": Op(Json.Num(c, "wid", 0), Json.Str(c, "op", "")); break;
                 case "deckSys": Sys(Json.Str(c, "what", ""), c, r); break;
