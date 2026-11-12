@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('macshare', {
   setOverview: call('setOverview'), // General › Overview: what it shows
   setChats: call('setChats'), // Messages: chat apps in one inbox
   history: call('history'), // Keep history (shared/histkeeper.js)
+  qrPair: call('qrPair'), // Connection: pair a phone with a QR code
+  adbQr: call('adbQr'), // wireless debugging: pair with a QR code (on / off)
   notifReply: call('notifReply'), // answer a phone chat's notification
   importCancel: call('importCancel'), // Explorer's Import / Capture from phone: stop
   skipSetup: call('skipSetup'),

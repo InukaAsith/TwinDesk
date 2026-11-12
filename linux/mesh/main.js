@@ -376,7 +376,7 @@ function start() {
     kvm: () => kvm, devctl: () => devctl });
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
-    devctl: () => devctl, chats: () => chats, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
+    devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
@@ -468,7 +468,9 @@ function startPhone(server, pairing) {
   // A phone on a USB cable: pairing, the session, screen and sound through it (no Wi-Fi needed).
   wired = new Wired({ adb, raw: server, peer: pl, getId: () => device.id, getName: () => device.name,
     hasPhone: () => pairing.list().some((x) => P.isPhoneOs(x.os)) });
-  pairing.isWired = (nonce) => wired.knows(nonce);
+  pairing.isWired = (nonce) => wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
+  pairing.isQr = qrKnows;
+  pairing.consumeQr = () => { qrPair = null; }; // a QR pairing that went through: the link is single-use
   wired.on('change', pushState);
   // An iPhone's or iPad's session through its USB cable (shared/iosnet.js: usbmuxd to the app's port):
   // this server and the WebRTC relay (wired.js), nothing else.
@@ -985,6 +987,37 @@ function loadBtAudio() {
   return btAudio;
 }
 
+// Connection › Pair a phone with a QR code (shared/ui-qrpair.js): this computer's id, name, addresses
+// and port, and a nonce that pairs with Allow only, as the USB cable does; a new one every 10 minutes.
+let qrPair = null;
+function qrPairView() {
+  if (!qrPair || Date.now() > qrPair.until) qrPair = { nonce: crypto.randomBytes(8).toString('hex'), until: Date.now() + 10 * 60000 };
+  const port = hostServer && hostServer.port;
+  const addrs = ownAddresses().filter((a) => isIPv4(a)).slice(0, 4);
+  if (!port || !addrs.length) return { url: '', why: !addrs.length ? 'No network' : 'Starting…' };
+  const q = new URLSearchParams({ id: device.id, n: device.name, a: addrs.join(','), p: String(port), k: qrPair.nonce });
+  return { url: 'twindesk://pair?' + q.toString(), until: qrPair.until };
+}
+const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
+// Connection › Wireless debugging › Pair with a QR code (shared/adbqr.js), for the active phone: on while shown.
+let adbQr = null;
+let adbQrState = null; // {text} | {done: 'paired' | 'timeout' | 'failed: …'}
+function adbQrDo(on) {
+  if (adbQr) { adbQr.stop(); adbQr = null; }
+  adbQrState = null;
+  const br = phone && phone.bridge;
+  if (on && br && br.adb.available) {
+    adbQr = require('../../shared/adbqr.js').startAdbQr({
+      adb: br.adb,
+      onPaired: () => br.pairedNow(),
+      onEnd: (why) => { adbQr = null; adbQrState = { done: why }; pushState(); },
+    });
+    adbQrState = { text: adbQr.text };
+  }
+  pushState();
+  return adbQrState;
+}
+
 function buildState() {
   const miss = missing();
   const snap = link.snapshot();
@@ -1030,6 +1063,7 @@ function buildState() {
     notifs: { ...settings.notifs, ...notifs.view() },
     phoneMedia: nowPlaying ? nowPlaying.view : null,
     btAudio: btAudio ? btAudio.view : null,
+    adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
     startup: autostart.get(),

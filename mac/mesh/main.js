@@ -55,6 +55,9 @@ const I18n = require('../../shared/i18n.js');
 const Look = require('../../shared/look.js');
 let i18n = I18n.create('en');
 const t = (...args) => i18n.t(...args);
+let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
+let adbQr = null; // wireless debugging's pairing QR code while shown (shared/adbqr.js)
+const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 const store = require('./store');
 const identity = require('../identity');
 const { Discovery, interfaces } = require('../discovery');
@@ -649,7 +652,31 @@ app.whenReady().then(() => {
   const phoneDir = new PhoneDir(hub, server);
   svc.wired = new Wired({ adb, raw: server, peer: phoneDir, getId: () => id.macId, getName: () => id.macName,
     hasPhone: () => pairing.list().some((x) => P.isPhoneOs(x.os)) });
-  pairing.isWired = (nonce) => svc.wired.knows(nonce);
+  pairing.isWired = (nonce) => svc.wired.knows(nonce) || qrKnows(nonce); // the cable, or Connection's QR code (Allow only)
+  pairing.isQr = qrKnows;
+  pairing.consumeQr = () => { qrPair = null; }; // a QR pairing that went through: the link is single-use
+  // Connection › Pair a phone with a QR code (shared/ui-qrpair.js), and wireless debugging's (shared/adbqr.js).
+  svc.qrPair = () => {
+    if (!qrPair || Date.now() > qrPair.until) qrPair = { nonce: require('crypto').randomBytes(8).toString('hex'), until: Date.now() + 10 * 60000 };
+    const addrs = (state.addresses || []).filter((a) => /^\d+\.\d+\.\d+\.\d+$/.test(a)).slice(0, 4);
+    if (!addrs.length) return { url: '', why: 'No network' };
+    const q = new URLSearchParams({ id: id.macId, n: id.macName, a: addrs.join(','), p: String(server.port), k: qrPair.nonce });
+    return { url: 'twindesk://pair?' + q.toString(), until: qrPair.until };
+  };
+  svc.adbQr = (on) => {
+    if (adbQr) { adbQr.stop(); adbQr = null; }
+    state.adbQr = null;
+    const br = svc.phone && svc.phone.bridge; // the active phone's
+    if (on && br && br.adb.available) {
+      adbQr = require('../../shared/adbqr.js').startAdbQr({
+        adb: br.adb,
+        onPaired: () => br.pairedNow(),
+        onEnd: (why) => { adbQr = null; state.adbQr = { done: why }; pushState(); },
+      });
+      state.adbQr = { text: adbQr.text };
+    }
+    pushState();
+  };
   svc.wired.on('change', pushState);
   // An iPhone's or iPad's session through its USB cable (shared/iosnet.js: usbmuxd to the app's port):
   // this server and the WebRTC relay (wired.js), nothing else.

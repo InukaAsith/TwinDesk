@@ -63,6 +63,8 @@ function setupIpc(ctx) {
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
   handle('importCancel', () => ctx.explorer && ctx.explorer() && ctx.explorer().cancel()); // Phone Files: stop importing into Explorer's folder
   handle('history', (r) => { if (r && typeof r === 'object' && ctx.history) ctx.history(r); });
+  handle('qrPair', () => ctx.qrPair()); // Connection: the phone pairing QR code's link
+  handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code
   handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
     : !ctx.notifs ? false : r.dismiss ? ctx.notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? ctx.notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
       : ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here

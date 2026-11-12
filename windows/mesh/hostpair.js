@@ -34,7 +34,7 @@ class Pairing extends EventEmitter {
   // What the control window shows about an in-progress request.
   pendingView() {
     const p = this.pending;
-    return p && { name: p.name, os: p.os, code: p.code, confirmed: p.confirmed, allowed: p.allowed, wired: p.wired };
+    return p && { name: p.name, os: p.os, code: p.code, confirmed: p.confirmed, allowed: p.allowed, wired: p.wired, qr: p.qr };
   }
 
   touch(id) {
@@ -101,6 +101,7 @@ class Pairing extends EventEmitter {
         // A phone on the USB cable, with the nonce wired.js sent it through adb (wired.knows):
         // no code to compare, only Allow here.
         wired: !!(this.isWired && this.isWired(msg.wired)),
+        qr: !!(this.isQr && this.isQr(msg.wired)), // the same, by Connection's QR code: on the network
         timer: setTimeout(() => this._abort(P.E.PAIR_TIMEOUT, 'Pairing timed out'), P.PAIR_TIMEOUT_MS),
       };
       this.server.send(ctx, { t: P.T.PAIR_NONCE, nonce: nm, os: P.OS.WIN });
@@ -148,6 +149,7 @@ class Pairing extends EventEmitter {
     this.fails.clear(p.ctx.address);
     this.server.send(p.ctx, { t: P.T.PAIR_OK, token, macId: this.id.id, macName: this.id.name, os: P.OS.WIN });
     console.log(`[pairing] paired with ${p.name} (${p.id})`);
+    if (p.qr && this.consumeQr) this.consumeQr(); // a QR pairing that went through: the link is single-use
     this._clear();
   }
 

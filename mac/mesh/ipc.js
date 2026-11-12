@@ -604,6 +604,10 @@ function setupIpc(ctx) {
     history(r) {
       if (ctx.history && r && typeof r === 'object') ctx.history.act(r);
     },
+    // Connection › Wireless debugging › Pair with a QR code: on while shown.
+    adbQr(on) {
+      if (ctx.adbQr) ctx.adbQr(on === true);
+    },
     notifReply(r) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
       if (!r || typeof r !== 'object' || !ctx.notifs) return;
@@ -654,6 +658,7 @@ function setupIpc(ctx) {
   };
 
   ipcMain.handle('getState', () => ctx.state);
+  ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));
   return actions;
