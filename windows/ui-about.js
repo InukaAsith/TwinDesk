@@ -51,6 +51,8 @@ UI.tab({
     const updInstall = UI.switch((v) => api.setUpdates({ install: v }), { label: I18n.t('Install updates automatically') });
     const instRow = UI.row(I18n.t('Install automatically'), I18n.t('Downloads a new version and installs it while this computer is idle. Settings and permissions stay'), [updInstall]);
 
+    const autoRow = UI.row(I18n.t('Check automatically'), I18n.t('Looks for new releases on GitHub every few hours'), [updAuto]);
+
     const pc = facts(I18n.t('This computer'), ['Computer name', 'System', 'Kernel', 'Processor', 'Memory', 'Architecture']);
     const build = facts(I18n.t('This app'), ['Version', 'Built for', 'Electron', 'Chromium', 'Node.js']);
     const thanksRow = UI.row(I18n.t('Thanks'), '');
@@ -59,7 +61,7 @@ UI.tab({
       hero,
       UI.card(I18n.t('Updates'), [
         updRow,
-        UI.row(I18n.t('Check automatically'), I18n.t('Looks for new releases on GitHub every few hours'), [updAuto]),
+        autoRow,
         instRow,
       ], { cls: 'keep-on' }),
       UI.card(I18n.t('Made by'), [
@@ -93,7 +95,14 @@ UI.tab({
       });
       build.set({ Version: a.app.version, 'Built for': a.app.arch, Electron: a.app.electron, Chromium: a.app.chrome, 'Node.js': a.app.node });
       const u = s.updates;
-      if (u) {
+      // The Microsoft Store's copy: the Store updates it, nothing to check or install here.
+      if (u && u.store) {
+        for (const b of [updCheck, updNotes, updUnskip, updGet, updWeb]) b.hidden = true;
+        autoRow.hidden = true;
+        instRow.hidden = true;
+        updStatus.textContent = '';
+        updRow.setHint(I18n.t('Version {version}. Updates come from the Microsoft Store', { version: u.current }));
+      } else if (u) {
         updAuto.set(u.auto);
         updCheck.disabled = u.checking;
         updGet.hidden = !u.available;

@@ -9,6 +9,7 @@
 const { app, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { launcher } = require('./storepkg'); // the Store's MSIX starts its alias
 
 const ARG = '--send-files';
 const SUFFIX = ' (TwinDesk).lnk';
@@ -42,7 +43,7 @@ class SendTo {
       const args = (app.isPackaged ? [] : [app.getAppPath()]).map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).concat(ARG).join(' ');
       const file = path.join(this.dir, name + SUFFIX);
       const ok = shell.writeShortcutLink(file, fs.existsSync(file) ? 'replace' : 'create', {
-        target: process.execPath, args, description: 'Send to ' + name + ' with TwinDesk', icon: process.execPath, iconIndex: 0,
+        target: launcher(), args, description: 'Send to ' + name + ' with TwinDesk', icon: process.execPath, iconIndex: 0,
       });
       if (!ok) console.warn('[sendto] Windows refused the Send to shortcut');
     } catch (e) {
@@ -64,7 +65,7 @@ class SendTo {
     const at = list.indexOf(ARG);
     if (at < 0) return false;
     // Chromium may move its own switches around, so take every existing absolute path after it.
-    const skip = new Set([process.execPath, app.getAppPath()].map((x) => path.resolve(x).toLowerCase()));
+    const skip = new Set([process.execPath, launcher(), app.getAppPath()].map((x) => path.resolve(x).toLowerCase()));
     const paths = list.slice(at + 1).filter((a) => typeof a === 'string' && !a.startsWith('--') && path.win32.isAbsolute(a)
       && !skip.has(path.resolve(a).toLowerCase()) && fs.existsSync(a)).slice(0, 1000);
     if (!paths.length) return true;

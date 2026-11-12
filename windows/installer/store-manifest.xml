@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
+     The Microsoft Store's MSIX (installer/build.js store; windows/storepkg.js says what it changes).
+     electron-builder fills the ${…} (identity and publisher: Partner Center › Product identity).
+     The app is in app\ (TwinDesk.exe, resources\app\… as the NSIS install).
+       desktop6      files and registry not virtualized: settings stay in %APPDATA%\MacShare, and the
+                     elevated scripts, Explorer's menu and Send to see what the app writes
+                     (unvirtualizedResources).
+       phone line    the capabilities windows-helper/calls/AppxManifest.xml gives the sparse package
+                     of the NSIS install; here macshare-calls.exe has this package's identity.
+       alias         TwinDesk.exe, which shortcuts and the login item start (the app's folder changes
+                     with every update).
+       firewall      the NSIS installer’s rules (installer.nsh), the package’s, kept up to date by Windows. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap13="http://schemas.microsoft.com/appx/manifest/uap/windows10/13"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap13 desktop desktop2 desktop6 rescap">
+  <Identity Name="${identityName}" ProcessorArchitecture="${arch}" Publisher='${publisher}' Version="${version}"/>
+  <Properties>
+    <DisplayName>${displayName}</DisplayName>
+    <PublisherDisplayName>${publisherDisplayName}</PublisherDisplayName>
+    <Description>${description}</Description>
+    <Logo>${logo}</Logo>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+  </Properties>
+  <Resources>
+    ${resourceLanguages}
+  </Resources>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0"/>
+  </Dependencies>
+  <Capabilities>
+    <uap:Capability Name="phoneCall"/>
+    <rescap:Capability Name="runFullTrust"/>
+    <rescap:Capability Name="unvirtualizedResources"/>
+    <rescap:Capability Name="phoneLineTransportManagement"/>
+    <rescap:Capability Name="phoneCallSystem"/>
+    <DeviceCapability Name="bluetooth"/>
+  </Capabilities>
+  <Applications>
+    <Application Id="${applicationId}" Executable="${executable}" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements BackgroundColor="${backgroundColor}" DisplayName="${displayName}" Description="${description}"
+        Square150x150Logo="${square150x150Logo}" Square44x44Logo="${square44x44Logo}">
+        ${defaultTile}
+      </uap:VisualElements>
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="${executable}" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="TwinDesk.exe"/>
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+        <uap3:Extension Category="windows.protocol">
+          <uap3:Protocol Name="twindesk" Parameters="&quot;%1&quot;">
+            <uap:DisplayName>TwinDesk</uap:DisplayName>
+          </uap3:Protocol>
+        </uap3:Extension>
+        <!-- Without it RegisterApp does nothing and Windows drops the hands-free link (Calls.cs). -->
+        <uap13:Extension Category="windows.phoneCallActivation"/>
+      </Extensions>
+    </Application>
+  </Applications>
+  <!-- makeappx: firewall rules are the package's, not the app's. -->
+  <Extensions>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="${executable}">
+        <desktop2:Rule Direction="in" IPProtocol="TCP" Profile="all"/>
+        <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="app\resources\app\windows\vendor\adb\adb.exe">
+        <desktop2:Rule Direction="in" IPProtocol="TCP" Profile="all"/>
+        <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="app\resources\app\windows-helper\bin\macshare-winhelper.exe">
+        <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+  </Extensions>
+</Package>

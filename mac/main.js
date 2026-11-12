@@ -1315,6 +1315,7 @@ function loadHub() {
     // on Apple silicon), so the Calls page has no Sound or Bluetooth setup here and the sound stays on the
     // phone (answer, end, mute, hold and the keypad still work). mac/callaudio.js is kept, unused.
     send: (paths, batch) => !!(svc.fileSend && svc.fileSend.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
+    shareSheet: (paths) => new (require('electron').ShareMenu)({ filePaths: paths }).popup(win && !win.isDestroyed() ? { browserWindow: win } : {}), // Photos › Share
     choose: () => dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, { properties: ['openFile', 'openDirectory', 'multiSelections'] })
       .then((r) => (r.canceled ? [] : r.filePaths)),
     share: { // shared folders with the phone (shared/foldershare.js)

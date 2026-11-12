@@ -1,7 +1,7 @@
 {
   "name": "macshare-win",
   "productName": "TwinDesk",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "TwinDesk for Windows: pair with a Mac, view its screen, share mouse, keyboard and clipboard.",
   "license": "GPL-3.0",
   "private": true,
@@ -11,7 +11,8 @@
     "test:monitor": "electron . --test-monitor",
     "build:helper": "..\\windows-helper\\build.cmd",
     "fetch-adb": "node scripts/fetch-adb.js",
-    "dist": "node installer/build.js"
+    "dist": "node installer/build.js",
+    "dist:store": "node installer/build.js store x64 arm64"
   },
   "dependencies": {
     "ws": "^8.18.0"

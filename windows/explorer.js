@@ -12,6 +12,7 @@
 
 const { app } = require('electron');
 const { execFile } = require('child_process');
+const { launcher } = require('./storepkg');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -36,11 +37,11 @@ class Explorer {
 
   // The menu in the registry (again at every start: the app may have moved).
   install() {
-    const exe = process.execPath;
+    const exe = launcher(); // the Store's MSIX: its alias (storepkg.js); the icon is this exe's
     const pre = app.isPackaged ? '' : `"${path.resolve(process.argv[1] || app.getAppPath())}" `; // a dev copy: electron.exe <app folder>
     const esc = (t) => t.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); // a .reg string's escapes
     const cmd = (args) => `"${esc(`"${exe}" ${pre}${args}`)}"`;
-    const icon = `"${esc(exe)},0"`;
+    const icon = `"${esc(process.execPath)},0"`;
     const key = (root, ...sub) => '[' + ['HKEY_CURRENT_USER', 'Software', 'Classes', root, 'shell', 'TwinDesk', ...sub].join('\\') + ']';
     const menu = (root, items) => [
       key(root), '"MUIVerb"="TwinDesk"', `"Icon"=${icon}`, '"SubCommands"=""', '',

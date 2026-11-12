@@ -267,8 +267,9 @@
           });
           // TwinDesk on an iPhone this computer can't install to right now.
           if (sess && !devs.length) rows.push(UI.row(sess.name, tr('Connected to TwinDesk but not available for installation. Connect it to {computer} by cable once and tap Trust; Wi-Fi sync then works without the cable.', { computer: here }), [], { literal: true }));
-          for (const n of near) rows.push(UI.row(n.name, tr('Nearby over Bluetooth. TwinDesk can be woken for a refresh.'), [el('span', { class: 'pill muted', text: 'Bluetooth' })], { literal: true }));
-          if (!rows.length) rows.push(UI.row(tr('No devices found'), tr('Connect the iPhone or iPad by cable, unlock it and tap Trust. It is then also reachable over Wi-Fi if Wi-Fi sync is enabled in Finder, Apple Devices or iTunes.'), [], { literal: true }));
+          for (const n of near) rows.push(UI.row(n.name, tr('Nearby over Bluetooth — for automatic refresh only. To install TwinDesk for the first time, connect by cable and tap Trust.'), [el('span', { class: 'pill muted', text: 'Bluetooth' })], { literal: true }));
+          if (near.length && !devs.length) rows.push(UI.row(tr('No cable connection'), !mac && !linux ? tr('Connect by cable, unlock it and tap Trust. Install Apple Devices or iTunes from the Microsoft Store if the iPhone or iPad is not detected.') : tr('Connect by cable, unlock it and tap Trust. Wi-Fi sync then works without the cable.'), [], { literal: true }));
+          if (!rows.length) rows.push(UI.row(tr('No devices found'), !mac && !linux ? tr('Connect the iPhone or iPad by cable, unlock it and tap Trust. Install Apple Devices or iTunes from the Microsoft Store if it is not detected. Wi-Fi sync then works without the cable.') : tr('Connect the iPhone or iPad by cable, unlock it and tap Trust. It is then also reachable over Wi-Fi if Wi-Fi sync is enabled in Finder, Apple Devices or iTunes.'), [], { literal: true }));
           if (pick && !v.udid) rows.unshift(UI.row(tr('Select a device'), tr('Several devices are available. Select the one to install to.'), [], { literal: true }));
           devList.replaceChildren(...rows);
         }

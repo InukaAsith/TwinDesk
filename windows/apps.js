@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
 const I18n = require('../shared/i18n.js');
+const { launcher } = require('./storepkg'); // the Store's MSIX starts its alias
 
 const T = P.T;
 
@@ -107,7 +108,7 @@ class Apps {
   // How this copy of TwinDesk opens one Mac app: "TwinDesk.exe --mac-app=<id>".
   static relaunch(id) {
     const args = (app.isPackaged ? [] : [app.getAppPath()]).concat('--mac-app=' + id);
-    return { target: process.execPath, args: args.map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ') };
+    return { target: launcher(), args: args.map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ') };
   }
 
   get startDir() {

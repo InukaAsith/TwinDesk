@@ -72,7 +72,9 @@ const { apply: applySettings, migrateKvm, load: loadSettings, save: storeSetting
 
 // Packaged: electron-builder's appId is the shortcut's AppUserModelID. In development Windows
 // only shows toasts for an id it knows, and electron.exe's path works.
-const AUMID = app.isPackaged ? 'org.macshare.windows' : process.execPath;
+// The Store's MSIX: the package's own app id (storepkg.js).
+const Store = require('../storepkg');
+const AUMID = Store.STORE ? Store.AUMID : app.isPackaged ? 'org.macshare.windows' : process.execPath;
 
 // ../main.js has set the command-line switches (WebRTC) and the user data folder before handing over.
 if (!app.requestSingleInstanceLock()) {
@@ -82,7 +84,8 @@ if (!app.requestSingleInstanceLock()) {
   app.setAppUserModelId(AUMID); // toasts need it; the installer's shortcut carries the same id
   // A pinned Mac app starts "TwinDesk.exe --mac-app=<id>": open it, else show the window.
   // twindesk: links (a toast's Copy, Explorer's TwinDesk menu) come to this copy of TwinDesk.
-  if (app.isPackaged) app.setAsDefaultProtocolClient('twindesk');
+  // The Store's MSIX declares twindesk: in its manifest; an NSIS install registers itself.
+  if (Store.STORE) { /* the manifest's */ } else if (app.isPackaged) app.setAsDefaultProtocolClient('twindesk');
   else app.setAsDefaultProtocolClient('twindesk', process.execPath, [path.resolve(process.argv[1] || '.')]);
   app.on('second-instance', (_e, argv) => {
     if (openLink(argv)) return;
@@ -407,7 +410,7 @@ function start() {
   helper.once('ready', () => vdd.check()); // switches a virtual monitor left on by a crash off
   // New releases on GitHub: a notification once per version, the tray item and About › Updates.
   updates = new Updates({
-    current: app.getVersion(), platform: 'win', getSettings: () => settings, getLanguage: () => i18n.locale, save: saveSettings, onChange: pushState,
+    current: app.getVersion(), platform: 'win', store: Store.STORE, getSettings: () => settings, getLanguage: () => i18n.locale, save: saveSettings, onChange: pushState,
     isBusy: () => !!(hub && hub.bus && hub.bus.connectedIds().length), // Install automatically waits until no device is connected
     onShowModal: showUpdateWindow,
     notify: (title, body, onClick) => {
@@ -650,6 +653,7 @@ function loadHub() {
     audio: (opts) => require('../callaudio.js').create({ helper, ...opts }), // the calls' sound over Bluetooth
     audioLimit: require('../callaudio.js').LIMIT,
     btSettings: () => shell.openExternal('ms-settings:bluetooth').catch(() => {}), // pairing the phone for the calls' sound
+    shareSheet: (paths, title) => helper && helper.send('share', { paths, title }), // Photos › Share: Windows' Share (Share.cs)
     send: (paths, batch) => !!(fileDrop && fileDrop.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
     choose: () => require('electron').dialog.showOpenDialog(mainWin && !mainWin.isDestroyed() ? mainWin : undefined, { properties: ['openFile', 'multiSelections'] }) // files only: with folders too it picks only folders here
       .then((r) => (r.canceled ? [] : r.filePaths)),
@@ -1160,7 +1164,7 @@ async function fixFirewall() {
 }
 
 // In development the login item starts electron.exe with this app's folder.
-const loginItem = () => ({ path: process.execPath, args: app.isPackaged ? ['--hidden'] : [app.getAppPath(), '--hidden'] });
+const loginItem = () => ({ path: Store.launcher(), args: app.isPackaged ? ['--hidden'] : [app.getAppPath(), '--hidden'] });
 function getStartup() {
   return app.getLoginItemSettings(loginItem()).openAtLogin;
 }
