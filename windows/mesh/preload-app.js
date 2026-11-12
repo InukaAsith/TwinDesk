@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('macshare', {
   relaunch: call('relaunch'),
   setEncoder: call('setEncoder'),
   setAudio: call('setAudio'),
+  phoneMedia: call('phoneMedia'),
+  phoneBtPick: call('phoneBtPick'),
   setTerminal: call('setTerminal'),
   openTerminal: call('openTerminal'),
   setupSshd: call('setupSshd'),

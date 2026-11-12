@@ -244,6 +244,7 @@ function publishState() {
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
+    state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web
     state.chats = chats ? chats.view() : null; // Messages' WhatsApp, Instagram… conversations
@@ -648,6 +649,13 @@ app.whenReady().then(() => {
     allowed: (port) => port === server.port || port === svc.wired.turnPort,
   });
   svc.iosNet.on('change', () => { if (svc.iosNet.view.devices.some((d) => d.app)) svc.wired.relay(); pushState(); });
+  // What plays on each phone, for the Overview's media controls (one shared/nowplaying.js per phone,
+  // shared/perphone.js), while Audio › Media controls is on; the active phone's is shown.
+  svc.nowPlaying = require('../../shared/perphone.js').phoneMedia({
+    NowPlaying: require('../../shared/nowplaying.js').NowPlaying, cfg: () => settings.audio, onChange: pushState, phones: () => svc.phone,
+  });
+  svc.loadNowPlaying = () => svc.nowPlaying;
+  const { PcNow } = require('../../shared/pcnow.js');
   svc.phone = new PhoneSet({
     hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
     make: (scoped) => {
@@ -667,6 +675,12 @@ app.whenReady().then(() => {
       u.views.on('change', pushState);
       u.bridge.on('popup', (kind, text) => hud.show(kind, text));
       u.bridge.on('save', () => store.saveSettings(settings));
+      svc.nowPlaying.unit(u);
+      // What plays on this Mac, for that phone's Media page and its media notification (shared/pcnow.js).
+      new PcNow({ server: u.link, key: (code) => {
+        svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
+        svc.helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
+      } });
     },
   });
   svc.phone.on('change', pushState);

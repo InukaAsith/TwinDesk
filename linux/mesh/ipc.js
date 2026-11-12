@@ -156,7 +156,12 @@ function setupIpc(ctx) {
     const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
     if (mic) mic.apply();
     if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
+    // Media controls: made for every phone when turned on; off, each one stops. The Bluetooth speaker: loaded when first on.
+    if (partial && 'phoneMedia' in partial && ctx.nowPlaying) ctx.nowPlaying.apply();
+    if (partial && 'phoneBt' in partial && ctx.btAudio) ctx.btAudio.apply(); else if (partial && 'phoneBt' in partial) ctx.loadBtAudio();
   }));
+  handle('phoneMedia', (m) => m && ctx.nowPlaying && ctx.nowPlaying.control(String(m.a || ''), m.pos));
+  handle('phoneBtPick', (id) => typeof id === 'string' && id && ctx.btAudio && ctx.btAudio.pick(id));
   handle('setTerminal', (partial) => {
     const p = partial && typeof partial === 'object' ? { enabled: partial.enabled, allowMac: partial.allowMac } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);

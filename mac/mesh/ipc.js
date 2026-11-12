@@ -514,7 +514,16 @@ function setupIpc(ctx) {
       const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
       if (mic) mic.apply();
       if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
+      // Media controls: made for every phone when turned on; off, each one stops.
+      const np = partial && 'phoneMedia' in partial && ctx.loadNowPlaying ? ctx.loadNowPlaying() : null;
+      if (np) np.apply();
     },
+    // The active phone's media controls on the Overview (shared/nowplaying.js, one per phone).
+    phoneMedia(m) {
+      const np = ctx.loadNowPlaying ? ctx.loadNowPlaying() : null;
+      if (m && np) np.control(String(m.a || ''), m.pos);
+    },
+    phoneBtPick() {}, // no Bluetooth speaker mode on macOS
     // "Share sound with the screen" (Display › Mac → PC).
     setScreenSound(on) {
       settings.sharing.audio = !!on;

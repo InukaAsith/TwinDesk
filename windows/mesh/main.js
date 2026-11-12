@@ -160,6 +160,8 @@ let kvm = null;
 let lockKey = null; // the cursor lock key at home (shared/cursorlock.js)
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let wired = null; // wired.js, with the phone
+let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
+let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
 let phoneDrive = null; // its storage as a drive here (phonedrive.js), the first phone's
 let bleHost = null; // Bluetooth, for devices not on this network: we host (blepipe.js)
@@ -400,7 +402,7 @@ function start() {
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
@@ -476,6 +478,12 @@ function startPhone(server, pairing) {
   iosNet.on('change', () => { if (iosNet.view.devices.some((d) => d.app)) wired.relay(); pushState(); });
   // Every phone gets its own stack (phone.js, phone-bridge.js, phoneview.js) made on a link scoped to it
   // (phones.js); `phone` is also the single-phone API for the active one.
+  // What plays on each phone (one shared/nowplaying.js per phone while Audio › Media controls is on),
+  // and on this computer for each phone's Media page (shared/pcnow.js).
+  nowPlaying = require('../../shared/perphone.js').phoneMedia({
+    NowPlaying: require('../../shared/nowplaying.js').NowPlaying, cfg: () => settings.audio, onChange: pushState, phones: () => phone,
+  });
+  const { PcNow } = require('../../shared/pcnow.js');
   phone = new PhoneSet({
     hub, link: pl, raw: server, discovery, pairing, wired,
     make: (scoped) => {
@@ -519,8 +527,15 @@ function startPhone(server, pairing) {
       u.bridge.on('popup', (kind, text) => hud.show(kind, text));
       u.views.on('change', pushState);
       u.views.on('focus', () => kvm.applyConfig());
+      nowPlaying.unit(u);
+      new PcNow({ server: u.link, key: (code) => {
+        if (!helper) return;
+        helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
+        helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
+      } });
     },
   });
+  loadBtAudio();
   // A phone notification clicked here: its app in a window (on the phone it came from).
   notifs.onClick = (m) => {
     const u = phone.unit(m.originId);
@@ -926,6 +941,27 @@ function meshPhoneCtl() {
   return v ? { ctl: v, qs: v.qs || null, top: v.top || [] } : { ctl: null, qs: null, top: [] };
 }
 
+// Audio › Play phone sound here (Bluetooth): this PC as the phone's Bluetooth speaker (A2dp.cs). A computer is one phone's
+// speaker at a time: the first phone that connected here (PhoneSet's first stack).
+function loadBtAudio() {
+  if (btAudio || !phone || !settings.audio.phoneBt) return btAudio;
+  const { BtAudio } = require('../../shared/btaudio.js');
+  btAudio = new BtAudio({
+    server: phone.first.link,
+    backend: {
+      list: async () => ((await helper.request('a2dpList', {}, 15000)).devices || []).map((d) => ({ id: String(d.id || ''), name: String(d.name || '') })),
+      open: (id) => helper.request('a2dpOpen', { dev: id }, 40000),
+      close: () => helper.request('a2dpClose'),
+      on: (fn) => helper.on('event', (name, m) => name === 'a2dp.state' && fn(m.state)),
+    },
+    cfg: () => settings.audio,
+    save: saveSettings,
+  });
+  btAudio.on('change', pushState);
+  btAudio.apply();
+  return btAudio;
+}
+
 function buildState() {
   const miss = missing();
   return {
@@ -964,6 +1000,8 @@ function buildState() {
     terminal: { ...settings.terminal, ...terminal.view(), installedKey: undefined, server: sshd.view() },
     files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
     notifs: { ...settings.notifs, ...notifs.view() },
+    phoneMedia: nowPlaying ? nowPlaying.view : null,
+    btAudio: btAudio ? btAudio.view : null,
     history: historyKeeper ? historyKeeper.view() : null,
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
     apps: link.peerOs !== P.OS.MAC ? peerApps.view() : apps.view(), // A PC's (or Linux computer's) apps come through peerapps.js
