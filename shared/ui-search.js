@@ -86,13 +86,25 @@
     }
   }, true);
 
-  // The magnifier at the top right.
-  function button() {
-    if (document.getElementById('search-btn')) return;
-    const b = UI.el('button', { class: 'search-btn', id: 'search-btn', attrs: { 'aria-label': t('Search'), title: t('Search') + (navigator.platform.startsWith('Mac') ? ' (⌘K)' : ' (Ctrl+K)') } }, [UI.icon('search')]);
+  // A glass pill in each page's header, level with its title: the magnifier and ⌘K (Ctrl K).
+  const mac = /^Mac/.test(navigator.platform);
+  function pill() {
+    const b = UI.el('button', { class: 'search-pill', attrs: { 'aria-label': t('Search'), title: t('Search') } }, [
+      UI.icon('search'),
+      UI.el('span', { class: 'search-keys', attrs: { 'data-literal': '' } }, mac ? [UI.el('kbd', { text: '⌘' }), UI.el('kbd', { text: 'K' })] : [UI.el('kbd', { text: 'Ctrl' }), UI.el('kbd', { text: 'K' })]),
+    ]);
     b.onclick = show;
-    document.body.append(b);
-    document.body.classList.add('has-search');
+    return b;
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', button); else button();
+  function place(head) {
+    if (head.querySelector('.search-pill')) return;
+    const titles = head.querySelector('.titles');
+    if (titles) titles.after(pill()); else head.append(pill());
+  }
+  function start() {
+    document.querySelectorAll('.page-head').forEach(place);
+    const pages = document.getElementById('pages');
+    if (pages) new MutationObserver(() => pages.querySelectorAll('.page-head').forEach(place)).observe(pages, { childList: true, subtree: true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

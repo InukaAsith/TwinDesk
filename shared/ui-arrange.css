@@ -88,7 +88,7 @@
   overflow: hidden;
 }
 .search-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.2)); }
-.search-bar svg, .search-btn svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; opacity: 0.7; }
+.search-bar svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; opacity: 0.7; }
 .search-input { flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 16px; }
 .search-input::-webkit-search-cancel-button { display: none; }
 .search-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
@@ -99,22 +99,48 @@
 .search-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-where { flex: none; font-size: 12px; color: var(--muted, #888); }
 .search-empty { margin: 0; padding: 12px 16px 14px; }
-.search-btn {
-  position: fixed;
-  top: 12px;
-  right: 14px;
-  z-index: 50;
-  width: 30px;
-  height: 30px;
-  display: flex;
+/* The search pill, level with the page's title: Liquid Glass (a translucent, blurred lens with a
+   bright rim and an inner highlight), in either theme. */
+.search-pill {
+  flex: none;
+  align-self: flex-start;
+  margin-top: -3px;
+  height: 36px;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
+  gap: 10px;
+  padding: 0 8px 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text, #fff) 16%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #fff 14%, transparent), color-mix(in srgb, #fff 3%, transparent)),
+    color-mix(in srgb, var(--card, #222) 55%, transparent);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, #000 12%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.18);
   color: var(--text, inherit);
   cursor: pointer;
   -webkit-app-region: no-drag;
+  transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1), background-color 0.2s;
 }
-.search-btn:hover { background: var(--nav-hover, rgba(127, 127, 127, 0.15)); }
-.has-search .page-head { padding-right: 40px; }
+.search-pill:hover { transform: scale(1.04); border-color: color-mix(in srgb, var(--text, #fff) 26%, transparent); }
+.search-pill:active { transform: scale(0.97); }
+.search-pill svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; opacity: 0.85; }
+.search-keys { display: inline-flex; gap: 3px; }
+.search-keys kbd {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font: 600 12px/1 -apple-system, "Segoe UI", system-ui, sans-serif;
+  color: var(--muted, inherit);
+  background: color-mix(in srgb, var(--text, #fff) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text, #fff) 10%, transparent);
+}
