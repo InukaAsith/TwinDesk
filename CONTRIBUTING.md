@@ -1,9 +1,5 @@
 # Contributing to TwinDesk
 
-> [!IMPORTANT]
-> **TwinDesk is in a feature freeze.** We are not adding new features until all current bugs and performance problems are fixed.
-> Bug reports, performance reports and fixes for them are very welcome. Feature requests and feature PRs will be closed or left for after the freeze.
-
 ## One maintainer
 
 TwinDesk is maintained by a single person in their spare time. Requests and pull requests are read,
