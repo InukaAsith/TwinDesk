@@ -9,7 +9,6 @@ UI.tab({
   order: 95,
   title: I18n.t('Multi-device'),
   heading: I18n.t('Multi-device · Mesh mode'),
-  tag: I18n.t('Beta'),
   color: 'linear-gradient(#5e5ce6, #3634a3)',
   desc: I18n.t('Several computers and phones connected at once'),
   bottom: true,
@@ -142,7 +141,7 @@ UI.tab({
 
     body.append(
       UI.card(I18n.t('Mesh mode'), [
-        UI.row(I18n.t('Use several devices at once'), I18n.t('On, in beta. TwinDesk restarts when you turn it on or off'), [turnOff]),
+        UI.row(I18n.t('Use several devices at once'), I18n.t('On. TwinDesk restarts when you turn it on or off'), [turnOff]),
         UI.row(I18n.t('Computers'), I18n.t('Connect to this one over the same network only, not Bluetooth. Phones over Wi-Fi, a USB cable or Bluetooth, as before'), []),
       ]),
       UI.card(I18n.t('Layout'), [gridEl, reachNote, layoutHint], { cls: 'keep-on' }),
