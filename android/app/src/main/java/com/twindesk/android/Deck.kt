@@ -393,7 +393,10 @@ fun DeckFull(core: Core, close: () -> Unit) {
         var step by remember { mutableStateOf(0 to 0) } // a three-finger page turn: (count, direction)
         var flash by remember { mutableStateOf<String?>(null) }
         LaunchedEffect(flash) { if (flash != null) { delay(900); flash = null } }
-        val toSpace = { to: JSONObject -> spaceId = to.optString("id"); flash = to.str("name", 30) }
+        val ctx = LocalContext.current
+        val show = { to: JSONObject -> spaceId = to.optString("id"); flash = to.str("name", 30) }
+        // Reaching the window space on one's own (a swipe, the tab, a tile) ends the nudge for good.
+        val toSpace = { to: JSONObject -> show(to); if (to.optString("kind") == "windows") tourSet(ctx, "reached") }
         // Along the screen's long side the next space, across it the next page; round and round.
         val swipe = { dx: Int, dy: Int ->
             val (sp, pg) = if (d.portrait) dy to dx else dx to dy
@@ -403,13 +406,13 @@ fun DeckFull(core: Core, close: () -> Unit) {
         }
         val swipeNow by rememberUpdatedState(swipe) // the detector outlives recompositions
         // Showing the way to the window space: the first time a short picture that must be followed
-        // (then a tour of it), after that a nudge and a tab each time the Deck opens elsewhere.
-        val ctx = LocalContext.current
+        // (then a tour of it), after that a nudge and a tab each time the Deck opens elsewhere, until
+        // the person has gone there themselves once.
         val win = spaces.firstOrNull { it.optString("kind") == "windows" }
         var intro by remember { mutableStateOf(win != null && !tourDone(ctx, "intro")) }
         var tour by remember { mutableStateOf(!tourDone(ctx, "windows")) }
         val nudge = remember { Animatable(0f) }
-        val hint = remember { win != null && !intro && space.optString("kind") != "windows" }
+        val hint = remember { win != null && !intro && space.optString("kind") != "windows" && !tourDone(ctx, "reached") }
         val toWindows = { win?.let { toSpace(it) }; Unit }
         Column(Modifier.fillMaxSize().threeFingerSwipe(d.swipeSpaces) { dx, dy -> swipeNow(dx, dy) }
             .graphicsLayer { val o = -nudge.value * 28.dp.toPx(); if (d.portrait) translationY = o else translationX = o }) {
@@ -419,7 +422,7 @@ fun DeckFull(core: Core, close: () -> Unit) {
         }
         if (hint && win != null && space.optString("kind") != "windows") SwipeHint(d, win.str("name", 30).ifEmpty { tr("Windows") }, nudge, toWindows)
         CloseButton(Modifier.align(Alignment.TopEnd).alpha(0.55f), close)
-        if (intro) DeckIntro(d) { tourSet(ctx, "intro"); intro = false; toWindows() }
+        if (intro) DeckIntro(d) { tourSet(ctx, "intro"); intro = false; win?.let(show) }
         else if (tour && space.optString("kind") == "windows") WindowTour { tourSet(ctx, "windows"); tour = false }
         flash?.let {
             Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 18.dp, vertical = 10.dp)) {

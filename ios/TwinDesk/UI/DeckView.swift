@@ -153,7 +153,8 @@ struct DeckScreen: View {
     @State private var step = (n: 0, dir: 0)
     @State private var flash: String?
     // Showing the way to the window space: the first time a short picture that must be followed (then
-    // a tour of it); after that a nudge and a tab each time the Deck opens elsewhere.
+    // a tour of it); after that a nudge and a tab each time the Deck opens elsewhere, until the person
+    // has gone there themselves once.
     @State private var intro = !DeckTourStore.done("intro")
     @State private var tour = !DeckTourStore.done("windows")
     @State private var hint = false
@@ -222,7 +223,7 @@ struct DeckScreen: View {
         .onChange(of: core.deck.portrait) { p in if p { Orientation.portrait() } else { Orientation.landscape() } }
         .task(id: win?.str("id") ?? "") {
             // Each opening away from the window space: the tiles nudge towards it twice, a tab shows the swipe.
-            guard win != nil, !intro, !hint else { return }
+            guard win != nil, !intro, !hint, !DeckTourStore.done("reached") else { return }
             let here = core.deck.spaces.first { $0.str("id") == spaceId } ?? core.deck.spaces.first
             guard here?.str("kind") != "windows" else { return }
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -252,11 +253,13 @@ struct DeckScreen: View {
     private func finishIntro(_ w: JSON) {
         DeckTourStore.set("intro")
         withAnimation { intro = false }
-        go(to: w.str("id"))
+        go(to: w.str("id"), own: false)
     }
 
-    private func go(to id: String) {
+    // Reaching the window space on one's own (a swipe, the tab, a tile) ends the nudge for good.
+    private func go(to id: String, own: Bool = true) {
         guard let s = core.deck.spaces.first(where: { $0.str("id") == id }) else { return }
+        if own && s.str("kind") == "windows" { DeckTourStore.set("reached") }
         withAnimation(.easeOut(duration: 0.2)) { spaceId = id }
         flash = s.str("name", max: 30)
     }
