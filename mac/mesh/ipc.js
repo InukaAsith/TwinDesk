@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'rezume', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -533,6 +533,13 @@ function setupIpc(ctx) {
       if (m && np) np.control(String(m.a || ''), m.pos);
     },
     phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // The Deck page (shared/ui-deck.js): the layout, and Try (runs a button here).
+    deckSave(layout) {
+      if (ctx.deck && layout && typeof layout === 'object') ctx.deck.save(layout);
+    },
+    deckTry(action) {
+      if (ctx.deck && action && typeof action === 'object') ctx.deck.exec(action).catch(() => {});
+    },
     // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
     setRemote(m) {
       if (!m || typeof m !== 'object') return;
@@ -719,6 +726,18 @@ function setupIpc(ctx) {
   ipcMain.handle('getState', () => ctx.state);
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
+  ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker
+  ipcMain.handle('deckPick', (_e, o) => (async () => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  })(o));
+  ipcMain.handle('deckRun', (_e, a) => (ctx.deck && a && typeof a === 'object' ? ctx.deck.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false })); // Try
+  ipcMain.handle('deckState', () => (ctx.deck ? ctx.deck.state().catch(() => ({})) : {})); // its sound, Bluetooth and display pickers
   ipcMain.handle('phoneListCameras', () => (ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : [])); // Camera: the phone's cameras
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));
   return actions;

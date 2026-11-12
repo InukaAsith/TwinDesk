@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld('macshare', {
   relaunch: call('relaunch'),
   setAudio: call('setAudio'),
   camera: call('camera'),
+  deckSave: call('deckSave'), deckTry: call('deckTry'), deckApps: call('deckApps'), deckState: call('deckState'), deckRun: call('deckRun'), deckPick: call('deckPick'), // the Deck page
   setRemote: call('setRemote'), // Remote tab (shared/phone-remote.js)
   setReZume: call('setReZume'), // ReZume tab (shared/rezume.js)
   rezumeDo: call('rezumeDo'), // … Open, Dismiss, Send to

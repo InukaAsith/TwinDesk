@@ -260,6 +260,21 @@ function setupIpc(ctx) {
     else if (m.a === 'allow' && typeof m.app === 'string') h.allow(m.list, m.app, m.on === true);
     else if (m.a === 'forget') h.forget(m.list, typeof m.app === 'string' ? m.app : '');
   });
+  // The Deck page (shared/ui-deck.js): the layout, Try (runs a button here), the app picker.
+  handle('deckSave', (layout) => { const d = ctx.deck && ctx.deck(); if (d && layout && typeof layout === 'object') d.save(layout); });
+  handle('deckTry', (action) => { const d = ctx.deck && ctx.deck(); if (d && action && typeof action === 'object') d.exec(action).catch(() => {}); });
+  handle('deckApps', () => { const d = ctx.deck && ctx.deck(); return d ? d.apps().catch(() => []) : []; });
+  handle('deckPick', async (o) => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { dialog, BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  });
+  handle('deckRun', (a) => { const d = ctx.deck && ctx.deck(); return d && a && typeof a === 'object' ? d.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false }; }); // Try
+  handle('deckState', () => { const d = ctx.deck && ctx.deck(); return d ? d.state().catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays
   // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
   handle('setRemote', (m) => {
     if (!m || typeof m !== 'object') return;

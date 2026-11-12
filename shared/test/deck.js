@@ -177,6 +177,16 @@ const fakeSys = {
   assert.ok(lay.layout && lay.mac === true && lay.can.includes('bt') && lay.caps.windows);
   assert.ok(!JSON.stringify(lay).includes('/Users/me'), 'no paths on the wire');
   assert.deepStrictEqual(d.view().surface, ['Pixel']);
+  // Multi-device: one more phone's session through add(): both phones' Decks run here.
+  const second = new FakeServer();
+  d.add(second);
+  second.current = { os: 'android', name: 'Tab' };
+  second.emit('client', second.current);
+  assert.deepStrictEqual(second.last(T.DECK_OFFER), { t: T.DECK_OFFER, v: 2 });
+  second.emit(`t:${T.DECK_HELLO}`, {});
+  assert.deepStrictEqual(d.view().surface.sort(), ['Pixel', 'Tab']);
+  second.emit('closed');
+  assert.deepStrictEqual(d.view().surface, ['Pixel']);
 
   // A device's save keeps the paths.
   const edit = JSON.parse(JSON.stringify(lay.layout));

@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const ACTIONS = [
   'setSharing', 'setStreamTarget', 'setStreamInput', 'selectDisplay', 'setDisplayMode', 'setVirtual', 'setStreamMaxHeight',
-  'setBitrate', 'setKvm', 'setApp', 'setAudio', 'camera', 'setRemote', 'setRezume', 'rezumeDo', 'phoneMedia', 'phoneBtPick', 'setTerminal', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'history', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
+  'setBitrate', 'setKvm', 'setApp', 'setAudio', 'camera', 'setRemote', 'deckSave', 'deckTry', 'setRezume', 'rezumeDo', 'phoneMedia', 'phoneBtPick', 'setTerminal', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'history', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
   'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'selectPeer', 'forgetPeer', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost',
@@ -33,6 +33,10 @@ const api = {
 for (const name of ACTIONS) api[name] = (arg) => ipcRenderer.send(name, arg);
 api.phoneCamera = (open, opts) => ipcRenderer.send('phoneCamera', { open, opts }); // Camera › Start and Window: {facing, show}, sent as one
 api.setReZume = api.setRezume; // the shared ReZume page (shared/ui-rezume.js) says it the PC's way
+api.deckApps = () => ipcRenderer.invoke('deckApps'); // the Deck page's app picker
+api.deckState = () => ipcRenderer.invoke('deckState'); // its sound, Bluetooth and display pickers
+api.deckPick = (o) => ipcRenderer.invoke('deckPick', o); // a file, folder or script for a tile
+api.deckRun = (action) => ipcRenderer.invoke('deckRun', action); // Try: {ok, why}
 api.qrPair = () => ipcRenderer.invoke('qrPair'); // Connection: pair a phone with a QR code (its link)
 api.phoneListCameras = () => ipcRenderer.invoke('phoneListCameras');
 

@@ -479,7 +479,8 @@ function displayOf(ds, w) {
 
 // The three apps' one call, only while the Deck module is on (main.js): the phones' Deck now, and
 // web(bus) for TwinDesk Web's (webwire o.deck). settings.deck holds the layout.
-//   o: {platform, helper (or () → helper), server (the phones' session), settings() → settings,
+//   o: {platform, helper (or () → helper), server (the phones' session; null in Multi-device, where
+//       add(link) makes one per phone), settings() → settings,
 //       saveSettings(), readClipboard() → text, onChange(), sys (tests: a stand-in for deck-sys)}
 function startDeck(o) {
   const h = typeof o.helper === 'function' ? o.helper : () => o.helper; // Windows and Linux start theirs later
@@ -501,6 +502,8 @@ function startDeck(o) {
   const api = {
     // The phones' session: now or once it's there (Windows and Linux make it after TwinDesk Web).
     attach(server) { if (!phone && server) { phone = new Deck({ ...base, server }); deckOne = deckOne || phone; } return api; },
+    // Multi-device (mac|windows|linux/mesh): one more phone's session, a Deck of its own (each phone's buttons run here).
+    add(server) { const d = new Deck({ ...base, server }); deckOne = deckOne || d; return d; },
     web: (bus) => new Deck({ ...base, server: bus, web: true }),
     view: () => Deck.view(),
     // This computer's Deck page: save the layout, try a tile here, its pickers' lists.

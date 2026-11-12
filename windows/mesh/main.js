@@ -166,6 +166,7 @@ let lockKey = null; // the cursor lock key at home (shared/cursorlock.js)
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let wired = null; // wired.js, with the phone
 let phoneRemote = null; // each phone's Remote page: touchpad, keyboard and gamepad here (shared/perphone.js phoneRemote)
+let deck = null; // the Deck (shared/deck.js): each phone's (and web device's) buttons run here
 let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
 let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
@@ -415,14 +416,14 @@ function start() {
   });
   updates.start();
   // TwinDesk Web (../web.js): the same server and pairings as the one-to-one app (one userData).
-  web = require('../web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip,
+  web = require('../web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip,
     kvm: () => kvm, devctl: () => devctl });
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
@@ -560,6 +561,7 @@ function startPhone(server, pairing) {
       u.views.on('focus', () => kvm.applyConfig());
       nowPlaying.unit(u);
       phoneRemote.unit(u);
+      if (loadDeck()) deck.add(u.link); // that phone's Deck runs here
       new PcNow({ server: u.link, key: (code) => {
         if (!helper) return;
         helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
@@ -1067,6 +1069,7 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
+    deck: deck ? deck.view() : null, // the Deck page: shown while a device has a Deck
     remote: (phoneRemote && phoneRemote.view) || REMOTE_OFF, // Remote tab: the active phone's
     rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '' }, // ReZume tab; mesh: why not here (one phone only)
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
@@ -1409,6 +1412,20 @@ function loadRemote() {
   if (!phoneRemote || (!settings.remote.allow && !settings.kvm.keyboard)) return null;
   phoneRemote.load();
   return phoneRemote;
+}
+
+// The Deck (shared/deck.js): made once, then one per phone (deck.add) and per web device (deck.web).
+// Not loaded at all while its module is off (General › Modules).
+function loadDeck() {
+  if ((settings.modules && settings.modules.off || []).includes('deck')) return null;
+  if (!deck) {
+    const { clipboard: cb } = require('electron');
+    deck = require('../../shared/deck.js').startDeck({
+      platform: 'win', helper: () => helper, server: null, settings: () => settings, saveSettings,
+      readClipboard: () => cb.readText(), onChange: pushState,
+    });
+  }
+  return deck;
 }
 
 function loadMic() {

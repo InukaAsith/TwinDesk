@@ -249,6 +249,7 @@ function publishState() {
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
+    state.deck = svc && svc.deck ? svc.deck.view() : null; // the Deck page: shown while a device has a Deck
     state.remote = svc && svc.remotes && svc.remotes.view ? svc.remotes.view // Remote tab: the active phone's
       : svc ? { allow: false, why: '', opened: false, using: false, pad: { on: false, supported: false, live: false, busy: '', message: '', name: '' } } : null;
     state.camera = svc && svc.camShare ? { ...svc.camShare.state, on: settings.camera.on !== false } : svc ? { on: false } : null; // Camera tab
@@ -709,6 +710,15 @@ app.whenReady().then(() => {
   svc.loadRemote = () => (svc.remotes.load() ? svc.remotes : null);
   svc.remote = () => (svc.remotes.loaded ? svc.remotes : null);
   svc.kvm.on('where', () => svc.remotes.refresh()); // the phones' Remote is taken only with the mouse at home
+  // The Deck (shared/deck.js): each phone's buttons run here, one Deck per phone (deck.add), and a web
+  // device's (deck.web). Not loaded at all while its module is off (General › Modules).
+  if (!((settings.modules && settings.modules.off) || []).includes('deck')) {
+    const { clipboard: cb } = require('electron');
+    svc.deck = require('../../shared/deck.js').startDeck({
+      platform: 'mac', helper: svc.helper, server: null, settings: () => settings, saveSettings: () => store.saveSettings(settings),
+      readClipboard: () => cb.readText(), onChange: pushState,
+    });
+  }
   const { PcNow } = require('../../shared/pcnow.js');
   svc.phone = new PhoneSet({
     hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
@@ -732,6 +742,7 @@ app.whenReady().then(() => {
       u.bridge.on('save', () => store.saveSettings(settings));
       svc.nowPlaying.unit(u);
       svc.remotes.unit(u);
+      if (svc.deck) svc.deck.add(u.link); // that phone's Deck runs here
       // What plays on this Mac, for that phone's Media page and its media notification (shared/pcnow.js).
       new PcNow({ server: u.link, key: (code) => {
         svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
@@ -1179,6 +1190,7 @@ function setupWeb() {
     }),
     remote: (bus, getSettings) => new PhoneRemote({ server: bus, helper: svc.helper, getSettings, atHome: () => !svc.kvm || svc.kvm.mode === 'home', onChange: pushState,
       padNote: 'Real gamepad isn’t on the Mac: the gamepad’s buttons work as keys' }),
+    deck: svc.deck ? (bus) => svc.deck.web(bus) : null, // the Deck module off: TwinDesk Web shows none
     notifs: svc.notifs,
     devLocal: (devctl && devctl.local) || new DevLocal(),
     smbInfo: () => {
