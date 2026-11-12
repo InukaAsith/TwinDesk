@@ -5,7 +5,7 @@ labels: enhancement
 ---
 
 > [!IMPORTANT]
-> **TwinDesk is in a feature freeze** and is **maintained by a single person**. Requests are read,
+> TwinDesk is **maintained by a single person**. Requests are read,
 > but there is no guarantee a feature will be added, or when. Bug and performance reports come first.
 
 **What you'd like TwinDesk to do:**
