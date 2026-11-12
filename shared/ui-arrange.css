@@ -101,7 +101,8 @@
 .search-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-where { flex: none; font-size: 12px; color: var(--muted, #888); }
 .search-empty { margin: 0; padding: 12px 16px 14px; }
-/* The search pill, level with the page's title: Liquid Glass (a translucent, blurred lens with a
+/* The search pill, level with the page's title: drawn as the style's other controls (Simple: the
+   control's fill, its line and shadow); with Glass, Liquid Glass (a translucent, blurred lens with a
    bright rim and an inner highlight), in either theme. */
 .search-pill {
   flex: none;
@@ -113,7 +114,16 @@
   gap: 10px;
   padding: 0 8px 0 14px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--text, #fff) 16%, transparent);
+  border: 1px solid var(--control-line, rgba(127, 127, 127, 0.3));
+  background: var(--control, var(--card, #222));
+  box-shadow: var(--shadow, none);
+  color: var(--text, inherit);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1), background-color 0.2s;
+}
+:root.glass .search-pill {
+  border-color: color-mix(in srgb, var(--text, #fff) 16%, transparent);
   background:
     linear-gradient(180deg, color-mix(in srgb, #fff 14%, transparent), color-mix(in srgb, #fff 3%, transparent)),
     color-mix(in srgb, var(--card, #222) 55%, transparent);
@@ -123,12 +133,9 @@
     inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent),
     inset 0 -1px 0 color-mix(in srgb, #000 12%, transparent),
     0 6px 18px rgba(0, 0, 0, 0.18);
-  color: var(--text, inherit);
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-  transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1), background-color 0.2s;
 }
-.search-pill:hover { transform: scale(1.04); border-color: color-mix(in srgb, var(--text, #fff) 26%, transparent); }
+.search-pill:hover { transform: scale(1.04); }
+:root.glass .search-pill:hover { border-color: color-mix(in srgb, var(--text, #fff) 26%, transparent); }
 .search-pill:active { transform: scale(0.97); }
 .search-pill svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; opacity: 0.85; }
 .search-keys { display: inline-flex; gap: 3px; }
