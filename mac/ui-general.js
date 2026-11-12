@@ -118,6 +118,10 @@ UI.tab({
       UI.card(t('Language'), [
         UI.row(t('Language'), t('Changing the language restarts TwinDesk.'), [language]),
       ]),
+      UI.card(t('Tutorial'), [
+        UI.row(t('Tour of TwinDesk'), t('How to install TwinDesk on your other device, connect it, and what each page does.'), [UI.button(t('Show the tour'), () => window.Tour && Tour.start(), 'small')]),
+        UI.row(t('What’s new'), t('What came in this version.'), [UI.button(t('Show'), () => window.Tour && Tour.news(), 'small')]),
+      ]),
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
       UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),

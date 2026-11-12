@@ -109,6 +109,7 @@ const ENTRIES = [
   { t: 'Glass or simple look', page: 'general', on: 'desk', k: 'style, glass, transparency, blur, appearance' },
   { t: 'Arrange the pages', page: 'general', k: 'sidebar order, bottom bar, reorder, customize tabs, arrange, move tabs' },
   { t: 'Modules: turn pages off', page: 'general', k: 'modules, hide pages, disable features, lighter' },
+  { t: 'Tour of TwinDesk', page: 'general', on: 'desk', k: 'tutorial, tour, guide, help, getting started, introduction, how to use, what is new, whats new, new features, changelog' },
   { t: 'Open at login', page: 'general', on: 'desk', k: 'startup, launch at login, autostart, boot' },
   { t: 'Run in the background', page: 'general', on: 'android', k: 'background, battery, stay connected, keep running' },
   { t: 'Battery and performance', page: 'general', k: 'battery saver, power, prioritize performance, ping, idle' },

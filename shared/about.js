@@ -13,6 +13,9 @@ const LINKS = {
   github: 'https://github.com/InukaAsith/TwinDesk',
   releases: 'https://github.com/InukaAsith/TwinDesk/releases',
   licence: 'https://github.com/InukaAsith/TwinDesk/blob/main/LICENSE',
+  siteDownload: 'https://twin-desk.vercel.app/#download', // the tour (shared/ui-tour.js): installing on the other device
+  siteIphone: 'https://twin-desk.vercel.app/#iphone',
+  siteAndroid: 'https://twin-desk.vercel.app/#android',
 };
 
 const NAME = { darwin: 'TwinDesk for macOS', win32: 'TwinDesk for Windows', linux: 'TwinDesk for Linux' };

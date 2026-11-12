@@ -107,7 +107,7 @@
     if (want && want.def.web && !UI.webDev) id = 'web';
     else if (want && !want.def.web && !UI.WEB_KEEP.includes(want.def.id)) UI.webDev = null; // TwinDesk Web, AirPlay, General, About: both
     let v = views.get(id) || views.get(home(UI.state));
-    if (UI.state && v.def.hidden && v.def.hidden(UI.state)) v = views.get(home(UI.state)) || v;
+    if (UI.state && v.def.hidden && v.def.hidden(UI.state) && UI.tourPeek !== v.def.id) v = views.get(home(UI.state)) || v; // tourPeek: the tour shows it for now (shared/ui-tour.js)
     if (current === v) {
       if (UI.state) { renderSidebar(UI.state); renderPage(v, UI.state); }
       return;
@@ -177,7 +177,7 @@
     // device picked: its own pages, then TwinDesk Web, AirPlay & SMB, General and About.
     for (const v of views.values()) {
       const hide = UI.webDev ? !v.def.web && !UI.WEB_KEEP.includes(v.def.id)
-        : !!v.def.web || !!(v.def.hidden && v.def.hidden(s));
+        : !!v.def.web || (!!(v.def.hidden && v.def.hidden(s)) && UI.tourPeek !== v.def.id);
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
       // Hidden for the device now in session: its version of this page (shared/ui-kinds.js), else the start.
       if (hide && current === v) { const twin = UI.webDev ? v.def.id : UI.pick(v.def.id, s); show(twin !== v.def.id ? twin : home(s), false); }
@@ -384,6 +384,7 @@
   api.getState().then((s) => {
     UI.state = s;
     show((s.ui && s.ui.tab) || home(s), false); // 'display' (before the split) goes to Share screen: ALIAS
+    if (window.Tour) Tour.maybe(s); // new here: the tour, once; after an update: What's new (shared/ui-tour.js). Before render: a page that throws can't keep it away
     render(s);
   });
 })();
