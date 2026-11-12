@@ -82,6 +82,29 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun setClipOn(v: Boolean) { store.setFlag("peer.clip", v); core.changed() }
     val notifsOn get() = store.flag("peer.notifs", true)
     fun setNotifsOn(v: Boolean) { store.setFlag("peer.notifs", v); core.changed() }
+    val screenSound get() = store.flag("peer.screen.sound", true)
+    fun setScreenSound(v: Boolean) {
+        store.setFlag("peer.screen.sound", v)
+        if (v) PeerScreen.ensureAudioPlayer() else PeerScreen.stopAudio()
+        PeerScreen.wantSound(this, v)
+        core.changed()
+    }
+    val shareSound get() = store.flag("peer.share.sound", true)
+    fun setShareSound(v: Boolean) {
+        store.setFlag("peer.share.sound", v)
+        if (!v) PeerScreen.stopStandaloneSound(this)
+        else PeerScreen.capture?.update()
+        core.changed()
+    }
+    val isCapturingAudio get() = PeerScreen.capture?.capturingAudio == true
+    val isPlayingAudio get() = PeerScreen.audioPlayer?.isPlaying == true
+    val soundError get() = PeerScreen.soundError
+
+    fun peerAddress(): String? = when (role) {
+        "host" -> hostWs?.address
+        "guest" -> link.endpoint()?.first
+        else -> null
+    }
 
     // ---- the session ----
     @Volatile var role = "" ; private set // "" | host | guest
@@ -96,13 +119,13 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun can(c: String): Boolean = c in (peerCaps ?: defaultCaps(peerOs))
     // What this phone offers the other: the same names in our peer.info.
     fun myCaps(): Set<String> = buildSet {
-        addAll(listOf("clip", "notifs", "files", "screen", "photos"))
+        addAll(listOf("clip", "notifs", "files", "screen", "photos", "sound"))
         if (core.hub.perm("messages") != "none") add("messages")
         if (core.hub.perm("files") != "none") add("fs")
     }
     // A phone older than caps: an iPhone has no messages or storage to browse; an Android phone has all.
     private fun defaultCaps(os: String) = if (os == "ios") setOf("clip", "notifs", "files", "screen", "photos")
-        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs")
+        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs", "sound")
     @Volatile var message = ""; private set
 
     // ---- pairing, as the host (mac/pairing.js) ----
@@ -126,6 +149,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun start() {
         core.discovery.peerOn = on
         core.discovery.onPeerAsk = { f, m -> main.post { onAsk(f, m) } }
+        link.busyHere = {
+            PeerScreen.screenActive || PeerScreen.standaloneSoundActive || PeerScreen.viewer != null || inFiles.isNotEmpty() || outFiles.isNotEmpty()
+        }
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         ctx.mainExecutor.execute { cm.addPrimaryClipChangedListener { clipNow() } }
         core.bg.scheduleWithFixedDelay({ runCatching { tick() }.onFailure { Log.e("TwinDesk", "peer", it) } }, 1, 1, TimeUnit.SECONDS)
@@ -151,7 +177,11 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         ticks++
         val now = System.currentTimeMillis()
         // The host's liveness: the guest pings every second (Link).
-        hostWs?.let { w -> if (now - w.lastRx > Proto.TIMEOUT_MS) { Log.i("TwinDesk", "peer: $peerName stopped answering"); w.close() } else w.send(msg(Proto.T.PING, "ts" to now).toString()) }
+        hostWs?.let { w ->
+            val active = PeerScreen.screenActive || PeerScreen.standaloneSoundActive || PeerScreen.viewer != null
+            val timeout = if (active) 25_000L else Proto.TIMEOUT_MS
+            if (now - w.lastRx > timeout) { Log.i("TwinDesk", "peer: $peerName stopped answering"); w.close() } else w.send(msg(Proto.T.PING, "ts" to now).toString())
+        }
         pairing?.let { p -> if (now - p.at > 60_000) { pairing = null; pairFailed(p.ws); fail(p.ws, Proto.E.PAIR_TIMEOUT, "Pairing timed out"); core.changed() } }
         // Waiting for the other phone to host: it's in its beacon (or peer.hosting) now.
         if (waitingFor.isNotEmpty()) {
@@ -376,7 +406,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         else -> false
     }
 
-    private fun queued(): Long = when (role) { "host" -> hostWs?.queued() ?: 0; "guest" -> link.queued(); else -> 0 }
+    fun queued(): Long = when (role) { "host" -> hostWs?.queued() ?: 0; "guest" -> link.queued(); else -> 0 }
 
     private fun started() {
         Log.i("TwinDesk", "peer: session with $peerName as $role")
@@ -475,6 +505,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
             "screen.ready" -> PeerScreen.ready(this)
             "screen.stop" -> PeerScreen.remoteStop(this)
             "screen.state" -> PeerScreen.state(this, m)
+            Proto.T.PEER_SOUND, "peer.sound" -> PeerScreen.onSound(this, m)
+            Proto.T.PEER_SOUND_WANT, "peer.sound.want" -> PeerScreen.onSoundWant(this, m)
+            Proto.T.PEER_SOUND_STATE, "peer.sound.state" -> PeerScreen.onSoundState(this, m)
         }
     }
 
@@ -788,7 +821,13 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 JSONObject().put("ok", true).put("n", items.size)
             }
         }
-        "screen.start" -> { main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600)) }; JSONObject().put("ok", true) }
+        "screen.start" -> {
+            val port = m.optInt("udpPort", 0)
+            val token = m.optLong("udpToken", 0L)
+            val key = PeerScreen.keyOf(m)
+            main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600), m.optBoolean("audio", false), port, token, key) }
+            JSONObject().put("ok", true)
+        }
         else -> JSONObject().put("error", "unknown")
     }
 

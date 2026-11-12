@@ -176,7 +176,8 @@ fun PeerPage(core: Core, v: Int, tab: String) {
             MacCard(tr("Shared with {name}", "name" to name)) {
                 var first = true
                 if (peer.can("clip")) { SwitchRow(tr("Clipboard"), tr("Copy on one phone, paste on the other"), peer.clipOn, first = true) { peer.setClipOn(it) }; first = false }
-                if (peer.can("notifs")) SwitchRow(tr("Notifications"), tr("Show each phone’s notifications on the other"), peer.notifsOn, first = first) { peer.setNotifsOn(it) }
+                if (peer.can("notifs")) { SwitchRow(tr("Notifications"), tr("Show each phone’s notifications on the other"), peer.notifsOn, first = first) { peer.setNotifsOn(it) }; first = false }
+                if (peer.can("sound")) SwitchRow(tr("Sound"), tr("Play audio from one device on the other."), peer.shareSound, first = first) { peer.setShareSound(it) }
             }
         }
         "Screen" -> {
@@ -185,6 +186,43 @@ fun PeerPage(core: Core, v: Int, tab: String) {
                 MacRow(tr("{name}’s screen", "name" to name), if (peer.peerOs == "ios") tr("{name} starts Share Screen in TwinDesk, then you tap View.", "name" to name) else tr("{name} is asked to start sharing when you tap View.", "name" to name), true) { PButton(tr("View"), true) { PeerScreen.view(peer, ctx) } }
                 MacRow(tr("This screen on {name}", "name" to name), tr("Android asks for confirmation before sharing this screen with {name}.", "name" to name))
             }
+            if (peer.can("sound")) MacCard(tr("Playback")) {
+                SwitchRow(tr("{name}’s sound with the screen", "name" to name), if (peer.isPlayingAudio) tr("Playing") else tr("Play audio while viewing {name}’s screen", "name" to name), peer.screenSound, first = true) { peer.setScreenSound(it) }
+            }
+            if (peer.can("sound")) MacCard(tr("Audio sharing")) {
+                SwitchRow(tr("Share sound with this screen"), tr("Allow {name} to hear audio from this device during screen share", "name" to name), peer.shareSound, first = true) { peer.setShareSound(it) }
+            }
+        }
+        "Sound" -> {
+            val me = core.store.deviceName
+            PageHead(tr("Sound"), tr("Play audio from one device on the other."))
+            MacCard {
+                DirHead(name, false, me, true)
+                SwitchRow(
+                    tr("Play {name}’s sound here", "name" to name),
+                    if (peer.isPlayingAudio) tr("Playing") else tr("Play audio from {name} on this phone", "name" to name),
+                    peer.screenSound,
+                    first = true
+                ) { peer.setScreenSound(it) }
+            }
+            MacCard {
+                DirHead(me, true, name, false)
+                val hint = when {
+                    peer.isCapturingAudio -> tr("Playing on {name}", "name" to name)
+                    peer.soundError.isNotEmpty() -> peer.soundError
+                    else -> tr("Play audio from this device on {name}", "name" to name)
+                }
+                SwitchRow(
+                    tr("Play this device’s sound on {name}", "name" to name),
+                    hint,
+                    peer.isCapturingAudio || PeerScreen.standaloneSoundActive,
+                    first = true
+                ) { on ->
+                    if (on) PeerScreen.startStandaloneSound(peer, ctx)
+                    else PeerScreen.stopStandaloneSound(peer)
+                }
+            }
+            Note(tr("Android requires screen capture permission to capture audio playback. Audio also plays on this phone."))
         }
         "Clipboard" -> {
             PageHead(tr("Clipboard"), tr("Copy on one phone and paste on the other."), peer.clipOn) { peer.setClipOn(it) }

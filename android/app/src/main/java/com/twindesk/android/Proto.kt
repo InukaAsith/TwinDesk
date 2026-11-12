@@ -90,6 +90,9 @@ object Proto {
         const val PHONE_SOUND_WANT = "phone.sound.want"
         const val PHONE_SOUND = "phone.sound"
         const val PHONE_SOUND_STATE = "phone.sound.state"
+        const val PEER_SOUND = "peer.sound"
+        const val PEER_SOUND_WANT = "peer.sound.want"
+        const val PEER_SOUND_STATE = "peer.sound.state"
         // This phone's screen without wireless debugging (Mirror.kt; shared/nativescreen.js there)
         const val PHONE_MIRROR_WANT = "phone.mirror.want"
         const val PHONE_MIRROR_STATE = "phone.mirror.state"

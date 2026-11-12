@@ -228,7 +228,15 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     fun changed() {
         // (runCatching: discovery may report before every feature exists)
-        runCatching { wifiFast.hold(link.connected && !link.wired && (screen.viewing || adb.viewed || remote.active)) }
+        val pcFast = link.connected && !link.wired && (screen.viewing || adb.viewed || remote.active)
+        val peerFast = peer.connected && (
+            PeerScreen.viewer != null ||
+            PeerScreen.screenActive ||
+            PeerScreen.standaloneSoundActive ||
+            peer.isPlayingAudio ||
+            peer.isCapturingAudio
+        )
+        runCatching { wifiFast.hold(pcFast || peerFast) }
         runCatching { link.nudge() } // a hold started or ended: the computer hears within a tick
         version.value++
         main.post { TwinService.refresh(ctx); if (started) bank.checkSoon() }

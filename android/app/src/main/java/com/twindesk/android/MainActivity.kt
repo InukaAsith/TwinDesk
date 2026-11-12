@@ -181,7 +181,8 @@ private fun peerShown(core: Core, t: Tab): Boolean {
         Tab.Messages -> p.can("messages") || "messages" in mine
         Tab.Photos -> p.can("photos") || "photos" in mine
         Tab.FileAccess -> p.can("fs") || "fs" in mine
-        else -> false // Calls, Mouse, Keyboard, Remote, ReZume, Sound, Media, Camera: a computer's
+        Tab.Sound -> p.can("sound")
+        else -> false // Calls, Mouse, Keyboard, Remote, ReZume, Media, Camera: a computer's
     }
 }
 
@@ -207,6 +208,7 @@ private fun isOn(core: Core, t: Tab): Boolean = if (peerMode(core)) when (t) {
     Tab.Clipboard -> core.peer.clipOn
     Tab.Notifications -> core.peer.notifsOn
     Tab.Files -> core.peer.busyLine != null
+    Tab.Sound -> core.peer.shareSound || core.peer.screenSound
     else -> false
 } else isOnPc(core, t)
 
