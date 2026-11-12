@@ -249,6 +249,8 @@ function publishState() {
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
+    state.camera = svc && svc.camShare ? { ...svc.camShare.state, on: settings.camera.on !== false } : svc ? { on: false } : null; // Camera tab
+    state.vcam = svc && svc.vcam ? svc.vcam.view() : svc ? { checked: true, supported: true, on: false } : null;
     // ReZume tab; mesh: why it isn't here (only with one phone, shared/rezume-solo.js)
     state.rezume = svc ? { ...(svc.rz ? svc.rz.view : { ...settings.rezume, connected: false }), mesh: svc.rzSolo ? svc.rzSolo.blocked() : '' } : null;
     state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web
@@ -711,6 +713,7 @@ app.whenReady().then(() => {
       u.link.on('client', () => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
       u.bridge.on('change', pushState);
       u.views.on('change', pushState);
+      if (svc.vcam) u.views.vcam = svc.vcam; // a phone's camera feeds the virtual camera too
       u.bridge.on('popup', (kind, text) => hud.show(kind, text));
       u.bridge.on('save', () => store.saveSettings(settings));
       svc.nowPlaying.unit(u);
@@ -779,6 +782,68 @@ app.whenReady().then(() => {
   };
   svc.rezume = () => svc.rz || null;
   try { svc.loadRezume(); } catch (e) { console.error('[rezume] couldn’t start: ' + (e && e.stack || e)); svc.rz = null; }
+  // Camera tab: the selected computer's camera here and this Mac's there (shared/camshare.js, over
+  // peer: the selected device), a phone's through its own stack (phoneview.js openCamera), loaded
+  // only while Camera is on. Camera › Virtual camera (shared/vcam.js, ../vcam.js): the running
+  // camera's picture also goes to a camera apps can pick.
+  const tellPhones = () => { for (const u of svc.phone.all || []) u.bridge._tellPhone(); }; // each phone's Camera page says so
+  svc.loadVcam = () => {
+    if (svc.vcam) return svc.vcam;
+    const { VirtualCam } = require('../../shared/vcam.js');
+    svc.vcam = new VirtualCam({
+      driver: require('../vcam'),
+      cfg: () => settings.camera,
+      save: () => store.saveSettings(settings),
+      onChange: pushState,
+      onReady: tellPhones,
+      ui: () => win,
+    });
+    for (const u of svc.phone.all || []) u.views.vcam = svc.vcam;
+    svc.vcam.check();
+    return svc.vcam;
+  };
+  svc.loadCamera = () => {
+    if (svc.camShare || settings.camera.on === false) return svc.camShare || null;
+    const { CamShare } = require('../../shared/camshare.js');
+    // A computer; a phone's camera goes through its own stack.
+    const computer = () => !!peer.current && !P.isPhoneOs(peer.current.os);
+    svc.loadVcam();
+    svc.camShare = new CamShare({
+      getLanguage: () => i18n.locale,
+      link: {
+        on: (t, fn) => (t === 'welcome' ? peer.on('client', (ctx) => !P.isPhoneOs(ctx.os) && fn()) : peer.on(`t:${t}`, (m) => fn(m))),
+        send: (m) => peer.sendToClient(m),
+        connected: computer,
+        ble: () => !!(peer.current && peer.current.transport === 'ble'),
+        closed: (fn) => peer.on('closed', fn),
+      },
+      cfg: () => settings.camera,
+      save: () => store.saveSettings(settings),
+      popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
+      peerName: () => (peer.current && peer.current.name) || 'the other computer',
+      onChange: pushState,
+    });
+    svc.camShare.sendPolicy(); // connected already: the selected computer hears whether it's shared
+    return svc.camShare;
+  };
+  svc.cam = () => ({ camShare: svc.camShare || null, vcam: svc.vcam || null });
+  // Camera's switch: on loads it; off, whatever runs stops (every phone's camera too) and nothing is shared.
+  svc.setCamera = (on) => {
+    settings.camera.on = !!on;
+    store.saveSettings(settings);
+    if (on) svc.loadCamera();
+    else {
+      if (svc.camShare) {
+        svc.camShare.closeView();
+        svc.camShare.stopSending();
+        svc.camShare.sendPolicy();
+      }
+      for (const u of svc.phone.all || []) for (const v of u.views.list()) if (v.kind === 'camera') u.views.close(v.id);
+    }
+    tellPhones();
+    pushState();
+  };
+  svc.loadCamera();
   // A phone notification clicked here: its app in a window (on the phone it came from).
   svc.clipboard.on('popup', (kind, text) => hud && hud.show(kind, text)); // a picture from another device
   svc.notifs.on('click', (m) => {

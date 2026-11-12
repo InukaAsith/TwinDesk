@@ -532,6 +532,29 @@ function setupIpc(ctx) {
       if (m && np) np.control(String(m.a || ''), m.pos);
     },
     phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // Camera tab: the selected computer's camera here, this Mac's there (shared/camshare.js). macOS
+    // asks for the camera when sharing is first turned on.
+    camera(m) {
+      if (m && m.do === 'on') return ctx.setCamera(m.on === true); // Camera's switch: loads it, or stops it
+      const { camShare: c, vcam } = ctx.cam();
+      if (!c || !m || typeof m !== 'object') return;
+      const allowed = async () => {
+        const { systemPreferences } = require('electron');
+        const st = systemPreferences.getMediaAccessStatus('camera');
+        return st === 'granted' || (st === 'not-determined' && systemPreferences.askForMediaAccess('camera'));
+      };
+      if (m.do === 'view') c.view(m.show === true); // show: its window too
+      else if (m.do === 'close') c.closeView();
+      else if (m.do === 'share') c.setShare(m.on === true, allowed);
+      else if (m.do === 'device') c.setDevice(m.id);
+      else if (m.do === 'stop') c.stopSending();
+      else if (m.do === 'devices') c.listDevices();
+      // Camera › Virtual camera (shared/vcam.js).
+      else if (m.do === 'virtual' && vcam) vcam.setOn(m.on === true);
+      else if (m.do === 'vcamRemove' && vcam) vcam.remove();
+      else if (m.do === 'vcamTarget' && vcam) vcam.setTarget(m.target);
+      else if (m.do === 'rotate' && vcam) vcam.turn();
+    },
     // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
     setRezume(m) {
       if (!m || typeof m !== 'object') return;

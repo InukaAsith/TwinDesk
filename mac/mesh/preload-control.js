@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const ACTIONS = [
   'setSharing', 'setStreamTarget', 'setStreamInput', 'selectDisplay', 'setDisplayMode', 'setVirtual', 'setStreamMaxHeight',
-  'setBitrate', 'setKvm', 'setApp', 'setAudio', 'setRezume', 'rezumeDo', 'phoneMedia', 'phoneBtPick', 'setTerminal', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'history', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
+  'setBitrate', 'setKvm', 'setApp', 'setAudio', 'camera', 'setRezume', 'rezumeDo', 'phoneMedia', 'phoneBtPick', 'setTerminal', 'openSharingSettings', 'setFiles', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'history', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
   'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'selectPeer', 'forgetPeer', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost',
@@ -26,6 +26,7 @@ const api = {
   onState: (fn) => ipcRenderer.on('state', (_e, s) => fn(s)),
   onShowUpdate: (fn) => ipcRenderer.on('show-update', () => fn()),
   onHub: (fn) => ipcRenderer.on('hub', (_e, m) => fn(m)), // the phone's answers for Calls, Messages and Photos
+  onCamPreview: (fn) => ipcRenderer.on('vcam:preview', (_e, buf) => fn(buf)), // Camera › the picture (a JPEG)
   onGo: (fn) => ipcRenderer.on('go', (_e, tab) => fn(tab)), // show a page (the call window's Calls)
   pathsOf: (files) => [...files].map((f) => webUtils.getPathForFile(f)).filter(Boolean), // dropped files -> paths
 };
