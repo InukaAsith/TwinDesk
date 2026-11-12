@@ -142,6 +142,8 @@ let smb = null;
 let apps = null;
 let sound = null;
 let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
+let camShare = null; // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js)
+let vcam = null; // Camera: the running camera's picture, to the tab and the virtual camera (shared/vcam.js, ../vcam.js)
 let pcScreen = null;
 let pcApps = null;
 let peerApps = null; // The other PC's apps here
@@ -409,9 +411,10 @@ function start() {
   web = require('../web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip,
     kvm: () => kvm, devctl: () => devctl });
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
+  loadCamera(); // only while it's on
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
@@ -519,6 +522,7 @@ function startPhone(server, pairing) {
     },
     onUnit: (u) => {
       u.phone.on('change', pushState);
+      if (vcam) u.views.vcam = vcam; // a phone's camera feeds the virtual camera too
       // The phone's Keyboard page names this PC's hotkey (double-tap = everything back here).
       u.link.on('client', (ctx) => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_WIN, 'win') }));
       u.bridge.on('save', saveSettings);
@@ -1046,6 +1050,8 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
+    camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
+    vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
     apps: link.peerOs !== P.OS.MAC ? peerApps.view() : apps.view(), // A PC's (or Linux computer's) apps come through peerapps.js
     startup: getStartup(),
@@ -1296,6 +1302,54 @@ function updateTray(s = buildState()) {
 }
 
 // Audio › Microphone: loaded the first time one of its switches is on (each change applies it).
+// Camera: the selected computer's camera here and this one's there (shared/camshare.js, over the
+// hub's facade: the selected device), a phone's through its own stack (phoneview.js openCamera),
+// and the running one's picture to the tab and the virtual camera (shared/vcam.js, ../vcam.js).
+const tellPhones = () => { if (phone) for (const u of phone.all || []) u.bridge._tellPhone(); }; // each phone's Camera page says so
+function loadVcam() {
+  if (vcam) return vcam;
+  const { VirtualCam } = require('../../shared/vcam.js');
+  vcam = new VirtualCam({ driver: require('../vcam'), cfg: () => settings.camera, save: saveSettings, onChange: pushState, onReady: tellPhones, ui: () => mainWin });
+  if (phone) for (const u of phone.all || []) u.views.vcam = vcam;
+  vcam.check();
+  return vcam;
+}
+
+function loadCamera() {
+  if (camShare || !settings.camera.on) return camShare;
+  const { CamShare } = require('../../shared/camshare.js');
+  loadVcam();
+  const computer = () => link.status.state === 'connected' && !(link.current && link.current.os === P.OS.ANDROID);
+  camShare = new CamShare({
+    getLanguage: () => i18n.locale,
+    link: { on: (t, fn) => link.on(t, fn), send: (m) => link.send(m), connected: computer, ble: () => !!(link.current && link.current.transport === 'ble'), closed: (fn) => link.on('closed', fn) },
+    cfg: () => settings.camera,
+    save: saveSettings,
+    popup: (kind, text, presentation) => hud && hud.show(kind, presentation || text),
+    peerName,
+    onChange: pushState,
+  });
+  camShare.sendPolicy(); // connected already: the selected computer hears whether it's shared
+  return camShare;
+}
+
+// Camera's switch: on loads it; off, whatever runs stops (every phone's camera too) and nothing is shared.
+function setCamera(on) {
+  settings.camera.on = !!on;
+  saveSettings();
+  if (on) loadCamera();
+  else {
+    if (camShare) {
+      camShare.closeView();
+      camShare.stopSending();
+      camShare.sendPolicy();
+    }
+    if (phone) for (const u of phone.all || []) for (const v of u.views.list()) if (v.kind === 'camera') u.views.close(v.id);
+  }
+  tellPhones();
+  pushState();
+}
+
 function loadMic() {
   if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
   const { Mic } = require('../../shared/mic.js');
