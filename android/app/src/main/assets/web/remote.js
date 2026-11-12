@@ -4,7 +4,7 @@
 // (relative, like the computers' own mouse and keyboard sharing); the computer answers
 // remote.state (whether it takes input from here). opts come from Remote.kt.
 //   touchpad  slide = move (never clicks) · tap = left click ("Tap to click", on unless switched off)
-//             hold = right click · two fingers = scroll · two-finger tap = right click
+//             hold = right click · two fingers = scroll · two-finger tap = right click · three-finger tap = middle click
 //   gamepad   left stick = four keys (WASD) · right stick = the mouse · buttons = their keys; or, when
 //             the computer takes it as a real gamepad (remote.state pad: Remote › Real gamepad there),
 //             the sticks, triggers and buttons as they are (remote.pad); or, while a computer is
@@ -222,8 +222,8 @@
     } else if (fingers.size === 2) {
       if (one) { clearTimeout(one.timer); one = null; }
       const [a, b] = [...fingers.values()];
-      two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: performance.now(), moved: false };
-    }
+      two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: performance.now(), moved: false, n: 2 };
+    } else if (two) two.n = Math.max(two.n, fingers.size); // a third finger: a middle click if it's a tap
   });
 
   pad.addEventListener('pointermove', (e) => {
@@ -263,7 +263,8 @@
     if (!fingers.delete(e.pointerId)) return;
     if (two) {
       if (fingers.size > 0) return;
-      if (!two.moved && performance.now() - two.t0 < 300) { tapKey('Mouse1'); tick(); } // two-finger tap
+      // A two-finger tap: a right click; three fingers: a middle click.
+      if (!two.moved && performance.now() - two.t0 < 350) { tapKey(two.n >= 3 ? 'Mouse2' : 'Mouse1'); tick(); }
       two = null;
       return;
     }
@@ -801,6 +802,7 @@
   let motionNone = false; // no gyroscope here
   let motionSeen = false; // a reading came
   let motionAt = 0;
+  let airDx = 0, airDy = 0; // the last smoothed move
   let turnPx = 0; // how far the pointer went while the air area was held (a tap moves it hardly at all)
   let up = [0, 0, 1];
   const AIR = 1100; // pixels a radian at speed 1, turned slowly; up to 2.4× turned fast
@@ -815,7 +817,7 @@
     const now = performance.now();
     const dt = Math.max(0.004, Math.min(0.1, (now - motionAt) / 1000));
     motionAt = now;
-    if (!clutch.size) return;
+    if (!clutch.size) { airDx = airDy = 0; return; }
     const [x, y, z] = up;
     const yaw = ax * x + ay * y + az * z; // + turning left
     const r = screenAngle() * Math.PI / 180;
@@ -829,7 +831,12 @@
     const soft = rate < 0.07 ? (rate - 0.02) / 0.05 : 1; // fine aim eases in
     const g = soft * opts.speed * AIR * (1 + Math.min(1.4, rate / 2.5));
     turnPx += Math.hypot(yaw, pitch) * g;
-    move(-yaw * g, -pitch * g);
+    // Smoothed by how fast it turns: a slow aim is steadied (the hand's tremor), a quick flick
+    // passes almost as it is, so the pointer doesn't lag behind it.
+    const k = Math.min(0.9, 0.3 + rate / 3);
+    airDx += (-yaw * g - airDx) * k;
+    airDy += (-pitch * g - airDy) * k;
+    move(airDx, airDy);
   };
 
   // In a browser: rotationRate (degrees a second about z, x, y as alpha, beta, gamma) and the tilt
@@ -888,39 +895,71 @@
     motionOn = on;
     motionAt = performance.now();
     if (nativeMotion) { try { TD.motion(on); } catch (_) { /* older app */ } } else if (on) webStart(); else webStop();
-    if (!on) { clutch.clear(); $('motion-ask').hidden = true; }
+    if (!on) { clutch.clear(); $('motion-ask').hidden = true; try { unlock(); } catch (_) { /* not set up yet */ } }
   }
 
-  // Held, the pointer follows the phone; let go, it stays where it is.
-  function hold(el, key, onUp) {
-    let id = null, t0 = 0;
+  // Held, the pointer follows the phone; let go, it stays where it is. It takes hold only after
+  // `wait` ms with the finger still down, so a tap (onUp with tap = true) never moves the pointer.
+  function hold(el, key, onUp, wait = 0) {
+    let id = null, t0 = 0, timer = 0, on = false;
+    const grab = () => { timer = 0; if (id == null) return; on = true; turnPx = 0; motionAt = performance.now(); clutch.add(key); el.classList.add('live'); };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (id != null) return;
       id = e.pointerId;
       try { el.setPointerCapture(id); } catch (_) { /* gone */ }
       t0 = performance.now();
-      turnPx = 0;
-      clutch.add(key);
-      el.classList.add('live');
-      motionAt = performance.now();
+      on = false;
+      if (wait > 0) { el.classList.add('touch'); timer = setTimeout(grab, wait); } else grab();
     });
     const end = (e) => {
       if (e.pointerId !== id) return;
       id = null;
+      clearTimeout(timer); timer = 0;
       clutch.delete(key);
-      el.classList.remove('live');
-      if (onUp && e.type === 'pointerup') onUp(performance.now() - t0);
+      el.classList.remove('live', 'touch');
+      if (onUp && e.type === 'pointerup') onUp(performance.now() - t0, !on);
+      on = false;
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
   }
 
   // ---- air mouse ----
-  hold($('air'), 'air', (ms) => { if (ms < TAP_MS && turnPx < 8) { tapKey('Mouse0'); tick(); } });
-  holdable($('a-left'), 'Mouse0');
-  holdable($('a-right'), 'Mouse1');
-  hold($('a-left'), 'left'); // a drag: held while the phone turns
+  // The big area: a tap clicks where the pointer is; held a moment, the pointer follows the phone.
+  // Left click: a tap clicks; held, it locks down (a drag: hold the big area and point to select),
+  // and a tap on it or on the big area lets go. Right click: a tap. The buttons never move the pointer.
+  const AIR_WAIT = 180;
+  let leftLocked = false;
+  const unlock = () => { if (!leftLocked) return false; leftLocked = false; press('Mouse0', false); $('a-left').classList.remove('on'); render(); return true; };
+  hold($('air'), 'air', (ms, tap) => { if (tap && ms < TAP_MS) { if (!unlock()) tapKey('Mouse0'); tick(); } }, AIR_WAIT);
+  (() => {
+    const el = $('a-left');
+    let id = null, timer = 0, locked = false;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (id != null) return;
+      id = e.pointerId;
+      try { el.setPointerCapture(id); } catch (_) { /* gone */ }
+      el.classList.add('down');
+      locked = false;
+      if (!leftLocked) timer = setTimeout(() => { timer = 0; locked = true; leftLocked = true; press('Mouse0', true); el.classList.add('on'); tick(); render(); }, HOLD_MS);
+    });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      el.classList.remove('down');
+      clearTimeout(timer); timer = 0;
+      if (e.type !== 'pointerup' || locked) return;
+      if (!unlock()) tapKey('Mouse0');
+      tick();
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  })();
+  $('a-right').addEventListener('pointerdown', (e) => { e.preventDefault(); $('a-right').classList.add('down'); });
+  $('a-right').addEventListener('pointerup', () => { $('a-right').classList.remove('down'); tapKey('Mouse1'); tick(); });
+  $('a-right').addEventListener('pointercancel', () => $('a-right').classList.remove('down'));
   // The strip: slide to scroll (the page follows the finger, as on the touchpad).
   (() => {
     const w = $('air-wheel');
