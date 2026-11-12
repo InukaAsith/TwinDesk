@@ -11,6 +11,8 @@
 //
 //   phoneMedia({ NowPlaying, cfg, onChange, phones: () => PhoneSet }) → the ipc's `nowPlaying`
 //     (apply(), control(a, pos), view) over one shared/nowplaying.js per phone, plus unit(u).
+//   anyPhone() → { unit(u), link }: a one-to-one link (on 'welcome'|'closed'|type, send, current)
+//     over every phone, aimed at the one that connected or spoke last (TwinDesk iPhone's signing).
 //   phoneRemote({ PhoneRemote, opts, wanted, phones }) → the Remote page's (setAllow, setPad,
 //     refresh, view) over one shared/phone-remote.js per phone; each phone's Remote page drives this
 //     computer; the page shows the active phone's. opts: PhoneRemote's options but server.
@@ -105,4 +107,31 @@ function phoneRemote({ PhoneRemote, opts, wanted, phones }) {
   };
 }
 
-module.exports = { PerPhone, phoneMedia, phoneRemote };
+// A feature written for one phone's link that serves whichever phone comes: what it hears comes from
+// every phone; what it sends goes to the one that connected or spoke last; 'closed' is that one's.
+function anyPhone() {
+  const handlers = [];
+  const units = [];
+  let last = null;
+  const bind = (u, ev, fn) => {
+    if (ev === 'welcome') u.link.on('client', (ctx) => { last = u; fn(ctx); });
+    else if (ev === 'closed') u.link.on('closed', (...a) => { if (last === u) fn(...a); });
+    else u.link.on(`t:${ev}`, (m, ctx) => { last = u; fn(m, ctx); });
+  };
+  return {
+    unit(u) {
+      units.push(u);
+      for (const [ev, fn] of handlers) bind(u, ev, fn);
+    },
+    link: {
+      on(ev, fn) {
+        handlers.push([ev, fn]);
+        for (const u of units) bind(u, ev, fn);
+      },
+      send(m) { if (last && last.link.current) last.link.sendToClient(m); },
+      get current() { return last ? last.link.current : null; },
+    },
+  };
+}
+
+module.exports = { PerPhone, phoneMedia, phoneRemote, anyPhone };

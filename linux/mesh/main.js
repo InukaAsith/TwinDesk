@@ -146,6 +146,7 @@ let wired = null; // wired.js, with the phone
 let hostServer = null; // server.js, once the certificate exists
 let phoneRemote = null; // each phone's Remote page: touchpad, keyboard and gamepad here (shared/perphone.js phoneRemote)
 let deck = null; // the Deck (shared/deck.js): each phone's (and web device's) buttons run here
+let iosSign = null; // shared/iossign.js: TwinDesk iPhone, for whichever iPhone connects (shared/perphone.js anyPhone)
 let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
 let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
@@ -389,7 +390,7 @@ function start() {
   loadReZume(); // only while it's on
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
@@ -506,6 +507,15 @@ function startPhone(server, pairing) {
     wanted: () => !!(settings.remote.allow || settings.kvm.keyboard),
     phones: () => phone,
   });
+  // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID, for
+  // whichever iPhone connected or spoke last. Off in General › Modules: not loaded.
+  const anyPhone = require('../../shared/perphone.js').anyPhone();
+  if (!((settings.modules && settings.modules.off) || []).includes('iossign')) iosSign = require('../../shared/iossign-host.js').create({
+    app, safeStorage: require('electron').safeStorage, link: anyPhone.link,
+    near: { list: () => (bleHost ? bleHost.list() : []), invite: (devId) => bleHost && bleHost.invite(devId) }, // iPhones linked over Bluetooth
+    usbSerials: () => (iosNet ? iosNet.view.devices.filter((x) => x.app).map((x) => x.serial) : []),
+    onChange: pushState,
+  });
   const { PcNow } = require('../../shared/pcnow.js');
   phone = new PhoneSet({
     hub, link: pl, raw: server, discovery, pairing, wired,
@@ -548,6 +558,7 @@ function startPhone(server, pairing) {
       u.views.on('focus', () => kvm.applyConfig());
       nowPlaying.unit(u);
       phoneRemote.unit(u);
+      anyPhone.unit(u);
       if (loadDeck()) deck.add(u.link); // that phone's Deck runs here
       new PcNow({ server: u.link, key: (code) => {
         if (!helper) return;
@@ -1088,6 +1099,7 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
+    iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     deck: deck ? deck.view() : null, // the Deck page: shown while a device has a Deck
     remote: (phoneRemote && phoneRemote.view) || REMOTE_OFF, // Remote tab: the active phone's
     rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '' }, // ReZume tab; mesh: why not here (one phone only)

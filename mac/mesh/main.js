@@ -249,6 +249,7 @@ function publishState() {
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
+    state.iosSign = svc && svc.iosSign ? svc.iosSign.view : null; // TwinDesk iPhone
     state.deck = svc && svc.deck ? svc.deck.view() : null; // the Deck page: shown while a device has a Deck
     state.remote = svc && svc.remotes && svc.remotes.view ? svc.remotes.view // Remote tab: the active phone's
       : svc ? { allow: false, why: '', opened: false, using: false, pad: { on: false, supported: false, live: false, busy: '', message: '', name: '' } } : null;
@@ -710,6 +711,15 @@ app.whenReady().then(() => {
   svc.loadRemote = () => (svc.remotes.load() ? svc.remotes : null);
   svc.remote = () => (svc.remotes.loaded ? svc.remotes : null);
   svc.kvm.on('where', () => svc.remotes.refresh()); // the phones' Remote is taken only with the mouse at home
+  // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID, for
+  // whichever iPhone connected or spoke last (shared/perphone.js anyPhone). Off in General › Modules: not loaded.
+  svc.anyPhone = require('../../shared/perphone.js').anyPhone();
+  if (!((settings.modules && settings.modules.off) || []).includes('iossign')) svc.iosSign = require('../../shared/iossign-host.js').create({
+    app, safeStorage: require('electron').safeStorage, link: svc.anyPhone.link,
+    near: { list: () => (svc.ble ? svc.ble.list() : []), invite: (devId) => svc.ble && svc.ble.invite(devId) }, // iPhones linked over Bluetooth
+    usbSerials: () => (svc.iosNet ? svc.iosNet.view.devices.filter((d) => d.app).map((d) => d.serial) : []),
+    onChange: pushState,
+  });
   // The Deck (shared/deck.js): each phone's buttons run here, one Deck per phone (deck.add), and a web
   // device's (deck.web). Not loaded at all while its module is off (General › Modules).
   if (!((settings.modules && settings.modules.off) || []).includes('deck')) {
@@ -742,6 +752,7 @@ app.whenReady().then(() => {
       u.bridge.on('save', () => store.saveSettings(settings));
       svc.nowPlaying.unit(u);
       svc.remotes.unit(u);
+      svc.anyPhone.unit(u);
       if (svc.deck) svc.deck.add(u.link); // that phone's Deck runs here
       // What plays on this Mac, for that phone's Media page and its media notification (shared/pcnow.js).
       new PcNow({ server: u.link, key: (code) => {

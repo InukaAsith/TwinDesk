@@ -260,6 +260,9 @@ function setupIpc(ctx) {
     else if (m.a === 'allow' && typeof m.app === 'string') h.allow(m.list, m.app, m.on === true);
     else if (m.a === 'forget') h.forget(m.list, typeof m.app === 'string' ? m.app : '');
   });
+  // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+  handle('iosSign', (o) => require('../../shared/iossign-host.js').act(ctx.iosSign && ctx.iosSign(), require('electron').dialog, o));
+  handle('iosSignIpa', () => require('../../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), require('electron').dialog));
   // The Deck page (shared/ui-deck.js): the layout, Try (runs a button here), the app picker.
   handle('deckSave', (layout) => { const d = ctx.deck && ctx.deck(); if (d && layout && typeof layout === 'object') d.save(layout); });
   handle('deckTry', (action) => { const d = ctx.deck && ctx.deck(); if (d && action && typeof action === 'object') d.exec(action).catch(() => {}); });

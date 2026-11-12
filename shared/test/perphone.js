@@ -102,4 +102,31 @@ function link(os) {
   assert.strictEqual(a.link.sent.length, before);
 }
 
+// anyPhone: hears every phone, answers the one that spoke last.
+{
+  const { anyPhone } = require('../perphone.js');
+  const any = anyPhone();
+  const a = { link: link(P.OS.IOS) };
+  any.unit(a);
+  const heard = [];
+  let welcomes = 0;
+  let closes = 0;
+  any.link.on('welcome', () => welcomes++);
+  any.link.on('closed', () => closes++);
+  any.link.on('ios.sign', (m) => heard.push(m.n));
+  const b = { link: link(P.OS.IOS) };
+  any.unit(b);
+  b.link.emit('client', b.link.current);
+  assert.strictEqual(welcomes, 1);
+  assert.strictEqual(any.link.current, b.link.current);
+  a.link.emit('t:ios.sign', { n: 1 });
+  assert.deepStrictEqual(heard, [1]);
+  any.link.send({ t: 'x' });
+  assert.ok(a.link.sent.some((m) => m.t === 'x') && !b.link.sent.some((m) => m.t === 'x'));
+  b.link.emit('closed');
+  assert.strictEqual(closes, 0); // not the one in use
+  a.link.emit('closed');
+  assert.strictEqual(closes, 1);
+}
+
 console.log('perphone: ok');

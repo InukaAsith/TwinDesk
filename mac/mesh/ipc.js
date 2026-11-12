@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -533,6 +533,13 @@ function setupIpc(ctx) {
       if (m && np) np.control(String(m.a || ''), m.pos);
     },
     phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+    iosSign(o) {
+      require('../../shared/iossign-host.js').act(ctx.iosSign, dialog, o);
+    },
+    iosSignIpa() {
+      require('../../shared/iossign-host.js').pickIpa(ctx.iosSign, dialog);
+    },
     // The Deck page (shared/ui-deck.js): the layout, and Try (runs a button here).
     deckSave(layout) {
       if (ctx.deck && layout && typeof layout === 'object') ctx.deck.save(layout);
