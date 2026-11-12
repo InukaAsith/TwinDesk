@@ -86,6 +86,7 @@
             android:label="@string/label_screen"
             android:theme="@style/Theme.TwinDesk"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+            android:screenOrientation="sensorLandscape"
             android:windowSoftInputMode="adjustNothing"
             android:launchMode="singleTask" />
 
