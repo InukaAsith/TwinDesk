@@ -97,12 +97,11 @@
               cp -r linux/*.js linux/*.css linux/*.html linux/assets linux/mesh "$share/linux/"
               cp linux/package.json "$share/linux/"
 
-              # Copy shared files
-              cp -r shared/*.js shared/*.css shared/*.html "$share/shared/"
-              if [ -d shared/icon ]; then
-                cp -r shared/icon "$share/shared/"
-              fi
-              cp -r shared/lang "$out/share/twindesk/shared/"
+              # Copy shared files: all of it but the tests. The app requires its folders too
+              # (shared/web, shared/airplay): without them start() throws before the tray and
+              # the window are made, and TwinDesk runs with neither.
+              cp -r shared/. "$share/shared/"
+              rm -rf "$share/shared/test"
 
               # Copy helper binaries
               cp linux-helper/bin/macshare-linuxhelper "$share/linux-helper/bin/"
@@ -163,16 +162,17 @@ Comment=Share mouse, keyboard, clipboard, files and screens with your other comp
 Exec=twindesk %U
 Icon=twindesk
 Type=Application
-StartupWMClass=TwinDesk
+StartupWMClass=twindesk
 Categories=Utility;
 Keywords=KVM;mouse;keyboard;clipboard;screen;share;
 EOF
 
               # Electron wrapper
               makeWrapper ${pkgs.electron}/bin/electron "$out/bin/twindesk" \
-                --add-flags "$share/linux/main.js" \
+                --add-flags "$share/linux" \
                 --set NODE_PATH "$share/node_modules" \
                 --set TWINDESK_BIN "$out/bin/twindesk" \
+                --set CHROME_DESKTOP twindesk.desktop \
                 --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
                 --prefix GI_TYPELIB_PATH : "${pkgs.lib.makeSearchPath "lib/girepository-1.0" [ pkgs.glib pkgs.gobject-introspection pkgs.gst_all_1.gstreamer pkgs.gst_all_1.gst-plugins-base ]}" \
                 --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${pkgs.lib.makeSearchPath "lib/gstreamer-1.0" [ pkgs.gst_all_1.gstreamer pkgs.gst_all_1.gst-plugins-base ]}"
