@@ -182,7 +182,10 @@
         outRow.hidden = !h.on || !h.connected;
         push.disabled = !h.last;
         outRow.setHint(h.last ? h.last.title : tr('Nothing to send yet'));
-        note.set(h.on ? tr(h.why || '') : '');
+        // Multi-device (shared/rezume-solo.js): only while one phone is the only device connected.
+        const meshWhy = h.mesh === 'computer' ? tr('ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.')
+          : h.mesh === 'many' ? tr('In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.') : '';
+        note.set(meshWhy || (h.on ? tr(h.why || '') : ''));
         const template = h.message === '{name} has no ReZume yet: update TwinDesk there' || h.message === 'ReZume is off on {name}' || h.message === '{name} does not accept this item';
         const message = h.on ? (h.waiting ? tr('Getting {item}…', { item: h.waiting }) : template ? tr(h.message, { name: UI.peer(s).name }) : tr(h.message || '')) : '';
         info.textContent = message;

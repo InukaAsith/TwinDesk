@@ -964,6 +964,8 @@
   "Pick one below": "在下方选择应用",
   "Pick them over there": "在对方电脑选择应用",
   "Pick up where you left off on your other device.": "在另一台设备上继续你刚才的工作。",
+  "ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.": "与电脑使用 ReZume 需要关闭多设备：在“多设备”页面关闭它，然后直接连接两台设备。在多设备模式下，ReZume 只适用于一部手机。",
+  "In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.": "在多设备模式下，只有当一部手机是唯一连接的设备时 ReZume 才能使用。请断开其他设备，或在“多设备”页面关闭多设备，以便与电脑使用 ReZume。",
   "Picture": "图片",
   "Picture from {name} copied: paste it with {keys}": "来自 {name} 的图片已复制：按 {keys} 粘贴",
   "Picture quality": "画面质量",

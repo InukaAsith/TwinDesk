@@ -142,6 +142,9 @@ let smb = null;
 let apps = null;
 let sound = null;
 let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
+let rezume = null; // ReZume (shared/rezume.js), only once it's turned on, and only with one phone (shared/rezume-solo.js)
+let rezumeShelf = null; // … its notification and taskbar button (shared/rezume-shelf.js)
+let rzSolo = null; // shared/rezume-solo.js: the phone while it is the only device connected
 let camShare = null; // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js)
 let vcam = null; // Camera: the running camera's picture, to the tab and the virtual camera (shared/vcam.js, ../vcam.js)
 let pcScreen = null;
@@ -212,6 +215,9 @@ function start() {
   links = new LinkManager({ device, resolveAddress: (macId) => discovery.get(macId) });
   mesh = new Mesh({ selfId: device.id });
   hub = new Hub({ device, links, mesh });
+  rzSolo = require('../../shared/rezume-solo.js').soloLink({ bus: hub.bus, sessions: hub.sessions });
+  // ReZume off here (not loaded): still answer the phone's policy, so it shows ReZume as off
+  hub.bus.on(P.T.RZ_POLICY, (m, from) => { if (!rezume && from && from === rzSolo.id()) hub.bus.send(from, { t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
   link = hub.facade;
   // Overview's controls of the selected device (a computer or a phone), and this computer's for it.
   const { DevCtl } = require('../../shared/devctl.js');
@@ -412,9 +418,10 @@ function start() {
     kvm: () => kvm, devctl: () => devctl });
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   loadCamera(); // only while it's on
+  loadReZume(); // only while it's on
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
@@ -1050,6 +1057,7 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
+    rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '' }, // ReZume tab; mesh: why not here (one phone only)
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
     vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
@@ -1348,6 +1356,39 @@ function setCamera(on) {
   }
   tellPhones();
   pushState();
+}
+
+// ReZume (shared/rezume.js) between this computer and a phone, while that phone is the only device
+// connected (shared/rezume-solo.js): between two computers it needs Multi-device off.
+function loadReZume() {
+  if (rezume || !settings.rezume.on) return rezume;
+  try { return loadReZumeNow(); } catch (e) { console.error('[rezume] couldn’t start: ' + (e && e.stack || e)); rezume = null; return null; }
+}
+function loadReZumeNow() {
+  const { shell } = require('electron');
+  const { ReZume } = require('../../shared/rezume.js');
+  const { ReZumeShelf } = require('../../shared/rezume-shelf.js');
+  const { phoneAdb } = require('../../shared/rezume-solo.js');
+  const act = require('../activity').create({ helper });
+  const solo = () => (phone && rzSolo.id() ? phone.unit(rzSolo.id()) : null);
+  const name = () => { const pr = rzSolo.link.peer(); return pr ? pr.name : 'the phone'; };
+  rezume = new ReZume({
+    link: rzSolo.link,
+    cfg: () => settings.rezume,
+    detect: () => act.detect(),
+    appIcon: (exe) => (path.isAbsolute(exe) ? act.appIcon(exe) : ''),
+    open: { url: (u) => shell.openExternal(u), file: (f) => shell.openPath(f), phoneApp: (pkg, n) => { const u = solo(); if (u) u.views.openApp(pkg, n || (u.phone.apps.find((a) => a.id === pkg) || {}).name); } },
+    cacheDir: path.join(app.getPath('temp'), 'TwinDesk ReZume'),
+    pick: (o, ways) => require('../../shared/rzpick.js').pick(o, ways, { peer: name(), language: i18n.locale }),
+    adb: () => { const u = solo(); return phoneAdb(u && u.bridge); },
+    phoneApps: () => { const u = solo(); return (u && u.phone.apps) || []; },
+    save: saveSettings,
+  });
+  rezume.on('change', pushState);
+  rezume.on('opened', (o) => hud && hud.show('home', { key: o.how === 'sent' ? 'Sent to {name}: {title}' : 'From {name}: {title}', vars: { name: name(), title: o.title } }));
+  rezumeShelf = new ReZumeShelf({ rezume, cfg: () => settings.rezume, peerName: name, appIcon: path.join(__dirname, '..', 'assets', 'icon.png'), appId: 'org.macshare.windows.rezume' });
+  rezume.apply();
+  return rezume;
 }
 
 function loadMic() {

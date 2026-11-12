@@ -249,6 +249,8 @@ function publishState() {
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
+    // ReZume tab; mesh: why it isn't here (only with one phone, shared/rezume-solo.js)
+    state.rezume = svc ? { ...(svc.rz ? svc.rz.view : { ...settings.rezume, connected: false }), mesh: svc.rzSolo ? svc.rzSolo.blocked() : '' } : null;
     state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web
     state.chats = chats ? chats.view() : null; // Messages' WhatsApp, Instagram… conversations
     if (svc) {
@@ -721,6 +723,62 @@ app.whenReady().then(() => {
   });
   svc.phone.on('change', pushState);
   svc.phoneViews = svc.phone.viewsProxy; // the windows of the active phone
+  // ReZume (shared/rezume.js) between this Mac and a phone, while that phone is the only device
+  // connected (shared/rezume-solo.js): between two computers it needs Multi-device off. Loaded the
+  // first time it's turned on; its offers in the Dock (dockstub.js), the menu bar and a notification.
+  const RzSolo = require('../../shared/rezume-solo.js');
+  svc.rzSolo = RzSolo.soloLink({ bus: hub.bus, sessions: hub.sessions });
+  hub.bus.on(P.T.RZ_POLICY, (m, from) => { if (!svc.rz && from && from === svc.rzSolo.id()) hub.bus.send(from, { t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); }); // off here: the phone shows it off
+  svc.loadRezume = () => {
+    if (svc.rz || !settings.rezume.on) return svc.rz || null;
+    const { shell } = require('electron');
+    const { ReZume } = require('../../shared/rezume.js');
+    const { ReZumeShelf } = require('../../shared/rezume-shelf.js');
+    const { DockStub } = require('../dockstub');
+    svc.rzAct = require('../activity').create({ cfg: () => settings.rezume });
+    const solo = () => (svc.rzSolo.id() ? svc.phone.unit(svc.rzSolo.id()) : null);
+    const name = () => { const p = svc.rzSolo.link.peer(); return p ? p.name : 'the phone'; };
+    svc.rz = new ReZume({
+      link: svc.rzSolo.link,
+      cfg: () => settings.rezume,
+      detect: () => svc.rzAct.detect(),
+      // Looks only when the app or window in front changed (the helper's frontWatch).
+      watch: (() => {
+        let fn = null;
+        const onEvent = (n) => n === 'front' && fn && fn();
+        const arm = () => fn && svc.helper.request('frontWatch', { on: true }).catch(() => {});
+        svc.helper.on('event', onEvent);
+        svc.helper.on('ready', arm); // a restarted helper watches again
+        return {
+          start: (f) => { fn = f; return svc.helper.request('frontWatch', { on: true }).then((r) => !!r.ax); },
+          stop: () => { fn = null; svc.helper.send('frontWatch', { on: false }); },
+        };
+      })(),
+      appIcon: (a) => svc.rzAct.appIcon(a),
+      open: { url: (u) => shell.openExternal(u), file: (p) => shell.openPath(p), phoneApp: (pkg, n) => { const u = solo(); if (u) u.views.openApp(pkg, n || (u.phone.apps.find((a) => a.id === pkg) || {}).name); } },
+      cacheDir: path.join(app.getPath('temp'), 'TwinDesk ReZume'),
+      pick: (o, ways) => require('../../shared/rzpick.js').pick(o, ways, { peer: name(), language: i18n.locale }),
+      adb: () => { const u = solo(); return RzSolo.phoneAdb(u && u.bridge); },
+      phoneApps: () => { const u = solo(); return (u && u.phone.apps) || []; },
+      save: () => store.saveSettings(settings),
+    });
+    svc.rz.on('change', pushState);
+    svc.rz.on('opened', (o) => hud && hud.show('home', { key: o.how === 'sent' ? 'Sent to {name}: {title}' : 'From {name}: {title}', vars: { name: name(), title: o.title } }));
+    let stub = null;
+    const dock = {
+      show(o, take, dismiss) {
+        if (stub) stub.stop();
+        stub = new DockStub({ id: 'rezume:' + (o.app || o.kind), name: (o.appName || 'ReZume') + ' (ReZume)', icon: o.icon }, (ev) => (ev === 'quit' ? dismiss() : take()));
+        stub.menu([o.title || o.name || o.appName || '']);
+      },
+      hide() { if (stub) { stub.stop(); stub = null; } },
+    };
+    svc.rzShelf = new ReZumeShelf({ rezume: svc.rz, cfg: () => settings.rezume, peerName: name, dock, badge: path.join(__dirname, '..', 'assets', 'sidebar-icon@4x.png') });
+    svc.rz.apply();
+    return svc.rz;
+  };
+  svc.rezume = () => svc.rz || null;
+  try { svc.loadRezume(); } catch (e) { console.error('[rezume] couldn’t start: ' + (e && e.stack || e)); svc.rz = null; }
   // A phone notification clicked here: its app in a window (on the phone it came from).
   svc.clipboard.on('popup', (kind, text) => hud && hud.show(kind, text)); // a picture from another device
   svc.notifs.on('click', (m) => {

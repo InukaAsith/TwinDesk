@@ -956,6 +956,8 @@
   "Pick one below": "Escolha um abaixo",
   "Pick them over there": "Escolha-os no outro dispositivo",
   "Pick up where you left off on your other device.": "Continue de onde parou no seu outro dispositivo.",
+  "ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.": "O ReZume com um computador precisa do modo Vários dispositivos desligado: desligue-o na página Vários dispositivos e conecte os dois diretamente. No modo Vários dispositivos, o ReZume funciona com um telefone.",
+  "In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.": "No modo Vários dispositivos, o ReZume só funciona enquanto um telefone é o único dispositivo conectado. Desconecte os outros ou desligue o modo Vários dispositivos na página Vários dispositivos para usar o ReZume com um computador.",
   "Picture": "Imagem",
   "Picture from {name} copied: paste it with {keys}": "Imagem de {name} copiada. Cole com {keys}.",
   "Picture quality": "Qualidade da imagem",

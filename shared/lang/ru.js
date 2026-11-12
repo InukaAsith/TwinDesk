@@ -964,6 +964,8 @@
   "Pick one below": "Выберите один ниже",
   "Pick them over there": "Выберите их на другом устройстве",
   "Pick up where you left off on your other device.": "Продолжайте с того места, где остановились на другом устройстве.",
+  "ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.": "Для ReZume с компьютером нужно выключить режим нескольких устройств: выключите его на странице «Несколько устройств» и подключите их напрямую. В этом режиме ReZume работает с одним телефоном.",
+  "In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.": "В режиме нескольких устройств ReZume работает, только пока подключён один телефон и больше ничего. Отключите остальные устройства или выключите этот режим на странице «Несколько устройств», чтобы использовать ReZume с компьютером.",
   "Picture": "Изображение",
   "Picture from {name} copied: paste it with {keys}": "Изображение с {name} скопировано. Вставьте его сочетанием {keys}.",
   "Picture quality": "Качество изображения",

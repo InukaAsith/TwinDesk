@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'rezume', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -532,6 +532,24 @@ function setupIpc(ctx) {
       if (m && np) np.control(String(m.a || ''), m.pos);
     },
     phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
+    setRezume(m) {
+      if (!m || typeof m !== 'object') return;
+      settings.rezume = require('../../shared/rezume.js').normalize({ ...settings.rezume, ...m });
+      save();
+      const r = ctx.rezume();
+      if (r) r.apply();
+      else ctx.loadRezume();
+    },
+    rezumeDo(m) {
+      const r = ctx.rezume();
+      if (!r || !m) return;
+      if (m.a === 'take') r.take();
+      else if (m.a === 'dismiss') r.dismiss();
+      else if (m.a === 'push') r.push();
+      else if (m.a === 'allow' && typeof m.app === 'string') r.allow(m.list, m.app, m.on === true);
+      else if (m.a === 'forget') r.forget(m.list, typeof m.app === 'string' ? m.app : '');
+    },
     // "Share sound with the screen" (Display › Mac → PC).
     setScreenSound(on) {
       settings.sharing.audio = !!on;

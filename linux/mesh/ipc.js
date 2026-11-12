@@ -248,6 +248,17 @@ function setupIpc(ctx) {
       for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
     } else ctx.phoneViews.openScreen();
   });
+  // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
+  handle('setReZume', (m) => change('rezume', m && typeof m === 'object' ? m : {}, () => (ctx.rezume ? ctx.rezume.apply() : ctx.loadReZume())));
+  handle('rezumeDo', (m) => {
+    const h = ctx.rezume;
+    if (!h || !m) return;
+    if (m.a === 'take') h.take();
+    else if (m.a === 'dismiss') h.dismiss();
+    else if (m.a === 'push') h.push();
+    else if (m.a === 'allow' && typeof m.app === 'string') h.allow(m.list, m.app, m.on === true);
+    else if (m.a === 'forget') h.forget(m.list, typeof m.app === 'string' ? m.app : '');
+  });
   // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js).
   handle('camera', (m) => {
     if (m && m.do === 'on') return ctx.setCamera(m.on === true); // Camera's switch: loads it, or stops it

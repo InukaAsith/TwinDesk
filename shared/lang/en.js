@@ -964,6 +964,8 @@
   "Pick one below": "Pick one below",
   "Pick them over there": "Choose them on the other device",
   "Pick up where you left off on your other device.": "Pick up where you left off on your other device.",
+  "ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.": "ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.",
+  "In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.": "In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.",
   "Picture": "Picture",
   "Picture from {name} copied: paste it with {keys}": "Picture from {name} copied. Paste it with {keys}.",
   "Picture quality": "Picture quality",
