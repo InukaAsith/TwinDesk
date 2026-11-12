@@ -102,31 +102,46 @@ function link(os) {
   assert.strictEqual(a.link.sent.length, before);
 }
 
-// anyPhone: hears every phone, answers the one that spoke last.
+// anyPhone: one iPhone at a time, held until it leaves; another iPhone isn't heard meanwhile.
 {
   const { anyPhone } = require('../perphone.js');
-  const any = anyPhone();
-  const a = { link: link(P.OS.IOS) };
-  any.unit(a);
+  const any = anyPhone({ want: (c) => c.os === P.OS.IOS });
   const heard = [];
   let welcomes = 0;
   let closes = 0;
   any.link.on('welcome', () => welcomes++);
   any.link.on('closed', () => closes++);
   any.link.on('ios.sign', (m) => heard.push(m.n));
+  const droid = { link: link(P.OS.ANDROID) };
+  any.unit(droid);
+  assert.strictEqual(any.link.current, null); // not an iPhone
+  const a = { link: link(P.OS.IOS) };
+  any.unit(a); // already connected: held at once
+  assert.strictEqual(welcomes, 1);
+  assert.strictEqual(any.link.current, a.link.current);
   const b = { link: link(P.OS.IOS) };
   any.unit(b);
   b.link.emit('client', b.link.current);
-  assert.strictEqual(welcomes, 1);
-  assert.strictEqual(any.link.current, b.link.current);
+  assert.strictEqual(welcomes, 1); // a still has it
+  b.link.emit('t:ios.sign', { n: 2 });
   a.link.emit('t:ios.sign', { n: 1 });
   assert.deepStrictEqual(heard, [1]);
   any.link.send({ t: 'x' });
   assert.ok(a.link.sent.some((m) => m.t === 'x') && !b.link.sent.some((m) => m.t === 'x'));
+  const bWas = b.link.current;
+  b.link.current = null;
   b.link.emit('closed');
   assert.strictEqual(closes, 0); // not the one in use
+  b.link.current = bWas; // b comes back while a still has it
+  b.link.emit('client', bWas);
+  assert.strictEqual(welcomes, 1);
+  // a leaves: closed, then b (still there) takes over from the start.
   a.link.emit('closed');
   assert.strictEqual(closes, 1);
+  assert.strictEqual(welcomes, 2);
+  assert.strictEqual(any.link.current, b.link.current);
+  b.link.emit('t:ios.sign', { n: 3 });
+  assert.deepStrictEqual(heard, [1, 3]);
 }
 
 console.log('perphone: ok');

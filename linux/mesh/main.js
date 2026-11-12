@@ -146,7 +146,7 @@ let wired = null; // wired.js, with the phone
 let hostServer = null; // server.js, once the certificate exists
 let phoneRemote = null; // each phone's Remote page: touchpad, keyboard and gamepad here (shared/perphone.js phoneRemote)
 let deck = null; // the Deck (shared/deck.js): each phone's (and web device's) buttons run here
-let iosSign = null; // shared/iossign.js: TwinDesk iPhone, for whichever iPhone connects (shared/perphone.js anyPhone)
+let iosSign = null; // shared/iossign.js: TwinDesk iPhone, one iPhone at a time, as in the one-to-one app (shared/perphone.js anyPhone)
 let modulesAtStart = []; // General › Modules: the ones off at start aren't loaded (fixed for this run)
 let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
 let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
@@ -511,7 +511,7 @@ function startPhone(server, pairing) {
   });
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID, for
   // whichever iPhone connected or spoke last. Off in General › Modules: not loaded.
-  const anyPhone = require('../../shared/perphone.js').anyPhone();
+  const anyPhone = require('../../shared/perphone.js').anyPhone({ want: (c) => c.os === P.OS.IOS }); // TwinDesk iPhone: one iPhone at a time
   if (!modulesAtStart.includes('iossign')) iosSign = require('../../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage, link: anyPhone.link,
     near: { list: () => (bleHost ? bleHost.list() : []), invite: (devId) => bleHost && bleHost.invite(devId) }, // iPhones linked over Bluetooth
