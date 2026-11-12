@@ -565,7 +565,7 @@ private fun Page(core: Core, v: Int, resumed: Int, tab: Tab, modifier: Modifier)
                 Tab.Sound -> SoundPage(core, v)
                 Tab.Media -> MediaPage(core, v)
                 Tab.Camera -> CameraPage(core, v)
-                Tab.General -> GeneralPage(core, v)
+                Tab.General -> GeneralPage(core, v + resumed)
                 Tab.About -> AboutPage(core, v)
             }
             Spacer(Modifier.height(24.dp))
@@ -790,7 +790,8 @@ private fun openCamera(ctx: android.content.Context) {
 // Bluetooth with computers (Overview and General, as on the computers): for one that isn't on this
 // network. Off by itself while the session is on the same Wi-Fi, on again when that drops (Core.bleTick).
 @Composable
-private fun BleSwitch(core: Core, askHint: String, first: Boolean = false) {
+private fun BleSwitch(core: Core, askHint: String, first: Boolean = false, revision: Int = 0) {
+    @Suppress("UNUSED_EXPRESSION") revision // General also refreshes after system Settings
     @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value // redraw on Core changes (Compose skips it otherwise: same core); read here, so it subscribes
     val ctx = LocalContext.current
     val name = them(core)
@@ -965,6 +966,7 @@ private fun SharedFolders(core: Core, v: Int) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) sh.choose(uri) }
     val ble = core.link.ble
     MacCard(tr("Shared folders")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(
             tr("Share a folder with {name}", "name" to name),
             when {
@@ -981,6 +983,7 @@ private fun SharedFolders(core: Core, v: Int) {
         }
         MacRow(tr("Folder"), sh.shown()) { Secondary(tr("Choose…")) { pick.launch(null) } }
         val pc = sh.pc
+        val pcServe = sh.pcServe
         MacRow(
             tr("{name}’s shared folder", "name" to name),
             when {
@@ -991,9 +994,10 @@ private fun SharedFolders(core: Core, v: Int) {
                 else -> tr("Turn on to browse a folder on {name} from the Files app", "name" to name)
             },
         ) {
+            @Suppress("UNUSED_EXPRESSION") v // the controls lambda is remembered separately
             if (pc != null) Primary(tr("Open")) { openPcShare(ctx) }
             else if (ble && sh.pcServe && !sh.opening) Primary(tr("Open")) { sh.openOverWifi() }
-            MacSwitch(sh.pcServe, { sh.setPcServe(it) })
+            MacSwitch(pcServe, { sh.setPcServe(it) })
         }
     }
 }
@@ -1081,7 +1085,12 @@ private fun ScreenPage(core: Core, v: Int) {
     // Paired now or before: the computer brings it back by itself (on Bluetooth, onto Wi-Fi first).
     val adb = core.adb
     val canShow = adb.paired || adb.known
+    val viewed = adb.viewed
+    val sharing = s.sharing
+    val mode = s.mode
+    val res = core.sync.value("res")
     MacCard(tr("This screen on {name}", "name" to name)) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         MacRow(
             tr("Show this screen on {name}", "name" to name),
             when {
@@ -1091,7 +1100,7 @@ private fun ScreenPage(core: Core, v: Int) {
             },
             first = true,
         ) {
-            if (adb.viewed) Secondary(tr("Close")) { adb.showOnComputer(false) }
+            if (viewed) Secondary(tr("Close")) { adb.showOnComputer(false) }
             Button(onClick = { adb.showOnComputer(true) }, enabled = canShow, colors = ButtonDefaults.buttonColors(containerColor = pal.accent, contentColor = Color.White), shape = RoundedCornerShape(8.dp)) { Text(tr("Show")) }
         }
     }
@@ -1103,6 +1112,7 @@ private fun ScreenPage(core: Core, v: Int) {
         },
     )
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         MacRow(tr("Show {name}’s screen", "name" to name), tr("Opens full screen. Tap the handle at the top for display options and the keyboard."), first = true) {
             Primary(tr("Open")) { ctx.startActivity(Intent(ctx, ViewerActivity::class.java)) }
         }
@@ -1111,13 +1121,14 @@ private fun ScreenPage(core: Core, v: Int) {
             SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
                 val modes = listOf("mirror" to tr("Mirror"), "extend" to tr("Extend"))
                 modes.forEachIndexed { i, (m, label) ->
-                    SegmentedButton(selected = s.sharing && s.mode == m, onClick = { s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
+                    SegmentedButton(selected = sharing && mode == m, onClick = { s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
                 }
             }
         } else MacRow(tr("Mode"), tr("Managed from {name}", "name" to name))
         if (s.sharing && s.remote) MacRow(tr("Sharing"), "") { Secondary(tr("Stop")) { s.control(share = false) } }
     }
     MacCard(tr("Touch")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         val pad = core.store.flag("screen.touchpad", true)
         SwitchRow(tr("Touchpad"), tr("Slide to move the pointer, like a laptop touchpad. When off, the pointer follows your finger."), pad, first = true) { s.setOpt("screen.touchpad", it) }
         if (pad) {
@@ -1134,14 +1145,15 @@ private fun ScreenPage(core: Core, v: Int) {
         if (!s.inputOn) MacRow(tr("Input is off"), tr("{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.", "name" to name))
     }
     MacCard(tr("Stylus")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Pen"), tr("Use the stylus as a drawing tablet on {name}, with pressure, tilt, eraser and side button. Touch is ignored while the pen is near. When off, the stylus acts as a mouse.", "name" to name), core.store.flag("screen.pen", true), first = true) { s.setOpt("screen.pen", it) }
         SwitchRow(tr("Fast writing"), tr("Lines reach {name} a little sooner but can lose points along the way. Leave off for smooth drawing and handwriting.", "name" to name), core.store.flag("screen.penFast", false), enabled = core.store.flag("screen.pen", true)) { s.setOpt("screen.penFast", it) }
     }
     MacCard(tr("Playback")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         // The same setting as Share screen › Resolution on the computer (pair.sync "res"): either side changes both.
         MacRow(tr("Resolution"), tr("The same as Share screen › Resolution on {name}", "name" to name), first = true) {
             SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
-                val res = core.sync.value("res")
                 val sizes = listOf(1080 to "1080p", 1440 to "1440p", 2160 to "4K", 0 to tr("Full"))
                 sizes.forEachIndexed { i, (h, label) ->
                     SegmentedButton(selected = res == h.toString(), onClick = { core.sync.setValue("res", h) }, shape = SegmentedButtonDefaults.itemShape(i, sizes.size)) { Text(label, maxLines = 1) }
@@ -1164,6 +1176,7 @@ private fun CursorPage(core: Core, v: Int) {
     // Over Bluetooth (pair.sync "ble", the computer's kvm.js): off, nothing crosses while the session runs through Bluetooth.
     val paused = core.link.ble && core.sync.value("ble") == "false"
     val shared = core.kvm.linked && core.sync.get("cursor", "in") && !paused
+    val via = core.input.via
     PageHead(tr("Cursor"), tr("Move the pointer past the edge of the screen on {name} to control this device.", "name" to name), if (host != null) shared else null) {
         // Through Bluetooth, with cursor sharing on, the switch is Over Bluetooth: off there leaves it on for Wi-Fi.
         if (core.link.ble && core.kvm.linked && core.sync.get("cursor", "in")) core.sync.setValue("ble", it)
@@ -1202,6 +1215,7 @@ private fun CursorPage(core: Core, v: Int) {
         if (core.adb.setupNeeded) Secondary(tr("Set up")) { Guide.open.value = true }
     }
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         DirHead(name, false, me, true)
         SwitchRow(tr("Use {name}’s mouse and keyboard on {me}", "name" to name, "me" to me), tr("Move the pointer past the edge of the screen"), core.sync.get("cursor", "in"), first = true) { core.sync.set("cursor", "in", it) }
         MacRow(tr("Control method"), when {
@@ -1213,13 +1227,17 @@ private fun CursorPage(core: Core, v: Int) {
             SingleChoiceSegmentedButtonRow {
                 val ways = listOf("auto" to tr("Auto"), "adb" to tr("Full (ADB)"), "phone" to tr("Limited"))
                 ways.forEachIndexed { i, (w, label) ->
-                    SegmentedButton(selected = core.input.via == w, onClick = { core.input.setVia(w); core.changed() }, shape = SegmentedButtonDefaults.itemShape(i, ways.size)) { Text(label, maxLines = 1) }
+                    SegmentedButton(selected = via == w, onClick = { core.input.setVia(w); core.changed() }, shape = SegmentedButtonDefaults.itemShape(i, ways.size)) { Text(label, maxLines = 1) }
                 }
             }
         }
     }
-    MacCard(tr("Where {name} is", "name" to name)) { LayoutPicker(me, name, core.kvm.macSide) { core.kvm.setMacSide(it) } }
+    MacCard(tr("Where {name} is", "name" to name)) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        LayoutPicker(me, name, core.kvm.macSide) { core.kvm.setMacSide(it) }
+    }
     MacCard(tr("Pointer")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         val speed = core.sync.value("speed").toFloatOrNull() ?: 1f
         MacRow(tr("Pointer speed"), "", first = true) {
             MacSlider(speed, 0.25f..4f, 14, { "%.2f×".format(it) }) { v ->
@@ -1233,6 +1251,7 @@ private fun CursorPage(core: Core, v: Int) {
         MacRow(tr("Middle click"), tr("Home"))
     }
     MacCard(tr("Not on the same network")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Over Bluetooth"), tr("Keeps working over Bluetooth when {name} isn’t on this network, at a slower rate. When off, it pauses until you’re back on Wi-Fi.", "name" to name),
             core.sync.value("ble") != "false", first = true) { core.sync.setValue("ble", it) }
     }
@@ -1299,16 +1318,19 @@ private fun RezumePage(core: Core, v: Int) {
         }
     }
     MacCard(tr("Content")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Web pages"), tr("The active tab in Chrome, Firefox, Edge, Samsung Internet, Brave, Opera, Vivaldi or DuckDuckGo"), r.opt("web"), first = true) { r.set("web", it) }
         SwitchRow(tr("Documents"), tr("Open the active document from {name} on this phone", "name" to name), r.opt("docs")) { r.set("docs", it) }
         SwitchRow(tr("Apps"), tr("Open the active app on {name} in its own window. Requires wireless debugging.", "name" to name), r.opt("apps")) { r.set("apps", it) }
     }
     MacCard(tr("Sharing")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Send from this device"), tr("{name} can continue what you’re using", "name" to name), r.opt("send"), first = true) { r.set("send", it) }
         SwitchRow(tr("Take {name}’s", "name" to name), tr("Receive from {name}", "name" to name), r.opt("receive")) { r.set("receive", it) }
         SwitchRow(tr("Open received items automatically"), tr("Items sent from {name} open without asking. Requires Display over other apps, otherwise a notification is shown.", "name" to name), r.opt("push")) { r.set("push", it) }
     }
     MacCard(tr("Items from {name}", "name" to name)) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Show a notification"), tr("A silent notification that’s replaced by the next one"), r.opt("notify"), first = true) { r.set("notify", it) }
     }
     Note(tr("Share a link to “Open on computer” to open it on {name}.", "name" to name))
@@ -1347,8 +1369,10 @@ private fun RemotePage(core: Core, v: Int) {
         }
     }
     MacCard(tr("Touchpad")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        val speed = r.speed
         MacRow(tr("Pointer speed"), tr("Also applies to the gamepad’s right stick and the screen touchpad"), first = true) {
-            MacSlider(r.speed, 0.3f..3f, 0, { "%.1f×".format(java.util.Locale.ROOT, it) }) { r.setSpeed(it) }
+            MacSlider(speed, 0.3f..3f, 0, { "%.1f×".format(java.util.Locale.ROOT, it) }) { r.setSpeed(it) }
         }
         SwitchRow(tr("Tap to click"), tr("Tap to click. When off, use the click buttons."), r.tapClick) { r.setTapClick(it) }
         SwitchRow(tr("Smooth motion"), tr("Smoother pointer movement on {name}, with about one frame of added delay", "name" to name), r.smooth) { r.setSmooth(it) }
@@ -1414,10 +1438,12 @@ private fun ClipboardPage(core: Core, v: Int) {
     PageHead(tr("Clipboard"), tr("Copy on one device and paste on the other."))
     if (core.host == null) NotConnected(core, v)
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         DirHead(name, false, me, true)
         SwitchRow(tr("Receive from {name}", "name" to name), tr("At once"), core.sync.get("clipboard", "in"), first = true) { core.sync.set("clipboard", "in", it) }
     }
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         DirHead(me, true, name, false)
         SwitchRow(tr("Send to {name}", "name" to name), tr("While TwinDesk is open, or at any time with wireless debugging"), core.sync.get("clipboard", "out"), first = true) { core.sync.set("clipboard", "out", it) }
         if (core.host != null) MacRow(tr("Send the clipboard now"), tr("Also available as a Quick Settings tile")) { Secondary(tr("Send")) { core.clip.sendCurrent(true) } }
@@ -1431,6 +1457,7 @@ private fun ClipboardPage(core: Core, v: Int) {
         core.changed()
     }
     MacCard(tr("Pictures")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Pictures"), tr("Copy pictures and screenshots up to 10 MB in both directions. Also turn on Pictures on {name}. Not available over Bluetooth.", "name" to name), clip.picturesOn, first = true) { clip.setPictures(it); shots.watch() }
         if (clip.picturesOn && core.host != null && !clip.peerImages) MacRow(tr("Off on {name}", "name" to name), tr("Turn on Pictures in Clipboard on {name} (TwinDesk 2.3 or later)", "name" to name))
         if (clip.picturesOn) {
@@ -1441,6 +1468,7 @@ private fun ClipboardPage(core: Core, v: Int) {
     }
     HistoryCard(core, "clip") // History.kt
     if (clip.history.isNotEmpty()) MacCard(tr("Recent")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         clip.history.toList().take(12).forEachIndexed { i, item ->
             // A picture of ours isn't kept here: only the computer's copy again.
             val again = item.dir == "in" || item.picture == null
@@ -1594,10 +1622,12 @@ private fun SoundPage(core: Core, v: Int) {
     if (core.host == null) NotConnected(core, v)
     else WifiGate(core, tr("Sound"))
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         DirHead(name, false, me, true)
         SwitchRow(tr("Play {name}’s sound here", "name" to name), if (core.macSound.playing) tr("Playing") else "", core.sync.get("audio", "in"), first = true) { core.sync.set("audio", "in", it) }
     }
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         DirHead(me, true, name, false)
         SwitchRow(tr("Play this device’s sound on {name}", "name" to name), soundHint(core), core.sync.get("audio", "out"), first = true) { core.sync.set("audio", "out", it) }
         SoundStart(core)
@@ -1650,14 +1680,16 @@ private fun GeneralPage(core: Core, v: Int) {
     var dev by remember { mutableStateOf(core.store.deviceName) }
     PageHead(tr("General"), "")
     MacCard(tr("Startup")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Run in the background"), if (core.background) tr("Stays connected while TwinDesk is closed, and starts with the phone") else tr("Connected only while TwinDesk is open"), core.background, first = true) { core.background = it }
     }
     // Connections (#143): quiet links (Link.kt) and reconnecting with TwinDesk closed.
     MacCard(tr("Connections")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Prioritize performance over battery life"), if (core.performance) tr("Checks the connection every second, even when nothing is in use") else tr("Checks an idle connection every few minutes, and immediately when a feature starts"), core.performance, first = true) { core.performance = it }
         SwitchRow(tr("Reconnect in the background"), if (core.reconnectBg) tr("Restores a dropped connection while TwinDesk is closed") else tr("Restores a dropped connection when TwinDesk opens"), core.reconnectBg) { core.reconnectBg = it }
     }
-    TailscaleCard(core) // #161 (Tailnet.kt)
+    TailscaleCard(core, v) // #161 (Tailnet.kt)
     // Arrange (Arrange.kt): the pages' order, and which are in the bottom bar.
     MacCard(tr("Page order")) {
         MacRow(tr("Arrange the pages"), tr("Which are in the bottom bar, and in what order. Or hold the bar"), first = true) { Secondary(tr("Arrange…")) { NavOrder.open.value = true } }
@@ -1679,6 +1711,7 @@ private fun GeneralPage(core: Core, v: Int) {
     // Every permission and feature in one place: each is asked for only when switched on elsewhere,
     // or here.
     MacCard(tr("Permissions")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         if (Build.VERSION.SDK_INT >= 33) Setup(tr("Notifications"), tr("Incoming files, pairing requests and connection status"),
             ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED, tr("Allow")) {
             askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -1711,6 +1744,7 @@ private fun GeneralPage(core: Core, v: Int) {
                 else -> tr("Used for screen, sound, mouse and keyboard with {name}", "name" to name)
             },
         ) {
+            @Suppress("UNUSED_EXPRESSION") v // the controls lambda is remembered separately
             if (core.adb.paired) Pill(tr("Paired"), "good")
             else if (core.link.ble) Pill(tr("Wi-Fi only"), "muted")
             else {
@@ -1741,7 +1775,7 @@ private fun GeneralPage(core: Core, v: Int) {
         }
     }
     NotifButtonsCard(core) // TwinDesk's notification: which buttons (QuickActions.kt)
-    BankCard(core) // banking apps: debugging off and TwinDesk closes (BankGuard.kt)
+    BankCard(core, v) // banking apps: debugging off and TwinDesk closes (BankGuard.kt)
     AppearanceCard()
     LanguageCard(core)
     MacCard(tr("This device")) {
@@ -1756,7 +1790,8 @@ private fun GeneralPage(core: Core, v: Int) {
         }
     }
     MacCard(tr("Network and Bluetooth")) {
-        BleSwitch(core, tr("Requires the Nearby devices permission"), first = true)
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        BleSwitch(core, tr("Requires the Nearby devices permission"), first = true, revision = v)
         SwitchRow(tr("Turn off Bluetooth on Wi-Fi connections"), if (core.bleWifiOff) tr("While connected to {name} over the same Wi-Fi network", "name" to name)
             else tr("Bluetooth stays on as a fallback if Wi-Fi drops"), core.bleWifiOff) { core.store.setFlag("bleWifiOff", it); core.changed() }
         val n = core.net
@@ -1769,6 +1804,7 @@ private fun GeneralPage(core: Core, v: Int) {
         })
     }
     if (core.hosts().isNotEmpty()) MacCard(tr("Paired computers")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         core.hosts().forEachIndexed { i, h ->
             MacRow(h.name, if (core.host?.id == h.id) (if (core.link.wired) tr("Connected over USB") else if (core.link.ble) tr("Connected over Bluetooth") else tr("Connected")) else tr("Last address: {address}", "address" to h.address), first = i == 0) {
                 if (core.host?.id == h.id) Pill(tr("Online"), "good")
@@ -1895,6 +1931,7 @@ private fun AboutPage(core: Core, v: Int) {
     if (!BuildConfig.UPDATER) MacCard(tr("Updates")) {
         MacRow("TwinDesk", tr("Version {current}. F-Droid installs new versions.", "current" to u.current), first = true)
     } else MacCard(tr("Updates")) {
+        @Suppress("UNUSED_EXPRESSION") v
         MacRow(
             "TwinDesk",
             when {
@@ -1907,6 +1944,7 @@ private fun AboutPage(core: Core, v: Int) {
             },
             first = true,
         ) {
+            @Suppress("UNUSED_EXPRESSION") v
             if (u.available && u.download != null) {
                 // In place, over this TwinDesk: no reinstall.
                 val label = when (u.stage) {

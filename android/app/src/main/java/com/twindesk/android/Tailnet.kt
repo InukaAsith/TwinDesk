@@ -37,8 +37,9 @@ object Tailnet {
 
 // General › Tailscale: the switch, and how to set it up.
 @androidx.compose.runtime.Composable
-fun TailscaleCard(core: Core) {
+fun TailscaleCard(core: Core, v: Int) {
     MacCard("Tailscale") {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Connect through Tailscale"), if (core.tailscale) tr("When the computer isn’t on this network, Connect tries its Tailscale address") else tr("Off: only this network, Bluetooth and the cable"), core.tailscale, first = true) { core.tailscale = it }
         MacRow(tr("How to set it up"), tr("1. Install Tailscale on this phone and on the computer, and sign in to the same account on both. 2. Pair them once here, on the same Wi-Fi (or type the computer’s Tailscale address, 100.x.y.z, in Pair by address). 3. Away from that Wi-Fi, keep Tailscale on and tap Connect: TwinDesk reaches the computer through it, even over mobile data."))
         MacRow(tr("This phone"), if (Tailnet.onIt()) tr("On Tailscale") else tr("Not on Tailscale now"))

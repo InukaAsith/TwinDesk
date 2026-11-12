@@ -120,10 +120,12 @@ fun AndroidSection(core: Core, v: Int) {
     var looking by remember { mutableStateOf(false) }
     LaunchedEffect(looking) { if (looking) { kotlinx.coroutines.delay(1500); looking = false } }
     MacCard(tr("Phones and tablets"), action = {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         if (peer.on) TextButton(onClick = { looking = true; Thread { runCatching { core.discovery.probe() } }.start() }, enabled = !looking) {
             Text(if (looking) tr("Looking…") else tr("Refresh"), color = pal.accent, fontSize = 14.sp)
         }
     }) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Connect with Android"), if (peer.on) tr("Discoverable by nearby phones and tablets with TwinDesk") else tr("Off: hidden from other phones"), peer.on, first = true) { peer.setOn(it) }
         if (peer.on) for (f in near) {
             val isPaired = peer.isPaired(f.id)
@@ -174,6 +176,7 @@ fun PeerPage(core: Core, v: Int, tab: String) {
                 if (peer.can("fs")) row(tr("Files on {name}", "name" to name), tr("Browse its storage"), tr("Open")) { PeerActivity.open(ctx, "files") }
             }
             MacCard(tr("Shared with {name}", "name" to name)) {
+                @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
                 var first = true
                 if (peer.can("clip")) { SwitchRow(tr("Clipboard"), tr("Copy on one phone, paste on the other"), peer.clipOn, first = true) { peer.setClipOn(it) }; first = false }
                 if (peer.can("notifs")) { SwitchRow(tr("Notifications"), tr("Show each phone’s notifications on the other"), peer.notifsOn, first = first) { peer.setNotifsOn(it) }; first = false }
@@ -255,11 +258,13 @@ fun PeerPage(core: Core, v: Int, tab: String) {
 // Messages, Photos, File access with a phone: theirs to open here (when it can), ours for it (when we can).
 @Composable
 private fun HubBoth(core: Core, peer: Peer, name: String, cap: String, title: String, theirs: String, ours: String, weCan: Boolean) {
+    val v = core.version.collectAsState().value
     val ctx = LocalContext.current
     val what = when (cap) { "photos" -> "media"; "fs" -> "files"; else -> cap } // Hub's names
     val open = when (cap) { "fs" -> "files"; else -> cap } // PeerActivity's
     PageHead(title, "")
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         var first = true
         if (peer.can(cap)) { MacRow(tr("On {name}", "name" to name), theirs, true) { PButton(tr("Open"), true) { PeerActivity.open(ctx, open) } }; first = false }
         if (weCan) {

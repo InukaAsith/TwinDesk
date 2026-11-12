@@ -30,6 +30,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -83,10 +84,13 @@ private fun Segments(items: List<Pair<String, String>>, selected: String, onPick
 
 @Composable
 private fun PlayTab(core: Core, name: String) {
+    val v = core.version.collectAsState().value
     val m = core.pcMedia
     val now = m.now
-    if (core.host == null) Note(tr("Connect to {name} to view and control its media.", "name" to name))
+    val connected = core.host != null
+    if (!connected) Note(tr("Connect to {name} to view and control its media.", "name" to name))
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             // The art: the computer doesn't send any, so the app's place in TwinDesk's colours.
             Box(
@@ -98,11 +102,11 @@ private fun PlayTab(core: Core, name: String) {
             Text(now?.title ?: tr("Nothing playing"), color = pal.text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             val sub = listOfNotNull(now?.artist?.ifEmpty { null }, now?.app?.ifEmpty { null }).joinToString(" · ")
             Text(
-                if (now == null) (if (core.host != null) tr("Play something on {name}", "name" to name) else tr("Not connected")) else sub.ifEmpty { name },
+                if (now == null) (if (connected) tr("Play something on {name}", "name" to name) else tr("Not connected")) else sub.ifEmpty { name },
                 color = pal.muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
             )
             Spacer(Modifier.height(20.dp))
-            val enabled = core.host != null && now != null
+            val enabled = connected && now != null
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 RoundButton(Ico.prev, tr("Previous"), enabled, big = false) { m.control("previous") }
                 RoundButton(if (now?.playing == true) Ico.pause else Ico.play, if (now?.playing == true) tr("Pause") else tr("Play"), enabled, big = true) { m.control("toggle") }
@@ -112,6 +116,7 @@ private fun PlayTab(core: Core, name: String) {
     }
     ComputerVolume(core, name)
     MacCard {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(tr("Show in the notification shade"), tr("What plays on {name} appears with this phone’s media controls", "name" to name), m.notifOn, first = true) { m.setNotif(it) }
     }
     Note(
@@ -136,12 +141,14 @@ private fun RoundButton(icon: ImageVector, label: String, enabled: Boolean, big:
 
 @Composable
 private fun ComputerVolume(core: Core, name: String, first: Boolean = true, inCard: Boolean = true) {
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value
+    val connected = core.host != null
     val c = core.dev.computer
     val level = c?.optDouble("volume", -1.0) ?: -1.0
     val can = c?.optJSONObject("can")?.optBoolean("volume", level >= 0) ?: false
     val row = @Composable {
         when {
-            core.host == null -> MacRow(name, tr("Not connected"), first = first)
+            !connected -> MacRow(name, tr("Not connected"), first = first)
             c == null -> MacRow(name, tr("Waiting for {name}…", "name" to name), first = first)
             !can || level < 0 -> MacRow(name, tr("Volume control requires a newer version of TwinDesk on {name}.", "name" to name), first = first)
             else -> VolumeRow(name, Ico.display, level.toFloat(), first) { core.dev.ask("volume", "level" to it.toDouble()) }
@@ -178,6 +185,7 @@ private val STREAMS get() = listOf(
 
 @Composable
 private fun DevicesTab(core: Core, name: String) {
+    val v = core.version.collectAsState().value
     val ctx = LocalContext.current
     val audio = remember { ctx.getSystemService(AudioManager::class.java) }
     // The phone's own volume keys (or another app) change these: follow them.
@@ -188,8 +196,13 @@ private fun DevicesTab(core: Core, name: String) {
         onDispose { runCatching { ctx.unregisterReceiver(r) } }
     }
     @Suppress("UNUSED_EXPRESSION") bump
-    MacCard(name) { ComputerVolume(core, name, first = true, inCard = false) }
+    MacCard(name) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        ComputerVolume(core, name, first = true, inCard = false)
+    }
     MacCard(core.store.deviceName) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        @Suppress("UNUSED_EXPRESSION") bump
         STREAMS.forEachIndexed { i, (stream, label) ->
             val max = audio.getStreamMaxVolume(stream).coerceAtLeast(1)
             val now = audio.getStreamVolume(stream).toFloat() / max
