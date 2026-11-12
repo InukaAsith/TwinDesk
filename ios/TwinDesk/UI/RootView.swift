@@ -78,8 +78,10 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    // The sidebar's groups, as the computers have them.
-    static let groups: [[Page]] = [
+    // The sidebar's groups, as the computers have them; arranged (SearchView.swift's NavOrder), one
+    // group in that order, General and About last.
+    static var groups: [[Page]] { NavOrder.load() == nil ? defaultGroups : [NavOrder.ordered(), NavOrder.fixed] }
+    static let defaultGroups: [[Page]] = [
         [.overview, .connection],
         [.receive, .share, .remote, .deck],
         [.clipboard, .notifications, .files, .photos, .messages],
@@ -89,7 +91,11 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
     ]
 
     // iPhone's tab bar: these as tabs, everything else under More.
-    static let bottom: [Page] = [.overview, .connection, .receive, .files]
+    // Arranged: the first pages shown, as many as chosen.
+    static var bottom: [Page] {
+        guard let s = NavOrder.load() else { return [.overview, .connection, .receive, .files] }
+        return Array(NavOrder.ordered().filter { $0.shown(Core.shared) }.prefix(s.bar))
+    }
     var tabTitle: String {
         switch self {
         case .connection: return tr("Connect")
@@ -120,7 +126,7 @@ enum Cover: Identifiable, Equatable {
 }
 
 // iPhone's tabs: a page of its own, or More (the rest, as a list).
-enum PhoneTab: Hashable { case page(Page), more }
+enum PhoneTab: Hashable { case page(Page), more, search }
 
 final class AppUI: ObservableObject {
     static let shared = AppUI()
@@ -128,6 +134,9 @@ final class AppUI: ObservableObject {
     @Published var tab: PhoneTab = .page(.overview) // iPhone: the tab bar's
     @Published var paths: [PhoneTab: [Page]] = [:] // iPhone: what's open over each tab
     @Published var cover: Cover?
+    @Published var navVersion = 0     // Arrange saved: the tabs and sidebar again
+    @Published var searching = false  // Search as a sheet (More's field, the iPad, ⌘K)
+    @Published var arranging = false  // the Arrange sheet
 
     // Open a page: iPad, in the sidebar. iPhone: a tab's own page, that tab (at its root); any
     // other, over the tab that's open, so Back returns to where it was opened from.
@@ -167,6 +176,10 @@ struct RootView: View {
                 MirrorAskSheet().environmentObject(core).presentationDetents([.large])
             }
             .modifier(PairPrompts())
+            .sheet(isPresented: $ui.searching) {
+                NavigationStack { SearchView(sheet: true) }.environmentObject(core).environmentObject(ui)
+            }
+            .sheet(isPresented: $ui.arranging) { ArrangeSheet() }
     }
 
     @ViewBuilder
@@ -179,6 +192,7 @@ struct RootView: View {
     // iPhone: the tab bar (with a phone holding the session, only the tabs it can do).
     private var stack: some View {
         let _ = core.tick
+        let _ = ui.navVersion
         let tabs = Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }
         return TabView(selection: Binding(get: { ui.tab }, set: { t in
             // A tab tapped again: back to its root.
@@ -201,6 +215,13 @@ struct RootView: View {
             }
             .tabItem { Label(tr("More"), systemImage: "ellipsis") }
             .tag(PhoneTab.more)
+            // Search: at the bar's right end.
+            NavigationStack(path: ui.path(.search)) {
+                SearchView()
+                    .navigationDestination(for: Page.self) { p in PageView(page: p) }
+            }
+            .tabItem { Label(tr("Search"), systemImage: "magnifyingglass") }
+            .tag(PhoneTab.search)
         }
         .modifier(TabBarGlass())
         // A tab that's gone (a phone that can't do it): Overview.
@@ -238,6 +259,7 @@ struct RootView: View {
             Button("") { core.clip.sendCurrent(force: true) }.keyboardShortcut("v", modifiers: [.command, .shift])
             Button("") { core.mirror.sharing ? core.mirror.stop() : ShareScreen.open() }.keyboardShortcut("s", modifiers: [.command, .shift])
             Button("") { if core.connected { ui.cover = .viewer } }.keyboardShortcut("r", modifiers: [.command, .shift])
+            Button("") { ui.searching = true }.keyboardShortcut("k", modifiers: .command)
         }
         .opacity(0).allowsHitTesting(false).accessibilityHidden(true)
     }
@@ -348,6 +370,8 @@ struct Sidebar: View {
         .navigationBarTitleDisplayMode(selection == nil ? .large : .inline)
         .modifier(BrandBar(on: selection != nil)) // iPad: the mark and name in the bar, level with the sidebar button
         .refreshable { core.discovery.refresh() }
+        // iPhone's More: Edit arranges the pages (which are tabs, and their order).
+        .toolbar { if selection == nil { ToolbarItem(placement: .navigationBarTrailing) { Button(tr("Edit")) { ui.arranging = true } } } }
     }
 
     @ViewBuilder
@@ -361,6 +385,11 @@ struct Sidebar: View {
             .padding(.top, selection == nil ? 4 : 8)
             .padding(.bottom, 4)
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        }
+        // Search (SearchView.swift).
+        Section {
+        } header: {
+            SearchFieldButton().textCase(nil).listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
         // The other paired computers and phones nearby, as the computers' sidebars list them: tap to connect.
         let near = nearbyPaired
@@ -384,7 +413,8 @@ struct Sidebar: View {
             } header: { Text(tr("Nearby")) }
         }
         // With a phone: only what it and this one can do (PeerViews' peerShows); Messages only then.
-        let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && (core.peerMode ? peerShows($0, core.peer) : $0 != .messages && ($0 != .deck || core.deck.offered)) } }.filter { !$0.isEmpty }
+        let _ = ui.navVersion
+        let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && $0.shown(core) } }.filter { !$0.isEmpty }
         ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
             Section {
                 ForEach(group) { p in

@@ -203,6 +203,7 @@ object Ico {
     val minus = lineIcon("minus", "M5 10h10")
     val close = lineIcon("close", "M5 5l10 10 M15 5 5 15")
     // Clipboard and notification history: a clock with a list.
+    val search = lineIcon("search", "M8.5 3.5a5 5 0 1 1 0 10a5 5 0 1 1 0-10z M12.2 12.2 16.5 16.5")
     val history = lineIcon("history", "M10 3a7 7 0 1 1-6.6 4.7 M3 3.5v4h4 M10 6.5V10l2.5 2")
     val left = lineIcon("left", "M12.5 4.5 7 10l5.5 5.5")
     val right = lineIcon("right", "M7.5 4.5 13 10l-5.5 5.5")

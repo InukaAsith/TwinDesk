@@ -111,6 +111,7 @@ UI.tab({
         styleRow,
         themeRow,
         accentRow,
+        UI.arrangeRow ? UI.arrangeRow() : null,
         UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
         wallRow,
         media.el,

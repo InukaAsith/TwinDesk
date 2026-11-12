@@ -1,0 +1,120 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* Arrange the sidebar (shared/ui-arrange.js) and Search (shared/ui-search.js). */
+
+.arrange-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.arrange-pop {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 18px 18px 14px;
+  background: var(--card, #fff);
+  color: var(--text, inherit);
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.arrange-pop h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.arrange-pop .hint { margin: 0; }
+
+.arrange-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.arrange-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  cursor: grab;
+  user-select: none;
+}
+
+.arrange-item:hover { background: var(--nav-hover, rgba(127, 127, 127, 0.1)); }
+.arrange-item.dragging { opacity: 0.45; }
+.arrange-item.muted .arrange-label { opacity: 0.6; }
+.arrange-item .tile { flex: none; }
+.arrange-grip { opacity: 0.4; font-size: 11px; letter-spacing: -2px; width: 12px; }
+.arrange-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.arrange-btn {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.arrange-btn:hover, .arrange-btn:focus-visible { opacity: 1; background: var(--nav-hover, rgba(127, 127, 127, 0.15)); }
+.arrange-actions { display: flex; align-items: center; gap: 8px; }
+.arrange-space { flex: 1; }
+
+/* Search: the palette near the top, the magnifier at the window's top right. */
+.search-overlay { align-items: flex-start; padding-top: 12vh; }
+.search-pop {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(520px, 76vh);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--card, #fff);
+  color: var(--text, inherit);
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.search-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.2)); }
+.search-bar svg, .search-btn svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; opacity: 0.7; }
+.search-input { flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 16px; }
+.search-input::-webkit-search-cancel-button { display: none; }
+.search-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.search-list:empty { display: none; }
+.search-item { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.search-item.on { background: var(--accent, #0a84ff); color: #fff; }
+.search-item.on .search-where { color: rgba(255, 255, 255, 0.8); }
+.search-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-where { flex: none; font-size: 12px; color: var(--muted, #888); }
+.search-empty { margin: 0; padding: 12px 16px 14px; }
+.search-btn {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 50;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text, inherit);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.search-btn:hover { background: var(--nav-hover, rgba(127, 127, 127, 0.15)); }
+.has-search .page-head { padding-right: 40px; }

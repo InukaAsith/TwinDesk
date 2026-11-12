@@ -183,8 +183,13 @@ private fun peerShown(core: Core, t: Tab): Boolean {
     }
 }
 
+// The pages in the person's order (Arrange.kt), General and About last.
+private fun ordered(core: Core): List<Tab> =
+    NavOrder.sort(core.store, Tab.entries.filter { it.group != "bottom" }) { it.name.lowercase() } + Tab.entries.filter { it.group == "bottom" }
+
 // The bottom bar: Overview first while connected, Connection second; before that Connection first.
-private fun bottom(core: Core) = when {
+// Arranged: the first pages shown, as many as chosen.
+private fun bottom(core: Core): List<Tab> = NavOrder.load(core.store)?.let { s -> ordered(core).filter { it.group != "bottom" && shown(core, it) }.take(s.bar) } ?: when {
     core.host != null -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files)
     peerMode(core) -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files).filter { peerShown(core, it) }
     else -> listOf(Tab.Connection, Tab.Screen, Tab.Files)
@@ -240,6 +245,7 @@ fun App(core: Core, resumed: Int) {
     wasConnected = connected
     if (!connected && tab == Tab.Overview) tab = Tab.Connection
     if (!shown(core, tab)) tab = if (connected) Tab.Overview else Tab.Connection // a page the other device can't do
+    @Suppress("UNUSED_EXPRESSION") NavOrder.version.intValue // redraw when arranged
     val BOTTOM = bottom(core).filter { core.moduleOn(it.name.lowercase()) } // General › Modules
     var more by rememberSaveable { mutableStateOf(false) }
     MainActivity.openTab.value?.let { name ->
@@ -319,6 +325,16 @@ fun App(core: Core, resumed: Int) {
     // The wireless debugging guide when opened from General › Setup / Cursor (Overview has it as a card).
     if (Guide.open.value) return WirelessGuide(core, ctx, v + resumed)
 
+    if (NavOrder.open.value) {
+        val items = ordered(core).filter { it.group != "bottom" && core.moduleOn(it.name.lowercase()) }
+            .map { ArrangeItem(it.name.lowercase(), tr(it.title), it.icon, it.colors) }
+        ArrangeDialog(core.store, items, NavOrder.load(core.store)?.bar ?: BOTTOM.size) { NavOrder.open.value = false }
+    }
+    // Search (Search.kt): over everything; a result opens its page.
+    if (Search.open.value) return SearchScreen(Tab.entries.filter { shown(core, it) }.map { it.name to it.title }) { name ->
+        Tab.entries.firstOrNull { it.name == name }?.takeIf { shown(core, it) }?.let { tab = it; more = false }
+    }
+
     Box(Modifier.fillMaxSize().background(pal.content)) {
         if (wide) {
             Row(Modifier.safeDrawingPadding()) {
@@ -354,11 +370,13 @@ fun App(core: Core, resumed: Int) {
                 // A Material navigation bar, as Google's own apps have it: line icons, the selected
                 // one in a pill of the accent colour, labels under them, the bar itself rounded and
                 // floating off the edges (the tablet keeps the Mac-like sidebar with coloured tiles).
+                // Search: its own round button at the bar's right end (Search.kt). Holding the bar: Arrange.
+                Row(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 NavigationBar(
                     containerColor = pal.card, tonalElevation = 0.dp, windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp)
+                    modifier = Modifier.weight(1f)
                         .shadow(14.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
-                        .clip(RoundedCornerShape(28.dp)).height(72.dp),
+                        .clip(RoundedCornerShape(28.dp)).height(72.dp).onHold { NavOrder.open.value = true },
                 ) {
                     val item = @Composable { label: String, icon: ImageVector, selected: Boolean, dot: Boolean, go: () -> Unit ->
                         NavigationBarItem(
@@ -378,6 +396,13 @@ fun App(core: Core, resumed: Int) {
                     }
                     for (t in BOTTOM) item(if (t == Tab.Connection) tr("Connect") else tr(t.title), t.icon, !more && tab == t, isOn(core, t)) { go(t, false) }
                     item(tr("More"), Ico.more, more || tab !in BOTTOM, false) { go(tab, true) }
+                }
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    Modifier.size(60.dp).shadow(14.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+                        .clip(RoundedCornerShape(50)).background(pal.card).clickable { Search.open.value = true },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Ico.search, tr("Search"), tint = pal.text, modifier = Modifier.size(24.dp)) }
                 }
                 }
             }
@@ -417,12 +442,15 @@ private fun Sidebar(core: Core, v: Int, tab: Tab, go: (Tab) -> Unit) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(Modifier.width(250.dp).fillMaxHeight().background(pal.sidebar).verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 14.dp)) {
         Box(Modifier.padding(start = 4.dp, bottom = 18.dp)) { Identity(core, v, 54) }
+        SearchField() // Search.kt
         Devices(core, v) { go(Tab.Overview) }
         var group: String? = null
-        for (t in Tab.entries.filter { shown(core, it) }) {
-            if (t.group == "bottom" && group != "bottom") Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(pal.line))
-            else if (group != null && t.group != group) Spacer(Modifier.height(10.dp))
-            group = t.group
+        val custom = NavOrder.load(core.store) != null // arranged: no groups' gaps
+        for (t in ordered(core).filter { shown(core, it) }) {
+            val g = if (custom && t.group != "bottom") "" else t.group
+            if (g == "bottom" && group != "bottom") Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(pal.line))
+            else if (group != null && g != group) Spacer(Modifier.height(10.dp))
+            group = g
             NavItem(t.icon, t.colors, tr(t.title), tab == t, isOn(core, t)) { go(t) }
         }
     }
@@ -488,8 +516,9 @@ private fun MoreList(core: Core, v: Int, BOTTOM: List<Tab>, modifier: Modifier, 
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp)) {
         PageHead(tr("More"), "")
+        SearchField() // Search.kt
         MacCard {
-            Tab.entries.filter { it !in BOTTOM && shown(core, it) }.forEachIndexed { i, t ->
+            ordered(core).filter { it !in BOTTOM && shown(core, it) }.forEachIndexed { i, t ->
                 Column {
                     if (i > 0) Box(Modifier.padding(start = 58.dp).fillMaxWidth().height(1.dp).background(pal.line))
                     Row(Modifier.fillMaxWidth().clickable { go(t) }.padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1606,6 +1635,10 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow(tr("Reconnect in the background"), if (core.reconnectBg) tr("Restores a dropped connection while TwinDesk is closed") else tr("Restores a dropped connection when TwinDesk opens"), core.reconnectBg) { core.reconnectBg = it }
     }
     TailscaleCard(core) // #161 (Tailnet.kt)
+    // Arrange (Arrange.kt): the pages' order, and which are in the bottom bar.
+    MacCard(tr("Page order")) {
+        MacRow(tr("Arrange the pages"), tr("Which are in the bottom bar, and in what order. Or hold the bar"), first = true) { Secondary(tr("Arrange…")) { NavOrder.open.value = true } }
+    }
     ModulesCard(core)
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
