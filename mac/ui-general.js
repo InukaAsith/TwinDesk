@@ -33,8 +33,10 @@ UI.tab({
     ];
     const perms = PERMS.map((p) => {
       const pill = el('span', { class: 'pill' });
-      const row = UI.row(p.label, p.note, [pill, UI.button(t('Open'), () => api.openSettings(p.kind), 'small')]);
-      return { p, pill, row };
+      let request = false;
+      const button = UI.button(t('Open'), () => request ? api.allowPermission(p.kind) : api.openSettings(p.kind), 'small');
+      const row = UI.row(p.label, p.note, [pill, button]);
+      return { p, pill, row, button, setRequest: (v) => { request = v; } };
     });
     const helperRow = UI.row(t('Background helper'), '');
     const helperVal = el('span', { class: 'value' });
@@ -141,10 +143,13 @@ UI.tab({
       wallSw.set(!s.phone || !s.phone.settings || s.phone.settings.wallpaper !== false);
       const ov = (s.ui && s.ui.overview) || {};
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);
-      for (const { p, pill } of perms) {
+      for (const { p, pill, button, setRequest } of perms) {
         const v = p.state ? p.state(s) : s.permissions[p.kind];
         const ok = p.kind === 'screen' ? v === 'granted' : v === true;
         const unknown = v === null || v === undefined || v === 'unknown';
+        const request = !ok && ['screen', 'accessibility', 'inputMonitoring'].includes(p.kind);
+        setRequest(request);
+        button.textContent = t(request ? 'Allow' : 'Open');
         pill.className = `pill ${unknown ? 'muted' : ok ? 'good' : 'bad'}`;
         // macOS counts Accessibility as enough for TwinDesk's keyboard tap: Input Monitoring reads
         // as allowed then, with its own switch in System Settings still off (that's fine).
