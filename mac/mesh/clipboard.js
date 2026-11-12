@@ -146,6 +146,7 @@ class Clip extends EventEmitter {
   // already on the clipboard when the watch began (initial).
   onLocalCopy(ev) {
     this.concealed = !!(ev && ev.concealed);
+    this.remote = !!(ev && ev.remote); // Universal Clipboard: see ../clipboard.js (#211)
     if (this.cfg.mode === 'instant' && !(ev && ev.initial)) this.sendIfChanged('instant');
   }
 
@@ -192,7 +193,7 @@ class Clip extends EventEmitter {
     this.images.text(); // a picture still on its way either way is out of date
     this.lastSync.received = text;
     this.seen = text; // so instant mode doesn't publish it back
-    if ((await this._readText()) !== text) this.clipboard.writeText(text);
+    if (this.remote || (await this._readText()) !== text) this.clipboard.writeText(text);
     this._remember('in', text, name);
     this._changed();
   }
@@ -204,6 +205,7 @@ class Clip extends EventEmitter {
     const c = this.cfg;
     if (!c.enabled || !c.send || !this.bus.connectedIds().length) return;
     if (!this.peerAccepts) return this._skip("A connected device doesn’t accept this Mac’s clipboard");
+    if (why === 'instant' && this.remote) return; // Universal Clipboard: see ../clipboard.js (#211)
     const text = await this._readText();
     if (!text) return this._picture(why);
     if (text === this.lastSync.sent || text === this.lastSync.received) return;

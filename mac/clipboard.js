@@ -25,6 +25,7 @@ class Clipboard extends EventEmitter {
     this.lastSent = null;
     this.lastReceived = null;
     this.concealed = false; // last helper report for the current item
+    this.remote = false; // … and whether it came from another Apple device (Universal Clipboard, #211)
     this.peerAccepts = true; // the PC's last clip.policy
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size} or a picture (clipimage.js)
     this.lastSkip = '';
@@ -64,6 +65,7 @@ class Clipboard extends EventEmitter {
     helper.on('event', (name, ev) => {
       if (name !== 'clipboard') return;
       this.concealed = !!ev.concealed;
+      this.remote = !!ev.remote;
       // Instant mode sends new copies only, not what was already on the clipboard when it began.
       if (this.cfg.mode === 'instant' && !ev.initial) this.sendIfChanged('instant');
     });
@@ -115,7 +117,8 @@ class Clipboard extends EventEmitter {
     if (!c.enabled || !c.receive || !P.clipAllowed(msg.text)) return;
     this.images.text();
     this.lastReceived = msg.text;
-    if ((await readText()) !== msg.text) clipboard.writeText(msg.text);
+    // A Universal Clipboard item isn't read to compare: reading it fetches it from the other device.
+    if (this.remote || (await readText()) !== msg.text) clipboard.writeText(msg.text);
     this._remember('in', msg.text);
     this.emit('change');
   }
@@ -126,6 +129,9 @@ class Clipboard extends EventEmitter {
     const c = this.cfg;
     if (!c.enabled || !c.send || !this.server.current) return;
     if (!this.peerAccepts) return this._skip(`${this.server.current ? this.server.current.name : 'the other computer'} doesn’t take the clipboard`);
+    // A Universal Clipboard copy from another Apple device: not read the moment it lands (that
+    // fetches it from there, with macOS's "Pasting from …" dialog, #211); it goes on the switch.
+    if (why === 'instant' && this.remote) return;
     const text = await readText();
     // Files copied in Finder: the clipboard also holds their names and icon, which aren't the copy.
     // Files go with the Files tab's shortcuts (fclip.js).
