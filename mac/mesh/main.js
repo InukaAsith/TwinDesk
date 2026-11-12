@@ -686,6 +686,7 @@ app.whenReady().then(() => {
   svc.phone.on('change', pushState);
   svc.phoneViews = svc.phone.viewsProxy; // the windows of the active phone
   // A phone notification clicked here: its app in a window (on the phone it came from).
+  svc.clipboard.on('popup', (kind, text) => hud && hud.show(kind, text)); // a picture from another device
   svc.notifs.on('click', (m) => {
     const u = svc.phone.unit(m.originId);
     if (u && u.link.current) u.views.openNotified(m.app, m.appName);
