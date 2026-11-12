@@ -57,6 +57,7 @@ class Server extends EventEmitter {
     // A phone's own screen (an iPhone's Share Screen, Android's Mirroring › Native): its upload here.
     this.https.on('request', (req, res) => {
       if (require('../../shared/nativescreen.js').NativeScreen.request(req, res)) return;
+      if (this.fxRequest && this.fxRequest(req, res)) return; // fast files of a session (session.js)
       res.writeHead(404);
       res.end();
     });
@@ -318,7 +319,8 @@ class Server extends EventEmitter {
     this.clients.set(deviceId, ctx);
     // The input lane (shared/inputlane.js): a lane of its own, when its hello asked, over the network only.
     const il = ctx.ilWanted && ctx.transport !== 'ble' ? this.ilPool.offer(ctx, ctx.ilWanted, ctx.address) : null;
-    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}) });
+    ctx.fx = ctx.fxWanted ? P.randomHex(16) : ''; // fast files: this session's token (session.js routes its requests)
+    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}), ...(ctx.fx ? { fx: ctx.fx } : {}) });
     this.emit('client', ctx);
   }
 

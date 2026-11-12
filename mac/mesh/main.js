@@ -278,6 +278,12 @@ function publishState() {
       const hs = c && settings.net.hotspots[c.deviceId];
       state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass), lan: lanType(c && c.address), tailscale: settings.net.tailscale !== false, tailnet: require('../../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true };
     }
+    // General › Advanced › Engines in use (shared/engines.js): the selected device's session.
+    const sel = hub && hub.facade.session;
+    state.engines = peer && sel && sel.connected ? require('../../shared/engines.js').snapshot({
+      current: peer.current, il: sel.il, lane: sel.lane(), fx: peer.fx, fx2: null, net: svc && svc.net ? svc.net.view : null,
+      lan: state.net ? state.net.lan : '', screen: stream && stream.active ? stream.view : null,
+    }) : null;
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
     if (svc && svc.phoneDrive) state.mount = { ...svc.phoneDrive.view, on: !!settings.mount.on };
@@ -716,7 +722,7 @@ app.whenReady().then(() => {
   svc.kvm.on('where', () => svc.remotes.refresh()); // the phones' Remote is taken only with the mouse at home
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID, for
   // whichever iPhone connected or spoke last (shared/perphone.js anyPhone). Off in General › Modules: not loaded.
-  svc.anyPhone = require('../../shared/perphone.js').anyPhone();
+  svc.anyPhone = require('../../shared/perphone.js').anyPhone({ want: (c) => c.os === P.OS.IOS }); // TwinDesk iPhone: one iPhone at a time
   if (!modulesAtStart.includes('iossign')) svc.iosSign = require('../../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage, link: svc.anyPhone.link,
     near: { list: () => (svc.ble ? svc.ble.list() : []), invite: (devId) => svc.ble && svc.ble.invite(devId) }, // iPhones linked over Bluetooth
@@ -1077,6 +1083,7 @@ function setupNet() {
   svc.net.on('dropped', () => settings.sharing.on && actions.setSharing(false)); // Bluetooth can't carry the screen
   peer.hold = (m) => svc.net.holdOut(m, (x) => peer.sendNow(x));
   peer.tap = (m) => svc.net.onMessage(m);
+  peer.fx.active = () => svc.net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
   peer.on('client', () => svc.net.started());
   peer.on('closed', () => svc.net.ended());
   peer.on('transport', () => {

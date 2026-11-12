@@ -229,7 +229,7 @@ class Link extends EventEmitter {
 
   _hello() {
     const p = this.pairing;
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, fx: 1, ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
@@ -321,6 +321,9 @@ class Link extends EventEmitter {
     this._setStatus('connected', '');
     // The input lane, when the host offered it (older hosts: none): started for this session.
     if (this.ilLane && !(msg.il && typeof msg.il === 'object' && this.transport !== 'ble' && this.ilLane.accept(msg.il, peerIp(this.ws, this.pairing.address)))) this.ilLane.stop();
+    // Fast files (shared/fastfile.js, session.js): the host's token for this session, and the address we reached it at.
+    this.fx = typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : '';
+    this.fxAddress = peerIp(this.ws, this.pairing.address);
     this.emit('welcome', msg);
   }
 
