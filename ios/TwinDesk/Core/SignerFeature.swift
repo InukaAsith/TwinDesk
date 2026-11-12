@@ -14,6 +14,8 @@
 //                            TwinDesk, which connects and runs the refresh by itself.
 //   sign.keep   ↔            the state: from a run typed on the computer, for this to keep; to a
 //                            computer with Keep a copy on (said in sign.info), its copy
+//   sign.want {update: version}  a newer release: signed and installed over this one (Update
+//                            TwinDesk, by itself or tapped); sign.start {update: true} runs it.
 //   sign.set    → computer   App refresh switched here {on}: the computer's TwinDesk iPhone follows.
 //                            The other way, sign.info {on, switched}: on there turns it on here;
 //                            switched off there just now turns it off here.
@@ -36,6 +38,8 @@ final class Signer: Feature {
     private(set) var anisette = ""
     private(set) var computerKeeps = false
     private(set) var apps: [App] = []
+    private(set) var latest = "" // the latest release, as the computer looked it up
+    private(set) var computerUpdates = false // the computer updates TwinDesk by itself
     // A run: step nil when none.
     private(set) var step: String?
     private(set) var done: [String] = [] // the run's steps so far, in order
@@ -51,7 +55,22 @@ final class Signer: Feature {
     private var gaveCopy = false
     private var app: String? // a run for this app, from the IPA the computer keeps
     private var fresh = false // Start over: TwinDesk's certificate revoked at Apple, a new one made
-    private var tapped: String? // the notification was tapped: this refresh ("" TwinDesk) runs once it can
+    private var tapped: String? // the notification was tapped: this refresh ("" TwinDesk, "#update" an update) runs once it can
+    private var updating = false // this run installs the latest release (Update TwinDesk)
+
+    // Installed by a computer's TwinDesk (its signer marks the Info.plist; AltStore and SideStore
+    // don't), or refreshed by one since. Overview's refresh card and Update TwinDesk show only then.
+    static let marked: Bool = (Bundle.main.object(forInfoDictionaryKey: "TDInstalledBy") as? String) == "TwinDesk"
+    var mine: Bool { Self.marked || core.store.flag("sign.mine", false) }
+
+    // A newer release than this TwinDesk (the computer's lookup, or this app's own check), "" none.
+    var newer: String {
+        let cur = core.updates.current
+        let best = [latest, core.updates.latest].filter { !$0.isEmpty }.max { Updates.compare($0, $1) < 0 } ?? ""
+        return !best.isEmpty && Updates.compare(best, cur) > 0 ? best : ""
+    }
+    // Update TwinDesk can run now: installed by a computer, App refresh on and ready there, signed in.
+    var canUpdate: Bool { mine && on && core.connected && available && facts.signedIn && !newer.isEmpty }
 
     // When TwinDesk here runs out: its own provisioning profile's ExpirationDate (0 unknown).
     static let expires: Double = {
@@ -124,7 +143,7 @@ final class Signer: Feature {
     }
 
     private func finish(error e: String? = nil, until: Date? = nil) {
-        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; fresh = false; percent = 0; done = []
+        step = nil; need = nil; seal = nil; typed = nil; ipa = nil; app = nil; fresh = false; updating = false; percent = 0; done = []
         error = e
         doneUntil = until
         core.changed()
@@ -143,6 +162,15 @@ final class Signer: Feature {
     func refresh(app id: String) {
         guard !running, core.connected, available, facts.signedIn else { return }
         app = id
+        begin()
+    }
+
+    // Update TwinDesk: the computer downloads the latest release, signs it with the session kept here
+    // and installs it over this one (the app closes as it's replaced; its data stays).
+    func update() {
+        guard !running, core.connected, available else { return }
+        guard facts.signedIn else { needsSignIn = true; core.changed(); return }
+        updating = true
         begin()
     }
 
@@ -182,6 +210,7 @@ final class Signer: Feature {
         if let i = ipa, let p = i.path { m["ipa"] = ["path": p, "size": i.size] }
         if let a = app { m["app"] = a }
         if fresh { m["fresh"] = true }
+        if updating { m["update"] = true }
         core.send(msg("sign.start", m))
         core.changed()
     }
@@ -228,7 +257,7 @@ final class Signer: Feature {
         guard let id = tapped, on, !running, core.connected, available else { return }
         tapped = nil
         guard facts.signedIn else { needsSignIn = true; core.changed(); return }
-        if id.isEmpty { refresh() } else { refresh(app: id) }
+        if id == "#update" { update() } else if id.isEmpty { refresh() } else { refresh(app: id) }
     }
 
     // Asked by the computer while not in front (or locked): a notification to tap.
@@ -263,6 +292,8 @@ final class Signer: Feature {
             anyIpa = m.bool("anyIpa")
             anisette = m.str("anisette", max: 200)
             computerKeeps = m.bool("keep")
+            latest = m.str("latest", max: 40)
+            computerUpdates = m.bool("autoUpdate")
             apps = ((m["apps"] as? [JSON]) ?? []).prefix(50).map {
                 App(id: $0.str("bundleId"), name: $0.str("name", max: 100), version: $0.str("version", max: 40), teamName: $0.str("teamName", max: 100),
                     expires: ($0["expires"] as? NSNumber)?.doubleValue ?? 0, twindesk: $0.bool("twindesk"), cached: $0.bool("cached"))
@@ -276,6 +307,14 @@ final class Signer: Feature {
             let id = m.str("app", max: 200)
             let state = UIApplication.shared.applicationState
             let unlocked = UIApplication.shared.isProtectedDataAvailable
+            let version = m.str("update", max: 40)
+            if !version.isEmpty {
+                // An update closes the app as it installs: now when asked from the computer, or by
+                // itself while TwinDesk is in the background and unlocked; in front, a notification.
+                if m.bool("now") && unlocked || (state != .active && unlocked && !m.bool("ask")) { update() }
+                else { Notifier.shared.signUpdate(version: version, computer: core.host?.name ?? tr("the computer")) }
+                return true
+            }
             // Clicked on the computer, or TwinDesk in front: now. By itself (not Ask first) and
             // unlocked: now too, in the background. Otherwise the notification, to tap.
             if m.bool("now") && unlocked || state == .active || (!m.bool("ask") && unlocked) {
@@ -331,6 +370,7 @@ final class Signer: Feature {
                 if computerKeeps { core.send(msg("sign.keep", ["state": s])) }
             }
         case "done":
+            if m.str("bundleId", max: 200) == Bundle.main.bundleIdentifier { core.store.setFlag("sign.mine", true) } // refreshed by a computer: ours from now on
             finish(until: Date(timeIntervalSince1970: (m["expires"] as? NSNumber)?.doubleValue ?? 0))
             return
         case "error":

@@ -21,6 +21,11 @@
 // shows it), sign.start → sign.key → sign.box (a sealed run), sign.ev (the helper's events),
 // sign.want (time to refresh), sign.keep (the state, to keep), sign.stop.
 //
+// Updates: the latest release is looked up (every 6 hours while this is on). When the TwinDesk on the
+// device is older, Update TwinDesk (here, or on the iPhone: sign.start {update}) signs and installs
+// the release's IPA, downloaded fresh, in place of the refresh's kept copy; the app's data stays.
+// cfg.update: do that by itself (the same ways as a refresh: the kept copy, or the iPhone's app).
+//
 // link: on(type | 'welcome' | 'closed', fn), send(msg), current (the session's ctx: os, id, name).
 // near: {list() → [{id, name, os}], invite(id)}: devices linked over Bluetooth (blepipe.js BleHost),
 // for an iPhone that isn't in a session: an invite wakes TwinDesk there, which comes back (Ble.swift).
@@ -50,6 +55,9 @@ const DEVICE_WAIT_MS = 30 * 1000; // a refresh the iPhone asked for waits this l
 const MAX_LINE = 256 * 1024;
 const MAX_STATE = 64 * 1024;
 const MAX_IPA = 4 * 1024 * 1024 * 1024;
+const RELEASE_API = 'https://api.github.com/repos/InukaAsith/TwinDesk/releases/latest';
+const RELEASE_MS = 6 * 60 * 60 * 1000;
+const { compare } = require('./updates.js');
 const str = (v, n = 200) => (typeof v === 'string' ? v.slice(0, n) : '');
 const b64 = (v, n) => (typeof v === 'string' && v.length <= n && /^[A-Za-z0-9+/]+=*$/.test(v) ? v : '');
 
@@ -96,6 +104,8 @@ class IosSign extends EventEmitter {
     this.ipa = ''; // an IPA chosen in this window for the next run (builds that install other apps)
     this.seed = cleanState(seed);
     this.stopped = false;
+    this.latest = ''; // TwinDesk's latest release ('' not known yet)
+    this.latestAt = 0;
 
     link.on('welcome', () => { this.phone = null; this._look(); });
     link.on('closed', () => {
@@ -145,10 +155,37 @@ class IosSign extends EventEmitter {
       else this.booted = false; // tried again when switched on again
       this._look();
     });
+    this._release();
     if (!this.timer) {
       this.timer = setInterval(() => this._look(), LOOK_MS);
       if (this.timer.unref) this.timer.unref();
     }
+  }
+
+  // The latest release's version, for Update TwinDesk (looked up at most every 6 hours).
+  async _release(force = false) {
+    if (this.cfg().on !== true || this.releasing || (!force && Date.now() - this.latestAt < RELEASE_MS)) return;
+    this.releasing = true;
+    try {
+      let f = (url, o) => fetch(url, o);
+      try { const { net } = require('electron'); if (net && net.fetch) f = (url, o) => net.fetch(url, o); } catch {}
+      const res = await f(`${RELEASE_API}?_=${Date.now()}`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'TwinDesk' }, cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      if (res.ok) {
+        const r = await res.json();
+        const v = String(r.tag_name || '').replace(/^v/i, '');
+        if (/^\d+(\.\d+)*/.test(v)) { this.latest = v.slice(0, 40); this.latestAt = Date.now(); }
+      }
+    } catch {} finally {
+      this.releasing = false;
+    }
+    this._changed();
+    this._auto();
+  }
+
+  // TwinDesk on this device, when a newer release is out: {version, latest}; null otherwise.
+  _update(udid) {
+    const app = (this.apps[udid] || []).find((a) => a.twindesk);
+    return app && this.latest && app.version && compare(this.latest, app.version) > 0 ? { bundleId: app.bundleId, version: app.version, latest: this.latest } : null;
   }
 
   _ios() { return !!(this.link.current && this.link.current.os === 'ios'); }
@@ -215,10 +252,11 @@ class IosSign extends EventEmitter {
 
   // The iPhone's app is asked for a refresh: now (Refresh now here), or by itself (cfg.how: 'ask'
   // shows a notification there to tap; 'self' refreshes while it's unlocked, else the notification).
-  _want({ now = false, app = '', expires = 0 } = {}) {
+  _want({ now = false, app = '', expires = 0, update = '' } = {}) {
     const c = this.cfg();
     const m = { t: T.WANT, ask: c.how === 'ask', name: '' };
     if (now) m.now = true;
+    if (update) { m.update = update; m.name = 'TwinDesk'; } // update: the version it goes to
     if (app) {
       m.app = app;
       const a = Object.values(this.apps).flat().find((x) => x.bundleId === app);
@@ -247,6 +285,7 @@ class IosSign extends EventEmitter {
       kept: this._factsOf(udid),
       pending: !!(this.pending && this.pending.udid === udid),
       ids: this.ids || null, twindeskIpa: !!this._twindeskIpa(udid),
+      update: this._update(udid), latest: this.latest, autoUpdate: c.update === true,
       ipa: this.ipa ? path.basename(this.ipa) : '',
       run: r ? { from: r.from, step: r.step, percent: r.percent, need: r.need, seen: r.seen.slice(), note: r.note || '', ipa: r.ipa ? path.basename(r.ipa) : '' } : null,
       last: this.last,
@@ -295,7 +334,7 @@ class IosSign extends EventEmitter {
       // (only then does an iPhone that is on follow it off).
       on: v.on, switched: this.switched,
       t: T.INFO, available: v.on && v.ready, seen: !!v.udid, anyIpa: v.anyIpa, anisette: v.anisette, keep: v.on && v.keep, days: v.days,
-      apps: v.apps, busy: !!v.run,
+      apps: v.apps, busy: !!v.run, latest: v.latest, autoUpdate: v.autoUpdate,
     });
   }
 
@@ -375,8 +414,10 @@ class IosSign extends EventEmitter {
   }
 
   // A run that installs TwinDesk itself: from the kept copy, else downloaded and then kept.
-  _twinDesk(req, udid) {
-    const kept = this._twindeskIpa(udid);
+  // fresh (an update, or a kept copy older than the TwinDesk on the device would be): the latest
+  // release is downloaded, and kept in place of the old copy.
+  _twinDesk(req, udid, fresh = false) {
+    const kept = fresh || this._update(udid) ? '' : this._twindeskIpa(udid);
     if (kept) req.twindesk_ipa = kept;
     else if (this.cacheDir && this.cfg().cache !== false) req.save_ipa = path.join(this.cacheDir, TWINDESK_IPA);
     return req;
@@ -387,6 +428,7 @@ class IosSign extends EventEmitter {
     if (!this.bin || this.stopped || this.looking) return;
     if (this.cfg().on !== true) { this.devices = []; this.apps = {}; return this._changed(); } // off: nothing is looked at
     this.looking = true;
+    this._release(); // at most every 6 hours
     try {
       const d = await this._once({ op: 'devices' });
       this.devices = d && Array.isArray(d.devices) ? d.devices.slice(0, 20).filter((x) => x && typeof x.udid === 'string' && /^[0-9A-Fa-f-]{20,64}$/.test(x.udid))
@@ -563,7 +605,8 @@ class IosSign extends EventEmitter {
     // An app installed from here before, by its kept IPA; TwinDesk itself too when its IPA is kept
     // (a build installed from a file stays that build), else TwinDesk's latest release.
     const again = m.app ? this._cached(str(m.app)) : '';
-    if (!m.app && !m.ipa) { this._twinDesk(req, udid); this._refreshOnly(req, udid); }
+    if (m.update === true && !m.app && !m.ipa) this._twinDesk(req, udid, true); // Update TwinDesk: the release, signed and installed
+    else if (!m.app && !m.ipa) { this._twinDesk(req, udid); this._refreshOnly(req, udid); }
     else if (again && this.info.anyIpa) { req.ipa = again; this._refreshOnly(req, udid, str(m.app)); }
     else if (m.app && this.info.anyIpa && (this.apps[udid] || []).some((a) => a.bundleId === str(m.app))) { req.no_ipa = true; this._refreshOnly(req, udid, str(m.app)); }
     else if (m.app) return fail({ kind: 'other', message: 'That app isn’t on the device' });
@@ -589,12 +632,17 @@ class IosSign extends EventEmitter {
   }
 
   // With this computer's kept copy, no iPhone app needed.
-  refreshKept() {
+  refreshKept({ update = false } = {}) {
     const udid = this._ready((e) => { this.last = { error: e, from: 'kept' }; this.emit('change'); });
     if (!udid) return;
     if (!this.kept[udid]) return;
     if (!this.cfg().keptFacts) this._saveFacts(); // a copy kept before the facts were
     const req = { op: 'install', udid, state: this.kept[udid] };
+    if (update) {
+      this._twinDesk(req, udid, true);
+      this._start({ from: 'kept', udid, update: true }, req);
+      return;
+    }
     if (this.ipa) req.ipa = this.ipa;
     else if (this.noIpa) req.no_ipa = true;
     else this._twinDesk(req, udid);
@@ -618,6 +666,15 @@ class IosSign extends EventEmitter {
       this.last = { info: 'Waking TwinDesk on the iPhone over Bluetooth…' };
       this.emit('change');
     }
+  }
+
+  // Update TwinDesk on the device to the latest release: this computer's copy, or the iPhone's app.
+  updateTwinDesk() {
+    const udid = this._udid();
+    if (this.run || !this.info || !this._update(udid)) return;
+    this.tried.set(`${udid} update`, Date.now());
+    if ((this._factsOf(udid) || {}).signedIn) return this.refreshKept({ update: true });
+    if (this._ios() && this.phone && this.phone.signedIn) this._want({ now: true, update: this.latest });
   }
 
   // One app again, from its kept IPA: with this computer's copy of the session, or by asking the iPhone.
@@ -645,6 +702,8 @@ class IosSign extends EventEmitter {
     else if (o.a === 'set') this.set(o);
     else if (o.a === 'signin') this.signIn(o);
     else if (o.a === 'refresh') this.refresh();
+    else if (o.a === 'update') this.updateTwinDesk();
+    else if (o.a === 'release') this._release(true);
     else if (o.a === 'answer') this.answer(o);
     else if (o.a === 'stop') this.stop();
     else if (o.a === 'ipa') this.setIpa('');
@@ -684,6 +743,16 @@ class IosSign extends EventEmitter {
     const again = (RETRY_HOURS.includes(c.retry) ? c.retry : 6) * 3600 * 1000;
     const rested = (key) => Date.now() - (this.tried.get(key) || 0) >= again;
     const apps = udid ? this.apps[udid] || [] : [];
+    // Update TwinDesk by itself (cfg.update): before any refresh, as installing the release refreshes it too.
+    if (c.update === true && this._update(udid) && rested(`${udid} update`)) {
+      const viaCopy = !!(this._factsOf(udid) || {}).signedIn;
+      const viaPhone = this._ios() && this.phone && this.phone.signedIn && this.phone.auto;
+      if (viaCopy || viaPhone) {
+        this.tried.set(`${udid} update`, Date.now());
+        if (viaCopy) return this.refreshKept({ update: true });
+        return this._want({ update: this.latest });
+      }
+    }
     const due = apps.filter((a) => soon(a.expires) && (a.twindesk || (c.which !== 'twindesk' && this._cached(a.bundleId))) && rested(`${udid} ${a.bundleId}`))[0];
     // The system doesn't see the device (no cable, no Wi-Fi sync right now), but the iPhone said
     // when its TwinDesk runs out: asked anyway, as it comes to the front for it and is seen then.
@@ -726,6 +795,7 @@ class IosSign extends EventEmitter {
       if (!o.on) { this._kept = {}; this._saveKept(); this.pending = null; this.queued = null; } // off: nothing of it stays here (the Keep a copy setting does)
     }
     if (typeof o.auto === 'boolean') patch.auto = o.auto;
+    if (typeof o.update === 'boolean') patch.update = o.update;
     if (Number.isInteger(o.days) && o.days >= 1 && o.days <= 6) patch.days = o.days;
     if (o.how === 'ask' || o.how === 'self') patch.how = o.how;
     if (o.which === 'all' || o.which === 'twindesk') patch.which = o.which;

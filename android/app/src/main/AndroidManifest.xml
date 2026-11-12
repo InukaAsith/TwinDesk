@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" /> <!-- the sound capture without wireless debugging (Sound.kt): Android asks it for any capture -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /> <!-- About › Update: installs the new release over this one (Updates.kt) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -314,6 +315,7 @@
             android:taskAffinity="" />
 
         <receiver android:name=".ActionReceiver" android:exported="false" />
+        <receiver android:name=".UpdateReceiver" android:exported="false" /> <!-- Android's installer's answer to an update (Updates.kt) -->
         <receiver
             android:name=".WiredReceiver"
             android:exported="true"

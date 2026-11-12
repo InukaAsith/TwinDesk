@@ -20,6 +20,7 @@ UI.modulesCard = () => {
   let cur = null;
   const rows = [];
   const sws = {};
+  const needs = {}; // per module: the red note and its Restart button, beside the switch toggled
   for (const m of M.LIST) {
     if (!known.has(m.id)) continue;
     const sw = UI.switch((on) => {
@@ -29,12 +30,14 @@ UI.modulesCard = () => {
       UI.api.setModules({ id: m.id, on, wasOn });
     }, { label: t(m.label) });
     sws[m.id] = sw;
-    rows.push(UI.row(t(m.label), '', [sw]));
+    const note = UI.el('span', { class: 'mod-restart', text: t('Restart needed') });
+    const btn = UI.button(t('Restart'), () => UI.api.relaunch(), 'small primary');
+    note.hidden = btn.hidden = true;
+    needs[m.id] = [note, btn];
+    rows.push(UI.row(t(m.label), '', [note, btn, sw]));
   }
-  const restartRow = UI.row(t('Restart to apply'), t('Modules load or unload when TwinDesk starts'), [UI.button(t('Restart'), () => UI.api.relaunch(), 'small primary')]);
-  restartRow.hidden = true;
   const head = UI.row(t('Modules'), t('A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.'), []);
-  const card = UI.card(t('Modules'), [head, restartRow, ...rows]);
+  const card = UI.card(t('Modules'), [head, ...rows]);
 
   return {
     card,
@@ -42,8 +45,12 @@ UI.modulesCard = () => {
       cur = s;
       const v = s && s.modules;
       if (!v) return;
-      for (const [id, sw] of Object.entries(sws)) sw.set(!v.off.includes(id));
-      restartRow.hidden = !v.restart;
+      const atStart = v.atStart || [];
+      for (const [id, sw] of Object.entries(sws)) {
+        sw.set(!v.off.includes(id));
+        const changed = v.off.includes(id) !== atStart.includes(id); // differs from what this run loaded
+        for (const e of needs[id]) e.hidden = !changed;
+      }
     },
   };
 };

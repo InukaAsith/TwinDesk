@@ -83,7 +83,7 @@ function normalize(s) {
     // hud: popup when switching computers. inputProtocol: udp = tdv2 input lane (default), tcp = tdv1
     app: { hud: bool(appS.hud, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true }, // keepPinging: General › Advanced (shared/quiet.js)
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored
-    updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '' },
+    updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '', install: up.install === true }, // install: install new versions by themselves (shared/selfupdate.js)
     clipboard: {
       enabled: bool(c.enabled, false),
       send: bool(c.send, true),

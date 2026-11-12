@@ -510,6 +510,39 @@ fn is_twindesk(path: &Path) -> bool {
     check().unwrap_or(false)
 }
 
+// TwinDesk signed here carries "TDInstalledBy": "TwinDesk" in its Info.plist (added before signing,
+// so the signature covers it). The app reads it to know a computer's TwinDesk installed it, not
+// AltStore or SideStore: its Overview refresh card and its update through the computer show only then.
+const MARK_KEY: &str = "TDInstalledBy";
+
+fn marked(src: &Path, tmp: &Path) -> Option<PathBuf> {
+    use std::io::{Read, Write};
+    let mut zin = zip::ZipArchive::new(std::io::BufReader::new(std::fs::File::open(src).ok()?)).ok()?;
+    let out = tmp.join("TwinDesk-marked.ipa");
+    let mut zout = zip::ZipWriter::new(std::fs::File::create(&out).ok()?);
+    let mut done = false;
+    for i in 0..zin.len() {
+        let name = zin.name_for_index(i)?.to_string();
+        let parts: Vec<&str> = name.split('/').collect();
+        if parts.len() == 3 && parts[0] == "Payload" && parts[1].ends_with(".app") && parts[2] == "Info.plist" {
+            let mut raw = Vec::new();
+            zin.by_index(i).ok()?.take(4 << 20).read_to_end(&mut raw).ok()?;
+            let mut info: plist::Dictionary = plist::from_bytes(&raw).ok()?;
+            info.insert(MARK_KEY.into(), plist::Value::String(MACHINE_NAME.into()));
+            let mut buf = Vec::new();
+            plist::to_writer_binary(&mut buf, &info).ok()?;
+            let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).unix_permissions(0o644);
+            zout.start_file(name, opts).ok()?;
+            zout.write_all(&buf).ok()?;
+            done = true;
+        } else {
+            zout.raw_copy_file(zin.by_index_raw(i).ok()?).ok()?;
+        }
+    }
+    zout.finish().ok()?;
+    done.then_some(out)
+}
+
 fn cert_view(c: &DevelopmentCertificate) -> Value {
     json!({
         "serial": c.serial_number,
@@ -743,6 +776,11 @@ async fn sign_and_install(
         }
     }
 
+    let twindesk = match &source {
+        Source::TwinDesk { .. } => true,
+        Source::Ipa(p) => is_twindesk(p),
+        Source::Nothing => false,
+    };
     let ipa: PathBuf = match source {
         Source::Ipa(path) => path,
         // A refresh of an app whose IPA isn't kept: its profiles were all there was to do.
@@ -771,6 +809,8 @@ async fn sign_and_install(
             to
         }
     };
+
+    let ipa = if twindesk { marked(&ipa, tmp).unwrap_or(ipa) } else { ipa };
 
     // Signing is several of Apple's steps and then the signature itself: each is said as it starts,
     // so a slow one shows where it is (isideload calls back at 0.1, 0.15, 0.2, then 0.3 … 1).
@@ -965,6 +1005,35 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    // An IPA of TwinDesk gets the mark in its main app's Info.plist; every other entry is copied as it is.
+    #[test]
+    fn marks_twindesk() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("td-mark-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("in.ipa");
+        let mut z = zip::ZipWriter::new(std::fs::File::create(&src).unwrap());
+        let o = zip::write::SimpleFileOptions::default();
+        let mut d = plist::Dictionary::new();
+        d.insert("CFBundleIdentifier".into(), plist::Value::String("com.twindesk.ios".into()));
+        let mut b = Vec::new();
+        plist::to_writer_xml(&mut b, &d).unwrap();
+        z.start_file("Payload/TwinDesk.app/Info.plist", o).unwrap();
+        z.write_all(&b).unwrap();
+        z.start_file("Payload/TwinDesk.app/TwinDesk", o).unwrap();
+        z.write_all(b"bin").unwrap();
+        z.finish().unwrap();
+        let out = super::marked(&src, &dir).unwrap();
+        assert!(super::is_twindesk(&out));
+        let mut zin = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+        let mut raw = Vec::new();
+        std::io::Read::read_to_end(&mut zin.by_name("Payload/TwinDesk.app/Info.plist").unwrap(), &mut raw).unwrap();
+        let info: plist::Dictionary = plist::from_bytes(&raw).unwrap();
+        assert_eq!(info.get(super::MARK_KEY).and_then(|v| v.as_string()), Some(super::MACHINE_NAME));
+        assert_eq!(zin.len(), 2);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     // TWINDESK_TEST_IPA=path/to/TwinDesk.ipa cargo test: that one is TwinDesk, nothing else is.
     #[test]
     fn twindesk_ipa() {

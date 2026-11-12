@@ -34,7 +34,8 @@ struct OverviewView: View {
                 }
             }
             // At the bottom: this TwinDesk runs out within 7 days (its own provisioning profile); off in App refresh.
-            if core.signer.homeCard, Signer.expires > 0, Signer.expires - Date().timeIntervalSince1970 < 7 * 86400 { ExpiryCard() }
+            // Only for a TwinDesk a computer installed (AltStore and SideStore refresh their own).
+            if core.signer.homeCard, core.signer.mine, Signer.expires > 0, Signer.expires - Date().timeIntervalSince1970 < 7 * 86400 { ExpiryCard() }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }

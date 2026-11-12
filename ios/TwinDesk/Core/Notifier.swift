@@ -92,6 +92,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
              cat: Cat.sign, info: ["app": app], sound: true)
     }
 
+    // A newer TwinDesk, which the computer installs over this one (App refresh): tap to update.
+    func signUpdate(version: String, computer: String) {
+        post("sign.update", tr("TwinDesk {version} is available", ["version": version]), tr("Tap to install it from {computer}. Your data stays.", ["computer": computer]),
+             cat: Cat.sign, info: ["app": "#update"], sound: true)
+    }
+
     func filesIn(_ name: String, ok: Bool, from: String) {
         guard UIApplication.shared.applicationState != .active else { return }
         post("files.in." + UUID().uuidString, ok ? tr("Received {name}", ["name": name]) : tr("{name} didn’t arrive", ["name": name]), ok ? tr("From {from} · Files › TwinDesk › Received", ["from": from]) : tr("From {from}", ["from": from]))

@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
         TwinService.start(this)
         setContent { Theme { App(Core.get(this), resumed.value) } }
         openTab.value = intent?.getStringExtra("tab")
+        if (intent?.getBooleanExtra("update", false) == true) Core.get(this).updates.installNow() // the update notification
     }
 
     // A notification opened a page (the computer's media: Media).
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.getStringExtra("tab")?.let { openTab.value = it }
+        if (intent.getBooleanExtra("update", false)) Core.get(this).updates.installNow()
     }
 
     override fun onResume() {
@@ -1893,10 +1895,21 @@ private fun AboutPage(core: Core, v: Int) {
             },
             first = true,
         ) {
-            if (u.available) Primary(tr("Download")) { u.open() }
+            if (u.available && u.download != null) {
+                // In place, over this TwinDesk: no reinstall.
+                val label = when (u.stage) {
+                    "downloading" -> tr("Downloading… {percent}%", "percent" to (u.progress * 100).toInt())
+                    "installing" -> tr("Installing…")
+                    else -> tr("Install now")
+                }
+                Primary(label) { if (u.stage != "downloading" && u.stage != "installing") u.installNow() }
+                Secondary(tr("Download")) { u.open() } // the APK from GitHub, in the browser
+            } else if (u.available) Primary(tr("Download")) { u.open() }
             if (!u.checking) Secondary(tr("Check now")) { u.checkNow() }
         }
+        if (u.installError.isNotEmpty()) MacRow(tr("Couldn’t update"), u.installError)
         SwitchRow(tr("Check automatically"), tr("Looks for new releases on GitHub every few hours"), u.auto) { u.auto = it }
+        SwitchRow(tr("Install automatically"), tr("Downloads a new version and installs it when no computer is connected. Settings and permissions stay"), u.install) { u.install = it }
     }
     MacCard(tr("Made by")) {
         MacRow("Inuka Asith", "inukaasith.vercel.app", first = true) { Secondary(tr("Portfolio")) { open("https://inukaasith.vercel.app") } }

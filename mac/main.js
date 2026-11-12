@@ -992,6 +992,7 @@ app.whenReady().then(() => {
     current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,
     save: () => store.saveSettings(settings), onChange: pushState,
     onShowModal: showUpdateWindow,
+    isBusy: () => !!(peer && peer.current), // Install automatically waits for no session
     notify: (title, body, onClick) => {
       if (!Notification.isSupported()) return;
       const n = new Notification({ title, body });

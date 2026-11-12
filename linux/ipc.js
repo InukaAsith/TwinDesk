@@ -108,7 +108,14 @@ function setupIpc(ctx) {
   handle('identifyDisplays', () => kvm.map.identify());
   handle('setKeys', (partial) => change('keys', partial, () => kvm.applyConfig())); // the hotkey lives in the helper
   handle('setApp', (partial) => change('app', partial, () => ctx.onApp && ctx.onApp()));
-  handle('setUpdates', (partial) => change('updates', { auto: !!(partial && partial.auto), skipped: typeof (partial && partial.skipped) === 'string' ? partial.skipped : (settings.updates && settings.updates.skipped) || '' }, () => ctx.updates.start()));
+  handle('setUpdates', (partial) => {
+    const p = partial || {};
+    const next = {};
+    if (typeof p.auto === 'boolean') next.auto = p.auto;
+    if (typeof p.skipped === 'string') next.skipped = p.skipped;
+    if (typeof p.install === 'boolean') next.install = p.install;
+    change('updates', next, () => { if ('install' in next) ctx.updates.setInstall(next.install); ctx.updates.start(); });
+  });
   handle('skipUpdate', (version) => ctx.updates && ctx.updates.skip && ctx.updates.skip(version));
   handle('unskipUpdate', () => ctx.updates && ctx.updates.unskip && ctx.updates.unskip());
   handle('checkUpdates', () => ctx.updates.check(true));

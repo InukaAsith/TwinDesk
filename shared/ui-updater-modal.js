@@ -257,6 +257,7 @@
       assetSize,
       notesBox,
       updateBtn,
+      linkBtn,
     };
 
     // --- Top In-App Banner ---
@@ -357,11 +358,14 @@
       assetBar.hidden = false;
       assetName.innerHTML = `📦 <span>${escapeHtml(u.download.name)}</span>`;
       assetSize.textContent = formatBytes(u.download.size);
-      updateBtn.textContent = t('Download & Install');
+      updateBtn.textContent = u.canInstall ? t('Install now') : t('Download & Install');
     } else {
       assetBar.hidden = true;
       updateBtn.textContent = t('Update Now');
     }
+
+    // In place: Install now, and the release on GitHub to download by hand.
+    overlay._refs.linkBtn.textContent = u.canInstall ? t('Download from GitHub ↗') : t('View on GitHub ↗');
 
     // Release Notes
     notesBox.innerHTML = parseMarkdownNotes(u.releaseNotes);
@@ -388,7 +392,8 @@
       if (showBanner) {
         banner._refs.lead.textContent = t('TwinDesk {version} is available.', { version: u.latest });
         banner._refs.sub.textContent = u.current ? t('(current: v{version})', { version: u.current }) : '';
-        banner._refs.getBtn.textContent = u.download ? t('Download') : t('Update');
+        banner._refs.getBtn.textContent = u.canInstall ? t('Install now') : u.download ? t('Download') : t('Update');
+        banner._refs.getBtn.disabled = u.stage === 'downloading' || u.stage === 'installing';
       }
     }
 

@@ -315,18 +315,34 @@ object Notify {
 
     fun cancelHubAsk(ctx: Context) = runCatching { nm(ctx).cancel(ID_HUB_ASK) }.let { }
 
-    // A new release on GitHub (Updates): tap to download it in the browser.
-    fun update(ctx: Context, latest: String, current: String) {
-        val open = PendingIntent.getActivity(
-            ctx, 50, Intent(Intent.ACTION_VIEW, Uri.parse(Core.get(ctx).updates.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    // An update downloaded and handed to Android, which wants the person's OK: tap to confirm it.
+    fun updateReady(ctx: Context, confirm: Intent, latest: String) = runCatching {
+        val open = PendingIntent.getActivity(ctx, 52, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        nm(ctx).notify(
+            ID_UPDATE,
+            Notification.Builder(ctx, CH_UPDATES)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle(tr("TwinDesk {latest} is ready to install", "latest" to latest))
+                .setContentText(tr("Tap to update. Your settings and permissions stay."))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .build(),
         )
+    }.let { }
+
+    // A new release on GitHub (Updates): tap to update in place (About opens and the update starts),
+    // or to download it in the browser when the release has no APK for this build.
+    fun update(ctx: Context, latest: String, current: String) {
+        val inPlace = Core.get(ctx).updates.download != null
+        val tap = if (inPlace) Intent(ctx, MainActivity::class.java).putExtra("tab", "About").putExtra("update", true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            else Intent(Intent.ACTION_VIEW, Uri.parse(Core.get(ctx).updates.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val open = PendingIntent.getActivity(ctx, 50, tap, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         nm(ctx).notify(
             ID_UPDATE,
             Notification.Builder(ctx, CH_UPDATES)
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle(tr("TwinDesk {latest} is available", "latest" to latest))
-                .setContentText(tr("You have {current}. Tap to download the new version.", "current" to current))
+                .setContentText(if (inPlace) tr("You have {current}. Tap to update.", "current" to current) else tr("You have {current}. Tap to download the new version.", "current" to current))
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build(),

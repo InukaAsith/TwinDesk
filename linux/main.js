@@ -408,6 +408,7 @@ function start() {
   updates = new Updates({
     current: app.getVersion(), platform: 'linux', prefer: process.env.APPIMAGE || !app.isPackaged ? 'appimage' : 'deb', getSettings: () => settings, getLanguage: () => i18n.locale, save: saveSettings, onChange: pushState,
     onShowModal: showUpdateWindow,
+    isBusy: () => !!(link && link.current), // Install automatically waits for no session
     notify: (title, body, onClick) => {
       if (!Notification.isSupported()) return;
       updateNote = new Notification({ title, body });

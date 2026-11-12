@@ -170,8 +170,11 @@
       // ---- TwinDesk on the device ----
       const refreshBtn = UI.button(tr('Refresh now'), () => act({ a: 'refresh' }), 'primary');
       const refreshRow = UI.row(tr('TwinDesk'), '', [refreshBtn], { literalHint: true });
+      // A newer release than the TwinDesk on the device: signed and installed over it (its data stays).
+      const updateBtn = UI.button(tr('Update'), () => act({ a: 'update' }), 'primary');
+      const updateRow = UI.row(tr('Update TwinDesk'), '', [updateBtn], { literalHint: true });
       const appList = el('div');
-      const refreshCard = UI.card(tr('Installed apps'), [refreshRow, appList]);
+      const refreshCard = UI.card(tr('Installed apps'), [refreshRow, updateRow, appList]);
 
       // ---- automatic refresh ----
       const autoSw = UI.switch((v) => act({ a: 'set', auto: v }));
@@ -192,7 +195,9 @@
       const retryRow = UI.row(tr('Retry after a failed refresh'), '', [retrySel.el]);
       const cacheSw = UI.switch((v) => act({ a: 'set', cache: v }));
       const cacheRow = UI.row(tr('Store IPAs on {computer}', { computer: here }), tr('Each IPA installed from here is kept, so TwinDesk and other apps are signed again from it instead of being downloaded again. Turning this off deletes the stored IPAs.'), [cacheSw.el], { literal: true });
-      const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, howRow, whichRow, retryRow, cacheRow]);
+      const updSw = UI.switch((v) => act({ a: 'set', update: v }));
+      const updAutoRow = UI.row(tr('Update TwinDesk automatically'), tr('When a new release is out, {computer} signs and installs it on the device the same way as a refresh. The app and its data stay.', { computer: Here }), [updSw.el]);
+      const autoCard = UI.card(tr('Automatic refresh'), [autoRow, daysRow, howRow, whichRow, retryRow, updAutoRow, cacheRow]);
 
       // ---- keep a copy (on by default) ----
       const keepSw = UI.switch((v) => act({ a: 'set', keep: v }));
@@ -344,6 +349,10 @@
         refreshRow.setHint(td ? [leftText(td.expires), phone && phone.signedIn ? tr('Apple ID: {account}', { account: phone.email }) : kept ? tr('Session stored on {computer} for {account}', { computer: here, account: v.kept.email }) : ''].filter(Boolean).join(' · ')
           : !sess && near.length ? tr('Nearby over Bluetooth. Refresh now wakes TwinDesk on the device.')
             : sess && !(phone && phone.signedIn) ? tr('Not signed in. Sign in on the iPhone under TwinDesk › App refresh.') : v.udid ? tr('Not installed') : '');
+        const up = v.update;
+        updateRow.hidden = !up;
+        updateBtn.disabled = !!run || !(kept || (phone && phone.signedIn));
+        if (up) updateRow.setHint(tr('{latest} is available. {device} has {version}.', { latest: up.latest, version: up.version, device: devName }));
         const ak = JSON.stringify([apps.filter((a) => !a.twindesk), v.anyIpa, !!(kept || (phone && phone.signedIn))]) + Math.floor(Date.now() / 3600000);
         if (ak !== appKey) {
           appKey = ak;
@@ -356,6 +365,7 @@
 
         // ---- automatic refresh ----
         autoSw.set(v.auto);
+        updSw.set(!!v.autoUpdate);
         daysSel.set(String(v.days || 3));
         howSeg.set(v.how || 'self');
         howRow.setHint(v.how === 'ask' ? tr('The iPhone shows a notification with the remaining time. Tapping it starts the refresh.')
