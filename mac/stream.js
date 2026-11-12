@@ -214,7 +214,8 @@ class Stream extends EventEmitter {
       const src = await this._source();
       const set = this.getSettings();
       this._toWindow('start', {
-        session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too sourceId: src.id, width, height, audio,
+        session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too
+        sourceId: src.id, width, height, audio,
         ice: (this.server.current && this.server.current.ice) || null, // a phone on the USB cable: through the relay
         fps: ScreenCodec.fps(target.hz, set.sharing && set.sharing.fps), // Share screen › Frame rate
         steady: !!(set.sharing && set.sharing.pace === 'steady'), // Playback › Steady (shared/screencodec.js)
