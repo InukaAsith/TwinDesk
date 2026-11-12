@@ -11,7 +11,11 @@
 //
 //   phoneMedia({ NowPlaying, cfg, onChange, phones: () => PhoneSet }) → the ipc's `nowPlaying`
 //     (apply(), control(a, pos), view) over one shared/nowplaying.js per phone, plus unit(u).
+//   phoneRemote({ PhoneRemote, opts, wanted, phones }) → the Remote page's (setAllow, setPad,
+//     refresh, view) over one shared/phone-remote.js per phone; each phone's Remote page drives this
+//     computer; the page shows the active phone's. opts: PhoneRemote's options but server.
 'use strict';
+const P = require('./protocol.js');
 
 class PerPhone {
   constructor(make, { want = () => true } = {}) {
@@ -71,4 +75,34 @@ function phoneMedia({ NowPlaying, cfg, onChange, phones }) {
   };
 }
 
-module.exports = { PerPhone, phoneMedia };
+// Remote (shared/phone-remote.js) for every phone: made once Remote (or Keyboard's voice typing) is
+// on; until then a phone opening its Remote page hears it's off (onPhone, from each unit's link).
+const REMOTE_OFF_WHY = 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there';
+function phoneRemote({ PhoneRemote, opts, wanted, phones }) {
+  const set = new PerPhone((link) => {
+    const r = new PhoneRemote({ ...opts, server: link });
+    r.refresh(); // its page may be open already
+    return r;
+  }, { want: wanted });
+  const active = () => { const p = phones(); return p ? set.of(p.active) : null; };
+  return {
+    unit(u) {
+      // Off here (not made): the phone's Remote page hears so.
+      u.link.on(`t:${P.T.REMOTE_HELLO}`, () => !set.of(u) && u.link.current && u.link.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: REMOTE_OFF_WHY, voice: false, voiceWhy: P.KEYBOARD_OFF }));
+      return set.unit(u);
+    },
+    // Turned on: made for every phone there is.
+    load() {
+      const p = phones();
+      if (p) set.load(p.all);
+      return set.made.size > 0;
+    },
+    get loaded() { return set.made.size > 0; },
+    setAllow(on) { set.each((r) => r.setAllow(on)); },
+    setPad(on) { const r = active(); if (r) r.setPad(on); },
+    refresh() { set.each((r) => r.refresh()); },
+    get view() { const r = active() || set.made.values().next().value; return r ? r.view : null; },
+  };
+}
+
+module.exports = { PerPhone, phoneMedia, phoneRemote };

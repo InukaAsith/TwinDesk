@@ -110,6 +110,7 @@ function setupIpc(ctx) {
     if (partial && typeof partial.locked === 'boolean') kvm.setLocked(partial.locked); // cursor lock: not a setting
     const { linked, edges, shared, locked, ...rest } = partial && typeof partial === 'object' ? partial : {}; // edges: setEdge only
     change('kvm', rest, () => kvm.applyConfig());
+    if ('keyboard' in rest) (ctx.phoneRemote ? ctx.phoneRemote.refresh() : ctx.loadRemote()); // voice typing follows Keyboard
   });
   // Dev only (windows/test/dev/e2e-app.js, MACSHARE_DEV_PORT set): a helper event, as if the helper
   // had sent it (kvm.js gets it through the same listener). Without that variable there is no handler.
@@ -261,6 +262,16 @@ function setupIpc(ctx) {
     else if (m.a === 'push') h.push();
     else if (m.a === 'allow' && typeof m.app === 'string') h.allow(m.list, m.app, m.on === true);
     else if (m.a === 'forget') h.forget(m.list, typeof m.app === 'string' ? m.app : '');
+  });
+  // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
+  handle('setRemote', (m) => {
+    if (!m || typeof m !== 'object') return;
+    // Off at start: not made; turned on, made for every phone (and they hear it).
+    if ('allow' in m && !ctx.phoneRemote && m.allow === true) { ctx.settings.remote.allow = true; ctx.loadRemote(); }
+    if ('allow' in m && ctx.phoneRemote) ctx.phoneRemote.setAllow(m.allow === true);
+    if ('pad' in m && ctx.phoneRemote) ctx.phoneRemote.setPad(m.pad === true); // Real gamepad
+    ctx.save();
+    ctx.push();
   });
   // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js).
   handle('camera', (m) => {

@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'rezume', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'rezume', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -358,6 +358,7 @@ function setupIpc(ctx) {
       ctx.kvm.settingsChanged(prev);
       if (partial && typeof partial.shared === 'boolean') ctx.kvm.setShared(partial.shared); // the Cursor tab's switch (Over Bluetooth through it)
       if (partial && typeof partial.locked === 'boolean') ctx.kvm.setLocked(partial.locked); // cursor lock: not a setting
+      if (partial && 'keyboard' in partial) (ctx.remote() ? ctx.remote().refresh() : ctx.loadRemote()); // voice typing follows Keyboard
     },
     // The shared layout (docs/mesh.md): a device goes to a cell (a device there moves to its old cell, or
     // they swap); a device goes off the map. Invalid arguments are ignored; the new layout comes with the state.
@@ -532,6 +533,15 @@ function setupIpc(ctx) {
       if (m && np) np.control(String(m.a || ''), m.pos);
     },
     phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
+    setRemote(m) {
+      if (!m || typeof m !== 'object') return;
+      // Off at start: not made; turned on, made for every phone (and they hear it).
+      if ('allow' in m && !ctx.remote() && m.allow === true) { settings.remote.allow = true; ctx.loadRemote(); }
+      if ('allow' in m && ctx.remote()) ctx.remote().setAllow(m.allow === true);
+      save();
+      ctx.pushState();
+    },
     // Camera tab: the selected computer's camera here, this Mac's there (shared/camshare.js). macOS
     // asks for the camera when sharing is first turned on.
     camera(m) {

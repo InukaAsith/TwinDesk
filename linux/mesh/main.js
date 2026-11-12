@@ -144,6 +144,7 @@ let peerApps = null;
 let pendingMacApp = null; // {id, until}: opened once the Mac connects (2 min)
 let wired = null; // wired.js, with the phone
 let hostServer = null; // server.js, once the certificate exists
+let phoneRemote = null; // each phone's Remote page: touchpad, keyboard and gamepad here (shared/perphone.js phoneRemote)
 let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
 let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
@@ -387,7 +388,7 @@ function start() {
   loadReZume(); // only while it's on
   const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
@@ -496,6 +497,14 @@ function startPhone(server, pairing) {
   nowPlaying = require('../../shared/perphone.js').phoneMedia({
     NowPlaying: require('../../shared/nowplaying.js').NowPlaying, cfg: () => settings.audio, onChange: pushState, phones: () => phone,
   });
+  // Each phone's Remote page drives this computer (shared/phone-remote.js, one per phone), made once
+  // Remote or Keyboard's voice typing is on; the Remote page shows the active phone's.
+  phoneRemote = require('../../shared/perphone.js').phoneRemote({
+    PhoneRemote: require('../../shared/phone-remote.js').PhoneRemote,
+    opts: { helper, getSettings: () => settings, atHome: () => !kvm || kvm.mode === 'home', onChange: pushState, loadPad: () => require('../gamepad'), save: saveSettings },
+    wanted: () => !!(settings.remote.allow || settings.kvm.keyboard),
+    phones: () => phone,
+  });
   const { PcNow } = require('../../shared/pcnow.js');
   phone = new PhoneSet({
     hub, link: pl, raw: server, discovery, pairing, wired,
@@ -537,6 +546,7 @@ function startPhone(server, pairing) {
       u.views.on('change', pushState);
       u.views.on('focus', () => kvm.applyConfig());
       nowPlaying.unit(u);
+      phoneRemote.unit(u);
       new PcNow({ server: u.link, key: (code) => {
         if (!helper) return;
         helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
@@ -1076,6 +1086,7 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
+    remote: (phoneRemote && phoneRemote.view) || REMOTE_OFF, // Remote tab: the active phone's
     rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '' }, // ReZume tab; mesh: why not here (one phone only)
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
     vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
@@ -1102,6 +1113,7 @@ function ownAddresses() {
 function onKvmChange() {
   if (kvm.mode !== lastMode) {
     lastMode = kvm.mode;
+    if (phoneRemote) phoneRemote.refresh(); // the phones' Remote is taken only with the mouse at home
     screen.refreshInput();
   }
   pushState();
@@ -1423,6 +1435,14 @@ function loadReZumeNow() {
   rezumeShelf = new ReZumeShelf({ rezume, cfg: () => settings.rezume, peerName: name, appIcon: path.join(__dirname, '..', 'assets', 'icon.png') });
   rezume.apply();
   return rezume;
+}
+
+// Remote: made for every phone once it's turned on (or Keyboard's voice typing is).
+const REMOTE_OFF = { allow: false, why: '', opened: false, using: false, pad: { on: false, supported: true, live: false, busy: '', message: '', name: '' } };
+function loadRemote() {
+  if (!phoneRemote || (!settings.remote.allow && !settings.kvm.keyboard)) return null;
+  phoneRemote.load();
+  return phoneRemote;
 }
 
 function loadMic() {

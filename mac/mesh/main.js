@@ -249,6 +249,8 @@ function publishState() {
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
+    state.remote = svc && svc.remotes && svc.remotes.view ? svc.remotes.view // Remote tab: the active phone's
+      : svc ? { allow: false, why: '', opened: false, using: false, pad: { on: false, supported: false, live: false, busy: '', message: '', name: '' } } : null;
     state.camera = svc && svc.camShare ? { ...svc.camShare.state, on: settings.camera.on !== false } : svc ? { on: false } : null; // Camera tab
     state.vcam = svc && svc.vcam ? svc.vcam.view() : svc ? { checked: true, supported: true, on: false } : null;
     // ReZume tab; mesh: why it isn't here (only with one phone, shared/rezume-solo.js)
@@ -695,6 +697,18 @@ app.whenReady().then(() => {
     NowPlaying: require('../../shared/nowplaying.js').NowPlaying, cfg: () => settings.audio, onChange: pushState, phones: () => svc.phone,
   });
   svc.loadNowPlaying = () => svc.nowPlaying;
+  // Each phone's Remote page drives this Mac (shared/phone-remote.js, one per phone), made once Remote
+  // or Keyboard's voice typing is on; the Remote page shows the active phone's.
+  svc.remotes = require('../../shared/perphone.js').phoneRemote({
+    PhoneRemote: require('../../shared/phone-remote.js').PhoneRemote,
+    opts: { helper: svc.helper, getSettings: () => settings, atHome: () => svc.kvm.mode === 'home', onChange: pushState,
+      padNote: 'Real gamepad isn’t on the Mac. To use {name} as a gamepad, turn on Remote › As a Bluetooth gamepad on {name}, then pair it with this Mac in System Settings › Bluetooth' },
+    wanted: () => !!(settings.remote.allow !== false || settings.kvm.keyboard),
+    phones: () => svc.phone,
+  });
+  svc.loadRemote = () => (svc.remotes.load() ? svc.remotes : null);
+  svc.remote = () => (svc.remotes.loaded ? svc.remotes : null);
+  svc.kvm.on('where', () => svc.remotes.refresh()); // the phones' Remote is taken only with the mouse at home
   const { PcNow } = require('../../shared/pcnow.js');
   svc.phone = new PhoneSet({
     hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
@@ -717,6 +731,7 @@ app.whenReady().then(() => {
       u.bridge.on('popup', (kind, text) => hud.show(kind, text));
       u.bridge.on('save', () => store.saveSettings(settings));
       svc.nowPlaying.unit(u);
+      svc.remotes.unit(u);
       // What plays on this Mac, for that phone's Media page and its media notification (shared/pcnow.js).
       new PcNow({ server: u.link, key: (code) => {
         svc.helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });

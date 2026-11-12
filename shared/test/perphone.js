@@ -66,4 +66,40 @@ function link(os) {
   for (const u of [a, b]) assert.ok(u.link.sent.some((m) => m.t === P.T.PHONE_MEDIA_WANT && m.on === false));
 }
 
+// phoneRemote: off → a phone's Remote page hears it's off; on → one per phone, the view the active one's.
+{
+  const { phoneRemote } = require('../perphone.js');
+  let allow = false;
+  const made = [];
+  class FakeRemote {
+    constructor(o) { this.server = o.server; this.allow = null; made.push(this); }
+    refresh() {}
+    setAllow(on) { this.allow = on; }
+    setPad(on) { this.pad = on; }
+    get view() { return { allow: this.allow, who: this.server.current.deviceId }; }
+  }
+  const a = { link: link(P.OS.ANDROID) };
+  const b = { link: link(P.OS.ANDROID) };
+  const phones = { all: [a, b], active: b };
+  const rem = phoneRemote({ PhoneRemote: FakeRemote, opts: {}, wanted: () => allow, phones: () => phones });
+  rem.unit(a);
+  rem.unit(b);
+  assert.strictEqual(made.length, 0);
+  a.link.emit(`t:${P.T.REMOTE_HELLO}`, {});
+  assert.ok(a.link.sent.some((m) => m.t === P.T.REMOTE_STATE && m.off === true));
+  allow = true;
+  assert.strictEqual(rem.load(), true);
+  assert.strictEqual(made.length, 2);
+  rem.setAllow(true);
+  assert.ok(made.every((r) => r.allow === true));
+  assert.strictEqual(rem.view.who, b.link.current.deviceId);
+  rem.setPad(true);
+  assert.strictEqual(made.find((r) => r.server === b.link).pad, true);
+  assert.strictEqual(made.find((r) => r.server === a.link).pad, undefined);
+  // On now: no "off" answer any more.
+  const before = a.link.sent.length;
+  a.link.emit(`t:${P.T.REMOTE_HELLO}`, {});
+  assert.strictEqual(a.link.sent.length, before);
+}
+
 console.log('perphone: ok');
