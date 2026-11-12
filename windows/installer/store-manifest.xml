@@ -10,7 +10,7 @@
                      of the NSIS install; here macshare-calls.exe has this package's identity.
        alias         TwinDesk.exe, which shortcuts and the login item start (the app's folder changes
                      with every update).
-       firewall      the NSIS installer's rules (installer.nsh), kept up to date by Windows. -->
+       firewall      the NSIS installer’s rules (installer.nsh), the package’s, kept up to date by Windows. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -63,24 +63,27 @@
         </uap3:Extension>
         <!-- Without it RegisterApp does nothing and Windows drops the hands-free link (Calls.cs). -->
         <uap13:Extension Category="windows.phoneCallActivation"/>
-        <desktop2:Extension Category="windows.firewallRules">
-          <desktop2:FirewallRules Executable="${executable}">
-            <desktop2:Rule Direction="in" IPProtocol="TCP" Profile="all"/>
-            <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
-          </desktop2:FirewallRules>
-        </desktop2:Extension>
-        <desktop2:Extension Category="windows.firewallRules">
-          <desktop2:FirewallRules Executable="app\resources\app\windows\vendor\adb\adb.exe">
-            <desktop2:Rule Direction="in" IPProtocol="TCP" Profile="all"/>
-            <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
-          </desktop2:FirewallRules>
-        </desktop2:Extension>
-        <desktop2:Extension Category="windows.firewallRules">
-          <desktop2:FirewallRules Executable="app\resources\app\windows-helper\bin\macshare-winhelper.exe">
-            <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
-          </desktop2:FirewallRules>
-        </desktop2:Extension>
       </Extensions>
     </Application>
   </Applications>
+  <!-- makeappx: firewall rules are the package's, not the app's. -->
+  <Extensions>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="${executable}">
+        <desktop2:Rule Direction="in" IPProtocol="TCP" Profile="all"/>
+        <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="app\resources\app\windows\vendor\adb\adb.exe">
+        <desktop2:Rule Direction="in" IPProtocol="TCP" Profile="all"/>
+        <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="app\resources\app\windows-helper\bin\macshare-winhelper.exe">
+        <desktop2:Rule Direction="in" IPProtocol="UDP" Profile="all"/>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+  </Extensions>
 </Package>
