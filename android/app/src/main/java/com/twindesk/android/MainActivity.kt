@@ -732,16 +732,14 @@ private fun ComputerCard(core: Core, name: String) {
     }
 }
 
-// TwinDesk's own Scan QR code: Google's code scanner where the phone has it (no camera permission
-// here), else the camera app (it opens twindesk:// links too: QrActivity).
+// TwinDesk's own Scan QR code: Google's code scanner where the build and the phone have it (no
+// camera permission here, QrScan.kt), else the camera app (it opens twindesk:// links too: QrActivity).
 fun scanQr(ctx: android.content.Context) {
-    val ok = runCatching {
-        val opts = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
-            .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build()
-        com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(ctx, opts).startScan()
-            .addOnSuccessListener { b -> if (!QrActivity.open(ctx, b.rawValue.orEmpty())) android.widget.Toast.makeText(ctx, tr("That isn’t a TwinDesk pairing code"), android.widget.Toast.LENGTH_SHORT).show() }
-            .addOnFailureListener { openCamera(ctx) }
-    }.isSuccess
+    val ok = runCatching<Boolean> {
+        QrScan.start(ctx,
+            { code -> if (!QrActivity.open(ctx, code)) android.widget.Toast.makeText(ctx, tr("That isn’t a TwinDesk pairing code"), android.widget.Toast.LENGTH_SHORT).show() },
+            { openCamera(ctx) })
+    }.getOrDefault(false)
     if (!ok) openCamera(ctx)
 }
 
@@ -1808,7 +1806,9 @@ private fun AboutPage(core: Core, v: Int) {
     val ctx = LocalContext.current
     val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     val u = core.updates
-    MacCard(tr("Updates")) {
+    if (!BuildConfig.UPDATER) MacCard(tr("Updates")) {
+        MacRow("TwinDesk", tr("Version {current}. F-Droid installs new versions.", "current" to u.current), first = true)
+    } else MacCard(tr("Updates")) {
         MacRow(
             "TwinDesk",
             when {
