@@ -527,12 +527,15 @@ each talking straight to the others with no hub in between.
 - **Pair once, join all.** A new device paired with one computer meets the rest by itself.
 
 <details>
-<summary><b>Mesh is in beta: what's in and what's still coming</b></summary>
+<summary><b>What's in Mesh, and how it differs</b></summary>
 
 Turn it on in the **Multi-device** page, and off again any time with everything as you left it.
-Connecting just two devices? You won't need it. Still coming to Mesh: the Camera, ReZume, pictures
-on the clipboard, and files dragged to more than one device at a time. The phone connects to one
-computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
+Connecting just two devices? Keep it off: the one-to-one mode does the same with less. The one-to-one
+app's pages are here too: files (the fast way, over HTTPS), the Camera, the Remote, the Deck,
+TwinDesk iPhone, Modules and pictures on the clipboard. ReZume works while a phone is the only
+device connected. Not yet: the Bluetooth mouse and keyboard, and files dragged to more than one
+device at a time. The phone connects to
+one computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
 See [docs/mesh.md](docs/mesh.md).
 
 </details>
@@ -930,7 +933,7 @@ November 2026. If something here is out of date or wrong, please
 | Notifications from the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Shared folders and a terminal | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Wake-on-LAN | ✅ | ✗ | ✗ | — | ✗ | ✗ |
-| Three or more computers | ✅ ([Mesh](#mesh), beta) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
+| Three or more computers | ✅ ([Mesh](#mesh)) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
 | Works without a shared network | ✅ Bluetooth, Wi-Fi Direct | ✗ | ✗ | ✗ | ✗ | ✅ |
 | At the login and lock screen | ✗ | ✅ | ✅ | ✅ | ◐ | ✗ |
 | Works with Barrier and Input Leap | ✗ | ✗ | ✅ | ✗ | ✗ | ✗ |
@@ -993,7 +996,7 @@ without it.
 | iPhone or iPad ↔ Mac, Windows or Linux | The [app's features](#iphone-app), or [TwinDesk Web](#twindesk-web) with no app |
 | Any browser ↔ Mac, Windows or Linux | [TwinDesk Web](#twindesk-web): screen, files, clipboard, notifications, remote |
 | Phone ↔ phone | Clipboard, notifications, files, photos, messages and screens ([more](#phone-to-phone)) |
-| All of them at once | [TwinDesk Mesh](#mesh) (beta) |
+| All of them at once | [TwinDesk Mesh](#mesh) |
 
 <a name="privacy"></a>
 
