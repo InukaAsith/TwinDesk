@@ -97,13 +97,19 @@ object PeerScreen {
 
     @Volatile var pendingRemoteUdpPort = 0
     @Volatile var pendingRemoteUdpToken = 0L
+    @Volatile var pendingRemoteUdpKey: ByteArray? = null
+
+    // The listener's key for the UDP lane, sent over the phones' TLS link; no key, no UDP (the sound
+    // then goes through that link instead).
+    fun keyOf(m: JSONObject): ByteArray? = m.optString("udpKey").takeIf { it.isNotEmpty() }
+        ?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.NO_WRAP) }.getOrNull() }?.takeIf { it.size == 16 }
 
     fun wantSound(peer: Peer, on: Boolean) {
         if (!peer.connected) return
         val player = if (on) ensureAudioPlayer() else null
         val port = player?.udpPort ?: 0
         val token = player?.udpToken ?: 0L
-        peer.send(msg(Proto.T.PEER_SOUND_WANT, "on" to on, "udpPort" to port, "udpToken" to token))
+        peer.send(msg(Proto.T.PEER_SOUND_WANT, "on" to on, "udpPort" to port, "udpToken" to token, "udpKey" to (player?.udpKeyB64 ?: "")))
     }
 
     fun onSoundWant(peer: Peer, m: JSONObject) {
@@ -111,25 +117,26 @@ object PeerScreen {
         remoteWantsAudio = on
         val remotePort = m.optInt("udpPort", 0)
         val remoteToken = m.optLong("udpToken", 0L)
+        val remoteKey = keyOf(m)
         val c = capture
         if (c != null) {
-            if (remotePort > 0 && remoteToken != 0L) {
-                peer.peerAddress()?.let { addr -> c.setRemoteUdp(addr, remotePort, remoteToken) }
+            if (remotePort > 0 && remoteToken != 0L && remoteKey != null) {
+                peer.peerAddress()?.let { addr -> c.setRemoteUdp(addr, remotePort, remoteToken, remoteKey) }
             }
             c.update()
         } else if (on && peer.shareSound) {
             pendingRemoteUdpPort = remotePort
             pendingRemoteUdpToken = remoteToken
+            pendingRemoteUdpKey = remoteKey
             val ctx = peer.core.ctx
             val i = Intent(ctx, PeerGrantActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            runCatching { ctx.startActivity(i) }
+            if (android.provider.Settings.canDrawOverlays(ctx) || MainActivity.shown) runCatching { ctx.startActivity(i) }
             val pi = PendingIntent.getActivity(ctx, 19, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             Notify.peer(
                 ctx,
                 tr("{name} wants to hear audio from this phone", "name" to peer.peerName),
                 tr("Tap to share sound with {name}.", "name" to peer.peerName),
                 pi,
-                fullScreen = true
             )
         }
         peer.core.changed()
@@ -148,7 +155,7 @@ object PeerScreen {
                 peer.peerAddress()?.let { addr -> player.connectUdp(addr, remotePort, remoteToken) }
             }
             if (peer.connected) {
-                peer.send(msg(Proto.T.PEER_SOUND_WANT, "on" to true, "udpPort" to player.udpPort, "udpToken" to player.udpToken))
+                peer.send(msg(Proto.T.PEER_SOUND_WANT, "on" to true, "udpPort" to player.udpPort, "udpToken" to player.udpToken, "udpKey" to player.udpKeyB64))
             }
         } else {
             if (!peer.screenSound || viewer == null) {
@@ -212,14 +219,14 @@ object PeerScreen {
 
     // The other phone wants to look: Start here (Android's own prompt), on screen when it lets us
     // open it, else from a notification.
-    fun asked(peer: Peer, size: Int, audio: Boolean = true, remotePort: Int = 0, remoteToken: Long = 0L) {
+    fun asked(peer: Peer, size: Int, audio: Boolean = true, remotePort: Int = 0, remoteToken: Long = 0L, remoteKey: ByteArray? = null) {
         maxSize = size.coerceIn(480, 2400)
         remoteWantsAudio = audio
         screenActive = true
         val c = capture
         if (c != null) {
-            if (remotePort > 0 && remoteToken != 0L) {
-                peer.peerAddress()?.let { addr -> c.setRemoteUdp(addr, remotePort, remoteToken) }
+            if (remotePort > 0 && remoteToken != 0L && remoteKey != null) {
+                peer.peerAddress()?.let { addr -> c.setRemoteUdp(addr, remotePort, remoteToken, remoteKey) }
             }
             c.sync()
             c.update()
@@ -228,16 +235,16 @@ object PeerScreen {
         }
         pendingRemoteUdpPort = remotePort
         pendingRemoteUdpToken = remoteToken
+        pendingRemoteUdpKey = remoteKey
         val ctx = peer.core.ctx
         val i = Intent(ctx, PeerGrantActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        runCatching { ctx.startActivity(i) }
+        if (android.provider.Settings.canDrawOverlays(ctx) || MainActivity.shown) runCatching { ctx.startActivity(i) }
         val pi = PendingIntent.getActivity(ctx, 19, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         Notify.peer(
             ctx,
             tr("{name} wants to see your screen", "name" to peer.peerName),
             tr("Tap to share this screen with {name}.", "name" to peer.peerName),
             pi,
-            fullScreen = true
         )
     }
 
@@ -370,13 +377,6 @@ object PeerScreen {
 class PeerGrantActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (android.os.Build.VERSION.SDK_INT >= 27) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
-        }
         Notify.cancelPeer(this)
         val peer = Core.get(this).peer
         val needAudio = peer.shareSound && (PeerScreen.remoteWantsAudio || PeerScreen.standaloneSoundActive || PeerScreen.screenActive)
@@ -404,6 +404,8 @@ class PeerGrantActivity : Activity() {
         } else if (requestCode == 1) {
             PeerScreen.standaloneSoundActive = false
             if (PeerScreen.screenActive) PeerScreen.tell(peer, false, "${Core.get(this).store.deviceName} didn’t share its screen")
+            PeerScreen.screenActive = false // nothing is shared: no low-latency Wi-Fi or busy link for it
+            PeerScreen.remoteWantsAudio = false
             PeerScreen.tellSoundState(peer)
             peer.core.changed()
         }
@@ -434,12 +436,15 @@ class PeerCaptureService : Service() {
     @Volatile var udpActive = false; private set
     private var udpRxThread: Thread? = null
     private var udpSeq = 0
+    private var udpSalt = 0
+    @Volatile private var remoteUdpKey: ByteArray? = null
 
-    fun setRemoteUdp(host: String, port: Int, token: Long) {
+    fun setRemoteUdp(host: String, port: Int, token: Long, key: ByteArray) {
         if (port <= 0 || token == 0L) return
         Thread({
             runCatching {
                 val addr = InetAddress.getByName(host)
+                remoteUdpKey = key
                 remoteUdpAddr = InetSocketAddress(addr, port)
                 udpActive = true
             }
@@ -555,6 +560,7 @@ class PeerCaptureService : Service() {
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
             .addMatchingUsage(AudioAttributes.USAGE_GAME)
             .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+            .excludeUid(android.os.Process.myUid()) // not the other phone's sound we play: it would go back round as an echo
             .build()
         val fmt = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_STEREO).build()
         val min = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
@@ -588,16 +594,18 @@ class PeerCaptureService : Service() {
         udpPort = uSock?.localPort ?: 0
         udpActive = false
         udpSeq = 0
-        if (PeerScreen.pendingRemoteUdpPort > 0 && PeerScreen.pendingRemoteUdpToken != 0L) {
+        udpSalt = java.util.concurrent.ThreadLocalRandom.current().nextInt() // with the sequence, a new nonce for every packet under the listener's key
+        val pendingKey = PeerScreen.pendingRemoteUdpKey
+        if (PeerScreen.pendingRemoteUdpPort > 0 && PeerScreen.pendingRemoteUdpToken != 0L && pendingKey != null) {
             val h = peer.peerAddress()
-            if (h != null) setRemoteUdp(h, PeerScreen.pendingRemoteUdpPort, PeerScreen.pendingRemoteUdpToken)
+            if (h != null) setRemoteUdp(h, PeerScreen.pendingRemoteUdpPort, PeerScreen.pendingRemoteUdpToken, pendingKey)
         }
         if (uSock != null) {
             udpRxThread = Thread({
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
                 val buf = ByteArray(64)
                 val dp = DatagramPacket(buf, buf.size)
-                while (capturingAudio && !uSock.isClosed) {
+                while (!uSock.isClosed) { // endAudio closes it
                     try {
                         uSock.receive(dp)
                         if (dp.length >= 8) {
@@ -666,12 +674,9 @@ class PeerCaptureService : Service() {
                         enc.getOutputBuffer(outIdx)!!.apply { position(info.offset); get(b) }
                         val target = remoteUdpAddr
                         val uSock = udpSocket
-                        if (udpActive && target != null && uSock != null && !uSock.isClosed) {
-                            val pkt = ByteArray(12 + b.size)
-                            val bb = ByteBuffer.wrap(pkt)
-                            bb.putLong(udpToken)
-                            bb.putInt(udpSeq++)
-                            bb.put(b)
+                        val key = remoteUdpKey
+                        if (udpActive && target != null && key != null && uSock != null && !uSock.isClosed) {
+                            val pkt = PeerAudioSeal.seal(key, udpToken, udpSalt, udpSeq++, b)
                             runCatching { uSock.send(DatagramPacket(pkt, pkt.size, target)) }
                         } else {
                             out.put(android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP))
@@ -694,6 +699,7 @@ class PeerCaptureService : Service() {
         capturingAudio = false
         udpActive = false
         remoteUdpAddr = null
+        remoteUdpKey = null
         runCatching { udpSocket?.close() }
         udpSocket = null
         udpPort = 0
@@ -854,16 +860,17 @@ class PeerViewActivity : Activity(), SurfaceHolder.Callback {
         val peer = Core.get(this).peer
         if (!peer.connected) { finish(); return }
         PeerScreen.viewer = this
-        val player = if (peer.screenSound) PeerScreen.ensureAudioPlayer() else null
+        val player = if (peer.screenSound && peer.can("sound")) PeerScreen.ensureAudioPlayer() else null // an iPhone has no sound to send
         say(tr("Waiting for {name}… Tap Start there.", "name" to peer.peerName))
         val long = maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
         val udpPort = player?.udpPort ?: 0
         val udpToken = player?.udpToken ?: 0L
         peer.ask("screen.start", JSONObject()
             .put("maxSize", long.coerceIn(720, 2400))
-            .put("audio", peer.screenSound)
+            .put("audio", player != null)
             .put("udpPort", udpPort)
-            .put("udpToken", udpToken)) { r -> if (r.has("error")) say(tr("Couldn’t ask: {error}", "error" to r.optString("error"))) }
+            .put("udpToken", udpToken)
+            .put("udpKey", player?.udpKeyB64 ?: "")) { r -> if (r.has("error")) say(tr("Couldn’t ask: {error}", "error" to r.optString("error"))) }
         peer.core.changed()
     }
 
@@ -978,6 +985,8 @@ class PeerAudioPlayer {
     private var udpSocket: DatagramSocket? = null
     val udpPort get() = udpSocket?.localPort ?: 0
     val udpToken = java.util.concurrent.ThreadLocalRandom.current().nextLong()
+    private val udpKey = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+    val udpKeyB64: String = android.util.Base64.encodeToString(udpKey, android.util.Base64.NO_WRAP)
     @Volatile private var senderToken = 0L
     private var udpThread: Thread? = null
 
@@ -1049,15 +1058,11 @@ class PeerAudioPlayer {
         while (running && !s.isClosed) {
             try {
                 s.receive(dp)
-                if (dp.length >= 12) {
-                    val bb = ByteBuffer.wrap(dp.data, dp.offset, dp.length)
-                    val token = bb.long
+                if (dp.length > PeerAudioSeal.HEAD) {
+                    val token = ByteBuffer.wrap(dp.data, dp.offset, 8).long
                     val st = senderToken
                     if (st != 0L && token != st) continue
-                    val seq = bb.int
-                    val opusLen = dp.length - 12
-                    val opusData = ByteArray(opusLen)
-                    bb.get(opusData)
+                    val opusData = PeerAudioSeal.open(udpKey, dp.data, dp.offset, dp.length) ?: continue // not sealed with our key
                     lastUdpRx = System.currentTimeMillis()
                     feedUdp(opusData)
                 }
@@ -1211,4 +1216,30 @@ class PeerAudioPlayer {
         runCatching { track?.release() }
         track = null
     }
+}
+
+// The UDP lane's packets: token (8) | salt (4) | sequence (4) | AES-GCM of the Opus frame, the header as
+// associated data. The key is the listener's, sent over the phones' TLS link, so only it can play them
+// and nobody else on the Wi-Fi can feed it.
+object PeerAudioSeal {
+    const val HEAD = 16
+    private fun nonce(salt: Int, seq: Int) = ByteBuffer.allocate(12).putInt(salt).putInt(seq).putInt(0).array()
+
+    fun seal(key: ByteArray, token: Long, salt: Int, seq: Int, frame: ByteArray): ByteArray {
+        val head = ByteBuffer.allocate(HEAD).putLong(token).putInt(salt).putInt(seq).array()
+        val c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(javax.crypto.Cipher.ENCRYPT_MODE, javax.crypto.spec.SecretKeySpec(key, "AES"), javax.crypto.spec.GCMParameterSpec(128, nonce(salt, seq)))
+        c.updateAAD(head)
+        return head + c.doFinal(frame)
+    }
+
+    fun open(key: ByteArray, buf: ByteArray, off: Int, len: Int): ByteArray? = runCatching {
+        val bb = ByteBuffer.wrap(buf, off + 8, 8)
+        val salt = bb.int
+        val seq = bb.int
+        val c = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(javax.crypto.Cipher.DECRYPT_MODE, javax.crypto.spec.SecretKeySpec(key, "AES"), javax.crypto.spec.GCMParameterSpec(128, nonce(salt, seq)))
+        c.updateAAD(buf, off, HEAD)
+        c.doFinal(buf, off + HEAD, len - HEAD)
+    }.getOrNull()
 }

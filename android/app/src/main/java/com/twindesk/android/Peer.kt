@@ -824,7 +824,8 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         "screen.start" -> {
             val port = m.optInt("udpPort", 0)
             val token = m.optLong("udpToken", 0L)
-            main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600), m.optBoolean("audio", true), port, token) }
+            val key = PeerScreen.keyOf(m)
+            main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600), m.optBoolean("audio", false), port, token, key) }
             JSONObject().put("ok", true)
         }
         else -> JSONObject().put("error", "unknown")

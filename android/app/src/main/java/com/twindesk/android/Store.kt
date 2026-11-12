@@ -81,9 +81,6 @@ class Store(private val ctx: Context) {
     fun flag(key: String, default: Boolean): Boolean = prefs.getBoolean(key, default)
     fun setFlag(key: String, on: Boolean) = prefs.edit().putBoolean(key, on).apply()
 
-    fun prefsInt(key: String, default: Int): Int = prefs.getInt(key, default)
-    fun setPrefsInt(key: String, v: Int) = prefs.edit().putInt(key, v).apply()
-
     fun prefsString(key: String, default: String): String = prefs.getString(key, default) ?: default
     fun setPrefsString(key: String, v: String) = prefs.edit().putString(key, v).apply()
 

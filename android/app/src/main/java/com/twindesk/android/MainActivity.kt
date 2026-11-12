@@ -181,7 +181,7 @@ private fun peerShown(core: Core, t: Tab): Boolean {
         Tab.Messages -> p.can("messages") || "messages" in mine
         Tab.Photos -> p.can("photos") || "photos" in mine
         Tab.FileAccess -> p.can("fs") || "fs" in mine
-        Tab.Sound -> p.can("sound") || p.can("screen")
+        Tab.Sound -> p.can("sound")
         else -> false // Calls, Mouse, Keyboard, Remote, ReZume, Media, Camera: a computer's
     }
 }

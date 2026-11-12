@@ -480,18 +480,15 @@ object Notify {
     fun cancelFclip(ctx: Context) = nm(ctx).cancel(ID_FCLIP)
 
     // Connect with Android (Peer.kt): another phone wants something; tapping opens TwinDesk (or `open`).
-    fun peer(ctx: Context, title: String, text: String, open: PendingIntent? = null, fullScreen: Boolean = false) = runCatching {
-        val b = Notification.Builder(ctx, CH_INVITE)
+    fun peer(ctx: Context, title: String, text: String, open: PendingIntent? = null) = runCatching {
+        nm(ctx).notify(ID_PEER, Notification.Builder(ctx, CH_INVITE)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(open ?: openApp(ctx))
             .setAutoCancel(true)
-        if (fullScreen && open != null) {
-            b.setFullScreenIntent(open, true)
-        }
-        nm(ctx).notify(ID_PEER, b.build())
+            .build())
     }.let { }
 
     fun cancelPeer(ctx: Context) = runCatching { nm(ctx).cancel(ID_PEER) }.let { }

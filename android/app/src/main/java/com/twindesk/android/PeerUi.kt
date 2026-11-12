@@ -186,10 +186,10 @@ fun PeerPage(core: Core, v: Int, tab: String) {
                 MacRow(tr("{name}’s screen", "name" to name), if (peer.peerOs == "ios") tr("{name} starts Share Screen in TwinDesk, then you tap View.", "name" to name) else tr("{name} is asked to start sharing when you tap View.", "name" to name), true) { PButton(tr("View"), true) { PeerScreen.view(peer, ctx) } }
                 MacRow(tr("This screen on {name}", "name" to name), tr("Android asks for confirmation before sharing this screen with {name}.", "name" to name))
             }
-            MacCard(tr("Playback")) {
+            if (peer.can("sound")) MacCard(tr("Playback")) {
                 SwitchRow(tr("{name}’s sound with the screen", "name" to name), if (peer.isPlayingAudio) tr("Playing") else tr("Play audio while viewing {name}’s screen", "name" to name), peer.screenSound, first = true) { peer.setScreenSound(it) }
             }
-            MacCard(tr("Audio sharing")) {
+            if (peer.can("sound")) MacCard(tr("Audio sharing")) {
                 SwitchRow(tr("Share sound with this screen"), tr("Allow {name} to hear audio from this device during screen share", "name" to name), peer.shareSound, first = true) { peer.setShareSound(it) }
             }
         }
