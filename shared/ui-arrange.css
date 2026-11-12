@@ -73,15 +73,16 @@
 .arrange-space { flex: 1; }
 
 /* Search: the palette near the top, the magnifier at the window's top right. */
-.search-overlay { align-items: flex-start; padding-top: 12vh; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(28px) saturate(140%); -webkit-backdrop-filter: blur(28px) saturate(140%); }
+/* No blur (a window-wide backdrop filter costs every frame): a deeper dim and a solid panel. */
+.search-overlay { align-items: flex-start; padding-top: 12vh; background: rgba(0, 0, 0, 0.55); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .search-pop {
   width: min(560px, calc(100vw - 32px));
   max-height: min(520px, 76vh);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  /* Frosted, nearly solid: what's behind it doesn't read through. */
-  background: color-mix(in srgb, var(--base, var(--card, #fff)) 90%, transparent);
+  /* Solid: what's behind it doesn't read through. */
+  background: var(--base, var(--card, #fff));
   color: var(--text, inherit);
   border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
   border-radius: 14px;
