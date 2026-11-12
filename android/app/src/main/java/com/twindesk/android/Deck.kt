@@ -51,6 +51,19 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.combinedClickable
@@ -389,12 +402,25 @@ fun DeckFull(core: Core, close: () -> Unit) {
             else if (space.optString("kind") != "windows") step = (step.first + 1) to pg
         }
         val swipeNow by rememberUpdatedState(swipe) // the detector outlives recompositions
-        Column(Modifier.fillMaxSize().threeFingerSwipe(d.swipeSpaces) { dx, dy -> swipeNow(dx, dy) }) {
+        // Showing the way to the window space: the first time a short picture that must be followed
+        // (then a tour of it), after that a nudge and a tab each time the Deck opens elsewhere.
+        val ctx = LocalContext.current
+        val win = spaces.firstOrNull { it.optString("kind") == "windows" }
+        var intro by remember { mutableStateOf(win != null && !tourDone(ctx, "intro")) }
+        var tour by remember { mutableStateOf(!tourDone(ctx, "windows")) }
+        val nudge = remember { Animatable(0f) }
+        val hint = remember { win != null && !intro && space.optString("kind") != "windows" }
+        val toWindows = { win?.let { toSpace(it) }; Unit }
+        Column(Modifier.fillMaxSize().threeFingerSwipe(d.swipeSpaces) { dx, dy -> swipeNow(dx, dy) }
+            .graphicsLayer { val o = -nudge.value * 28.dp.toPx(); if (d.portrait) translationY = o else translationX = o }) {
             if (space.optString("kind") == "windows") Column(Modifier.weight(1f)) { WindowSpace(d, space) }
             else TileSpace(core, d, space, pageOf, editing = false, full = true, step = step, onPage = { flash = it }) { to -> spaces.firstOrNull { it.optString("id") == to }?.let(toSpace) }
             d.done?.second?.takeIf { it.isNotEmpty() && it != "busy" }?.let { Text(tr(it), color = pal.bad, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp)) }
         }
+        if (hint && win != null && space.optString("kind") != "windows") SwipeHint(d, win.str("name", 30).ifEmpty { tr("Windows") }, nudge, toWindows)
         CloseButton(Modifier.align(Alignment.TopEnd).alpha(0.55f), close)
+        if (intro) DeckIntro(d) { tourSet(ctx, "intro"); intro = false; toWindows() }
+        else if (tour && space.optString("kind") == "windows") WindowTour { tourSet(ctx, "windows"); tour = false }
         flash?.let {
             Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 18.dp, vertical = 10.dp)) {
                 Text(it, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -404,6 +430,207 @@ fun DeckFull(core: Core, close: () -> Unit) {
 }
 
 // The small × in the full-screen Deck's corner.
+// ---- showing the way to the window space ----
+
+private const val TOUR_PREFS = "deck_tour"
+private fun tourDone(ctx: Context, k: String) = ctx.getSharedPreferences(TOUR_PREFS, Context.MODE_PRIVATE).getBoolean(k, false)
+private fun tourSet(ctx: Context, k: String) = ctx.getSharedPreferences(TOUR_PREFS, Context.MODE_PRIVATE).edit().putBoolean(k, true).apply()
+private fun ease(x: Float) = x.coerceIn(0f, 1f).let { it * it * (3 - 2 * it) }
+private fun span(t: Float, a: Float, b: Float) = ease((t - a) / (b - a))
+private val tourBlue = Color(0xFF0A84FF)
+private val tourApps = listOf(Color(0xFF30D158), Color(0xFFFF9F0A), Color(0xFFBF5AF2))
+
+// Three fingertips, sliding the way a space turns (portrait: down the screen).
+@Composable
+private fun Fingers(t: Float, portrait: Boolean, m: Modifier = Modifier) = Box(m.size(44.dp)) {
+    val p = span(t, 0.1f, 0.8f)
+    val a = if (t < 0.85f) 1f else 1f - span(t, 0.85f, 1f)
+    for (i in 0..2) {
+        val o = (i - 1) * 12
+        val x = if (portrait) o.dp else (14 - 28 * p).dp
+        val y = if (portrait) (14 - 28 * p).dp else o.dp
+        Box(Modifier.align(Alignment.Center).offset(x, y).size(10.dp).alpha(a).clip(CircleShape).background(Color.White.copy(alpha = 0.9f)))
+    }
+}
+
+// Each time the full Deck opens away from the window space: the tiles nudge towards it and a tab at
+// that edge shows the three-finger swipe, then fades; a tap on it goes there.
+@Composable
+private fun BoxScope.SwipeHint(d: Deck, name: String, nudge: Animatable<Float, *>, go: () -> Unit) {
+    var shown by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(350)
+        repeat(2) { nudge.animateTo(1f, tween(260)); nudge.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f)) }
+        delay(3200); shown = false
+    }
+    val t by rememberInfiniteTransition(label = "hint").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "t")
+    AnimatedVisibility(shown, Modifier.align(if (d.portrait) Alignment.BottomCenter else Alignment.CenterEnd), enter = fadeIn(), exit = fadeOut()) {
+        val shape = if (d.portrait) RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp) else RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
+        val inner: @Composable () -> Unit = {
+            Fingers(t, d.portrait)
+            Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(if (d.portrait) "↓" else "›", color = Color.White, fontSize = 18.sp)
+        }
+        val m = Modifier.clip(shape).background(tourBlue.copy(alpha = 0.92f)).clickable { shown = false; go() }.padding(horizontal = 10.dp, vertical = 8.dp)
+        if (d.portrait) Row(m, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { inner() }
+        else Column(m.width(84.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { inner() }
+    }
+}
+
+// The first time: a short picture of the swipe, and nothing else works until the window space is
+// reached (three fingers here, or the button).
+@Composable
+private fun BoxScope.DeckIntro(d: Deck, go: () -> Unit) {
+    val t by rememberInfiniteTransition(label = "intro").animateFloat(0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "t")
+    var ready by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(1800); ready = true }
+    val goNow by rememberUpdatedState(go)
+    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.78f))
+        .pointerInput(Unit) { awaitEachGesture { do { val e = awaitPointerEvent(); e.changes.forEach { it.consume() } } while (e.changes.any { it.pressed }) } }
+        .threeFingerSwipe(true) { dx, dy -> if ((if (d.portrait) dy else dx) != 0) goNow() }, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(24.dp)) {
+            // The tiles slide away, the window space slides in, three fingers sweep across.
+            BoxWithConstraints(Modifier.size(if (d.portrait) 150.dp else 260.dp, if (d.portrait) 240.dp else 150.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF1C1C1E))) {
+                val p = span(t, 0.2f, 0.7f)
+                val (W, H) = maxWidth to maxHeight
+                val sx = { k: Float -> if (d.portrait) 0.dp else W * k }
+                val sy = { k: Float -> if (d.portrait) H * k else 0.dp }
+                Box(Modifier.offset(sx(-p), sy(-p)).fillMaxSize().padding(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (r in 0..2) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (c in 0..3) Box(Modifier.size(if (d.portrait) 26.dp else 52.dp, 34.dp).clip(RoundedCornerShape(7.dp)).background(listOf(tourBlue, Color(0xFF30D158), Color(0xFFFF9F0A), Color(0xFFFF375F))[(r + c) % 4].copy(alpha = 0.8f)))
+                        }
+                    }
+                }
+                Box(Modifier.offset(sx(1 - p), sy(1 - p)).fillMaxSize().padding(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { for (c in tourApps) Box(Modifier.size(20.dp).clip(RoundedCornerShape(5.dp)).background(c)) }
+                        Row(Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(Color(0xFF14213A)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(tourApps[0].copy(alpha = 0.55f)))
+                            Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(5.dp)).background(tourApps[1].copy(alpha = 0.55f)))
+                        }
+                    }
+                }
+                Fingers(t, d.portrait, Modifier.align(Alignment.Center).graphicsLayer { scaleX = 1.6f; scaleY = 1.6f })
+            }
+            Text(tr("Your computer’s windows are one swipe away"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            Text(if (d.portrait) tr("Swipe up or down with three fingers to reach your windows") else tr("Swipe sideways with three fingers to reach your windows"),
+                color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+            Box(Modifier.height(44.dp), contentAlignment = Alignment.Center) {
+                if (ready) Box(Modifier.clip(RoundedCornerShape(50)).background(tourBlue).clickable { goNow() }.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                        Text(tr("Take me there"), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+            }
+        }
+    }
+}
+
+// The first time in the window space: three quick pictures (tap, hold, drag); it can't be used until
+// the last one's button.
+@Composable
+private fun BoxScope.WindowTour(done: () -> Unit) {
+    var step by remember { mutableStateOf(0) }
+    var ready by remember(step) { mutableStateOf(false) }
+    LaunchedEffect(step) { delay(1600); ready = true }
+    val t by rememberInfiniteTransition(label = "tour").animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "t")
+    val texts = listOf(
+        tr("Tap an app: the ways it can sit show up. Tap one to arrange it."),
+        tr("Hold an app to pick a few, then choose how they sit together."),
+        tr("Or drag an app onto the display: a corner, a side or the middle."),
+    )
+    Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.8f))
+        .pointerInput(Unit) { awaitEachGesture { do { val e = awaitPointerEvent(); e.changes.forEach { it.consume() } } while (e.changes.any { it.pressed }) } },
+        contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(24.dp).widthIn(max = 420.dp)) {
+            TourDemo(step, t, Modifier.size(280.dp, 170.dp))
+            Text(texts[step], color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (i in texts.indices) Box(Modifier.size(7.dp).clip(CircleShape).background(if (i == step) Color.White else Color.White.copy(alpha = 0.3f)))
+            }
+            Box(Modifier.height(44.dp), contentAlignment = Alignment.Center) {
+                if (ready) Box(Modifier.clip(RoundedCornerShape(50)).background(tourBlue).clickable { if (step < texts.size - 1) step++ else done() }.padding(horizontal = 22.dp, vertical = 10.dp)) {
+                        Text(if (step < texts.size - 1) tr("Next") else tr("Start"), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+            }
+        }
+    }
+}
+
+// A little window space: three apps along the top, the display below, a fingertip doing the step.
+@Composable
+private fun TourDemo(step: Int, t: Float, m: Modifier) = BoxWithConstraints(m.clip(RoundedCornerShape(16.dp)).background(Color(0xFF1C1C1E)).padding(10.dp)) {
+    val W = maxWidth; val H = maxHeight
+    val appS = 26.dp; val gap = 10.dp
+    val appX = { i: Int -> (appS + gap) * i }
+    val dispY = appS + 12.dp
+    val dispH = H - dispY
+    // The finger's place and press, by step.
+    var fx = 0.dp; var fy = 0.dp; var press = 0f; var drag: Color? = null
+    val picked = mutableListOf<Int>(); var layouts = 0f; var placed = 0f; var lit = 0f
+    when (step) {
+        0 -> {
+            val toL = span(t, 0.5f, 0.65f)
+            fx = appX(0) + appS / 2 + (W * 0.5f - appX(0) - appS / 2) * toL; fy = appS / 2 + (dispY + dispH * 0.5f - appS / 2) * toL
+            press = if (t in 0.15f..0.3f || t in 0.7f..0.8f) 1f else 0f
+            if (t > 0.25f && t < 0.8f) picked += 0
+            layouts = span(t, 0.3f, 0.45f) * (1 - span(t, 0.8f, 0.85f)); placed = span(t, 0.8f, 0.9f)
+        }
+        1 -> {
+            val toB = span(t, 0.38f, 0.48f); val toL = span(t, 0.6f, 0.7f)
+            fx = appX(0) + appS / 2 + (appX(1) - appX(0)) * toB + (W * 0.5f - appX(1) - appS / 2) * toL; fy = appS / 2 + (dispY + dispH * 0.5f - appS / 2) * toL
+            press = if (t in 0.05f..0.35f || t in 0.5f..0.56f || t in 0.74f..0.82f) 1f else 0f
+            if (t > 0.3f && t < 0.82f) picked += 0
+            if (t > 0.54f && t < 0.82f) picked += 1
+            layouts = span(t, 0.56f, 0.66f) * (1 - span(t, 0.82f, 0.86f)); placed = span(t, 0.82f, 0.92f)
+        }
+        else -> {
+            val dn = span(t, 0.2f, 0.6f)
+            fx = appX(2) + appS / 2 + (W * 0.2f - appX(2) - appS / 2) * dn; fy = appS / 2 + (dispY + dispH * 0.5f - appS / 2) * dn
+            press = if (t in 0.1f..0.65f) 1f else 0f
+            if (t in 0.15f..0.65f) drag = tourApps[2]
+            lit = span(t, 0.4f, 0.5f) * (1 - span(t, 0.65f, 0.7f)); placed = span(t, 0.65f, 0.75f)
+        }
+    }
+    // Apps.
+    tourApps.forEachIndexed { i, c ->
+        val n = picked.indexOf(i)
+        Box(Modifier.offset(appX(i), 0.dp).size(appS).clip(RoundedCornerShape(7.dp)).background(c).border(if (n >= 0) 2.dp else 0.dp, Color.White, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
+            if (n >= 0 && step == 1) Text("${n + 1}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+    // The display: or, while apps are picked, the ways they can sit.
+    Box(Modifier.offset(0.dp, dispY).size(W, dispH).clip(RoundedCornerShape(10.dp)).background(Color(0xFF14213A))) {
+        val half = W / 2
+        if (step == 2) {
+            Box(Modifier.size(half, dispH).padding(3.dp).alpha(lit).clip(RoundedCornerShape(7.dp)).background(tourBlue.copy(alpha = 0.5f)).border(2.dp, Color.White, RoundedCornerShape(7.dp)))
+            Box(Modifier.size(half, dispH).padding(3.dp).alpha(placed * (1 - span(t, 0.95f, 1f))).clip(RoundedCornerShape(7.dp)).background(tourApps[2].copy(alpha = 0.7f)))
+        } else {
+            val apps = if (step == 0) listOf(tourApps[0]) else listOf(tourApps[0], tourApps[1])
+            if (placed > 0f) Row(Modifier.fillMaxSize().padding(3.dp).alpha(placed * (1 - span(t, 0.95f, 1f))), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (step == 0) { Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(apps[0].copy(alpha = 0.7f))); Spacer(Modifier.weight(1f)) }
+                else for (c in apps) Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(c.copy(alpha = 0.7f)))
+            }
+            if (layouts > 0f) Row(Modifier.fillMaxSize().padding(8.dp).alpha(layouts), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                for (k in 0..2) Box(Modifier.weight(1f).aspectRatio(1.5f).graphicsLayer { scaleX = 0.8f + 0.2f * layouts; scaleY = scaleX }.clip(RoundedCornerShape(5.dp)).background(Color(0xFF2A3B5C))
+                    .border(if (k == 1) 1.5.dp else 0.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(5.dp)).padding(3.dp)) {
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        when (k) {
+                            0 -> { Box(Modifier.weight(1f).fillMaxHeight().background(apps[0].copy(alpha = 0.7f))); if (apps.size > 1) Box(Modifier.weight(1f).fillMaxHeight().background(apps[1].copy(alpha = 0.7f))) }
+                            1 -> { Box(Modifier.weight(1f).fillMaxHeight().background(apps[0].copy(alpha = 0.7f))); Box(Modifier.weight(1f).fillMaxHeight().background(apps.getOrNull(1)?.copy(alpha = 0.7f) ?: Color.White.copy(alpha = 0.08f))) }
+                            else -> { Box(Modifier.weight(2f).fillMaxHeight().background(apps[0].copy(alpha = 0.7f))); Box(Modifier.weight(1f).fillMaxHeight().background(apps.getOrNull(1)?.copy(alpha = 0.7f) ?: Color.White.copy(alpha = 0.08f))) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // The app being dragged, and the fingertip (a ring grows while it holds, step 2).
+    drag?.let { c -> Box(Modifier.offset(fx - 13.dp, fy - 13.dp).size(26.dp).alpha(0.9f).clip(RoundedCornerShape(7.dp)).background(c)) }
+    val ring = if (step == 1 && t in 0.05f..0.35f) span(t, 0.05f, 0.3f) else 0f
+    if (ring > 0f) Box(Modifier.offset(fx - 18.dp, fy - 18.dp).size(36.dp).alpha(1 - ring * 0.5f).graphicsLayer { scaleX = 0.6f + ring * 0.6f; scaleY = scaleX }.border(2.dp, Color.White, CircleShape))
+    Box(Modifier.offset(fx - 11.dp, fy - 11.dp).size(22.dp).graphicsLayer { scaleX = 1f - press * 0.2f; scaleY = scaleX }.clip(CircleShape).background(Color.White.copy(alpha = 0.55f + press * 0.3f)))
+}
+
 @Composable
 private fun CloseButton(m: Modifier, close: () -> Unit) = Box(
     m.size(30.dp).clip(CircleShape).background(pal.card).clickable(onClick = close), contentAlignment = Alignment.Center,

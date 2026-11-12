@@ -152,6 +152,12 @@ struct DeckScreen: View {
     @State private var pageOf: [String: String] = [:]
     @State private var step = (n: 0, dir: 0)
     @State private var flash: String?
+    // Showing the way to the window space: the first time a short picture that must be followed (then
+    // a tour of it); after that a nudge and a tab each time the Deck opens elsewhere.
+    @State private var intro = !DeckTourStore.done("intro")
+    @State private var tour = !DeckTourStore.done("windows")
+    @State private var hint = false
+    @State private var nudge: CGFloat = 0
 
     var body: some View {
         let _ = core.tick
@@ -174,7 +180,13 @@ struct DeckScreen: View {
                     }
                 }
                 .padding(6)
-                .background(ThreeFingerSwipe(enabled: d.swipeSpaces) { dx, dy in swipe(dx, dy) })
+                .offset(x: d.portrait ? 0 : -nudge, y: d.portrait ? -nudge : 0)
+                .background(ThreeFingerSwipe(enabled: d.swipeSpaces || (intro && win != nil)) { dx, dy in swipe(dx, dy) })
+                if hint, let w = win, space.str("kind") != "windows" {
+                    DeckSwipeHint(name: w.str("name", max: 30).isEmpty ? tr("Windows") : w.str("name", max: 30), portrait: d.portrait) { hint = false; go(to: w.str("id")) }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: d.portrait ? .bottom : .trailing)
+                        .transition(.opacity)
+                }
             }
             Button { ui.cover = nil } label: {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(TDColor.text)
@@ -182,6 +194,11 @@ struct DeckScreen: View {
             }
             .opacity(0.55).padding(8)
             .accessibilityLabel(tr("Close"))
+            if !(d.layout == nil || spaces.isEmpty || !core.connected), let w = win {
+                let here = spaces.first { $0.str("id") == spaceId } ?? spaces[0]
+                if intro { DeckIntro(portrait: d.portrait) { finishIntro(w) } }
+                else if tour && here.str("kind") == "windows" { DeckWindowTour { DeckTourStore.set("windows"); tour = false } }
+            }
             if let f = flash {
                 Text(f).font(.headline).foregroundStyle(.white).padding(.horizontal, 18).padding(.vertical, 10)
                     .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -203,6 +220,22 @@ struct DeckScreen: View {
             core.media.page(false)
         }
         .onChange(of: core.deck.portrait) { p in if p { Orientation.portrait() } else { Orientation.landscape() } }
+        .task(id: win?.str("id") ?? "") {
+            // Each opening away from the window space: the tiles nudge towards it twice, a tab shows the swipe.
+            guard win != nil, !intro, !hint else { return }
+            let here = core.deck.spaces.first { $0.str("id") == spaceId } ?? core.deck.spaces.first
+            guard here?.str("kind") != "windows" else { return }
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            withAnimation(.easeOut(duration: 0.2)) { hint = true }
+            for _ in 0..<2 {
+                withAnimation(.easeOut(duration: 0.26)) { nudge = 28 }
+                try? await Task.sleep(nanoseconds: 260_000_000)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) { nudge = 0 }
+                try? await Task.sleep(nanoseconds: 450_000_000)
+            }
+            try? await Task.sleep(nanoseconds: 3_200_000_000)
+            withAnimation { hint = false }
+        }
         .onChange(of: flash) { f in
             guard f != nil else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { if flash == f { withAnimation { flash = nil } } }
@@ -215,6 +248,13 @@ struct DeckScreen: View {
         }
     }
 
+    private var win: JSON? { core.deck.spaces.first { $0.str("kind") == "windows" } }
+    private func finishIntro(_ w: JSON) {
+        DeckTourStore.set("intro")
+        withAnimation { intro = false }
+        go(to: w.str("id"))
+    }
+
     private func go(to id: String) {
         guard let s = core.deck.spaces.first(where: { $0.str("id") == id }) else { return }
         withAnimation(.easeOut(duration: 0.2)) { spaceId = id }
@@ -222,6 +262,7 @@ struct DeckScreen: View {
     }
     private func swipe(_ dx: Int, _ dy: Int) {
         let ss = core.deck.spaces
+        if intro, let w = win { if (core.deck.portrait ? dy : dx) != 0 { finishIntro(w) }; return }
         let i = ss.firstIndex { $0.str("id") == (spaceId.isEmpty ? ss.first?.str("id") ?? "" : spaceId) } ?? 0
         // Along the screen's long side the next space, across it the next page; round and round.
         let (sp, pg) = core.deck.portrait ? (dy, dx) : (dx, dy)
@@ -232,6 +273,252 @@ struct DeckScreen: View {
         } else if ss.indices.contains(i), ss[i].str("kind") != "windows" {
             step = (step.n + 1, pg)
         }
+    }
+}
+
+// ---- showing the way to the window space ----
+
+enum DeckTourStore {
+    static func done(_ k: String) -> Bool { UserDefaults.standard.bool(forKey: "deck.tour." + k) }
+    static func set(_ k: String) { UserDefaults.standard.set(true, forKey: "deck.tour." + k) }
+}
+private func tourEase(_ x: Double) -> Double { let v = min(1, max(0, x)); return v * v * (3 - 2 * v) }
+private func tourSpan(_ t: Double, _ a: Double, _ b: Double) -> Double { tourEase((t - a) / (b - a)) }
+private let tourBlue = Color(red: 0.04, green: 0.52, blue: 1)
+private let tourApps = [Color(red: 0.19, green: 0.82, blue: 0.35), Color(red: 1, green: 0.62, blue: 0.04), Color(red: 0.75, green: 0.35, blue: 0.95)]
+private let tourNavy = Color(red: 0.08, green: 0.13, blue: 0.23)
+
+// Three fingertips, sliding the way a space turns (portrait: down the screen).
+struct DeckFingers: View {
+    let t: Double, portrait: Bool
+    var body: some View {
+        let p = tourSpan(t, 0.1, 0.8)
+        let a = t < 0.85 ? 1 : 1 - tourSpan(t, 0.85, 1)
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                let o = CGFloat(i - 1) * 12, s = CGFloat(14 - 28 * p)
+                Circle().fill(Color.white.opacity(0.9)).frame(width: 10, height: 10).offset(x: portrait ? o : s, y: portrait ? s : o).opacity(a)
+            }
+        }
+        .frame(width: 44, height: 44)
+    }
+}
+
+// Each time the full Deck opens away from the window space: a tab at that edge shows the three-finger
+// swipe, then fades; a tap on it goes there (the tiles nudge towards it meanwhile, DeckScreen).
+struct DeckSwipeHint: View {
+    let name: String, portrait: Bool
+    let go: () -> Void
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
+            let inner = Group {
+                DeckFingers(t: t, portrait: portrait)
+                Text(name).font(.footnote.weight(.semibold)).lineLimit(1)
+                Text(portrait ? "↓" : "›").font(.title3)
+            }
+            Button(action: go) {
+                Group {
+                    if portrait { HStack(spacing: 8) { inner } } else { VStack(spacing: 4) { inner }.frame(width: 84) }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .background(tourBlue.opacity(0.92), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+}
+
+// The first time: a short picture of the swipe; nothing else works until the window space is reached
+// (three fingers anywhere, or the button).
+struct DeckIntro: View {
+    let portrait: Bool
+    let go: () -> Void
+    @State private var ready = false
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.78).ignoresSafeArea().contentShape(Rectangle()).onTapGesture {}
+            VStack(spacing: 14) {
+                TimelineView(.animation) { tl in
+                    let t = tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.2) / 2.2
+                    let p = CGFloat(tourSpan(t, 0.2, 0.7))
+                    GeometryReader { g in
+                        let W = g.size.width, H = g.size.height
+                        ZStack(alignment: .topLeading) {
+                            VStack(spacing: 6) {
+                                ForEach(0..<3, id: \.self) { r in
+                                    HStack(spacing: 6) {
+                                        ForEach(0..<4, id: \.self) { c in
+                                            RoundedRectangle(cornerRadius: 7).fill([tourBlue, tourApps[0], tourApps[1], Color.pink][(r + c) % 4].opacity(0.8)).frame(height: 34)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(10)
+                            .offset(x: portrait ? 0 : -W * p, y: portrait ? -H * p : 0)
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 6) { ForEach(0..<3, id: \.self) { i in RoundedRectangle(cornerRadius: 5).fill(tourApps[i]).frame(width: 20, height: 20) } }
+                                HStack(spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 5).fill(tourApps[0].opacity(0.55))
+                                    RoundedRectangle(cornerRadius: 5).fill(tourApps[1].opacity(0.55))
+                                }
+                                .padding(4).background(tourNavy, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .padding(10)
+                            .frame(width: W, height: H, alignment: .topLeading)
+                            .offset(x: portrait ? 0 : W * (1 - p), y: portrait ? H * (1 - p) : 0)
+                            DeckFingers(t: t, portrait: portrait).scaleEffect(1.6).frame(width: W, height: H)
+                        }
+                    }
+                    .frame(width: portrait ? 150 : 260, height: portrait ? 240 : 150)
+                    .background(Color(white: 0.11))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                Text(tr("Your computer’s windows are one swipe away")).font(.headline).foregroundStyle(.white).multilineTextAlignment(.center)
+                Text(portrait ? tr("Swipe up or down with three fingers to reach your windows") : tr("Swipe sideways with three fingers to reach your windows"))
+                    .font(.subheadline).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center)
+                Button(action: go) {
+                    Text(tr("Take me there")).font(.subheadline.weight(.semibold)).foregroundStyle(.white).padding(.horizontal, 20).padding(.vertical, 10).background(tourBlue, in: Capsule())
+                }
+                .opacity(ready ? 1 : 0).disabled(!ready).frame(height: 44)
+            }
+            .padding(24)
+        }
+        .task { try? await Task.sleep(nanoseconds: 1_800_000_000); withAnimation { ready = true } }
+    }
+}
+
+// The first time in the window space: three quick pictures (tap, hold, drag); it can't be used until
+// the last one's button.
+struct DeckWindowTour: View {
+    let done: () -> Void
+    @State private var step = 0
+    @State private var ready = false
+    private var texts: [String] { [
+        tr("Tap an app: the ways it can sit show up. Tap one to arrange it."),
+        tr("Hold an app to pick a few, then choose how they sit together."),
+        tr("Or drag an app onto the display: a corner, a side or the middle."),
+    ] }
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.8).ignoresSafeArea().contentShape(Rectangle()).onTapGesture {}
+            VStack(spacing: 14) {
+                TimelineView(.animation) { tl in
+                    DeckTourDemo(step: step, t: tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2.6) / 2.6).frame(width: 280, height: 170)
+                }
+                Text(texts[step]).font(.callout.weight(.medium)).foregroundStyle(.white).multilineTextAlignment(.center).frame(maxWidth: 420)
+                HStack(spacing: 6) { ForEach(texts.indices, id: \.self) { i in Circle().fill(Color.white.opacity(i == step ? 1 : 0.3)).frame(width: 7, height: 7) } }
+                Button {
+                    if step < texts.count - 1 { step += 1 } else { done() }
+                } label: {
+                    Text(step < texts.count - 1 ? tr("Next") : tr("Start")).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 22).padding(.vertical, 10).background(tourBlue, in: Capsule())
+                }
+                .opacity(ready ? 1 : 0).disabled(!ready).frame(height: 44)
+            }
+            .padding(24)
+        }
+        .task(id: step) {
+            ready = false
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            withAnimation { ready = true }
+        }
+    }
+}
+
+// A little window space: three apps along the top, the display below, a fingertip doing the step.
+struct DeckTourDemo: View {
+    let step: Int, t: Double
+    var body: some View {
+        GeometryReader { g in
+            let W = g.size.width - 20, H = g.size.height - 20
+            let appS: CGFloat = 26, gap: CGFloat = 10
+            let appX = { (i: Int) -> CGFloat in (appS + gap) * CGFloat(i) }
+            let dispY = appS + 12, dispH = H - dispY
+            let st = state(W: W, dispY: dispY, dispH: dispH, appX: appX, appS: appS)
+            ZStack(alignment: .topLeading) {
+                ForEach(0..<3, id: \.self) { i in
+                    let n = st.picked.firstIndex(of: i)
+                    RoundedRectangle(cornerRadius: 7).fill(tourApps[i]).frame(width: appS, height: appS)
+                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.white, lineWidth: n != nil ? 2 : 0))
+                        .overlay(Text(n != nil && step == 1 ? "\(n! + 1)" : "").font(.system(size: 11, weight: .bold)).foregroundStyle(.white))
+                        .offset(x: appX(i))
+                }
+                display(W: W, dispH: dispH, st: st).offset(y: dispY)
+                if let c = st.drag { RoundedRectangle(cornerRadius: 7).fill(c).frame(width: 26, height: 26).opacity(0.9).offset(x: st.fx - 13, y: st.fy - 13) }
+                if st.ring > 0 { Circle().strokeBorder(Color.white, lineWidth: 2).frame(width: 36, height: 36).scaleEffect(0.6 + st.ring * 0.6).opacity(1 - st.ring * 0.5).offset(x: st.fx - 18, y: st.fy - 18) }
+                Circle().fill(Color.white.opacity(0.55 + st.press * 0.3)).frame(width: 22, height: 22).scaleEffect(1 - st.press * 0.2).offset(x: st.fx - 11, y: st.fy - 11)
+            }
+            .padding(10)
+        }
+        .background(Color(white: 0.11))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private struct St { var fx: CGFloat = 0, fy: CGFloat = 0, press: Double = 0, drag: Color?, picked: [Int] = [], layouts: Double = 0, placed: Double = 0, lit: Double = 0, ring: CGFloat = 0 }
+
+    private func state(W: CGFloat, dispY: CGFloat, dispH: CGFloat, appX: (Int) -> CGFloat, appS: CGFloat) -> St {
+        var s = St(drag: nil)
+        let midY = dispY + dispH * 0.5
+        switch step {
+        case 0:
+            let toL = CGFloat(tourSpan(t, 0.5, 0.65))
+            s.fx = appX(0) + appS / 2 + (W * 0.5 - appX(0) - appS / 2) * toL; s.fy = appS / 2 + (midY - appS / 2) * toL
+            s.press = (0.15...0.3).contains(t) || (0.7...0.8).contains(t) ? 1 : 0
+            if t > 0.25 && t < 0.8 { s.picked = [0] }
+            s.layouts = tourSpan(t, 0.3, 0.45) * (1 - tourSpan(t, 0.8, 0.85)); s.placed = tourSpan(t, 0.8, 0.9)
+        case 1:
+            let toB = CGFloat(tourSpan(t, 0.38, 0.48)), toL = CGFloat(tourSpan(t, 0.6, 0.7))
+            s.fx = appX(0) + appS / 2 + (appX(1) - appX(0)) * toB + (W * 0.5 - appX(1) - appS / 2) * toL; s.fy = appS / 2 + (midY - appS / 2) * toL
+            s.press = (0.05...0.35).contains(t) || (0.5...0.56).contains(t) || (0.74...0.82).contains(t) ? 1 : 0
+            if t > 0.3 && t < 0.82 { s.picked = [0] }
+            if t > 0.54 && t < 0.82 { s.picked.append(1) }
+            s.layouts = tourSpan(t, 0.56, 0.66) * (1 - tourSpan(t, 0.82, 0.86)); s.placed = tourSpan(t, 0.82, 0.92)
+            s.ring = (0.05...0.35).contains(t) ? CGFloat(tourSpan(t, 0.05, 0.3)) : 0
+        default:
+            let dn = CGFloat(tourSpan(t, 0.2, 0.6))
+            s.fx = appX(2) + appS / 2 + (W * 0.2 - appX(2) - appS / 2) * dn; s.fy = appS / 2 + (midY - appS / 2) * dn
+            s.press = (0.1...0.65).contains(t) ? 1 : 0
+            if (0.15...0.65).contains(t) { s.drag = tourApps[2] }
+            s.lit = tourSpan(t, 0.4, 0.5) * (1 - tourSpan(t, 0.65, 0.7)); s.placed = tourSpan(t, 0.65, 0.75)
+        }
+        return s
+    }
+
+    @ViewBuilder
+    private func display(W: CGFloat, dispH: CGFloat, st: St) -> some View {
+        let fade = 1 - tourSpan(t, 0.95, 1)
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 10).fill(tourNavy)
+            if step == 2 {
+                RoundedRectangle(cornerRadius: 7).fill(tourBlue.opacity(0.5)).overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.white, lineWidth: 2))
+                    .frame(width: W / 2 - 6, height: dispH - 6).offset(x: 3, y: 3).opacity(st.lit)
+                RoundedRectangle(cornerRadius: 7).fill(tourApps[2].opacity(0.7)).frame(width: W / 2 - 6, height: dispH - 6).offset(x: 3, y: 3).opacity(st.placed * fade)
+            } else {
+                let apps = step == 0 ? [tourApps[0]] : [tourApps[0], tourApps[1]]
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 6).fill(apps[0].opacity(0.7))
+                    if apps.count > 1 { RoundedRectangle(cornerRadius: 6).fill(apps[1].opacity(0.7)) } else { Color.clear }
+                }
+                .padding(3).opacity(st.placed * fade)
+                HStack(spacing: 8) {
+                    ForEach(0..<3, id: \.self) { k in
+                        HStack(spacing: 2) {
+                            Rectangle().fill(apps[0].opacity(0.7)).frame(maxWidth: .infinity).layoutPriority(k == 2 ? 2 : 1)
+                            Rectangle().fill(apps.count > 1 ? apps[1].opacity(0.7) : Color.white.opacity(0.08)).frame(maxWidth: .infinity)
+                        }
+                        .padding(3)
+                        .aspectRatio(1.5, contentMode: .fit)
+                        .background(Color(red: 0.16, green: 0.23, blue: 0.36), in: RoundedRectangle(cornerRadius: 5))
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.white.opacity(k == 1 ? 0.6 : 0), lineWidth: 1.5))
+                        .scaleEffect(0.8 + 0.2 * st.layouts)
+                    }
+                }
+                .padding(8).frame(maxHeight: .infinity).opacity(st.layouts)
+            }
+        }
+        .frame(width: W, height: dispH)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
