@@ -1522,6 +1522,7 @@
   "Version": "Versão",
   "Version {version}": "Versão {version}",
   "Version {version}. No releases published yet": "Versão {version}. Nenhuma versão publicada ainda",
+  "Version {version}. Updates come from the Microsoft Store": "Versão {version}. As atualizações vêm da Microsoft Store",
   "Version {version}{checked}": "Versão {version}{checked}",
   "ViGEmBus was installed but doesn’t answer yet: restart Windows": "O ViGEmBus está instalado. Reinicie o Windows para concluir a configuração.",
   "Via {names} · not linked to this PC": "Via {names} · não ligado a este PC",

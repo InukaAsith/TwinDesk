@@ -1530,6 +1530,7 @@
   "Version": "Версия",
   "Version {version}": "Версия {version}",
   "Version {version}. No releases published yet": "Версия {version}. Выпусков пока нет",
+  "Version {version}. Updates come from the Microsoft Store": "Версия {version}. Обновления приходят из Microsoft Store",
   "Version {version}{checked}": "Версия {version}{checked}",
   "ViGEmBus was installed but doesn’t answer yet: restart Windows": "ViGEmBus установлен. Перезапустите Windows, чтобы завершить настройку.",
   "Via {names} · not linked to this PC": "Через {names} · не связано с этим ПК",

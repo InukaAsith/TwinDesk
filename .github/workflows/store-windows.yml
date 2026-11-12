@@ -1,0 +1,68 @@
+name: Microsoft Store (MSIX)
+
+# The Microsoft Store's packages (windows/installer/build.js store): one MSIX per architecture,
+# unsigned (Partner Center signs them), kept with the run to upload to Partner Center by hand.
+# Not put on a GitHub release: the NSIS installers stay the download there.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to build (releases come from main)
+        required: false
+        default: main
+
+# Write: the full Android APK may come from a draft release (.github/actions/android-full).
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: ./.github/actions/android-full
+        with:
+          keystore: ${{ secrets.ANDROID_KEYSTORE }}
+
+      # Rust for the input lane and the iOS signer (built without any-ipa for the Store), both architectures.
+      - name: Rust (x64 and arm64 targets)
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+          echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+          cargo --version
+
+      - name: Install dependencies
+        working-directory: windows
+        run: npm install
+
+      - name: Build the MSIX packages (x64 and arm64)
+        working-directory: windows
+        run: npm run dist:store
+
+      - name: Check the input lane is in
+        shell: bash
+        run: |
+          for a in x64 arm64; do
+            f=windows-helper/bin/$a/tdfast.dll
+            if [ ! -s "$f" ]; then echo "::error::$f is missing: tdfast didn't build for $a"; exit 1; fi
+          done
+          ls -l windows/dist/TwinDesk-Store-*.msix
+
+      - name: Keep the packages with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: twindesk-store-msix
+          path: windows/dist/TwinDesk-Store-*.msix
+          if-no-files-found: error

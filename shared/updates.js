@@ -189,7 +189,10 @@ class Updates {
     this.openUrl = opts.openUrl || ((url) => require('electron').shell.openExternal(url));
     this.onShowModal = opts.onShowModal || (() => this.open());
     this.isBusy = opts.isBusy || (() => false);
-    this.self = opts.selfUpdate === undefined ? makeSelf(opts.platform, this.fetch) : opts.selfUpdate;
+    // The Microsoft Store's copy (windows/storepkg.js): the Store updates it. Nothing is checked,
+    // downloaded or installed here.
+    this.store = opts.store === true;
+    this.self = this.store ? null : opts.selfUpdate === undefined ? makeSelf(opts.platform, this.fetch) : opts.selfUpdate;
     this.idleTimer = null;
     this.status = {
       checking: false,
@@ -210,6 +213,7 @@ class Updates {
       stage: '',
       progress: 0,
       installError: '',
+      store: this.store,
     };
     this.file = '';
     this.timer = null;
@@ -226,6 +230,7 @@ class Updates {
 
   // Start (or stop) the automatic checks after the setting changed.
   start() {
+    if (this.store) return;
     clearTimeout(this.first);
     clearInterval(this.timer);
     this.first = null;
@@ -259,7 +264,7 @@ class Updates {
   }
 
   async check(manual = true) {
-    if (this.status.checking) return;
+    if (this.store || this.status.checking) return;
     this._set({ checking: true, error: '', promptUpdate: false });
     try {
       const url = `${API}?_=${Date.now()}`;
@@ -331,6 +336,7 @@ class Updates {
 
   // Update: installed in place where this copy can be, else the download (or release page) opened.
   open() {
+    if (this.store) return this.openUrl('ms-windows-store://pdp/?ProductId=9NXNB01FXJ5N');
     if (this._installable()) return this.install();
     this.openUrl(this.url);
   }

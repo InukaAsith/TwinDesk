@@ -25,6 +25,7 @@ const { uhidKey } = require('../shared/uhidkbd.js');
 const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
 const { writeClipImage } = require('../shared/clipimage.js');
+const { launcher } = require('./storepkg'); // the Store's MSIX starts its alias
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
@@ -713,7 +714,7 @@ class PhoneViews extends EventEmitter {
   // How this copy of TwinDesk opens one phone app: "TwinDesk.exe --phone-app=<package>".
   static relaunch(pkg) {
     const args = (app.isPackaged ? [] : [app.getAppPath()]).concat('--phone-app=' + pkg);
-    return { target: process.execPath, args: args.map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ') };
+    return { target: launcher(), args: args.map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ') };
   }
 
   _app(pkg) {

@@ -1530,6 +1530,7 @@
   "Version": "版本",
   "Version {version}": "版本 {version}",
   "Version {version}. No releases published yet": "版本 {version}。尚未发布任何版本",
+  "Version {version}. Updates come from the Microsoft Store": "版本 {version}。更新来自 Microsoft Store",
   "Version {version}{checked}": "版本 {version}{checked}",
   "ViGEmBus was installed but doesn’t answer yet: restart Windows": "ViGEmBus 已安装但尚未响应，请重启 Windows",
   "Via {names} · not linked to this PC": "通过{names}可见 · 未与此电脑连接",

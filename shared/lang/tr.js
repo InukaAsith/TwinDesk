@@ -1530,6 +1530,7 @@
   "Version": "Sürüm",
   "Version {version}": "Sürüm {version}",
   "Version {version}. No releases published yet": "Sürüm {version}. Henüz yayınlanmış sürüm yok",
+  "Version {version}. Updates come from the Microsoft Store": "Sürüm {version}. Güncellemeler Microsoft Store’dan gelir",
   "Version {version}{checked}": "Sürüm {version}{checked}",
   "ViGEmBus was installed but doesn’t answer yet: restart Windows": "ViGEmBus kuruldu. Kurulumu tamamlamak için Windows'u yeniden başlatın.",
   "Via {names} · not linked to this PC": "{names} üzerinden · bu PC'ye bağlı değil",
