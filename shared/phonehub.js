@@ -10,6 +10,8 @@
 // btSettings(): opens this computer's Bluetooth settings, where the phone is paired for that.
 // send(paths, batch): files to the phone (the file sender's sendBatch); choose(): files picked here.
 // share: shared folders' options (foldershare.js), when this computer has them.
+// shareSheet(paths, title): the system's Share for files here (the Mac's share menu, Windows' Share
+// through the helper); none on Linux. Photos' Copy and Share use the picture the viewer shows.
 //
 // Events: 'change' (view), 'data' (a reply for the window: forwarded as is), 'call' (call, before).
 'use strict';
@@ -46,14 +48,22 @@ const phonePath = (v) => {
   return parts.join('/');
 };
 const fileName = (v) => (typeof v === 'string' && v.trim() && v.length <= 255 && !/[/\u0000-\u001f]/.test(v) && v.trim() !== '.' && v.trim() !== '..' ? v.trim() : '');
+// A phone's picture (media.view: a JPEG data: URL) as an Electron image, else null.
+function photoImage(data) {
+  if (!picture(data, 40e6)) return null;
+  try {
+    const img = require('electron').nativeImage.createFromDataURL(data);
+    return img.isEmpty() ? null : img;
+  } catch (_) { return null; }
+}
 const PAIR_WATCH_MS = 5 * 60000; // looking for the phone's pairing this long after setup or Forget
 const PAIR_POLL_MS = 3000;
 
 class PhoneHub extends EventEmitter {
   // audioLimit: what this computer can't do with the calls' sound, said under its switch (Windows).
-  constructor({ server, getSettings, save, audio, audioLimit, btSettings, send, choose, share }) {
+  constructor({ server, getSettings, save, audio, audioLimit, btSettings, send, choose, share, shareSheet }) {
     super();
-    Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', btSettings: btSettings || null, sendFiles: send || null, choose: choose || null });
+    Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', btSettings: btSettings || null, sendFiles: send || null, choose: choose || null, shareSheet: shareSheet || null });
     this.pairTimer = null; // looking for the phone's pairing (watchPair)
     this.share = null;
     if (share) {
@@ -157,6 +167,7 @@ class PhoneHub extends EventEmitter {
   // {do: 'set', what, on} | {do: 'opt', callAudio?, btDevice?} | {do: 'ask', what} | {do: 'seen'}
   // | {do: 'send', msg} | {do: 'audio', a: 'here'|'phone'|'connect'|'check'|'settings'|'forget'} | {do: 'call', a, number?, on?}
   // | {do: 'upload', path, paths? (none: chosen here first)} | {do: 'share', a: 'mount'|'unmount'|'auto'|'serve'|'choose'|'default', on?}
+  // | {do: 'copyImage', data} | {do: 'shareImage', data, name}: Photos' viewer, its picture (a data: URL)
   act(r) {
     if (!r || typeof r !== 'object') return;
     const s = this.settings;
@@ -193,7 +204,43 @@ class PhoneHub extends EventEmitter {
         return this.callAct(String(r.a || ''), r);
       case 'share':
         return this.share && this.share.act(String(r.a || ''), r);
+      case 'copyImage':
+        return this.copyImage(r.data);
+      case 'shareImage':
+        return this.shareImage(r.data, r.name);
       default:
+    }
+  }
+
+  // Photos: the picture on this computer's clipboard.
+  copyImage(data) {
+    const img = photoImage(data);
+    if (!img) return false;
+    require('electron').clipboard.writeImage(img);
+    return true;
+  }
+
+  // Photos: the picture as a file (the temp folder's TwinDesk Photos, emptied of older ones), then
+  // the system's Share for it.
+  shareImage(data, name) {
+    if (!this.shareSheet || !photoImage(data)) return false;
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(require('os').tmpdir(), 'TwinDesk Photos');
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      for (const f of fs.readdirSync(dir)) {
+        const p = path.join(dir, f);
+        try { if (Date.now() - fs.statSync(p).mtimeMs > 3600000) fs.rmSync(p, { force: true }); } catch (_) { /* in use */ }
+      }
+      const base = (fileName(name) || 'Photo').replace(/\.[^.]*$/, '').replace(/[\\:*?"<>|]/g, '_').slice(0, 120) || 'Photo';
+      const file = path.join(dir, base + '.jpg');
+      fs.writeFileSync(file, Buffer.from(String(data).slice(String(data).indexOf(',') + 1), 'base64'));
+      this.shareSheet([file], base);
+      return true;
+    } catch (e) {
+      console.warn('[hub] share:', e.message);
+      return false;
     }
   }
 
@@ -434,6 +481,7 @@ class PhoneHub extends EventEmitter {
       audio: this.audio ? this.audio.view : null, canAudio: !!this.makeAudio, audioLimit: this.audioLimit,
       btSettings: !!this.btSettings, pairWatch: !!this.pairTimer, // pairing for the calls' sound: Open Bluetooth settings, looking for the phone
       share: this.share ? this.share.view : null,
+      shareSheet: !!this.shareSheet, // Photos' Share (none on Linux)
     };
   }
 }

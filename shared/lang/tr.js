@@ -268,6 +268,8 @@
   "Controls": "Denetimler",
   "Copied {item} for {name}": "{item}, {name} için kopyalandı",
   "Copy": "Kopyala",
+  "Copied": "Kopyalandı",
+  "Share": "Paylaş",
   "Copy and Paste Files ({copy}, {paste})": "Dosyaları Kopyala ve Yapıştır ({copy}, {paste})",
   "Copy and paste files": "Dosyaları kopyala ve yapıştır",
   "Copy and paste files with shortcuts": "Kısayollarla dosyaları kopyala ve yapıştır",

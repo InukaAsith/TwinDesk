@@ -268,6 +268,8 @@
   "Controls": "控制",
   "Copied {item} for {name}": "已为 {name} 复制 {item}",
   "Copy": "复制",
+  "Copied": "已复制",
+  "Share": "分享",
   "Copy and Paste Files ({copy}, {paste})": "复制与粘贴文件（{copy}、{paste}）",
   "Copy and paste files": "复制和粘贴文件",
   "Copy and paste files with shortcuts": "使用快捷键复制和粘贴文件",

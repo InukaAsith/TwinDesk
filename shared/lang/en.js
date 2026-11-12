@@ -268,6 +268,8 @@
   "Controls": "Controls",
   "Copied {item} for {name}": "Copied {item} for {name}",
   "Copy": "Copy",
+  "Copied": "Copied",
+  "Share": "Share",
   "Copy and Paste Files ({copy}, {paste})": "Copy and Paste Files ({copy}, {paste})",
   "Copy and paste files": "Copy and paste files",
   "Copy and paste files with shortcuts": "Copy and paste files with shortcuts",

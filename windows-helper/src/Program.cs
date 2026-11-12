@@ -317,6 +317,7 @@ namespace MacShare
                     case "toastDone":
                         Toast.Done(Json.Str(c, "aumid", ""), Json.Str(c, "tag", "files"), Json.Str(c, "title", ""), Json.Str(c, "text", ""));
                         break;
+                    case "share": Share.Files(Strings(c, "paths"), Json.Str(c, "title", "")); break; // Photos › Share: Windows' Share (Share.cs)
                     case "moveTo": Injector.MoveTo((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0)); break; // The Mac's pointer on this PC's screen
                     case "pen": // a phone's stylus on this PC's screen (Stylus.cs)
                         Dictionary<string, object> st = Json.Obj(c, "pen");

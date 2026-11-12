@@ -268,6 +268,8 @@
   "Controls": "Элементы управления",
   "Copied {item} for {name}": "{item} скопировано для {name}",
   "Copy": "Копировать",
+  "Copied": "Скопировано",
+  "Share": "Поделиться",
   "Copy and Paste Files ({copy}, {paste})": "Копирование и вставка файлов ({copy}, {paste})",
   "Copy and paste files": "Копирование и вставка файлов",
   "Copy and paste files with shortcuts": "Копирование и вставка файлов сочетаниями клавиш",

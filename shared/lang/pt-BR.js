@@ -266,6 +266,8 @@
   "Controls": "Controles",
   "Copied {item} for {name}": "{item} copiado para {name}",
   "Copy": "Copiar",
+  "Copied": "Copiado",
+  "Share": "Compartilhar",
   "Copy and Paste Files ({copy}, {paste})": "Copiar e colar arquivos ({copy}, {paste})",
   "Copy and paste files": "Copiar e colar arquivos",
   "Copy and paste files with shortcuts": "Copiar e colar arquivos com atalhos",
