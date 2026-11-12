@@ -234,6 +234,7 @@ function setupIpc(ctx) {
   phone('disconnectPhone', () => ctx.phone.disconnect());
   handle('setPhone', (partial) => change('phone', partial, () => {
     if (partial && 'input' in partial && ctx.phone) ctx.phone.bridge.tellVia();
+    if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial) && ctx.phone) for (const u of ctx.phone.all || []) u.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js), every phone
     if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts();
   }));
   // The phone as a drive (phonedrive.js). The Mount page's switch: off unmounts and stops
@@ -247,10 +248,32 @@ function setupIpc(ctx) {
       for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
     } else ctx.phoneViews.openScreen();
   });
+  // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js).
+  handle('camera', (m) => {
+    if (m && m.do === 'on') return ctx.setCamera(m.on === true); // Camera's switch: loads it, or stops it
+    const c = ctx.camShare;
+    if (!c || !m || typeof m !== 'object') return;
+    if (m.do === 'view') c.view(m.show === true); // show: its window too
+    else if (m.do === 'close') c.closeView();
+    else if (m.do === 'share') c.setShare(m.on === true);
+    else if (m.do === 'device') c.setDevice(m.id);
+    else if (m.do === 'stop') c.stopSending();
+    else if (m.do === 'devices') c.listDevices();
+    // Camera › Virtual camera (shared/vcam.js).
+    else if (m.do === 'virtual' && ctx.vcam) ctx.vcam.setOn(m.on === true);
+    else if (m.do === 'vcamRemove' && ctx.vcam) ctx.vcam.remove();
+    else if (m.do === 'rotate' && ctx.vcam) ctx.vcam.turn();
+  });
+  phone('phoneCamera', (open, opts) => {
+    if (open === false) {
+      for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
+    } else ctx.phoneViews.openCamera(opts);
+  });
+  phone('phoneListCameras', () => (ctx.phone.bridge ? ctx.phone.bridge.listCameras() : []));
   phone('phoneOpenApp', (arg) => arg && typeof arg.id === 'string' && ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100)));
   phone('phoneCloseView', (id) => ctx.phoneViews.close(Number(id)));
   phone('phoneScreenAct', (key) => (key === 'rotate' || key === 'screenPower') && ctx.phoneViews.screenAct(key));
-  phone('phoneRetry', (id) => { const u = typeof id === 'string' && id ? ctx.phone.unit(id.slice(0, 64)) : null; (u || ctx.phone).bridge._kick(); });
+  phone('phoneRetry', (id) => { const u = typeof id === 'string' && id ? ctx.phone.unit(id.slice(0, 64)) : null; (u || ctx.phone).bridge.retry(); }); // also Set Up, when nothing used wireless debugging
   phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
   phone('phoneInstallApps', () => require('../../shared/apkinstall.js').choose(ctx.phone.bridge, (s) => (ctx.t ? ctx.t(s) : s))); // Phone › Apps › Install Apps
   handle('phoneAssets', () => (ctx.phone ? ctx.phone.assetsView() : { wallpaper: '', apps: [] }));

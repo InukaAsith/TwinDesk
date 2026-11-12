@@ -171,7 +171,7 @@ function setupIpc(ctx) {
     setPhone(partial) {
       setGroup('phone', partial);
       if (partial && 'input' in partial) ctx.phone.bridge.tellVia();
-      if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial)) ctx.phone.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js)
+      if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial)) for (const u of ctx.phone.all || []) u.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js), every phone
       if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts(); // the open phone windows light their buttons
     },
     phonePair(arg) {
@@ -668,6 +668,7 @@ function setupIpc(ctx) {
   ipcMain.handle('getState', () => ctx.state);
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
+  ipcMain.handle('phoneListCameras', () => (ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : [])); // Camera: the phone's cameras
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));
   return actions;
 }

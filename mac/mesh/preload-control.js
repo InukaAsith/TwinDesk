@@ -32,5 +32,6 @@ const api = {
 for (const name of ACTIONS) api[name] = (arg) => ipcRenderer.send(name, arg);
 api.phoneCamera = (open, opts) => ipcRenderer.send('phoneCamera', { open, opts }); // Camera › Start and Window: {facing, show}, sent as one
 api.qrPair = () => ipcRenderer.invoke('qrPair'); // Connection: pair a phone with a QR code (its link)
+api.phoneListCameras = () => ipcRenderer.invoke('phoneListCameras');
 
 contextBridge.exposeInMainWorld('macshare', api);

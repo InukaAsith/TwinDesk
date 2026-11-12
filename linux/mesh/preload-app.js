@@ -61,6 +61,8 @@ contextBridge.exposeInMainWorld('macshare', {
   setMulti: call('setMulti'),
   relaunch: call('relaunch'),
   setAudio: call('setAudio'),
+  camera: call('camera'),
+  onCamPreview: (fn) => ipcRenderer.on('vcam:preview', (_e, buf) => fn(buf)), // Camera › the picture (a JPEG)
   phoneMedia: call('phoneMedia'),
   phoneBtPick: call('phoneBtPick'),
   setTerminal: call('setTerminal'),
@@ -90,6 +92,8 @@ contextBridge.exposeInMainWorld('macshare', {
   phoneUnmount: call('phoneUnmount'),
   phonePair: call('phonePair'),
   phoneScreen: call('phoneScreen'),
+  phoneCamera: call('phoneCamera'),
+  phoneListCameras: call('phoneListCameras'),
   phoneOpenApp: call('phoneOpenApp'),
   phoneCloseView: call('phoneCloseView'),
   phoneScreenAct: call('phoneScreenAct'),
