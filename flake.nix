@@ -97,12 +97,11 @@
               cp -r linux/*.js linux/*.css linux/*.html linux/assets linux/mesh "$share/linux/"
               cp linux/package.json "$share/linux/"
 
-              # Copy shared files
-              cp -r shared/*.js shared/*.css shared/*.html "$share/shared/"
-              if [ -d shared/icon ]; then
-                cp -r shared/icon "$share/shared/"
-              fi
-              cp -r shared/lang "$out/share/twindesk/shared/"
+              # Copy shared files: all of it but the tests. The app requires its folders too
+              # (shared/web, shared/airplay): without them start() throws before the tray and
+              # the window are made, and TwinDesk runs with neither.
+              cp -r shared/. "$share/shared/"
+              rm -rf "$share/shared/test"
 
               # Copy helper binaries
               cp linux-helper/bin/macshare-linuxhelper "$share/linux-helper/bin/"
