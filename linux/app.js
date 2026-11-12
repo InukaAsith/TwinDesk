@@ -117,6 +117,7 @@
     }
     current = v;
     if (UI.state) renderSidebar(UI.state); // in or out of a web device's pages
+    if (current !== v) return; // it sent us elsewhere (this page is hidden for the device now): that page is shown
     v.page.hidden = false;
     v.navBtn.classList.add('active');
     v.navBtn.setAttribute('aria-selected', 'true');
