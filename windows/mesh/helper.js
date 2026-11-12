@@ -21,7 +21,19 @@ class MeshHelper extends Helper {
       this.emit('exit', -1);
       return;
     }
-    const proc = spawn(EXE, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    // Windows can refuse to start it (Smart App Control, a work PC's policy: spawn EPERM). As in
+    // ../helper.js the app goes on without it: thrown from here, start() stopped before the window (#216).
+    let proc;
+    try {
+      proc = spawn(EXE, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    } catch (e) {
+      this._blocked(e);
+      return;
+    }
+    if (!proc.pid) { // failed: 'error' follows, and no 'exit'
+      proc.on('error', (e) => this._blocked(e));
+      return;
+    }
     this.proc = proc;
     this.buf = '';
     proc.stdout.setEncoding('utf8');
