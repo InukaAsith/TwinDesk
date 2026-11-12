@@ -161,7 +161,7 @@ namespace MacShare
             finally { CloseHandle(p); }
         }
 
-        static Dictionary<uint, uint> Parents()
+        internal static Dictionary<uint, uint> Parents()
         {
             Dictionary<uint, uint> d = new Dictionary<uint, uint>();
             IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
