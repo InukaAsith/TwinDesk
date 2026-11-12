@@ -130,6 +130,7 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 **🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
 
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="#apt"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-APT-a80030?style=for-the-badge" alt="Linux, APT repository"></a><br>
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/twindesk-bin-3.0.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
 <sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
@@ -160,6 +161,19 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 <p align="center">🍺 <b>Homebrew</b> on macOS:<br><code>brew install --cask inukaasith/twindesk/twindesk</code><br>
 <sub>Update with <code>brew upgrade --cask twindesk</code>: TwinDesk opens again by itself if it was running, so a Mac you drive only through it gets its mouse back. The <a href="https://github.com/InukaAsith/homebrew-twindesk">tap</a> follows every release.</sub></p>
+
+<a name="apt"></a>
+
+<p align="center">🐧 <b>APT</b> on Debian, Ubuntu, Mint and Pop!_OS, kept up to date by <code>apt upgrade</code>:</p>
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://inukaasith.github.io/twindesk-apt/twindesk.gpg | sudo tee /etc/apt/keyrings/twindesk.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/twindesk.gpg] https://inukaasith.github.io/twindesk-apt stable main" | sudo tee /etc/apt/sources.list.d/twindesk.list
+sudo apt update && sudo apt install twindesk
+```
+
+<p align="center"><sub>The <a href="https://github.com/InukaAsith/twindesk-apt">repository</a> follows every release within a few hours.</sub></p>
 
 <p align="center"><sub>Already on 2.5? The in-app updater picks the right file. Update every device you pair: 3.0 still talks to 2.5, and the new features switch on when both sides have 3.0.<br>
 Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
