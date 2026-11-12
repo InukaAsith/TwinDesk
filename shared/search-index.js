@@ -75,7 +75,7 @@ const ENTRIES = [
   // Sharing
   { t: 'Shared clipboard', page: 'clipboard', k: 'copy paste, copy on phone paste on pc, universal clipboard, clipboard sync' },
   { t: 'Clipboard history', page: 'clipboard', k: 'copied before, recent copies, paste history, past clips' },
-  { t: 'Keep history, encrypted', page: 'clipboard', on: 'desk', k: 'save clipboard history, save notifications history, remember, keep, encrypted, restart' },
+  { t: 'Keep history, encrypted', page: 'clipboard', k: 'save clipboard history, save notifications history, remember, keep, encrypted, restart' },
   { t: 'Phone notifications on the computer', page: 'notifications', dir: 'p2c', k: 'notifications on pc, alerts, mirror notifications, messages on computer' },
   { t: 'Computer notifications on the phone', page: 'notifications', dir: 'c2p', k: 'pc notifications on phone, alerts' },
   { t: 'Notification history', page: 'notifications', k: 'past notifications, missed, old alerts, history' },

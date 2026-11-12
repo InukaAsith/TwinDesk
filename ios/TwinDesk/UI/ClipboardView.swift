@@ -39,6 +39,9 @@ struct ClipboardView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     .glassCard()
+
+                    SectionTitle(text: tr("History"))
+                    HistoryCard(what: "clip") // HistoryView.swift
                 } right: {
                     if !core.clip.history.isEmpty {
                         SectionTitle(text: tr("Recent"))

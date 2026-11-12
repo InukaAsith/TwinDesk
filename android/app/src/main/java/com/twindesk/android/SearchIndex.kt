@@ -23,6 +23,7 @@ object SearchIndex {
         Entry("Snap windows from the phone", { tr("Snap windows from the phone") }, "window layout, tile windows, arrange windows, split screen, snap", "Deck", "p2c"),
         Entry("Shared clipboard", { tr("Shared clipboard") }, "copy paste, copy on phone paste on pc, universal clipboard, clipboard sync", "Clipboard", ""),
         Entry("Clipboard history", { tr("Clipboard history") }, "copied before, recent copies, paste history, past clips", "Clipboard", ""),
+        Entry("Keep history, encrypted", { tr("Keep history, encrypted") }, "save clipboard history, save notifications history, remember, keep, encrypted, restart", "Clipboard", ""),
         Entry("Phone notifications on the computer", { tr("Phone notifications on the computer") }, "notifications on pc, alerts, mirror notifications, messages on computer", "Notifications", "p2c"),
         Entry("Computer notifications on the phone", { tr("Computer notifications on the phone") }, "pc notifications on phone, alerts", "Notifications", "c2p"),
         Entry("Notification history", { tr("Notification history") }, "past notifications, missed, old alerts, history", "Notifications", ""),

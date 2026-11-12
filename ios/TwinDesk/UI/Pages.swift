@@ -410,6 +410,10 @@ struct NotificationsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .glassCard()
+                // History (HistoryView.swift), and the computer's notifications shown here.
+                SectionTitle(text: tr("History"))
+                HistoryCard(what: "notifs")
+                RecentNotifs()
             }
         }
     }

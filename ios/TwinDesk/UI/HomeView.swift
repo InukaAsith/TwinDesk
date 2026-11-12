@@ -76,6 +76,11 @@ struct OverviewView: View {
             TileDef(id: "micShare", label: tr("Share mic"), symbol: "mic.fill", color: .orange, on: core.sync.get("mic", "out"),
                     state: core.sync.get("mic", "out") ? tr("A microphone on {name}", ["name": name]) : tr("Off")) { core.sync.set("mic", "out", !core.sync.get("mic", "out")) },
             TileDef(id: "notifications", label: tr("Notifications"), symbol: "bell.badge.fill", color: Page.notifications.color, state: tr("Both ways")) { ui.open(.notifications) },
+            // History's own views (HistoryView.swift).
+            TileDef(id: "clipHistory", label: tr("Clipboard history"), symbol: "clock.arrow.circlepath", color: Page.clipboard.color,
+                    state: tr("{count} items", ["count": core.history.clip().count])) { ui.history = "clip" },
+            TileDef(id: "notifHistory", label: tr("Notification history"), symbol: "clock.arrow.circlepath", color: Page.notifications.color,
+                    state: tr("{count} items", ["count": core.history.notifs().count])) { ui.history = "notifs" },
         ]
         // Deck tiles added to the quick actions (the Deck's tile editor): they run there as on the Deck page.
         for item in TileLayout.load(core.store).items where item.id.hasPrefix("deck:") {

@@ -24,6 +24,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var sync = PairSync(self)
     lazy var clip = Clip(self)
     lazy var notifs = Notifs(self)
+    lazy var history = History(self) // the clipboard's and notifications' history, kept encrypted when asked
     lazy var files = Files(self)
     lazy var fclip = FileClip(self)
     lazy var info = PhoneInfo(self)

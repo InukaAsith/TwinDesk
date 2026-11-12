@@ -137,6 +137,7 @@ final class AppUI: ObservableObject {
     @Published var navVersion = 0     // Arrange saved: the tabs and sidebar again
     @Published var searching = false  // Search as a sheet (More's field, the iPad, ⌘K)
     @Published var arranging = false  // the Arrange sheet
+    @Published var history: String?   // a history's own view: "clip" or "notifs" (HistoryView.swift)
 
     // Open a page: iPad, in the sidebar. iPhone: a tab's own page, that tab (at its root); any
     // other, over the tab that's open, so Back returns to where it was opened from.
@@ -180,6 +181,9 @@ struct RootView: View {
                 NavigationStack { SearchView(sheet: true) }.environmentObject(core).environmentObject(ui)
             }
             .sheet(isPresented: $ui.arranging) { ArrangeSheet() }
+            .sheet(isPresented: Binding(get: { ui.history != nil }, set: { if !$0 { ui.history = nil } })) {
+                NavigationStack { HistoryView(what: ui.history ?? "clip") }.environmentObject(core).environmentObject(ui)
+            }
     }
 
     @ViewBuilder

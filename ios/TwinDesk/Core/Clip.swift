@@ -235,7 +235,10 @@ final class Clip: Feature {
         return true
     }
 
+    func clearHistory() { history = []; core.changed() }
+
     private func remember(_ item: Item) {
+        if !item.pic { core.history.addClip(item.dir, item.text) } // History.swift
         history.removeAll { $0.text == item.text }
         history.insert(item, at: 0)
         if history.count > 20 { history.removeLast(history.count - 20) }

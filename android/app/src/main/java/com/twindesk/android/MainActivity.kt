@@ -330,6 +330,8 @@ fun App(core: Core, resumed: Int) {
             .map { ArrangeItem(it.name.lowercase(), tr(it.title), it.icon, it.colors) }
         ArrangeDialog(core.store, items, NavOrder.load(core.store)?.bar ?: BOTTOM.size) { NavOrder.open.value = false }
     }
+    // A history's own view (History.kt): from its page or an Overview shortcut.
+    History.view.value?.let { what -> return HistoryScreen(core, v, what) }
     // Search (Search.kt): over everything; a result opens its page.
     if (Search.open.value) return SearchScreen(Tab.entries.filter { shown(core, it) }.map { it.name to it.title }) { name ->
         Tab.entries.firstOrNull { it.name == name }?.takeIf { shown(core, it) }?.let { tab = it; more = false }
@@ -1435,6 +1437,7 @@ private fun ClipboardPage(core: Core, v: Int) {
             if (shots.lastSent.isNotEmpty()) MacRow(tr("Last screenshot sent"), shots.lastSent)
         }
     }
+    HistoryCard(core, "clip") // History.kt
     if (clip.history.isNotEmpty()) MacCard(tr("Recent")) {
         clip.history.toList().take(12).forEachIndexed { i, item ->
             // A picture of ours isn't kept here: only the computer's copy again.
@@ -1473,6 +1476,14 @@ private fun NotificationsPage(core: Core, v: Int) {
     }
     // Each app on its own (#102): every app on the phone, as a block list or an allow list (AppCards.kt).
     if (core.notifs.supported) NotifAppsCard(core, name)
+    HistoryCard(core, "notifs") // History.kt
+    // The computer's notifications shown here, newest first (all of them: History's own view).
+    val recent = core.history.notifs().take(8)
+    if (recent.isNotEmpty()) MacCard(tr("Recent")) {
+        recent.forEachIndexed { i, e ->
+            MacRow(listOf(e.app, e.title).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { e.text.take(80) }, e.text.replace('\n', ' ').take(140), first = i == 0)
+        }
+    }
 }
 
 // ---- Files ----

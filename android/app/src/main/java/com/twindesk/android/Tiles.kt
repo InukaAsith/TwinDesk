@@ -185,6 +185,9 @@ fun TilesCard(core: Core) {
         Def("micShare", tr("Share mic"), Ico.mic, g(0xFFFFB340, 0xFFFF9500), on = { core.sync.get("mic", "out") },
             state = { if (core.sync.get("mic", "out")) tr("A microphone on {name}", "name" to name) else tr("Off") }) { core.sync.set("mic", "out", !core.sync.get("mic", "out")) },
         Def("notifications", tr("Notifications"), Ico.bell, g(0xFFFF6961, 0xFFFF3B30), state = { tr("Both ways") }) { page("Notifications") },
+        // History's own views (History.kt).
+        Def("clipHistory", tr("Clipboard history"), Ico.history, g(0xFF64D2FF, 0xFF30B0C7), state = { tr("{count} items", "count" to core.history.clip().size) }) { History.view.value = "clip" },
+        Def("notifHistory", tr("Notification history"), Ico.history, g(0xFFFF6961, 0xFFFF3B30), state = { tr("{count} items", "count" to core.history.notifs().size) }) { History.view.value = "notifs" },
     )
     // Deck tiles pinned here: they run on the computer as on the Deck page.
     val deckDefs = Tiles.load(core.store).items.filter { it.id.startsWith("deck:") }.map { item ->

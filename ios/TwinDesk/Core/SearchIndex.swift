@@ -23,6 +23,7 @@ enum SearchIndex {
         Entry(en: "Snap windows from the phone", title: { tr("Snap windows from the phone") }, k: "window layout, tile windows, arrange windows, split screen, snap", page: "deck", dir: "p2c"),
         Entry(en: "Shared clipboard", title: { tr("Shared clipboard") }, k: "copy paste, copy on phone paste on pc, universal clipboard, clipboard sync", page: "clipboard", dir: ""),
         Entry(en: "Clipboard history", title: { tr("Clipboard history") }, k: "copied before, recent copies, paste history, past clips", page: "clipboard", dir: ""),
+        Entry(en: "Keep history, encrypted", title: { tr("Keep history, encrypted") }, k: "save clipboard history, save notifications history, remember, keep, encrypted, restart", page: "clipboard", dir: ""),
         Entry(en: "Phone notifications on the computer", title: { tr("Phone notifications on the computer") }, k: "notifications on pc, alerts, mirror notifications, messages on computer", page: "notifications", dir: "p2c"),
         Entry(en: "Computer notifications on the phone", title: { tr("Computer notifications on the phone") }, k: "pc notifications on phone, alerts", page: "notifications", dir: "c2p"),
         Entry(en: "Notification history", title: { tr("Notification history") }, k: "past notifications, missed, old alerts, history", page: "notifications", dir: ""),

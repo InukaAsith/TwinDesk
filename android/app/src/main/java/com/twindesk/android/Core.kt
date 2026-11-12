@@ -51,6 +51,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val sync = PairSync(this)
     val clip = Clip(this)
     val notifs = Notifs(this)
+    val history = History(this) // the clipboard's and notifications' history, kept encrypted when asked (History.kt)
     val files = Files(this)
     val fclip = FileClip(this)
     val info = PhoneInfo(this)

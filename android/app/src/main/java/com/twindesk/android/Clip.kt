@@ -164,6 +164,7 @@ class Clip(core: Core) : Feature(core) {
     }
 
     private fun remember(item: Item) {
+        if (item.picture == null) core.history.addClip(item.dir, item.text) // History.kt
         main.post {
             if (item.picture == null) history.removeAll { it.picture == null && it.text == item.text }
             history.addFirst(item)
