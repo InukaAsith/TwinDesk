@@ -56,11 +56,11 @@
             <desktop:ExecutionAlias Alias="TwinDesk.exe"/>
           </uap3:AppExecutionAlias>
         </uap3:Extension>
-        <uap:Extension Category="windows.protocol">
-          <uap:Protocol Name="twindesk" Parameters="&quot;%1&quot;">
+        <uap3:Extension Category="windows.protocol">
+          <uap3:Protocol Name="twindesk" Parameters="&quot;%1&quot;">
             <uap:DisplayName>TwinDesk</uap:DisplayName>
-          </uap:Protocol>
-        </uap:Extension>
+          </uap3:Protocol>
+        </uap3:Extension>
         <!-- Without it RegisterApp does nothing and Windows drops the hands-free link (Calls.cs). -->
         <uap13:Extension Category="windows.phoneCallActivation"/>
         <desktop2:Extension Category="windows.firewallRules">

@@ -153,8 +153,30 @@ function checkSigner() {
   }
 }
 
+// electron-builder's makeappx and makepri (winCodeSign 2.6.0) are from 2017's SDK and refuse the
+// newer parts of store-manifest.xml (uap13: the calls): the installed Windows SDK's, newest first,
+// go in their place in its cache (the same tools windows-helper/calls/pack.ps1 uses).
+let toolsDone = false;
+async function newerAppxTools() {
+  if (toolsDone || process.platform !== 'win32') return;
+  toolsDone = true;
+  const vendor = await require('app-builder-lib/out/binDownload').getBin('winCodeSign');
+  const kits = path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Windows Kits', '10', 'bin');
+  const vers = fs.existsSync(kits) ? fs.readdirSync(kits).filter((v) => /^10\./.test(v))
+    .sort((a, b) => b.split('.').map(Number).reduce((r, x, i) => r || x - Number(a.split('.')[i]), 0)) : [];
+  for (const a of ['x64', 'x86', 'arm64']) {
+    const dest = path.join(vendor, 'windows-10', a === 'x86' ? 'ia32' : a);
+    if (!fs.existsSync(dest)) continue;
+    const from = vers.map((v) => path.join(kits, v, a)).find((d) => fs.existsSync(path.join(d, 'makeappx.exe')));
+    if (!from) throw new Error('No Windows SDK makeappx.exe for ' + a + ': install the Windows 10/11 SDK');
+    for (const f of ['makeappx.exe', 'makepri.exe']) if (fs.existsSync(path.join(from, f))) fs.copyFileSync(path.join(from, f), path.join(dest, f));
+    console.log('appx tools from ' + from);
+  }
+}
+
 // The Microsoft Store's MSIX (appx target): unsigned, Partner Center signs it.
 async function packStore(arch) {
+  await newerAppxTools();
   const name = 'TwinDesk-Store-' + pkg.version + '-' + arch + '.msix';
   console.log('Packaging the Store MSIX for ' + arch + '…');
   await builder.build({
