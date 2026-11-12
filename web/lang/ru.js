@@ -619,5 +619,7 @@ window.TwinDeskWeb = { lang: 'ru', messages: {
   "Timer": "Таймер",
   "Trackpad, keyboard, air mouse, slides and gamepad": "Трекпад, клавиатура, аэромышь, слайды и геймпад",
   "Turn the phone to move the pointer · tap to click": "Поворачивайте телефон, чтобы двигать указатель · коснитесь, чтобы щёлкнуть",
-  "Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.": "Используйте этот {device} как трекпад, клавиатуру, аэромышь, пульт для презентаций или геймпад для {name}."
+  "Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.": "Используйте этот {device} как трекпад, клавиатуру, аэромышь, пульт для презентаций или геймпад для {name}.",
+  "Laser": "Лазер",
+  "Hold to point the laser": "Удерживайте для лазерной указки",
 } };

@@ -285,6 +285,7 @@
       DECK_STATE: 'deck.state', // device->computer {} / computer->device {state: {volume, muted, micVolume, micMuted, outputs, inputs, bt, displays, dark, dnd}}
       DECK_WINS: 'deck.wins', // device->computer {} / computer->device {apps: [{key, name, icon, windows: [{wid, title, display}]}], displays, front}
       DECK_PLACE: 'deck.place', // device->computer {wid, display, zone?: {x, y, w, h} of 12} -> deck.done {id: 'place'}
+      REMOTE_LASER: 'remote.laser', // phone->computer {on}: the presentation remote's laser dot here, following the pointer (shared/laser.js)
       REMOTE_RELEASE: 'remote.release', // let go of every key and button the remote holds
       // {b, lx, ly, rx, ry, lt, rt}, only while remote.state says pad: b the buttons (bits 0..13: A B X Y LB RB
       // Back Start L3 R3 Up Down Left Right), the sticks -1..1 (y down), the triggers 0..1; on change, at most every 8 ms

@@ -619,5 +619,7 @@ window.TwinDeskWeb = { lang: 'tr', messages: {
   "Timer": "Zamanlayıcı",
   "Trackpad, keyboard, air mouse, slides and gamepad": "Dokunmatik yüzey, klavye, hava faresi, slaytlar ve oyun kumandası",
   "Turn the phone to move the pointer · tap to click": "İşaretçiyi hareket ettirmek için telefonu çevirin · tıklamak için dokunun",
-  "Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.": "Bu {device} cihazını {name} için dokunmatik yüzey, klavye, hava faresi, sunum kumandası veya oyun kumandası olarak kullanın."
+  "Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.": "Bu {device} cihazını {name} için dokunmatik yüzey, klavye, hava faresi, sunum kumandası veya oyun kumandası olarak kullanın.",
+  "Laser": "Lazer",
+  "Hold to point the laser": "Lazerle göstermek için basılı tutun",
 } };

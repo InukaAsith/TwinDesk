@@ -619,5 +619,7 @@ window.TwinDeskWeb = { lang: 'zh-CN', messages: {
   "Timer": "计时器",
   "Trackpad, keyboard, air mouse, slides and gamepad": "触控板、键盘、空中鼠标、幻灯片和游戏手柄",
   "Turn the phone to move the pointer · tap to click": "转动手机即可移动指针 · 轻点即可点击",
-  "Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.": "将此{device}用作 {name} 的触控板、键盘、空中鼠标、演示遥控器或游戏手柄。"
+  "Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.": "将此{device}用作 {name} 的触控板、键盘、空中鼠标、演示遥控器或游戏手柄。",
+  "Laser": "激光笔",
+  "Hold to point the laser": "按住以使用激光笔",
 } };

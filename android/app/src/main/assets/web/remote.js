@@ -1006,8 +1006,23 @@
     b.addEventListener('pointercancel', up);
   }
   hold($('p-point'), 'point');
-  $('p-point').addEventListener('pointerdown', () => { $('p-point').classList.add('down'); TD.haptic(); });
-  for (const ev of ['pointerup', 'pointercancel']) $('p-point').addEventListener(ev, () => $('p-point').classList.remove('down'));
+  // Laser (on unless turned off; kept on this device): while pointing, the computer shows a red dot
+  // that follows the pointer (remote.laser), gone again when the finger lifts.
+  let laser = true;
+  try { laser = localStorage.getItem('remote.laser') !== '0'; } catch (_) { /* default */ }
+  let lasing = false;
+  const laserTo = (on) => { if (on === lasing) return; lasing = on; send({ t: 'remote.laser', on }); };
+  const laserShow = () => { $('p-laser').classList.toggle('on', laser); $('p-point').textContent = laser ? t('Hold to point the laser') : t('Hold to point'); };
+  $('p-laser').addEventListener('click', () => {
+    laser = !laser;
+    try { localStorage.setItem('remote.laser', laser ? '1' : '0'); } catch (_) { /* this session */ }
+    laserShow();
+    tick();
+  });
+  laserShow();
+  $('p-point').addEventListener('pointerdown', () => { $('p-point').classList.add('down'); TD.haptic(); if (laser) laserTo(true); });
+  for (const ev of ['pointerup', 'pointercancel']) $('p-point').addEventListener(ev, () => { $('p-point').classList.remove('down'); laserTo(false); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) laserTo(false); });
   timerShow();
 
   render();
