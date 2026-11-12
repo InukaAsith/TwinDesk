@@ -61,6 +61,7 @@ class Updates(private val core: Core) {
     // Start (or stop) the automatic checks after the setting changed.
     fun start() {
         timer?.cancel(false)
+        if (!BuildConfig.UPDATER) return // the F-Droid build: F-Droid updates it
         timer = if (auto) core.bg.scheduleWithFixedDelay({ check(false) }, FIRST_DELAY, EVERY, TimeUnit.MILLISECONDS) else null
     }
 
@@ -117,7 +118,7 @@ class Updates(private val core: Core) {
     // ---- in place ----
 
     // Update: downloaded (or the download reused) and installed over this TwinDesk.
-    fun installNow() = core.bg.execute { installInPlace(asked = true) }
+    fun installNow() { if (BuildConfig.UPDATER) core.bg.execute { installInPlace(asked = true) } }
 
     private fun allowed(): Boolean = core.ctx.packageManager.canRequestPackageInstalls()
 
