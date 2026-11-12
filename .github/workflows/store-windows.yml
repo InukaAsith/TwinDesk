@@ -51,6 +51,12 @@ jobs:
         working-directory: windows
         run: npm run dist:store
 
+      # Packing refused: which part of the manifest (installer/appx-diagnose.ps1).
+      - name: Which part of the manifest
+        if: failure()
+        shell: pwsh
+        run: ./windows/installer/appx-diagnose.ps1
+
       - name: Check the input lane is in
         shell: bash
         run: |
