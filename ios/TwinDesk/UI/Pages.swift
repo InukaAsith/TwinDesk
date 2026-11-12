@@ -280,6 +280,20 @@ struct RemoteView: View {
                         .primaryButton().controlSize(.large).disabled(!core.connected)
                 }
                 .glassCard()
+                VStack(alignment: .leading, spacing: 14) {
+                    CardHeader(symbol: "dot.radiowaves.forward", color: Color(red: 0.19, green: 0.69, blue: 0.78), title: tr("Air mouse"),
+                               detail: tr("Hold the screen and point the {device}: the pointer follows as you turn it. Tap to click, hold Left click to drag, and slide the strip to scroll.", ["device": Device.word]))
+                    Button { ui.cover = .remote("air") } label: { Label(tr("Open Air mouse"), systemImage: "dot.radiowaves.forward").frame(maxWidth: .infinity) }
+                        .primaryButton().controlSize(.large).disabled(!core.connected)
+                }
+                .glassCard()
+                VStack(alignment: .leading, spacing: 14) {
+                    CardHeader(symbol: "play.rectangle.on.rectangle.fill", color: .orange, title: tr("Presentation"),
+                               detail: tr("A slide clicker for PowerPoint, Keynote, Google Slides and PDFs: Next and Previous, Start, Black screen, and Hold to point, which moves the pointer as you turn the {device}.", ["device": Device.word]))
+                    Button { ui.cover = .remote("present") } label: { Label(tr("Open Presentation"), systemImage: "play.rectangle").frame(maxWidth: .infinity) }
+                        .primaryButton().controlSize(.large).disabled(!core.connected)
+                }
+                .glassCard()
                 if let a = core.remote.allowed, !a, !core.remote.why.isEmpty {
                     Label(core.remote.why, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.warn).glassCard()
                 }

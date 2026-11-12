@@ -6,7 +6,7 @@ html, body {
 }
 button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0; touch-action: none; }
 button.down, button.on { background: var(--accent); border-color: var(--accent); }
-body:not(.pad) .pad-only, body:not(.gamepad) .game-only, body:not(.voice) .voice-only { display: none !important; }
+body:not(.pad) .pad-only, body:not(.gamepad) .game-only, body:not(.voice) .voice-only, body:not(.air) .air-only, body:not(.present) .present-only { display: none !important; }
 
 #top { position: fixed; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 14px; box-sizing: border-box; background: var(--card); z-index: 2; }
 #name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -121,3 +121,36 @@ body.voice { touch-action: auto; }
 #voice-keys button:active { filter: brightness(1.25); }
 #voice-help { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 #v-clear { touch-action: manipulation; }
+
+/* ---- air mouse: a big area held while pointing, a scroll strip beside it, the clicks under it ---- */
+#air-view { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; display: grid; grid-template: 1fr 72px / 1fr 64px; gap: 10px; padding: 10px 12px 14px; box-sizing: border-box; }
+#air { grid-area: 1 / 1; border-radius: 22px; background: var(--pad); border: 1px solid var(--line); display: grid; place-items: center; text-align: center; color: #6c6c70; font-size: 13.5px; line-height: 1.6; padding: 16px; transition: background-color 0.15s, border-color 0.15s; }
+#air b { color: var(--text); font-size: 17px; font-weight: 600; }
+#air.live { background: #10243d; border-color: var(--accent); }
+#air-wheel { grid-area: 1 / 2; border-radius: 22px; background: repeating-linear-gradient(180deg, var(--pad) 0 14px, #1d1d20 14px 16px); border: 1px solid var(--line); display: grid; place-items: center; color: #6c6c70; font-size: 12px; writing-mode: vertical-rl; }
+#air-wheel.live { border-color: var(--accent); }
+#air-clicks { grid-area: 2 / 1 / 3 / 3; display: flex; gap: 10px; }
+#air-clicks button { flex: 1; font-size: 15px; }
+@media (orientation: landscape) { #air-view { grid-template: 1fr 64px / 1fr 80px; } }
+
+/* ---- presentation remote: Next big under the thumb, Previous above it, the pointer at the bottom ---- */
+#present-view { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; display: grid; gap: 10px; padding: 10px 12px 14px; box-sizing: border-box;
+  grid-template: "row row" 48px "timer timer" 64px "prev prev" 1fr "next next" 2fr "point point" 72px / 1fr 1fr; }
+#p-row { grid-area: row; display: flex; gap: 8px; }
+#p-row button { flex: 1; font-size: 14px; touch-action: manipulation; }
+#p-timer { grid-area: timer; background: transparent; border: 0; font: 600 40px/1 ui-rounded, system-ui, sans-serif; font-variant-numeric: tabular-nums; color: var(--text); }
+#p-timer.idle { color: #6c6c70; }
+#p-prev { grid-area: prev; font-size: 22px; font-weight: 600; border-radius: 22px; }
+#p-next { grid-area: next; font-size: 30px; font-weight: 700; border-radius: 26px; background: #14365e; border-color: #1f4f88; }
+#p-next.down { background: var(--accent); }
+#p-point { grid-area: point; font-size: 16px; font-weight: 600; border-radius: 22px; color: #ff6961; }
+#p-point.down { background: #ff3b30; border-color: #ff3b30; color: #fff; }
+@media (orientation: landscape) {
+  #present-view { grid-template: "row row row" 44px "prev timer next" 1fr "prev point next" 72px / 1fr 1fr 1.4fr; }
+}
+
+/* The browser asks before it gives the phone's motion (iPhone): asked from a tap, here. */
+#motion-ask { position: fixed; left: 16px; right: 16px; bottom: 96px; z-index: 4; padding: 14px 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); text-align: center; }
+#motion-ask[hidden] { display: none; }
+#motion-ask p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+#motion-ask button { height: 40px; padding: 0 18px; background: var(--accent); border-color: var(--accent); touch-action: manipulation; }

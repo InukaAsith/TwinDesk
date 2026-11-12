@@ -189,6 +189,9 @@ object Ico {
     val mic = lineIcon("mic", "M10 2.5a2.5 2.5 0 0 1 2.5 2.5v5a2.5 2.5 0 0 1-5 0V5A2.5 2.5 0 0 1 10 2.5z M5 9.5a5 5 0 0 0 10 0 M10 14.5v3 M7.5 17.5h5")
     val touchpad = lineIcon("touchpad", "M3 4h14v9.5H3z M3 13.5h14v2.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z M10 13.5V17")
     val gamepad = lineIcon("gamepad", "M6.5 6.5h7a4 4 0 0 1 4 4v1.5a2.8 2.8 0 0 1-5 1.7L11.4 12H8.6l-1.1 1.7a2.8 2.8 0 0 1-5-1.7v-1.5a4 4 0 0 1 4-4z M6 8.5v3 M4.5 10h3 M13 9.5h0 M14.5 11h0")
+    // A phone pointing at a screen, and a slide with a pointer.
+    val air = lineIcon("air", "M7 6.5h4.5v10H7z M8.5 14.5h1.5 M13.5 5.5a3 3 0 0 1 0 4 M15.5 3.5a6 6 0 0 1 0 8")
+    val present = lineIcon("present", "M2.5 3.5h15v9.5h-15z M10 13v3.5 M7 17h6 M6 10l3-3 2 2 3-3")
     val send = lineIcon("send", "M3 5h5l1.5 2H17v9H3z M10 14.5v-5 M7.8 11.5 10 9.3l2.2 2.2")
     val lock = lineIcon("lock", "M5 9h10v8H5z M7 9V6.5a3 3 0 0 1 6 0V9 M10 12v2")
     val sleep = lineIcon("sleep", "M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z")

@@ -136,6 +136,8 @@ fun TilesCard(core: Core) {
         Def("voice", tr("Voice typing"), Ico.mic, g(0xFFFF6482, 0xFFFF2D55), state = { tr("Speak, it types on {name}", "name" to name) }) { remote("voice") },
         Def("touchpad", tr("Touchpad"), Ico.touchpad, g(0xFFFFB340, 0xFFFF9500), state = { tr("And keyboard") }) { remote("pad") },
         Def("gamepad", tr("Gamepad"), Ico.gamepad, g(0xFFBF5AF2, 0xFF8944AB), state = { tr("Keys or a controller") }) { remote("gamepad") },
+        Def("air", tr("Air mouse"), Ico.air, g(0xFF5AC8FA, 0xFF30B0C7), state = { tr("Point to move") }) { remote("air") },
+        Def("present", tr("Presentation"), Ico.present, g(0xFFFF9F0A, 0xFFFF6B00), state = { tr("Next, previous, pointer") }) { remote("present") },
         Def("files", tr("Send files"), Ico.send, g(0xFF64D2FF, 0xFF0A84FF), state = { tr("To Downloads") }) { pick.launch("*/*") },
         Def("clipboard", tr("Send clipboard"), Ico.clipboard, g(0xFF64D2FF, 0xFF30B0C7), state = { tr("What’s copied here") }) {
             toast(if (core.clip.sendCurrent(true)) tr("Clipboard sent to {name}", "name" to name) else tr("Nothing to send on the clipboard"))

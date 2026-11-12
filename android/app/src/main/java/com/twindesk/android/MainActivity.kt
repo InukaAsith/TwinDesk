@@ -1284,7 +1284,7 @@ private fun RemotePage(core: Core, v: Int) {
     val ctx = LocalContext.current
     val name = them(core)
     val me = core.store.deviceName
-    PageHead(tr("Remote"), tr("Use this device as {name}’s touchpad and keyboard, a gamepad, or to type by voice.", "name" to name))
+    PageHead(tr("Remote"), tr("Use this device as {name}’s touchpad and keyboard, an air mouse, a presentation remote, a gamepad, or to type by voice.", "name" to name))
     if (core.host == null) {
         NotConnected(core, v)
         return BtPadCard(core) // works without TwinDesk on the computer
@@ -1301,6 +1301,12 @@ private fun RemotePage(core: Core, v: Int) {
         }
         MacRow(tr("Voice typing"), tr("Speak with your keyboard’s voice typing (Gboard’s microphone). Each word is typed on {name} as it appears, and fixes are typed there too.", "name" to name)) {
             Primary(tr("Open")) { open("voice") }
+        }
+        MacRow(tr("Air mouse"), tr("Hold the screen and point the phone: the pointer follows as you turn it. Tap to click, hold Left click to drag, and slide the strip to scroll.")) {
+            Primary(tr("Open")) { open("air") }
+        }
+        MacRow(tr("Presentation"), tr("A slide clicker for PowerPoint, Keynote, Google Slides and PDFs: Next and Previous (or the volume keys), Start, Black screen, and Hold to point, which moves the pointer as you turn the phone.")) {
+            Primary(tr("Open")) { open("present") }
         }
     }
     MacCard(tr("Touchpad")) {

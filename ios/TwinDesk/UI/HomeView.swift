@@ -52,6 +52,8 @@ struct OverviewView: View {
             TileDef(id: "voice", label: tr("Voice typing"), symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), state: tr("Speak, it types on {name}", ["name": name])) { ui.cover = .remote("voice") },
             TileDef(id: "touchpad", label: tr("Touchpad"), symbol: "hand.point.up.left.fill", color: .orange, state: tr("And keyboard")) { ui.cover = .remote("pad") },
             TileDef(id: "gamepad", label: tr("Gamepad"), symbol: "gamecontroller.fill", color: Color(red: 0.69, green: 0.32, blue: 0.87), state: tr("Keys or a controller")) { ui.cover = .remote("gamepad") },
+            TileDef(id: "air", label: tr("Air mouse"), symbol: "dot.radiowaves.forward", color: Color(red: 0.19, green: 0.69, blue: 0.78), state: tr("Point to move")) { ui.cover = .remote("air") },
+            TileDef(id: "present", label: tr("Presentation"), symbol: "play.rectangle.on.rectangle.fill", color: .orange, state: tr("Next, previous, pointer")) { ui.cover = .remote("present") },
             TileDef(id: "photos", label: tr("Send photos"), symbol: "photo.on.rectangle", color: Page.photos.color, state: tr("To {name}", ["name": name])) { pickingPhotos = true },
             TileDef(id: "files", label: tr("Send files"), symbol: "folder.fill.badge.plus", color: Page.files.color, state: tr("To Downloads")) { picking = true },
             TileDef(id: "clipboard", label: tr("Send clipboard"), symbol: "doc.on.clipboard.fill", color: Page.clipboard.color, state: tr("What’s copied here")) { _ = core.clip.sendCurrent(force: true) },
