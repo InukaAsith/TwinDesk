@@ -23,6 +23,8 @@ final class Deck: Feature {
     var spaces: [JSON] { (layout?["spaces"] as? [JSON]) ?? [] }
     var swipePages: Bool { (layout?.obj("swipe")?["pages"] as? NSNumber)?.boolValue ?? true }
     var swipeSpaces: Bool { (layout?.obj("swipe")?["spaces"] as? NSNumber)?.boolValue ?? true }
+    // How the full-screen Deck is held (layout.orient, set on the computer's Deck page or here): landscape unless portrait.
+    var portrait: Bool { layout?.str("orient") == "portrait" }
 
     private func reset() { offered = false; layout = nil; apps = nil; state = nil; wins = nil; done = nil }
     override func onWelcome(_ host: Computer, _ m: JSON) { DispatchQueue.main.async { self.reset(); self.core.changed() } }
@@ -91,6 +93,7 @@ final class Deck: Feature {
     func runs(_ a: JSON) -> Bool {
         let k = a.str("k")
         if k == "nav" || k == "none" { return true }
+        if k == "widget" { return DeckCatalog.entry(a).map { DeckCatalog.available($0, caps, platform) == nil } ?? true }
         if !can.contains(k) { return false }
         guard let e = DeckCatalog.entry(a) else { return true }
         return DeckCatalog.available(e, caps, platform) == nil

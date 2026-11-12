@@ -69,6 +69,12 @@ struct OverviewView: View {
             TileDef(id: "ring", label: tr("Ring"), symbol: "bell.and.waves.left.and.right.fill", color: TDColor.bad, has: can.contains(.ring), state: tr("Find {name}", ["name": name])) { core.dev.act("ring") },
             TileDef(id: "sound", label: tr("Sound"), symbol: "speaker.wave.2.fill", color: Page.audio.color, state: tr("{name}’s sound", ["name": name])) { ui.open(.audio) },
             TileDef(id: "camera", label: tr("Webcam"), symbol: "video.fill", color: Page.camera.color, state: tr("This camera on {name}", ["name": name])) { ui.open(.camera) },
+            TileDef(id: "deck", label: tr("Open Deck"), symbol: "square.grid.2x2.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: core.deck.offered, state: tr("Full screen")) { ui.cover = .deck },
+            // Shared straight from here (their pages have the details).
+            TileDef(id: "camShare", label: tr("Share camera"), symbol: "video.fill", color: TDColor.good, on: core.camera.share,
+                    state: core.camera.share ? tr("On {name}", ["name": name]) : tr("Off")) { core.camera.setShare(!core.camera.share); core.changed() },
+            TileDef(id: "micShare", label: tr("Share mic"), symbol: "mic.fill", color: .orange, on: core.sync.get("mic", "out"),
+                    state: core.sync.get("mic", "out") ? tr("A microphone on {name}", ["name": name]) : tr("Off")) { core.sync.set("mic", "out", !core.sync.get("mic", "out")) },
             TileDef(id: "notifications", label: tr("Notifications"), symbol: "bell.badge.fill", color: Page.notifications.color, state: tr("Both ways")) { ui.open(.notifications) },
         ]
         // Deck tiles added to the quick actions (the Deck's tile editor): they run there as on the Deck page.

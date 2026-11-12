@@ -369,6 +369,7 @@ enum Orientation {
     private static var scene: UIWindowScene? { UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first }
 
     static func landscape() { request(.landscape) }
+    static func portrait() { request(.portrait) }
     static func free() { request(Device.isPad ? .all : .allButUpsideDown) }
     static func toggle() {
         let land = scene?.interfaceOrientation.isLandscape == true

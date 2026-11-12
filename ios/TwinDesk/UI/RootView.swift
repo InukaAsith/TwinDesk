@@ -115,8 +115,8 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
 // What's over the pages now (full screen).
 enum Cover: Identifiable, Equatable {
-    case viewer, remote(String), peerScreen
-    var id: String { switch self { case .viewer: return "viewer"; case .peerScreen: return "peerScreen"; case .remote(let m): return "remote." + m } }
+    case viewer, remote(String), peerScreen, deck
+    var id: String { switch self { case .viewer: return "viewer"; case .peerScreen: return "peerScreen"; case .deck: return "deck"; case .remote(let m): return "remote." + m } }
 }
 
 // iPhone's tabs: a page of its own, or More (the rest, as a list).
@@ -267,6 +267,7 @@ private struct Covers: ViewModifier {
         case .viewer: ViewerScreen()
         case .remote(let mode): RemoteScreen(mode: mode)
         case .peerScreen: PeerScreenView()
+        case .deck: DeckScreen()
         }
     }
 }

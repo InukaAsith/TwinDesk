@@ -72,71 +72,164 @@ private func stateText(_ a: JSON, _ s: JSON?) -> String {
     }
 }
 
+// The Deck page: Open Deck, its settings and the tiles to set up. The tiles themselves open full
+// screen (DeckScreen): Edit is here, not there.
 struct DeckView: View {
     @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
     @State private var spaceId = ""
     @State private var pageOf: [String: String] = [:]
-    @State private var editing = false
+
+    var body: some View {
+        let _ = core.tick
+        let d = core.deck
+        let spaces = d.spaces.filter { $0.str("kind") != "windows" }
+        let name = core.host?.name ?? ""
+        PageScroll(title: tr("Deck")) {
+            if !core.connected { NeedsComputer(what: tr("Deck")) }
+            else if d.layout == nil || d.spaces.isEmpty {
+                Text(tr("Waiting for {name}…", ["name": name])).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).glassCard()
+            } else {
+                Button { ui.cover = .deck } label: { Label(tr("Open Deck"), systemImage: "square.grid.2x2.fill").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6) }
+                    .primaryButton()
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(tr("Settings")).font(.headline)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(tr("Hold the phone"))
+                            Spacer()
+                            Picker(tr("Hold the phone"), selection: Binding(get: { d.portrait }, set: { p in d.edit { $0["orient"] = p ? "portrait" : "landscape" } })) {
+                                Text(tr("Landscape")).tag(false)
+                                Text(tr("Portrait")).tag(true)
+                            }.pickerStyle(.segmented).frame(maxWidth: 230)
+                        }
+                        Text(tr("The Deck opens full screen this way up. Also set on {name}’s Deck page.", ["name": name])).font(.caption).foregroundStyle(.secondary)
+                    }
+                    ToggleRow(title: tr("Swipe between pages"), detail: tr("Off: switch pages with the page bar, or a Go to page tile"),
+                              on: Binding(get: { d.swipePages }, set: { v in d.edit { l in var w = l.obj("swipe") ?? [:]; w["pages"] = v; l["swipe"] = w } }))
+                    ToggleRow(title: tr("Three-finger swipes"), detail: tr("Sideways for the next or previous page, up or down for the next or previous space"),
+                              on: Binding(get: { d.swipeSpaces }, set: { v in d.edit { l in var w = l.obj("swipe") ?? [:]; w["spaces"] = v; l["swipe"] = w } }))
+                    ToggleRow(title: tr("Open Deck on the Overview"), detail: tr("A shortcut among the Overview’s tiles"),
+                              on: Binding(get: { TileLayout.has(core.store, "deck") }, set: { TileLayout.set(core.store, "deck", $0); core.changed() }))
+                }.glassCard()
+                Text(tr("The Deck opens full screen and keeps the screen on. Swipe with three fingers to change page or space; tap × in its corner to close it."))
+                    .font(.footnote).foregroundStyle(.secondary)
+                if !spaces.isEmpty {
+                    let space = spaces.first { $0.str("id") == spaceId } ?? spaces[0]
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(tr("Tiles")).font(.headline)
+                        if spaces.count > 1 {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(spaces.indices, id: \.self) { i in
+                                        let s = spaces[i]
+                                        let on = s.str("id") == space.str("id")
+                                        Button { spaceId = s.str("id") } label: {
+                                            Text(s.str("name", max: 30)).font(.subheadline.weight(on ? .semibold : .regular))
+                                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                                .foregroundStyle(on ? Color.white : TDColor.text)
+                                                .background(on ? TDColor.accent : TDColor.control, in: Capsule())
+                                        }.buttonStyle(PressScale())
+                                    }
+                                }
+                            }
+                        }
+                        DeckTileSpace(space: space, pageId: Binding(get: { pageOf[space.str("id")] ?? "" }, set: { pageOf[space.str("id")] = $0 }), editing: true, full: false, toSpace: { _ in })
+                    }.glassCard()
+                }
+            }
+        }
+    }
+}
+
+// The Deck full screen: only the tiles, the whole screen, a faint × in the corner; held landscape
+// unless the computer's Deck says portrait (layout.orient), the screen kept on. Three fingers
+// sideways turn the page, up or down change the space; the name shows a moment.
+struct DeckScreen: View {
+    @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
+    @State private var spaceId = ""
+    @State private var pageOf: [String: String] = [:]
+    @State private var step = (n: 0, dir: 0)
+    @State private var flash: String?
 
     var body: some View {
         let _ = core.tick
         let d = core.deck
         let spaces = d.spaces
-        PageScroll(title: tr("Deck")) {
-            if !core.connected { NeedsComputer(what: tr("Deck")) }
-            else if d.layout == nil || spaces.isEmpty {
-                Text(tr("Waiting for {name}…", ["name": core.host?.name ?? ""])).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).glassCard()
+        ZStack(alignment: .topTrailing) {
+            TDColor.bg.ignoresSafeArea()
+            if d.layout == nil || spaces.isEmpty || !core.connected {
+                Text(tr("Waiting for {name}…", ["name": core.host?.name ?? ""])).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let space = spaces.first { $0.str("id") == spaceId } ?? spaces[0]
-                VStack(alignment: .leading, spacing: 14) {
-                    spaceBar(spaces, space)
-                    if space.str("kind") == "windows" { DeckWindowSpace(space: space) }
-                    else { DeckTileSpace(space: space, pageId: Binding(get: { pageOf[space.str("id")] ?? "" }, set: { pageOf[space.str("id")] = $0 }), editing: editing, toSpace: { go(to: $0) }) }
+                VStack(spacing: 4) {
+                    if space.str("kind") == "windows" { ScrollView { DeckWindowSpace(space: space).padding(.top, 30) } }
+                    else {
+                        DeckTileSpace(space: space, pageId: Binding(get: { pageOf[space.str("id")] ?? "" }, set: { pageOf[space.str("id")] = $0 }),
+                                      editing: false, full: true, step: step.n, stepDir: step.dir, onPage: { flash = $0 }, toSpace: { go(to: $0) })
+                    }
                     if let why = d.done?.why, !why.isEmpty, why != "busy" {
-                        Label(tr(why), systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.bad)
+                        Text(tr(why)).font(.caption).foregroundStyle(TDColor.bad).lineLimit(1)
                     }
                 }
-                .glassCard()
-                .background(ThreeFingerSwipe(enabled: d.swipeSpaces && !editing) { dir in step(dir) })
+                .padding(6)
+                .background(ThreeFingerSwipe(enabled: d.swipeSpaces) { dx, dy in swipe(dx, dy) })
             }
+            Button { ui.cover = nil } label: {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(TDColor.text)
+                    .frame(width: 30, height: 30).background(TDColor.control, in: Circle())
+            }
+            .opacity(0.55).padding(8)
+            .accessibilityLabel(tr("Close"))
+            if let f = flash {
+                Text(f).font(.headline).foregroundStyle(.white).padding(.horizontal, 18).padding(.vertical, 10)
+                    .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        .onAppear {
+            if core.deck.portrait { Orientation.portrait() } else { Orientation.landscape() }
+            UIApplication.shared.isIdleTimerDisabled = true
+            core.media.page(true) // what plays there, for a media widget
+        }
+        .onDisappear {
+            Orientation.free()
+            UIApplication.shared.isIdleTimerDisabled = false
+            core.media.page(false)
+        }
+        .onChange(of: core.deck.portrait) { p in if p { Orientation.portrait() } else { Orientation.landscape() } }
+        .onChange(of: flash) { f in
+            guard f != nil else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { if flash == f { withAnimation { flash = nil } } }
         }
         .task {
             while !Task.isCancelled {
                 if core.connected && core.deck.layout != nil { core.deck.askState() }
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
     }
 
-    private func go(to id: String) { if core.deck.spaces.contains(where: { $0.str("id") == id }) { withAnimation(.easeOut(duration: 0.2)) { spaceId = id } } }
-    private func step(_ dir: Int) {
-        let ss = core.deck.spaces
-        let i = ss.firstIndex { $0.str("id") == spaceId } ?? 0
-        let j = max(0, min(ss.count - 1, i + dir))
-        if j != i { UIImpactFeedbackGenerator(style: .light).impactOccurred(); go(to: ss[j].str("id")) }
+    private func go(to id: String) {
+        guard let s = core.deck.spaces.first(where: { $0.str("id") == id }) else { return }
+        withAnimation(.easeOut(duration: 0.2)) { spaceId = id }
+        flash = s.str("name", max: 30)
     }
-
-    private func spaceBar(_ spaces: [JSON], _ space: JSON) -> some View {
-        HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(spaces.indices, id: \.self) { i in
-                        let s = spaces[i]
-                        let on = s.str("id") == space.str("id")
-                        Button { go(to: s.str("id")) } label: {
-                            Label(s.str("name", max: 30), systemImage: s.str("kind") == "windows" ? "display" : "square.grid.2x2.fill")
-                                .font(.subheadline.weight(on ? .semibold : .regular))
-                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                .foregroundStyle(on ? Color.white : TDColor.text)
-                                .background(on ? TDColor.accent : TDColor.control, in: Capsule())
-                        }.buttonStyle(PressScale())
-                    }
-                }
-            }
-            if space.str("kind") != "windows" {
-                Button(editing ? tr("Done") : tr("Edit")) { withAnimation(.easeOut(duration: 0.18)) { editing.toggle() } }
-                    .font(.subheadline.weight(editing ? .semibold : .regular))
-            }
+    private func swipe(_ dx: Int, _ dy: Int) {
+        let ss = core.deck.spaces
+        let i = ss.firstIndex { $0.str("id") == (spaceId.isEmpty ? ss.first?.str("id") ?? "" : spaceId) } ?? 0
+        if dy != 0 {
+            let j = i + dy
+            guard j >= 0, j < ss.count else { return }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            go(to: ss[j].str("id"))
+        } else if ss.indices.contains(i), ss[i].str("kind") != "windows" {
+            step = (step.n + 1, dx)
         }
     }
 }
@@ -150,8 +243,13 @@ struct DeckTileSpace: View {
     let space: JSON
     @Binding var pageId: String
     let editing: Bool
+    var full = false // the full-screen Deck: no bars, the grid as big as the screen
+    var step = 0 // a three-finger page turn (DeckScreen): its count and direction
+    var stepDir = 0
+    var onPage: (String) -> Void = { _ in }
     let toSpace: (String) -> Void
     @State private var width: CGFloat = 320
+    @State private var height: CGFloat = 320
     @State private var sliding = false
     @State private var open: EditTarget?
     private let gap: CGFloat = 8
@@ -161,20 +259,23 @@ struct DeckTileSpace: View {
         let pages = (space["pages"] as? [JSON]) ?? []
         let idx = max(0, pages.firstIndex { $0.str("id") == pageId } ?? 0)
         VStack(alignment: .leading, spacing: 12) {
-            pageBar(pages, idx)
+            if !full { pageBar(pages, idx) }
             if pages.isEmpty { Text(tr("No pages")).foregroundStyle(.secondary) }
             else {
                 grid(pages[min(idx, pages.count - 1)], pages: pages, idx: idx)
                     .id(pages[min(idx, pages.count - 1)].str("id"))
                     .transition(.opacity)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(GeometryReader { g in Color.clear.onAppear { width = g.size.width }.onChange(of: g.size.width) { w in width = w } })
+                    .frame(maxWidth: .infinity, maxHeight: full ? .infinity : nil, alignment: .topLeading)
+                    .background(GeometryReader { g in
+                        Color.clear.onAppear { width = g.size.width; height = g.size.height }
+                            .onChange(of: g.size) { z in width = z.width; height = z.height }
+                    })
                     .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
                         defer { sliding = false }
                         guard d.swipePages, !editing, !sliding, abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.5 else { return }
                         turn(pages, idx + (v.translation.width < 0 ? 1 : -1))
                     })
-                if pages.count > 1 {
+                if pages.count > 1 && !full {
                     HStack(spacing: 6) {
                         ForEach(pages.indices, id: \.self) { i in Circle().fill(i == idx ? TDColor.text : TDColor.muted.opacity(0.4)).frame(width: 7, height: 7) }
                     }.frame(maxWidth: .infinity)
@@ -193,6 +294,14 @@ struct DeckTileSpace: View {
             }
         }
         .sheet(item: $open) { t in DeckTileEditor(tileId: t.id).environmentObject(core) }
+        .onChange(of: step) { _ in
+            let pages = (space["pages"] as? [JSON]) ?? []
+            let idx = max(0, pages.firstIndex { $0.str("id") == pageId } ?? 0)
+            let to = idx + stepDir
+            guard to >= 0, to < pages.count else { return }
+            turn(pages, to)
+            onPage(pages[to].str("name", max: 30))
+        }
     }
 
     private func turn(_ pages: [JSON], _ i: Int) {
@@ -232,26 +341,28 @@ struct DeckTileSpace: View {
     @ViewBuilder
     private func grid(_ p: JSON, pages: [JSON], idx: Int) -> some View {
         let cols = max(2, min(8, p.int("cols", 4))), rows = max(2, min(8, p.int("rows", 4)))
-        let w = min(width, 560)
-        let cell = max(20, (w - gap * CGFloat(cols - 1)) / CGFloat(cols))
+        let w = full ? width : min(width, 560)
+        let cw = max(20, (w - gap * CGFloat(cols - 1)) / CGFloat(cols))
+        // Full screen: cells as tall as the screen allows; on the Deck page, square.
+        let ch = full ? max(20, (height - gap * CGFloat(rows - 1)) / CGFloat(rows)) : cw
         let tiles = (p["tiles"] as? [JSON]) ?? []
         ZStack(alignment: .topLeading) {
-            Color.clear.frame(width: w, height: cell * CGFloat(rows) + gap * CGFloat(rows - 1))
+            Color.clear.frame(width: w, height: ch * CGFloat(rows) + gap * CGFloat(rows - 1))
             if editing {
                 let taken = Set(tiles.flatMap { t in (0..<t.int("w", 1)).flatMap { dx in (0..<t.int("h", 1)).map { dy in (t.int("y") + dy) * cols + t.int("x") + dx } } })
                 ForEach(0..<(rows * cols), id: \.self) { n in
                     if !taken.contains(n) {
                         Button { add(p, x: n % cols, y: n / cols) } label: {
                             Image(systemName: "plus").foregroundStyle(.secondary)
-                                .frame(width: cell, height: cell)
+                                .frame(width: cw, height: ch)
                                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(TDColor.line))
                         }
-                        .offset(x: (cell + gap) * CGFloat(n % cols), y: (cell + gap) * CGFloat(n / cols))
+                        .offset(x: (cw + gap) * CGFloat(n % cols), y: (ch + gap) * CGFloat(n / cols))
                     }
                 }
             }
             ForEach(tiles.indices, id: \.self) { i in
-                DeckTile(tile: tiles[i], cell: cell, gap: gap, editing: editing, sliding: $sliding) { tap(tiles[i], pages: pages, idx: idx) }
+                DeckTile(tile: tiles[i], cw: cw, ch: ch, gap: gap, editing: editing, sliding: $sliding) { tap(tiles[i], pages: pages, idx: idx) }
             }
         }
     }
@@ -284,6 +395,7 @@ struct DeckTileSpace: View {
                 if i >= 0, i < ss.count { toSpace(ss[i].str("id")) }
             }
         case "none": break
+        case "widget": if a.str("what") == "media" { core.media.ctl("toggle") }
         default: if d.runs(a) { d.run(t.str("id")) }
         }
     }
@@ -293,7 +405,8 @@ struct DeckTileSpace: View {
 struct DeckTile: View {
     @EnvironmentObject var core: Core
     let tile: JSON
-    let cell: CGFloat
+    let cw: CGFloat
+    let ch: CGFloat
     let gap: CGFloat
     let editing: Bool
     @Binding var sliding: Bool
@@ -313,8 +426,11 @@ struct DeckTile: View {
         let value = drag ?? level(a, d.state)
         let sub = slider ? (value.map(pct) ?? "") : stateText(a, d.state)
         let label = deckLabel(tile, d.platform)
-        let width = cell * CGFloat(w) + gap * CGFloat(w - 1), height = cell * CGFloat(h) + gap * CGFloat(h - 1)
-        content(w: w, h: h, fg: fg, label: label, sub: sub, slider: a.str("k") == "slider", value: value)
+        let width = cw * CGFloat(w) + gap * CGFloat(w - 1), height = ch * CGFloat(h) + gap * CGFloat(h - 1)
+        Group {
+            if a.str("k") == "widget" { DeckWidget(action: a, w: w, h: h, fg: fg) }
+            else { content(w: w, h: h, fg: fg, label: label, sub: sub, slider: a.str("k") == "slider", value: value) }
+        }
             .padding(w == 1 && h == 1 ? 6 : 12)
             .frame(width: width, height: height)
             .background(deckColor(hex), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -328,7 +444,7 @@ struct DeckTile: View {
                 d.set(id, v)
             }.onEnded { _ in drag = nil } : nil)
             .onTapGesture { if !slider { onTap() } }
-            .offset(x: (cell + gap) * CGFloat(tile.int("x")), y: (cell + gap) * CGFloat(tile.int("y")))
+            .offset(x: (cw + gap) * CGFloat(tile.int("x")), y: (ch + gap) * CGFloat(tile.int("y")))
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
     }
@@ -368,14 +484,84 @@ struct DeckTile: View {
     }
 }
 
-// Three fingers sideways anywhere: the next (left) or previous (right) space. A pan recognizer on
-// the window, as SwiftUI can't count fingers; it doesn't cancel the touches under it.
+// A widget's face: the time, what plays on the computer (with its buttons), or the computer's
+// processor, memory or heat (deck.state perf) as a number and a bar.
+struct DeckWidget: View {
+    @EnvironmentObject var core: Core
+    let action: JSON
+    let w: Int
+    let h: Int
+    let fg: Color
+
+    var body: some View {
+        let big = w > 1 || h > 1
+        switch action.str("what") {
+        case "clock":
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                VStack(spacing: 2) {
+                    Text(ctx.date, style: .time).font(.system(size: h > 1 && w > 1 ? 40 : big ? 28 : 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.5)
+                    Text(ctx.date.formatted(.dateTime.weekday(big ? .wide : .abbreviated).day().month(big ? .wide : .abbreviated))).font(.system(size: big ? 13 : 10)).opacity(0.75).lineLimit(1)
+                }.foregroundStyle(fg).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        case "media":
+            let n = core.media.now
+            let playing = n?.playing == true
+            if !big {
+                VStack(spacing: 4) {
+                    DeckGlyph(icon: playing ? "pause" : "play", size: 22)
+                    Text(n?.title ?? tr("Nothing playing")).font(.system(size: 10)).lineLimit(1)
+                }.foregroundStyle(fg).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(n?.title ?? tr("Nothing playing")).font(.system(size: 14, weight: .semibold)).lineLimit(h > 1 ? 2 : 1)
+                    let sub = [n?.artist ?? "", n?.app ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+                    if !sub.isEmpty { Text(sub).font(.system(size: 11.5)).opacity(0.72).lineLimit(1) }
+                    Spacer(minLength: 0)
+                    HStack {
+                        Spacer()
+                        Button { core.media.ctl("prev") } label: { DeckGlyph(icon: "prev", size: 18).frame(width: 36, height: 36) }
+                        Spacer()
+                        Button { core.media.ctl("toggle") } label: { DeckGlyph(icon: playing ? "pause" : "play", size: 24).frame(width: 40, height: 40) }
+                        Spacer()
+                        Button { core.media.ctl("next") } label: { DeckGlyph(icon: "next", size: 18).frame(width: 36, height: 36) }
+                        Spacer()
+                    }.buttonStyle(.plain)
+                }.foregroundStyle(fg).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            }
+        default:
+            let perf = core.deck.state?.obj("perf")
+            let what = action.str("what")
+            let num: Double? = (perf?[what] as? NSNumber)?.doubleValue
+            let frac: Double? = num.map { what == "temp" ? $0 / 100 : $0 }
+            let text = num.map { what == "temp" ? "\(Int($0.rounded()))°" : pct($0) } ?? "—"
+            let bar: Color = (frac ?? 0) > 0.9 ? Color(red: 1, green: 0.27, blue: 0.23) : (frac ?? 0) > 0.7 ? Color(red: 1, green: 0.62, blue: 0.04) : fg
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    DeckGlyph(icon: DeckCatalog.symbolOf(action), size: big ? 18 : 14)
+                    Text(what == "cpu" ? tr("CPU") : what == "ram" ? tr("Memory") : tr("Temperature")).font(.system(size: big ? 13 : 10)).opacity(0.8).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(text).font(.system(size: h > 1 ? 36 : big ? 26 : 20, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.5)
+                GeometryReader { g in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(fg.opacity(0.22))
+                        Capsule().fill(bar).frame(width: g.size.width * CGFloat(max(0, min(1, frac ?? 0))))
+                    }
+                }.frame(height: 5)
+            }.foregroundStyle(fg).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        }
+    }
+}
+
+// Three fingers anywhere: sideways the next (left) or previous (right) page, up or down the next
+// or previous space (onSwipe(dx, dy)). A pan recognizer on the window, as SwiftUI can't count
+// fingers; it doesn't cancel the touches under it.
 struct ThreeFingerSwipe: UIViewRepresentable {
     let enabled: Bool
-    let onSwipe: (Int) -> Void
+    let onSwipe: (Int, Int) -> Void
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var onSwipe: (Int) -> Void = { _ in }
+        var onSwipe: (Int, Int) -> Void = { _, _ in }
         var enabled = true
         weak var pan: UIPanGestureRecognizer?
         var fired = false
@@ -385,7 +571,9 @@ struct ThreeFingerSwipe: UIViewRepresentable {
             case .began: fired = false
             case .changed:
                 let t = g.translation(in: g.view)
-                if !fired, abs(t.x) > 80, abs(t.x) > abs(t.y) * 1.3 { fired = true; onSwipe(t.x < 0 ? 1 : -1) }
+                guard !fired, max(abs(t.x), abs(t.y)) > 80 else { return }
+                fired = true
+                if abs(t.x) >= abs(t.y) { onSwipe(t.x < 0 ? 1 : -1, 0) } else { onSwipe(0, t.y < 0 ? 1 : -1) }
             default: break
             }
         }
@@ -444,6 +632,7 @@ struct DeckWindowSpace: View {
     @State private var wid: Int64?
     @State private var display: String?
     @State private var layoutIdx = 0
+    @State private var armed: (key: String, n: Int, zone: JSON)? // a zone tapped first, waiting for an app
 
     var body: some View {
         let d = core.deck
@@ -461,29 +650,41 @@ struct DeckWindowSpace: View {
         }
     }
 
+    // The app chosen (none at first, and none again once it's placed) and a zone tapped before an
+    // app: either order works. With two zones: place one app, tap the other zone, pick the next app.
     @ViewBuilder
     private func content(_ w: JSON) -> some View {
         let apps = (w["apps"] as? [JSON]) ?? []
         let displays = (w["displays"] as? [JSON]) ?? []
         let front = w.int64("front")
         let app = apps.first { $0.str("key") == appKey }
-            ?? apps.first { (($0["windows"] as? [JSON]) ?? []).contains { $0.int64("wid") == front } } ?? apps.first
+        let windows = (app?["windows"] as? [JSON]) ?? []
+        let win = windows.first { $0.int64("wid") == wid } ?? windows.first { $0.int64("wid") == front } ?? windows.first
+        let to = display ?? win?.str("display") ?? displays.first { $0.bool("main") }?.str("id") ?? displays.first?.str("id") ?? ""
         if !w.str("why").isEmpty { Label(tr(w.str("why", max: 300)), systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(TDColor.bad) }
-        if let app = app {
-            let windows = (app["windows"] as? [JSON]) ?? []
-            let win = windows.first { $0.int64("wid") == wid } ?? windows.first { $0.int64("wid") == front } ?? windows.first
-            Text(tr("App")).font(.caption).foregroundStyle(.secondary)
+        if apps.isEmpty { Text(tr("No windows open")).foregroundStyle(.secondary) }
+        else {
+            Text(armed.map { tr("Now choose the app for zone {n}", ["n": $0.n]) } ?? tr("App"))
+                .font(.caption.weight(armed == nil ? .regular : .semibold)).foregroundStyle(armed == nil ? Color.secondary : TDColor.accent)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(apps.indices, id: \.self) { i in
                         let a = apps[i]
-                        let on = a.str("key") == app.str("key")
-                        Button { appKey = a.str("key"); wid = nil; display = nil } label: {
+                        let on = a.str("key") == app?.str("key")
+                        let aw = (a["windows"] as? [JSON]) ?? []
+                        let inFront = aw.contains { $0.int64("wid") == front }
+                        Button {
+                            if let z = armed, let target = aw.first(where: { $0.int64("wid") == front }) ?? aw.first { put(target, z.zone, to) }
+                            else if on { appKey = nil; wid = nil } else { appKey = a.str("key"); wid = nil }
+                        } label: {
                             VStack(spacing: 4) {
-                                if let img = appIcon(a.str("icon", max: 400_000)) { Image(uiImage: img).resizable().frame(width: 40, height: 40) }
-                                else {
-                                    Text(String(a.str("name").prefix(1)).uppercased()).font(.headline)
-                                        .frame(width: 40, height: 40).background(TDColor.control, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                ZStack(alignment: .topTrailing) {
+                                    if let img = appIcon(a.str("icon", max: 400_000)) { Image(uiImage: img).resizable().frame(width: 40, height: 40) }
+                                    else {
+                                        Text(String(a.str("name").prefix(1)).uppercased()).font(.headline)
+                                            .frame(width: 40, height: 40).background(TDColor.control, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    }
+                                    if inFront { Circle().fill(TDColor.accent).frame(width: 8, height: 8) }
                                 }
                                 Text(a.str("name", max: 40)).font(.caption2).lineLimit(1).foregroundStyle(TDColor.text)
                             }
@@ -493,13 +694,13 @@ struct DeckWindowSpace: View {
                     }
                 }
             }
-            if windows.count > 1 {
+            if app != nil && windows.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(windows.indices, id: \.self) { i in
                             let x = windows[i]
                             let on = x.int64("wid") == win?.int64("wid")
-                            Button { wid = x.int64("wid"); display = nil } label: {
+                            Button { wid = x.int64("wid") } label: {
                                 Text(x.str("title", max: 50).isEmpty ? tr("Window") : x.str("title", max: 50)).font(.footnote).lineLimit(1)
                                     .padding(.horizontal, 12).padding(.vertical, 6)
                                     .foregroundStyle(on ? Color.white : TDColor.text)
@@ -509,49 +710,53 @@ struct DeckWindowSpace: View {
                     }
                 }
             }
-            if let win = win { placing(win, displays) }
-        } else {
-            Text(tr("No windows open")).foregroundStyle(.secondary)
+            placing(app, win, displays, to)
         }
     }
 
+    private func put(_ win: JSON, _ zone: JSON?, _ to: String) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        core.deck.place(win.int64("wid"), display: to, zone: zone)
+        appKey = nil; wid = nil; armed = nil
+    }
+
     @ViewBuilder
-    private func placing(_ win: JSON, _ displays: [JSON]) -> some View {
-        let d = core.deck
+    private func placing(_ app: JSON?, _ win: JSON?, _ displays: [JSON], _ to: String) -> some View {
         let layouts = (space["layouts"] as? [JSON]) ?? []
-        let to = display ?? win.str("display")
-        if !layouts.isEmpty {
-            let i = min(layoutIdx, layouts.count - 1)
-            Text(layouts[i].str("name", max: 30)).font(.caption).foregroundStyle(.secondary)
-            TabView(selection: $layoutIdx) {
-                ForEach(layouts.indices, id: \.self) { n in
-                    let zones = (layouts[n]["zones"] as? [JSON]) ?? []
-                    GeometryReader { g in
-                        let u = g.size.width / 12, v = g.size.height / 12
-                        ZStack(alignment: .topLeading) {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(red: 0.11, green: 0.16, blue: 0.27))
-                            ForEach(zones.indices, id: \.self) { z in
-                                let zone = zones[z]
-                                Button {
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                    d.place(win.int64("wid"), display: to, zone: zone)
-                                } label: {
-                                    Text("\(z + 1)").font(.headline).foregroundStyle(.white)
-                                        .frame(width: max(1, u * CGFloat(zone.int("w", 1)) - 6), height: max(1, v * CGFloat(zone.int("h", 1)) - 6))
-                                        .background(Color(red: 0.04, green: 0.52, blue: 1).opacity(0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color(red: 0.39, green: 0.82, blue: 1), lineWidth: 1.5))
-                                }
-                                .buttonStyle(PressScale())
-                                .offset(x: u * CGFloat(zone.int("x")) + 3, y: v * CGFloat(zone.int("y")) + 3)
+        Text(layoutIdx == 0 ? tr("Drag to an edge") : layouts[min(layoutIdx - 1, max(0, layouts.count - 1))].str("name", max: 30)).font(.caption).foregroundStyle(.secondary)
+        TabView(selection: $layoutIdx) {
+            DeckSnapPad(app: app, onDrop: { z in if let w = win { put(w, z, to) } }).padding(.horizontal, 2).tag(0)
+            ForEach(layouts.indices, id: \.self) { n in
+                let zones = (layouts[n]["zones"] as? [JSON]) ?? []
+                GeometryReader { g in
+                    let u = g.size.width / 12, v = g.size.height / 12
+                    ZStack(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(red: 0.11, green: 0.16, blue: 0.27))
+                        ForEach(zones.indices, id: \.self) { z in
+                            let zone = zones[z]
+                            let lit = armed?.key == "\(n).\(z)"
+                            Button {
+                                if let w = win { put(w, zone, to) }
+                                else { armed = lit ? nil : (key: "\(n).\(z)", n: z + 1, zone: zone) }
+                            } label: {
+                                Text("\(z + 1)").font(.headline).foregroundStyle(.white)
+                                    .frame(width: max(1, u * CGFloat(zone.int("w", 1)) - 6), height: max(1, v * CGFloat(zone.int("h", 1)) - 6))
+                                    .background(Color(red: 0.04, green: 0.52, blue: 1).opacity(lit ? 0.75 : 0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(lit ? Color.white : Color(red: 0.39, green: 0.82, blue: 1), lineWidth: lit ? 2.5 : 1.5))
                             }
+                            .buttonStyle(PressScale())
+                            .offset(x: u * CGFloat(zone.int("x")) + 3, y: v * CGFloat(zone.int("y")) + 3)
                         }
                     }
-                    .padding(.horizontal, 2)
-                    .tag(n)
                 }
+                .padding(.horizontal, 2)
+                .tag(n + 1)
             }
-            .tabViewStyle(.page(indexDisplayMode: layouts.count > 1 ? .always : .never))
-            .aspectRatio(16 / 10, contentMode: .fit)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .always))
+        .aspectRatio(16 / 10, contentMode: .fit)
+        if app == nil && armed == nil {
+            Text(tr("Choose an app, then a zone, or tap a zone first and then the app.")).font(.caption).foregroundStyle(.secondary)
         }
         if displays.count > 1 {
             Text(tr("Display")).font(.caption).foregroundStyle(.secondary)
@@ -572,8 +777,69 @@ struct DeckWindowSpace: View {
                     }
                 }
             }
-            if to != win.str("display") {
-                Button(tr("Move the window to this display")) { d.place(win.int64("wid"), display: to, zone: nil) }.secondaryButton()
+            if let win = win, to != win.str("display") {
+                Button(tr("Move the window to this display")) { put(win, nil, to) }.secondaryButton()
+            }
+        }
+    }
+}
+
+// Where a drop at (fx, fy) of the display snaps a window on the 12 × 12 zone grid: a corner a
+// quarter, the left or right edge a half, the top the whole display, the bottom its lower half.
+func deckSnapZone(_ fx: CGFloat, _ fy: CGFloat) -> JSON? {
+    let e: CGFloat = 0.18
+    let z = { (x: Int, y: Int, w: Int, h: Int) -> JSON in ["x": x, "y": y, "w": w, "h": h] }
+    let l = fx < e, r = fx > 1 - e, t = fy < e, b = fy > 1 - e
+    if l && t { return z(0, 0, 6, 6) }
+    if r && t { return z(6, 0, 6, 6) }
+    if l && b { return z(0, 6, 6, 6) }
+    if r && b { return z(6, 6, 6, 6) }
+    if l { return z(0, 0, 6, 12) }
+    if r { return z(6, 0, 6, 12) }
+    if t { return z(0, 0, 12, 12) }
+    if b { return z(0, 6, 12, 6) }
+    return nil
+}
+
+// The display with the chosen app in the middle, to drag to an edge or a corner; where it would go
+// shows as it moves.
+struct DeckSnapPad: View {
+    let app: JSON?
+    let onDrop: (JSON) -> Void
+    @State private var at: CGPoint?
+
+    var body: some View {
+        GeometryReader { g in
+            let u = g.size.width / 12, v = g.size.height / 12
+            let zone = at.flatMap { deckSnapZone($0.x / max(1, g.size.width), $0.y / max(1, g.size.height)) }
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(red: 0.11, green: 0.16, blue: 0.27))
+                if let z = zone {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(red: 0.04, green: 0.52, blue: 1).opacity(0.45))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color(red: 0.39, green: 0.82, blue: 1), lineWidth: 2))
+                        .frame(width: u * CGFloat(z.int("w")) - 8, height: v * CGFloat(z.int("h")) - 8)
+                        .offset(x: u * CGFloat(z.int("x")) + 4, y: v * CGFloat(z.int("y")) + 4)
+                }
+                if let app = app {
+                    Group {
+                        if let img = appIcon(app.str("icon", max: 400_000)) { Image(uiImage: img).resizable() }
+                        else { Text(String(app.str("name").prefix(1)).uppercased()).font(.title2.weight(.semibold)).frame(width: 52, height: 52).background(TDColor.control, in: RoundedRectangle(cornerRadius: 12, style: .continuous)) }
+                    }
+                    .frame(width: 52, height: 52)
+                    .position(at ?? CGPoint(x: g.size.width / 2, y: g.size.height / 2))
+                    .gesture(DragGesture(coordinateSpace: .local).onChanged { d in at = d.location }.onEnded { d in
+                        let z = deckSnapZone(d.location.x / max(1, g.size.width), d.location.y / max(1, g.size.height))
+                        at = nil
+                        if let z = z { onDrop(z) }
+                    })
+                    if at == nil {
+                        Text(tr("Drag {name} to an edge or a corner", ["name": app.str("name", max: 40)])).font(.caption).foregroundStyle(.white.opacity(0.75))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom).padding(10)
+                    }
+                } else {
+                    Text(tr("Choose an app, then drag it to an edge or a corner.")).font(.footnote).foregroundStyle(.white.opacity(0.75)).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(16)
+                }
             }
         }
     }
