@@ -270,6 +270,7 @@ function pushState() {
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
+    state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.chats = svc && svc.chats ? svc.chats.view() : null; // Messages' WhatsApp, Instagram… conversations
     if (svc) {
       const { secret, ...smb } = settings.smb; // never send the share password to the window

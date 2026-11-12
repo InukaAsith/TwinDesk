@@ -29,7 +29,7 @@ function load(file, language = I18n) {
     switch() { return node('switch'); }, select() { return node('select'); }, segmented() { const n = node('segment'); n.el = n; return n; },
     card(title, children) { return node('card', { title }, children); }, pair: (...children) => node('pair', {}, children), dir: (id, children) => node('dir', {}, children),
     slider: () => node('slider'), phoneAudioCard: () => ({ el: node('div'), update() {} }),
-    nowPlaying: () => ({ el: node('div'), update() {} }), adbBle: () => false, appIcon: () => node('img'),
+    historyCard: () => ({ el: node('div'), update() {} }), nowPlaying: () => ({ el: node('div'), update() {} }), adbBle: () => false, appIcon: () => node('img'),
     paceRow: () => ({ render() {} }), codecImpl: (name, hw) => I18n.t(hw ? 'Hardware' : 'Software') + ` (${name})`,
     peer: (s) => ({ name: s.client.name }), icon: () => node('icon'), fill: (s) => s, ago: () => '刚刚', bytes: (v) => String(v),
   };

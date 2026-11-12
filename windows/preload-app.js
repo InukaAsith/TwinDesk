@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setClipboard: call('setClipboard'),
   copyHistory: call('copyHistory'),
   clearHistory: call('clearHistory'),
+  history: call('history'),
   setTab: call('setTab'),
   setMulti: call('setMulti'),
   setModules: call('setModules'), // General › Modules

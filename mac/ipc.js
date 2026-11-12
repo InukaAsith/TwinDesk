@@ -601,6 +601,10 @@ function setupIpc(ctx) {
     clearHistory() {
       ctx.clipboard.clearHistory();
     },
+    // Keep history: {do: 'set', save, days} | {do: 'unlock', what} | {do: 'clear'} (shared/histkeeper.js).
+    history(r) {
+      if (ctx.history && r && typeof r === 'object') ctx.history.act(r);
+    },
     // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
     hub(r) {
       ctx.hub().act(r);

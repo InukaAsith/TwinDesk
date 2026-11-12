@@ -74,6 +74,7 @@ const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneViews } = require('./phoneview');
 const setupIpc = require('./ipc');
+const { HistoryKeeper } = require('../shared/histkeeper.js');
 const system = require('./system');
 const { LiveProgress } = require('./liveprogress');
 const { BleHost, BleGuest, BlePhones } = require('../shared/blepipe.js');
@@ -127,6 +128,7 @@ let settings = null;
 let device = null;
 let screen = null;
 let clip = null;
+let historyKeeper = null; // Clipboard and Notifications › History: kept encrypted when asked (shared/histkeeper.js)
 let camShare = null; // Camera tab: the cameras of the two computers (shared/camshare.js)
 let phoneRemote = null; // the phone's Remote page: touchpad, keyboard and gamepad here (shared/phone-remote.js)
 let vcam = null; // Camera: the running camera's picture, to the tab and the virtual camera (shared/vcam.js, vcam.js)
@@ -377,6 +379,7 @@ function start() {
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
   sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });
   notifs = new Notifs({ link, helper, settings, save: saveSettings, peerName, onChange: pushState });
+  historyKeeper = new HistoryKeeper({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] });
   const sender = new Sender(link);
   sender.on('stats', (_, s) => { screenStats = { codec: s.codec, encoder: s.encoder, at: Date.now() }; }); // Engines in use
@@ -416,7 +419,7 @@ function start() {
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
   web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     iosSign: () => iosSign, devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -1270,6 +1273,7 @@ function buildState() {
     pcApps: pcApps.view(),
     macApps: settings.macApps,
     notifs: { ...settings.notifs, ...notifs.view() },
+    history: historyKeeper ? historyKeeper.view() : null,
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
     startup: autostart.get(),
     setup: { missing: miss, show: setupShows(miss) },
