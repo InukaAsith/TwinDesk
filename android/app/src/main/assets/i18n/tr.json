@@ -985,6 +985,7 @@
   "Uses wireless debugging. The Accessibility service requires the full version of TwinDesk": "Kablosuz hata ayıklama kullanır. Erişilebilirlik hizmeti TwinDesk’in tam sürümünü gerektirir",
   "Uses your keyboard's own voice typing: Gboard's microphone, or Dictation on iPhone. Each word appears on the computer as it shows here; fixes are typed there too. Clear starts a new box without deleting anything on the computer.": "Klavyenizin kendi sesle yazma özelliğini kullanır: Gboard mikrofonu ya da iPhone’da Dikte. Her kelime burada göründüğü gibi bilgisayarda da görünür; düzeltmeler de orada yazılır. Temizle, bilgisayarda hiçbir şeyi silmeden yeni bir kutu başlatır.",
   "Version {current}": "Sürüm {current}",
+  "Version {current}. F-Droid installs new versions.": "Sürüm {current}. Yeni sürümleri F-Droid yükler.",
   "Version {current}. No releases are available yet.": "Sürüm {current}. Henüz yayımlanmış sürüm yok.",
   "Version {version}": "Sürüm {version}",
   "View": "Görüntüle",

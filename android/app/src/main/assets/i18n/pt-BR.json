@@ -985,6 +985,7 @@
   "Uses wireless debugging. The Accessibility service requires the full version of TwinDesk": "Usa a depuração por Wi-Fi. O serviço de acessibilidade requer a versão completa do TwinDesk",
   "Uses your keyboard's own voice typing: Gboard's microphone, or Dictation on iPhone. Each word appears on the computer as it shows here; fixes are typed there too. Clear starts a new box without deleting anything on the computer.": "Usa a digitação por voz do próprio teclado: o microfone do Gboard ou o Ditado no iPhone. Cada palavra aparece no computador assim como aparece aqui; as correções também são digitadas lá. Limpar começa uma nova caixa sem apagar nada no computador.",
   "Version {current}": "Versão {current}",
+  "Version {current}. F-Droid installs new versions.": "Versão {current}. O F-Droid instala as novas versões.",
   "Version {current}. No releases are available yet.": "Versão {current}. Ainda não há versões disponíveis.",
   "Version {version}": "Versão {version}",
   "View": "Ver",

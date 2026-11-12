@@ -985,6 +985,7 @@
   "Uses wireless debugging. The Accessibility service requires the full version of TwinDesk": "使用无线调试。无障碍服务需要完整版 TwinDesk",
   "Uses your keyboard's own voice typing: Gboard's microphone, or Dictation on iPhone. Each word appears on the computer as it shows here; fixes are typed there too. Clear starts a new box without deleting anything on the computer.": "使用键盘自带的语音输入：Gboard 的麦克风，或 iPhone 上的听写。每个词在这里出现时也会出现在电脑上；修正也会同步输入。“清除”会开始一个新输入框，但不会删除电脑上的任何内容。",
   "Version {current}": "版本 {current}",
+  "Version {current}. F-Droid installs new versions.": "版本 {current}。新版本由 F-Droid 安装。",
   "Version {current}. No releases are available yet.": "版本 {current}。暂无可用发布。",
   "Version {version}": "版本 {version}",
   "View": "查看",
