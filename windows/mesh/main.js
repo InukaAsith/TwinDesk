@@ -60,6 +60,7 @@ const { Wired } = require('./wired');
 const { Phone } = require('./phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneSet } = require('./phones');
+const { Explorer } = require('../explorer');
 const { Adb } = require('../adb');
 const { PhoneViews } = require('../phoneview');
 const { PhoneDrive } = require('../phonedrive');
@@ -80,13 +81,39 @@ if (!app.requestSingleInstanceLock()) {
   Menu.setApplicationMenu(null); // its accelerators would steal keys meant for the Mac
   app.setAppUserModelId(AUMID); // toasts need it; the installer's shortcut carries the same id
   // A pinned Mac app starts "TwinDesk.exe --mac-app=<id>": open it, else show the window.
+  // twindesk: links (a toast's Copy, Explorer's TwinDesk menu) come to this copy of TwinDesk.
+  if (app.isPackaged) app.setAsDefaultProtocolClient('twindesk');
+  else app.setAsDefaultProtocolClient('twindesk', process.execPath, [path.resolve(process.argv[1] || '.')]);
   app.on('second-instance', (_e, argv) => {
+    if (openLink(argv)) return;
     if (sendTo && sendTo.handle(argv)) return; // Explorer › Send to
     if (!openMacAppArg(argv) && !openPhoneAppArg(argv)) showMain();
   });
   app.whenReady().then(start);
 }
 
+// twindesk:copy?code=… (a one-time code's Copy on a toast), twindesk:open?app=…&from=… (the toast
+// itself: the app on the phone it came from), twindesk:go?tab=… (a page). True: it was one of them.
+function openLink(argv) {
+  if (explorer && explorer.handle(argv)) return true; // Explorer's TwinDesk › Import / Capture from phone
+  const a = (argv || []).find((x) => /^twindesk:/i.test(String(x)));
+  if (!a) return false;
+  let u;
+  try { u = new URL(a); } catch (_) { return true; }
+  const q = u.searchParams;
+  const what = u.pathname.replace(/^\/+/, '');
+  if (what === 'copy' && /^\d{3,10}$/.test(q.get('code') || '')) {
+    require('electron').clipboard.writeText(q.get('code'));
+    if (hud) hud.show('clip', { key: 'Code copied' });
+  } else if (what === 'open' && notifs && notifs.onClick && q.get('app')) {
+    notifs.onClick({ app: q.get('app').slice(0, 200), appName: (q.get('name') || '').slice(0, 100), originId: (q.get('from') || '').slice(0, 200) || undefined });
+  } else if (what === 'go' && q.get('tab')) {
+    goTab(q.get('tab').slice(0, 30));
+  }
+  return true;
+}
+
+let explorer = null; // Explorer's right-click › TwinDesk (../explorer.js), for the active phone
 let mainWin = null;
 let tray = null;
 let trayKey = '';
@@ -369,7 +396,7 @@ function start() {
   web = require('../web').setupWeb({ settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip,
     kvm: () => kvm, devctl: () => devctl });
   const ipc = setupIpc({ clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
-    devctl: () => devctl, chats: () => chats, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
+    devctl: () => devctl, chats: () => chats, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get phoneDrive() { return phoneDrive; }, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
@@ -384,7 +411,7 @@ function start() {
   });
   createTray();
   createMainWindow();
-  if (!sendTo.handle(process.argv) && !openMacAppArg(process.argv)) openPhoneAppArg(process.argv);
+  if (!openLink(process.argv) && !sendTo.handle(process.argv) && !openMacAppArg(process.argv)) openPhoneAppArg(process.argv);
   setTimeout(checkFirewall, 3000);
   if (process.argv.includes('--test-monitor')) screen.open(true); // dev: ?test=1 pattern
 }
@@ -496,6 +523,13 @@ function startPhone(server, pairing) {
     const u = phone.unit(m.originId);
     if (u && u.link.current) u.views.openNotified(m.app, m.appName);
   };
+  // Explorer's right-click › TwinDesk: Send to phone, Import / Capture from phone (the active phone).
+  explorer = new Explorer({
+    phoneOn: () => { const c = phone.active.link.current; return !!(c && c.os === P.OS.ANDROID); },
+    send: (m) => phone.active.link.sendToClient(m), on: (t, fn) => pl.on('t:' + t, fn),
+    goTab, popup: (kind, text, sub) => hud && hud.show(kind, text, sub), onChange: pushState,
+  });
+  explorer.install();
   kvm.local = phone; // driving a phone goes through adb, by the partner: phone.drives(id) / handle(msg, id)
   kvm.blockEdge = () => phone.focused; // moving inside the phone window never crosses
   pushState();
@@ -925,7 +959,7 @@ function buildState() {
     pcApps: pcApps.view(),
     macApps: settings.macApps,
     terminal: { ...settings.terminal, ...terminal.view(), installedKey: undefined, server: sshd.view() },
-    files: { ...settings.files, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
+    files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
     notifs: { ...settings.notifs, ...notifs.view() },
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
     apps: link.peerOs !== P.OS.MAC ? peerApps.view() : apps.view(), // A PC's (or Linux computer's) apps come through peerapps.js

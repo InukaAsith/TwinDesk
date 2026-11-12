@@ -12,6 +12,8 @@ const P = require('../../shared/protocol.js');
 const { Pool } = require('../../shared/mesh.js');
 const { NotifGuard, isOwn } = require('../../shared/notif-guard.js');
 const { IconsOut, IconsIn } = require('../../shared/notificon.js');
+const { withMeshPhoneActions } = require('../../shared/notifacts.js');
+const { otpOf } = require('../../shared/otp.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -64,6 +66,7 @@ class Notifs extends EventEmitter {
 
     const bus = this.bus;
     bus.on(T.NOTIF, (m, from) => this._show(m, from));
+    bus.on('notif.gone', (m, from) => { const h = (this.history || []).find((x) => x.id === m.id); if (h && h.from === from) this.gone(m.id); }); // gone from the phone (shared/notifacts.js)
     bus.on(T.NOTIF_POLICY, (m, from) => {
       const e = this.mesh.get(from);
       if (e) e.notifPool = m.accept === true;
@@ -199,14 +202,24 @@ class Notifs extends EventEmitter {
     if (this.guard.repeat('in', m.app, m.title, m.body)) return; // a repeat of what was just shown
     const origin = this._nameOf(r.msg.o, m.on, from);
     const appName = str(m.appName, 100);
-    const title = str(m.title, 200) || appName || origin;
+    // The recent ones, for Overview and Messages' chat apps; buttons and Reply go back to the device.
+    const item = this.remember(m, { from, origin: r.msg.o || from, on: origin, direct: !r.msg.o || r.msg.o === from });
+    const title = item.title;
     const body = str(m.body);
     this.echoes.push({ title, body: body.slice(0, 80), until: Date.now() + 30000 });
+    // A one-time code: a Copy button on the notification; then the phone's own buttons (Mark as read…).
+    const code = otpOf([title, body].join(' '));
     const n = new this.Notification({
       title,
       icon: this.iconsIn.for(m),
       subtitle: [appName, origin].filter(Boolean).join(' · '),
       body: [str(m.subtitle, 200), body].filter(Boolean).join('\n'),
+      actions: [...(code ? ['Copy ' + code] : []), ...item.actions].map((text) => ({ type: 'button', text })),
+    });
+    n.tdId = item.id;
+    if (n.on) n.on('action', (_e, i) => {
+      if (code && i === 0) return require('electron').clipboard.writeText(code);
+      this.act(item.id, i - (code ? 1 : 0));
     });
     this.live.add(n);
     const drop = () => this.live.delete(n);
@@ -226,8 +239,13 @@ class Notifs extends EventEmitter {
       sent: this.sent,
       shown: this.shown,
       apps: [...this.apps.values()].sort((a, b) => b.at - a.at).slice(0, 40),
+      ...this.historyView(),
     };
   }
+
+  changed() { this.emit('change'); }
 }
+
+withMeshPhoneActions(Notifs);
 
 module.exports = { Notifs };

@@ -42,7 +42,7 @@ const SCHEMA = {
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac) },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
   mesh: { autoJoin: bool },
-  updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
+  updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
@@ -533,6 +533,7 @@ function setupIpc(ctx) {
     },
     setUpdates(partial) {
       setGroup('updates', partial);
+      if (partial && typeof partial.install === 'boolean') ctx.updates.setInstall(partial.install);
       ctx.updates.start();
     },
     skipUpdate(version) {
@@ -592,7 +593,10 @@ function setupIpc(ctx) {
     // A phone chat's notification answered here (its own Reply).
     notifReply(r) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
-      if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
+      if (!r || typeof r !== 'object' || !ctx.notifs) return;
+      if (r.dismiss) return void ctx.notifs.dismiss(String(r.id || '')); // Overview's × (shared/notifacts.js)
+      if (Number.isInteger(r.act)) return void ctx.notifs.act(String(r.id || ''), r.act); // one of its buttons
+      ctx.notifs.reply(String(r.id || ''), r.text);
     },
     // General › Appearance: { style }, { theme } and/or { accent } ('' follows the system); local only.
     setLook(o) {

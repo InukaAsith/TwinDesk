@@ -62,7 +62,9 @@ function setupIpc(ctx) {
   handle('refreshFound', () => discovery.refresh());
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image)) : ctx.notifs && ctx.notifs.reply && ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
+    : !ctx.notifs ? false : r.dismiss ? ctx.notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? ctx.notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
+      : ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
@@ -126,7 +128,14 @@ function setupIpc(ctx) {
   });
   handle('setKeys', (partial) => change('keys', partial, () => kvm.applyConfig())); // the hotkey lives in the helper
   handle('setApp', (partial) => change('app', partial, () => ctx.onApp && ctx.onApp()));
-  handle('setUpdates', (partial) => change('updates', { auto: !!(partial && partial.auto), skipped: typeof (partial && partial.skipped) === 'string' ? partial.skipped : (settings.updates && settings.updates.skipped) || '' }, () => ctx.updates.start()));
+  handle('setUpdates', (partial) => {
+    const p = partial || {};
+    const next = {};
+    if (typeof p.auto === 'boolean') next.auto = p.auto;
+    if (typeof p.skipped === 'string') next.skipped = p.skipped;
+    if (typeof p.install === 'boolean') next.install = p.install;
+    change('updates', next, () => { if ('install' in next) ctx.updates.setInstall(next.install); ctx.updates.start(); });
+  });
   handle('skipUpdate', (version) => ctx.updates && ctx.updates.skip && ctx.updates.skip(version));
   handle('unskipUpdate', () => ctx.updates && ctx.updates.unskip && ctx.updates.unskip());
   handle('checkUpdates', () => ctx.updates.check(true));
