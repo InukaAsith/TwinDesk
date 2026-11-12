@@ -84,7 +84,14 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
         @JavascriptInterface fun pad(b: Int, lx: Double, ly: Double, rx: Double, ry: Double, lt: Double, rt: Double) {
             if (core.btPadMade) core.btPad.pad(b, lx, ly, rx, ry, lt, rt)
         }
+        // The phone's turning (remote.html's air mouse and presentation pointer): window.tdMotion while on.
+        @JavascriptInterface fun motion(on: Boolean) = main.post {
+            if (on && motion == null) motion = Motion(view.context) { s -> if (ready) view.evaluateJavascript("window.tdMotion&&tdMotion($s)", null) }.also { it.start() }
+            else if (!on) { motion?.stop(); motion = null }
+        }.let { }
     }
+
+    private var motion: Motion? = null
 
     // A message to the page (any thread).
     fun post(m: JSONObject) = main.post { if (ready) deliver(m) else queue.add(m) }
@@ -103,6 +110,8 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
     }
 
     fun destroy() = main.post {
+        motion?.stop()
+        motion = null
         ready = false
         view.removeJavascriptInterface("TD")
         view.loadUrl("about:blank")
@@ -340,4 +349,53 @@ class WifiFast(ctx: Context) {
         for (l in locks) runCatching { if (on) l.acquire() else l.release() }
         Log.i("TwinDesk", "wifi low latency ${if (on) "on" else "off"}")
     }
+}
+
+// The phone's turning, for remote.html (tdMotion): the gyroscope's radians about the phone's x, y and z
+// added up between calls (about every 12 ms), and which way is up (gravity, a unit vector), all in
+// the phone's frame. "null" when there's no gyroscope.
+class Motion(ctx: Context, private val out: (String) -> Unit) : android.hardware.SensorEventListener {
+    private val sm = ctx.getSystemService(android.hardware.SensorManager::class.java)
+    private val gyro = sm?.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)
+    private val grav = sm?.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY)
+    private val accel = if (grav == null) sm?.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) else null
+    private val main = Handler(Looper.getMainLooper())
+    private var last = 0L
+    private var lastOut = 0L
+    private val a = DoubleArray(3)
+    private val up = doubleArrayOf(0.0, 0.0, 1.0)
+
+    fun start() {
+        if (sm == null || gyro == null) return out("null")
+        sm.registerListener(this, gyro, 5_000, main) // as fast as it gives, up to 200 a second
+        (grav ?: accel)?.let { sm.registerListener(this, it, android.hardware.SensorManager.SENSOR_DELAY_GAME, main) }
+    }
+
+    fun stop() { sm?.unregisterListener(this) }
+
+    override fun onSensorChanged(e: android.hardware.SensorEvent) {
+        val v = e.values
+        if (e.sensor.type != android.hardware.Sensor.TYPE_GYROSCOPE) {
+            val n = Math.sqrt((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).toDouble())
+            if (n < 1) return
+            val k = if (accel != null) 0.15 else 1.0 // the accelerometer alone: smoothed, so a shake doesn't tip "up"
+            for (i in 0..2) up[i] += (v[i] / n - up[i]) * k
+            val m = Math.sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]).takeIf { it > 0 } ?: 1.0
+            for (i in 0..2) up[i] /= m
+            return
+        }
+        if (last != 0L) {
+            val dt = (e.timestamp - last) / 1e9
+            if (dt > 0 && dt < 0.1) for (i in 0..2) a[i] += v[i] * dt
+        }
+        last = e.timestamp
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastOut < 12) return
+        lastOut = now
+        val f = { d: Double -> String.format(java.util.Locale.ROOT, "%.6f", d) }
+        out("${f(a[0])},${f(a[1])},${f(a[2])},${f(up[0])},${f(up[1])},${f(up[2])}")
+        a.fill(0.0)
+    }
+
+    override fun onAccuracyChanged(s: android.hardware.Sensor?, acc: Int) {}
 }

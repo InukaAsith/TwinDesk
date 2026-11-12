@@ -9,6 +9,7 @@ import Foundation
 import WebKit
 import UIKit
 import SwiftUI
+import CoreMotion
 
 final class WebHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
     let page: String
@@ -16,6 +17,7 @@ final class WebHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKU
     private weak var core: Core?
     private var ready = false
     private var queue: [JSON] = []
+    private var motion: CMMotionManager?
     var onEvent: (String, JSON?) -> Void = { _, _ in }
 
     private static let shim = """
@@ -32,6 +34,7 @@ final class WebHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKU
         setPad: (id, code) => post({ k: 'setPad', id: String(id), code: String(code) }),
         setLayout: (json) => post({ k: 'setLayout', s: String(json) }),
         pad: (b, lx, ly, rx, ry, lt, rt) => post({ k: 'pad', b, lx, ly, rx, ry, lt, rt }),
+        motion: (on) => post({ k: 'motion', on: !!on }),
       };
       const log = console.log.bind(console);
       console.log = (...a) => { try { post({ k: 'log', s: a.map(String).join(' ') }); } catch (e) {} log(...a); };
@@ -86,6 +89,7 @@ final class WebHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKU
     func js(_ s: String) { DispatchQueue.main.async { self.view.evaluateJavaScript(s, completionHandler: nil) } }
 
     func destroy() {
+        motionOn(false)
         ready = false
         queue.removeAll()
         view.configuration.userContentController.removeScriptMessageHandler(forName: "td")
@@ -126,9 +130,37 @@ final class WebHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKU
         case "pad":
             let n = { (key: String) in (o[key] as? NSNumber)?.doubleValue ?? 0 }
             core.remote.pad(b: Int(n("b")), lx: n("lx"), ly: n("ly"), rx: n("rx"), ry: n("ry"), lt: n("lt"), rt: n("rt"))
+        case "motion": motionOn((o["on"] as? Bool) ?? false)
         case "log":
             NSLog("TwinDesk web(%@): %@", page, (o["s"] as? String) ?? "")
         default: break
+        }
+    }
+
+    // The phone's turning, for remote.html (window.tdMotion: the air mouse, the presentation pointer):
+    // radians about the phone's x, y and z added up between calls (about every 12 ms), and which way is
+    // up (against gravity, a unit vector), in the phone's frame. tdMotion(null): no gyroscope.
+    private func motionOn(_ on: Bool) {
+        if !on { motion?.stopDeviceMotionUpdates(); motion = nil; return }
+        guard motion == nil else { return }
+        let m = CMMotionManager()
+        guard m.isDeviceMotionAvailable else { return js("window.tdMotion&&tdMotion(null)") }
+        motion = m
+        m.deviceMotionUpdateInterval = 1.0 / 100
+        var a = (0.0, 0.0, 0.0), last: TimeInterval = 0, sent: TimeInterval = 0
+        m.startDeviceMotionUpdates(to: .main) { [weak self] d, _ in
+            guard let self = self, let d = d, self.ready else { return }
+            if last > 0 {
+                let dt = d.timestamp - last
+                if dt > 0 && dt < 0.1 { a.0 += d.rotationRate.x * dt; a.1 += d.rotationRate.y * dt; a.2 += d.rotationRate.z * dt }
+            }
+            last = d.timestamp
+            guard d.timestamp - sent >= 0.012 else { return }
+            sent = d.timestamp
+            let g = d.gravity
+            let f = { (v: Double) in String(format: "%.6f", v) }
+            self.view.evaluateJavaScript("window.tdMotion&&tdMotion(\(f(a.0)),\(f(a.1)),\(f(a.2)),\(f(-g.x)),\(f(-g.y)),\(f(-g.z)))", completionHandler: nil)
+            a = (0, 0, 0)
         }
     }
 
