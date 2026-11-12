@@ -91,6 +91,7 @@ let win = null;
 let tray = null;
 let lockKey = null; // the cursor lock key at home (shared/cursorlock.js)
 let hud = null;
+let modulesAtStart = []; // General › Modules: the ones off at start aren't loaded
 let quitting = false;
 let startHidden = process.argv.includes('--hidden');
 // server: this Mac's server (many clients); links: the hosts we dial; hub: the mesh (hub.js);
@@ -250,6 +251,7 @@ function publishState() {
     state.phoneMedia = svc && svc.nowPlaying ? svc.nowPlaying.view : null; // the active phone's (shared/perphone.js)
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.iosSign = svc && svc.iosSign ? svc.iosSign.view : null; // TwinDesk iPhone
+    if (settings) state.modules = require('../../shared/modules.js').view(settings.modules, modulesAtStart); // General › Modules
     state.deck = svc && svc.deck ? svc.deck.view() : null; // the Deck page: shown while a device has a Deck
     state.remote = svc && svc.remotes && svc.remotes.view ? svc.remotes.view // Remote tab: the active phone's
       : svc ? { allow: false, why: '', opened: false, using: false, pad: { on: false, supported: false, live: false, busy: '', message: '', name: '' } } : null;
@@ -423,7 +425,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'warning' || e.level === 'error') console.log(`[window] ${e.level}: ${e.message}`);
   });
-  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: modulesAtStart.join(',') } });
   win.once('ready-to-show', () => {
     if (startHidden) startHidden = false; // started at login: stay in the menu bar
     else showWindow();
@@ -516,6 +518,7 @@ app.whenReady().then(() => {
   if (app.dock && !app.isPackaged) app.dock.setIcon(path.join(__dirname, '..', '..', 'shared', 'icon', 'teindesk-dark-mac.png'));
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
+  modulesAtStart = require('../../shared/modules.js').normalize(settings.modules).off.filter((id) => id !== 'multi'); // General › Modules: fixed for this run (the window's scripts are)
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -714,7 +717,7 @@ app.whenReady().then(() => {
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID, for
   // whichever iPhone connected or spoke last (shared/perphone.js anyPhone). Off in General › Modules: not loaded.
   svc.anyPhone = require('../../shared/perphone.js').anyPhone();
-  if (!((settings.modules && settings.modules.off) || []).includes('iossign')) svc.iosSign = require('../../shared/iossign-host.js').create({
+  if (!modulesAtStart.includes('iossign')) svc.iosSign = require('../../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage, link: svc.anyPhone.link,
     near: { list: () => (svc.ble ? svc.ble.list() : []), invite: (devId) => svc.ble && svc.ble.invite(devId) }, // iPhones linked over Bluetooth
     usbSerials: () => (svc.iosNet ? svc.iosNet.view.devices.filter((d) => d.app).map((d) => d.serial) : []),
@@ -722,7 +725,7 @@ app.whenReady().then(() => {
   });
   // The Deck (shared/deck.js): each phone's buttons run here, one Deck per phone (deck.add), and a web
   // device's (deck.web). Not loaded at all while its module is off (General › Modules).
-  if (!((settings.modules && settings.modules.off) || []).includes('deck')) {
+  if (!modulesAtStart.includes('deck')) {
     const { clipboard: cb } = require('electron');
     svc.deck = require('../../shared/deck.js').startDeck({
       platform: 'mac', helper: svc.helper, server: null, settings: () => settings, saveSettings: () => store.saveSettings(settings),

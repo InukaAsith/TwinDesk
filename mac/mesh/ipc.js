@@ -533,6 +533,14 @@ function setupIpc(ctx) {
       if (m && np) np.control(String(m.a || ''), m.pos);
     },
     phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // General › Modules (shared/modules.js): applies after a restart.
+    setModules(m) {
+      if (!m || typeof m !== 'object') return;
+      const Mods = require('../../shared/modules.js');
+      settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+      save();
+      ctx.pushState();
+    },
     // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
     iosSign(o) {
       require('../../shared/iossign-host.js').act(ctx.iosSign, dialog, o);

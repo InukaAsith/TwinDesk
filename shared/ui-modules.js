@@ -22,7 +22,7 @@ UI.modulesCard = () => {
   const sws = {};
   const needs = {}; // per module: the red note and its Restart button, beside the switch toggled
   for (const m of M.LIST) {
-    if (!known.has(m.id)) continue;
+    if (!known.has(m.id) || (M.keep || []).includes(m.id)) continue;
     const sw = UI.switch((on) => {
       const ctl = switchOf(m.id);
       const wasOn = !!(ctl && cur && ctl.get(cur));

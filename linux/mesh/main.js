@@ -147,6 +147,7 @@ let hostServer = null; // server.js, once the certificate exists
 let phoneRemote = null; // each phone's Remote page: touchpad, keyboard and gamepad here (shared/perphone.js phoneRemote)
 let deck = null; // the Deck (shared/deck.js): each phone's (and web device's) buttons run here
 let iosSign = null; // shared/iossign.js: TwinDesk iPhone, for whichever iPhone connects (shared/perphone.js anyPhone)
+let modulesAtStart = []; // General › Modules: the ones off at start aren't loaded (fixed for this run)
 let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
 let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
@@ -181,6 +182,7 @@ function start() {
   autostart.refresh(); // an older entry gets the output redirect (#162)
   device = loadDevice();
   settings = loadSettings(store); // settings.json and the mesh's own in multi.json (settings.js)
+  modulesAtStart = require('../../shared/modules.js').normalize(settings.modules).off.filter((id) => id !== 'multi'); // the window's scripts are fixed at load
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -510,7 +512,7 @@ function startPhone(server, pairing) {
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID, for
   // whichever iPhone connected or spoke last. Off in General › Modules: not loaded.
   const anyPhone = require('../../shared/perphone.js').anyPhone();
-  if (!((settings.modules && settings.modules.off) || []).includes('iossign')) iosSign = require('../../shared/iossign-host.js').create({
+  if (!modulesAtStart.includes('iossign')) iosSign = require('../../shared/iossign-host.js').create({
     app, safeStorage: require('electron').safeStorage, link: anyPhone.link,
     near: { list: () => (bleHost ? bleHost.list() : []), invite: (devId) => bleHost && bleHost.invite(devId) }, // iPhones linked over Bluetooth
     usbSerials: () => (iosNet ? iosNet.view.devices.filter((x) => x.app).map((x) => x.serial) : []),
@@ -1099,6 +1101,7 @@ function buildState() {
     btAudio: btAudio ? btAudio.view : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)
     history: historyKeeper ? historyKeeper.view() : null,
+    modules: require('../../shared/modules.js').view(settings.modules, modulesAtStart), // General › Modules
     iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     deck: deck ? deck.view() : null, // the Deck page: shown while a device has a Deck
     remote: (phoneRemote && phoneRemote.view) || REMOTE_OFF, // Remote tab: the active phone's
@@ -1232,7 +1235,7 @@ function createMainWindow() {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, off: modulesAtStart.join(',') } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1463,7 +1466,7 @@ function loadRemote() {
 // The Deck (shared/deck.js): made once, then one per phone (deck.add) and per web device (deck.web).
 // Not loaded at all while its module is off (General › Modules).
 function loadDeck() {
-  if ((settings.modules && settings.modules.off || []).includes('deck')) return null;
+  if (modulesAtStart.includes('deck')) return null;
   if (!deck) {
     const { clipboard: cb } = require('electron');
     deck = require('../../shared/deck.js').startDeck({

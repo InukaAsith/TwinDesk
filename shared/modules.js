@@ -107,7 +107,9 @@
 if (typeof window !== 'undefined' && window.TdModules) {
   (function () {
     const q = new URLSearchParams(location.search).get('off') || '';
-    TdModules.off = TdModules.normalize({ off: q.split(',') }).off;
+    // In Multi-device (a …/mesh/ window) its own page is always there: it's the way back out.
+    TdModules.keep = /\/mesh\/[^/]+\.html$/.test(location.pathname) ? ['multi'] : [];
+    TdModules.off = TdModules.normalize({ off: q.split(',') }).off.filter((id) => !TdModules.keep.includes(id));
     TdModules.skipped = []; // modules whose pages or scripts this window has but didn't load
     if (typeof UI === 'undefined' || !UI.tab) return;
     const register = UI.tab;

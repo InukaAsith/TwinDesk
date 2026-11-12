@@ -263,6 +263,14 @@ function setupIpc(ctx) {
     else if (m.a === 'allow' && typeof m.app === 'string') h.allow(m.list, m.app, m.on === true);
     else if (m.a === 'forget') h.forget(m.list, typeof m.app === 'string' ? m.app : '');
   });
+  // General › Modules (shared/modules.js): applies after a restart.
+  handle('setModules', (m) => {
+    if (!m || typeof m !== 'object') return;
+    const Mods = require('../../shared/modules.js');
+    settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+    ctx.save();
+    ctx.push();
+  });
   // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
   handle('iosSign', (o) => require('../../shared/iossign-host.js').act(ctx.iosSign && ctx.iosSign(), require('electron').dialog, o));
   handle('iosSignIpa', () => require('../../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), require('electron').dialog));
