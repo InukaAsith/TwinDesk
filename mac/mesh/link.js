@@ -11,6 +11,7 @@
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { PairLimit, versionMessage } = require('../../shared/pairlimit.js');
 const Tailnet = require('../../shared/tailnet.js'); // away from its network: its Tailscale address (#161)
 const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { linkLane, peerIp } = require('../../shared/inputlane.js');
@@ -42,6 +43,7 @@ class Link extends EventEmitter {
     this.resolveAddress = opts.resolveAddress || (() => null);
     this.pairing = this.store.load(); // {macId, macName, address, port, fp, token, os} or null
     this.pairState = null; // pairing in progress: {phase, address, port, macName, code, error}
+    this.pairLimit = new PairLimit((why) => this._pairFailed(why)); // each waiting phase has a time limit (shared/pairlimit.js)
     this.status = { state: this.pairing ? 'connecting' : 'not_paired', rtt: null, message: '' };
     this.ws = null;
     this.mode = null; // 'session' | 'pair'
@@ -227,7 +229,7 @@ class Link extends EventEmitter {
 
   _hello() {
     const p = this.pairing;
-    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
+    this._raw({ t: T.HELLO, v: P.PROTOCOL_VERSION, id: this.device.id, name: this.device.name, os: P.OS.MAC, token: p.token, mesh: 1, fx: 1, ...(this.fx2Hello && this.fx2Hello() ? { fx2: 1 } : {}), ...this._ilHello(), ...(this.takeover ? { takeover: true } : {}) });
     this.timers.hello = setTimeout(() => {
       this.lastError = 'No answer';
       if (this.ws) this.ws.terminate();
@@ -319,12 +321,19 @@ class Link extends EventEmitter {
     this._setStatus('connected', '');
     // The input lane, when the host offered it (older hosts: none): started for this session.
     if (this.ilLane && !(msg.il && typeof msg.il === 'object' && this.transport !== 'ble' && this.ilLane.accept(msg.il, peerIp(this.ws, this.pairing.address)))) this.ilLane.stop();
+    // Fast files (shared/fastfile.js, session.js): the host's token for this session, and the address we reached it at.
+    this.fx = require('../../shared/meshfx.js').token(msg);
+    this.fx2Port = this.fx ? require('../../shared/meshfx.js').fx2Port(msg) : 0;
+    this.fxAddress = peerIp(this.ws, this.pairing.address);
     this.emit('welcome', msg);
   }
 
   _onError(msg) {
     const code = msg.code;
-    if (this.mode === 'pair') return this._pairFailed(PAIR_ERRORS[code] || `Pairing failed (${code}).`);
+    if (this.mode === 'pair') {
+      const name = (this.pairState && this.pairState.macName) || 'The other computer';
+      return this._pairFailed((code === P.E.VERSION_MISMATCH && versionMessage(msg, name)) || PAIR_ERRORS[code] || `Pairing failed (${code}).`);
+    }
     if (code === P.E.BAD_TOKEN) {
       const name = this.pairing ? this.pairing.macName : 'the other computer';
       this.forget();
@@ -461,6 +470,8 @@ class Link extends EventEmitter {
   }
 
   _changed() {
+    const ps = this.pairState;
+    this.pairLimit.update(ps, ps && ps.macName, ps && ps.address);
     for (const fn of this.stateFns) fn();
   }
 }

@@ -66,6 +66,9 @@ function setupIpc(ctx) {
   handle('qrPair', () => ctx.qrPair());
   handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code // Connection: the phone pairing QR code's link
   handle('importCancel', () => ctx.explorer() && ctx.explorer().cancel()); // Phone Files: stop importing into Explorer's folder
+  // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+  handle('iosSign', (o) => require('../shared/iossign-host.js').act(ctx.iosSign && ctx.iosSign(), dialog, o));
+  handle('iosSignIpa', () => require('../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), dialog));
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
@@ -105,7 +108,14 @@ function setupIpc(ctx) {
   handle('identifyDisplays', () => kvm.map.identify());
   handle('setKeys', (partial) => change('keys', partial, () => kvm.applyConfig())); // the hotkey lives in the helper
   handle('setApp', (partial) => change('app', partial, () => ctx.onApp && ctx.onApp()));
-  handle('setUpdates', (partial) => change('updates', { auto: !!(partial && partial.auto), skipped: typeof (partial && partial.skipped) === 'string' ? partial.skipped : (settings.updates && settings.updates.skipped) || '' }, () => ctx.updates.start()));
+  handle('setUpdates', (partial) => {
+    const p = partial || {};
+    const next = {};
+    if (typeof p.auto === 'boolean') next.auto = p.auto;
+    if (typeof p.skipped === 'string') next.skipped = p.skipped;
+    if (typeof p.install === 'boolean') next.install = p.install;
+    change('updates', next, () => { if ('install' in next) ctx.updates.setInstall(next.install); ctx.updates.start(); });
+  });
   handle('skipUpdate', (version) => ctx.updates && ctx.updates.skip && ctx.updates.skip(version));
   handle('unskipUpdate', () => ctx.updates && ctx.updates.unskip && ctx.updates.unskip());
   handle('checkUpdates', () => ctx.updates.check(true));
@@ -115,10 +125,34 @@ function setupIpc(ctx) {
   handle('setClipboard', (partial) => change('clipboard', partial, () => clip.applySettings()));
   handle('copyHistory', (index) => clip.copyHistory(Number(index)));
   handle('clearHistory', () => clip.clearHistory());
+  handle('history', (r) => { if (r && typeof r === 'object' && ctx.history) ctx.history(r); });
   handle('setTab', (tab) => change('ui', { tab }));
   handle('setChats', (on) => { change('ui', { chats: on === true }); if (ctx.chats && ctx.chats()) ctx.chats().sync(); }); // Messages: WhatsApp, Telegram and Instagram there too
   handle('setOverview', (o) => o && typeof o === 'object' && change('ui', { overview: { ...settings.ui.overview, ...o } })); // General › Overview // invalid names fall back in normalize()
   handle('setMulti', (on) => require('./multi').set(on === true)); // Multi-device: TwinDesk restarts
+  // The Deck page (shared/ui-deck.js): the layout, Try (runs a button here), the app picker.
+  handle('deckSave', (layout) => { const d = ctx.deck && ctx.deck(); if (d && layout && typeof layout === 'object') d.save(layout); });
+  handle('deckTry', (action) => { const d = ctx.deck && ctx.deck(); if (d && action && typeof action === 'object') d.exec(action).catch(() => {}); });
+  handle('deckApps', () => { const d = ctx.deck && ctx.deck(); return d ? d.apps().catch(() => []) : []; });
+  handle('deckPick', async (o) => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { dialog, BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  });
+  handle('deckRun', (a) => { const d = ctx.deck && ctx.deck(); return d && a && typeof a === 'object' ? d.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false }; }); // Try
+  handle('deckState', () => { const d = ctx.deck && ctx.deck(); return d ? d.state().catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays
+  // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
+  handle('setModules', (m) => {
+    if (!m || typeof m !== 'object') return;
+    const Mods = require('../shared/modules.js');
+    settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+    ctx.save();
+    ctx.push();
+  });
   handle('setEncoder', (hw) => { require('./encoder').write(hw !== false); ctx.push(); }); // General › Advanced › Hardware encoder (#133): applies after a restart
   handle('relaunch', () => { app.relaunch({ args: process.argv.slice(1).filter((a) => a !== '--hidden') }); app.quit(); }); // General › Advanced: a setting read at startup
   handle('setAudio', (partial) => change('audio', partial, () => {

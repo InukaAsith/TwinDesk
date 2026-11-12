@@ -45,6 +45,8 @@ let qrPair = null; // Connection's phone pairing QR code: {nonce, until}
 let adbQr = null; // wireless debugging's pairing QR code while shown (shared/adbqr.js)
 const qrKnows = (nonce) => !!qrPair && typeof nonce === 'string' && nonce === qrPair.nonce && Date.now() < qrPair.until;
 
+const Mods = require('../shared/modules.js'); // General › Modules: the ones off at start aren't loaded
+let modulesAtStart = [];
 const Engines = require('../shared/engines.js'); // General › Advanced › Engines in use
 const { lanType } = require('../shared/lantype.js'); // Wi-Fi or Ethernet for Overview (#140)
 const path = require('path');
@@ -201,6 +203,8 @@ function pushState() {
       : /^(utun|bridge|vmnet|vnic|llw|awdl)/.test(i.name) ? 4 : i.name === defaultIf ? 2 : 3);
     state.addresses = interfaces().sort((a, b) => rank(a) - rank(b)).map((i) => i.address);
     state.pairing = pairing ? pairing.pendingView() : null;
+    if (settings) state.modules = Mods.view(settings.modules, modulesAtStart); // General › Modules
+    state.deck = svc && svc.deck ? svc.deck.view() : null; // the Deck page: shown while a device has a Deck
     state.paired = pairing ? pairing.list() : [];
     if (discovery) {
       state.discovery = { ...discovery.status };
@@ -266,6 +270,7 @@ function pushState() {
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
+    state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.chats = svc && svc.chats ? svc.chats.view() : null; // Messages' WhatsApp, Instagram… conversations
     if (svc) {
       const { secret, ...smb } = settings.smb; // never send the share password to the window
@@ -275,6 +280,7 @@ function pushState() {
       state.papps = { ...settings.papps, ...svc.pcApps.view };
     }
     if (svc) state.wake = svc.wake.view;
+    if (svc && svc.iosSign) state.iosSign = svc.iosSign.view;
     if (svc && svc.phone) {
       // A phone's controls on Overview (dev.state): quick settings, volume and ringer, most used apps.
       const v = svc.devctl && state.client && P.isPhoneOs(state.client.os) ? svc.devctl.view : null; // an iPhone's too: Ring (its Overview, shared/ui-device-ios.js)
@@ -430,7 +436,7 @@ function createWindow() {
   win.webContents.on('console-message', (e) => {
     if (e.level === 'warning' || e.level === 'error') console.log(`[window] ${e.level}: ${e.message}`);
   });
-  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style) } });
+  win.loadFile(path.join(__dirname, 'control.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: Mods.offQuery({ off: modulesAtStart }) } });
   win.once('ready-to-show', showWindow);
   // In the Dock and ⌘-Tab only while the window is open; menu bar only otherwise.
   const w = win;
@@ -518,6 +524,7 @@ function updateTray() {
   trayKey = key;
   tray.setToolTip(c ? `TwinDesk: ${c.name}` : 'TwinDesk');
   const model = {
+    off: modulesAtStart, // General › Modules
     t,
     connected: !!c,
     status: c ? t('Connected to {name}', { name: c.name }) + (c.transport === 'ble' ? ' · ' + t('Bluetooth') : '') : t('Not connected'),
@@ -568,6 +575,7 @@ app.whenReady().then(() => {
   if (app.dock && !app.isPackaged) app.dock.setIcon(path.join(__dirname, '..', 'shared', 'icon', 'teindesk-dark-mac.png'));
   store.init(app.getPath('userData'));
   settings = store.loadSettings();
+  modulesAtStart = Mods.normalize(settings.modules).off; // fixed for this run: the window's scripts are
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -691,6 +699,18 @@ app.whenReady().then(() => {
     },
   });
   svc.devctl.on('change', pushState);
+  // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
+  if (!modulesAtStart.includes('iossign')) svc.iosSign = require('../shared/iossign-host.js').create({ // off in General › Modules: not loaded
+    app, safeStorage: require('electron').safeStorage,
+    link: {
+      on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
+      send: (m) => peer.sendToClient(m),
+      get current() { return peer.current; },
+    },
+    near: { list: () => (svc.ble ? svc.ble.list() : []), invite: (devId) => svc.ble && svc.ble.invite(devId) }, // iPhones linked over Bluetooth
+    usbSerials: () => (svc.iosNet ? svc.iosNet.view.devices.filter((d) => d.app).map((d) => d.serial) : []),
+    onChange: pushState,
+  });
   // ReZume off here (not loaded): still answer the other side's policy, so it shows ReZume as off
   // here, not missing, and offers nothing.
   peer.on(`t:${P.T.RZ_POLICY}`, () => { if (!svc.rz && peer.current) peer.sendToClient({ t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
@@ -847,6 +867,15 @@ app.whenReady().then(() => {
   peer.on(`t:${P.T.REMOTE_HELLO}`, () => !svc.phoneRemote && peer.current && P.isPhoneOs(peer.current.os)
     && peer.sendToClient({ t: P.T.REMOTE_STATE, allowed: false, off: true, why: 'Remote is off on this computer: turn it on in TwinDesk’s Remote page there', voice: false, voiceWhy: P.KEYBOARD_OFF }));
   svc.loadRemote();
+  // The Deck (shared/deck.js): a phone's or web device's buttons run here. Not loaded at all while its
+  // module is off (General › Modules).
+  if (!modulesAtStart.includes('deck')) {
+    const { clipboard: cb } = require('electron');
+    svc.deck = require('../shared/deck.js').startDeck({
+      platform: 'mac', helper: svc.helper, server: peer, settings: () => settings, saveSettings: () => store.saveSettings(settings),
+      readClipboard: () => cb.readText(), onChange: pushState,
+    });
+  }
   // ReZume: what's in use here goes on on the other device, and theirs here (shared/rezume.js), its
   // offers in the Dock (a Dock icon of their app, dockstub.js), the menu bar and a notification.
   // Loaded the first time it's turned on: until then nothing is looked at; ipc reaches it through svc.rezume().
@@ -963,6 +992,7 @@ app.whenReady().then(() => {
     current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,
     save: () => store.saveSettings(settings), onChange: pushState,
     onShowModal: showUpdateWindow,
+    isBusy: () => !!(peer && peer.current), // Install automatically waits for no session
     notify: (title, body, onClick) => {
       if (!Notification.isSupported()) return;
       const n = new Notification({ title, body });
@@ -1370,6 +1400,7 @@ function setupWeb() {
       enabled: () => settings.web.control !== false,
       swapKeys: () => !apple(bus.current) && settings.keys.swapCtrlCmd !== false, // an iPhone's keyboard has ⌘ already
     }),
+    deck: svc.deck ? (bus) => svc.deck.web(bus) : null, // the Deck module off: TwinDesk Web shows none
     remote: (bus, getSettings) => new PhoneRemote({ server: bus, helper: svc.helper, getSettings, atHome: () => svc.kvm.mode === 'home', onChange: pushState,
       padNote: 'Real gamepad isn’t on the Mac: the gamepad’s buttons work as keys' }),
     notifs: svc.notifs,

@@ -51,6 +51,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val sync = PairSync(this)
     val clip = Clip(this)
     val notifs = Notifs(this)
+    val history = History(this) // the clipboard's and notifications' history, kept encrypted when asked (History.kt)
     val files = Files(this)
     val fclip = FileClip(this)
     val info = PhoneInfo(this)
@@ -64,6 +65,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val macSound = MacSound(this)
     val shortcuts = Shortcuts(this)
     val kvm = Kvm(this)
+    val deck = Deck(this) // the Deck: buttons here the computer runs (only when it offers it)
     val remote = Remote(this) // this phone as the computer's touchpad, keyboard and gamepad (the Remote page)
     // …and as a Bluetooth gamepad for any computer: made only when it's on or the Remote page asks.
     private val btPadLazy = lazy { BtPad(this) }
@@ -85,7 +87,24 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // Connect with Android: another phone, on a session of its own beside the computer's (Peer.kt).
     // Not a Feature: the computer's messages never reach it, nor its the computer.
     val peer = Peer(this)
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia)
+    // General › Modules (Modules.kt): the modules off when this process started; a page off isn't
+    // shown and its features hear nothing from the computer.
+    val modulesAtStart: Set<String> = Modules.off(store)
+    fun moduleOn(id: String) = id in Modules.FIXED || id !in modulesAtStart
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia, deck)
+        .filter { f ->
+            when (f) {
+                clip, fclip -> moduleOn("clipboard")
+                notifs -> moduleOn("notifications")
+                rezume -> moduleOn("rezume")
+                remote -> moduleOn("remote")
+                pcMedia, nowPlaying -> moduleOn("media")
+                sound, macSound -> moduleOn("sound")
+                hub -> listOf("calls", "messages", "photos", "fileaccess").any(::moduleOn)
+                deck -> moduleOn("deck")
+                else -> true
+            }
+        }
 
     val host: Host? get() = if (link.connected) link.host else null
 

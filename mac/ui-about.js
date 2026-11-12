@@ -44,9 +44,13 @@ UI.tab({
     const updCheck = UI.button(t('Check now'), () => api.checkUpdates(), 'small');
     const updNotes = UI.button(t('What’s New'), () => window.UpdaterModal && window.UpdaterModal.show(), 'small');
     const updUnskip = UI.button(t('Don’t skip'), () => api.unskipUpdate && api.unskipUpdate(), 'small');
-    const updGet = UI.button(t('Download'), () => api.openUpdate(), 'small primary');
-    const updRow = UI.row('TwinDesk', '', [updStatus, updNotes, updUnskip, updGet, updCheck], { literal: true });
+    const updGet = UI.button(t('Download'), () => api.openUpdate(), 'small primary'); // Install now where this copy updates in place
+    const updWeb = UI.button(t('Download'), () => api.openLink('releases'), 'small'); // the release on GitHub, beside Install now
+    const updRow = UI.row('TwinDesk', '', [updStatus, updNotes, updUnskip, updGet, updWeb, updCheck], { literal: true });
     const updAuto = UI.switch((v) => api.setUpdates({ auto: v }), { label: t('Check for updates automatically') });
+    // Install updates by themselves (shared/selfupdate.js), where this copy can update in place.
+    const updInstall = UI.switch((v) => api.setUpdates({ install: v }), { label: t('Install updates automatically') });
+    const instRow = UI.row(t('Install automatically'), t('Downloads a new version and installs it while this computer is idle. Settings and permissions stay'), [updInstall]);
 
     const pc = facts(t('This computer'), ['Computer name', 'System', 'Kernel', 'Processor', 'Memory', 'Architecture']);
     const build = facts(t('This app'), ['Version', 'Built for', 'Electron', 'Chromium', 'Node.js']);
@@ -57,6 +61,7 @@ UI.tab({
       UI.card(t('Updates'), [
         updRow,
         UI.row(t('Check automatically'), t('Looks for new releases on GitHub every few hours'), [updAuto]),
+        instRow,
       ], { cls: 'keep-on' }),
       UI.card(t('Made by'), [
         UI.row('Inuka Asith', 'inukaasith.vercel.app', [link(t('Portfolio'), 'portfolio')]),
@@ -105,6 +110,18 @@ UI.tab({
           : u.available ? t('You have {version}. {action}', { version: u.current, action })
             : u.noReleases ? t('Version {version}. No releases published yet', { version: u.current })
               : t('Version {version}{checked}', { version: u.current, checked }));
+        // In place: Update downloads and installs; the row says how far it is.
+        const busy = u.stage === 'downloading' || u.stage === 'installing';
+        updGet.textContent = !u.canInstall ? t('Download')
+          : u.stage === 'downloading' ? t('Downloading… {percent}%', { percent: Math.round((u.progress || 0) * 100) })
+            : u.stage === 'installing' ? t('Installing…')
+              : t('Install now');
+        updGet.disabled = busy;
+        updWeb.hidden = !u.available || !u.canInstall;
+        instRow.hidden = !u.canInstall;
+        updInstall.set(!!u.install);
+        if (u.installError) updRow.setHint(t('Couldn’t update: {error}', { error: u.installError }));
+        else if (u.canInstall && u.available && !u.error) updRow.setHint(t('You have {version}. Updates in place: no reinstall, your settings and permissions stay', { version: u.current }));
       }
     };
   },

@@ -1,0 +1,114 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The tour and What's new (shared/ui-tour.js): a shade over the window, a hole cut where it points,
+   a card. Everything drawn here: no images. */
+
+.tour { position: fixed; inset: 0; z-index: 9000; --tour-bg: #ffffff; } /* solid: the Glass look's cards are see-through */
+@media (prefers-color-scheme: dark) { .tour { --tour-bg: #2c2c2e; } }
+.tour-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); transition: background 0.25s; }
+.tour.pointing .tour-shade { background: transparent; } /* the hole's shadow is the shade then; it still takes the clicks */
+.tour-hole {
+  position: absolute; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.45), 0 0 0 2px var(--accent) inset;
+  transition: left 0.3s, top 0.3s, width 0.3s, height 0.3s;
+}
+.tour-ring {
+  position: absolute; border-radius: 9px; pointer-events: none; border: 2px solid var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft); animation: tour-pulse 1.6s ease-in-out infinite;
+  transition: left 0.3s, top 0.3s, width 0.3s, height 0.3s;
+}
+@keyframes tour-pulse { 50% { box-shadow: 0 0 0 8px transparent; } }
+
+.tour-skip {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2; /* clear of the search pill and the titles */
+  font: inherit; font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;
+  background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 999px; padding: 6px 14px;
+}
+.tour-skip:hover { background: rgba(0, 0, 0, 0.8); }
+.tour-skip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tour-card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box;
+  background: var(--tour-bg); color: var(--text); border-radius: 16px; padding: 22px 22px 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--line);
+  animation: tour-in 0.25s ease-out;
+}
+.tour-card.wide { width: min(560px, calc(100vw - 32px)); }
+.tour-card.beside { transform: none; width: min(340px, calc(100vw - 32px)); }
+@keyframes tour-in { from { opacity: 0; } }
+.tour-card h2 { margin: 0 0 8px; font-size: 19px; line-height: 1.25; }
+.tour-card p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.tour-kicker { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.tour-dots { display: flex; gap: 5px; margin-bottom: 10px; }
+.tour-dots span { width: 6px; height: 6px; border-radius: 3px; background: var(--track-off); transition: width 0.2s; }
+.tour-dots span.done { background: var(--accent-soft); }
+.tour-dots span.on { width: 16px; background: var(--accent); }
+
+.tour-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.tour-actions .tour-gap { flex: 1; }
+.tour-actions.stack { flex-direction: column; align-items: stretch; }
+.tour-actions.stack .tour-gap { display: none; }
+.tour-actions.stack .tour-back { order: 9; align-self: flex-start; }
+.tour-actions .btn.wide { justify-content: flex-start; text-align: left; padding: 10px 14px; font-size: 14px; }
+
+.tour-hero { display: flex; justify-content: center; padding: 6px 0 4px; }
+.tour-hero .tour-icon { width: 72px; height: 72px; animation: tour-float 3s ease-in-out infinite; }
+@keyframes tour-float { 50% { transform: translateY(-5px); } }
+.tour-icon { display: block; width: 34px; height: 34px; flex: none; background-size: contain; background-repeat: no-repeat; background-position: center; }
+
+/* Install: a device the app goes onto, and the steps beside it. */
+.tour-art { display: flex; align-items: center; gap: 20px; margin: 4px 0 10px; }
+.tour-device { position: relative; flex: none; background: #1d1d1f; box-shadow: 0 0 0 1px var(--line); }
+.tour-device.phone { width: 66px; height: 124px; border-radius: 14px; padding: 6px; box-sizing: border-box; }
+.tour-device.laptop { width: 132px; height: 84px; border-radius: 8px 8px 2px 2px; padding: 6px; box-sizing: border-box; margin-bottom: 8px; }
+.tour-device.laptop::after { content: ''; position: absolute; left: -12px; right: -12px; bottom: -8px; height: 6px; border-radius: 0 0 6px 6px; background: #8e8e93; }
+.tour-screen { position: relative; width: 100%; height: 100%; border-radius: 9px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #3a7bd5, #6dd5ed); }
+.tour-device.laptop .tour-screen { border-radius: 3px; }
+.tour-bar { position: absolute; left: 18%; right: 18%; bottom: 22%; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); overflow: hidden; }
+.tour-bar span { display: block; height: 100%; width: 0; background: #fff; animation: tour-fill 4s ease-in-out infinite; }
+@keyframes tour-fill { 0% { width: 0; } 35%, 100% { width: 100%; } }
+.tour-screen .tour-icon { width: 30px; height: 30px; opacity: 0; transform: scale(0.4); animation: tour-pop 4s ease-out infinite; }
+@keyframes tour-pop { 0%, 38% { opacity: 0; transform: scale(0.4); } 48%, 92% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+.tour-tick { position: absolute; right: 8%; top: 8%; width: 16px; height: 16px; border-radius: 8px; background: #30b94d; color: #fff; font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; opacity: 0; animation: tour-tick 4s ease-out infinite; }
+@keyframes tour-tick { 0%, 55% { opacity: 0; transform: scale(0.3); } 62%, 92% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+.tour-steps { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.45; color: var(--text); }
+.tour-steps li { margin: 0 0 7px; opacity: 0; animation: tour-step 0.4s ease-out forwards; }
+.tour-steps li:nth-child(2) { animation-delay: 0.35s; }
+.tour-steps li:nth-child(3) { animation-delay: 0.7s; }
+@keyframes tour-step { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+
+.tour-extra { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.tour-qr { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); max-width: 300px; }
+.tour-qr-code { width: 96px; height: 96px; flex: none; background: #fff; padding: 6px; border-radius: 8px; image-rendering: pixelated; }
+
+/* Connect: two devices, dots running between them, the same code on both. */
+.tour-art.connect { justify-content: center; gap: 10px; }
+.tour-art.connect .tour-device.laptop { width: 112px; height: 72px; }
+.tour-art.connect .tour-device.phone { width: 52px; height: 96px; }
+.tour-code { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: #fff; letter-spacing: 0.05em; animation: tour-code 3s ease-in-out infinite; }
+@keyframes tour-code { 0%, 45% { opacity: 0; } 55%, 100% { opacity: 1; } }
+.tour-link { display: flex; gap: 6px; }
+.tour-link span { width: 6px; height: 6px; border-radius: 3px; background: var(--accent); opacity: 0.2; animation: tour-dot 1.2s ease-in-out infinite; }
+.tour-link span:nth-child(2) { animation-delay: 0.2s; }
+.tour-link span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes tour-dot { 40% { opacity: 1; transform: scale(1.3); } }
+
+/* The demo device in the sidebar. */
+.tour-demo { cursor: default; animation: tour-in 0.4s ease-out; }
+.tour-demo-wall { background: linear-gradient(160deg, #5e5ce6, #bf5af2); }
+.tour-demo-sub { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* What's new: a list, no pictures. */
+.tour-news { list-style: none; margin: 4px 0 0; padding: 0; max-height: min(52vh, 420px); overflow: auto; }
+.tour-news li { padding: 9px 0; border-top: 1px solid var(--row-line); font-size: 13px; line-height: 1.45; }
+.tour-news li:first-child { border-top: 0; }
+.tour-news strong { display: block; font-size: 13.5px; margin-bottom: 2px; }
+.tour-news span { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour *, .tour *::after { animation-duration: 0.01s !important; animation-iteration-count: 1 !important; transition: none !important; }
+  .tour-screen .tour-icon, .tour-tick { opacity: 1; transform: none; }
+  .tour-bar span { width: 100%; }
+}

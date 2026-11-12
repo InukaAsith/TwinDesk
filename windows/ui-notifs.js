@@ -30,12 +30,14 @@ UI.tab({
     const histCard = UI.card(I18n.t('Recent Notifications'), [histList], clearBtn);
     const apps = el('div');
 
-    body.append(note, pair.el, histCard, UI.card(I18n.t('Apps'), [apps]));
+    const hist = UI.historyCard('notifs');
+    body.append(note, pair.el, histCard, hist.el, UI.card(I18n.t('Apps'), [apps]));
 
     let key = '';
     let histKey = '';
     return (s) => {
       const n = s.notifs;
+      hist.update(s);
       const p = UI.peer(s);
       const connected = s.link.state === 'connected';
       pair.update(s);

@@ -49,11 +49,15 @@ const VALUES = {
 class PairSync {
   // opts: link, settings (shared; .pairSync is kept here), save(), set(section, partial) (ipc.js:
   // applies a setting with its side effects), only (the features this app has, else all of them)
+  // bus (mesh hub): pair.sync from every connected device; peerRole / peerOs name them for stash + welcome
   constructor(opts) {
     Object.assign(this, opts);
     this.features = Object.fromEntries(Object.entries(FEATURES).filter(([f]) => !opts.only || opts.only.includes(f)));
     this.last = null; // the values both computers agree on now
     this.peerId = '';
+    this.bus = opts.bus || null;
+    this.peerRole = opts.peerRole;
+    this.peerOs = opts.peerOs;
     if (!this.settings.pairSync || typeof this.settings.pairSync !== 'object') this.settings.pairSync = {};
 
     this.link.on('welcome', () => {
@@ -65,22 +69,79 @@ class PairSync {
       if (this.link.hosting) this.link.send({ t: T.PAIR_SYNC, all: this.last }); // we are the host: ours win
     });
     this.link.on('closed', () => { this.last = null; this.peerId = ''; });
-    this.link.on(T.PAIR_SYNC, (m) => {
-      if (!this.last) return;
-      const vals = this._values();
-      if (vals[m.key] && vals[m.key].allowed.includes(m.value)) return this._adopt({ values: { [m.key]: m.value } });
-      if (m.all && typeof m.all === 'object') {
-        const mine = { values: {} };
-        for (const [k, d] of Object.entries(vals)) if (m.all.values && d.allowed.includes(m.all.values[k])) mine.values[k] = m.all.values[k];
-        for (const f of Object.keys(this.features)) {
-          const v = m.all[f];
-          if (v && typeof v === 'object') mine[f] = { out: v.in, in: v.out }; // their in = our out
-        }
-        this._adopt(mine);
-      } else if (this.features[m.feature] && (m.dir === 'out' || m.dir === 'in') && typeof m.on === 'boolean') {
-        this._adopt({ [m.feature]: { [m.dir === 'out' ? 'in' : 'out']: m.on } });
+    this.link.on(T.PAIR_SYNC, (m) => { if (this.last) this._applySync(m); });
+    if (this.bus) {
+      this.bus.on(T.PAIR_SYNC, (m, fromId) => {
+        if (fromId !== this.bus.selectedId()) this._stash(fromId, m);
+      });
+      this.bus.onPeer('welcome', (id) => this._busWelcome(id));
+    }
+  }
+
+  _valuesForPeer(peerId) {
+    const phone = !!(this.peerOs && P.isPhoneOs(this.peerOs(peerId)));
+    return Object.fromEntries(Object.entries(VALUES).filter(([, d]) => (phone || !d.phone) && (!d.feature || this.features[d.feature])));
+  }
+
+  _wireToSaved(m, peerId) {
+    const vals = this._valuesForPeer(peerId);
+    if (vals[m.key] && vals[m.key].allowed.includes(m.value)) return { values: { [m.key]: m.value } };
+    if (m.all && typeof m.all === 'object') {
+      const mine = { values: {} };
+      for (const [k, d] of Object.entries(vals)) if (m.all.values && d.allowed.includes(m.all.values[k])) mine.values[k] = m.all.values[k];
+      for (const f of Object.keys(this.features)) {
+        const v = m.all[f];
+        if (v && typeof v === 'object') mine[f] = { out: v.in, in: v.out };
       }
-    });
+      return mine;
+    }
+    if (this.features[m.feature] && (m.dir === 'out' || m.dir === 'in') && typeof m.on === 'boolean') {
+      return { [m.feature]: { [m.dir === 'out' ? 'in' : 'out']: m.on } };
+    }
+    return null;
+  }
+
+  _mergeSaved(peerId, add) {
+    if (!add) return;
+    const cur = this.settings.pairSync[peerId] || { values: {} };
+    for (const [k, v] of Object.entries(add.values || {})) cur.values[k] = v;
+    for (const [f, v] of Object.entries(add)) {
+      if (f === 'values' || !v) continue;
+      if (!cur[f]) cur[f] = {};
+      for (const dir of ['out', 'in']) {
+        if (typeof v[dir] === 'boolean') cur[f][dir] = v[dir];
+      }
+    }
+    this.settings.pairSync[peerId] = cur;
+    this.save();
+  }
+
+  _stash(peerId, m) {
+    this._mergeSaved(peerId, this._wireToSaved(m, peerId));
+  }
+
+  _busWelcome(peerId) {
+    if (!this.bus || peerId === this.bus.selectedId()) return;
+    if (this.peerRole && this.peerRole(peerId) !== 'guest') return;
+    const saved = this.settings.pairSync[peerId];
+    if (!saved) return;
+    this.bus.send(peerId, { t: T.PAIR_SYNC, all: saved });
+  }
+
+  _applySync(m) {
+    const vals = this._values();
+    if (vals[m.key] && vals[m.key].allowed.includes(m.value)) return this._adopt({ values: { [m.key]: m.value } });
+    if (m.all && typeof m.all === 'object') {
+      const mine = { values: {} };
+      for (const [k, d] of Object.entries(vals)) if (m.all.values && d.allowed.includes(m.all.values[k])) mine.values[k] = m.all.values[k];
+      for (const f of Object.keys(this.features)) {
+        const v = m.all[f];
+        if (v && typeof v === 'object') mine[f] = { out: v.in, in: v.out }; // their in = our out
+      }
+      this._adopt(mine);
+    } else if (this.features[m.feature] && (m.dir === 'out' || m.dir === 'in') && typeof m.on === 'boolean') {
+      this._adopt({ [m.feature]: { [m.dir === 'out' ? 'in' : 'out']: m.on } });
+    }
   }
 
   // ReZume isn't restored per pair: its settings stay as they are, and the host's win on connect, so

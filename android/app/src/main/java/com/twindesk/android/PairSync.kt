@@ -13,6 +13,7 @@ class PairSync(core: Core) : Feature(core) {
         "notifs" to ("notifs.send" to "notifs.receive"),
         "audio" to ("audio.send" to "audio.receive"), // out: the phone's sound on the Mac (the Mac plays it over adb)
         "cursor" to ("cursor.out" to "cursor.in"), // in: the Mac's mouse and keyboard used here
+        "mic" to ("mic.send" to "mic.receive"), // out: this phone's microphone on the computer (it takes it over adb, or the iPhone's app sends it)
         "rezume" to ("rezume.send" to "rezume.receive"), // read and set through Rezume; its own switch is the shared value "rezume"
     )
 

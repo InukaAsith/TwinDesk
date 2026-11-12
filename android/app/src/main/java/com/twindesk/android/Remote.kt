@@ -174,7 +174,7 @@ class RemoteActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        mode = when (intent.getStringExtra("mode")) { "gamepad" -> "gamepad"; "voice" -> "voice"; else -> "pad" }
+        mode = when (val m = intent.getStringExtra("mode")) { "gamepad", "voice", "air", "present" -> m; else -> "pad" }
         if (mode == "gamepad") requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Voice typing keeps the system bars, and the page sits inside them and above the keyboard
@@ -210,6 +210,14 @@ class RemoteActivity : ComponentActivity() {
             }
             setContentView(frame)
         } else setContentView(h.view)
+    }
+
+    // The presentation remote: the volume keys go back (up) and forward (down) a slide, as on a clicker.
+    override fun dispatchKeyEvent(e: android.view.KeyEvent): Boolean {
+        val dir = when (e.keyCode) { android.view.KeyEvent.KEYCODE_VOLUME_UP -> 1; android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> -1; else -> 0 }
+        if (mode != "present" || dir == 0) return super.dispatchKeyEvent(e)
+        if (e.action == android.view.KeyEvent.ACTION_DOWN && e.repeatCount == 0) host?.post(JSONObject().put("t", "volkey").put("dir", dir))
+        return true
     }
 
     override fun onStart() {

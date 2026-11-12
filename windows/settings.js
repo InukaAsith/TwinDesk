@@ -10,7 +10,7 @@ const { normalizeFolder } = require('../shared/received.js');
 // The keys that can be held to move a window to the other computer (the helper reports these).
 const MOVE_KEYS = ['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'];
 
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'mac-pc', 'pc-mac', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'apps', 'rezume', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const OLD_TABS = { display: 'mac-pc', receive: 'mac-pc', share: 'pc-mac' }; // older names
 
@@ -83,7 +83,7 @@ function normalize(s) {
     // hud: popup when switching computers. inputProtocol: udp = tdv2 input lane (default), tcp = tdv1
     app: { hud: bool(appS.hud, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true }, // keepPinging: General › Advanced (shared/quiet.js)
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored
-    updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '' },
+    updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '', install: up.install === true }, // install: install new versions by themselves (shared/selfupdate.js)
     clipboard: {
       enabled: bool(c.enabled, false),
       send: bool(c.send, true),
@@ -232,6 +232,8 @@ function normalize(s) {
     ui: { tab: OLD_TABS[ui.tab] || (TABS.includes(ui.tab) ? ui.tab : 'overview'), overview: overviewParts(ui.overview), chats: bool(ui.chats, false), language: savedLanguage(ui.language),
       style: Look.style(ui.style), theme: Look.theme(ui.theme), accent: Look.accent(ui.accent) }, // General › Appearance (shared/look.js)
     windows: s.windows && typeof s.windows === 'object' ? s.windows : {},
+    modules: require('../shared/modules.js').normalize(s.modules), // General › Modules
+    deck: s.deck && typeof s.deck === 'object' && JSON.stringify(s.deck).length < 400000 ? s.deck : null, // the Deck's layout (shared/deck-model.js normalizes it when read)
   };
 }
 

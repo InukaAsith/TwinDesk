@@ -272,6 +272,21 @@
       REMOTE_KEY_DOWN: 'remote.kd', // {code} (KeyboardEvent.code)
       REMOTE_KEY_UP: 'remote.ku', // {code}
       REMOTE_TEXT: 'remote.text', // {text}: characters no key here types (Cyrillic, accents…), typed as they are; only while remote.state says text
+      // The Deck (shared/deck.js): a phone's or web device's buttons that this computer runs.
+      DECK_OFFER: 'deck.offer', // computer->phone {v}: this computer has the Deck on (none: no Deck page anywhere)
+      DECK_HELLO: 'deck.hello', // device->computer {}: it has a Deck
+      DECK_LAYOUT: 'deck.layout', // computer->device {layout (no paths), can: [action kinds], caps, mac} | {off: true} (TwinDesk Web, module off)
+      DECK_RUN: 'deck.run', // device->computer {id}: a tile
+      DECK_DONE: 'deck.done', // computer->device {id, ok, why?}
+      DECK_SAVE: 'deck.save', // device->computer {layout}: edited there
+      DECK_APPS: 'deck.apps', // device->computer {} / computer->device {apps: [{id, name, icon}]}
+      DECK_CLIP: 'deck.clip', // computer->device {text}: Clipboard › Send
+      DECK_SET: 'deck.set', // device->computer {id, value 0-1}: a slider tile, while it's dragged
+      DECK_STATE: 'deck.state', // device->computer {} / computer->device {state: {volume, muted, micVolume, micMuted, outputs, inputs, bt, displays, dark, dnd}}
+      DECK_WINS: 'deck.wins', // device->computer {} / computer->device {apps: [{key, name, icon, windows: [{wid, title, display}]}], displays, front}
+      DECK_PLACE: 'deck.place', // device->computer {wid, display, zone?: {x, y, w, h} of 12, restore?: a minimized one brought back, op?: close|min|max|full: its own buttons} -> deck.done {id: 'place'}
+      DECK_ARRANGE: 'deck.arrange', // device->computer {display, items: [{key, wid?, zone}]}: several apps at once, the ones not running opened -> deck.done {id: 'arrange'}
+      REMOTE_LASER: 'remote.laser', // phone->computer {on}: the presentation remote's laser dot here, following the pointer (shared/laser.js)
       REMOTE_RELEASE: 'remote.release', // let go of every key and button the remote holds
       // {b, lx, ly, rx, ry, lt, rt}, only while remote.state says pad: b the buttons (bits 0..13: A B X Y LB RB
       // Back Start L3 R3 Up Down Left Right), the sticks -1..1 (y down), the triggers 0..1; on change, at most every 8 ms
@@ -338,6 +353,18 @@
       SHARE_OFFER: 'share.offer', // phone->computer {on, port, secret, name}: its folder over WebDAV at its address, http://<it>:<port>/<secret>/<name>/; sent again when the session moves
       SHARE_HOST: 'share.host', // computer->phone {on, port, token, name}: this computer's folder, http://<computer>:<port>/<token>/<op>?p= (list, stat, file, mkdir, delete, rename)
       SHARE_SET: 'share.set', // phone->computer {serve}: switch the computer's folder for the phone on or off (its setting; share.host says how it is)
+      // Signing TwinDesk for iPhone with the person's own Apple ID (shared/iossign.js, ios-signer/,
+      // Signer.swift): the iPhone keeps the signing state, the computer's helper does the work.
+      SIGN_STATE: 'sign.state', // iPhone->computer {signedIn, email, until (ms: its session's end), auto}
+      SIGN_INFO: 'sign.info', // computer->iPhone {available, anyIpa, anisette, keep, days, busy, apps: [{bundleId, name, version, team, teamName, expires (s), twindesk, cached (its IPA is kept on the computer)}]}
+      SIGN_START: 'sign.start', // iPhone->computer {ipa?: {path (as file.done gave it), size} | app?: bundleId (its IPA is kept on the computer)}: a sealed run
+      SIGN_KEY: 'sign.key', // computer->iPhone {pub}: the helper's key for this run
+      SIGN_BOX: 'sign.box', // iPhone->computer {pub?, box}: its key and sealed request, then its sealed answers
+      SIGN_EV: 'sign.ev', // computer->iPhone {ev: 'step'|'progress'|'need2fa'|'needcert'|'state'|'done'|'error', …}; state's box is sealed for it
+      SIGN_WANT: 'sign.want', // computer->iPhone {now?, app?: bundleId}: TwinDesk there runs out soon (now: Refresh was clicked here)
+      SIGN_KEEP: 'sign.keep', // either way {state}: the signing state, for the other side to keep (the computer only with Keep a copy on)
+      SIGN_STOP: 'sign.stop', // iPhone->computer: stop the run
+      SIGN_SET: 'sign.set', // iPhone->computer {on}: App refresh switched there; the computer's TwinDesk iPhone follows (and sign.info {on, switched} the other way)
       // Resume: `welcome` carries {resume: key}; the guest opens a second socket (another path to the
       // host, e.g. the network once both are on one) with hello {..., resume: key} and gets welcome
       // {resumed: true}: from then on both sides send on it, and the first socket stays as the

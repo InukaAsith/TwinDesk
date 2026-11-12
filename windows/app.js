@@ -15,19 +15,20 @@
   // Sidebar groups: no headings, one icon column, a small gap between groups: the device and
   // Connection, the phone's own things, screens, input, sharing, media; Multi-device, General and
   // About below a line. ORDER places each tab (the tab files' own order is the fallback).
-  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, 'mac-pc': 2, 'pc-mac': 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
-  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
+  const GROUP = { overview: 0, connection: 0, messages: 1, calls: 1, media: 1, papps: 1, mirror: 2, 'mac-pc': 2, 'pc-mac': 2, apps: 2, cursor: 3, keyboard: 3, remote: 3, deck: 3, clipboard: 4, notifications: 4, files: 4, pfiles: 4, mount: 4, audio: 5, camera: 5, rezume: 5, terminal: 5 };
+  const ORDER = { overview: 0, connection: 1, messages: 5, calls: 6, media: 7, papps: 8, mirror: 10, 'mac-pc': 11, 'pc-mac': 12, apps: 13, cursor: 20, keyboard: 21, remote: 22, deck: 23, clipboard: 40, notifications: 41, files: 42, pfiles: 43, mount: 44, audio: 60, camera: 61, rezume: 62, terminal: 63, multi: 95, general: 100, about: 110 };
   // Older names for a page (saved in settings, sent by the tray or a popup).
   const ALIAS = { phone: 'overview' };
   const orderOf = (d) => ORDER[UI.baseOf(d)] ?? d.order ?? 50; // a kind's own version of a page (variantOf): the page's place
   let lastGroup;
   let gap = null; // the gap before the current group (hidden with the group: renderSidebar)
-  for (const def of UI.tabs.slice().sort((a, b) => orderOf(a) - orderOf(b))) {
+  const custom = UI.navCustom(); // Arrange (shared/ui-arrange.js): the person's order, without the groups' gaps
+  for (const def of UI.arrangeSort(UI.tabs.slice().sort((a, b) => orderOf(a) - orderOf(b)))) {
     if (def.navHidden) { // reached another way (the phone tile)
       views.set(def.id, { def, ...buildPage(def), navBtn: el('button'), stateEl: el('span') });
       continue;
     }
-    const group = GROUP[UI.baseOf(def)];
+    const group = custom ? 0 : GROUP[UI.baseOf(def)];
     if (!def.bottom && lastGroup !== undefined && group !== lastGroup) nav.append(gap = el('li', { class: 'gap', attrs: { role: 'presentation' } }));
     lastGroup = group;
     if (def.bottom && !nav.querySelector('.sep')) nav.append(el('li', { class: 'sep', attrs: { role: 'presentation' } })); // one line above General and About
@@ -40,10 +41,13 @@
       navLabel,
       stateEl,
     ]);
+    navBtn.dataset.base = UI.baseOf(def);
+    if (def.bottom) navBtn.dataset.bottom = '1';
     navBtn.onclick = () => show(def.id, true);
     nav.append(el('li', {}, [navBtn]));
     views.set(def.id, { def, ...buildPage(def), navBtn, stateEl, navLabel, gap });
   }
+  UI.arrangeHold(nav);
 
   function buildPage(def) {
     const page = el('section', { class: 'page', id: 'page-' + def.id, hidden: true, attrs: { role: 'tabpanel' } });
@@ -100,7 +104,7 @@
     if (want && want.def.web && !UI.webDev) id = 'web';
     else if (want && !want.def.web && !UI.WEB_KEEP.includes(want.def.id)) UI.webDev = null; // TwinDesk Web, AirPlay, General, About: both
     let v = views.get(id) || views.get(home(UI.state));
-    if (UI.state && v.def.hidden && v.def.hidden(UI.state)) v = views.get(home(UI.state)) || v;
+    if (UI.state && v.def.hidden && v.def.hidden(UI.state) && UI.tourPeek !== v.def.id) v = views.get(home(UI.state)) || v; // tourPeek: the tour shows it for now (shared/ui-tour.js)
     if (current === v) {
       if (UI.state) { renderSidebar(UI.state); renderPage(v, UI.state); }
       return;
@@ -112,6 +116,7 @@
     }
     current = v;
     if (UI.state) renderSidebar(UI.state); // in or out of a web device's pages
+    if (current !== v) return; // it sent us elsewhere (this page is hidden for the device now): that page is shown
     v.page.hidden = false;
     v.navBtn.classList.add('active');
     v.navBtn.setAttribute('aria-selected', 'true');
@@ -178,7 +183,7 @@
     // device picked: its own pages, then TwinDesk Web, AirPlay & SMB, General and About.
     for (const v of views.values()) {
       const hide = UI.webDev ? !v.def.web && !UI.WEB_KEEP.includes(v.def.id)
-        : !!v.def.web || !!(v.def.hidden && v.def.hidden(s));
+        : !!v.def.web || (!!(v.def.hidden && v.def.hidden(s)) && UI.tourPeek !== v.def.id);
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
       // Hidden for the device now in session: its version of this page (shared/ui-kinds.js), else the start.
       if (hide && current === v) { const twin = UI.webDev ? v.def.id : UI.pick(v.def.id, s); show(twin !== v.def.id ? twin : home(s), false); }
@@ -365,6 +370,7 @@
   api.getState().then((s) => {
     UI.state = s;
     show((s.ui && s.ui.tab) || home(s), false);
+    if (window.Tour) Tour.maybe(s); // new here: the tour, once; after an update: What's new (shared/ui-tour.js). Before render: a page that throws can't keep it away
     render(s);
   });
 })();

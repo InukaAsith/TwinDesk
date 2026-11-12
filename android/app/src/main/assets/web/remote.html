@@ -97,6 +97,33 @@
     <div id="map-list"></div>
   </div>
 
+  <!-- Air mouse: hold the big area and point the phone; it moves the pointer as the phone turns
+       (the gyroscope: the app's own sensors through TD.motion, or the browser's). -->
+  <section id="air-view" class="air-only">
+    <div id="air"><span><b data-i18n>Hold here and point</b><br><span data-i18n>Turn the phone to move the pointer · tap to click</span></span></div>
+    <div id="air-wheel" aria-label="Scroll"><span data-i18n>Scroll</span></div>
+    <div id="air-clicks">
+      <button id="a-left" data-i18n>Left click</button>
+      <button id="a-right" data-i18n>Right click</button>
+    </div>
+  </section>
+
+  <!-- Presentation remote: the keys every slideshow app takes (Page Down / Page Up, B, Esc), a
+       pointer that moves the computer's pointer as the phone turns, and a timer. -->
+  <section id="present-view" class="present-only">
+    <div id="p-row">
+      <button id="p-start" data-i18n>Start</button>
+      <button id="p-black" data-i18n>Black screen</button>
+      <button id="p-exit" data-i18n>End</button>
+      <button id="p-laser" data-i18n>Laser</button>
+    </div>
+    <button id="p-timer" aria-label="Timer">0:00</button>
+    <button id="p-prev" aria-label="Previous">‹ <span data-i18n>Previous</span></button>
+    <button id="p-next" aria-label="Next"><span data-i18n>Next</span> ›</button>
+    <button id="p-point" data-i18n>Hold to point</button>
+  </section>
+  <div id="motion-ask" hidden><p id="motion-ask-text"></p><button id="motion-ok" data-i18n>Allow motion</button></div>
+
   <textarea id="kbd" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
   <script src="remote.js"></script>
 </body>

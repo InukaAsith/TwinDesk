@@ -16,6 +16,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         static let fclip = "fclip"
         static let invite = "invite"
         static let screen = "screen"
+        static let sign = "sign"
     }
 
     func setUp() {
@@ -29,6 +30,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             UNNotificationCategory(identifier: Cat.clipOut, actions: [send], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.fclip, actions: [save], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.invite, actions: [connect], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Cat.sign, actions: [UNNotificationAction(identifier: "refresh", title: tr("Refresh"), options: [.foreground])], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.screen, actions: [UNNotificationAction(identifier: "view", title: tr("View"), options: [.foreground])], intentIdentifiers: []),
         ])
         c.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
@@ -84,6 +86,18 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         post("invite", tr("{name} wants to connect", ["name": name]), tr("Tap to pair this {device}.", ["device": Device.word]), cat: Cat.invite, sound: true)
     }
 
+    // App refresh (SignerFeature.swift): an app here runs out soon. Tapping it opens TwinDesk and the refresh runs.
+    func signRefresh(app: String, name: String, left: String, computer: String) {
+        post("sign.want", tr("{name} needs a refresh", ["name": name]), [left, tr("Tap to refresh it from {computer}.", ["computer": computer])].filter { !$0.isEmpty }.joined(separator: " "),
+             cat: Cat.sign, info: ["app": app], sound: true)
+    }
+
+    // A newer TwinDesk, which the computer installs over this one (App refresh): tap to update.
+    func signUpdate(version: String, computer: String) {
+        post("sign.update", tr("TwinDesk {version} is available", ["version": version]), tr("Tap to install it from {computer}. Your data stays.", ["computer": computer]),
+             cat: Cat.sign, info: ["app": "#update"], sound: true)
+    }
+
     func filesIn(_ name: String, ok: Bool, from: String) {
         guard UIApplication.shared.applicationState != .active else { return }
         post("files.in." + UUID().uuidString, ok ? tr("Received {name}", ["name": name]) : tr("{name} didn’t arrive", ["name": name]), ok ? tr("From {from} · Files › TwinDesk › Received", ["from": from]) : tr("From {from}", ["from": from]))
@@ -118,6 +132,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         case (Cat.screen, _):
             core.screen.autoOpen = true
             core.changed()
+        case (Cat.sign, _):
+            core.signer.tappedNotification(app: info["app"] as? String)
         case (Cat.invite, _):
             if let f = core.invite { core.pair(f) }
         case (_, UNNotificationDefaultActionIdentifier) where response.notification.request.identifier == "update":

@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Multi-device (Mesh mode, beta) in the one-to-one app: the picture of a mesh on its tab, and the popup
-// before it's turned on, which says it's in beta (docs/multi-device.md).
+// Multi-device (Mesh mode) in the one-to-one app: the picture of a mesh on its tab, and the popup
+// before it's turned on, which says to keep it off with only two devices (docs/multi-device.md).
 //   MeshIntro.art()                 -> an element: devices, each one linked to every other
 //   MeshIntro.confirm(onTurnOn)     -> the popup (styled as pairpop.js's .pair-pop); Turn on calls onTurnOn
 (function () {
@@ -36,7 +36,7 @@
     return wrap;
   }
 
-  // Said before it's turned on: it's in beta, and with two devices the one-to-one app is the one to use.
+  // Said before it's turned on: with two devices the one-to-one app is the one to use.
   function confirm(onTurnOn) {
     const el = (tag, cls, text) => {
       const e = document.createElement(tag);
@@ -50,10 +50,8 @@
     pop.setAttribute('aria-modal', 'true');
     const body = el('div', 'pop-body');
     const title = el('strong', '', t("Turn on Multi-device? "));
-    title.append(el('span', 'pill beta', t("Mesh · Beta")));
     body.append(
       title,
-      el('p', '', t("Mesh mode is still in beta, and you may run into some issues with it.")),
       el('p', '', t("If you connect only two devices, keep it off.")),
       el('div', 'hint', t("TwinDesk restarts when you turn it on or off.")),
     );

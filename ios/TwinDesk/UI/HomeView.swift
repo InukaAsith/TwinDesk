@@ -33,6 +33,9 @@ struct OverviewView: View {
                     .glassCard()
                 }
             }
+            // At the bottom: this TwinDesk runs out within 7 days (its own provisioning profile); off in App refresh.
+            // Only for a TwinDesk a computer installed (AltStore and SideStore refresh their own).
+            if core.signer.homeCard, core.signer.mine, Signer.expires > 0, Signer.expires - Date().timeIntervalSince1970 < 7 * 86400 { ExpiryCard() }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }
@@ -52,6 +55,8 @@ struct OverviewView: View {
             TileDef(id: "voice", label: tr("Voice typing"), symbol: "mic.fill", color: Color(red: 1, green: 0.27, blue: 0.4), state: tr("Speak, it types on {name}", ["name": name])) { ui.cover = .remote("voice") },
             TileDef(id: "touchpad", label: tr("Touchpad"), symbol: "hand.point.up.left.fill", color: .orange, state: tr("And keyboard")) { ui.cover = .remote("pad") },
             TileDef(id: "gamepad", label: tr("Gamepad"), symbol: "gamecontroller.fill", color: Color(red: 0.69, green: 0.32, blue: 0.87), state: tr("Keys or a controller")) { ui.cover = .remote("gamepad") },
+            TileDef(id: "air", label: tr("Air mouse"), symbol: "dot.radiowaves.forward", color: Color(red: 0.19, green: 0.69, blue: 0.78), state: tr("Point to move")) { ui.cover = .remote("air") },
+            TileDef(id: "present", label: tr("Presentation"), symbol: "play.rectangle.on.rectangle.fill", color: .orange, state: tr("Next, previous, pointer")) { ui.cover = .remote("present") },
             TileDef(id: "photos", label: tr("Send photos"), symbol: "photo.on.rectangle", color: Page.photos.color, state: tr("To {name}", ["name": name])) { pickingPhotos = true },
             TileDef(id: "files", label: tr("Send files"), symbol: "folder.fill.badge.plus", color: Page.files.color, state: tr("To Downloads")) { picking = true },
             TileDef(id: "clipboard", label: tr("Send clipboard"), symbol: "doc.on.clipboard.fill", color: Page.clipboard.color, state: tr("What’s copied here")) { _ = core.clip.sendCurrent(force: true) },
@@ -65,8 +70,29 @@ struct OverviewView: View {
             TileDef(id: "ring", label: tr("Ring"), symbol: "bell.and.waves.left.and.right.fill", color: TDColor.bad, has: can.contains(.ring), state: tr("Find {name}", ["name": name])) { core.dev.act("ring") },
             TileDef(id: "sound", label: tr("Sound"), symbol: "speaker.wave.2.fill", color: Page.audio.color, state: tr("{name}’s sound", ["name": name])) { ui.open(.audio) },
             TileDef(id: "camera", label: tr("Webcam"), symbol: "video.fill", color: Page.camera.color, state: tr("This camera on {name}", ["name": name])) { ui.open(.camera) },
+            TileDef(id: "deck", label: tr("Open Deck"), symbol: "square.grid.2x2.fill", color: Color(red: 0.37, green: 0.36, blue: 0.9), has: core.deck.offered, state: tr("Full screen")) { ui.cover = .deck },
+            // Shared straight from here (their pages have the details).
+            TileDef(id: "camShare", label: tr("Share camera"), symbol: "video.fill", color: TDColor.good, on: core.camera.share,
+                    state: core.camera.share ? tr("On {name}", ["name": name]) : tr("Off")) { core.camera.setShare(!core.camera.share); core.changed() },
+            TileDef(id: "micShare", label: tr("Share mic"), symbol: "mic.fill", color: .orange, on: core.sync.get("mic", "out"),
+                    state: core.sync.get("mic", "out") ? tr("A microphone on {name}", ["name": name]) : tr("Off")) { core.sync.set("mic", "out", !core.sync.get("mic", "out")) },
             TileDef(id: "notifications", label: tr("Notifications"), symbol: "bell.badge.fill", color: Page.notifications.color, state: tr("Both ways")) { ui.open(.notifications) },
+            // History's own views (HistoryView.swift).
+            TileDef(id: "clipHistory", label: tr("Clipboard history"), symbol: "clock.arrow.circlepath", color: Page.clipboard.color,
+                    state: tr("{count} items", ["count": core.history.clip().count])) { ui.history = "clip" },
+            TileDef(id: "notifHistory", label: tr("Notification history"), symbol: "clock.arrow.circlepath", color: Page.notifications.color,
+                    state: tr("{count} items", ["count": core.history.notifs().count])) { ui.history = "notifs" },
         ]
+        // Deck tiles added to the quick actions (the Deck's tile editor): they run there as on the Deck page.
+        for item in TileLayout.load(core.store).items where item.id.hasPrefix("deck:") {
+            let tid = String(item.id.dropFirst(5))
+            let found = core.deck.find(tid)?.tile
+            let a = found?.obj("action") ?? [:]
+            let runs = found != nil && core.deck.offered && !["nav", "none", "slider"].contains(a.str("k")) && core.deck.runs(a)
+            defs.append(TileDef(id: item.id, label: found.map { deckLabel($0, core.deck.platform) } ?? tr("Deck"),
+                                symbol: found.flatMap { DeckCatalog.sf[deckIcon($0)] } ?? "square.grid.3x3.fill",
+                                color: deckColor(found?.str("color", max: 7) ?? "#0a84ff"), has: runs, state: name) { core.deck.run(tid) })
+        }
         if core.fclip.offer != nil { // what the computer copied: kept first while it's there
             defs.insert(TileDef(id: "auto.savecopied", label: tr("Save copied"), symbol: "square.and.arrow.down.fill", color: TDColor.good, state: tr("Copied on {name}", ["name": name])) { core.fclip.save() }, at: 0)
         }
@@ -107,6 +133,39 @@ struct OverviewView: View {
             }
             await MainActor.run { core.files.flushShares() }
         }
+    }
+}
+
+// When this TwinDesk stops opening (a sideloaded build's 7 days), and Refresh: through the computer
+// when App refresh is set up, else to its page to set it up.
+struct ExpiryCard: View {
+    @EnvironmentObject var core: Core
+    @EnvironmentObject var ui: AppUI
+
+    var body: some View {
+        let s = core.signer
+        let secs = Signer.expires - Date().timeIntervalSince1970
+        let days = Int(secs / 86400)
+        let title = secs <= 0 ? tr("TwinDesk has expired")
+            : days >= 1 ? tr("TwinDesk expires in {count} days", ["count": "\(days)"])
+            : tr("TwinDesk expires in {count} hours", ["count": "\(max(1, Int(secs / 3600)))"])
+        let date = Date(timeIntervalSince1970: Signer.expires).formatted(date: .abbreviated, time: .shortened)
+        let ready = s.on && core.connected && s.available && s.facts.signedIn
+        return VStack(alignment: .leading, spacing: 12) {
+            CardHeader(symbol: "clock.badge.exclamationmark", color: days < 2 ? TDColor.bad : Page.signing.color, title: title,
+                       detail: tr("Until {date}", ["date": date]))
+            if s.running {
+                Button { ui.open(.signing) } label: {
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text(tr("Refreshing…")) }.frame(maxWidth: .infinity)
+                }.secondaryButton()
+            } else if ready {
+                Button { s.refresh() } label: { Label(tr("Refresh now"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.primaryButton()
+            } else {
+                Button { ui.open(.signing) } label: { Label(tr("Set up App refresh"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity) }.secondaryButton()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
     }
 }
 

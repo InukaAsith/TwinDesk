@@ -56,6 +56,15 @@ struct SettingsView: View {
                 }
                 .glassCard()
 
+                // Arrange (SearchView.swift): which pages are tabs, and the order.
+                SectionTitle(text: tr("Page order"))
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(tr("Arrange the pages")) { AppUI.shared.arranging = true }
+                        .secondaryButton().frame(maxWidth: .infinity, alignment: .leading)
+                    Text(tr("Which are in the bottom bar, and in what order. Or Edit on More")).font(.caption).foregroundStyle(.secondary)
+                }
+                .glassCard()
+
                 SectionTitle(text: tr("Language"))
                 LanguagePicker()
 

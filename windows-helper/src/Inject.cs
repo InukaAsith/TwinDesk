@@ -102,8 +102,68 @@ namespace MacShare
                 case 4: flags = down ? Native.MOUSEEVENTF_XDOWN : Native.MOUSEEVENTF_XUP; data = Native.XBUTTON2; break;
                 default: return;
             }
+            if (b == 0 && down && OnOwnCaptionButton())
+            {
+                // Held back until the release (#209): Windows' caption-button loop would stall our app's
+                // main thread, which is the one that has to bring us that release.
+                Native.GetCursorPos(out heldCaption);
+                captionHeld = true;
+                heldButtons.Add(b);
+                return;
+            }
+            if (b == 0 && !down && captionHeld)
+            {
+                captionHeld = false;
+                heldButtons.Remove(b);
+                Native.POINT now;
+                Native.GetCursorPos(out now);
+                bool moved = now.x != heldCaption.x || now.y != heldCaption.y;
+                if (moved) MoveTo(heldCaption.x, heldCaption.y);
+                Send(Mouse(0, 0, 0, Native.MOUSEEVENTF_LEFTDOWN));
+                if (moved) MoveTo(now.x, now.y); // released off the button: Windows cancels it, as with a real mouse
+                Send(Mouse(0, 0, 0, Native.MOUSEEVENTF_LEFTUP));
+                return;
+            }
             if (down) heldButtons.Add(b); else heldButtons.Remove(b);
             Send(Mouse(0, 0, data, flags));
+        }
+
+        bool captionHeld;
+        Native.POINT heldCaption;
+
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
+        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+
+        static uint appPid; // TwinDesk's main process (our parent), 0 until known
+        static uint AppPid()
+        {
+            if (appPid == 0)
+            {
+                uint ppid;
+                if (AppWindows.Parents().TryGetValue((uint)System.Diagnostics.Process.GetCurrentProcess().Id, out ppid)) appPid = ppid;
+            }
+            return appPid;
+        }
+
+        // The pointer is on the minimize, maximize, close or help button of one of TwinDesk's own windows.
+        static bool OnOwnCaptionButton()
+        {
+            Native.POINT p;
+            if (!Native.GetCursorPos(out p)) return false;
+            IntPtr h = WindowFromPoint(p);
+            if (h == IntPtr.Zero) return false;
+            IntPtr root = GetAncestor(h, 2); // GA_ROOT
+            uint pid;
+            GetWindowThreadProcessId(root != IntPtr.Zero ? root : h, out pid);
+            uint app = AppPid();
+            if (app == 0 || pid != app) return false;
+            IntPtr hit;
+            IntPtr l = new IntPtr(((p.y & 0xFFFF) << 16) | (p.x & 0xFFFF));
+            if (SendMessageTimeout(h, 0x84 /* WM_NCHITTEST */, IntPtr.Zero, l, 2 /* SMTO_ABORTIFHUNG */, 100, out hit) == IntPtr.Zero) return false;
+            int ht = (int)hit.ToInt64();
+            return ht == 8 || ht == 9 || ht == 20 || ht == 21; // HTMINBUTTON, HTMAXBUTTON, HTCLOSE, HTHELP
         }
 
         // DOM sign: positive dy = scroll down (content further down) → negative WHEEL data.
@@ -226,6 +286,7 @@ namespace MacShare
             heldScans.Clear();
             tapDown.Clear();
             modsOnly = swallowSpace = false;
+            if (captionHeld) { captionHeld = false; heldButtons.Remove(0); } // never pressed here: nothing to release
             foreach (int b in new List<int>(heldButtons)) Button(b, false);
             heldButtons.Clear();
             wheelRem = hwheelRem = 0;

@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
         TwinService.start(this)
         setContent { Theme { App(Core.get(this), resumed.value) } }
         openTab.value = intent?.getStringExtra("tab")
+        if (intent?.getBooleanExtra("update", false) == true) Core.get(this).updates.installNow() // the update notification
     }
 
     // A notification opened a page (the computer's media: Media).
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intent.getStringExtra("tab")?.let { openTab.value = it }
+        if (intent.getBooleanExtra("update", false)) Core.get(this).updates.installNow()
     }
 
     override fun onResume() {
@@ -152,6 +154,7 @@ private enum class Tab(val title: String, val icon: ImageVector, val colors: Lis
     Cursor("Mouse", Ico.cursor, grad(0xFFFFB340, 0xFFFF9500), "Input"),
     Keyboard("Keyboard", Ico.keyboard, grad(0xFFD1D1D6, 0xFF8E8E93), "Input"),
     Remote("Remote", Ico.remote, grad(0xFFBF5AF2, 0xFF8944AB), "Input"),
+    Deck("Deck", Ico.deck, grad(0xFFBF5AF2, 0xFF5E5CE6), "Input"), // only while the computer offers it (Deck.kt)
     Clipboard("Clipboard", Ico.clipboard, grad(0xFF64D2FF, 0xFF30B0C7), "Share"),
     Notifications("Notifications", Ico.bell, grad(0xFFFF6961, 0xFFFF3B30), "Share"),
     Files("Files", Ico.files, grad(0xFF64D2FF, 0xFF0A84FF), "Share"),
@@ -183,14 +186,21 @@ private fun peerShown(core: Core, t: Tab): Boolean {
     }
 }
 
+// The pages in the person's order (Arrange.kt), General and About last.
+private fun ordered(core: Core): List<Tab> =
+    NavOrder.sort(core.store, Tab.entries.filter { it.group != "bottom" }) { it.name.lowercase() } + Tab.entries.filter { it.group == "bottom" }
+
 // The bottom bar: Overview first while connected, Connection second; before that Connection first.
-private fun bottom(core: Core) = when {
+// Arranged: the first pages shown, as many as chosen.
+private fun bottom(core: Core): List<Tab> = NavOrder.load(core.store)?.let { s -> ordered(core).filter { it.group != "bottom" && shown(core, it) }.take(s.bar) } ?: when {
     core.host != null -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files)
     peerMode(core) -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files).filter { peerShown(core, it) }
     else -> listOf(Tab.Connection, Tab.Screen, Tab.Files)
 }
 // Overview only while connected (elsewhere, Connection shows); with a phone, only what it can do.
-private fun shown(core: Core, t: Tab) = if (peerMode(core)) peerShown(core, t) else t != Tab.Overview || core.host != null
+private fun shown(core: Core, t: Tab) = core.moduleOn(t.name.lowercase()) && // General › Modules (Modules.kt)
+    (t != Tab.Deck || (core.host != null && core.deck.offered)) && // the computer has the Deck on
+    if (peerMode(core)) peerShown(core, t) else t != Tab.Overview || core.host != null
 
 // The sidebar's green dot: the page's feature is on.
 private fun isOn(core: Core, t: Tab): Boolean = if (peerMode(core)) when (t) {
@@ -239,7 +249,8 @@ fun App(core: Core, resumed: Int) {
     wasConnected = connected
     if (!connected && tab == Tab.Overview) tab = Tab.Connection
     if (!shown(core, tab)) tab = if (connected) Tab.Overview else Tab.Connection // a page the other device can't do
-    val BOTTOM = bottom(core)
+    @Suppress("UNUSED_EXPRESSION") NavOrder.version.intValue // redraw when arranged
+    val BOTTOM = bottom(core).filter { core.moduleOn(it.name.lowercase()) } // General › Modules
     var more by rememberSaveable { mutableStateOf(false) }
     MainActivity.openTab.value?.let { name ->
         Tab.entries.firstOrNull { it.name == name }?.takeIf { shown(core, it) }?.let { tab = it; more = false }
@@ -318,13 +329,25 @@ fun App(core: Core, resumed: Int) {
     // The wireless debugging guide when opened from General › Setup / Cursor (Overview has it as a card).
     if (Guide.open.value) return WirelessGuide(core, ctx, v + resumed)
 
+    if (NavOrder.open.value) {
+        val items = ordered(core).filter { it.group != "bottom" && core.moduleOn(it.name.lowercase()) }
+            .map { ArrangeItem(it.name.lowercase(), tr(it.title), it.icon, it.colors) }
+        ArrangeDialog(core.store, items, NavOrder.load(core.store)?.bar ?: BOTTOM.size) { NavOrder.open.value = false }
+    }
+    // A history's own view (History.kt): from its page or an Overview shortcut.
+    History.view.value?.let { what -> return HistoryScreen(core, v, what) }
+    // Search (Search.kt): over everything; a result opens its page.
+    if (Search.open.value) return SearchScreen(Tab.entries.filter { shown(core, it) }.map { it.name to it.title }) { name ->
+        Tab.entries.firstOrNull { it.name == name }?.takeIf { shown(core, it) }?.let { tab = it; more = false }
+    }
+
     Box(Modifier.fillMaxSize().background(pal.content)) {
         if (wide) {
             Row(Modifier.safeDrawingPadding()) {
                 Sidebar(core, v, tab) { tab = it }
                 // the page in a rounded sheet beside the sidebar, as the phone's under its branding
                 Box(Modifier.weight(1f).fillMaxHeight().padding(top = 10.dp, end = 10.dp, bottom = 10.dp).clip(RoundedCornerShape(28.dp)).background(pal.sheet)) {
-                    Page(core, v, tab, Modifier.fillMaxSize())
+                    Page(core, v, resumed, tab, Modifier.fillMaxSize())
                 }
             }
         } else {
@@ -349,15 +372,17 @@ fun App(core: Core, resumed: Int) {
                 // The page in a big rounded sheet under the branding; the bar floats at its bottom.
                 Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(pal.sheet)) {
                 if (more) MoreList(core, v, BOTTOM, Modifier.weight(1f)) { go(it, false) }
-                else Page(core, v, tab, Modifier.weight(1f))
+                else Page(core, v, resumed, tab, Modifier.weight(1f))
                 // A Material navigation bar, as Google's own apps have it: line icons, the selected
                 // one in a pill of the accent colour, labels under them, the bar itself rounded and
                 // floating off the edges (the tablet keeps the Mac-like sidebar with coloured tiles).
+                // Search: its own round button at the bar's right end (Search.kt). Holding the bar: Arrange.
+                Row(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 NavigationBar(
                     containerColor = pal.card, tonalElevation = 0.dp, windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp)
+                    modifier = Modifier.weight(1f)
                         .shadow(14.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
-                        .clip(RoundedCornerShape(28.dp)).height(72.dp),
+                        .clip(RoundedCornerShape(28.dp)).height(72.dp).onHold { NavOrder.open.value = true },
                 ) {
                     val item = @Composable { label: String, icon: ImageVector, selected: Boolean, dot: Boolean, go: () -> Unit ->
                         NavigationBarItem(
@@ -377,6 +402,13 @@ fun App(core: Core, resumed: Int) {
                     }
                     for (t in BOTTOM) item(if (t == Tab.Connection) tr("Connect") else tr(t.title), t.icon, !more && tab == t, isOn(core, t)) { go(t, false) }
                     item(tr("More"), Ico.more, more || tab !in BOTTOM, false) { go(tab, true) }
+                }
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    Modifier.size(60.dp).shadow(14.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+                        .clip(RoundedCornerShape(50)).background(pal.card).clickable { Search.open.value = true },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Ico.search, tr("Search"), tint = pal.text, modifier = Modifier.size(24.dp)) }
                 }
                 }
             }
@@ -416,12 +448,15 @@ private fun Sidebar(core: Core, v: Int, tab: Tab, go: (Tab) -> Unit) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(Modifier.width(250.dp).fillMaxHeight().background(pal.sidebar).verticalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 14.dp)) {
         Box(Modifier.padding(start = 4.dp, bottom = 18.dp)) { Identity(core, v, 54) }
+        SearchField() // Search.kt
         Devices(core, v) { go(Tab.Overview) }
         var group: String? = null
-        for (t in Tab.entries.filter { shown(core, it) }) {
-            if (t.group == "bottom" && group != "bottom") Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(pal.line))
-            else if (group != null && t.group != group) Spacer(Modifier.height(10.dp))
-            group = t.group
+        val custom = NavOrder.load(core.store) != null // arranged: no groups' gaps
+        for (t in ordered(core).filter { shown(core, it) }) {
+            val g = if (custom && t.group != "bottom") "" else t.group
+            if (g == "bottom" && group != "bottom") Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth().height(1.dp).background(pal.line))
+            else if (group != null && g != group) Spacer(Modifier.height(10.dp))
+            group = g
             NavItem(t.icon, t.colors, tr(t.title), tab == t, isOn(core, t)) { go(t) }
         }
     }
@@ -487,8 +522,9 @@ private fun MoreList(core: Core, v: Int, BOTTOM: List<Tab>, modifier: Modifier, 
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp)) {
         PageHead(tr("More"), "")
+        SearchField() // Search.kt
         MacCard {
-            Tab.entries.filter { it !in BOTTOM && shown(core, it) }.forEachIndexed { i, t ->
+            ordered(core).filter { it !in BOTTOM && shown(core, it) }.forEachIndexed { i, t ->
                 Column {
                     if (i > 0) Box(Modifier.padding(start = 58.dp).fillMaxWidth().height(1.dp).background(pal.line))
                     Row(Modifier.fillMaxWidth().clickable { go(t) }.padding(horizontal = 16.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -505,7 +541,7 @@ private fun MoreList(core: Core, v: Int, BOTTOM: List<Tab>, modifier: Modifier, 
 }
 
 @Composable
-private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
+private fun Page(core: Core, v: Int, resumed: Int, tab: Tab, modifier: Modifier) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
         Column(Modifier.widthIn(max = 820.dp)) {
@@ -521,8 +557,9 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
                 Tab.Cursor -> CursorPage(core, v)
                 Tab.Keyboard -> KeyboardPage(core, v)
                 Tab.Remote -> RemotePage(core, v)
+                Tab.Deck -> DeckPage(core, v)
                 Tab.Clipboard -> ClipboardPage(core, v)
-                Tab.Notifications -> NotificationsPage(core, v)
+                Tab.Notifications -> NotificationsPage(core, v + resumed)
                 Tab.Files -> FilesPage(core, v)
                 Tab.Rezume -> RezumePage(core, v)
                 Tab.Sound -> SoundPage(core, v)
@@ -734,16 +771,14 @@ private fun ComputerCard(core: Core, name: String) {
     }
 }
 
-// TwinDesk's own Scan QR code: Google's code scanner where the phone has it (no camera permission
-// here), else the camera app (it opens twindesk:// links too: QrActivity).
+// TwinDesk's own Scan QR code: Google's code scanner where the build and the phone have it (no
+// camera permission here, QrScan.kt), else the camera app (it opens twindesk:// links too: QrActivity).
 fun scanQr(ctx: android.content.Context) {
-    val ok = runCatching {
-        val opts = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
-            .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build()
-        com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(ctx, opts).startScan()
-            .addOnSuccessListener { b -> if (!QrActivity.open(ctx, b.rawValue.orEmpty())) android.widget.Toast.makeText(ctx, tr("That isn’t a TwinDesk pairing code"), android.widget.Toast.LENGTH_SHORT).show() }
-            .addOnFailureListener { openCamera(ctx) }
-    }.isSuccess
+    val ok = runCatching<Boolean> {
+        QrScan.start(ctx,
+            { code -> if (!QrActivity.open(ctx, code)) android.widget.Toast.makeText(ctx, tr("That isn’t a TwinDesk pairing code"), android.widget.Toast.LENGTH_SHORT).show() },
+            { openCamera(ctx) })
+    }.getOrDefault(false)
     if (!ok) openCamera(ctx)
 }
 
@@ -1286,7 +1321,7 @@ private fun RemotePage(core: Core, v: Int) {
     val ctx = LocalContext.current
     val name = them(core)
     val me = core.store.deviceName
-    PageHead(tr("Remote"), tr("Use this device as {name}’s touchpad and keyboard, a gamepad, or to type by voice.", "name" to name))
+    PageHead(tr("Remote"), tr("Use this device as {name}’s touchpad and keyboard, an air mouse, a presentation remote, a gamepad, or to type by voice.", "name" to name))
     if (core.host == null) {
         NotConnected(core, v)
         return BtPadCard(core) // works without TwinDesk on the computer
@@ -1303,6 +1338,12 @@ private fun RemotePage(core: Core, v: Int) {
         }
         MacRow(tr("Voice typing"), tr("Speak with your keyboard’s voice typing (Gboard’s microphone). Each word is typed on {name} as it appears, and fixes are typed there too.", "name" to name)) {
             Primary(tr("Open")) { open("voice") }
+        }
+        MacRow(tr("Air mouse"), tr("Hold the screen and point the phone: the pointer follows as you turn it. Tap to click, hold Left click to drag, and slide the strip to scroll.")) {
+            Primary(tr("Open")) { open("air") }
+        }
+        MacRow(tr("Presentation"), tr("A slide clicker for PowerPoint, Keynote, Google Slides and PDFs: Next and Previous (or the volume keys), Start, Black screen, and Hold to point, which moves the pointer as you turn the phone.")) {
+            Primary(tr("Open")) { open("present") }
         }
     }
     MacCard(tr("Touchpad")) {
@@ -1398,6 +1439,7 @@ private fun ClipboardPage(core: Core, v: Int) {
             if (shots.lastSent.isNotEmpty()) MacRow(tr("Last screenshot sent"), shots.lastSent)
         }
     }
+    HistoryCard(core, "clip") // History.kt
     if (clip.history.isNotEmpty()) MacCard(tr("Recent")) {
         clip.history.toList().take(12).forEachIndexed { i, item ->
             // A picture of ours isn't kept here: only the computer's copy again.
@@ -1417,25 +1459,43 @@ private fun NotificationsPage(core: Core, v: Int) {
     val ctx = LocalContext.current
     PageHead(tr("Notifications"), tr("See notifications from both devices."))
     if (core.host == null) NotConnected(core, v)
-    if (!core.notifs.supported) Note(
+    // Read here, outside the card lambdas. Those lambdas are remembered, and their only capture was
+    // this same Core, so a switch, a count or an access row stayed put until the page was left.
+    val supported = core.notifs.supported
+    val access = core.notifs.hasAccess
+    val outOn = core.sync.get("notifs", "out")
+    val sent = core.notifs.sent
+    val hideText = core.store.flag("notifs.hideText", false)
+    val paired = core.adb.paired
+    val inOn = core.sync.get("notifs", "in")
+    val shown = core.notifs.shown
+    if (!supported) Note(
         tr("This version of TwinDesk can’t read notifications, as Play Protect restricts downloaded apps. ") +
             tr("Once wireless debugging is set up, install the full version from the Phone page on {name}. Your settings and pairings are kept.", "name" to name),
         "warn",
     )
-    else if (!core.notifs.hasAccess) Note(tr("Allow Notification access to show this device’s notifications on {name}.", "name" to name), "warn")
+    else if (!access) Note(tr("Allow Notification access to show this device’s notifications on {name}.", "name" to name), "warn")
     MacCard {
         DirHead(me, true, name, false)
-        SwitchRow(tr("Show this device’s notifications on {name}", "name" to name), tr("{count} sent", "count" to core.notifs.sent), core.sync.get("notifs", "out"), first = true) { core.sync.set("notifs", "out", it) }
-        SwitchRow(tr("Hide the message text"), tr("Only the app name and title are shown on {name}", "name" to name), core.store.flag("notifs.hideText", false)) { core.store.setFlag("notifs.hideText", it); core.changed() }
-        if (core.notifs.supported && !core.notifs.hasAccess) MacRow(tr("Notification access"), tr("Required to read notifications")) { Primary(tr("Allow")) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-        if (!core.notifs.supported && !core.adb.paired) MacRow(tr("Wireless debugging"), tr("Set it up, then install the full version from {name}", "name" to name)) { Primary(tr("Guide")) { Guide.open.value = true } }
+        SwitchRow(tr("Show this device’s notifications on {name}", "name" to name), tr("{count} sent", "count" to sent), outOn, first = true) { core.sync.set("notifs", "out", it) }
+        SwitchRow(tr("Hide the message text"), tr("Only the app name and title are shown on {name}", "name" to name), hideText) { core.store.setFlag("notifs.hideText", it); core.changed() }
+        if (supported && !access) MacRow(tr("Notification access"), tr("Required to read notifications")) { Primary(tr("Allow")) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+        if (!supported && !paired) MacRow(tr("Wireless debugging"), tr("Set it up, then install the full version from {name}", "name" to name)) { Primary(tr("Guide")) { Guide.open.value = true } }
     }
     MacCard {
         DirHead(name, false, me, true)
-        SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to core.notifs.shown), core.sync.get("notifs", "in"), first = true) { core.sync.set("notifs", "in", it) }
+        SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to shown), inOn, first = true) { core.sync.set("notifs", "in", it) }
     }
     // Each app on its own (#102): every app on the phone, as a block list or an allow list (AppCards.kt).
     if (core.notifs.supported) NotifAppsCard(core, name)
+    HistoryCard(core, "notifs") // History.kt
+    // The computer's notifications shown here, newest first (all of them: History's own view).
+    val recent = core.history.notifs().take(8)
+    if (recent.isNotEmpty()) MacCard(tr("Recent")) {
+        recent.forEachIndexed { i, e ->
+            MacRow(listOf(e.app, e.title).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { e.text.take(80) }, e.text.replace('\n', ' ').take(140), first = i == 0)
+        }
+    }
 }
 
 // ---- Files ----
@@ -1565,6 +1625,23 @@ private fun SoundStart(core: Core) {
 
 // ---- General ----
 
+// General › Modules (Modules.kt): a switch per page but Overview, Connection, General and About.
+// Exit-and-start-again applies them (the process holds the set it started with).
+@Composable
+private fun ModulesCard(core: Core) {
+    val ctx = LocalContext.current
+    var off by remember { mutableStateOf(Modules.off(core.store)) }
+    MacCard(tr("Modules")) {
+        MacRow(tr("Modules"), tr("A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on."), first = true)
+        if (off != core.modulesAtStart) MacRow(tr("Restart to apply"), tr("Modules load or unload when TwinDesk starts")) { Primary(tr("Restart")) { Modules.restart(ctx) } }
+        for (t in Tab.entries) {
+            val id = t.name.lowercase()
+            if (id in Modules.FIXED) continue
+            SwitchRow(tr(t.title), "", id !in off) { Modules.set(core.store, id, it); off = Modules.off(core.store) }
+        }
+    }
+}
+
 @Composable
 private fun GeneralPage(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
@@ -1581,6 +1658,11 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow(tr("Reconnect in the background"), if (core.reconnectBg) tr("Restores a dropped connection while TwinDesk is closed") else tr("Restores a dropped connection when TwinDesk opens"), core.reconnectBg) { core.reconnectBg = it }
     }
     TailscaleCard(core) // #161 (Tailnet.kt)
+    // Arrange (Arrange.kt): the pages' order, and which are in the bottom bar.
+    MacCard(tr("Page order")) {
+        MacRow(tr("Arrange the pages"), tr("Which are in the bottom bar, and in what order. Or hold the bar"), first = true) { Secondary(tr("Arrange…")) { NavOrder.open.value = true } }
+    }
+    ModulesCard(core)
     val pm = ctx.getSystemService(PowerManager::class.java)
     @Composable
     fun Setup(label: String, hint: String, done: Boolean, action: String, first: Boolean = false, onClick: () -> Unit) =
@@ -1810,7 +1892,9 @@ private fun AboutPage(core: Core, v: Int) {
     val ctx = LocalContext.current
     val open = { url: String -> ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     val u = core.updates
-    MacCard(tr("Updates")) {
+    if (!BuildConfig.UPDATER) MacCard(tr("Updates")) {
+        MacRow("TwinDesk", tr("Version {current}. F-Droid installs new versions.", "current" to u.current), first = true)
+    } else MacCard(tr("Updates")) {
         MacRow(
             "TwinDesk",
             when {
@@ -1823,10 +1907,21 @@ private fun AboutPage(core: Core, v: Int) {
             },
             first = true,
         ) {
-            if (u.available) Primary(tr("Download")) { u.open() }
+            if (u.available && u.download != null) {
+                // In place, over this TwinDesk: no reinstall.
+                val label = when (u.stage) {
+                    "downloading" -> tr("Downloading… {percent}%", "percent" to (u.progress * 100).toInt())
+                    "installing" -> tr("Installing…")
+                    else -> tr("Install now")
+                }
+                Primary(label) { if (u.stage != "downloading" && u.stage != "installing") u.installNow() }
+                Secondary(tr("Download")) { u.open() } // the APK from GitHub, in the browser
+            } else if (u.available) Primary(tr("Download")) { u.open() }
             if (!u.checking) Secondary(tr("Check now")) { u.checkNow() }
         }
+        if (u.installError.isNotEmpty()) MacRow(tr("Couldn’t update"), u.installError)
         SwitchRow(tr("Check automatically"), tr("Looks for new releases on GitHub every few hours"), u.auto) { u.auto = it }
+        SwitchRow(tr("Install automatically"), tr("Downloads a new version and installs it when no computer is connected. Settings and permissions stay"), u.install) { u.install = it }
     }
     MacCard(tr("Made by")) {
         MacRow("Inuka Asith", "inukaasith.vercel.app", first = true) { Secondary(tr("Portfolio")) { open("https://inukaasith.vercel.app") } }

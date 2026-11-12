@@ -7,7 +7,8 @@
 <p align="center">
   <b>Your Mac, PC, Linux box, Android phone and iPhone, working as one desk.</b><br>
   One mouse and keyboard for every computer. Screens, files, clipboard, notifications, cameras, calls and texts, shared.<br>
-  Free and open source. No account, no cloud, and on iPhone not even an app to install.
+  Free and open source. No account, no cloud, and on iPhone not even an app to install.<br>
+  <sub>An open-source alternative to Microsoft Phone Link, KDE Connect, Intel Unison and Synergy, in one app.</sub>
 </p>
 
 <p align="center">
@@ -71,6 +72,11 @@ It's one app on every computer, so a Mac and a PC pair exactly like two Macs. Ph
 not notification mirrors. And an iPhone, an iPad or any device with a browser joins by typing
 **`twindesk.local`**.
 
+**Looking for a Phone Link alternative?** TwinDesk does what Microsoft Phone Link does (texts, calls,
+notifications, photos and your phone's screen and apps on the computer), and it also works on a Mac
+and on Linux, with an iPhone as well as Android, and without a Microsoft account. It replaces KDE
+Connect and Intel Unison the same way. See [how it compares](#compare).
+
 <table>
 <tr>
 <td width="25%" valign="top">
@@ -130,6 +136,7 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 **🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
 
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="#apt"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-APT-a80030?style=for-the-badge" alt="Linux, APT repository"></a><br>
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
 <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/twindesk-bin-3.0.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
 <sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
@@ -160,6 +167,19 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 <p align="center">🍺 <b>Homebrew</b> on macOS:<br><code>brew install --cask inukaasith/twindesk/twindesk</code><br>
 <sub>Update with <code>brew upgrade --cask twindesk</code>: TwinDesk opens again by itself if it was running, so a Mac you drive only through it gets its mouse back. The <a href="https://github.com/InukaAsith/homebrew-twindesk">tap</a> follows every release.</sub></p>
+
+<a name="apt"></a>
+
+<p align="center">🐧 <b>APT</b> on Debian, Ubuntu, Mint and Pop!_OS, kept up to date by <code>apt upgrade</code>:</p>
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://inukaasith.github.io/twindesk-apt/twindesk.gpg | sudo tee /etc/apt/keyrings/twindesk.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/twindesk.gpg] https://inukaasith.github.io/twindesk-apt stable main" | sudo tee /etc/apt/sources.list.d/twindesk.list
+sudo apt update && sudo apt install twindesk
+```
+
+<p align="center"><sub>The <a href="https://github.com/InukaAsith/twindesk-apt">repository</a> follows every release within a few hours.</sub></p>
 
 <p align="center"><sub>Already on 2.5? The in-app updater picks the right file. Update every device you pair: 3.0 still talks to 2.5, and the new features switch on when both sides have 3.0.<br>
 Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
@@ -513,12 +533,15 @@ each talking straight to the others with no hub in between.
 - **Pair once, join all.** A new device paired with one computer meets the rest by itself.
 
 <details>
-<summary><b>Mesh is in beta: what's in and what's still coming</b></summary>
+<summary><b>What's in Mesh, and how it differs</b></summary>
 
 Turn it on in the **Multi-device** page, and off again any time with everything as you left it.
-Connecting just two devices? You won't need it. Still coming to Mesh: the Camera, ReZume, pictures
-on the clipboard, and files dragged to more than one device at a time. The phone connects to one
-computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
+Connecting just two devices? Keep it off: the one-to-one mode does the same with less. The one-to-one
+app's pages are here too: files (the fast way, over HTTPS), the Camera, the Remote, the Deck,
+TwinDesk iPhone, Modules and pictures on the clipboard. ReZume works while a phone is the only
+device connected. Not yet: the Bluetooth mouse and keyboard, and files dragged to more than one
+device at a time. The phone connects to
+one computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
 See [docs/mesh.md](docs/mesh.md).
 
 </details>
@@ -916,7 +939,7 @@ November 2026. If something here is out of date or wrong, please
 | Notifications from the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Shared folders and a terminal | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Wake-on-LAN | ✅ | ✗ | ✗ | — | ✗ | ✗ |
-| Three or more computers | ✅ ([Mesh](#mesh), beta) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
+| Three or more computers | ✅ ([Mesh](#mesh)) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
 | Works without a shared network | ✅ Bluetooth, Wi-Fi Direct | ✗ | ✗ | ✗ | ✗ | ✅ |
 | At the login and lock screen | ✗ | ✅ | ✅ | ✅ | ◐ | ✗ |
 | Works with Barrier and Input Leap | ✗ | ✗ | ✅ | ✗ | ✗ | ✗ |
@@ -979,7 +1002,7 @@ without it.
 | iPhone or iPad ↔ Mac, Windows or Linux | The [app's features](#iphone-app), or [TwinDesk Web](#twindesk-web) with no app |
 | Any browser ↔ Mac, Windows or Linux | [TwinDesk Web](#twindesk-web): screen, files, clipboard, notifications, remote |
 | Phone ↔ phone | Clipboard, notifications, files, photos, messages and screens ([more](#phone-to-phone)) |
-| All of them at once | [TwinDesk Mesh](#mesh) (beta) |
+| All of them at once | [TwinDesk Mesh](#mesh) |
 
 <a name="privacy"></a>
 

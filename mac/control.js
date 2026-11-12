@@ -7,6 +7,8 @@
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ICONS = {
+  search: 'M8.5 3.5a5 5 0 1 1 0 10a5 5 0 1 1 0-10z M12.2 12.2 16.5 16.5', // Search (shared/ui-search.js)
+  deck: 'M3 3h6v6H3z M11 3h6v6h-6z M3 11h6v6H3z M11 11h6v6h-6z', // the Deck (shared/ui-deck.js)
   overview: 'M3 9.5 10 4l7 5.5V17H3z M8 17v-4h4v4',
   display: 'M3 4h14v9H3z M7 17h6 M10 13v4',
   receive: 'M3 4h14v9H3z M7 17h6 M10 13v4 M10 6v4.5 M7.8 8.5 10 10.7l2.2-2.2',

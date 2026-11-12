@@ -29,7 +29,27 @@ struct TileLayout: Equatable {
             let s = x["s"] as? String ?? "s"
             return TileItem(id: id, size: ["s", "w", "b"].contains(s) ? s : "s")
         }
-        return TileLayout(rows: (o["rows"] as? Int) == 2 ? 2 : 1, items: items)
+        return TileLayout(rows: max(1, min(maxRows, (o["rows"] as? Int) ?? 1)), items: items)
+    }
+    static let maxRows = 8 // as many rows as people like, up to a screenful
+
+    // A quick action on or off from its own page (Open Deck from the Deck page).
+    static func has(_ store: Store, _ id: String) -> Bool { load(store).items.contains { $0.id == id } }
+    static func set(_ store: Store, _ id: String, _ on: Bool) {
+        var l = load(store)
+        let has = l.items.contains { $0.id == id }
+        if on && !has { l.items.append(TileItem(id: id, size: "s")); l.save(store) }
+        else if !on && has { l.items.removeAll { $0.id == id }; l.save(store) }
+    }
+
+    // A Deck tile among the quick actions ("deck:<its id>"): on or off from the Deck's tile editor.
+    static func pinned(_ store: Store, _ tile: String) -> Bool { load(store).items.contains { $0.id == "deck:" + tile } }
+    static func pin(_ store: Store, _ tile: String, _ on: Bool) {
+        var l = load(store)
+        let id = "deck:" + tile
+        let has = l.items.contains { $0.id == id }
+        if on && !has { l.items.append(TileItem(id: id, size: "s")); l.save(store) }
+        else if !on && has { l.items.removeAll { $0.id == id }; l.save(store) }
     }
 
     func save(_ store: Store) {
@@ -45,7 +65,7 @@ struct TileLayout: Equatable {
         var taken = Set<Int>() // col * 8 + row
         return items.map { it in
             let w = it.size == "s" ? 1 : 2
-            let h = it.size == "b" && rows == 2 ? 2 : 1
+            let h = it.size == "b" && rows >= 2 ? 2 : 1
             var col = 0
             while true {
                 for r in 0...(rows - h) {
@@ -213,10 +233,8 @@ struct TilesCard: View {
             HStack {
                 Text(tr("Rows"))
                 Spacer()
-                Picker(tr("Rows"), selection: Binding(get: { layout.rows }, set: { v in withAnimation(Self.anim) { set(TileLayout(rows: v, items: layout.items)) } })) {
-                    Text(tr("One")).tag(1); Text(tr("Two")).tag(2)
-                }
-                .pickerStyle(.segmented).frame(width: 150)
+                Stepper("\(layout.rows)", value: Binding(get: { layout.rows }, set: { v in withAnimation(Self.anim) { set(TileLayout(rows: v, items: layout.items)) } }), in: 1...TileLayout.maxRows)
+                    .fixedSize()
             }
             if let id = sel, let i = layout.items.firstIndex(where: { $0.id == id }), let d = byId[id] {
                 HStack(spacing: 10) {
@@ -234,14 +252,14 @@ struct TilesCard: View {
                         withAnimation(Self.anim) { var l = layout; l.items[i].size = v; set(l) }
                     })) {
                         Text(tr("Small")).tag("s"); Text(tr("Wide")).tag("w")
-                        if layout.rows == 2 { Text(tr("Large")).tag("b") }
+                        if layout.rows >= 2 { Text(tr("Large")).tag("b") }
                     }
-                    .pickerStyle(.segmented).frame(width: layout.rows == 2 ? 210 : 150)
+                    .pickerStyle(.segmented).frame(width: layout.rows >= 2 ? 210 : 150)
                 }
             } else {
                 Text(tr("Tap a quick action to move or resize it, or − to remove it.")).font(.footnote).foregroundStyle(.secondary)
             }
-            let rest = defs.filter { d in d.has && !d.id.hasPrefix("auto.") && !layout.items.contains { $0.id == d.id } }
+            let rest = defs.filter { d in d.has && !d.id.hasPrefix("auto.") && !d.id.hasPrefix("deck:") && !layout.items.contains { $0.id == d.id } }
             if !rest.isEmpty {
                 Text(tr("Add")).font(.footnote.weight(.medium)).foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {

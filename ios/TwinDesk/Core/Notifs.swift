@@ -30,6 +30,7 @@ final class Notifs: Feature {
                                      computer: core.link.host?.name ?? "Computer")
         shown += 1
         recent.insert(Item(app: app, title: m.str("title", max: 300), body: body), at: 0)
+        core.history.addNotif(id: m.str("id", max: 200), app: app, title: m.str("title", max: 300), body: body) // History.swift
         if recent.count > 20 { recent.removeLast(recent.count - 20) }
         core.changed()
         return true

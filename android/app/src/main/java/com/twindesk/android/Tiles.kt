@@ -68,13 +68,14 @@ object Tiles {
     data class Placed(val item: Item, val col: Int, val row: Int, val w: Int, val h: Int)
 
     private const val KEY = "overview.tiles"
+    const val MAX_ROWS = 8 // as many rows as people like, up to a screenful
     // One row of four; the rest under Edit › Add.
     val DEFAULT = Layout(1, listOf(Item("screen", "s"), Item("voice", "s"), Item("touchpad", "s"), Item("files", "s")))
 
     fun load(store: Store): Layout = runCatching {
         val o = JSONObject(store.prefsString(KEY, ""))
         val a = o.getJSONArray("items")
-        Layout(if (o.optInt("rows", 1) == 2) 2 else 1, (0 until a.length()).map { a.getJSONObject(it) }
+        Layout(o.optInt("rows", 1).coerceIn(1, MAX_ROWS), (0 until a.length()).map { a.getJSONObject(it) }
             .map { Item(it.getString("id"), it.optString("s", "s").takeIf { s -> s in listOf("s", "w", "b") } ?: "s") }
             .distinctBy { it.id })
     }.getOrDefault(DEFAULT)
@@ -85,13 +86,31 @@ object Tiles {
 
     fun reset(store: Store) = store.setPrefsString(KEY, "")
 
+    // A shortcut on or off from its own page (Open Deck from the Deck page, a history from its page).
+    fun has(store: Store, id: String) = load(store).items.any { it.id == id }
+    fun set(store: Store, id: String, on: Boolean) {
+        val l = load(store)
+        val has = l.items.any { it.id == id }
+        if (on && !has) save(store, l.copy(items = l.items + Item(id, "s")))
+        else if (!on && has) save(store, l.copy(items = l.items.filter { it.id != id }))
+    }
+
+    // A Deck tile in the shortcuts ("deck:<its id>"): on or off from the Deck page's tile editor.
+    fun pinned(store: Store, tile: String) = load(store).items.any { it.id == "deck:$tile" }
+    fun pin(store: Store, tile: String, on: Boolean) {
+        val l = load(store)
+        val has = l.items.any { it.id == "deck:$tile" }
+        if (on && !has) save(store, l.copy(items = l.items + Item("deck:$tile", "s")))
+        else if (!on && has) save(store, l.copy(items = l.items.filter { it.id != "deck:$tile" }))
+    }
+
     // Column by column, each tile in the first place it fits, in order: a large tile with one row
     // is a wide one. The computers and the iPhone pack the same way.
     fun pack(items: List<Item>, rows: Int): List<Placed> {
         val taken = HashSet<Pair<Int, Int>>()
         return items.map { it ->
             val w = if (it.size == "s") 1 else 2
-            val h = if (it.size == "b" && rows == 2) 2 else 1
+            val h = if (it.size == "b" && rows >= 2) 2 else 1
             var col = 0
             var spot: Pair<Int, Int>? = null
             while (spot == null) {
@@ -136,6 +155,8 @@ fun TilesCard(core: Core) {
         Def("voice", tr("Voice typing"), Ico.mic, g(0xFFFF6482, 0xFFFF2D55), state = { tr("Speak, it types on {name}", "name" to name) }) { remote("voice") },
         Def("touchpad", tr("Touchpad"), Ico.touchpad, g(0xFFFFB340, 0xFFFF9500), state = { tr("And keyboard") }) { remote("pad") },
         Def("gamepad", tr("Gamepad"), Ico.gamepad, g(0xFFBF5AF2, 0xFF8944AB), state = { tr("Keys or a controller") }) { remote("gamepad") },
+        Def("air", tr("Air mouse"), Ico.air, g(0xFF5AC8FA, 0xFF30B0C7), state = { tr("Point to move") }) { remote("air") },
+        Def("present", tr("Presentation"), Ico.present, g(0xFFFF9F0A, 0xFFFF6B00), state = { tr("Next, previous, pointer") }) { remote("present") },
         Def("files", tr("Send files"), Ico.send, g(0xFF64D2FF, 0xFF0A84FF), state = { tr("To Downloads") }) { pick.launch("*/*") },
         Def("clipboard", tr("Send clipboard"), Ico.clipboard, g(0xFF64D2FF, 0xFF30B0C7), state = { tr("What’s copied here") }) {
             toast(if (core.clip.sendCurrent(true)) tr("Clipboard sent to {name}", "name" to name) else tr("Nothing to send on the clipboard"))
@@ -155,9 +176,30 @@ fun TilesCard(core: Core) {
         Def("sound", tr("Sound"), Ico.audio, g(0xFFFF6482, 0xFFFF2D55), on = { core.sync.get("audio", "in") }, state = { if (core.sync.get("audio", "in")) tr("Playing here") else tr("{name}’s sound", "name" to name) }) { page("Sound") },
         Def("camera", tr("Webcam"), Ico.camera, g(0xFFBF5AF2, 0xFF8944AB), on = { core.adb.camera.on }, state = { tr("This camera on {name}", "name" to name) }) { page("Camera") },
         Def("mouse", tr("Mouse"), Ico.cursor, g(0xFFFFB340, 0xFFFF9500), state = { tr("{name}’s mouse here", "name" to name) }) { page("Cursor") },
+        Def("deck", tr("Open Deck"), Ico.deck, g(0xFFBF5AF2, 0xFF5E5CE6), has = { core.deck.offered && core.moduleOn("deck") }, state = { tr("Full screen") }) { DeckActivity.open(ctx) },
+        // Shared straight from here (their pages have the details).
+        Def("camShare", tr("Share camera"), Ico.camera, g(0xFF5EE07A, 0xFF30B94D), has = { core.adb.paired || core.adb.known || core.adb.camera.on },
+            on = { core.adb.camera.on }, state = { if (core.adb.camera.on) tr("On {name}", "name" to name) else tr("Off") }) { core.adb.cameraOnComputer(!core.adb.camera.on) },
+        Def("soundShare", tr("Share sound"), Ico.audio, g(0xFFFF6482, 0xFFFF2D55), on = { core.sync.get("audio", "out") },
+            state = { if (core.sync.get("audio", "out")) tr("Playing on {name}", "name" to name) else tr("Off") }) { core.sync.set("audio", "out", !core.sync.get("audio", "out")) },
+        Def("micShare", tr("Share mic"), Ico.mic, g(0xFFFFB340, 0xFFFF9500), on = { core.sync.get("mic", "out") },
+            state = { if (core.sync.get("mic", "out")) tr("A microphone on {name}", "name" to name) else tr("Off") }) { core.sync.set("mic", "out", !core.sync.get("mic", "out")) },
         Def("notifications", tr("Notifications"), Ico.bell, g(0xFFFF6961, 0xFFFF3B30), state = { tr("Both ways") }) { page("Notifications") },
+        // History's own views (History.kt).
+        Def("clipHistory", tr("Clipboard history"), Ico.history, g(0xFF64D2FF, 0xFF30B0C7), state = { tr("{count} items", "count" to core.history.clip().size) }) { History.view.value = "clip" },
+        Def("notifHistory", tr("Notification history"), Ico.history, g(0xFFFF6961, 0xFFFF3B30), state = { tr("{count} items", "count" to core.history.notifs().size) }) { History.view.value = "notifs" },
     )
-    val byId = defs.associateBy { it.id }
+    // Deck tiles pinned here: they run on the computer as on the Deck page.
+    val deckDefs = Tiles.load(core.store).items.filter { it.id.startsWith("deck:") }.map { item ->
+        val tid = item.id.removePrefix("deck:")
+        val found = core.deck.find(tid)?.first
+        val a = found?.optJSONObject("action")
+        val col = deckColor(found?.optString("color") ?: "#0a84ff")
+        Def(item.id, found?.let { deckLabel(it, core.deck.platform) } ?: tr("Deck"), found?.let { DeckCatalog.symbol(deckIcon(it)) } ?: Ico.deck, listOf(col, col),
+            has = { core.deck.offered && a != null && a.optString("k") !in listOf("nav", "none", "slider") && core.deck.runs(a) },
+        ) { core.deck.run(tid) }
+    }
+    val byId = (defs + deckDefs).associateBy { it.id }
 
     var layout by remember { mutableStateOf(Tiles.load(core.store)) }
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -193,10 +235,12 @@ fun TilesCard(core: Core) {
         if (editing) {
             Line()
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // One row or two.
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // How many rows: one up to MAX_ROWS.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(tr("Rows"), color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                    Segments(listOf("1" to tr("One"), "2" to tr("Two")), layout.rows.toString()) { set(layout.copy(rows = it.toInt())) }
+                    RoundButton(Ico.minus, layout.rows > 1) { set(layout.copy(rows = layout.rows - 1)) }
+                    Text("${layout.rows}", color = pal.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(22.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    RoundButton(Ico.plus, layout.rows < Tiles.MAX_ROWS) { set(layout.copy(rows = layout.rows + 1)) }
                 }
                 // The selected tile: earlier, later, its size.
                 val cur = sel?.let { id -> layout.items.firstOrNull { x -> x.id == id } }
@@ -211,7 +255,7 @@ fun TilesCard(core: Core) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(tr("Size"), color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         // Large needs two rows (a square two by two): with one row, small or wide.
-                        val sizes = listOf("s" to tr("Small"), "w" to tr("Wide")) + if (layout.rows == 2) listOf("b" to tr("Large")) else emptyList()
+                        val sizes = listOf("s" to tr("Small"), "w" to tr("Wide")) + if (layout.rows >= 2) listOf("b" to tr("Large")) else emptyList()
                         Segments(sizes, if (cur.size == "b" && layout.rows == 1) "w" else cur.size) { s ->
                             set(layout.copy(items = layout.items.map { x -> if (x.id == cur.id) x.copy(size = s) else x }))
                         }

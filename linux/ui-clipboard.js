@@ -43,21 +43,27 @@ UI.tab({
     const list = el('div', { class: 'history' });
     const clearBtn = UI.button(I18n.t('Clear'), () => api.clearHistory(), 'small');
 
+    const recentRow = UI.row(I18n.t('Recent items'), I18n.t('Never saved to disk'), [historySize]);
+    const hist = UI.historyCard('clip');
+
     body.append(
       pair.el,
       UI.card('', [modeRow, picturesRow]),
       UI.card(I18n.t('Privacy'), [
         UI.row(I18n.t('Skip passwords'), I18n.t('From password managers'), [concealed]),
         maxKBRow,
-        UI.row(I18n.t('Recent items'), I18n.t('Never saved to disk'), [historySize]),
+        recentRow,
       ]),
       skipNote,
       UI.card(I18n.t('Recent'), [list], { actions: [clearBtn] }),
+      hist.el,
     );
 
     let lastKey = '';
     return (s) => {
       const c = s.clipboard;
+      hist.update(s);
+      recentRow.setHint(s.history && s.history.save ? I18n.t('Kept encrypted, as History says') : I18n.t('Never saved to disk'));
       pair.update(s);
       mode.set(c.mode);
       modeRow.setHint(c.mode === 'instant' ? I18n.t('As soon as you copy') : I18n.t('When you move to the other computer'));

@@ -333,6 +333,15 @@ namespace MacShare
                     case "displayExtend": c["changed"] = Display.ExtendIfDuplicated(Json.Str(c, "monitor", "")); break;
                     // PC apps on the Mac
                     case "windows": Async(c, delegate (Dictionary<string, object> r) { r["windows"] = AppWindows.List(); }); return;
+                    // The Deck (DeckSys.cs): sound devices, Bluetooth, brightness, windows, lock and sleep, apps
+                    case "deckAudio": case "deckAudioDefault": case "deckVolume": case "deckBt": case "deckBtRadio": case "deckBtConnect":
+                    case "deckBright": case "deckBrightSet": case "deckWinFront": case "deckMinWins": case "deckWinFrame": case "deckWinOp": case "deckSys":
+                    case "deckState": case "deckApps": case "deckAppOpen":
+                        {
+                            string dc = cmd;
+                            Async(c, delegate (Dictionary<string, object> r) { DeckSys.Dispatch(dc, c, r); }, dc == "deckApps" || dc == "deckAppOpen");
+                            return;
+                        }
                     case "icons":
                         System.Collections.IList paths = c.ContainsKey("paths") ? c["paths"] as System.Collections.IList : null;
                         int size = (int)Json.Num(c, "size", 256);

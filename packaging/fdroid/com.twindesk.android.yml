@@ -1,0 +1,45 @@
+# TwinDesk on F-Droid: the build recipe for fdroiddata (gitlab.com/fdroid/fdroiddata,
+# metadata/com.twindesk.android.yml). F-Droid builds the "fdroid" flavor from the tag and signs it
+# with its own key: the full build's features, no Google code scanner, no self-updater.
+# The store listing comes from fastlane/metadata/android in this repo.
+Categories:
+  - Connectivity
+  - System
+License: GPL-3.0-only
+AuthorName: inukaasith
+WebSite: https://twin-desk.vercel.app
+SourceCode: https://github.com/InukaAsith/TwinDesk
+IssueTracker: https://github.com/InukaAsith/TwinDesk/issues
+Changelog: https://github.com/InukaAsith/TwinDesk/releases
+
+AutoName: TwinDesk
+
+RepoType: git
+Repo: https://github.com/InukaAsith/TwinDesk.git
+
+Builds:
+  # 3.0.0 with the fdroid flavor added (tag v3.0.0-fdroid, branch fdroid-3.0.0); later
+  # versions come from their release tags (UpdateCheckMode).
+  - versionName: 3.0.0
+    versionCode: 30000
+    commit: v3.0.0-fdroid
+    subdir: android/app
+    gradle:
+      - fdroid
+    rm:
+      # Only android/ is built; the desktop and iPhone apps (and their prebuilt binaries) go.
+      - ios
+      - linux
+      - linux-helper
+      - mac
+      - mac-helper
+      - native
+      - shared
+      - web
+      - windows
+      - windows-helper
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9.]+$
+CurrentVersion: 3.0.0
+CurrentVersionCode: 30000

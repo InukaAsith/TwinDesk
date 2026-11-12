@@ -24,6 +24,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var sync = PairSync(self)
     lazy var clip = Clip(self)
     lazy var notifs = Notifs(self)
+    lazy var history = History(self) // the clipboard's and notifications' history, kept encrypted when asked
     lazy var files = Files(self)
     lazy var fclip = FileClip(self)
     lazy var info = PhoneInfo(self)
@@ -40,6 +41,8 @@ final class Core: ObservableObject, LinkEvents {
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
     lazy var mic = Mic(self)
+    lazy var deck = Deck(self) // the Deck: tiles here the computer runs, while it offers it (Deck.swift)
+    lazy var signer = Signer(self) // TwinDesk signed with the person's own Apple ID, by the computer (SignerFeature.swift)
     lazy var updates = Updates(self) // new releases on GitHub (About › Updates)
     lazy var peer = Peer(self) // another phone: its own link, one session with the computer's (Peer.swift)
 
@@ -110,7 +113,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh(); DispatchQueue.main.async { self.offBle(); self.ble.start() } }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic]
+        features = [sync, clip, notifs, signer, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic, deck]
         link.bleRx = { [unowned self] in self.ble.lastDown }
     }
 

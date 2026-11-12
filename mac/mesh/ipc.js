@@ -19,7 +19,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'apps', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -42,7 +42,7 @@ const SCHEMA = {
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac) },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
   mesh: { autoJoin: bool },
-  updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
+  updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
@@ -52,7 +52,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, enterSends: bool, arrowSwipe: bool, uhid: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -171,6 +171,8 @@ function setupIpc(ctx) {
     setPhone(partial) {
       setGroup('phone', partial);
       if (partial && 'input' in partial) ctx.phone.bridge.tellVia();
+      if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial)) for (const u of ctx.phone.all || []) u.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js), every phone
+      if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts(); // the open phone windows light their buttons
     },
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);
@@ -179,6 +181,12 @@ function setupIpc(ctx) {
       if (open === false) {
         for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
       } else ctx.phoneViews.openScreen();
+    },
+    phoneCamera(m) {
+      const { open, opts } = m && typeof m === 'object' ? m : { open: m }; // preload-control: {open, opts}
+      if (open === false) {
+        for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
+      } else ctx.phoneViews.openCamera(opts);
     },
     phoneOpenApp(arg) {
       if (arg && typeof arg.id === 'string') ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100));
@@ -206,7 +214,7 @@ function setupIpc(ctx) {
       if (ctx.phone) return require('../../shared/apkinstall.js').choose(ctx.phone.bridge, t);
     },
     phoneRetry() {
-      ctx.phone.bridge._kick();
+      ctx.phone.bridge.retry(); // also Set Up, when nothing used wireless debugging
     },
     // The phone in Finder (phonedrive.js).
     phoneMount() {
@@ -350,6 +358,7 @@ function setupIpc(ctx) {
       ctx.kvm.settingsChanged(prev);
       if (partial && typeof partial.shared === 'boolean') ctx.kvm.setShared(partial.shared); // the Cursor tab's switch (Over Bluetooth through it)
       if (partial && typeof partial.locked === 'boolean') ctx.kvm.setLocked(partial.locked); // cursor lock: not a setting
+      if (partial && 'keyboard' in partial) (ctx.remote() ? ctx.remote().refresh() : ctx.loadRemote()); // voice typing follows Keyboard
     },
     // The shared layout (docs/mesh.md): a device goes to a cell (a device there moves to its old cell, or
     // they swap); a device goes off the map. Invalid arguments are ignored; the new layout comes with the state.
@@ -514,6 +523,87 @@ function setupIpc(ctx) {
       const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
       if (mic) mic.apply();
       if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
+      // Media controls: made for every phone when turned on; off, each one stops.
+      const np = partial && 'phoneMedia' in partial && ctx.loadNowPlaying ? ctx.loadNowPlaying() : null;
+      if (np) np.apply();
+    },
+    // The active phone's media controls on the Overview (shared/nowplaying.js, one per phone).
+    phoneMedia(m) {
+      const np = ctx.loadNowPlaying ? ctx.loadNowPlaying() : null;
+      if (m && np) np.control(String(m.a || ''), m.pos);
+    },
+    phoneBtPick() {}, // no Bluetooth speaker mode on macOS
+    // General › Modules (shared/modules.js): applies after a restart.
+    setModules(m) {
+      if (!m || typeof m !== 'object') return;
+      const Mods = require('../../shared/modules.js');
+      settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+      save();
+      ctx.pushState();
+    },
+    // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+    iosSign(o) {
+      require('../../shared/iossign-host.js').act(ctx.iosSign, dialog, o);
+    },
+    iosSignIpa() {
+      require('../../shared/iossign-host.js').pickIpa(ctx.iosSign, dialog);
+    },
+    // The Deck page (shared/ui-deck.js): the layout, and Try (runs a button here).
+    deckSave(layout) {
+      if (ctx.deck && layout && typeof layout === 'object') ctx.deck.save(layout);
+    },
+    deckTry(action) {
+      if (ctx.deck && action && typeof action === 'object') ctx.deck.exec(action).catch(() => {});
+    },
+    // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
+    setRemote(m) {
+      if (!m || typeof m !== 'object') return;
+      // Off at start: not made; turned on, made for every phone (and they hear it).
+      if ('allow' in m && !ctx.remote() && m.allow === true) { settings.remote.allow = true; ctx.loadRemote(); }
+      if ('allow' in m && ctx.remote()) ctx.remote().setAllow(m.allow === true);
+      save();
+      ctx.pushState();
+    },
+    // Camera tab: the selected computer's camera here, this Mac's there (shared/camshare.js). macOS
+    // asks for the camera when sharing is first turned on.
+    camera(m) {
+      if (m && m.do === 'on') return ctx.setCamera(m.on === true); // Camera's switch: loads it, or stops it
+      const { camShare: c, vcam } = ctx.cam();
+      if (!c || !m || typeof m !== 'object') return;
+      const allowed = async () => {
+        const { systemPreferences } = require('electron');
+        const st = systemPreferences.getMediaAccessStatus('camera');
+        return st === 'granted' || (st === 'not-determined' && systemPreferences.askForMediaAccess('camera'));
+      };
+      if (m.do === 'view') c.view(m.show === true); // show: its window too
+      else if (m.do === 'close') c.closeView();
+      else if (m.do === 'share') c.setShare(m.on === true, allowed);
+      else if (m.do === 'device') c.setDevice(m.id);
+      else if (m.do === 'stop') c.stopSending();
+      else if (m.do === 'devices') c.listDevices();
+      // Camera › Virtual camera (shared/vcam.js).
+      else if (m.do === 'virtual' && vcam) vcam.setOn(m.on === true);
+      else if (m.do === 'vcamRemove' && vcam) vcam.remove();
+      else if (m.do === 'vcamTarget' && vcam) vcam.setTarget(m.target);
+      else if (m.do === 'rotate' && vcam) vcam.turn();
+    },
+    // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
+    setRezume(m) {
+      if (!m || typeof m !== 'object') return;
+      settings.rezume = require('../../shared/rezume.js').normalize({ ...settings.rezume, ...m });
+      save();
+      const r = ctx.rezume();
+      if (r) r.apply();
+      else ctx.loadRezume();
+    },
+    rezumeDo(m) {
+      const r = ctx.rezume();
+      if (!r || !m) return;
+      if (m.a === 'take') r.take();
+      else if (m.a === 'dismiss') r.dismiss();
+      else if (m.a === 'push') r.push();
+      else if (m.a === 'allow' && typeof m.app === 'string') r.allow(m.list, m.app, m.on === true);
+      else if (m.a === 'forget') r.forget(m.list, typeof m.app === 'string' ? m.app : '');
     },
     // "Share sound with the screen" (Display › Mac → PC).
     setScreenSound(on) {
@@ -533,6 +623,7 @@ function setupIpc(ctx) {
     },
     setUpdates(partial) {
       setGroup('updates', partial);
+      if (partial && typeof partial.install === 'boolean') ctx.updates.setInstall(partial.install);
       ctx.updates.start();
     },
     skipUpdate(version) {
@@ -590,9 +681,20 @@ function setupIpc(ctx) {
       ctx.pushState();
     },
     // A phone chat's notification answered here (its own Reply).
+    // Keep history: {do: 'set', save, days} | {do: 'unlock', what} | {do: 'clear'} (shared/histkeeper.js).
+    history(r) {
+      if (ctx.history && r && typeof r === 'object') ctx.history.act(r);
+    },
+    // Connection › Wireless debugging › Pair with a QR code: on while shown.
+    adbQr(on) {
+      if (ctx.adbQr) ctx.adbQr(on === true);
+    },
     notifReply(r) {
       if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
-      if (r && typeof r === 'object' && ctx.notifs && ctx.notifs.reply) ctx.notifs.reply(String(r.id || ''), r.text);
+      if (!r || typeof r !== 'object' || !ctx.notifs) return;
+      if (r.dismiss) return void ctx.notifs.dismiss(String(r.id || '')); // Overview's × (shared/notifacts.js)
+      if (Number.isInteger(r.act)) return void ctx.notifs.act(String(r.id || ''), r.act); // one of its buttons
+      ctx.notifs.reply(String(r.id || ''), r.text);
     },
     // General › Appearance: { style }, { theme } and/or { accent } ('' follows the system); local only.
     setLook(o) {
@@ -637,7 +739,21 @@ function setupIpc(ctx) {
   };
 
   ipcMain.handle('getState', () => ctx.state);
+  ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
+  ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker
+  ipcMain.handle('deckPick', (_e, o) => (async () => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  })(o));
+  ipcMain.handle('deckRun', (_e, a) => (ctx.deck && a && typeof a === 'object' ? ctx.deck.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false })); // Try
+  ipcMain.handle('deckState', () => (ctx.deck ? ctx.deck.state().catch(() => ({})) : {})); // its sound, Bluetooth and display pickers
+  ipcMain.handle('phoneListCameras', () => (ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : [])); // Camera: the phone's cameras
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));
   return actions;
 }

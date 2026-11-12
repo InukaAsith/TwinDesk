@@ -51,7 +51,7 @@ const pactl = (args) => new Promise((resolve) => execFile('pactl', args, { timeo
 
 class Mic {
   constructor(opts) {
-    Object.assign(this, { onChange: () => {}, platform: process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux', askMic: null }, opts);
+    Object.assign(this, { onChange: () => {}, platform: process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux', askMic: null, meshHub: null }, opts);
     this.tx = transportOf(opts);
     this.win = null;
     this.ready = false;
@@ -63,7 +63,7 @@ class Mic {
     this.status = { sending: false, receiving: false, error: '', into: '', inputs: [], outputs: [] };
 
     this.tx.welcome(() => { this.peerAccepts = false; this.apply(true); });
-    this.tx.closed(() => { this.peerAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-recv' }); this.apply(); });
+    this.tx.closed(() => { this.peerAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-recv' }); this.apply(); this._syncMicSticky(); });
     this.tx.on(T.MIC_POLICY, (m) => {
       const accept = m.accept === true;
       if (m.ask) this._policy(); // the other side just loaded its microphone: it asks for ours
@@ -81,6 +81,7 @@ class Mic {
       if (!this._ours(e) || !s) return;
       const list = (v) => (Array.isArray(v) ? v.slice(0, 40).map((d) => ({ id: String(d.id || '').slice(0, 200), label: String(d.label || '').slice(0, 200) })) : []);
       Object.assign(this.status, { sending: !!s.sending, receiving: !!s.receiving, error: String(s.error || '').slice(0, 300), into: String(s.into || '').slice(0, 200), inputs: list(s.inputs), outputs: list(s.outputs) });
+      this._syncMicSticky();
       this.onChange();
     };
     this._onReady = (e) => {
@@ -115,7 +116,19 @@ class Mic {
       }
     } else if (!want && this.sending) this._stopSend(true);
     if (!c.micSend && !c.micReceive) this._close(); // both off: the window goes (no memory kept for it)
+    this._syncMicSticky();
     this.onChange();
+  }
+
+  _syncMicSticky() {
+    if (!this.meshHub) return;
+    const live = !!(this.sending || this.status.receiving);
+    let id = null;
+    if (live) {
+      if (this.server && this.server.current) id = this.server.current.deviceId;
+      else if (this.link && this.link.current) id = this.link.current.deviceId;
+    }
+    this.meshHub.setAudioSticky('mic', id);
   }
 
   _policy(ask = false) {
@@ -131,6 +144,7 @@ class Mic {
     this.sending = null;
     this._toWin({ t: 'stop-send' });
     if (tell && this.tx.connected()) this.tx.send({ t: T.MIC_STOP });
+    this._syncMicSticky();
   }
 
   // Linux: the "TwinDesk Microphone" apps pick (on), or gone (off).

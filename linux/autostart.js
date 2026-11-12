@@ -4,6 +4,9 @@
 // path is in $APPIMAGE), else the installed binary, else (development) electron with this folder.
 // Through sh with stdout and stderr to /dev/null: a session start has no terminal, and a pipe nobody
 // reads is what made the console logger loop (#162). refresh() at start rewrites an older entry.
+// The command is written into sh's script itself, in single quotes, so the Exec line has no $ and,
+// for an ordinary path, no backslash: systemd's XDG autostart generator (KDE Plasma 6 and other
+// systemd sessions) kept the backslash of "exec \"\$0\" ...", and sh ran a command named $0 (#189).
 'use strict';
 
 const fs = require('fs');
@@ -15,7 +18,9 @@ const file = () => path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir
 // The Exec key's quoting (a reserved character after a backslash, inside double quotes), then the
 // desktop file's own string escape (a backslash doubled), which a reader undoes first; % is %% (field codes).
 const quote = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : '"' + String(s).replace(/(["`$\\])/g, '\\$1') + '"').replace(/\\/g, '\\\\').replace(/%/g, '%%');
-const QUIET = 'exec "$0" "$@" >/dev/null 2>&1';
+// A word of sh's script: as is when it's plain, else in single quotes (a ' inside is '"'"').
+const shword = (s) => (/^[\w@%+=:,./-]+$/.test(s) ? s : "'" + String(s).replace(/'/g, `'"'"'`) + "'");
+const quiet = (cmd) => 'exec ' + cmd.map(shword).join(' ') + ' >/dev/null 2>&1';
 
 function command() {
   if (process.env.TWINDESK_BIN) return [process.env.TWINDESK_BIN, '--hidden'];
@@ -39,7 +44,7 @@ function entry() {
     'Type=Application',
     'Name=TwinDesk',
     'Comment=Share mouse, keyboard, clipboard and screens with your other computer',
-    'Exec=' + ['sh', '-c', QUIET, ...command()].map(quote).join(' '),
+    'Exec=' + ['sh', '-c', quiet(command())].map(quote).join(' '),
     'Icon=twindesk',
     'Terminal=false',
     'X-GNOME-Autostart-enabled=true',

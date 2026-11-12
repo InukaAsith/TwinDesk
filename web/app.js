@@ -61,6 +61,8 @@
     link: 'M8.5 11.5a3.2 3.2 0 0 0 4.5 0l2.5-2.5a3.2 3.2 0 0 0-4.5-4.5l-.8.8 M11.5 8.5a3.2 3.2 0 0 0-4.5 0L4.5 11a3.2 3.2 0 0 0 4.5 4.5l.8-.8',
     remote: 'M6.5 6.5h7a4 4 0 0 1 4 4v1.5a2.8 2.8 0 0 1-5 1.7L11.4 12H8.6l-1.1 1.7a2.8 2.8 0 0 1-5-1.7v-1.5a4 4 0 0 1 4-4z M6 8.5v3 M4.5 10h3 M13 9.5h0 M14.5 11h0',
     clipboard: 'M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4',
+    air: 'M7 6.5h4.5v10H7z M8.5 14.5h1.5 M13.5 5.5a3 3 0 0 1 0 4 M15.5 3.5a6 6 0 0 1 0 8',
+    present: 'M2.5 3.5h15v9.5h-15z M10 13v3.5 M7 17h6 M6 10l3-3 2 2 3-3',
     bell: 'M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0',
     audio: 'M4 8h3l4-3v10l-4-3H4z M14 7.5c1 .8 1 4.2 0 5 M16 5.5c2.2 1.8 2.2 7.2 0 9',
     camera: 'M2.5 6h10v8h-10z M12.5 8.5l5-2.5v8l-5-2.5',
@@ -964,7 +966,7 @@
       ['display', ['#5AC8FA', '#0A84FF'], tr('Screen sharing'), tr('View and control your computer, with audio')],
       ['files', ['#64D2FF', '#0A84FF'], tr('File transfer'), tr('Send and receive files in both directions')],
       ['clipboard', ['#64D2FF', '#30B0C7'], tr('Shared clipboard'), tr('Copy on one device, paste on the other')],
-      ['remote', ['#BF5AF2', '#8944AB'], tr('Remote control'), tr('Trackpad, keyboard and gamepad')],
+      ['remote', ['#BF5AF2', '#8944AB'], tr('Remote control'), tr('Trackpad, keyboard, air mouse, slides and gamepad')],
       ['bell', ['#FF6961', '#FF3B30'], tr('Notifications'), tr('Computer notifications on your lock screen')],
       ['camera', ['#BF5AF2', '#8944AB'], tr('Camera and microphone'), tr('Use this device as a webcam')],
     ];
@@ -1861,15 +1863,19 @@
       hd, why,
       el('div', { class: 'stack', style: 'margin-bottom:18px' }, [
         el('button', { class: 'btn primary big', onclick: () => openRemote('pad') }, [icon('cursor'), tr('Trackpad and keyboard')]),
+        el('button', { class: 'btn big', onclick: () => openRemote('air') }, [icon('air'), tr('Air mouse')]),
+        el('button', { class: 'btn big', onclick: () => openRemote('present') }, [icon('present'), tr('Presentation')]),
         el('button', { class: 'btn big', onclick: () => openRemote('gamepad') }, [icon('gamepad'), tr('Gamepad')]),
       ]),
       card(tr('Gestures'), [
         row(tr('Trackpad'), tr('Slide to move · Tap to click · Touch and hold to right-click · Two fingers to scroll')),
+        row(tr('Air mouse'), tr('Hold the screen and point the {device}: the pointer follows as you turn it · Tap to click · Slide the strip to scroll', { device: ME.kind })),
+        row(tr('Presentation'), tr('Next and Previous change slides in PowerPoint, Keynote, Google Slides and PDFs · Hold to point moves the pointer as you turn the {device}', { device: ME.kind })),
         row(tr('Gamepad'), tr('Hold the {device} in landscape. Buttons are mapped to keys on the computer and can be changed under Keys.', { device: ME.kind })),
       ]),
     );
     return () => {
-      hd.desc(tr('Use this {device} as a trackpad, keyboard or gamepad for {name}.', { device: ME.kind, name: pcName() }));
+      hd.desc(tr('Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.', { device: ME.kind, name: pcName() }));
       const r = S.remote;
       why.textContent = !online() ? tr('Not connected to {name}', { name: pcName() }) : r && r.allowed === false ? (r.why || tr('Remote input is turned off in TwinDesk on {name}.', { name: pcName() })) : '';
       why.hidden = !why.textContent;
@@ -2327,7 +2333,7 @@
   function openOverlay(kind, mode) {
     closeOverlay(true);
     if (!needOnline()) return;
-    const f = el('iframe', { src: `/td/${kind}.html`, allow: 'autoplay; fullscreen', style: 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:40;background:#000' });
+    const f = el('iframe', { src: `/td/${kind}.html`, allow: 'autoplay; fullscreen; accelerometer; gyroscope', style: 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:40;background:#000' });
     const kids = [f];
     // The viewer: the computer's monitor bar on top (Extend, Mirror, Keyboard, Stop), out of the way
     // until the handle brings it back.

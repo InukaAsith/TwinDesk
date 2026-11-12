@@ -350,6 +350,7 @@ class Notifs(core: Core) : Feature(core) {
                 val body = listOf(m.str("subtitle", 200), m.str("body", 1000)).filter { it.isNotEmpty() }.joinToString("\n")
                 Notify.fromComputer(core.ctx, m.str("id", 200), app, title, body, core.host?.name ?: tr("Computer"), iconIn(m))
                 shown++
+                core.history.addNotif(m.str("id", 200), app, title, body, m.optLong("at")) // History.kt
             }
             // An answer typed on the computer (Overview, Messages' chat apps): through the app's own Reply.
             "notif.reply" -> {

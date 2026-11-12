@@ -62,6 +62,13 @@ function render(locale) {
     general({ ...s, permissions: { ...s.permissions, screen } });
     assert.ok(nodes.some((n) => n.textContent === translated(expected)), 'permission status is translated: ' + expected);
   }
+  const screenButton = nodes.filter((n) => n.tag === 'row' && n.label === translated('Screen Recording'))
+    .flatMap((row) => row.children).find((n) => n.tag === 'button' && n.label === translated('Open'));
+  screenButton.click();
+  assert.deepStrictEqual(calls.at(-1), ['openSettings', 'screen'], 'granted permission still opens Settings');
+  general({ ...s, permissions: { ...s.permissions, screen: 'denied' } });
+  screenButton.click();
+  assert.deepStrictEqual(calls.at(-1), ['allowPermission', 'screen'], 'missing permission requests access');
   assert.strictEqual(ui.setup.render(s), false, 'Setup closes after permissions are granted');
   const denied = { ...s, permissions: { screen: 'denied', accessibility: false, inputMonitoring: false } };
   assert.strictEqual(ui.setup.render(denied), true);
