@@ -479,13 +479,15 @@
 
   // ---- once, at start ---------------------------------------------------------------------------
 
-  // Someone who already used TwinDesk: anything paired, or anything this window keeps.
+  // Someone who already used TwinDesk: anything paired, or anything this window keeps. Not phones
+  // merely seen nearby: a new install on a network where phones run TwinDesk sees them at once, and
+  // skipped the welcome for it.
   const used = (s) => {
     let kept = 0;
     try { kept = localStorage.length; } catch (_) { kept = 0; }
     const ph = s.phone || {};
     return kept > 0 || (Array.isArray(s.paired) ? s.paired.length > 0 : !!s.paired) || (s.guests || []).length > 0
-      || !!s.client || !!(s.link && s.link.state === 'connected') || !!ph.connected || (ph.nearby || []).length > 0 || (ph.paired || []).length > 0;
+      || !!s.client || !!(s.link && s.link.state === 'connected') || !!ph.connected || (ph.paired || []).length > 0;
   };
 
   const ready = () => {
