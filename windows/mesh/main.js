@@ -213,7 +213,7 @@ function start() {
   screen.fileDrop = fileDrop;
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
-  sound = new Sound({ link, settings, onChange: pushState });
+  sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   helper = new Helper();
@@ -1183,7 +1183,7 @@ function updateTray(s = buildState()) {
 function loadMic() {
   if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
   const { Mic } = require('../../shared/mic.js');
-  mic = new Mic({ link, cfg: () => settings.audio, onChange: pushState });
+  mic = new Mic({ link: hub.audioLink(), cfg: () => settings.audio, onChange: pushState, meshHub: hub });
   return mic;
 }
 

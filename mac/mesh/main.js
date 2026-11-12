@@ -618,7 +618,7 @@ app.whenReady().then(() => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
     const { Mic } = require('../../shared/mic.js');
     const askMic = () => (systemPreferences.getMediaAccessStatus('microphone') === 'granted' ? Promise.resolve(true) : systemPreferences.askForMediaAccess('microphone'));
-    svc.mic = new Mic({ server: peer, cfg: () => settings.audio, onChange: pushState, platform: 'mac', askMic });
+    svc.mic = new Mic({ server: svc.audioPeer || peer, cfg: () => settings.audio, onChange: pushState, platform: 'mac', askMic, meshHub: hub });
     return svc.mic;
   };
   svc.loadMic();
