@@ -10,6 +10,7 @@
     <string name="input_service_desc">Lets the computer you paired in TwinDesk tap, scroll and type on this phone with its mouse and keyboard when wireless debugging isn’t available (for example over Bluetooth). TwinDesk only acts on what that computer sends while you share its cursor; it doesn’t read your screen.</string>
     <string name="label_screen">Mac screen</string>
     <string name="label_remote">Remote</string>
+    <string name="label_deck">Deck</string>
     <string name="label_send">Send to computer</string>
     <string name="label_copy">Copy to computer</string>
     <string name="label_open">Open on computer</string>

@@ -18,6 +18,7 @@
     { id: 'open', name: 'Apps and websites' },
     { id: 'files', name: 'Files and scripts' },
     { id: 'clipboard', name: 'Clipboard' },
+    { id: 'widgets', name: 'Widgets' },
     { id: 'deck', name: 'Deck navigation' },
   ];
 
@@ -98,6 +99,12 @@
     e('clipboard', 'Cut', 'Cuts the selection.', { k: 'clip', what: 'cut' }),
     e('clipboard', 'Paste', 'Pastes the clipboard.', { k: 'clip', what: 'paste' }),
     e('clipboard', 'Send clipboard to the phone', 'Sends what is copied on this computer to the device’s clipboard.', { k: 'clip', what: 'send' }),
+
+    e('widgets', 'Clock', 'The time and date, on the device.', { k: 'widget', what: 'clock' }, { device: true, wide: true }),
+    e('widgets', 'Media player', 'What is playing on this computer, with play, pause and skip.', { k: 'widget', what: 'media' }, { device: true, wide: true }),
+    e('widgets', 'CPU', 'How busy this computer’s processor is, live.', { k: 'widget', what: 'cpu' }, { device: true, needs: 'perf' }),
+    e('widgets', 'Memory', 'How much of this computer’s memory is in use, live.', { k: 'widget', what: 'ram' }, { device: true, needs: 'perf' }),
+    e('widgets', 'Temperature', 'How hot this computer’s processor is, live.', { k: 'widget', what: 'temp' }, { device: true, needs: 'temp' }),
 
     e('deck', 'Go to page', 'Opens another page of this space.', { k: 'nav', what: 'page', to: '' }, { device: true }),
     e('deck', 'Go to space', 'Opens another space.', { k: 'nav', what: 'space', to: '' }, { device: true }),

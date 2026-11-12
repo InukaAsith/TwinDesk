@@ -201,6 +201,9 @@ object Ico {
     val pencil = lineIcon("pencil", "M4 16l1-4 8.5-8.5 3 3L8 15z M11.5 5.5l3 3")
     val plus = lineIcon("plus", "M10 4.5v11 M4.5 10h11")
     val minus = lineIcon("minus", "M5 10h10")
+    val close = lineIcon("close", "M5 5l10 10 M15 5 5 15")
+    // Clipboard and notification history: a clock with a list.
+    val history = lineIcon("history", "M10 3a7 7 0 1 1-6.6 4.7 M3 3.5v4h4 M10 6.5V10l2.5 2")
     val left = lineIcon("left", "M12.5 4.5 7 10l5.5 5.5")
     val right = lineIcon("right", "M7.5 4.5 13 10l-5.5 5.5")
     val shield = lineIcon("shield", "M10 2.5l6 2.5v4.5c0 4-2.7 6.7-6 8-3.3-1.3-6-4-6-8V5z M7.5 10l2 2 3.5-3.5")

@@ -3,7 +3,9 @@
 // Deck page and in tests. Every layout from a file, the window or a device goes through
 // normalize(), so nothing out of shape is kept or run.
 //
-//   layout  { v: 2, swipe: {pages, spaces}, spaces: [space] }
+//   layout  { v: 2, swipe: {pages, spaces}, orient, spaces: [space] }
+//             orient: 'landscape' (the default, held sideways like the gamepad) or 'portrait': how
+//             the phone holds its full-screen Deck.
 //             swipe.pages: a swipe across the grid turns the page; swipe.spaces: a three-finger
 //             swipe changes the space. Off, the device's own bar (and Navigate tiles) do it.
 //   space   { id, name, kind: 'tiles', pages: [page] }
@@ -36,6 +38,9 @@
 //            the window in front
 //     clip   {what: copy|cut|paste|send}: send = this computer's clipboard to the device's
 //     nav    {what: page|space|next|prev|nextspace|prevspace, to}: on the device, not sent to the computer
+//     widget {what: clock|media|cpu|ram|temp}: shows, isn't run. The clock is the device's; media is
+//            what plays on this computer (its buttons play, pause and skip); cpu, ram and temp are
+//            this computer's use and heat (deck.state perf), live while the Deck shows
 //     none   {}: a label only
 // Paths (files, folders, scripts) stay on this computer: forDevice() leaves them out of what a device gets, and
 // fromDevice() keeps this computer's own (a device can't set or change them).
@@ -43,9 +48,9 @@
 'use strict';
 
 (function (root) {
-  const KINDS = ['keys', 'text', 'macro', 'media', 'volume', 'mic', 'output', 'input', 'bt', 'bright', 'slider', 'app', 'url', 'open', 'script', 'sys', 'win', 'clip', 'nav', 'none'];
+  const KINDS = ['keys', 'text', 'macro', 'media', 'volume', 'mic', 'output', 'input', 'bt', 'bright', 'slider', 'app', 'url', 'open', 'script', 'sys', 'win', 'clip', 'nav', 'widget', 'none'];
   const LOCAL = ['open', 'script']; // only set on this computer, never sent to a device
-  const DEVICE = ['nav', 'none']; // the device does these itself
+  const DEVICE = ['nav', 'widget', 'none']; // the device does these itself
   const MEDIA = { playpause: 'MediaPlayPause', next: 'MediaTrackNext', prev: 'MediaTrackPrevious', stop: 'MediaStop' };
   const WHATS = {
     media: Object.keys(MEDIA),
@@ -58,6 +63,7 @@
     win: ['left', 'right', 'top', 'bottom', 'max', 'center', 'min', 'full', 'tl', 'tr', 'bl', 'br', 'third1', 'third2', 'third3', 'nextdisplay', 'close'],
     clip: ['copy', 'cut', 'paste', 'send'],
     nav: ['page', 'space', 'next', 'prev', 'nextspace', 'prevspace'],
+    widget: ['clock', 'media', 'cpu', 'ram', 'temp'],
   };
   const MODS = ['Mod', 'Ctrl', 'Alt', 'Shift', 'Meta'];
   const MOD_CODE = { Ctrl: 'ControlLeft', Alt: 'AltLeft', Shift: 'ShiftLeft', Meta: 'MetaLeft' };
@@ -68,7 +74,7 @@
   // The symbols every surface draws with its own icons; anything else in icon is shown as it is (an emoji).
   const SYMBOLS = [
     'play', 'pause', 'next', 'prev', 'stop', 'volume', 'volumeDown', 'mute', 'mic', 'micOff', 'speaker', 'headphones',
-    'bluetooth', 'sun', 'sunDim', 'moon', 'lock', 'sleep', 'power', 'desktop', 'windows', 'switcher', 'camera', 'crop',
+    'bluetooth', 'sun', 'sunDim', 'moon', 'clock', 'cpu', 'memory', 'thermo', 'lock', 'sleep', 'power', 'desktop', 'windows', 'switcher', 'camera', 'crop',
     'keyboard', 'command', 'text', 'macro', 'globe', 'app', 'folder', 'terminal', 'copy', 'cut', 'paste', 'send',
     'left', 'right', 'up', 'down', 'maximize', 'minimize', 'display', 'grid', 'star', 'bolt', 'bell', 'bellOff', 'none',
   ];
@@ -139,6 +145,7 @@
         if ((w === 'page' || w === 'space') && !to) return { k: 'none' };
         return w === 'page' || w === 'space' ? { k, what: w, to } : { k, what: w };
       }
+      case 'widget': return { k, what: what('clock') };
       default: return { k: 'none' };
     }
   }
@@ -215,7 +222,7 @@
       }).filter(Boolean);
       return { id, name, kind: 'tiles', pages: pages.length ? pages : [{ id: uniq(ids, 'p'), name: 'Page 1', cols: 4, rows: 4, tiles: [] }] };
     }).filter(Boolean);
-    const out = { v: 2, swipe: { pages: sw.pages !== false, spaces: sw.spaces !== false }, spaces };
+    const out = { v: 2, swipe: { pages: sw.pages !== false, spaces: sw.spaces !== false }, orient: src.orient === 'portrait' ? 'portrait' : 'landscape', spaces };
     if (!spaces.length) return normalize(starter());
     // Navigate to a page or space that's gone: nothing.
     const fix = (a) => {
@@ -246,6 +253,7 @@
     return {
       v: 2,
       swipe: { pages: true, spaces: true },
+      orient: 'landscape',
       spaces: [
         { id: 'deck', name: 'Deck', kind: 'tiles', pages: [
           { id: 'main', name: 'Main', cols: 4, rows: 4, tiles: [
@@ -405,6 +413,7 @@
       case 'sys': return { lock: 'lock', sleep: 'sleep', screenoff: 'display', desktop: 'desktop', switcher: 'switcher', overview: 'windows', screenshot: 'camera', shotarea: 'crop', darkmode: 'moon', dnd: 'bellOff' }[w];
       case 'win': return { left: 'left', right: 'right', top: 'up', bottom: 'down', max: 'maximize', min: 'minimize', full: 'maximize', nextdisplay: 'display', close: 'none' }[w] || 'grid';
       case 'clip': return { copy: 'copy', cut: 'cut', paste: 'paste', send: 'send' }[w];
+      case 'widget': return { clock: 'clock', media: 'play', cpu: 'cpu', ram: 'memory', temp: 'thermo' }[w];
       case 'nav': return { page: 'grid', space: 'windows', next: 'right', prev: 'left', nextspace: 'down', prevspace: 'up' }[w];
       default: return 'none';
     }

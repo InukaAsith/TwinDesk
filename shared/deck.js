@@ -109,6 +109,7 @@ class Deck {
       ...(bt ? { bt: { radio: bt.radio, devices: (bt.devices || []).slice(0, 60) } } : {}),
       ...(bright ? { displays: bright.displays || [] } : {}),
       dark: !!(st && st.dark), ...(st && st.dnd !== undefined ? { dnd: !!st.dnd } : {}),
+      perf: this.sys.perf ? this.sys.perf(st || {}) : undefined,
     };
   }
   async pushState() {

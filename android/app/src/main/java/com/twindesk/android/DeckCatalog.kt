@@ -22,7 +22,7 @@ object DeckCatalog {
         val k: String get() = JSONObject(action).optString("k")
         val what: String? get() = JSONObject(action).optString("what").ifEmpty { null }
     }
-    val GROUPS = listOf("keyboard" to "Keyboard", "media" to "Media", "sound" to "Sound", "bluetooth" to "Bluetooth", "display" to "Display", "windows" to "Windows", "system" to "System", "open" to "Apps and websites", "files" to "Files and scripts", "clipboard" to "Clipboard", "deck" to "Deck navigation")
+    val GROUPS = listOf("keyboard" to "Keyboard", "media" to "Media", "sound" to "Sound", "bluetooth" to "Bluetooth", "display" to "Display", "windows" to "Windows", "system" to "System", "open" to "Apps and websites", "files" to "Files and scripts", "clipboard" to "Clipboard", "widgets" to "Widgets", "deck" to "Deck navigation")
     val ENTRIES = listOf(
         Entry("keys", "keyboard", mapOf("" to "Keyboard shortcut"), mapOf("" to "Presses a key combination. Record it or type it."), "{\"k\":\"keys\",\"combo\":\"\"}", "", false, false, false),
         Entry("text", "keyboard", mapOf("" to "Type text"), mapOf("" to "Types a snippet as if from the keyboard, optionally followed by Return."), "{\"k\":\"text\",\"text\":\"\"}", "", false, false, false),
@@ -87,6 +87,11 @@ object DeckCatalog {
         Entry("clip.cut", "clipboard", mapOf("" to "Cut"), mapOf("" to "Cuts the selection."), "{\"k\":\"clip\",\"what\":\"cut\"}", "", false, false, false),
         Entry("clip.paste", "clipboard", mapOf("" to "Paste"), mapOf("" to "Pastes the clipboard."), "{\"k\":\"clip\",\"what\":\"paste\"}", "", false, false, false),
         Entry("clip.send", "clipboard", mapOf("" to "Send clipboard to the phone"), mapOf("" to "Sends what is copied on this computer to the device’s clipboard."), "{\"k\":\"clip\",\"what\":\"send\"}", "", false, false, false),
+        Entry("widget.clock", "widgets", mapOf("" to "Clock"), mapOf("" to "The time and date, on the device."), "{\"k\":\"widget\",\"what\":\"clock\"}", "", false, true, true),
+        Entry("widget.media", "widgets", mapOf("" to "Media player"), mapOf("" to "What is playing on this computer, with play, pause and skip."), "{\"k\":\"widget\",\"what\":\"media\"}", "", false, true, true),
+        Entry("widget.cpu", "widgets", mapOf("" to "CPU"), mapOf("" to "How busy this computer’s processor is, live."), "{\"k\":\"widget\",\"what\":\"cpu\"}", "perf", false, true, false),
+        Entry("widget.ram", "widgets", mapOf("" to "Memory"), mapOf("" to "How much of this computer’s memory is in use, live."), "{\"k\":\"widget\",\"what\":\"ram\"}", "perf", false, true, false),
+        Entry("widget.temp", "widgets", mapOf("" to "Temperature"), mapOf("" to "How hot this computer’s processor is, live."), "{\"k\":\"widget\",\"what\":\"temp\"}", "temp", false, true, false),
         Entry("nav.page", "deck", mapOf("" to "Go to page"), mapOf("" to "Opens another page of this space."), "{\"k\":\"nav\",\"what\":\"page\",\"to\":\"\"}", "", false, true, false),
         Entry("nav.space", "deck", mapOf("" to "Go to space"), mapOf("" to "Opens another space."), "{\"k\":\"nav\",\"what\":\"space\",\"to\":\"\"}", "", false, true, false),
         Entry("nav.next", "deck", mapOf("" to "Next page"), mapOf("" to "Opens the next page."), "{\"k\":\"nav\",\"what\":\"next\"}", "", false, true, false),
@@ -131,6 +136,10 @@ object DeckCatalog {
         "sun" to "M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4",
         "sunDim" to "M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM12 5h.01M12 19h.01M5 12h.01M19 12h.01M7 7h.01M17 17h.01M7 17h.01M17 7h.01",
         "moon" to "M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z",
+        "clock" to "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 7v5l3.5 2",
+        "cpu" to "M7 7h10v10H7zM10 10h4v4h-4zM9.5 4v3M14.5 4v3M9.5 17v3M14.5 17v3M4 9.5h3M4 14.5h3M17 9.5h3M17 14.5h3",
+        "memory" to "M3.5 7.5h17v8h-17zM7 10.5v2M10.5 10.5v2M14 10.5v2M17.5 10.5v2M6 15.5v3M18 15.5v3",
+        "thermo" to "M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0zM12 9v7.5",
         "lock" to "M6.5 10.5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM8.5 10.5v-3a3.5 3.5 0 0 1 7 0v3",
         "sleep" to "M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5zM15 4h4l-4 4h4",
         "power" to "M12 3v8M6.8 6.5a7.5 7.5 0 1 0 10.4 0",
@@ -171,7 +180,7 @@ object DeckCatalog {
         val d = PATHS[name] ?: return null
         return cache.getOrPut(name) { icon(name, d, name == "play" || name == "stop") }
     }
-    val SYMBOLS = listOf("play", "pause", "next", "prev", "stop", "volume", "volumeDown", "mute", "mic", "micOff", "speaker", "headphones", "bluetooth", "sun", "sunDim", "moon", "lock", "sleep", "power", "desktop", "windows", "switcher", "camera", "crop", "keyboard", "command", "text", "macro", "globe", "app", "folder", "terminal", "copy", "cut", "paste", "send", "left", "right", "up", "down", "maximize", "minimize", "display", "grid", "star", "bolt", "bell", "bellOff")
+    val SYMBOLS = listOf("play", "pause", "next", "prev", "stop", "volume", "volumeDown", "mute", "mic", "micOff", "speaker", "headphones", "bluetooth", "sun", "sunDim", "moon", "clock", "cpu", "memory", "thermo", "lock", "sleep", "power", "desktop", "windows", "switcher", "camera", "crop", "keyboard", "command", "text", "macro", "globe", "app", "folder", "terminal", "copy", "cut", "paste", "send", "left", "right", "up", "down", "maximize", "minimize", "display", "grid", "star", "bolt", "bell", "bellOff")
 
     // The symbol a tile shows when it has none of its own (shared/deck-model.js symbolOf).
     fun symbolOf(a: JSONObject?): String {
@@ -196,6 +205,7 @@ object DeckCatalog {
             "win" -> when (w) { "left" -> "left"; "right" -> "right"; "top" -> "up"; "bottom" -> "down"; "max" -> "maximize"; "center" -> "grid"; "min" -> "minimize"; "full" -> "maximize"; "tl" -> "grid"; "tr" -> "grid"; "bl" -> "grid"; "br" -> "grid"; "third1" -> "grid"; "third2" -> "grid"; "third3" -> "grid"; "nextdisplay" -> "display"; "close" -> "none"; else -> "left" }
             "clip" -> when (w) { "copy" -> "copy"; "cut" -> "cut"; "paste" -> "paste"; "send" -> "send"; else -> "copy" }
             "nav" -> when (w) { "page" -> "grid"; "space" -> "windows"; "next" -> "right"; "prev" -> "left"; "nextspace" -> "down"; "prevspace" -> "up"; else -> "grid" }
+            "widget" -> when (w) { "clock" -> "clock"; "media" -> "play"; "cpu" -> "cpu"; "ram" -> "memory"; "temp" -> "thermo"; else -> "clock" }
             "none" -> "none"
             else -> "none"
         }

@@ -28,6 +28,28 @@ const run = (cmd, args, timeout = 8000) => new Promise((resolve, reject) => {
   cp.execFile(cmd, args, { timeout, shell: false }, (err, out) => (err ? reject(err) : resolve(String(out || ''))));
 });
 const CACHE_MS = 60000;
+const os = require('os');
+let cpuWas = null;
+
+// Linux's thermal zones: the processor's (x86_pkg_temp, a *cpu* or *soc* zone) else the hottest.
+function thermal() {
+  try {
+    return fs.readdirSync('/sys/class/thermal').filter((d) => d.startsWith('thermal_zone')).map((d) => {
+      const dir = path.join('/sys/class/thermal', d);
+      let type = '';
+      try { type = fs.readFileSync(path.join(dir, 'type'), 'utf8').trim(); } catch (_) {}
+      return { type, file: path.join(dir, 'temp') };
+    });
+  } catch (_) { return []; }
+}
+async function linuxTemp() {
+  const zones = thermal();
+  const read = (z) => { try { return Number(fs.readFileSync(z.file, 'utf8')) / 1000; } catch (_) { return NaN; } };
+  const cpu = zones.filter((z) => /x86_pkg|cpu|soc|k10temp|coretemp/i.test(z.type)).map(read).filter((v) => v > 5 && v < 130);
+  const any = zones.map(read).filter((v) => v > 5 && v < 130);
+  const list = cpu.length ? cpu : any;
+  return list.length ? Math.max(...list) : null;
+}
 
 // Keys each platform presses for a step it has no API for (KeyboardEvent.code names).
 const KEYS = {
@@ -57,7 +79,7 @@ function sys(platform, { helper, press }) {
     platform,
     // What this computer can do, for the editor and the device (sub-steps are checked when run).
     caps() {
-      const c = { audio: true, outputs: true, mic: true, bt: true, bright: true, win: true, windows: !linux, darkmode: true, dnd: platform !== 'mac', screenoff: !linux };
+      const c = { audio: true, outputs: true, mic: true, bt: true, bright: true, win: true, windows: !linux, darkmode: true, dnd: platform !== 'mac', screenoff: !linux, perf: true, temp: platform === 'mac' || (linux && thermal().length > 0) };
       if (linux) {
         c.audio = c.outputs = c.mic = which('pactl');
         c.bt = which('bluetoothctl');
@@ -175,7 +197,20 @@ function sys(platform, { helper, press }) {
     async state() {
       if (!linux) return H('deckState').catch(() => ({}));
       const dark = await run('gsettings', ['get', 'org.gnome.desktop.interface', 'color-scheme']).catch(() => '');
-      return { dark: /dark/.test(dark) };
+      const temp = await linuxTemp();
+      return { dark: /dark/.test(dark), ...(temp ? { temp } : {}) };
+    },
+    // The widgets' CPU, memory and heat: {cpu 0–1, ram 0–1, temp °C?}. The processor's use since the
+    // last ask (the Deck asks every few seconds while it shows); the helper's memory count on a Mac
+    // (Node's leaves out what macOS could free at once), Node's elsewhere.
+    perf(st = {}) {
+      const now = os.cpus().reduce((a, c) => { const t = c.times; a.idle += t.idle; a.all += t.user + t.nice + t.sys + t.idle + t.irq; return a; }, { idle: 0, all: 0 });
+      const was = cpuWas || now;
+      cpuWas = now;
+      const all = now.all - was.all;
+      const cpu = all > 0 ? 1 - (now.idle - was.idle) / all : os.loadavg()[0] / Math.max(1, os.cpus().length);
+      const ram = typeof st.memUsed === 'number' ? st.memUsed : 1 - os.freemem() / os.totalmem();
+      return { cpu: clamp01(cpu), ram: clamp01(ram), ...(typeof st.temp === 'number' ? { temp: Math.round(st.temp) } : {}) };
     },
 
     // ---- Apps ----

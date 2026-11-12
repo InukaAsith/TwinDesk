@@ -20,7 +20,7 @@ const SF = {
   play: 'play.fill', pause: 'pause.fill', next: 'forward.end.fill', prev: 'backward.end.fill', stop: 'stop.fill',
   volume: 'speaker.wave.2.fill', volumeDown: 'speaker.wave.1.fill', mute: 'speaker.slash.fill', mic: 'mic.fill', micOff: 'mic.slash.fill',
   speaker: 'hifispeaker.fill', headphones: 'headphones', bluetooth: 'antenna.radiowaves.left.and.right', sun: 'sun.max.fill', sunDim: 'sun.min.fill',
-  moon: 'moon.fill', lock: 'lock.fill', sleep: 'moon.zzz.fill', power: 'power', desktop: 'menubar.dock.rectangle', windows: 'rectangle.3.group',
+  moon: 'moon.fill', clock: 'clock', cpu: 'cpu', memory: 'memorychip', thermo: 'thermometer.medium', lock: 'lock.fill', sleep: 'moon.zzz.fill', power: 'power', desktop: 'menubar.dock.rectangle', windows: 'rectangle.3.group',
   switcher: 'arrow.left.arrow.right.square', camera: 'camera.fill', crop: 'crop', keyboard: 'keyboard', command: 'command', text: 'textformat',
   macro: 'list.bullet.indent', globe: 'globe', app: 'app.fill', folder: 'folder.fill', terminal: 'terminal.fill', copy: 'doc.on.doc.fill',
   cut: 'scissors', paste: 'doc.on.clipboard.fill', send: 'paperplane.fill', left: 'arrow.left', right: 'arrow.right', up: 'arrow.up', down: 'arrow.down',

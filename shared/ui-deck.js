@@ -708,7 +708,10 @@
         const sp = UI.switch((v) => change(() => { L.swipe.spaces = v; }), { label: t('Three-finger swipe between spaces') });
         pg.set(L.swipe.pages);
         sp.set(L.swipe.spaces);
+        const or = UI.segmented([{ value: 'landscape', label: t('Landscape') }, { value: 'portrait', label: t('Portrait') }], (v) => change(() => { L.orient = v; }));
+        or.set(L.orient || 'landscape');
         gestures.replaceChildren(UI.card(t('On the phone'), [
+          UI.row(t('Hold the phone'), t('The Deck opens full screen this way up'), [or.el]),
           UI.row(t('Swipe between pages'), t('Off: switch pages with the page bar, or a Go to page tile'), [pg.el]),
           UI.row(t('Three-finger swipe between spaces'), t('Off: switch spaces with the space bar, or a Go to space tile'), [sp.el]),
           UI.row(t('Start over'), t('Replaces every space, page and tile with the first layout'), [UI.button(t('Reset'), () => {

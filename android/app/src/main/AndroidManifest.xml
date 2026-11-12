@@ -99,6 +99,17 @@
             android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask" />
 
+        <!-- The Deck full screen (Deck.kt): held landscape unless the computer's Deck says portrait. -->
+        <activity
+            android:name=".DeckActivity"
+            android:exported="false"
+            android:label="@string/label_deck"
+            android:theme="@style/Theme.TwinDesk"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask" />
+
         <activity
             android:name=".ShareActivity"
             android:exported="true"
