@@ -162,16 +162,17 @@ Comment=Share mouse, keyboard, clipboard, files and screens with your other comp
 Exec=twindesk %U
 Icon=twindesk
 Type=Application
-StartupWMClass=TwinDesk
+StartupWMClass=twindesk
 Categories=Utility;
 Keywords=KVM;mouse;keyboard;clipboard;screen;share;
 EOF
 
               # Electron wrapper
               makeWrapper ${pkgs.electron}/bin/electron "$out/bin/twindesk" \
-                --add-flags "$share/linux/main.js" \
+                --add-flags "$share/linux" \
                 --set NODE_PATH "$share/node_modules" \
                 --set TWINDESK_BIN "$out/bin/twindesk" \
+                --set CHROME_DESKTOP twindesk.desktop \
                 --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
                 --prefix GI_TYPELIB_PATH : "${pkgs.lib.makeSearchPath "lib/girepository-1.0" [ pkgs.glib pkgs.gobject-introspection pkgs.gst_all_1.gstreamer pkgs.gst_all_1.gst-plugins-base ]}" \
                 --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${pkgs.lib.makeSearchPath "lib/gstreamer-1.0" [ pkgs.gst_all_1.gstreamer pkgs.gst_all_1.gst-plugins-base ]}"
