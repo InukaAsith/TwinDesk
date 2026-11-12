@@ -8,7 +8,7 @@
 'use strict';
 
 const path = require('path');
-const { BrowserWindow, ipcMain, session, desktopCapturer, webContents } = require('electron');
+const { BrowserWindow, ipcMain, session, desktopCapturer, webContents, systemPreferences } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const ScreenCodec = require('../../shared/screencodec.js');
@@ -27,8 +27,13 @@ function setHandler() {
     try {
       const wc = req.frame ? webContents.fromFrame(req.frame) : null;
       const st = (wc && byCapture.get(wc.id)) || byCapture.values().next().value;
+      if (!st || !st.active) return cb({});
       // The sound, when asked for: Chromium's loopback (audiohub.js loopback()).
-      cb({ video: await st._source(), ...(req.audioRequested ? { audio: 'loopback' } : {}) });
+      const active = st.active, win = st.win;
+      const target = st._target();
+      if (!target || target.id !== active.displayId) return cb({});
+      const source = await st._source(target);
+      cb(st.active === active && st.win === win ? { video: source, ...(req.audioRequested ? { audio: 'loopback' } : {}) } : {});
     } catch (e) {
       console.error(`[stream] no capture source: ${e.message}`);
       cb({});
@@ -85,8 +90,7 @@ class Stream extends EventEmitter {
       if (on === this.viewer) return;
       this.viewer = on;
       if (on) this.restart('viewer open');
-      else if (this.active) this._stopWindow('no viewer');
-      else this._setStatus(this.getSettings().sharing.on ? 'no viewer' : 'off');
+      else this._stopWindow(this.getSettings().sharing.on ? 'no viewer' : 'off');
     });
     server.on('closed', () => {
       if (!server.current || !P.isPhoneOs(server.current.os)) {
@@ -152,12 +156,18 @@ class Stream extends EventEmitter {
     return this.win && !this.win.isDestroyed() && e.sender === this.win.webContents;
   }
 
-  async _source() {
-    const target = this._target();
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
-    const src = (target && sources.find((s) => s.display_id === String(target.id))) || sources[0];
-    if (!src) throw new Error('no screens (Screen Recording permission?)');
-    return src;
+  async _source(target = this._target()) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
+      const src = target && (sources.find((s) => s.display_id === String(target.id)) ||
+        (sources.length === 1 && !sources[0].display_id && this.displays.list?.().length === 1 ? sources[0] : null));
+      if (src) return src;
+      if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') throw new Error('Screen Recording permission required');
+      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    const error = new Error('no display to share');
+    error.code = 'NO_DISPLAY';
+    throw error;
   }
 
   _ensureWindow() {
@@ -204,8 +214,9 @@ class Stream extends EventEmitter {
     if (this.choice && this.choice.mode === 'none') return this._stopWindow('off for this device');
     // Bluetooth can't carry the picture: it starts once the session is on Wi-Fi (netlink.js, 'transport').
     if (this.server.current && this.server.current.transport === 'ble') return this._stopWindow('waiting for Wi-Fi');
+    this.displays.captureWanted?.(this, true);
     const target = this._target();
-    if (!target) return this._stopWindow('no display to share');
+    if (!target) return this._waitDisplay();
 
     const s = ++this.session;
     const { width, height } = this._outSize(target);
@@ -234,15 +245,19 @@ class Stream extends EventEmitter {
     try {
       await this._ensureWindow();
       if (!this.active || this.active.session !== s) return;
-      const src = await this._source();
+      const src = await this._source(target);
+      if (!this.active || this.active.session !== s) return;
       const set = this.getSettings();
       this._toWindow('start', {
-        session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too sourceId: src.id, width, height, audio,
+        session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too
+        sourceId: src.id, width, height, audio,
         ice: (this.server.current && this.server.current.ice) || null, // a phone on the USB cable: through the relay
         fps: ScreenCodec.fps(target.hz, set.sharing && set.sharing.fps), // Share screen › Frame rate
         steady: !!(set.sharing && set.sharing.pace === 'steady'), // Playback › Steady (shared/screencodec.js)
       });
     } catch (e) {
+      if (!this.active || this.active.session !== s) return;
+      if (e.code === 'NO_DISPLAY') { this.displays.uncapturable?.(target.id); return this._waitDisplay(); }
       console.error(`[stream] start failed: ${e.message}`);
       this._setStatus(`error: ${e.message}`);
       this._scheduleRetry();
@@ -264,14 +279,25 @@ class Stream extends EventEmitter {
   }
 
   _displaysChanged() {
-    if (!this.active) return;
+    if (!this.active) {
+      if (this.awaitingDisplay && this._target()) this.restart('display available');
+      return;
+    }
     const t = this._target();
     if (!t || t.id !== this.active.displayId || t.pixelWidth !== this.active.width || t.pixelHeight !== this.active.height) {
       this.restart('display changed');
     }
   }
 
-  _stopWindow(status) {
+  _waitDisplay() {
+    this._stopWindow('no display to share', true);
+    this.awaitingDisplay = true;
+  }
+
+  _stopWindow(status, waiting = false) {
+    this.session++;
+    this.awaitingDisplay = false;
+    if (!waiting) this.displays.captureWanted?.(this, false);
     clearTimeout(this.retryTimer);
     this._releaseAudio();
     this.audio.on = false;

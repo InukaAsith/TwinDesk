@@ -339,7 +339,7 @@ function shareAs(mode) {
 function displayMode() {
   const t = svc && svc.displays.target();
   if (!t) return 'custom';
-  if (t.virtual) return 'extend';
+  if (t.virtual) return svc.displays.fallbackOnly() ? 'mirror' : 'extend';
   return t.primary && !settings.virtual.enabled ? 'mirror' : 'custom';
 }
 

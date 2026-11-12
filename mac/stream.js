@@ -37,8 +37,13 @@ class Stream extends EventEmitter {
 
     session.defaultSession.setDisplayMediaRequestHandler(async (_req, cb) => {
       try {
+        if (!this.active) return cb({});
         // The sound, when asked for: Chromium's loopback (audiohub.js loopback()).
-        cb({ video: await this._source(), ...(_req.audioRequested ? { audio: 'loopback' } : {}) });
+        const active = this.active, win = this.win;
+        const target = this.displays.target();
+        if (!target || target.id !== active.displayId) return cb({});
+        const source = await this._source(target);
+        cb(this.active === active && this.win === win ? { video: source, ...(_req.audioRequested ? { audio: 'loopback' } : {}) } : {});
       } catch (e) {
         console.error(`[stream] no capture source: ${e.message}`);
         cb({});
@@ -70,8 +75,7 @@ class Stream extends EventEmitter {
       if (on === this.viewer) return;
       this.viewer = on;
       if (on) this.restart('viewer open');
-      else if (this.active) this._stopWindow('no viewer');
-      else this._setStatus(this.getSettings().sharing.on ? 'no viewer' : 'off');
+      else this._stopWindow(this.getSettings().sharing.on ? 'no viewer' : 'off');
     });
     server.on('closed', () => {
       if (!server.current || !P.isPhoneOs(server.current.os)) {
@@ -129,12 +133,18 @@ class Stream extends EventEmitter {
     return this.win && !this.win.isDestroyed() && e.sender === this.win.webContents;
   }
 
-  async _source() {
-    const target = this.displays.target();
-    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
-    const src = (target && sources.find((s) => s.display_id === String(target.id))) || sources[0];
-    if (!src) throw new Error('no screens (Screen Recording permission?)');
-    return src;
+  async _source(target = this.displays.target()) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
+      const src = target && (sources.find((s) => s.display_id === String(target.id)) ||
+        (sources.length === 1 && !sources[0].display_id && this.displays.list?.().length === 1 ? sources[0] : null));
+      if (src) return src;
+      if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') throw new Error('Screen Recording permission required');
+      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    const error = new Error('no display to share');
+    error.code = 'NO_DISPLAY';
+    throw error;
   }
 
   _ensureWindow() {
@@ -181,8 +191,9 @@ class Stream extends EventEmitter {
     if (this.viewer === false || this.waitingPolicy) return this._stopWindow('no viewer');
     // Bluetooth can't carry the picture: it starts once the session is on Wi-Fi (netlink.js, 'transport').
     if (this.server.current.transport === 'ble') return this._stopWindow('waiting for Wi-Fi');
+    this.displays.captureWanted?.(this, true);
     const target = this.displays.target();
-    if (!target) return this._stopWindow('no display to share');
+    if (!target) return this._waitDisplay();
 
     const s = ++this.session;
     const { width, height } = this._outSize(target);
@@ -211,7 +222,8 @@ class Stream extends EventEmitter {
     try {
       await this._ensureWindow();
       if (!this.active || this.active.session !== s) return;
-      const src = await this._source();
+      const src = await this._source(target);
+      if (!this.active || this.active.session !== s) return;
       const set = this.getSettings();
       this._toWindow('start', {
         session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too
@@ -222,6 +234,8 @@ class Stream extends EventEmitter {
         codec: ScreenCodec.mode(set.sharing && set.sharing.codec), // Share screen › Encoder
       });
     } catch (e) {
+      if (!this.active || this.active.session !== s) return;
+      if (e.code === 'NO_DISPLAY') { this.displays.uncapturable?.(target.id); return this._waitDisplay(); }
       // The rejection isn't always an Error (Screen Recording not allowed): say what it was.
       const why = (e && e.message) || util.inspect(e);
       console.error(`[stream] start failed: ${why} (Screen Recording: ${systemPreferences.getMediaAccessStatus('screen')})`);
@@ -245,14 +259,25 @@ class Stream extends EventEmitter {
   }
 
   _displaysChanged() {
-    if (!this.active) return;
+    if (!this.active) {
+      if (this.awaitingDisplay && this.displays.target()) this.restart('display available');
+      return;
+    }
     const t = this.displays.target();
     if (!t || t.id !== this.active.displayId || t.pixelWidth !== this.active.width || t.pixelHeight !== this.active.height) {
       this.restart('display changed');
     }
   }
 
-  _stopWindow(status) {
+  _waitDisplay() {
+    this._stopWindow('no display to share', true);
+    this.awaitingDisplay = true;
+  }
+
+  _stopWindow(status, waiting = false) {
+    this.session++;
+    this.awaitingDisplay = false;
+    if (!waiting) this.displays.captureWanted?.(this, false);
     clearTimeout(this.retryTimer);
     this._releaseAudio();
     this.audio.on = false;
