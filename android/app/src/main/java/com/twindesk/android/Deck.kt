@@ -51,6 +51,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -188,6 +190,7 @@ class Deck(core: Core) : Feature(core) {
     fun askApps() { if (apps == null) core.send(msg(Proto.T.DECK_APPS)) }
     // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).
     fun arrange(display: String, items: List<JSONObject>) { done = null; core.send(msg(Proto.T.DECK_ARRANGE, "display" to display, "items" to JSONArray(items))) }
+    fun winOp(wid: Long, op: String) { done = null; core.send(msg(Proto.T.DECK_PLACE, "wid" to wid, "op" to op)) }
     fun restore(wid: Long) { done = null; core.send(msg(Proto.T.DECK_PLACE, "wid" to wid, "restore" to true)) }
     fun place(wid: Long, display: String, zone: JSONObject?) {
         done = null
@@ -702,9 +705,9 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     if (d.caps?.optBoolean("windows", true) == false) { Text(tr("Not on this computer"), color = pal.muted); return }
     if (w == null) { Text(tr("Loading windows…"), color = pal.muted); return }
     val apps = w.optJSONArray("apps").objs()
-    // The apps with a window showing, then (apart, grayed) the ones whose windows are all minimized.
+    // The apps with a window showing; then, past a line in the same row, every minimized window (grayed).
     val showing = apps.filter { !it.optBoolean("min") }
-    val minimized = apps.filter { it.optBoolean("min") }
+    val minWins = apps.flatMap { a -> a.optJSONArray("windows").objs().filter { it.optBoolean("min") }.map { a to it } }
     val known = w.optJSONArray("known").objs()
     val displays = w.optJSONArray("displays").objs()
     val front = w.optLong("front")
@@ -713,7 +716,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     // the display shown; the saved sets' shelf; what was arranged last (for Save).
     var sel by remember { mutableStateOf(listOf<String>()) }
     var multi by remember { mutableStateOf(false) } // select mode: a hold starts it, taps then add and take out
-    var wid by remember { mutableStateOf<Long?>(null) }
+    var pref by remember { mutableStateOf(mapOf<String, Long>()) } // an app's window chosen (a chip, or a minimized one held)
     var armed by remember { mutableStateOf<JSONObject?>(null) }
     var display by remember { mutableStateOf("") }
     var shelf by rememberSaveable { mutableStateOf(false) }
@@ -724,13 +727,13 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     val one = picked.singleOrNull()
     val windows = one?.optJSONArray("windows").objs()
     // An app's window: the one chosen, else the one in front, else one showing, else a minimized one.
-    val windowOf = { a: JSONObject -> a.optJSONArray("windows").objs().let { ws -> (if (a === one) ws.firstOrNull { it.optLong("wid") == wid } else null) ?: ws.firstOrNull { it.optLong("wid") == front } ?: ws.firstOrNull { !it.optBoolean("min") } ?: ws.firstOrNull() } }
+    val windowOf = { a: JSONObject -> a.optJSONArray("windows").objs().let { ws -> ws.firstOrNull { it.optLong("wid") == pref[a.optString("key")] } ?: ws.firstOrNull { it.optLong("wid") == front } ?: ws.firstOrNull { !it.optBoolean("min") } ?: ws.firstOrNull() } }
     val mainId = displays.firstOrNull { it.optBoolean("main") }?.optString("id") ?: displays.firstOrNull()?.optString("id") ?: ""
     val shown = display.takeIf { id -> displays.any { it.optString("id") == id } } ?: one?.let { windowOf(it)?.optString("display") }?.takeIf { it.isNotEmpty() } ?: mainId
     val shownD = displays.firstOrNull { it.optString("id") == shown }
     val ratio = shownD?.takeIf { it.optInt("h") > 0 }?.let { it.optInt("w").toFloat() / it.optInt("h") }?.coerceIn(0.5f, 3f) ?: 1.6f
 
-    val clear = { sel = emptyList(); multi = false; wid = null; armed = null }
+    val clear = { sel = emptyList(); multi = false; pref = emptyMap(); armed = null }
     val put = { a: JSONObject, zone: JSONObject ->
         windowOf(a)?.let { d.place(it.optLong("wid"), shown, JSONObject(zone.toString())) }
         clear()
@@ -740,9 +743,9 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     val tap = { k: String ->
         if (multi || sel.size > 1) { sel = if (k in sel) sel - k else (sel + k).takeLast(6); if (sel.isEmpty()) multi = false }
         else sel = if (sel == listOf(k)) emptyList() else listOf(k)
-        wid = null
+        pref = pref - k
     }
-    val hold = { k: String -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); multi = true; if (k !in sel) sel = (sel + k).takeLast(6); wid = null }
+    val hold = { k: String -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); multi = true; if (k !in sel) sel = (sel + k).takeLast(6); pref = pref - k }
     // The picked apps into a configuration's zones, in order; remembered for Save.
     val arrange = { zones: List<JSONObject> ->
         val items = picked.zip(zones).map { (a, z) -> JSONObject().put("key", a.optString("key")).put("wid", windowOf(a)?.optLong("wid") ?: 0).put("zone", JSONObject(z.toString())) }
@@ -775,21 +778,26 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     val hover = dragging?.let { target(it.second) }
 
     // One app in the picker: its icon (bigger when there's room), its place in the order once picked.
-    // A minimized one is grayed: a tap brings it back (a hold still picks it, arranging brings it back too).
+    // win: a minimized window of it instead, grayed and named after its title: a tap brings it back,
+    // a hold picks the app with that window (arranging brings it back too).
     @Composable
-    fun AppItem(a: JSONObject, itemW: Dp, iconSize: Dp, min: Boolean) = key(a.optString("key")) {
+    fun AppItem(a: JSONObject, itemW: Dp, iconSize: Dp, win: JSONObject?) = key(a.optString("key") + (win?.optLong("wid") ?: "")) {
         val k = a.optString("key")
-        val n = sel.indexOf(k)
-        val inFront = a.optJSONArray("windows").objs().any { it.optLong("wid") == front }
+        val mw = win?.optLong("wid")
+        val chosenMin = pref[k]?.let { p -> a.optJSONArray("windows").objs().any { it.optLong("wid") == p && it.optBoolean("min") } } == true
+        val n = if (if (mw != null) pref[k] == mw else !chosenMin) sel.indexOf(k) else -1
+        val inFront = win == null && a.optJSONArray("windows").objs().any { it.optLong("wid") == front }
+        val choose = { if (mw != null) pref = pref + (k to mw) }
         var at by remember { mutableStateOf(Offset.Zero) }
         Column(Modifier.width(itemW).onGloballyPositioned { at = it.positionInRoot() }
-            .pointerInput(k) {
+            .pointerInput(k, mw) {
                 // Downwards: a drag onto the display. Sideways: the row scrolls.
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     var down2 = false
                     val ch = awaitTouchSlopOrCancellation(down.id) { c, over -> if (abs(over.y) > abs(over.x)) { down2 = true; c.consume() } }
                     if (ch == null || !down2) return@awaitEachGesture
+                    choose()
                     dragging = a to (at + ch.position)
                     val ended = drag(ch.id) { c -> dragging = dragging?.let { it.first to (at + c.position) }; c.consume() }
                     if (ended) dragging?.let { (x, p) -> dropNow(x, p) }
@@ -797,48 +805,44 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
                 }
             }
             .clip(RoundedCornerShape(14.dp)).background(if (n >= 0) pal.accentSoft else Color.Transparent)
-            .combinedClickable(onLongClick = { hold(k) }) {
+            .combinedClickable(onLongClick = { hold(k); choose() }) {
                 val z = armed
                 when {
-                    z != null -> put(a, z)
-                    min && !multi && sel.size < 2 -> { a.optJSONArray("windows").objs().firstOrNull()?.let { d.restore(it.optLong("wid")) }; clear() }
-                    else -> tap(k)
+                    z != null -> { choose(); put(a, z) }
+                    mw != null && !multi && sel.size < 2 -> { d.restore(mw); clear() }
+                    mw != null && k in sel && pref[k] != mw -> choose() // picked already: this window instead
+                    else -> { tap(k); if (k in sel) choose() }
                 }
-            }.padding(5.dp).alpha(if (min && n < 0) 0.45f else 1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            }.padding(5.dp).alpha(if (mw != null && n < 0) 0.45f else 1f), horizontalAlignment = Alignment.CenterHorizontally) {
             Box {
                 AppIcon(a, iconSize)
                 if (n >= 0) Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp).size(18.dp).clip(CircleShape).background(pal.accent), contentAlignment = Alignment.Center) {
                     Text("${n + 1}", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 } else if (inFront) Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(pal.accent))
             }
-            Text(a.str("name", 40), color = pal.text, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+            Text(win?.str("title", 40)?.ifEmpty { null } ?: a.str("name", 40), color = pal.text, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
         }
     }
 
-    // The apps along the top, as big as the room allows; below them, after a line, the minimized
-    // ones; below those, the picked app's windows when it has more than one.
+    // One row along the top: the apps showing, as big as the room allows, then past a line the
+    // minimized windows; below, only when the picked app has more than one window, its windows.
     val bar: @Composable () -> Unit = {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(end = 40.dp)) {
-            val itemW = (maxWidth / maxOf(1, showing.size)).coerceIn(62.dp, 96.dp)
+            val itemW = (maxWidth / maxOf(1, showing.size + minWins.size)).coerceIn(62.dp, 96.dp)
             val iconSize = (itemW * 0.62f).coerceIn(38.dp, 58.dp)
             Column {
                 if (apps.isEmpty()) Text(tr("No windows open"), color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (a in showing) AppItem(a, itemW, iconSize, false)
-                }
-                if (minimized.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(tr("Minimized"), color = pal.muted, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
-                        Box(Modifier.weight(1f).height(1.dp).background(pal.muted.copy(alpha = 0.3f)))
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        for (a in minimized) AppItem(a, (itemW * 0.8f).coerceAtLeast(58.dp), (iconSize * 0.8f).coerceAtLeast(32.dp), true)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    for (a in showing) AppItem(a, itemW, iconSize, null)
+                    if (minWins.isNotEmpty()) {
+                        Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(iconSize + 14.dp).background(pal.muted.copy(alpha = 0.4f)))
+                        for ((a, x) in minWins) AppItem(a, itemW, iconSize, x)
                     }
                 }
-                if (one != null && windows.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (one != null && windows.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (x in windows) {
                         val on = x === windowOf(one)
-                        Box(Modifier.clip(RoundedCornerShape(50)).background(if (on) pal.accent else pal.card).clickable { wid = x.optLong("wid") }.padding(horizontal = 12.dp, vertical = 6.dp)
+                        Box(Modifier.clip(RoundedCornerShape(50)).background(if (on) pal.accent else pal.card).clickable { pref = pref + (one.optString("key") to x.optLong("wid")) }.padding(horizontal = 12.dp, vertical = 6.dp)
                             .alpha(if (x.optBoolean("min") && !on) 0.5f else 1f)) {
                             Text(x.str("title", 40).ifEmpty { tr("Window") }, color = if (on) Color.White else pal.text, fontSize = 12.sp, maxLines = 1)
                         }
@@ -873,7 +877,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     // finger lit while an app is dragged; a tap places the picked app (or waits for one).
     val screen: @Composable (Modifier) -> Unit = { m ->
         BoxWithConstraints(m.onGloballyPositioned { pad = it.boundsInRoot() }.clip(RoundedCornerShape(14.dp)).background(Color(0xFF14213A))
-            .pointerInput(shown, sel, armed, wid) {
+            .pointerInput(shown, sel, armed, pref) {
                 detectTapGestures { o ->
                     val z = snapZone(o.x / size.width, o.y / size.height) ?: return@detectTapGestures
                     when {
@@ -965,8 +969,24 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
             }
             row()
         }
-        // The shelf over the display's right edge.
-        Box(Modifier.align(Alignment.CenterEnd).padding(vertical = 90.dp)) { shelfView(d, sets, shelf, { shelf = it }, byKey, known, displays, shown, dropSet) }
+        // At the right edge: the window's own buttons (the picked app's window, else the one in front)
+        // in a thin bar, and the saved sets' shelf below it.
+        val ctl = one?.let(windowOf) ?: apps.firstNotNullOfOrNull { a -> a.optJSONArray("windows").objs().firstOrNull { it.optLong("wid") == front } }
+        Column(Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 24.dp), horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+            if (ctl != null && !shelf) Column(Modifier.width(30.dp).clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)).background(pal.card).padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                val wd = ctl.optLong("wid")
+                @Composable fun btn(label: String, op: String, glyph: @Composable () -> Unit) =
+                    Box(Modifier.size(30.dp, 36.dp).clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); d.winOp(wd, op); if (op == "close" || op == "min") clear() }
+                        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) { glyph() }
+                btn(tr("Close"), "close") { Icon(Ico.close, null, tint = pal.bad, modifier = Modifier.size(13.dp)) }
+                btn(tr("Minimize"), "min") { DeckGlyph("minimize", pal.text, 15.dp) }
+                btn(tr("Maximize"), "max") { DeckGlyph("maximize", pal.text, 15.dp) }
+                btn(tr("Full screen"), "full") { DeckGlyph("display", pal.text, 15.dp) }
+            }
+            shelfView(d, sets, shelf, { shelf = it }, byKey, known, displays, shown, dropSet)
+        }
         // The app being dragged, under the finger.
         dragging?.let { (a, p) ->
             Box(Modifier.offset { IntOffset((p.x - origin.x).roundToInt() - 26.dp.roundToPx(), (p.y - origin.y).roundToInt() - 26.dp.roundToPx()) }.alpha(0.9f)) { AppIcon(a, 52.dp) }

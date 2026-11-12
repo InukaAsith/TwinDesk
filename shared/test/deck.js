@@ -304,6 +304,13 @@ const fakeSys = {
   server.emit(`t:${T.DECK_ARRANGE}`, { display: 'd1', items: [{ key: 'com.microsoft.VSCode', zone: { x: 0, y: 0, w: 6, h: 12 } }] });
   await new Promise((r) => setTimeout(r, 30));
   assert.deepStrictEqual(calls.filter((c) => c[0] === 'frame').map((c) => c[1]), [11], 'arranged too');
+  calls.length = 0;
+  for (const op of ['close', 'min', 'full', 'max']) server.emit(`t:${T.DECK_PLACE}`, { wid: 7, op });
+  server.emit(`t:${T.DECK_PLACE}`, { wid: 7, op: 'rm -rf' });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepStrictEqual(calls.slice(0, 3), [['winop', 7, 'close'], ['winop', 7, 'min'], ['winop', 7, 'full']], 'a window\'s own buttons');
+  assert.strictEqual(calls[3][0], 'frame', 'Mac maximize: the whole display');
+  assert.strictEqual(calls.length, 4, 'nothing else');
   fakeSys.wins = realWins;
   // Windows: a program matched to the Start menu app that starts it, nothing else.
   const opened = [];

@@ -332,6 +332,23 @@ class Deck {
       const wid = Number(m.wid);
       const { windows, minimized = [] } = await this.sys.wins();
       const min = minimized.find((x) => x.wid === wid);
+      // A window's own buttons: closed, minimized, the whole display (Windows: maximized), full screen (Mac).
+      if (m.op !== undefined) {
+        const op = String(m.op);
+        if (!['close', 'min', 'max', 'full'].includes(op)) throw new Error('Not a window action');
+        const w0 = windows.find((x) => x.wid === wid) || min;
+        if (!w0) throw new Error('That window is gone');
+        if (op === 'close' || op === 'min') await this.sys.winOp(wid, op);
+        else if (op === 'full' && this.platform === 'mac') await this.sys.winOp(wid, 'full');
+        else if (this.platform === 'win') await this.sys.winOp(wid, 'max');
+        else {
+          const ds = this.sys.displays();
+          const at = (!min && displayOf(ds, w0)) || ds.find((d) => d.main) || ds[0];
+          if (!at) throw new Error('No display');
+          await this.sys.frame(wid, zoneRect(at, { x: 0, y: 0, w: 12, h: 12 }));
+        }
+        return done(true);
+      }
       // A minimized window brought back as it was (or straight into a zone, below).
       if (min && (m.restore || !m.zone)) { await this.sys.winOp(wid, 'restore'); return done(true); }
       const w = windows.find((x) => x.wid === wid) || min;

@@ -70,6 +70,8 @@ final class Deck: Feature {
     func askApps() { if apps == nil { _ = core.send(msg("deck.apps")) } }
     // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).
     func arrange(display: String, items: [JSON]) { done = nil; _ = core.send(msg("deck.arrange", ["display": display, "items": items])) }
+    // A window's own buttons: close, min, max, full.
+    func winOp(_ wid: Int64, _ op: String) { done = nil; _ = core.send(msg("deck.place", ["wid": wid, "op": op])) }
     // A minimized window brought back as it was.
     func restore(_ wid: Int64) { done = nil; _ = core.send(msg("deck.place", ["wid": wid, "restore": true])) }
     func place(_ wid: Int64, display: String, zone: JSON?) {

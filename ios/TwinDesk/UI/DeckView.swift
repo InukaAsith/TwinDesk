@@ -633,7 +633,7 @@ struct DeckWindowSpace: View {
     // the display shown; the saved sets' shelf; what was arranged last (for Save).
     @State private var sel: [String] = []
     @State private var multi = false // select mode: a hold starts it, taps then add and take out
-    @State private var wid: Int64?
+    @State private var pref: [String: Int64] = [:] // an app's window chosen (a chip, or a minimized one held)
     @State private var display: String?
     @State private var armed: JSON?
     @State private var shelf = false
@@ -663,9 +663,9 @@ struct DeckWindowSpace: View {
         let apps: [JSON], known: [JSON], displays: [JSON], front: Int64
         let picked: [JSON], shown: String
         var one: JSON? { picked.count == 1 ? picked[0] : nil }
-        // The apps with a window showing; the ones whose windows are all minimized (apart, grayed).
+        // The apps with a window showing; every minimized window (past a line in the same row, grayed).
         var showing: [JSON] { apps.filter { !$0.bool("min") } }
-        var minimized: [JSON] { apps.filter { $0.bool("min") } }
+        var minWins: [(JSON, JSON)] { apps.flatMap { a in ((a["windows"] as? [JSON]) ?? []).filter { $0.bool("min") }.map { (a, $0) } } }
         var ratio: CGFloat = 1.6 // the shown display's width to height
     }
 
@@ -700,8 +700,15 @@ struct DeckWindowSpace: View {
                     .frame(maxHeight: .infinity)
                     row(c)
                 }
-                // The shelf over the display's right edge.
-                shelfView(c).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing).padding(.vertical, 90)
+                // At the right edge: the window's own buttons (the picked app's window, else the one in
+                // front) in a thin bar, and the saved sets' shelf below it.
+                VStack(alignment: .trailing, spacing: 8) {
+                    if !shelf, let ctl = one.flatMap({ windowOf($0, front) }) ?? apps.lazy.compactMap({ a in ((a["windows"] as? [JSON]) ?? []).first { $0.int64("wid") == front } }).first {
+                        controls(ctl.int64("wid"))
+                    }
+                    shelfView(c)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing).padding(.vertical, 24)
                 // The app being dragged, under the finger.
                 if let dr = drag { icon(dr.app, 52).opacity(0.9).position(dr.at).allowsHitTesting(false) }
             }
@@ -713,7 +720,7 @@ struct DeckWindowSpace: View {
 
     private func windowOf(_ a: JSON, _ front: Int64) -> JSON? {
         let aw = (a["windows"] as? [JSON]) ?? []
-        if a.str("key") == sel.first, sel.count == 1, let x = aw.first(where: { $0.int64("wid") == wid }) { return x }
+        if let p = pref[a.str("key")], let x = aw.first(where: { $0.int64("wid") == p }) { return x }
         return aw.first { $0.int64("wid") == front } ?? aw.first { !$0.bool("min") } ?? aw.first
     }
 
@@ -731,7 +738,7 @@ struct DeckWindowSpace: View {
         }
     }
 
-    private func clear() { sel = []; multi = false; wid = nil; armed = nil }
+    private func clear() { sel = []; multi = false; pref = [:]; armed = nil }
     private func put(_ a: JSON, _ zone: JSON, _ c: Ctx) {
         guard let w = windowOf(a, c.front) else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -777,46 +784,42 @@ struct DeckWindowSpace: View {
             if let i = sel.firstIndex(of: k) { sel.remove(at: i) } else { sel = Array((sel + [k]).suffix(6)) }
             if sel.isEmpty { multi = false }
         } else { sel = sel == [k] ? [] : [k] }
-        wid = nil
+        pref[k] = nil
     }
     private func hold(_ k: String) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         multi = true
         if !sel.contains(k) { sel = Array((sel + [k]).suffix(6)) }
-        wid = nil
+        pref[k] = nil
     }
 
-    // The apps along the top, as big as the room allows; below them, after a line, the minimized
-    // ones (grayed: a tap brings one back, a hold still picks it); below those, the picked app's
-    // windows when it has more than one.
+    // One row along the top: the apps showing, as big as the room allows, then past a line the
+    // minimized windows; below, only when the picked app has more than one window, its windows.
     @ViewBuilder
     private func bar(_ c: Ctx, width: CGFloat) -> some View {
-        let itemW = min(96, max(62, width / CGFloat(max(1, c.showing.count))))
+        let mins = c.minWins
+        let itemW = min(96, max(62, width / CGFloat(max(1, c.showing.count + mins.count))))
         let iconS = min(58, max(38, itemW * 0.62))
         let windows = (c.one?["windows"] as? [JSON]) ?? []
         VStack(alignment: .leading, spacing: 4) {
             if c.apps.isEmpty { Text(tr("No windows open")).font(.footnote).foregroundStyle(.secondary).padding(8) }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) { ForEach(c.showing.indices, id: \.self) { i in appItem(c.showing[i], c, itemW, iconS, min: false) } }
+                HStack(spacing: 4) {
+                    ForEach(c.showing.indices, id: \.self) { i in appItem(c.showing[i], c, itemW, iconS, win: nil) }
+                    if !mins.isEmpty {
+                        Rectangle().fill(Color.secondary.opacity(0.4)).frame(width: 1, height: iconS + 14).padding(.horizontal, 6)
+                        ForEach(mins.indices, id: \.self) { i in appItem(mins[i].0, c, itemW, iconS, win: mins[i].1) }
+                    }
+                }
             }
             .scrollDisabled(drag != nil)
-            if !c.minimized.isEmpty {
-                HStack(spacing: 8) {
-                    Text(tr("Minimized")).font(.caption2).foregroundStyle(.secondary)
-                    Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) { ForEach(c.minimized.indices, id: \.self) { i in appItem(c.minimized[i], c, max(58, itemW * 0.8), max(32, iconS * 0.8), min: true) } }
-                }
-                .scrollDisabled(drag != nil)
-            }
             if let one = c.one, windows.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(windows.indices, id: \.self) { i in
                             let x = windows[i]
                             let on = x.int64("wid") == windowOf(one, c.front)?.int64("wid")
-                            chip(x.str("title", max: 40).isEmpty ? tr("Window") : x.str("title", max: 40), on) { wid = x.int64("wid") }
+                            chip(x.str("title", max: 40).isEmpty ? tr("Window") : x.str("title", max: 40), on) { pref[one.str("key")] = x.int64("wid") }
                                 .opacity(x.bool("min") && !on ? 0.5 : 1)
                         }
                     }
@@ -826,10 +829,17 @@ struct DeckWindowSpace: View {
     }
 
     // One app in the picker: its icon, its place in the order once picked; dragged down onto the display.
-    private func appItem(_ a: JSON, _ c: Ctx, _ itemW: CGFloat, _ iconS: CGFloat, min isMin: Bool) -> some View {
+    // win: a minimized window of it instead, grayed and named after its title: a tap brings it back,
+    // a hold picks the app with that window (arranging brings it back too).
+    private func appItem(_ a: JSON, _ c: Ctx, _ itemW: CGFloat, _ iconS: CGFloat, win: JSON?) -> some View {
         let k = a.str("key")
-        let n = sel.firstIndex(of: k)
-        let inFront = ((a["windows"] as? [JSON]) ?? []).contains { $0.int64("wid") == c.front }
+        let mw = win?.int64("wid")
+        let aw = (a["windows"] as? [JSON]) ?? []
+        let chosenMin = pref[k].map { p in aw.contains { $0.int64("wid") == p && $0.bool("min") } } ?? false
+        let n = (mw != nil ? pref[k] == mw : !chosenMin) ? sel.firstIndex(of: k) : nil
+        let inFront = win == nil && aw.contains { $0.int64("wid") == c.front }
+        let choose = { if let mw = mw { pref[k] = mw } }
+        let title = win.map { $0.str("title", max: 40) } ?? ""
         return VStack(spacing: 3) {
             ZStack(alignment: .topTrailing) {
                 icon(a, iconS)
@@ -838,23 +848,23 @@ struct DeckWindowSpace: View {
                         .frame(width: 18, height: 18).background(TDColor.accent, in: Circle()).offset(x: 6, y: -4)
                 } else if inFront { Circle().fill(TDColor.accent).frame(width: 8, height: 8) }
             }
-            Text(a.str("name", max: 40)).font(.caption2).lineLimit(1).foregroundStyle(TDColor.text)
+            Text(title.isEmpty ? a.str("name", max: 40) : title).font(.caption2).lineLimit(1).foregroundStyle(TDColor.text)
         }
-        .opacity(isMin && n == nil ? 0.45 : 1)
+        .opacity(mw != nil && n == nil ? 0.45 : 1)
         .frame(width: itemW - 10).padding(5)
         .background(n != nil ? TDColor.accent.opacity(0.22) : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture {
-            if let z = armed { put(a, z, c) }
-            else if isMin && !multi && sel.count < 2 {
-                if let w = ((a["windows"] as? [JSON]) ?? []).first { UIImpactFeedbackGenerator(style: .light).impactOccurred(); core.deck.restore(w.int64("wid")) }
-                clear()
-            } else { tap(k) }
+            if let z = armed { choose(); put(a, z, c) }
+            else if let mw = mw, !multi, sel.count < 2 { UIImpactFeedbackGenerator(style: .light).impactOccurred(); core.deck.restore(mw); clear() }
+            else if let mw = mw, sel.contains(k), pref[k] != mw { choose() } // picked already: this window instead
+            else { tap(k); if sel.contains(k) { choose() } }
         }
-        .onLongPressGesture(minimumDuration: 0.4) { hold(k) }
+        .onLongPressGesture(minimumDuration: 0.4) { hold(k); choose() }
         // Downwards: a drag onto the display. Sideways: the row scrolls.
         .simultaneousGesture(DragGesture(minimumDistance: 10, coordinateSpace: .named("ws"))
             .onChanged { g in
+                if drag == nil, abs(g.translation.height) > abs(g.translation.width) { choose() }
                 if drag != nil || abs(g.translation.height) > abs(g.translation.width) { drag = (a, g.location) }
             }
             .onEnded { g in
@@ -975,6 +985,25 @@ struct DeckWindowSpace: View {
             .onChange(of: g.frame(in: .named("ws"))) { f in pad = f }
         }
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func controls(_ wid: Int64) -> some View {
+        let btn = { (label: String, op: String, sym: String, tint: Color) in
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                core.deck.winOp(wid, op)
+                if op == "close" || op == "min" { clear() }
+            } label: { Image(systemName: sym).font(.system(size: 13, weight: .semibold)).foregroundStyle(tint).frame(width: 30, height: 36) }
+            .accessibilityLabel(label)
+        }
+        return VStack(spacing: 0) {
+            btn(tr("Close"), "close", "xmark", TDColor.bad)
+            btn(tr("Minimize"), "min", "minus", TDColor.text)
+            btn(tr("Maximize"), "max", "macwindow", TDColor.text)
+            btn(tr("Full screen"), "full", "arrow.up.left.and.arrow.down.right", TDColor.text)
+        }
+        .padding(.vertical, 4)
+        .background(TDColor.control, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // The saved sets, pulled out with the tab at the right edge: one tap arranges them (and opens
