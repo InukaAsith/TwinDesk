@@ -11,6 +11,7 @@
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { PairLimit, versionMessage } = require('../../shared/pairlimit.js');
 const Tailnet = require('../../shared/tailnet.js'); // away from its network: its Tailscale address (#161)
 const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { linkLane, peerIp } = require('../../shared/inputlane.js');
@@ -42,6 +43,7 @@ class Link extends EventEmitter {
     this.resolveAddress = opts.resolveAddress || (() => null);
     this.pairing = this.store.load(); // {macId, macName, address, port, fp, token, os} or null
     this.pairState = null; // pairing in progress: {phase, address, port, macName, code, error}
+    this.pairLimit = new PairLimit((why) => this._pairFailed(why)); // each waiting phase has a time limit (shared/pairlimit.js)
     this.status = { state: this.pairing ? 'connecting' : 'not_paired', rtt: null, message: '' };
     this.ws = null;
     this.mode = null; // 'session' | 'pair'
@@ -324,7 +326,10 @@ class Link extends EventEmitter {
 
   _onError(msg) {
     const code = msg.code;
-    if (this.mode === 'pair') return this._pairFailed(PAIR_ERRORS[code] || `Pairing failed (${code}).`);
+    if (this.mode === 'pair') {
+      const name = (this.pairState && this.pairState.macName) || 'The other computer';
+      return this._pairFailed((code === P.E.VERSION_MISMATCH && versionMessage(msg, name)) || PAIR_ERRORS[code] || `Pairing failed (${code}).`);
+    }
     if (code === P.E.BAD_TOKEN) {
       const name = this.pairing ? this.pairing.macName : 'the other computer';
       this.forget();
@@ -461,6 +466,8 @@ class Link extends EventEmitter {
   }
 
   _changed() {
+    const ps = this.pairState;
+    this.pairLimit.update(ps, ps && ps.macName, ps && ps.address);
     for (const fn of this.stateFns) fn();
   }
 }

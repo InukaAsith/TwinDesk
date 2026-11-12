@@ -7,6 +7,7 @@
 // the session again if the network goes. A move that doesn't last is tried again later and later (resumeBackoff).
 const WebSocket = require('ws');
 const P = require('../../shared/protocol.js');
+const { PairLimit, versionMessage } = require('../../shared/pairlimit.js');
 const Tailnet = require('../../shared/tailnet.js'); // away from its network: its Tailscale address (#161)
 const Quiet = require('../../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { linkLane, peerIp } = require('../../shared/inputlane.js');
@@ -52,6 +53,7 @@ class Link {
     this.seq = 0; // connection attempts: a Bluetooth pipe that opens late is dropped
     this.pairing = this.store.load(); // {macId, macName, address, port, fp, token} or null
     this.pairState = null; // pairing in progress: {phase, address, port, macName, code, error}
+    this.pairLimit = new PairLimit((why) => this._pairFailed(why)); // each waiting phase has a time limit (shared/pairlimit.js)
     this.status = { state: this.pairing ? 'connecting' : 'not_paired', rtt: null, message: '' };
     this.ws = null;
     this.mode = null; // 'session' | 'pair'
@@ -447,7 +449,10 @@ class Link {
 
   _onError(msg) {
     const code = msg.code;
-    if (this.mode === 'pair') return this._pairFailed(PAIR_ERRORS[code] || 'Pairing failed (' + code + ').');
+    if (this.mode === 'pair') {
+      const name = (this.pairState && this.pairState.macName) || 'The other computer';
+      return this._pairFailed((code === P.E.VERSION_MISMATCH && versionMessage(msg, name)) || PAIR_ERRORS[code] || 'Pairing failed (' + code + ').');
+    }
     if (code === P.E.BAD_TOKEN) {
       this.forget();
       this._setStatus('not_paired', 'Your Mac forgot {me}. Pair again.');
@@ -612,6 +617,8 @@ class Link {
   }
 
   _changed() {
+    const ps = this.pairState;
+    this.pairLimit.update(ps, ps && ps.macName, ps && ps.address);
     for (const fn of this.stateFns) fn();
   }
 }
