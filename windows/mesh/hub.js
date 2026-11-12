@@ -416,16 +416,22 @@ class Hub extends EventEmitter {
 
   _makeFacade() {
     const hub = this;
+    const chunk = (obj) => { if (obj && obj.t === P.T.FILE_CHUNK) fx.sentChunk(); }; // Engines in use: the old way
+    // Fast files (shared/meshfx.js) of the selected device, as the one-to-one link.fx.
+    const fx = require('../../shared/meshfx.js').facadeFx(() => hub.selected, () => hub.sessions.list(), hub.sessions.fxShared);
     return {
+      fx,
       on: (type, fn) => addTo(hub._facadeHandlers, type, fn),
       onState: (fn) => hub._facadeStateFns.push(fn),
       // A message to the selected device; while it is on Bluetooth, files may wait for Wi-Fi (netHold).
       send: (obj) => {
+        chunk(obj);
         if (hub.netHold && hub.netHold(obj)) return true;
         const s = hub.selected;
         return !!s && s.send(obj) === true;
       },
       sendNow: (obj) => {
+        chunk(obj);
         const s = hub.selected;
         return !!s && s.send(obj) === true;
       },

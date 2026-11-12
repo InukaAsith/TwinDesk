@@ -322,7 +322,7 @@ class Link extends EventEmitter {
     // The input lane, when the host offered it (older hosts: none): started for this session.
     if (this.ilLane && !(msg.il && typeof msg.il === 'object' && this.transport !== 'ble' && this.ilLane.accept(msg.il, peerIp(this.ws, this.pairing.address)))) this.ilLane.stop();
     // Fast files (shared/fastfile.js, session.js): the host's token for this session, and the address we reached it at.
-    this.fx = typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : '';
+    this.fx = require('../../shared/meshfx.js').token(msg);
     this.fxAddress = peerIp(this.ws, this.pairing.address);
     this.emit('welcome', msg);
   }

@@ -14,7 +14,7 @@
 
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
-const { FastFiles } = require('../../shared/fastfile.js');
+const MeshFx = require('../../shared/meshfx.js');
 
 class Session extends EventEmitter {
   // fxShared: the receivers' fast-file hooks, the same for every session (peer.js's fx).
@@ -38,25 +38,13 @@ class Session extends EventEmitter {
     this.lifeFns = []; // hub: fn(up, replaced) when the device becomes connected or stops being connected
     // Fast files (shared/fastfile.js): this device's file bytes over HTTPS, when both apps can (hello
     // fx: 1, welcome fx: token). Not the files engine (fx2): it serves one session at a time.
-    this.fx = new FastFiles({ session: () => this._fxSession(), deliver: (m) => this._deliver(m, true), send: (m) => this.send(m), fx2: null });
-    if (fxShared) {
-      this.fx.pressures = fxShared.pressures;
-      this.fx.hooks = fxShared.hooks;
-      this.fx.active = () => fxShared.active && fxShared.active();
-      this.fx.onFallback = (o) => fxShared.onFallback && fxShared.onFallback(o);
-    }
+    this.fx = MeshFx.sessionFx(this, fxShared || MeshFx.hooks());
   }
 
   // What FastFiles needs of the live connection, or null (no fast files with it).
   _fxSession() {
-    if (this.linkUp) {
-      const l = this.link;
-      return l.fx ? { host: false, token: l.fx, transport: this.transport, address: l.fxAddress || l.pairing.address, port: l.pairing.port, fp: l.pairing.fp, fx2: false } : null;
-    }
-    if (this.hostUp) {
-      const c = this.ctx;
-      return c.fx ? { host: true, token: c.fx, plainToken: '', transport: this.transport, address: c.address, fx2: false } : null;
-    }
+    if (this.linkUp) return MeshFx.guestInfo(this.link, this.transport);
+    if (this.hostUp) return MeshFx.hostInfo(this.ctx, this.transport);
     return null;
   }
 
@@ -294,7 +282,7 @@ class Sessions extends EventEmitter {
     super();
     this.server = null;
     this.sessions = new Map(); // deviceId -> Session
-    this.fxShared = { pressures: [], hooks: [] }; // fast files: the receivers' hooks (peer.js)
+    this.fxShared = MeshFx.hooks(); // fast files: the receivers' hooks (peer.js)
     if (links) {
       links.on('add', (link) => this._linkAdded(link));
       links.on('remove', (id) => {
@@ -312,12 +300,7 @@ class Sessions extends EventEmitter {
     this.server = server;
     for (const s of this.sessions.values()) s.server = server;
     // Fast files: a request with a session's token goes to that session.
-    server.fxRequest = (req, res) => {
-      const tok = req.headers['x-twindesk-fx'];
-      if (!tok) return false;
-      for (const s of this.sessions.values()) if (s.hostUp && s.ctx.fx && s.ctx.fx === tok) return s.fx.request(req, res);
-      return false;
-    };
+    server.fxRequest = (req, res) => MeshFx.route(this.sessions.values(), req, res);
     server.on('client', (ctx) => this.ensure(ctx.deviceId).setCtx(ctx));
     server.on('closed', (ctx) => {
       const s = this.sessions.get(ctx.deviceId);

@@ -111,31 +111,10 @@ class Peer {
   }
 }
 
-// Fast files (shared/fastfile.js) as the one-to-one features use them (filesend.js, drop.js, Engines):
+// Fast files (shared/meshfx.js) as the one-to-one features use them (filesend.js, drop.js, Engines):
 // the route's device's own (session.js); the receivers' hooks reach every device's.
 function fxOf(route) {
-  const cur = () => { const s = route.session; return s && s.fx ? s.fx : null; };
-  const shared = () => route.hub.sessions.fxShared;
-  return {
-    usable: () => { const f = cur(); return !!f && f.usable(); },
-    get parallel() { const f = cur(); return f ? f.parallel : 1; },
-    parallelFor: (size) => { const f = cur(); return f ? f.parallelFor(size) : 1; },
-    send: (id, path, size, onBytes) => {
-      const f = cur();
-      if (f) return f.send(id, path, size, onBytes);
-      const e = new Error('no fast files');
-      e.early = true;
-      return Promise.reject(e);
-    },
-    endFields: (id) => { const f = cur(); return f ? f.endFields(id) : {}; },
-    cancel: (id) => { for (const s of route.hub.sessions.list()) s.fx.cancel(id); },
-    sentChunk: () => { const f = cur(); if (f) f.sentChunk(); },
-    describe: () => { const f = cur(); return f ? f.describe() : { next: 'chunk', why: 'peer', plain: false, last: null }; },
-    pressure: (fn) => shared().pressures.push(fn),
-    receiver: (hook) => shared().hooks.push(hook),
-    set active(fn) { shared().active = fn; }, // () on bytes either way (netlink.js keeps a link made for files up)
-    set onFallback(fn) { shared().onFallback = fn; },
-  };
+  return require('../../shared/meshfx.js').facadeFx(() => route.session, () => route.hub.sessions.list(), route.hub.sessions.fxShared);
 }
 
 module.exports = { Peer, fxOf };

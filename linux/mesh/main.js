@@ -666,6 +666,7 @@ function setupNet() {
   net.on('change', pushState);
   net.on('dropped', () => pcScreen.mode !== 'off' && pcScreen.setMode('off')); // Back to Bluetooth on the phone: it can't carry the screen
   hub.netHold = (m) => net.holdOut(m, (x) => link.sendNow(x)); // files wait for Wi-Fi (netlink.js)
+  link.fx.active = () => net.touch('files'); // fast files on a link made for them keep it up, as file.chunk does
   hub.netTap = (m) => net.onMessage(m); // every message of the selected device (net.*)
   link.on('welcome', () => {
     net.started();
@@ -1054,6 +1055,16 @@ function adbQrDo(on) {
   return adbQrState;
 }
 
+// General › Advanced › Engines in use (shared/engines.js): the selected device's session.
+function enginesView() {
+  const s = hub && hub.selected;
+  if (!link || !s || !s.connected) return null;
+  return require('../../shared/engines.js').snapshot({
+    current: link.current, il: s.il, lane: s.lane(), fx: link.fx, fx2: null, net: net ? net.view : null,
+    lan: lanType(link.current && link.current.address), screen: null,
+  });
+}
+
 function buildState() {
   const miss = missing();
   const snap = link.snapshot();
@@ -1084,6 +1095,7 @@ function buildState() {
     ui: settings.ui,
     look: Look.view(settings.ui, null), // Linux has no system accent colour to read
     app: settings.app,
+    engines: enginesView(),
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer
     updates: updates ? updates.view : null,
