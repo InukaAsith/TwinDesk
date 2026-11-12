@@ -154,6 +154,13 @@ class Screen(core: Core) : Feature(core) {
         policy(w, hpx)
     }
 
+    // The same viewer resized: update Extend's shape without restarting sharing or its controls.
+    fun resize(h: WebHost, w: Int, hpx: Int) {
+        if (host !== h || !viewing || w <= 0 || hpx <= 0) return
+        if (core.link.ble) waitWifi = w to hpx
+        else core.send(msg("screen.policy", "accept" to true, "width" to w, "height" to hpx))
+    }
+
     private fun policy(w: Int, hpx: Int) {
         core.send(msg("screen.policy", "accept" to true, "width" to w, "height" to hpx))
         // Show the Mac's screen = the Mac starts sharing, in the mode used last.
