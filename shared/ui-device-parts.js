@@ -178,13 +178,20 @@
     // A page as a tile, with its sidebar icon and colour (left out where there's no such page);
     // has: shown for this device now.
     // Every page in the sidebar for the device in session (Overview aside), as tiles: shortcuts to any of them.
+    // TwinDesk Web's own pages (def.web) are a browser's, not this device's; one page per family
+    // (variantOf), in the sidebar's order, each with the sidebar's icon.
     pageTiles(s) {
-      return UI.tabs.filter((d) => UI.baseOf(d) !== 'overview' && !d.navHidden && !(d.hidden && d.hidden(s)))
-        .sort((a, b) => (a.order ?? 50) - (b.order ?? 50)).map((d) => P.pageTile(d.id, s));
+      const order = [...document.querySelectorAll('#nav .nav-item[data-base]')].map((b) => b.dataset.base);
+      const rank = (d) => { const i = order.indexOf(UI.baseOf(d)); return i < 0 ? 999 : i; };
+      const seen = new Set();
+      return UI.tabs.filter((d) => UI.baseOf(d) !== 'overview' && !d.navHidden && !d.web && !(d.hidden && d.hidden(s)))
+        .sort((a, b) => rank(a) - rank(b) || (a.order ?? 50) - (b.order ?? 50))
+        .filter((d) => !seen.has(UI.baseOf(d)) && seen.add(UI.baseOf(d)))
+        .map((d) => P.pageTile(d.id, s));
     },
     pageTile(id, s) {
       const def = UI.tabs.find((d) => d.id === id);
-      return def ? { id: 'p.' + id, label: t(def.title), icon: UI.icon(def.icon), color: def.color, has: !(def.hidden && def.hidden(s)), run: () => UI.go(id) } : null;
+      return def ? { id: 'p.' + id, label: t(def.title), icon: UI.icon(def.icon || def.id), color: def.color, has: !(def.hidden && def.hidden(s)), run: () => UI.go(id) } : null;
     },
 
     // ---- tiles, the way Control Center has them (the phones' Overview has the same: Tiles.kt,
