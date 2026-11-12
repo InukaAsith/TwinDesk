@@ -101,10 +101,21 @@
     const titles = head.querySelector('.titles');
     if (titles) titles.after(pill()); else head.append(pill());
   }
+  // A device's Overview hides its header (ui-device.css), its card first: the pill on a row of its
+  // own at the top of the page.
+  function above(hero) {
+    const body = hero.closest('.device-page') && hero.parentElement;
+    if (!body || body.querySelector(':scope > .search-row')) return;
+    body.prepend(UI.el('div', { class: 'search-row' }, [pill()]));
+  }
+  function all(root) {
+    root.querySelectorAll('.page-head').forEach(place);
+    root.querySelectorAll('.dv-hero').forEach(above);
+  }
   function start() {
-    document.querySelectorAll('.page-head').forEach(place);
+    all(document);
     const pages = document.getElementById('pages');
-    if (pages) new MutationObserver(() => pages.querySelectorAll('.page-head').forEach(place)).observe(pages, { childList: true, subtree: true });
+    if (pages) new MutationObserver(() => all(pages)).observe(pages, { childList: true, subtree: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
