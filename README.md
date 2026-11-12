@@ -7,7 +7,8 @@
 <p align="center">
   <b>Your Mac, PC, Linux box, Android phone and iPhone, working as one desk.</b><br>
   One mouse and keyboard for every computer. Screens, files, clipboard, notifications, cameras, calls and texts, shared.<br>
-  Free and open source. No account, no cloud, and on iPhone not even an app to install.
+  Free and open source. No account, no cloud, and on iPhone not even an app to install.<br>
+  <sub>An open-source alternative to Microsoft Phone Link, KDE Connect, Intel Unison and Synergy, in one app.</sub>
 </p>
 
 <p align="center">
@@ -70,6 +71,11 @@ another device and **ReZume** brings the tab, the video or the document you were
 It's one app on every computer, so a Mac and a PC pair exactly like two Macs. Phones are full peers,
 not notification mirrors. And an iPhone, an iPad or any device with a browser joins by typing
 **`twindesk.local`**.
+
+**Looking for a Phone Link alternative?** TwinDesk does what Microsoft Phone Link does (texts, calls,
+notifications, photos and your phone's screen and apps on the computer), and it also works on a Mac
+and on Linux, with an iPhone as well as Android, and without a Microsoft account. It replaces KDE
+Connect and Intel Unison the same way. See [how it compares](#compare).
 
 <table>
 <tr>
