@@ -206,7 +206,7 @@
           if (o && Array.isArray(o.items)) {
             const seen = new Set();
             return {
-              rows: o.rows === 2 ? 2 : 1,
+              rows: Math.max(1, Math.min(8, Number.isInteger(o.rows) ? o.rows : 1)), // as many rows as wanted, up to eight
               items: o.items.filter((x) => x && typeof x.id === 'string' && !seen.has(x.id) && seen.add(x.id))
                 .map((x) => ({ id: x.id, s: ['s', 'w', 'b'].includes(x.s) ? x.s : 's' })),
             };
@@ -224,7 +224,7 @@
       const grid = el('div', { class: 'dv-tiles' });
       const editor = el('div', { class: 'dv-tiles-edit' });
       editor.hidden = true;
-      const rowsSeg = UI.segmented([{ value: 1, label: t('One row') }, { value: 2, label: t('Two rows') }], (v) => { layout.rows = v; save(); draw(); });
+      const rowsSeg = UI.select([1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ value: String(n), label: String(n) })), (v) => { layout.rows = Number(v) || 1; save(); draw(); });
       const sizeSeg = UI.segmented([{ value: 's', label: t('Small') }, { value: 'w', label: t('Wide') }, { value: 'b', label: t('Large') }], (v) => {
         const it = layout.items.find((x) => x.id === sel);
         if (it) { it.s = v; save(); draw(); }
@@ -255,7 +255,7 @@
         const taken = new Set();
         return items.map((it) => {
           const w = it.s === 's' ? 1 : 2;
-          const h = it.s === 'b' && rows === 2 ? 2 : 1;
+          const h = it.s === 'b' && rows >= 2 ? 2 : 1;
           for (let col = 0; ; col++) {
             for (let r = 0; r + h <= rows; r++) {
               let free = true;
@@ -328,7 +328,7 @@
         // the editor
         editor.hidden = !editing;
         if (!editing) return;
-        rowsSeg.set(layout.rows);
+        rowsSeg.set(String(layout.rows));
         const it = layout.items.find((x) => x.id === sel);
         const d = it && byId.get(it.id);
         selRow.hidden = !d;
