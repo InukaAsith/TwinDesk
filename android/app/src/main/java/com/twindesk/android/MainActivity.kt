@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         shown = false
+        Core.get(this).background()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -1833,6 +1834,7 @@ private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, li
     @Suppress("UNUSED_EXPRESSION") v
     // Another phone holds the session: this phone, the link, that phone.
     val ph = core.peer.takeIf { host == null && it.connected }
+    val returning = core.returning.takeIf { ph == null }
 
         Row(
             Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 12.dp).fillMaxWidth()
@@ -1857,6 +1859,7 @@ private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, li
             when {
                 host != null -> tr("Connected")
                 ph != null -> tr("Connected") + (if (ph.role == "host") tr(" · It connected to this phone") else "")
+                returning != null -> returning.name + " · " + tr("Reconnecting…")
                 link.message.isNotEmpty() -> link.message
                 core.hosts().isNotEmpty() -> tr("Tap Connect, or select this device on your computer.")
                 else -> tr("Choose a computer below, or pair by address.")
@@ -1864,6 +1867,9 @@ private fun ColumnScope.HeroBody(core: Core, v: Int, me: String, host: Host?, li
             color = pal.muted, fontSize = 12.5.sp, lineHeight = 17.sp, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
         )
+        if (returning != null) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp), horizontalArrangement = Arrangement.Center) {
+            Secondary(tr("Disconnect")) { core.disconnect() }
+        }
         // Wireless debugging not set up (or off): one line under Connected, with the way to fix it.
         // Reached anyway (adb's TCP mode, on a direct Wi-Fi link): nothing to fix.
         // Over Bluetooth: greyed out, it only works over Wi-Fi.

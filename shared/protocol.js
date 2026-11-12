@@ -19,6 +19,9 @@
     // tile, its own Connect button, an invite) or to resume a session that just dropped, and it
     // replaces the computer. Computers are refused (busy) while it holds the session and for
     // PHONE_GRACE_MS after it drops, so a Wi-Fi blip doesn't hand the session back.
+    // Capable Macs allow a durable exact-phone return (hello rc:1), never a takeover. The phone
+    // keeps the last authenticated Mac until Stop/Forget/replacement; the Mac independently keeps
+    // its last Android owner. Legacy hosts still reject hello+resume instead of taking a session.
     PHONE_GRACE_MS: 30000,
     PING_MS: 1000,
     TIMEOUT_MS: 8000, // close the session after this much silence (8 s: a busy or throttled computer can miss a ping or two, #74)
@@ -80,7 +83,7 @@
       PAIR_OK: 'pair.ok',
       PAIR_CANCEL: 'pair.cancel',
       // session
-      HELLO: 'hello',
+      HELLO: 'hello', // + {rc:1, resume:'0'} is a non-takeover reclaim (shared/reclaim.js); plain hello still takes a phone's session
       WELCOME: 'welcome',
       ERROR: 'error',
       PING: 'ping',

@@ -84,6 +84,8 @@ UI.tab({
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null;
     const pairedList = el('div');
     const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
+    const returnRow = UI.row('', tr('Reconnecting…'), [UI.button(tr('Disconnect'), () => api.disconnectPhone(), 'small')], { literal: true });
+    const returnCard = UI.card('', [returnRow]);
 
     body.append(
       permCard,
@@ -91,6 +93,7 @@ UI.tab({
       UI.card(tr('Nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
       hero,
+      returnCard,
       adb.el,
       UI.card(tr('Paired'), [pairedList]),
       ...(webCard ? [webCard.el] : []),
@@ -162,6 +165,9 @@ UI.tab({
       blePcSw.set(!!s.net && s.net.blePc === true);
       const c = s.client;
       const g = s.guest || { status: {}, hosts: [] };
+      const returning = s.phone && s.phone.returning;
+      returnCard.hidden = !returning;
+      if (returning) returnRow.label.textContent = returning.name;
 
       // this Mac
       addrVal.textContent = s.addresses.length ? s.addresses[0] : tr('No network');

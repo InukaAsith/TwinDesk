@@ -1109,6 +1109,7 @@
   "{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.": "{name} Bluetooth üzerinden yanıt vermedi. Onda TwinDesk’i açın ya da ikisini aynı Wi-Fi ağına bağlayın, sonra yeniden eşleştirin.",
   "{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.": "{name} yanıt vermedi. Onda TwinDesk’i açın ya da orada Diğer telefonlara ev sahipliği yap’ı açın.",
   "{name} didn’t arrive": "{name} ulaşmadı",
+  "{name} didn’t confirm this pairing. Use Connect to try again.": "{name} bu eşleştirmeyi onaylamadı. Yeniden denemek için Bağla’yı kullanın.",
   "{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.": "{name} bu cihazdan girdi kabul etmiyor. {name} üzerinde Ekran paylaş’ta Girdi al’ı açın.",
   "{name} doesn’t accept input from this device. Turn on Remote in TwinDesk on {name}.": "{name} bu cihazdan girdi kabul etmiyor. {name} üzerindeki TwinDesk’te Uzaktan Kumanda’yı açın.",
   "{name} doesn’t answer the remote: update TwinDesk there.": "{name} uzaktan kumandaya yanıt vermiyor: oradaki TwinDesk’i güncelleyin.",
