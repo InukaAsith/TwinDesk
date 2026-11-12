@@ -80,7 +80,21 @@ l = M.resize(l, 'a', 3, 1);
 assert.strictEqual(M.find(l, 'a').w, 3);
 l = M.move(l, 'b', 'q');
 assert.strictEqual(M.where(l, 'b').page.id, 'q', 'onto another page, its first free place');
-assert.deepStrictEqual(M.free(M.pageOf(l, 's', 'q'), 2, 2), null, 'q is taken where 2 × 2 would go');
+assert.deepStrictEqual(M.free(M.pageOf(l, 's', 'q'), 2, 2), { x: 1, y: 0 }, 'q grew to the screen (4 × 2): 2 × 2 goes beside b');
+assert.deepStrictEqual(M.free(M.pageOf(l, 's', 'q'), 4, 2), null, 'not 4 × 2');
+
+// The grid follows the way the Deck is held (16:9), so tiles are about square.
+assert.deepStrictEqual(M.fit(4, 'landscape'), { cols: 7, rows: 4 });
+assert.deepStrictEqual(M.fit(3, 'portrait'), { cols: 3, rows: 5 });
+const sq = M.normalize({ spaces: [{ kind: 'tiles', pages: [{ cols: 4, rows: 4, tiles: [{ id: 't', x: 3, y: 1, w: 1, h: 2 }] }] }] }).spaces[0].pages[0];
+assert.deepStrictEqual([sq.cols, sq.rows, sq.fit], [7, 4, 'landscape'], 'a square grid grows sideways, no tile lost');
+const turned = M.normalize({ orient: 'portrait', spaces: [{ kind: 'tiles', pages: [sq] }] }).spaces[0].pages[0];
+assert.deepStrictEqual([turned.cols, turned.rows], [4, 7], 'held upright: columns become rows');
+assert.deepStrictEqual([turned.tiles[0].x, turned.tiles[0].y, turned.tiles[0].w, turned.tiles[0].h], [1, 3, 2, 1], 'and the tiles turn with it');
+const back2 = M.normalize({ orient: 'landscape', spaces: [{ kind: 'tiles', pages: [turned] }] }).spaces[0].pages[0];
+assert.deepStrictEqual([back2.cols, back2.rows, back2.tiles[0].x, back2.tiles[0].y], [7, 4, 3, 1], 'and back');
+const again = M.normalize(M.normalize({ spaces: [{ kind: 'tiles', pages: [sq] }] }));
+assert.deepStrictEqual([again.spaces[0].pages[0].cols, again.spaces[0].pages[0].rows], [7, 4], 'stable');
 
 // Paths stay on this computer.
 const withPaths = M.normalize({ spaces: [{ id: 's', kind: 'tiles', pages: [{ id: 'p', tiles: [

@@ -103,6 +103,13 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.runtime.key
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -248,8 +255,8 @@ private fun level(a: JSONObject, s: JSONObject?): Float? {
     }.takeIf { !it.isNaN() }?.toFloat()
 }
 
-// Three fingers across the screen: sideways the next or previous page, up or down the next or
-// previous space (onSwipe(dx, dy), one of them ±1).
+// Three fingers across the screen: onSwipe(dx, dy), one of them ±1 (DeckFull turns it into a
+// space along the screen's long side, a page across it).
 private fun Modifier.threeFingerSwipe(enabled: Boolean, onSwipe: (Int, Int) -> Unit) = if (!enabled) this else pointerInput(Unit) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -308,7 +315,7 @@ fun DeckPage(core: Core, v: Int) {
         SwitchRow(tr("Swipe between pages"), tr("Off: switch pages with the page bar, or a Go to page tile"), d.swipePages) { on ->
             d.edit { l -> (l.optJSONObject("swipe") ?: JSONObject().also { l.put("swipe", it) }).put("pages", on) }
         }
-        SwitchRow(tr("Three-finger swipes"), tr("Sideways for the next or previous page, up or down for the next or previous space"), d.swipeSpaces) { on ->
+        SwitchRow(tr("Three-finger swipes"), tr("Along the screen’s long side for the next space, across it for the next page; past the last, back to the first"), d.swipeSpaces) { on ->
             d.edit { l -> (l.optJSONObject("swipe") ?: JSONObject().also { l.put("swipe", it) }).put("spaces", on) }
         }
         SwitchRow(tr("Open Deck on the Overview"), tr("A shortcut among the Overview’s tiles"), pinned) { on -> Tiles.set(core.store, "deck", on); pinned = on }
@@ -342,7 +349,7 @@ private fun DeckEditor(core: Core, d: Deck) {
 }
 
 // The Deck full screen (DeckActivity): only the tiles, every bit of the screen, and a faint × in a
-// corner. Three fingers sideways turn the page, up or down change the space; the name shows a moment.
+// corner. Three fingers along the long side change the space, across it the page, round and round.
 @Composable
 fun DeckFull(core: Core, close: () -> Unit) {
     val v by core.version.collectAsState()
@@ -364,14 +371,16 @@ fun DeckFull(core: Core, close: () -> Unit) {
         var flash by remember { mutableStateOf<String?>(null) }
         LaunchedEffect(flash) { if (flash != null) { delay(900); flash = null } }
         val toSpace = { to: JSONObject -> spaceId = to.optString("id"); flash = to.str("name", 30) }
+        // Along the screen's long side the next space, across it the next page; round and round.
         val swipe = { dx: Int, dy: Int ->
+            val (sp, pg) = if (d.portrait) dy to dx else dx to dy
             val i = spaces.indexOf(space)
-            if (dy != 0) spaces.getOrNull(i + dy)?.let(toSpace)
-            else if (space.optString("kind") != "windows") step = (step.first + 1) to dx
+            if (sp != 0) { if (spaces.size > 1) toSpace(spaces[Math.floorMod(i + sp, spaces.size)]) }
+            else if (space.optString("kind") != "windows") step = (step.first + 1) to pg
         }
         val swipeNow by rememberUpdatedState(swipe) // the detector outlives recompositions
         Column(Modifier.fillMaxSize().threeFingerSwipe(d.swipeSpaces) { dx, dy -> swipeNow(dx, dy) }) {
-            if (space.optString("kind") == "windows") Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 30.dp)) { WindowSpace(d, space) }
+            if (space.optString("kind") == "windows") Column(Modifier.weight(1f).padding(top = 30.dp)) { WindowSpace(d, space) }
             else TileSpace(core, d, space, pageOf, editing = false, full = true, step = step, onPage = { flash = it }) { to -> spaces.firstOrNull { it.optString("id") == to }?.let(toSpace) }
             d.done?.second?.takeIf { it.isNotEmpty() && it != "busy" }?.let { Text(tr(it), color = pal.bad, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(top = 4.dp)) }
         }
@@ -445,8 +454,9 @@ private fun ColumnScope.TileSpace(core: Core, d: Deck, space: JSONObject, pageOf
     // A three-finger swipe (DeckFull): the next or previous page, its name shown a moment.
     LaunchedEffect(step.first) {
         if (step.first == 0) return@LaunchedEffect
-        val to = pager.currentPage + step.second
-        pages.getOrNull(to)?.let { pager.animateScrollToPage(to); onPage(it.str("name", 30)) }
+        if (pages.size < 2) return@LaunchedEffect
+        val to = Math.floorMod(pager.currentPage + step.second, pages.size)
+        pager.animateScrollToPage(to); onPage(pages[to].str("name", 30))
     }
     val toPage = { i: Int -> if (i in pages.indices) scope.launch { pager.animateScrollToPage(i) }; Unit }
 
@@ -677,6 +687,7 @@ private fun appIcon(data: String): ImageBitmap? = if (data.isEmpty()) null else 
     runCatching { val b = Base64.decode(data.substringAfter(","), Base64.DEFAULT); BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap() }.getOrNull()
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WindowSpace(d: Deck, space: JSONObject) {
     LaunchedEffect(space.optString("id")) { while (true) { d.askWins(); delay(5000) } }
@@ -688,8 +699,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     val displays = w.optJSONArray("displays").objs()
     val front = w.optLong("front")
     // The app chosen (none at first, and none again once it's placed), and a zone tapped before an
-    // app: either order works. Tap an app then a zone, or a zone then an app; with two zones,
-    // place one app, tap the other zone, pick the next app.
+    // app: either order works. Or an app dragged from the bar straight onto a zone, or an edge.
     var appKey by remember { mutableStateOf<String?>(null) }
     var wid by remember { mutableStateOf<Long?>(null) }
     var armed by remember { mutableStateOf<Pair<Int, JSONObject>?>(null) } // a zone's number and rect
@@ -705,95 +715,163 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     }
     val windowOf = { a: JSONObject -> a.optJSONArray("windows").objs().let { ws -> ws.firstOrNull { it.optLong("wid") == front } ?: ws.firstOrNull() } }
 
-    // The running apps (a dot: the one in front).
-    Text(armed?.let { tr("Now choose the app for zone {n}", "n" to it.first) } ?: tr("App"),
-        color = if (armed != null) pal.accent else pal.muted, fontSize = 12.sp, fontWeight = if (armed != null) FontWeight.SemiBold else null, modifier = Modifier.padding(bottom = 6.dp))
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        for (a in apps) {
-            val on = a === app
-            val inFront = a.optJSONArray("windows").objs().any { it.optLong("wid") == front }
-            Column(Modifier.width(64.dp).clip(RoundedCornerShape(12.dp)).background(if (on) pal.accentSoft else Color.Transparent)
-                .clickable {
-                    val z = armed
-                    val target = windowOf(a)
-                    if (z != null && target != null) put(target, JSONObject(z.second.toString()))
-                    else if (on) { appKey = null; wid = null } else { appKey = a.optString("key"); wid = null }
-                }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box {
-                    val img = appIcon(a.optString("icon"))
-                    if (img != null) Image(img, null, Modifier.size(40.dp))
-                    else Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(pal.card), contentAlignment = Alignment.Center) {
-                        Text(a.str("name", 2).take(1).uppercase(), color = pal.text, fontWeight = FontWeight.SemiBold)
+    // The pages are the layouts drawn on the computer (none yet: the display, for its edges).
+    val layouts = space.optJSONArray("layouts").objs()
+    val pager = rememberPagerState { maxOf(1, layouts.size) }
+    val zones = layouts.getOrNull(pager.currentPage)?.optJSONArray("zones").objs()
+    // A drag from the bar: the app and where the finger is (in the window's coordinates); the pad's place.
+    var drag by remember { mutableStateOf<Pair<JSONObject, Offset>?>(null) }
+    var pad by remember { mutableStateOf<Rect?>(null) }
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    // Where a drop at p goes: the layout's zone under it, else an edge or a corner of the display.
+    val target = { p: Offset ->
+        pad?.takeIf { it.contains(p) }?.let { r ->
+            val fx = (p.x - r.left) / r.width; val fy = (p.y - r.top) / r.height
+            val gx = fx * ZONE_GRID; val gy = fy * ZONE_GRID
+            zones.firstOrNull { z -> gx >= z.optInt("x") && gx < z.optInt("x") + z.optInt("w", 1) && gy >= z.optInt("y") && gy < z.optInt("y") + z.optInt("h", 1) }
+                ?.let { JSONObject(it.toString()) } ?: snapZone(fx, fy)
+        }
+    }
+    val targetNow by rememberUpdatedState(target)
+    val dropNow by rememberUpdatedState({ a: JSONObject, p: Offset ->
+        val t = if (a === app) win else windowOf(a)
+        targetNow(p)?.let { z -> t?.let { put(it, z) } }
+        Unit
+    })
+    val hover = drag?.let { target(it.second) }
+
+    val bar: @Composable ColumnScope.() -> Unit = {
+        Text(armed?.let { tr("Now choose the app for zone {n}", "n" to it.first) } ?: tr("App"),
+            color = if (armed != null) pal.accent else pal.muted, fontSize = 12.sp, fontWeight = if (armed != null) FontWeight.SemiBold else null, modifier = Modifier.padding(bottom = 6.dp))
+        // The running apps (a dot: the one in front): tap to choose, or drag one onto the pad.
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (a in apps) key(a.optString("key")) {
+                val on = a === app
+                val inFront = a.optJSONArray("windows").objs().any { it.optLong("wid") == front }
+                var at by remember { mutableStateOf(Offset.Zero) }
+                Column(Modifier.width(58.dp).onGloballyPositioned { at = it.positionInRoot() }
+                    .pointerInput(a.optString("key")) {
+                        detectDragGestures(
+                            onDragStart = { o -> drag = a to (at + o) },
+                            onDragEnd = { drag?.let { (x, p) -> dropNow(x, p) }; drag = null },
+                            onDragCancel = { drag = null },
+                        ) { ch, delta -> ch.consume(); drag = drag?.let { it.first to (it.second + delta) } }
                     }
-                    if (inFront) Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(pal.accent))
+                    .clip(RoundedCornerShape(12.dp)).background(if (on) pal.accentSoft else Color.Transparent)
+                    .clickable {
+                        val z = armed
+                        val t = windowOf(a)
+                        if (z != null && t != null) put(t, JSONObject(z.second.toString()))
+                        else if (on) { appKey = null; wid = null } else { appKey = a.optString("key"); wid = null }
+                    }.padding(5.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box {
+                        AppIcon(a, 36.dp)
+                        if (inFront) Box(Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(pal.accent))
+                    }
+                    Text(a.str("name", 40), color = pal.text, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
                 }
-                Text(a.str("name", 40), color = pal.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        // Its windows, when it has more than one.
+        if (app != null && windows.size > 1) FlowRow(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (x in windows) {
+                val on = x === win
+                Box(Modifier.clip(RoundedCornerShape(50)).background(if (on) pal.accent else pal.card).clickable { wid = x.optLong("wid") }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Text(x.str("title", 50).ifEmpty { tr("Window") }, color = if (on) Color.White else pal.text, fontSize = 12.sp, maxLines = 1)
+                }
             }
         }
     }
-    // Its windows, when it has more than one.
-    if (app != null && windows.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (x in windows) {
-            val on = x === win
-            Box(Modifier.clip(RoundedCornerShape(50)).background(if (on) pal.accent else pal.card).clickable { wid = x.optLong("wid") }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                Text(x.str("title", 50).ifEmpty { tr("Window") }, color = if (on) Color.White else pal.text, fontSize = 12.sp, maxLines = 1)
+    // The displays: which one a zone goes on, or send the window there as it is.
+    val screens: @Composable ColumnScope.() -> Unit = {
+        if (displays.size > 1) {
+            Text(tr("Display"), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (x in displays) {
+                    val on = x.optString("id") == shownDisplay
+                    Column(Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) pal.accent else pal.card).clickable { display = x.optString("id") }.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                        Text(x.str("name", 40).ifEmpty { tr("Display") }, color = if (on) Color.White else pal.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        Text("${x.optInt("w")} × ${x.optInt("h")}" + if (x.optBoolean("main")) " · " + tr("Main") else "", color = if (on) Color.White.copy(alpha = 0.8f) else pal.muted, fontSize = 11.sp)
+                    }
+                }
+            }
+            if (win != null && shownDisplay != win.optString("display")) TextButton(onClick = { put(win, null) }) {
+                Text(tr("Move the window to this display"), color = pal.accent)
             }
         }
+    }
+    // The layouts, swiped (one finger): tap a zone, or drop an app on it.
+    val pads: @Composable ColumnScope.() -> Unit = {
+        Text(layouts.getOrNull(pager.currentPage)?.str("name", 30) ?: tr("Drag to an edge"), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+        HorizontalPager(pager, Modifier.fillMaxWidth().weight(1f), pageSpacing = 16.dp, userScrollEnabled = drag == null) { i ->
+            FitPad {
+                val zs = layouts.getOrNull(i)?.optJSONArray("zones").objs()
+                BoxWithConstraints(Modifier.fillMaxSize().then(if (i == pager.currentPage) Modifier.onGloballyPositioned { pad = it.boundsInRoot() } else Modifier)
+                    .clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C2A44))) {
+                    val u = maxWidth / ZONE_GRID; val v = maxHeight / ZONE_GRID
+                    zs.forEachIndexed { n, z ->
+                        val lit = armed?.second?.toString() == z.toString() || (i == pager.currentPage && hover?.toString() == z.toString())
+                        Box(
+                            Modifier.offset(x = u * z.optInt("x"), y = v * z.optInt("y")).size(u * z.optInt("w", 1), v * z.optInt("h", 1)).padding(3.dp)
+                                .clip(RoundedCornerShape(8.dp)).background(Color(0xFF0A84FF).copy(alpha = if (lit) 0.75f else 0.35f))
+                                .border(if (lit) 2.5.dp else 1.5.dp, if (lit) Color.White else Color(0xFF64D2FF), RoundedCornerShape(8.dp))
+                                .clickable {
+                                    // An app chosen: there. None: this zone waits for one.
+                                    if (win != null) put(win, JSONObject(z.toString()))
+                                    else armed = if (lit) null else (n + 1) to z
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) { Text("${n + 1}", color = Color.White, fontWeight = FontWeight.SemiBold) }
+                    }
+                    // Dropped off the zones: an edge or a corner, shown as the finger moves.
+                    if (i == pager.currentPage) hover?.takeIf { h -> zs.none { it.toString() == h.toString() } }?.let { z ->
+                        Box(Modifier.offset(x = u * z.optInt("x"), y = v * z.optInt("y")).size(u * z.optInt("w"), v * z.optInt("h")).padding(4.dp)
+                            .clip(RoundedCornerShape(10.dp)).background(Color(0xFF0A84FF).copy(alpha = 0.45f)).border(2.dp, Color(0xFF64D2FF), RoundedCornerShape(10.dp)))
+                    }
+                    if (zs.isEmpty() && drag == null) Text(tr("Draw your own layouts on the computer’s Deck page."), color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp,
+                        textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.Center).padding(16.dp))
+                }
+            }
+        }
+        if (layouts.size > 1) Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+            layouts.indices.forEach { i -> Box(Modifier.padding(3.dp).size(7.dp).clip(CircleShape).background(if (i == pager.currentPage) pal.text else pal.muted.copy(alpha = 0.4f))) }
+        }
+        Text(if (armed == null) tr("Drag an app onto a zone or an edge, or tap an app and then a zone.") else "", color = pal.muted, fontSize = 12.sp, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
     }
 
-    // The first page: drag the app to an edge (halves), the top (full) or a corner (quarters), as
-    // windows snap on a computer. Then the layouts, swiped: tap a zone.
-    val layouts = space.optJSONArray("layouts").objs()
-    val pager = rememberPagerState { layouts.size + 1 }
-    Text(if (pager.currentPage == 0) tr("Drag to an edge") else layouts.getOrNull(pager.currentPage - 1)?.str("name", 30) ?: "",
-        color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
-    HorizontalPager(pager, Modifier.fillMaxWidth(), pageSpacing = 16.dp) { i ->
-        if (i == 0) SnapPad(app, win) { z -> win?.let { put(it, z) } }
-        else {
-            val zones = layouts[i - 1].optJSONArray("zones").objs()
-            BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C2A44))) {
-                val u = maxWidth / ZONE_GRID; val v = maxHeight / ZONE_GRID
-                zones.forEachIndexed { n, z ->
-                    val lit = armed?.second?.toString() == z.toString()
-                    Box(
-                        Modifier.offset(x = u * z.optInt("x"), y = v * z.optInt("y")).size(u * z.optInt("w", 1), v * z.optInt("h", 1)).padding(3.dp)
-                            .clip(RoundedCornerShape(8.dp)).background(Color(0xFF0A84FF).copy(alpha = if (lit) 0.75f else 0.35f))
-                            .border(if (lit) 2.5.dp else 1.5.dp, if (lit) Color.White else Color(0xFF64D2FF), RoundedCornerShape(8.dp))
-                            .clickable {
-                                // An app chosen: there. None: this zone waits for one.
-                                if (win != null) put(win, JSONObject(z.toString()))
-                                else armed = if (lit) null else (n + 1) to z
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) { Text("${n + 1}", color = Color.White, fontWeight = FontWeight.SemiBold) }
-                }
-            }
+    // Everything on one screen, never scrolled: held sideways the apps and displays beside the pad,
+    // upright above it. The pad takes what's left, 16:10.
+    Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInRoot() }) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val side = maxWidth * 0.34f
+            if (maxWidth > maxHeight) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.width(side).fillMaxHeight()) { bar(); screens() }
+                Column(Modifier.weight(1f).fillMaxHeight()) { pads() }
+            } else Column(Modifier.fillMaxSize()) { bar(); pads(); screens() }
+        }
+        // The app being dragged, under the finger.
+        drag?.let { (a, p) ->
+            Box(Modifier.offset { IntOffset((p.x - origin.x).roundToInt() - 26.dp.roundToPx(), (p.y - origin.y).roundToInt() - 26.dp.roundToPx()) }.alpha(0.9f)) { AppIcon(a, 52.dp) }
         }
     }
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.Center) {
-        (0..layouts.size).forEach { i -> Box(Modifier.padding(3.dp).size(7.dp).clip(CircleShape).background(if (i == pager.currentPage) pal.text else pal.muted.copy(alpha = 0.4f))) }
+}
+
+// An app's icon, or its first letter.
+@Composable
+private fun AppIcon(a: JSONObject, size: Dp) {
+    val img = appIcon(a.optString("icon"))
+    if (img != null) Image(img, null, Modifier.size(size))
+    else Box(Modifier.size(size).clip(RoundedCornerShape(size / 4)).background(pal.card), contentAlignment = Alignment.Center) {
+        Text(a.str("name", 2).take(1).uppercase(), color = pal.text, fontWeight = FontWeight.SemiBold)
     }
-    Text(
-        if (app == null && armed == null) tr("Choose an app, then a zone, or tap a zone first and then the app.") else "",
-        color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
-    )
-    // The displays: which one a zone goes on, or send the window there as it is.
-    if (displays.size > 1) {
-        Text(tr("Display"), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (x in displays) {
-                val on = x.optString("id") == shownDisplay
-                Column(Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) pal.accent else pal.card).clickable { display = x.optString("id") }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text(x.str("name", 40).ifEmpty { tr("Display") }, color = if (on) Color.White else pal.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                    Text("${x.optInt("w")} × ${x.optInt("h")}" + if (x.optBoolean("main")) " · " + tr("Main") else "", color = if (on) Color.White.copy(alpha = 0.8f) else pal.muted, fontSize = 11.sp)
-                }
-            }
-        }
-        if (win != null && shownDisplay != win.optString("display")) TextButton(onClick = { put(win, null) }) {
-            Text(tr("Move the window to this display"), color = pal.accent)
-        }
-    }
-    Text(tr("Draw your own layouts on the computer’s Deck page."), color = pal.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+}
+
+// A pad as big as the space allows, kept 16:10 and centred.
+@Composable
+private fun FitPad(content: @Composable () -> Unit) = BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    val w = minOf(maxWidth, maxHeight * 1.6f)
+    Box(Modifier.size(w, w / 1.6f)) { content() }
 }
 
 // Where a drop at (fx, fy) of the display snaps a window, on the 12 × 12 zone grid: a corner a
@@ -812,50 +890,6 @@ internal fun snapZone(fx: Float, fy: Float): JSONObject? {
         top -> z(0, 0, 12, 12)
         bottom -> z(0, 6, 12, 6)
         else -> null
-    }
-}
-
-// The display, with the chosen app in the middle to drag to an edge; where it would go shows as it moves.
-@Composable
-private fun SnapPad(app: JSONObject?, win: JSONObject?, onDrop: (JSONObject) -> Unit) {
-    var at by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
-    val drop by rememberUpdatedState(onDrop)
-    BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C2A44))
-        .pointerInput(app?.optString("key"), win?.optLong("wid")) {
-            if (app == null || win == null) return@pointerInput
-            detectDragGestures(
-                onDragStart = { o -> at = o },
-                onDragEnd = {
-                    val p = at; at = null
-                    if (p != null) snapZone(p.x / size.width, p.y / size.height)?.let(drop)
-                },
-                onDragCancel = { at = null },
-            ) { ch, delta -> ch.consume(); at = (at ?: ch.position) + delta }
-        }) {
-        val u = maxWidth / ZONE_GRID; val v = maxHeight / ZONE_GRID
-        val p = at
-        val zone = p?.let { with(androidx.compose.ui.platform.LocalDensity.current) { snapZone(it.x / maxWidth.toPx(), it.y / maxHeight.toPx()) } }
-        zone?.let { z ->
-            Box(Modifier.offset(x = u * z.optInt("x"), y = v * z.optInt("y")).size(u * z.optInt("w"), v * z.optInt("h")).padding(4.dp)
-                .clip(RoundedCornerShape(10.dp)).background(Color(0xFF0A84FF).copy(alpha = 0.45f)).border(2.dp, Color(0xFF64D2FF), RoundedCornerShape(10.dp)))
-        }
-        if (app == null || win == null) Text(tr("Choose an app, then drag it to an edge or a corner."), color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp,
-            textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.Center).padding(16.dp))
-        else {
-            val img = appIcon(app.optString("icon"))
-            val dp = with(androidx.compose.ui.platform.LocalDensity.current) { p?.let { androidx.compose.ui.unit.DpOffset(it.x.toDp() - 26.dp, it.y.toDp() - 26.dp) } }
-            Column(
-                (if (dp != null) Modifier.offset(dp.x, dp.y) else Modifier.align(Alignment.Center)).width(52.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (img != null) Image(img, null, Modifier.size(52.dp))
-                else Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)).background(pal.card), contentAlignment = Alignment.Center) {
-                    Text(app.str("name", 2).take(1).uppercase(), color = pal.text, fontWeight = FontWeight.SemiBold)
-                }
-            }
-            if (p == null) Text(tr("Drag {name} to an edge or a corner", "name" to app.str("name", 40)), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp))
-        }
     }
 }
 

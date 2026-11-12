@@ -181,6 +181,29 @@
 
   const uniq = (ids, p, v) => { let id = idOf(v) || newId(p); while (ids.has(id)) id = newId(p); ids.add(id); return id; };
 
+  // The phone's screen is about 16:9: a page's grid follows the way the Deck is held, so its tiles
+  // are about square (held sideways, more columns than rows). fit(n, orient): the grid for n rows
+  // (landscape) or n columns (portrait). A page made for the other way (its fit) is turned: columns
+  // become rows and each tile goes with them. A grid narrower than the screen only grows, so no
+  // tile is lost.
+  const ASPECT = 16 / 9;
+  function fit(n, orient) {
+    const k = Math.min(GRID[1], Math.max(GRID[0], Math.round(n * ASPECT)));
+    return orient === 'portrait' ? { cols: n, rows: k } : { cols: k, rows: n };
+  }
+  function shape(p, cols, rows, orient) {
+    let list = Array.isArray(p.tiles) ? p.tiles : [];
+    if ((p.fit === 'landscape' || p.fit === 'portrait') && p.fit !== orient) {
+      [cols, rows] = [rows, cols];
+      list = list.map((t) => (t && typeof t === 'object' ? { ...t, x: t.y, y: t.x, w: t.h, h: t.w } : t));
+    }
+    const [a, b] = orient === 'portrait' ? [rows, cols] : [cols, rows]; // the long side, the short one
+    let long = a, short = b;
+    if (long < Math.round(short * ASPECT)) long = Math.min(GRID[1], Math.round(short * ASPECT));
+    if (long > short * ASPECT * 1.35) short = Math.min(GRID[1], Math.max(short, Math.round(long / ASPECT)));
+    return orient === 'portrait' ? { cols: short, rows: long, list } : { cols: long, rows: short, list };
+  }
+
   // v1 (one grid, buttons in slots) as one space of tiles.
   function fromV1(l) {
     const cols = int(l.cols, GRID[0], GRID[1], 4), rows = int(l.rows, GRID[0], GRID[1], 3);
@@ -203,6 +226,7 @@
     if (!Array.isArray(src.spaces) && Array.isArray(src.pages)) src = fromV1(src);
     const sw = src.swipe && typeof src.swipe === 'object' ? src.swipe : {};
     const ids = new Set();
+    const orient = src.orient === 'portrait' ? 'portrait' : 'landscape';
     const spaces = (Array.isArray(src.spaces) ? src.spaces : []).slice(0, MAX_SPACES).map((s, i) => {
       if (!s || typeof s !== 'object') return null;
       const id = uniq(ids, 's', s.id);
@@ -217,12 +241,12 @@
       }
       const pages = (Array.isArray(s.pages) ? s.pages : []).slice(0, MAX_PAGES).map((p, j) => {
         if (!p || typeof p !== 'object') return null;
-        const cols = int(p.cols, GRID[0], GRID[1], 4), rows = int(p.rows, GRID[0], GRID[1], 4);
-        return { id: uniq(ids, 'p', p.id), name: line(p.name, 30) || `Page ${j + 1}`, cols, rows, tiles: tiles(p.tiles, cols, rows) };
+        const g = shape(p, int(p.cols, GRID[0], GRID[1], 4), int(p.rows, GRID[0], GRID[1], 4), orient);
+        return { id: uniq(ids, 'p', p.id), name: line(p.name, 30) || `Page ${j + 1}`, cols: g.cols, rows: g.rows, fit: orient, tiles: tiles(g.list, g.cols, g.rows) };
       }).filter(Boolean);
-      return { id, name, kind: 'tiles', pages: pages.length ? pages : [{ id: uniq(ids, 'p'), name: 'Page 1', cols: 4, rows: 4, tiles: [] }] };
+      return { id, name, kind: 'tiles', pages: pages.length ? pages : [{ id: uniq(ids, 'p'), name: 'Page 1', ...fit(4, orient), fit: orient, tiles: [] }] };
     }).filter(Boolean);
-    const out = { v: 2, swipe: { pages: sw.pages !== false, spaces: sw.spaces !== false }, orient: src.orient === 'portrait' ? 'portrait' : 'landscape', spaces };
+    const out = { v: 2, swipe: { pages: sw.pages !== false, spaces: sw.spaces !== false }, orient, spaces };
     if (!spaces.length) return normalize(starter());
     // Navigate to a page or space that's gone: nothing.
     const fix = (a) => {
@@ -422,7 +446,7 @@
 
   const api = {
     KINDS, LOCAL, DEVICE, MEDIA, WHATS, MODS, COLORS, SYMBOLS, GRID, SPAN, ZONE_GRID,
-    normalize, starter, starterLayouts, action, combo, codesOf, url, forDevice, fromDevice,
+    normalize, fit, starter, starterLayouts, action, combo, codesOf, url, forDevice, fromDevice,
     space, pageOf, find, where, fits, free, move, resize, symbolOf, iconOf, newId,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;

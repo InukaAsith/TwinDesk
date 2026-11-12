@@ -29,7 +29,7 @@
     Mod: mac ? '⌘' : 'Ctrl', Meta: mac ? '⌘' : 'Win', Ctrl: mac ? '⌃' : 'Ctrl', Alt: mac ? '⌥' : 'Alt', Shift: mac ? '⇧' : 'Shift',
   }[p] || KEY_NAME[p] || p.replace(/^Key|^Digit/, ''))).join(mac ? '' : '+');
   const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 1], [4, 1], [3, 2], [4, 2]];
-  const RANGE = [2, 3, 4, 5, 6, 7, 8];
+  const SIDES = [2, 3, 4]; // the short side: the long one is about 16/9 of it (up to 8)
   const pct = (v) => `${Math.round((Number(v) || 0) * 100)}%`;
 
   UI.tab({
@@ -114,7 +114,7 @@
         menu.append(
           item(t('Tile space'), t('Pages of tiles of your own'), () => change(() => {
             const id = M.newId('s');
-            L.spaces.push({ id, name: t('Space {n}', { n: L.spaces.length + 1 }), kind: 'tiles', pages: [{ id: M.newId('p'), name: t('Page 1'), cols: 4, rows: 4, tiles: [] }] });
+            L.spaces.push({ id, name: t('Space {n}', { n: L.spaces.length + 1 }), kind: 'tiles', pages: [{ id: M.newId('p'), name: t('Page 1'), ...M.fit(4, L.orient), fit: L.orient, tiles: [] }] });
             spaceId = id;
           })),
           item(t('Window space'), caps.windows === false ? t('Not on Linux') : hasWin ? t('There is one already') : t('Running apps, your window layouts, your displays'), () => change(() => {
@@ -160,7 +160,7 @@
         const plus = chip('+', false, () => change(() => {
           const id = M.newId('p');
           const cur = page();
-          s.pages.push({ id, name: t('Page {n}', { n: s.pages.length + 1 }), cols: cur.cols, rows: cur.rows, tiles: [] });
+          s.pages.push({ id, name: t('Page {n}', { n: s.pages.length + 1 }), cols: cur.cols, rows: cur.rows, fit: L.orient, tiles: [] });
           pageId = id;
           selId = '';
         }), 'deck-chip-plus');
@@ -178,6 +178,8 @@
         const grid = el('div', { class: 'deck-grid' });
         grid.style.setProperty('--cols', p.cols);
         grid.style.setProperty('--rows', p.rows);
+        grid.style.aspectRatio = L.orient === 'portrait' ? '9 / 16' : '16 / 9'; // the phone's screen, held as the Deck is
+        if (L.orient === 'portrait') { grid.style.width = 'min(100%, calc(70vh * 9 / 16))'; grid.style.margin = '0 auto'; }
         for (let y = 0; y < p.rows; y++) {
           for (let x = 0; x < p.cols; x++) {
             const cell = el('button', { class: 'deck-cell', attrs: { 'aria-label': t('Add a tile here') } });
@@ -195,7 +197,7 @@
         }
         for (const tl of p.tiles) grid.append(tileEl(tl, grid));
         const frame = el('div', { class: 'deck-phone' }, [grid]);
-        frame.style.setProperty('--ratio', `${p.cols} / ${p.rows}`);
+        frame.style.setProperty('--ratio', L.orient === 'portrait' ? '9 / 16' : '16 / 9');
         stage.replaceChildren(frame, el('p', { class: 'deck-tip', text: t('Click an empty place to add a tile. Drag a tile to move it, or onto a page’s name; drag its corner to resize it.') }));
       }
 
@@ -321,10 +323,10 @@
           side.replaceChildren(
             panel(t('Page'), [
               field(t('Name'), input(p.name, (v) => change(() => { page().name = v; }, { side: false }), { maxlength: 30 })),
-              el('div', { class: 'deck-pair' }, [
-                field(t('Columns'), pick(RANGE.map((n) => ({ value: n, label: String(n) })), p.cols, (v) => change(() => { page().cols = Number(v); }))),
-                field(t('Rows'), pick(RANGE.map((n) => ({ value: n, label: String(n) })), p.rows, (v) => change(() => { page().rows = Number(v); }))),
-              ]),
+              // One side is chosen, the other follows the screen (16:9), so tiles stay about square.
+              L.orient === 'portrait'
+                ? field(t('Columns'), pick(SIDES.map((n) => ({ value: n, label: String(n) })), p.cols, (v) => change(() => { Object.assign(page(), M.fit(Number(v), 'portrait')); })))
+                : field(t('Rows'), pick(SIDES.map((n) => ({ value: n, label: String(n) })), p.rows, (v) => change(() => { Object.assign(page(), M.fit(Number(v), 'landscape')); }))),
               el('p', { class: 'deck-field-hint', text: t('A smaller grid cuts tiles past its edge, and removes those that start past it.') }),
               el('div', { class: 'deck-actions' }, [
                 UI.button(t('Move left'), () => change(() => { const ps = space().pages; const i = ps.indexOf(page()); if (i > 0) ps.splice(i - 1, 0, ps.splice(i, 1)[0]); }), 'small'),
