@@ -15,9 +15,9 @@ const P = require('../shared/protocol.js');
 const DROP_MS = 30000;
 
 class Audio extends EventEmitter {
-  constructor({ server, hub, stream, getSettings }) {
+  constructor({ server, hub, stream, getSettings, meshHub = null }) {
     super();
-    Object.assign(this, { server, hub, stream, getSettings });
+    Object.assign(this, { server, hub, stream, getSettings, meshHub });
     this.win = null;
     this.peerAccepts = false; // the PC plays our sound
     this.sendSession = 0;
@@ -28,12 +28,14 @@ class Audio extends EventEmitter {
       this.peerAccepts = false;
       this._policy();
       this.evaluate();
+      this._syncAudioSticky();
     });
     server.on('closed', () => {
       if (server.current) return;
       this._stopSend(false);
       this._stopRecv();
       this._idle();
+      this._syncAudioSticky();
     });
     server.on(`t:${P.T.AUDIO_POLICY}`, (m) => {
       this.peerAccepts = m.accept === true;
@@ -54,12 +56,20 @@ class Audio extends EventEmitter {
       const ours = s.dir === 'm2w' ? this.sending : this.receiving;
       if (!ours || s.session !== ours.session) return;
       ours.status = s.status === 'connected' ? 'live' : s.status;
+      this._syncAudioSticky();
       this.emit('change');
     });
   }
 
   get cfg() {
     return this.getSettings().audio;
+  }
+
+  _syncAudioSticky() {
+    if (!this.meshHub) return;
+    const c = this.server.current;
+    const live = !!(this.sending || this.receiving);
+    this.meshHub.setAudioSticky('sound', live && c ? c.deviceId : null);
   }
 
   _fromWin(e) {
@@ -104,6 +114,7 @@ class Audio extends EventEmitter {
     } else if (!want && this.sending) {
       this._stopSend(true);
     }
+    this._syncAudioSticky();
     this.emit('change');
   }
 
@@ -113,6 +124,7 @@ class Audio extends EventEmitter {
     this.hub.release('audio');
     this._toWin('send-stop', {});
     if (tell && this.server.current) this.server.sendToClient({ t: P.T.AUDIO_STOP, dir: 'm2w' });
+    this._syncAudioSticky();
     this.emit('change');
     this._idle();
   }
@@ -137,6 +149,7 @@ class Audio extends EventEmitter {
     this.receiving = { session: m.session, status: 'connecting' };
     await this._ensureWin();
     this._toWin('recv', { session: m.session, sdp: m.sdp, ice: (this.server.current && this.server.current.ice) || null });
+    this._syncAudioSticky();
     this.emit('change');
   }
 
@@ -144,6 +157,7 @@ class Audio extends EventEmitter {
     if (!this.receiving) return;
     this.receiving = null;
     this._toWin('recv-stop', {});
+    this._syncAudioSticky();
     this.emit('change');
     this._idle();
   }

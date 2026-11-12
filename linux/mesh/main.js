@@ -245,7 +245,7 @@ function start() {
   });
   fileDrop = new FileDrop({ link, settings, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
   screen.fileDrop = fileDrop;
-  sound = new Sound({ link, settings, onChange: pushState });
+  sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   terminal = new Terminal({ link, settings, onChange: pushState });
@@ -396,7 +396,10 @@ function start() {
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
-  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'] }); // Two-way switches per pair (no ReZume or Remote here)
+  pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
+    bus: hub.bus,
+    peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
+    peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; } }); // Two-way switches per pair (no ReZume or Remote here)
   nativeTheme.on('updated', pushState);
   link.start();
   link.on('welcome', () => { // a Mac app's launcher was used while the Mac wasn't connected
@@ -1492,7 +1495,7 @@ function loadDeck() {
 function loadMic() {
   if (mic || !(settings.audio.micSend || settings.audio.micReceive)) return mic;
   const { Mic } = require('../../shared/mic.js');
-  mic = new Mic({ link, cfg: () => settings.audio, onChange: pushState });
+  mic = new Mic({ link: hub.audioLink(), cfg: () => settings.audio, onChange: pushState, meshHub: hub });
   return mic;
 }
 

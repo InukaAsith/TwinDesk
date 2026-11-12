@@ -345,7 +345,7 @@ fun App(core: Core, resumed: Int) {
                 Sidebar(core, v, tab) { tab = it }
                 // the page in a rounded sheet beside the sidebar, as the phone's under its branding
                 Box(Modifier.weight(1f).fillMaxHeight().padding(top = 10.dp, end = 10.dp, bottom = 10.dp).clip(RoundedCornerShape(28.dp)).background(pal.sheet)) {
-                    Page(core, v, tab, Modifier.fillMaxSize())
+                    Page(core, v, resumed, tab, Modifier.fillMaxSize())
                 }
             }
         } else {
@@ -370,7 +370,7 @@ fun App(core: Core, resumed: Int) {
                 // The page in a big rounded sheet under the branding; the bar floats at its bottom.
                 Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(pal.sheet)) {
                 if (more) MoreList(core, v, BOTTOM, Modifier.weight(1f)) { go(it, false) }
-                else Page(core, v, tab, Modifier.weight(1f))
+                else Page(core, v, resumed, tab, Modifier.weight(1f))
                 // A Material navigation bar, as Google's own apps have it: line icons, the selected
                 // one in a pill of the accent colour, labels under them, the bar itself rounded and
                 // floating off the edges (the tablet keeps the Mac-like sidebar with coloured tiles).
@@ -539,7 +539,7 @@ private fun MoreList(core: Core, v: Int, BOTTOM: List<Tab>, modifier: Modifier, 
 }
 
 @Composable
-private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
+private fun Page(core: Core, v: Int, resumed: Int, tab: Tab, modifier: Modifier) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
     Column(modifier.fillMaxHeight().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
         Column(Modifier.widthIn(max = 820.dp)) {
@@ -557,7 +557,7 @@ private fun Page(core: Core, v: Int, tab: Tab, modifier: Modifier) {
                 Tab.Remote -> RemotePage(core, v)
                 Tab.Deck -> DeckPage(core, v)
                 Tab.Clipboard -> ClipboardPage(core, v)
-                Tab.Notifications -> NotificationsPage(core, v)
+                Tab.Notifications -> NotificationsPage(core, v + resumed)
                 Tab.Files -> FilesPage(core, v)
                 Tab.Rezume -> RezumePage(core, v)
                 Tab.Sound -> SoundPage(core, v)
@@ -1457,22 +1457,32 @@ private fun NotificationsPage(core: Core, v: Int) {
     val ctx = LocalContext.current
     PageHead(tr("Notifications"), tr("See notifications from both devices."))
     if (core.host == null) NotConnected(core, v)
-    if (!core.notifs.supported) Note(
+    // Read here, outside the card lambdas. Those lambdas are remembered, and their only capture was
+    // this same Core, so a switch, a count or an access row stayed put until the page was left.
+    val supported = core.notifs.supported
+    val access = core.notifs.hasAccess
+    val outOn = core.sync.get("notifs", "out")
+    val sent = core.notifs.sent
+    val hideText = core.store.flag("notifs.hideText", false)
+    val paired = core.adb.paired
+    val inOn = core.sync.get("notifs", "in")
+    val shown = core.notifs.shown
+    if (!supported) Note(
         tr("This version of TwinDesk can’t read notifications, as Play Protect restricts downloaded apps. ") +
             tr("Once wireless debugging is set up, install the full version from the Phone page on {name}. Your settings and pairings are kept.", "name" to name),
         "warn",
     )
-    else if (!core.notifs.hasAccess) Note(tr("Allow Notification access to show this device’s notifications on {name}.", "name" to name), "warn")
+    else if (!access) Note(tr("Allow Notification access to show this device’s notifications on {name}.", "name" to name), "warn")
     MacCard {
         DirHead(me, true, name, false)
-        SwitchRow(tr("Show this device’s notifications on {name}", "name" to name), tr("{count} sent", "count" to core.notifs.sent), core.sync.get("notifs", "out"), first = true) { core.sync.set("notifs", "out", it) }
-        SwitchRow(tr("Hide the message text"), tr("Only the app name and title are shown on {name}", "name" to name), core.store.flag("notifs.hideText", false)) { core.store.setFlag("notifs.hideText", it); core.changed() }
-        if (core.notifs.supported && !core.notifs.hasAccess) MacRow(tr("Notification access"), tr("Required to read notifications")) { Primary(tr("Allow")) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-        if (!core.notifs.supported && !core.adb.paired) MacRow(tr("Wireless debugging"), tr("Set it up, then install the full version from {name}", "name" to name)) { Primary(tr("Guide")) { Guide.open.value = true } }
+        SwitchRow(tr("Show this device’s notifications on {name}", "name" to name), tr("{count} sent", "count" to sent), outOn, first = true) { core.sync.set("notifs", "out", it) }
+        SwitchRow(tr("Hide the message text"), tr("Only the app name and title are shown on {name}", "name" to name), hideText) { core.store.setFlag("notifs.hideText", it); core.changed() }
+        if (supported && !access) MacRow(tr("Notification access"), tr("Required to read notifications")) { Primary(tr("Allow")) { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+        if (!supported && !paired) MacRow(tr("Wireless debugging"), tr("Set it up, then install the full version from {name}", "name" to name)) { Primary(tr("Guide")) { Guide.open.value = true } }
     }
     MacCard {
         DirHead(name, false, me, true)
-        SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to core.notifs.shown), core.sync.get("notifs", "in"), first = true) { core.sync.set("notifs", "in", it) }
+        SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to shown), inOn, first = true) { core.sync.set("notifs", "in", it) }
     }
     // Each app on its own (#102): every app on the phone, as a block list or an allow list (AppCards.kt).
     if (core.notifs.supported) NotifAppsCard(core, name)
