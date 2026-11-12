@@ -712,6 +712,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     // The apps picked, in order (a tap picks one, a hold adds more); a place tapped before any app;
     // the display shown; the saved sets' shelf; what was arranged last (for Save).
     var sel by remember { mutableStateOf(listOf<String>()) }
+    var multi by remember { mutableStateOf(false) } // select mode: a hold starts it, taps then add and take out
     var wid by remember { mutableStateOf<Long?>(null) }
     var armed by remember { mutableStateOf<JSONObject?>(null) }
     var display by remember { mutableStateOf("") }
@@ -729,18 +730,24 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
     val shownD = displays.firstOrNull { it.optString("id") == shown }
     val ratio = shownD?.takeIf { it.optInt("h") > 0 }?.let { it.optInt("w").toFloat() / it.optInt("h") }?.coerceIn(0.5f, 3f) ?: 1.6f
 
-    val clear = { sel = emptyList(); wid = null; armed = null }
+    val clear = { sel = emptyList(); multi = false; wid = null; armed = null }
     val put = { a: JSONObject, zone: JSONObject ->
         windowOf(a)?.let { d.place(it.optLong("wid"), shown, JSONObject(zone.toString())) }
         clear()
     }
-    // A tap picks that app alone (again: none); with a few picked, a tap adds or takes out. A hold adds.
-    val tap = { k: String -> sel = if (sel.size > 1) (if (k in sel) sel - k else (sel + k).takeLast(6)) else if (sel == listOf(k)) emptyList() else listOf(k); wid = null }
-    val hold = { k: String -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); sel = if (k in sel) sel - k else (sel + k).takeLast(6); wid = null }
+    // A tap picks that app alone (again: none). A hold starts select mode with it picked (never takes
+    // it out); in select mode a tap adds or takes out, and taking out the last one ends it.
+    val tap = { k: String ->
+        if (multi || sel.size > 1) { sel = if (k in sel) sel - k else (sel + k).takeLast(6); if (sel.isEmpty()) multi = false }
+        else sel = if (sel == listOf(k)) emptyList() else listOf(k)
+        wid = null
+    }
+    val hold = { k: String -> haptic.performHapticFeedback(HapticFeedbackType.LongPress); multi = true; if (k !in sel) sel = (sel + k).takeLast(6); wid = null }
     // The picked apps into a configuration's zones, in order; remembered for Save.
     val arrange = { zones: List<JSONObject> ->
         val items = picked.zip(zones).map { (a, z) -> JSONObject().put("key", a.optString("key")).put("wid", windowOf(a)?.optLong("wid") ?: 0).put("zone", JSONObject(z.toString())) }
-        if (items.isNotEmpty()) { d.arrange(shown, items); last = picked.map { it.optString("key") } to zones.take(items.size) }
+        // Done: the picking ends (Save still offered for what was just arranged).
+        if (items.isNotEmpty()) { d.arrange(shown, items); last = picked.map { it.optString("key") } to zones.take(items.size); clear() }
     }
     val windowSpace = d.spaces.firstOrNull { it.optString("kind") == "windows" }
     val sets = windowSpace?.optJSONArray("sets").objs()
@@ -794,7 +801,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
                 val z = armed
                 when {
                     z != null -> put(a, z)
-                    min && sel.size < 2 -> { a.optJSONArray("windows").objs().firstOrNull()?.let { d.restore(it.optLong("wid")) }; clear() }
+                    min && !multi && sel.size < 2 -> { a.optJSONArray("windows").objs().firstOrNull()?.let { d.restore(it.optLong("wid")) }; clear() }
                     else -> tap(k)
                 }
             }.padding(5.dp).alpha(if (min && n < 0) 0.45f else 1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -942,7 +949,7 @@ private fun WindowSpace(d: Deck, space: JSONObject) {
             if (picked.isEmpty()) Text(if (armed != null) tr("Now tap the app for that place") else tr("Tap an app to see where it can go, hold one to pick more. Or drag it onto the display."),
                 color = if (armed != null) pal.accent else pal.muted, fontSize = 12.sp, maxLines = 2, modifier = Modifier.padding(horizontal = 4.dp))
             if (picked.size > 1) Chip(tr("Swap order")) { sel = sel.drop(1) + sel.first() }
-            if (last != null && last?.first == sel) Chip(tr("Save"), accent = true) { saveSet() }
+            if (last != null && (sel.isEmpty() || last?.first == sel)) Chip(tr("Save"), accent = true) { saveSet() }
             if (picked.isNotEmpty()) Chip(tr("Clear")) { clear() }
         }
     }

@@ -632,6 +632,7 @@ struct DeckWindowSpace: View {
     // The apps picked, in order (a tap picks one, a hold adds more); a place tapped before any app;
     // the display shown; the saved sets' shelf; what was arranged last (for Save).
     @State private var sel: [String] = []
+    @State private var multi = false // select mode: a hold starts it, taps then add and take out
     @State private var wid: Int64?
     @State private var display: String?
     @State private var armed: JSON?
@@ -730,7 +731,7 @@ struct DeckWindowSpace: View {
         }
     }
 
-    private func clear() { sel = []; wid = nil; armed = nil }
+    private func clear() { sel = []; multi = false; wid = nil; armed = nil }
     private func put(_ a: JSON, _ zone: JSON, _ c: Ctx) {
         guard let w = windowOf(a, c.front) else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -743,6 +744,7 @@ struct DeckWindowSpace: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         core.deck.arrange(display: c.shown, items: items)
         last = (c.picked.map { $0.str("key") }, Array(zones.prefix(items.count)))
+        clear() // done: the picking ends (Save still offered for what was just arranged)
     }
     private func saveSet(_ c: Ctx) {
         guard let l = last else { return }
@@ -768,15 +770,19 @@ struct DeckWindowSpace: View {
         return deckSnapZone((p.x - pad.minX) / pad.width, (p.y - pad.minY) / pad.height)
     }
 
-    // A tap picks that app alone (again: none); with a few picked, a tap adds or takes out. A hold adds.
+    // A tap picks that app alone (again: none). A hold starts select mode with it picked (never takes
+    // it out); in select mode a tap adds or takes out, and taking out the last one ends it.
     private func tap(_ k: String) {
-        if sel.count > 1 { if let i = sel.firstIndex(of: k) { sel.remove(at: i) } else { sel = Array((sel + [k]).suffix(6)) } }
-        else { sel = sel == [k] ? [] : [k] }
+        if multi || sel.count > 1 {
+            if let i = sel.firstIndex(of: k) { sel.remove(at: i) } else { sel = Array((sel + [k]).suffix(6)) }
+            if sel.isEmpty { multi = false }
+        } else { sel = sel == [k] ? [] : [k] }
         wid = nil
     }
     private func hold(_ k: String) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        if let i = sel.firstIndex(of: k) { sel.remove(at: i) } else { sel = Array((sel + [k]).suffix(6)) }
+        multi = true
+        if !sel.contains(k) { sel = Array((sel + [k]).suffix(6)) }
         wid = nil
     }
 
@@ -840,7 +846,7 @@ struct DeckWindowSpace: View {
         .contentShape(Rectangle())
         .onTapGesture {
             if let z = armed { put(a, z, c) }
-            else if isMin && sel.count < 2 {
+            else if isMin && !multi && sel.count < 2 {
                 if let w = ((a["windows"] as? [JSON]) ?? []).first { UIImpactFeedbackGenerator(style: .light).impactOccurred(); core.deck.restore(w.int64("wid")) }
                 clear()
             } else { tap(k) }
@@ -1064,7 +1070,7 @@ struct DeckWindowSpace: View {
                         .font(.caption).foregroundStyle(armed != nil ? TDColor.accent : Color.secondary).lineLimit(2).padding(.horizontal, 4)
                 }
                 if c.picked.count > 1 { chip(tr("Swap order"), false) { sel = Array(sel.dropFirst()) + [sel[0]] } }
-                if let l = last, l.keys == sel { chip(tr("Save"), true) { saveSet(c) } }
+                if let l = last, sel.isEmpty || l.keys == sel { chip(tr("Save"), true) { saveSet(c) } }
                 if !c.picked.isEmpty { chip(tr("Clear"), false) { clear() } }
             }
             .frame(height: 48)
