@@ -191,12 +191,12 @@ private fun peerShown(core: Core, t: Tab): Boolean {
 private fun ordered(core: Core): List<Tab> =
     NavOrder.sort(core.store, Tab.entries.filter { it.group != "bottom" }) { it.name.lowercase() } + Tab.entries.filter { it.group == "bottom" }
 
-// The bottom bar: Overview first while connected, Connection second; before that Connection first.
+// The bottom bar, four pages and More: Overview first while connected, Connection second; before that Connection first.
 // Arranged: the first pages shown, as many as chosen.
 private fun bottom(core: Core): List<Tab> = NavOrder.load(core.store)?.let { s -> ordered(core).filter { it.group != "bottom" && shown(core, it) }.take(s.bar) } ?: when {
     core.host != null -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files)
     peerMode(core) -> listOf(Tab.Overview, Tab.Connection, Tab.Screen, Tab.Files).filter { peerShown(core, it) }
-    else -> listOf(Tab.Connection, Tab.Screen, Tab.Files)
+    else -> listOf(Tab.Connection, Tab.Screen, Tab.Files, Tab.Clipboard)
 }
 // Overview only while connected (elsewhere, Connection shows); with a phone, only what it can do.
 private fun shown(core: Core, t: Tab) = core.moduleOn(t.name.lowercase()) && // General › Modules (Modules.kt)

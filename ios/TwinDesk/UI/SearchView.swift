@@ -42,7 +42,7 @@ enum NavOrder {
 
     // The Search button at the bar's right end (More's search field stays either way). As Android's.
     private static let searchKey = "nav.search"
-    static var searchButton: Bool { UserDefaults.standard.object(forKey: searchKey) as? Bool ?? true }
+    static var searchButton: Bool { UserDefaults.standard.object(forKey: searchKey) as? Bool ?? false } // off unless chosen
     static func setSearchButton(_ on: Bool) {
         UserDefaults.standard.set(on, forKey: searchKey)
         AppUI.shared.navVersion += 1
