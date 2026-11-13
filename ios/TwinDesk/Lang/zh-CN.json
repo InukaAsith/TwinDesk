@@ -947,5 +947,6 @@
   "{name}’s sound": "{name} 的声音",
   "{shown} shown this session": "本次会话已显示 {shown} 条",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
-  "{what}. Save to this {device}?": "{what}。保存到此 {device}？"
+  "{what}. Save to this {device}?": "{what}。保存到此 {device}？",
+  "Search button": "搜索按钮"
 }

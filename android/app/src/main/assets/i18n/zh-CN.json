@@ -1165,5 +1165,6 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "{what}需要 WLAN 直连或同一 Wi-Fi 网络。你当前通过蓝牙连接。",
   "‹ Back": "‹ 返回",
   "‹ Up": "‹ 上一级",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴",
+  "Search button": "搜索按钮"
 }

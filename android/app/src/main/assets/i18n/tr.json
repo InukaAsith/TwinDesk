@@ -1165,5 +1165,6 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "{what} için Wi-Fi Direct veya aynı Wi-Fi ağı gerekir. Bluetooth ile bağlısınız.",
   "‹ Back": "‹ Geri",
   "‹ Up": "‹ Yukarı",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘, Ctrl gibi çalışır; ⌘C kopyalar, ⌘V yapıştırır"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘, Ctrl gibi çalışır; ⌘C kopyalar, ⌘V yapıştırır",
+  "Search button": "Arama düğmesi"
 }

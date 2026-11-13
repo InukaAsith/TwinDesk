@@ -947,5 +947,6 @@
   "{name}’s sound": "Звук {name}",
   "{shown} shown this session": "Показано за сеанс: {shown}",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
-  "{what}. Save to this {device}?": "{what}. Сохранить на этот {device}?"
+  "{what}. Save to this {device}?": "{what}. Сохранить на этот {device}?",
+  "Search button": "Кнопка поиска"
 }

@@ -1165,5 +1165,6 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "Для «{what}» нужен Wi-Fi Direct или та же сеть Wi-Fi. Вы подключены по Bluetooth.",
   "‹ Back": "‹ Назад",
   "‹ Up": "‹ Вверх",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ работает как Ctrl: ⌘C копирует, ⌘V вставляет"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ работает как Ctrl: ⌘C копирует, ⌘V вставляет",
+  "Search button": "Кнопка поиска"
 }

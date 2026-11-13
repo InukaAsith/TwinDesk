@@ -194,42 +194,68 @@ struct RootView: View {
     }
 
     // iPhone: the tab bar (with a phone holding the session, only the tabs it can do).
-    private var stack: some View {
+    // Search, as Android's: its own round button at the bar's right end (iOS 26 draws a tab with the
+    // search role that way; iOS 18 to 25 as the last tab), or none (Arrange › Search button, More's
+    // field stays). iOS 16 and 17: the last tab.
+    @ViewBuilder private var stack: some View {
         let _ = core.tick
         let _ = ui.navVersion
         let tabs = Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }
-        return TabView(selection: Binding(get: { ui.tab }, set: { t in
+        let search = NavOrder.searchButton
+        let pick = Binding<PhoneTab>(get: { ui.tab == .search && !search ? .page(.overview) : ui.tab }, set: { t in
             // A tab tapped again: back to its root.
             if t == ui.tab { ui.paths[t] = [] }
             ui.tab = t
             if case .page(let p) = t { ui.page = p }
-        })) {
-            ForEach(tabs) { p in
-                NavigationStack(path: ui.path(.page(p))) {
-                    PageView(page: p)
-                        .environment(\.branded, p == .overview) // the tab's own page only
-                        .navigationDestination(for: Page.self) { q in PageView(page: q).environment(\.branded, false) }
+        })
+        Group {
+            if #available(iOS 18.0, *) {
+                TabView(selection: pick) {
+                    ForEach(tabs) { p in
+                        Tab(p.tabTitle, systemImage: tabIcon(p), value: PhoneTab.page(p)) { pageStack(p) }
+                    }
+                    Tab(tr("More"), systemImage: "ellipsis", value: PhoneTab.more) { moreStack(tabs) }
+                    if search {
+                        Tab(tr("Search"), systemImage: "magnifyingglass", value: PhoneTab.search, role: .search) { searchStack }
+                    }
                 }
-                .tabItem { Label(p.tabTitle, systemImage: tabIcon(p)) }
-                .tag(PhoneTab.page(p))
+            } else {
+                TabView(selection: pick) {
+                    ForEach(tabs) { p in
+                        pageStack(p).tabItem { Label(p.tabTitle, systemImage: tabIcon(p)) }.tag(PhoneTab.page(p))
+                    }
+                    moreStack(tabs).tabItem { Label(tr("More"), systemImage: "ellipsis") }.tag(PhoneTab.more)
+                    if search {
+                        searchStack.tabItem { Label(tr("Search"), systemImage: "magnifyingglass") }.tag(PhoneTab.search)
+                    }
+                }
             }
-            NavigationStack(path: ui.path(.more)) {
-                Sidebar(selection: nil, hiding: tabs)
-                    .navigationDestination(for: Page.self) { p in PageView(page: p) }
-            }
-            .tabItem { Label(tr("More"), systemImage: "ellipsis") }
-            .tag(PhoneTab.more)
-            // Search: at the bar's right end.
-            NavigationStack(path: ui.path(.search)) {
-                SearchView()
-                    .navigationDestination(for: Page.self) { p in PageView(page: p) }
-            }
-            .tabItem { Label(tr("Search"), systemImage: "magnifyingglass") }
-            .tag(PhoneTab.search)
         }
         .modifier(TabBarGlass())
         // A tab that's gone (a phone that can't do it): Overview.
         .onChange(of: tabs) { t in if case .page(let p) = ui.tab, !t.contains(p) { ui.tab = .page(.overview) } }
+    }
+
+    private func pageStack(_ p: Page) -> some View {
+        NavigationStack(path: ui.path(.page(p))) {
+            PageView(page: p)
+                .environment(\.branded, p == .overview) // the tab's own page only
+                .navigationDestination(for: Page.self) { q in PageView(page: q).environment(\.branded, false) }
+        }
+    }
+
+    private func moreStack(_ tabs: [Page]) -> some View {
+        NavigationStack(path: ui.path(.more)) {
+            Sidebar(selection: nil, hiding: tabs)
+                .navigationDestination(for: Page.self) { p in PageView(page: p) }
+        }
+    }
+
+    private var searchStack: some View {
+        NavigationStack(path: ui.path(.search)) {
+            SearchView()
+                .navigationDestination(for: Page.self) { p in PageView(page: p) }
+        }
     }
 
     // Line icons in the bar, as Android's (the sidebar keeps the filled, coloured ones).

@@ -29,6 +29,15 @@ enum NavOrder {
 
     static func reset() {
         UserDefaults.standard.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: searchKey)
+        AppUI.shared.navVersion += 1
+    }
+
+    // The Search button at the bar's right end (More's search field stays either way). As Android's.
+    private static let searchKey = "nav.search"
+    static var searchButton: Bool { UserDefaults.standard.object(forKey: searchKey) as? Bool ?? true }
+    static func setSearchButton(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: searchKey)
         AppUI.shared.navVersion += 1
     }
 
@@ -56,6 +65,7 @@ struct ArrangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pages: [Page] = NavOrder.ordered()
     @State private var bar: Int = NavOrder.load()?.bar ?? Page.bottom.count
+    @State private var search: Bool = NavOrder.searchButton
 
     var body: some View {
         NavigationStack {
@@ -64,6 +74,7 @@ struct ArrangeSheet: View {
                     Stepper(value: $bar, in: NavOrder.minBar...NavOrder.maxBar) {
                         HStack { Text(tr("In the bar")); Spacer(); Text("\(bar)").foregroundStyle(.secondary) }
                     }
+                    Toggle(tr("Search button"), isOn: $search)
                 } footer: { Text(tr("The first ones are in the bottom bar, the rest under More.")) }
                 Section {
                     ForEach(Array(pages.enumerated()), id: \.element) { i, p in
@@ -83,7 +94,7 @@ struct ArrangeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(tr("Cancel")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button(tr("Done")) { NavOrder.save(pages, bar: bar); dismiss() }.bold() }
+                ToolbarItem(placement: .confirmationAction) { Button(tr("Done")) { NavOrder.save(pages, bar: bar); NavOrder.setSearchButton(search); dismiss() }.bold() }
                 ToolbarItem(placement: .bottomBar) { Button(tr("Reset"), role: .destructive) { NavOrder.reset(); dismiss() } }
             }
         }

@@ -404,12 +404,14 @@ fun App(core: Core, resumed: Int) {
                     for (t in BOTTOM) item(if (t == Tab.Connection) tr("Connect") else tr(t.title), t.icon, !more && tab == t, isOn(core, t)) { go(t, false) }
                     item(tr("More"), Ico.more, more || tab !in BOTTOM, false) { go(tab, true) }
                 }
+                if (NavOrder.searchButton(core.store)) { // Arrange › Search button
                 Spacer(Modifier.width(10.dp))
                 Box(
                     Modifier.size(60.dp).shadow(14.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
                         .clip(RoundedCornerShape(50)).background(pal.card).clickable { Search.open.value = true },
                     contentAlignment = Alignment.Center,
                 ) { Icon(Ico.search, tr("Search"), tint = pal.text, modifier = Modifier.size(24.dp)) }
+                }
                 }
                 }
             }

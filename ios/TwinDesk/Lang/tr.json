@@ -947,5 +947,6 @@
   "{name}’s sound": "{name} sesi",
   "{shown} shown this session": "Bu oturumda {shown} gösterildi",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
-  "{what}. Save to this {device}?": "{what}. Bu {device} cihazına kaydedilsin mi?"
+  "{what}. Save to this {device}?": "{what}. Bu {device} cihazına kaydedilsin mi?",
+  "Search button": "Arama düğmesi"
 }

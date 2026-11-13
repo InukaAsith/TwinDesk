@@ -65,7 +65,12 @@ object NavOrder {
         version.intValue++
     }
 
-    fun reset(store: Store) { store.setPrefsString(KEY, ""); version.intValue++ }
+    fun reset(store: Store) { store.setPrefsString(KEY, ""); store.setFlag(SEARCH, true); version.intValue++ }
+
+    // The round Search button beside the bar (More's search field stays either way).
+    private const val SEARCH = "nav.search"
+    fun searchButton(store: Store) = store.flag(SEARCH, true)
+    fun setSearchButton(store: Store, on: Boolean) { store.setFlag(SEARCH, on); version.intValue++ }
 
     // ids in their default order → the saved one; a page new since keeps its place after the one
     // it follows by default.
@@ -104,6 +109,7 @@ fun Modifier.onHold(action: () -> Unit): Modifier = pointerInput(Unit) {
 fun ArrangeDialog(store: Store, items: List<ArrangeItem>, barNow: Int, onClose: () -> Unit) {
     val list = remember { mutableStateListOf<ArrangeItem>().apply { addAll(items) } }
     var bar by remember { mutableIntStateOf(barNow.coerceIn(NavOrder.MIN_BAR, NavOrder.MAX_BAR)) }
+    var search by remember { mutableStateOf(NavOrder.searchButton(store)) }
     AlertDialog(
         onDismissRequest = onClose,
         containerColor = pal.card,
@@ -117,6 +123,10 @@ fun ArrangeDialog(store: Store, items: List<ArrangeItem>, barNow: Int, onClose: 
                     Text("$bar", color = pal.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp))
                     Step("+", bar < NavOrder.MAX_BAR) { bar++ }
                 }
+                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(tr("Search button"), color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    MacSwitch(search, { search = it })
+                }
                 list.forEachIndexed { i, it ->
                     if (i == bar) Text(tr("Under More"), color = pal.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -129,7 +139,7 @@ fun ArrangeDialog(store: Store, items: List<ArrangeItem>, barNow: Int, onClose: 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { NavOrder.save(store, list.map { it.id }, bar); onClose() }) { Text(tr("Done"), color = pal.accent) } },
+        confirmButton = { TextButton(onClick = { NavOrder.save(store, list.map { it.id }, bar); NavOrder.setSearchButton(store, search); onClose() }) { Text(tr("Done"), color = pal.accent) } },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { NavOrder.reset(store); onClose() }) { Text(tr("Reset"), color = pal.muted) }
