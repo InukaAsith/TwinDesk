@@ -304,7 +304,7 @@ class Kvm {
     const edges = this.edges;
     return E.SIDES.filter((side) => {
       const id = edges[side];
-      return !!id && this._connectedTo(id) && this._linkedFor(id) && !this._pausedFor(id);
+      return !!id && this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && this._linkedFor(id) && !this._pausedFor(id); // an iPhone can't be driven
     });
   }
 
@@ -433,7 +433,7 @@ class Kvm {
 
   _canDriveTo(id) {
     const k = this.cfg;
-    return this._connectedTo(id) && this._linkedFor(id) && !this._pausedFor(id) && k.driveOther && (k.mouse || k.keyboard);
+    return this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && this._linkedFor(id) && !this._pausedFor(id) && k.driveOther && (k.mouse || k.keyboard);
   }
 
   _onHelper(name, msg) {

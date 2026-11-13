@@ -17,6 +17,22 @@ enum NavOrder {
     static let fixed: [Page] = [.general, .about]
     struct Saved: Codable { var order: [String]; var bar: Int }
 
+    // How many pages the bar can hold beside More (and Search). iOS 26's system bar takes five
+    // tabs, Search one of them, before it makes a More of its own; TwinDesk's own bar, all five.
+    static func barLimit(search: Bool) -> Int {
+        if #available(iOS 26.0, *) { return search ? 3 : 4 }
+        return maxBar
+    }
+
+    // Once: a bar saved at three while Search took the fourth place, with Search off now, gets it back.
+    static func migrate() {
+        let k = "nav.bar4"
+        guard !UserDefaults.standard.bool(forKey: k) else { return }
+        UserDefaults.standard.set(true, forKey: k)
+        guard !searchButton, barLimit(search: false) > barLimit(search: true), let s = load(), s.bar == barLimit(search: true) else { return }
+        if let d = try? JSONEncoder().encode(Saved(order: s.order, bar: s.bar + 1)) { UserDefaults.standard.set(d, forKey: key) }
+    }
+
     static func load() -> Saved? {
         guard let d = UserDefaults.standard.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d), !s.order.isEmpty else { return nil }
         return Saved(order: s.order, bar: min(max(s.bar, minBar), maxBar))
@@ -35,7 +51,7 @@ enum NavOrder {
 
     // The Search button at the bar's right end (More's search field stays either way). As Android's.
     private static let searchKey = "nav.search"
-    static var searchButton: Bool { UserDefaults.standard.object(forKey: searchKey) as? Bool ?? true }
+    static var searchButton: Bool { UserDefaults.standard.object(forKey: searchKey) as? Bool ?? false } // off unless chosen
     static func setSearchButton(_ on: Bool) {
         UserDefaults.standard.set(on, forKey: searchKey)
         AppUI.shared.navVersion += 1
@@ -64,17 +80,19 @@ extension Page {
 struct ArrangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pages: [Page] = NavOrder.ordered()
-    @State private var bar: Int = NavOrder.load()?.bar ?? Page.bottom.count
+    @State private var bar: Int = min(NavOrder.load()?.bar ?? Page.bottom.count, NavOrder.barLimit(search: NavOrder.searchButton))
     @State private var search: Bool = NavOrder.searchButton
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Stepper(value: $bar, in: NavOrder.minBar...NavOrder.maxBar) {
+                    Stepper(value: $bar, in: NavOrder.minBar...NavOrder.barLimit(search: search)) {
                         HStack { Text(tr("In the bar")); Spacer(); Text("\(bar)").foregroundStyle(.secondary) }
                     }
                     Toggle(tr("Search button"), isOn: $search)
+                        // Search off: its place in the bar goes to one more page; on: the bar gives one back.
+                        .onChange(of: search) { on in let d = NavOrder.barLimit(search: false) - NavOrder.barLimit(search: true); bar = min(max(bar + (on ? -d : d), NavOrder.minBar), NavOrder.barLimit(search: on)) }
                 } footer: { Text(tr("The first ones are in the bottom bar, the rest under More.")) }
                 Section {
                     ForEach(Array(pages.enumerated()), id: \.element) { i, p in

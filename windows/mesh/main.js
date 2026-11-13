@@ -650,8 +650,10 @@ function loadHub() {
   const { PhoneHub } = require('../../shared/phonehub.js');
   phoneHub = new PhoneHub({
     server: phoneLink, getSettings: () => settings, save: saveSettings,
-    audio: (opts) => require('../callaudio.js').create({ helper, ...opts }), // the calls' sound over Bluetooth
-    audioLimit: require('../callaudio.js').LIMIT,
+    // The calls' sound over Bluetooth; not in the Store's MSIX (Partner Center doesn't grant its phone line capabilities).
+    audio: Store.STORE ? null : (opts) => require('../callaudio.js').create({ helper, ...opts }),
+    audioLimit: Store.STORE ? '' : require('../callaudio.js').LIMIT,
+    audioStore: Store.STORE,
     btSettings: () => shell.openExternal('ms-settings:bluetooth').catch(() => {}), // pairing the phone for the calls' sound
     shareSheet: (paths, title) => helper && helper.send('share', { paths, title }), // Photos › Share: Windows' Share (Share.cs)
     send: (paths, batch) => !!(fileDrop && fileDrop.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
@@ -1376,7 +1378,7 @@ function loadCamera() {
   if (camShare || !settings.camera.on) return camShare;
   const { CamShare } = require('../../shared/camshare.js');
   loadVcam();
-  const computer = () => link.status.state === 'connected' && !(link.current && link.current.os === P.OS.ANDROID);
+  const computer = () => link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os));
   camShare = new CamShare({
     getLanguage: () => i18n.locale,
     link: { on: (t, fn) => link.on(t, fn), send: (m) => link.send(m), connected: computer, ble: () => !!(link.current && link.current.transport === 'ble'), closed: (fn) => link.on('closed', fn) },

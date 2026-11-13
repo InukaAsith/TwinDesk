@@ -1314,6 +1314,8 @@
   "Take {name}’s": "Take {name}’s",
   "Taking over…": "Taking over…",
   "Talk and listen on this computer": "Talk and listen on this computer",
+  "Not in the Microsoft Store version": "Not in the Microsoft Store version",
+  "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}",
   "Talk and listen on {me}": "Talk and listen on {me}",
   "Tap Allow on the phone (“Allow USB debugging?”).": "Tap Allow on the phone (“Allow USB debugging?”).",
   "Tap Pair device with QR code.": "Tap Pair device with QR code.",

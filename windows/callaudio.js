@@ -24,7 +24,6 @@ const ROOT = path.join(__dirname, '..'); // the package's external location: its
 const BIN = path.join(ROOT, 'windows-helper', 'bin');
 const EXE = path.join(BIN, 'macshare-calls.exe');
 const MSIX = path.join(BIN, 'twindesk-calls.msix');
-const { STORE } = require('./storepkg');
 const CER = path.join(BIN, 'twindesk-calls.cer');
 const PKG = 'TwinDesk.Calls';
 const PKG_VERSION = '1.0.1.0'; // as windows-helper/calls/AppxManifest.xml
@@ -134,14 +133,7 @@ class CallAudio extends EventEmitter {
   }
 
   async _launch(gen, force) {
-    // The Store's MSIX (storepkg.js): its manifest carries the phone line's capabilities, and
-    // macshare-calls.exe, started by this app, has the package's identity. Nothing to register.
-    if (STORE) {
-      if (!fs.existsSync(EXE)) { this.error = 'macshare-calls is missing'; return this._set('unavailable'); }
-      this._set('starting');
-      this._spawn();
-      return this._send({ cmd: 'info' });
-    }
+    // Never in the Store's MSIX: it has no phone line capabilities (main.js passes no audio there).
     if (!fs.existsSync(EXE) || !fs.existsSync(MSIX)) {
       this.error = 'macshare-calls is missing (npm run build:helper)';
       return this._set('unavailable');
@@ -190,7 +182,6 @@ class CallAudio extends EventEmitter {
       // copy): registered again here, once.
       if (m.identity === false) {
         this._end();
-        if (STORE) { this.error = 'Windows didn’t give macshare-calls TwinDesk’s package identity'; return this._set('unavailable'); }
         if (this.forced) { this.error = 'Windows didn’t give macshare-calls TwinDesk’s package identity'; return this._set('unavailable'); }
         this.forced = true;
         return this._launch(this.gen, true);

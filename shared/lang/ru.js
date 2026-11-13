@@ -1314,6 +1314,8 @@
   "Take {name}’s": "Взять у {name}",
   "Taking over…": "Перехват…",
   "Talk and listen on this computer": "Говорите и слушайте на этом компьютере",
+  "Not in the Microsoft Store version": "Нет в версии из Microsoft Store",
+  "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "Чтобы говорить и слушать на {me} через Bluetooth, нужен установщик TwinDesk с GitHub. Звонки звучат на {phone}",
   "Talk and listen on {me}": "Говорите и слушайте на {me}",
   "Tap Allow on the phone (“Allow USB debugging?”).": "Нажмите «Разрешить» на телефоне («Разрешить отладку по USB?»).",
   "Tap Pair device with QR code.": "Нажмите «Подключить устройство с помощью QR-кода».",

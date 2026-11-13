@@ -53,7 +53,7 @@ final class Camera: Feature {
         host = nil
         if tell && core.connected { core.send(msg("cam.close")) }
         status = ""
-        UIApplication.shared.isIdleTimerDisabled = false
+        Awake.hold("camera", false)
         core.changed()
     }
 
@@ -70,7 +70,7 @@ final class Camera: Feature {
             error = ""
             core.send(msg("cam.state", ["status": "starting"]))
             page().post(["t": "start", "facing": front ? "user" : "environment"])
-            UIApplication.shared.isIdleTimerDisabled = true
+            Awake.hold("camera", true)
             core.changed()
         case "cam.answer": host?.post(["t": "answer", "sdp": m.str("sdp", max: 200_000)])
         case "cam.ice":
@@ -88,7 +88,7 @@ final class Camera: Feature {
     func pageStatus(_ m: JSON) {
         status = m.str("status") == "failed" ? "failed" : m.str("status")
         error = m.str("error")
-        if status == "failed" { UIApplication.shared.isIdleTimerDisabled = false }
+        if status == "failed" { Awake.hold("camera", false) }
         core.changed()
     }
 }

@@ -353,14 +353,24 @@ struct RemoteScreen: View {
             }
             core.remote.attach(h, mode: mode)
             if mode == "gamepad" { Orientation.landscape() }
-            UIApplication.shared.isIdleTimerDisabled = true
+            Awake.hold("remote", true)
         }
         .onDisappear {
             if let h = host { core.remote.detach(h); h.destroy() }
             host = nil
             Orientation.free()
-            UIApplication.shared.isIdleTimerDisabled = false
+            Awake.hold("remote", false)
         }
+    }
+}
+
+// The screen kept on while any of these asks for it (the viewer, the camera, the Remote, the Deck
+// and its page): one closing no longer lets the phone sleep under another still open.
+enum Awake {
+    private static var by = Set<String>()
+    static func hold(_ who: String, _ on: Bool) {
+        if on { by.insert(who) } else { by.remove(who) }
+        UIApplication.shared.isIdleTimerDisabled = !by.isEmpty
     }
 }
 
@@ -371,6 +381,8 @@ enum Orientation {
     static func landscape() { request(.landscape) }
     static func portrait() { request(.portrait) }
     static func free() { request(Device.isPad ? .all : .allButUpsideDown) }
+    // The window's size as it is now: the full Deck waits on it to turn before drawing its tiles.
+    static var size: CGSize { scene?.keyWindow?.bounds.size ?? scene?.coordinateSpace.bounds.size ?? .zero }
     // The app's allowed orientations (AppDelegate): what was last asked for.
     static private(set) var mask: UIInterfaceOrientationMask = Device.isPad ? .all : .allButUpsideDown
     static func toggle() {
@@ -378,13 +390,47 @@ enum Orientation {
         request(land ? .portrait : .landscape)
     }
 
-    // The allowed orientations change first (AppDelegate reads `mask`), then the window turns.
+    // The allowed orientations change first (AppDelegate reads `mask`, every controller up the
+    // chain, the full-screen Deck's included, is told), then the window turns and is laid out again
+    // at its new size: with Portrait Orientation Lock on, a turn alone left the page drawn at the old
+    // size, scaled, or cut in half.
     private static func request(_ want: UIInterfaceOrientationMask) {
         mask = want
         guard let s = scene else { return }
         if #available(iOS 16.0, *) {
-            s.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            for w in s.windows { controllers(w).forEach { $0.setNeedsUpdateOfSupportedInterfaceOrientations() } }
             s.requestGeometryUpdate(.iOS(interfaceOrientations: want)) { _ in }
+        }
+        relayout()
+    }
+
+    // Back in the app (Portrait Orientation Lock may have turned it upright meanwhile): as asked again.
+    static func reapply() {
+        if mask != (Device.isPad ? .all : .allButUpsideDown) { request(mask) } else { relayout() }
+    }
+
+    private static func controllers(_ w: UIWindow) -> [UIViewController] {
+        var out: [UIViewController] = [], vc = w.rootViewController
+        while let v = vc { out.append(v); out.append(contentsOf: v.children); vc = v.presentedViewController }
+        return out
+    }
+
+    // The window and each page on it sized to the scene as it is now, during and after the turn.
+    private static func relayout() {
+        for delay in [0.05, 0.35, 0.8] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard let s = scene else { return }
+                let b = s.coordinateSpace.bounds
+                for w in s.windows where !w.isHidden {
+                    if w.frame.size != b.size { w.frame = b }
+                    for vc in controllers(w) where vc.presentingViewController != nil || vc === w.rootViewController {
+                        if let v = vc.view, vc.modalPresentationStyle == .fullScreen || vc.modalPresentationStyle == .overFullScreen || vc === w.rootViewController,
+                           v.frame.size != w.bounds.size { v.frame = w.bounds }
+                        vc.view?.setNeedsLayout()
+                    }
+                    w.layoutIfNeeded()
+                }
+            }
         }
     }
 }

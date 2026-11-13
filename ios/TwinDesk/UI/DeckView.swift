@@ -139,6 +139,9 @@ struct DeckView: View {
                 }
             }
         }
+        // The screen kept on here too, as in the full Deck.
+        .onAppear { Awake.hold("deckPage", true) }
+        .onDisappear { Awake.hold("deckPage", false) }
     }
 }
 
@@ -153,12 +156,17 @@ struct DeckScreen: View {
     @State private var step = (n: 0, dir: 0)
     @State private var flash: String?
     // Showing the way to the window space: the first time a short picture that must be followed (then
-    // a tour of it); after that a nudge and a tab each time the Deck opens elsewhere, until the person
-    // has gone there themselves once.
+    // a tour of it); after that, as on Android, a nudge and a tab each time the Deck opens elsewhere,
+    // there until the first touch.
     @State private var intro = !DeckTourStore.done("intro")
     @State private var tour = !DeckTourStore.done("windows")
     @State private var hint = false
     @State private var nudge: CGFloat = 0
+    // The tiles wait for the window to finish turning (opening, the computer changing the way up,
+    // closing) behind a short word, instead of being drawn half turned.
+    @State private var phase = Phase.loading
+    @State private var turns = 0
+    private enum Phase { case loading, shown, closing }
 
     var body: some View {
         let _ = core.tick
@@ -166,7 +174,9 @@ struct DeckScreen: View {
         let spaces = d.spaces
         ZStack(alignment: .topTrailing) {
             TDColor.bg.ignoresSafeArea()
-            if d.layout == nil || spaces.isEmpty || !core.connected {
+            if phase != .shown {
+                DeckBusy(text: phase == .closing ? tr("Closing Deck…") : tr("Loading Deck…")).transition(.opacity)
+            } else if d.layout == nil || spaces.isEmpty || !core.connected {
                 Text(tr("Waiting for {name}…", ["name": core.host?.name ?? ""])).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let space = spaces.first { $0.str("id") == spaceId } ?? spaces[0]
@@ -189,13 +199,15 @@ struct DeckScreen: View {
                         .transition(.opacity)
                 }
             }
-            Button { ui.cover = nil } label: {
-                Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(TDColor.text)
-                    .frame(width: 30, height: 30).background(TDColor.control, in: Circle())
+            if phase == .shown {
+                Button { close() } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(TDColor.text)
+                        .frame(width: 30, height: 30).background(TDColor.control, in: Circle())
+                }
+                .opacity(0.55).padding(8)
+                .accessibilityLabel(tr("Close"))
             }
-            .opacity(0.55).padding(8)
-            .accessibilityLabel(tr("Close"))
-            if !(d.layout == nil || spaces.isEmpty || !core.connected), let w = win {
+            if phase == .shown, !(d.layout == nil || spaces.isEmpty || !core.connected), let w = win {
                 let here = spaces.first { $0.str("id") == spaceId } ?? spaces[0]
                 if intro { DeckIntro(portrait: d.portrait) { finishIntro(w) } }
                 else if tour && here.str("kind") == "windows" { DeckWindowTour { DeckTourStore.set("windows"); tour = false } }
@@ -208,34 +220,34 @@ struct DeckScreen: View {
                     .transition(.opacity)
             }
         }
+        // The first touch anywhere (a tile, a swipe, the tab itself) puts the hint away.
+        .simultaneousGesture(TapGesture().onEnded { endHint() })
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
-            if core.deck.portrait { Orientation.portrait() } else { Orientation.landscape() }
-            UIApplication.shared.isIdleTimerDisabled = true
+            turn(portrait: core.deck.portrait)
+            Awake.hold("deck", true)
             core.media.page(true) // what plays there, for a media widget
         }
         .onDisappear {
             Orientation.free()
-            UIApplication.shared.isIdleTimerDisabled = false
+            Awake.hold("deck", false)
             core.media.page(false)
         }
-        .onChange(of: core.deck.portrait) { p in if p { Orientation.portrait() } else { Orientation.landscape() } }
-        .task(id: win?.str("id") ?? "") {
+        .onChange(of: core.deck.portrait) { p in if phase != .closing { turn(portrait: p) } }
+        .task(id: "\(win?.str("id") ?? "")\(phase == .shown)") {
             // Each opening away from the window space: the tiles nudge towards it twice, a tab shows the swipe.
-            guard win != nil, !intro, !hint, !DeckTourStore.done("reached") else { return }
+            guard phase == .shown, win != nil, !intro, !hint else { return }
             let here = core.deck.spaces.first { $0.str("id") == spaceId } ?? core.deck.spaces.first
             guard here?.str("kind") != "windows" else { return }
             try? await Task.sleep(nanoseconds: 350_000_000)
             withAnimation(.easeOut(duration: 0.2)) { hint = true }
-            for _ in 0..<2 {
+            for _ in 0..<2 where hint {
                 withAnimation(.easeOut(duration: 0.26)) { nudge = 28 }
                 try? await Task.sleep(nanoseconds: 260_000_000)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) { nudge = 0 }
                 try? await Task.sleep(nanoseconds: 450_000_000)
             }
-            try? await Task.sleep(nanoseconds: 3_200_000_000)
-            withAnimation { hint = false }
         }
         .onChange(of: flash) { f in
             guard f != nil else { return }
@@ -250,6 +262,42 @@ struct DeckScreen: View {
     }
 
     private var win: JSON? { core.deck.spaces.first { $0.str("kind") == "windows" } }
+
+    // Held the way asked, then the tiles once the window is that way up and laid out again.
+    private func turn(portrait p: Bool) {
+        phase = .loading
+        turns += 1
+        let n = turns
+        if p { Orientation.portrait() } else { Orientation.landscape() }
+        Task { @MainActor in
+            await Self.settle(1.5) { let s = Orientation.size; return s.width > 0 && (s.width > s.height) != p }
+            if turns == n && phase == .loading { withAnimation(.easeOut(duration: 0.2)) { phase = .shown } }
+        }
+    }
+    // The tiles away first, the phone upright again (an iPad free as it was), then the Deck gone.
+    private func close() {
+        guard phase != .closing else { return }
+        withAnimation(.easeOut(duration: 0.15)) { phase = .closing }
+        let from = Orientation.size
+        if Device.isPad { Orientation.free() } else { Orientation.portrait() }
+        Task { @MainActor in
+            await Self.settle(Device.isPad ? 0.6 : 1.5) {
+                let s = Orientation.size
+                return Device.isPad ? s != from : s.width > 0 && s.height > s.width
+            }
+            ui.cover = nil
+        }
+    }
+    // Until `done` (at most `limit` seconds), then a moment for the layout after the turn (Orientation.relayout).
+    private static func settle(_ limit: Double, _ done: () -> Bool) async {
+        var waited = 0.0
+        while !done() && waited < limit { try? await Task.sleep(nanoseconds: 50_000_000); waited += 0.05 }
+        try? await Task.sleep(nanoseconds: 350_000_000)
+    }
+    private func endHint() {
+        guard hint else { return }
+        withAnimation(.easeOut(duration: 0.2)) { hint = false; nudge = 0 }
+    }
     private func finishIntro(_ w: JSON) {
         DeckTourStore.set("intro")
         withAnimation { intro = false }
@@ -259,12 +307,12 @@ struct DeckScreen: View {
     // Reaching the window space on one's own (a swipe, the tab, a tile) ends the nudge for good.
     private func go(to id: String, own: Bool = true) {
         guard let s = core.deck.spaces.first(where: { $0.str("id") == id }) else { return }
-        if own && s.str("kind") == "windows" { DeckTourStore.set("reached") }
         withAnimation(.easeOut(duration: 0.2)) { spaceId = id }
         flash = s.str("name", max: 30)
     }
     private func swipe(_ dx: Int, _ dy: Int) {
         let ss = core.deck.spaces
+        endHint()
         if intro, let w = win { if (core.deck.portrait ? dy : dx) != 0 { finishIntro(w) }; return }
         let i = ss.firstIndex { $0.str("id") == (spaceId.isEmpty ? ss.first?.str("id") ?? "" : spaceId) } ?? 0
         // Along the screen's long side the next space, across it the next page; round and round.
@@ -307,8 +355,20 @@ struct DeckFingers: View {
     }
 }
 
+// The full Deck while the window turns: a word in the middle, nothing else.
+private struct DeckBusy: View {
+    let text: String
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(text).font(.headline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 // Each time the full Deck opens away from the window space: a tab at that edge shows the three-finger
-// swipe, then fades; a tap on it goes there (the tiles nudge towards it meanwhile, DeckScreen).
+// swipe until the first touch; a tap on it goes there (the tiles nudge towards it meanwhile, DeckScreen).
 struct DeckSwipeHint: View {
     let name: String, portrait: Bool
     let go: () -> Void

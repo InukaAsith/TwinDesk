@@ -44,6 +44,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -311,6 +312,9 @@ fun DeckPage(core: Core, v: Int) {
     val d = core.deck
     val ctx = LocalContext.current
     val name = core.host?.name ?: ""
+    // The screen kept on here too, as in the full Deck (DeckActivity).
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(view) { view.keepScreenOn = true; onDispose { view.keepScreenOn = false } }
     PageHead(tr("Deck"), tr("Tiles that run shortcuts, media, sound, windows and more on {name}", "name" to name))
     if (d.layout == null || d.spaces.isEmpty()) {
         Text(tr("Waiting for {name}…", "name" to name), color = pal.muted)
@@ -379,7 +383,9 @@ fun DeckFull(core: Core, close: () -> Unit) {
     @Suppress("UNUSED_EXPRESSION") v
     val d = core.deck
     val spaces = d.spaces
-    Box(Modifier.fillMaxSize().background(pal.content).windowInsetsPadding(WindowInsets.safeDrawing).padding(6.dp)) {
+    var touched by remember { mutableStateOf(false) } // the first touch anywhere puts the hint away
+    Box(Modifier.fillMaxSize().background(pal.content).windowInsetsPadding(WindowInsets.safeDrawing).padding(6.dp)
+        .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); waitForUpOrCancellation(PointerEventPass.Initial); touched = true } }) {
         if (d.layout == null || spaces.isEmpty()) {
             Text(tr("Waiting for {name}…", "name" to (core.host?.name ?: "")), color = pal.muted, modifier = Modifier.align(Alignment.Center))
             CloseButton(Modifier.align(Alignment.TopEnd), close)
@@ -395,8 +401,7 @@ fun DeckFull(core: Core, close: () -> Unit) {
         LaunchedEffect(flash) { if (flash != null) { delay(900); flash = null } }
         val ctx = LocalContext.current
         val show = { to: JSONObject -> spaceId = to.optString("id"); flash = to.str("name", 30) }
-        // Reaching the window space on one's own (a swipe, the tab, a tile) ends the nudge for good.
-        val toSpace = { to: JSONObject -> show(to); if (to.optString("kind") == "windows") tourSet(ctx, "reached") }
+        val toSpace = { to: JSONObject -> show(to) }
         // Along the screen's long side the next space, across it the next page; round and round.
         val swipe = { dx: Int, dy: Int ->
             val (sp, pg) = if (d.portrait) dy to dx else dx to dy
@@ -406,13 +411,15 @@ fun DeckFull(core: Core, close: () -> Unit) {
         }
         val swipeNow by rememberUpdatedState(swipe) // the detector outlives recompositions
         // Showing the way to the window space: the first time a short picture that must be followed
-        // (then a tour of it), after that a nudge and a tab each time the Deck opens elsewhere, until
-        // the person has gone there themselves once.
+        // (then a tour of it), after that a nudge and a tab each time the Deck opens elsewhere, there
+        // until the first touch (a tile, a swipe, the tab itself).
         val win = spaces.firstOrNull { it.optString("kind") == "windows" }
         var intro by remember { mutableStateOf(win != null && !tourDone(ctx, "intro")) }
         var tour by remember { mutableStateOf(!tourDone(ctx, "windows")) }
         val nudge = remember { Animatable(0f) }
-        val hint = remember { win != null && !intro && space.optString("kind") != "windows" && !tourDone(ctx, "reached") }
+        var hint by remember { mutableStateOf(win != null && !intro && space.optString("kind") != "windows") }
+        LaunchedEffect(hint) { if (!hint) nudge.animateTo(0f, tween(200)) }
+        LaunchedEffect(touched) { if (touched) hint = false }
         val toWindows = { win?.let { toSpace(it) }; Unit }
         Column(Modifier.fillMaxSize().threeFingerSwipe(d.swipeSpaces) { dx, dy -> swipeNow(dx, dy) }
             .graphicsLayer { val o = -nudge.value * 28.dp.toPx(); if (d.portrait) translationY = o else translationX = o }) {
@@ -457,14 +464,13 @@ private fun Fingers(t: Float, portrait: Boolean, m: Modifier = Modifier) = Box(m
 }
 
 // Each time the full Deck opens away from the window space: the tiles nudge towards it and a tab at
-// that edge shows the three-finger swipe, then fades; a tap on it goes there.
+// that edge shows the three-finger swipe until the first touch (DeckFull); a tap on it goes there.
 @Composable
 private fun BoxScope.SwipeHint(d: Deck, name: String, nudge: Animatable<Float, *>, go: () -> Unit) {
     var shown by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         delay(350)
         repeat(2) { nudge.animateTo(1f, tween(260)); nudge.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 300f)) }
-        delay(3200); shown = false
     }
     val t by rememberInfiniteTransition(label = "hint").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "t")
     AnimatedVisibility(shown, Modifier.align(if (d.portrait) Alignment.BottomCenter else Alignment.CenterEnd), enter = fadeIn(), exit = fadeOut()) {

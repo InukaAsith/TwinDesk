@@ -65,11 +65,11 @@ object NavOrder {
         version.intValue++
     }
 
-    fun reset(store: Store) { store.setPrefsString(KEY, ""); store.setFlag(SEARCH, true); version.intValue++ }
+    fun reset(store: Store) { store.setPrefsString(KEY, ""); store.setFlag(SEARCH, false); version.intValue++ }
 
     // The round Search button beside the bar (More's search field stays either way).
     private const val SEARCH = "nav.search"
-    fun searchButton(store: Store) = store.flag(SEARCH, true)
+    fun searchButton(store: Store) = store.flag(SEARCH, false) // off unless chosen
     fun setSearchButton(store: Store, on: Boolean) { store.setFlag(SEARCH, on); version.intValue++ }
 
     // ids in their default order → the saved one; a page new since keeps its place after the one

@@ -90,8 +90,8 @@ async function main() {
   if (fs.existsSync(multiHelper)) copy(multiHelper, path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper-multi.exe'));
   else console.log('note: no windows-helper/bin/macshare-winhelper-multi.exe — Multi-device uses the one-to-one helper (one edge)');
   // The calls' sound on this PC (callaudio.js): its .exe, its signed package and that certificate.
-  // The Store's MSIX gives macshare-calls.exe its own identity: no sparse package or certificate.
-  for (const f of STORE ? ['macshare-calls.exe'] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
+  // Not in the Store's MSIX: it has no phone line capabilities (store-manifest.xml).
+  for (const f of STORE ? [] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
     const from = path.join(ROOT, 'windows-helper', 'bin', f);
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
