@@ -297,9 +297,12 @@ function publishState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+
 function sendScreenState() {
   const c = peer && peer.current;
   if (!c || !svc) return void (screenStateKey = '');
+  // No display list. Mesh has one capture and one input target, and each device can be off or on
+  // its own screen. A phone pick would clear that choice and move every viewer that follows it.
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
   const key = JSON.stringify([c.deviceId, msg]);
   if (key === screenStateKey) return;
@@ -307,11 +310,18 @@ function sendScreenState() {
   peer.sendToClient(msg);
 }
 
+function displayPick(m) {
+  return !!m && Object.prototype.hasOwnProperty.call(m, 'displayId') && m.displayId != null && m.displayId !== '';
+}
+
 // The viewer on the other computer starts/stops our sharing or switches Extend/Mirror.
 function onScreenCtl(m) {
   // The phone viewer's Close stops sharing even when the viewer may not start and switch it.
   if (m.share === false && m.close === true) return void (settings.sharing.on && actions.setSharing(false, 'remote'));
   if (settings.sharing.remote === false) return void (screenStateKey = '', pushState()); // re-send: remote false
+  // One-to-one only. Ignore it here so the owner's per-device off or display, and every other
+  // viewer's picture, stay as they are. Stop (share false) still runs below.
+  if (m.share !== false && displayPick(m)) return;
   if (m.mode === 'extend' || m.mode === 'mirror') {
     if (displayMode() !== m.mode) actions.setDisplayMode(m.mode);
   }

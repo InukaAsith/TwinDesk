@@ -119,6 +119,14 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
     }
 }
 
+// One real display the computer offered in screen.state (the virtual display is Extend, and is not listed).
+data class MacDisplay(val id: String, val name: String, val w: Int, val h: Int) {
+    fun label(): String = buildString {
+        append(name.ifBlank { id }.take(40))
+        if (w > 0 && h > 0) append(" · ").append(w).append('×').append(h)
+    }
+}
+
 // The Mac's screen: what it shares (screen.state), Start/Stop and Mirror/Extend (screen.ctl), and
 // the viewer page while ViewerActivity is open (screen.policy tells the Mac to stream).
 class Screen(core: Core) : Feature(core) {
@@ -135,6 +143,22 @@ class Screen(core: Core) : Feature(core) {
     val sharing get() = state?.optBoolean("on") == true
     val mode get() = state?.optString("mode") ?: ""
     val remote get() = state?.optBoolean("remote", true) != false
+    // The real display being mirrored, empty while extending or when the computer didn't say.
+    val displayId get() = state?.optString("displayId").orEmpty()
+
+    // Real displays the computer can mirror. Missing on an older computer: no picker, Mirror/Extend only.
+    val displays: List<MacDisplay>
+        get() {
+            val a = state?.optJSONArray("displays") ?: return emptyList()
+            val out = ArrayList<MacDisplay>(minOf(a.length(), 8))
+            for (i in 0 until minOf(a.length(), 8)) {
+                val o = a.optJSONObject(i) ?: continue
+                val id = o.optString("id")
+                if (id.isEmpty() || id.length > 16 || out.any { it.id == id }) continue
+                out.add(MacDisplay(id, o.optString("name").take(60), o.optInt("w"), o.optInt("h")))
+            }
+            return out
+        }
 
     // ViewerActivity opened: stream to us, at our screen's size (the Mac sizes Extend to it).
     fun attach(h: WebHost, w: Int, hpx: Int) {
@@ -181,7 +205,11 @@ class Screen(core: Core) : Feature(core) {
         wantStart = false
         if (!viewing || sharing || !remote) return
         startedByUs = true
-        control(share = true, mode = pickMode())
+        // Opening again sends Mirror, and Mirror on the computer means the main screen.
+        // A screen already picked stays that screen. Extend (no displayId) still starts on Mirror.
+        val id = displayId
+        if (id.isNotEmpty() && displays.any { it.id == id }) control(share = true, displayId = id)
+        else control(share = true, mode = pickMode())
     }
 
     // Always Mirror to start with (the computer's screen as it is); Extend is a tap away in the viewer.
@@ -246,13 +274,22 @@ class Screen(core: Core) : Feature(core) {
     }
 
     // Start/stop the Mac's sharing, or switch Mirror/Extend (when the Mac allows it).
-    fun control(share: Boolean? = null, mode: String? = null, close: Boolean = false) {
+    // displayId mirrors that real display and does not switch Extend/Mirror by itself.
+    fun control(share: Boolean? = null, mode: String? = null, close: Boolean = false, displayId: String? = null) {
         val m = msg("screen.ctl")
         if (share != null) m.put("share", share)
         if (mode != null) m.put("mode", mode)
         if (close) m.put("close", true)
+        if (displayId != null) m.put("displayId", displayId)
         if (share == false) startedByUs = false
         core.send(m)
+    }
+
+    // Mirror one of the computer's real displays. Ownership matches Mirror: the viewer sets
+    // startedByUs when it opens and sharing is off; choosing a display does not take the session over.
+    fun pickDisplay(id: String) {
+        if (id.isEmpty() || displays.none { it.id == id }) return
+        control(share = true, displayId = id)
     }
 
     fun keyboard(on: Boolean) {
@@ -266,7 +303,7 @@ class Screen(core: Core) : Feature(core) {
         if (core.link.connected && sharing) control(share = false, close = true)
     }
 
-    // Mirror / Extend tapped in the viewer (for this time: the next one starts on Mirror again).
+    // Mirror / Extend tapped in the viewer.
     fun pick(mode: String) {
         control(share = true, mode = mode)
     }
