@@ -353,14 +353,24 @@ struct RemoteScreen: View {
             }
             core.remote.attach(h, mode: mode)
             if mode == "gamepad" { Orientation.landscape() }
-            UIApplication.shared.isIdleTimerDisabled = true
+            Awake.hold("remote", true)
         }
         .onDisappear {
             if let h = host { core.remote.detach(h); h.destroy() }
             host = nil
             Orientation.free()
-            UIApplication.shared.isIdleTimerDisabled = false
+            Awake.hold("remote", false)
         }
+    }
+}
+
+// The screen kept on while any of these asks for it (the viewer, the camera, the Remote, the Deck
+// and its page): one closing no longer lets the phone sleep under another still open.
+enum Awake {
+    private static var by = Set<String>()
+    static func hold(_ who: String, _ on: Bool) {
+        if on { by.insert(who) } else { by.remove(who) }
+        UIApplication.shared.isIdleTimerDisabled = !by.isEmpty
     }
 }
 
@@ -371,6 +381,8 @@ enum Orientation {
     static func landscape() { request(.landscape) }
     static func portrait() { request(.portrait) }
     static func free() { request(Device.isPad ? .all : .allButUpsideDown) }
+    // The window's size as it is now: the full Deck waits on it to turn before drawing its tiles.
+    static var size: CGSize { scene?.keyWindow?.bounds.size ?? scene?.coordinateSpace.bounds.size ?? .zero }
     // The app's allowed orientations (AppDelegate): what was last asked for.
     static private(set) var mask: UIInterfaceOrientationMask = Device.isPad ? .all : .allButUpsideDown
     static func toggle() {

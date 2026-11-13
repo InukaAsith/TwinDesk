@@ -312,6 +312,9 @@ fun DeckPage(core: Core, v: Int) {
     val d = core.deck
     val ctx = LocalContext.current
     val name = core.host?.name ?: ""
+    // The screen kept on here too, as in the full Deck (DeckActivity).
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(view) { view.keepScreenOn = true; onDispose { view.keepScreenOn = false } }
     PageHead(tr("Deck"), tr("Tiles that run shortcuts, media, sound, windows and more on {name}", "name" to name))
     if (d.layout == null || d.spaces.isEmpty()) {
         Text(tr("Waiting for {name}…", "name" to name), color = pal.muted)

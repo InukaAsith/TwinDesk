@@ -61,7 +61,7 @@ final class Screen: Feature {
         let px = UIScreen.main.nativeBounds.size
         core.send(msg("screen.policy", ["accept": true, "width": Int(max(px.width, px.height)), "height": Int(min(px.width, px.height))]))
         if state == nil { wantStart = true } else { startIfNeeded() }
-        UIApplication.shared.isIdleTimerDisabled = true
+        Awake.hold("viewer", true)
         core.changed()
     }
 
@@ -77,7 +77,7 @@ final class Screen: Feature {
         }
         startedByUs = false
         autoOpened = false
-        UIApplication.shared.isIdleTimerDisabled = false
+        Awake.hold("viewer", false)
         core.changed()
     }
 
