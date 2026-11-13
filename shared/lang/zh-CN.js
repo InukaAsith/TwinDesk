@@ -1314,6 +1314,8 @@
   "Take {name}’s": "接续 {name} 的内容",
   "Taking over…": "正在接管…",
   "Talk and listen on this computer": "在本机接听和通话",
+  "Not in the Microsoft Store version": "Microsoft Store 版本不支持",
+  "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "要通过蓝牙在 {me} 上接听和通话，需要使用 GitHub 上的 TwinDesk 安装程序。通话声音在 {phone} 上播放",
   "Talk and listen on {me}": "在 {me} 上接听和通话",
   "Tap Allow on the phone (“Allow USB debugging?”).": "请在手机上点击“允许”（“允许 USB 调试吗？”）。",
   "Tap Pair device with QR code.": "点击“使用二维码配对设备”。",

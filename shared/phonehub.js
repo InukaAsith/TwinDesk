@@ -61,9 +61,10 @@ const PAIR_POLL_MS = 3000;
 
 class PhoneHub extends EventEmitter {
   // audioLimit: what this computer can't do with the calls' sound, said under its switch (Windows).
-  constructor({ server, getSettings, save, audio, audioLimit, btSettings, send, choose, share, shareSheet }) {
+  // audioStore: the Microsoft Store's build, which has no calls' sound (Calls says so instead).
+  constructor({ server, getSettings, save, audio, audioLimit, audioStore, btSettings, send, choose, share, shareSheet }) {
     super();
-    Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', btSettings: btSettings || null, sendFiles: send || null, choose: choose || null, shareSheet: shareSheet || null });
+    Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', audioStore: !!audioStore, btSettings: btSettings || null, sendFiles: send || null, choose: choose || null, shareSheet: shareSheet || null });
     this.pairTimer = null; // looking for the phone's pairing (watchPair)
     this.share = null;
     if (share) {
@@ -478,7 +479,7 @@ class PhoneHub extends EventEmitter {
       connected: !!this.phone, name: this.phone ? this.phone.name : '',
       supported: !!this.state, // the phone app answered (an older one doesn't know these)
       perm: this.state, call: this.call, ended: this.ended, unread: this.unread, muted: this.muted,
-      audio: this.audio ? this.audio.view : null, canAudio: !!this.makeAudio, audioLimit: this.audioLimit,
+      audio: this.audio ? this.audio.view : null, canAudio: !!this.makeAudio, audioLimit: this.audioLimit, audioStore: this.audioStore,
       btSettings: !!this.btSettings, pairWatch: !!this.pairTimer, // pairing for the calls' sound: Open Bluetooth settings, looking for the phone
       share: this.share ? this.share.view : null,
       shareSheet: !!this.shareSheet, // Photos' Share (none on Linux)

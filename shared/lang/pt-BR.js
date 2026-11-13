@@ -1306,6 +1306,8 @@
   "Take {name}’s": "Pegar de {name}",
   "Taking over…": "Assumindo…",
   "Talk and listen on this computer": "Falar e ouvir neste computador",
+  "Not in the Microsoft Store version": "Não disponível na versão da Microsoft Store",
+  "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "Falar e ouvir em {me} por Bluetooth requer o instalador do TwinDesk do GitHub. As chamadas tocam em {phone}",
   "Talk and listen on {me}": "Falar e ouvir em {me}",
   "Tap Allow on the phone (“Allow USB debugging?”).": "Toque em Permitir no celular (“Permitir a depuração USB?”).",
   "Tap Pair device with QR code.": "Toque em Parear o dispositivo com um código QR.",

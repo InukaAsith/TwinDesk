@@ -401,7 +401,7 @@ class Kvm extends EventEmitter {
   // ---- owner: this Mac drives the PC ----
 
   _canDrive() {
-    return this.mode === 'home' && !!this.server.current && !!this.cfg.driveOther && this.linked && !this.paused;
+    return this.mode === 'home' && !!this.server.current && this.server.current.os !== P.OS.IOS && !!this.cfg.driveOther && this.linked && !this.paused; // an iPhone can't be driven
   }
 
   _take(fields) {
