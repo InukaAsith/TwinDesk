@@ -371,16 +371,20 @@ enum Orientation {
     static func landscape() { request(.landscape) }
     static func portrait() { request(.portrait) }
     static func free() { request(Device.isPad ? .all : .allButUpsideDown) }
+    // The app's allowed orientations (AppDelegate): what was last asked for.
+    static private(set) var mask: UIInterfaceOrientationMask = Device.isPad ? .all : .allButUpsideDown
     static func toggle() {
         let land = scene?.interfaceOrientation.isLandscape == true
         request(land ? .portrait : .landscape)
     }
 
-    private static func request(_ mask: UIInterfaceOrientationMask) {
+    // The allowed orientations change first (AppDelegate reads `mask`), then the window turns.
+    private static func request(_ want: UIInterfaceOrientationMask) {
+        mask = want
         guard let s = scene else { return }
         if #available(iOS 16.0, *) {
-            s.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
             s.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            s.requestGeometryUpdate(.iOS(interfaceOrientations: want)) { _ in }
         }
     }
 }

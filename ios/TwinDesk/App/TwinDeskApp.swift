@@ -12,6 +12,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if launchOptions?[.location] != nil { Core.shared.wake() }
         return true
     }
+
+    // What the app allows right now (Orientation in Pages.swift): the Deck and the gamepad held
+    // sideways even with Portrait Orientation Lock on, which a geometry request alone didn't do.
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Orientation.mask
+    }
 }
 
 @main
