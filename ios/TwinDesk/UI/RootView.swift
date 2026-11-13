@@ -193,24 +193,18 @@ struct RootView: View {
         if UIDevice.current.userInterfaceIdiom == .pad && width == .regular { split } else { stack }
     }
 
-    // iPhone: the tab bar (with a phone holding the session, only the tabs it can do).
-    // Search, as Android's: its own round button at the bar's right end (iOS 26 draws a tab with the
-    // search role that way; iOS 18 to 25 as the last tab), or none (Arrange › Search button, More's
-    // field stays). iOS 16 and 17: the last tab.
+    // iPhone: the tab bar (with a phone holding the session, only the tabs it can do), and Search
+    // as Android's: its own round button at the bar's right end, or none (Arrange › Search button;
+    // More's field stays). iOS 26: the system's bar, which draws a tab in the search role that way.
+    // iOS 16 to 25, whose bar is always the full width: TwinDesk's own bar, drawn as Android's.
     @ViewBuilder private var stack: some View {
         let _ = core.tick
         let _ = ui.navVersion
         let tabs = Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }
         let search = NavOrder.searchButton
-        let pick = Binding<PhoneTab>(get: { ui.tab == .search && !search ? .page(.overview) : ui.tab }, set: { t in
-            // A tab tapped again: back to its root.
-            if t == ui.tab { ui.paths[t] = [] }
-            ui.tab = t
-            if case .page(let p) = t { ui.page = p }
-        })
         Group {
-            if #available(iOS 18.0, *) {
-                TabView(selection: pick) {
+            if #available(iOS 26.0, *) {
+                TabView(selection: Binding<PhoneTab>(get: { ui.tab == .search && !search ? .page(.overview) : ui.tab }, set: select)) {
                     ForEach(tabs) { p in
                         Tab(p.tabTitle, systemImage: tabIcon(p), value: PhoneTab.page(p)) { pageStack(p) }
                     }
@@ -219,21 +213,30 @@ struct RootView: View {
                         Tab(tr("Search"), systemImage: "magnifyingglass", value: PhoneTab.search, role: .search) { searchStack }
                     }
                 }
+                .modifier(TabBarGlass())
             } else {
-                TabView(selection: pick) {
-                    ForEach(tabs) { p in
-                        pageStack(p).tabItem { Label(p.tabTitle, systemImage: tabIcon(p)) }.tag(PhoneTab.page(p))
+                // Only the open tab is drawn; each keeps its pages (AppUI's paths).
+                Group {
+                    switch ui.tab {
+                    case .page(let p) where tabs.contains(p): pageStack(p)
+                    case .more: moreStack(tabs)
+                    default: pageStack(.overview)
                     }
-                    moreStack(tabs).tabItem { Label(tr("More"), systemImage: "ellipsis") }.tag(PhoneTab.more)
-                    if search {
-                        searchStack.tabItem { Label(tr("Search"), systemImage: "magnifyingglass") }.tag(PhoneTab.search)
-                    }
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    OwnTabBar(tabs: tabs, current: ui.tab, search: search, icon: tabIcon, pick: select) { ui.searching = true }
                 }
             }
         }
-        .modifier(TabBarGlass())
         // A tab that's gone (a phone that can't do it): Overview.
         .onChange(of: tabs) { t in if case .page(let p) = ui.tab, !t.contains(p) { ui.tab = .page(.overview) } }
+    }
+
+    private func select(_ t: PhoneTab) {
+        // A tab tapped again: back to its root.
+        if t == ui.tab { ui.paths[t] = [] }
+        ui.tab = t
+        if case .page(let p) = t { ui.page = p }
     }
 
     private func pageStack(_ p: Page) -> some View {
@@ -640,4 +643,57 @@ struct PairSheet: View {
     }
 
     private func spaced(_ c: String) -> String { c.count == 6 ? "\(c.prefix(3)) \(c.suffix(3))" : c }
+}
+
+// iPhone's bar below iOS 26, as Android's: a rounded bar floating off the edges (line icons, the
+// selected one in a pill of the accent colour, labels under them) and the round Search button.
+private struct OwnTabBar: View {
+    let tabs: [Page]
+    let current: PhoneTab
+    let search: Bool
+    let icon: (Page) -> String
+    let pick: (PhoneTab) -> Void
+    let onSearch: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 0) {
+                ForEach(tabs) { p in item(p.tabTitle, icon(p), current == .page(p)) { pick(.page(p)) } }
+                item(tr("More"), "ellipsis", current == .more) { pick(.more) }
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 64)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 3)
+            if search {
+                Button(action: onSearch) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 20, weight: .semibold)).foregroundStyle(TDColor.text)
+                        .frame(width: 56, height: 56)
+                        .background(.regularMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 3)
+                .accessibilityLabel(tr("Search"))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 2)
+    }
+
+    private func item(_ label: String, _ symbol: String, _ on: Bool, _ go: @escaping () -> Void) -> some View {
+        Button(action: go) {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 19, weight: on ? .semibold : .regular))
+                    .foregroundStyle(on ? TDColor.accent : TDColor.muted)
+                    .frame(width: 52, height: 30)
+                    .background(on ? TDColor.accent.opacity(0.16) : .clear, in: Capsule())
+                Text(label).font(.system(size: 11, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                    .foregroundStyle(on ? TDColor.text : TDColor.muted)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
 }
