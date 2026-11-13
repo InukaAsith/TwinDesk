@@ -153,8 +153,8 @@ struct DeckScreen: View {
     @State private var step = (n: 0, dir: 0)
     @State private var flash: String?
     // Showing the way to the window space: the first time a short picture that must be followed (then
-    // a tour of it); after that a nudge and a tab each time the Deck opens elsewhere, until the person
-    // has gone there themselves once.
+    // a tour of it); after that, as on Android, a nudge and a tab each time the Deck opens elsewhere,
+    // there until the first touch.
     @State private var intro = !DeckTourStore.done("intro")
     @State private var tour = !DeckTourStore.done("windows")
     @State private var hint = false
@@ -208,6 +208,8 @@ struct DeckScreen: View {
                     .transition(.opacity)
             }
         }
+        // The first touch anywhere (a tile, a swipe, the tab itself) puts the hint away.
+        .simultaneousGesture(TapGesture().onEnded { endHint() })
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
@@ -223,19 +225,17 @@ struct DeckScreen: View {
         .onChange(of: core.deck.portrait) { p in if p { Orientation.portrait() } else { Orientation.landscape() } }
         .task(id: win?.str("id") ?? "") {
             // Each opening away from the window space: the tiles nudge towards it twice, a tab shows the swipe.
-            guard win != nil, !intro, !hint, !DeckTourStore.done("reached") else { return }
+            guard win != nil, !intro, !hint else { return }
             let here = core.deck.spaces.first { $0.str("id") == spaceId } ?? core.deck.spaces.first
             guard here?.str("kind") != "windows" else { return }
             try? await Task.sleep(nanoseconds: 350_000_000)
             withAnimation(.easeOut(duration: 0.2)) { hint = true }
-            for _ in 0..<2 {
+            for _ in 0..<2 where hint {
                 withAnimation(.easeOut(duration: 0.26)) { nudge = 28 }
                 try? await Task.sleep(nanoseconds: 260_000_000)
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) { nudge = 0 }
                 try? await Task.sleep(nanoseconds: 450_000_000)
             }
-            try? await Task.sleep(nanoseconds: 3_200_000_000)
-            withAnimation { hint = false }
         }
         .onChange(of: flash) { f in
             guard f != nil else { return }
@@ -250,6 +250,10 @@ struct DeckScreen: View {
     }
 
     private var win: JSON? { core.deck.spaces.first { $0.str("kind") == "windows" } }
+    private func endHint() {
+        guard hint else { return }
+        withAnimation(.easeOut(duration: 0.2)) { hint = false; nudge = 0 }
+    }
     private func finishIntro(_ w: JSON) {
         DeckTourStore.set("intro")
         withAnimation { intro = false }
@@ -259,12 +263,12 @@ struct DeckScreen: View {
     // Reaching the window space on one's own (a swipe, the tab, a tile) ends the nudge for good.
     private func go(to id: String, own: Bool = true) {
         guard let s = core.deck.spaces.first(where: { $0.str("id") == id }) else { return }
-        if own && s.str("kind") == "windows" { DeckTourStore.set("reached") }
         withAnimation(.easeOut(duration: 0.2)) { spaceId = id }
         flash = s.str("name", max: 30)
     }
     private func swipe(_ dx: Int, _ dy: Int) {
         let ss = core.deck.spaces
+        endHint()
         if intro, let w = win { if (core.deck.portrait ? dy : dx) != 0 { finishIntro(w) }; return }
         let i = ss.firstIndex { $0.str("id") == (spaceId.isEmpty ? ss.first?.str("id") ?? "" : spaceId) } ?? 0
         // Along the screen's long side the next space, across it the next page; round and round.
@@ -308,7 +312,7 @@ struct DeckFingers: View {
 }
 
 // Each time the full Deck opens away from the window space: a tab at that edge shows the three-finger
-// swipe, then fades; a tap on it goes there (the tiles nudge towards it meanwhile, DeckScreen).
+// swipe until the first touch; a tap on it goes there (the tiles nudge towards it meanwhile, DeckScreen).
 struct DeckSwipeHint: View {
     let name: String, portrait: Bool
     let go: () -> Void

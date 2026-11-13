@@ -24,6 +24,15 @@ enum NavOrder {
         return maxBar
     }
 
+    // Once: a bar saved at three while Search took the fourth place, with Search off now, gets it back.
+    static func migrate() {
+        let k = "nav.bar4"
+        guard !UserDefaults.standard.bool(forKey: k) else { return }
+        UserDefaults.standard.set(true, forKey: k)
+        guard !searchButton, barLimit(search: false) > barLimit(search: true), let s = load(), s.bar == barLimit(search: true) else { return }
+        if let d = try? JSONEncoder().encode(Saved(order: s.order, bar: s.bar + 1)) { UserDefaults.standard.set(d, forKey: key) }
+    }
+
     static func load() -> Saved? {
         guard let d = UserDefaults.standard.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d), !s.order.isEmpty else { return nil }
         return Saved(order: s.order, bar: min(max(s.bar, minBar), maxBar))
@@ -82,7 +91,8 @@ struct ArrangeSheet: View {
                         HStack { Text(tr("In the bar")); Spacer(); Text("\(bar)").foregroundStyle(.secondary) }
                     }
                     Toggle(tr("Search button"), isOn: $search)
-                        .onChange(of: search) { on in bar = min(bar, NavOrder.barLimit(search: on)) }
+                        // Search off: its place in the bar goes to one more page; on: the bar gives one back.
+                        .onChange(of: search) { on in let d = NavOrder.barLimit(search: false) - NavOrder.barLimit(search: true); bar = min(max(bar + (on ? -d : d), NavOrder.minBar), NavOrder.barLimit(search: on)) }
                 } footer: { Text(tr("The first ones are in the bottom bar, the rest under More.")) }
                 Section {
                     ForEach(Array(pages.enumerated()), id: \.element) { i, p in

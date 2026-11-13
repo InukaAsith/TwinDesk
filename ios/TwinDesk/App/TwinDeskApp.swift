@@ -6,6 +6,7 @@ import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        NavOrder.migrate()
         Notifier.shared.setUp()
         Core.shared.start()
         // Relaunched in the background by a significant location change: straight back on.
@@ -45,6 +46,7 @@ struct TwinDeskApp: App {
                 core.clip.appBecameActive()
                 core.hub.appBecameActive()
                 core.files.importInbox()
+                Orientation.reapply() // the Deck or the gamepad still sideways, laid out whole
             case .background:
                 core.setFront(false)
                 Background.shared.enteredBackground()
