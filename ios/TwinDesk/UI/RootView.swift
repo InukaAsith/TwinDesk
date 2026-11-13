@@ -200,8 +200,9 @@ struct RootView: View {
     @ViewBuilder private var stack: some View {
         let _ = core.tick
         let _ = ui.navVersion
-        let tabs = Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }
         let search = NavOrder.searchButton
+        // iOS 26's bar folds anything past five (Search counted) into a More of its own: no more than fit.
+        let tabs = Array(Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }.prefix(NavOrder.barLimit(search: search)))
         Group {
             if #available(iOS 26.0, *) {
                 TabView(selection: Binding<PhoneTab>(get: { ui.tab == .search && !search ? .page(.overview) : ui.tab }, set: select)) {

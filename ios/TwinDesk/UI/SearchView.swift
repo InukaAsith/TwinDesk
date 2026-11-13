@@ -17,6 +17,13 @@ enum NavOrder {
     static let fixed: [Page] = [.general, .about]
     struct Saved: Codable { var order: [String]; var bar: Int }
 
+    // How many pages the bar can hold beside More (and Search). iOS 26's system bar takes five
+    // tabs, Search one of them, before it makes a More of its own; TwinDesk's own bar, all five.
+    static func barLimit(search: Bool) -> Int {
+        if #available(iOS 26.0, *) { return search ? 3 : 4 }
+        return maxBar
+    }
+
     static func load() -> Saved? {
         guard let d = UserDefaults.standard.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d), !s.order.isEmpty else { return nil }
         return Saved(order: s.order, bar: min(max(s.bar, minBar), maxBar))
@@ -64,17 +71,18 @@ extension Page {
 struct ArrangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var pages: [Page] = NavOrder.ordered()
-    @State private var bar: Int = NavOrder.load()?.bar ?? Page.bottom.count
+    @State private var bar: Int = min(NavOrder.load()?.bar ?? Page.bottom.count, NavOrder.barLimit(search: NavOrder.searchButton))
     @State private var search: Bool = NavOrder.searchButton
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Stepper(value: $bar, in: NavOrder.minBar...NavOrder.maxBar) {
+                    Stepper(value: $bar, in: NavOrder.minBar...NavOrder.barLimit(search: search)) {
                         HStack { Text(tr("In the bar")); Spacer(); Text("\(bar)").foregroundStyle(.secondary) }
                     }
                     Toggle(tr("Search button"), isOn: $search)
+                        .onChange(of: search) { on in bar = min(bar, NavOrder.barLimit(search: on)) }
                 } footer: { Text(tr("The first ones are in the bottom bar, the rest under More.")) }
                 Section {
                     ForEach(Array(pages.enumerated()), id: \.element) { i, p in
