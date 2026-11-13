@@ -24,6 +24,8 @@ class Clipboard extends EventEmitter {
     this.getSettings = getSettings;
     this.lastSent = null;
     this.lastReceived = null;
+    this.readSequence = 0;
+    this.receiving = 0;
     this.concealed = false; // last helper report for the current item
     this.remote = false; // … and whether it came from another Apple device (Universal Clipboard, #211)
     this.peerAccepts = true; // the PC's last clip.policy
@@ -44,12 +46,14 @@ class Clipboard extends EventEmitter {
     });
 
     server.on('client', () => {
+      ++this.readSequence;
       this.peerAccepts = true;
       this.images.reset();
       this.sendPolicy();
       this._watch();
     });
     server.on('closed', () => {
+      ++this.readSequence;
       this.images.reset();
       this._watch();
     });
@@ -115,27 +119,42 @@ class Clipboard extends EventEmitter {
   async _onClip(msg) {
     const c = this.cfg;
     if (!c.enabled || !c.receive || !P.clipAllowed(msg.text)) return;
-    this.images.text();
-    this.lastReceived = msg.text;
-    // A Universal Clipboard item isn't read to compare: reading it fetches it from the other device.
-    if (this.remote || (await readText()) !== msg.text) clipboard.writeText(msg.text);
-    this._remember('in', msg.text);
-    this.emit('change');
+    const sequence = ++this.readSequence;
+    const peer = this.server.current;
+    ++this.receiving;
+    try {
+      // A Universal Clipboard item isn't read to compare: reading it fetches it from the other device.
+      const write = this.remote || (await readText()) !== msg.text;
+      if (sequence !== this.readSequence || peer !== this.server.current || !this.cfg.enabled || !this.cfg.receive) return;
+      if (write) await clipboard.writeText(msg.text);
+      if (sequence !== this.readSequence || peer !== this.server.current) return;
+      this.images.text();
+      this.lastSent = null;
+      this.lastReceived = msg.text;
+      this._remember('in', msg.text);
+      this.emit('change');
+    } finally {
+      --this.receiving;
+      if (sequence === this.readSequence) ++this.readSequence;
+    }
   }
 
   // Send our clipboard if allowed and changed since it was last sent or received: its text, else
   // its picture (Clipboard › Pictures).
   async sendIfChanged(why) {
     const c = this.cfg;
-    if (!c.enabled || !c.send || !this.server.current) return;
+    if (!c.enabled || !c.send || !this.server.current || this.receiving) return;
     if (!this.peerAccepts) return this._skip(`${this.server.current ? this.server.current.name : 'the other computer'} doesn’t take the clipboard`);
     // A Universal Clipboard copy from another Apple device: not read the moment it lands (that
     // fetches it from there, with macOS's "Pasting from …" dialog, #211); it goes on the switch.
     if (why === 'instant' && this.remote) return;
+    const sequence = ++this.readSequence, peer = this.server.current;
+    const valid = () => sequence === this.readSequence && peer === this.server.current && !this.receiving && this.cfg.enabled && this.cfg.send && this.peerAccepts;
     const text = await readText();
     // Files copied in Finder: the clipboard also holds their names and icon, which aren't the copy.
     // Files go with the Files tab's shortcuts (fclip.js).
     const src = await this.helper.request('fileSource').catch(() => ({}));
+    if (!valid()) return;
     if (src.files && src.files.length) {
       this.lastSent = text;
       const f = this.getSettings().files;
@@ -147,6 +166,7 @@ class Clipboard extends EventEmitter {
     if (c.skipConcealed) {
       // The watcher's flag may be stale for a request; ask the helper about the current item.
       const info = why === 'instant' ? { concealed: this.concealed } : await this.helper.request('clipboardInfo').catch(() => ({}));
+      if (!valid()) return;
       if (info.concealed) {
         this.lastSent = text; // don't retry this item
         return this._skip('skipped a password (concealed item)');
@@ -157,6 +177,7 @@ class Clipboard extends EventEmitter {
       return this._skip(`skipped ${Math.round(Buffer.byteLength(text, 'utf8') / 1024)} KB (over ${c.maxKB} KB)`);
     }
     this.lastSent = text;
+    this.lastReceived = null;
     this.images.text();
     this.server.sendToClient({ t: P.T.CLIP, text });
     this._remember('out', text);
