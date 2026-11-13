@@ -132,7 +132,7 @@ class Stream extends EventEmitter {
   async _source() {
     const target = this.displays.target();
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
-    const src = (target && sources.find((s) => s.display_id === String(target.id))) || sources[0];
+    const src = target ? sources.find((s) => s.display_id === String(target.id)) : sources[0];
     if (!src) throw new Error('no screens (Screen Recording permission?)');
     return src;
   }

@@ -1127,7 +1127,8 @@ private fun ScreenPage(core: Core, v: Int) {
                 SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
                     val modes = listOf("mirror" to tr("Mirror"), "extend" to tr("Extend"))
                     modes.forEachIndexed { i, (m, label) ->
-                        SegmentedButton(selected = sharing && (mode == m || (m == "mirror" && mode == "custom" && displayId.isNotEmpty())), onClick = { s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
+                        val selected = sharing && (mode == m || (m == "mirror" && mode == "custom" && displayId.isNotEmpty()))
+                        SegmentedButton(selected = selected, onClick = { if (!selected) s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
                     }
                 }
             }
