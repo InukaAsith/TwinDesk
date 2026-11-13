@@ -888,8 +888,9 @@ class PhoneBridge extends EventEmitter {
       if (!this.kvm || this.kvm.mouse === false) return;
       if (this.ctl === this.input) {
         const d = this._display();
-        if (m.phase === 'begin') this.nativePinchBlocked = false;
-        if (!this.nativePinchBlocked && !this.kvm.buttons && d && Modes.caps(this.phone.info).has('input.pinch') && m.phase !== 'end') this.input.pinch(this.kvm.x, this.kvm.y, d.w, d.h, Number(m.v));
+        if (m.phase === 'begin') { this.nativePinchBlocked = false; this.input.cancelPinch(); }
+        if (m.phase === 'end') this.input.finishPinch();
+        else if (!this.nativePinchBlocked && !this.kvm.buttons && d && Modes.caps(this.phone.info).has('input.pinch')) this.input.pinch(this.kvm.x, this.kvm.y, d.w, d.h, Number(m.v));
         return;
       }
       if (this.input) this.input.cancelPinch();
