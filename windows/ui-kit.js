@@ -141,6 +141,27 @@ const UI = {
     return b;
   },
 
+  customSize(onApply) {
+    const fields = ['Width', 'Height'].map((label) => {
+      const input = UI.el('input', { type: 'number', min: 320, max: 7680, step: 1, required: true, inputMode: 'numeric' });
+      return { input, el: UI.el('label', {}, [UI.el('span', { text: I18n.t(label) }), input]) };
+    });
+    const apply = UI.button(I18n.t('Apply'), () => {
+      for (const { input } of fields) if (!input.reportValidity()) return;
+      onApply(fields.map(({ input }) => input.valueAsNumber).join('x'));
+    }, 'small');
+    for (const { input } of fields) input.onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); apply.click(); }
+    };
+    return {
+      el: UI.el('div', { class: 'custom-screen-size' }, [fields[0].el, UI.el('span', { text: '×', attrs: { 'aria-hidden': 'true' } }), fields[1].el, apply]),
+      set(size) {
+        if (fields.some(({ input }) => document.activeElement === input)) return;
+        fields.forEach(({ input }, i) => { input.value = size[i]; });
+      },
+    };
+  },
+
   // A row: label (+ hint) on the left, controls on the right. Returns the row with .hint/.label.
   // Labels and hints may name the computers: {me} (this PC's name), {name} / {Name} (the other
   // one's, or "the other computer"); app.js fills them in again whenever a name changes.
