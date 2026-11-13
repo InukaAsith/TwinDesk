@@ -26,9 +26,6 @@ class PhoneInput {
     this.pinchAcc = null;
     this.pinching = false;
     this.pinchIdle = null;
-    this.pinchPending = 0;
-    this.pinchEngaged = false;
-    this.pinchEnding = false;
   }
 
   mouse(action, x, y, w, h, actionButton, buttons) {
@@ -58,11 +55,6 @@ class PhoneInput {
 
   pinch(x, y, w, h, v) {
     if (!Number.isFinite(v) || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0 || !v) return;
-    if (!this.pinchEngaged) {
-      this.pinchPending += v;
-      if (Math.abs(this.pinchPending) < 0.04) return;
-      v = this.pinchPending; this.pinchPending = 0; this.pinchEngaged = true;
-    }
     this.pinching = true;
     clearTimeout(this.pinchIdle);
     this.pinchIdle = setTimeout(() => { this.pinching = false; this.pinchIdle = null; }, 500);
@@ -72,17 +64,7 @@ class PhoneInput {
     acc.timer = setTimeout(() => {
       this.pinchAcc = null;
       if (acc.v && !this.closed) this.send({ t: P.T.PHONE_IN, a: 'z', x: acc.x, y: acc.y, v: acc.v });
-      if (this.pinchEnding) { this.pinching = false; this.pinchEnding = false; }
     }, 180);
-  }
-
-  finishPinch() {
-    this.pinchPending = 0;
-    this.pinchEngaged = false;
-    clearTimeout(this.pinchIdle);
-    this.pinchIdle = null;
-    this.pinchEnding = !!this.pinchAcc;
-    if (!this.pinchEnding) this.pinching = false;
   }
 
   cancelPinch() {
@@ -91,9 +73,6 @@ class PhoneInput {
     clearTimeout(this.pinchIdle);
     this.pinchIdle = null;
     this.pinching = false;
-    this.pinchPending = 0;
-    this.pinchEngaged = false;
-    this.pinchEnding = false;
   }
 
   key(action, keycode, meta = 0) {
