@@ -66,6 +66,15 @@ test('received clipboard text is recorded without echoing it to the peer', async
   await f.clip._onClip({ text: 'remote' }); await f.clip.sendIfChanged();
   assert.deepEqual(writes, ['remote']); assert.equal(f.clip.history[0].dir, 'in'); assert.equal(f.sent.length, 0);
 });
+test('copies can be repeated after a different copy crosses in either direction', async () => {
+  const f = fixture();
+  read = () => 'A'; await f.clip.sendIfChanged();
+  await f.clip._onClip({ text: 'B' }); read = () => 'B'; await f.clip.sendIfChanged();
+  read = () => 'A'; await f.clip.sendIfChanged();
+  await f.clip._onClip({ text: 'B' }); read = () => 'C'; await f.clip.sendIfChanged();
+  read = () => 'B'; await f.clip.sendIfChanged();
+  assert.deepEqual(f.sent.filter(m => m.t === P.T.CLIP).map(m => m.text), ['A', 'A', 'C', 'B']);
+});
 
 function pollFixture(t) {
   const f = fixture(), original = global.setInterval;
