@@ -30,6 +30,7 @@ const { KeyState, ANDROID } = require('../android-keys');
 const chat = require('../../shared/phonechat.js');
 const { uhidKey } = require('../../shared/uhidkbd.js');
 const { PhoneInput } = require('../../shared/phoneinput.js');
+const { PhonePinch } = require('../../shared/phonepinch.js');
 const Modes = require('../../shared/phonemodes.js');
 const { NativeScreen } = require('../../shared/nativescreen.js');
 
@@ -281,6 +282,7 @@ class PhoneBridge extends EventEmitter {
       if (usb && usb !== this.serial) {
         // The cable was plugged in: move onto it (windows opened from now on use it too).
         console.log(`[phone] moving onto the USB cable (${usb})`);
+        if (this.pinch) this.pinch.cancel();
         this.control.stop();
         this.control = null;
       } else {
@@ -595,6 +597,12 @@ class PhoneBridge extends EventEmitter {
   }
 
   handle(m) {
+    if ((this.pinch?.active || this.input?.pinching) && (m.t === T.K_MOVE || m.t === T.K_WHEEL)) return;
+    if ([T.K_DOWN, T.K_UP, T.K_KEY_DOWN, T.K_KEY_UP, T.KVM_TAKE, T.KVM_RELEASE].includes(m.t)) {
+      if (this.pinch) this.pinch.cancel();
+      if (this.input) this.input.cancelPinch();
+      this.nativePinchBlocked = true;
+    }
     switch (m.t) {
       case T.KVM_TAKE: return this._take(m);
       case T.KVM_RELEASE: return this._kvmEnd(false);
@@ -796,8 +804,10 @@ class PhoneBridge extends EventEmitter {
   }
 
   _kvmEnd(tellKvm) {
+    if (this.pinch) this.pinch.cancel();
     const k = this.kvm;
     if (!k) return;
+    this.input.stop();
     const d = this._display();
     if (k.buttons && d && this.ctl) this.ctl.mouse(ACTION.UP, k.x, k.y, d.w, d.h, k.buttons, 0);
     // The pointer leaves: without a hover exit Android keeps a mouse hovering where it was.
@@ -874,9 +884,21 @@ class PhoneBridge extends EventEmitter {
   }
 
   _gesture(m) {
+    if (m.g === 'zoom') {
+      if (!this.kvm || this.kvm.mouse === false) return;
+      if (this.ctl === this.input) {
+        const d = this._display();
+        if (m.phase === 'begin') this.nativePinchBlocked = false;
+        if (!this.nativePinchBlocked && !this.kvm.buttons && d && Modes.caps(this.phone.info).has('input.pinch') && m.phase !== 'end') this.input.pinch(this.kvm.x, this.kvm.y, d.w, d.h, Number(m.v));
+        return;
+      }
+      if (this.input) this.input.cancelPinch();
+      if (!this.pinch) this.pinch = new PhonePinch();
+      return this.pinch.gesture(this.ctl, this._display(), this.kvm, m);
+    }
     if (!this.ctl || m.phase === 'begin' || m.phase === 'change') return;
     const key = { back: ANDROID.BACK, overview: ANDROID.APP_SWITCH, appWindows: ANDROID.APP_SWITCH, desktop: ANDROID.HOME, launcher: ANDROID.ALL_APPS }[m.g];
-    if (key) this.ctl.tap(key);
+    if (key) { if (this.pinch) this.pinch.cancel(); this.ctl.tap(key); }
   }
 
   // ---- windows (phoneview.js) ----

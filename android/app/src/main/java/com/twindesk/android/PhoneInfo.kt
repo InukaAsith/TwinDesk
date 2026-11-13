@@ -120,7 +120,7 @@ class PhoneInfo(core: Core) : Feature(core) {
                 "release" to Build.VERSION.RELEASE, "sdk" to Build.VERSION.SDK_INT, "battery" to battery, "charging" to charging,
                 "colors" to jsonArray(colors()), "display" to display(),
                 // This app's version and what it can do that older ones can't (the computer picks by them).
-                "app" to BuildConfig.VERSION_NAME, "caps" to jsonArray(listOf("mirror.native")),
+                "app" to BuildConfig.VERSION_NAME, "caps" to jsonArray(listOf("mirror.native") + if (BuildConfig.ACCESSIBILITY) listOf("input.pinch") else emptyList()),
             )
             val key = m.toString()
             if (withWallpaper && !core.link.ble) wallpaperImage()?.let { m.put("wallpaper", it) } // too big for Bluetooth
