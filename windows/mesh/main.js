@@ -781,10 +781,12 @@ function setupNet() {
     if (!peerApps.view().open && !screen.watching()) net.release('apps');
     if (!(phone && phone.views && phone.views.list().length) && !pendingView) net.release('phone');
     if (!smb.drive && !smbWait) net.release('smb');
-    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => net.onGroup }));
+    useBleInput(settings.net.bleInput === true); // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js)
+    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !settings.net.bleInput, current: () => link.current, onGroup: () => net.onGroup }));
     inviteIos();
     const near = link.snapshot().link.state !== 'connected' && !link.hosting && !bleOff;
-    bleGuest.scan(near && settings.net.blePc); // looking for a host only while there's no session
+    // looking for a host only while there's no session, or, with mouse and keyboard over Bluetooth, for the hosts it rides to
+    bleGuest.scan((near || settings.net.bleInput === true) && settings.net.blePc);
     if (blePhones) blePhones.scan(near && settings.net.ble); // … and for phones
   }, 2000);
 }
@@ -805,6 +807,23 @@ function inviteIos() {
     bleHost.invite(g.id);
   }
 }
+// Cursor › Mouse and keyboard over Bluetooth (#158): shared/bleinput.js only while it's on, for every
+// session: the ones we host (server.js send) and the ones we dialled (links.js; each one near over
+// Bluetooth connects again through it, then moves to the network and keeps both).
+// Called every tick: the server may start after the switch was read, and a link that came up on the
+// network before its host was seen over Bluetooth tries it then (links.js, at most every few minutes).
+let bleInputOn = false;
+function useBleInput(on) {
+  const m = on ? require('../../shared/bleinput.js') : null;
+  if (hub && hub.server) hub.server.bleInput = m;
+  if (!links) return;
+  if (bleInputOn !== !!on) {
+    bleInputOn = !!on;
+    console.log(`[ble] mouse and keyboard over Bluetooth ${on ? 'on' : 'off'}`);
+    links.setBleInput(m); // just turned on: every link near over Bluetooth now
+  } else if (on) links.bleAgain();
+}
+
 // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
 // blepolicy.js wifiQuiet): no advertising, scanning or links, its Bluetooth fallback closed with
 // them; back as it was when the session ends.
@@ -822,7 +841,8 @@ function applyQuiet(off) {
 
 // Bluetooth on or off (General), or the helper restarted.
 function applyNet() {
-  if (!settings.net.bleWifiOff) applyQuiet(false);
+  if (!settings.net.bleWifiOff || settings.net.bleInput) applyQuiet(false);
+  useBleInput(settings.net.bleInput === true);
   if (bleHost) bleHost.apply();
   if (bleGuest && !settings.net.blePc) bleGuest.scan(false);
   if (blePhones && !settings.net.ble) blePhones.stop();

@@ -15,6 +15,7 @@ const T = P.T;
 // A host without `os` is an older Mac.
 const osOf = (o) => (Object.values(P.OS).includes(o) ? o : P.OS.MAC);
 const HELLO_TIMEOUT_MS = P.HELLO_TIMEOUT_MS; // no `welcome` this long after hello = retry
+const BLE_AGAIN_MS = 5 * 60 * 1000; // mouse and keyboard over Bluetooth: a session on the network alone tries Bluetooth again at most this often
 const KEEPALIVE_TICK_MS = 250; // how often the keep-alive decides whether to ping
 const RESUME_RETRY_MS = 5000; // a failed move to the network: try again after this
 const isBle = (a) => String(a || '').startsWith('ble:');
@@ -43,6 +44,7 @@ class Link {
     this.store = opts.store;
     this.resolveAddress = opts.resolveAddress;
     this.ble = opts.ble || null;
+    this.bleInput = null; // shared/bleinput.js while Cursor › Mouse and keyboard over Bluetooth is on (links.js setBleInput)
     this.transport = 'ip'; // the session's socket: 'ip' | 'ble'
     this.alt = null; // its other socket after a move (the fallback)
     this.pending = null; // a socket moving the session (hello {resume})
@@ -84,9 +86,22 @@ class Link {
 
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    Quiet.sent(this.ws, obj);
-    this.ws.send(JSON.stringify(obj));
-    this.lastTx = this.ws.lastTx = Date.now();
+    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
+    const ws = this.bleInput ? this.bleInput.route(this.ws, this.alt, obj) : this.ws;
+    Quiet.sent(ws, obj);
+    ws.send(JSON.stringify(obj));
+    this.lastTx = ws.lastTx = Date.now();
+    return true;
+  }
+
+  // Mouse and keyboard over Bluetooth just went on: a session on the network alone, with the host
+  // near over Bluetooth, starts again through it (then moves to the network), so it has both.
+  bleAgain() {
+    if (this.destroyed || !this.authed || this.transport !== 'ip' || this.alt || !this.pairing || !this.ble || !this.ble.get(this.pairing.macId)) return false;
+    if (Date.now() - (this.bleAgainAt || 0) < BLE_AGAIN_MS || Date.now() - (this.bleFailAt || 0) < BLE_AGAIN_MS) return false; // tried, or its pipe failed, a little while ago (0: just turned on)
+    this.bleAgainAt = Date.now();
+    console.log(`[link] ${this.pairing.macName || this.pairing.macId}: mouse and keyboard over Bluetooth, connecting again through it`);
+    this._connect('session');
     return true;
   }
 
@@ -196,7 +211,10 @@ class Link {
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
     const hostId = mode === 'pair' ? target.id : target.macId;
     const near = this.ble && hostId && this.ble.get(hostId);
-    const viaBle = isBle(target.address) || (mode === 'session' && near && !this.resolveAddress(hostId));
+    // Mouse and keyboard over Bluetooth (shared/bleinput.js): through it first even on the same network,
+    // so the session keeps it beside the network one once it moves there.
+    const viaBle = isBle(target.address) || (mode === 'session' && near && (!this.resolveAddress(hostId)
+      || (!!this.bleInput && Date.now() - (this.bleFailAt || 0) > BLE_AGAIN_MS))); // its pipe failed: the network a while
     if (!viaBle) return this._open(target.address, target.port, 'ip');
     if (!near) {
       this.lastError = '{Name} isn’t nearby';
@@ -207,6 +225,7 @@ class Link {
       if (seq === this.seq) this._open('127.0.0.1', port, 'ble');
     }, (e) => {
       if (seq !== this.seq) return;
+      this.bleFailAt = Date.now();
       this.lastError = e.message;
       this._onClose();
     });

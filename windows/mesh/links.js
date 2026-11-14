@@ -34,6 +34,7 @@ class LinkManager extends EventEmitter {
     this.hostPairing = hostPairing;
     this.resolveAddress = resolveAddress;
     this.inboundWaitMs = inboundWaitMs;
+    this.bleInput = null; // shared/bleinput.js while it's on (setBleInput)
     this.ble = null; // BleGuest (blepipe.js), set by setBle(): a host not on this network, near over Bluetooth
     this.links = new Map(); // macId -> Link
     this.pairLink = null; // the Link of the pairing in progress (not yet a host)
@@ -198,6 +199,24 @@ class LinkManager extends EventEmitter {
     for (const link of this.links.values()) link.ble = ble;
   }
 
+  // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js, null: off), for every link now and later.
+  // Turned on: a link on the network alone, with its host near over Bluetooth, connects again through it.
+  setBleInput(m) {
+    this.bleInput = m || null;
+    for (const link of this.links.values()) {
+      link.bleInput = this.bleInput;
+      link.bleAgainAt = 0;
+    }
+    this.bleAgain();
+  }
+
+  // While it's on (main.js, every tick): each link on the network alone whose host is near over Bluetooth
+  // connects again through it, once per BLE_AGAIN_MS (Link.bleAgain), so a pipe that fails doesn't loop.
+  bleAgain() {
+    if (!this.bleInput) return;
+    for (const link of this.links.values()) link.bleAgain();
+  }
+
   _newLink(entry) {
     let link = null;
     link = new Link({
@@ -213,6 +232,7 @@ class LinkManager extends EventEmitter {
         clear: () => this._drop(link),
       },
     });
+    link.bleInput = this.bleInput;
     link.on('welcome', (msg) => this.emit('welcome', link, msg));
     link.on('closed', (msg) => this.emit('closed', link, msg));
     link.onState(() => this.emit('change', link));

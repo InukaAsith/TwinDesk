@@ -217,6 +217,10 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .pair-pop .hint { color: var(--muted); font-size: 12px; }
 .pair-pop .banner-actions { justify-content: flex-end; }
 .pair-pop:not([hidden]) { animation: pop-in 0.3s var(--spring) both; }
+/* A yes/no popup before a switch that needs one (shared/mesh-intro.js ask: Cursor › Mouse and keyboard over Bluetooth). */
+.mesh-pop { border-color: #5e5ce6; }
+.mesh-pop .pill { margin-left: 4px; vertical-align: 2px; }
+.mesh-pop p { margin: 8px 0; }
 @keyframes pop-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 
 /* Wireless debugging over Bluetooth (UI.adbBle): greyed out, it says why. */
