@@ -148,7 +148,7 @@ let sound = null;
 let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
 let rezume = null; // ReZume (shared/rezume.js), only once it's turned on, and only with one phone (shared/rezume-solo.js)
 let rezumeShelf = null; // … its notification and taskbar button (shared/rezume-shelf.js)
-let rzSolo = null; // shared/rezume-solo.js: the phone while it is the only device connected
+let rzSolo = null; // shared/rezume-solo.js: the device ReZume is with (picked on its page; a phone alone without a pick)
 let camShare = null; // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js)
 let vcam = null; // Camera: the running camera's picture, to the tab and the virtual camera (shared/vcam.js, ../vcam.js)
 let pcScreen = null;
@@ -225,7 +225,11 @@ function start() {
   links = new LinkManager({ device, resolveAddress: (macId) => discovery.get(macId) });
   mesh = new Mesh({ selfId: device.id });
   hub = new Hub({ device, links, mesh });
-  rzSolo = require('../../shared/rezume-solo.js').soloLink({ bus: hub.bus, sessions: hub.sessions });
+  // ReZume with one device of the mesh, picked on the ReZume page and the same on both (settings.rezume.with).
+  rzSolo = require('../../shared/rezume-solo.js').soloLink({ bus: hub.bus, sessions: hub.sessions, partner: {
+    get: () => settings.rezume.with,
+    set: (v) => { settings.rezume.with = v; saveSettings(); pushState(); },
+  } });
   // ReZume off here (not loaded): still answer the phone's policy, so it shows ReZume as off
   hub.bus.on(P.T.RZ_POLICY, (m, from) => { if (!rezume && from && from === rzSolo.id()) hub.bus.send(from, { t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
   link = hub.facade;
@@ -388,6 +392,7 @@ function start() {
   });
   fileRecv.onBatch = (b) => {
     liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerName() }) : '');
+    if (rezume && rezume.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
   };
@@ -439,7 +444,7 @@ function start() {
   if (settings.drive.on) loadDrive();
   const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
     checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
@@ -781,10 +786,12 @@ function setupNet() {
     if (!peerApps.view().open && !screen.watching()) net.release('apps');
     if (!(phone && phone.views && phone.views.list().length) && !pendingView) net.release('phone');
     if (!smb.drive && !smbWait) net.release('smb');
-    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff, current: () => link.current, onGroup: () => net.onGroup }));
+    useBleInput(settings.net.bleInput === true); // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js)
+    applyQuiet(bleQuiet({ on: settings.net.bleWifiOff && !settings.net.bleInput, current: () => link.current, onGroup: () => net.onGroup }));
     inviteIos();
     const near = link.snapshot().link.state !== 'connected' && !link.hosting && !bleOff;
-    bleGuest.scan(near && settings.net.blePc); // looking for a host only while there's no session
+    // looking for a host only while there's no session, or, with mouse and keyboard over Bluetooth, for the hosts it rides to
+    bleGuest.scan((near || settings.net.bleInput === true) && settings.net.blePc);
     if (blePhones) blePhones.scan(near && settings.net.ble); // … and for phones
   }, 2000);
 }
@@ -805,6 +812,23 @@ function inviteIos() {
     bleHost.invite(g.id);
   }
 }
+// Cursor › Mouse and keyboard over Bluetooth (#158): shared/bleinput.js only while it's on, for every
+// session: the ones we host (server.js send) and the ones we dialled (links.js; each one near over
+// Bluetooth connects again through it, then moves to the network and keeps both).
+// Called every tick: the server may start after the switch was read, and a link that came up on the
+// network before its host was seen over Bluetooth tries it then (links.js, at most every few minutes).
+let bleInputOn = false;
+function useBleInput(on) {
+  const m = on ? require('../../shared/bleinput.js') : null;
+  if (hub && hub.server) hub.server.bleInput = m;
+  if (!links) return;
+  if (bleInputOn !== !!on) {
+    bleInputOn = !!on;
+    console.log(`[ble] mouse and keyboard over Bluetooth ${on ? 'on' : 'off'}`);
+    links.setBleInput(m); // just turned on: every link near over Bluetooth now
+  } else if (on) links.bleAgain();
+}
+
 // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
 // blepolicy.js wifiQuiet): no advertising, scanning or links, its Bluetooth fallback closed with
 // them; back as it was when the session ends.
@@ -822,7 +846,8 @@ function applyQuiet(off) {
 
 // Bluetooth on or off (General), or the helper restarted.
 function applyNet() {
-  if (!settings.net.bleWifiOff) applyQuiet(false);
+  if (!settings.net.bleWifiOff || settings.net.bleInput) applyQuiet(false);
+  useBleInput(settings.net.bleInput === true);
   if (bleHost) bleHost.apply();
   if (bleGuest && !settings.net.blePc) bleGuest.scan(false);
   if (blePhones && !settings.net.ble) blePhones.stop();
@@ -1131,7 +1156,7 @@ function buildState() {
     iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     deck: deck ? deck.view() : null, // the Deck page: shown while a device has a Deck
     remote: (phoneRemote && phoneRemote.view) || REMOTE_OFF, // Remote tab: the active phone's
-    rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '' }, // ReZume tab; mesh: why not here (one phone only)
+    rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '', meshWith: rzSolo ? rzSolo.view() : null }, // ReZume tab; mesh: why not (pick a device), and the picker
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
     vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
@@ -1240,7 +1265,7 @@ function createMainWindow() {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, off: modulesAtStart.join(',') } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: modulesAtStart.join(',') } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1348,6 +1373,7 @@ function updateTray(s = buildState()) {
   };
   const kind = (os) => (os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'ios' ? 'iPhone' : os === 'android' ? t('Phone') : 'PC');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    off: modulesAtStart, // General › Modules: menus of modules that are off aren't there
     t,
     connected,
     status: connected ? t('Connected to {name}', { name }) + rtt : t('Not connected'),
@@ -1449,6 +1475,9 @@ function loadReZumeNow() {
   const act = require('../activity').create({ helper });
   const solo = () => (phone && rzSolo.id() ? phone.unit(rzSolo.id()) : null);
   const name = () => { const pr = rzSolo.link.peer(); return pr ? pr.name : 'the phone'; };
+  // A document goes through Files, which is the selected device's: the device ReZume is with is
+  // selected for it (as crossing to it with the pointer does).
+  const toPartner = () => { const to = rzSolo.id(); return !!to && (hub.selectedId === to || !!hub.select(to)); };
   rezume = new ReZume({
     link: rzSolo.link,
     cfg: () => settings.rezume,
@@ -1459,6 +1488,8 @@ function loadReZumeNow() {
     pick: (o, ways) => require('../../shared/rzpick.js').pick(o, ways, { peer: name(), language: i18n.locale }),
     adb: () => { const u = solo(); return phoneAdb(u && u.bridge); },
     phoneApps: () => { const u = solo(); return (u && u.phone.apps) || []; },
+    sendFile: (p, batch) => toPartner() && !!fileDrop.sendBatch([p], 'rezume', batch),
+    expectFile: (batch, dir) => { if (toPartner()) fileRecv.expectBatch(batch, dir || receivedDir(settings, app.getPath('downloads')), 0, true); },
     save: saveSettings,
   });
   rezume.on('change', pushState);

@@ -128,17 +128,10 @@ UI.tab({
       setTimeout(() => { refresh.disabled = false; refresh.textContent = t('Refresh'); }, 1500);
     }, 'small');
 
-    // ---- a connected phone's wireless debugging, until it works (the Phone page has it too) ----
     const ADB = { needsPair: ['bad', t('Pair once')], waitingWifi: ['bad', t('Off')], connecting: ['muted', t('Looking…')], missing: ['bad', t('Missing')], error: ['bad', t('Problem')] };
-    const adbPill = el('span', { class: 'pill bad' });
-    const adbRow = UI.row(t('Wireless debugging'), '', [adbPill, UI.button(t('Try Again'), () => api.phoneRetry(), 'small')], { literal: true });
-    const adbCode = el('input', { type: 'text', placeholder: '123456', maxLength: 6, inputMode: 'numeric', autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': t('Pairing code') } });
-    const adbWhere = el('input', { type: 'text', placeholder: t('Address:port (optional)'), autocomplete: 'off', spellcheck: false, attrs: { 'aria-label': t('Pairing address') } });
-    const adbPair = UI.button(t('Pair'), () => api.phonePair({ code: adbCode.value, where: adbWhere.value }), 'small primary');
-    adbCode.onkeydown = adbWhere.onkeydown = (e) => { if (e.key === 'Enter') adbPair.click(); };
-    const adbPairRow = UI.row(t('Pairing code'), t('Or type it on the phone, in TwinDesk’s notification'), [adbCode, adbWhere, adbPair]);
-    const adbQr = UI.adbQr ? UI.adbQr() : null; // Android's Pair device with QR code (shared/ui-adbqr.js)
-    const adbCard = UI.card(t('Phone screen, mouse and keyboard'), [adbRow, adbPairRow].concat(adbQr ? [adbQr.el] : []));
+    // The phone's wireless debugging: the one-to-one app's card (shared/ui-adb.js): state, steps, pairing by code or
+    // QR code, and the full app over the standard one. It follows the selected phone.
+    const adb = UI.adbCard();
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null; // pair a phone with a QR code (shared/ui-qrpair.js)
 
     // Every phone whose screen/mouse/keyboard connection (wireless debugging or cable) is not working yet, each with
@@ -167,7 +160,7 @@ UI.tab({
       UI.card(t('Found nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
       hero,
-      adbCard,
+      adb.el,
       pair.el,
       UI.card(t('Paired'), [pairedList]),
       ...(webCard ? [webCard.el] : []),
@@ -234,20 +227,8 @@ UI.tab({
 
       for (const r of m2p.concat(p2m)) r.update(s);
 
-      // the phone's wireless debugging: only while it needs something
+      adb.update(s); // the phone's wireless debugging (shared/ui-adb.js)
       const ph = s.phone || {};
-      const br = (ph.connected && ph.bridge) || { state: 'off' };
-      const pairable = br.state === 'needsPair' || !!br.canPair;
-      adbCard.hidden = !ph.connected || !(pairable || ['waitingWifi', 'missing', 'error'].includes(br.state));
-      if (!adbCard.hidden) {
-        const [cls, label] = ADB[br.state] || ADB.error;
-        adbPill.className = `pill ${cls}`;
-        adbPill.textContent = label;
-        adbRow.setHint(t(br.message || ''));
-        adbPairRow.hidden = !pairable;
-        if (UI.adbBle(s, adbCard, adbRow, adbPill)) adbPairRow.hidden = true;
-        if (adbQr) adbQr.update(s, pairable && !adbPairRow.hidden);
-      }
       if (qrPair) qrPair.update(s);
 
       // A phone that is only just connecting is not a problem yet: 'connecting' counts after 8 s.

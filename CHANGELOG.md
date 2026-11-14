@@ -19,6 +19,11 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   or Recycle Bin. Off until you turn it on, and nothing of it runs until then
   ([how it works](docs/drive.md)). Mac, Windows and Linux, one-to-one and Multi-device: in
   Multi-device every connected computer syncs, and a change passes on to the ones it didn't reach.
+- **Multi-device catches up with one-to-one:** ReZume with any one device of the mesh, picked on the
+  ReZume page and the same on both (picking a computer picks this one there; the one either was
+  with before lets go). Mouse and keyboard over Bluetooth between Macs and Windows PCs. Pages that are
+  switched off in General › Modules aren't loaded, and their tray menus go. The Connection page has the
+  full wireless debugging card, and Windows and Linux open in the right Style.
 - **The monitor map in Multi-device** (#225): every device's monitors in one picture, arranged by
   dragging. The pointer crosses only where monitors touch, keeps its place along the edge, and goes
   through an offline device to the next one. Phones hang off a computer's edge, and red shows where

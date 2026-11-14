@@ -54,6 +54,10 @@ issue when there is one.
 ## Multi-device (Mesh)
 
 - Up to **10 devices** at once.
-- **ReZume** works with one phone alone. With a computer too, turn Multi-device off for it.
+- **ReZume** works with one device at a time: pick it under ReZume with. Documents travel through Files,
+  so the device you pick becomes the selected one while a document goes. App windows and documents edited
+  in place are one-to-one only.
+- **Mouse and keyboard over Bluetooth** works between Macs and Windows PCs. A session the Mac dialled
+  has no Bluetooth path, and Linux joins other computers over the network only.
 - **TwinDesk iPhone** signs one iPhone at a time.
 - With only two devices, keep Multi-device off: one-to-one has everything, with less to set up.
