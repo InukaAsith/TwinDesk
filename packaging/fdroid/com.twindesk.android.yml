@@ -39,7 +39,26 @@ Builds:
       - windows
       - windows-helper
 
+  - versionName: 3.2.0
+    versionCode: 30200
+    commit: v3.2.0
+    subdir: android/app
+    gradle:
+      - fdroid
+    rm:
+      # Only android/ is built; the desktop and iPhone apps (and their prebuilt binaries) go.
+      - ios
+      - linux
+      - linux-helper
+      - mac
+      - mac-helper
+      - native
+      - shared
+      - web
+      - windows
+      - windows-helper
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 3.0.0
-CurrentVersionCode: 30000
+CurrentVersion: 3.2.0
+CurrentVersionCode: 30200
