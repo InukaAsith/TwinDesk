@@ -20,6 +20,9 @@ was never released on its own.
   one-to-one (how to install TwinDesk on the other device, pair it, and what each page does), with a
   last stop on the Multi-device page. After an update, What's new shows there too. Both are in
   General › Tutorial.
+- **Every edition on one release:** the installers, TwinDesk Portable and the Full KVM builds
+  (Windows and Linux) are all on the 3.2.0 release. The updater takes your own edition's file: Full
+  KVM updates to Full KVM, Portable to Portable, and the normal app never to either.
 - **What's new for 3.2:** the list after updating covers everything since 3.0, including TwinDesk
   Drive, the monitor map and the touchpad gestures.
 - **TwinDesk Drive** (File Sharing): one folder kept the same on your computers, with no cloud.
