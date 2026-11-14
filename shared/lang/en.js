@@ -1526,7 +1526,7 @@
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Use the phone as this computer’s touchpad, keyboard or gamepad.",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Use this PC’s own mouse for the administrator prompt or lock screen",
   "Use this window as an extra screen of the other computer": "Use this window as an extra screen of the other computer",
-  "Use two computers as one desk": "Use two computers as one desk",
+  "All your computers and phones as one desk": "All your computers and phones as one desk",
   "Use {me} as a second screen for {name}.": "Use {me} as a second screen for {name}.",
   "Use {me}’s mouse and keyboard on {name}": "Use {me}’s mouse and keyboard on {name}",
   "Use {name}’s mouse and keyboard on {me}": "Use {name}’s mouse and keyboard on {me}",

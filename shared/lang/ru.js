@@ -1526,7 +1526,7 @@
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Используйте телефон как тачпад, клавиатуру или геймпад этого компьютера.",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Использовать собственную мышь этого ПК для запроса администратора или экрана блокировки",
   "Use this window as an extra screen of the other computer": "Использовать это окно как дополнительный экран другого компьютера",
-  "Use two computers as one desk": "Два компьютера как один рабочий стол",
+  "All your computers and phones as one desk": "Все ваши компьютеры и телефоны как один рабочий стол",
   "Use {me} as a second screen for {name}.": "Используйте {me} как второй экран для {name}.",
   "Use {me}’s mouse and keyboard on {name}": "Использовать мышь и клавиатуру {me} на {name}",
   "Use {name}’s mouse and keyboard on {me}": "Использовать мышь и клавиатуру {name} на {me}",

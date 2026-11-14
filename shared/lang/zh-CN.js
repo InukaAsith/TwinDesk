@@ -1526,7 +1526,7 @@
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "将手机用作此电脑的触控板、键盘或手柄。",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "请使用本机鼠标操作管理员权限提示或锁屏界面",
   "Use this window as an extra screen of the other computer": "将此窗口用作另一台电脑的扩展屏幕",
-  "Use two computers as one desk": "让两台电脑共用一个工作台",
+  "All your computers and phones as one desk": "让你的所有电脑和手机共用一个工作台",
   "Use {me} as a second screen for {name}.": "将 {me} 用作 {name} 的第二块屏幕。",
   "Use {me}’s mouse and keyboard on {name}": "使用 {me} 的鼠标和键盘控制 {name}",
   "Use {name}’s mouse and keyboard on {me}": "使用 {name} 的鼠标和键盘控制 {me}",

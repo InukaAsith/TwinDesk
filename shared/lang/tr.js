@@ -1526,7 +1526,7 @@
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Telefonu bu bilgisayarın dokunmatik yüzeyi, klavyesi veya oyun kumandası olarak kullanın.",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Yönetici istemi veya kilit ekranı için bu PC'nin kendi faresini kullan",
   "Use this window as an extra screen of the other computer": "Bu pencereyi diğer bilgisayarın ek ekranı olarak kullan",
-  "Use two computers as one desk": "İki bilgisayarı tek masa gibi kullanın",
+  "All your computers and phones as one desk": "Tüm bilgisayarlarınızı ve telefonlarınızı tek masa gibi kullanın",
   "Use {me} as a second screen for {name}.": "{me} cihazını {name} için ikinci ekran olarak kullanın.",
   "Use {me}’s mouse and keyboard on {name}": "{me} faresini ve klavyesini {name} üzerinde kullan",
   "Use {name}’s mouse and keyboard on {me}": "{name} faresini ve klavyesini {me} üzerinde kullan",

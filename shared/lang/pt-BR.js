@@ -1518,7 +1518,7 @@
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Use o celular como touchpad, teclado ou controle de jogo deste computador.",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Usar o mouse deste PC na solicitação de administrador ou na tela de bloqueio",
   "Use this window as an extra screen of the other computer": "Usar esta janela como tela extra do outro computador",
-  "Use two computers as one desk": "Use dois computadores como uma só mesa",
+  "All your computers and phones as one desk": "Todos os seus computadores e celulares como uma só mesa",
   "Use {me} as a second screen for {name}.": "Use {me} como segunda tela de {name}.",
   "Use {me}’s mouse and keyboard on {name}": "Usar o mouse e o teclado de {me} em {name}",
   "Use {name}’s mouse and keyboard on {me}": "Usar o mouse e o teclado de {name} em {me}",

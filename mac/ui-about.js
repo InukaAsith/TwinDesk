@@ -36,7 +36,7 @@ UI.tab({
       el('div', { class: 'about-icon', attrs: { role: 'img', 'aria-label': t('TwinDesk icon') } }),
       nameEl,
       verEl,
-      el('div', { class: 'about-tag', text: t('Use two computers as one desk') }),
+      el('div', { class: 'about-tag', text: t('All your computers and phones as one desk') }),
     ]);
 
     // Updates: new releases of TwinDesk on GitHub.
