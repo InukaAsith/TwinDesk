@@ -268,7 +268,7 @@ namespace TwinDesk.FullKvm
             readonly object agentGate = new object();
             Win.Agent agent;
             volatile bool done;
-            bool restarted;
+            bool readySent; // the client has had an agent's "ready": a later one's is ours (Replay)
             string desktop = "Default"; // where the next agent starts (the last one said where to)
             bool ctrl, alt;
 
@@ -369,12 +369,18 @@ namespace TwinDesk.FullKvm
             void FromAgent(Win.Agent a)
             {
                 string line;
-                bool swallowReady = restarted;
                 while ((line = a.ReadLine()) != null)
                 {
                     if (done) break;
                     if (line.IndexOf("\"event\":\"agentDesktop\"", StringComparison.Ordinal) >= 0) { Want(line); continue; } // ours, not the app's
-                    if (swallowReady && line.IndexOf("\"event\":\"ready\"", StringComparison.Ordinal) >= 0) { swallowReady = false; Replay(a); continue; }
+                    if (line.IndexOf("\"event\":\"ready\"", StringComparison.Ordinal) >= 0)
+                    {
+                        // The client's first "ready" goes through, whichever agent says it: at the login
+                        // screen the first agent (on Default) leaves for Winlogon before it is ready, and
+                        // without one the client sends nothing. A later agent's is ours: the last settings again.
+                        if (readySent) { Replay(a); continue; }
+                        readySent = true;
+                    }
                     ToClient(line);
                 }
                 int code = a.Wait();
@@ -382,7 +388,6 @@ namespace TwinDesk.FullKvm
                 if (done) return;
                 if (code == 3) // Agent.DESKTOP_CHANGED: the same client, on the new input desktop
                 {
-                    restarted = true;
                     Thread.Sleep(100);
                     if (StartAgent()) return;
                 }

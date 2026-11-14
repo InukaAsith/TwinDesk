@@ -22,4 +22,4 @@
   ${endIf}
 !macroend
 
-!include "installer.nsh"
+!include "${__FILEDIR__}\installer.nsh" ; this folder's, not electron-builder's own installer.nsh on the include path
