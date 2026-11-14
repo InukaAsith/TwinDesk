@@ -95,12 +95,18 @@
     const col = UI.el('div', { class: 'sec-body' }, cards);
     const wrap = UI.el('div', { class: 'sections' }, [list, col]);
     const box = () => document.getElementById('content');
+    // Where the cards show from: under the page's title, which stays at the top while they scroll.
+    const under = (s) => {
+      const head = wrap.closest('.page') && wrap.closest('.page').querySelector('.page-head');
+      const top = s.getBoundingClientRect().top;
+      return head && getComputedStyle(head).position === 'sticky' ? Math.max(top, head.getBoundingClientRect().bottom) : top;
+    };
     const links = cards.map((c) => {
       const title = c.querySelector('.card-title span');
       const b = UI.el('button', { class: 'sec-link', text: title ? title.textContent : '' });
       b.onclick = () => {
         const s = box();
-        if (s) s.scrollTo({ top: s.scrollTop + c.getBoundingClientRect().top - s.getBoundingClientRect().top - 14, behavior: 'smooth' });
+        if (s) s.scrollTo({ top: s.scrollTop + c.getBoundingClientRect().top - under(s) - 14, behavior: 'smooth' });
       };
       list.append(b);
       return b;
@@ -110,7 +116,7 @@
       queued = false;
       const s = box();
       if (!s || !wrap.offsetParent) return;
-      const top = s.getBoundingClientRect().top + 80;
+      const top = under(s) + 40;
       let at = 0;
       cards.forEach((c, i) => { if (c.getBoundingClientRect().top <= top) at = i; });
       if (s.scrollTop + s.clientHeight >= s.scrollHeight - 2) at = cards.length - 1; // the bottom: the last one, however short

@@ -326,7 +326,8 @@ class FolderShare extends EventEmitter {
       res.end(body);
     };
     if (!this._allowed(req.socket.remoteAddress)) return req.socket.destroy(); // kept alive from before the session moved
-    if (token !== this.token || !this.settings.shareServe) return done(404);
+    const t = Buffer.from(String(token || '')), mine = Buffer.from(this.token);
+    if (t.length !== mine.length || !crypto.timingSafeEqual(t, mine) || !this.settings.shareServe) return done(404); // constant time
     const p = await this._local(u.searchParams.get('p'));
     if (!p) return done(400);
     const root = await fs.promises.realpath(path.resolve(this.folder));

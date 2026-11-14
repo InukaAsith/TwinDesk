@@ -13,6 +13,7 @@ UI.tab({
   desc: I18n.t('The phone’s storage as a drive in Finder, through ADB: the cable (USB debugging) or wireless debugging.'),
   color: 'linear-gradient(#ffd60a, #ff9f0a)',
   badge: (s) => (s.mount && s.mount.mounted ? 'on' : ''),
+  moduleSwitch: { get: (s) => !!(s.mount && s.mount.on), set: (v) => UI.api.setMount({ on: v }) }, // General › Modules
   build(body) {
     const { api } = UI;
     const onSw = UI.switch((v) => api.setMount({ on: v }), { label: I18n.t('Phone in Finder') });

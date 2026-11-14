@@ -1,0 +1,15 @@
+TwinDesk joins your phone with your Mac, Windows and Linux computers so they work as one desk.
+
+<ul>
+<li><b>Screens and apps</b>: see and use the computer's screen on the phone, and the phone's screen and apps on the computer.</li>
+<li><b>Mouse and keyboard</b>: move the pointer off the computer's screen onto the phone, or use the phone as a touchpad, remote or air mouse.</li>
+<li><b>Files and clipboard</b>: copy on one device and paste on another; send files and folders either way.</li>
+<li><b>Texts, calls and notifications</b>: read and answer messages, take calls and see the phone's notifications on the computer.</li>
+<li><b>Deck</b>: a grid of shortcuts and controls for the computer, on the phone.</li>
+</ul>
+
+No account and no cloud: devices find each other on the same network, over USB, Bluetooth or Wi-Fi Direct, and talk directly, encrypted.
+
+The TwinDesk desktop app (free, from the website or GitHub) is needed on the computer.
+
+This build from F-Droid includes notification access, Messages and the Accessibility service for input. Each is off until you switch it on. Scan QR code opens the Camera app to read the pairing code.

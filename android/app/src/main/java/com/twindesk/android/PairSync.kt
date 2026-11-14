@@ -13,12 +13,13 @@ class PairSync(core: Core) : Feature(core) {
         "notifs" to ("notifs.send" to "notifs.receive"),
         "audio" to ("audio.send" to "audio.receive"), // out: the phone's sound on the Mac (the Mac plays it over adb)
         "cursor" to ("cursor.out" to "cursor.in"), // in: the Mac's mouse and keyboard used here
+        "mic" to ("mic.send" to "mic.receive"), // out: this phone's microphone on the computer (it takes it over adb, or the iPhone's app sends it)
         "rezume" to ("rezume.send" to "rezume.receive"), // read and set through Rezume; its own switch is the shared value "rezume"
     )
 
     // Shared values, the same on both sides (the Mac's VALUES): stored as strings.
     // keyboard: off on a fresh install, like every feature.
-    private val valueDefaults = mapOf("keyboard" to core.store.was.toString(), "speed" to "1", "reverseScroll" to "false", "gestures" to "true", "pace" to "fast", "ble" to "true")
+    private val valueDefaults = mapOf("keyboard" to "false", "speed" to "1", "reverseScroll" to "false", "gestures" to "true", "pace" to "fast", "ble" to "true", "res" to "1080") // res: the screen's Resolution (the computer's Share screen › Resolution)
 
     fun value(key: String): String = core.store.prefsString("value.$key", valueDefaults[key] ?: "")
 
@@ -43,7 +44,7 @@ class PairSync(core: Core) : Feature(core) {
     fun get(feature: String, dir: String): Boolean {
         if (feature == "rezume") return core.rezume.opt(if (dir == "out") "send" else "receive")
         val (o, i) = keys.getValue(feature)
-        return core.store.flag(if (dir == "out") o else i, core.store.was && feature != "audio" && !(feature == "cursor" && dir == "out"))
+        return core.store.flag(if (dir == "out") o else i, false) // on only when saved on
     }
 
     // The person flipped a switch here: tell the computer, which follows.

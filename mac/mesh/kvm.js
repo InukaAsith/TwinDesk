@@ -336,7 +336,7 @@ class Kvm extends EventEmitter {
     const k = this.cfg;
     if (!this.linked || !k.driveOther || !k.mouse || (this.locked && this.mode === 'home')) return [];
     const edges = this.edges;
-    return E.SIDES.filter((side) => !!edges[side] && this._connectedTo(edges[side]) && !this._pausedFor(edges[side]));
+    return E.SIDES.filter((side) => !!edges[side] && this._connectedTo(edges[side]) && this._peerOs(edges[side]) !== P.OS.IOS && !this._pausedFor(edges[side])); // an iPhone can't be driven
   }
 
   // Mouse and keyboard sharing as a whole (the hotkey's double-tap): off = everything home and
@@ -457,7 +457,7 @@ class Kvm extends EventEmitter {
   }
 
   _canDriveTo(id) {
-    return this._connectedTo(id) && !!this.cfg.driveOther && this.linked && !this._pausedFor(id);
+    return this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && !!this.cfg.driveOther && this.linked && !this._pausedFor(id);
   }
 
   // A connected computer (not a phone) we may drive, to drive the phone `id` through.

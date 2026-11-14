@@ -7,28 +7,30 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case overview, connection, receive, share, remote, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, general, about
+    case overview, connection, receive, share, remote, deck, clipboard, notifications, files, photos, messages, audio, camera, media, airplay, shortcuts, signing, general, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .overview: return "Overview"
-        case .connection: return "Connection"
-        case .receive: return "Receive screen"
-        case .share: return "Share screen"
-        case .remote: return "Remote"
-        case .clipboard: return "Clipboard"
-        case .notifications: return "Notifications"
-        case .files: return "File Sharing"
-        case .photos: return "Photos"
-        case .messages: return "Messages"
-        case .audio: return "Audio"
-        case .camera: return "Camera"
-        case .media: return "Media"
-        case .airplay: return "AirPlay & SMB"
-        case .shortcuts: return "Shortcuts"
-        case .general: return "General"
-        case .about: return "About"
+        case .overview: return tr("Overview")
+        case .connection: return tr("Connection")
+        case .receive: return tr("Receive screen")
+        case .share: return tr("Share screen")
+        case .remote: return tr("Remote")
+        case .deck: return tr("Deck")
+        case .clipboard: return tr("Clipboard")
+        case .notifications: return tr("Notifications")
+        case .files: return tr("File Sharing")
+        case .photos: return tr("Photos")
+        case .messages: return tr("Messages")
+        case .audio: return tr("Audio")
+        case .camera: return tr("Camera")
+        case .media: return tr("Media")
+        case .airplay: return tr("AirPlay & SMB")
+        case .shortcuts: return tr("Shortcuts")
+        case .signing: return tr("App refresh")
+        case .general: return tr("General")
+        case .about: return tr("About")
         }
     }
 
@@ -39,6 +41,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .receive: return "display"
         case .share: return "rectangle.on.rectangle"
         case .remote: return "gamecontroller.fill"
+        case .deck: return "square.grid.3x3.fill"
         case .clipboard: return "doc.on.clipboard.fill"
         case .notifications: return "bell.fill"
         case .files: return "folder.fill"
@@ -49,6 +52,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .media: return "play.fill"
         case .airplay: return "airplayvideo"
         case .shortcuts: return "square.stack.3d.up.fill"
+        case .signing: return "signature"
         case .general: return "gearshape.fill"
         case .about: return "info"
         }
@@ -59,6 +63,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .overview: return Color(white: 0.45)
         case .connection, .receive, .share, .files, .about: return TDColor.accent
         case .remote: return .orange
+        case .deck: return Color(red: 0.62, green: 0.38, blue: 0.95)
         case .messages: return TDColor.good
         case .clipboard: return Color(red: 0.35, green: 0.78, blue: 0.85)
         case .notifications: return TDColor.bad
@@ -68,27 +73,34 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .media: return Color(red: 0.98, green: 0.24, blue: 0.5)
         case .airplay: return Color(red: 1, green: 0.8, blue: 0.0)
         case .shortcuts: return Color(red: 0.37, green: 0.36, blue: 0.9)
+        case .signing: return Color(red: 0.25, green: 0.52, blue: 0.56)
         case .general: return Color(white: 0.5)
         }
     }
 
-    // The sidebar's groups, as the computers have them.
-    static let groups: [[Page]] = [
+    // The sidebar's groups, as the computers have them; arranged (SearchView.swift's NavOrder), one
+    // group in that order, General and About last.
+    static var groups: [[Page]] { NavOrder.load() == nil ? defaultGroups : [NavOrder.ordered(), NavOrder.fixed] }
+    static let defaultGroups: [[Page]] = [
         [.overview, .connection],
-        [.receive, .share, .remote],
+        [.receive, .share, .remote, .deck],
         [.clipboard, .notifications, .files, .photos, .messages],
         [.audio, .camera, .media],
-        [.airplay, .shortcuts],
+        [.airplay, .shortcuts, .signing],
         [.general, .about],
     ]
 
     // iPhone's tab bar: these as tabs, everything else under More.
-    static let bottom: [Page] = [.overview, .connection, .receive, .files]
+    // Arranged: the first pages shown, as many as chosen.
+    static var bottom: [Page] {
+        guard let s = NavOrder.load() else { return [.overview, .connection, .receive, .files] }
+        return Array(NavOrder.ordered().filter { $0.shown(Core.shared) }.prefix(s.bar))
+    }
     var tabTitle: String {
         switch self {
-        case .connection: return "Connect"
-        case .receive: return "Screen"
-        case .files: return "Files"
+        case .connection: return tr("Connect")
+        case .receive: return tr("Screen")
+        case .files: return tr("Files")
         default: return title
         }
     }
@@ -109,12 +121,12 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
 // What's over the pages now (full screen).
 enum Cover: Identifiable, Equatable {
-    case viewer, remote(String), peerScreen
-    var id: String { switch self { case .viewer: return "viewer"; case .peerScreen: return "peerScreen"; case .remote(let m): return "remote." + m } }
+    case viewer, remote(String), peerScreen, deck
+    var id: String { switch self { case .viewer: return "viewer"; case .peerScreen: return "peerScreen"; case .deck: return "deck"; case .remote(let m): return "remote." + m } }
 }
 
 // iPhone's tabs: a page of its own, or More (the rest, as a list).
-enum PhoneTab: Hashable { case page(Page), more }
+enum PhoneTab: Hashable { case page(Page), more, search }
 
 final class AppUI: ObservableObject {
     static let shared = AppUI()
@@ -122,6 +134,10 @@ final class AppUI: ObservableObject {
     @Published var tab: PhoneTab = .page(.overview) // iPhone: the tab bar's
     @Published var paths: [PhoneTab: [Page]] = [:] // iPhone: what's open over each tab
     @Published var cover: Cover?
+    @Published var navVersion = 0     // Arrange saved: the tabs and sidebar again
+    @Published var searching = false  // Search as a sheet (More's field, the iPad, ⌘K)
+    @Published var arranging = false  // the Arrange sheet
+    @Published var history: String?   // a history's own view: "clip" or "notifs" (HistoryView.swift)
 
     // Open a page: iPad, in the sidebar. iPhone: a tab's own page, that tab (at its root); any
     // other, over the tab that's open, so Back returns to where it was opened from.
@@ -161,6 +177,13 @@ struct RootView: View {
                 MirrorAskSheet().environmentObject(core).presentationDetents([.large])
             }
             .modifier(PairPrompts())
+            .sheet(isPresented: $ui.searching) {
+                NavigationStack { SearchView(sheet: true) }.environmentObject(core).environmentObject(ui)
+            }
+            .sheet(isPresented: $ui.arranging) { ArrangeSheet() }
+            .sheet(isPresented: Binding(get: { ui.history != nil }, set: { if !$0 { ui.history = nil } })) {
+                NavigationStack { HistoryView(what: ui.history ?? "clip") }.environmentObject(core).environmentObject(ui)
+            }
     }
 
     @ViewBuilder
@@ -170,35 +193,73 @@ struct RootView: View {
         if UIDevice.current.userInterfaceIdiom == .pad && width == .regular { split } else { stack }
     }
 
-    // iPhone: the tab bar (with a phone holding the session, only the tabs it can do).
-    private var stack: some View {
+    // iPhone: the tab bar (with a phone holding the session, only the tabs it can do), and Search
+    // as Android's: its own round button at the bar's right end, or none (Arrange › Search button;
+    // More's field stays). iOS 26: the system's bar, which draws a tab in the search role that way.
+    // iOS 16 to 25, whose bar is always the full width: TwinDesk's own bar, drawn as Android's.
+    @ViewBuilder private var stack: some View {
         let _ = core.tick
-        let tabs = Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }
-        return TabView(selection: Binding(get: { ui.tab }, set: { t in
-            // A tab tapped again: back to its root.
-            if t == ui.tab { ui.paths[t] = [] }
-            ui.tab = t
-            if case .page(let p) = t { ui.page = p }
-        })) {
-            ForEach(tabs) { p in
-                NavigationStack(path: ui.path(.page(p))) {
-                    PageView(page: p)
-                        .environment(\.branded, p == .overview) // the tab's own page only
-                        .navigationDestination(for: Page.self) { q in PageView(page: q).environment(\.branded, false) }
+        let _ = ui.navVersion
+        let search = NavOrder.searchButton
+        // iOS 26's bar folds anything past five (Search counted) into a More of its own: no more than fit.
+        let tabs = Array(Page.bottom.filter { !core.peerMode || peerShows($0, core.peer) }.prefix(NavOrder.barLimit(search: search)))
+        Group {
+            if #available(iOS 26.0, *) {
+                TabView(selection: Binding<PhoneTab>(get: { ui.tab == .search && !search ? .page(.overview) : ui.tab }, set: select)) {
+                    ForEach(tabs) { p in
+                        Tab(p.tabTitle, systemImage: tabIcon(p), value: PhoneTab.page(p)) { pageStack(p) }
+                    }
+                    Tab(tr("More"), systemImage: "ellipsis", value: PhoneTab.more) { moreStack(tabs) }
+                    if search {
+                        Tab(tr("Search"), systemImage: "magnifyingglass", value: PhoneTab.search, role: .search) { searchStack }
+                    }
                 }
-                .tabItem { Label(p.tabTitle, systemImage: tabIcon(p)) }
-                .tag(PhoneTab.page(p))
+                .modifier(TabBarGlass())
+            } else {
+                // Only the open tab is drawn; each keeps its pages (AppUI's paths).
+                Group {
+                    switch ui.tab {
+                    case .page(let p) where tabs.contains(p): pageStack(p)
+                    case .more: moreStack(tabs)
+                    default: pageStack(.overview)
+                    }
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    OwnTabBar(tabs: tabs, current: ui.tab, search: search, icon: tabIcon, pick: select) { ui.searching = true }
+                }
             }
-            NavigationStack(path: ui.path(.more)) {
-                Sidebar(selection: nil, hiding: tabs)
-                    .navigationDestination(for: Page.self) { p in PageView(page: p) }
-            }
-            .tabItem { Label("More", systemImage: "ellipsis") }
-            .tag(PhoneTab.more)
         }
-        .modifier(TabBarGlass())
         // A tab that's gone (a phone that can't do it): Overview.
         .onChange(of: tabs) { t in if case .page(let p) = ui.tab, !t.contains(p) { ui.tab = .page(.overview) } }
+    }
+
+    private func select(_ t: PhoneTab) {
+        // A tab tapped again: back to its root.
+        if t == ui.tab { ui.paths[t] = [] }
+        ui.tab = t
+        if case .page(let p) = t { ui.page = p }
+    }
+
+    private func pageStack(_ p: Page) -> some View {
+        NavigationStack(path: ui.path(.page(p))) {
+            PageView(page: p)
+                .environment(\.branded, p == .overview) // the tab's own page only
+                .navigationDestination(for: Page.self) { q in PageView(page: q).environment(\.branded, false) }
+        }
+    }
+
+    private func moreStack(_ tabs: [Page]) -> some View {
+        NavigationStack(path: ui.path(.more)) {
+            Sidebar(selection: nil, hiding: tabs)
+                .navigationDestination(for: Page.self) { p in PageView(page: p) }
+        }
+    }
+
+    private var searchStack: some View {
+        NavigationStack(path: ui.path(.search)) {
+            SearchView()
+                .navigationDestination(for: Page.self) { p in PageView(page: p) }
+        }
     }
 
     // Line icons in the bar, as Android's (the sidebar keeps the filled, coloured ones).
@@ -232,6 +293,7 @@ struct RootView: View {
             Button("") { core.clip.sendCurrent(force: true) }.keyboardShortcut("v", modifiers: [.command, .shift])
             Button("") { core.mirror.sharing ? core.mirror.stop() : ShareScreen.open() }.keyboardShortcut("s", modifiers: [.command, .shift])
             Button("") { if core.connected { ui.cover = .viewer } }.keyboardShortcut("r", modifiers: [.command, .shift])
+            Button("") { ui.searching = true }.keyboardShortcut("k", modifiers: .command)
         }
         .opacity(0).allowsHitTesting(false).accessibilityHidden(true)
     }
@@ -261,6 +323,7 @@ private struct Covers: ViewModifier {
         case .viewer: ViewerScreen()
         case .remote(let mode): RemoteScreen(mode: mode)
         case .peerScreen: PeerScreenView()
+        case .deck: DeckScreen()
         }
     }
 }
@@ -274,12 +337,28 @@ private struct PairPrompts: ViewModifier {
             .sheet(isPresented: Binding(get: { core.pair != nil }, set: { if !$0 { core.cancelPairing() } })) {
                 PairSheet().environmentObject(core).presentationDetents([.medium])
             }
-            .alert(core.invite.map { "\($0.name) wants to connect" } ?? "",
+            .alert(core.invite.map { tr("{name} wants to connect", ["name": $0.name]) } ?? "",
                    isPresented: Binding(get: { core.invite != nil && core.pair == nil }, set: { if !$0 { core.dismissInvite() } })) {
-                Button("Pair") { if let f = core.invite { core.pair(f) } }
-                Button("Not Now", role: .cancel) { core.dismissInvite() }
+                Button(tr("Pair")) { if let f = core.invite { core.pair(f) } }
+                Button(tr("Not Now"), role: .cancel) { core.dismissInvite() }
             } message: {
-                Text("Pair this \(Device.word) with it to share the clipboard, files and screens.")
+                Text(tr("Pair this {device} with it to share the clipboard, files and screens.", ["device": Device.word]))
+            }
+            // A phone (Android or iPhone) pairing with this one, or asking it to host: a popup on any
+            // page, not only the card at the bottom of Connection. Swiping the sheet away denies.
+            .sheet(isPresented: Binding(get: { _ = core.tick; return core.peer.hostPairing != nil && core.pair == nil },
+                                        set: { if !$0, core.peer.hostPairing != nil { core.peer.respondPair(false) } })) {
+                if let p = core.peer.hostPairing {
+                    PeerPairAsk(p: p).padding(24).environmentObject(core).presentationDetents([.medium])
+                }
+            }
+            .alert(core.peer.asked.map { tr("{name} wants to connect", ["name": $0.name]) } ?? "",
+                   isPresented: Binding(get: { _ = core.tick; return core.peer.asked != nil && core.peer.hostPairing == nil && core.pair == nil },
+                                        set: { if !$0, core.peer.asked != nil { core.peer.answerAsk(false) } })) {
+                Button(tr("Allow")) { core.peer.answerAsk(true) }
+                Button(tr("Not Now"), role: .cancel) { core.peer.answerAsk(false) }
+            } message: {
+                Text(tr("Let it connect to this {device}?", ["device": Device.word]))
             }
     }
 }
@@ -321,10 +400,12 @@ struct Sidebar: View {
         .background(Backdrop())
         // iPhone's More: a large title. iPad: TwinDesk's own header (the mark, the name, the state)
         // in the bar, beside the sidebar's button.
-        .navigationTitle(selection == nil ? "More" : "")
+        .navigationTitle(selection == nil ? tr("More") : "")
         .navigationBarTitleDisplayMode(selection == nil ? .large : .inline)
         .modifier(BrandBar(on: selection != nil)) // iPad: the mark and name in the bar, level with the sidebar button
         .refreshable { core.discovery.refresh() }
+        // iPhone's More: Edit arranges the pages (which are tabs, and their order).
+        .toolbar { if selection == nil { ToolbarItem(placement: .navigationBarTrailing) { Button(tr("Edit")) { ui.arranging = true } } } }
     }
 
     @ViewBuilder
@@ -338,6 +419,11 @@ struct Sidebar: View {
             .padding(.top, selection == nil ? 4 : 8)
             .padding(.bottom, 4)
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        }
+        // Search (SearchView.swift).
+        Section {
+        } header: {
+            SearchFieldButton().textCase(nil).listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
         // The other paired computers and phones nearby, as the computers' sidebars list them: tap to connect.
         let near = nearbyPaired
@@ -358,10 +444,11 @@ struct Sidebar: View {
                     .buttonStyle(PressScale())
                     .listRowBackground(TDColor.card)
                 }
-            } header: { Text("Nearby") }
+            } header: { Text(tr("Nearby")) }
         }
         // With a phone: only what it and this one can do (PeerViews' peerShows); Messages only then.
-        let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && (core.peerMode ? peerShows($0, core.peer) : $0 != .messages) } }.filter { !$0.isEmpty }
+        let _ = ui.navVersion
+        let groups = Page.groups.map { g in g.filter { !hiding.contains($0) && $0.shown(core) } }.filter { !$0.isEmpty }
         ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
             Section {
                 ForEach(group) { p in
@@ -391,8 +478,8 @@ struct Sidebar: View {
                     .font(.system(size: 22, weight: .regular)).foregroundStyle(.secondary)
                     .frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(phone?.peerName ?? core.host?.name ?? core.hosts.first?.name ?? "No computer").font(.headline).foregroundStyle(TDColor.text)
-                    Text(phone != nil ? "Phone · Connected" : statusLine).font(.subheadline).foregroundStyle(.secondary)
+                    Text(phone?.peerName ?? core.host?.name ?? core.hosts.first?.name ?? tr("No computer")).font(.headline).foregroundStyle(TDColor.text)
+                    Text(phone != nil ? tr("Phone · Connected") : statusLine).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if live { LiveDot(size: 9) }
@@ -425,12 +512,12 @@ struct Sidebar: View {
         var list: [NearDev] = []
         for h in core.hosts where h.id != shown && core.host?.id != h.id && (core.nearby.contains(where: { $0.id == h.id }) || core.ble.has(h.id)) {
             let connecting = core.state == "connecting" && core.link.host?.id == h.id
-            list.append(NearDev(id: h.id, name: h.name, symbol: osSymbol(h.os), sub: connecting ? "Connecting…" : "Nearby · Tap to connect") { core.connect(h) })
+            list.append(NearDev(id: h.id, name: h.name, symbol: osSymbol(h.os), sub: connecting ? tr("Connecting…") : tr("Nearby · Tap to connect")) { core.connect(h) })
         }
         if core.peer.on {
             for f in core.peer.nearby() where f.id != shown && core.peer.isPaired(f.id) && !(core.peer.connected && core.peer.peerId == f.id) {
                 list.append(NearDev(id: f.id, name: f.name, symbol: f.os == "ios" ? "iphone" : "iphone.gen2",
-                                    sub: core.peer.waitingFor == f.id ? "Requesting connection…" : "Nearby · Tap to connect") { core.peer.connect(f) })
+                                    sub: core.peer.waitingFor == f.id ? tr("Requesting connection…") : tr("Nearby · Tap to connect")) { core.peer.connect(f) })
             }
         }
         return list
@@ -439,9 +526,9 @@ struct Sidebar: View {
     private var statusLine: String {
         switch core.state {
         case "connected":
-            return [core.link.wired ? "USB" : core.link.viaBle ? "Bluetooth" : Discovery.hasEthernet ? "Ethernet" : "Wi-Fi", core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
-        case "connecting": return "Connecting…"
-        default: return core.hosts.isEmpty ? "Tap to pair a computer" : "Not connected · Tap to connect"
+            return [core.link.wired ? "USB" : core.link.viaBle ? tr("Bluetooth") : Discovery.hasEthernet ? tr("Ethernet") : "Wi-Fi", core.rttMs.map { "\($0) ms" }].compactMap { $0 }.joined(separator: " · ")
+        case "connecting": return tr("Connecting…")
+        default: return core.hosts.isEmpty ? tr("Tap to pair a computer") : tr("Not connected · Tap to connect")
         }
     }
 
@@ -490,7 +577,7 @@ struct PageView: View {
     let page: Page
     var body: some View {
         let _ = core.tick
-        if core.peerMode && ![.connection, .general, .about].contains(page) { PeerPageView(page: page) }
+        if core.peerMode && ![.connection, .signing, .general, .about].contains(page) { PeerPageView(page: page) }
         else { pc }
     }
 
@@ -502,6 +589,7 @@ struct PageView: View {
         case .receive: ReceiveScreenView()
         case .share: ShareScreenView()
         case .remote: RemoteView()
+        case .deck: DeckView()
         case .clipboard: ClipboardView()
         case .notifications: NotificationsView()
         case .files: FilesView()
@@ -512,6 +600,7 @@ struct PageView: View {
         case .media: MediaView()
         case .airplay: AirPlayView()
         case .shortcuts: ShortcutsView()
+        case .signing: SignerView()
         case .general: SettingsView()
         case .about: AboutView()
         }
@@ -529,24 +618,24 @@ struct PairSheet: View {
             Text(p?.name ?? "").font(.title2.bold())
             switch p?.phase ?? "" {
             case "code":
-                Text("Check that \(p?.name ?? "the computer") shows this code").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text(tr("Check that {name} shows this code", ["name": p?.name ?? tr("the computer")])).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Text(spaced(p?.code ?? "")).font(.system(size: 44, weight: .bold, design: .rounded)).monospacedDigit()
                 HStack(spacing: 14) {
-                    Button("Cancel", role: .cancel) { core.cancelPairing() }.secondaryButton()
-                    Button("They Match") { core.confirmCode() }.primaryButton()
+                    Button(tr("Cancel"), role: .cancel) { core.cancelPairing() }.secondaryButton()
+                    Button(tr("They Match")) { core.confirmCode() }.primaryButton()
                 }
             case "waiting":
                 ProgressView()
-                Text(p?.qr == true ? "Click Allow on \(p?.name ?? "the computer")." : "Confirm the code on \(p?.name ?? "the computer") too.")
+                Text(p?.qr == true ? tr("Click Allow on {name}.", ["name": p?.name ?? tr("the computer")]) : tr("Confirm the code on {name} too.", ["name": p?.name ?? tr("the computer")]))
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button("Cancel", role: .cancel) { core.cancelPairing() }.secondaryButton()
+                Button(tr("Cancel"), role: .cancel) { core.cancelPairing() }.secondaryButton()
             case "failed":
                 Text(p?.error ?? "").multilineTextAlignment(.center).foregroundStyle(.secondary)
-                Button("Close") { core.cancelPairing() }.primaryButton()
+                Button(tr("Close")) { core.cancelPairing() }.primaryButton()
             default:
                 ProgressView()
-                Text("Connecting…").foregroundStyle(.secondary)
-                Button("Cancel", role: .cancel) { core.cancelPairing() }.secondaryButton()
+                Text(tr("Connecting…")).foregroundStyle(.secondary)
+                Button(tr("Cancel"), role: .cancel) { core.cancelPairing() }.secondaryButton()
             }
         }
         .padding(28)
@@ -555,4 +644,57 @@ struct PairSheet: View {
     }
 
     private func spaced(_ c: String) -> String { c.count == 6 ? "\(c.prefix(3)) \(c.suffix(3))" : c }
+}
+
+// iPhone's bar below iOS 26, as Android's: a rounded bar floating off the edges (line icons, the
+// selected one in a pill of the accent colour, labels under them) and the round Search button.
+private struct OwnTabBar: View {
+    let tabs: [Page]
+    let current: PhoneTab
+    let search: Bool
+    let icon: (Page) -> String
+    let pick: (PhoneTab) -> Void
+    let onSearch: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 0) {
+                ForEach(tabs) { p in item(p.tabTitle, icon(p), current == .page(p)) { pick(.page(p)) } }
+                item(tr("More"), "ellipsis", current == .more) { pick(.more) }
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 64)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 3)
+            if search {
+                Button(action: onSearch) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 20, weight: .semibold)).foregroundStyle(TDColor.text)
+                        .frame(width: 56, height: 56)
+                        .background(.regularMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 3)
+                .accessibilityLabel(tr("Search"))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 2)
+    }
+
+    private func item(_ label: String, _ symbol: String, _ on: Bool, _ go: @escaping () -> Void) -> some View {
+        Button(action: go) {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 19, weight: on ? .semibold : .regular))
+                    .foregroundStyle(on ? TDColor.accent : TDColor.muted)
+                    .frame(width: 52, height: 30)
+                    .background(on ? TDColor.accent.opacity(0.16) : .clear, in: Capsule())
+                Text(label).font(.system(size: 11, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                    .foregroundStyle(on ? TDColor.text : TDColor.muted)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
 }

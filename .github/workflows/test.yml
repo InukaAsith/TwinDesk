@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The apps' one dependency the tests load (fx2-welcome, quiet-servers), at the root so shared/ finds it.
+      - name: Install ws
+        run: npm install --no-save --no-package-lock --ignore-scripts ws@8.18.0
+
+      # movebench.js is a benchmark, not part of the test run.
+      - name: Shared tests
+        run: |
+          fail=0
+          for f in shared/test/*.js; do
+            case "$f" in */movebench.js) continue;; esac
+            node "$f" > /tmp/out.txt 2>&1 || { fail=1; echo "::error file=$f::$f failed"; cat /tmp/out.txt; }
+          done
+          exit $fail
+
+      - name: Syntax check
+        run: |
+          git ls-files '*.js' ':!:**/node_modules/**' ':!:web/**' | xargs -n 1 -P 4 node --check

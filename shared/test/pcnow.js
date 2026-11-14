@@ -25,7 +25,7 @@ assert.deepStrictEqual(sent.pop(), { t: P.T.PC_MEDIA, none: true }, 'nothing pla
 
 media.now = { title: 'On & On', artist: 'Cartoon', album: '', app: 'Firefox', playing: true };
 media.emit('change');
-assert.deepStrictEqual(sent.pop(), { t: P.T.PC_MEDIA, title: 'On & On', artist: 'Cartoon', album: '', app: 'Firefox', playing: true });
+assert.deepStrictEqual(sent.pop(), { t: P.T.PC_MEDIA, title: 'On & On', artist: 'Cartoon', album: '', app: 'Firefox', playing: true, art: '' }, 'the first one carries the artwork (none here)');
 
 const did = [];
 media.do = (a) => did.push(a);

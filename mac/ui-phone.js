@@ -89,11 +89,14 @@ UI.tab({
     const wall = UI.switch((v) => api.setPhone({ wallpaper: v }), { label: I18n.t('Wallpaper') });
     const enterSends = UI.switch((v) => api.setPhone({ enterSends: v }), { label: I18n.t('Return sends messages') });
     const arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: I18n.t('Arrow keys swipe') });
+    // #123: keys as a real USB keyboard on the phone (shared/uhidkbd.js), in the phone's own layout.
+    const uhid = UI.switch((v) => api.setPhone({ uhid: v }), { label: I18n.t('Type as a hardware keyboard') });
     const optsCard = UI.card(I18n.t('Settings'), [
       UI.row(I18n.t('Phone sound in the screen window'), I18n.t('Android 11 or later'), [sound]),
       UI.row(I18n.t('Picture'), I18n.t('For the screen window and app windows'), [quality]),
       UI.row(I18n.t('Return sends messages'), I18n.t('In WhatsApp, Instagram and Telegram, in a phone window or with this keyboard on the phone. ⇧Return: a new line'), [enterSends]),
       UI.row(I18n.t('Arrow keys swipe'), I18n.t('In a phone window: up and down through feeds, Reels and Shorts, left and right through pages. Off: they move the cursor'), [arrowSwipe]),
+      UI.row(I18n.t('Type as a hardware keyboard'), I18n.t('Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout'), [uhid]),
       UI.row(I18n.t('Show the phone’s wallpaper here'), I18n.t('Lets TwinDesk on the phone read it (set up over wireless debugging)'), [wall]),
       UI.row(I18n.t('Mouse and keyboard'), I18n.t('Push the pointer off the edge of the screen to use the phone. Double-tap the hotkey to come back.'), [UI.button(I18n.t('Cursor Settings'), () => UI.go('cursor'), 'small')]),
     ]);
@@ -174,6 +177,7 @@ UI.tab({
       quality.set(String(settings.bitrateMbps || 8));
       wall.set(settings.wallpaper !== false);
       enterSends.set(settings.enterSends !== false);
+      uhid.set(settings.uhid === true);
       arrowSwipe.set(settings.arrowSwipe === true);
       via.set(br.input || (settings.input === 'phone' ? 'phone' : 'adb'));
       viaRow.setHint(br.inputMode === 'auto' ? (br.state === 'ready' ? I18n.t('Automatic: ADB, wireless debugging is ready') : I18n.t('Automatic: Accessibility until wireless debugging is ready'))

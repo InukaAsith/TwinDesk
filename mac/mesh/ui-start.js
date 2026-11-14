@@ -19,8 +19,10 @@
   const orderOf = (d) => ORDER[UI.baseOf(d)] ?? d.order ?? 50; // a kind's own version of a page (variantOf): the page's place
   let lastGroup = null;
   let gap = null; // the gap before the current group (hidden with the group: renderSidebar)
-  for (const def of UI.tabs.slice().sort((a, b) => orderOf(a) - orderOf(b))) {
-    if (UI.baseOf(def) in GROUP) def.group = GROUP[UI.baseOf(def)];
+  const custom = UI.navCustom(); // Arrange (shared/ui-arrange.js)
+  for (const def of UI.arrangeSort(UI.tabs.slice().sort((a, b) => orderOf(a) - orderOf(b)))) {
+    if (custom) def.group = 0;
+    else if (UI.baseOf(def) in GROUP) def.group = GROUP[UI.baseOf(def)];
     if (def.navHidden) { // reached another way (the phone tile)
       views.set(def.id, { def, ...buildPage(def), navBtn: el('button'), stateEl: el('span') });
       continue;
@@ -39,10 +41,13 @@
       label,
       stateEl,
     ]);
+    navBtn.dataset.base = UI.baseOf(def);
+    if (def.bottom) navBtn.dataset.bottom = '1';
     navBtn.onclick = () => show(def.id, true);
     nav.append(el('li', {}, [navBtn]));
     views.set(def.id, { def, ...buildPage(def), navBtn, stateEl, gap });
   }
+  UI.arrangeHold(nav);
 
   function buildPage(def) {
     const page = el('section', { class: 'page', id: `page-${def.id}`, hidden: true, attrs: { role: 'tabpanel' } });
@@ -109,6 +114,7 @@
     }
     current = v;
     if (UI.state) renderSidebar(UI.state); // in or out of a web device's pages
+    if (current !== v) return; // it sent us elsewhere (this page is hidden for the device now): that page is shown
     v.page.hidden = false;
     v.navBtn.classList.add('active');
     v.navBtn.setAttribute('aria-selected', 'true');

@@ -41,6 +41,10 @@ body {
   -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; overscroll-behavior: none;
 }
 [hidden] { display: none !important; }
+/* The language picker's flags where the system has none (Windows, Linux): only the regional-indicator
+   letters use this font. Twemoji art, CC-BY 4.0. */
+@font-face { font-family: "TwinDesk Flags"; src: url("/lang/flags.woff2") format("woff2"); unicode-range: U+1F1E6-1F1FF; }
+html.flagfont body { font-family: "TwinDesk Flags", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif; }
 button, input, textarea, select { font: inherit; color: inherit; }
 a { color: var(--accent); text-decoration: none; }
 b { font-weight: 600; }
@@ -232,6 +236,7 @@ html.solo .page { overflow: visible; padding: 8px 32px 48px; max-width: 1120px; 
 .promo-grid .promo h1 { font-size: 44px; letter-spacing: -0.03em; }
 .promo-grid .feat { grid-template-columns: repeat(3, 1fr); }
 .promo-grid .aside { position: sticky; top: 20px; display: grid; gap: 0; }
+.promo-grid .aside-gap { height: 30px; }
 
 /* ---- Files and the Drop ---- */
 .dropzone {
@@ -330,6 +335,13 @@ html.wide .toast { bottom: 28px; }
   .promo-grid .promo { text-align: center; }
   .promo-grid .promo p { margin: 0 auto; }
   .promo-grid .feat { grid-template-columns: 1fr 1fr; }
+  /* One column (an iPad held upright): pairing right under the title, as on a phone, not below
+     the features and downloads. */
+  .promo-grid .promo-main { display: contents; }
+  .promo-grid .promo { order: 0; }
+  .promo-grid .aside { order: 1; position: static; }
+  .promo-grid .aside-gap { display: none; }
+  .promo-grid .promo-main > :not(.promo) { order: 2; }
 }
 @media (min-width: 560px) { .tiles { grid-template-columns: repeat(6, 1fr); } }
 
@@ -451,3 +463,6 @@ html.presenting .page { padding-bottom: 90px; }
 /* A clipboard alert tapped where the page couldn't write the clipboard by itself: one tap does it. */
 .copy-bar { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 84px); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-radius: 18px; background: var(--card); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); max-width: 560px; margin: 0 auto; }
 .copy-bar > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+/* About: who made it, under the name */
+.about-hero .muted { max-width: 420px; margin: 0 auto; }
+.about-hero .about-by { color: var(--accent); font-weight: 600; font-size: 13px; margin: 8px 0 0; }

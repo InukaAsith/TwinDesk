@@ -38,6 +38,8 @@ const ALIGN = 1024 * 1024;
 const READ_BYTES = 1024 * 1024;
 const WRITE_BYTES = 1024 * 1024; // gathered before a write at an offset
 const IDLE_MS = 30000;
+const REAP_MS = 10 * 60 * 1000; // a transfer or a served file nothing moved on for this long is dropped
+const REAP_EVERY_MS = 60000;
 const BYTES_MS = 50; // progress at most this often per file
 
 // [{i, off, len}] for a file of `size` bytes (the same on both sides).
@@ -136,6 +138,7 @@ class Engine {
     this.pulls = new Map(); // id -> {reqs, done}
     this.counts = new Map(); // id\0dir -> bytes not told yet
     this.countTimer = null;
+    this.reaper = null; // runs only while something is incoming or served (_arm), so an idle engine never wakes
     this.agent = this._agent();
     this.plainAgent = new http.Agent({ keepAlive: true, maxSockets: 32 });
   }
@@ -247,6 +250,7 @@ class Engine {
       return res.end();
     }
     s.busy.add(r.i);
+    s.touched = Date.now();
     const hash = crypto.createHash('sha256');
     const rs = r.len ? fs.createReadStream(s.path, { start: r.off, end: r.off + r.len - 1, highWaterMark: READ_BYTES }) : null;
     s.reqs.add(res);
@@ -270,13 +274,14 @@ class Engine {
     });
     if (!rs) return res.end();
     rs.on('error', gone);
-    rs.on('data', (b) => { hash.update(b); s.sent += b.length; this._count(id, 'send', b.length); });
+    rs.on('data', (b) => { hash.update(b); s.sent += b.length; s.touched = Date.now(); this._count(id, 'send', b.length); });
     rs.pipe(res);
   }
 
   _serve(m) {
     const ranges = plan(m.size);
-    this.serving.set(m.id, { path: m.path, size: Number(m.size), hashes: new Array(ranges.length), left: ranges.length, busy: new Set(), reqs: new Set(), sent: 0 });
+    this.serving.set(m.id, { path: m.path, size: Number(m.size), hashes: new Array(ranges.length), left: ranges.length, busy: new Set(), reqs: new Set(), sent: 0, touched: Date.now() });
+    this._arm();
   }
 
   // PUT: a range of a file the guest sends us. The first one asks main where it goes ('want').
@@ -284,8 +289,9 @@ class Engine {
     let f = this.incoming.get(id);
     if (!f) {
       const ranges = plan(r.total);
-      f = { size: r.total, path: undefined, fd: null, hashes: new Array(ranges.length), left: ranges.length, queue: [], reqs: new Set(), busy: new Set(), got: 0 };
+      f = { size: r.total, path: undefined, fd: null, hashes: new Array(ranges.length), left: ranges.length, queue: [], reqs: new Set(), busy: new Set(), got: 0, touched: Date.now() };
       this.incoming.set(id, f);
+      this._arm();
       this.post({ ev: 'want', id, size: r.total });
     }
     if (f.size !== r.total || f.hashes[r.i] !== undefined || f.busy.has(r.i)) {
@@ -293,9 +299,26 @@ class Engine {
       return res.end();
     }
     f.busy.add(r.i);
+    f.touched = Date.now();
     req.pause();
     f.reqs.add(req);
-    const go = () => this._takeRange(id, f, r, req, () => { res.writeHead(200); res.end(); }, (code) => { res.writeHead(code); res.end(); });
+    // A request that dies while it waits for 'target' frees its range, so a retry is not met by
+    // 409s; when nothing of the file is left the file fails instead of wedging behind `incoming`.
+    let taken = false;
+    const go = () => {
+      if (req.destroyed) return drop();
+      taken = true;
+      this._takeRange(id, f, r, req, () => { res.writeHead(200); res.end(); }, (code) => { res.writeHead(code); res.end(); });
+    };
+    const drop = () => {
+      if (taken || this.incoming.get(id) !== f || !f.reqs.delete(req)) return;
+      f.busy.delete(r.i);
+      const qi = f.queue.indexOf(go);
+      if (qi !== -1) f.queue.splice(qi, 1);
+      if (!f.reqs.size && !f.busy.size) this._failed(id, 'recv', new Error('the transfer stopped'), f.got === 0);
+    };
+    req.on('aborted', drop);
+    req.on('close', drop);
     if (f.path === undefined) f.queue.push(go);
     else go();
   }
@@ -328,6 +351,7 @@ class Engine {
         return this._failed(id, 'recv', new Error('more data than offered'));
       }
       f.got += b.length;
+      f.touched = Date.now();
       this._count(id, 'recv', b.length);
     });
     src.on('error', () => {});
@@ -466,6 +490,23 @@ class Engine {
     if (!v) return;
     this.counts.delete(k);
     this.post({ ev: 'bytes', id, dir, n: v });
+  }
+
+  // A transfer or a served file nothing has moved on for a while is dropped: a peer that goes
+  // quiet mid-file otherwise leaves an open fd and a wedged id until 'reset'.
+  _arm() {
+    if (this.reaper) return;
+    this.reaper = setInterval(() => this._reap(), REAP_EVERY_MS);
+    this.reaper.unref();
+  }
+
+  _reap() {
+    if (!this.incoming.size && !this.serving.size) { clearInterval(this.reaper); this.reaper = null; return; }
+    const now = Date.now();
+    for (const [id, f] of this.incoming)
+      if (now - f.touched > REAP_MS) this._failed(id, 'recv', new Error('the transfer stalled'), f.got === 0);
+    for (const [id, s] of this.serving)
+      if (now - s.touched > REAP_MS) this._failed(id, 'send', new Error('the transfer stalled'), s.sent === 0);
   }
 
   // A file failed (once): everything of it stops; main hears why.

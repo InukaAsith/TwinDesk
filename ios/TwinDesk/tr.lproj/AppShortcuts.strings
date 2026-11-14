@@ -1,0 +1,7 @@
+/* Siri and Spotlight phrases. */
+"Send clipboard with ${applicationName}" = "${applicationName} ile panoyu gönder";
+"Save copied files with ${applicationName}" = "${applicationName} ile kopyalanan dosyaları kaydet";
+"Connect with ${applicationName}" = "${applicationName} ile bağlan";
+"Show computer screen with ${applicationName}" = "${applicationName} ile bilgisayar ekranını göster";
+"Play or pause with ${applicationName}" = "${applicationName} ile oynat veya duraklat";
+"Lock computer with ${applicationName}" = "${applicationName} ile bilgisayarı kilitle";

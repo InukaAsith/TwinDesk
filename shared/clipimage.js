@@ -292,6 +292,87 @@ class ClipImages {
   }
 }
 
+// Multi-device (mac|windows|linux/mesh clipboard): the same pictures with every connected device.
+// Each device has its own clip.policy (images: it takes them), its own sender and receiver; a
+// picture goes straight to each device that takes pictures (not relayed by the pool), never over
+// Bluetooth. o, as ClipImages', with: ids() → connected device ids, send(id, msg), backlog(id),
+// ble(id), peerName(id), remember(dir, item, fromName).
+class MeshClipImages extends ClipImages {
+  constructor(o) {
+    super({ ...o, send: () => false, connected: () => false, ble: () => true, peerName: () => '' });
+    this.peers = new Map(); // id → {images, out: ImageOut, in: ImageIn}
+  }
+  _peer(id) {
+    let p = this.peers.get(id);
+    if (!p) {
+      p = { images: false, in: new ImageIn() };
+      p.out = new ImageOut({ send: (m) => this.o.send(id, m), backlog: () => this.o.backlog(id), open: () => this._takes(id) });
+      this.peers.set(id, p);
+    }
+    return p;
+  }
+  _takes(id) {
+    const c = this.o.cfg();
+    const p = this.peers.get(id);
+    return !!(this.on && c.send && p && p.images && this.o.ids().includes(id) && !this.o.ble(id));
+  }
+  get targets() {
+    return this.o.ids().filter((id) => this._takes(id));
+  }
+  get canSend() {
+    return this.targets.length > 0;
+  }
+  // Some connected device takes pictures (the Clipboard tab's note).
+  get peerImages() {
+    return this.o.ids().some((id) => (this.peers.get(id) || {}).images === true);
+  }
+  set peerImages(_) { /* per device here */ }
+  policy(m, id) {
+    if (id) this._peer(id).images = !!m && m.images === true;
+  }
+  reset(id) {
+    const p = id && this.peers.get(id);
+    if (!p) return;
+    p.images = false;
+    p.out.cancel();
+    p.in.drop();
+  }
+  text() {
+    for (const p of this.peers.values()) { p.out.cancel(); p.in.drop(); }
+  }
+  header(m, from) {
+    if (!from) return;
+    this._gotFrom(this._peer(from).in.header(m), from).catch((e) => console.error('[clip] picture not copied:', e.message));
+  }
+  part(m, from) {
+    if (!from) return;
+    this._gotFrom(this._peer(from).in.part(m), from).catch((e) => console.error('[clip] picture not copied:', e.message));
+  }
+  async _send(img) {
+    const p = pngOf(img);
+    if (!p) return 'skipped a picture over ' + Math.round(MAX / 1048576) + ' MB';
+    const ids = this.targets;
+    const ok = (await Promise.all(ids.map((id) => this._peer(id).out.send(p.png, { w: p.w, h: p.h })))).some(Boolean);
+    if (!ok) return '';
+    this.o.remember('out', this._item(p, img, false), '');
+    this.o.onChange();
+    return 'sent';
+  }
+  async _gotFrom(pic, from) {
+    if (!pic || !this.accept) return;
+    const img = this.nativeImage.createFromBuffer(pic.png);
+    if (img.isEmpty()) return;
+    for (const p of this.peers.values()) p.out.cancel(); // theirs is newer than a picture of ours still going
+    this.sig.received = sigOf(img);
+    await writeClipImage(this.clipboard, img, pic.png);
+    this.sig.received = sigOf(await this._read()) || sigOf(img);
+    const name = this.o.peerName(from) || 'another device';
+    this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot), name);
+    this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${name} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name, keys: this.o.pasteKeys || 'Ctrl+V' } });
+    this.o.onChange();
+  }
+}
+
 // Recent items keep at most this many pictures to copy again (each up to 10 MB); older picture
 // items stay listed without one.
 const KEEP_PICTURES = 5;
@@ -306,4 +387,4 @@ function itemView(h, preview) {
   return { dir: h.dir, at: h.at, size: h.size, text: h.text.slice(0, preview) };
 }
 
-module.exports = { ImageOut, ImageIn, ClipImages, pngOf, sigOf, isPng, trimPictures, itemView, readClipImage, writeClipImage };
+module.exports = { ImageOut, ImageIn, ClipImages, MeshClipImages, pngOf, sigOf, isPng, trimPictures, itemView, readClipImage, writeClipImage };

@@ -29,7 +29,27 @@ struct TileLayout: Equatable {
             let s = x["s"] as? String ?? "s"
             return TileItem(id: id, size: ["s", "w", "b"].contains(s) ? s : "s")
         }
-        return TileLayout(rows: (o["rows"] as? Int) == 2 ? 2 : 1, items: items)
+        return TileLayout(rows: max(1, min(maxRows, (o["rows"] as? Int) ?? 1)), items: items)
+    }
+    static let maxRows = 8 // as many rows as people like, up to a screenful
+
+    // A quick action on or off from its own page (Open Deck from the Deck page).
+    static func has(_ store: Store, _ id: String) -> Bool { load(store).items.contains { $0.id == id } }
+    static func set(_ store: Store, _ id: String, _ on: Bool) {
+        var l = load(store)
+        let has = l.items.contains { $0.id == id }
+        if on && !has { l.items.append(TileItem(id: id, size: "s")); l.save(store) }
+        else if !on && has { l.items.removeAll { $0.id == id }; l.save(store) }
+    }
+
+    // A Deck tile among the quick actions ("deck:<its id>"): on or off from the Deck's tile editor.
+    static func pinned(_ store: Store, _ tile: String) -> Bool { load(store).items.contains { $0.id == "deck:" + tile } }
+    static func pin(_ store: Store, _ tile: String, _ on: Bool) {
+        var l = load(store)
+        let id = "deck:" + tile
+        let has = l.items.contains { $0.id == id }
+        if on && !has { l.items.append(TileItem(id: id, size: "s")); l.save(store) }
+        else if !on && has { l.items.removeAll { $0.id == id }; l.save(store) }
     }
 
     func save(_ store: Store) {
@@ -45,7 +65,7 @@ struct TileLayout: Equatable {
         var taken = Set<Int>() // col * 8 + row
         return items.map { it in
             let w = it.size == "s" ? 1 : 2
-            let h = it.size == "b" && rows == 2 ? 2 : 1
+            let h = it.size == "b" && rows >= 2 ? 2 : 1
             var col = 0
             while true {
                 for r in 0...(rows - h) {
@@ -92,9 +112,9 @@ struct TilesCard: View {
         let shown = auto + layout.items.filter { byId[$0.id].map { editing || $0.has } ?? false }
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Quick actions").font(.headline)
+                Text(tr("Quick actions")).font(.headline)
                 Spacer()
-                Button(editing ? "Done" : "Edit") { withAnimation(Self.anim) { editing.toggle(); sel = nil } }
+                Button(editing ? tr("Done") : tr("Edit")) { withAnimation(Self.anim) { editing.toggle(); sel = nil } }
                     .font(.subheadline.weight(editing ? .semibold : .regular))
             }
             let cell = min(120, (width - gap * 3) / 4)
@@ -102,7 +122,7 @@ struct TilesCard: View {
             let cols = placed.map { $0.col + $0.w }.max() ?? 0
             Group {
                 if placed.isEmpty {
-                    Text(editing ? "Add quick actions below." : "No quick actions. Tap Edit to add some.").font(.footnote).foregroundStyle(.secondary)
+                    Text(editing ? tr("Add quick actions below.") : tr("No quick actions. Tap Edit to add some.")).font(.footnote).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -184,7 +204,7 @@ struct TilesCard: View {
                 }
                 .buttonStyle(.plain)
                 .offset(x: -5, y: -5)
-                .accessibilityLabel("Remove \(d.label)")
+                .accessibilityLabel(tr("Remove {label}", ["label": d.label]))
             }
         }
         .offset(x: (cell + gap) * CGFloat(p.col), y: (cell + gap) * CGFloat(p.row))
@@ -211,12 +231,10 @@ struct TilesCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Divider()
             HStack {
-                Text("Rows")
+                Text(tr("Rows"))
                 Spacer()
-                Picker("Rows", selection: Binding(get: { layout.rows }, set: { v in withAnimation(Self.anim) { set(TileLayout(rows: v, items: layout.items)) } })) {
-                    Text("One").tag(1); Text("Two").tag(2)
-                }
-                .pickerStyle(.segmented).frame(width: 150)
+                Stepper("\(layout.rows)", value: Binding(get: { layout.rows }, set: { v in withAnimation(Self.anim) { set(TileLayout(rows: v, items: layout.items)) } }), in: 1...TileLayout.maxRows)
+                    .fixedSize()
             }
             if let id = sel, let i = layout.items.firstIndex(where: { $0.id == id }), let d = byId[id] {
                 HStack(spacing: 10) {
@@ -226,24 +244,24 @@ struct TilesCard: View {
                     Button { move(i, 1) } label: { Image(systemName: "chevron.right") }.secondaryButton().disabled(i == layout.items.count - 1)
                 }
                 HStack {
-                    Text("Size")
+                    Text(tr("Size"))
                     Spacer()
                     // Large is two by two: with one row, small or wide.
                     let cur = layout.items[i].size == "b" && layout.rows == 1 ? "w" : layout.items[i].size
-                    Picker("Size", selection: Binding(get: { cur }, set: { v in
+                    Picker(tr("Size"), selection: Binding(get: { cur }, set: { v in
                         withAnimation(Self.anim) { var l = layout; l.items[i].size = v; set(l) }
                     })) {
-                        Text("Small").tag("s"); Text("Wide").tag("w")
-                        if layout.rows == 2 { Text("Large").tag("b") }
+                        Text(tr("Small")).tag("s"); Text(tr("Wide")).tag("w")
+                        if layout.rows >= 2 { Text(tr("Large")).tag("b") }
                     }
-                    .pickerStyle(.segmented).frame(width: layout.rows == 2 ? 210 : 150)
+                    .pickerStyle(.segmented).frame(width: layout.rows >= 2 ? 210 : 150)
                 }
             } else {
-                Text("Tap a quick action to move or resize it, or − to remove it.").font(.footnote).foregroundStyle(.secondary)
+                Text(tr("Tap a quick action to move or resize it, or − to remove it.")).font(.footnote).foregroundStyle(.secondary)
             }
-            let rest = defs.filter { d in d.has && !d.id.hasPrefix("auto.") && !layout.items.contains { $0.id == d.id } }
+            let rest = defs.filter { d in d.has && !d.id.hasPrefix("auto.") && !d.id.hasPrefix("deck:") && !layout.items.contains { $0.id == d.id } }
             if !rest.isEmpty {
-                Text("Add").font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+                Text(tr("Add")).font(.footnote.weight(.medium)).foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
                     ForEach(rest, id: \.id) { d in
                         Button {
@@ -262,7 +280,7 @@ struct TilesCard: View {
                     }
                 }
             }
-            Button("Reset to default", role: .destructive) {
+            Button(tr("Reset to default"), role: .destructive) {
                 withAnimation(Self.anim) { core.store.setString(TileLayout.key, ""); layout = .standard; sel = nil }
             }
             .font(.footnote)

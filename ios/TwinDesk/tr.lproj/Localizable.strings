@@ -1,0 +1,12 @@
+/* Shortcuts: the actions’ titles and descriptions (iOS shows them in the iPhone’s language). */
+"Send Clipboard to Computer" = "Panoyu bilgisayara gönder";
+"Sends what you copied on this iPhone to the connected computer." = "Bu iPhone’da kopyaladığınızı bağlı bilgisayara gönderir.";
+"Save Files Copied on Computer" = "Bilgisayarda kopyalanan dosyaları kaydet";
+"Brings the files copied on the computer (⌃⌥C there) to Files › TwinDesk." = "Bilgisayarda kopyalanan dosyaları (orada ⌃⌥C) Dosyalar › TwinDesk’e getirir.";
+"Connect to Computer" = "Bilgisayara bağlan";
+"Send Files to Computer" = "Dosyaları bilgisayara gönder";
+"Sends files or photos to the connected computer (its Downloads)." = "Dosyaları veya fotoğrafları bağlı bilgisayara (İndirilenler’ine) gönderir.";
+Files = "Dosyalar";
+"Show Computer’s Screen" = "Bilgisayarın ekranını göster";
+"Play or Pause on Computer" = "Bilgisayarda Oynat veya Duraklat";
+"Lock Computer" = "Bilgisayarı kilitle";

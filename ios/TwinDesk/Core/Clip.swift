@@ -50,7 +50,7 @@ final class Clip: Feature {
     var autoCopy: Bool { core.store.flag("clip.auto", true) }
     var notify: Bool { core.store.flag("clip.notify", true) }
     var notifyOwn: Bool { core.store.flag("clip.notifyOwn", true) }
-    var pictures: Bool { core.store.flag("clip.images", true) }
+    var pictures: Bool { core.store.flag("clip.images", false) }
 
     func setOption(_ key: String, _ on: Bool) {
         core.store.setFlag(key, on)
@@ -156,10 +156,10 @@ final class Clip: Feature {
     private func receivePicture(_ png: Data, _ w: Int, _ h: Int) {
         guard let img = UIImage(data: png) else { return }
         expectEcho()
-        remember(Item(dir: "in", text: "Picture · \(w) × \(h)", pic: true))
+        remember(Item(dir: "in", text: tr("Picture · {w} × {h}", ["w": w, "h": h]), pic: true))
         writeImage(img)
         if notify && UIApplication.shared.applicationState != .active {
-            Notifier.shared.clipIn("Picture · \(w) × \(h)", from: core.link.host?.name ?? "Computer", copied: true)
+            Notifier.shared.clipIn(tr("Picture · {w} × {h}", ["w": w, "h": h]), from: core.link.host?.name ?? "Computer", copied: true)
         }
     }
 
@@ -169,6 +169,7 @@ final class Clip: Feature {
     private func startWatching() {
         if watch != nil { return }
         watch = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.check() }
+        watch?.tolerance = 0.5 // iOS may fold it into other wakeups (battery)
     }
 
     func appBecameActive() { check() }
@@ -188,7 +189,7 @@ final class Clip: Feature {
             sendCurrent(force: false)
         } else if notifyOwn {
             let hasImage = UIPasteboard.general.hasImages
-            Notifier.shared.clipOut(to: core.link.host?.name ?? "the computer", picture: hasImage)
+            Notifier.shared.clipOut(to: core.link.host?.name ?? tr("the computer"), picture: hasImage)
         }
     }
 
@@ -230,11 +231,14 @@ final class Clip: Feature {
             }
         }
         expectEcho()
-        remember(Item(dir: "out", text: "Picture · \(w) × \(h)", pic: true))
+        remember(Item(dir: "out", text: tr("Picture · {w} × {h}", ["w": w, "h": h]), pic: true))
         return true
     }
 
+    func clearHistory() { history = []; core.changed() }
+
     private func remember(_ item: Item) {
+        if !item.pic { core.history.addClip(item.dir, item.text) } // History.swift
         history.removeAll { $0.text == item.text }
         history.insert(item, at: 0)
         if history.count > 20 { history.removeLast(history.count - 20) }

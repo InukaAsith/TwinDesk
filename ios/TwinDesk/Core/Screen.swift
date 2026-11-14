@@ -29,7 +29,7 @@ final class Screen: Feature {
 
     // ---- options (General › Receive screen, and the viewer's bar) ----
     var touchpad: Bool { core.store.flag("screen.touchpad", false) } // off: touch screen (the pointer is where the finger is)
-    var sound: Bool { core.store.flag("screen.sound", true) }
+    var sound: Bool { core.store.flag("screen.sound", false) }
     var smooth: Bool { core.store.flag("screen.smooth", false) }
     var pen: Bool { core.store.flag("screen.pen", true) }
     var penFast: Bool { core.store.flag("screen.penFast", false) } // Fast writing: the Pencil's samples batched (viewer.js)
@@ -41,7 +41,7 @@ final class Screen: Feature {
     }
 
     func opts() -> JSON {
-        msg("opts", ["sound": sound, "pacing": smooth ? "smooth" : "fast", "name": core.host?.name ?? "the computer",
+        msg("opts", ["sound": sound, "pacing": smooth ? "smooth" : "fast", "name": core.host?.name ?? tr("the computer"),
                      "touch": touchpad ? "pad" : "direct", "speed": core.remote.speed, "tap": core.remote.tapClick, "pen": pen, "penFast": penFast])
     }
 
@@ -61,7 +61,7 @@ final class Screen: Feature {
         let px = UIScreen.main.nativeBounds.size
         core.send(msg("screen.policy", ["accept": true, "width": Int(max(px.width, px.height)), "height": Int(min(px.width, px.height))]))
         if state == nil { wantStart = true } else { startIfNeeded() }
-        UIApplication.shared.isIdleTimerDisabled = true
+        Awake.hold("viewer", true)
         core.changed()
     }
 
@@ -77,7 +77,7 @@ final class Screen: Feature {
         }
         startedByUs = false
         autoOpened = false
-        UIApplication.shared.isIdleTimerDisabled = false
+        Awake.hold("viewer", false)
         core.changed()
     }
 
@@ -122,7 +122,7 @@ final class Screen: Feature {
             if let w = was, !w.bool("on"), on, !viewing, !startedByUs {
                 autoOpened = true
                 if UIApplication.shared.applicationState == .active { autoOpen = true }
-                else { Notifier.shared.screen(core.host?.name ?? "Your computer") }
+                else { Notifier.shared.screen(core.host?.name ?? tr("Your computer")) }
             }
             if !on { Notifier.shared.cancel("screen") }
             if wantStart { startIfNeeded() }

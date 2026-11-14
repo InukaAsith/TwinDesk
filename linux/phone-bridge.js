@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { uhidKey } = require('../shared/uhidkbd.js');
 const { Adb } = require('./adb');
 const { Session, ACTION } = require('./scrcpy');
 const { KeyState, ANDROID } = require('./android-keys');
@@ -806,6 +807,8 @@ class PhoneBridge extends EventEmitter {
     const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
     const e = this.keys.event(code, down);
+    // Phone › Type as a hardware keyboard: a HID keyboard on the phone, its own layout (#123).
+    if (uhidKey(this.ctl, (this.getSettings().phone || {}).uhid === true, code, down)) return;
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
 

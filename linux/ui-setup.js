@@ -11,7 +11,7 @@ UI.setup = (() => {
   const { el, api } = UI;
   const t = (...args) => I18n.t(...args);
   const language = UI.select([
-    { value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }, { value: 'ru', label: 'Русский' }, { value: 'tr', label: 'Türkçe' },
+    { value: 'en', label: '🇬🇧 English' }, { value: 'zh-CN', label: '🇨🇳 简体中文' }, { value: 'ru', label: '🇷🇺 Русский' }, { value: 'tr', label: '🇹🇷 Türkçe' }, { value: 'pt-BR', label: '🇧🇷 Português (Brasil)' },
   ], (v) => api.setLanguage(v));
   language.set(I18n.locale);
   const done = () => el('span', { class: 'pill good', text: t('Done') });
@@ -32,7 +32,7 @@ UI.setup = (() => {
     el('div', { class: 'app-mark', attrs: { 'aria-hidden': 'true' } }),
     el('h1', { text: t('Set up TwinDesk') }),
     el('p', { text: t('A few things before {me} can share with the other computer.') }),
-    UI.card('', [UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language])]),
+    UI.card('', [UI.row(t('Language'), t('Some pages are still in English. Changing the language restarts TwinDesk.'), [language])]),
     UI.card('', [sessRow, inRow, fwRow, helperRow]),
     el('div', { class: 'setup-foot' }, [
       el('span', { class: 'hint', text: t('You can change these later in General.') }),

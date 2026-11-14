@@ -32,6 +32,8 @@ const FEATURES = {
 const VALUES = {
   rezume: { path: ['rezume', 'on'], allowed: [true, false], feature: 'rezume' }, // only where the app has ReZume
   pace: { path: ['sharing', 'pace'], allowed: ['fast', 'smooth', 'steady'] },
+  // Share screen › Resolution, the same as a phone's Receive screen page (only with a phone).
+  res: { path: ['streamMaxHeight'], allowed: [0, 1080, 1440, 2160], phone: true },
   gestures: { path: ['kvm', 'gestures'], allowed: [true, false] },
   syncPads: { path: ['kvm', 'syncPads'], allowed: [true, false] }, // one pointer for every mouse (kvm.js 'local')
   ble: { path: ['kvm', 'ble'], allowed: [true, false] }, // cursor sharing over Bluetooth (kvm.js)
@@ -44,8 +46,9 @@ const VALUES = {
 
 class PairSync {
   // only: the features this app has (else all of them)
-  constructor({ server, getSettings, saveSettings, apply, only }) {
-    Object.assign(this, { server, getSettings, saveSettings, apply });
+  // bus (mesh hub): pair.sync from every connected device; peerRole / peerOs name them for stash + welcome
+  constructor({ server, getSettings, saveSettings, apply, only, bus, peerRole, peerOs }) {
+    Object.assign(this, { server, getSettings, saveSettings, apply, bus: bus || null, peerRole, peerOs });
     this.features = Object.fromEntries(Object.entries(FEATURES).filter(([f]) => !only || only.includes(f)));
     this.last = null; // values as both sides agree on them now
     this.peerId = null;
@@ -60,21 +63,82 @@ class PairSync {
     server.on('closed', () => {
       if (!server.current) this.peerId = null;
     });
-    server.on(`t:${P.T.PAIR_SYNC}`, (m) => {
-      const vals = this._values();
-      if (vals[m.key] && vals[m.key].allowed.includes(m.value)) return this._adopt({ values: { [m.key]: m.value } });
-      if (m.all && typeof m.all === 'object') {
-        const mine = { values: {} };
-        for (const [k, d] of Object.entries(vals)) if (m.all.values && d.allowed.includes(m.all.values[k])) mine.values[k] = m.all.values[k];
-        for (const f of Object.keys(this.features)) {
-          const v = m.all[f];
-          if (v && typeof v === 'object') mine[f] = { out: v.in, in: v.out }; // their in = our out (what they don't have stays)
-        }
-        this._adopt(mine);
-      } else if (this.features[m.feature] && (m.dir === 'out' || m.dir === 'in')) {
-        this._adopt({ [m.feature]: { [m.dir === 'out' ? 'in' : 'out']: !!m.on } });
+    server.on(`t:${P.T.PAIR_SYNC}`, (m) => this._applySync(m));
+    if (this.bus) {
+      this.bus.on(P.T.PAIR_SYNC, (m, fromId) => {
+        if (fromId !== this.bus.selectedId()) this._stash(fromId, m);
+      });
+      this.bus.onPeer('welcome', (id) => this._busWelcome(id));
+    }
+  }
+
+  _valuesForPeer(peerId) {
+    const phone = !!(this.peerOs && P.isPhoneOs(this.peerOs(peerId)));
+    return Object.fromEntries(Object.entries(VALUES).filter(([, d]) => (phone || !d.phone) && (!d.feature || this.features[d.feature])));
+  }
+
+  // A wire message as values to remember for a peer (directions from our side), without touching live settings.
+  _wireToSaved(m, peerId) {
+    const vals = this._valuesForPeer(peerId);
+    if (vals[m.key] && vals[m.key].allowed.includes(m.value)) return { values: { [m.key]: m.value } };
+    if (m.all && typeof m.all === 'object') {
+      const mine = { values: {} };
+      for (const [k, d] of Object.entries(vals)) if (m.all.values && d.allowed.includes(m.all.values[k])) mine.values[k] = m.all.values[k];
+      for (const f of Object.keys(this.features)) {
+        const v = m.all[f];
+        if (v && typeof v === 'object') mine[f] = { out: v.in, in: v.out };
       }
-    });
+      return mine;
+    }
+    if (this.features[m.feature] && (m.dir === 'out' || m.dir === 'in')) {
+      return { [m.feature]: { [m.dir === 'out' ? 'in' : 'out']: !!m.on } };
+    }
+    return null;
+  }
+
+  _mergeSaved(peerId, add) {
+    if (!add) return;
+    const store = this._byPeer();
+    const cur = store[peerId] || { values: {} };
+    for (const [k, v] of Object.entries(add.values || {})) cur.values[k] = v;
+    for (const [f, v] of Object.entries(add)) {
+      if (f === 'values' || !v) continue;
+      if (!cur[f]) cur[f] = {};
+      for (const dir of ['out', 'in']) {
+        if (typeof v[dir] === 'boolean') cur[f][dir] = v[dir];
+      }
+    }
+    store[peerId] = cur;
+    this.saveSettings();
+  }
+
+  _stash(peerId, m) {
+    this._mergeSaved(peerId, this._wireToSaved(m, peerId));
+  }
+
+  // A device connected while not selected: push what we remember for that pair (host only).
+  _busWelcome(peerId) {
+    if (!this.bus || peerId === this.bus.selectedId()) return;
+    if (this.peerRole && this.peerRole(peerId) !== 'guest') return;
+    const saved = this._byPeer()[peerId];
+    if (!saved) return;
+    this.bus.send(peerId, { t: P.T.PAIR_SYNC, all: saved });
+  }
+
+  _applySync(m) {
+    const vals = this._values();
+    if (vals[m.key] && vals[m.key].allowed.includes(m.value)) return this._adopt({ values: { [m.key]: m.value } });
+    if (m.all && typeof m.all === 'object') {
+      const mine = { values: {} };
+      for (const [k, d] of Object.entries(vals)) if (m.all.values && d.allowed.includes(m.all.values[k])) mine.values[k] = m.all.values[k];
+      for (const f of Object.keys(this.features)) {
+        const v = m.all[f];
+        if (v && typeof v === 'object') mine[f] = { out: v.in, in: v.out }; // their in = our out (what they don't have stays)
+      }
+      this._adopt(mine);
+    } else if (this.features[m.feature] && (m.dir === 'out' || m.dir === 'in')) {
+      this._adopt({ [m.feature]: { [m.dir === 'out' ? 'in' : 'out']: !!m.on } });
+    }
   }
 
   _byPeer() {
@@ -121,7 +185,7 @@ class PairSync {
     const out = {};
     for (const [f, d] of Object.entries(this.features)) out[f] = { out: this._get(s, d, 'out'), in: this._get(s, d, 'in') };
     out.values = {};
-    for (const [k, d] of Object.entries(this._values())) out.values[k] = s[d.path[0]][d.path[1]];
+    for (const [k, d] of Object.entries(this._values())) out.values[k] = d.path.length === 1 ? s[d.path[0]] : s[d.path[0]][d.path[1]];
     return out;
   }
 
@@ -133,7 +197,7 @@ class PairSync {
     for (const [k, v] of Object.entries(vals.values || {})) {
       const d = known[k];
       if (!d || now.values[k] === v) continue;
-      s[d.path[0]][d.path[1]] = v;
+      if (d.path.length === 1) s[d.path[0]] = v; else s[d.path[0]][d.path[1]] = v;
       now.values[k] = v;
       this.apply('value', k, v);
     }

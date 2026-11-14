@@ -80,18 +80,30 @@ class PhoneRemote {
       if (text && this._take(m.voice === true)) this.helper.send('type', { text });
     });
     on(T.REMOTE_PAD, (m) => this.padProc && this._take() && this.padProc.stdin.write(padBytes(m)));
+    // The presentation remote's laser: a red dot that follows the pointer, while Remote takes the phone's input.
+    on(T.REMOTE_LASER, (m) => this.laserSet(m.on === true && !this.why));
     on(T.REMOTE_RELEASE, () => {
+      this.laserSet(false);
       this.release();
       this.opened = false; // the page closed
       this.onChange();
     });
     // The phone went away holding a key (Wi-Fi dropped mid-press): let it go here.
     server.on('closed', () => {
+      this.laserSet(false);
       this.release();
       this._padStop();
       this.opened = false;
       this.onChange();
     });
+  }
+
+  laserSet(on) {
+    if (!on && !this.laser) return;
+    try {
+      if (!this.laser) this.laser = new (require('./laser.js').Laser)();
+      this.laser.set(on);
+    } catch (_) { /* no display here (tests) */ }
   }
 
   get allow() {

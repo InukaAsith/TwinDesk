@@ -20,6 +20,7 @@ const I18n = require('../shared/i18n.js');
 const { Session, ACTION, TYPE } = require('./scrcpy');
 const { NativeScreen } = require('../shared/nativescreen.js');
 const iosusb = require('./iosusb.js'); // an iPhone's screen over its cable
+const { uhidKey } = require('../shared/uhidkbd.js');
 const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
 const { DockStub, addToDock } = require('./dockstub');
@@ -476,6 +477,7 @@ class PhoneViews extends EventEmitter {
         const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
         if (this._special(v, code, !!m.down)) break;
         const e = v.keys.event(code, !!m.down);
+        if (uhidKey(s, (this.getSettings().phone || {}).uhid === true, code, !!m.down)) break; // a HID keyboard (#123)
         if (e) s.key(m.down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta, m.repeat ? 1 : 0);
         break;
       }

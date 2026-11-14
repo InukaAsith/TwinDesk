@@ -135,7 +135,7 @@ static void dispatch(const char *line) {
   } else if (!strcmp(cmd, "screens")) {
     // X11: XRandR knows better
   } else if (!strcmp(cmd, "windows")) {
-    wins_list(jnum(c, "id", 0)); // its own (long) reply
+    wins_list(jnum(c, "id", 0), jbool(c, "minimized", 0)); // its own (long) reply
     json_free(c);
     return;
   } else if (!strcmp(cmd, "activeWindow") || !strcmp(cmd, "windowAt")) {
@@ -144,6 +144,10 @@ static void dispatch(const char *line) {
     return;
   } else if (!strcmp(cmd, "winRaise")) {
     wins_raise((unsigned long)jnum(c, "wid", 0));
+  } else if (!strcmp(cmd, "winMin")) {
+    wins_min((unsigned long)jnum(c, "wid", 0));
+  } else if (!strcmp(cmd, "winFrame")) {
+    wins_frame((unsigned long)jnum(c, "wid", 0), (int)jnum(c, "x", 0), (int)jnum(c, "y", 0), (int)jnum(c, "w", 800), (int)jnum(c, "h", 600));
   } else if (!strcmp(cmd, "winClose")) {
     wins_close((unsigned long)jnum(c, "wid", 0));
   } else if (!strcmp(cmd, "winSize")) {

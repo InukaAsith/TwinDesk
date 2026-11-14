@@ -22,8 +22,9 @@ class Sound {
     this.status = { receiving: false, sending: false, error: '' };
 
     const link = this.link;
-    link.on('welcome', () => { this.macAccepts = false; this.apply(); });
-    link.on('closed', () => { this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); });
+    this.meshHub = opts.meshHub || null;
+    link.on('welcome', () => { this.macAccepts = false; this.apply(); this._syncAudioSticky(); });
+    link.on('closed', () => { this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this._syncAudioSticky(); });
     link.on(T.AUDIO_POLICY, (m) => {
       const accept = m.accept === true;
       if (accept === this.macAccepts) return; // apply() answers with our policy: only on a change, or the two sides echo forever
@@ -44,6 +45,7 @@ class Sound {
     ipcMain.on('sound-state', (e, s) => {
       if (!this.win || e.sender !== this.win.webContents || !s) return;
       Object.assign(this.status, { receiving: !!s.receiving, sending: !!s.sending, error: String(s.error || '') });
+      this._syncAudioSticky();
       this.onChange();
     });
     ipcMain.on('sound-ready', (e) => {
@@ -66,6 +68,13 @@ class Sound {
     return this.settings.audio;
   }
 
+  _syncAudioSticky() {
+    if (!this.meshHub) return;
+    const live = !!(this.sending || this.status.receiving);
+    const c = this.link.current;
+    this.meshHub.setAudioSticky('sound', live && c ? c.deviceId : null);
+  }
+
   // After welcome, a policy from the Mac, or a settings change.
   apply() {
     const connected = this.link.status.state === 'connected';
@@ -78,6 +87,7 @@ class Sound {
       this.sending = { session: ++this.session, muteLocal: this.cfg.muteLocal };
       this._toWin({ t: 'start-send', session: this.sending.session, ice: this._ice() });
     } else if (!want && this.sending) this._stopSend(true);
+    this._syncAudioSticky();
     this.onChange();
   }
 
@@ -86,6 +96,7 @@ class Sound {
     this.sending = null;
     this._toWin({ t: 'stop-send' });
     if (tellMac) this.link.send({ t: T.AUDIO_STOP, dir: 'w2m' });
+    this._syncAudioSticky();
   }
 
   // A phone on the USB cable: WebRTC through the relay (wired.js), else null.

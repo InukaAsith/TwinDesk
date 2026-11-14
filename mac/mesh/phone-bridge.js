@@ -1,4 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith, Erdoğan Yeşil. GPL-3.0, see LICENSE.
+// Multi-device: ../phone-bridge.js for one phone of several (mesh/phones.js), its Kvm routing by the
+// partner it drives (drives(id), drivable(), the reply hook), and what the USB cable says when adb
+// can't find the phone. When a fix in ../phone-bridge.js applies here too, make it in both.
 // Everything the Mac does to the phone through wireless debugging (adb.js + scrcpy.js), while a
 // phone is the peer:
 //   setup   find the phone's adb (mDNS), pair once with the code from Developer options, connect,
@@ -10,6 +13,9 @@
 //           the phone's clipboard (scrcpy reads it in the background, which the app can't).
 //   windows the phone's screen in a window, and phone apps in windows of their own, each on its
 //           own virtual display (phoneview.js).
+//   modes   ADB or Native for the mouse and keyboard, the screen and the sound (shared/phonemodes.js).
+//           Wireless debugging is only switched on, looked for and asked about while something
+//           uses it (adb.bridge need); otherwise this stays 'idle'.
 //
 // Events: 'change' — this.view changed; 'popup' (kind, text) — for the HUD.
 'use strict';
@@ -18,11 +24,14 @@ const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
-const { NativeScreen } = require('../../shared/nativescreen.js');
 const { Adb } = require('../adb');
 const { Session, ACTION } = require('../scrcpy');
 const { KeyState, ANDROID } = require('../android-keys');
+const chat = require('../../shared/phonechat.js');
+const { uhidKey } = require('../../shared/uhidkbd.js');
 const { PhoneInput } = require('../../shared/phoneinput.js');
+const Modes = require('../../shared/phonemodes.js');
+const { NativeScreen } = require('../../shared/nativescreen.js');
 
 const T = P.T;
 const APP_ID = 'com.twindesk.android';
@@ -63,11 +72,11 @@ function fullApk() {
 }
 
 class PhoneBridge extends EventEmitter {
-  constructor({ server, phone, getSettings, clipboard }) {
+  constructor({ server, phone, getSettings, clipboard, adb }) {
     super();
     Object.assign(this, { server, phone, getSettings, clipboard });
-    this.adb = new Adb();
-    // off | missing | waitingWifi | needsPair | connecting | ready | error
+    this.adb = adb || new Adb(); // phones share one adb (one adb server)
+    // off | idle (nothing uses it) | missing | waitingWifi | needsPair | connecting | ready | error
     this.state = 'off';
     this.message = '';
     this.serial = null;
@@ -97,6 +106,7 @@ class PhoneBridge extends EventEmitter {
         ph.input = m.via;
         ph.inputPicked = true;
         this.emit('save');
+        this._tellPhone(); // whether wireless debugging is still needed
       }
       this.emit('change');
     });
@@ -115,19 +125,24 @@ class PhoneBridge extends EventEmitter {
       this.pair(m.code, port > 0 && port < 65536 ? `${address}:${port}` : '');
     });
     phone.on('info', () => this._kick());
+    this.setup = false; // set up on purpose this session (Connection's Set Up, a pairing code)
     server.on('client', (ctx) => {
       if (isPhone(ctx)) {
-        this.adb.wake();
+        this.setup = false;
+        if (this.need) this.adb.wake();
         this._tellPhone();
         return this._kick();
       }
       this._stopAll('');
     });
     server.on('closed', () => {
-      if (!isPhone(server.current)) this._stopAll('');
+      if (!isPhone(server.current)) {
+        this.setup = false; // (its native screen window closes with the views: other phones keep theirs)
+        this._stopAll('');
+      }
     });
-    // An iPhone's Share Screen (its broadcast extension): to its window here (phoneview.js native).
-    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && m && NativeScreen.state(m));
+    // The phone's own screen capture (Mirroring › Native): to its window.
+    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && m && NativeScreen.state(m)); // an iPhone's too (its broadcast extension)
     // The phone's sound without wireless debugging (Sound.kt there): asked for while adb can't carry
     // it; what comes plays in a hidden window (phoneview.js netSound).
     this.netSound = { asked: false, on: false, waiting: false, error: '' };
@@ -159,6 +174,10 @@ class PhoneBridge extends EventEmitter {
       state: this.state, message: this.message, serial: this.serial, available: this.adb.available, canPair: this.canPair, inputBlocked: this.inputBlocked,
       via: this.via, // 'usb' | 'wifi' | null: how adb reaches the phone
       input: this.inputVia, inputMode: this.inputMode, // the mouse and keyboard: what they go through now, and the choice
+      // The screen and the sound, the same way ('adb' | 'native', and 'auto' | 'adb' | 'native');
+      // nativeMirror: the phone's app can share its screen itself (an older one can't); need: wireless debugging is wanted
+      mirror: this.mirrorVia, mirrorMode: this.mirrorMode, nativeMirror: this.nativeMirrorOk,
+      soundVia: this.soundVia, soundMode: this.soundMode, need: this.need,
       control: !!(this.control && !this.control.closed), driving: !!this.kvm,
       install: this.install, fullApk: !!fullApk(), appInstall: this.appInstall || null, // appInstall: Phone › Apps › Install Apps (shared/apkinstall.js)
       windows: this.views ? this.views.list() : [],
@@ -183,11 +202,13 @@ class PhoneBridge extends EventEmitter {
     return /[:]/.test(this.serial) || this.serial.includes('._adb-tls') ? 'wifi' : 'usb';
   }
 
-  // viewed: a phone window is open here (meanwhile the phone keeps its Wi-Fi out of power save).
+  // viewed: a phone window is open here (meanwhile the phone keeps its Wi-Fi out of power save);
+  // camera: its camera here, for its Camera page ({on, facing, error, virtual}: phoneview.js cameraState).
   _tellPhone() {
     if (!isPhone(this.server.current)) return;
     const viewed = !!(this.views && this.views.list().length);
-    this.server.sendToClient({ t: T.ADB_BRIDGE, state: this.state, message: this.message, canPair: this.canPair, inputBlocked: this.inputBlocked, viewed });
+    const camera = this.views ? this.views.cameraState() : null;
+    this.server.sendToClient({ t: T.ADB_BRIDGE, state: this.state, message: this.message, canPair: this.canPair, inputBlocked: this.inputBlocked, viewed, camera, need: this.need });
   }
 
   // MIUI and HyperOS refuse adb's touches and keys (INJECT_EVENTS) until Developer options ›
@@ -222,12 +243,16 @@ class PhoneBridge extends EventEmitter {
   // The phone's sound here when Sound › receive is on (the screen window carries its own): through
   // adb once it's ready, else captured by the phone (Start there), which then stays until it stops.
   // Not through Bluetooth: too much for it.
+  // Sound › ADB or Native (soundMode): picked, only that; Automatic as before. A Native screen window
+  // with its sound takes the phone's own capture too.
   _sound() {
     if (!this.views) return;
     const c = this.server.current;
     const want = isPhone(c) && !!this.getSettings().audio.receive && !this.views.screenWithSound;
     const adb = this.state === 'ready';
-    const net = want && (!adb || this.netSound.on) && c.transport !== 'ble';
+    const mode = this.soundMode;
+    const viaNet = mode === 'native' || (mode === 'auto' && (!adb || this.netSound.on));
+    const net = isPhone(c) && c.transport !== 'ble' && ((want && viaNet) || !!this.views.nativeScreenSound);
     this.views.sound(want && adb && !net);
     const audio = this.getSettings().audio || {};
     this.views.mic(isPhone(c) && adb && !!audio.micReceive, audio.micOut || ''); // the phone's microphone, here
@@ -245,7 +270,7 @@ class PhoneBridge extends EventEmitter {
       if (isPhone(c)) this.server.sendToClient({ t: T.PHONE_SOUND_WANT, on: net });
       this.emit('change');
     }
-    this.views.netSound(net);
+    this.views.netSound(net && want);
   }
 
   async _poll() {
@@ -279,6 +304,15 @@ class PhoneBridge extends EventEmitter {
     if (!this.adb.available) return this._set('missing', 'adb or the scrcpy server is missing from this build.');
     const a = this.phone.adb;
     if (!a) return this._set('connecting', 'Waiting for the phone…');
+    // Nothing uses wireless debugging: don't switch it on, look for it or ask for a code. Already on
+    // for a phone this computer reached before: connect quietly (Automatic then goes through it).
+    // ReZume's phone apps (Mirror apps) open through it as well: with wireless debugging on there,
+    // it's used even when the mouse, the screen and the sound are all Limited.
+    if (!this.need && !(a.wifi && (this.known.has(this.server.current.deviceId) || this._rzApps()))) {
+      this.misses = 0;
+      return this._set('idle', 'Not in use: the mouse and keyboard, the screen and the sound are set to Limited.');
+    }
+    this.adb.wake();
     const address = this.adbAddress();
     const ready = await this._findDevice(address);
     if (ready) {
@@ -365,13 +399,6 @@ class PhoneBridge extends EventEmitter {
         : 'On the phone: Settings › Developer options › Wireless debugging › Pair device with pairing code.');
   }
 
-  _logOnce(key, text) {
-    this.logged = this.logged || new Map();
-    if (this.logged.get(key) === text) return;
-    this.logged.set(key, text);
-    console.log(`[phone] ${text}`);
-  }
-
   _known(on) {
     const id = this.server.current && this.server.current.deviceId;
     if (!id || this.known.has(id) === on) return;
@@ -407,7 +434,18 @@ class PhoneBridge extends EventEmitter {
   }
 
   // The code from "Pair device with pairing code" (and its address:port when mDNS can't see it).
+  // Paired some other way (wireless debugging's QR code, shared/adbqr.js): connect as after a code.
+  pairedNow() {
+    this.setup = true;
+    this.pairedAt = Date.now();
+    this.misses = 0;
+    this._known(true);
+    this._set('connecting', 'Paired. Connecting…');
+    setTimeout(() => this._kick(), 1000);
+  }
+
   async pair(code, where) {
+    this.setup = true;
     code = String(code || '').replace(/\D/g, '');
     if (code.length !== 6) return this._set('needsPair', 'The pairing code has six digits.');
     let address, port;
@@ -447,6 +485,8 @@ class PhoneBridge extends EventEmitter {
       `appops set ${APP_ID} GET_USAGE_STATS allow`,
       `appops set ${APP_ID} WRITE_SETTINGS allow`,
       `cmd notification allow_dnd ${APP_ID}`,
+      // Hold and the keypad on calls from the computer (CallCompanion.kt, Android 12+; older ones say no).
+      `appops set ${APP_ID} MANAGE_ONGOING_CALLS allow`,
     ];
     if (this.getSettings().phone && this.getSettings().phone.wallpaper !== false) cmds.push(`appops set ${APP_ID} MANAGE_EXTERNAL_STORAGE allow`);
     for (const c of cmds) await this.adb.shell(serial, c, { timeout: 8000 });
@@ -484,10 +524,10 @@ class PhoneBridge extends EventEmitter {
     await s.start();
     this.control = s;
     // A session that ended without its hover exit (the Wi-Fi gone, the app quit) left Android a mouse
-    // hovering over the status bar or the gesture area. Any hover exit from here clears it; the
-    // pointer, if it's on the phone, hovers again just below.
-    const d0 = this._display();
-    if (d0) s.mouse(ACTION.HOVER_EXIT, 0, 0, d0.w, d0.h, 0, 0);
+    // hovering over the status bar or the gesture area: edges and gesture navigation stop answering
+    // until the phone restarts. Any hover exit from here clears it.
+    const d = this._display();
+    if (d) s.mouse(ACTION.HOVER_EXIT, 0, 0, d.w, d.h, 0, 0);
     this._set('ready');
   }
 
@@ -549,7 +589,6 @@ class PhoneBridge extends EventEmitter {
   drivable() {
     return !!(this.control && !this.control.closed && this._display());
   }
-
   _display() {
     const info = this.phone.info;
     return info && info.display;
@@ -609,6 +648,71 @@ class PhoneBridge extends EventEmitter {
     return m === 'auto' ? (this.state === 'ready' ? 'adb' : 'phone') : m;
   }
 
+  _logOnce(key, text) {
+    this.logged = this.logged || new Map();
+    if (this.logged.get(key) === text) return;
+    this.logged.set(key, text);
+    console.log(`[phone] ${text}`);
+  }
+
+  // ---- ADB or Native (shared/phonemodes.js) ----
+
+  get mirrorMode() {
+    return Modes.picked(this.getSettings().phone, 'mirror');
+  }
+
+  get soundMode() {
+    return Modes.picked(this.getSettings().phone, 'soundVia');
+  }
+
+  // The phone's app shares its screen itself (phone.info caps; an older one doesn't say).
+  get nativeMirrorOk() {
+    return Modes.caps(this.phone.info).has('mirror.native');
+  }
+
+  get mirrorVia() {
+    if (this.server.current && this.server.current.os === P.OS.IOS) return 'native'; // the iPhone's Share Screen: its only way
+    return Modes.resolve(this.mirrorMode, { adbReady: this.state === 'ready', nativeOk: this.nativeMirrorOk });
+  }
+
+  get soundVia() {
+    return Modes.resolve(this.soundMode, { adbReady: this.state === 'ready' });
+  }
+
+  // ReZume on, taking the phone's apps into windows here (shared/rezume.js DEFAULTS: apps, mirror on).
+  _rzApps() {
+    const rz = this.getSettings().rezume || {};
+    return !!rz.on && rz.receive !== false && rz.apps !== false && rz.mirror !== false;
+  }
+
+  // Wireless debugging is wanted now: switched on, looked for, asked for (see phonemodes.js).
+  get need() {
+    const c = this.server.current;
+    if (!isPhone(c)) return false;
+    const audio = this.getSettings().audio || {};
+    const views = this.views ? this.views.list() : [];
+    const adbOnly = views.some((v) => v.kind === 'app' || v.kind === 'camera') || !!audio.micReceive
+      || !!(this.install && this.install.state === 'installing')
+      || (this.mirrorVia === 'adb' && views.some((v) => v.kind === 'screen'));
+    return Modes.need({ ph: this.getSettings().phone, known: this.known.has(c.deviceId), setup: this.setup, adbOnly });
+  }
+
+  // Connection's Try Again / Set Up: set it up now, wanted or not.
+  retry() {
+    this.setup = true;
+    this._tellPhone();
+    this._kick();
+  }
+
+  // A choice changed (here or on the phone): the phone hears whether it's still needed, the sound
+  // goes the new way, and the bridge looks again.
+  modesChanged() {
+    this._tellPhone();
+    this._sound();
+    this._kick();
+    this.emit('change');
+  }
+
   _take(m) {
     const d = this._display();
     if (!this.ctl || !d) {
@@ -626,7 +730,6 @@ class PhoneBridge extends EventEmitter {
     const x = side === 'left' ? 0 : side === 'right' ? d.w - 1 : off * (d.w - 1);
     const y = side === 'top' ? 0 : side === 'bottom' ? d.h - 1 : off * (d.h - 1);
     this.kvm = { route: m.route, x, y, side, push: 0, buttons: 0, mouse: m.mouse !== false };
-    console.log(`[phone] driving starts: entered at ${side} (${Math.round(x)},${Math.round(y)}) of ${d.w}x${d.h}`);
     this.keys.clear();
     if (this.inputBlocked) this.emit('popup', 'home', { key: INPUT_BLOCKED });
     // Answer after Kvm's _take returns: it starts its "no answer" timer right after sending kvm.take.
@@ -695,11 +798,9 @@ class PhoneBridge extends EventEmitter {
   _kvmEnd(tellKvm) {
     const k = this.kvm;
     if (!k) return;
-    console.log(`[phone] driving ends (${tellKvm ? 'the connection or the app ended it' : 'released or handed back'})`);
     const d = this._display();
     if (k.buttons && d && this.ctl) this.ctl.mouse(ACTION.UP, k.x, k.y, d.w, d.h, k.buttons, 0);
-    // The pointer leaves: without a hover exit Android keeps a mouse hovering where it was, and the
-    // phone's edges and gesture navigation stop answering until it restarts (#67, #118).
+    // The pointer leaves: without a hover exit Android keeps a mouse hovering where it was.
     if (d && this.ctl) this.ctl.mouse(ACTION.HOVER_EXIT, k.x, k.y, d.w, d.h, 0, 0);
     for (const code of [...this.keys.held]) this._key({ t: T.K_KEY_UP, code });
     this.kvm = null;
@@ -741,7 +842,34 @@ class PhoneBridge extends EventEmitter {
     const swap = this.server.keySwap(this.getSettings());
     const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
+
+    // Enter in a chat app sends (shared/phonechat.js; the setting is the phone windows' one). Its
+    // release goes with it. Through the phone's own input (Accessibility) there's no text to type:
+    // Shift+Enter is a key there, which it makes a new line itself.
+    if (chat.isEnter(code)) {
+      if (!down && this.enterEaten) {
+        this.enterEaten = false;
+        return;
+      }
+      const views = this.views || {};
+      const ctl = this.ctl;
+      if (down && chat.enter({
+        on: (this.getSettings().phone || {}).enterSends !== false,
+        pkg: views.activeApp,
+        shift: this.keys.held.has('ShiftLeft') || this.keys.held.has('ShiftRight'),
+        a11y: !!views.a11y,
+        phoneSend: () => this.server.sendToClient({ t: T.PHONE_SEND }),
+        tap: (k) => this.ctl === ctl && ctl.tap(k),
+        text: typeof ctl.text === 'function' ? (t) => ctl.text(t) : null,
+      })) {
+        this.enterEaten = true;
+        return;
+      }
+    }
+
     const e = this.keys.event(code, down);
+    // Phone › Type as a hardware keyboard: a HID keyboard on the phone, its own layout (#123).
+    if (uhidKey(this.ctl, (this.getSettings().phone || {}).uhid === true, code, down)) return;
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
 
@@ -753,17 +881,24 @@ class PhoneBridge extends EventEmitter {
 
   // ---- windows (phoneview.js) ----
 
-  // Options for a new screen/app session, from settings.
-  // How the phone's screen comes: an iPhone's only through its Share Screen; an Android phone's through adb here.
-  get mirrorVia() {
-    return this.server.current && this.server.current.os === P.OS.IOS ? 'native' : 'adb';
-  }
-
+  // Options for a new screen/app/camera session, from settings.
   sessionOpts(kind, extra = {}) {
     const ph = this.getSettings().phone || {};
     const base = { video: true, control: true, maxFps: 60, videoBitRate: (ph.bitrateMbps || 8) * 1000000 };
+    if (kind === 'camera') return { ...base, audio: false, stayAwake: true, flex: false, ...extra };
     if (kind === 'screen') return { ...base, audio: !!ph.sound, maxSize: ph.maxSize || 0, stayAwake: true, ...extra };
     return { ...base, audio: false, flex: true, ...extra };
+  }
+
+  async listCameras() {
+    if (!this.serial || this.state !== 'ready') return [];
+    try {
+      const { Session } = require('../scrcpy');
+      return await Session.listCameras(this.adb, this.serial);
+    } catch (e) {
+      console.log('[phone-bridge] listCameras failed:', e && e.message);
+      return [];
+    }
   }
 
   setupView() {

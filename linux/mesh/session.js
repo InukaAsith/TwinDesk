@@ -13,12 +13,14 @@
 
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const MeshFx = require('../../shared/meshfx.js');
 
 // The Mac's apps (app.*) only come from a Mac; app windows (papp.*) with a PC or a Linux computer.
 const MAC_ONLY = /^app\./;
 
 class Session extends EventEmitter {
-  constructor(id, { server = null } = {}) {
+  // fxShared: the receivers' fast-file hooks, the same for every session (the facade's fx, hub.js).
+  constructor(id, { server = null, fxShared = null } = {}) {
     super();
     this.id = id;
     this.server = server;
@@ -36,6 +38,15 @@ class Session extends EventEmitter {
     this.meshCapable = false; // the device speaks the mesh (hello/welcome `mesh: 1`); set when it comes up
     this.taps = []; // hub: fn(msg) -> true when it consumed the message (see _deliver)
     this.lifeFns = []; // hub: fn(up) when the device becomes connected or stops being connected
+    // Fast files (shared/meshfx.js): this device's file bytes over HTTPS, when both apps can.
+    this.fx = MeshFx.sessionFx(this, fxShared || MeshFx.hooks());
+  }
+
+  // What FastFiles needs of the live connection (the guest link first, as send() does), or null.
+  _fxSession() {
+    if (this.linkUp) return MeshFx.guestInfo(this.link, this.transport);
+    if (this.hostUp) return MeshFx.hostInfo(this.ctx, this.transport);
+    return null;
   }
 
   // Hub hooks. A tap sees every message of this device before the handlers; returning true
@@ -216,8 +227,10 @@ class Session extends EventEmitter {
     this._deliver(msg);
   }
 
-  _deliver(msg) {
+  // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
+  _deliver(msg, raw = false) {
     if (!this._allowed(msg.t)) return;
+    if (!raw && this.fx.incoming(msg)) return;
     for (const tap of this.taps) if (tap(msg) === true) return;
     const fns = this.handlers.get(msg.t);
     if (fns) for (const fn of fns) fn(msg);
@@ -243,6 +256,8 @@ class Session extends EventEmitter {
   // The device came up or went down: features get welcome or closed, the hub gets onLife(up, replaced).
   _transition(up, msg, replaced = false) {
     this._up = up;
+    this.fx.reset(); // a new session: its own token, nothing of the last one in flight
+    if (this.fx2v) this.fx2v.need(up); // the files engine stays up while the session is
     if (up) {
       this.meshCapable = this.linkUp ? this._linkMesh : !!(this.ctx && this.ctx.mesh);
       const welcome = this.hosting ? { macId: this.ctx.deviceId, macName: this.ctx.name, os: this.ctx.os } : msg || {};
@@ -268,6 +283,7 @@ class Sessions extends EventEmitter {
     super();
     this.server = null;
     this.sessions = new Map(); // deviceId -> Session
+    this.fxShared = MeshFx.hooks(); // fast files: the receivers' hooks (the facade's fx)
     if (links) {
       links.on('add', (link) => this._linkAdded(link));
       links.on('remove', (id) => {
@@ -284,6 +300,8 @@ class Sessions extends EventEmitter {
     if (this.server) return;
     this.server = server;
     for (const s of this.sessions.values()) s.server = server;
+    server.fxRequest = (req, res) => MeshFx.route(this.sessions.values(), req, res); // fast files: to the session of the token
+    MeshFx.attachServer(this.fxShared, server); // the files engine (fx2) with the server's identity
     server.on('client', (ctx) => this.ensure(ctx.deviceId).setCtx(ctx));
     server.on('transport', (ctx) => {
       const s = this.sessions.get(ctx.deviceId);
@@ -313,7 +331,7 @@ class Sessions extends EventEmitter {
   ensure(id) {
     let s = this.sessions.get(id);
     if (!s) {
-      s = new Session(id, { server: this.server });
+      s = new Session(id, { server: this.server, fxShared: this.fxShared });
       this.sessions.set(id, s);
       this.emit('session', s);
     }
@@ -321,6 +339,7 @@ class Sessions extends EventEmitter {
   }
 
   _linkAdded(link) {
+    MeshFx.attachLink(this.fxShared, link); // hello fx2 (shared/meshfx.js)
     const id = link.pairing && link.pairing.macId;
     if (id) this.ensure(id).setLink(link);
   }

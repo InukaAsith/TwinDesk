@@ -151,7 +151,7 @@ class SoundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         core = Core.get(this)
-        val name = core.host?.name ?: "your computer"
+        val name = core.host?.name ?: tr("your computer")
         try {
             startForeground(Notify.ID_SOUND, Notify.soundOn(this, name, core.mirror.wanted, core.sound.wanted), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } catch (e: Exception) {
@@ -195,7 +195,7 @@ class SoundService : Service() {
         val sc = screen ?: ScreenStreamer(this, p, core).also { screen = it }
         if (core.mirror.wanted && !sc.running) sc.start()
         else if (!core.mirror.wanted && sc.running) sc.stop()
-        runCatching { Notify.nm(this).notify(Notify.ID_SOUND, Notify.soundOn(this, core.host?.name ?: "your computer", screenOn, capturing)) }
+        runCatching { Notify.nm(this).notify(Notify.ID_SOUND, Notify.soundOn(this, core.host?.name ?: tr("your computer"), screenOn, capturing)) }
         core.sound.tell()
         core.mirror.tell()
         core.changed()
@@ -302,7 +302,7 @@ class SoundService : Service() {
         end()
         if (running === this) running = null
         val core = Core.get(this)
-        if ((core.sound.wanted || core.mirror.wanted) && core.link.connected) Notify.sound(this, core.host?.name ?: "your computer", core.mirror.wanted) // stopped here: Start again from there
+        if ((core.sound.wanted || core.mirror.wanted) && core.link.connected) Notify.sound(this, core.host?.name ?: tr("your computer"), core.mirror.wanted) // stopped here: Start again from there
         core.sound.tell()
         core.mirror.tell()
         core.changed()

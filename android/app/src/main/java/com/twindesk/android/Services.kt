@@ -163,7 +163,7 @@ class AdbTile : TileService() {
         val core = Core.get(this)
         qsTile?.apply {
             state = if (core.adb.wifiDebugging) android.service.quicksettings.Tile.STATE_ACTIVE else android.service.quicksettings.Tile.STATE_INACTIVE
-            subtitle = if (core.adb.canEnable) null else "Tap to set up"
+            subtitle = if (core.adb.canEnable) null else tr("Tap to set up")
             updateTile()
         }
     }

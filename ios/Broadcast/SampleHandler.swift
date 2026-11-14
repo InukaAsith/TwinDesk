@@ -9,7 +9,10 @@
 // Frames to the app: [u8 type][u32 BE length][payload]
 //   1  JSON  {hello: 1, w, h} | {stopped: 1}
 //   2  bytes a scrcpy packet as nativescreen.js reads it (12-byte header, then Annex B)
-// From the app: type 1 JSON {maxSize, bitrate, fps} | {sync: 1} (a keyframe now) | {stop: 1}
+// From the app: type 1 JSON {ack: 1} (it has us) | {maxSize, bitrate, fps, want: 1} | {want: 0} | {sync: 1}
+// (a keyframe now) | {stop: 1}. No ack within a few seconds (TwinDesk isn't running, or iOS holds it
+// suspended): the broadcast ends saying so, rather than recording for nothing. Until something
+// watches (want), frames aren't encoded: the screen is only sized, which costs next to nothing.
 import ReplayKit
 import VideoToolbox
 import Network
@@ -30,6 +33,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var inflight = 0 // bytes handed to the socket not yet sent
     private var rx = Data()
     private var started = false
+    private var acked = false // the app answered: it has the screen
+    private var wanted = false // a computer or phone watches: encode
     // Landscape (an iPad, mostly): iOS hands the frames upright as in portrait, with how the device
     // is held beside them. Scaled down to the size we send, then turned, so the computer gets the
     // picture the right way up (and the extension stays inside its 50 MB).
@@ -48,10 +53,15 @@ final class SampleHandler: RPBroadcastSampleHandler {
             case .ready:
                 self.started = true
                 self.read()
+                self.q.asyncAfter(deadline: .now() + 5) { [weak self] in
+                    guard let self = self, !self.acked else { return }
+                    self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 4, userInfo: [NSLocalizedDescriptionKey:
+                        tr("Open TwinDesk and connect to a computer, then share the screen again.")]))
+                }
             case .failed, .waiting:
                 if !self.started {
                     self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                        "Open TwinDesk and connect to a computer, then share the screen again."]))
+                        tr("Open TwinDesk and connect to a computer, then share the screen again.")]))
                 }
             default: break
             }
@@ -77,11 +87,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
             // At most `fps`, and never while the socket is backed up (frames dropped, not queued).
             if lastFrame.isValid, CMTimeGetSeconds(CMTimeSubtract(pts, lastFrame)) < 1.0 / Double(fps) - 0.002 { return }
             if inflight > 3 << 20 { forceKey = true; return }
+            if !wanted && session != nil { return } // sized and said (hello); nothing to encode for
             lastFrame = pts
             guard let px = upright(raw, orient) else { return }
             let w = CVPixelBufferGetWidth(px), h = CVPixelBufferGetHeight(px)
             if session == nil || w != srcSize.w || h != srcSize.h { makeSession(w, h) }
-            guard let s = session else { return }
+            guard let s = session, wanted else { return }
             var props: CFDictionary?
             if forceKey {
                 forceKey = false
@@ -258,7 +269,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             guard let self = self else { return }
             if let d = data { self.rx.append(d); self.parse() }
             if done || err != nil {
-                self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 2, userInfo: [NSLocalizedDescriptionKey: "TwinDesk stopped sharing the screen."]))
+                self.finishBroadcastWithError(NSError(domain: "TwinDesk", code: 2, userInfo: [NSLocalizedDescriptionKey: tr("TwinDesk stopped sharing the screen.")]))
                 return
             }
             self.read()
@@ -274,9 +285,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
             rx = rx.subdata(in: (rx.startIndex + 5 + n)..<rx.endIndex)
             guard type == 1, let m = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else { continue }
             if m["stop"] != nil {
-                finishBroadcastWithError(NSError(domain: "TwinDesk", code: 3, userInfo: [NSLocalizedDescriptionKey: "Stopped from the computer."]))
+                finishBroadcastWithError(NSError(domain: "TwinDesk", code: 3, userInfo: [NSLocalizedDescriptionKey: tr("Stopped from the computer.")]))
                 return
             }
+            if m["ack"] != nil { acked = true }
+            if let w = m["want"] as? Int { wanted = w != 0; if wanted { forceKey = true; sentConfig = nil } }
             if m["sync"] != nil { forceKey = true; sentConfig = nil }
             var changed = false
             if let v = m["maxSize"] as? Int, v >= 0, v != maxSize { maxSize = v; changed = true }

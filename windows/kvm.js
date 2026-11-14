@@ -239,7 +239,7 @@ class Kvm {
       side: this.crossingSide,
       resistancePx: k.resistancePx,
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
-      driveOther: !!(this.linked && k.driveOther && k.mouse && this.connected && this.crossingSide && !this.blockEdge() && !this.paused && !(this.locked && this.mode === 'home')),
+      driveOther: !!(this.linked && k.driveOther && k.mouse && this.connected && !this._iphone() && this.crossingSide && !this.blockEdge() && !this.paused && !(this.locked && this.mode === 'home')),
       keyboard: !!k.keyboard,
       deadmanMs: P.HELPER_DEADMAN_MS,
       doubleTapMs: P.DOUBLE_TAP_MS,
@@ -359,7 +359,14 @@ class Kvm {
 
   _canDrive() {
     const k = this.cfg;
-    return this.connected && this.linked && !this.paused && k.driveOther && (k.mouse || k.keyboard);
+    return this.connected && !this._iphone() && this.linked && !this.paused && k.driveOther && (k.mouse || k.keyboard);
+  }
+
+  // An iPhone or iPad on the link: it can't be driven (iOS takes no input from another app), so
+  // nothing crosses to it, as on the Mac (mac/kvm.js).
+  _iphone() {
+    const c = this.link.current;
+    return !!c && c.os === P.OS.IOS;
   }
 
   _onHelper(name, msg) {

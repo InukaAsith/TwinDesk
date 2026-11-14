@@ -10,7 +10,7 @@
 
 const SHELL = 'twindesk-shell-v1';
 const FILES = ['/', '/app.css', '/app.js', '/icon.png', '/touch-icon.png', '/logo-light.png', '/logo-dark.png',
-  '/td/viewer.html', '/td/viewer.js', '/td/viewer.css', '/td/remote.html', '/td/remote.js', '/td/remote.css', '/td-bridge.js', '/td-bridge.css'];
+  '/td/viewer.html', '/td/viewer.js', '/td/viewer.css', '/td/remote.html', '/td/remote.js', '/td/remote.css', '/td-bridge.js', '/td-bridge.css', '/lang/pick.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => Promise.all(FILES.map((f) => c.add(f).catch(() => {})))).then(() => self.skipWaiting()));

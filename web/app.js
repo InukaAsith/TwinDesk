@@ -15,6 +15,23 @@
 'use strict';
 
 (() => {
+  // ---------------------------------------------------------------- the language
+  // As in the apps: the English text is the key; web/lang/<language>.js (written in by web/lang/pick.js
+  // before this script) gives another language's; anything missing stays English. {name} parts are
+  // filled once, so braces in a computer's name stay as they are. What goes to the computer stays English.
+  const LANGUAGES = [['en', 'English', '🇬🇧'], ['zh-CN', '简体中文', '🇨🇳'], ['ru', 'Русский', '🇷🇺'], ['tr', 'Türkçe', '🇹🇷'], ['pt-BR', 'Português (Brasil)', '🇧🇷']];
+  const LANG = (window.TwinDeskWeb && window.TwinDeskWeb.lang) || 'en';
+  const MESSAGES = (window.TwinDeskWeb && window.TwinDeskWeb.messages) || {};
+  document.documentElement.lang = LANG;
+  function tr(text, vars) {
+    const s = MESSAGES[text] || text.replace(/^[^|]*\|/, '');
+    return vars ? s.replace(/\{(\w+)\}/g, (x, k) => (k in vars ? String(vars[k]) : x)) : s;
+  }
+  // A sentence with elements in it (a link, a name in bold): its parts, in this language's order.
+  function trNodes(text, nodes) {
+    return tr(text).split(/(\{\w+\})/).map((p) => { const k = /^\{(\w+)\}$/.exec(p); return k && k[1] in nodes ? nodes[k[1]] : p; }).filter((p) => p !== '');
+  }
+
   // ---------------------------------------------------------------- the kit
   const $ = (id) => document.getElementById(id);
   const SVG = 'http://www.w3.org/2000/svg';
@@ -44,6 +61,8 @@
     link: 'M8.5 11.5a3.2 3.2 0 0 0 4.5 0l2.5-2.5a3.2 3.2 0 0 0-4.5-4.5l-.8.8 M11.5 8.5a3.2 3.2 0 0 0-4.5 0L4.5 11a3.2 3.2 0 0 0 4.5 4.5l.8-.8',
     remote: 'M6.5 6.5h7a4 4 0 0 1 4 4v1.5a2.8 2.8 0 0 1-5 1.7L11.4 12H8.6l-1.1 1.7a2.8 2.8 0 0 1-5-1.7v-1.5a4 4 0 0 1 4-4z M6 8.5v3 M4.5 10h3 M13 9.5h0 M14.5 11h0',
     clipboard: 'M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4',
+    air: 'M7 6.5h4.5v10H7z M8.5 14.5h1.5 M13.5 5.5a3 3 0 0 1 0 4 M15.5 3.5a6 6 0 0 1 0 8',
+    present: 'M2.5 3.5h15v9.5h-15z M10 13v3.5 M7 17h6 M6 10l3-3 2 2 3-3',
     bell: 'M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0',
     audio: 'M4 8h3l4-3v10l-4-3H4z M14 7.5c1 .8 1 4.2 0 5 M16 5.5c2.2 1.8 2.2 7.2 0 9',
     camera: 'M2.5 6h10v8h-10z M12.5 8.5l5-2.5v8l-5-2.5',
@@ -117,10 +136,10 @@
   };
   function card(title, kids, action) {
     const t = el('span', { text: title || '' });
-    const tr = el('div', { class: 'card-title' }, [t, action || null]);
-    tr.hidden = !title && !action;
-    const w = el('div', { class: 'card-wrap' }, [tr, el('div', { class: 'card' }, kids)]);
-    w.setTitle = (x) => { t.textContent = x; tr.hidden = !x && !action; };
+    const bar = el('div', { class: 'card-title' }, [t, action || null]);
+    bar.hidden = !title && !action;
+    const w = el('div', { class: 'card-wrap' }, [bar, el('div', { class: 'card' }, kids)]);
+    w.setTitle = (x) => { t.textContent = x; bar.hidden = !x && !action; };
     return w;
   }
   function head(title, ctl) {
@@ -176,10 +195,10 @@
       return ok;
     }
   }
-  const copy = async (t, what = 'Copied') => { const ok = await copyText(t); if (ok) haptic(); toast(ok ? what : 'Could not copy'); };
+  const copy = async (t, what = tr('Copied')) => { const ok = await copyText(t); if (ok) haptic(); toast(ok ? what : tr('Could not copy')); };
   const copyBox = (get) => {
     const m = el('span', { class: 'mono' });
-    const e = el('div', { class: 'copybox' }, [m, btn('Copy', () => copy(get()), 'small')]);
+    const e = el('div', { class: 'copybox' }, [m, btn(tr('Copy'), () => copy(get()), 'small')]);
     e.update = () => { m.textContent = get(); };
     e.update();
     return e;
@@ -192,9 +211,10 @@
     os: IPAD ? 'ipados' : /iPhone|iPod/.test(UA) ? 'ios' : /Android/.test(UA) ? 'android' : /Mac OS X/.test(UA) ? 'mac' : /Windows/.test(UA) ? 'win' : /CrOS/.test(UA) ? 'linux' : /Linux/.test(UA) ? 'linux' : 'other',
   };
   ME.apple = ME.os === 'ios' || ME.os === 'ipados';
+  document.documentElement.classList.toggle('flagfont', ['win', 'linux', 'other'].includes(ME.os));
   ME.mobile = ME.apple || ME.os === 'android';
-  ME.model = IPAD ? 'iPad' : ME.os === 'ios' ? 'iPhone' : ME.os === 'android' ? 'Android phone' : ME.os === 'mac' ? 'Mac browser' : ME.os === 'win' ? 'Windows browser' : 'Browser';
-  ME.kind = IPAD ? 'iPad' : ME.os === 'ios' ? 'iPhone' : ME.os === 'android' ? 'phone' : 'browser';
+  ME.model = IPAD ? 'iPad' : ME.os === 'ios' ? 'iPhone' : ME.os === 'android' ? tr('Android phone') : ME.os === 'mac' ? tr('Mac browser') : ME.os === 'win' ? tr('Windows browser') : tr('Browser');
+  ME.kind = IPAD ? 'iPad' : ME.os === 'ios' ? 'iPhone' : ME.os === 'android' ? tr('phone') : tr('browser');
   const STANDALONE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const MAC_SAFARI = !STANDALONE && /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints < 2 && /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Firefox|OPR/.test(navigator.userAgent);
   const STORE = 'twindesk.web';
@@ -285,13 +305,13 @@
   const peerUrl = (x) => `http://${x.ip}:${x.port + 1}/#h=${encodeURIComponent(x.host)}&p=${x.port}`;
   function openPeer(x) {
     if (x.self) return;
-    toast(`Opening ${x.name}…`);
+    toast(tr('Opening {name}…', { name: x.name }));
     location.assign(peerUrl(x));
   }
   const peerBars = new Set();
   function peerBar() {
-    const list = el('div', { class: 'peers-list', role: 'radiogroup', 'aria-label': 'Computer' });
-    const e = el('div', { class: 'peers' }, [el('div', { class: 'peers-title', text: 'Computers on this network' }), list]);
+    const list = el('div', { class: 'peers-list', role: 'radiogroup', 'aria-label': tr('Computer') });
+    const e = el('div', { class: 'peers' }, [el('div', { class: 'peers-title', text: tr('Computers on this network') }), list]);
     e.update = () => {
       const L = S.peers || [];
       e.hidden = L.length < 2;
@@ -477,7 +497,7 @@
       if (prev && moveBack()) return render();
       // The cable came out under it: straight back on the page's own address.
       if (via && e.code !== 4001 && e.code !== 4002 && !S.paused) { via = ''; tries = 0; return connect(true); }
-      if (e.code === 4001) return dropCreds('This device was removed on the computer. Pair again to reconnect.');
+      if (e.code === 4001) return dropCreds(tr('This device was removed on the computer. Pair again to reconnect.'));
       if (e.code === 4002 || S.paused) { // Disconnect, here or on the computer: off until Connect
         S.paused = S.paused || 'computer';
         S.conn = 'paused';
@@ -527,7 +547,7 @@
         S.link = m.link || '';
         S.conn = 'online';
         keepCreds();
-        toast(`Paired with ${m.pc.name}`);
+        toast(tr('Paired with {name}', { name: m.pc.name }));
         haptic();
         frame();
         go('overview');
@@ -537,15 +557,15 @@
         S.pc = m.pc;
         S.link = m.link || '';
         S.conn = 'online';
-        if (prev) { const p = prev.sock; prev = null; try { p.close(1000, 'moved'); } catch (_) {} if (S.link === 'USB-C') toast(`Connected to ${pcName()} over USB-C`); }
+        if (prev) { const p = prev.sock; prev = null; try { p.close(1000, 'moved'); } catch (_) {} if (S.link === 'USB-C') toast(tr('Connected to {name} over USB-C', { name: pcName() })); }
         keepCreds();
         frame();
         break;
-      case 'unknown': return dropCreds('This device is no longer paired with the computer. Pair again to reconnect.');
-      case 'forgotten': return dropCreds('This device was removed on the computer.');
+      case 'unknown': return dropCreds(tr('This device is no longer paired with the computer. Pair again to reconnect.'));
+      case 'forgotten': return dropCreds(tr('This device was removed on the computer.'));
       case 'disconnected': S.paused = 'computer'; break;
       case 'bad-code':
-        S.pairErr = m.why === 'off' ? 'TwinDesk Web is turned off on that computer.' : m.wait ? `Too many attempts. Try again in ${m.wait} seconds.` : 'Incorrect code. Check the code in TwinDesk › TwinDesk Web on the computer.';
+        S.pairErr = m.why === 'off' ? tr('TwinDesk Web is turned off on that computer.') : m.wait ? tr('Too many attempts. Try again in {seconds} seconds.', { seconds: m.wait }) : tr('Incorrect code. Check the code in TwinDesk › TwinDesk Web on the computer.');
         renderPage();
         break;
       case 'pc.links': if (S.pc) { S.pc.ips = m.ips || S.pc.ips; S.pc.cable = m.cable || []; } probeCable(); break;
@@ -554,7 +574,7 @@
       case 'chat.all': S.chat = m.items || []; refresh('files', 'drop', 'overview'); break;
       case 'chat.add':
         S.chat.push(m.item);
-        if (m.item.from === 'pc' && !document.hidden && cur !== 'drop' && cur !== 'files') toast(m.item.file ? `${pcName()} sent ${m.item.file.name}` : `${pcName()}: ${String(m.item.text).slice(0, 60)}`);
+        if (m.item.from === 'pc' && !document.hidden && cur !== 'drop' && cur !== 'files') toast(m.item.file ? tr('{name} sent {file}', { name: pcName(), file: m.item.file.name }) : `${pcName()}: ${String(m.item.text).slice(0, 60)}`);
         refresh('files', 'drop', 'overview');
         break;
       case 'chat.state': {
@@ -607,7 +627,7 @@
         break;
       case 'alert': localAlert(m); break;
       case 'push.result':
-        toast(m.ok ? (m.local ? 'Test sent. It appears when TwinDesk is in the background.' : 'Test sent. Lock this device or switch apps to see it.') : `The test was not delivered${m.status ? ` (push service error ${m.status})` : m.why ? `: ${m.why}` : ''}`);
+        toast(m.ok ? (m.local ? tr('Test sent. It appears when TwinDesk is in the background.') : tr('Test sent. Lock this device or switch apps to see it.')) : m.status ? tr('The test was not delivered (push service error {status})', { status: m.status }) : m.why ? tr('The test was not delivered: {reason}', { reason: m.why }) : tr('The test was not delivered'));
         break;
       case 'policy': S.allow = m.allow || {}; renderPage(); break;
       case 'scr.answer': case 'scr.ice': answerIn('scr', m); break;
@@ -619,7 +639,7 @@
         refresh('send');
         break;
       case 'dev.state': S.devs = { can: m.can || {}, state: m.state || {} }; refresh('overview'); break;
-      case 'dev.error': toast(`Could not ${m.do}: ${m.why}`); break;
+      case 'dev.error': toast(tr('Could not {action}: {reason}', { action: m.do, reason: m.why })); break;
       case 'mount': S.mount = m; refresh('mount'); break;
       case 'media.state': S.media = m; paintMedia(); refresh('background', 'overview'); break;
       default: break;
@@ -656,22 +676,22 @@
 
   // ---------------------------------------------------------------- the frame
   const PAGES = [
-    { id: 'overview', title: 'Overview', icon: 'overview', c: ['#8E8E93', '#636366'], g: 1 },
-    { id: 'connection', title: 'Connection', icon: 'link', c: ['#30D158', '#248A3D'], g: 1 },
-    { id: 'receive', title: 'Receive screen', short: 'Screen', icon: 'display', c: ['#5AC8FA', '#0A84FF'], g: 2 },
-    { id: 'send', title: 'Send screen', icon: 'cast', c: ['#64D2FF', '#5E5CE6'], g: 2 },
-    { id: 'remote', title: 'Remote', icon: 'remote', c: ['#BF5AF2', '#8944AB'], g: 3 },
-    { id: 'clipboard', title: 'Clipboard', icon: 'clipboard', c: ['#64D2FF', '#30B0C7'], g: 4 },
-    { id: 'notifications', title: 'Notifications', short: 'Alerts', icon: 'bell', c: ['#FF6961', '#FF3B30'], g: 4 },
-    { id: 'files', title: 'Files', icon: 'files', c: ['#64D2FF', '#0A84FF'], g: 4 },
-    { id: 'drop', title: 'Drop', icon: 'drop', c: ['#FFB340', '#FF9500'], g: 4 },
-    { id: 'mount', title: 'Mount', icon: 'drive', c: ['#AEAEB2', '#636366'], g: 4 },
-    { id: 'sound', title: 'Sound', icon: 'audio', c: ['#FF6482', '#FF2D55'], g: 5 },
-    { id: 'camera', title: 'Camera', icon: 'camera', c: ['#BF5AF2', '#8944AB'], g: 5 },
-    { id: 'background', title: 'Background', icon: 'moon', c: ['#7D7AFF', '#5E5CE6'], g: 6 },
-    { id: 'shortcuts', title: 'Shortcuts', icon: 'bolt', c: ['#FF6482', '#BF5AF2'], g: 6 },
-    { id: 'general', title: 'General', icon: 'general', c: ['#AEAEB2', '#636366'], g: 'bottom' },
-    { id: 'about', title: 'About', icon: 'about', c: ['#64D2FF', '#0A84FF'], g: 'bottom' },
+    { id: 'overview', title: tr('Overview'), icon: 'overview', c: ['#8E8E93', '#636366'], g: 1 },
+    { id: 'connection', title: tr('Connection'), icon: 'link', c: ['#30D158', '#248A3D'], g: 1 },
+    { id: 'receive', title: tr('Receive screen'), short: tr('Screen'), icon: 'display', c: ['#5AC8FA', '#0A84FF'], g: 2 },
+    { id: 'send', title: tr('Send screen'), icon: 'cast', c: ['#64D2FF', '#5E5CE6'], g: 2 },
+    { id: 'remote', title: tr('Remote'), icon: 'remote', c: ['#BF5AF2', '#8944AB'], g: 3 },
+    { id: 'clipboard', title: tr('Clipboard'), icon: 'clipboard', c: ['#64D2FF', '#30B0C7'], g: 4 },
+    { id: 'notifications', title: tr('Notifications'), short: tr('Alerts'), icon: 'bell', c: ['#FF6961', '#FF3B30'], g: 4 },
+    { id: 'files', title: tr('Files'), icon: 'files', c: ['#64D2FF', '#0A84FF'], g: 4 },
+    { id: 'drop', title: tr('Drop'), icon: 'drop', c: ['#FFB340', '#FF9500'], g: 4 },
+    { id: 'mount', title: tr('Mount'), icon: 'drive', c: ['#AEAEB2', '#636366'], g: 4 },
+    { id: 'sound', title: tr('Sound'), icon: 'audio', c: ['#FF6482', '#FF2D55'], g: 5 },
+    { id: 'camera', title: tr('Camera'), icon: 'camera', c: ['#BF5AF2', '#8944AB'], g: 5 },
+    { id: 'background', title: tr('Background'), icon: 'moon', c: ['#7D7AFF', '#5E5CE6'], g: 6 },
+    { id: 'shortcuts', title: tr('Shortcuts'), icon: 'bolt', c: ['#FF6482', '#BF5AF2'], g: 6 },
+    { id: 'general', title: tr('General'), icon: 'general', c: ['#AEAEB2', '#636366'], g: 'bottom' },
+    { id: 'about', title: tr('About'), icon: 'about', c: ['#64D2FF', '#0A84FF'], g: 'bottom' },
   ];
   const PAGE = Object.fromEntries(PAGES.map((p) => [p.id, p]));
   const BOTTOM = ['overview', 'receive', 'files', 'drop'];
@@ -679,7 +699,7 @@
   let more = false;
   const built = new Map(); // id -> {el, render}
   let topEl = null, navEl = null, sheetEl = null, sideEl = null;
-  const pcName = () => (S.pc && S.pc.name) || (S.serving && S.serving.name) || 'your computer';
+  const pcName = () => (S.pc && S.pc.name) || (S.serving && S.serving.name) || tr('your computer');
   const online = () => S.conn === 'online';
 
   function frame() {
@@ -719,9 +739,9 @@
     ]);
     e.update = () => {
       dot.className = `dot${online() ? ' good' : S.conn === 'connecting' || S.conn === 'boot' ? ' warn' : ''}`;
-      who.textContent = !S.creds ? (S.serving ? `Not connected · ${S.serving.name} available` : 'Not connected')
+      who.textContent = !S.creds ? (S.serving ? tr('Not connected · {name} available', { name: S.serving.name }) : tr('Not connected'))
         : online() ? [pcName(), S.link === 'USB-C' ? 'USB-C' : '', S.rtt != null ? `${S.rtt} ms` : ''].filter(Boolean).join(' · ')
-          : S.conn === 'paused' ? `${pcName()} · Disconnected` : S.conn === 'offline' ? `${pcName()} · Not reachable` : `${pcName()} · Connecting…`;
+          : S.conn === 'paused' ? tr('{name} · Disconnected', { name: pcName() }) : S.conn === 'offline' ? tr('{name} · Not reachable', { name: pcName() }) : tr('{name} · Connecting…', { name: pcName() });
     };
     e.update();
     return e;
@@ -732,7 +752,7 @@
     if (navEl) {
       navEl.replaceChildren(...[...BOTTOM, 'more'].map((id) => {
         const on = id === 'more' ? more || !BOTTOM.includes(cur) : !more && cur === id;
-        const p = PAGE[id] || { title: 'More', icon: 'more' };
+        const p = PAGE[id] || { title: tr('More'), icon: 'more' };
         const count = id === 'more' && S.unseen ? el('i', { class: 'count', text: String(Math.min(99, S.unseen)) }) : null;
         const live = id === 'receive' && S.screen.on ? el('span', { class: 'dot' }) : null;
         return el('button', { class: on ? 'on' : '', onclick: () => (id === 'more' ? showMore() : show(id)) }, [
@@ -789,11 +809,11 @@
     copyWant = false;
     const t = S.clip && S.clip.text;
     if (!t) { copyWant = true; return; } // the computer's clipboard comes with the welcome
-    if (document.hasFocus() && (await copyText(t))) { haptic(); return toast('Copied from ' + pcName()); }
+    if (document.hasFocus() && (await copyText(t))) { haptic(); return toast(tr('Copied from {name}', { name: pcName() })); }
     const bar = el('div', { class: 'copy-bar' }, [
-      el('span', { text: `Copied on ${pcName()}: ${t.replace(/\s+/g, ' ').slice(0, 80)}` }),
-      btn('Copy', async () => { bar.remove(); await copy(t, 'Copied'); }, 'small primary'),
-      btn('Dismiss', () => bar.remove(), 'small'),
+      el('span', { text: tr('Copied on {name}: {text}', { name: pcName(), text: t.replace(/\s+/g, ' ').slice(0, 80) }) }),
+      btn(tr('Copy'), async () => { bar.remove(); await copy(t, tr('Copied')); }, 'small primary'),
+      btn(tr('Dismiss'), () => bar.remove(), 'small'),
     ]);
     document.querySelectorAll('.copy-bar').forEach((x) => x.remove());
     document.body.append(bar);
@@ -809,7 +829,7 @@
     more = true;
     if (!wideQ.matches) topEl.hidden = true;
     sheetEl.classList.add('gap');
-    const page = el('div', { class: 'page' }, [head('More')]);
+    const page = el('div', { class: 'page' }, [head(tr('More'))]);
     let g = null;
     let rows = [];
     const flush = () => { if (rows.length) page.append(card('', rows)); rows = []; };
@@ -828,15 +848,16 @@
 
   // What the computer turned off for this device (its pages in TwinDesk there): said at the top of the page.
   const POLICY = {
-    receive: [['screen', 'Viewing the screen']], sound: [['sound', 'Computer audio'], ['mic', 'The microphone']],
-    clipboard: [['clipOut', 'Receiving the clipboard'], ['clipIn', 'Sending the clipboard']], notifications: [['notifs', 'Notifications']],
-    files: [['files', 'Sending files']], camera: [['camera', 'The camera']], remote: [['control', 'Control']], send: [['share', 'Sharing this screen']],
+    receive: [['screen', tr('Viewing the screen')]], sound: [['sound', tr('Computer audio')], ['mic', tr('The microphone')]],
+    clipboard: [['clipOut', tr('Receiving the clipboard')], ['clipIn', tr('Sending the clipboard')]], notifications: [['notifs', tr('Notifications')]],
+    files: [['files', tr('Sending files')]], camera: [['camera', tr('The camera')]], remote: [['control', tr('Control')]], send: [['share', tr('Sharing this screen')]],
   };
   function policyNote(v) {
     const off = (POLICY[cur] || []).filter(([k]) => S.allow && S.allow[k] === false).map(([, label]) => label);
     if (!v.policy) { v.policy = el('div', { class: 'note warn policy' }); v.el.prepend(v.policy); }
     v.policy.hidden = !off.length || !S.creds;
-    v.policy.textContent = off.length ? `${off.join(' and ')} ${off.length > 1 ? 'are' : 'is'} turned off for this ${ME.kind} on ${pcName()}. Turn ${off.length > 1 ? 'them' : 'it'} on in TwinDesk there, on this device’s page.` : '';
+    v.policy.textContent = off.length === 1 ? tr('{what} is turned off for this {device} on {name}. Turn it on in TwinDesk there, on this device’s page.', { what: off[0], device: ME.kind, name: pcName() })
+      : off.length ? tr('{what} and {last} are turned off for this {device} on {name}. Turn them on in TwinDesk there, on this device’s page.', { what: off.slice(0, -1).join(', '), last: off[off.length - 1], device: ME.kind, name: pcName() }) : '';
   }
   function renderPage() {
     if (topEl) topEl.update();
@@ -848,10 +869,10 @@
     if (ids.some((i) => ['notifications', 'receive', 'camera', 'sound', 'background'].includes(i))) renderNav();
   }
   function render() { renderTop(); renderNav(); renderPage(); }
-  const offlineNote = () => note(S.conn === 'paused' ? `Disconnected${S.paused === 'computer' ? ` on ${pcName()}` : ''}. Still paired: Connect when you want it back.` : S.conn === 'offline' ? `${pcName()} is not reachable. Make sure TwinDesk is open on it and both devices are on the same network.` : `Connecting to ${pcName()}…`, 'warn');
-  const needOnline = () => { if (online()) return true; toast(`Not connected to ${pcName()}`); return false; };
-  const statusText = () => (online() ? ['Connected', S.link === 'USB-C' ? 'USB-C' : '', S.rtt != null ? `${S.rtt} ms` : '', S.secure ? 'Secure' : ''].filter(Boolean).join(' · ')
-    : S.conn === 'paused' ? (S.paused === 'computer' ? `Disconnected on ${pcName()}` : 'Disconnected') : S.conn === 'offline' ? 'Not reachable' : 'Connecting…');
+  const offlineNote = () => note(S.conn === 'paused' ? (S.paused === 'computer' ? tr('Disconnected on {name}. Still paired: Connect when you want it back.', { name: pcName() }) : tr('Disconnected. Still paired: Connect when you want it back.')) : S.conn === 'offline' ? tr('{name} is not reachable. Make sure TwinDesk is open on it and both devices are on the same network.', { name: pcName() }) : tr('Connecting to {name}…', { name: pcName() }), 'warn');
+  const needOnline = () => { if (online()) return true; toast(tr('Not connected to {name}', { name: pcName() })); return false; };
+  const statusText = () => (online() ? [tr('Connected'), S.link === 'USB-C' ? 'USB-C' : '', S.rtt != null ? `${S.rtt} ms` : '', S.secure ? tr('Secure') : ''].filter(Boolean).join(' · ')
+    : S.conn === 'paused' ? (S.paused === 'computer' ? tr('Disconnected on {name}', { name: pcName() }) : tr('Disconnected')) : S.conn === 'offline' ? tr('Not reachable') : tr('Connecting…'));
   const osName = (os) => ({ mac: 'macOS', win: 'Windows', linux: 'Linux' }[os] || '');
   const chev = () => el('span', { class: 'chev', text: '›' });
   const link = (text, fn) => el('a', { href: '#', class: 'act', text, onclick: (e) => { e.preventDefault(); fn(); } });
@@ -902,8 +923,8 @@
   // ---- Not paired: product overview, pairing, downloads ----
   BUILD.promo = (page) => {
     const boxes = el('div', { class: 'code-boxes' });
-    const input = el('input', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: '6', autocomplete: 'one-time-code', 'aria-label': 'Pairing code' });
-    const goBtn = btn('Connect', null, 'primary big');
+    const input = el('input', { inputmode: 'numeric', pattern: '[0-9]*', maxlength: '6', autocomplete: 'one-time-code', 'aria-label': tr('Pairing code') });
+    const goBtn = btn(tr('Connect'), null, 'primary big');
     const err = note('', 'bad');
     // The six boxes are made once, the input stays where it is: moving a focused input (iOS) drops
     // its keyboard, so the code couldn't be typed.
@@ -921,17 +942,17 @@
     boxes.onclick = () => input.focus();
     input.oninput = () => { paint(); if (input.value.length === 6) submit(); };
     input.onfocus = input.onblur = paint;
-    const submit = () => { if (input.value.length === 6) { S.pairErr = ''; pair(input.value); goBtn.textContent = 'Connecting…'; setTimeout(() => { goBtn.textContent = 'Connect'; }, 3000); } };
+    const submit = () => { if (input.value.length === 6) { S.pairErr = ''; pair(input.value); goBtn.textContent = tr('Connecting…'); setTimeout(() => { goBtn.textContent = tr('Connect'); }, 3000); } };
     goBtn.onclick = submit;
     if (S.pairCode) input.value = S.pairCode;
     paint();
     // A QR code from the computer's TwinDesk Web page: its code (and, for another computer, its address).
-    const scanBtn = btn('Scan QR Code', () => scanQr((text) => {
+    const scanBtn = btn(tr('Scan QR Code'), () => scanQr((text) => {
       let u = null;
-      try { u = new URL(text); } catch (_) { return toast('That isn’t a TwinDesk QR code'); }
+      try { u = new URL(text); } catch (_) { return toast(tr('That isn’t a TwinDesk QR code')); }
       const h = new URLSearchParams(u.hash.slice(1));
       const code = (h.get('pair') || '').replace(/\D/g, '').slice(0, 6);
-      if (code.length !== 6) return toast('That isn’t a TwinDesk QR code');
+      if (code.length !== 6) return toast(tr('That isn’t a TwinDesk QR code'));
       const host = h.get('h');
       const here = (S.serving && S.serving.host) || location.hostname;
       if (host && host !== here && u.host !== location.host) return location.assign(u.href); // another computer
@@ -942,27 +963,27 @@
     const installBox = installFirst();
     const serve = el('div', { class: 'desc' });
     const F = [
-      ['display', ['#5AC8FA', '#0A84FF'], 'Screen sharing', 'View and control your computer, with audio'],
-      ['files', ['#64D2FF', '#0A84FF'], 'File transfer', 'Send and receive files in both directions'],
-      ['clipboard', ['#64D2FF', '#30B0C7'], 'Shared clipboard', 'Copy on one device, paste on the other'],
-      ['remote', ['#BF5AF2', '#8944AB'], 'Remote control', 'Trackpad, keyboard and gamepad'],
-      ['bell', ['#FF6961', '#FF3B30'], 'Notifications', 'Computer notifications on your lock screen'],
-      ['camera', ['#BF5AF2', '#8944AB'], 'Camera and microphone', 'Use this device as a webcam'],
+      ['display', ['#5AC8FA', '#0A84FF'], tr('Screen sharing'), tr('View and control your computer, with audio')],
+      ['files', ['#64D2FF', '#0A84FF'], tr('File transfer'), tr('Send and receive files in both directions')],
+      ['clipboard', ['#64D2FF', '#30B0C7'], tr('Shared clipboard'), tr('Copy on one device, paste on the other')],
+      ['remote', ['#BF5AF2', '#8944AB'], tr('Remote control'), tr('Trackpad, keyboard, air mouse, slides and gamepad')],
+      ['bell', ['#FF6961', '#FF3B30'], tr('Notifications'), tr('Computer notifications on your lock screen')],
+      ['camera', ['#BF5AF2', '#8944AB'], tr('Camera and microphone'), tr('Use this device as a webcam')],
     ];
     const promo = el('div', { class: 'promo' }, [
       el('img', { class: 'logo', src: logo(), alt: '' }),
       el('h1', { text: 'TwinDesk' }),
-      el('p', { text: 'Your computers and phone, working as one: screen, files, clipboard and input, shared across devices. Free and open source.' }),
+      el('p', { text: tr('Your computers and phone, working as one: screen, files, clipboard and input, shared across devices. Free and open source.') }),
     ]);
-    const connect = card('Connect to a computer', [el('div', { class: 'pair-box' }, [serve, installBox, boxes, goBtn, scanBtn, err,
-      el('div', { class: 'desc', text: `On the computer, open TwinDesk › TwinDesk Web. Scan the QR code${ME.mobile ? ' with your camera' : ''} or enter the six-digit code above.` })])]);
+    const connect = card(tr('Connect to a computer'), [el('div', { class: 'pair-box' }, [serve, installBox, boxes, goBtn, scanBtn, err,
+      el('div', { class: 'desc', text: ME.mobile ? tr('On the computer, open TwinDesk › TwinDesk Web. Scan the QR code with your camera or enter the six-digit code above.') : tr('On the computer, open TwinDesk › TwinDesk Web. Scan the QR code or enter the six-digit code above.') })])]);
     const feat = el('div', { class: 'feat' }, F.map(([i, c, t, d]) => el('div', {}, [tile(i, c, 34), el('b', { text: t }), el('span', { text: d })])));
     const dl = downloads();
     const peers = peerBar();
-    if (wideQ.matches) page.replaceChildren(peers, el('div', { class: 'promo-grid' }, [el('div', {}, [promo, feat, dl]), el('div', { class: 'aside' }, [el('div', { style: 'height:30px' }), connect])]));
+    if (wideQ.matches) page.replaceChildren(peers, el('div', { class: 'promo-grid' }, [el('div', { class: 'promo-main' }, [promo, feat, dl]), el('div', { class: 'aside' }, [el('div', { class: 'aside-gap' }), connect])]));
     else page.replaceChildren(peers, promo, connect, feat, dl);
     return () => {
-      serve.textContent = S.serving ? `${S.serving.name} is ready to pair. You only need to pair once.` : 'You only need to pair once.';
+      serve.textContent = S.serving ? tr('{name} is ready to pair. You only need to pair once.', { name: S.serving.name }) : tr('You only need to pair once.');
       peers.update();
       err.textContent = S.pairErr;
       err.hidden = !S.pairErr;
@@ -996,8 +1017,8 @@
       box.hidden = S.secure || !S.creds || location.protocol !== 'http:' || Date.now() - later < 3 * 864e5;
       if (box.hidden || box.firstChild) return;
       box.replaceChildren(tile('lock', ['#30d158', '#248a3d'], 40),
-        el('div', { class: 'ic-text' }, [el('b', { text: 'Set up a secure connection' }), el('div', { class: 'desc', text: `For the camera, screen sharing, alerts and the clipboard. Takes a minute, once${STANDALONE ? '. Then add TwinDesk again from the secure address.' : ', before adding TwinDesk as an app.'}` })]),
-        el('div', { class: 'ic-btns' }, [btn('Set Up', () => go('connection'), 'small primary'), link('Not now', () => { try { localStorage.setItem(LATER, String(Date.now())); } catch (_) {} box.hidden = true; })]));
+        el('div', { class: 'ic-text' }, [el('b', { text: tr('Set up a secure connection') }), el('div', { class: 'desc', text: STANDALONE ? tr('For the camera, screen sharing, alerts and the clipboard. Takes a minute, once. Then add TwinDesk again from the secure address.') : tr('For the camera, screen sharing, alerts and the clipboard. Takes a minute, once, before adding TwinDesk as an app.') })]),
+        el('div', { class: 'ic-btns' }, [btn(tr('Set Up'), () => go('connection'), 'small primary'), link(tr('Not now'), () => { try { localStorage.setItem(LATER, String(Date.now())); } catch (_) {} box.hidden = true; })]));
     };
     return box;
   }
@@ -1013,11 +1034,11 @@
       const can = ME.apple || MAC_SAFARI || !!installEvt;
       box.hidden = STANDALONE || !S.creds || !can || Date.now() - later < 7 * 864e5 || (location.protocol === 'http:' && !S.secure && !skipSecure() && !secLater());
       if (box.hidden) return;
-      const notNow = link('Not now', () => { try { localStorage.setItem(LATER, String(Date.now())); } catch (_) {} box.hidden = true; });
-      const how = ME.apple ? el('div', { class: 'desc', html: 'Tap <b>Share</b> in Safari, then <b>Add to Home Screen</b>. It opens connected, with alerts on the Lock Screen.' })
-        : MAC_SAFARI ? el('div', { class: 'desc', html: 'In Safari’s menu bar, choose <b>File › Add to Dock</b>. It opens connected, in its own window.' })
-          : el('div', { class: 'desc', text: 'It opens connected in its own window, with alerts and the share menu.' });
-      box.replaceChildren(tile('down', ['#64d2ff', '#0a84ff'], 40), el('div', { class: 'ic-text' }, [el('b', { text: `Install TwinDesk for ${pcName()}` }), how]),
+      const notNow = link(tr('Not now'), () => { try { localStorage.setItem(LATER, String(Date.now())); } catch (_) {} box.hidden = true; });
+      const how = ME.apple ? el('div', { class: 'desc', html: tr('Tap <b>Share</b> in Safari, then <b>Add to Home Screen</b>. It opens connected, with alerts on the Lock Screen.') })
+        : MAC_SAFARI ? el('div', { class: 'desc', html: tr('In Safari’s menu bar, choose <b>File › Add to Dock</b>. It opens connected, in its own window.') })
+          : el('div', { class: 'desc', text: tr('It opens connected in its own window, with alerts and the share menu.') });
+      box.replaceChildren(tile('down', ['#64d2ff', '#0a84ff'], 40), el('div', { class: 'ic-text' }, [el('b', { text: tr('Install TwinDesk for {name}', { name: pcName() }) }), how]),
         el('div', { class: 'ic-btns' }, [ME.apple || MAC_SAFARI ? null : installBtn(), notNow].filter(Boolean)));
     };
     return box;
@@ -1034,10 +1055,10 @@
       if (location.protocol === 'http:' && !skipSecure() && (ME.mobile || MAC_SAFARI || installEvt)) {
         box.hidden = false;
         box.replaceChildren(
-          el('b', { text: 'First, set up a secure connection' }),
-          el('div', { class: 'desc', text: `Once per computer. The camera, screen sharing and alerts need it${ME.apple ? ', and the Home Screen app opens on it' : MAC_SAFARI ? ', and the Dock app opens on it' : ', and the installed app opens on it'}.` }),
+          el('b', { text: tr('First, set up a secure connection') }),
+          el('div', { class: 'desc', text: ME.apple ? tr('Once per computer. The camera, screen sharing and alerts need it, and the Home Screen app opens on it.') : MAC_SAFARI ? tr('Once per computer. The camera, screen sharing and alerts need it, and the Dock app opens on it.') : tr('Once per computer. The camera, screen sharing and alerts need it, and the installed app opens on it.') }),
           el('ol', {}, secureSteps()),
-          link('Skip for now', () => { try { sessionStorage.setItem(SKIP_SECURE, '1'); } catch (_) {} box.update(); }),
+          link(tr('Skip for now'), () => { try { sessionStorage.setItem(SKIP_SECURE, '1'); } catch (_) {} box.update(); }),
         );
         return;
       }
@@ -1048,30 +1069,30 @@
       if (MAC_SAFARI) {
         box.hidden = false;
         box.replaceChildren(
-          el('b', { text: 'Add TwinDesk to the Dock' }),
+          el('b', { text: tr('Add TwinDesk to the Dock') }),
           el('ol', {}, [
-            el('li', { html: 'In Safari’s menu bar, choose <b>File › Add to Dock</b>, then <b>Add</b>.' }),
-            el('li', { text: 'Open TwinDesk from the Dock: it pairs there and stays connected.' }),
+            el('li', { html: tr('In Safari’s menu bar, choose <b>File › Add to Dock</b>, then <b>Add</b>.') }),
+            el('li', { text: tr('Open TwinDesk from the Dock: it pairs there and stays connected.') }),
           ]),
-          el('div', { class: 'desc', text: 'The Dock app keeps its own sign-in, apart from Safari.' }),
+          el('div', { class: 'desc', text: tr('The Dock app keeps its own sign-in, apart from Safari.') }),
         );
       } else if (ME.apple) {
         const hold = holdForInstall();
         box.hidden = false;
         box.replaceChildren(
-          el('b', { text: hold ? 'First, add TwinDesk to your Home Screen' : 'Add TwinDesk to your Home Screen' }),
+          el('b', { text: hold ? tr('First, add TwinDesk to your Home Screen') : tr('Add TwinDesk to your Home Screen') }),
           el('ol', {}, [
-            el('li', { html: 'Tap <b>Share</b> (the square with an arrow) in Safari.' }),
-            el('li', { html: 'Choose <b>Add to Home Screen</b>, then <b>Add</b>.' }),
-            el('li', { text: 'Open TwinDesk from the Home Screen: it pairs there and stays connected.' }),
+            el('li', { html: tr('Tap <b>Share</b> (the square with an arrow) in Safari.') }),
+            el('li', { html: tr('Choose <b>Add to Home Screen</b>, then <b>Add</b>.') }),
+            el('li', { text: tr('Open TwinDesk from the Home Screen: it pairs there and stays connected.') }),
           ]),
-          el('div', { class: 'desc', text: 'The Home Screen app keeps its own sign-in, apart from Safari, so pair it inside the app.' }),
-          hold ? link('Pair here in Safari instead', () => { sessionStorage.setItem(HOLD_KEY, '1'); render(); if (S.pairCode && S.pairCode.length === 6) pair(S.pairCode); }) : null,
+          el('div', { class: 'desc', text: tr('The Home Screen app keeps its own sign-in, apart from Safari, so pair it inside the app.') }),
+          hold ? link(tr('Pair here in Safari instead'), () => { sessionStorage.setItem(HOLD_KEY, '1'); render(); if (S.pairCode && S.pairCode.length === 6) pair(S.pairCode); }) : null,
         );
       } else {
         const b = installBtn();
         box.hidden = b.hidden;
-        box.replaceChildren(el('b', { text: 'Install TwinDesk as an app' }), el('div', { class: 'desc', text: 'It opens like an app, with alerts and shortcuts.' }), b);
+        box.replaceChildren(el('b', { text: tr('Install TwinDesk as an app') }), el('div', { class: 'desc', text: tr('It opens like an app, with alerts and shortcuts.') }), b);
       }
     };
     box.update();
@@ -1084,7 +1105,7 @@
     const sc = document.createElement('script');
     sc.src = '/vendor/jsQR.js';
     sc.onload = () => (window.jsQR ? ok(window.jsQR) : no(new Error('no decoder')));
-    sc.onerror = () => { jsQrLoad = null; no(new Error('the decoder didn’t load')); };
+    sc.onerror = () => { jsQrLoad = null; no(new Error(tr('the decoder didn’t load'))); };
     document.head.append(sc);
   }));
   const decodeFrom = (jsQR, src, w, h) => {
@@ -1103,11 +1124,11 @@
     const video = el('video', { class: 'qr-video', playsinline: '', muted: '', autoplay: '' });
     video.muted = true;
     video.setAttribute('playsinline', '');
-    const close = btn('Cancel', () => stop(), 'big');
-    const photo = link('Use a photo instead', () => { stop(); scanPhoto(done); });
+    const close = btn(tr('Cancel'), () => stop(), 'big');
+    const photo = link(tr('Use a photo instead'), () => { stop(); scanPhoto(done); });
     const sheet = el('div', { class: 'qr-sheet' }, [
       el('div', { class: 'qr-frame' }, [video, el('div', { class: 'qr-aim' })]),
-      el('div', { class: 'desc', text: 'Point the camera at the QR code in TwinDesk Web on the computer.' }),
+      el('div', { class: 'desc', text: tr('Point the camera at the QR code in TwinDesk Web on the computer.') }),
       photo, close,
     ]);
     document.body.append(sheet);
@@ -1128,7 +1149,7 @@
         setTimeout(() => requestAnimationFrame(tick), 120);
       };
       tick();
-    }, (e) => { stop(); toast(e && e.name === 'NotAllowedError' ? 'Camera access is off: use a photo of the code' : 'The camera isn’t available here'); scanPhoto(done); });
+    }, (e) => { stop(); toast(e && e.name === 'NotAllowedError' ? tr('Camera access is off: use a photo of the code') : tr('The camera isn’t available here')); scanPhoto(done); });
   }
   function scanPhoto(done) {
     const pick = el('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: '' });
@@ -1141,10 +1162,31 @@
         const jsQR = await loadJsQr();
         const img = await createImageBitmap(f);
         const text = decodeFrom(jsQR, img, img.width, img.height);
-        if (text) done(text); else toast('No QR code in that photo');
-      } catch (e) { toast('Couldn’t read that photo'); }
+        if (text) done(text); else toast(tr('No QR code in that photo'));
+      } catch (e) { toast(tr('Couldn’t read that photo')); }
     };
     pick.click();
+  }
+
+  // The newest published release's IPA on GitHub (its address, kept for this visit), or '' (none, or offline).
+  let ipaAsk = null;
+  function latestIpa() {
+    if (ipaAsk) return ipaAsk;
+    try { const k = sessionStorage.getItem('twindesk.web.ipa'); if (k) return (ipaAsk = Promise.resolve(k)); } catch (_) {}
+    ipaAsk = fetch('https://api.github.com/repos/InukaAsith/TwinDesk/releases?per_page=15', { headers: { Accept: 'application/vnd.github+json' } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => {
+        for (const rel of Array.isArray(list) ? list : []) {
+          const a = !rel.draft && (rel.assets || []).find((x) => /\.ipa$/i.test(x.name || ''));
+          if (a && a.browser_download_url) {
+            try { sessionStorage.setItem('twindesk.web.ipa', a.browser_download_url); } catch (_) {}
+            return a.browser_download_url;
+          }
+        }
+        return '';
+      })
+      .catch(() => '');
+    return ipaAsk;
   }
 
   function downloads() {
@@ -1154,15 +1196,18 @@
     const L = [
       ['macOS', 'Apple silicon', f('TwinDesk-{v}-arm64.dmg')],
       ['macOS', 'Intel', f('TwinDesk-{v}-x64_Intel.dmg')],
-      ['Windows', 'Installer (x64)', f('TwinDesk-Setup-{v}.exe')],
+      ['Windows', tr('Installer (x64)'), f('TwinDesk-Setup-{v}.exe')],
       ['Linux', 'Debian / Ubuntu (.deb)', f('TwinDesk-{v}-amd64.deb')],
       ['Linux', 'AppImage', f('TwinDesk-{v}-x86_64.AppImage')],
       ['Android', 'APK', f('TwinDesk-{v}.apk')],
     ];
-    return card('Download TwinDesk', [
-      el('div', { class: 'dl' }, L.map(([a, b, href]) => el('a', { href, target: '_blank', rel: 'noopener' }, [el('b', { text: a }), el('span', { text: b })]))),
-      row('All releases', 'Free and open source under GPL-3.0', [chev()], () => window.open(R, '_blank')),
-    ], v ? el('span', { class: 'muted act', text: `Version ${v}` }) : null);
+    // iPhone and iPad: the newest release on GitHub with an IPA (not every release has one yet).
+    const ipa = el('a', { href: `${R}`, target: '_blank', rel: 'noopener' }, [el('b', { text: 'iPhone / iPad' }), el('span', { text: tr('IPA, to sideload with SideStore or AltStore') })]);
+    latestIpa().then((u) => { if (u) ipa.href = u; });
+    return card(tr('Download TwinDesk'), [
+      el('div', { class: 'dl' }, [...L.map(([a, b, href]) => el('a', { href, target: '_blank', rel: 'noopener' }, [el('b', { text: a }), el('span', { text: b })])), ipa]),
+      row(tr('All releases'), tr('Free and open source under GPL-3.0'), [chev()], () => window.open(R, '_blank')),
+    ], v ? el('span', { class: 'muted act', text: tr('Version {version}', { version: v }) }) : null);
   }
 
   // ---- Overview: the computer, its actions, and what's happening ----
@@ -1186,27 +1231,27 @@
     const npT = el('b'), npA = el('span');
     const ctl = (ic, cmd) => el('button', { type: 'button', 'aria-label': cmd, onclick: () => { haptic(); send({ t: 'media.do', cmd }); } }, [icon(ic)]);
     const playB = ctl('play', 'toggle');
-    const np = card('Now playing', [el('div', { class: 'np' }, [art, el('div', { class: 't' }, [npT, npA]), el('div', { class: 'ctl' }, [ctl('prev', 'previous'), playB, ctl('next', 'next')])])]);
+    const np = card(tr('Now playing'), [el('div', { class: 'np' }, [art, el('div', { class: 't' }, [npT, npA]), el('div', { class: 'ctl' }, [ctl('prev', 'previous'), playB, ctl('next', 'next')])])]);
     np.classList.add('span');
     const clipText = el('div', { class: 'clip-text' });
-    const clip = card('Clipboard', [el('div', { class: 'pad16' }, [clipText, el('div', { class: 'two' }, [
-      btn('Copy', () => copy(S.clip.text), 'soft', 'copy'),
-      btn('Send clipboard', () => pastePhone(), '', 'up'),
-    ])])], link('History', () => go('clipboard')));
+    const clip = card(tr('Clipboard'), [el('div', { class: 'pad16' }, [clipText, el('div', { class: 'two' }, [
+      btn(tr('Copy'), () => copy(S.clip.text), 'soft', 'copy'),
+      btn(tr('Send clipboard'), () => pastePhone(), '', 'up'),
+    ])])], link(tr('History'), () => go('clipboard')));
     const nList = el('div', { class: 'card mini-list' });
-    const notifs = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Latest notifications' }), link('See all', () => go('notifications'))]), nList]);
+    const notifs = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: tr('Latest notifications') }), link(tr('See all'), () => go('notifications'))]), nList]);
     const fList = el('div', { class: 'card mini-list' });
-    const files = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Recent files' }), link('See all', () => go('files'))]), fList]);
-    const zone = el('div', { class: 'dropzone slim', onclick: () => pickFiles() }, [icon('up', 28), el('b', { text: 'Drop files here' }), el('span', { text: 'or click to choose' })]);
-    const sendCard = card('Send files', [zone]);
+    const files = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: tr('Recent files') }), link(tr('See all'), () => go('files'))]), fList]);
+    const zone = el('div', { class: 'dropzone slim', onclick: () => pickFiles() }, [icon('up', 28), el('b', { text: tr('Drop files here') }), el('span', { text: tr('or click to choose') })]);
+    const sendCard = card(tr('Send files'), [zone]);
     zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('over'); };
     zone.ondragleave = () => zone.classList.remove('over');
     zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove('over'); if (e.dataTransfer.files.length) upload([...e.dataTransfer.files], true); };
     const btSw = sw((v) => send({ t: 'dev.do', do: 'bluetooth', on: v }));
     const dndSw = sw((v) => send({ t: 'dev.do', do: 'dnd', on: v }));
-    const btRow = row('Bluetooth', '', [btSw]);
-    const dndRow = row('Do Not Disturb', '', [dndSw]);
-    const controls = card('Controls', [btRow, dndRow]);
+    const btRow = row(tr('Bluetooth'), '', [btSw]);
+    const dndRow = row(tr('Do Not Disturb'), '', [dndSw]);
+    const controls = card(tr('Controls'), [btRow, dndRow]);
     // The clipboard and Send files side by side first, at iPad and desktop widths alike; then the rest in pairs.
     const grid = el('div', { class: 'ov-grid' }, [clip, sendCard, np, notifs, files, controls]);
     const inst = installCard();
@@ -1222,24 +1267,24 @@
       dot.className = `dot${online() ? ' good' : S.conn === 'offline' || S.conn === 'paused' ? '' : ' warn'}`;
       stText.textContent = [statusText(), osName(S.pc && S.pc.os)].filter(Boolean).join(' · ');
       const A = online() ? [
-        btn('Show screen', () => openViewer(), 'primary', 'display'),
-        btn('Send files', () => pickFiles(), '', 'up'),
-        can.ring && btn(ringing ? 'Stop ringing' : 'Ring', () => { haptic(); send({ t: 'dev.do', do: ringing ? 'ringStop' : 'ring' }); st.ringing = !ringing; renderPage(); }, ringing ? 'on' : '', 'ring'),
-        can.lock && btn('Lock', () => { haptic(); send({ t: 'dev.do', do: 'lock' }); toast(`Locking ${pcName()}`); }, '', 'lock'),
-        can.sleep && btn('Sleep', () => { haptic(); send({ t: 'dev.do', do: 'sleep' }); toast(`Putting ${pcName()} to sleep`); }, '', 'sleep'),
-        btn('Disconnect', () => disconnectHere(), '', 'stop'),
+        btn(tr('Show screen'), () => openViewer(), 'primary', 'display'),
+        btn(tr('Send files'), () => pickFiles(), '', 'up'),
+        can.ring && btn(ringing ? tr('Stop ringing') : tr('Ring'), () => { haptic(); send({ t: 'dev.do', do: ringing ? 'ringStop' : 'ring' }); st.ringing = !ringing; renderPage(); }, ringing ? 'on' : '', 'ring'),
+        can.lock && btn(tr('Lock'), () => { haptic(); send({ t: 'dev.do', do: 'lock' }); toast(tr('Locking {name}', { name: pcName() })); }, '', 'lock'),
+        can.sleep && btn(tr('Sleep'), () => { haptic(); send({ t: 'dev.do', do: 'sleep' }); toast(tr('Putting {name} to sleep', { name: pcName() })); }, '', 'sleep'),
+        btn(tr('Disconnect'), () => disconnectHere(), '', 'stop'),
       ] : S.conn === 'paused' ? [
-        btn('Connect', () => reconnect(), 'primary'),
-        btn('Use another computer', () => forgetHere()),
+        btn(tr('Connect'), () => reconnect(), 'primary'),
+        btn(tr('Use another computer'), () => forgetHere()),
       ] : [
-        btn('Try again', () => { tries = 0; connect(); }, 'primary'),
-        btn('Use another computer', () => forgetHere()),
+        btn(tr('Try again'), () => { tries = 0; connect(); }, 'primary'),
+        btn(tr('Use another computer'), () => forgetHere()),
       ];
       actions.replaceChildren(...A.filter(Boolean));
       const F = [
-        ['Connection', [S.link, S.secure ? 'Secure' : 'Not secure'].filter(Boolean).join(' · ')],
-        ['Latency', online() && S.rtt != null ? `${S.rtt} ms` : '—'],
-        ['Address', (S.pc && S.pc.ips && S.pc.ips[0]) || location.hostname],
+        [tr('Connection'), [S.link, S.secure ? tr('Secure') : tr('Not secure')].filter(Boolean).join(' · ')],
+        [tr('Latency'), online() && S.rtt != null ? `${S.rtt} ms` : '—'],
+        [tr('Address'), (S.pc && S.pc.ips && S.pc.ips[0]) || location.hostname],
         ['TwinDesk', (S.pc && S.pc.version) || '—'],
       ];
       facts.replaceChildren(...F.flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })]));
@@ -1251,11 +1296,11 @@
       art.style.backgroundImage = m.art ? `url("${m.art}")` : '';
       art.firstChild.style.display = m.art ? 'none' : '';
       playB.replaceChildren(icon(m.playing === false ? 'play' : 'pause'));
-      clipText.textContent = S.clip.text || 'The clipboard is empty';
+      clipText.textContent = S.clip.text || tr('The clipboard is empty');
       clipText.classList.toggle('muted', !S.clip.text);
       clip.hidden = !online();
       const N = S.notifs.slice(0, 3);
-      nList.replaceChildren(...N.map((n) => row([n.appName, n.title].filter(Boolean).join(' · ') || 'Notification', String(n.body || '').slice(0, 90), [el('span', { class: 'muted', style: 'font-size:12px', text: ago(n.at) })])));
+      nList.replaceChildren(...N.map((n) => row([n.appName, n.title].filter(Boolean).join(' · ') || tr('Notification'), String(n.body || '').slice(0, 90), [el('span', { class: 'muted', style: 'font-size:12px', text: ago(n.at) })])));
       notifs.hidden = !N.length;
       const fl = S.chat.filter((x) => x.file).slice(-3).reverse();
       fList.replaceChildren(...fl.map((x) => fileRow(x)));
@@ -1274,40 +1319,40 @@
   // ---- Connection ----
   BUILD.connection = (page) => {
     const h = hero();
-    const hd = head('Connection');
-    const status = valueRow('Status');
-    const rtt = valueRow('Latency');
-    const sec = valueRow('Security');
+    const hd = head(tr('Connection'));
+    const status = valueRow(tr('Status'));
+    const rtt = valueRow(tr('Latency'));
+    const sec = valueRow(tr('Security'));
     const addr = el('div');
     const setup = el('div');
-    const forget = row('', '', [btn('Forget', () => forgetHere(), 'small danger')]);
-    const install = row(ME.apple ? 'Add to Home Screen' : 'Install as an app', '', [installBtn()]);
+    const forget = row('', '', [btn(tr('Forget'), () => forgetHere(), 'small danger')]);
+    const install = row(ME.apple ? tr('Add to Home Screen') : tr('Install as an app'), '', [installBtn()]);
     const others = el('div');
     page.append(peerBar(), hd, h,
       card('', [status, rtt, sec]),
-      card('Addresses', [el('div', { class: 'pad16', style: 'gap:10px' }, [addr])]),
+      card(tr('Addresses'), [el('div', { class: 'pad16', style: 'gap:10px' }, [addr])]),
       setup,
-      card('Paired computer', [forget]),
+      card(tr('Paired computer'), [forget]),
       others,
       card('', [install]),
     );
     let othersKey = '';
     let addrKey = '';
     return () => {
-      hd.desc(`This ${ME.kind} reconnects to ${pcName()} automatically, even when either device's network address changes.`);
-      h.update(S.conn === 'paused' ? [btn('Connect', () => reconnect(), 'primary')] : []);
+      hd.desc(tr('This {device} reconnects to {name} automatically, even when either device\'s network address changes.', { device: ME.kind, name: pcName() }));
+      h.update(S.conn === 'paused' ? [btn(tr('Connect'), () => reconnect(), 'primary')] : []);
       status.set([statusText().split(' · ')[0], online() && S.link ? S.link : ''].filter(Boolean).join(' · '));
       rtt.set(online() && S.rtt != null ? `${S.rtt} ms` : '');
-      sec.set(S.secure ? 'Encrypted (HTTPS)' : 'Not encrypted');
+      sec.set(S.secure ? tr('Encrypted (HTTPS)') : tr('Not encrypted'));
       const key = JSON.stringify([S.pc && S.pc.host, S.pc && S.pc.ips, location.host]);
       if (key !== addrKey) {
         addrKey = key;
         const port = (S.pc && S.pc.port) || Number(location.port) || 47870;
         const L = [];
-        if (S.pc && S.pc.host) L.push(['Secure address (recommended)', `https://${S.pc.host}:${port}/`]);
-        if (S.pc && S.pc.host) L.push(['By name (keeps working when the computer’s address changes)', `http://${S.pc.host}:${port + 1}/`]);
-        for (const ip of (S.pc && S.pc.ips) || []) L.push([`Local address (${ip})`, `http://${ip}:${port + 1}/`]);
-        if (!L.length) L.push(['This page', location.origin + '/']);
+        if (S.pc && S.pc.host) L.push([tr('Secure address (recommended)'), `https://${S.pc.host}:${port}/`]);
+        if (S.pc && S.pc.host) L.push([tr('By name (keeps working when the computer’s address changes)'), `http://${S.pc.host}:${port + 1}/`]);
+        for (const ip of (S.pc && S.pc.ips) || []) L.push([tr('Local address ({ip})', { ip }), `http://${ip}:${port + 1}/`]);
+        if (!L.length) L.push([tr('This page'), location.origin + '/']);
         addr.replaceChildren(...L.map(([l, u]) => el('div', {}, [el('div', { class: 'muted', style: 'font-size:12.5px', text: l }), copyBox(() => u)])));
       }
       if (!setup.firstChild && !S.secure) setup.append(secureCard());
@@ -1315,17 +1360,17 @@
       const ok = JSON.stringify(rest.map((x) => [x.id, x.name, x.ip, x.port]));
       if (ok !== othersKey) {
         othersKey = ok;
-        others.replaceChildren(...(rest.length ? [card('Other computers on this network', [
-          ...rest.map((x) => row(x.name, [osName(x.os), x.host].filter(Boolean).join(' · '), [btn('Open', () => openPeer(x), 'small')])),
-          el('div', { class: 'pad16 desc', text: `Each computer is paired separately. Opening another one keeps this ${ME.kind} paired with ${pcName()}.` }),
+        others.replaceChildren(...(rest.length ? [card(tr('Other computers on this network'), [
+          ...rest.map((x) => row(x.name, [osName(x.os), x.host].filter(Boolean).join(' · '), [btn(tr('Open'), () => openPeer(x), 'small')])),
+          el('div', { class: 'pad16 desc', text: tr('Each computer is paired separately. Opening another one keeps this {device} paired with {name}.', { device: ME.kind, name: pcName() }) }),
         ])] : []));
       }
       forget.setLabel(pcName());
-      forget.setHint(`Paired${S.pc && S.pc.version ? ` · TwinDesk ${S.pc.version}` : ''}. Forgetting removes the pairing on both devices.`);
-      install.setHint(STANDALONE ? 'Installed. TwinDesk opens connected without pairing again.'
-        : ME.apple ? 'In Safari, tap Share › Add to Home Screen. Required for notifications on iPhone and iPad.'
-          : MAC_SAFARI ? 'In Safari’s menu bar, choose File › Add to Dock.'
-          : 'Opens TwinDesk in its own window and adds it to the share menu.');
+      forget.setHint(S.pc && S.pc.version ? tr('Paired · TwinDesk {version}. Forgetting removes the pairing on both devices.', { version: S.pc.version }) : tr('Paired. Forgetting removes the pairing on both devices.'));
+      install.setHint(STANDALONE ? tr('Installed. TwinDesk opens connected without pairing again.')
+        : ME.apple ? tr('In Safari, tap Share › Add to Home Screen. Required for notifications on iPhone and iPad.')
+          : MAC_SAFARI ? tr('In Safari’s menu bar, choose File › Add to Dock.')
+          : tr('Opens TwinDesk in its own window and adds it to the share menu.'));
     };
   };
 
@@ -1333,7 +1378,7 @@
   let installEvt = null;
   addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; refresh('connection', 'shortcuts', 'overview'); });
   function installBtn() {
-    const b = btn('Install', async () => {
+    const b = btn(tr('Install'), async () => {
       if (!installEvt) return;
       installEvt.prompt();
       try { await installEvt.userChoice; } catch (_) {}
@@ -1347,36 +1392,36 @@
 
   function secureSteps() {
     const steps = ME.apple ? [
-      el('li', {}, [el('a', { href: '/twindesk.mobileconfig', text: 'Download the TwinDesk profile' }), '.']),
-      el('li', { html: 'Open Settings › <b>Profile Downloaded</b> and tap Install.' }),
-      el('li', { html: 'Go to Settings › General › About › <b>Certificate Trust Settings</b> and turn on TwinDesk.' }),
+      el('li', {}, [el('a', { href: '/twindesk.mobileconfig', text: tr('Download the TwinDesk profile') }), '.']),
+      el('li', { html: tr('Open Settings › <b>Profile Downloaded</b> and tap Install.') }),
+      el('li', { html: tr('Go to Settings › General › About › <b>Certificate Trust Settings</b> and turn on TwinDesk.') }),
     ] : ME.os === 'android' ? [
-      el('li', {}, [el('a', { href: '/twindesk.cer', text: 'Download the TwinDesk certificate' }), '.']),
-      el('li', { html: 'Open Settings › Security › More security settings › Encryption &amp; credentials › <b>Install a certificate</b> › CA certificate, and select the file.' }),
+      el('li', {}, [el('a', { href: '/twindesk.cer', text: tr('Download the TwinDesk certificate') }), '.']),
+      el('li', { html: tr('Open Settings › Security › More security settings › Encryption &amp; credentials › <b>Install a certificate</b> › CA certificate, and select the file.') }),
     ] : ME.os === 'mac' ? [
       // A profile, as on iPhone: System Settings installs it and trusts it in one go. (Double-clicking a
       // .cer imports into the default keychain, which fails with -25294 when that's iCloud or Local Items.)
-      el('li', {}, [el('a', { href: '/twindesk.mobileconfig', text: 'Download the TwinDesk profile' }), '.']),
-      el('li', { html: 'Open System Settings › General › <b>Device Management</b> (on older macOS: Privacy &amp; Security › <b>Profiles</b>), double-click TwinDesk and click <b>Install</b>.' }),
-      el('li', {}, ['Or with Keychain Access: ', el('a', { href: '/twindesk.cer', text: 'download the certificate' }), ', choose File › Import Items, pick the ', el('b', { text: 'login' }), ' keychain, then double-click it and set Trust to Always Trust.']),
+      el('li', {}, [el('a', { href: '/twindesk.mobileconfig', text: tr('Download the TwinDesk profile') }), '.']),
+      el('li', { html: tr('Open System Settings › General › <b>Device Management</b> (on older macOS: Privacy &amp; Security › <b>Profiles</b>), double-click TwinDesk and click <b>Install</b>.') }),
+      el('li', {}, trNodes('Or with Keychain Access: {download}, choose File › Import Items, pick the {login} keychain, then double-click it and set Trust to Always Trust.', { download: el('a', { href: '/twindesk.cer', text: tr('download the certificate') }), login: el('b', { text: 'login' }) })),
     ] : [
-      el('li', {}, [el('a', { href: '/twindesk.cer', text: 'Download the TwinDesk certificate' }), '.']),
-      el('li', { text: ME.os === 'win' ? 'Open the file and choose Install Certificate › Current User › Trusted Root Certification Authorities.' : 'Import it into your browser’s certificate settings as a certificate authority.' }),
+      el('li', {}, [el('a', { href: '/twindesk.cer', text: tr('Download the TwinDesk certificate') }), '.']),
+      el('li', { text: ME.os === 'win' ? tr('Open the file and choose Install Certificate › Current User › Trusted Root Certification Authorities.') : tr('Import it into your browser’s certificate settings as a certificate authority.') }),
     ];
-    steps.push(el('li', {}, [btn('Switch to the secure address', () => secureNow(), 'small primary')]));
+    steps.push(el('li', {}, [btn(tr('Switch to the secure address'), () => secureNow(), 'small primary')]));
     return steps;
   }
   function secureCard() {
     const steps = secureSteps();
-    return card('Set up a secure connection', [
-      el('div', { class: 'pad16', style: 'padding-bottom:0' }, [el('div', { class: 'muted', text: 'Required for the camera, microphone, notifications and clipboard access. It also keeps the address the same when the computer changes networks.' })]),
+    return card(tr('Set up a secure connection'), [
+      el('div', { class: 'pad16', style: 'padding-bottom:0' }, [el('div', { class: 'muted', text: tr('Required for the camera, microphone, notifications and clipboard access. It also keeps the address the same when the computer changes networks.') })]),
       el('ol', { class: 'steps' }, steps),
-      row('About this certificate', 'It is valid only for this computer’s .local name and private network addresses. It cannot be used for websites.'),
+      row(tr('About this certificate'), tr('It is valid only for this computer’s .local name and private network addresses. It cannot be used for websites.')),
     ]);
   }
 
   function fileRow(x, extra) {
-    const r = row(x.file.name, `${x.from === 'pc' ? `From ${pcName()}` : 'Sent'} · ${bytes(x.file.size)} · ${ago(x.at)}`, [
+    const r = row(x.file.name, x.from === 'pc' ? tr('From {name} · {size} · {ago}', { name: pcName(), size: bytes(x.file.size), ago: ago(x.at) }) : tr('Sent · {size} · {ago}', { size: bytes(x.file.size), ago: ago(x.at) }), [
       ...(extra || []),
       x.from === 'pc' ? saveBtn(x) : el('span', { class: 'muted', text: '✓' }),
     ]);
@@ -1393,8 +1438,8 @@
   // so a large one asks for a second tap.
   const blobs = new Map();
   function saveBtn(x) {
-    if (!(ME.mobile && navigator.canShare)) return el('a', { class: 'btn small soft', href: fileUrl(x), download: x.file.name, text: 'Save' });
-    const b = btn('Save', null, 'small soft');
+    if (!(ME.mobile && navigator.canShare)) return el('a', { class: 'btn small soft', href: fileUrl(x), download: x.file.name, text: tr('Save') });
+    const b = btn(tr('Save'), null, 'small soft');
     b.onclick = () => shareFile(x, b);
     return b;
   }
@@ -1417,61 +1462,61 @@
       try {
         await navigator.share({ files: [f] });
       } catch (e) {
-        if (e.name === 'NotAllowedError') toast('Ready. Tap Save again.');
+        if (e.name === 'NotAllowedError') toast(tr('Ready. Tap Save again.'));
         else if (e.name !== 'AbortError') location.href = fileUrl(x);
       }
     } catch (_) {
       location.href = fileUrl(x);
     } finally {
-      if (b) b.textContent = 'Save';
+      if (b) b.textContent = tr('Save');
     }
   }
 
   // ---- Receive screen ----
   const QUALITY = { auto: [1440, 14], high: [2160, 24], medium: [1080, 10], low: [720, 5] };
   BUILD.receive = (page) => {
-    const hd = head('Receive screen');
-    const openB = el('button', { class: 'btn primary big', onclick: () => openViewer() }, [icon('display'), 'Open screen']);
+    const hd = head(tr('Receive screen'));
+    const openB = el('button', { class: 'btn primary big', onclick: () => openViewer() }, [icon('display'), tr('Open screen')]);
     const status = note('');
-    const modeSeg = seg([['mirror', 'Mirror'], ['extend', 'Extend']], () => prefs.mode, (v) => { prefs.mode = v; savePrefs(); if (overlay && overlay.kind === 'viewer') startScreen(); renderPage(); });
-    const modeRow = row('Display mode', '', [modeSeg]);
+    const modeSeg = seg([['mirror', tr('Mirror')], ['extend', tr('Extend')]], () => prefs.mode, (v) => { prefs.mode = v; savePrefs(); if (overlay && overlay.kind === 'viewer') startScreen(); renderPage(); });
+    const modeRow = row(tr('Display mode'), '', [modeSeg]);
     const ctlSw = sw((v) => { prefs.control = v; savePrefs(); });
     const fullSw = sw((v) => { prefs.full = v; savePrefs(); });
     const soundSw = sw((v) => { prefs.sound = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
     // Steady takes a new session (viewer.js leaves the playout-delay extension out of its answer).
-    const paceSeg = seg([['fast', 'Lowest latency'], ['smooth', 'Smooth'], ['steady', 'Steady']], () => prefs.pacing, (v) => { const was = prefs.pacing; prefs.pacing = v; savePrefs(); toFrame('viewer', optsFor('viewer')); if ((was === 'steady') !== (v === 'steady') && overlay && overlay.kind === 'viewer') startScreen(); });
+    const paceSeg = seg([['fast', tr('Lowest latency')], ['smooth', tr('Smooth')], ['steady', tr('Steady')]], () => prefs.pacing, (v) => { const was = prefs.pacing; prefs.pacing = v; savePrefs(); toFrame('viewer', optsFor('viewer')); if ((was === 'steady') !== (v === 'steady') && overlay && overlay.kind === 'viewer') startScreen(); });
     const qSeg = seg([['low', '720p'], ['medium', '1080p'], ['auto', '1440p'], ['high', '4K']], () => prefs.quality, (v) => { prefs.quality = v; savePrefs(); if (overlay && overlay.kind === 'viewer') startScreen(); });
-    const touchSeg = seg([['pad', 'Trackpad'], ['direct', 'Direct']], () => prefs.touch, (v) => { prefs.touch = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
+    const touchSeg = seg([['pad', tr('Trackpad')], ['direct', tr('Direct')]], () => prefs.touch, (v) => { prefs.touch = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
     const tapSw = sw((v) => { prefs.tap = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
     const penSw = sw((v) => { prefs.pen = v; savePrefs(); toFrame('viewer', optsFor('viewer')); });
     const speed = el('input', { type: 'range', min: '0.4', max: '3', step: '0.1', style: 'width:150px' });
     speed.onchange = () => { prefs.speed = Number(speed.value); savePrefs(); toFrame('viewer', optsFor('viewer')); };
-    const st = { status: valueRow('Status'), picture: valueRow('Resolution'), mode: valueRow('Mode'), rtt: valueRow('Latency') };
-    const ctlRow = row('Allow control', '', [ctlSw]);
-    const fullRow = row('Open in full screen', 'Hides the browser interface while viewing', [fullSw]);
-    const penRow = row(ME.apple ? 'Apple Pencil input' : 'Stylus input', 'Sends pressure and tilt for drawing apps. When off, the stylus works like a finger.', [penSw]);
+    const st = { status: valueRow(tr('Status')), picture: valueRow(tr('Resolution')), mode: valueRow(tr('Mode')), rtt: valueRow(tr('Latency')) };
+    const ctlRow = row(tr('Allow control'), '', [ctlSw]);
+    const fullRow = row(tr('Open in full screen'), tr('Hides the browser interface while viewing'), [fullSw]);
+    const penRow = row(ME.apple ? tr('Apple Pencil input') : tr('Stylus input'), tr('Sends pressure and tilt for drawing apps. When off, the stylus works like a finger.'), [penSw]);
     page.append(
       hd,
       el('div', { class: 'stack', style: 'margin-bottom:18px' }, [openB, status]),
-      card('Display', [modeRow, ctlRow, fullRow]),
-      card('Video and audio', [row('Audio', 'Play the computer’s audio with the video', [soundSw]), row('Playback', 'Lowest latency for interaction; Smooth for video on busy networks', [paceSeg]), row('Resolution', '', [qSeg])]),
-      card('Touch input', [
-        row('Touch mode', 'Trackpad moves the pointer like a laptop trackpad. Direct places it under your finger.', [touchSeg]),
-        row('Tap to click', '', [tapSw]),
-        row('Pointer speed', '', [speed]),
+      card(tr('Display'), [modeRow, ctlRow, fullRow]),
+      card(tr('Video and audio'), [row(tr('Audio'), tr('Play the computer’s audio with the video'), [soundSw]), row(tr('Playback'), tr('Lowest latency for interaction; Smooth for video on busy networks'), [paceSeg]), row(tr('Resolution'), '', [qSeg])]),
+      card(tr('Touch input'), [
+        row(tr('Touch mode'), tr('Trackpad moves the pointer like a laptop trackpad. Direct places it under your finger.'), [touchSeg]),
+        row(tr('Tap to click'), '', [tapSw]),
+        row(tr('Pointer speed'), '', [speed]),
         penRow,
       ]),
-      card('Session', Object.values(st)),
+      card(tr('Session'), Object.values(st)),
     );
     return () => {
-      hd.desc(`View and control ${pcName()} from this ${ME.kind}.`);
+      hd.desc(tr('View and control {name} from this {device}.', { name: pcName(), device: ME.kind }));
       openB.disabled = !online();
-      openB.lastChild.textContent = overlay && overlay.kind === 'viewer' ? 'Return to screen' : 'Open screen';
+      openB.lastChild.textContent = overlay && overlay.kind === 'viewer' ? tr('Return to screen') : tr('Open screen');
       const ext = !!(S.pc && S.pc.extend);
       modeSeg.hidden = !ext;
-      modeRow.setHint(!ext ? 'Mirror only. Extend requires a newer version of TwinDesk on the computer.' : prefs.mode === 'extend' ? `Adds a separate display to ${pcName()} for this ${ME.kind}` : `Shows ${pcName()}’s main display`);
+      modeRow.setHint(!ext ? tr('Mirror only. Extend requires a newer version of TwinDesk on the computer.') : prefs.mode === 'extend' ? tr('Adds a separate display to {name} for this {device}', { name: pcName(), device: ME.kind }) : tr('Shows {name}’s main display', { name: pcName() }));
       const locked = !!(S.pc && S.pc.control === false);
-      ctlRow.setHint(locked ? `Turned off in TwinDesk on ${pcName()}` : 'Send touch, keyboard and stylus input to the computer');
+      ctlRow.setHint(locked ? tr('Turned off in TwinDesk on {name}', { name: pcName() }) : tr('Send touch, keyboard and stylus input to the computer'));
       ctlSw.checked = prefs.control && !locked;
       ctlSw.disabled = locked;
       fullRow.hidden = !document.fullscreenEnabled;
@@ -1483,25 +1528,25 @@
       speed.value = prefs.speed;
       paceSeg.paint(); qSeg.paint(); touchSeg.paint(); modeSeg.paint();
       const s = S.screen.status;
-      status.textContent = !online() ? (S.conn === 'offline' ? `${pcName()} is not reachable` : 'Connecting…') : s.startsWith('error') ? s.replace(/^error: /, '') : '';
+      status.textContent = !online() ? (S.conn === 'offline' ? tr('{name} is not reachable', { name: pcName() }) : tr('Connecting…')) : s.startsWith('error') ? s.replace(/^error: /, '') : '';
       status.hidden = !status.textContent;
       status.className = `note${s.startsWith('error') ? ' bad' : ' warn'}`;
       const live = s === 'live' || s === 'connected';
-      st.status.set(s === 'off' ? 'Not viewing' : live ? 'Live' : s.startsWith('error') ? 'Stopped' : 'Starting…');
+      st.status.set(s === 'off' ? tr('Not viewing') : live ? tr('Live') : s.startsWith('error') ? tr('Stopped') : tr('Starting…'));
       st.picture.set(S.picture ? `${S.picture[0]} × ${S.picture[1]}` : '');
-      st.mode.set(s === 'off' ? '' : prefs.mode === 'extend' && ext ? 'Extended display' : 'Mirrored display');
+      st.mode.set(s === 'off' ? '' : prefs.mode === 'extend' && ext ? tr('Extended display') : tr('Mirrored display'));
       st.rtt.set(online() && S.rtt != null ? `${S.rtt} ms` : '');
     };
   };
 
   // ---- Send screen ----
   BUILD.send = (page) => {
-    const hd = head('Send screen');
+    const hd = head(tr('Send screen'));
     const body = el('div');
     page.append(hd, body);
     return () => {
       const name = pcName();
-      hd.desc(`Show this ${ME.kind}’s screen on ${name}.`);
+      hd.desc(tr('Show this {device}’s screen on {name}.', { device: ME.kind, name }));
       let share = null;
       if (CAN_SHARE) {
         const vt = S.scr.stream && S.scr.stream.getVideoTracks()[0];
@@ -1512,79 +1557,79 @@
         prev.muted = true;
         if (S.scr.stream) { prev.srcObject = S.scr.stream; prev.play().catch(() => {}); }
         const stage = S.scr.on
-          ? el('div', { class: 'present-stage' }, [prev, el('div', { class: 'present-live' }, [el('span', { class: 'dot' + (S.scr.status === 'live' ? ' on' : '') }), S.scr.status === 'live' ? `Live on ${name}` : 'Connecting…'])])
-          : el('div', { class: 'present-stage idle', onclick: () => { if (needOnline()) startScr(); } }, [tile('share', PAGE.send.c, 54), el('b', { text: `Present to ${name}` }), el('span', { class: 'muted', text: ME.os === 'android' ? 'Shares this phone’s screen in a window there.' : 'Choose a screen, a window or a tab. It opens in a window there.' })]);
+          ? el('div', { class: 'present-stage' }, [prev, el('div', { class: 'present-live' }, [el('span', { class: 'dot' + (S.scr.status === 'live' ? ' on' : '') }), S.scr.status === 'live' ? tr('Live on {name}', { name }) : tr('Connecting…')])])
+          : el('div', { class: 'present-stage idle', onclick: () => { if (needOnline()) startScr(); } }, [tile('share', PAGE.send.c, 54), el('b', { text: tr('Present to {name}', { name }) }), el('span', { class: 'muted', text: ME.os === 'android' ? tr('Shares this phone’s screen in a window there.') : tr('Choose a screen, a window or a tab. It opens in a window there.') })]);
         share = el('div', {}, [
           stage,
           el('div', { class: S.scr.on && !ME.mobile ? 'two' : 'one', style: 'margin:14px 0 18px;display:grid' }, S.scr.on
-            ? [ME.mobile ? null : btn('Share another', () => switchScr(), 'big', 'display'), btn('Stop presenting', () => stopScr(), 'big danger')].filter(Boolean)
-            : [btn('Start presenting', () => { if (needOnline()) startScr(); }, 'primary big', 'share')]),
+            ? [ME.mobile ? null : btn(tr('Share another'), () => switchScr(), 'big', 'display'), btn(tr('Stop presenting'), () => stopScr(), 'big danger')].filter(Boolean)
+            : [btn(tr('Start presenting'), () => { if (needOnline()) startScr(); }, 'primary big', 'share')]),
           card('', [
-            row('Share audio', S.scr.on ? `${S.scr.stream && S.scr.stream.getAudioTracks().length ? 'Sound is going' : 'No sound in this share'}. Change it next time you start.` : ME.os === 'android' ? 'Where Android allows it (Android 10 and later, for apps that let it).' : 'The tab’s sound, or the whole computer’s where the browser offers it (Chrome and Edge on Windows and ChromeOS).', [audio]),
-            S.scr.on && vt ? row('Showing', scrWhat(vt).replace(/^./, (c) => c.toUpperCase())) : null,
+            row(tr('Share audio'), S.scr.on ? (S.scr.stream && S.scr.stream.getAudioTracks().length ? tr('Sound is going. Change it next time you start.') : tr('No sound in this share. Change it next time you start.')) : ME.os === 'android' ? tr('Where Android allows it (Android 10 and later, for apps that let it).') : tr('The tab’s sound, or the whole computer’s where the browser offers it (Chrome and Edge on Windows and ChromeOS).'), [audio]),
+            S.scr.on && vt ? row(tr('Showing'), scrWhat(vt).replace(/^./, (c) => c.toUpperCase())) : null,
           ].filter(Boolean)),
         ]);
       } else if (!ME.apple && !window.isSecureContext) {
         // Browsers hide screen sharing on a plain http page: it's the connection, not the browser.
         // The same panel as when it can present, with what it takes: the secure page.
         share = el('div', {}, [
-          el('div', { class: 'present-stage idle', onclick: () => go('connection') }, [tile('share', PAGE.send.c, 54), el('b', { text: `Present to ${name}` }), el('span', { class: 'muted', text: 'Browsers allow screen sharing only on a secure page. Set it up once, then choose a screen, a window or a tab here.' })]),
-          el('div', { class: 'two', style: 'margin:14px 0 18px;display:grid' }, [btn('Set Up Secure Connection', () => go('connection'), 'primary big', 'lock'), btn('Switch to Secure Address', () => secureNow(), 'big')]),
+          el('div', { class: 'present-stage idle', onclick: () => go('connection') }, [tile('share', PAGE.send.c, 54), el('b', { text: tr('Present to {name}', { name }) }), el('span', { class: 'muted', text: tr('Browsers allow screen sharing only on a secure page. Set it up once, then choose a screen, a window or a tab here.') })]),
+          el('div', { class: 'two', style: 'margin:14px 0 18px;display:grid' }, [btn(tr('Set Up Secure Connection'), () => go('connection'), 'primary big', 'lock'), btn(tr('Switch to Secure Address'), () => secureNow(), 'big')]),
         ]);
       } else if (!ME.apple) {
-        share = card('', [row('This browser can’t share its screen', ME.os === 'android' ? 'Use Chrome for Android, or AirPlay or screen casting if the computer has it turned on.' : 'Use Chrome, Edge or Firefox, or AirPlay if this device has it.')]);
+        share = card('', [row(tr('This browser can’t share its screen'), ME.os === 'android' ? tr('Use Chrome for Android, or AirPlay or screen casting if the computer has it turned on.') : tr('Use Chrome, Edge or Firefox, or AirPlay if this device has it.'))]);
       }
       if (ME.apple) {
         body.replaceChildren(
-          el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('cast', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: `AirPlay to ${name}` }), el('div', { class: 'muted', text: S.pc && S.pc.os === 'mac' ? `${name} receives AirPlay when AirPlay Receiver is on in its System Settings.` : `${name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.` })]),
-          card('Mirror your screen', [el('ol', { class: 'steps' }, [
-            el('li', { html: 'Open <b>Control Center</b>.' }),
-            el('li', { html: 'Tap <b>Screen Mirroring</b>.' }),
-            el('li', {}, ['Select ', el('b', { text: name }), '.']),
-            el('li', { html: 'To stop, open Screen Mirroring again and tap <b>Stop Mirroring</b>.' }),
+          el('div', { class: 'hero', style: 'padding:26px 20px;text-align:center' }, [tile('cast', PAGE.send.c, 56), el('h2', { style: 'margin:14px 0 4px;font-size:20px', text: tr('AirPlay to {name}', { name }) }), el('div', { class: 'muted', text: S.pc && S.pc.os === 'mac' ? tr('{name} receives AirPlay when AirPlay Receiver is on in its System Settings.', { name }) : tr('{name} appears as an AirPlay receiver when AirPlay is enabled in TwinDesk.', { name }) })]),
+          card(tr('Mirror your screen'), [el('ol', { class: 'steps' }, [
+            el('li', { html: tr('Open <b>Control Center</b>.') }),
+            el('li', { html: tr('Tap <b>Screen Mirroring</b>.') }),
+            el('li', {}, trNodes('Select {name}.', { name: el('b', { text: name }) })),
+            el('li', { html: tr('To stop, open Screen Mirroring again and tap <b>Stop Mirroring</b>.') }),
           ])]),
-          card('Play video or audio', [el('ol', { class: 'steps' }, [
-            el('li', { html: 'In Photos, Music, YouTube or another app, tap the <b>AirPlay</b> button.' }),
-            el('li', {}, ['Select ', el('b', { text: name }), '.']),
+          card(tr('Play video or audio'), [el('ol', { class: 'steps' }, [
+            el('li', { html: tr('In Photos, Music, YouTube or another app, tap the <b>AirPlay</b> button.') }),
+            el('li', {}, trNodes('Select {name}.', { name: el('b', { text: name }) })),
           ])]),
-          card('', [row(`${name} is not listed`, S.pc && S.pc.os === 'mac' ? `On ${name}, open System Settings › General › AirDrop & Handoff and turn on AirPlay Receiver (Allow AirPlay for: Current User, or Everyone on the same network). Both devices must be on the same network.` : `Enable AirPlay in TwinDesk on ${name} (AirPlay & SMB). Both devices must be on the same network, or connected with a cable.`)]),
+          card('', [row(tr('{name} is not listed', { name }), S.pc && S.pc.os === 'mac' ? tr('On {name}, open System Settings › General › AirDrop & Handoff and turn on AirPlay Receiver (Allow AirPlay for: Current User, or Everyone on the same network). Both devices must be on the same network.', { name }) : tr('Enable AirPlay in TwinDesk on {name} (AirPlay & SMB). Both devices must be on the same network, or connected with a cable.', { name }))]),
         );
       } else if (ME.os === 'android') {
         body.replaceChildren(
           share,
-          card('', [row('TwinDesk for Android', `Shares this phone’s screen and audio with ${name}, and lets ${name} control it.`, [el('a', { class: 'btn small primary', href: 'https://github.com/InukaAsith/TwinDesk/releases/latest', target: '_blank', rel: 'noopener', text: 'Download' })])]),
-          card('Screen casting', [el('ol', { class: 'steps' }, [
-            el('li', { html: 'Open Quick Settings and tap <b>Screen cast</b> (or Smart View).' }),
-            el('li', {}, ['Select ', el('b', { text: name }), '. Casting must be enabled in TwinDesk on the computer.']),
+          card('', [row(tr('TwinDesk for Android'), tr('Shares this phone’s screen and audio with {name}, and lets {name} control it.', { name }), [el('a', { class: 'btn small primary', href: 'https://github.com/InukaAsith/TwinDesk/releases/latest', target: '_blank', rel: 'noopener', text: tr('Download') })])]),
+          card(tr('Screen casting'), [el('ol', { class: 'steps' }, [
+            el('li', { html: tr('Open Quick Settings and tap <b>Screen cast</b> (or Smart View).') }),
+            el('li', {}, trNodes('Select {name}. Casting must be enabled in TwinDesk on the computer.', { name: el('b', { text: name }) })),
           ])]),
         );
       } else {
-        body.replaceChildren(share, card('', [row('Install TwinDesk on this computer', `TwinDesk shares this screen with ${name} as an extended or mirrored display, with keyboard and mouse.`)]), downloads());
+        body.replaceChildren(share, card('', [row(tr('Install TwinDesk on this computer'), tr('TwinDesk shares this screen with {name} as an extended or mirrored display, with keyboard and mouse.', { name }))]), downloads());
       }
     };
   };
 
   // ---- Files ----
   BUILD.files = (page) => {
-    const hd = head('Files');
+    const hd = head(tr('Files'));
     // Send: from here to the computer. Receive: what the computer sent, waiting to be saved here.
     let view = 'send';
-    const tabs = seg([['send', 'Send'], ['receive', 'Receive']], () => view, (v) => { view = v; shown = ''; queueMicrotask(paint); }, 'full');
+    const tabs = seg([['send', tr('Send')], ['receive', tr('Receive')]], () => view, (v) => { view = v; shown = ''; queueMicrotask(paint); }, 'full');
     const tabsWrap = el('div', { style: 'margin-bottom:18px' }, [tabs]);
-    const zone = el('div', { class: 'dropzone', onclick: () => pickFiles() }, [tile('up', PAGE.files.c, 46), el('b', { text: 'Drop files here to send' }), el('span', { text: 'or click to choose files' })]);
+    const zone = el('div', { class: 'dropzone', onclick: () => pickFiles() }, [tile('up', PAGE.files.c, 46), el('b', { text: tr('Drop files here to send') }), el('span', { text: tr('or click to choose files') })]);
     const actions = el('div', { class: 'two', style: 'margin-bottom:18px' }, [
-      el('button', { class: 'btn primary big', onclick: () => pickFiles() }, [icon('up'), 'Choose files']),
-      el('button', { class: 'btn big', onclick: () => pickFiles('image/*,video/*') }, [icon('camera'), 'Photos and videos']),
+      el('button', { class: 'btn primary big', onclick: () => pickFiles() }, [icon('up'), tr('Choose files')]),
+      el('button', { class: 'btn big', onclick: () => pickFiles('image/*,video/*') }, [icon('camera'), tr('Photos and videos')]),
     ]);
     const prog = el('div', { class: 'card' });
-    const progWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: 'Sending' }), prog]);
+    const progWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: tr('Sending') }), prog]);
     const sent = el('div', { class: 'card' });
-    const sentWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: 'Sent' }), sent]);
+    const sentWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: tr('Sent') }), sent]);
     const wait = el('div', { class: 'card' });
-    const saveAll = el('button', { class: 'muted act', text: 'Save All' });
-    const waitWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Waiting' }), saveAll]), wait]);
+    const saveAll = el('button', { class: 'muted act', text: tr('Save All') });
+    const waitWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: tr('Waiting') }), saveAll]), wait]);
     const done = el('div', { class: 'card' });
-    const doneWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: 'Saved' }), el('button', { class: 'muted act', text: 'Clear', onclick: () => { for (const x of incoming().filter((i) => i.file.saved)) send({ t: 'chat.del', id: x.id }); } })]), done]);
+    const doneWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title' }, [el('span', { text: tr('Saved') }), el('button', { class: 'muted act', text: tr('Clear'), onclick: () => { for (const x of incoming().filter((i) => i.file.saved)) send({ t: 'chat.del', id: x.id }); } })]), done]);
     const empty = el('div', { class: 'empty' });
     const sendPart = el('div', {}, [zone, actions, progWrap, sentWrap]);
     const recvPart = el('div', {}, [waitWrap, doneWrap]);
@@ -1617,11 +1662,11 @@
       if (got.length > seen && got.some((x) => !x.file.saved && Date.now() - x.at < 15000)) view = 'receive';
       seen = got.length;
       hd.desc(view === 'send'
-        ? `Files you send are saved in ${pcName()}’s received files folder (Downloads unless changed there). To put them somewhere else, press the Paste Files shortcut (⌃⌥V) on ${pcName()}.`
-        : `Files ${pcName()} sends from its Files page wait here until you save them. Photos and messages sent in Drop stay in Drop.`);
+        ? tr('Files you send are saved in {name}’s received files folder (Downloads unless changed there). To put them somewhere else, press the Paste Files shortcut (⌃⌥V) on {name}.', { name: pcName() })
+        : tr('Files {name} sends from its Files page wait here until you save them. Photos and messages sent in Drop stay in Drop.', { name: pcName() }));
       tabs.paint();
       const badge = waiting.length ? ` (${waiting.length})` : '';
-      tabs.children[1].textContent = `Receive${badge}`;
+      tabs.children[1].textContent = tr('Receive') + badge;
       const ups = [...S.uploads.values()].filter((u) => u.to !== 'drop');
       const key = JSON.stringify([view, files().map((x) => [x.id, x.file.got, x.file.saved]), ups.map((u) => Math.round(u.sent / Math.max(1, u.size) * 50))]);
       if (key === shown) return;
@@ -1634,34 +1679,34 @@
       if (view === 'send') {
         const out = files().filter((x) => x.from !== 'pc').reverse();
         prog.replaceChildren(...ups.map((u) => {
-          const r = row(u.name, `${bytes(u.sent)} of ${bytes(u.size)}`, [el('span', { class: 'spin' })]);
+          const r = row(u.name, tr('{sent} of {size}', { sent: bytes(u.sent), size: bytes(u.size) }), [el('span', { class: 'spin' })]);
           r.querySelector('.text').append(el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round(u.sent / Math.max(1, u.size) * 100)}%` })]));
           return r;
         }));
         progWrap.hidden = !ups.length;
         sent.replaceChildren(...out.slice(0, 40).map((x) => fileRow(x)));
         sentWrap.hidden = !out.length;
-        empty.replaceChildren(el('div', { text: `Nothing sent yet. Choose files to send them to ${pcName()}.` }));
+        empty.replaceChildren(el('div', { text: tr('Nothing sent yet. Choose files to send them to {name}.', { name: pcName() }) }));
         empty.hidden = !!(out.length || ups.length) || !touchOnly;
       } else {
         const saved = got.filter((x) => x.file.saved);
         wait.replaceChildren(...waiting.slice(0, 60).map((x) => {
           const f = x.file;
           const going = f.got > 0 && f.size && f.got < f.size;
-          const r = fileRow(x, [btn('Remove', () => send({ t: 'chat.del', id: x.id }), 'small')]);
-          r.setHint(going ? `Saving… ${bytes(f.got)} of ${bytes(f.size)}` : `From ${pcName()} · ${bytes(f.size)} · ${ago(x.at)}`);
+          const r = fileRow(x, [btn(tr('Remove'), () => send({ t: 'chat.del', id: x.id }), 'small')]);
+          r.setHint(going ? tr('Saving… {got} of {size}', { got: bytes(f.got), size: bytes(f.size) }) : tr('From {name} · {size} · {ago}', { name: pcName(), size: bytes(f.size), ago: ago(x.at) }));
           if (going) r.querySelector('.text').append(el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round((f.got / f.size) * 100)}%` })]));
           return r;
         }));
         waitWrap.hidden = !waiting.length;
         saveAll.hidden = waiting.length < 2;
         done.replaceChildren(...saved.slice(0, 40).map((x) => {
-          const r = fileRow(x, [btn('Remove', () => send({ t: 'chat.del', id: x.id }), 'small')]);
-          r.setHint(`Saved · ${bytes(x.file.size)} · ${ago(x.file.saved)}`);
+          const r = fileRow(x, [btn(tr('Remove'), () => send({ t: 'chat.del', id: x.id }), 'small')]);
+          r.setHint(tr('Saved · {size} · {ago}', { size: bytes(x.file.size), ago: ago(x.file.saved) }));
           return r;
         }));
         doneWrap.hidden = !saved.length;
-        empty.replaceChildren(el('div', { text: `Nothing to receive. Files ${pcName()} sends from its Files page appear here.` }));
+        empty.replaceChildren(el('div', { text: tr('Nothing to receive. Files {name} sends from its Files page appear here.', { name: pcName() }) }));
         empty.hidden = !!got.length;
       }
     };
@@ -1672,14 +1717,14 @@
   BUILD.drop = (page) => {
     page.className = 'page flush';
     const thread = el('div', { class: 'thread' });
-    const ta = el('textarea', { rows: '1', placeholder: 'Message', enterkeyhint: 'send' });
-    const sendB = el('button', { class: 'round go', type: 'submit', 'aria-label': 'Send', disabled: true }, [icon('send')]);
-    const form = el('form', { class: 'composer' }, [el('button', { class: 'round', type: 'button', 'aria-label': 'Attach files', onclick: () => pickFiles(null, true) }, [icon('plus')]), ta, sendB]);
+    const ta = el('textarea', { rows: '1', placeholder: tr('Message'), enterkeyhint: 'send' });
+    const sendB = el('button', { class: 'round go', type: 'submit', 'aria-label': tr('Send'), disabled: true }, [icon('send')]);
+    const form = el('form', { class: 'composer' }, [el('button', { class: 'round', type: 'button', 'aria-label': tr('Attach files'), onclick: () => pickFiles(null, true) }, [icon('plus')]), ta, sendB]);
     const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; sendB.disabled = !ta.value.trim() || !online(); };
     ta.oninput = grow;
     ta.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey && !ME.mobile) { e.preventDefault(); form.requestSubmit(); } };
     form.onsubmit = (e) => { e.preventDefault(); const t = ta.value.trim(); if (!t || !online()) return; send({ t: 'chat', text: t }); ta.value = ''; grow(); haptic(); };
-    const hd = head('Drop', btn('Paste', () => pastePhone(true), 'small', 'clipboard'));
+    const hd = head(tr('Drop'), btn(tr('Paste'), () => pastePhone(true), 'small', 'clipboard'));
     hd.style.marginBottom = '4px';
     const top = el('div', { style: wideQ.matches ? 'padding:28px 40px 0' : 'padding:20px 20px 0' }, [hd]);
     page.ondragover = (e) => { e.preventDefault(); };
@@ -1687,7 +1732,7 @@
     page.append(top, thread, form);
     let shown = '';
     return () => {
-      hd.desc(`Messages, links and files shared with ${pcName()}.`);
+      hd.desc(tr('Messages, links and files shared with {name}.', { name: pcName() }));
       const items = S.chat.filter((x) => x.kind !== 'files');
       const ups = [...S.uploads.values()].filter((u) => u.to === 'drop');
       const key = JSON.stringify([items.map((x) => x.id), ups.map((u) => [u.name, Math.round(u.sent / Math.max(1, u.size) * 50)])]);
@@ -1699,13 +1744,13 @@
       let day = '';
       for (const x of items) {
         const d = new Date(x.at).toDateString();
-        if (d !== day) { day = d; kids.push(el('div', { class: 'day', text: d === new Date().toDateString() ? 'Today' : new Date(x.at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) })); }
+        if (d !== day) { day = d; kids.push(el('div', { class: 'day', text: d === new Date().toDateString() ? tr('Today') : new Date(x.at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) })); }
         kids.push(bubble(x));
       }
       for (const u of ups) {
-        kids.push(el('div', { class: 'msg me' }, [el('div', { class: 'file' }, [el('div', { class: 'ext', text: (u.name.split('.').pop() || '').slice(0, 4) }), el('div', { style: 'min-width:0' }, [el('div', { class: 'nm', text: u.name }), el('div', { class: 'sz', text: `${bytes(u.sent)} of ${bytes(u.size)}` }), el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round(u.sent / Math.max(1, u.size) * 100)}%` })])]), el('span', { class: 'spin' })])]));
+        kids.push(el('div', { class: 'msg me' }, [el('div', { class: 'file' }, [el('div', { class: 'ext', text: (u.name.split('.').pop() || '').slice(0, 4) }), el('div', { style: 'min-width:0' }, [el('div', { class: 'nm', text: u.name }), el('div', { class: 'sz', text: tr('{sent} of {size}', { sent: bytes(u.sent), size: bytes(u.size) }) }), el('div', { class: 'bar' }, [el('i', { style: `width:${Math.round(u.sent / Math.max(1, u.size) * 100)}%` })])]), el('span', { class: 'spin' })])]));
       }
-      if (!kids.length) kids.push(el('div', { class: 'empty' }, [tile('drop', PAGE.drop.c, 54), el('div', { text: `No messages yet. Send a note, link or photo to ${pcName()}.` })]));
+      if (!kids.length) kids.push(el('div', { class: 'empty' }, [tile('drop', PAGE.drop.c, 54), el('div', { text: tr('No messages yet. Send a note, link or photo to {name}.', { name: pcName() }) })]));
       thread.replaceChildren(...kids);
       if (atEnd || ups.length) thread.scrollTop = thread.scrollHeight;
     };
@@ -1714,7 +1759,7 @@
   function bubble(x) {
     const me = x.from === 'phone';
     const del = el('button', { text: 'Delete', onclick: () => send({ t: 'chat.del', id: x.id }) });
-    const meta = el('div', { class: 'meta' }, [el('span', { text: `${me ? 'You' : pcName()} · ${ago(x.at)}` })]);
+    const meta = el('div', { class: 'meta' }, [el('span', { text: `${me ? tr('You') : pcName()} · ${ago(x.at)}` })]);
     const save = () => (ME.mobile && navigator.canShare ? shareFile(x) : (location.href = fileUrl(x)));
     let body;
     if (x.file) {
@@ -1724,13 +1769,13 @@
         body = el('div', { class: 'file' }, [
           el('div', { class: 'ext', text: (x.file.name.split('.').pop() || 'file').slice(0, 4) }),
           el('div', { style: 'min-width:0' }, [el('div', { class: 'nm', text: x.file.name }), el('div', { class: 'sz', text: bytes(x.file.size) })]),
-          me ? el('span', { class: 'muted', text: '✓' }) : el('button', { class: 'get', 'aria-label': 'Save', onclick: save }, [icon('down', 18)]),
+          me ? el('span', { class: 'muted', text: '✓' }) : el('button', { class: 'get', 'aria-label': tr('Save'), onclick: save }, [icon('down', 18)]),
         ]);
       }
-      if (!me) meta.append(el('button', { text: 'Save', onclick: save }));
+      if (!me) meta.append(el('button', { text: tr('Save'), onclick: save }));
     } else {
       body = el('div', { class: 'bubble' }, [linkify(x.text || '')]);
-      meta.append(el('button', { text: 'Copy', onclick: () => copy(x.text) }));
+      meta.append(el('button', { text: tr('Copy'), onclick: () => copy(x.text) }));
     }
     meta.append(del);
     return el('div', { class: `msg ${me ? 'me' : 'them'}` }, [body, meta]);
@@ -1762,7 +1807,7 @@
       x.upload.onprogress = (e) => { u.sent = e.loaded; progressSoon(); };
       x.onloadend = () => {
         S.uploads.delete(id);
-        if (x.status !== 200) toast(`Could not send ${u.name}`);
+        if (x.status !== 200) toast(tr('Could not send {name}', { name: u.name }));
         else haptic();
         refresh('files', 'drop', 'overview');
       };
@@ -1775,60 +1820,64 @@
     if (!needOnline()) return;
     let t = '';
     try { t = await navigator.clipboard.readText(); } catch (_) { t = ''; }
-    if (!t) { go('clipboard'); return toast('Paste into the text box, then tap Send'); }
+    if (!t) { go('clipboard'); return toast(tr('Paste into the text box, then tap Send')); }
     if (asMessage) send({ t: 'chat', text: t });
     else send({ t: 'clip.set', text: t });
     haptic();
-    toast(asMessage ? `Sent to ${pcName()}` : `Copied to ${pcName()}`);
+    toast(asMessage ? tr('Sent to {name}', { name: pcName() }) : tr('Copied to {name}', { name: pcName() }));
   }
 
   // ---- Clipboard ----
   BUILD.clipboard = (page) => {
-    const hd = head('Clipboard');
+    const hd = head(tr('Clipboard'));
     const text = el('div', { class: 'clip-text' });
     const when = el('span', { class: 'muted act' });
-    const box = el('textarea', { class: 'field', rows: '3', placeholder: 'Type or paste text' });
-    const sendB = btn('Send', () => { const t = box.value; if (!t) return; send({ t: 'clip.set', text: t }); box.value = ''; sendB.disabled = true; haptic(); toast(`Copied to ${pcName()}`); }, 'primary', 'send');
+    const box = el('textarea', { class: 'field', rows: '3', placeholder: tr('Type or paste text') });
+    const sendB = btn(tr('Send'), () => { const t = box.value; if (!t) return; send({ t: 'clip.set', text: t }); box.value = ''; sendB.disabled = true; haptic(); toast(tr('Copied to {name}', { name: pcName() })); }, 'primary', 'send');
     sendB.disabled = true;
     box.oninput = () => { sendB.disabled = !box.value || !online(); };
     const hist = el('div', { class: 'card' });
-    const histWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: 'History' }), hist]);
-    const onPc = card('', [el('div', { class: 'pad16' }, [text, btn('Copy', () => copy(S.clip.text), 'soft big', 'copy')])], when);
-    const toPc = card('', [el('div', { class: 'pad16' }, [box, el('div', { class: 'two' }, [btn('Paste from this device', () => pastePhone(), '', 'clipboard'), sendB])])]);
-    const tip = row(ME.apple ? 'Copy with Back Tap' : 'Clipboard alerts', ME.apple ? 'Set up a shortcut to copy the computer’s clipboard with a double tap on the back of your iPhone' : 'Get notified when something is copied on the computer', [chev()], () => go(ME.apple ? 'shortcuts' : 'background'));
+    const histWrap = el('div', { class: 'card-wrap' }, [el('div', { class: 'card-title', text: tr('History') }), hist]);
+    const onPc = card('', [el('div', { class: 'pad16' }, [text, btn(tr('Copy'), () => copy(S.clip.text), 'soft big', 'copy')])], when);
+    const toPc = card('', [el('div', { class: 'pad16' }, [box, el('div', { class: 'two' }, [btn(tr('Paste from this device'), () => pastePhone(), '', 'clipboard'), sendB])])]);
+    const tip = row(ME.apple ? tr('Copy with Back Tap') : tr('Clipboard alerts'), ME.apple ? tr('Set up a shortcut to copy the computer’s clipboard with a double tap on the back of your iPhone') : tr('Get notified when something is copied on the computer'), [chev()], () => go(ME.apple ? 'shortcuts' : 'background'));
     page.append(hd, onPc, toPc, histWrap, card('', [tip]));
     return () => {
-      hd.desc(`Copy text between this ${ME.kind} and ${pcName()}.`);
-      onPc.setTitle(`${pcName()}’s clipboard`);
-      toPc.setTitle(`Send to ${pcName()}`);
-      text.textContent = S.clip.text || 'The clipboard is empty';
+      hd.desc(tr('Copy text between this {device} and {name}.', { device: ME.kind, name: pcName() }));
+      onPc.setTitle(tr('{name}’s clipboard', { name: pcName() }));
+      toPc.setTitle(tr('Send to {name}', { name: pcName() }));
+      text.textContent = S.clip.text || tr('The clipboard is empty');
       text.classList.toggle('muted', !S.clip.text);
       when.textContent = S.clip.at ? ago(S.clip.at) : '';
       const h = (S.clip.history || []).slice(1, 12);
       histWrap.hidden = !h.length;
-      hist.replaceChildren(...h.map((x) => row(x.text.replace(/\s+/g, ' ').slice(0, 120), `${x.from || ''} · ${ago(x.at)}`, [btn('Copy', () => copy(x.text), 'small')])));
+      hist.replaceChildren(...h.map((x) => row(x.text.replace(/\s+/g, ' ').slice(0, 120), `${x.from || ''} · ${ago(x.at)}`, [btn(tr('Copy'), () => copy(x.text), 'small')])));
     };
   };
 
   // ---- Remote ----
   BUILD.remote = (page) => {
-    const hd = head('Remote');
+    const hd = head(tr('Remote'));
     const why = note('', 'warn');
     page.append(
       hd, why,
       el('div', { class: 'stack', style: 'margin-bottom:18px' }, [
-        el('button', { class: 'btn primary big', onclick: () => openRemote('pad') }, [icon('cursor'), 'Trackpad and keyboard']),
-        el('button', { class: 'btn big', onclick: () => openRemote('gamepad') }, [icon('gamepad'), 'Gamepad']),
+        el('button', { class: 'btn primary big', onclick: () => openRemote('pad') }, [icon('cursor'), tr('Trackpad and keyboard')]),
+        el('button', { class: 'btn big', onclick: () => openRemote('air') }, [icon('air'), tr('Air mouse')]),
+        el('button', { class: 'btn big', onclick: () => openRemote('present') }, [icon('present'), tr('Presentation')]),
+        el('button', { class: 'btn big', onclick: () => openRemote('gamepad') }, [icon('gamepad'), tr('Gamepad')]),
       ]),
-      card('Gestures', [
-        row('Trackpad', 'Slide to move · Tap to click · Touch and hold to right-click · Two fingers to scroll'),
-        row('Gamepad', `Hold the ${ME.kind} in landscape. Buttons are mapped to keys on the computer and can be changed under Keys.`),
+      card(tr('Gestures'), [
+        row(tr('Trackpad'), tr('Slide to move · Tap to click · Touch and hold to right-click · Two fingers to scroll')),
+        row(tr('Air mouse'), tr('Hold the screen and point the {device}: the pointer follows as you turn it · Tap to click · Slide the strip to scroll', { device: ME.kind })),
+        row(tr('Presentation'), tr('Next and Previous change slides in PowerPoint, Keynote, Google Slides and PDFs · Hold to point moves the pointer as you turn the {device}', { device: ME.kind })),
+        row(tr('Gamepad'), tr('Hold the {device} in landscape. Buttons are mapped to keys on the computer and can be changed under Keys.', { device: ME.kind })),
       ]),
     );
     return () => {
-      hd.desc(`Use this ${ME.kind} as a trackpad, keyboard or gamepad for ${pcName()}.`);
+      hd.desc(tr('Use this {device} as a trackpad, keyboard, air mouse, presentation remote or gamepad for {name}.', { device: ME.kind, name: pcName() }));
       const r = S.remote;
-      why.textContent = !online() ? `Not connected to ${pcName()}` : r && r.allowed === false ? (r.why || `Remote input is turned off in TwinDesk on ${pcName()}.`) : '';
+      why.textContent = !online() ? tr('Not connected to {name}', { name: pcName() }) : r && r.allowed === false ? (r.why || tr('Remote input is turned off in TwinDesk on {name}.', { name: pcName() })) : '';
       why.hidden = !why.textContent;
     };
   };
@@ -1836,15 +1885,15 @@
   // ---- Notifications ----
   BUILD.notifications = (page) => {
     const on = sw((v) => { const o = load(); o.notifs = v; save(o); S.notifsOn = v; send({ t: 'notifs', on: v }); if (!v) S.notifs = []; renderPage(); });
-    const hd = head('Notifications', on);
-    const bg = row('Lock screen alerts', '', [chev()], () => go('background'));
+    const hd = head(tr('Notifications'), on);
+    const bg = row(tr('Lock screen alerts'), '', [chev()], () => go('background'));
     const list = el('div');
     page.append(hd, card('', [bg]), list);
     return () => {
-      hd.desc(`Notifications from ${pcName()}.`);
+      hd.desc(tr('Notifications from {name}.', { name: pcName() }));
       on.checked = load().notifs !== false;
       on.disabled = !online();
-      bg.setHint(S.alerts && S.alerts.notifs && notifPerm() === 'granted' ? 'On. Notifications also arrive when TwinDesk is closed.' : 'Receive these notifications when TwinDesk is closed');
+      bg.setHint(S.alerts && S.alerts.notifs && notifPerm() === 'granted' ? tr('On. Notifications also arrive when TwinDesk is closed.') : tr('Receive these notifications when TwinDesk is closed'));
       const items = S.notifs;
       list.replaceChildren(...(items.length ? items.map((n) => {
         const code = /\b(\d{4,8})\b/.exec(`${n.title} ${n.body}`);
@@ -1855,27 +1904,27 @@
             el('div', { class: 't', text: n.title || '' }),
             n.subtitle ? el('div', { class: 'b', text: n.subtitle }) : null,
             el('div', { class: 'b', text: n.body || '' }),
-            code && /code|otp|verif|password|pin/i.test(`${n.title} ${n.body}`) ? btn(`Copy code ${code[1]}`, () => copy(code[1]), 'small soft') : null,
+            code && /code|otp|verif|password|pin/i.test(`${n.title} ${n.body}`) ? btn(tr('Copy code {code}', { code: code[1] }), () => copy(code[1]), 'small soft') : null,
           ]),
         ]);
-      }) : [el('div', { class: 'empty' }, [tile('bell', PAGE.notifications.c, 54), el('div', { text: load().notifs === false ? 'Notifications are turned off.' : `No notifications yet.${S.pc && S.pc.os === 'mac' ? ' On macOS, TwinDesk needs Full Disk Access to read notifications.' : ''}` })])]));
+      }) : [el('div', { class: 'empty' }, [tile('bell', PAGE.notifications.c, 54), el('div', { text: load().notifs === false ? tr('Notifications are turned off.') : (S.pc && S.pc.os === 'mac' ? tr('No notifications yet. On macOS, TwinDesk needs Full Disk Access to read notifications.') : tr('No notifications yet.')) })])]));
     };
   };
 
   // ---- Mount ----
   BUILD.mount = (page) => {
-    const hd = head('Mount');
+    const hd = head(tr('Mount'));
     const body = el('div');
     page.append(hd, body);
     let asked = false;
     return () => {
       if (!asked && online()) { asked = true; send({ t: 'mount.get' }); }
-      hd.desc(`Access ${pcName()}’s shared folder as a network drive${ME.apple ? ' in the Files app' : ''}.`);
+      hd.desc(ME.apple ? tr('Access {name}’s shared folder as a network drive in the Files app.', { name: pcName() }) : tr('Access {name}’s shared folder as a network drive.', { name: pcName() }));
       const m = S.mount;
       if (!m || !m.on) {
         body.replaceChildren(
-          note(S.pc && S.pc.mount === false ? `Folder sharing is not available in this version of TwinDesk on ${pcName()}.` : `Folder sharing is off. Turn it on in TwinDesk on ${pcName()} under AirPlay & SMB.`, 'info'),
-          card('', [row('Connection details', `The server address and sign-in details appear here once sharing is on.`)]),
+          note(S.pc && S.pc.mount === false ? tr('Folder sharing is not available in this version of TwinDesk on {name}.', { name: pcName() }) : tr('Folder sharing is off. Turn it on in TwinDesk on {name} under AirPlay & SMB.', { name: pcName() }), 'info'),
+          card('', [row(tr('Connection details'), tr('The server address and sign-in details appear here once sharing is on.'))]),
         );
         return;
       }
@@ -1883,28 +1932,28 @@
       const unc = `\\\\${m.host}\\${m.share || ''}`;
       const field = (label, value) => el('div', {}, [el('div', { class: 'muted', style: 'font-size:12.5px', text: label }), copyBox(() => value)]);
       const steps = ME.apple ? [
-        el('li', { html: 'Open <b>Files</b>, tap <b>•••</b> and choose <b>Connect to Server</b>.' }),
-        el('li', { text: 'Enter the server address and tap Connect.' }),
-        el('li', { html: 'Choose <b>Registered User</b>, enter the user name and password, and tap Next.' }),
-        el('li', { text: `${pcName()} now appears under Shared in the Files app.` }),
+        el('li', { html: tr('Open <b>Files</b>, tap <b>•••</b> and choose <b>Connect to Server</b>.') }),
+        el('li', { text: tr('Enter the server address and tap Connect.') }),
+        el('li', { html: tr('Choose <b>Registered User</b>, enter the user name and password, and tap Next.') }),
+        el('li', { text: tr('{name} now appears under Shared in the Files app.', { name: pcName() }) }),
       ] : ME.os === 'android' ? [
-        el('li', { text: 'Open a file manager that supports SMB, such as Solid Explorer, CX File Explorer or Material Files.' }),
-        el('li', { text: 'Add a network location (SMB) with the address, user name and password.' }),
+        el('li', { text: tr('Open a file manager that supports SMB, such as Solid Explorer, CX File Explorer or Material Files.') }),
+        el('li', { text: tr('Add a network location (SMB) with the address, user name and password.') }),
       ] : ME.os === 'win' ? [
-        el('li', {}, ['In File Explorer, enter ', el('span', { class: 'mono', text: unc }), ' in the address bar.']),
-        el('li', { text: 'Sign in with the user name and password. To keep it, right-click it and choose Map network drive.' }),
+        el('li', {}, trNodes('In File Explorer, enter {address} in the address bar.', { address: el('span', { class: 'mono', text: unc }) })),
+        el('li', { text: tr('Sign in with the user name and password. To keep it, right-click it and choose Map network drive.') }),
       ] : ME.os === 'mac' ? [
-        el('li', { html: 'In Finder, choose Go › <b>Connect to Server</b> (⌘K).' }),
-        el('li', { text: 'Enter the server address, then the user name and password.' }),
-      ] : [el('li', { text: 'In your file manager, choose Connect to Server and enter the server address.' })];
+        el('li', { html: tr('In Finder, choose Go › <b>Connect to Server</b> (⌘K).') }),
+        el('li', { text: tr('Enter the server address, then the user name and password.') }),
+      ] : [el('li', { text: tr('In your file manager, choose Connect to Server and enter the server address.') })];
       body.replaceChildren(
-        card('Connection details', [el('div', { class: 'pad16', style: 'gap:10px' }, [
-          field('Server address', ME.os === 'win' ? unc : url),
-          m.user ? field('User name', m.user) : null,
-          m.password ? field('Password', m.password) : null,
+        card(tr('Connection details'), [el('div', { class: 'pad16', style: 'gap:10px' }, [
+          field(tr('Server address'), ME.os === 'win' ? unc : url),
+          m.user ? field(tr('User name'), m.user) : null,
+          m.password ? field(tr('Password'), m.password) : null,
         ])]),
-        card('Instructions', [el('ol', { class: 'steps' }, steps)]),
-        m.path ? card('', [row('Shared folder', m.path)]) : null,
+        card(tr('Instructions'), [el('ol', { class: 'steps' }, steps)]),
+        m.path ? card('', [row(tr('Shared folder'), m.path)]) : null,
       );
     };
   };
@@ -1915,20 +1964,20 @@
     const micSw = sw((v) => (v ? startMic() : stopMic()));
     const lr = row('', '', [listen]);
     const mr = row('', '', [micSw]);
-    const hd = head('Sound');
+    const hd = head(tr('Sound'));
     const a = card('', [lr]);
     const b = card('', [mr]);
     page.append(hd, a, b);
     return () => {
-      hd.desc(`Stream ${pcName()}’s audio to this ${ME.kind}, or use this ${ME.kind} as its microphone.`);
-      a.setTitle('Computer audio');
-      b.setTitle('Microphone');
-      lr.setLabel(`Play ${pcName()}’s audio here`);
-      lr.setHint(S.listening ? (S.screen.status === 'live' ? 'Playing' : 'Starting…') : 'Audio only, without the screen');
+      hd.desc(tr('Stream {name}’s audio to this {device}, or use this {device} as its microphone.', { name: pcName(), device: ME.kind }));
+      a.setTitle(tr('Computer audio'));
+      b.setTitle(tr('Microphone'));
+      lr.setLabel(tr('Play {name}’s audio here', { name: pcName() }));
+      lr.setHint(S.listening ? (S.screen.status === 'live' ? tr('Playing') : tr('Starting…')) : tr('Audio only, without the screen'));
       listen.checked = S.listening;
       listen.disabled = !online();
-      mr.setLabel(`Use as ${pcName()}’s microphone`);
-      mr.setHint(!S.secure ? 'Requires a secure connection. Set it up under Connection.' : S.mic.on ? (S.mic.status === 'live' ? (S.mic.out ? `Live through ${S.mic.out}` : 'Live. Install a virtual audio device on the computer so apps can select it.') : 'Starting…') : 'Apps on the computer receive it through a virtual audio device');
+      mr.setLabel(tr('Use as {name}’s microphone', { name: pcName() }));
+      mr.setHint(!S.secure ? tr('Requires a secure connection. Set it up under Connection.') : S.mic.on ? (S.mic.status === 'live' ? (S.mic.out ? tr('Live through {device}', { device: S.mic.out }) : tr('Live. Install a virtual audio device on the computer so apps can select it.')) : tr('Starting…')) : tr('Apps on the computer receive it through a virtual audio device'));
       micSw.checked = S.mic.on;
       micSw.disabled = !online() || !S.secure;
     };
@@ -1937,17 +1986,17 @@
   // ---- Camera ----
   BUILD.camera = (page) => {
     const camSw = sw((v) => (v ? startCam() : stopCam()));
-    const flip = btn('Switch camera', () => { S.cam.facing = S.cam.facing === 'user' ? 'environment' : 'user'; if (S.cam.on) startCam(); }, 'small');
+    const flip = btn(tr('Switch camera'), () => { S.cam.facing = S.cam.facing === 'user' ? 'environment' : 'user'; if (S.cam.on) startCam(); }, 'small');
     const r = row('', '', [flip, camSw]);
     const prev = el('video', { playsinline: true, muted: true, autoplay: true });
     prev.muted = true;
     const prevWrap = el('div', { class: 'cam-preview' }, [prev]);
-    const hd = head('Camera');
+    const hd = head(tr('Camera'));
     page.append(hd, card('', [r, prevWrap]));
     return () => {
-      hd.desc(`Use this ${ME.kind}’s camera on ${pcName()}. Turn on Virtual Camera in TwinDesk to use it in video calls.`);
-      r.setLabel(`Use as ${pcName()}’s camera`);
-      r.setHint(!S.secure ? 'Requires a secure connection. Set it up under Connection.' : S.cam.on ? (S.cam.status === 'live' ? 'Live' : 'Starting…') : `${S.cam.facing === 'user' ? 'Front' : 'Rear'} camera`);
+      hd.desc(tr('Use this {device}’s camera on {name}. Turn on Virtual Camera in TwinDesk to use it in video calls.', { device: ME.kind, name: pcName() }));
+      r.setLabel(tr('Use as {name}’s camera', { name: pcName() }));
+      r.setHint(!S.secure ? tr('Requires a secure connection. Set it up under Connection.') : S.cam.on ? (S.cam.status === 'live' ? tr('Live') : tr('Starting…')) : (S.cam.facing === 'user' ? tr('Front camera') : tr('Rear camera')));
       camSw.checked = S.cam.on;
       camSw.disabled = !online() || !S.secure;
       flip.hidden = !S.cam.on || !ME.mobile;
@@ -1961,22 +2010,22 @@
   const notifPerm = () => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
   const canPush = () => S.secure && 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
   BUILD.background = (page) => {
-    const hd = head('Background');
+    const hd = head(tr('Background'));
     const kaSw = sw((v) => { prefs.keepAlive = v; savePrefs(); keepAlive(v); renderPage(); });
-    const kaRow = row('Stay connected in the background', '', [kaSw]);
-    const mediaRow = row('Lock screen controls', '');
+    const kaRow = row(tr('Stay connected in the background'), '', [kaSw]);
+    const mediaRow = row(tr('Lock screen controls'), '');
     const locSw = sw((v) => { prefs.keepLoc = v; savePrefs(); keepLocation(v && prefs.keepAlive); renderPage(); });
-    const locRow = row('Also use location', 'Watches this device’s approximate location as a second way to stay active. The location is not sent anywhere. Uses more battery.', [locSw]);
-    const nBtn = btn('Allow', () => enablePush(), 'small primary');
-    const nRow = row('Notifications', '', [nBtn]);
-    const testRow = row('Test notification', 'Sends a test alert from the computer', [btn('Send test', () => { if (needOnline()) send({ t: 'push.test' }); }, 'small')]);
+    const locRow = row(tr('Also use location'), tr('Watches this device’s approximate location as a second way to stay active. The location is not sent anywhere. Uses more battery.'), [locSw]);
+    const nBtn = btn(tr('Allow'), () => enablePush(), 'small primary');
+    const nRow = row(tr('Notifications'), '', [nBtn]);
+    const testRow = row(tr('Test notification'), tr('Sends a test alert from the computer'), [btn(tr('Send test'), () => { if (needOnline()) send({ t: 'push.test' }); }, 'small')]);
     const A = [
-      ['clip', 'Clipboard changes', 'When text is copied on the computer'],
-      ['drop', 'Drop messages', ''],
-      ['files', 'Incoming files', ''],
-      ['notifs', 'Computer notifications', 'Forwards each notification shown on the computer'],
-      ['preview', 'Show previews', 'Include the text or file name in alerts'],
-      ['badge', 'App icon badge', 'Shows the number of unread alerts'],
+      ['clip', tr('Clipboard changes'), tr('When text is copied on the computer')],
+      ['drop', tr('Drop messages'), ''],
+      ['files', tr('Incoming files'), ''],
+      ['notifs', tr('Computer notifications'), tr('Forwards each notification shown on the computer')],
+      ['preview', tr('Show previews'), tr('Include the text or file name in alerts')],
+      ['badge', tr('App icon badge'), tr('Shows the number of unread alerts')],
     ];
     const sws = {};
     const aRows = A.map(([k, l, h]) => {
@@ -1984,36 +2033,36 @@
       return row(l, h, [sws[k]]);
     });
     const why = note('', 'info');
-    page.append(hd, card('Connection', [kaRow, locRow, mediaRow]), card('Notifications', [nRow, testRow]), card('Alerts', aRows), why);
+    page.append(hd, card(tr('Connection'), [kaRow, locRow, mediaRow]), card(tr('Notifications'), [nRow, testRow]), card(tr('Alerts'), aRows), why);
     return () => {
-      hd.desc(`Keep receiving updates from ${pcName()} while this ${ME.kind} is locked or another app is open.`);
+      hd.desc(tr('Keep receiving updates from {name} while this {device} is locked or another app is open.', { name: pcName(), device: ME.kind }));
       kaSw.checked = prefs.keepAlive;
       kaRow.setHint(ME.apple
-        ? 'Plays inaudible audio so iOS keeps the connection open. Other audio pauses briefly when it starts, and battery use increases slightly.'
-        : ME.os === 'android' ? 'Plays inaudible audio so the browser does not suspend the page.'
-          : 'Prevents the browser from suspending this page. Most desktop browsers stay connected without it.');
-      mediaRow.setHint(S.pc && S.pc.media ? `Shows media playing on ${pcName()} with play, pause and skip controls` : `Shows “Connected to ${pcName()}” on the lock screen`);
+        ? tr('Plays inaudible audio so iOS keeps the connection open. Other audio pauses briefly when it starts, and battery use increases slightly.')
+        : ME.os === 'android' ? tr('Plays inaudible audio so the browser does not suspend the page.')
+          : tr('Prevents the browser from suspending this page. Most desktop browsers stay connected without it.'));
+      mediaRow.setHint(S.pc && S.pc.media ? tr('Shows media playing on {name} with play, pause and skip controls', { name: pcName() }) : tr('Shows “Connected to {name}” on the lock screen', { name: pcName() }));
       mediaRow.hidden = !prefs.keepAlive;
       locSw.checked = !!prefs.keepLoc;
       locRow.hidden = !prefs.keepAlive || !navigator.geolocation;
       locSw.disabled = !window.isSecureContext;
-      if (!window.isSecureContext) locRow.setHint('Requires a secure connection. Set it up under Connection.');
+      if (!window.isSecureContext) locRow.setHint(tr('Requires a secure connection. Set it up under Connection.'));
       const p = notifPerm();
       const needsHome = ME.apple && !STANDALONE;
-      nRow.setHint(!S.secure ? 'Requires a secure connection. Set it up under Connection.'
-        : needsHome ? 'On iPhone and iPad, notifications require TwinDesk on the Home Screen. In Safari, tap Share › Add to Home Screen, then open TwinDesk from there.'
-          : p === 'unsupported' ? 'This browser does not support web notifications.'
-            : p === 'denied' ? 'Blocked. Allow notifications for this site in your browser settings.'
-              : p === 'granted' ? (S.push ? 'On. Alerts arrive even when TwinDesk is closed. Both devices need internet access.' : canPush() ? 'On while TwinDesk is open. Turn on push to receive alerts when it is closed.' : 'On while TwinDesk is open in the background.')
-                : 'Off');
+      nRow.setHint(!S.secure ? tr('Requires a secure connection. Set it up under Connection.')
+        : needsHome ? tr('On iPhone and iPad, notifications require TwinDesk on the Home Screen. In Safari, tap Share › Add to Home Screen, then open TwinDesk from there.')
+          : p === 'unsupported' ? tr('This browser does not support web notifications.')
+            : p === 'denied' ? tr('Blocked. Allow notifications for this site in your browser settings.')
+              : p === 'granted' ? (S.push ? tr('On. Alerts arrive even when TwinDesk is closed. Both devices need internet access.') : canPush() ? tr('On while TwinDesk is open. Turn on push to receive alerts when it is closed.') : tr('On while TwinDesk is open in the background.'))
+                : tr('Off'));
       nBtn.hidden = !S.secure || needsHome || p === 'unsupported' || p === 'denied' || (p === 'granted' && (S.push || !canPush()));
-      nBtn.textContent = p === 'granted' ? 'Turn on push' : 'Allow';
+      nBtn.textContent = p === 'granted' ? tr('Turn on push') : tr('Allow');
       testRow.hidden = p !== 'granted';
       const a = S.alerts || {};
       for (const [k] of A) { sws[k].checked = !!a[k]; sws[k].disabled = !online(); }
-      aRows[3].setLabel(`${pcName()} notifications`);
+      aRows[3].setLabel(tr('{name} notifications', { name: pcName() }));
       aRows[5].hidden = !('setAppBadge' in navigator);
-      why.textContent = ME.apple ? 'iOS only lets a page copy to the clipboard after a tap. Tapping a clipboard alert opens TwinDesk with the text ready to copy. To copy in one step, add the Copy from computer shortcut under Shortcuts.' : '';
+      why.textContent = ME.apple ? tr('iOS only lets a page copy to the clipboard after a tap. Tapping a clipboard alert opens TwinDesk with the text ready to copy. To copy in one step, add the Copy from computer shortcut under Shortcuts.') : '';
       why.hidden = !why.textContent;
     };
   };
@@ -2022,12 +2071,12 @@
   // iPhone and iPad: signed shortcuts (web/shortcuts/*.shortcut, made by web/shortcuts-src). Each asks
   // for its link when it's added; Add copies this device's link first, so it's a tap and a paste.
   BUILD.shortcuts = (page) => {
-    const hd = head('Shortcuts');
+    const hd = head(tr('Shortcuts'));
     const body = el('div');
     page.append(hd, body);
     let key = '';
     return () => {
-      hd.desc(ME.apple ? `Use TwinDesk from the share sheet, Back Tap and Siri.` : `Use TwinDesk from the share menu, the app icon and scripts.`);
+      hd.desc(ME.apple ? tr('Use TwinDesk from the share sheet, Back Tap and Siri.') : tr('Use TwinDesk from the share menu, the app icon and scripts.'));
       const k = JSON.stringify([S.creds && S.creds.token, S.pc && S.pc.host, S.secure, ME.os, !!installEvt]);
       if (k === key) return;
       key = k;
@@ -2035,17 +2084,17 @@
       const port = (S.pc && S.pc.port) || 47870;
       const base = S.secure && S.pc && S.pc.host ? `https://${S.pc.host}:${port}` : `http://${(S.pc && S.pc.ips && S.pc.ips[0]) || location.hostname}:${port + 1}`;
       const U = (p, extra = '') => `${base}${p}?t=${token}${extra}`;
-      const warn = note(`Set up a secure connection first (Connection). Shortcuts then keep working when ${pcName()}’s network address changes.`, 'warn');
+      const warn = note(tr('Set up a secure connection first (Connection). Shortcuts then keep working when {name}’s network address changes.', { name: pcName() }), 'warn');
       warn.hidden = S.secure;
-      const security = note('Shortcut links include this device’s access key. Anyone with a link can use it on your network. Forgetting this device revokes them.', '');
+      const security = note(tr('Shortcut links include this device’s access key. Anyone with a link can use it on your network. Forgetting this device revokes them.'), '');
       if (ME.apple) {
         const sc = (ic, colors, file, title, desc, tip, url) => {
           const add = el('button', { class: 'btn big add', type: 'button', onclick: async () => {
             await copyText(url);
             haptic();
-            toast('Link copied. Paste it when Shortcuts asks.');
+            toast(tr('Link copied. Paste it when Shortcuts asks.'));
             setTimeout(() => { location.href = `/shortcuts/${encodeURIComponent(file)}.shortcut`; }, 350);
-          } }, [icon('plus'), 'Add to Shortcuts']);
+          } }, [icon('plus'), tr('Add to Shortcuts')]);
           return el('div', { class: 'sc' }, [
             el('div', { class: 'top' }, [tile(ic, colors, 44), el('div', {}, [el('b', { text: title }), el('span', { text: desc })])]),
             add,
@@ -2055,25 +2104,25 @@
         body.replaceChildren(
           warn,
           el('div', { class: 'sc-grid' }, [
-            sc('clipboard', PAGE.clipboard.c, 'Copy from computer', 'Copy from computer', `Copies ${pcName()}’s clipboard to this ${ME.kind}`, 'Tip: assign it to Back Tap in Settings › Accessibility › Touch › Back Tap.', U('/api/clip')),
-            sc('up', PAGE.files.c, 'Send clipboard', 'Send clipboard', `Copies this ${ME.kind}’s clipboard to ${pcName()}`, 'Tip: assign it to a triple Back Tap.', U('/api/clip')),
-            sc('share', PAGE.drop.c, 'Send to computer', 'Send to computer', 'Sends photos and files from the share sheet', `Files are saved to ${pcName()}’s Downloads folder.`, U('/api/up')),
-            sc('link', PAGE.send.c, 'Send to Drop', 'Send to Drop', 'Sends links and text from the share sheet', '', U('/api/drop')),
+            sc('clipboard', PAGE.clipboard.c, tr('Copy from computer'), tr('Copy from computer'), tr('Copies {name}’s clipboard to this {device}', { name: pcName(), device: ME.kind }), tr('Tip: assign it to Back Tap in Settings › Accessibility › Touch › Back Tap.'), U('/api/clip')),
+            sc('up', PAGE.files.c, tr('Send clipboard'), tr('Send clipboard'), tr('Copies this {device}’s clipboard to {name}', { device: ME.kind, name: pcName() }), tr('Tip: assign it to a triple Back Tap.'), U('/api/clip')),
+            sc('share', PAGE.drop.c, tr('Send to computer'), tr('Send to computer'), tr('Sends photos and files from the share sheet'), tr('Files are saved to {name}’s Downloads folder.', { name: pcName() }), U('/api/up')),
+            sc('link', PAGE.send.c, tr('Send to Drop'), tr('Send to Drop'), tr('Sends links and text from the share sheet'), '', U('/api/drop')),
           ]),
-          card('How it works', [el('ol', { class: 'steps' }, [
-            el('li', { html: 'Tap <b>Add to Shortcuts</b>. TwinDesk copies a link for this device.' }),
-            el('li', { html: 'In Shortcuts, tap <b>Set Up Shortcut</b> and paste the link when asked.' }),
-            el('li', { text: 'Tap Add Shortcut.' }),
+          card(tr('How it works'), [el('ol', { class: 'steps' }, [
+            el('li', { html: tr('Tap <b>Add to Shortcuts</b>. TwinDesk copies a link for this device.') }),
+            el('li', { html: tr('In Shortcuts, tap <b>Set Up Shortcut</b> and paste the link when asked.') }),
+            el('li', { text: tr('Tap Add Shortcut.') }),
           ])]),
           security,
         );
       } else if (ME.os === 'android') {
         const inst = installBtn();
         body.replaceChildren(
-          card('Share menu', [row('Share to TwinDesk', STANDALONE ? `Share photos, files and links from any app to ${pcName()}.` : 'Install TwinDesk to add it to the Android share menu.', [inst])]),
-          card('App shortcuts', [row('Quick actions', 'Touch and hold the TwinDesk icon for Send files, Clipboard and Trackpad.')]),
-          card('Automation apps', [el('div', { class: 'pad16', style: 'gap:8px' }, [
-            el('div', { class: 'muted', text: 'Use this link in Tasker, MacroDroid or HTTP Shortcuts to read (GET) or set (POST) the computer’s clipboard.' }),
+          card(tr('Share menu'), [row(tr('Share to TwinDesk'), STANDALONE ? tr('Share photos, files and links from any app to {name}.', { name: pcName() }) : tr('Install TwinDesk to add it to the Android share menu.'), [inst])]),
+          card(tr('App shortcuts'), [row(tr('Quick actions'), tr('Touch and hold the TwinDesk icon for Send files, Clipboard and Trackpad.'))]),
+          card(tr('Automation apps'), [el('div', { class: 'pad16', style: 'gap:8px' }, [
+            el('div', { class: 'muted', text: tr('Use this link in Tasker, MacroDroid or HTTP Shortcuts to read (GET) or set (POST) the computer’s clipboard.') }),
             copyBox(() => U('/api/clip')),
           ])]),
           security,
@@ -2082,11 +2131,11 @@
         const inst = installBtn();
         body.replaceChildren(
           warn,
-          card('', [row('Install as an app', 'Opens TwinDesk in its own window', [inst])]),
-          card('Command line', [el('div', { class: 'pad16', style: 'gap:8px' }, [
-            el('div', { class: 'muted', text: `Read ${pcName()}’s clipboard` }), copyBox(() => `curl -s "${U('/api/clip')}"`),
-            el('div', { class: 'muted', text: 'Set the clipboard' }), copyBox(() => `echo "text" | curl -s --data-binary @- "${U('/api/clip')}"`),
-            el('div', { class: 'muted', text: 'Send a file' }), copyBox(() => `curl -s --data-binary @photo.jpg "${U('/api/up', '&name=photo.jpg')}"`),
+          card('', [row(tr('Install as an app'), tr('Opens TwinDesk in its own window'), [inst])]),
+          card(tr('Command line'), [el('div', { class: 'pad16', style: 'gap:8px' }, [
+            el('div', { class: 'muted', text: tr('Read {name}’s clipboard', { name: pcName() }) }), copyBox(() => `curl -s "${U('/api/clip')}"`),
+            el('div', { class: 'muted', text: tr('Set the clipboard') }), copyBox(() => `echo "text" | curl -s --data-binary @- "${U('/api/clip')}"`),
+            el('div', { class: 'muted', text: tr('Send a file') }), copyBox(() => `curl -s --data-binary @photo.jpg "${U('/api/up', '&name=photo.jpg')}"`),
           ])]),
           security,
         );
@@ -2097,20 +2146,27 @@
   // ---- General ----
   BUILD.general = (page) => {
     const nameIn = el('input', { class: 'field', style: 'width:200px;text-align:right;padding:9px 12px;font-size:15px', placeholder: ME.model });
-    nameIn.onchange = () => { const o = load(); o.name = nameIn.value.trim(); save(o); send({ t: 'rename', name: o.name || ME.model }); toast('Name updated'); renderTop(); };
+    nameIn.onchange = () => { const o = load(); o.name = nameIn.value.trim(); save(o); send({ t: 'rename', name: o.name || ME.model }); toast(tr('Name updated')); renderTop(); };
     const look = () => { savePrefs(); applyLook(); frame(); };
-    const themeSeg = seg([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], () => prefs.theme, (v) => { prefs.theme = v; look(); });
+    const themeSeg = seg([['system', tr('System')], ['light', tr('Light')], ['dark', tr('Dark')]], () => prefs.theme, (v) => { prefs.theme = v; look(); });
     const sw8 = el('div', { class: 'swatches' }, ACCENTS.map((c) => el('button', { type: 'button', 'aria-label': c, style: `background:${c}`, class: prefs.accent === c ? 'on' : '', onclick: () => { prefs.accent = c; look(); } })));
-    const hd = head('General');
-    const nameRow = row('Device name', '', [nameIn]);
+    const hd = head(tr('General'));
+    const nameRow = row(tr('Device name'), '', [nameIn]);
+    // The language: kept in this browser (pick.js reads it before the page), and the page opens again in it.
+    const langs = card(tr('Language'), LANGUAGES.map(([code, name, flag]) => row(`${flag}  ${name}`, '', code === LANG ? [icon('check')] : null, () => {
+      if (code === LANG) return;
+      try { localStorage.setItem('twindesk.web.lang', code); } catch (_) {}
+      location.reload();
+    })));
     page.append(
       hd,
-      card('Appearance', [row('Theme', '', [themeSeg]), row('Accent color', '', [sw8])]),
-      card('This device', [nameRow]),
+      langs,
+      card(tr('Appearance'), [row(tr('Theme'), '', [themeSeg]), row(tr('Accent color'), '', [sw8])]),
+      card(tr('This device'), [nameRow]),
     );
     return () => {
-      hd.desc('Appearance and device settings.');
-      nameRow.setHint(`The name shown on ${pcName()}`);
+      hd.desc(tr('Language, appearance and device settings.'));
+      nameRow.setHint(tr('The name shown on {name}', { name: pcName() }));
       if (document.activeElement !== nameIn) nameIn.value = load().name || '';
     };
   };
@@ -2123,7 +2179,7 @@
     for (const base of [host && `https://${host}:${port}`, `https://${location.hostname}:${port}`].filter(Boolean)) {
       if (await reachable(base)) return location.replace(`${base}/${frag}`);
     }
-    toast(ME.apple ? 'The certificate is not trusted yet. Install the profile and enable it in Certificate Trust Settings.' : 'The certificate is not trusted yet. Install it as a certificate authority.');
+    toast(ME.apple ? tr('The certificate is not trusted yet. Install the profile and enable it in Certificate Trust Settings.') : tr('The certificate is not trusted yet. Install it as a certificate authority.'));
   }
 
   function forgetHere() {
@@ -2134,20 +2190,70 @@
   }
 
   // ---- About ----
+  // About, as the apps have it: the icon and version, who made it, this device, this page, the
+  // licence and the downloads.
   BUILD.about = (page) => {
+    const ver = el('p', { class: 'ver' });
+    const go = (u) => () => window.open(u, '_blank', 'noopener');
+    const fact = (label) => valueRow(label);
+    const devName = fact(tr('Name')), devModel = fact(tr('Model')), devSys = fact(tr('System')), devBrowser = fact(tr('Browser')), devScreen = fact(tr('Screen'));
+    const appVer = fact(tr('Version')), appFrom = fact(tr('Served by')), appConn = fact(tr('Connection')), appMode = fact(tr('Opened as'));
     page.append(
-      el('div', { class: 'promo', style: 'padding-top:6px' }, [
+      el('div', { class: 'promo about-hero', style: 'padding-top:6px' }, [
         el('img', { class: 'logo', src: logo(), alt: '' }),
         el('h1', { text: 'TwinDesk' }),
-        el('p', { class: 'ver' }),
+        ver,
+        el('p', { class: 'muted', text: tr('Use your computers and phones together: screens, files, clipboard and input.') }),
+        el('p', { class: 'about-by', text: tr('by Inuka Asith') }),
       ]),
-      card('', [
-        row('TwinDesk Web', 'Served by TwinDesk on your computer over your local network. Push notifications are end-to-end encrypted and relayed by your browser’s push service.'),
-        row('Source code', 'github.com/InukaAsith/TwinDesk', [chev()], () => window.open('https://github.com/InukaAsith/TwinDesk', '_blank')),
+      card(tr('Made by'), [
+        row('Inuka Asith', tr('Designed and built TwinDesk · inukaasith.vercel.app'), [chev()], go('https://inukaasith.vercel.app')),
+        row(tr('Source code'), 'github.com/InukaAsith/TwinDesk', [chev()], go('https://github.com/InukaAsith/TwinDesk')),
+        row(tr('All releases'), tr('Downloads for macOS, Windows, Linux, Android and iPhone'), [chev()], go('https://github.com/InukaAsith/TwinDesk/releases')),
+        row(tr('Report a problem'), tr('Issues on GitHub'), [chev()], go('https://github.com/InukaAsith/TwinDesk/issues')),
+      ]),
+      card(tr('This device'), [devName, devModel, devSys, devBrowser, devScreen]),
+      card(tr('This app'), [
+        row('TwinDesk Web', tr('Served by TwinDesk on your computer over your local network. Push notifications are end-to-end encrypted and relayed by your browser’s push service.')),
+        appVer, appFrom, appConn, appMode,
+      ]),
+      card(tr('Licence'), [
+        row(tr('GNU General Public License v3'), tr('Free and open source. Copyright © 2026 inukaasith'), [chev()], go('https://github.com/InukaAsith/TwinDesk/blob/main/LICENSE')),
+        row(tr('Crafted with ☕ and ❤️ in Sri Lanka 🇱🇰'), ''),
       ]),
       downloads(),
     );
-    return () => { page.querySelector('.ver').textContent = S.pc && S.pc.version ? `Version ${S.pc.version} on ${pcName()}` : ''; };
+    const sys = () => {
+      const ua = navigator.userAgent;
+      const ios = /OS (\d+)[._](\d+)/.exec(ua);
+      const and = /Android ([\d.]+)/.exec(ua);
+      const mac = /Mac OS X (\d+)[._](\d+)/.exec(ua);
+      const win = /Windows NT ([\d.]+)/.exec(ua);
+      if (ME.os === 'ios' || ME.os === 'ipados') return (ME.os === 'ipados' ? 'iPadOS' : 'iOS') + (ios ? ` ${ios[1]}.${ios[2]}` : '');
+      if (and) return `Android ${and[1]}`;
+      if (mac) return `macOS ${mac[1]}.${mac[2]}`;
+      if (win) return 'Windows';
+      return ME.os === 'linux' ? 'Linux' : '';
+    };
+    const browser = () => {
+      const ua = navigator.userAgent;
+      const m = /(Edg|OPR|Firefox|FxiOS|CriOS|Chrome|Version)\/([\d.]+)/.exec(ua);
+      const names = { Edg: 'Edge', OPR: 'Opera', Firefox: 'Firefox', FxiOS: 'Firefox', CriOS: 'Chrome', Chrome: 'Chrome', Version: 'Safari' };
+      return m ? `${names[m[1]]} ${m[2].split('.').slice(0, 2).join('.')}` : '';
+    };
+    return () => {
+      const v = (S.pc && S.pc.version) || (S.serving && S.serving.version) || '';
+      ver.textContent = v ? tr('Version {version}', { version: v }) : '';
+      devName.set(load().name || ME.model);
+      devModel.set(ME.model);
+      devSys.set(sys());
+      devBrowser.set(browser());
+      devScreen.set(`${screen.width} × ${screen.height} · ${Math.round((devicePixelRatio || 1) * 10) / 10}×`);
+      appVer.set(v);
+      appFrom.set(S.pc ? pcName() : (S.serving && S.serving.name) || '');
+      appConn.set(location.protocol === 'https:' ? tr('Secure') : tr('Not secure'));
+      appMode.set(STANDALONE ? tr('App') : tr('Browser tab'));
+    };
   };
 
   // ---------------------------------------------------------------- the phone app's pages, full screen
@@ -2160,14 +2266,14 @@
     if (w && typeof w.tdRecv === 'function') { try { w.tdRecv(m); } catch (e) { console.warn(e); } } else if (overlay && overlay.kind === kind) queued[kind].push(m);
   }
 
-  const CONTROLS = [['lsUp', 'Left stick up'], ['lsLeft', 'Left stick left'], ['lsDown', 'Left stick down'], ['lsRight', 'Left stick right'], ['l3', 'L3'], ['r3', 'R3'],
+  const CONTROLS = [['lsUp', tr('Left stick up')], ['lsLeft', tr('Left stick left')], ['lsDown', tr('Left stick down')], ['lsRight', tr('Left stick right')], ['l3', 'L3'], ['r3', 'R3'],
     ['a', 'A'], ['b', 'B'], ['x', 'X'], ['y', 'Y'], ['lb', 'LB'], ['rb', 'RB'], ['lt', 'LT'], ['rt', 'RT'],
-    ['up', 'D-pad up'], ['down', 'D-pad down'], ['left', 'D-pad left'], ['right', 'D-pad right'], ['back', 'Back'], ['start', 'Start']];
+    ['up', tr('D-pad up')], ['down', tr('D-pad down')], ['left', tr('D-pad left')], ['right', tr('D-pad right')], ['back', 'Back'], ['start', 'Start']];
   const PAD_DEFAULTS = { lsUp: 'KeyW', lsLeft: 'KeyA', lsDown: 'KeyS', lsRight: 'KeyD', l3: 'ShiftLeft', r3: 'KeyV', a: 'Space', b: 'ControlLeft', x: 'KeyR', y: 'KeyE', lb: 'KeyQ', rb: 'KeyF', lt: 'Mouse1', rt: 'Mouse0', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', back: 'Tab', start: 'Escape' };
-  const KEYS = [['', 'Nothing'], ['Mouse0', 'Left click'], ['Mouse1', 'Right click'], ['Mouse2', 'Middle click'],
+  const KEYS = [['', tr('Nothing')], ['Mouse0', tr('Left click')], ['Mouse1', tr('Right click')], ['Mouse2', tr('Middle click')],
     ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((c) => [`Key${c}`, c]), ...'0123456789'.split('').map((d) => [`Digit${d}`, d]),
-    ['Space', 'Space'], ['Enter', 'Enter'], ['Escape', 'Esc'], ['Tab', 'Tab'], ['Backspace', 'Backspace'], ['ShiftLeft', 'Shift'], ['ControlLeft', 'Ctrl'], ['AltLeft', 'Alt'],
-    ['ArrowUp', 'Up arrow'], ['ArrowDown', 'Down arrow'], ['ArrowLeft', 'Left arrow'], ['ArrowRight', 'Right arrow'],
+    ['Space', tr('Space')], ['Enter', 'Enter'], ['Escape', 'Esc'], ['Tab', 'Tab'], ['Backspace', 'Backspace'], ['ShiftLeft', 'Shift'], ['ControlLeft', 'Ctrl'], ['AltLeft', 'Alt'],
+    ['ArrowUp', tr('Up arrow')], ['ArrowDown', tr('Down arrow')], ['ArrowLeft', tr('Left arrow')], ['ArrowRight', tr('Right arrow')],
     ['Minus', '-'], ['Equal', '='], ['BracketLeft', '['], ['BracketRight', ']'], ['Semicolon', ';'], ['Quote', "'"], ['Comma', ','], ['Period', '.'], ['Slash', '/'], ['Backquote', '`'],
     ...Array.from({ length: 12 }, (_, i) => [`F${i + 1}`, `F${i + 1}`]), ['Insert', 'Insert'], ['Delete', 'Delete'], ['Home', 'Home'], ['End', 'End'], ['PageUp', 'Page Up'], ['PageDown', 'Page Down']];
   const padMap = () => Object.fromEntries(CONTROLS.map(([id]) => [id, prefs.pad[id] != null ? prefs.pad[id] : PAD_DEFAULTS[id]]));
@@ -2188,6 +2294,7 @@
   }
 
   window.TDHost = {
+    tr: (text, vars) => { let v = {}; try { v = JSON.parse(vars || '{}'); } catch (_) {} return tr(text, v); },
     ready(kind, win) {
       frames[kind] = win;
       toFrame(kind, optsFor(kind));
@@ -2202,7 +2309,7 @@
       let m;
       try { m = JSON.parse(json); } catch (_) { return; }
       if (!m || typeof m.t !== 'string') return;
-      if (m.t === 'pair.sync') return toast(`Turn on Remote in TwinDesk on ${pcName()}`);
+      if (m.t === 'pair.sync') return toast(tr('Turn on Remote in TwinDesk on {name}', { name: pcName() }));
       if (kind === 'viewer' && m.t.startsWith('in.') && !prefs.control) return;
       if (kind === 'viewer' && m.t === 'screen.start') return startScreen();
       send(m);
@@ -2226,7 +2333,7 @@
   function openOverlay(kind, mode) {
     closeOverlay(true);
     if (!needOnline()) return;
-    const f = el('iframe', { src: `/td/${kind}.html`, allow: 'autoplay; fullscreen', style: 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:40;background:#000' });
+    const f = el('iframe', { src: `/td/${kind}.html`, allow: 'autoplay; fullscreen; accelerometer; gyroscope', style: 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:40;background:#000' });
     const kids = [f];
     // The viewer: the computer's monitor bar on top (Extend, Mirror, Keyboard, Stop), out of the way
     // until the handle brings it back.
@@ -2234,7 +2341,7 @@
       let kb = false;
       let hideT = null;
       const bar = el('div', { class: 'vbar' });
-      const handle = el('button', { class: 'vhandle', 'aria-label': 'Show the bar', onclick: () => wake() });
+      const handle = el('button', { class: 'vhandle', 'aria-label': tr('Show the bar'), onclick: () => wake() });
       const wake = () => { bar.classList.remove('away'); clearTimeout(hideT); hideT = setTimeout(() => bar.classList.add('away'), 3500); };
       bar.onpointerdown = wake;
       const b = (ic, label, fn, cls = '') => el('button', { type: 'button', class: cls, onclick: () => { fn(); wake(); } }, [icon(ic), label ? el('span', { text: label }) : null]);
@@ -2242,14 +2349,14 @@
         if (!overlay || overlay.kind !== 'viewer') return;
         const ext = !!(S.pc && S.pc.extend);
         bar.replaceChildren(...[
-          ext ? b('extend', 'Extend', () => { prefs.mode = 'extend'; savePrefs(); startScreen(); paintBar(); }, prefs.mode === 'extend' ? 'on' : '') : null,
-          ext ? b('mirror', 'Mirror', () => { prefs.mode = 'mirror'; savePrefs(); startScreen(); paintBar(); }, prefs.mode !== 'extend' ? 'on' : '') : null,
+          ext ? b('extend', tr('Extend'), () => { prefs.mode = 'extend'; savePrefs(); startScreen(); paintBar(); }, prefs.mode === 'extend' ? 'on' : '') : null,
+          ext ? b('mirror', tr('Mirror'), () => { prefs.mode = 'mirror'; savePrefs(); startScreen(); paintBar(); }, prefs.mode !== 'extend' ? 'on' : '') : null,
           ext ? el('span', { class: 'sep' }) : null,
-          b('keyboard', ME.mobile ? '' : 'Keyboard', () => { kb = !kb; toFrame('viewer', { t: 'keyboard', on: kb }); }, kb ? 'on' : ''),
+          b('keyboard', ME.mobile ? '' : tr('Keyboard'), () => { kb = !kb; toFrame('viewer', { t: 'keyboard', on: kb }); }, kb ? 'on' : ''),
           b('audio', '', () => { prefs.sound = !prefs.sound; savePrefs(); toFrame('viewer', optsFor('viewer')); paintBar(); }, prefs.sound ? 'on' : ''),
           document.fullscreenEnabled ? b('full', '', () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {})) : null,
           el('span', { class: 'sep' }),
-          b('stop', 'Close', () => closeOverlay(), 'stop'),
+          b('stop', tr('Close'), () => closeOverlay(), 'stop'),
         ].filter(Boolean));
       };
       kids.push(handle, bar);
@@ -2331,7 +2438,7 @@
     if (geoWatch !== null) return;
     try {
       geoWatch = navigator.geolocation.watchPosition(() => {}, (e) => {
-        if (e && e.code === 1) { prefs.keepLoc = false; savePrefs(); geoWatch = null; toast('Location access was denied. Background mode uses audio only.'); refresh('background'); }
+        if (e && e.code === 1) { prefs.keepLoc = false; savePrefs(); geoWatch = null; toast(tr('Location access was denied. Background mode uses audio only.')); refresh('background'); }
       }, { enableHighAccuracy: false, maximumAge: 5 * 60000, timeout: 10 * 60000 });
     } catch (_) { geoWatch = null; }
   }
@@ -2366,8 +2473,8 @@
     const has = !!(m && m.title);
     try {
       ms.metadata = new MediaMetadata(has
-        ? { title: m.title, artist: m.artist || '', album: m.album || `on ${pcName()}`, artwork: m.art ? [{ src: m.art, sizes: '512x512' }] : [{ src: '/icon.png', sizes: '512x512', type: 'image/png' }] }
-        : { title: `Connected to ${pcName()}`, artist: 'TwinDesk', album: online() ? 'Running in the background' : 'Reconnecting…', artwork: [{ src: '/icon.png', sizes: '512x512', type: 'image/png' }] });
+        ? { title: m.title, artist: m.artist || '', album: m.album || tr('on {name}', { name: pcName() }), artwork: m.art ? [{ src: m.art, sizes: '512x512' }] : [{ src: '/icon.png', sizes: '512x512', type: 'image/png' }] }
+        : { title: tr('Connected to {name}', { name: pcName() }), artist: 'TwinDesk', album: online() ? tr('Running in the background') : tr('Reconnecting…'), artwork: [{ src: '/icon.png', sizes: '512x512', type: 'image/png' }] });
       ms.playbackState = has && m.playing === false ? 'paused' : 'playing';
       const act = (cmd) => () => { if (has) send({ t: 'media.do', cmd }); if (ka && ka.paused) ka.play().catch(() => {}); };
       ms.setActionHandler('play', act('play'));
@@ -2400,10 +2507,10 @@
   };
   // In the tap: permission first (iOS asks only inside one), then the push subscription.
   async function enablePush() {
-    if (typeof Notification === 'undefined') return toast('This browser does not support web notifications');
+    if (typeof Notification === 'undefined') return toast(tr('This browser does not support web notifications'));
     let p = Notification.permission;
     if (p !== 'granted') p = await Notification.requestPermission();
-    if (p !== 'granted') { renderPage(); return toast('Notifications are blocked for this site'); }
+    if (p !== 'granted') { renderPage(); return toast(tr('Notifications are blocked for this site')); }
     prefs.push = true;
     savePrefs();
     if (canPush()) await subscribe(true);
@@ -2419,10 +2526,10 @@
       if (sub && key && btoa(String.fromCharCode(...new Uint8Array(key))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') !== S.pc.vapid) { await sub.unsubscribe(); sub = null; }
       if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(S.pc.vapid) });
       send({ t: 'push.sub', sub: sub.toJSON(), alerts: S.alerts || undefined });
-      if (loud) toast(`Push notifications from ${pcName()} are on`);
+      if (loud) toast(tr('Push notifications from {name} are on', { name: pcName() }));
       return true;
     } catch (e) {
-      if (loud) toast(`Could not turn on push notifications: ${e.message}`);
+      if (loud) toast(tr('Could not turn on push notifications: {error}', { error: e.message }));
       return false;
     }
   }
@@ -2464,7 +2571,7 @@
     const text = [s.title, s.text, s.url].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join('\n').trim();
     if (s.files && s.files.length) upload(s.files);
     if (text) { send({ t: 'chat', text }); if (!s.files || !s.files.length) go('drop'); }
-    toast(`Sent to ${pcName()}`);
+    toast(tr('Sent to {name}', { name: pcName() }));
   }
 
   // ---------------------------------------------------------------- sound only
@@ -2479,7 +2586,7 @@
     laudio.muted = false;
     laudio.play().catch(() => {}); // in the tap: iOS lets this element play from now on
     send({ t: 'screen.start', video: false, audio: true });
-    if (navigator.mediaSession) navigator.mediaSession.metadata = new MediaMetadata({ title: `${pcName()} audio`, artist: 'TwinDesk', artwork: [{ src: '/icon.png', sizes: '512x512', type: 'image/png' }] });
+    if (navigator.mediaSession) navigator.mediaSession.metadata = new MediaMetadata({ title: tr('{name} audio', { name: pcName() }), artist: 'TwinDesk', artwork: [{ src: '/icon.png', sizes: '512x512', type: 'image/png' }] });
     refresh('sound');
   }
   function stopListen() {
@@ -2499,7 +2606,7 @@
       const pc = new RTCPeerConnection({ iceServers: [] });
       lpc = pc;
       lpending = [];
-      pc.ontrack = (e) => { laudio.srcObject = new MediaStream([e.track]); laudio.play().catch(() => toast('Tap the audio switch again to start playback')); };
+      pc.ontrack = (e) => { laudio.srcObject = new MediaStream([e.track]); laudio.play().catch(() => toast(tr('Tap the audio switch again to start playback'))); };
       pc.onicecandidate = (e) => e.candidate && send({ t: 'rtc.ice', session: m.session, candidate: e.candidate.toJSON() });
       await pc.setRemoteDescription({ type: 'offer', sdp: m.sdp });
       for (const c of lpending.splice(0)) await pc.addIceCandidate(c).catch(() => {});
@@ -2530,10 +2637,10 @@
   });
   const scrWhat = (vt) => {
     const st = (vt && vt.getSettings && vt.getSettings()) || {};
-    return st.displaySurface === 'browser' ? 'a tab' : st.displaySurface === 'window' ? 'a window' : ME.os === 'android' ? 'this phone’s screen' : 'your screen';
+    return st.displaySurface === 'browser' ? tr('a tab') : st.displaySurface === 'window' ? tr('a window') : ME.os === 'android' ? tr('this phone’s screen') : tr('your screen');
   };
   async function startScr() {
-    if (!S.secure && location.hostname !== 'localhost') return toast('Sharing the screen requires a secure connection. Set it up under Connection.');
+    if (!S.secure && location.hostname !== 'localhost') return toast(tr('Sharing the screen requires a secure connection. Set it up under Connection.'));
     try {
       const stream = await pickScreen();
       S.scr = { on: true, stream, status: 'connecting' };
@@ -2542,7 +2649,7 @@
       await offerOut('scr', stream);
       haptic();
     } catch (e) {
-      if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(`Screen: ${e.message}`);
+      if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(tr('Screen: {error}', { error: e.message }));
       stopScr(true);
     }
     refresh('send', 'overview');
@@ -2553,7 +2660,7 @@
     const o = outs.scr;
     if (!o || !S.scr.on) return startScr();
     let stream;
-    try { stream = await pickScreen(); } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(`Screen: ${e.message}`); return; }
+    try { stream = await pickScreen(); } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(tr('Screen: {error}', { error: e.message })); return; }
     const old = S.scr.stream;
     const senders = o.pc.getSenders();
     let renegotiate = false;
@@ -2589,7 +2696,7 @@
       v.muted = true;
       bar = el('div', { class: 'present-bar', role: 'status' }, [
         v, el('div', { class: 'pb-text' }, [el('b'), el('span')]),
-        btn('Share another', () => switchScr(), 'small'), btn('Stop', () => stopScr(), 'small danger'),
+        btn(tr('Share another'), () => switchScr(), 'small'), btn(tr('Stop'), () => stopScr(), 'small danger'),
       ]);
       bar.querySelector('.pb-prev').onclick = () => go('send');
       document.body.append(bar);
@@ -2599,8 +2706,8 @@
     if (v.srcObject !== S.scr.stream) { v.srcObject = S.scr.stream; v.play().catch(() => {}); }
     const vt = S.scr.stream && S.scr.stream.getVideoTracks()[0];
     const audio = S.scr.stream && S.scr.stream.getAudioTracks().length > 0;
-    bar.querySelector('b').textContent = S.scr.status === 'live' ? `You’re presenting to ${pcName()}` : `Connecting to ${pcName()}…`;
-    bar.querySelector('span').textContent = `Showing ${scrWhat(vt)}${audio ? ', with sound' : ''}`;
+    bar.querySelector('b').textContent = S.scr.status === 'live' ? tr('You’re presenting to {name}', { name: pcName() }) : tr('Connecting to {name}…', { name: pcName() });
+    bar.querySelector('span').textContent = audio ? tr('Showing {what}, with sound', { what: scrWhat(vt) }) : tr('Showing {what}', { what: scrWhat(vt) });
     bar.querySelectorAll('button')[0].hidden = ME.mobile;
   }
   async function offerOut(kind, stream) {
@@ -2627,7 +2734,7 @@
   }
 
   async function startCam() {
-    if (!S.secure) return toast('The camera requires a secure connection. Set it up under Connection.');
+    if (!S.secure) return toast(tr('The camera requires a secure connection. Set it up under Connection.'));
     try {
       if (S.cam.stream) S.cam.stream.getTracks().forEach((t) => t.stop());
       S.cam.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: S.cam.facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: false });
@@ -2635,7 +2742,7 @@
       S.cam.status = 'connecting';
       await offerOut('cam', S.cam.stream);
     } catch (e) {
-      toast(e.name === 'NotAllowedError' ? 'Allow camera access for this site in Settings' : `Camera: ${e.message}`);
+      toast(e.name === 'NotAllowedError' ? tr('Allow camera access for this site in Settings') : tr('Camera: {error}', { error: e.message }));
       stopCam();
     }
     refresh('camera', 'overview');
@@ -2650,14 +2757,14 @@
     refresh('camera', 'overview');
   }
   async function startMic() {
-    if (!S.secure) return toast('The microphone requires a secure connection. Set it up under Connection.');
+    if (!S.secure) return toast(tr('The microphone requires a secure connection. Set it up under Connection.'));
     try {
       S.mic.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
       S.mic.on = true;
       S.mic.status = 'connecting';
       await offerOut('mic', S.mic.stream);
     } catch (e) {
-      toast(e.name === 'NotAllowedError' ? 'Allow microphone access for this site in Settings' : `Microphone: ${e.message}`);
+      toast(e.name === 'NotAllowedError' ? tr('Allow microphone access for this site in Settings') : tr('Microphone: {error}', { error: e.message }));
       stopMic();
     }
     refresh('sound');

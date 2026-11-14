@@ -74,7 +74,7 @@ for (const platform of ['windows', 'mac']) for (const mesh of [false, true]) {
   const source = fs.readFileSync(file, 'utf8');
   const captured = [];
   const callbacks = {};
-  const context = { hud: { show: (...args) => captured.push(args) }, settings: { kvm: { mouse: true }, keys: { hotkey: 'Ctrl' } }, id: { macName: literal }, device: { name: literal }, peerName: () => literal, peer: { current: { name: literal } }, phoneRemote: null, svc: { kvm: { on: (event, fn) => { callbacks[event] = fn; } } }, kvm: { keyboardOnly: false }, P: {} };
+  const context = { hud: { show: (...args) => captured.push(args) }, settings: { kvm: { mouse: true }, keys: { hotkey: 'Ctrl' } }, id: { macName: literal }, device: { name: literal }, peerName: () => literal, peer: { current: { name: literal } }, phoneRemote: null, svc: { kvm: { on: (event, fn) => { callbacks[event] = fn; } }, pcApps: { setDriven() {} } }, kvm: { keyboardOnly: false }, P: {} };
   if (platform === 'windows') {
     const start = source.indexOf('  kvm.onWhere = ');
     vm.runInNewContext(source.slice(start, source.indexOf('\n  };', start) + 5), context);

@@ -61,7 +61,13 @@ function setupIpc(ctx) {
   handle('refreshFound', () => discovery.refresh());
   handle('deviceDo', (c) => c && typeof c === 'object' && ctx.devctl() && ctx.devctl().do(c)); // Overview: ring, lock, quick settings… (shared/devctl.js)
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image)) : ctx.notifs && ctx.notifs.reply && ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
+  handle('importCancel', () => ctx.explorer && ctx.explorer() && ctx.explorer().cancel()); // Phone Files: stop importing into Explorer's folder
+  handle('history', (r) => { if (r && typeof r === 'object' && ctx.history) ctx.history(r); });
+  handle('qrPair', () => ctx.qrPair()); // Connection: the phone pairing QR code's link
+  handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
+    : !ctx.notifs ? false : r.dismiss ? ctx.notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? ctx.notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
+      : ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
@@ -104,6 +110,7 @@ function setupIpc(ctx) {
     if (partial && typeof partial.locked === 'boolean') kvm.setLocked(partial.locked); // cursor lock: not a setting
     const { linked, edges, shared, locked, ...rest } = partial && typeof partial === 'object' ? partial : {}; // edges: setEdge only
     change('kvm', rest, () => kvm.applyConfig());
+    if ('keyboard' in rest) (ctx.phoneRemote ? ctx.phoneRemote.refresh() : ctx.loadRemote()); // voice typing follows Keyboard
   });
   // Dev only (windows/test/dev/e2e-app.js, MACSHARE_DEV_PORT set): a helper event, as if the helper
   // had sent it (kvm.js gets it through the same listener). Without that variable there is no handler.
@@ -125,7 +132,14 @@ function setupIpc(ctx) {
   });
   handle('setKeys', (partial) => change('keys', partial, () => kvm.applyConfig())); // the hotkey lives in the helper
   handle('setApp', (partial) => change('app', partial, () => ctx.onApp && ctx.onApp()));
-  handle('setUpdates', (partial) => change('updates', { auto: !!(partial && partial.auto), skipped: typeof (partial && partial.skipped) === 'string' ? partial.skipped : (settings.updates && settings.updates.skipped) || '' }, () => ctx.updates.start()));
+  handle('setUpdates', (partial) => {
+    const p = partial || {};
+    const next = {};
+    if (typeof p.auto === 'boolean') next.auto = p.auto;
+    if (typeof p.skipped === 'string') next.skipped = p.skipped;
+    if (typeof p.install === 'boolean') next.install = p.install;
+    change('updates', next, () => { if ('install' in next) ctx.updates.setInstall(next.install); ctx.updates.start(); });
+  });
   handle('skipUpdate', (version) => ctx.updates && ctx.updates.skip && ctx.updates.skip(version));
   handle('unskipUpdate', () => ctx.updates && ctx.updates.unskip && ctx.updates.unskip());
   handle('checkUpdates', () => ctx.updates.check(true));
@@ -146,7 +160,12 @@ function setupIpc(ctx) {
     const mic = ctx.loadMic && ctx.loadMic(); // Microphone: loaded when first on
     if (mic) mic.apply();
     if (partial && ('micReceive' in partial || 'micOut' in partial) && ctx.phone && ctx.phone.bridge && ctx.phone.bridge._sound) ctx.phone.bridge._sound(); // a phone's microphone, now
+    // Media controls: made for every phone when turned on; off, each one stops. The Bluetooth speaker: loaded when first on.
+    if (partial && 'phoneMedia' in partial && ctx.nowPlaying) ctx.nowPlaying.apply();
+    if (partial && 'phoneBt' in partial && ctx.btAudio) ctx.btAudio.apply(); else if (partial && 'phoneBt' in partial) ctx.loadBtAudio();
   }));
+  handle('phoneMedia', (m) => m && ctx.nowPlaying && ctx.nowPlaying.control(String(m.a || ''), m.pos));
+  handle('phoneBtPick', (id) => typeof id === 'string' && id && ctx.btAudio && ctx.btAudio.pick(id));
   handle('setTerminal', (partial) => {
     const p = partial && typeof partial === 'object' ? { enabled: partial.enabled, allowMac: partial.allowMac } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
@@ -217,6 +236,7 @@ function setupIpc(ctx) {
   phone('disconnectPhone', () => ctx.phone.disconnect());
   handle('setPhone', (partial) => change('phone', partial, () => {
     if (partial && 'input' in partial && ctx.phone) ctx.phone.bridge.tellVia();
+    if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial) && ctx.phone) for (const u of ctx.phone.all || []) u.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js), every phone
     // Every phone's open windows move their controls (phones.js: a stack per phone).
     if (partial && 'controls' in partial && ctx.phone) for (const u of ctx.phone.all || []) if (u.views) u.views.applyControls();
     if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phone) for (const u of ctx.phone.all || []) if (u.views) u.views.applyOpts();
@@ -232,6 +252,75 @@ function setupIpc(ctx) {
       for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
     } else ctx.phoneViews.openScreen();
   });
+  // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
+  handle('setReZume', (m) => change('rezume', m && typeof m === 'object' ? m : {}, () => (ctx.rezume ? ctx.rezume.apply() : ctx.loadReZume())));
+  handle('rezumeDo', (m) => {
+    const h = ctx.rezume;
+    if (!h || !m) return;
+    if (m.a === 'take') h.take();
+    else if (m.a === 'dismiss') h.dismiss();
+    else if (m.a === 'push') h.push();
+    else if (m.a === 'allow' && typeof m.app === 'string') h.allow(m.list, m.app, m.on === true);
+    else if (m.a === 'forget') h.forget(m.list, typeof m.app === 'string' ? m.app : '');
+  });
+  // General › Modules (shared/modules.js): applies after a restart.
+  handle('setModules', (m) => {
+    if (!m || typeof m !== 'object') return;
+    const Mods = require('../../shared/modules.js');
+    settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+    ctx.save();
+    ctx.push();
+  });
+  // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+  handle('iosSign', (o) => require('../../shared/iossign-host.js').act(ctx.iosSign && ctx.iosSign(), require('electron').dialog, o));
+  handle('iosSignIpa', () => require('../../shared/iossign-host.js').pickIpa(ctx.iosSign && ctx.iosSign(), require('electron').dialog));
+  // The Deck page (shared/ui-deck.js): the layout, Try (runs a button here), the app picker.
+  handle('deckSave', (layout) => { const d = ctx.deck && ctx.deck(); if (d && layout && typeof layout === 'object') d.save(layout); });
+  handle('deckTry', (action) => { const d = ctx.deck && ctx.deck(); if (d && action && typeof action === 'object') d.exec(action).catch(() => {}); });
+  handle('deckApps', () => { const d = ctx.deck && ctx.deck(); return d ? d.apps().catch(() => []) : []; });
+  handle('deckPick', async (o) => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { dialog, BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  });
+  handle('deckRun', (a) => { const d = ctx.deck && ctx.deck(); return d && a && typeof a === 'object' ? d.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false }; }); // Try
+  handle('deckState', () => { const d = ctx.deck && ctx.deck(); return d ? d.state().catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays
+  // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
+  handle('setRemote', (m) => {
+    if (!m || typeof m !== 'object') return;
+    // Off at start: not made; turned on, made for every phone (and they hear it).
+    if ('allow' in m && !ctx.phoneRemote && m.allow === true) { ctx.settings.remote.allow = true; ctx.loadRemote(); }
+    if ('allow' in m && ctx.phoneRemote) ctx.phoneRemote.setAllow(m.allow === true);
+    if ('pad' in m && ctx.phoneRemote) ctx.phoneRemote.setPad(m.pad === true); // Real gamepad
+    ctx.save();
+    ctx.push();
+  });
+  // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js).
+  handle('camera', (m) => {
+    if (m && m.do === 'on') return ctx.setCamera(m.on === true); // Camera's switch: loads it, or stops it
+    const c = ctx.camShare;
+    if (!c || !m || typeof m !== 'object') return;
+    if (m.do === 'view') c.view(m.show === true); // show: its window too
+    else if (m.do === 'close') c.closeView();
+    else if (m.do === 'share') c.setShare(m.on === true);
+    else if (m.do === 'device') c.setDevice(m.id);
+    else if (m.do === 'stop') c.stopSending();
+    else if (m.do === 'devices') c.listDevices();
+    // Camera › Virtual camera (shared/vcam.js).
+    else if (m.do === 'virtual' && ctx.vcam) ctx.vcam.setOn(m.on === true);
+    else if (m.do === 'vcamRemove' && ctx.vcam) ctx.vcam.remove();
+    else if (m.do === 'rotate' && ctx.vcam) ctx.vcam.turn();
+  });
+  phone('phoneCamera', (open, opts) => {
+    if (open === false) {
+      for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
+    } else ctx.phoneViews.openCamera(opts);
+  });
+  phone('phoneListCameras', () => (ctx.phone.bridge ? ctx.phone.bridge.listCameras() : []));
   phone('phoneOpenApp', (arg) => arg && typeof arg.id === 'string' && ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100)));
   phone('phoneCloseView', (id) => ctx.phoneViews.close(Number(id)));
   // Right-click on a phone app: open it, or pin it to Start (phoneview.js).
@@ -243,7 +332,7 @@ function setupIpc(ctx) {
       { label: 'Pin to Start', click: () => ctx.phoneViews.pin(arg.id, name) },
     ]).popup();
   });
-  phone('phoneRetry', (id) => { const u = typeof id === 'string' && id ? ctx.phone.unit(id.slice(0, 64)) : null; (u || ctx.phone).bridge._kick(); });
+  phone('phoneRetry', (id) => { const u = typeof id === 'string' && id ? ctx.phone.unit(id.slice(0, 64)) : null; (u || ctx.phone).bridge.retry(); }); // also Set Up, when nothing used wireless debugging
   phone('phoneInstallFull', () => ctx.phone.bridge.installFull());
   phone('phoneInstallApps', () => require('../../shared/apkinstall.js').choose(ctx.phone.bridge, (s) => (ctx.t ? ctx.t(s) : s))); // Phone › Apps › Install Apps
   phone('phoneScreenAct', (key) => (key === 'rotate' || key === 'screenPower') && ctx.phoneViews.screenAct(key)); // the Phone page's Rotate and Phone screen off

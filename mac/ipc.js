@@ -20,7 +20,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'apps', 'rezume', 'multi', 'web', 'airplay', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'apps', 'rezume', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -42,7 +42,7 @@ const SCHEMA = {
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: emergencyShortcut.valid },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
-  updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : '') },
+  updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, engine: oneOf(['helper', 'system'], 'helper'), volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, plain: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
@@ -52,7 +52,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), codec: oneOf(['h264', 'h265'], 'h264'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -460,6 +460,8 @@ function setupIpc(ctx) {
       if (typeof partial.ble === 'boolean') settings.net.ble = partial.ble;
       if (typeof partial.blePc === 'boolean') settings.net.blePc = partial.blePc;
       if (typeof partial.bleWifiOff === 'boolean') settings.net.bleWifiOff = partial.bleWifiOff; // blepolicy.js wifiQuiet
+      if (typeof partial.tailscale === 'boolean') settings.net.tailscale = partial.tailscale; // shared/tailnet.js
+      if (typeof partial.bleInput === 'boolean') settings.net.bleInput = partial.bleInput; // shared/bleinput.js
       save();
       ctx.ble.apply();
       if (partial.blePc === false && ctx.bleLook) ctx.bleLook.look(false); // computers off: stop looking now, not at the next tick
@@ -568,6 +570,7 @@ function setupIpc(ctx) {
     },
     setUpdates(partial) {
       setGroup('updates', partial);
+      if (partial && typeof partial.install === 'boolean') ctx.updates.setInstall(partial.install);
       ctx.updates.start();
     },
     skipUpdate(version) {
@@ -600,9 +603,20 @@ function setupIpc(ctx) {
     clearHistory() {
       ctx.clipboard.clearHistory();
     },
+    // Keep history: {do: 'set', save, days} | {do: 'unlock', what} | {do: 'clear'} (shared/histkeeper.js).
+    history(r) {
+      if (ctx.history && r && typeof r === 'object') ctx.history.act(r);
+    },
     // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
     hub(r) {
       ctx.hub().act(r);
+    },
+    // TwinDesk iPhone (shared/iossign.js): one action, and Choose an IPA….
+    iosSign(o) {
+      require('../shared/iossign-host.js').act(ctx.iosSign, dialog, o);
+    },
+    iosSignIpa() {
+      require('../shared/iossign-host.js').pickIpa(ctx.iosSign, dialog);
     },
     // Overview: the other device's controls (shared/devctl.js): ring, lock, quick settings…
     deviceDo(c) {
@@ -671,14 +685,40 @@ function setupIpc(ctx) {
     },
     relaunch() {
       app.relaunch();
-      app.exit(0);
+      app.quit(); // not exit: before-quit sends the cursor home and lets the helper release input
     },
     setMulti(on) {
       require('./multi').set(on === true); // Multi-device: TwinDesk restarts
     },
+    // The Deck page (shared/ui-deck.js): the layout, and Try (runs a button here).
+    deckSave(layout) {
+      if (ctx.deck && layout && typeof layout === 'object') ctx.deck.save(layout);
+    },
+    deckTry(action) {
+      if (ctx.deck && action && typeof action === 'object') ctx.deck.exec(action).catch(() => {});
+    },
+    // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
+    setModules(m) {
+      if (!m || typeof m !== 'object') return;
+      const Mods = require('../shared/modules.js');
+      settings.modules = typeof m.restored === 'string' ? Mods.restored(settings.modules, m.restored) : Mods.set(settings.modules, String(m.id), m.on === true, m.wasOn === true);
+      save();
+    },
   };
 
   ipcMain.handle('getState', () => ctx.state);
+  ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker
+  ipcMain.handle('deckPick', (_e, o) => (async () => { // the Deck page: a file, folder or script for a tile (its path stays here)
+    const { dialog, BrowserWindow } = require('electron');
+    const kind = o && o.kind;
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, {
+      properties: kind === 'folder' ? ['openDirectory'] : kind === 'any' ? ['openFile', 'openDirectory'] : ['openFile'],
+      ...(kind === 'script' ? { title: 'Choose a script', buttonLabel: 'Choose' } : {}),
+    });
+    return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
+  })(o));
+  ipcMain.handle('deckRun', (_e, a) => (ctx.deck && a && typeof a === 'object' ? ctx.deck.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false })); // Try
+  ipcMain.handle('deckState', () => (ctx.deck ? ctx.deck.state().catch(() => ({})) : {})); // its sound, Bluetooth and display pickers
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   for (const [name, fn] of Object.entries(actions)) ipcMain.on(name, (_e, arg) => fn(arg));

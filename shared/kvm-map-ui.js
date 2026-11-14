@@ -125,10 +125,8 @@
       const { mine, theirs } = lists();
       const mb = G.bounds(mine), tb = G.bounds(theirs);
       const x = drag.from.x + p.x - drag.start.x, y = drag.from.y + p.y - drag.start.y;
-      // The side its centre is nearest to, as in the system's display settings.
-      const nx = (x + tb.w / 2 - (mb.x + mb.w / 2)) / ((mb.w + tb.w) / 2);
-      const ny = (y + tb.h / 2 - (mb.y + mb.h / 2)) / ((mb.h + tb.h) / 2);
-      const side = Math.abs(nx) >= Math.abs(ny) ? (nx > 0 ? 'right' : 'left') : (ny > 0 ? 'bottom' : 'top');
+      // Follow the closest valid placement of the actual display groups, not their box centres.
+      const side = G.closestSide(mine, theirs, x, y, drag.side);
       const vert = side === 'left' || side === 'right';
       let along = vert ? y - mb.y : x - mb.x;
       if (data.theirs.length) along = G.snap(mine, theirs, side, along);

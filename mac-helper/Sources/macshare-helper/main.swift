@@ -236,6 +236,9 @@ func handle(_ line: String) {
       case .failure(let e): replyError(id, e.message)
       }
     }
+  case "deckAudio", "deckAudioDefault", "deckVolume", "deckBt", "deckBtRadio", "deckBtConnect", "deckBright", "deckBrightSet",
+       "deckWins", "deckWinFrame", "deckWinOp", "deckSys", "deckState": // the Deck (Deck.swift)
+    Deck.handle(cmd, msg, id)
   case "appWindows":
     let pids = Set(((msg["pids"] as? [NSNumber]) ?? []).map { $0.intValue })
     reply(id, ["windows": Apps.windows(pids: pids, popups: (msg["popups"] as? Bool) ?? false)])
@@ -281,7 +284,7 @@ func handle(_ line: String) {
     BlePeripheral.shared.stop()
     reply(id)
   case "bleHold":
-    BlePeripheral.shared.hold()
+    BlePeripheral.shared.hold(advertise: (msg["advertise"] as? Bool) ?? false)
     reply(id)
   case "bleSend":
     if let dev = msg["dev"] as? String, let b64 = msg["data"] as? String, let data = Data(base64Encoded: b64) {

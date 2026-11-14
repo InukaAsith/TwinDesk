@@ -18,9 +18,9 @@ struct MirrorAskSheet: View {
                     .font(.system(size: 30, weight: .semibold)).glassChip(68, tint: .purple)
                     .padding(.top, 10)
                 VStack(spacing: 6) {
-                    Text("\(core.host?.name ?? "The computer") wants to see this screen")
+                    Text(tr("{name} wants to see this screen", ["name": core.host?.name ?? tr("The computer")]))
                         .font(.title3.bold()).multilineTextAlignment(.center)
-                    Text("Share it with TwinDesk, or mirror it using AirPlay.")
+                    Text(tr("Share it with TwinDesk, or mirror it using AirPlay."))
                         .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 VStack(spacing: 10) {
@@ -28,29 +28,29 @@ struct MirrorAskSheet: View {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { ShareScreen.open() }
                     } label: {
-                        Label("Share Screen", systemImage: "record.circle").frame(maxWidth: .infinity)
+                        Label(tr("Share Screen"), systemImage: "record.circle").frame(maxWidth: .infinity)
                     }
                     .primaryButton().controlSize(.large)
                     Button {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { how = true }
                         core.mirror.useAirPlay()
                     } label: {
-                        Label("Screen Mirroring", systemImage: "airplayvideo").frame(maxWidth: .infinity)
+                        Label(tr("Screen Mirroring"), systemImage: "airplayvideo").frame(maxWidth: .infinity)
                     }
                     .secondaryButton().controlSize(.large)
                 }
                 if how && core.mirror.airplayOff {
                     // The Mac's own receiver is off: macOS's switch, opened there by TwinDesk.
-                    Label("Turn on AirPlay Receiver on \(core.host?.name ?? "the Mac"): System Settings › General › AirDrop & Handoff › AirPlay Receiver (macOS 12 or later). TwinDesk opened it there.",
+                    Label(tr("Turn on AirPlay Receiver on {name}: System Settings › General › AirDrop & Handoff › AirPlay Receiver (macOS 12 or later). TwinDesk opened it there.", ["name": core.host?.name ?? tr("the Mac")]),
                           systemImage: "exclamationmark.circle")
                         .font(.footnote).foregroundStyle(TDColor.warn).multilineTextAlignment(.leading)
                 }
                 if how {
                     MirrorGuide(target: core.mirror.airplayName)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    Button("Done") { dismiss() }.secondaryButton()
+                    Button(tr("Done")) { dismiss() }.secondaryButton()
                 } else {
-                    Button("Not Now", role: .cancel) { core.mirror.decline(); dismiss() }
+                    Button(tr("Not Now"), role: .cancel) { core.mirror.decline(); dismiss() }
                         .foregroundStyle(.secondary)
                 }
             }
@@ -72,7 +72,7 @@ struct MirrorGuide: View {
     @State private var finger: CGFloat = 0 // 0 at the top, 1 down (the swipe)
     @State private var pulse = false
 
-    private let steps = ["Swipe down from the top right corner", "Tap Screen Mirroring", ""]
+    private let steps = [tr("Swipe down from the top right corner"), tr("Tap Screen Mirroring"), ""]
 
     var body: some View {
         VStack(spacing: 16) {
@@ -84,7 +84,7 @@ struct MirrorGuide: View {
                         Text("\(i + 1)").font(.caption.bold()).foregroundStyle(.white)
                             .frame(width: 22, height: 22)
                             .background(step == i ? TDColor.accent : TDColor.muted.opacity(0.5), in: Circle())
-                        Text(i == 2 ? "Select \(target)" : steps[i])
+                        Text(i == 2 ? tr("Select {target}", ["target": target]) : steps[i])
                             .font(.subheadline.weight(step == i ? .semibold : .regular))
                             .foregroundStyle(step == i ? TDColor.text : .secondary)
                     }
@@ -92,7 +92,7 @@ struct MirrorGuide: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(Device.isPad || hasNotch ? "Control Center opens from the top right corner." : "On an iPhone with a Home button, swipe up from the bottom edge instead.")
+            Text(Device.isPad || hasNotch ? tr("Control Center opens from the top right corner.") : tr("On an iPhone with a Home button, swipe up from the bottom edge instead."))
                 .font(.caption).foregroundStyle(.secondary)
         }
         .glassCard()
@@ -133,7 +133,7 @@ struct MirrorGuide: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
-        .accessibilityLabel("Open Control Center, tap Screen Mirroring, select \(target)")
+        .accessibilityLabel(tr("Open Control Center, tap Screen Mirroring, select {target}", ["target": target]))
     }
 
     private func fingerAt(_ w: CGFloat, _ h: CGFloat) -> CGPoint {
@@ -179,7 +179,7 @@ struct MirrorGuide: View {
 
     private func list(_ w: CGFloat, _ h: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Screen Mirroring").font(.caption.bold()).foregroundStyle(.white)
+            Text(tr("Screen Mirroring")).font(.caption.bold()).foregroundStyle(.white)
             HStack(spacing: 8) {
                 Image(systemName: "laptopcomputer").font(.caption).foregroundStyle(.white)
                 Text(target).font(.caption.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
@@ -189,7 +189,7 @@ struct MirrorGuide: View {
             .background(TDColor.accent.opacity(pulse ? 0.7 : 0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             HStack(spacing: 8) {
                 Image(systemName: "appletv").font(.caption).foregroundStyle(.white.opacity(0.5))
-                Text("Living Room").font(.caption).foregroundStyle(.white.opacity(0.5))
+                Text(tr("Living Room")).font(.caption).foregroundStyle(.white.opacity(0.5))
             }
             .padding(.horizontal, 8)
         }

@@ -34,7 +34,7 @@ final class Discovery {
     // Android phones with TwinDesk (their beacon's `ap`, Peer.swift): port is their phone server's
     // (`phost`), 0 while they don't host. They answer our probes; their beacons are broadcasts.
     private var phones: [String: Found] = [:] // q only
-    var peerOn: () -> Bool = { true }
+    var peerOn: () -> Bool = { false }
     var peerPort: () -> UInt16 = { 0 } // ours while we host (Peer.swift), in our beacon as `phost`
     var onPeer: (Found, JSON) -> Void = { _, _ in } // another phone's peer.* (main)
     var error = ""
@@ -86,7 +86,7 @@ final class Discovery {
         q.async {
             guard on != self.slow else { return }
             self.slow = on
-            NSLog("TwinDesk: discovery %@", on ? "slow (connected, off screen)" : "every 2 s")
+            NSLog("TwinDesk: discovery %@", on ? "slow (off screen)" : "every 2 s")
             if on { self.beaconTimer?.schedule(deadline: .now() + Discovery.slowInterval, repeating: Discovery.slowInterval, leeway: .seconds(10)) }
             else { self.beaconTimer?.schedule(deadline: .now(), repeating: Proto.beaconInterval) }
         }

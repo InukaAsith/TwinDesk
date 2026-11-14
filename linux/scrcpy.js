@@ -24,7 +24,7 @@ const CODEC = { h264: 0x68323634, h265: 0x68323635, av1: 0x00617631, opus: 0x6f7
 const TYPE = {
   INJECT_KEYCODE: 0, INJECT_TEXT: 1, INJECT_TOUCH: 2, INJECT_SCROLL: 3, BACK_OR_SCREEN_ON: 4,
   EXPAND_NOTIFICATIONS: 5, EXPAND_SETTINGS: 6, COLLAPSE_PANELS: 7, GET_CLIPBOARD: 8, SET_CLIPBOARD: 9,
-  SET_DISPLAY_POWER: 10, ROTATE: 11, START_APP: 16, RESET_VIDEO: 17, RESIZE_DISPLAY: 21, SCAN_FILE: 22,
+  SET_DISPLAY_POWER: 10, ROTATE: 11, UHID_CREATE: 12, UHID_INPUT: 13, UHID_DESTROY: 14, START_APP: 16, RESET_VIDEO: 17, RESIZE_DISPLAY: 21, SCAN_FILE: 22,
   CAMERA_SET_TORCH: 18, CAMERA_ZOOM_IN: 19, CAMERA_ZOOM_OUT: 20, // scrcpy 5.0.1's ControlMessage
 };
 // MotionEvent / KeyEvent actions
@@ -326,6 +326,37 @@ class Session extends EventEmitter {
     b[0] = TYPE.INJECT_TEXT;
     b.writeUInt32BE(t.length, 1);
     t.copy(b, 5);
+    this._send(b);
+  }
+
+  // A HID device on the phone (/dev/uhid; shared/uhidkbd.js): made once, then its input reports.
+  uhidCreate(id, vendorId, productId, name, descriptor) {
+    const n = Buffer.from(String(name), 'utf8').subarray(0, 127);
+    const b = Buffer.alloc(1 + 2 + 2 + 2 + 1 + n.length + 2 + descriptor.length);
+    let o = 0;
+    b[o++] = TYPE.UHID_CREATE;
+    b.writeUInt16BE(id, o); o += 2;
+    b.writeUInt16BE(vendorId, o); o += 2;
+    b.writeUInt16BE(productId, o); o += 2;
+    b[o++] = n.length; n.copy(b, o); o += n.length;
+    b.writeUInt16BE(descriptor.length, o); o += 2;
+    descriptor.copy(b, o);
+    this._send(b);
+  }
+
+  uhidInput(id, data) {
+    const b = Buffer.alloc(5 + data.length);
+    b[0] = TYPE.UHID_INPUT;
+    b.writeUInt16BE(id, 1);
+    b.writeUInt16BE(data.length, 3);
+    data.copy(b, 5);
+    this._send(b);
+  }
+
+  uhidDestroy(id) {
+    const b = Buffer.alloc(3);
+    b[0] = TYPE.UHID_DESTROY;
+    b.writeUInt16BE(id, 1);
     this._send(b);
   }
 

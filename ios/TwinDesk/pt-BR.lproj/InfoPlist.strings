@@ -1,0 +1,8 @@
+/* What iOS asks before TwinDesk uses something. */
+NSLocalNetworkUsageDescription = "O TwinDesk encontra seus computadores nesta rede e se conecta a eles.";
+NSLocationWhenInUseUsageDescription = "O TwinDesk usa sua localização aproximada (sem GPS) só para ficar conectado ao computador enquanto não está na tela. Ele nunca guarda nem envia onde você está.";
+NSPhotoLibraryUsageDescription = "Envie fotos e vídeos ao computador e deixe que ele os mostre e salve (Fotos no computador, enquanto você deixar ativado).";
+NSCameraUsageDescription = "Use esta câmera no computador (a aba Câmera e a câmera virtual), enquanto você permitir.";
+NSMicrophoneUsageDescription = "Envie o som deste microfone ao computador, enquanto você permitir.";
+NSBluetoothAlwaysUsageDescription = "O TwinDesk mantém um link Bluetooth com o computador, para as notificações dele chegarem em segundo plano e a sessão continuar longe do Wi-Fi.";
+NSLocationAlwaysAndWhenInUseUsageDescription = "O TwinDesk usa sua localização aproximada (sem GPS) só para ficar conectado ao computador enquanto não está na tela. Ele nunca guarda nem envia onde você está.";

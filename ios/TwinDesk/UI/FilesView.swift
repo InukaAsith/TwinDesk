@@ -16,10 +16,10 @@ struct FilesView: View {
                 GlassGroup {
                     Columns {
                         HStack(spacing: 12) {
-                            Button { picking = true } label: { Label("Files", systemImage: "folder.badge.plus").frame(maxWidth: .infinity) }
+                            Button { picking = true } label: { Label(tr("Files"), systemImage: "folder.badge.plus").frame(maxWidth: .infinity) }
                                 .primaryButton().controlSize(.large).keyboardShortcut("o", modifiers: .command)
                             PhotosPicker(selection: $photos, maxSelectionCount: 50, matching: .any(of: [.images, .videos])) {
-                                Label("Photos", systemImage: "photo.on.rectangle").frame(maxWidth: .infinity)
+                                Label(tr("Photos"), systemImage: "photo.on.rectangle").frame(maxWidth: .infinity)
                             }
                             .secondaryButton().controlSize(.large)
                         }
@@ -27,9 +27,9 @@ struct FilesView: View {
 
                         if let o = core.fclip.offer {
                             VStack(alignment: .leading, spacing: 10) {
-                                Label("Copied on \(core.host?.name ?? "the computer")", systemImage: "doc.on.doc").font(.headline)
-                                Text(o.files == 1 ? (o.names.first ?? "1 file") : "\(o.files) items").foregroundStyle(.secondary)
-                                Button("Save to this \(Device.word)") { core.fclip.save() }.primaryButton()
+                                Label(tr("Copied on {name}", ["name": core.host?.name ?? tr("the computer")]), systemImage: "doc.on.doc").font(.headline)
+                                Text(o.files == 1 ? (o.names.first ?? tr("1 file")) : tr("{files} items", ["files": o.files])).foregroundStyle(.secondary)
+                                Button(tr("Save to this {device}", ["device": Device.word])) { core.fclip.save() }.primaryButton()
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .glassCard(tint: .blue)
@@ -39,8 +39,8 @@ struct FilesView: View {
                             HStack {
                                 Image(systemName: "folder.fill").foregroundStyle(.blue).glassChip(42, tint: .blue)
                                 VStack(alignment: .leading) {
-                                    Text("Received").font(.body.weight(.semibold))
-                                    Text("Files › On My \(Device.word) › TwinDesk").font(.caption).foregroundStyle(.secondary)
+                                    Text(tr("Received")).font(.body.weight(.semibold))
+                                    Text(tr("Files › On My {device} › TwinDesk", ["device": Device.word])).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 Image(systemName: "arrow.up.forward.app").foregroundStyle(.secondary)
@@ -49,7 +49,7 @@ struct FilesView: View {
                         .buttonStyle(.plain).glassCard().hoverLift()
 
                         if core.connected {
-                            Label(Device.isPad ? "Or drag files here from Files, Photos or Safari" : "Or drag files onto TwinDesk from another app",
+                            Label(Device.isPad ? tr("Or drag files here from Files, Photos or Safari") : tr("Or drag files onto TwinDesk from another app"),
                                   systemImage: "hand.draw")
                                 .font(.subheadline).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity).padding(.vertical, 22)
@@ -57,7 +57,7 @@ struct FilesView: View {
                         }
                     } right: {
                         if !core.files.batches.isEmpty {
-                            SectionTitle(text: "Transfers")
+                            SectionTitle(text: tr("Transfers"))
                             VStack(spacing: 14) {
                                 ForEach(core.files.batches.prefix(30)) { b in transfer(b) }
                             }
@@ -68,7 +68,7 @@ struct FilesView: View {
                 }
             }
             .background(Backdrop())
-            .navigationTitle("File Sharing")
+            .navigationTitle(tr("File Sharing"))
             .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
                 if case .success(let urls) = r { for u in urls { core.files.adopt(u) }; core.files.flushShares() }
             }
@@ -88,13 +88,13 @@ struct FilesView: View {
                 Image(systemName: b.dir == "in" ? "arrow.down.circle.fill" : "arrow.up.circle.fill").foregroundStyle(b.dir == "in" ? .green : .blue)
                 Text(b.name).lineLimit(1)
                 Spacer()
-                Text(b.finished ? (b.ok ? "Done" : b.cancelled ? "Cancelled" : "Failed") : "\(Int(b.progress * 100))%").font(.caption).foregroundStyle(b.ok || b.cancelled ? Color.secondary : Color.orange)
+                Text(b.finished ? (b.ok ? tr("Done") : b.cancelled ? tr("Cancelled") : tr("Failed")) : "\(Int(b.progress * 100))%").font(.caption).foregroundStyle(b.ok || b.cancelled ? Color.secondary : Color.orange)
                 if b.dir == "out" && !b.finished {
-                    Button("Cancel", role: .destructive) { core.files.cancel(b.id) }.secondaryButton().controlSize(.mini)
+                    Button(tr("Cancel"), role: .destructive) { core.files.cancel(b.id) }.secondaryButton().controlSize(.mini)
                 }
             }
             if !b.finished { ProgressView(value: b.progress) }
-            Text(ByteCountFormatter.string(fromByteCount: b.bytes, countStyle: .file) + (b.count > 1 ? " · \(b.count) items" : ""))
+            Text(ByteCountFormatter.string(fromByteCount: b.bytes, countStyle: .file) + (b.count > 1 ? tr(" · {count} items", ["count": b.count]) : ""))
                 .font(.caption2).foregroundStyle(.secondary)
         }
     }

@@ -27,6 +27,7 @@ const { Notifs } = require('./notifs');
 const { FileClip } = require('../fclip');
 const { Wake } = require('../wake');
 const { AppSend } = require('../appsend');
+const { Peer } = require('./peer');
 const store = require('./store');
 
 // hub: the mesh hub (hub.js) for the pooled features; mesh: the shared/mesh.js registry; selfName():
@@ -44,7 +45,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     enabled: () => s().streamInput !== false && (!kvm || kvm.mode === 'home'),
     swapKeys: () => server.keySwap(s()), // never between two Macs
   });
-  const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper });
+  const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, session: (id) => meshHub.sessions.get(id) });
   const drop = new Drop({ server, helper, displays, getSettings: s });
   const fileSend = new FileSend(server, s);
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
@@ -54,10 +55,13 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
 
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
   const sshClient = new SshClient(server, s);
-  const audio = new Audio({ server, hub, stream, getSettings: s });
+  const audioPeer = new Peer(meshHub.audioRoute(), meshHub.server);
+  const audio = new Audio({ server: audioPeer, hub, stream, getSettings: s, meshHub });
   const pcView = new PcView({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   const pcApps = new PcApps({ server, getSettings: s });
   const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, saveSettings: () => store.saveSettings(s()), selfName });
+  // History › Keep history: the clipboard's and notifications' history kept, encrypted (shared/histkeeper.js).
+  const history = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: require('electron').app.getPath('userData'), clip: clipboard, notifs, changed: pushState });
   const fileClip = new FileClip({ server, helper, fileSend, drop, getSettings: s });
   kvm.fileClip = fileClip;
   fileClip.kvm = kvm; // the shortcut while the pointer is over there (keyboard not shared)
@@ -105,7 +109,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   helper.start();
 
   return {
-    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, pcView, pcApps, hub, fileSend, notifs, fileClip, wake, appSend, updateAwake,
+    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, audioPeer, pcView, pcApps, hub, fileSend, notifs, history, fileClip, wake, appSend, updateAwake,
     shutdown() {
       pcView.shutdown();
       pcApps.shutdown();

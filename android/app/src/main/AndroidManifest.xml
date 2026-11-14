@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" /> <!-- the sound capture without wireless debugging (Sound.kt): Android asks it for any capture -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /> <!-- About › Update: installs the new release over this one (Updates.kt) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -82,9 +83,9 @@
         <activity
             android:name=".ViewerActivity"
             android:exported="false"
-            android:label="Mac screen"
+            android:label="@string/label_screen"
             android:theme="@style/Theme.TwinDesk"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
             android:screenOrientation="sensorLandscape"
             android:windowSoftInputMode="adjustNothing"
             android:launchMode="singleTask" />
@@ -93,16 +94,27 @@
         <activity
             android:name=".RemoteActivity"
             android:exported="false"
-            android:label="Remote"
+            android:label="@string/label_remote"
             android:theme="@style/Theme.TwinDesk"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask" />
+
+        <!-- The Deck full screen (Deck.kt): held landscape unless the computer's Deck says portrait. -->
+        <activity
+            android:name=".DeckActivity"
+            android:exported="false"
+            android:label="@string/label_deck"
+            android:theme="@style/Theme.TwinDesk"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:screenOrientation="sensorLandscape"
             android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask" />
 
         <activity
             android:name=".ShareActivity"
             android:exported="true"
-            android:label="Send to computer"
+            android:label="@string/label_send"
             android:icon="@mipmap/ic_launcher"
             android:theme="@style/Theme.TwinDesk.Invisible"
             android:excludeFromRecents="true"
@@ -123,7 +135,7 @@
             android:name=".CopyToComputer"
             android:targetActivity=".ShareActivity"
             android:exported="true"
-            android:label="Copy to computer"
+            android:label="@string/label_copy"
             android:icon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -143,7 +155,7 @@
             android:targetActivity=".ShareActivity"
             android:enabled="false"
             android:exported="true"
-            android:label="Open on computer"
+            android:label="@string/label_open"
             android:icon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -254,7 +266,7 @@
             android:name=".ClipTile"
             android:exported="true"
             android:icon="@drawable/ic_stat"
-            android:label="Send clipboard"
+            android:label="@string/label_clip_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
@@ -265,7 +277,7 @@
             android:name=".AdbTile"
             android:exported="true"
             android:icon="@drawable/ic_stat"
-            android:label="Wireless debugging"
+            android:label="@string/sc_adb_short"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
@@ -273,10 +285,12 @@
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
         </service>
 
-        <!-- Home screen shortcut: wireless debugging on, then gone (no window). -->
+        <!-- Home screen shortcut: wireless debugging on, then gone (no window). Not exported: the
+             shortcut and the notification start it as TwinDesk itself, and no other app may (it
+             switches wireless debugging on). -->
         <activity
             android:name=".AdbActivity"
-            android:exported="true"
+            android:exported="false"
             android:theme="@style/Theme.TwinDesk.Invisible"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -301,6 +315,7 @@
             android:taskAffinity="" />
 
         <receiver android:name=".ActionReceiver" android:exported="false" />
+        <receiver android:name=".UpdateReceiver" android:exported="false" /> <!-- Android's installer's answer to an update (Updates.kt) -->
         <receiver
             android:name=".WiredReceiver"
             android:exported="true"

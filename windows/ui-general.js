@@ -17,7 +17,7 @@ UI.tab({
     const { el, api } = UI;
     const t = (...args) => I18n.t(...args);
     const language = UI.select([
-      { value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }, { value: 'ru', label: 'Русский' }, { value: 'tr', label: 'Türkçe' },
+      { value: 'en', label: '🇬🇧 English' }, { value: 'zh-CN', label: '🇨🇳 简体中文' }, { value: 'ru', label: '🇷🇺 Русский' }, { value: 'tr', label: '🇹🇷 Türkçe' }, { value: 'pt-BR', label: '🇧🇷 Português (Brasil)' },
     ], (v) => api.setLanguage(v));
     language.set(I18n.locale);
     const startup = UI.switch((v) => api.setStartup(v), { label: t('Start with Windows') });
@@ -46,6 +46,11 @@ UI.tab({
     const blePcSw = UI.switch((v) => api.setNet({ blePc: v }), { label: t('Bluetooth with computers') });
     const blePcRow = UI.row(t('Bluetooth with computers'), '', [blePcSw]);
     // Bluetooth off altogether while the session is on the same Wi-Fi (blepolicy.js wifiQuiet).
+    // Tailscale (#161, shared/tailnet.js): reaching a paired device away from its network.
+    const tailSw = UI.switch((v) => api.setNet({ tailscale: v }), { label: t('Connect through Tailscale') });
+    const tailRow = UI.row(t('Connect through Tailscale'), '', [tailSw]);
+    const tailHere = UI.row(t('This computer on Tailscale'), '', []);
+    const tailHow = UI.row(t('How to set it up'), t('To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.'), []);
     const bleWifiSw = UI.switch((v) => api.setNet({ bleWifiOff: v }), { label: t('Turn off Bluetooth on Wi-Fi connections') });
     const bleWifiRow = UI.row(t('Turn off Bluetooth on Wi-Fi connections'), '', [bleWifiSw]);
     // What Windows has to allow, in one place (each is also asked for where a feature needs it).
@@ -93,6 +98,7 @@ UI.tab({
     const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
     const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
+    const modules = UI.modulesCard ? UI.modulesCard() : { card: null, update() {} }; // General › Modules (shared/ui-modules.js; not in Multi-device)
     const sections = UI.sections([
       UI.card(t('Permissions'), [fwRow, btRow, locRow]),
       UI.card(t('Startup'), [
@@ -103,23 +109,31 @@ UI.tab({
         styleRow,
         themeRow,
         accentRow,
+        UI.arrangeRow ? UI.arrangeRow() : null,
         UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
         wallRow,
         media.el,
       ]),
       UI.card(t('Language'), [
-        UI.row(t('Language'), t('Some pages are still in English. Changing the language reloads this window.'), [language]),
+        UI.row(t('Language'), t('Some pages are still in English. Changing the language restarts TwinDesk.'), [language]),
+      ]),
+      UI.card(t('Tutorial'), [
+        UI.row(t('Tour of TwinDesk'), t('How to install TwinDesk on your other device, connect it, and what each page does.'), [UI.button(t('Show the tour'), () => window.Tour && Tour.start(), 'small')]),
+        UI.row(t('What’s new'), t('What came in this version.'), [UI.button(t('Show'), () => window.Tour && Tour.news(), 'small')]),
       ]),
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, sendToRow]),
+      UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
       UI.card(t('This computer'), [deviceRow, helperRow, vddRow]),
       UI.card(t('Connections'), [pingRow]),
+      ...(modules.card ? [modules.card] : []),
       UI.card(t('Advanced'), [protoRow, ...(api.setEncoder ? [encRow] : []), ...engines.rows]),
     ]);
     body.append(sections);
 
     return (s) => {
       engines.update(s);
+      modules.update(s);
       if (s.app) {
         const proto = s.app.inputProtocol === 'tcp' ? 'tcp' : 'udp';
         if (protoStart === null) protoStart = proto;
@@ -182,6 +196,9 @@ UI.tab({
         : radio || t('A phone nearby connects through Bluetooth; files and screens switch to Wi-Fi Direct for a moment'));
       blePcSw.set(n.blePc === true);
       bleWifiSw.set(n.bleWifiOff !== false);
+      tailSw.set(n.tailscale !== false);
+      tailRow.setHint(n.tailscale === false ? t('Off: only this network, Bluetooth and the cable') : t('When the other device isn’t on this network, TwinDesk tries its Tailscale address'));
+      tailHere.setHint((n.tailnet || []).length ? n.tailnet.join(' · ') : t('Not on Tailscale now'));
       bleWifiRow.setHint(n.bleWifiOff === false ? t('Bluetooth stays on beside the Wi-Fi, the way back if it drops')
         : n.bleOff ? t('Off now: the session is on the same Wi-Fi. Bluetooth comes back when it ends')
           : t('On the same Wi-Fi network (not Wi-Fi Direct), Bluetooth goes off until the session ends. With a computer, phones can’t find this one meanwhile'));

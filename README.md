@@ -5,17 +5,40 @@
 <h1 align="center"><a href="https://twin-desk.vercel.app">TwinDesk</a></h1>
 
 <p align="center">
-  <b>Your Mac, your PC, your Linux box and your Android phone, working as one desk.</b><br>
-  One mouse and keyboard for all of them. Their screens, apps, files, clipboard, cameras, calls and texts, shared.<br>
-  Free and open source. No account, no cloud, no shared network needed.
+  <b>Your Mac, PC, Linux box, Android phone and iPhone, working as one desk.</b><br>
+  One mouse and keyboard for every computer. Screens, files, clipboard, notifications, cameras, calls and texts, shared.<br>
+  Free and open source. No account, no cloud, and on iPhone not even an app to install.<br>
+  <sub>An open-source alternative to Microsoft Phone Link, KDE Connect, Intel Unison and Synergy, in one app.</sub>
 </p>
 
 <p align="center">
-  <a href="#download"><b>⬇️ Download 2.5</b></a> ·
-  <a href="https://twin-desk.vercel.app"><b>Website</b></a> ·
-  <a href="#new-in-25"><b>What's new</b></a> ·
-  <a href="#what-it-does"><b>What it does</b></a> ·
-  <a href="#get-started"><b>Get started</b></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/get-android.png" width="240" alt="Get it for Android"></a>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/get-windows.png" width="240" alt="Download for Windows"></a>
+  <br>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/get-dmg.png" width="240" alt="Download for macOS (Apple silicon)"></a>
+  <a href="#homebrew"><img src=".github/assets/buttons/get-brew.png" width="240" alt="Install with Homebrew"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src=".github/assets/buttons/get-linux.png" width="240" alt="Download for Linux (AppImage)"></a>
+</p>
+
+<p align="center">
+  <sub>Intel Macs, Windows on ARM, .deb, Arch, NixOS and everything else: <a href="#download"><b>all downloads</b></a> · iPhone without an app: <a href="#twindesk-web"><b>TwinDesk Web</b></a></sub>
+</p>
+
+<p align="center">
+  <img src=".github/assets/v30-hero-desks.jpg" alt="TwinDesk 3.0 on a MacBook, a Windows PC, in a web browser at twindesk.local, on an Android phone and on an iPhone, all connected" width="100%">
+</p>
+
+<p align="center">
+  <a href="#whats-new"><b>What's new in 3.0</b></a> ·
+  <a href="#iphone"><b>iPhone and iPad</b></a> ·
+  <a href="#computers"><b>Computers</b></a> ·
+  <a href="#android"><b>Android</b></a> ·
+  <a href="#airplay"><b>AirPlay</b></a> ·
+  <a href="#apps"><b>Every app</b></a> ·
+  <a href="#compare"><b>How it compares</b></a> ·
+  <a href="#get-started"><b>Get started</b></a> ·
+  <a href="https://twin-desk.vercel.app"><b>Website</b></a>
 </p>
 
 <p align="center">
@@ -24,14 +47,11 @@
   <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4">
   <img alt="Linux X11 and Wayland" src="https://img.shields.io/badge/Linux-X11%20%7C%20Wayland-f0a30a">
   <img alt="Android 10+" src="https://img.shields.io/badge/Android-10%2B-3ddc84">
+  <img alt="iOS and iPadOS 16+" src="https://img.shields.io/badge/iPhone%20%26%20iPad-iOS%2016%2B-1c8bd6">
+  <img alt="Any browser" src="https://img.shields.io/badge/Web-any%20browser-5e5ce6">
   <img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue">
   <a href="https://github.com/inukaasith/twindesk/releases"><img src="https://img.shields.io/github/downloads/inukaasith/twindesk/total" alt="Downloads"></a>
 </p>
-
-<p align="center">
-  <img src=".github/assets/v25-hero-desks.jpg" alt="TwinDesk on a Mac over its desktop wallpaper, on a Windows PC over its wallpaper, and on an Android phone, all connected" width="100%">
-</p>
-
 
 ## What is TwinDesk?
 
@@ -44,26 +64,31 @@ yourself, a phone you keep picking up, the same tab opened three times.
 
 Push the mouse off the edge of your Mac's screen and it carries on onto the PC, keyboard and all.
 Copy on one, paste on the other. Drag a file across the edge and drop it there. Open the PC's apps
-in windows on your Mac. Turn a tablet or an old laptop into a second screen. Answer your phone's
-calls and texts from the computer, use its camera in your video calls, and drive the computer from
-the couch with it. And when you walk from one device to another, **ReZume** brings the tab, the
-video or the document you were on with you.
+in windows on your Mac. Turn a tablet into a second screen. Answer your phone's calls from the
+computer, use its camera in your video calls, and drive the computer from the couch with it. Walk to
+another device and **ReZume** brings the tab, the video or the document you were on with you.
 
-It's one app on every platform, so a Mac and a PC pair exactly like two Macs, and a phone is a full
-peer instead of a notification mirror.
+It's one app on every computer, so a Mac and a PC pair exactly like two Macs. Phones are full peers,
+not notification mirrors. And an iPhone, an iPad or any device with a browser joins by typing
+**`twindesk.local`**.
+
+**Looking for a Phone Link alternative?** TwinDesk does what Microsoft Phone Link does (texts, calls,
+notifications, photos and your phone's screen and apps on the computer), and it also works on a Mac
+and on Linux, with an iPhone as well as Android, and without a Microsoft account. It replaces KDE
+Connect and Intel Unison the same way. See [how it compares](#compare).
 
 <table>
 <tr>
 <td width="25%" valign="top">
 
 **🔀 Any combination**<br>
-Mac ↔ Windows, Mac ↔ Mac, PC ↔ PC, Linux ↔ anything, Android ↔ any computer. Or [all of them at once](#mesh).
+Mac, Windows, Linux, Android, iPhone, iPad and any browser, two at a time or [all at once](#mesh).
 
 </td>
 <td width="25%" valign="top">
 
 **📡 Anywhere**<br>
-Same Wi-Fi, a USB cable, or no shared network at all: Bluetooth and a direct Wi-Fi link of their own.
+Same Wi-Fi, a USB cable, Tailscale, or no shared network at all: Bluetooth and a direct Wi-Fi link.
 
 </td>
 <td width="25%" valign="top">
@@ -81,74 +106,88 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 </tr>
 </table>
 
-<table>
-<tr>
-<td width="50%" align="center" valign="top">
-
-**💻 Computer to computer**<br>
-<img src=".github/assets/v25-overview-pc.gif" alt="The Mac switching to a connected Linux PC: its Overview with Ring, Lock, Sleep, volume, clipboard and a drop zone for files, then the File Sharing and Clipboard pages" width="100%">
-
-</td>
-<td width="50%" align="center" valign="top">
-
-**📱 Computer to phone**<br>
-<img src=".github/assets/v25-overview-phone.gif" alt="An Android phone taking over the Mac's link: the phone's Overview with its battery, network and quick actions, then its Photos" width="100%">
-
-</td>
-</tr>
-</table>
+---
 
 <a name="download"></a>
 
-## ⬇️ Download
+# ⬇️ Download
 
 <table>
 <tr>
-<td width="25%" align="center" valign="top">
+<td width="20%" align="center" valign="top">
 
 **🍎 macOS**<br><sub>13 Ventura or later</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-2.5.3-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-2.5.3-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
+<a href="#homebrew"><img src="https://img.shields.io/badge/Homebrew-cask-fbb040?style=for-the-badge" alt="macOS, Homebrew"></a>
 
 </td>
-<td width="25%" align="center" valign="top">
+<td width="20%" align="center" valign="top">
 
 **🪟 Windows**<br><sub>10 and 11</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-Setup-2.5.3.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-Setup-2.5.3-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
 
 </td>
-<td width="25%" align="center" valign="top">
+<td width="20%" align="center" valign="top">
 
 **🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-2.5.3-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-2.5.3-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/twindesk-bin-2.5.3-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="#apt"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-APT-a80030?style=for-the-badge" alt="Linux, APT repository"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/twindesk-bin-3.0.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
 <sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
 
 </td>
-<td width="25%" align="center" valign="top">
+<td width="20%" align="center" valign="top">
 
 **🤖 Android**<br><sub>10 or later, phones and tablets</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-2.5.3.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v2.5.3/TwinDesk-2.5.3-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
-<sub>The full app adds notifications, texts and Accessibility; the computer can install it for you over wireless debugging</sub>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
+<sub>The full app adds notifications, texts and Accessibility; the computer can install it for you</sub>
+
+</td>
+<td width="20%" align="center" valign="top">
+
+**📱 iPhone and iPad**<br><sub>iOS 16 or later</sub>
+
+<a href="#twindesk-web"><img src="https://img.shields.io/badge/No_app-twindesk.local-5e5ce6?style=for-the-badge" alt="TwinDesk Web, no app"></a><br>
+<a href="#altstore"><img src="https://img.shields.io/badge/AltStore-source-1c8bd6?style=for-the-badge" alt="AltStore source"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
 
 </td>
 </tr>
 </table>
 
-<p align="center">🍺 <b>Homebrew</b> on macOS: <code>brew install --cask inukaasith/twindesk/twindesk</code><br>
+<a name="homebrew"></a>
+
+<p align="center">🍺 <b>Homebrew</b> on macOS:<br><code>brew install --cask inukaasith/twindesk/twindesk</code><br>
 <sub>Update with <code>brew upgrade --cask twindesk</code>: TwinDesk opens again by itself if it was running, so a Mac you drive only through it gets its mouse back. The <a href="https://github.com/InukaAsith/homebrew-twindesk">tap</a> follows every release.</sub></p>
+
+<a name="apt"></a>
+
+<p align="center">🐧 <b>APT</b> on Debian, Ubuntu, Mint and Pop!_OS, kept up to date by <code>apt upgrade</code>:</p>
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://inukaasith.github.io/twindesk-apt/twindesk.gpg | sudo tee /etc/apt/keyrings/twindesk.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/twindesk.gpg] https://inukaasith.github.io/twindesk-apt stable main" | sudo tee /etc/apt/sources.list.d/twindesk.list
+sudo apt update && sudo apt install twindesk
+```
+
+<p align="center"><sub>The <a href="https://github.com/InukaAsith/twindesk-apt">repository</a> follows every release within a few hours.</sub></p>
+
+<p align="center"><sub>Already on 2.5? The in-app updater picks the right file. Update every device you pair: 3.0 still talks to 2.5, and the new features switch on when both sides have 3.0.<br>
+Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
 
 <a name="first-launch"></a>
 
 <details>
-<summary><b>⚠️ First launch: the apps aren't code-signed</b> <sub>how to allow them on macOS, Windows and Android</sub></summary>
+<summary><b>⚠️ First launch: the apps aren't code-signed</b> <sub>how to allow them on macOS, Windows, Android and iPhone</sub></summary>
 
 TwinDesk is free and has no paid Apple Developer ID or Windows code-signing certificate, so
 macOS and Windows don't know who made it and ask once before opening it. The source is all here.
@@ -195,42 +234,464 @@ lets you turn those on. Installed by hand, Play Protect may block it, and Androi
 out notification access and Accessibility as a **restricted setting**: open **Settings › Apps ›
 TwinDesk**, tap **⋮ › Allow restricted settings**, then turn them on.
 
+**📱 iPhone and iPad**
+
+The IPA is unsigned: AltStore, SideStore or another signing tool signs it with your own Apple ID
+([how](#altstore)). The first time, iOS may ask you to trust your Apple ID as a developer in
+**Settings › General › VPN & Device Management**. TwinDesk Web needs none of this.
+
 </details>
-
-<p align="center"><sub>Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
-
-
-<p align="center">
-  <img src=".github/assets/v25-hero.jpg" alt="TwinDesk on a Mac in light and dark, connected to a Windows PC and an Android phone, with the phone app in light and dark" width="100%">
-</p>
 
 ---
 
-<a name="new-in-25"></a>
+<a name="whats-new"></a>
 
-# ✨ New in 2.5
+# ✨ New in 3.0: now on iPhone, iPad and any browser
 
 <p align="center">
-  <img src=".github/assets/v25-banner.jpg" alt="TwinDesk 2.5: pick up where you left off, faster than ever" width="100%">
+  <img src=".github/assets/v30-banner.jpg" alt="TwinDesk 3.0: now on iPhone, iPad and any browser. The Mac's Photos page showing an iPhone's photos, the Android app and the iPhone app" width="100%">
 </p>
 
-The biggest TwinDesk release yet. **ReZume** carries what you were doing to the other screen.
-Every app has **an all-new look**, in light and dark. And underneath, the mouse and keyboard run on
-**tdv2**, a new UDP protocol written in Rust, while files move on **fx2**, a new transfer engine.
+<table>
+<tr>
+<td width="33%" valign="top">
 
-| | What's new | |
+**🌐 [TwinDesk Web](#twindesk-web)**<br>
+Type `twindesk.local` in Safari, pair once, done. Screens, files, clipboard, notifications and a
+remote, with nothing to install.
+
+</td>
+<td width="33%" valign="top">
+
+**📱 [iPhone and iPad app](#iphone-app)**<br>
+Every page of the Android app, native on iOS, with Liquid Glass. Pairs over Wi-Fi, USB or
+Bluetooth. Add it to AltStore or SideStore.
+
+</td>
+<td width="33%" valign="top">
+
+**🤝 [Phone to phone](#phone-to-phone)**<br>
+Android to Android, iPhone to iPhone, Android to iPhone: clipboard, files, photos, notifications
+and screens between phones.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**🪟 Glass look**<br>
+A new default style on every computer, with your accent's glow behind the window.
+
+</td>
+<td valign="top">
+
+**📺 [AirPlay on Windows and Linux](#airplay)**<br>
+Mirror an iPhone, iPad or Mac to a PC, with sound.
+
+</td>
+<td valign="top">
+
+**🌍 Five languages, every app**<br>
+English, 简体中文, Русский, Türkçe and Português (Brasil), on computers, phones and the web.
+
+</td>
+</tr>
+</table>
+
+Also new: **Tailscale** when devices aren't on the same network, **mouse and keyboard over
+Bluetooth** for crowded Wi-Fi, **the phone keyboard as a real USB keyboard**, **pens** (an Apple
+Pencil, a stylus or a drawing tablet) with pressure and tilt in screen viewers, **4K** screens,
+**idle links that let laptops and phones sleep**, and a round of security hardening. The full list is
+in the [3.0.0 release notes](https://github.com/InukaAsith/TwinDesk/releases/tag/v3.0.0).
+
+---
+
+<a name="iphone"></a>
+
+# 📱 iPhone and iPad: two ways in
+
+| | 🌐 **TwinDesk Web** | 📱 **The app** |
 |---|---|---|
-| 🔁 | **ReZume.** The tab, the video at the same second, the document or the app you were on, continued on the other device | [More](#rezume) |
-| 🎨 | **All-new look.** Redrawn on Windows, macOS, Linux and Android, in light, dark or system, with your accent color | [More](#new-look) |
-| ⚡ | **tdv2.** Mouse moves on their own encrypted UDP lane, native Rust in the helper, nothing allocated per move | [More](#speed) |
-| 📦 | **fx2.** Files in their own process, in parallel ranges, verified while they stream | [More](#speed) |
-| 🪟 | **Move windows.** Hold Right Ctrl and drag a window past the edge: it moves to the other computer | [More](#move-windows) |
-| 🎙 | **Microphone sharing.** One computer's microphone on the other, or the phone as a microphone | [More](#sound-and-microphone) |
-| 🌍 | **Русский, Türkçe, 简体中文** on every desktop | |
+| **Install** | Nothing. Safari, then *Add to Home Screen* if you like | AltStore, SideStore or any signing tool, with your Apple ID |
+| **Best for** | Trying TwinDesk in ten seconds, a borrowed iPad, any laptop or tablet | Everyday use: background link, USB, Bluetooth, Share Screen |
+| **Connects over** | Same Wi-Fi | Wi-Fi, USB cable (to a Mac), Bluetooth |
+| **The computer's screen** | ✅ mirror or extend, touch, Apple Pencil | ✅ mirror or extend, touch, Apple Pencil |
+| **Files, clipboard, notifications, remote, camera, microphone** | ✅ | ✅ |
+| **The iPhone's own screen on the computer** | through AirPlay | ✅ Share Screen, or AirPlay |
+| **Photos on the computer, Shortcuts, Back Tap, Lock Screen media** | Shortcuts | ✅ |
+
+<a name="twindesk-web"></a>
+
+## 🌐 TwinDesk Web: no app needed
+
+<p align="center">
+  <img src=".github/assets/v30-web-iphone.jpg" alt="Step 1: the TwinDesk Web page on the Mac with a pairing code and QR code. Then on an iPhone: the pairing page at twindesk.local, the connected Overview, Files and the touchpad" width="100%">
+</p>
+
+Every TwinDesk computer can serve the iPhone app's little sibling straight to a browser. It works
+on an iPhone, an iPad, a Chromebook, a friend's laptop, anything with a modern browser.
+
+1. **On the computer,** open TwinDesk › **TwinDesk Web** and switch it on. A pairing code and a QR
+   code appear. (Mac, Windows and Linux, in one-to-one and Multi-device mode.)
+2. **On the iPhone,** on the same Wi-Fi, open Safari and type **`twindesk.local`**. Or just point the
+   Camera at the QR code.
+3. **Enter the code once.** That's the pairing. The computer shows the browser in its sidebar as one
+   more device.
+4. **Optional, recommended:** Share › **Add to Home Screen**. TwinDesk then opens like an app,
+   connects by itself, and the computer's notifications arrive as real alerts through Web Push, sent
+   by your own computer with no server in between.
+
+What you get in the browser:
+
+- **Receive screen:** the computer's screen, mirrored or as an extra display, with touch, a
+  touchpad mode, keyboard, sound and the **Apple Pencil as a pen** on an iPad.
+- **Files** both ways, and **Drop**: a chat-like place for notes, links and photos.
+- **Clipboard** both ways, the computer's **notifications**, **Ring, Lock and Sleep**.
+- **Remote:** trackpad and keyboard, a gamepad (or a real one on the computer), the phone's
+  **camera** and **microphone** on the computer.
+- **Send screen** through the computer's AirPlay receiver, and **Shortcuts** actions.
+- Several computers on the network? The pairing page lists them all to pick from.
+
+<a name="iphone-app"></a>
+
+## 📱 The TwinDesk app for iPhone and iPad
+
+<p align="center">
+  <img src=".github/assets/v30-iphone.jpg" alt="The iPhone app: Overview, Receive screen, Share screen, Media and Remote" width="100%">
+</p>
+
+A native SwiftUI app with every page of the Android app. On the computer, an iPhone is a phone like
+any other.
+
+- **The computer's screen on the iPhone or iPad,** mirrored or as a second display, with touch, a
+  touchpad mode and the **Apple Pencil as a pen**, pressure, tilt and eraser included.
+- **Share Screen:** the whole iPhone screen in a window on the computer, every app, like presenting
+  in a video call.
+- **Files both ways,** *Send to Computer* in the share sheet, and the computer's folder in Files.
+- **Photos on the computer:** its Photos page shows the iPhone's photos and videos, newest first.
+- **Clipboard** both ways, the computer's **notifications**, its **sound** on the iPhone, the
+  iPhone's **camera** and **microphone** on the computer.
+- **Remote** (touchpad and keyboard, gamepad, voice typing) and **Media** with the computer's
+  Now Playing on the Lock Screen.
+- **Wi-Fi, USB cable or Bluetooth.** Off screen the session moves onto Bluetooth, and back to Wi-Fi
+  when you open TwinDesk.
+- **Shortcuts and Back Tap:** send the clipboard, send files, show the computer's screen, lock it,
+  play or pause.
+- **iPhone gets a tab bar** (Liquid Glass on iOS 26), **iPad gets a sidebar** with two columns, drag
+  and drop and keyboard shortcuts.
+
+<p align="center">
+  <img src=".github/assets/v30-accent.jpg" alt="The iPhone app's Overview in light and dark with different accent colours" width="100%">
+</p>
+
+<a name="altstore"></a>
+
+### Install it
+
+TwinDesk isn't on the App Store yet (that's what [sponsoring](SPONSOR.md) pays for), so you install
+the IPA with your own Apple ID:
+
+<p>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a><br>
+  <a href="https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-SideStore-8e5cf6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to SideStore"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
+</p>
+
+1. Install [AltStore](https://altstore.io) or [SideStore](https://sidestore.io) on the iPhone.
+2. Tap **Add to AltStore** (or SideStore) above on the iPhone, or add this source by hand:<br>
+   `https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json`
+3. Install TwinDesk from the source. It updates from there when a new version is out.
+
+With a free Apple ID, apps installed this way have to be refreshed every 7 days; AltStore and
+SideStore do it for you in the background. Needs iOS or iPadOS 16 or later.
+
+---
+
+<a name="computers"></a>
+<a name="what-it-does"></a>
+
+# 💻 Computer to computer
+
+<p align="center">
+  <img src=".github/assets/v25-computers.jpg" alt="The Clipboard, File Sharing, Receive screen and Share screen pages on the Mac, connected to a Windows PC" width="100%">
+</p>
+
+A Mac and a Windows PC. Two Macs. A gaming PC and a Linux laptop. Pair any two computers and they
+behave like one: one mouse and keyboard, one clipboard, files that go where you drag them, and each
+other's screens, apps, cameras and speakers whenever you want them. Every feature has its own page
+and its own switch, and nothing runs until you turn it on.
+
+## 🖱 One mouse and keyboard
+
+Push the pointer off the edge of your screen and **keep working on the other computer**, as if they
+were one. Your keyboard follows the pointer, and so do Caps Lock, media keys, volume and brightness.
+Trackpad gestures (Spaces swipes, pinch to zoom, show desktop) carry over. Each computer's own
+trackpad takes its pointer back, shake the mouse to find the pointer, and a double-tap of the hotkey
+brings everything home.
+
+- **Where the other computer is:** drag the screens on the Mouse page to match your desk.
+- **Cursor lock** keeps the pointer on the computer it's on: **Scroll Lock** (F14 on a Mac), the
+  Mouse page, or the tray and menu bar.
+- **Over Bluetooth on busy Wi-Fi** (new in 3.0, off by default): the pointer and keys ride Bluetooth
+  while screens, files and the clipboard stay on Wi-Fi.
+
+<a name="move-windows"></a>
+
+## 🪟 Move windows
+
+Hold **Right Ctrl** (**Right Command** on a Mac), grab a window and drag it past the edge of the
+screen. It moves to the other computer and keeps working there. Let go of it on the way back and it
+returns to where you grabbed it.
+
+## 🧩 The other computer's apps, in windows of their own
+
+Open a **Windows app on your Mac** (or a Mac app on your PC) and it gets **a window of its own**,
+with its own Dock icon or Start-menu pin. No full remote desktop, just the app you need, next to
+your own.
+
+<p align="center">
+  <img src=".github/assets/mac-apps.jpg" alt="Chess, Clock and Calculator from one Mac running in their own windows on the other Mac" width="100%">
+</p>
+
+## 🖥 Extended display and remote screen
+
+Extend your Mac onto a PC or another Mac with a **real virtual display**, or mirror it. Or bring the
+other computer's screen into a window and control it from there.
+
+- **Low-latency H.264 or H.265,** hardware encoding with a fallback, up to **4K**.
+- **Fastest, Smooth or Steady** playback, a frame-rate cap, and optional frame generation.
+- **Pens** (new in 3.0): a stylus, a drawing tablet or an Apple Pencil over Sidecar draws on the other
+  computer with pressure, tilt and eraser. Real multitouch on Windows.
+- **Linux:** Extend on GNOME and X11, and a guide for KDE Plasma on Wayland.
+
+<p align="center">
+  <img src=".github/assets/mac-screen-window.jpg" alt="The MacBook Pro's extended screen in a window on the Studio Mac, with the Receive screen settings" width="100%">
+</p>
+
+## 📁 Files, shared folders and terminal
+
+**Drag files across the screen edge** and drop them anywhere, or copy with <kbd>⌃⌥C</kbd> and
+paste with <kbd>⌃⌥V</kbd> (<kbd>Ctrl+Alt+C/V</kbd> on Windows and Linux), into a folder or straight
+into the app in front. Send from the macOS Share menu or Explorer's *Send to*, or **share a folder**
+that shows up as a network drive on the other side. Big and small, files move on [fx2](#speed).
+Need a shell? `ssh twindesk` opens one on the other computer, no passwords needed.
+
+## 📋 Shared clipboard
+
+Copy on one computer and paste on the other, instantly or when you switch over. **Pictures** go too,
+up to 10 MB: take a screenshot with <kbd>Win+Shift+S</kbd> on the PC and paste it on the Mac.
+Entries from password managers are skipped, and a Recent list keeps the last few things you copied.
+
+<p align="center">
+  <img src=".github/assets/v30-features.jpg" alt="TwinDesk's feature pages: Sound sharing, Camera sharing, Second screen, Notification sync, ReZume and Phone drive" width="100%">
+</p>
+
+## 📷 Camera sharing
+
+Show the other computer's camera in a window, or send it to **a webcam every app can pick**:
+**TwinDesk Camera** in Zoom, Teams, Meet or the browser. A computer shares its camera only when you
+allow it, and a popup there says who is watching. The same works with a [phone's camera](#phone-camera).
+
+<a name="sound-and-microphone"></a>
+
+## 🔊 Sound, microphone, notifications and Wake-on-LAN
+
+Hear one computer's sound on the other, and **use one computer's microphone on the other**, each
+way on its own switch. See one computer's notifications on the other as native notifications. Wake
+a sleeping computer with Wake-on-LAN.
+
+## 🧭 Every page on a computer
+
+| Page | What it's for |
+|---|---|
+| **Overview** | The other computer at a glance: Ring, Lock, Sleep, Bluetooth, Do not disturb, volume, its clipboard and a drop zone |
+| **Connection** | Nearby devices, pairing by code or QR, Bluetooth and Wi-Fi Direct |
+| **Share screen / Receive screen** | Extend or mirror onto the other computer, or see and control its screen |
+| **Apps** | The other computer's apps in windows of their own |
+| **Mouse / Keyboard** | The screen layout, cursor lock, the hotkey, shortcuts that follow the pointer |
+| **Clipboard / Notifications / File Sharing** | Each way on its own switch, with Recent, per-app rules and shared folders |
+| **Audio / Camera** | Sound and microphone both ways, the camera in a window or as TwinDesk Camera |
+| **ReZume** | Continue the other computer's tab, video or document here |
+| **TwinDesk Web / AirPlay & SMB** | Phones and browsers with no app, AirPlay mirroring and a folder for the Files app |
+| **Multi-device** | [TwinDesk Mesh](#mesh): every device at once |
+| **General** | Appearance (Glass or Simple, light or dark, accent), language, Tailscale, permissions, engines in use |
+
+<a name="mesh"></a>
+
+## 🕸 TwinDesk Mesh: every device at once
+
+<p align="center">
+  <img src=".github/assets/v22-mesh-desk.jpg" alt="The pointer travelling from a Windows PC across a MacBook and a Linux laptop onto a phone, with the desk map below" width="100%">
+</p>
+
+Your laptop, your desktop, the Linux box in the corner and your phone, **all connected at once**,
+each talking straight to the others with no hub in between.
+
+- **One mouse, every screen.** Line your devices up on the map once, and the pointer goes from the PC to the Mac to the Linux laptop to the phone.
+- **One clipboard.** Copy on any of them, paste on any other. The newest copy wins.
+- **One notification pool.** Your phone buzzes, and every computer shows it.
+- **Pair once, join all.** A new device paired with one computer meets the rest by itself.
+
+<details>
+<summary><b>What's in Mesh, and how it differs</b></summary>
+
+Turn it on in the **Multi-device** page, and off again any time with everything as you left it.
+Connecting just two devices? Keep it off: the one-to-one mode does the same with less. The one-to-one
+app's pages are here too: files (the fast way, over HTTPS), the Camera, the Remote, the Deck,
+TwinDesk iPhone, Modules and pictures on the clipboard. ReZume works while a phone is the only
+device connected. Not yet: the Bluetooth mouse and keyboard, and files dragged to more than one
+device at a time. The phone connects to
+one computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
+See [docs/mesh.md](docs/mesh.md).
+
+</details>
+
+---
+
+<a name="airplay"></a>
+
+# 📺 AirPlay receiver: mirror an iPhone to any computer
+
+<p align="center">
+  <img src=".github/assets/v30-airplay.jpg" alt="The AirPlay & SMB page on the Mac with the Screen Mirroring guide, and the iPhone app's AirPlay & SMB and Share screen pages" width="100%">
+</p>
+
+AirPlay used to stop at Apple TVs and Macs. **With TwinDesk 3.0, a Windows PC and a Linux box are
+AirPlay receivers too.** Open Control Center on an iPhone or iPad, tap **Screen Mirroring**, and your
+PC is in the list, right next to the Apple TV. Pick it, and the whole iPhone screen appears on the
+computer, **with its sound**. A Mac mirrors to it the same way.
+
+- **No app on the iPhone.** It's the AirPlay already built into iOS, iPadOS and macOS.
+- **Screen and sound,** for presenting, demos, a game on the big screen, or a video from any app.
+- **Video or music only:** tap AirPlay in Photos, Safari, Music or YouTube and pick the computer.
+- **On a Mac,** macOS has its own AirPlay Receiver; the page shows where to switch it on and the three taps on the iPhone.
+- **Pairs with everything else:** with the iPhone app or [TwinDesk Web](#twindesk-web), mirroring is
+  how the iPhone shares its screen; the TwinDesk app can also do it with **Share Screen**.
+
+**Plus SMB for the Files app.** The same page shares a folder on the computer that an iPhone or iPad
+adds in **Files › ⋯ › Connect to Server**, so the computer's files sit right next to iCloud Drive.
+
+---
+
+<a name="android"></a>
+
+# 🤖 Android: a full peer
+
+<p align="center">
+  <img src=".github/assets/v30-android-connected.jpg" alt="The Mac's page for a connected Pixel 9 Pro with Shortcuts, Quick actions, battery, signal and storage, next to the Android app's Overview and More pages" width="100%">
+</p>
+
+Most phone links stop at notifications and a file drop. In TwinDesk your Android phone or tablet is a
+**full peer**: it pairs like a computer and gets the same features, plus its calls, texts, photos,
+files, apps and camera. On the computer, the phone's **Overview** is one tap from everything:
+customizable **Shortcuts** (show its screen, send files, notifications, apps), **Quick actions**
+(Wi-Fi, Bluetooth, Do not disturb, torch, ring mode and volume), its battery, signal, network and
+storage, the latest clipboard and its most-used apps.
+
+<p align="center">
+  <img src=".github/assets/v30-phone-pages.jpg" alt="The Mac's Phone apps, Photos, Mouse and Phone Files pages for a connected Pixel 9 Pro" width="100%">
+</p>
+
+## 📞 Calls and messages
+
+Answer, decline and make your phone's calls from the computer. When it rings, a small window shows
+who's calling with **Answer** and **Decline**. With Bluetooth, the computer becomes **the phone's
+headset**, so you talk and listen right there. Read and reply to your texts, WhatsApp, Instagram and
+Telegram on **Messages**, pictures included.
+
+<p align="center">
+  <img src=".github/assets/v25-phone.jpg" alt="The Mac's Calls, Phone apps, Mirroring and Remote pages for the connected phone" width="100%">
+</p>
+
+## 📲 Phone apps in windows
+
+Open **single Android apps in windows of their own**, side by side with your desktop apps. Pin them
+to the Dock or the Start menu and use them like any other app, with your mouse and real keyboard.
+**Mirroring** shows the whole phone in a window instead, with touch, mouse, keyboard and its sound.
+Install .apk files on the phone straight from the computer.
+
+<p align="center">
+  <img src=".github/assets/phone-on-mac.jpg" alt="The tablet's home screen in a Mac window, and Calculator, Calendar and Clock open as separate Mac windows" width="100%">
+</p>
+
+## 🖼 Photos, phone files and Mount
+
+Browse the phone's **photos and videos**, open any of them big, save or remove one or many.
+**Phone Files** browses the phone's whole storage: save, upload, rename, delete, or just drop files
+on the page. **Shared folders work both ways.** On a Mac, **Mount** puts the phone in Finder like
+any drive.
+
+<a name="phone-camera"></a>
+
+## 📷 Phone camera and microphone
+
+The phone's **back or front camera** in a window on the computer or as the **TwinDesk Camera**
+webcam in any video call, and the phone **as a microphone** for the computer.
+
+## 🖱 Your mouse and keyboard on the phone
+
+Push the pointer past the screen edge and it **carries on onto the phone**. Type in any Android app
+with your real keyboard. New in 3.0: **the phone keyboard as a real USB keyboard**, so every symbol
+and accent in the phone's own layout comes out right.
+
+## 🎮 Remote and gamepad
+
+<p align="center">
+  <img src=".github/assets/v23-remote.jpg" alt="The phone's Remote: a touchpad with a row of keys, and the gamepad laid out like an Xbox controller" width="100%">
+</p>
+
+- **Touchpad and keyboard** for the couch or a presentation, with the keys a phone keyboard lacks.
+- **Gamepad,** laid out like an Xbox controller. Its buttons press the keys you choose, or turn on
+  **Real gamepad** and the computer sees an actual controller (Windows and Linux).
+- **A Bluetooth gamepad for any computer**, the Mac included, with no TwinDesk and no driver there.
+
+## 🖥 Tablet as a second screen
+
+Turn a tablet or phone into an **extra monitor**. **Extend** for more desktop space, or **Mirror**
+to show what's on your screen. Use touch as the mouse, or switch on touchpad mode.
+
+<p align="center">
+  <img src=".github/assets/second-screen.jpg" alt="Share screen settings on the Mac, and the tablet showing the extended Mac desktop" width="100%">
+</p>
+
+## 📤 Files, clipboard, notifications, media and sound
+
+- **Files.** *Send to computer* or *Copy to computer* from any Android app's share menu; from the
+  computer, the Share menu, *Send to*, a drag across the screen edge or <kbd>⌃⌥C</kbd> / <kbd>Ctrl+Alt+C</kbd>.
+- **Clipboard.** Text and pictures both ways, the phone's screenshots included.
+- **Notifications.** The phone's on the computer as native notifications, per app, and the other way around.
+- **Media.** What's playing on the phone, with play, pause, skip and seek on the computer, and the
+  computer's Now Playing on the phone.
+- **Sound.** The phone's sound on the computer, or the computer's on the phone.
+
+## 🧭 Every page for a phone
+
+| On the computer | On the phone |
+|---|---|
+| **Overview** with Shortcuts and Quick actions, **Connection** | **Overview** with the computer's Ring, Lock, Sleep and volume, **Connect** |
+| **Messages, Calls, Photos, Apps** | **Screen:** be the computer's second screen, or see its screen |
+| **Mirroring, Share screen** | **Files:** send, copy and receive |
+| **Mouse, Keyboard, Remote** | **Remote:** touchpad, keyboard, gamepad |
+| **Clipboard, Notifications, File Sharing, Phone Files, Mount** | **ReZume, Clipboard, Notifications, Sound, Media, Camera** |
+| **Audio, Camera, ReZume** | **General:** name, theme and accent, language, background, permissions |
+
+<p align="center">
+  <img src=".github/assets/v30-android.jpg" alt="The Android app: Overview, Screen, Files and More" width="100%">
+</p>
+
+<a name="phone-to-phone"></a>
+
+## 🤝 Phone to phone
+
+**Android to Android, iPhone to iPhone, Android to iPhone.** Pair two phones like a computer, then
+share the clipboard, notifications, files both ways, photos, messages and screens. Either phone can
+host, and a phone-to-phone session takes the computer's place while it lasts.
+
+---
 
 <a name="rezume"></a>
 
-## 🔁 ReZume: pick up right where you left off
+# 🔁 ReZume: pick up right where you left off
 
 <p align="center">
   <img src=".github/assets/v25-rezume.jpg" alt="The ReZume page on the Mac and on the phone, with a document and a video offered to continue" width="100%">
@@ -244,9 +705,8 @@ document is ready to edit.
 - **Videos at the same moment:** YouTube, Vimeo, Twitch, Dailymotion or a video file.
 - **Documents three ways:** a **Preview** copy, **Edit** the original live (save on the Mac, it's
   saved on the PC), or the app's own **Window** streamed across.
-- **App windows** for apps without a page or document, and **phone apps** in a window on the computer.
-- **Phone ↔ computer:** the phone's tab or app on the computer, and *Open on computer* in the phone's share sheet.
-- **Where it shows is up to you:** the taskbar or Dock, the tray or menu bar, a notification, the ReZume page.
+- **Phone ↔ computer:** the phone's tab or app on the computer, and *Open on computer* in the share sheet.
+- **Off until you turn it on,** and a document's path never leaves the device.
 
 <details>
 <summary><b>How ReZume reads what you're doing, and what it never sends</b></summary>
@@ -276,44 +736,23 @@ The full design is in [docs/rezume.md](docs/rezume.md).
 
 </details>
 
-<a name="new-look"></a>
-
-## 🎨 An all-new look, light and dark
-
-<p align="center">
-  <img src=".github/assets/v25-look.jpg" alt="The Mouse and Apps pages in light mode next to the phone's Overview and Phone apps in dark mode" width="100%">
-</p>
-
-Every app was redrawn from scratch: Windows, macOS, Linux and Android.
-
-- **Your devices in the sidebar,** with their latency and battery. One click to connect or switch.
-- **A real Overview.** For a computer: Ring, Lock, Sleep, Bluetooth, Do not disturb and volume. For
-  a phone: Wi-Fi, mobile data, hotspot, torch, auto-rotate, battery saver, ring mode, the clipboard,
-  its most-used apps and a drop zone for files.
-- **Every two-way feature as one card per direction,** named after your own devices.
-- **Light, dark or system,** with an accent color of your own (General › Appearance).
-- **The Android app in Google's Material style,** laid out for phones and tablets.
-
 <a name="speed"></a>
 
-## ⚡ A new engine: tdv2 and fx2
+# ⚡ Fast by design: tdv2 and fx2
 
 <p align="center">
-  <img src=".github/assets/v25-engine.jpg" alt="Before: one TCP stream where mouse moves wait behind a file. 2.5: a UDP input lane in Rust, the session for clicks and keys, and fx2 for files" width="100%">
+  <img src=".github/assets/v25-engine.jpg" alt="Before: one TCP stream where mouse moves wait behind a file. Now: a UDP input lane in Rust, the session for clicks and keys, and fx2 for files" width="100%">
 </p>
 
-The fastest way to make the pointer feel like it's plugged straight into the other computer is to
-make sure nothing ever stands in its way. In 2.5 nothing does.
-
-- **tdv2:** every mouse move travels on its own encrypted UDP lane. A lost packet never holds back
-  the next one, and a move never waits behind a file or a picture on the clipboard.
-- **Native Rust, zero garbage.** The lane lives in `tdfast`, a small Rust core inside the native
-  helper on every computer. Not a single object is allocated per move, so no garbage collector ever
-  pauses your pointer.
-- **fx2:** files move in a process of their own, in parallel ranges, hashed while they stream, so a
-  big copy never slows anything else. 10,000 small files went from a PC to a Mac in under 48 seconds.
+- **tdv2:** every mouse move travels on its own encrypted UDP lane, in native Rust inside the helper.
+  A lost packet never holds back the next one, a move never waits behind a file, and nothing is
+  allocated per move, so no garbage collector ever pauses your pointer.
+- **fx2:** files move in a process of their own, in parallel ranges, hashed while they stream. 10,000
+  small files went from a PC to a Mac in under 48 seconds.
+- **Quiet when idle:** with nothing in use, links stop pinging every second so laptops and phones
+  can sleep, and every engine starts only when it's needed.
 - **Always compatible.** Older TwinDesk, Bluetooth, or a firewall that blocks UDP? Everything falls
-  back to the previous path by itself.
+  back by itself. General › Advanced › *Engines in use* shows what this session runs on.
 
 <details>
 <summary><b>tdv2 in detail: the wire, the crypto and the guarantees</b></summary>
@@ -374,185 +813,7 @@ exactly as before. General › Advanced › Input protocol lets you pick **UDP (
 
 ---
 
-<a name="what-it-does"></a>
-
-# 💻 Computer to computer
-
-<p align="center">
-  <img src=".github/assets/v25-computers.jpg" alt="The Clipboard, File Sharing, Receive screen and Share screen pages on the Mac, connected to a Windows PC" width="100%">
-</p>
-
-## 🖱 One mouse and keyboard
-
-Push the pointer off the edge of your screen and **keep working on the other computer**, as if
-they were one. Your keyboard follows the pointer, and so do Caps Lock, media keys, volume and
-brightness. Trackpad gestures (Spaces swipes, pinch to zoom, show desktop) carry over. Each
-computer's own trackpad takes its pointer back, shake the mouse to find the pointer, and a
-double-tap of the hotkey brings everything home.
-
-**Cursor lock** keeps the pointer on the computer it's on: press **Scroll Lock** (F14 on a Mac), or
-use the Mouse page or the tray and menu bar.
-
-<a name="move-windows"></a>
-
-## 🪟 Move windows
-
-Hold **Right Ctrl** (**Right Command** on a Mac), grab a window and drag it past the edge of the
-screen. It moves to the other computer and keeps working there. Let go of it on the way back and it
-returns to where you grabbed it.
-
-## 🧩 The other computer's apps, in windows of their own
-
-Open a **Windows app on your Mac** (or a Mac app on your PC) and it gets **a window of its own**,
-with its own Dock icon or Start-menu pin. No full remote desktop, just the app you need, next to
-your own.
-
-<p align="center">
-  <img src=".github/assets/mac-apps.jpg" alt="Chess, Clock and Calculator from one Mac running in their own windows on the other Mac" width="100%">
-</p>
-
-## 🖥 Extended display and remote screen
-
-Extend your Mac onto a PC or another Mac with a **real virtual display**, or mirror it. Or bring
-the other computer's screen into a window and control it from there. Low-latency **H.264 or H.265**,
-hardware encoding with a fallback, *Fastest* and *Smooth* playback, and optional frame generation.
-
-<p align="center">
-  <img src=".github/assets/mac-screen-window.jpg" alt="The MacBook Pro's extended screen in a window on the Studio Mac, with the Receive screen settings" width="100%">
-</p>
-
-## 📁 Files, shared folders and terminal
-
-**Drag files across the screen edge** and drop them anywhere, or copy with <kbd>⌃⌥C</kbd> and
-paste with <kbd>⌃⌥V</kbd> (<kbd>Ctrl+Alt+C/V</kbd> on Windows and Linux), into a folder or straight
-into the app in front. Send from the macOS Share menu or Explorer's *Send to*, or **share a folder**
-that shows up as a network drive on the other side. Big and small, files move on
-[fx2](#speed). Need a shell? `ssh twindesk` opens one on the other computer, no passwords needed.
-
-## 📋 Shared clipboard
-
-Copy on one computer and paste on the other, instantly or when you switch over. **Pictures** go
-too, up to 10 MB: take a screenshot with <kbd>Win+Shift+S</kbd> on the PC and paste it on the Mac.
-Entries from password managers are skipped, and a Recent list keeps the last few things you copied.
-
-## 📷 Camera sharing
-
-Show the other computer's camera in a window, or send it to **a webcam every app can pick**:
-**TwinDesk Camera** in Zoom, Teams, Meet or the browser. A computer shares its camera only when you
-allow it, and a popup there says who is watching. The same works with a [phone's camera](#phone-camera).
-
-<a name="sound-and-microphone"></a>
-
-## 🔊 Sound, microphone, notifications and Wake-on-LAN
-
-Hear one computer's sound on the other, and **use one computer's microphone on the other**, each way
-on its own switch. See one computer's notifications on the other as native notifications. Wake a
-sleeping computer with Wake-on-LAN.
-
-<a name="mesh"></a>
-
-## 🕸 TwinDesk Mesh: every device at once
-
-<p align="center">
-  <img src=".github/assets/v22-mesh-desk.jpg" alt="The pointer travelling from a Windows PC across a MacBook and a Linux laptop onto a phone, with the desk map below" width="100%">
-</p>
-
-Your laptop, your desktop, the Linux box in the corner and your phone, **all connected at once**,
-each talking straight to the others with no hub in between.
-
-- **One mouse, every screen.** Line your devices up on the map once, and the pointer goes from the PC to the Mac to the Linux laptop to the phone.
-- **One clipboard.** Copy on any of them, paste on any other. The newest copy wins.
-- **One notification pool.** Your phone buzzes, and every computer shows it.
-- **Pair once, join all.** A new device paired with one computer meets the rest by itself.
-
-<details>
-<summary><b>Mesh is in beta: what's in and what's still coming</b></summary>
-
-Turn it on in the **Multi-device** page, and off again any time with everything as you left it.
-Connecting just two devices? You won't need it. Still coming to Mesh: the Camera, ReZume, pictures
-on the clipboard, and files dragged to more than one device at a time. The phone connects to one
-computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
-See [docs/mesh.md](docs/mesh.md).
-
-</details>
-
----
-
-# 📱 Phone and tablet
-
-<p align="center">
-  <img src=".github/assets/v25-android.jpg" alt="The Android app in light and dark: Overview, ReZume, Remote, Screen, Clipboard and More" width="100%">
-</p>
-
-Most phone links stop at notifications and a file drop. In TwinDesk your Android phone or tablet is
-a **full peer**: it pairs like a computer and gets the same features, plus its calls, texts, photos,
-files, apps and camera.
-
-<p align="center">
-  <img src=".github/assets/v25-phone.jpg" alt="The Mac's Calls, Phone apps, Mirroring and Remote pages for the connected phone" width="100%">
-</p>
-
-## 📞 Calls and messages
-
-Answer, decline and make your phone's calls from the computer. When it rings, a small window shows
-who's calling with **Answer** and **Decline**. With Bluetooth, the computer becomes **the phone's
-headset**, so you talk and listen right there. Read and reply to your texts, WhatsApp, Instagram and
-Telegram on **Messages**, pictures included.
-
-## 📲 Phone apps in windows
-
-Open **single Android apps in windows of their own**, side by side with your desktop apps. Pin them
-to the Dock or the Start menu and use them like any other app, with your mouse and real keyboard.
-Install .apk files on the phone straight from the computer.
-
-<p align="center">
-  <img src=".github/assets/phone-on-mac.jpg" alt="The tablet's home screen in a Mac window, and Calculator, Calendar and Clock open as separate Mac windows" width="100%">
-</p>
-
-## 🖼 Photos and phone files
-
-Browse the phone's **photos and videos**, open any of them big, save or remove one or many.
-**Phone Files** browses the phone's whole storage: save, upload, rename, delete, or just drop files
-on the page. **Shared folders work both ways.**
-
-<a name="phone-camera"></a>
-
-## 📷 Phone camera and microphone
-
-The phone's **back or front camera** in a window on the computer or as the **TwinDesk Camera**
-webcam in any video call, and the phone **as a microphone** for the computer.
-
-## 🎮 Remote and gamepad
-
-<p align="center">
-  <img src=".github/assets/v23-remote.jpg" alt="The phone's Remote: a touchpad with a row of keys, and the gamepad laid out like an Xbox controller" width="100%">
-</p>
-
-- **Touchpad and keyboard** for the couch or a presentation, with the keys a phone keyboard lacks.
-- **Gamepad,** laid out like an Xbox controller. Its buttons press the keys you choose, or turn on
-  **Real gamepad** and the computer sees an actual controller (Windows and Linux).
-- **A Bluetooth gamepad for any computer**, the Mac included, with no TwinDesk and no driver there.
-
-## 🖥 Tablet as a second screen
-
-Turn a tablet or phone into an **extra monitor**. **Extend** for more desktop space, or **Mirror**
-to show what's on your screen. Use touch as the mouse, or switch on touchpad mode.
-
-<p align="center">
-  <img src=".github/assets/second-screen.jpg" alt="Share screen settings on the Mac, and the tablet showing the extended Mac desktop" width="100%">
-</p>
-
-## 📤 Files, clipboard, notifications, media, mouse and keyboard
-
-- **Files.** *Send to computer* or *Copy to computer* from any Android app's share menu; from the
-  computer, the Share menu, *Send to*, a drag across the screen edge or <kbd>⌃⌥C</kbd> / <kbd>Ctrl+Alt+C</kbd>.
-- **Clipboard.** Text and pictures both ways, the phone's screenshots included.
-- **Notifications.** The phone's on the computer as native notifications, per app, and the other way around.
-- **Media.** What's playing on the phone, with play, pause, skip and seek on the computer.
-- **Mouse and keyboard.** Push the pointer past the screen edge and it **carries on onto the phone**;
-  type with your real keyboard in any Android app.
-
----
+<a name="connections"></a>
 
 # 📡 Connections
 
@@ -560,11 +821,11 @@ to show what's on your screen. Use touch as the mouse, or switch on touchpad mod
   <img src=".github/assets/v21-connections.jpg" alt="Same Wi-Fi, Bluetooth LE, Wi-Fi Direct, phone hotspot and USB cable" width="100%">
 </p>
 
-You never have to choose. TwinDesk uses the same network when there is one, moves a phone onto
-the **USB cable** when you plug it in, and falls back to **Bluetooth** when the Wi-Fi goes: on a
-train, or in a café whose guest Wi-Fi blocks devices. When a screen or a big file needs more than
-Bluetooth, TwinDesk **brings up a direct Wi-Fi link** between the two devices for as long as it's
-needed, then goes back.
+You never have to choose. TwinDesk uses the same network when there is one, moves a phone onto the
+**USB cable** when you plug it in, and falls back to **Bluetooth** when the Wi-Fi goes: on a train,
+or in a café whose guest Wi-Fi blocks devices. When a screen or a big file needs more than Bluetooth,
+TwinDesk **brings up a direct Wi-Fi link** for as long as it's needed. Away from home, devices on
+the same **Tailscale** network find each other too.
 
 <details>
 <summary><b>What works over which link</b></summary>
@@ -584,16 +845,152 @@ computers** (off until you want it), on the Connection page.
 
 ---
 
+<a name="apps"></a>
+
+# 🧭 Every TwinDesk app
+
+The same TwinDesk runs on Mac, Windows and Linux. The phone apps and TwinDesk Web connect to any of
+them. The iPhone and iPad app and TwinDesk Web are new in 3.0.
+
+✅ yes · ◐ partly · ✗ no · — doesn't apply
+
+<details open>
+<summary><b>What each app can do</b></summary>
+
+| | Mac | Windows | Linux | Android | iPhone and iPad | TwinDesk Web |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Get it** | .dmg | installer | .deb, AppImage, Arch, Nix | .apk | .ipa, sideloaded | nothing to install: a browser, or add it to the Home Screen |
+| **Connecting** | | | | | | |
+| Same Wi-Fi | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| USB cable | ✅ phones | ✅ Android | ✅ Android | ✅ | ◐ to a Mac | ✗ |
+| Bluetooth | ✅ | ✅ | ✅ | ✅ | ✅ | ✗ |
+| Wi-Fi Direct or hotspot | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+| Several devices at once ([Mesh](#mesh)) | ✅ | ✅ | ◐ same Wi-Fi only | ◐ one computer at a time | ◐ one computer at a time | ◐ one computer at a time |
+| Phone to phone | — | — | — | ✅ | ✅ | — |
+| **Mouse and keyboard** | | | | | | |
+| Shares its mouse and keyboard | ✅ | ✅ | ✅ | — | — | — |
+| The pointer carries onto it | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+| Drag windows to another computer | ✅ | ✅ | ◐ Xorg | — | — | — |
+| Remote: touchpad, keyboard and gamepad | — | — | — | ✅ | ✅ | ✅ |
+| Real gamepad on the computer | — | — | — | ✅ | ✅ | ✅ |
+| Bluetooth gamepad, no TwinDesk on the computer | — | — | — | ✅ | ✗ | ✗ |
+| **Screens and apps** | | | | | | |
+| Shows its screen on another device | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ not in Safari on iPhone |
+| Extends onto another device | ✅ | ✅ | ◐ GNOME, X11 | — | — | — |
+| Sees and controls a computer's screen | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Apple Pencil as a pen on the computer | — | — | — | — | ✅ iPad | ✅ iPad |
+| Its apps in windows on another computer | ✅ | ✅ | ◐ Xorg | ✅ | ✗ | — |
+| **Files and clipboard** | | | | | | |
+| Clipboard, text and pictures | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Send files both ways | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Drag files across the screen edge | ✅ | ✅ | ◐ out of Linux on Xorg | ✅ | ✗ | ✗ |
+| Shared folder | ✅ | ✅ | ✅ | ✅ both ways | ◐ the computer's, in Files | ◐ the computer's |
+| Its photos and files on the computer | — | — | — | ✅ | ◐ photos, the app's files | ✗ |
+| Drop: messages and files, like a chat | — | — | — | ✗ | ✗ | ✅ |
+| Terminal (`ssh twindesk`) | ✅ | ✅ | ✅ | — | — | — |
+| **Camera and sound** | | | | | | |
+| Its camera as a webcam on a computer | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Its microphone on a computer | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Plays a computer's sound | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Its sound on the computer | ✅ | ✅ | ✅ | ✅ | ◐ through AirPlay | ✗ |
+| **Phone and more** | | | | | | |
+| Calls answered on the computer | — | — | — | ✅ | ✗ | ✗ |
+| Texts, WhatsApp, Instagram, Telegram | — | — | — | ✅ | ✗ | ✗ |
+| Its notifications on the computer | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+| The computer's notifications here | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ when added to the Home Screen |
+| Media controls | ✅ | ✅ | ✅ | ✅ both ways | ◐ the computer's, on the Lock Screen | ✗ |
+| [ReZume](#rezume) | ✅ | ✅ | ✅ | ✅ | ✗ | ✗ |
+
+Most of the ✗ on iPhone and iPad come from iOS itself: an app there can't read other apps'
+notifications, handle calls or texts, or be driven by another device's mouse.
+
+</details>
+
+---
+
+<a name="compare"></a>
+
+# ⚖️ How it compares
+
+Most tools do one part of this: a shared mouse and keyboard, a phone link, a second screen or file
+sending. TwinDesk does all of them in one app, on every platform. These tables were made in
+November 2026. If something here is out of date or wrong, please
+[open an issue](https://github.com/InukaAsith/TwinDesk/issues) and it will be fixed.
+
+✅ yes · ◐ partly · ✗ no · — not confirmed
+
+<details open>
+<summary><b>Computer to computer</b></summary>
+
+| | **TwinDesk** | Synergy 3 | Deskflow | ShareMouse | Mouse without Borders | Universal Control |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Platforms | Mac, Windows, Linux | Mac, Windows, Linux | Mac, Windows, Linux | Mac, Windows | Windows | Mac, iPad |
+| Linux on Wayland | ✅ | ◐ | ✅ | ✗ | ✗ | ✗ |
+| Mouse and keyboard across the edge | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Trackpad gestures and media keys carry over | ✅ | ✗ | ✗ | ✗ | ✗ | ✅ |
+| Shared clipboard, text | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Shared clipboard, pictures | ✅ | ◐ | ◐ | — | ✅ | ✅ |
+| Drag files across the edge | ✅ | — | ✗ | ✅ | ✅ (small files) | ✅ |
+| Drag windows to the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| The other computer's apps in windows of their own | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Extended display and remote screen | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Camera as a webcam on the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Sound and microphone between computers | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Notifications from the other computer | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Shared folders and a terminal | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Wake-on-LAN | ✅ | ✗ | ✗ | — | ✗ | ✗ |
+| Three or more computers | ✅ ([Mesh](#mesh)) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
+| Works without a shared network | ✅ Bluetooth, Wi-Fi Direct | ✗ | ✗ | ✗ | ✗ | ✅ |
+| At the login and lock screen | ✗ | ✅ | ✅ | ✅ | ◐ | ✗ |
+| Works with Barrier and Input Leap | ✗ | ✗ | ✅ | ✗ | ✗ | ✗ |
+| Input travels over | UDP ([tdv2](#speed)), TCP fallback | TCP | TCP | TCP | TCP | Apple's own |
+| Account or licence | none | licence | none | licence | none | Apple ID |
+| Price | free | paid | free | free and paid | free | free |
+
+</details>
+
+<details open>
+<summary><b>Phone to computer</b></summary>
+
+| | **TwinDesk** | Phone Link | KDE Connect | Apple Continuity | scrcpy | LocalSend |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Computers | Mac, Windows, Linux | Windows | Linux, Windows, Mac | Mac | Mac, Windows, Linux | all |
+| Phones | Android, iPhone and iPad | Android, iPhone (fewer features) | Android, iPhone (fewer features) | iPhone, iPad | Android | all |
+| Notifications | ✅ both ways | ✅ | ✅ both ways | ✅ | ✗ | ✗ |
+| Answer calls, talk through the computer | ✅ | ✅ | ◐ alerts, mute | ✅ | ✗ | ✗ |
+| Texts | ✅ SMS, WhatsApp, Instagram, Telegram | ✅ SMS | ✅ SMS | ✅ iMessage, SMS | ✗ | ✗ |
+| Phone screen mirroring and control | ✅ | ✅ some phones | ✗ | ✅ not in the EU | ✅ | ✗ |
+| Phone apps in windows of their own | ✅ | ✅ some phones | ✗ | ✗ | ◐ | ✗ |
+| Photos | ✅ | ✅ | ◐ | ✅ iCloud | ✗ | ✗ |
+| The phone's whole storage | ✅ | ◐ | ✅ | ✗ | ✗ | ✗ |
+| Send files both ways | ✅ | ✅ | ✅ | ✅ AirDrop | ◐ | ✅ |
+| Clipboard | ✅ text and pictures | ✅ | ✅ text | ✅ | ✅ | ✗ |
+| Phone as a webcam | ✅ | ✅ | ✗ | ✅ | ✅ | ✗ |
+| Phone as a microphone | ✅ | ✗ | ✗ | ✅ | ◐ | ✗ |
+| Tablet as a second screen | ✅ | ✗ | ✗ | ✅ Sidecar, iPad | ✗ | ✗ |
+| Phone as touchpad, keyboard or remote | ✅ | ◐ | ✅ | ✗ | ✗ | ✗ |
+| Phone as a gamepad, or a real controller | ✅ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| The computer's mouse carries onto the phone | ✅ | ✗ | ✗ | ✅ iPad | ◐ in its window | ✗ |
+| Media controls | ✅ | ✅ | ✅ | ◐ | ✗ | ✗ |
+| USB, Bluetooth, Wi-Fi Direct | ✅ all three | ◐ | ◐ | ✅ | USB, Wi-Fi | ✗ same network |
+| Setup | an app; wireless debugging for screen, apps and camera | built into Windows | an app | built in | USB debugging | an app |
+| Account | none | Microsoft account | none | Apple ID | none | none |
+
+</details>
+
+---
+
 <a name="get-started"></a>
 
 # 🚀 Get started
 
-1. **Download** TwinDesk for each computer and your phone ([above](#download)).
+1. **Download** TwinDesk for each computer and your phone ([above](#download)). On an iPhone you can
+   skip this: use [TwinDesk Web](#twindesk-web).
 2. **Open it on both.** They find each other on the same network, over Bluetooth, or over a USB cable for a phone.
 3. **Pair once** by comparing a code or scanning a QR code (on a USB cable, just click Allow). From then on they connect by themselves.
 4. **Turn on what you want.** Every feature starts off and isn't even loaded until you switch it on.
 
-For the phone's screen, apps and camera in windows, TwinDesk walks you through turning on Android's
+For an Android phone's screen, apps and camera in windows, TwinDesk walks you through turning on
 wireless debugging once ([details](#wireless-debugging)). Files, clipboard, calls and photos work
 without it.
 
@@ -602,7 +999,10 @@ without it.
 | Mac ↔ Windows PC, Mac ↔ Mac, PC ↔ PC | Every computer feature |
 | Linux ↔ Mac, PC or Linux | Every computer feature ([a few differences](#linux)) |
 | Android ↔ Mac, Windows or Linux | Every phone and tablet feature (Real gamepad on Windows and Linux) |
-| All of them at once | [TwinDesk Mesh](#mesh) (beta) |
+| iPhone or iPad ↔ Mac, Windows or Linux | The [app's features](#iphone-app), or [TwinDesk Web](#twindesk-web) with no app |
+| Any browser ↔ Mac, Windows or Linux | [TwinDesk Web](#twindesk-web): screen, files, clipboard, notifications, remote |
+| Phone ↔ phone | Clipboard, notifications, files, photos, messages and screens ([more](#phone-to-phone)) |
+| All of them at once | [TwinDesk Mesh](#mesh) |
 
 <a name="privacy"></a>
 
@@ -762,6 +1162,8 @@ Inside each helper, **tdfast** (Rust) runs the tdv2 input lane.
 | `linux-helper/` | Linux helper (C): XInput2 / XTest on X11, evdev / uinput on Wayland, XRandR, window list, XDND edge strip |
 | `native/tdfast/` | The tdv2 input lane (Rust, C ABI), linked into every helper |
 | `android/` | Android app (Kotlin, Jetpack Compose); the computers drive the phone through adb and [scrcpy](https://github.com/Genymobile/scrcpy)'s server |
+| `ios/` | iPhone and iPad app (SwiftUI, iOS 16+): the app, the Share Screen broadcast extension and the share extension, built in CI into an unsigned IPA |
+| `web/` | TwinDesk Web, the browser client each computer serves at `twindesk.local` (a PWA with Web Push) |
 | `shared/` | Used by every app: the wire protocol, the input lane, fx2, ReZume, the Bluetooth pipe and Wi-Fi Direct links, the phone hub, shared folders, frame generation and icons |
 
 The link between two devices is one TLS session wherever it runs: on the local network, through
@@ -776,6 +1178,51 @@ cameras and sound. Each is negotiated in hello and welcome and falls back by its
 
 Ports: TCP **47800** (the session and files), UDP **47801** (discovery), and the input lane and fx2
 on ports the two sides agree on per session.
+
+</details>
+
+<a name="electron"></a>
+<details>
+<summary><h2>🪶 Electron, and why TwinDesk isn't a memory hog</h2> <sub>what runs in Chromium, what doesn't, and what it costs</sub></summary>
+
+"Electron app" often means "a browser tab that eats a gigabyte". TwinDesk uses Electron for what
+Chromium is genuinely best at, and keeps everything else out of it.
+
+**What Electron does here**
+
+- **The windows** you click around in: the pages, the sidebar, settings. One codebase draws the same
+  app on Mac, Windows and Linux, which is why a Mac and a PC pair exactly like two Macs.
+- **Media.** Chromium's WebRTC stack gives TwinDesk hardware H.264/H.265 encoding and decoding,
+  low-latency screen streaming, cameras and sound on every OS, battle-tested by billions of video
+  calls. Writing that natively three times would be slower to ship and less reliable.
+- **The session logic** (pairing, the link, state machines) in Node, shared with every platform.
+
+**What Electron doesn't do**
+
+- **Input never touches JavaScript.** Mouse moves go from the OS's input hook to the network and back
+  into the other OS through a small native helper (Swift on Mac, C# on Windows, C on Linux) and
+  `tdfast`, a Rust core. Nothing is allocated per move, so no garbage collector can stall your pointer.
+- **Files** move in a separate utility process (fx2), started only when a transfer needs it.
+
+**Why it stays light**
+
+- **Nothing loads until you turn it on.** Every feature is off on a new install, and a feature that's
+  off isn't even required into memory.
+- **Windows that aren't needed go away.** Hidden helper windows (popups, viewers, the HUD) are closed
+  after 30 seconds of not being needed, instead of keeping a renderer alive all day.
+- **Event-driven, not polling.** Idle links don't ping every second, and timers run only while
+  something needs them. In the tray on a Mac, TwinDesk measured **about 0.3% CPU** for the app and
+  **0%** for its helper.
+- **It starts fast:** compiled code is cached on disk, and each window loads English plus its own
+  language only.
+
+**What it costs.** On a MacBook Air, with the window open and an Android phone connected, all of
+TwinDesk's processes together used **147 MB** (resident memory, measured while writing this). Most of
+that is Chromium itself, the same engine your browser and chat apps already keep in memory, and it
+doesn't grow with how long TwinDesk runs.
+
+Want to see what your session uses? **General › Advanced › Engines in use** lists the input lane,
+the file engine and the connection in use right now, and why a faster one isn't, if it isn't.
 
 </details>
 
@@ -798,8 +1245,8 @@ npm start                       # run from source
 npm run dist && npm run dmg     # build TwinDesk.app and TwinDesk-<version>-<arch>.dmg in mac/dist/
 ```
 
-The disk image is named after the app inside it: `TwinDesk-2.5.0-arm64.dmg` for Apple Silicon,
-`TwinDesk-2.5.0-x64.dmg` for Intel. Keep `arm64` and `x64` in the names on a release: the in-app
+The disk image is named after the app inside it: `TwinDesk-3.0.0-arm64.dmg` for Apple Silicon,
+`TwinDesk-3.0.0-x64.dmg` for Intel. Keep `arm64` and `x64` in the names on a release: the in-app
 updater picks the one for each Mac by them. `npm run dist:x64 && npm run dmg` (or `npm run
 dmg:intel`) builds the Intel app from an Apple Silicon Mac, cross-compiling the helpers and tdfast.
 

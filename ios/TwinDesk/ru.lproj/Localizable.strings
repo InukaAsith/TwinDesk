@@ -1,0 +1,12 @@
+/* Shortcuts: the actions’ titles and descriptions (iOS shows them in the iPhone’s language). */
+"Send Clipboard to Computer" = "Отправить буфер обмена на компьютер";
+"Sends what you copied on this iPhone to the connected computer." = "Отправляет скопированное на этом iPhone на подключённый компьютер.";
+"Save Files Copied on Computer" = "Сохранить файлы, скопированные на компьютере";
+"Brings the files copied on the computer (⌃⌥C there) to Files › TwinDesk." = "Переносит файлы, скопированные на компьютере (там ⌃⌥C), в «Файлы › TwinDesk».";
+"Connect to Computer" = "Подключиться к компьютеру";
+"Send Files to Computer" = "Отправить файлы на компьютер";
+"Sends files or photos to the connected computer (its Downloads)." = "Отправляет файлы или фото на подключённый компьютер (в его «Загрузки»).";
+Files = "Файлы";
+"Show Computer’s Screen" = "Показать экран компьютера";
+"Play or Pause on Computer" = "Пуск или пауза на компьютере";
+"Lock Computer" = "Заблокировать компьютер";

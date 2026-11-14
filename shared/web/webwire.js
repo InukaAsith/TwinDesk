@@ -11,6 +11,7 @@
 //   o.input(bus, target) (the viewer's in.* onto this computer, aimed at target() → {bounds}),
 //   o.touch (its helper injects in.tc as real touch: Windows, Linux),
 //   o.remote(bus, cfg) → shared/phone-remote.js (the Remote page's touchpad, keyboard and gamepad),
+//   o.deck(bus) → shared/deck.js (the Deck), left out while the Deck module is off,
 //   o.notifs (want(on), 'notif'), o.devLocal (shared/devlocal.js), o.smbInfo() → {on, host, share, user,
 //   password, path} | null, o.key(code) (a media key), o.vcam() (the virtual camera loaded: the web
 //   camera's picture shows), o.fileClip {offerLocal(paths, from)} (the file-paste shortcut), o.t (i18n),
@@ -115,6 +116,7 @@ function startWeb(o) {
     };
     remote = o.remote(hub.remoteBus, () => rcfg);
   }
+  if (o.deck) o.deck(hub.deckBus); // the Deck (shared/deck.js), only while its module is on
 
   let pushed = 0;
   hub.on('change', () => {

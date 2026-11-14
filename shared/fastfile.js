@@ -775,7 +775,7 @@ function receiverHook(o) {
       if (f.out && !(await streamReady(f.out))) return null; // its own open goes first: the engine's doesn't truncate
       if (find(id) !== f || f.got || f.seq) return null;
       f.fx2 = true;
-      return f.tmp;
+      return o.path ? o.path(f) : f.tmp; // path: somewhere else while it lands (windows/dragrecv.js)
     },
     untarget(id) {
       const f = find(id);

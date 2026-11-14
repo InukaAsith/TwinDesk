@@ -49,7 +49,7 @@ jobs:
       - name: Build the standard and full APKs
         working-directory: android
         run: |
-          ./gradlew --no-daemon assembleRelease
+          ./gradlew --no-daemon assembleStandardRelease assembleFullRelease # fdroid: F-Droid builds it
           v=$(grep -m1 versionName app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
           mkdir -p dist
           cp app/build/outputs/apk/standard/release/app-standard-release.apk "dist/TwinDesk-$v.apk"

@@ -15,6 +15,7 @@ const { IconsIn } = require('../../shared/notificon.js');
 
 const electronNotification = electron.Notification; // undefined under plain node (tests inject one)
 const { NotifGuard, isOwn } = require('../../shared/notif-guard.js');
+const { withMeshPhoneActions } = require('../../shared/notifacts.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -67,6 +68,7 @@ class Notifs extends EventEmitter {
 
     const bus = this.bus;
     bus.on(T.NOTIF, (m, from) => this._show(m, from));
+    bus.on('notif.gone', (m, from) => { const h = (this.history || []).find((x) => x.id === m.id); if (h && h.from === from) this.gone(m.id); }); // gone from the phone (shared/notifacts.js)
     bus.on(T.NOTIF_POLICY, (m, from) => {
       const e = this.mesh.get(from);
       if (e) e.notifPool = m.accept === true;
@@ -249,7 +251,9 @@ class Notifs extends EventEmitter {
     if (this.guard.repeat('in', m.app, m.title, m.body)) return; // a repeat of what was just shown
     const origin = this._nameOf(r.msg.o, m.on, from);
     const appName = str(m.appName, 100);
-    const title = str(m.title, 200) || appName || origin;
+    // The recent ones, for Overview and Messages' chat apps; buttons and Reply go back to the device.
+    const item = this.remember(m, { from, origin: r.msg.o || from, on: origin, direct: !r.msg.o || r.msg.o === from });
+    const title = item.title;
     const body = str(m.body);
     this.echoes.push({ title, body: body.slice(0, 80), until: Date.now() + 30000 });
     // Desktop notifications have no subtitle: the first line is "<appName> · <device>".
@@ -258,6 +262,7 @@ class Notifs extends EventEmitter {
       icon: this.iconsIn ? this.iconsIn.for(m) : undefined,
       body: [[appName, origin].filter(Boolean).join(' · '), str(m.subtitle, 200), body].filter(Boolean).join('\n'),
     });
+    n.tdId = item.id;
     this.live.add(n);
     const drop = () => this.live.delete(n);
     n.on('close', drop);
@@ -281,8 +286,13 @@ class Notifs extends EventEmitter {
       sent: this.sent,
       shown: this.shown,
       apps: [...this.apps.values()].sort((a, b) => b.at - a.at).slice(0, 40),
+      ...this.historyView(),
     };
   }
+
+  changed() { this.onChange(); }
 }
+
+withMeshPhoneActions(Notifs);
 
 module.exports = Notifs;

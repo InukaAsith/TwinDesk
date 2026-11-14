@@ -56,7 +56,7 @@ final class Remote: Feature {
     func opts() -> JSON {
         var pads: JSON = [:]
         for (id, _) in Self.controls { pads[id] = padKey(id) }
-        return msg("opts", ["mode": mode, "name": core.host?.name ?? "the computer", "me": core.store.deviceName, "connected": core.connected,
+        return msg("opts", ["mode": mode, "name": core.host?.name ?? tr("the computer"), "me": core.store.deviceName, "connected": core.connected,
                             "os": core.host?.os ?? "", "ble": false, "speed": speed, "tap": tapClick, "smooth": smooth, "pad": pads,
                             "layout": layout(), "bt": false, "btName": "",
                             "controls": Self.controls.map { [$0.0, $0.1] }, "keys": Self.keys.map { [$0.0, $0.1] }])
@@ -213,13 +213,13 @@ final class Remote: Feature {
 
     // ---- the gamepad page's controls and keys (Remote.kt) ----
 
-    static let controls: [(String, String)] = [
-        ("lsUp", "Left stick up"), ("lsLeft", "Left stick left"), ("lsDown", "Left stick down"), ("lsRight", "Left stick right"),
+    static var controls: [(String, String)] { [
+        ("lsUp", tr("Left stick up")), ("lsLeft", tr("Left stick left")), ("lsDown", tr("Left stick down")), ("lsRight", tr("Left stick right")),
         ("l3", "L3"), ("r3", "R3"), ("a", "A"), ("b", "B"), ("x", "X"), ("y", "Y"),
         ("lb", "LB"), ("rb", "RB"), ("lt", "LT"), ("rt", "RT"),
-        ("up", "D-pad up"), ("down", "D-pad down"), ("left", "D-pad left"), ("right", "D-pad right"),
-        ("back", "Back"), ("start", "Start"),
-    ]
+        ("up", tr("D-pad up")), ("down", tr("D-pad down")), ("left", tr("D-pad left")), ("right", tr("D-pad right")),
+        ("back", tr("gamepad|Back")), ("start", tr("gamepad|Start")),
+    ] }
 
     static let defaults: [String: String] = [
         "lsUp": "KeyW", "lsLeft": "KeyA", "lsDown": "KeyS", "lsRight": "KeyD", "l3": "ShiftLeft", "r3": "KeyV",
@@ -227,17 +227,17 @@ final class Remote: Feature {
         "up": "ArrowUp", "down": "ArrowDown", "left": "ArrowLeft", "right": "ArrowRight", "back": "Tab", "start": "Escape",
     ]
 
-    static let keys: [(String, String)] = {
-        var k: [(String, String)] = [("", "Nothing"), ("Mouse0", "Left click"), ("Mouse1", "Right click"), ("Mouse2", "Middle click")]
+    static var keys: [(String, String)] {
+        var k: [(String, String)] = [("", tr("Nothing")), ("Mouse0", tr("Left click")), ("Mouse1", tr("Right click")), ("Mouse2", tr("Middle click"))]
         for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" { k.append(("Key\(c)", String(c))) }
         for d in 0...9 { k.append(("Digit\(d)", "\(d)")) }
-        k += [("Space", "Space"), ("Enter", "Enter"), ("Escape", "Esc"), ("Tab", "Tab"), ("Backspace", "Backspace"),
+        k += [("Space", tr("Space")), ("Enter", "Enter"), ("Escape", "Esc"), ("Tab", "Tab"), ("Backspace", "Backspace"),
               ("ShiftLeft", "Shift"), ("ControlLeft", "Ctrl"), ("AltLeft", "Alt"),
-              ("ArrowUp", "Up arrow"), ("ArrowDown", "Down arrow"), ("ArrowLeft", "Left arrow"), ("ArrowRight", "Right arrow"),
+              ("ArrowUp", tr("Up arrow")), ("ArrowDown", tr("Down arrow")), ("ArrowLeft", tr("Left arrow")), ("ArrowRight", tr("Right arrow")),
               ("Minus", "-"), ("Equal", "="), ("BracketLeft", "["), ("BracketRight", "]"), ("Semicolon", ";"), ("Quote", "'"),
               ("Comma", ","), ("Period", "."), ("Slash", "/"), ("Backquote", "`")]
         for f in 1...12 { k.append(("F\(f)", "F\(f)")) }
         k += [("Insert", "Insert"), ("Delete", "Delete"), ("Home", "Home"), ("End", "End"), ("PageUp", "Page Up"), ("PageDown", "Page Down")]
         return k
-    }()
+    }
 }

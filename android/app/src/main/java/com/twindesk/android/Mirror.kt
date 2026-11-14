@@ -101,7 +101,7 @@ object Capture {
         main.removeCallbacksAndMessages(null)
         main.postDelayed({ // the screen and the sound are often asked for together: one Start
             val s = SoundService.running
-            val name = core.host?.name ?: "your computer"
+            val name = core.host?.name ?: tr("your computer")
             val screen = core.mirror.wanted
             val sound = core.sound.wanted
             when {

@@ -15,7 +15,7 @@ UI.tab({
   color: 'linear-gradient(#5ac8fa, #0a84ff)',
   desc: 'See {me} in a window on the other computer.',
   master: { get: (s) => s.pcScreen.mode !== 'off', set: (v) => UI.api.setPcScreenMode(v ? 'last' : 'off') },
-  badge: (s) => (s.pcScreen.status === 'live' ? 'on' : ''),
+  badge: (s) => (s.pcScreen.mode !== 'off' ? 'on' : ''), // sharing on, as the Mac's (watched or not)
   build(body) {
     const { el, api } = UI;
     const t = (...args) => I18n.t(...args);
@@ -74,6 +74,15 @@ UI.tab({
     const removeBtn = UI.button(t('Remove'), () => api.removeVdd(), 'small');
     const driver = UI.row(t('TwinDesk virtual display'), '', [installBtn, removeBtn]);
     const driverCard = UI.card('', [driver], { cls: 'keep-on' });
+    // KDE Plasma on Wayland (#69): KWin makes virtual screens only for its own tools, so Extend can't
+    // add one here. KDE's krfb-virtualmonitor can, and Mirror then shares it: the workaround, spelled out.
+    const KDE_CMD = 'krfb-virtualmonitor --name TwinDesk --resolution 1920x1080 --password CHANGE-ME --port 5901';
+    const kdeCard = UI.card(t('Extend on KDE Plasma'), [
+      UI.row(t('1. Install krfb'), t('From Discover, or in a terminal: {command}', { command: 'sudo apt install krfb  ·  sudo dnf install krfb  ·  sudo pacman -S krfb' }), []),
+      UI.row(t('2. Make the extra screen'), t('Run {command} and leave it running: the screen lasts as long as it does. It also starts a VNC server on that port, so pick your own password and keep the port closed to other networks. Use the other computer’s resolution.', { command: KDE_CMD }), []),
+      UI.row(t('3. Place it'), t('System Settings › Display & Monitor: put the new screen on the side where the other computer is.'), []),
+      UI.row(t('4. Share it'), t('Choose Mirror above. When your desktop asks which screen to share, pick the new one.'), []),
+    ]);
 
     body.append(
       UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow]),
@@ -82,6 +91,7 @@ UI.tab({
       UI.card(t('Remote'), [remoteRow], { cls: 'keep-on' }),
       details,
       driverCard,
+      kdeCard,
       note,
     );
 
@@ -126,6 +136,7 @@ UI.tab({
       remoteRow.label.textContent = t('Let {device} start and switch this screen', { device: UI.peer(s).the });
       remoteRow.setHint(p.remote ? t('Opening the screen window there starts sharing; Extend and Mirror can be switched from there.') : '');
       const wayland = s.session && s.session.type === 'wayland';
+      kdeCard.hidden = !(wayland && /kde/i.test(s.session.desktop || ''));
       monitorRow.hidden = wayland || p.mode === 'extend';
       driverCard.hidden = !(v.setup || v.removable || v.busy);
       installBtn.hidden = !v.setup;

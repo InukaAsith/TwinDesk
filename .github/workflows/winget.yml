@@ -1,0 +1,36 @@
+# winget: when a release is published, a pull request to microsoft/winget-pkgs moves
+# InukaAsith.TwinDesk to it (both Windows installers, x64 and arm64). Runs on Ubuntu, builds nothing.
+# Needs the WINGET_TOKEN secret: a classic token with the public_repo scope, from the account that
+# owns the InukaAsith/winget-pkgs fork. Without it the job says so and stops.
+name: winget
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to submit (e.g. v3.0.1)
+        required: true
+
+jobs:
+  winget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Token
+        id: token
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then echo "::warning::No WINGET_TOKEN secret: nothing sent to winget"; echo "ok=false" >> "$GITHUB_OUTPUT"
+          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Pull request to winget-pkgs
+        if: steps.token.outputs.ok == 'true'
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: InukaAsith.TwinDesk
+          release-tag: ${{ inputs.tag || github.event.release.tag_name }}
+          installers-regex: '^TwinDesk-Setup-.*\.exe$'
+          max-versions-to-keep: 3
+          token: ${{ secrets.WINGET_TOKEN }}

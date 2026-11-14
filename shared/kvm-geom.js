@@ -150,6 +150,21 @@
     return m && t ? Math.round((m.len - t.len) / 2) : 0;
   }
 
+  // Pick the arrangement closest to the dragged group's bounding-box origin. Using the centres of
+  // the two bounding boxes misidentifies the side when their displays form an irregular shape.
+  function closestSide(mine, theirs, x, y, previous) {
+    const mb = bounds(mine), tb = bounds(theirs);
+    if (!mb || !tb || !Number.isFinite(x) || !Number.isFinite(y)) return previous || 'right';
+    let best = null;
+    for (const side of SIDES) {
+      const a = vertical(side) ? y - mb.y : x - mb.x;
+      const p = placement(mine, theirs, { side, along: a });
+      const distance = Math.hypot(p.x + tb.x - x, p.y + tb.y - y);
+      if (!best || distance < best.distance - 1e-6 || (Math.abs(distance - best.distance) <= 1e-6 && side === previous)) best = { side, distance };
+    }
+    return best.side;
+  }
+
   // `along` moved to the nearest place where the two touch by at least MIN_TOUCH (or all of the
   // shorter monitor), and pulled onto aligned monitor edges or centres within SNAP points.
   function snap(mine, theirs, side, value) {
@@ -207,7 +222,7 @@
     return { side: OPPOSITE[arrange.side], along: arrange.along === null ? null : -arrange.along };
   }
 
-  const api = { SIDES, OPPOSITE, MIN_TOUCH, bounds, span, placement, contact, exitPoint, entryPoint, zones, zonesText, mapOffset, centred, snap, normalize, mirror, numbered };
+  const api = { SIDES, OPPOSITE, MIN_TOUCH, bounds, span, placement, contact, exitPoint, entryPoint, zones, zonesText, mapOffset, centred, closestSide, snap, normalize, mirror, numbered };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.KvmGeom = api;
 })(typeof self !== 'undefined' ? self : this);

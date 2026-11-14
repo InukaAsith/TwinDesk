@@ -8,7 +8,9 @@
 // Commands: bleStart {info}, bleStop, bleHold, bleSend {dev, data (base64)}, bleCtrl {dev, msg (JSON text)}.
 // bleHold (the session on Wi-Fi, an iPhone linked): no advertising, but the service and the links
 // that are up stay, on a slow connection interval; advertising comes back while none is left, so the
-// iPhone can find this Mac again. bleStart after it picks up where it was (no links dropped).
+// iPhone can find this Mac again. bleHold {advertise: true}: held, still advertising (the session's
+// iPhone isn't linked yet; any other link no longer keeps it from finding this Mac).
+// bleStart after it picks up where it was (no links dropped).
 // Events: ble.state {state: on|off|unauthorized|unsupported}, ble.guest {dev, hello}, ble.open {dev},
 //         ble.data {dev, data}, ble.close {dev} (its pipe closed), ble.gone {dev} (it went away),
 //         ble.sent {dev, bytes}.
@@ -37,6 +39,7 @@ final class BlePeripheral: NSObject, CBPeripheralManagerDelegate {
   private var lastState = ""
   private var added = false // the service is up (didAdd)
   private var holding = false // bleHold: quiet, links kept
+  private var holdAds = false // bleHold {advertise}: held but advertising
 
   func start(info: Data) {
     queue.async {
@@ -45,6 +48,7 @@ final class BlePeripheral: NSObject, CBPeripheralManagerDelegate {
       self.wanted = true
       let wasHolding = self.holding
       self.holding = false
+      self.holdAds = false
       if self.pm == nil {
         self.pm = CBPeripheralManager(delegate: self, queue: self.queue)
       } else if same && wasHolding {
@@ -57,12 +61,13 @@ final class BlePeripheral: NSObject, CBPeripheralManagerDelegate {
   }
 
   // Quiet but linked (see the top): only advertising stops.
-  func hold() {
+  func hold(advertise ads: Bool) {
     queue.async {
       guard self.wanted, self.added else { return }
       self.holding = true
+      self.holdAds = ads
       self.latency(.high)
-      if self.centrals.isEmpty { self.advertise() } else { self.pm?.stopAdvertising() }
+      if self.centrals.isEmpty || ads { self.advertise() } else { self.pm?.stopAdvertising() }
     }
   }
 
@@ -141,7 +146,7 @@ final class BlePeripheral: NSObject, CBPeripheralManagerDelegate {
   func peripheralManager(_ p: CBPeripheralManager, didAdd service: CBService, error: Error?) {
     if let error = error { return log("ble: add service: \(error.localizedDescription)") }
     added = true
-    if !holding || centrals.isEmpty { advertise() }
+    if !holding || holdAds || centrals.isEmpty { advertise() }
   }
 
   func peripheralManagerDidStartAdvertising(_ p: CBPeripheralManager, error: Error?) {
@@ -152,7 +157,7 @@ final class BlePeripheral: NSObject, CBPeripheralManagerDelegate {
     centrals[central.identifier] = central
     if holding {
       p.setDesiredConnectionLatency(.high, for: central)
-      p.stopAdvertising() // found again: quiet once more
+      if !holdAds { p.stopAdvertising() } // found again: quiet once more
     }
   }
 

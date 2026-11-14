@@ -67,4 +67,4 @@ async function load() {
   return { pfx, passphrase, fp };
 }
 
-module.exports = { load };
+module.exports = { load, readPass, writePass };

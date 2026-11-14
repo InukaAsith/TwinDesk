@@ -1,0 +1,8 @@
+/* What iOS asks before TwinDesk uses something. */
+NSLocalNetworkUsageDescription = "TwinDesk bu ağdaki bilgisayarlarınızı bulur ve onlara bağlanır.";
+NSLocationWhenInUseUsageDescription = "TwinDesk yaklaşık konumunuzu (GPS yok) yalnızca ekranda değilken bilgisayarınıza bağlı kalmak için kullanır. Nerede olduğunuzu asla saklamaz veya göndermez.";
+NSPhotoLibraryUsageDescription = "Fotoğraf ve videoları bilgisayarınıza gönderin, onları göstermesine ve kaydetmesine izin verin (açık tuttuğunuz sürece bilgisayardaki Fotoğraflar).";
+NSCameraUsageDescription = "Bu kamerayı izin verdiğiniz sürece bilgisayarınızda kullanın (Kamera sekmesi ve sanal kamera).";
+NSMicrophoneUsageDescription = "Bu mikrofonun sesini izin verdiğiniz sürece bilgisayarınıza gönderin.";
+NSBluetoothAlwaysUsageDescription = "TwinDesk bilgisayarınızla Bluetooth bağlantısını sürdürür; böylece bildirimleri arka planda size ulaşır ve oturum Wi-Fi’dan uzakta da devam eder.";
+NSLocationAlwaysAndWhenInUseUsageDescription = "TwinDesk yaklaşık konumunuzu (GPS yok) yalnızca ekranda değilken bilgisayarınıza bağlı kalmak için kullanır. Nerede olduğunuzu asla saklamaz veya göndermez.";

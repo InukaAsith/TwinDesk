@@ -161,7 +161,7 @@ namespace MacShare
             finally { CloseHandle(p); }
         }
 
-        static Dictionary<uint, uint> Parents()
+        internal static Dictionary<uint, uint> Parents()
         {
             Dictionary<uint, uint> d = new Dictionary<uint, uint>();
             IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -184,14 +184,15 @@ namespace MacShare
 
         // [{wid, pid, ppid, exe, aumid, title, x, y, w, h, scale}] — visible, not minimized, not cloaked,
         // not tool windows, menus or the shell. Process details are cached per pid for this call.
-        public static List<object> List()
+        // iconic: the minimized ones instead (the Deck's window space lists them apart), no frame needed.
+        public static List<object> List(bool iconic = false)
         {
             List<object> list = new List<object>();
             Dictionary<uint, uint> parents = Parents();
             Dictionary<uint, string[]> procs = new Dictionary<uint, string[]>();
             EnumWindows(delegate (IntPtr h, IntPtr l)
             {
-                if (!IsWindowVisible(h) || IsIconic(h)) return true;
+                if (!IsWindowVisible(h) || IsIconic(h) != iconic) return true;
                 int style = GetWindowLong(h, GWL_STYLE), ex = GetWindowLong(h, GWL_EXSTYLE);
                 if ((style & WS_CHILD) != 0) return true;
                 int cloaked;
@@ -204,7 +205,9 @@ namespace MacShare
                 bool popup = MenuClass.Contains(cls) || (!captioned && (owner != IntPtr.Zero || (ex & WS_EX_TOOLWINDOW) != 0));
                 if ((ex & WS_EX_TOOLWINDOW) != 0 && !popup && !captioned) return true;
                 RECT r;
-                if (!Frame(h, out r) || r.right - r.left < (popup ? 4 : 20) || r.bottom - r.top < (popup ? 4 : 20)) return true;
+                if (iconic && (popup || !captioned)) return true;
+                if (iconic) r = new RECT();
+                else if (!Frame(h, out r) || r.right - r.left < (popup ? 4 : 20) || r.bottom - r.top < (popup ? 4 : 20)) return true;
                 uint pid;
                 GetWindowThreadProcessId(h, out pid);
                 string[] pi;

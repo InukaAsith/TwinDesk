@@ -9,6 +9,7 @@
 const WebSocket = require('ws');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const Tailnet = require('../shared/tailnet.js');
 const Quiet = require('../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { PairLimit, versionMessage } = require('../shared/pairlimit.js');
 const store = require('./store');
@@ -140,14 +141,15 @@ class Link extends EventEmitter {
     store.write('hosts.json', this.hosts);
   }
 
-  _connect(mode, host) {
+  // at: another address for this attempt (its Tailscale one, shared/tailnet.js); the host's stays.
+  _connect(mode, host, at = '') {
     this._closeSocket();
     clearTimeout(this.timers.reconnect);
     this.mode = mode;
     this.host = host || null;
     this.nw = this.nm = null;
-    const target = mode === 'pair' ? this.pairState : host;
-    const ws = new WebSocket(`wss://${target.address}:${target.port}`, {
+    const target = mode === 'pair' ? this.pairState : { ...host, address: at || host.address };
+    const ws = new WebSocket(`wss://${target.address.includes(':') ? `[${target.address}]` : target.address}:${target.port}`, {
       rejectUnauthorized: false, // self-signed; the fingerprint is pinned instead
       maxPayload: P.MAX_PAYLOAD,
       handshakeTimeout: 5000,
@@ -268,6 +270,8 @@ class Link extends EventEmitter {
     this.attempt = 0;
     const h = this.host;
     if (typeof msg.macName === 'string' && msg.macName) h.name = msg.macName.slice(0, 64);
+    const tail = Tailnet.clean(msg.tail); // its Tailscale addresses, for away from its network
+    if (tail.length || msg.tail) h.tail = tail;
     h.lastSeen = Date.now();
     this._save();
     this.ctx = {
@@ -380,7 +384,8 @@ class Link extends EventEmitter {
         this._save();
       }
       this._setStatus('connecting', this.lastError || '');
-      this._connect('session', seen);
+      // Not seen here: every other attempt through Tailscale, when both are on it (#161).
+      this._connect('session', seen, Tailnet.pick({ address: seen.address, seen: at, tail: seen.tail, attempt: this.attempt }));
     }, d);
   }
 
