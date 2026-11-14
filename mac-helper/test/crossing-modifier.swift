@@ -22,6 +22,12 @@ struct CrossingModifierTest {
                  "the normal TwinDesk hotkey can also be a held crossing modifier")
     precondition(!allowsCrossing(required: "Command", flags: crossingFlags(crossingBits([]))),
                  "releasing the key closes the return edge again")
+    var pressure = 75.0
+    precondition(!crossingModifierGate(required: "Command", flags: [], reset: { pressure = 0 }))
+    precondition(pressure == 0, "releasing the modifier clears earlier edge pressure")
+    pressure = 20
+    precondition(crossingModifierGate(required: "Command", flags: [.maskCommand], reset: { pressure = 0 }))
+    precondition(pressure == 20, "holding the modifier preserves the current push")
     print("crossing modifier: ok")
   }
 }

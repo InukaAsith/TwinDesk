@@ -27,3 +27,9 @@ func allowsCrossing(required: String, flags: CGEventFlags) -> Bool {
   default: return false
   }
 }
+
+// An interrupted push must start over even if the key is pressed again quickly.
+func crossingModifierGate(required: String, flags: CGEventFlags, reset: () -> Void) -> Bool {
+  guard allowsCrossing(required: required, flags: flags) else { reset(); return false }
+  return true
+}

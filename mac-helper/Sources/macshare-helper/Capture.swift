@@ -477,6 +477,7 @@ final class Capture {
 
   /// Returns true to swallow.
   private func onFlags(_ e: CGEvent) -> Bool {
+    if !capturing && edgeEnabled { _ = crossingAllowed(e.flags) }
     if capturing && capMouse && crossingWatch {
       ev(["t": "k.mod", "flags": crossingBits(e.flags)])
     }
@@ -620,6 +621,16 @@ final class Capture {
     return true
   }
 
+  private func crossingAllowed(_ flags: CGEventFlags) -> Bool {
+    return crossingModifierGate(required: crossingModifier, flags: flags) {
+#if MULTI
+      edgeBy.removeAll()
+#else
+      edge.push = 0
+#endif
+    }
+  }
+
   private func onMouse(_ type: CGEventType, _ e: CGEvent) -> Bool {
     var type = type
     let dx = e.getDoubleValueField(.mouseEventDeltaX), dy = e.getDoubleValueField(.mouseEventDeltaY)
@@ -670,10 +681,11 @@ final class Capture {
     }
 
     if noteLocal(type, dx, dy) { return false } // ours again: the event goes on here as it is
+    let allowed = !capturing && edgeEnabled ? crossingAllowed(e.flags) : true
     if type == .leftMouseDown { dragPbCount = NSPasteboard(name: .drag).changeCount }
     // A file drag pushed through the crossing edge carries the files over.
 #if MULTI
-    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles, allowsCrossing(required: crossingModifier, flags: e.flags),
+    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles, allowed,
        let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
       let paths = draggedFiles()
       log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
@@ -686,7 +698,7 @@ final class Capture {
       }
     }
 #else
-    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles, allowsCrossing(required: crossingModifier, flags: e.flags),
+    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles, allowed,
        let off = push(&edge, e.location, dx, dy, side, resistance, edgeZones) {
       let paths = draggedFiles()
       log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
@@ -703,7 +715,7 @@ final class Capture {
       // The system's own button state: counting downs and ups here stuck at 1 when the tap missed
       // an up (disabled by a timeout meanwhile), and nothing crossed again until a restart.
 #if MULTI
-      if !capturing, edgeEnabled, allowsCrossing(required: crossingModifier, flags: e.flags), NSEvent.pressedMouseButtons == 0 || grab.grabbing,
+      if !capturing, edgeEnabled, allowed, NSEvent.pressedMouseButtons == 0 || grab.grabbing,
          let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
         Flash.shared.leave(at: e.location, side: hit.side)
@@ -714,7 +726,7 @@ final class Capture {
         return true
       }
 #else
-      if !capturing, edgeEnabled, allowsCrossing(required: crossingModifier, flags: e.flags), NSEvent.pressedMouseButtons == 0 || grab.grabbing,
+      if !capturing, edgeEnabled, allowed, NSEvent.pressedMouseButtons == 0 || grab.grabbing,
          let off = push(&edge, e.location, dx, dy, side, resistance, edgeZones) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
         Flash.shared.leave(at: e.location, side: side)
