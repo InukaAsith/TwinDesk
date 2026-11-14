@@ -41,6 +41,13 @@ typedef struct {
   char path[300];
   int absX, absY, touching, hasLast; // touchpad: single-finger motion
   double lastX, lastY, scaleX, scaleY;
+  // Touchpad gestures while grabbed (#222): libinput doesn't see the touchpad then, so its taps and
+  // two-finger scrolling are made here (pad_frame).
+  int tools, fingers, slot, mtX[2], mtY[2], mtOn[2];
+  int tapAlive, tapMax, tapPressed;
+  double tapStart, tapMove;
+  int twoMode, twoHas; // 0 not decided yet, 1 scroll, 2 pinch
+  double twoCx, twoCy, twoDist, twoAccC, twoAccD;
 } In;
 
 static In ins[MAX_IN];
@@ -57,6 +64,7 @@ static double deadmanMs = 1500, doubleTapMs = 400;
 static double speed = 1.0;
 static int accelFlat;          // the desktop's pointer profile is flat (no acceleration)
 static double accelSpeed;       // the desktop's pointer speed, libinput's -1..1
+static int padTap = 1, padNatural; // the desktop's touchpad: tap to click, natural scrolling (kvmConfig)
 
 // state
 static double px, py;                 // where we think the pointer is (logical px)
@@ -230,6 +238,8 @@ static void scan(void) {
       in->scaleX = in->scaleY = 0.5;
       if (!ioctl(fd, EVIOCGABS(ABS_X), &ax) && ax.resolution > 0) in->scaleX = 4.0 / ax.resolution;
       if (!ioctl(fd, EVIOCGABS(ABS_Y), &ay) && ay.resolution > 0) in->scaleY = 4.0 / ay.resolution;
+      struct input_absinfo sl;
+      if (!ioctl(fd, EVIOCGABS(ABS_MT_SLOT), &sl)) in->slot = sl.value; // a pad says the slot only when it changes
     }
     if (capturing) { ioctl(fd, EVIOCGRAB, 1); in->grabbed = 1; }
     fprintf(stderr, "input: %s (%s%s%s)\n", name, kind & K_MOUSE ? "mouse " : "", kind & K_PAD ? "touchpad " : "", kind & K_KBD ? "keyboard" : "");
@@ -450,6 +460,8 @@ void wl_config(const JObj *c) {
   edgeKeyboard = jbool(c, "keyboard", 1);
   accelFlat = !strcmp(jstr(c, "accelProfile", "adaptive"), "flat");
   accelSpeed = fmax(-1, fmin(1, jnum(c, "accelSpeed", 0)));
+  padTap = jbool(c, "padTap", 1);
+  padNatural = jbool(c, "padNatural", 0);
   deadmanMs = jnum(c, "deadmanMs", 1500);
   doubleTapMs = jnum(c, "doubleTapMs", 400);
   shortcut_config(c);
@@ -633,6 +645,112 @@ static void on_motion(double rdx, double rdy, double tMs) {
   emit(jo_end(&o));
 }
 
+// ---- touchpad gestures (#222) ----
+// While this computer drives another one the touchpads are grabbed, so the desktop's libinput never
+// sees them: tap to click (one finger left, two right, three middle), two-finger scrolling and the
+// two-finger pinch are made here, as libinput would, and go as k.md/k.mu, k.wh (pixels) and k.ge
+// zoom (shared/pinch.js on a phone). At home (not grabbed) libinput does it; two fingers there only
+// keep from moving the pointer we follow.
+#define TAP_MS 180       // a touch shorter than this, that hardly moved, is a tap
+#define TAP_MOVE_PX 10   // … about 2.5 mm (pad px are about 4 per mm)
+#define SCROLL_GAIN 2.0  // pad px → wheel px
+
+static void pad_button(int b) {
+  if (!capturing || !capMouse) return;
+  flush_hotkey();
+  for (int down = 1; down >= 0; down--) {
+    JOut k;
+    jo_begin(&k);
+    jo_str(&k, "t", down ? "k.md" : "k.mu");
+    jo_num(&k, "b", b);
+    forward(jo_end(&k));
+  }
+}
+
+static void pad_scroll(double dx, double dy) {
+  if (!capturing || !capMouse || (dx == 0 && dy == 0)) return;
+  double s = padNatural ? -SCROLL_GAIN : SCROLL_GAIN; // DOM sign: +dy = content further down
+  JOut k;
+  jo_begin(&k);
+  jo_str(&k, "t", "k.wh");
+  jo_num(&k, "dx", round(dx * s * 100) / 100);
+  jo_num(&k, "dy", round(dy * s * 100) / 100);
+  jo_str(&k, "mode", "pixel");
+  forward(jo_end(&k));
+}
+
+static void pad_zoom(const char *phase, double v) {
+  if (!capturing || !capMouse) return;
+  JOut k;
+  jo_begin(&k);
+  jo_str(&k, "t", "k.ge");
+  jo_str(&k, "g", "zoom");
+  jo_num(&k, "v", round(v * 10000) / 10000);
+  jo_str(&k, "phase", phase);
+  forward(jo_end(&k));
+}
+
+static int pad_fingers(const In *in) {
+  if (!in->touching) return 0;
+  for (int n = 5; n >= 2; n--) if (in->tools & (1 << n)) return n;
+  return 1;
+}
+
+static void pad_two_end(In *in) {
+  if (in->twoMode == 2) pad_zoom("end", 0);
+  in->twoMode = in->twoHas = 0;
+  in->twoAccC = in->twoAccD = 0;
+}
+
+// One frame (SYN_REPORT) of a touchpad. *mdx, *mdy: the pointer's move (one finger only).
+static void pad_frame(In *in, double tMs, double *mdx, double *mdy) {
+  int was = in->fingers, f = pad_fingers(in);
+  in->fingers = f;
+  if (f && !was) { in->tapAlive = 1; in->tapStart = tMs; in->tapMax = f; in->tapMove = 0; in->tapPressed = 0; }
+  if (f > in->tapMax) in->tapMax = f;
+  if (f != was) { in->hasLast = 0; pad_two_end(in); } // a finger more or less: start over, no jump
+  if (!f) {
+    if (in->tapAlive && padTap && !in->tapPressed && tMs - in->tapStart < TAP_MS && in->tapMove < TAP_MOVE_PX && in->tapMax <= 3)
+      pad_button(in->tapMax == 1 ? 0 : in->tapMax == 2 ? 1 : 2);
+    in->tapAlive = 0;
+    return;
+  }
+  if (f == 1) {
+    if (in->hasLast) {
+      double dx = (in->absX - in->lastX) * in->scaleX, dy = (in->absY - in->lastY) * in->scaleY;
+      *mdx += dx; *mdy += dy;
+      in->tapMove += sqrt(dx * dx + dy * dy);
+    }
+    in->lastX = in->absX; in->lastY = in->absY; in->hasLast = 1;
+    return;
+  }
+  if (f != 2) return; // three or more: no pointer, no scroll
+  // Two fingers: their middle scrolls, their distance pinches. Without slots (an old single-touch
+  // pad that only counts fingers) the one position there is scrolls.
+  double ax, ay, dist = 0;
+  int both = in->mtOn[0] && in->mtOn[1];
+  if (both) {
+    double x0 = in->mtX[0] * in->scaleX, y0 = in->mtY[0] * in->scaleY, x1 = in->mtX[1] * in->scaleX, y1 = in->mtY[1] * in->scaleY;
+    ax = (x0 + x1) / 2; ay = (y0 + y1) / 2;
+    dist = sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+  } else {
+    ax = in->absX * in->scaleX; ay = in->absY * in->scaleY;
+  }
+  if (in->twoHas) {
+    double dcx = ax - in->twoCx, dcy = ay - in->twoCy, dd = both ? dist - in->twoDist : 0;
+    in->tapMove += sqrt(dcx * dcx + dcy * dcy) + fabs(dd);
+    if (in->twoMode == 0) {
+      in->twoAccC += sqrt(dcx * dcx + dcy * dcy);
+      in->twoAccD += fabs(dd);
+      if (in->twoAccD > 16 && in->twoAccD > 1.5 * in->twoAccC) { in->twoMode = 2; pad_zoom("begin", 0); }
+      else if (in->twoAccC > 6) in->twoMode = 1;
+    }
+    if (in->twoMode == 1) pad_scroll(dcx, dcy);
+    else if (in->twoMode == 2 && in->twoDist > 1) pad_zoom("change", dist / in->twoDist - 1);
+  }
+  in->twoCx = ax; in->twoCy = ay; in->twoDist = dist; in->twoHas = 1;
+}
+
 static void read_in(int i) {
   In *in = &ins[i];
   struct input_event evs[64];
@@ -649,8 +767,12 @@ static void read_in(int i) {
     for (int k = 0; k < (int)(n / (ssize_t)sizeof evs[0]); k++) {
       struct input_event *e = &evs[k];
       if (e->type == EV_KEY) {
-        if (e->code >= BTN_MOUSE && e->code < BTN_JOYSTICK) on_button(e->code, e->value != 0);
+        if (e->code >= BTN_MOUSE && e->code < BTN_JOYSTICK) { if (e->value) in->tapPressed = 1; on_button(e->code, e->value != 0); }
         else if (e->code == BTN_TOUCH) { in->touching = e->value != 0; in->hasLast = 0; }
+        else if ((in->kind & K_PAD) && (e->code == BTN_TOOL_FINGER || e->code == BTN_TOOL_DOUBLETAP || e->code == BTN_TOOL_TRIPLETAP || e->code == BTN_TOOL_QUADTAP || e->code == BTN_TOOL_QUINTTAP)) {
+          int n = e->code == BTN_TOOL_FINGER ? 1 : e->code == BTN_TOOL_DOUBLETAP ? 2 : e->code == BTN_TOOL_TRIPLETAP ? 3 : e->code == BTN_TOOL_QUADTAP ? 4 : 5;
+          if (e->value) in->tools |= 1 << n; else in->tools &= ~(1 << n);
+        }
         else if (e->code < 256) on_key(e->code, e->value);
       } else if (e->type == EV_REL) {
         if (e->code == REL_X) mdx += e->value;
@@ -660,11 +782,14 @@ static void read_in(int i) {
       } else if (e->type == EV_ABS && (in->kind & K_PAD)) {
         if (e->code == ABS_X) in->absX = e->value;
         else if (e->code == ABS_Y) in->absY = e->value;
-      } else if (e->type == EV_SYN && e->code == SYN_REPORT) {
-        if ((in->kind & K_PAD) && in->touching) {
-          if (in->hasLast) { mdx += (in->absX - in->lastX) * in->scaleX; mdy += (in->absY - in->lastY) * in->scaleY; }
-          in->lastX = in->absX; in->lastY = in->absY; in->hasLast = 1;
+        else if (e->code == ABS_MT_SLOT) in->slot = e->value;
+        else if (in->slot >= 0 && in->slot < 2) {
+          if (e->code == ABS_MT_POSITION_X) in->mtX[in->slot] = e->value;
+          else if (e->code == ABS_MT_POSITION_Y) in->mtY[in->slot] = e->value;
+          else if (e->code == ABS_MT_TRACKING_ID) in->mtOn[in->slot] = e->value >= 0;
         }
+      } else if (e->type == EV_SYN && e->code == SYN_REPORT) {
+        if (in->kind & K_PAD) pad_frame(in, e->input_event_sec * 1000.0 + e->input_event_usec / 1000.0, &mdx, &mdy);
         if (mdx != 0 || mdy != 0) { on_motion(mdx, mdy, e->input_event_sec * 1000.0 + e->input_event_usec / 1000.0); mdx = mdy = 0; }
       }
     }
