@@ -20,10 +20,12 @@ function scripts(page) {
   const html = fs.readFileSync(file, 'utf8');
   const base = (html.match(/<base href="([^"]+)"/) || [])[1] || './';
   const dir = path.resolve(path.dirname(file), base);
-  return [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => {
-    const p = path.join(dir, m[1]);
-    assert.ok(fs.existsSync(p), `${page}: ${m[1]} doesn't exist`);
-    return { src: m[1], code: fs.readFileSync(p, 'utf8') };
+  // A module script (shared/modload.js data-src=…) counts as the script it loads: with every module on, all of them are there.
+  return [...html.matchAll(/<script src="([^"]+)"(?: data-src="([^"]+)")?><\/script>/g)].map((m) => {
+    const src = m[2] || m[1];
+    const p = path.join(dir, src);
+    assert.ok(fs.existsSync(p), `${page}: ${src} doesn't exist`);
+    return { src, code: fs.readFileSync(p, 'utf8') };
   });
 }
 

@@ -41,9 +41,11 @@ assert.strictEqual(M.offQuery({ off: ['a', 'terminal', 'deck'] }), 'terminal,dec
 
 // Every module script named in SCRIPTS that a window lists goes through modload.js, and every module
 // page script is listed somewhere.
-for (const html of ['mac/control.html', 'windows/app.html', 'linux/app.html']) {
+// The Multi-device windows too, but for their own page (always there in them: the way back out).
+for (const html of ['mac/control.html', 'windows/app.html', 'linux/app.html', 'mac/mesh/control.html', 'windows/mesh/app.html', 'linux/mesh/app.html']) {
   const s = fs.readFileSync(path.join(__dirname, '..', '..', html), 'utf8');
   for (const [, src] of s.matchAll(/<script src="([^"]+)"><\/script>/g)) {
+    if (html.includes('/mesh/') && src === 'mesh/ui-multi.js') continue;
     assert.ok(!M.SCRIPTS[src.split('/').pop()], `${html}: ${src} is a module script, load it with modload.js`);
   }
   assert.ok(s.indexOf('shared/modules.js') < s.indexOf('modload.js'), `${html}: modules.js before the first module script`);

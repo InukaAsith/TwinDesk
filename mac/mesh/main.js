@@ -488,6 +488,7 @@ function updateTray() {
   const found = (state.found || []).filter((d) => !c || d.id !== c.id);
   const other = c ? name : t('Other Computer');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    off: modulesAtStart, // General › Modules: menus of modules that are off aren't there
     t,
     connected: !!c,
     status: c ? t('Connected to {name}', { name: c.name }) + (c.rttMs != null ? ' · ' + t('{ms} ms', { ms: c.rttMs }) : '') : t('Not connected'),

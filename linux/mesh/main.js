@@ -1274,7 +1274,7 @@ function createMainWindow() {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, off: modulesAtStart.join(',') } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: modulesAtStart.join(',') } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1374,6 +1374,7 @@ function updateTray(s) {
   };
   const kind = (os) => (os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'ios' ? 'iPhone' : os === 'android' ? t('Phone') : 'PC');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    off: modulesAtStart, // General › Modules: menus of modules that are off aren't there
     t,
     connected,
     status: connected ? t('Connected to {name}', { name }) : t('Not connected'),

@@ -91,6 +91,7 @@ for (const mode of ['mac', 'mac/mesh']) {
     row(label, hint, controls = [], options = {}) {
       const row = el('div', {}, controls); row.label = el('span', { text: label }); row.hint = el('span', { text: hint });
       row.append(row.label, row.hint); row.setHint = (v) => row.hint.textContent = v;
+      row.querySelector = () => ({ prepend() {}, append() {} }); // shared/ui-adb.js puts its Show steps button there
       row.options = options; built.push(row); return row;
     },
     card: (_title, children) => el('div', {}, children), pair: (...children) => el('div', {}, children), dir: (_d, children) => el('div', {}, children),
@@ -98,10 +99,13 @@ for (const mode of ['mac', 'mac/mesh']) {
     peer: () => ({ name, me: 'Local {name} $&' }), fill: x => t(x, { name, me: 'Local {name} $&' }),
     osClass: () => 'pc', osIcon: () => el('span'), ago: () => '2 min', via: () => 'Wi-Fi', isPhone: () => false,
     adbCard: () => ({ el: el('div'), update() {} }), adbBle: () => false,
+    note: () => Object.assign(el('div'), { set() {} }),
   };
   const pageContext = { UI, window: { I18n: { t } }, setTimeout() {}, Date, console };
   const adbSource = fs.readFileSync(path.join(root, 'shared/ui-adb.js'), 'utf8');
-  vm.runInNewContext(adbSource.slice(0, adbSource.indexOf('\nUI.adbCard =')) + '\n' + fs.readFileSync(path.join(root, mode, 'ui-overview.js'), 'utf8'), pageContext);
+  // Multi-device's Connection page has the one-to-one app's wireless debugging card (all of shared/ui-adb.js).
+  const adbPart = mode.endsWith('/mesh') ? adbSource : adbSource.slice(0, adbSource.indexOf('\nUI.adbCard ='));
+  vm.runInNewContext(adbPart + '\n' + fs.readFileSync(path.join(root, mode, 'ui-overview.js'), 'utf8'), pageContext);
   assert.strictEqual(def.title, '连接', mode + ': connection title');
   const body = el('div'); const update = def.build(body);
   const state = { macName: 'Local {name} $&', addresses: ['192.0.2.10'], paired: [{ id: 'saved', name, lastSeen: 1 }],
