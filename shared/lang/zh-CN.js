@@ -2242,6 +2242,10 @@
   "Put the pages in the order you like. Or hold the sidebar": "按你喜欢的顺序排列页面。也可以长按侧边栏",
   "Arrange…": "排列…",
   "Line up again": "重新排列",
+  "Skip computers that are not connected": "跳过未连接的电脑",
+  "On: the pointer goes past a computer that is not connected, to the device on its far side": "开：指针越过未连接的电脑，到达它另一侧的设备",
+  "Off: the pointer stops at a computer that is not connected (a red line)": "关：指针停在未连接的电脑前（红线）",
+  "{name} is not connected: the pointer stops here": "{name} 未连接：指针在此停止",
   "{name}: drag to move it, or use the arrow keys": "{name}：拖动以移动，或使用方向键",
   "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).": "把设备拖到它在桌上的位置。指针会在显示器相接的地方、沿边缘的同一位置穿过（亮起的线）。",
 });

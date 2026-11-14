@@ -91,11 +91,14 @@
         g.addEventListener('keydown', (e) => onKey(e, dev));
         nodes.push(g);
       }
-      // Our edges where the pointer crosses (map.edges: side, from-to along it, at = the edge's line).
-      for (const e of map.edges || []) {
+      // Our edges where the pointer crosses (map.edges: side, from-to along it, at = the edge's line), and
+      // in red where a computer that isn't connected stops it (map.blocked).
+      const lines = [...(map.edges || []), ...(map.blocked || []).map((e) => ({ ...e, blocked: true }))];
+      for (const e of lines) {
         if (!Number.isFinite(e.at)) continue;
         const line = document.createElement('span');
-        line.className = 'mm-edge ' + e.side;
+        line.className = 'mm-edge ' + e.side + (e.blocked ? ' blocked' : '');
+        if (e.blocked) line.title = I18n.t('{name} is not connected: the pointer stops here', { name: (people.get(e.dev) || { name: String(e.dev).slice(0, 8) }).name });
         const vertical = e.side === 'left' || e.side === 'right';
         const a = vertical ? toScreen(e.at, e.from) : toScreen(e.from, e.at);
         const len = (e.to - e.from) * scale;

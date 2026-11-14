@@ -14,4 +14,5 @@
 .mm-label { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; overflow: hidden; pointer-events: none; }
 .mm-name { max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
 .mm-edge { position: absolute; z-index: 2; border-radius: 2px; background: var(--accent); pointer-events: none; box-shadow: 0 0 6px var(--accent); }
+.mm-edge.blocked { background: var(--bad); box-shadow: 0 0 6px var(--bad); pointer-events: auto; } /* an offline computer stops the pointer here */
 .mm-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 8px; }

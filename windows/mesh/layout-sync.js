@@ -121,7 +121,15 @@ class LayoutSync {
   // The plane as it is now: the arranged world, or the one from the grid, for every known device.
   world() {
     const v = this.view();
-    return W.complete(v.world, v.cells, this.allDisplays(), Object.keys(v.cells), (id) => this._isPhone(id));
+    const ids = Object.keys(v.cells), displays = this.allDisplays(), phone = (id) => this._isPhone(id);
+    // In one piece, no gaps, phones as leaves (#225); worked out again only when something changed.
+    const key = JSON.stringify([v.world || null, v.cells, displays, ids.filter(phone)]);
+    if (!this._worldMemo || this._worldMemo.key !== key) {
+      this._worldMemo = { key, world: W.settle(W.complete(v.world, v.cells, displays, ids, phone), displays, ids, phone) };
+    }
+    const out = {};
+    for (const id of Object.keys(this._worldMemo.world)) out[id] = { ...this._worldMemo.world[id] }; // a copy: move() edits it
+    return out;
   }
 
   // Where the edges of device id lead: { left: [{ from, to, dev, … }], … } (shared/layout-world.js).
@@ -129,7 +137,7 @@ class LayoutSync {
     const v = this.view();
     const ids = Object.keys(v.cells);
     if (!ids.includes(id)) return { left: [], right: [], top: [], bottom: [] };
-    return W.stretches(this.world(), this.allDisplays(), ids, id, (x) => this._present(x), (x) => this._isPhone(x));
+    return W.stretches(this.world(), this.allDisplays(), ids, id, (x) => this._present(x), (x) => this._isPhone(x), this.skips());
   }
 
   // For the helper: the sides with somewhere to go, and the zones along them (only where monitors touch).
@@ -147,7 +155,7 @@ class LayoutSync {
     const v = this.view();
     const ids = Object.keys(v.cells);
     if (!ids.includes(fromId)) return null;
-    return W.cross(this.world(), this.allDisplays(), ids, fromId, side, offset, (x) => this._present(x), (x) => this._isPhone(x));
+    return W.cross(this.world(), this.allDisplays(), ids, fromId, side, offset, (x) => this._present(x), (x) => this._isPhone(x), this.skips());
   }
 
   // A person's edit on the monitor map: device id dropped with its top-left at (x, y) in the plane;
@@ -157,11 +165,24 @@ class LayoutSync {
     const world = this.world();
     const ids = Object.keys(world);
     const at = W.drop(world, this.allDisplays(), ids, id, x, y, Number.isFinite(snap) ? snap : 60, (k) => this._isPhone(k));
-    world[id] = at;
+    Object.assign(world, W.settle({ ...world, [id]: at }, this.allDisplays(), ids, (k) => this._isPhone(k), id)); // the rest close up around it
     const r = L.arrange(this.view(), world, this.selfId);
     if (!r.ok) return null;
     this._commit(L.keepUnknown(r.layout, this.layout, this._known()));
     return at;
+  }
+
+  // Offline computers: passed through (on, the default) or the pointer stops at them (the Multi-device
+  // tab's switch; in the layout, so every device follows the same rule).
+  skips() {
+    return this.layout.skip !== false;
+  }
+
+  setSkip(on) {
+    const r = L.setSkip(this.layout, on, this.selfId);
+    if (!r.ok) return false;
+    this._commit(r.layout);
+    return true;
   }
 
   // Back to the grid's arrangement: the world goes (the edges follow the grid again).
@@ -230,8 +251,18 @@ class LayoutSync {
     const st = this.stretches();
     const edges = [];
     for (const side of W.SIDES) for (const x of st[side]) edges.push({ side, from: x.from, to: x.to, at: x.at, dev: x.dev, gap: x.gap });
+    // Red on the map: wherever a computer that isn't connected stops the pointer of one that is (ours
+    // or another's edge: the mesh line it cuts), each piece once.
+    const blocked = [], seen = new Set();
+    for (const id of ids) {
+      if (!this._present(id) || this._isPhone(id)) continue;
+      for (const b of (id === this.selfId ? st : this.stretches(id)).blocked || []) {
+        const k = [b.side, b.at, b.from, b.to].join();
+        if (!seen.has(k)) { seen.add(k); blocked.push({ ...b, by: id }); }
+      }
+    }
     return { rev: this.layout.rev, by: this.layout.by, cells: v.cells, grid: L.grid(v), targets, reach,
-      map: { arranged: !!this.layout.world, world, monitors, online, edges, phones: ids.filter((id) => this._isPhone(id)) } };
+      map: { arranged: !!this.layout.world, skip: this.skips(), world, monitors, online, edges, blocked, phones: ids.filter((id) => this._isPhone(id)) } };
   }
 
   // A person's edit: device id goes to cell (x, y); a device that was there moves to id's old cell.

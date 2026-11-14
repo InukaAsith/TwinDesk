@@ -2241,6 +2241,10 @@
   "Put the pages in the order you like. Or hold the sidebar": "Sayfaları istediğiniz sıraya koyun. Ya da kenar çubuğuna basılı tutun",
   "Arrange…": "Düzenle…",
   "Line up again": "Yeniden hizala",
+  "Skip computers that are not connected": "Bağlı olmayan bilgisayarları atla",
+  "On: the pointer goes past a computer that is not connected, to the device on its far side": "Açık: işaretçi bağlı olmayan bir bilgisayarı geçip arkasındaki cihaza gider",
+  "Off: the pointer stops at a computer that is not connected (a red line)": "Kapalı: işaretçi bağlı olmayan bir bilgisayarda durur (kırmızı çizgi)",
+  "{name} is not connected: the pointer stops here": "{name} bağlı değil: işaretçi burada durur",
   "{name}: drag to move it, or use the arrow keys": "{name}: taşımak için sürükleyin veya ok tuşlarını kullanın",
   "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).": "Bir cihazı masanızda durduğu yere sürükleyin. İşaretçi, monitörlerin birbirine değdiği yerlerden, kenar boyunca aynı noktadan geçer (yanan çizgiler).",
 });

@@ -376,6 +376,9 @@ function setupIpc(ctx) {
     resetMap() {
       ctx.layoutSync.resetWorld();
     },
+    setMapSkip(on) { // offline computers: passed or not
+      ctx.layoutSync.setSkip(on === true);
+    },
     removeFromLayout(id) {
       if (typeof id !== 'string' || !id || id.length > 64) return;
       ctx.layoutSync.remove(id);

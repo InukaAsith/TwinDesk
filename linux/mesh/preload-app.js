@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setLayoutCell: call('setLayoutCell'),
   moveOnMap: call('moveOnMap'),
   resetMap: call('resetMap'),
+  setMapSkip: call('setMapSkip'),
   removeFromLayout: call('removeFromLayout'),
   devHelperEvent: call('devHelperEvent'), // dev only: the main process has no handler without MACSHARE_DEV_PORT
   setKeys: call('setKeys'),

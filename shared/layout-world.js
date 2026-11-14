@@ -145,11 +145,15 @@
   // stretch { from, to, dev, display, gap } in plane coordinates along the side, in order. ids: every
   // device of the map; present(id): the ones that may be crossed to (online). An offline one is passed
   // through (gap: how far), empty space is not.
-  function stretches(world, displays, ids, selfId, present = () => true, phone = () => false) {
+  // skip: an offline computer is passed through (true, the default) or stops the pointer (false). Pieces
+  // an offline computer stops (skip off, or nothing beyond it) are in out.blocked: [{ side, from, to, at,
+  // dev }] (the Multi-device tab draws them red); they lead nowhere.
+  function stretches(world, displays, ids, selfId, present = () => true, phone = () => false, skip = true) {
     const all = placed(world, displays, ids, phone);
     const mine = all.filter((m) => m.dev === selfId);
     const others = all.filter((m) => m.dev !== selfId);
     const out = { left: [], right: [], top: [], bottom: [] };
+    const blocked = [];
     const far = (c, side) => edgeAt(c, side); // an offline monitor's edge on the way out
     for (const side of SIDES) {
       const res = [];
@@ -167,17 +171,27 @@
             const here = cands.filter((x) => x.span[0] <= p && x.span[1] >= q).map((x) => x.c);
             // Walk out from the edge: what touches the front; offline ones are crossed, the front moving
             // to their far edge.
-            let front = e, best = null;
+            let front = e, best = null, stop = null;
             for (let step = 0; step < MAX_DEVICES * 8 && !best; step++) {
               const touchingNow = here.filter((c) => Math.abs(ahead(c, side, front)) < 1);
               if (!touchingNow.length) break;
               const live = touchingNow.filter((c) => present(c.dev)).sort((u, v) => (u.dev < v.dev ? -1 : u.dev > v.dev ? 1 : 0));
               if (live.length) { best = live[0]; break; }
+              const pc = touchingNow.filter((c) => !phone(c.dev)).sort((u, v) => (u.dev < v.dev ? -1 : 1))[0];
+              if (pc && !stop) stop = pc; // the first offline computer on the way
+              if (!skip) break;
               const next = touchingNow.reduce((f, c) => (Math.abs(far(c, side) - e) > Math.abs(f - e) ? far(c, side) : f), front);
               if (next === front) break;
               front = next;
             }
-            if (!best) continue;
+            if (!best) {
+              if (stop) {
+                const lb = blocked[blocked.length - 1];
+                if (lb && lb.side === side && lb.dev === stop.dev && lb.at === e && Math.abs(lb.to - p) < 1) lb.to = q;
+                else blocked.push({ side, from: p, to: q, at: e, dev: stop.dev });
+              }
+              continue;
+            }
             const gap = Math.abs(front - e);
             const last = res[res.length - 1];
             if (last && last.dev === best.dev && last.display === best.id && last.at === e && Math.abs(last.to - p) < 1) last.to = q;
@@ -187,6 +201,7 @@
       }
       out[side] = res.filter((s) => s.to - s.from >= 8).sort((u, v) => u.from - v.from); // slivers (rounding) aren't a way
     }
+    Object.defineProperty(out, 'blocked', { value: blocked.filter((b) => b.to - b.from >= 8), enumerable: false });
     return out;
   }
 
@@ -223,9 +238,9 @@
   // A crossing: the pointer left device fromId through `side` at `offset` (0–1 along its bounding box).
   // { to, offset } — the device and where along its facing side (opposite) it comes in — or null. Off
   // every stretch (rounding): the nearest one.
-  function cross(world, displays, ids, fromId, side, offset, present = () => true, phone = () => false) {
+  function cross(world, displays, ids, fromId, side, offset, present = () => true, phone = () => false, skip = true) {
     if (!SIDES.includes(side)) return null;
-    const st = stretches(world, displays, ids, fromId, present, phone)[side];
+    const st = stretches(world, displays, ids, fromId, present, phone, skip)[side];
     if (!st.length) return null;
     const s = spanOf(world, displays, fromId, side, phone);
     const a = s.start + Math.min(1, Math.max(0, Number(offset) || 0)) * s.len;
@@ -245,10 +260,15 @@
   // shortest way), and pulled onto aligned edges or centres within `snap` points. The others don't move.
   function drop(world, displays, ids, id, x, y, snap = 60, phone = () => false) {
     const rest = ids.filter((k) => k !== id && world[k]);
-    const others = placed(world, displays, rest, phone);
-    const at = { x: Math.round(x), y: Math.round(y) };
+    if (phone(id)) { const sub = {}; for (const k of rest) sub[k] = world[k]; return leaf(sub, displays, id, { x, y }, phone); }
+    return fit(placed(world, displays, rest, phone), (p) => placed({ [id]: p }, displays, [id], phone), { x, y }, snap);
+  }
+
+  // Where a group of monitors may go, among `others`: mineAt(p) gives the group's monitors with its
+  // origin at p, start is where it was put. Off the others, touching one, aligned within snap.
+  function fit(others, mineAt, start, snap) {
+    const at = { x: Math.round(start.x), y: Math.round(start.y) };
     if (!others.length) return at;
-    const mineAt = (p) => placed({ [id]: p }, displays, [id], phone);
     // 1. Off the others: the smallest move that clears every overlap (a few rounds for crowded places).
     for (let round = 0; round < 8; round++) {
       const mine = mineAt(at);
@@ -315,7 +335,145 @@
     return { x: Math.round(at.x), y: Math.round(at.y) };
   }
 
-  const api = { SIDES, OPPOSITE, MIN_TOUCH, normalize, bounds, screensOf, placed, fromCells, complete, stretches, spanOf, zonesText, sidesOf, cross, drop };
+  // How long a piece of edge two monitors share (0: they don't touch).
+  function shared(m, o) {
+    const h = Math.min(m.y + m.h, o.y + o.h) - Math.max(m.y, o.y), w = Math.min(m.x + m.w, o.x + o.w) - Math.max(m.x, o.x);
+    if (h >= 1 && (Math.abs(m.x + m.w - o.x) < 1 || Math.abs(o.x + o.w - m.x) < 1)) return h;
+    if (w >= 1 && (Math.abs(m.y + m.h - o.y) < 1 || Math.abs(o.y + o.h - m.y) < 1)) return w;
+    return 0;
+  }
+
+  // A group of monitors (base, where they are) moved flush against the others: one of its monitors
+  // against a side of one of theirs, lined up at the start, the end or the middle, or where it is
+  // along it. The move that is short and gives a real shared edge (half the shorter side, or more)
+  // wins over one that only touches by a sliver. Returns the move { x, y }, or null.
+  function dock(others, base) {
+    let best = null;
+    for (const g of base) {
+      for (const m of others) {
+        for (const side of SIDES) {
+          const v = vertical(side);
+          const dAcross = side === 'right' ? m.x + m.w - g.x : side === 'left' ? m.x - (g.x + g.w) : side === 'bottom' ? m.y + m.h - g.y : m.y - (g.y + g.h);
+          const g0 = v ? g.y : g.x, gl = v ? g.h : g.w, m0 = v ? m.y : m.x, ml = v ? m.h : m.w;
+          const t = Math.min(MIN_TOUCH, gl, ml);
+          const alongs = [m0 - g0, m0 + ml - gl - g0, m0 + (ml - gl) / 2 - g0, Math.max(m0 - gl + t, Math.min(m0 + ml - t, g0)) - g0];
+          for (const a of alongs) {
+            const d = v ? { x: dAcross, y: Math.round(a) } : { x: Math.round(a), y: dAcross };
+            const moved = base.map((b) => ({ ...b, x: b.x + d.x, y: b.y + d.y }));
+            if (moved.some((b) => others.some((o) => overlap(b, o)))) continue;
+            let contact = 0, need = 0;
+            for (const b of moved) for (const o of others) { const c = shared(b, o); if (c) { contact += c; need = Math.max(need, Math.min(vertical(side) ? b.h : b.w, vertical(side) ? o.h : o.w) / 2); } }
+            if (!contact) continue;
+            const cost = Math.hypot(d.x, d.y) + 4 * Math.max(0, need - contact);
+            if (!best || cost < best.cost) best = { d, cost };
+          }
+        }
+      }
+    }
+    return best && best.d;
+  }
+
+  // Two monitors side by side or one above the other, sharing a piece of edge.
+  function touches(m, o) {
+    const h = Math.min(m.y + m.h, o.y + o.h) - Math.max(m.y, o.y), w = Math.min(m.x + m.w, o.x + o.w) - Math.max(m.x, o.x);
+    return (h >= 1 && (Math.abs(m.x + m.w - o.x) < 1 || Math.abs(o.x + o.w - m.x) < 1)) || (w >= 1 && (Math.abs(m.y + m.h - o.y) < 1 || Math.abs(o.y + o.h - m.y) < 1));
+  }
+
+  // The devices in groups that touch: [[id, …], …], each group in id order.
+  function groupsOf(world, displays, ids, phone = () => false) {
+    const mons = placed(world, displays, ids, phone);
+    const up = {};
+    const find = (k) => (up[k] === k ? k : (up[k] = find(up[k])));
+    for (const id of ids) if (world[id]) up[id] = id;
+    for (let i = 0; i < mons.length; i++) {
+      for (let j = i + 1; j < mons.length; j++) {
+        if (mons[i].dev !== mons[j].dev && touches(mons[i], mons[j])) up[find(mons[i].dev)] = find(mons[j].dev);
+      }
+    }
+    const by = {};
+    for (const id of Object.keys(up).sort()) (by[find(id)] = by[find(id)] || []).push(id);
+    return Object.values(by);
+  }
+
+  // Where a phone goes, near `want`: against the outer edge of one computer's monitor, touching that
+  // computer and nothing else. Phones are leaves: one between two computers would cut the line the
+  // pointer takes from one to the other (it ends a chain, L.reach), so it never sits there, nor
+  // against another phone. world: the others, already placed.
+  function leaf(world, displays, id, want, phone = () => false) {
+    const others = placed(world, displays, Object.keys(world), phone);
+    const pcs = others.filter((m) => !phone(m.dev));
+    const at = { x: Math.round(want.x), y: Math.round(want.y) };
+    if (!pcs.length) return at;
+    const mineAt = (p) => placed({ [id]: p }, displays, [id], phone);
+    const mb = bounds(mineAt({ x: 0, y: 0 }));
+    let best = null;
+    for (const m of pcs) {
+      for (const side of SIDES) {
+        const v = vertical(side);
+        const len = v ? mb.h : mb.w, mlen = v ? m.h : m.w, m0 = v ? m.y : m.x, w0 = v ? at.y : at.x;
+        const t = Math.min(MIN_TOUCH, len, mlen);
+        const lo = m0 - len + t, hi = m0 + mlen - t;
+        const alongs = [Math.max(lo, Math.min(hi, w0)), m0, m0 + mlen - len, m0 + (mlen - len) / 2].filter((a) => a >= lo - 0.5 && a <= hi + 0.5);
+        const across = side === 'right' ? m.x + m.w : side === 'left' ? m.x - mb.w : side === 'bottom' ? m.y + m.h : m.y - mb.h;
+        for (const a of alongs) {
+          const p = v ? { x: across, y: Math.round(a) } : { x: Math.round(a), y: across };
+          const mine = mineAt(p);
+          if (mine.some((mm) => others.some((o) => overlap(mm, o)))) continue;
+          const devs = new Set(others.filter((o) => mine.some((mm) => touches(mm, o))).map((o) => o.dev));
+          if (devs.size !== 1 || !devs.has(m.dev)) continue;
+          // Short, and against a real piece of the edge (half the phone's side, or the monitor's), not a sliver.
+          const contact = mine.reduce((n, mm) => n + others.reduce((k, o) => k + shared(mm, o), 0), 0);
+          const cost = Math.hypot(p.x - at.x, p.y - at.y) + 4 * Math.max(0, Math.min(len, mlen) / 2 - contact);
+          if (!best || cost < best.cost) best = { p, cost };
+        }
+      }
+    }
+    return best ? best.p : at;
+  }
+
+  // The world in one piece, with no monitor over another: a device whose monitors changed size (or
+  // that came in at the corner of the others) leaves no gap or overlap, and a device dragged out of a
+  // row leaves no hole in it (the rest close up). Overlaps first, in id order (`keep` first: it stays
+  // where it is); then every group apart slides to touch the others, the nearest first, the biggest
+  // group (or keep's) staying. Every device computes the same from the same world and displays.
+  function settle(world, displays, ids, phone = () => false, keep = null) {
+    const here = ids.filter((id) => world[id]).sort();
+    const order = here.filter((id) => !phone(id)); // the computers first, in one piece by themselves
+    if (keep && order.includes(keep)) order.unshift(...order.splice(order.indexOf(keep), 1));
+    const out = {};
+    for (const id of order) {
+      const others = placed(out, displays, Object.keys(out), phone);
+      const mineAt = (p) => placed({ [id]: p }, displays, [id], phone);
+      const at = world[id];
+      out[id] = mineAt(at).some((m) => others.some((o) => overlap(m, o))) ? fit(others, mineAt, at, 0) : { x: at.x, y: at.y };
+    }
+    for (let round = 0; round < 2 * MAX_DEVICES; round++) {
+      const groups = groupsOf(out, displays, order, phone);
+      if (groups.length < 2) break;
+      groups.sort((a, b) => (keep ? b.includes(keep) - a.includes(keep) : 0) || b.length - a.length || (a[0] < b[0] ? -1 : 1));
+      const main = bounds(placed(out, displays, groups[0], phone));
+      const gap = (b) => Math.hypot(Math.max(0, b.x - (main.x + main.w), main.x - (b.x + b.w)), Math.max(0, b.y - (main.y + main.h), main.y - (b.y + b.h)));
+      const g = groups.slice(1).map((ids2) => ({ ids: ids2, d: gap(bounds(placed(out, displays, ids2, phone))) })).sort((a, b) => a.d - b.d)[0].ids;
+      const base = placed(out, displays, g, phone);
+      const others = placed(out, displays, order.filter((k) => !g.includes(k)), phone);
+      const shifted = (p) => base.map((m) => ({ ...m, x: m.x + p.x, y: m.y + p.y }));
+      let d = dock(others, base) || fit(others, shifted, { x: 0, y: 0 }, 0);
+      if (!shifted(d).some((m) => others.some((o) => touches(m, o)))) {
+        // Nowhere straight ahead: beside the main group's rightmost monitor, at its top.
+        const right = placed(out, displays, groups[0], phone).sort((a, b) => b.x + b.w - (a.x + a.w) || a.y - b.y)[0];
+        const gb = bounds(base);
+        d = fit(others, shifted, { x: right.x + right.w - gb.x, y: right.y - gb.y }, 0);
+      }
+      for (const k of g) out[k] = { x: out[k].x + d.x, y: out[k].y + d.y };
+    }
+    // Then the phones, each a leaf on one computer (keep's first, so it goes where it was dropped).
+    const phones = here.filter((id) => phone(id));
+    if (keep && phones.includes(keep)) phones.unshift(...phones.splice(phones.indexOf(keep), 1));
+    for (const id of phones) out[id] = leaf(out, displays, id, world[id], phone);
+    return out;
+  }
+
+  const api = { SIDES, OPPOSITE, MIN_TOUCH, normalize, bounds, screensOf, placed, fromCells, complete, stretches, spanOf, zonesText, sidesOf, cross, drop, settle, groupsOf, leaf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LayoutWorld = api;
 })(typeof self !== 'undefined' ? self : this);

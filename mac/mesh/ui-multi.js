@@ -29,6 +29,9 @@ UI.tab({
     const map = MonitorMap.create({ move: (id, x, y, snap) => api.moveOnMap({ id, x, y, snap }) });
     const resetBtn = UI.button(I18n.t('Line up again'), () => api.resetMap(), 'small');
     const actions = UI.el('div', { class: 'mm-actions' }, [resetBtn]);
+    // An offline computer in the way: the pointer goes on to what is past it, or stops (a red line).
+    const skipSw = UI.switch((v) => api.setMapSkip(v), { label: I18n.t('Skip computers that are not connected') });
+    const skipRow = UI.row(I18n.t('Skip computers that are not connected'), '', [skipSw]);
 
     function drawLayout(s) {
       const lay = s && s.layout;
@@ -39,6 +42,10 @@ UI.tab({
       }
       map.draw(lay.map, people, s.macId);
       resetBtn.hidden = !lay.map.arranged; // only once someone moved a device on the map
+      const skip = lay.map.skip !== false;
+      skipSw.set(skip);
+      skipRow.setHint(skip ? I18n.t('On: the pointer goes past a computer that is not connected, to the device on its far side')
+        : I18n.t('Off: the pointer stops at a computer that is not connected (a red line)'));
       const reach = lay.reach || {};
       const red = Object.keys(reach).filter((id) => reach[id] === 'blocked' && (people.get(id) || {}).via);
       const behind = Object.values(reach).includes('behind');
@@ -57,7 +64,7 @@ UI.tab({
       UI.card(I18n.t('Mesh mode'), [
         UI.row(I18n.t('Use several devices at once'), I18n.t('On. TwinDesk restarts when you turn it on or off'), [turnOff]),
       ]),
-      UI.card(I18n.t('Layout'), [map.el, actions, reachNote, layoutHint], { cls: 'keep-on' }),
+      UI.card(I18n.t('Layout'), [map.el, actions, reachNote, layoutHint, skipRow], { cls: 'keep-on' }),
       UI.card(I18n.t('Joining'), [joinRow]),
     );
 

@@ -133,6 +133,7 @@ function setupIpc(ctx) {
   });
   // Off the map: the devices line up from the grid again.
   handle('resetMap', () => layoutSync.resetWorld());
+  handle('setMapSkip', (on) => layoutSync.setSkip(on === true)); // offline computers: passed or not
   // A device off the map (its cell is removed from the shared layout). false when it has no cell.
   handle('removeFromLayout', (id) => {
     if (typeof id !== 'string' || !id || id.length > 64) return false;

@@ -64,7 +64,19 @@ function normalize(value) {
   }
   const world = worldOf(value, out.cells);
   if (world) out.world = world;
+  if (value.skip === false) out.skip = false; // offline computers stop the pointer (true, the default: it passes them)
   return out;
+}
+
+// The layout's own switches, carried by every edit: { skip: false } or {}.
+const flags = (l) => (l && l.skip === false ? { skip: false } : {});
+
+// A person's edit: pass offline computers (on, the default) or stop at them.
+function setSkip(layout, on, by) {
+  const l = normalize(layout);
+  if ((l.skip !== false) === !!on) return { ok: false, layout: l };
+  const { skip, ...rest } = l;
+  return { ok: true, layout: { ...rest, rev: l.rev + 1, by: by || '', ...(on ? {} : { skip: false }) } };
 }
 
 // A stable string of a layout: equal layouts give equal strings (dedupe, tie-break, tests).
@@ -72,7 +84,7 @@ function canonical(layout) {
   const l = normalize(layout);
   const cells = Object.keys(l.cells).sort().map((id) => `${id}:${l.cells[id].x},${l.cells[id].y}`);
   const world = l.world ? Object.keys(l.world).sort().map((id) => `${id}:${l.world[id].x},${l.world[id].y}`) : [];
-  return `${l.rev}|${l.by}|${cells.join(';')}${world.length ? '|' + world.join(';') : ''}`;
+  return `${l.rev}|${l.by}|${cells.join(';')}${world.length ? '|' + world.join(';') : ''}${l.skip === false ? '|noskip' : ''}`;
 }
 
 // True when a is newer than b: the higher rev wins; at the same rev the larger `by`, then the
@@ -227,6 +239,7 @@ function view(layout, ids) {
   const known = new Set(ids);
   const out = { rev: l.rev, by: l.by, cells: {} };
   if (l.world) out.world = { ...l.world };
+  if (l.skip === false) out.skip = false;
   for (const id of Object.keys(l.cells)) if (known.has(id)) out.cells[id] = { ...l.cells[id] };
   for (const id of [...known].sort()) {
     if (out.cells[id] || Object.keys(out.cells).length >= MAX_CELLS) continue;
@@ -265,7 +278,7 @@ function place(layout, id, x, y, by) {
     return { ok: false, layout: l };
   }
   cells[id] = { x, y };
-  return { ok: true, layout: { rev: l.rev + 1, by: by || '', cells: pack(cells, id), ...(l.world ? { world: { ...l.world } } : {}) } };
+  return { ok: true, layout: { rev: l.rev + 1, by: by || '', cells: pack(cells, id), ...(l.world ? { world: { ...l.world } } : {}), ...flags(l) } };
 }
 
 // A person's edit on the monitor map (#225): the monitors of each device where `world` puts them (the
@@ -276,7 +289,7 @@ function arrange(layout, world, by) {
   const w = World.normalize(world);
   for (const id of Object.keys(w)) if (!l.cells[id]) delete w[id];
   if (!Object.keys(w).length) return { ok: false, layout: l };
-  return { ok: true, layout: { rev: l.rev + 1, by: by || '', cells: { ...l.cells }, world: w } };
+  return { ok: true, layout: { rev: l.rev + 1, by: by || '', cells: { ...l.cells }, world: w, ...flags(l) } };
 }
 
 // A person's edit: take device id off the map; the devices on either side of it close up.
@@ -285,7 +298,7 @@ function remove(layout, id, by) {
   if (!l.cells[id]) return l;
   const cells = { ...l.cells };
   delete cells[id];
-  const out = { rev: l.rev + 1, by: by || '', cells: pack(cells) };
+  const out = { rev: l.rev + 1, by: by || '', cells: pack(cells), ...flags(l) };
   if (l.world) {
     const world = { ...l.world };
     delete world[id];
@@ -336,7 +349,7 @@ function keepUnknown(edited, stored, known) {
       if (world && s.world && s.world[id] && !world[id]) world[id] = { ...s.world[id] };
     }
   }
-  return { rev: e.rev, by: e.by, cells, ...(world ? { world } : {}) };
+  return { rev: e.rev, by: e.by, cells, ...(world ? { world } : {}), ...flags(e) };
 }
 
 // Which devices the mouse and keyboard of device selfId reach by crossing screen edges (docs/mesh.md,
@@ -370,5 +383,5 @@ function reach(layout, selfId, canDrive, endsChain = () => false) {
 
 module.exports = {
   SIDES, OPPOSITE, empty, normalize, canonical, newer, merge, neighbors, across, sideTo, view, place, arrange, remove, fromEdges, grid,
-  pieces, pack, joined, targets, reach, keepUnknown,
+  pieces, pack, joined, targets, reach, keepUnknown, setSkip,
 };

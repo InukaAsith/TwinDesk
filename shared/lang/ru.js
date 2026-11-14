@@ -2241,6 +2241,10 @@
   "Put the pages in the order you like. Or hold the sidebar": "Расставьте страницы в нужном порядке. Или удерживайте боковую панель",
   "Arrange…": "Упорядочить…",
   "Line up again": "Выровнять заново",
+  "Skip computers that are not connected": "Пропускать неподключённые компьютеры",
+  "On: the pointer goes past a computer that is not connected, to the device on its far side": "Вкл.: указатель проходит мимо неподключённого компьютера к устройству за ним",
+  "Off: the pointer stops at a computer that is not connected (a red line)": "Выкл.: указатель останавливается у неподключённого компьютера (красная линия)",
+  "{name} is not connected: the pointer stops here": "{name} не подключён: указатель останавливается здесь",
   "{name}: drag to move it, or use the arrow keys": "{name}: перетащите или используйте клавиши со стрелками",
   "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).": "Перетащите устройство туда, где оно стоит на столе. Указатель переходит там, где мониторы соприкасаются, в том же месте вдоль края (подсвеченные линии).",
 });

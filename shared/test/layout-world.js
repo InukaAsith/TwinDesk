@@ -89,6 +89,76 @@ const world = { pc: { x: 0, y: 0 }, tall: { x: -1080, y: -420 }, top: { x: 4080,
   assert.deepStrictEqual(only, { x: 77, y: 88 }, 'alone: anywhere');
 }
 {
+  // settle(): one piece, no holes, no overlaps.
+  const d = { A: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }], B: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }], C: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }] };
+  const all = ['A', 'B', 'C'];
+  const one = (w) => W.groupsOf(w, d, all).length === 1;
+  const noOverlap = (w) => { const m = W.placed(w, d, all); return m.every((a, i) => m.every((b, j) => i === j || Math.min(a.x + a.w, b.x + b.w) <= Math.max(a.x, b.x) || Math.min(a.y + a.h, b.y + b.h) <= Math.max(a.y, b.y))); };
+  // Already one piece: nothing moves.
+  const row = { A: { x: 0, y: 0 }, B: { x: 1000, y: 0 }, C: { x: 2000, y: 0 } };
+  assert.deepStrictEqual(W.settle(row, d, all), row);
+  // B dragged out of the middle, onto A's top: C closes up to the others.
+  const out = W.settle({ ...row, B: { x: 0, y: -800 } }, d, all, undefined, 'B');
+  assert.ok(one(out) && noOverlap(out), JSON.stringify(out));
+  assert.deepStrictEqual(out.B, { x: 0, y: -800 }, 'the dragged one stays');
+  assert.deepStrictEqual(out.C, { x: 1000, y: 0 }, 'C beside A, where B was');
+  // Islands far apart (the screenshot of #225's map): one piece.
+  const islands = W.settle({ A: { x: 0, y: 0 }, B: { x: 9000, y: 300 }, C: { x: 20000, y: -500 } }, d, all);
+  assert.ok(one(islands) && noOverlap(islands), JSON.stringify(islands));
+  // A device whose real monitors came in bigger than the usual screen: off the one it now covers.
+  const big = { ...d, A: [{ id: '1', x: 0, y: 0, w: 2560, h: 1440 }] };
+  const grown = W.settle(row, big, all);
+  assert.ok(W.groupsOf(grown, big, all).length === 1, JSON.stringify(grown));
+  const m = W.placed(grown, big, all);
+  assert.ok(m.every((a, i) => m.every((b, j) => i === j || Math.min(a.x + a.w, b.x + b.w) <= Math.max(a.x, b.x) || Math.min(a.y + a.h, b.y + b.h) <= Math.max(a.y, b.y))), JSON.stringify(grown));
+  // The same on every device: the order ids come in doesn't matter.
+  assert.deepStrictEqual(W.settle({ A: { x: 0, y: 0 }, B: { x: 9000, y: 300 }, C: { x: 20000, y: -500 } }, d, ['C', 'A', 'B']), islands);
+}
+{
+  // Phones are leaves: never between two computers, never against another phone.
+  const d = { A: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }], B: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }], p: [], q: [] };
+  const phone = (id) => id === 'p' || id === 'q';
+  const all = ['A', 'B', 'p', 'q'];
+  const touching = (w, id) => { const m = W.placed(w, d, all, phone); const mine = m.filter((x) => x.dev === id); return [...new Set(m.filter((o) => o.dev !== id && mine.some((a) => (Math.min(a.y + a.h, o.y + o.h) - Math.max(a.y, o.y) >= 1 && (Math.abs(a.x + a.w - o.x) < 1 || Math.abs(o.x + o.w - a.x) < 1)) || (Math.min(a.x + a.w, o.x + o.w) - Math.max(a.x, o.x) >= 1 && (Math.abs(a.y + a.h - o.y) < 1 || Math.abs(o.y + o.h - a.y) < 1)))).map((o) => o.dev))].sort(); };
+  // A phone dropped in the gap between A and B (it was A | p | B): B joins A, the phone goes outside.
+  const w = W.settle({ A: { x: 0, y: 0 }, p: { x: 1000, y: 0 }, B: { x: 1412, y: 0 }, q: { x: 2412, y: 0 } }, d, all, phone);
+  assert.deepStrictEqual(touching(w, 'A'), ['B', ...touching(w, 'A').filter((x) => x !== 'B')], 'the computers touch: ' + JSON.stringify(w));
+  assert.strictEqual(touching(w, 'p').length, 1, 'p on one computer: ' + JSON.stringify(w));
+  assert.strictEqual(touching(w, 'q').length, 1, 'q on one computer: ' + JSON.stringify(w));
+  assert.ok(!phone(touching(w, 'p')[0]) && !phone(touching(w, 'q')[0]));
+  // Dropping a phone right between them: it lands beside one of them, touching that one only.
+  const row = { A: { x: 0, y: 0 }, B: { x: 1000, y: 0 } };
+  const at = W.drop(row, d, ['A', 'B', 'p'], 'p', 900, 0, 60, phone);
+  assert.strictEqual(touching({ ...row, p: at }, 'p').length, 1, JSON.stringify(at));
+}
+{
+  // An offline computer in the way: passed (skip on), or a red piece where it stops the pointer.
+  const d = { A: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }], B: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }], C: [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }] };
+  const w = { A: { x: 0, y: 0 }, B: { x: 1000, y: 0 }, C: { x: 2000, y: 0 } };
+  const all = ['A', 'B', 'C'];
+  const noB = (id) => id !== 'B';
+  const on = W.stretches(w, d, all, 'A', noB);
+  assert.strictEqual(on.right[0].dev, 'C');
+  assert.deepStrictEqual(on.blocked, []);
+  const off = W.stretches(w, d, all, 'A', noB, undefined, false);
+  assert.deepStrictEqual(off.right, [], 'skip off: nowhere through B');
+  assert.deepStrictEqual(off.blocked.map((b) => [b.side, b.dev, b.from, b.to, b.at]), [['right', 'B', 0, 800, 1000]]);
+  assert.strictEqual(W.cross(w, d, all, 'A', 'right', 0.5, noB, undefined, false), null);
+  // Nothing past the offline one: red even with skip on.
+  const end = W.stretches({ A: w.A, B: w.B }, d, ['A', 'B'], 'A', noB);
+  assert.deepStrictEqual(end.blocked.map((b) => b.dev), ['B']);
+  // The switch is in the shared layout and survives edits.
+  const L = require('../layout.js');
+  const l0 = { rev: 3, by: 'A', cells: { A: { x: 0, y: 0 }, B: { x: 1, y: 0 } } };
+  const r = L.setSkip(l0, false, 'A');
+  assert.ok(r.ok && r.layout.skip === false && r.layout.rev === 4);
+  assert.strictEqual(L.normalize(r.layout).skip, false);
+  assert.strictEqual(L.place(r.layout, 'B', 0, 1, 'A').layout.skip, false, 'kept by a grid edit');
+  assert.strictEqual(L.arrange(r.layout, { A: { x: 0, y: 0 }, B: { x: 1000, y: 0 } }, 'A').layout.skip, false, 'kept by a map edit');
+  assert.ok(!L.setSkip(r.layout, false, 'A').ok, 'no change, no edit');
+  assert.notStrictEqual(L.canonical(l0), L.canonical({ ...l0, skip: false }));
+}
+{
   // Untrusted input.
   assert.deepStrictEqual(W.normalize({ a: { x: 1.4, y: 2 }, b: { x: 'x', y: 1 }, c: { x: 1e9, y: 0 }, '': { x: 0, y: 0 } }), { a: { x: 1, y: 2 } });
   assert.deepStrictEqual(W.normalize([1, 2]), {});

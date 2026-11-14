@@ -2242,6 +2242,10 @@
   "Put the pages in the order you like. Or hold the sidebar": "Put the pages in the order you like. Or hold the sidebar",
   "Arrange…": "Arrange…",
   "Line up again": "Line up again",
+  "Skip computers that are not connected": "Skip computers that are not connected",
+  "On: the pointer goes past a computer that is not connected, to the device on its far side": "On: the pointer goes past a computer that is not connected, to the device on its far side",
+  "Off: the pointer stops at a computer that is not connected (a red line)": "Off: the pointer stops at a computer that is not connected (a red line)",
+  "{name} is not connected: the pointer stops here": "{name} is not connected: the pointer stops here",
   "{name}: drag to move it, or use the arrow keys": "{name}: drag to move it, or use the arrow keys",
   "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).": "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).",
 });
