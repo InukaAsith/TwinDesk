@@ -3,6 +3,14 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["ru"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "Follow Size ({width} × {height})": "Как в поле «Размер» ({width} × {height})",
+  "Set text and app sizes for this screen in Windows Settings › System › Display.": "Настройте размер текста и приложений для этого экрана в Параметры Windows › Система › Дисплей.",
+  "Width": "Ширина",
+  "Custom size": "Произвольный размер",
+  "Height": "Высота",
+  "Width and height in pixels, from 320 to 7680 each.": "Ширина и высота в пикселях, от 320 до 7680 каждая.",
+  "Desktop pixels on the extra screen.": "Размер рабочего стола дополнительного экрана в пикселях.",
+  "Limits video height, preserving aspect ratio. Full size sends the original pixels.": "Ограничивает высоту видео с сохранением пропорций. Исходный размер передаёт исходные пиксели.",
   " (hw)": " (апп.)",
   " (main)": " (основной)",
   " (not set up yet)": " (ещё не настроено)",

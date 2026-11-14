@@ -3,6 +3,14 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["tr"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "Follow Size ({width} × {height})": "Boyutu izle ({width} × {height})",
+  "Set text and app sizes for this screen in Windows Settings › System › Display.": "Bu ekranın metin ve uygulama boyutlarını Windows Ayarları › Sistem › Ekran bölümünden ayarlayın.",
+  "Width": "Genişlik",
+  "Custom size": "Özel boyut",
+  "Height": "Yükseklik",
+  "Width and height in pixels, from 320 to 7680 each.": "Genişlik ve yükseklik, her biri 320–7680 piksel.",
+  "Desktop pixels on the extra screen.": "Ek ekrandaki masaüstünün piksel boyutları.",
+  "Limits video height, preserving aspect ratio. Full size sends the original pixels.": "En boy oranını koruyarak video yüksekliğini sınırlar. Tam boyut, özgün pikselleri gönderir.",
   " (hw)": " (donanım)",
   " (main)": " (ana)",
   " (not set up yet)": " (henüz ayarlanmadı)",

@@ -163,6 +163,11 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .banner-actions { display: flex; gap: 8px; }
 
 /* ---------- Windows additions ---------- */
+.custom-screen-size { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.custom-screen-size label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.custom-screen-size input { box-sizing: border-box; width: 80px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--control-line); background: var(--control); box-shadow: var(--shadow); user-select: text; }
+.custom-screen-size input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 760px) { .row:has(.custom-screen-size) { flex-wrap: wrap; gap: 8px; } }
 #nav li.gap { height: 10px; }
 .nav-item .state.warn::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 input[type="text"], input[type="search"] { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--control-line); background: var(--control); box-shadow: var(--shadow); min-width: 190px; user-select: text; }
