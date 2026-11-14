@@ -9,6 +9,24 @@ switches on only when both sides have it ([how that's decided](docs/capabilities
 Numbers like (#143) are [issues and pull requests](https://github.com/InukaAsith/TwinDesk/issues).
 Everyone who sent code, reported a problem or tested is thanked under their version.
 
+## 3.1.1 (unreleased)
+
+### New
+
+- **The monitor map in Multi-device** (#225): every device's monitors in one picture, arranged by
+  dragging. The pointer crosses only where monitors touch, keeps its place along the edge, and goes
+  through an offline device to the next one. Phones hang off a computer's edge, and red shows where
+  an offline computer stops the pointer.
+- **Linux touchpad driving another device** (#222): tap to click with one, two or three fingers,
+  two-finger scrolling and pinch, read from the desktop's own settings (GNOME, KDE, Hyprland, Sway,
+  niri). A pinch reaches an Android phone as two fingers.
+- **Overview cards end level** (#224): cards side by side are as tall as each other.
+
+### Fixes
+
+- **Clipboard:** copying the same text again after the other side copied something sends it again
+  (#223).
+
 ## 3.1.0 (unreleased)
 
 ### New
