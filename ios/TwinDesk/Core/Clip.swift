@@ -96,6 +96,7 @@ final class Clip: Feature {
 
     func receiveText(_ text: String) {
         lastIn = text
+        lastOut = nil // what went out before may be copied and go again (#223)
         expectEcho()
         remember(Item(dir: "in", text: text))
         if autoCopy || UIApplication.shared.applicationState == .active { write(text) }
@@ -208,6 +209,7 @@ final class Clip: Feature {
         guard core.connected, !text.isEmpty, text.utf8.count <= Proto.clipMaxBytes else { return false }
         if !force && (text == lastOut || text == lastIn) { return false }
         lastOut = text
+        lastIn = nil // … and the computer's copy before this one
         expectEcho()
         remember(Item(dir: "out", text: text))
         return core.send(msg(Proto.T.clip, ["text": text]))
