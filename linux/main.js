@@ -297,6 +297,7 @@ function start() {
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
   // The helper: X11 (XInput2 + XTest), or on Wayland its uinput backend when /dev/uinput is ours.
   helper = new Helper(() => system.inputBlocker(session));
+  if (require('../shared/edition.js').fullKvm()) require('./fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   hud = new Hud(() => settings);
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', popup: (kind, text) => hud.show(kind, text), onChange: pushState });
