@@ -75,9 +75,36 @@ func handle(_ line: String) {
   Capture.shared.touch() // every command is a keepalive for the capture dead-man
   let num = { (k: String, d: Double) in (msg[k] as? NSNumber)?.doubleValue ?? d }
   switch cmd {
+#if !MULTI
+  case "portalCapabilities":
+    reply(id, ["version": 3])
+#endif
   case "kvmConfig":
     Capture.shared.edgeZones = zones(msg["zones"])
     Capture.shared.takeBack = (msg["takeBack"] as? Bool) ?? true
+#if !MULTI
+    Capture.shared.portals = ((msg["portals"] as? [[String: Any]]) ?? []).compactMap { value in
+      guard let id = value["id"] as? String, let source = value["source"] as? [String: Any],
+            let display = source["display"] as? String, let displayID = UInt32(display),
+            let side = source["side"] as? String, ["left", "right", "top", "bottom"].contains(side),
+            let from = (source["from"] as? NSNumber)?.doubleValue,
+            let to = (source["to"] as? NSNumber)?.doubleValue, from >= 0, to <= 1, from < to,
+            let mods = value["modifiers"] as? [String], let key = value["key"] as? String else { return nil }
+      var flags: CGEventFlags = []
+      for mod in mods {
+        switch mod {
+        case "Command": flags.insert(.maskCommand)
+        case "Control": flags.insert(.maskControl)
+        case "Alt": flags.insert(.maskAlternate)
+        case "Shift": flags.insert(.maskShift)
+        default: return nil
+        }
+      }
+      let vk = key.isEmpty ? nil : KeyCodes.vk(key)
+      if !key.isEmpty && vk == nil { return nil }
+      return Capture.Portal(id: id, side: side, display: displayID, from: from, to: to, flags: flags, key: vk)
+    }
+#endif
     guard Capture.shared.startTap() else { return replyError(id, "event tap failed (Accessibility / Input Monitoring)") }
     Flash.shared.prepare()
 #if MULTI
@@ -116,12 +143,50 @@ func handle(_ line: String) {
     Capture.shared.arrived(side: side)
     Flash.shared.arrive(at: to, side: side) // the PC's pointer arrives here
     reply(id)
+#if !MULTI
+  case "placePortal":
+    guard let display = msg["display"] as? String, let displayID = UInt32(display),
+          CGDisplayIsActive(displayID) != 0,
+          let side = msg["side"] as? String, ["left", "right", "top", "bottom"].contains(side),
+          let deadline = (msg["deadlineMs"] as? NSNumber)?.doubleValue,
+          portalPlacementIsFresh(deadlineMs: deadline, nowMs: Date().timeIntervalSince1970 * 1000),
+          let offset = (msg["offset"] as? NSNumber)?.doubleValue, offset.isFinite, offset >= 0, offset <= 1 else {
+      return replyError(id, "invalid portal destination")
+    }
+    let rect = CGDisplayBounds(displayID)
+    guard rect.width >= 4, rect.height >= 4 else { return replyError(id, "display unavailable") }
+    let x = min(max(rect.minX + CGFloat(offset) * rect.width, rect.minX + 2), rect.maxX - 2)
+    let y = min(max(rect.minY + CGFloat(offset) * rect.height, rect.minY + 2), rect.maxY - 2)
+    let to: CGPoint
+    switch side {
+    case "top": to = CGPoint(x: x, y: rect.minY + 2)
+    case "bottom": to = CGPoint(x: x, y: rect.maxY - 2)
+    case "left": to = CGPoint(x: rect.minX + 2, y: y)
+    default: to = CGPoint(x: rect.maxX - 2, y: y)
+    }
+    Capture.shared.warp(to)
+    Capture.shared.arrived(side: side)
+    Flash.shared.arrive(at: to, side: side)
+    reply(id)
+#endif
   case "armReturn":
     Capture.shared.returnZones = zones(msg["zones"])
 #if MULTI
     let sides = (msg["sides"] as? [String]) ?? [(msg["side"] as? String) ?? "right"]
     Capture.shared.armReturn(on: (msg["on"] as? Bool) ?? false, sides: sides, resistance: num("resistancePx", 120))
 #else
+    if (msg["on"] as? Bool) == true, let value = msg["portal"] as? [String: Any] {
+      guard let display = value["display"] as? String, let displayID = UInt32(display), CGDisplayIsActive(displayID) != 0,
+            let side = value["side"] as? String, side == (msg["side"] as? String), ["left", "right", "top", "bottom"].contains(side),
+            let from = (value["from"] as? NSNumber)?.doubleValue, let to = (value["to"] as? NSNumber)?.doubleValue,
+            from.isFinite, to.isFinite, from >= 0, to <= 1, from < to else {
+        Capture.shared.armReturn(on: false, side: "right", resistance: 0)
+        return replyError(id, "invalid portal return edge")
+      }
+      Capture.shared.portalReturn = Capture.PortalReturn(display: displayID, side: side, from: from, to: to)
+    } else {
+      Capture.shared.portalReturn = nil
+    }
     Capture.shared.armReturn(on: (msg["on"] as? Bool) ?? false, side: (msg["side"] as? String) ?? "right",
                              resistance: num("resistancePx", 120))
 #endif

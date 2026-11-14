@@ -47,7 +47,7 @@
   const SCRIPTS = {
     'ui-display.js': ['share'], 'ui-share.js': ['share'], 'ui-fullkvm.js': ['fullkvm'],
     'ui-display-pc.js': ['receive'], 'ui-receive.js': ['receive'],
-    'kvm-geom.js': ['cursor'], 'kvm-map-ui.js': ['cursor'], 'ui-cursor.js': ['cursor'], 'mesh-intro.js': ['cursor', 'multi'],
+    'kvm-geom.js': ['cursor'], 'kvm-map-ui.js': ['cursor'], 'cursor-portals.js': ['cursor'], 'ui-cursor-portals.js': ['cursor'], 'ui-cursor.js': ['cursor'], 'mesh-intro.js': ['cursor', 'multi'],
     'ui-keyboard.js': ['keyboard'], 'ui-clipboard.js': ['clipboard'], 'ui-notifs.js': ['notifications'],
     'ui-mic.js': ['audio'], 'ui-audio.js': ['audio'], 'ui-camera.js': ['camera'], 'ui-remote.js': ['remote'],
     'ui-terminal.js': ['terminal'], 'ui-files.js': ['files'], 'ui-drive.js': ['files'], 'ui-mount.js': ['mount'], 'ui-apps.js': ['apps'],

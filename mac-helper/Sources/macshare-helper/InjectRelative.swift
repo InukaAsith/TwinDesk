@@ -27,7 +27,8 @@ extension Injector {
   /// A relative move (the input lane's, Lane.swift, and `inject` k.mm): no dictionary per move.
   func moveRel(_ dx: Double, _ dy: Double) {
     let cur = CGEvent(source: nil)?.location ?? .zero
-    let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops)
+    let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops,
+                          portalStop: Capture.shared.portalReturnStop)
     var type = CGEventType.mouseMoved
     var b = 0
     if let held = heldButtons.min() {
