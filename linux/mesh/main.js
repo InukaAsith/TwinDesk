@@ -429,11 +429,15 @@ function start() {
 }
 
 // The Wayland backend can't ask the compositor for the monitors: tell it ours (logical px).
+let sentScreens = '';
 function sendScreens() {
   if (!helper || (helper.kvmBackend || helper.backend) !== 'uinput') return; // ours on Wayland, or the Full KVM service's
   const { screen: displays } = require('electron');
   const primary = displays.getPrimaryDisplay().id;
   const list = displays.getAllDisplays().map((d) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.id === primary ? 1 : 0].join(',')).join(';');
+  // In the log once per change: where the pointer may go is only what this says (#183).
+  if (list !== sentScreens) console.log('[kvm] Wayland monitors (x,y,w,h,primary):', list);
+  sentScreens = list;
   helper.send('screens', { list });
 }
 
