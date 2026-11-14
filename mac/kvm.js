@@ -22,7 +22,7 @@ const { KvmMap } = require('../shared/kvm-map.js');
 const REFUSED = { busy: '{them} is using this computer right now', not_allowed: '{them} doesn’t accept input from here' };
 const OFF_BLE = 'Cursor sharing is off over Bluetooth';
 // Input that goes numbered (es) and fenced when there's an input lane (shared/inputlane.js).
-const LANE_EVENTS = new Set([P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP, P.T.K_GESTURE]);
+const LANE_EVENTS = new Set([P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP, P.T.K_GESTURE, P.T.K_CROSSING_MODIFIERS]);
 
 class Kvm extends EventEmitter {
   constructor({ server, helper, getSettings, clipboard, input, drop, fileSend }) {
@@ -83,6 +83,7 @@ class Kvm extends EventEmitter {
     this.lockAt = 0;
     this.lockKey = new CL.LockKey(() => this.getSettings().keys.lockKeys);
     this.drivenMouse = false; // driven with the mouse too (not keyboard only): the way back is watched
+    this.drivenModifierState = false; // the driver can report physical modifier state
     // The crossing map: both computers' monitors, where they touch (shared/kvm-map.js).
     this.map = new KvmMap({
       electron: require('electron'),
@@ -152,7 +153,10 @@ class Kvm extends EventEmitter {
     on(P.T.KVM_HOME, () => { if (this.mode === 'home') this.caps.expect(); });
     on(P.T.KVM_CAPS, (m) => this.caps.onPeer(m));
     on(P.T.KVM_ACCEPT, (m) => {
-      if (this.mode === 'driving' && m.route === this.route) clearTimeout(this.acceptTimer);
+      if (this.mode === 'driving' && m.route === this.route) {
+        clearTimeout(this.acceptTimer);
+        if (m.crossingModifierV1 === true) this.helper.send('crossingWatch', {});
+      }
     });
     on(P.T.KVM_REFUSE, (m) => {
       if (this.mode === 'driving' && m.route === this.route) this.goHome(this._them(REFUSED[m.why] || '{them} refused'), false);
@@ -179,6 +183,7 @@ class Kvm extends EventEmitter {
     });
     for (const t of [P.T.K_MOVE, P.T.K_DOWN, P.T.K_UP, P.T.K_WHEEL, P.T.K_KEY_DOWN, P.T.K_KEY_UP]) on(t, (m) => this._onWire(m));
     on(P.T.K_GESTURE, (m) => this._onWire(m));
+    on(P.T.K_CROSSING_MODIFIERS, (m) => this._onWire(m));
     on(P.T.KVM_LOCK, (m) => {
       if (this.mode !== 'home') this.setLocked(m.on === true, false);
     });
@@ -244,6 +249,7 @@ class Kvm extends EventEmitter {
     this.helper
       .request('kvmConfig', {
         side: k.pcSide, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
+        crossingModifier: k.crossingModifier || '',
         driveOther: !!(this.linked && k.driveOther && k.mouse && this.server.current && this.server.current.os !== P.OS.IOS && !this.paused && !(this.locked && this.mode === 'home')),
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
@@ -352,7 +358,7 @@ class Kvm extends EventEmitter {
 
   // armReturn while driven: the way back, only where the monitors touch.
   _returnCfg() {
-    return { on: true, side: this.cfg.pcSide, resistancePx: this.cfg.resistancePx, zones: this.map.zones() };
+    return { on: true, side: this.cfg.pcSide, resistancePx: this.cfg.resistancePx, zones: this.map.zones(), requireModifier: this.drivenModifierState };
   }
 
   // The layout or the monitors changed while driven: the way back follows.
@@ -410,7 +416,7 @@ class Kvm extends EventEmitter {
     this.lane.reset(this.route);
     this._setMode('driving', '');
     this.input.releaseAll();
-    const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!fields.mouse, keyboard: !!k.keyboard, ...fields.where };
+    const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!fields.mouse, keyboard: !!k.keyboard, crossingModifierV1: true, crossingFlags: fields.crossingFlags || 0, ...fields.where };
     const plan = fields.paths && fields.paths.length ? this.fileSend.planDrag(fields.paths) : null;
     if (plan) take.drag = { count: plan.items.length };
     this._drive(take);
@@ -516,7 +522,7 @@ class Kvm extends EventEmitter {
           if (!this.server.current) this._setMode('home', 'Nothing connected');
           return;
         }
-        this._take({ mouse: true, where: { side: P.opposite(k.pcSide), offset: this.map.toPeer(ev.offset) }, paths: ev.drag && ev.drag.paths });
+        this._take({ mouse: true, where: { side: P.opposite(k.pcSide), offset: this.map.toPeer(ev.offset) }, paths: ev.drag && ev.drag.paths, crossingFlags: ev.crossingFlags });
         // A window grabbed with the move key crossed with the pointer (main.js onMoveWindow).
         if (ev.moving && this.onMoveWindow) this.onMoveWindow(ev);
         break;
@@ -606,9 +612,11 @@ class Kvm extends EventEmitter {
     if (m.drag) console.log(`[drag] in: the PC crossed with a drag of ${m.drag.count} item(s)`);
     if (m.drag) this.drop.armDrag();
     this._setMode('driven', '');
-    this.server.sendToClient({ t: P.T.KVM_ACCEPT, route: m.route });
+    this.server.sendToClient({ t: P.T.KVM_ACCEPT, route: m.route, crossingModifierV1: true });
     if (first) this.input.releaseAll();
     this.drivenMouse = m.mouse !== false;
+    this.drivenModifierState = m.crossingModifierV1 === true;
+    this.helper.send('crossingFlags', { flags: this.drivenModifierState && Number.isInteger(m.crossingFlags) ? m.crossingFlags & 15 : 0 });
     if (m.mouse !== false) {
       if (typeof m.side === 'string') this.helper.send('place', { side: m.side, offset: Number(m.offset) || 0.5 });
       else if (first) this.helper.send('place', { center: true });
@@ -625,6 +633,12 @@ class Kvm extends EventEmitter {
     const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     let ev;
     switch (m.t) {
+      case P.T.K_CROSSING_MODIFIERS:
+        if (this.drivenModifierState && Number.isInteger(m.flags) && m.flags >= 0 && m.flags <= 15) {
+          this.injectMoves.flush();
+          this.helper.send('crossingFlags', { flags: m.flags });
+        }
+        return;
       case P.T.K_MOVE:
         ev = { t: m.t, dx: num(m.dx) * k.speed, dy: num(m.dy) * k.speed };
         if (this.drop.dragIn.arming) { // the drag starts where the pointer came in; these follow once it has

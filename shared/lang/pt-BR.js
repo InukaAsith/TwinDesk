@@ -1956,6 +1956,8 @@
   "Move windows to {name}": "Mover janelas para {name}",
   "Key to hold": "Tecla para segurar",
   "Hold it, then click anywhere in a window and drag": "Segure-a, clique em qualquer lugar de uma janela e arraste",
+  "Hold key to switch": "Tecla para segurar ao alternar",
+  "Hold this key when leaving this Mac. On return, the other computer needs a compatible version.": "Mantenha esta tecla pressionada ao sair deste Mac. Para voltar, o outro computador precisa de uma versão compatível.",
   "Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home": "Arraste uma janela além da borda com a tecla pressionada: ela abre em {name} e sai desta tela. Arraste-a de volta ou feche-a lá para trazê-la de volta",
   "Right Windows key": "Tecla Windows direita",
   "Left Windows key": "Tecla Windows esquerda",

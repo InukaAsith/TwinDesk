@@ -1964,6 +1964,8 @@
   "Move windows to {name}": "Перемещать окна на {name}",
   "Key to hold": "Удерживаемая клавиша",
   "Hold it, then click anywhere in a window and drag": "Удерживайте её, затем нажмите в любом месте окна и перетащите",
+  "Hold key to switch": "Удерживать клавишу для перехода",
+  "Hold this key when leaving this Mac. On return, the other computer needs a compatible version.": "Удерживайте эту клавишу при переходе с этого Mac. Для возврата на другом компьютере нужна совместимая версия.",
   "Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home": "Перетащите окно за край, удерживая клавишу: оно откроется на {name} и уйдёт с этого экрана. Чтобы вернуть его, перетащите обратно или закройте там",
   "Right Windows key": "Правая клавиша Windows",
   "Left Windows key": "Левая клавиша Windows",

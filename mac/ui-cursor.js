@@ -26,6 +26,15 @@ UI.tab({
     const drive = UI.switch((v) => api.setKvm({ driveOther: v }), { label: I18n.t('Use here, control there') });
     const driven = UI.switch((v) => api.setKvm({ beDriven: v }), { label: I18n.t('Let it control this computer') });
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => `${v} px` }, (v) => api.setKvm({ resistancePx: v }));
+    const crossingModifier = UI.select([
+      { value: '', label: I18n.t('None') },
+      { value: 'Command', label: '⌘ Command' },
+      { value: 'Control', label: '⌃ Control' },
+      { value: 'Alt', label: '⌥ Option' },
+      { value: 'Shift', label: '⇧ Shift' },
+    ], (v) => api.setKvm({ crossingModifier: v }));
+    crossingModifier.el.setAttribute('aria-label', I18n.t('Hold key to switch'));
+    let crossingModifierRow;
     const speed = UI.slider({ min: 0.25, max: 4, step: 0.25, format: (v) => `${v.toFixed(2)}×` }, (v) => api.setKvm({ speed: v }));
     const reverse = UI.switch((v) => api.setKvm({ reverseScroll: v }), { label: I18n.t('Reverse scrolling') });
     const gestures = UI.switch((v) => api.setKvm({ gestures: v }), { label: I18n.t('Trackpad gestures') });
@@ -79,6 +88,7 @@ UI.tab({
       UI.card(I18n.t('Where the other computer is'), [map.el]),
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
+        crossingModifierRow = UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when leaving this Mac. On return, the other computer needs a compatible version.'), [crossingModifier.el]),
         speedRow = peerRow(I18n.t('Pointer speed here'), '', [speed]),
         peerRow(I18n.t('Reverse scrolling from {name}'), '', [reverse]),
         gestureRow,
@@ -109,6 +119,8 @@ UI.tab({
       drive.set(k.driveOther);
       driven.set(k.beDriven);
       resistance.set(k.resistancePx);
+      crossingModifierRow.hidden = !!s.mesh;
+      crossingModifier.set(k.crossingModifier || '');
       speed.set(k.speed);
       // A computer's mouse here is sped up by it; with a phone, it's this Mac's pointer there (phone-bridge.js).
       speedRow.label.dataset.peer = UI.isPhone(s) ? I18n.t('Pointer speed on {name}') : I18n.t('Pointer speed here');

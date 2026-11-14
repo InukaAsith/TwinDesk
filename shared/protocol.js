@@ -124,6 +124,7 @@
       KVM_CAPS: 'kvm.caps', // either {on}: my Caps Lock as I hand my input over (take, or home); the other side turns its own that way (shared/capsync.js, #131)
       KVM_NEXT: 'kvm.next', // multi-device: {route, to, side, offset}: a device we drive reached an edge that leads to device `to` (docs/mesh.md)
       K_MOVE: 'k.mm',
+      K_CROSSING_MODIFIERS: 'k.mod', // physical modifier state for a compatible peer's return edge
       K_DOWN: 'k.md',
       K_UP: 'k.mu',
       K_WHEEL: 'k.wh',
