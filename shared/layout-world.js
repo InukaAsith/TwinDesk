@@ -180,8 +180,8 @@
             if (!best) continue;
             const gap = Math.abs(front - e);
             const last = res[res.length - 1];
-            if (last && last.dev === best.dev && last.display === best.id && Math.abs(last.to - p) < 1) last.to = q;
-            else res.push({ from: p, to: q, dev: best.dev, display: best.id, gap });
+            if (last && last.dev === best.dev && last.display === best.id && last.at === e && Math.abs(last.to - p) < 1) last.to = q;
+            else res.push({ from: p, to: q, at: e, dev: best.dev, display: best.id, gap }); // at: our edge's line
           }
         }
       }

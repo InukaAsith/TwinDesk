@@ -2240,4 +2240,7 @@
   "Reset": "Sıfırla",
   "Put the pages in the order you like. Or hold the sidebar": "Sayfaları istediğiniz sıraya koyun. Ya da kenar çubuğuna basılı tutun",
   "Arrange…": "Düzenle…",
+  "Line up again": "Yeniden hizala",
+  "{name}: drag to move it, or use the arrow keys": "{name}: taşımak için sürükleyin veya ok tuşlarını kullanın",
+  "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).": "Bir cihazı masanızda durduğu yere sürükleyin. İşaretçi, monitörlerin birbirine değdiği yerlerden, kenar boyunca aynı noktadan geçer (yanan çizgiler).",
 });

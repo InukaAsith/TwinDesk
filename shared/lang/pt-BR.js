@@ -2240,4 +2240,7 @@
   "Reset": "Redefinir",
   "Put the pages in the order you like. Or hold the sidebar": "Coloque as páginas na ordem que quiser. Ou segure a barra lateral",
   "Arrange…": "Organizar…",
+  "Line up again": "Alinhar de novo",
+  "{name}: drag to move it, or use the arrow keys": "{name}: arraste para mover ou use as setas",
+  "Drag a device to where it sits on your desk. The pointer crosses where the monitors touch, at the same place along the edge (the lit lines).": "Arraste um dispositivo para onde ele fica na sua mesa. O ponteiro passa onde os monitores se tocam, no mesmo ponto ao longo da borda (as linhas acesas).",
 });

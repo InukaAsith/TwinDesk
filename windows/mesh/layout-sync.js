@@ -229,7 +229,7 @@ class LayoutSync {
     for (const id of ids) online[id] = this._present(id);
     const st = this.stretches();
     const edges = [];
-    for (const side of W.SIDES) for (const x of st[side]) edges.push({ side, from: x.from, to: x.to, dev: x.dev, gap: x.gap });
+    for (const side of W.SIDES) for (const x of st[side]) edges.push({ side, from: x.from, to: x.to, at: x.at, dev: x.dev, gap: x.gap });
     return { rev: this.layout.rev, by: this.layout.by, cells: v.cells, grid: L.grid(v), targets, reach,
       map: { arranged: !!this.layout.world, world, monitors, online, edges, phones: ids.filter((id) => this._isPhone(id)) } };
   }

@@ -266,9 +266,14 @@ function start() {
     knownIds: () => hub.peers({ indirect: true }).map((p) => p.id), // with those known through a peer: one map everywhere
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
     endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
+    // The monitor map (#225): ours from Electron, the others' kept for when they are offline.
+    online: (pid) => { const p = hub.peers({ indirect: true }).find((x) => x.id === pid); return !!p && (p.state === 'connected' || p.state === 'via'); },
+    myDisplays: () => require('../../shared/screen-mesh.js').fromElectron(require('electron').screen),
+    displaysStorage: { get: () => settings.layoutDisplays || null, set: (m) => { settings.layoutDisplays = m; saveSettings(); } },
     legacyEdges: () => settings.kvm.edges, // settings from before the layout: once
     onChange: () => { if (kvm) kvm.layoutChanged(); pushState(); },
   });
+  for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   // Popups: a {key, vars} is translated in the popup (hud-renderer.js) with the device names added;
