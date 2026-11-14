@@ -35,12 +35,16 @@ UI.tab({
       { value: '2560x1440', label: '2560 × 1440' },
       { value: '3840x2160', label: '3840 × 2160' },
     ], (v) => set({ extendSize: v }));
-    const streamSize = UI.select([
+    const customSize = UI.customSize((v) => set({ extendSize: v }));
+    const customRow = UI.row(t('Custom size'), t('Width and height in pixels, from 320 to 7680 each.'), [customSize]);
+    const scaleNote = el('div', { class: 'note' }, [el('span', { text: t('Set text and app sizes for this screen in Windows Settings › System › Display.') })]);
+    const streamSizes = [
       { value: 1080, label: t('1080p (1920 × 1080), fastest') },
       { value: 1440, label: t('1440p (2560 × 1440), sharper') },
       { value: 2160, label: t('4K (3840 × 2160), sharpest') },
       { value: 0, label: t('Full size') },
-    ], (v) => set({ maxHeight: Number(v) }));
+    ];
+    const streamSize = UI.select(streamSizes, (v) => set({ maxHeight: v === 'extend' ? v : Number(v) }));
     const quality = UI.select([
       { value: 10, label: t('Low, 10 Mbps') },
       { value: 20, label: t('Medium, 20 Mbps') },
@@ -63,7 +67,7 @@ UI.tab({
     const remoteRow = UI.row(t('Let the other computer start and switch this screen'), '', [remote], { literal: true }); // screen.ctl
 
     const monitorRow = UI.row(t('Display'), '', [monitor], { literal: true });
-    const extendRow = UI.row(t('Size'), '', [extendSize]);
+    const extendRow = UI.row(t('Size'), t('Desktop pixels on the extra screen.'), [extendSize]);
     const details = UI.details(['Status', 'Display', 'Picture', 'Speed', 'Round trip', 'Codec', 'Encoder', 'Frames dropped']);
 
     const installBtn = UI.button(t('Install'), () => api.installVdd(), 'small primary');
@@ -78,8 +82,8 @@ UI.tab({
 
     body.append(
       missing,
-      UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow]),
-      UI.card(t('screen.picture'), [UI.row(t('Resolution'), '', [streamSize]), UI.row(t('Quality'), '', [quality]), UI.row(t('Frame rate'), '', [frameRate]), paceRow, codecRow], { cls: 'keep-on' }),
+      UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow, customRow, scaleNote]),
+      UI.card(t('screen.picture'), [UI.row(t('Resolution'), t('Limits video height, preserving aspect ratio. Full size sends the original pixels.'), [streamSize]), UI.row(t('Quality'), '', [quality]), UI.row(t('Frame rate'), '', [frameRate]), paceRow, codecRow], { cls: 'keep-on' }),
       UI.card(t('Sound and control'), [UI.row(t('Include sound'), '', [sound]), inputRow], { cls: 'keep-on' }),
       UI.card(t('Remote'), [remoteRow], { cls: 'keep-on' }),
       details,
@@ -96,8 +100,12 @@ UI.tab({
       monitor.set(p.monitor || (p.monitors.find((m) => /\(main\)$/.test(m.label)) || p.monitors[0] || { id: '' }).id);
       monitorRow.hidden = p.mode === 'extend';
       extendRow.hidden = p.mode !== 'extend';
+      customRow.hidden = p.mode !== 'extend';
+      scaleNote.hidden = p.mode !== 'extend';
       extendSize.set(p.extendSize);
-      extendRow.setHint(p.extendSize === 'mac' ? p.extendPx[0] + ' × ' + p.extendPx[1] : '');
+      extendRow.setHint(p.extendSize === 'mac' ? p.extendPx[0] + ' × ' + p.extendPx[1] : t('Desktop pixels on the extra screen.'));
+      customSize.set(p.extendPx);
+      streamSize.options([...streamSizes, { value: 'extend', label: t('Follow Size ({width} × {height})', { width: p.extendPx[0], height: p.extendPx[1] }) }]);
       streamSize.set(p.maxHeight);
       quality.set(p.mbps);
       frameRate.set(p.fps || 0);

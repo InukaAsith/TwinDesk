@@ -3,6 +3,13 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["zh-CN"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "Follow Size ({width} × {height})": "跟随尺寸（{width} × {height}）",
+  "Set text and app sizes for this screen in Windows Settings › System › Display.": "文字和应用大小可在 Windows 设置 › 系统 › 显示中调整。",
+  "Width": "宽度",
+  "Height": "高度",
+  "Width and height in pixels, from 320 to 7680 each.": "宽度和高度分别填写，单位为像素，范围为 320–7680。",
+  "Desktop pixels on the extra screen.": "决定扩展桌面的像素尺寸。",
+  "Limits video height, preserving aspect ratio. Full size sends the original pixels.": "限制视频高度，保持宽高比；选择“原始分辨率”可传输原始像素。",
   " (hw)": "（硬件）",
   " (main)": "（主屏幕）",
   " (not set up yet)": "（尚未设置）",
@@ -324,6 +331,7 @@
   "Cursor sharing on": "光标共享已开启",
   "Cursor unlocked": "光标已解锁",
   "Customize": "自定义",
+  "Custom size": "自定义尺寸",
   "Data saver (4 Mb/s)": "节省流量（4 Mb/s）",
   "Data saver · 4 Mb/s": "省流量 · 4 Mb/s",
   "Decline": "拒接",
