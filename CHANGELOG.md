@@ -61,6 +61,7 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 Code from [@alexfoxtm](https://github.com/alexfoxtm) (#221, #227, #228) and
 [@youyouhdhd](https://github.com/youyouhdhd) (#226).
+Reported by [@ElMahaster](https://github.com/ElMahaster) (#188).
 
 ## 3.1.0 (unreleased)
 
