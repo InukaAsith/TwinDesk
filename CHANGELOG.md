@@ -31,6 +31,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Linux touchpad driving another device** (#222): tap to click with one, two or three fingers,
   two-finger scrolling and pinch, read from the desktop's own settings (GNOME, KDE, Hyprland, Sway,
   niri). A pinch reaches an Android phone as two fingers.
+- **Pick which Mac display an Android phone mirrors** (#221), from the Screen page or the viewer's
+  toolbar. One-to-one only; if that monitor goes, another one is shown.
+- **A custom size for Extend** (Windows, #226): any width and height from 320 to 7680, and a
+  Resolution that follows it, so the other side gets exactly the extra screen.
 - **Overview cards end level** (#224): cards side by side are as tall as each other.
 - **The Full KVM page in every build** (Windows, Linux): with its own icon and an animation of it at
   work. The normal build shows what it does and says it's only in the Full KVM builds; none of Full
@@ -46,7 +50,15 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Full KVM at the login screen** (Windows): after signing out, a computer connected but the pointer
   didn't move. The service never told the machine node its helper was ready.
 - **Clipboard:** copying the same text again after the other side copied something sends it again
-  (#223).
+  (#223), on the computers and now on Android and iPhone too (#227).
+- **Pinch on Android** from a Mac trackpad or a Linux touchpad (#228): pinching in did nothing,
+  because the two fingers started closer than Android needs to see a pinch. They now start far
+  enough apart, a long pinch keeps zooming, and it works without wireless debugging too.
+
+### Thanks
+
+Code from [@alexfoxtm](https://github.com/alexfoxtm) (#221, #227, #228) and
+[@youyouhdhd](https://github.com/youyouhdhd) (#226).
 
 ## 3.1.0 (unreleased)
 
