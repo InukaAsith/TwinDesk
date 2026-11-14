@@ -61,8 +61,54 @@ async function set(mode) {
   return state();
 }
 
+// System-wide: while seat0 isn't ours (the login screen, another person), the machine node or their
+// TwinDesk is this computer to the mesh, and we must not hold the network (discovery's port, the links
+// to the same devices with the same id). On X11 an app in a session off screen can't even notice: its
+// main thread waits on the display (seen in the VM: the Mac's link went silent, discovery's queue
+// filled). So a guard outside us does it: plain sh as this user (no AppImage mount, which ends with
+// us), started with the app. With System-wide on and seat0 someone else's for 3 s, it ends TwinDesk;
+// once seat0 is ours again it starts it as it was. TwinDesk quit by the person (seat0 ours) stays quit.
+function guard() {
+  const q = (a) => "'" + String(a).replace(/'/g, "'\\''") + "'";
+  const exe = process.env.APPIMAGE || process.execPath;
+  const again = 'cd ' + q(process.cwd()) + ' && exec ' + [exe, ...process.argv.slice(1)].map(q).join(' ');
+  const sh = `pid=${process.pid}; uid=${process.getuid()}
+ours() { s=$(loginctl show-seat seat0 -p ActiveSession --value 2>/dev/null); [ -z "$s" ] && return 0; [ "$(loginctl show-session "$s" -p User --value 2>/dev/null)" = "$uid" ]; }
+system() { grep -q '"system"' ${CONF} 2>/dev/null && [ -e ${UNIT} ]; }
+away=0
+while kill -0 $pid 2>/dev/null; do
+  sleep 1
+  if system && ! ours; then away=$((away + 1)); else away=0; fi
+  if [ $away -ge 3 ]; then
+    kill -TERM $pid 2>/dev/null; sleep 2; kill -KILL $pid 2>/dev/null
+    break
+  fi
+done
+[ $away -ge 3 ] || exit 0
+until ours; do sleep 2; done
+sleep 1
+${again}`;
+  const { spawn } = require('child_process');
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  // Its own unit (systemd-run --user), so it outlives whatever started TwinDesk (a launcher's scope
+  // is torn down with the app); plain detached where there is no user manager.
+  const fs2 = require('fs');
+  const bin = ['/usr/bin/systemd-run', '/bin/systemd-run'].find((f) => fs2.existsSync(f));
+  const p = bin
+    ? spawn(bin, ['--user', '--collect', '--quiet', '--unit', 'twindesk-fullkvm-guard-' + process.pid,
+      // The unit has the user manager's environment, not ours: what starting TwinDesk again needs.
+      ...['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_SESSION_TYPE', 'XDG_CURRENT_DESKTOP', 'DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR', 'APPIMAGE', 'HOME', 'PATH', 'LANG']
+        .filter((k) => env[k]).map((k) => '--setenv=' + k + '=' + env[k]),
+      '/bin/sh', '-c', sh], { detached: true, stdio: 'ignore', env })
+    : spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore', env });
+  p.on('exit', (code) => { if (code && bin) spawn('/bin/sh', ['-c', sh], { detached: true, stdio: 'ignore', env }).unref(); });
+  p.unref();
+}
+
 function attach(ctx) {
   helper = ctx.helper;
+  guard();
   ipcMain.handle('fullkvm', (_e, op, arg) => (op === 'set' ? set(String(arg)) : state()));
   const preload = path.join(__dirname, 'preload.js');
   const ses = session.defaultSession;

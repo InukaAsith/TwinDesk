@@ -75,10 +75,17 @@ async function main() {
   const id = await identity.load(); // the person's certificate: the same computer to the others
   discovery.self.fp = id.fp;
   const server = new Server(id);
+  // The person's TwinDesk may still hold the port for a moment (it is on its way out): again until ours.
+  server.on('listenError', (e) => {
+    log('the port:', e.code || e.message, '- again in 2 s');
+    setTimeout(() => server.https.listen(server.port, '0.0.0.0'), 2000);
+  });
+  server.on('listening', () => log('listening on', server.port));
   discovery.self.port = server.port;
   const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp });
   pairing.on('request', () => { log('a pairing request at the login screen: refused'); pairing.respond(false); });
   hub.attachHost(server, pairing);
+  hub.start(); // dial the computers we are a guest of (mesh/main.js: link.start())
 
   const helper = new ServiceHelper(SOCK);
   helper.on('ready', () => { log('the mouse and keyboard are ours'); sendScreens(helper); });
@@ -98,8 +105,9 @@ async function main() {
     legacyEdges: () => settings.kvm.edges,
     onChange: () => { if (kvm) kvm.layoutChanged(); },
   });
-  const none = { prepareDrag: () => null, view: () => ({}) };
-  const kvm = new Kvm({ hub, layoutSync, helper, clip: null, fileDrop: none, fileRecv: none, dragRecv: none, settings, save, onChange: () => {} });
+  // No files, drags or clipboard here: whatever kvm.js asks of them is a no-op.
+  const none = new Proxy({ view: () => ({}), dragging: false }, { get: (t, k) => (k in t ? t[k] : k === 'then' ? undefined : () => null) });
+  const kvm = new Kvm({ hub, layoutSync, helper, clip: none, fileDrop: none, fileRecv: none, dragRecv: none, settings, save, onChange: () => {} });
   kvm.onWhere = (mode) => log('mouse and keyboard:', mode);
   hub.on('change', () => {
     const on = hub.peers().filter((p) => p.state === 'connected').map((p) => p.name || p.id);

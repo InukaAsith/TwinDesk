@@ -69,6 +69,11 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
     folder (`/var/lib/twindesk`, `%ProgramData%\TwinDesk\machine`, readable by the service accounts and
     administrators only). The other devices see the same device, at the same place on the map.
   - It is `shared/fullkvm/headless.js`, the same on both (the platform's own mesh modules).
+  - The person's TwinDesk gives way while seat0 isn't theirs (Linux, `linux/fullkvm/manager.js`): on X11 an
+    app in a session off screen stalls on the display and can't notice, yet holds the discovery port, the
+    server port and the links. A guard (sh, its own `systemd-run --user` unit) ends it after 3 s and starts
+    it again when the session is back. To do on Windows: a disconnected session's TwinDesk keeps running
+    and holds the ports the same way.
   - On Windows the app stages the copy in its own temp folder, with the certificate's passphrase
     unsealed (DPAPI is the user's; LOCAL SERVICE couldn't open it) and its displays
     (`fullkvm-displays.json`); `--apply` copies it and the app deletes the stage.
