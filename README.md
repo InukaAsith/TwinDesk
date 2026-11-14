@@ -12,13 +12,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src=".github/assets/buttons/get-android.png" width="240" alt="Get it for Android"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0.apk"><img src=".github/assets/buttons/get-android.png" width="240" alt="Get it for Android"></a>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src=".github/assets/buttons/get-windows.png" width="240" alt="Download for Windows"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Setup-3.2.0.exe"><img src=".github/assets/buttons/get-windows.png" width="240" alt="Download for Windows"></a>
   <br>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src=".github/assets/buttons/get-dmg.png" width="240" alt="Download for macOS (Apple silicon)"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-arm64.dmg"><img src=".github/assets/buttons/get-dmg.png" width="240" alt="Download for macOS (Apple silicon)"></a>
   <a href="#homebrew"><img src=".github/assets/buttons/get-brew.png" width="240" alt="Install with Homebrew"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src=".github/assets/buttons/get-linux.png" width="240" alt="Download for Linux (AppImage)"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-x86_64.AppImage"><img src=".github/assets/buttons/get-linux.png" width="240" alt="Download for Linux (AppImage)"></a>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <a href="#whats-new"><b>What's new in 3.0</b></a> ·
+  <a href="#whats-new"><b>What's new in 3.2</b></a> ·
   <a href="#iphone"><b>iPhone and iPad</b></a> ·
   <a href="#computers"><b>Computers</b></a> ·
   <a href="#android"><b>Android</b></a> ·
@@ -120,8 +120,8 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 **🍎 macOS**<br><sub>13 Ventura or later</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
 <a href="#homebrew"><img src="https://img.shields.io/badge/Homebrew-cask-fbb040?style=for-the-badge" alt="macOS, Homebrew"></a>
 
 </td>
@@ -129,27 +129,29 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 **🪟 Windows**<br><sub>10 and 11</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-Setup-3.0.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Setup-3.2.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Setup-3.2.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Portable-3.2.0.exe"><img src="https://img.shields.io/badge/Portable-.exe-3a6ea5?style=for-the-badge" alt="Windows, Portable"></a><br>
+<sub>Portable runs without installing (<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Portable-3.2.0-arm64.exe">ARM64</a>). <a href="#full-kvm">Full KVM</a>: <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-Setup-3.2.0.exe">x64</a> · <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-Setup-3.2.0-arm64.exe">ARM64</a></sub>
 
 </td>
 <td width="20%" align="center" valign="top">
 
 **🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
 <a href="#apt"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-APT-a80030?style=for-the-badge" alt="Linux, APT repository"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/twindesk-bin-3.0.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
-<sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)</sub>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/twindesk-bin-3.2.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
+<sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)<br><a href="#full-kvm">Full KVM</a>: <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-3.2.0-amd64.deb">.deb</a> · <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-3.2.0-x86_64.AppImage">AppImage</a></sub>
 
 </td>
 <td width="20%" align="center" valign="top">
 
 **🤖 Android**<br><sub>10 or later, phones and tablets</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk-3.0.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
 <sub>The full app adds notifications, texts and Accessibility; the computer can install it for you</sub>
 
 </td>
@@ -159,7 +161,7 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 <a href="#twindesk-web"><img src="https://img.shields.io/badge/No_app-twindesk.local-5e5ce6?style=for-the-badge" alt="TwinDesk Web, no app"></a><br>
 <a href="#altstore"><img src="https://img.shields.io/badge/AltStore-source-1c8bd6?style=for-the-badge" alt="AltStore source"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
 
 </td>
 </tr>
@@ -183,7 +185,7 @@ sudo apt update && sudo apt install twindesk
 
 <p align="center"><sub>The <a href="https://github.com/InukaAsith/twindesk-apt">repository</a> follows every release within a few hours.</sub></p>
 
-<p align="center"><sub>Already on 2.5? The in-app updater picks the right file. Update every device you pair: 3.0 still talks to 2.5, and the new features switch on when both sides have 3.0.<br>
+<p align="center"><sub>Already installed? <b>Install now</b> in the app updates it in place, with your edition's file (Portable stays Portable, Full KVM stays Full KVM). Update every device you pair: a newer TwinDesk still talks to an older one, and a new feature switches on when both sides have it.<br>
 Every file and older version is on the <a href="https://github.com/InukaAsith/TwinDesk/releases">releases page</a>.</sub></p>
 
 <a name="first-launch"></a>
@@ -248,7 +250,66 @@ The IPA is unsigned: AltStore, SideStore or another signing tool signs it with y
 
 <a name="whats-new"></a>
 
-# ✨ New in 3.0: now on iPhone, iPad and any browser
+# ✨ New in 3.2
+
+<p align="center">
+  <img src=".github/assets/v32-banner.jpg" alt="TwinDesk 3.2: a Deck on your phone, one map for every screen. The Multi-device monitor map on the Mac and the Deck on an iPhone" width="100%">
+</p>
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**🎛 [Deck](#deck)**<br>
+A grid of buttons on the phone for the computer: shortcuts, sound, brightness, Bluetooth, and a
+window space that arranges the computer's windows.
+
+</td>
+<td width="33%" valign="top">
+
+**🗂 [TwinDesk Drive](#drive)**<br>
+One folder kept the same on all your computers, with no cloud. Each keeps its own copy and works
+offline.
+
+</td>
+<td width="33%" valign="top">
+
+**🕸 [Multi-device, out of beta](#mesh)**<br>
+Every monitor of every device on one map, plus fast files, Camera, Remote, Deck, ReZume and Drive.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**🖱 [Hold a key to cross](#mouse)**<br>
+The pointer leaves the screen only while a key is held, and an emergency shortcut brings
+everything home at once.
+
+</td>
+<td valign="top">
+
+**📍 [Air mouse and laser](#remote)**<br>
+Point the phone to move the pointer, or run your slides from it with a laser pointer.
+
+</td>
+<td valign="top">
+
+**🧳 [Portable and Full KVM](#full-kvm)**<br>
+Windows without installing, and a build that also drives the login screen, UAC and admin windows.
+
+</td>
+</tr>
+</table>
+
+Also new: **search everywhere** (<kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd>), **Arrange** the sidebar,
+**General › Modules** to switch off pages you don't use, **encrypted clipboard and notification
+history**, **updates that install in place**, a **tour** for someone new, and a Linux touchpad that
+drives the other device. Everything, with credits, is in the [changelog](CHANGELOG.md).
+
+<a name="iphone-headline"></a>
+
+# 📱 Now on iPhone, iPad and any browser
 
 <p align="center">
   <img src=".github/assets/v30-banner.jpg" alt="TwinDesk 3.0: now on iPhone, iPad and any browser. The Mac's Photos page showing an iPhone's photos, the Android app and the iPhone app" width="100%">
@@ -396,7 +457,7 @@ the IPA with your own Apple ID:
 <p>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a><br>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-SideStore-8e5cf6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to SideStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
 </p>
 
 1. Install [AltStore](https://altstore.io) or [SideStore](https://sidestore.io) on the iPhone.
@@ -406,6 +467,10 @@ the IPA with your own Apple ID:
 
 With a free Apple ID, apps installed this way have to be refreshed every 7 days; AltStore and
 SideStore do it for you in the background. Needs iOS or iPadOS 16 or later.
+
+**Or let the computer do it** (new in 3.2, opt in): the **TwinDesk iPhone** page on Mac, Windows or
+Linux signs the app with your own free Apple ID, installs it over the cable or Wi-Fi and refreshes it
+before it expires. Updates install the same way.
 
 ---
 
@@ -423,6 +488,8 @@ behave like one: one mouse and keyboard, one clipboard, files that go where you 
 other's screens, apps, cameras and speakers whenever you want them. Every feature has its own page
 and its own switch, and nothing runs until you turn it on.
 
+<a name="mouse"></a>
+
 ## 🖱 One mouse and keyboard
 
 Push the pointer off the edge of your screen and **keep working on the other computer**, as if they
@@ -434,7 +501,12 @@ brings everything home.
 - **Where the other computer is:** drag the screens on the Mouse page to match your desk.
 - **Cursor lock** keeps the pointer on the computer it's on: **Scroll Lock** (F14 on a Mac), the
   Mouse page, or the tray and menu bar.
-- **Over Bluetooth on busy Wi-Fi** (new in 3.0, off by default): the pointer and keys ride Bluetooth
+- **Hold a key to cross** (new in 3.2): pick Command, Control, Alt or Shift and the pointer leaves
+  the screen only while it's held, so it never slips over by accident.
+- **Emergency return** (new in 3.2): <kbd>Control+Alt+Command+Esc</kbd> (or your own shortcut)
+  stops sharing at once and brings the mouse and keyboard home.
+- **Linux touchpads** drive the other device with taps, two-finger scrolling and pinch.
+- **Over Bluetooth on busy Wi-Fi** (off by default): the pointer and keys ride Bluetooth
   while screens, files and the clipboard stay on Wi-Fi.
 
 <a name="move-windows"></a>
@@ -464,6 +536,7 @@ other computer's screen into a window and control it from there.
 - **Fastest, Smooth or Steady** playback, a frame-rate cap, and optional frame generation.
 - **Pens** (new in 3.0): a stylus, a drawing tablet or an Apple Pencil over Sidecar draws on the other
   computer with pressure, tilt and eraser. Real multitouch on Windows.
+- **Any size on Windows** (new in 3.2): Extend with a custom width and height, 320 to 7680.
 - **Linux:** Extend on GNOME and X11, and a guide for KDE Plasma on Wayland.
 
 <p align="center">
@@ -478,11 +551,19 @@ into the app in front. Send from the macOS Share menu or Explorer's *Send to*, o
 that shows up as a network drive on the other side. Big and small, files move on [fx2](#speed).
 Need a shell? `ssh twindesk` opens one on the other computer, no passwords needed.
 
+<a name="drive"></a>
+
+**TwinDesk Drive** (new in 3.2, in File Sharing) keeps **one folder the same on all your
+computers**, with no cloud. Each keeps its own copy and works offline; they swap what changed when
+they connect. A file changed on two at once keeps both, and deleted files go to the Trash or
+Recycle Bin. [How it works](docs/drive.md).
+
 ## 📋 Shared clipboard
 
 Copy on one computer and paste on the other, instantly or when you switch over. **Pictures** go too,
 up to 10 MB: take a screenshot with <kbd>Win+Shift+S</kbd> on the PC and paste it on the Mac.
 Entries from password managers are skipped, and a Recent list keeps the last few things you copied.
+History can also be kept across restarts, encrypted, for a day up to a year.
 
 <p align="center">
   <img src=".github/assets/v30-features.jpg" alt="TwinDesk's feature pages: Sound sharing, Camera sharing, Second screen, Notification sync, ReZume and Phone drive" width="100%">
@@ -516,7 +597,13 @@ a sleeping computer with Wake-on-LAN.
 | **ReZume** | Continue the other computer's tab, video or document here |
 | **TwinDesk Web / AirPlay & SMB** | Phones and browsers with no app, AirPlay mirroring and a folder for the Files app |
 | **Multi-device** | [TwinDesk Mesh](#mesh): every device at once |
-| **General** | Appearance (Glass or Simple, light or dark, accent), language, Tailscale, permissions, engines in use |
+| **Deck** | The phone's grid of buttons and window space for this computer |
+| **TwinDesk iPhone** | Sign, install and refresh the iPhone app with your own Apple ID |
+| **Full KVM** | Windows and Linux: the login screen, UAC and admin windows (Full KVM build) |
+| **General** | Appearance (Glass or Simple, light or dark, accent), language, Modules, Arrange, Tailscale, permissions, the tour |
+
+Every page but General, About, Connection and Overview can be switched off in **General › Modules**,
+and **search** (<kbd>⌘K</kbd>, <kbd>Ctrl+K</kbd>) finds any setting by what it does.
 
 <a name="mesh"></a>
 
@@ -532,6 +619,8 @@ each talking straight to the others with no hub in between.
 - **One mouse, every screen.** Line your devices up on the map once, and the pointer goes from the PC to the Mac to the Linux laptop to the phone.
 - **One clipboard.** Copy on any of them, paste on any other. The newest copy wins.
 - **One notification pool.** Your phone buzzes, and every computer shows it.
+- **One map for every monitor** (new in 3.2): drag every device's monitors into place, and the
+  pointer crosses only where they touch, even through an offline device to the next one.
 - **Pair once, join all.** A new device paired with one computer meets the rest by itself.
 
 <details>
@@ -540,13 +629,28 @@ each talking straight to the others with no hub in between.
 Turn it on in the **Multi-device** page, and off again any time with everything as you left it.
 Connecting just two devices? Keep it off: the one-to-one mode does the same with less. The one-to-one
 app's pages are here too: files (the fast way, over HTTPS), the Camera, the Remote, the Deck,
-TwinDesk iPhone, Modules and pictures on the clipboard. ReZume works with one device at a time,
+TwinDesk iPhone, Modules, TwinDesk Drive and pictures on the clipboard. ReZume works with one device at a time,
 picked on its page (picking a computer picks this one there too). The mouse and keyboard over
 Bluetooth work between Macs and Windows PCs. Not yet: files dragged to more than one device at a time. The phone connects to
 one computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
 See [docs/mesh.md](docs/mesh.md).
 
 </details>
+
+<a name="full-kvm"></a>
+
+## 🔐 Full KVM and Portable (Windows, Linux)
+
+- **Full KVM** is a separate build whose service lets TwinDesk's mouse and keyboard reach what an
+  app can't: UAC prompts, the lock screen, Ctrl+Alt+Del, windows run as administrator, polkit, and
+  the login screen after a restart or sign-out. The normal build shows the page but has none of it
+  inside. [Details](docs/full-kvm.md).
+- **TwinDesk Portable** (Windows) is one .exe that runs without installing. As administrator it also
+  does the firewall, folder sharing and Wake on LAN; drivers, Full KVM and the calls' sound need the
+  installed app.
+
+Both are on every [release](https://github.com/InukaAsith/TwinDesk/releases), and the updater keeps
+each on its own edition.
 
 ---
 
@@ -636,16 +740,29 @@ Push the pointer past the screen edge and it **carries on onto the phone**. Type
 with your real keyboard. New in 3.0: **the phone keyboard as a real USB keyboard**, so every symbol
 and accent in the phone's own layout comes out right.
 
-## 🎮 Remote and gamepad
+<a name="remote"></a>
+
+## 🎮 Remote, Deck and gamepad
 
 <p align="center">
   <img src=".github/assets/v23-remote.jpg" alt="The phone's Remote: a touchpad with a row of keys, and the gamepad laid out like an Xbox controller" width="100%">
 </p>
 
-- **Touchpad and keyboard** for the couch or a presentation, with the keys a phone keyboard lacks.
+- **Touchpad and keyboard** for the couch, with the keys a phone keyboard lacks. A three-finger tap
+  is a middle click.
+- **Air mouse and Presentation** (new in 3.2): point the phone to move the pointer, or run slides
+  with a laser pointer. Android, iPhone and Web.
 - **Gamepad,** laid out like an Xbox controller. Its buttons press the keys you choose, or turn on
   **Real gamepad** and the computer sees an actual controller (Windows and Linux).
 - **A Bluetooth gamepad for any computer**, the Mac included, with no TwinDesk and no driver there.
+
+<a name="deck"></a>
+
+**🎛 Deck** (new in 3.2, on Android, iPhone and Web): a grid of buttons for the computer, in spaces
+and pages. Shortcuts, live sliders for sound and brightness, Bluetooth devices, the sound output,
+files and saved scripts opened like a double-click, and a full-screen mode with widgets. Its
+**window space** shows the computer's windows: tap apps, pick a layout and they're arranged, or save
+a set and arrange it again with one tap.
 
 ## 🖥 Tablet as a second screen
 
@@ -665,6 +782,8 @@ to show what's on your screen. Use touch as the mouse, or switch on touchpad mod
 - **Media.** What's playing on the phone, with play, pause, skip and seek on the computer, and the
   computer's Now Playing on the phone.
 - **Sound.** The phone's sound on the computer, or the computer's on the phone.
+- **Which Mac display** (new in 3.2): pick the monitor an Android phone mirrors, from the Screen page
+  or the viewer's toolbar.
 
 ## 🧭 Every page for a phone
 
@@ -852,7 +971,7 @@ computers** (off until you want it), on the Connection page.
 # 🧭 Every TwinDesk app
 
 The same TwinDesk runs on Mac, Windows and Linux. The phone apps and TwinDesk Web connect to any of
-them. The iPhone and iPad app and TwinDesk Web are new in 3.0.
+them. The iPhone and iPad app and TwinDesk Web came in 3.0.
 
 ✅ yes · ◐ partly · ✗ no · — doesn't apply
 
@@ -861,7 +980,7 @@ them. The iPhone and iPad app and TwinDesk Web are new in 3.0.
 
 | | Mac | Windows | Linux | Android | iPhone and iPad | TwinDesk Web |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| **Get it** | .dmg | installer | .deb, AppImage, Arch, Nix | .apk | .ipa, sideloaded | nothing to install: a browser, or add it to the Home Screen |
+| **Get it** | .dmg, Homebrew | installer, Portable | .deb, AppImage, Arch, Nix | .apk | .ipa, sideloaded | nothing to install: a browser, or add it to the Home Screen |
 | **Connecting** | | | | | | |
 | Same Wi-Fi | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | USB cable | ✅ phones | ✅ Android | ✅ Android | ✅ | ◐ to a Mac | ✗ |
@@ -943,7 +1062,7 @@ November 2026. If something here is out of date or wrong, please
 | Wake-on-LAN | ✅ | ✗ | ✗ | — | ✗ | ✗ |
 | Three or more computers | ✅ ([Mesh](#mesh)) | ✅ | ✅ | ✅ | ✅ (up to 4) | ✅ (up to 3) |
 | Works without a shared network | ✅ Bluetooth, Wi-Fi Direct | ✗ | ✗ | ✗ | ✗ | ✅ |
-| At the login and lock screen | ✗ | ✅ | ✅ | ✅ | ◐ | ✗ |
+| At the login and lock screen | ◐ [Full KVM](#full-kvm), Windows and Linux | ✅ | ✅ | ✅ | ◐ | ✗ |
 | Works with Barrier and Input Leap | ✗ | ✗ | ✅ | ✗ | ✗ | ✗ |
 | Input travels over | UDP ([tdv2](#speed)), TCP fallback | TCP | TCP | TCP | TCP | Apple's own |
 | Account or licence | none | licence | none | licence | none | Apple ID |
@@ -1250,8 +1369,8 @@ npm start                       # run from source
 npm run dist && npm run dmg     # build TwinDesk.app and TwinDesk-<version>-<arch>.dmg in mac/dist/
 ```
 
-The disk image is named after the app inside it: `TwinDesk-3.0.0-arm64.dmg` for Apple Silicon,
-`TwinDesk-3.0.0-x64.dmg` for Intel. Keep `arm64` and `x64` in the names on a release: the in-app
+The disk image is named after the app inside it: `TwinDesk-3.2.0-arm64.dmg` for Apple Silicon,
+`TwinDesk-3.2.0-x64.dmg` for Intel. Keep `arm64` and `x64` in the names on a release: the in-app
 updater picks the one for each Mac by them. `npm run dist:x64 && npm run dmg` (or `npm run
 dmg:intel`) builds the Intel app from an Apple Silicon Mac, cross-compiling the helpers and tdfast.
 
