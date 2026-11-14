@@ -144,4 +144,5 @@ class Helper extends EventEmitter {
 }
 
 Helper.EXE = EXE;
-module.exports = Helper;
+// The Full KVM build (docs/full-kvm.md): the mouse and keyboard through its service when it is there.
+module.exports = require('../shared/edition.js').fullKvm() ? require('../shared/fullkvm/route.js')(Helper) : Helper;

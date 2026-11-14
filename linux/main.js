@@ -297,6 +297,7 @@ function start() {
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
   // The helper: X11 (XInput2 + XTest), or on Wayland its uinput backend when /dev/uinput is ours.
   helper = new Helper(() => system.inputBlocker(session));
+  if (require('../shared/edition.js').fullKvm()) require('./fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   hud = new Hud(() => settings);
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', popup: (kind, text) => hud.show(kind, text), onChange: pushState });
@@ -444,7 +445,7 @@ function start() {
 
 // The Wayland backend can't ask the compositor for the monitors: tell it ours (logical px).
 function sendScreens() {
-  if (!helper || helper.backend !== 'uinput') return;
+  if (!helper || (helper.kvmBackend || helper.backend) !== 'uinput') return; // ours on Wayland, or the Full KVM service's
   const { screen: displays } = require('electron');
   const primary = displays.getPrimaryDisplay().id;
   const list = displays.getAllDisplays().map((d) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.id === primary ? 1 : 0].join(',')).join(';');

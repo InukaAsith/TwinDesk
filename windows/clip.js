@@ -142,6 +142,9 @@ class Clip {
   }
 
   _remember(dir, item) {
+    // What went out last is no longer on the other side once something came in, and the other way
+    // round: copying it again must send it again (#223).
+    if (dir === 'in') this.lastSync.sent = null; else this.lastSync.received = null;
     const n = this.cfg.historySize;
     if (!n) return;
     if (typeof item === 'string') {

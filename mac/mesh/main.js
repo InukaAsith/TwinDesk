@@ -586,6 +586,10 @@ app.whenReady().then(() => {
     knownIds: () => hub.peers().map((p) => p.id),
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
     endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
+    // The monitor map (#225): ours from Electron, the others' kept for when they are offline.
+    online: (pid) => { const p = hub.peers().find((x) => x.id === pid); return !!p && (p.state === 'connected' || p.state === 'via'); },
+    myDisplays: () => require('../../shared/screen-mesh.js').fromElectron(require('electron').screen),
+    displaysStorage: { get: () => settings.layoutDisplays || null, set: (m) => { settings.layoutDisplays = m; store.saveSettings(settings); } },
     legacyEdges: () => {
       const k = settings.kvm || {};
       if (k.edges && Object.values(k.edges).some(Boolean)) return k.edges;
@@ -597,6 +601,7 @@ app.whenReady().then(() => {
       pushState();
     },
   });
+  for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
   peer.on('client', (ctx) => {

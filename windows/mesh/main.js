@@ -272,6 +272,7 @@ function start() {
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   helper = new Helper();
+  if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
   // Settings from before the cursor edges: one paired device takes the side its old pcSide gave it.
@@ -286,9 +287,14 @@ function start() {
     knownIds: () => hub.peers({ indirect: true }).map((p) => p.id), // with those known through a peer: one map everywhere
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
     endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
+    // The monitor map (#225): ours from Electron, the others' kept for when they are offline.
+    online: (pid) => { const p = hub.peers({ indirect: true }).find((x) => x.id === pid); return !!p && (p.state === 'connected' || p.state === 'via'); },
+    myDisplays: () => require('../../shared/screen-mesh.js').fromElectron(require('electron').screen),
+    displaysStorage: { get: () => settings.layoutDisplays || null, set: (m) => { settings.layoutDisplays = m; saveSettings(); } },
     legacyEdges: () => settings.kvm.edges, // settings from before the layout: once
     onChange: () => { if (kvm) kvm.layoutChanged(); pushState(); },
   });
+  for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   hud = new Hud(() => settings);

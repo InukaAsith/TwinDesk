@@ -27,7 +27,7 @@
         rec {
           twindesk = pkgs.stdenv.mkDerivation rec {
             pname = "twindesk";
-            version = "3.1.0";
+            version = "3.1.1";
 
             src = self;
 
@@ -102,6 +102,9 @@
               # the window are made, and TwinDesk runs with neither.
               cp -r shared/. "$share/shared/"
               rm -rf "$share/shared/test"
+              # The Full KVM build's service (docs/full-kvm.md) isn't in the Nix package: without
+              # shared/fullkvm its hooks (shared/edition.js) stay off, as in the normal .deb.
+              rm -rf "$share/shared/fullkvm"
 
               # Copy helper binaries
               cp linux-helper/bin/macshare-linuxhelper "$share/linux-helper/bin/"
