@@ -89,8 +89,14 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
   - On Windows the app stages the copy in its own temp folder, with the certificate's passphrase
     unsealed (DPAPI is the user's; LOCAL SERVICE couldn't open it) and its displays
     (`fullkvm-displays.json`); `--apply` copies it and the app deletes the stage.
-  - Pairing changes made later reach the machine node the next time System-wide is turned on (to do:
-    copy them again on their own).
+  - Pairing changes made later (pairing again, forgetting, the map): on Windows, before the node starts
+    at the login screen, the service copies the pairing files (`paired*.json`, `pairing*.json`,
+    `multi.json`, `settings.json`) again from the TwinDesk of whoever was just signed in, only when its
+    `device.json` has the machine copy's id, and only plain files they (or administrators) own: no links
+    or junctions, 1 MB at most. The certificate isn't copied again. On Linux, the next time System-wide
+    is turned on (to do).
+  - The node never writes or removes the pairing files (`headless.js` pairStore): nobody can pair at
+    the login screen, so a host's `bad_token` (it was paired again meanwhile) mustn't forget it for good.
 
 ## Security
 

@@ -125,6 +125,7 @@ namespace TwinDesk.FullKvm
         Thread loop;
         volatile bool stopping;
         string ownerSid = null; // who the pipe is for now
+        string lastUser = null; // the last person signed in at the console: the machine node's pairings come from their TwinDesk
         NamedPipeServerStream pipe;
         Client client;
 
@@ -173,6 +174,7 @@ namespace TwinDesk.FullKvm
             string user = Win.ConsoleUserSid(session);
             bool system = cfg.mode == "system";
             string want = user ?? (system ? Win.LocalServiceSid : null);
+            if (user != null) lastUser = user;
             Node(system && user == null && session != 0xFFFFFFFF);
             lock (gate)
             {
@@ -250,7 +252,7 @@ namespace TwinDesk.FullKvm
                 using (ServiceController sc = new ServiceController(Paths.NodeService))
                 {
                     ServiceControllerStatus st = sc.Status;
-                    if (on && st == ServiceControllerStatus.Stopped) { sc.Start(); Log.Line("machine node started"); }
+                    if (on && st == ServiceControllerStatus.Stopped) { Machine.Refresh(lastUser); sc.Start(); Log.Line("machine node started"); }
                     else if (!on && st == ServiceControllerStatus.Running) { sc.Stop(); Log.Line("machine node stopped"); }
                 }
             }
@@ -420,6 +422,81 @@ namespace TwinDesk.FullKvm
                     if (kept.TryGetValue(cmd, out l)) a.Write(l);
                 }
             }
+        }
+    }
+
+    // ---- the machine node's pairings, kept as the person's ----
+
+    // System-wide copied the person's pairings once; they pair again, forget a device or move it on the
+    // map later, while signed in. Before the node starts at the login screen, the service (SYSTEM) copies
+    // those files again from the TwinDesk of whoever was just signed in, when it is the same computer to
+    // the others (its device.json has the machine copy's id). The certificate isn't copied again (its
+    // passphrase is sealed to the person; it doesn't change). The person's folder is theirs to write, so
+    // only plain files they (or administrators) own, of a sane size, are taken: no links, no junctions.
+    static class Machine
+    {
+        static readonly string[] Files = { "paired.json", "paired-mesh.json", "pairing.json", "pairings.json", "multi.json", "settings.json" };
+        const long MaxBytes = 1 << 20;
+
+        public static void Refresh(string sid)
+        {
+            try
+            {
+                if (sid == null || !Directory.Exists(Paths.Machine)) return;
+                string profile = Win.ProfilePath(sid);
+                if (profile == null) return;
+                string from = Path.Combine(profile, "AppData", "Roaming", "MacShare");
+                if (!Directory.Exists(from) || Linked(from) || Linked(Path.GetDirectoryName(from))) return;
+                string mine = DeviceId(Path.Combine(Paths.Machine, "device.json"));
+                string theirs = Trusted(Path.Combine(from, "device.json"), sid) ? DeviceId(Path.Combine(from, "device.json")) : null;
+                if (mine == null || mine != theirs) { Log.Line("pairings: the signed-in TwinDesk isn't this machine node's, kept as they were"); return; }
+                int n = 0;
+                foreach (string f in Files)
+                {
+                    string src = Path.Combine(from, f), dst = Path.Combine(Paths.Machine, f);
+                    if (!File.Exists(src)) { if (File.Exists(dst)) { File.Delete(dst); n++; } continue; } // forgotten there: here too
+                    if (!Trusted(src, sid)) continue;
+                    byte[] b = File.ReadAllBytes(src);
+                    if (File.Exists(dst) && Same(b, File.ReadAllBytes(dst))) continue;
+                    File.WriteAllBytes(dst, b); // an existing file keeps its ACL, a new one the folder's
+                    n++;
+                }
+                if (n > 0) Log.Line("pairings: " + n + " file(s) again from the signed-in TwinDesk");
+            }
+            catch (Exception e) { Log.Line("pairings: " + e.Message); }
+        }
+
+        static bool Linked(string p)
+        {
+            return (File.GetAttributes(p) & FileAttributes.ReparsePoint) != 0;
+        }
+
+        // A plain file, not too big, owned by the person (or administrators, or SYSTEM: an elevated TwinDesk's).
+        static bool Trusted(string f, string sid)
+        {
+            if (!File.Exists(f) || Linked(f) || new FileInfo(f).Length > MaxBytes) return false;
+            string owner = File.GetAccessControl(f, AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier)).Value;
+            return owner == sid
+                || owner == new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null).Value
+                || owner == new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null).Value;
+        }
+
+        static string DeviceId(string f)
+        {
+            try
+            {
+                Dictionary<string, object> d = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(f));
+                object id;
+                return d != null && d.TryGetValue("id", out id) && id is string && ((string)id).Length > 0 ? (string)id : null;
+            }
+            catch (Exception) { return null; }
+        }
+
+        static bool Same(byte[] a, byte[] b)
+        {
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
         }
     }
 
@@ -652,6 +729,16 @@ namespace TwinDesk.FullKvm
         }
         [StructLayout(LayoutKind.Sequential)]
         struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+
+        // Where a person's profile is (C:\Users\name), from the registry's ProfileList; null if unknown.
+        public static string ProfilePath(string sid)
+        {
+            using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" + sid))
+            {
+                string p = k == null ? null : k.GetValue("ProfileImagePath") as string;
+                return string.IsNullOrEmpty(p) ? null : Environment.ExpandEnvironmentVariables(p);
+            }
+        }
 
         // The SID of the person signed in on that session, or null (nobody: the login screen).
         public static string ConsoleUserSid(uint session)

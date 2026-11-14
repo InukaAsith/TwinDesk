@@ -42,6 +42,17 @@ const { SvcLink } = require('./svc-link.js');
 const log = (...a) => console.log('[machine]', ...a);
 const SOCK = process.env.TWINDESK_KVM_SOCK || (process.platform === 'win32' ? '\\\\.\\pipe\\TwinDesk.kvm' : '/run/twindesk/kvm.sock');
 
+// The pairings, read only: here nobody can pair again, so a host that answers bad_token (the person
+// paired again while signed in) mustn't make us forget it for good. Changes stay in memory; the
+// person's own copy comes again at the next sign-out (Windows: the service, docs/full-kvm.md).
+const meshStore = mod('mesh/store');
+const PAIRINGS = new Set(['pairings.json', 'pairing.json', 'paired.json', 'paired-mesh.json']);
+const pairStore = {
+  read: (name, fallback) => meshStore.read(name, fallback),
+  write: (name, obj) => { if (!PAIRINGS.has(name)) meshStore.write(name, obj); },
+  remove: (name) => { if (!PAIRINGS.has(name) && meshStore.remove) meshStore.remove(name); },
+};
+
 function loadDevice() {
   let d = store.read('device.json', null);
   if (!d || typeof d.id !== 'string') { d = { id: crypto.randomUUID() }; store.write('device.json', d); }
@@ -68,7 +79,7 @@ async function main() {
 
   const discovery = new Discovery(device);
   discovery.start();
-  const links = new LinkManager({ device, resolveAddress: (id) => discovery.get(id) });
+  const links = new LinkManager({ device, storage: pairStore, resolveAddress: (id) => discovery.get(id) });
   const mesh = new Mesh({ selfId: device.id });
   const hub = new Hub({ device, links, mesh });
 
@@ -82,7 +93,7 @@ async function main() {
   });
   server.on('listening', () => log('listening on', server.port));
   discovery.self.port = server.port;
-  const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp });
+  const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp }, { storage: pairStore });
   pairing.on('request', () => { log('a pairing request at the login screen: refused'); pairing.respond(false); });
   hub.attachHost(server, pairing);
   hub.start(); // dial the computers we are a guest of (mesh/main.js: link.start())
