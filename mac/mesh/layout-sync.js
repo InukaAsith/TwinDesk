@@ -182,18 +182,34 @@ class LayoutSync {
   }
 
   // What the edges of device id (default: this device) lead to: { left, right, top, bottom }.
+  // From the monitor map (#225): on each side, the device with the longest stretch there (an offline
+  // one passed through to the next). Where along the side matters: cross().
   neighbors(id = this.selfId) {
-    return L.neighbors(this.view(), id);
+    const st = this.stretches(id);
+    const out = { left: null, right: null, top: null, bottom: null };
+    for (const side of W.SIDES) {
+      const len = {};
+      for (const x of st[side]) len[x.dev] = (len[x.dev] || 0) + (x.to - x.from);
+      const best = Object.keys(len).sort((a, b) => len[b] - len[a] || (a < b ? -1 : 1))[0];
+      out[side] = best || null;
+    }
+    return out;
   }
 
-  // The device a pointer reaches when it leaves `id` through `side`, or null.
+  // The device a pointer reaches when it leaves `id` through `side`, or null (the longest stretch).
   across(side, id = this.selfId) {
-    return L.across(this.view(), id, side);
+    return W.SIDES.includes(side) ? this.neighbors(id)[side] : null;
   }
 
-  // The side of `fromId` that leads to `toId`, or null.
+  // The side of `fromId` that leads to `toId`, or null (the one with the longest stretch to it).
   sideTo(toId, fromId = this.selfId) {
-    return L.sideTo(this.view(), fromId, toId);
+    const st = this.stretches(fromId);
+    let best = null, most = 0;
+    for (const side of W.SIDES) {
+      const len = st[side].filter((x) => x.dev === toId).reduce((n, x) => n + (x.to - x.from), 0);
+      if (len > most) { most = len; best = side; }
+    }
+    return best;
   }
 
   // Plain data for the editor: rev, who edited last, the cells shown, the grid to draw and, per
