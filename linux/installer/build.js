@@ -18,7 +18,11 @@ const STAGE = path.join(LIN, 'dist', 'stage');
 const pkg = require(path.join(LIN, 'package.json'));
 const electronVersion = require(path.join(LIN, 'node_modules', 'electron', 'package.json')).version;
 
-const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json']); // tests (mesh/test) stay out of the package
+// The Full KVM build (docs/full-kvm.md): `TWINDESK_EDITION=full-kvm npm run dist`. Only it carries
+// linux/fullkvm and shared/fullkvm (the service); the normal packages have none of it, and the
+// hooks in the app (shared/edition.js) stay off without those folders.
+const FULL_KVM = process.env.TWINDESK_EDITION === 'full-kvm';
+const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json', ...(FULL_KVM ? [] : ['fullkvm'])]); // tests (mesh/test) stay out of the package
 
 function copy(from, to, filter = () => true) {
   const st = fs.statSync(from);
@@ -59,7 +63,7 @@ async function main() {
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
   for (const name of fs.readdirSync(path.join(ROOT, 'shared'))) {
-    if (name === 'lang' || name === 'web' || name === 'airplay' || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
+    if (name === 'lang' || name === 'web' || name === 'airplay' || (FULL_KVM && name === 'fullkvm') || /\.(js|css|html)$/.test(name)) copy(path.join(ROOT, 'shared', name), path.join(STAGE, 'shared', name));
   }
   // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
   // phone app's viewer and remote it reuses (android-web/).
@@ -126,7 +130,7 @@ async function main() {
         synopsis: 'Share mouse, keyboard, clipboard, files and screens with your other computer',
         maintainer: 'inukaasith',
         desktop: { entry: { Name: 'TwinDesk', StartupWMClass: 'TwinDesk', Keywords: 'KVM;mouse;keyboard;clipboard;screen;share;' } },
-        artifactName: 'TwinDesk-${version}-${arch}.${ext}',
+        artifactName: (FULL_KVM ? 'TwinDesk-FullKVM-' : 'TwinDesk-') + '${version}-${arch}.${ext}',
       },
       deb: {
         // Electron's own needs plus what TwinDesk calls: openssl (host certificate), pactl (sound),

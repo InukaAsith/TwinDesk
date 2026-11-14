@@ -444,7 +444,7 @@ function start() {
 
 // The Wayland backend can't ask the compositor for the monitors: tell it ours (logical px).
 function sendScreens() {
-  if (!helper || helper.backend !== 'uinput') return;
+  if (!helper || (helper.kvmBackend || helper.backend) !== 'uinput') return; // ours on Wayland, or the Full KVM service's
   const { screen: displays } = require('electron');
   const primary = displays.getPrimaryDisplay().id;
   const list = displays.getAllDisplays().map((d) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.id === primary ? 1 : 0].join(',')).join(';');
