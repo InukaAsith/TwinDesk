@@ -47,7 +47,11 @@ isn't in use. For a bug report, attach the log: **Open log folder** in the tray 
 - **Stuck on the other computer.** Double-tap **Right Alt** (Right Option on a Mac), the hotkey, to
   bring everything home.
 - **Wrong keys or symbols.** Each side types in its own keyboard layout. If a layout still comes out
-  wrong, open an issue with both layouts named (#10, #188).
+  wrong, open an issue with both layouts named (#10).
+- **An Android phone types QWERTY on an AZERTY (or other) keyboard.** Turn on Phone › Settings ›
+  **Type as a hardware keyboard** (needs wireless debugging; in Multi-device too). Then on the phone,
+  Settings › System › Keyboard › Physical keyboard › **TwinDesk keyboard**, pick your layout.
+  Accents, dead keys and AltGr symbols come out as they do on that keyboard (#123, #188).
 - **Windows: a UAC prompt or the lock screen.** Windows keeps these on a secure desktop that no
   normal app can reach. Use the computer's own mouse for that prompt (#210).
 

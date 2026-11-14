@@ -54,6 +54,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Pinch on Android** from a Mac trackpad or a Linux touchpad (#228): pinching in did nothing,
   because the two fingers started closer than Android needs to see a pinch. They now start far
   enough apart, a long pinch keeps zooming, and it works without wireless debugging too.
+- **Phone keyboard layout in Multi-device:** the Phone page on Linux and Windows now has **Type as
+  a hardware keyboard**, so an AZERTY or other layout reaches an Android phone as it is (#188).
 
 ### Thanks
 
