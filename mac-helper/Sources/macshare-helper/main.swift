@@ -76,6 +76,9 @@ func handle(_ line: String) {
   let num = { (k: String, d: Double) in (msg[k] as? NSNumber)?.doubleValue ?? d }
   switch cmd {
   case "kvmConfig":
+#if !MULTI
+    Capture.shared.emergencyShortcut = EmergencyShortcut((msg["emergencyKeys"] as? String) ?? EmergencyShortcut.fallback)
+#endif
     Capture.shared.edgeZones = zones(msg["zones"])
     Capture.shared.crossingModifier = (msg["crossingModifier"] as? String) ?? ""
     Capture.shared.takeBack = (msg["takeBack"] as? Bool) ?? true
@@ -113,6 +116,11 @@ func handle(_ line: String) {
     Capture.shared.watchCrossingFlags()
   case "crossingFlags":
     Capture.shared.remoteCrossingFlags = crossingFlags((msg["flags"] as? Int) ?? 0)
+#if !MULTI
+  case "emergencyActive":
+    Capture.shared.setEmergencyActive((msg["on"] as? Bool) ?? false)
+    reply(id)
+#endif
   case "place":
     let center = (msg["center"] as? Bool) == true
     let side = center ? nil : msg["side"] as? String

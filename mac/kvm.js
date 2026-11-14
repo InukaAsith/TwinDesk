@@ -252,6 +252,7 @@ class Kvm extends EventEmitter {
         crossingModifier: k.crossingModifier || '',
         driveOther: !!(this.linked && k.driveOther && k.mouse && this.server.current && this.server.current.os !== P.OS.IOS && !this.paused && !(this.locked && this.mode === 'home')),
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
+        emergencyKeys: require('./emergency-shortcut').valid(this.getSettings().keys.emergencyKeys),
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
         dwellMs: P.KVM_EDGE_DWELL_MS,
         zones: this.map.zones(), // only where the monitors touch (null: anywhere on the side)
@@ -378,6 +379,7 @@ class Kvm extends EventEmitter {
       if (prev === 'home') this.config();
     }
     if (prev !== mode) this.lockKey.reset();
+    if (prev !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' });
     if (prev !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();
@@ -582,6 +584,11 @@ class Kvm extends EventEmitter {
         break;
       case 'captureEnded':
         if (this.mode === 'driving') this.goHome(ev.reason === 'deadman' ? 'Input came back by itself (safety timeout)' : '');
+        break;
+      case 'emergency':
+        this.home(); // helper has already stopped capturing or released injected keys locally
+        if (this.linked) this.setLinked(false); // keep it off until explicitly re-enabled
+        this.helper.send('emergencyActive', { on: false }); // also acknowledge if capture stopped before main changed mode
         break;
       // This computer's own mouse or trackpad moved or clicked while driven (the helper's return
       // watch): it takes the computer back. The driver's pointer comes back where it left, ours stays

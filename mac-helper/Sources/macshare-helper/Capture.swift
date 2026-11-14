@@ -85,6 +85,15 @@ final class Capture {
   private var edge = (push: 0.0, at: 0.0, since: 0.0)
   private var ret = (push: 0.0, at: 0.0, since: 0.0)
   private var returnSide: String?
+  var emergencyActive = false
+  var emergencyShortcut = EmergencyShortcut(EmergencyShortcut.fallback)
+  private var emergencyGate = EmergencyInputGate()
+  var allowsRemoteInput: Bool { emergencyGate.allowsInput }
+
+  func setEmergencyActive(_ on: Bool) {
+    emergencyActive = on
+    emergencyGate.session(active: on)
+  }
 #endif
   private var returnResistance = 120.0
   // Driven (armReturn on): the first input from this Mac's own mouse or trackpad takes the Mac back
@@ -596,6 +605,29 @@ final class Capture {
     hkStage = 0
     if down { flushHotkey() }
     let kc = UInt16(e.getIntegerValueField(.keyboardEventKeycode))
+#if !MULTI
+    // Stop locally before asking main to release the peer. This still works if main is delayed,
+    // provided the event tap and helper are responsive. Never intercept the chord at home.
+    if emergencyActive || capturing {
+      if emergencyShortcut.matches(keyCode: kc, flags: e.flags, down: down, kbType: e.getIntegerValueField(.keyboardEventKeyboardType)) {
+        let wasCapturing = capturing
+        emergencyGate.stop()
+        if wasCapturing { stopCapture(side: nil, offset: nil) }
+        else {
+          DragIn.shared.cancel() // avoid dropping a file when releasing the injected mouse button
+          injector.releaseAll()
+        }
+        returnSide = nil
+        localWatch = false
+        emergencyActive = false
+        edgeEnabled = false
+        swallowUps.insert(kc)
+        emit(["event": "emergency"])
+        return true
+      }
+    }
+    if down && swallowUps.contains(kc) { return true } // suppress autorepeat until the release
+#endif
     if capturing && capKeyboard {
       if !down && localDown.remove(kc) != nil { return false }
       guard let code = KeyCodes.code(kc, kbType: e.getIntegerValueField(.keyboardEventKeyboardType)) else { return true }
