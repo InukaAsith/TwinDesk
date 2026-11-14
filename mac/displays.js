@@ -151,9 +151,17 @@ class Displays extends EventEmitter {
       const v = all.find((d) => d.virtual);
       if (v) return v;
     }
-    const want = this.getSettings().sharing.displayId;
+    const settings = this.getSettings();
+    const want = settings.sharing.displayId;
+    const picked = want != null && all.find((d) => d.id === want);
+    if (picked) return picked;
+    // The saved screen is gone. Extend (no saved id, or the virtual display is on) still prefers
+    // that display. A real-screen pick must not silently become Extend because a virtual display
+    // is still up. Input uses this same target, so the picture and the pointer stay on one screen.
+    if (want != null && settings.virtual && settings.virtual.enabled === false) {
+      return all.find((d) => d.primary && !d.virtual) || all.find((d) => !d.virtual) || all[0] || null;
+    }
     return (
-      (want != null && all.find((d) => d.id === want)) ||
       all.find((d) => d.virtual) ||
       all.find((d) => d.primary) ||
       all[0] ||

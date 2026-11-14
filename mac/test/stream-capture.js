@@ -41,3 +41,11 @@ test('passes selected display, bounded dimensions and audio to the capture windo
   assert.equal(start.msg.height, 1080);
   assert.equal(start.msg.audio, 'loopback');
 });
+
+test('refuses a capture source for a different selected display', async () => {
+  const server = new EventEmitter();
+  const displays = new EventEmitter();
+  displays.target = () => ({ id: 3 });
+  const stream = new Stream(server, displays, () => ({}), { release() {}, loopback() {} });
+  await assert.rejects(stream._source(), /no screens/);
+});

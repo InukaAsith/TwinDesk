@@ -1091,6 +1091,8 @@ private fun ScreenPage(core: Core, v: Int) {
     val viewed = adb.viewed
     val sharing = s.sharing
     val mode = s.mode
+    val displays = s.displays
+    val displayId = s.displayId
     val res = core.sync.value("res")
     MacCard(tr("This screen on {name}", "name" to name)) {
         @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
@@ -1119,13 +1121,19 @@ private fun ScreenPage(core: Core, v: Int) {
         MacRow(tr("Show {name}’s screen", "name" to name), tr("Opens full screen. Tap the handle at the top for display options and the keyboard."), first = true) {
             Primary(tr("Open")) { ctx.startActivity(Intent(ctx, ViewerActivity::class.java)) }
         }
-        if (s.remote) MacRow(tr("Mode"), tr("Extend uses this device as a second display for {name}", "name" to name)) {
-            // A phone: Mirror and Extend across the row's width, under the label.
-            SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
-                val modes = listOf("mirror" to tr("Mirror"), "extend" to tr("Extend"))
-                modes.forEachIndexed { i, (m, label) ->
-                    SegmentedButton(selected = sharing && mode == m, onClick = { s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
+        if (s.remote) {
+            MacRow(tr("Mode"), tr("Extend uses this device as a second display for {name}", "name" to name)) {
+                // A phone: Mirror and Extend across the row's width, under the label.
+                SingleChoiceSegmentedButtonRow(if (LocalConfiguration.current.screenWidthDp < 600) Modifier.fillMaxWidth() else Modifier) {
+                    val modes = listOf("mirror" to tr("Mirror"), "extend" to tr("Extend"))
+                    modes.forEachIndexed { i, (m, label) ->
+                        val selected = sharing && (mode == m || (m == "mirror" && mode == "custom" && displayId.isNotEmpty()))
+                        SegmentedButton(selected = selected, onClick = { if (!selected) s.control(share = true, mode = m) }, shape = SegmentedButtonDefaults.itemShape(i, modes.size)) { Text(label) }
+                    }
                 }
+            }
+            if (displays.size > 1) MacRow(tr("Display"), tr("Mirror one screen of {name}", "name" to name)) {
+                MacDisplayPick(displays, if (sharing && mode != "extend") displayId else "") { s.pickDisplay(it) }
             }
         } else MacRow(tr("Mode"), tr("Managed from {name}", "name" to name))
         if (s.sharing && s.remote) MacRow(tr("Sharing"), "") { Secondary(tr("Stop")) { s.control(share = false) } }
