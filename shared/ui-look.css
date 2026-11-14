@@ -7,6 +7,7 @@
   height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: none; text-align: left; color: var(--muted);
   cursor: default; outline: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none;
 }
+.sec-link[hidden] { display: none; }
 .sec-link:hover { background: var(--nav-hover); color: var(--text); }
 .sec-link.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .sec-link:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }

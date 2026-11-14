@@ -49,6 +49,18 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 - **Full KVM at the login screen** (Windows): after signing out, a computer connected but the pointer
   didn't move. The service never told the machine node its helper was ready.
+- **Full KVM at the login screen after pairing again** (Windows): a computer paired again (or a
+  device forgotten, or the map changed) while signed in couldn't connect after signing out: the login
+  screen still had the pairings from when System-wide was turned on, and one the other side refused
+  was forgotten there for good. The service now takes them again from your TwinDesk at each sign-out,
+  and the login screen never forgets a pairing itself.
+- **Coming back to a PC with two monitors** (mesh and one-to-one): with a MacBook under the main
+  monitor, the pointer could come back on the second monitor, or in the middle of the screen after a
+  fast move. It now comes back on the edge that touches the device it left, where it left.
+- **Full KVM** stays at the bottom of the sidebar with Multi-device, General and About; Arrange
+  doesn't move it.
+- **General's Portable** showed in the list beside the page on an installed TwinDesk, which has no
+  Portable card. A card that's hidden has no link there now.
 - **Clipboard:** copying the same text again after the other side copied something sends it again
   (#223), on the computers and now on Android and iPhone too (#227).
 - **Pinch on Android** from a Mac trackpad or a Linux touchpad (#228): pinching in did nothing,

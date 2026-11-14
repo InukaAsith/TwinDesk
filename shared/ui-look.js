@@ -109,6 +109,9 @@
         if (s) s.scrollTo({ top: s.scrollTop + c.getBoundingClientRect().top - under(s) - 14, behavior: 'smooth' });
       };
       list.append(b);
+      // A card that's hidden (General's Portable in an installed app) has no link either, and gets it when shown.
+      b.hidden = c.hidden;
+      new MutationObserver(() => { b.hidden = c.hidden; later(); }).observe(c, { attributes: true, attributeFilter: ['hidden'] });
       return b;
     });
     let queued = false;
@@ -118,8 +121,8 @@
       if (!s || !wrap.offsetParent) return;
       const top = under(s) + 40;
       let at = 0;
-      cards.forEach((c, i) => { if (c.getBoundingClientRect().top <= top) at = i; });
-      if (s.scrollTop + s.clientHeight >= s.scrollHeight - 2) at = cards.length - 1; // the bottom: the last one, however short
+      cards.forEach((c, i) => { if (!c.hidden && c.getBoundingClientRect().top <= top) at = i; });
+      if (s.scrollTop + s.clientHeight >= s.scrollHeight - 2) at = cards.map((c) => !c.hidden).lastIndexOf(true); // the bottom: the last one shown, however short
       links.forEach((b, i) => b.classList.toggle('active', i === at));
     };
     const later = () => { if (!queued) { queued = true; requestAnimationFrame(spy); } };
