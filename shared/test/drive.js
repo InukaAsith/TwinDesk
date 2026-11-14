@@ -186,14 +186,18 @@ async function sync(...ds) {
   assert.strictEqual(await b.open('../index.json', e.h), null);
 
   // A name Windows can't hold is skipped on Windows, and doesn't come back as a deletion.
-  const w = device('www', 'Win', 'win32');
-  await w.start();
-  tick();
-  write(b, 'what?.txt', 'q');
-  await sync(a, b, w);
-  assert.strictEqual(read(w, 'what?.txt'), null);
-  assert.strictEqual(read(a, 'what?.txt'), 'q');
-  assert.ok(w.status().skipped >= 1);
+  // (the test's own disk must hold it: not when the test itself runs on Windows)
+  let w = null;
+  if (process.platform !== 'win32') {
+    w = device('www', 'Win', 'win32');
+    await w.start();
+    tick();
+    write(b, 'what?.txt', 'q');
+    await sync(a, b, w);
+    assert.strictEqual(read(w, 'what?.txt'), null);
+    assert.strictEqual(read(a, 'what?.txt'), 'q');
+    assert.ok(w.status().skipped >= 1);
+  }
 
   // ---- three devices: a change goes through the one in the middle ----
   const c = device('ccc', 'Linux');
@@ -224,7 +228,7 @@ async function sync(...ds) {
   assert.strictEqual(await c.adopt(slow, t2), true);
   for (const x of pulls) if (x !== slow) c.release(x);
 
-  for (const d of [a, b, c, w]) await d.stop();
+  for (const d of [a, b, c, w]) if (d) await d.stop();
   fs.rmSync(base, { recursive: true, force: true });
   console.log('drive: ok');
 })().catch((e) => {

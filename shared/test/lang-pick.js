@@ -18,7 +18,7 @@ assert.deepStrictEqual(written('?kind=mic&language=pt-BR', 'file:///C:/TwinDesk/
 for (const s of ['', '?language=en', '?language=xx', '?language=../../evil', '?language=%22%3E%3Cscript%3E']) assert.deepStrictEqual(written(s), [], s);
 
 // Every page that reads English also reads pick.js (and no other catalog by name), right after it.
-const pages = require('child_process').execSync("git ls-files '*.html'", { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+const pages = require('child_process').execFileSync('git', ['ls-files', '*.html'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
 let n = 0;
 for (const p of pages) {
   const html = fs.readFileSync(path.join(ROOT, p), 'utf8');

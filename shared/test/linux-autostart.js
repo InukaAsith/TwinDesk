@@ -16,6 +16,11 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const Module = require('module');
 
+if (process.platform === 'win32') { // a Linux file: its paths (no backslash) and sh to read the Exec line
+  console.log('linux-autostart: skipped on Windows');
+  process.exit(0);
+}
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'twindesk-autostart-'));
 process.env.XDG_CONFIG_HOME = path.join(dir, 'config');
 delete process.env.TWINDESK_BIN;
