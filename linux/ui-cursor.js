@@ -56,6 +56,7 @@ UI.tab({
     const adbBtn = UI.button(t('Wireless Debugging'), () => UI.go('connection'), 'small');
     const viaRow = UI.row(t('Control the phone with'), '', [via.el, adbBtn]);
     const viaCard = UI.card(t('Phone'), [viaRow]);
+    const crossing = UI.crossingOptions(false); // hold a key to cross, the emergency return
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : t('None')) }, (v) => set({ resistancePx: v }));
     const pair = UI.dirCards(
       { on: { get: (s) => s.kvm.beDriven, set: (v) => set({ beDriven: v }) }, label: t('Use {name}’s mouse and keyboard on {me}'), hint: t('Push the pointer past the edge there'), rows: [
@@ -64,6 +65,7 @@ UI.tab({
       ] },
       { on: { get: (s) => s.kvm.driveOther, set: (v) => set({ driveOther: v }) }, label: t('Use {me}’s mouse and keyboard on {name}'), hint: t('Push the pointer past the edge'), rows: [
         UI.row(t('Edge resistance'), t('Push a little further to cross'), [resistance]),
+        crossing.modRow,
       ] },
     );
 
@@ -76,6 +78,7 @@ UI.tab({
       viaCard,
       pair.el,
       lock.el,
+      crossing.card,
       UI.card(t('Feel'), [gestureRow, syncRow, shakeRow]),
       UI.card(t('Not on the same network'), [bleRow]),
       UI.card(t('Crowded Wi-Fi'), [bleInputRow]),
@@ -102,6 +105,7 @@ UI.tab({
       resistance.set(k.resistancePx);
       ble.set(k.ble !== false);
       lock.update(s);
+      crossing.update(s);
       viaCard.hidden = !UI.peer(s).phone;
       const br = (s.phone || {}).bridge || {};
       const pset = (s.phone || {}).settings || {};

@@ -52,6 +52,7 @@ namespace MacShare
             if (capturing) { capMouse = mouse; capKeys = keys; return; }
             mouseArrivalGuard = false;
             capturing = true; capMouse = mouse; capKeys = keys;
+            CrossingReset();
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear();
             Touch();
@@ -89,6 +90,7 @@ namespace MacShare
                 mouseArrivalGuard = true;
             }
             capturing = false;
+            CrossingReset();
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
             foreach (uint vk in heldVks) swallowVks.Add(vk);
             foreach (int b in heldButtons) swallowButtons.Add(b);
@@ -106,6 +108,8 @@ namespace MacShare
 
         // Watches these sides for the pointer leaving this PC (valid names only, no repeats). Off, or none
         // given: nothing is watched.
+        void DisarmForEmergency() { retArmed = false; retSides.Clear(); retPushes.Clear(); pushes.Clear(); WatchLocal(false); }
+
         public void ArmReturn(bool on, IEnumerable<string> sides, double resistance)
         {
             WatchLocal(on);
@@ -129,6 +133,7 @@ namespace MacShare
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
             if (!DriveOther || Sides.Count == 0 || (AnyButtonDown() && !AppWindows.Grabbing)) { pushes.Clear(); return; } // Rule 6: no crossing mid-drag
+            if (!EdgeAllowed()) { pushes.Clear(); return; } // hold-to-cross: not without the key (Crossing.cs)
             foreach (string side in Sides)
             {
                 double outward = Screens.Outward(side, dx, dy);
@@ -149,6 +154,7 @@ namespace MacShare
                 AppWindows.AddMoving(d, true); // a window grabbed with the move key goes over with the pointer (pcapps.js)
                 d["offset"] = Math.Round(offset, 4);
                 d["side"] = side;
+                d["crossingFlags"] = LocalCrossingBits();
                 emit(d);
                 return;
             }
@@ -160,6 +166,7 @@ namespace MacShare
         public void FeedReturn(int x, int y, double dx, double dy)
         {
             if (!retArmed || HoldReturn) return;
+            if (!ReturnAllowed()) { retPushes.Clear(); return; } // hold-to-cross on the way back (Crossing.cs)
             DateTime now = DateTime.UtcNow;
             foreach (string side in retSides)
             {

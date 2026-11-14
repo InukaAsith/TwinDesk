@@ -31,6 +31,7 @@ UI.tab({
     const shakeRow = UI.row(t('Shake to bring the pointer back'), t('While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here'), [shake]);
     const ble = UI.switch((v) => set({ ble: v }), { label: t('Over Bluetooth') });
     const bleRow = UI.row(t('Over Bluetooth'), t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
+    const crossing = UI.crossingOptions(true); // hold a key to cross, the emergency return
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : t('None')) }, (v) => set({ resistancePx: v }));
     // A phone as the peer: how the pointer and keys reach it (settings.phone.input, the phone's own toggle too).
     const via = UI.segmented([{ value: 'adb', label: 'ADB' }, { value: 'phone', label: t('Accessibility') }], (v) => api.setPhone({ input: v, inputPicked: true }));
@@ -42,6 +43,7 @@ UI.tab({
       ] },
       { on: { get: (s) => s.kvm.driveOther, set: (v) => set({ driveOther: v }) }, label: t('Use {me}’s mouse and keyboard on {name}'), hint: t('Push the pointer past the edge'), rows: [
         UI.row(t('Edge resistance'), t('Push a little further to cross'), [resistance]),
+        crossing.modRow,
         viaRow,
       ] },
     );
@@ -52,6 +54,7 @@ UI.tab({
     body.append(
       pair.el,
       lock.el,
+      crossing.card,
       UI.card(t('Feel'), [gestureRow, syncRow, shakeRow]),
       UI.card(t('Not on the same network'), [bleRow]),
       UI.card(t('Right now'), [status], { cls: 'keep-on' }),
@@ -64,6 +67,7 @@ UI.tab({
       via.set(((s.phone || {}).bridge || {}).input || (((s.phone || {}).settings || {}).input === 'phone' ? 'phone' : 'adb'));
       status.update(s);
       lock.update(s);
+      crossing.update(s);
       speed.set(s.kvm.speed);
       reverse.set(s.kvm.reverseScroll);
       gestures.set(s.kvm.gestures !== false);

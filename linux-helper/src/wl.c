@@ -294,6 +294,8 @@ void wl_move_to(int x, int y) {
 }
 
 static void feed_return(double dx, double dy);
+void wl_forward(const char *k) { forward(k); }
+int wl_mouse(void) { return capturing && capMouse; }
 
 // The pointer came here (back home, or placed by the driver) through `s`, or by the hotkey
 // (SIDE_NONE): starts the cooldown and the arrival guard, and clears every push.
@@ -375,10 +377,12 @@ void wl_release_all(void) {
 
 // A relative move from the input lane (lane.c): no JSON per move.
 void wl_move_rel(double dx, double dy) {
+  if (crossing_blocked()) return;
   inj_move(dx, dy);
 }
 
 void wl_inject(const JObj *ev) {
+  if (crossing_blocked()) return; // the emergency shortcut, until main ended the session
   const char *t = jstr(ev, "t", "");
   if (!strcmp(t, "k.mm")) inj_move(jnum(ev, "dx", 0), jnum(ev, "dy", 0));
   else if (!strcmp(t, "k.md")) inj_button((int)jnum(ev, "b", -1), 1);
@@ -426,6 +430,7 @@ void wl_capture_stop(int toSide, double offset, int hasSide) {
   // What is still held was pressed over there: let it go there (the other side's releaseAll does
   // too); the compositor never saw those presses, so their releases are harmless here.
   grab_all(0);
+  crossing_reset();
   if (capMouse && hasSide && toSide != SIDE_NONE) {
     int x, y;
     screens_edge_point(toSide, offset, &x, &y);
@@ -452,7 +457,7 @@ static void feed_return(double dx, double dy) {
   for (int i = 0; i < nRetSides; i++) {
     int s = retSides[i];
     double outward = screens_outward(s, dx, dy);
-    if (!may_cross(s, outward)) { retPushBy[s] = 0; continue; }
+    if (!may_cross(s, outward) || !crossing_return_ok()) { retPushBy[s] = 0; continue; }
     if (outward <= 0 || !screens_on_outer_edge((int)px, (int)py, s) || !zones_contain(retZ, nRetZ, (int)px, (int)py, s)) { retPushBy[s] = 0; continue; }
     if (now - retLastBy[s] > 300) retPushBy[s] = 0;
     retLastBy[s] = now;
@@ -496,6 +501,7 @@ void wl_config(const JObj *c) {
   deadmanMs = jnum(c, "deadmanMs", 1500);
   doubleTapMs = jnum(c, "doubleTapMs", 400);
   shortcut_config(c);
+  crossing_config(c);
 }
 
 void wl_touch(void) { lastCmd = now_ms(); }
@@ -550,8 +556,24 @@ static void flush_hotkey(void) {
 }
 
 // value: 1 down, 0 up, 2 autorepeat (sent as another k.kd, like the PC)
+// The emergency shortcut: capture stops here first (or what we injected is let go), then main is told.
+void wl_emergency(void) {
+  if (capturing) wl_capture_stop(SIDE_NONE, 0, 0);
+  else { pen_leave(1); touch_leave(1); wl_release_all(); }
+  retArmed = 0;
+  local_watch(0);
+  driveOther = 0;
+  memset(pushBy, 0, sizeof pushBy);
+  crossing_emergency();
+}
+
 static void on_key(int ev, int value) {
   if (ev < 0 || ev > 255) return;
+  {
+    int cr = crossing_key(ev, value, capturing, capturing && capMouse, forward);
+    if (cr == 1) { if (value != 2) localKeys[ev] = (unsigned char)value; return; }
+    if (cr == 2) { localKeys[ev] = 1; wl_emergency(); return; }
+  }
   if (value != 2) { localKeys[ev] = (unsigned char)value; shortcut_key(ev, value, !capturing, !(capturing && capKeys)); }
   int hot = value == 2 ? 0 : detect_hotkey(ev, value);
   if (capturing && capKeys) {
@@ -662,7 +684,7 @@ static void on_motion(double rdx, double rdy, double tMs) {
   for (int i = 0; i < nEdgeSides; i++) {
     int s = edgeSides[i];
     double outward = screens_outward(s, rdx, rdy);
-    if (!may_cross(s, outward)) { pushBy[s] = 0; continue; }
+    if (!may_cross(s, outward) || !crossing_edge_ok()) { pushBy[s] = 0; continue; }
     if (outward <= 0 || !screens_on_outer_edge((int)px, (int)py, s) || !zones_contain(edgeZ, nEdgeZ, (int)px, (int)py, s)) { pushBy[s] = 0; continue; }
     if (now - lastPushBy[s] > 300) pushBy[s] = 0;
     lastPushBy[s] = now;
@@ -675,6 +697,7 @@ static void on_motion(double rdx, double rdy, double tMs) {
     JOut o;
     jo_begin(&o);
     jo_str(&o, "event", "edge");
+    jo_num(&o, "crossingFlags", crossing_bits());
     jo_str(&o, "side", side_name(s));
     jo_num(&o, "offset", round(offset * 10000) / 10000);
     emit(jo_end(&o));

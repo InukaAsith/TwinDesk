@@ -22,6 +22,9 @@ const { LaneMesh, LANE_TYPES } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
 const store = require('./store');
+// Hold a key to cross (#230; in Multi-device, only this Mac's own mouse and trackpad at its edges)
+// and the emergency return (#178).
+const Crossing = require('../../shared/crossing.js');
 
 // {them} = the other computer's name (Kvm._them).
 const REFUSED = { busy: '{them} is using this computer right now', not_allowed: '{them} doesn’t accept input from here' };
@@ -326,6 +329,8 @@ class Kvm extends EventEmitter {
         side: sides[0] || null, sides, zones: edge.zones, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
         driveOther: sides.length > 0,
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
+        crossingModifier: Crossing.modifier(k.crossingModifier),
+        emergencyKeys: Crossing.emergency(this.getSettings().keys.emergencyKeys),
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
         dwellMs: P.KVM_EDGE_DWELL_MS,
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
@@ -434,6 +439,7 @@ class Kvm extends EventEmitter {
       if (prev === 'home') this.config();
     }
     if (prev !== mode) this.lockKey.reset();
+    if (prev !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' }); // the emergency shortcut works while a session is on
     if (prev !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();
@@ -649,6 +655,9 @@ class Kvm extends EventEmitter {
       // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
       case 'shake':
         if (this.mode === 'driving' && this.cfg.shakeHome !== false) this.goHome('');
+        break;
+      case 'emergency':
+        this._emergency();
         break;
       case 'captureEnded':
         if (this.mode === 'driving') this.goHome(ev.reason === 'deadman' ? 'Input came back by itself (safety timeout)' : '');
@@ -889,6 +898,14 @@ class Kvm extends EventEmitter {
     this.helper.send('armReturn', { on: false });
     this._setMode('home', message);
     this.clipboard.sendIfChanged('switch');
+  }
+
+  // The emergency shortcut (#178; the helper already stopped capturing, or let go of what it
+  // injected): everything home, and sharing off until it's turned on again.
+  _emergency() {
+    this.home();
+    if (this.linked) this.setLinked(false);
+    this.helper.send('emergencyActive', { on: false });
   }
 
   // Menu bar "Bring Mouse and Keyboard Back".

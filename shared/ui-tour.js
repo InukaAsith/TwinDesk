@@ -40,6 +40,8 @@
       ['Modules', 'Switch off the pages you don’t use in General › Modules. They aren’t even loaded.'],
       ['TwinDesk iPhone', 'Install the iPhone app with your own Apple ID from this computer, and keep it refreshed. Opt in.'],
       ['A tour of TwinDesk', 'For someone new: how to install it on the other device, connect, and what each page does. In General › Tutorial, in Multi-device too.'],
+      ['Hold a key to cross', 'Pick a key on the Mouse page: the pointer leaves this computer at the edge only while you hold it. On every computer, in Multi-device too.'],
+      ['Emergency return', 'A shortcut that brings the mouse and keyboard home and turns sharing off, whatever the other computer is doing. Set it on the Mouse page.'],
     ], changes: [
       ['Pointer home on the right monitor', 'Coming back to a computer with two monitors, the pointer comes back on the edge it left from, also after a fast move.'],
       ['Clipboard', 'Copying the same text again after the other side copied something sends it again, on computers, Android and iPhone.'],

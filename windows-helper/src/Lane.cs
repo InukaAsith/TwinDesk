@@ -41,7 +41,7 @@ namespace MacShare
 
         static readonly Callback callback = OnLane; // kept alive: the lane's thread calls it
         static readonly JavaScriptSerializer json = new JavaScriptSerializer();
-        static readonly HashSet<string> fenced = new HashSet<string> { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" };
+        static readonly HashSet<string> fenced = new HashSet<string> { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge", "k.mod" };
         static Action<double, double> inject;
         static Action<Dictionary<string, object>> emit;
         static volatile bool driving;

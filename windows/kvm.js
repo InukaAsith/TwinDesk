@@ -14,7 +14,9 @@ const { KvmMap } = require('../shared/kvm-map.js');
 const T = P.T;
 const K_TYPES = new Set([T.K_MOVE, T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP]);
 // Input that goes numbered (es) and fenced when there's an input lane (shared/inputlane.js).
-const LANE_EVENTS = new Set([T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP, T.K_GESTURE]);
+const LANE_EVENTS = new Set([T.K_DOWN, T.K_UP, T.K_WHEEL, T.K_KEY_DOWN, T.K_KEY_UP, T.K_GESTURE, T.K_CROSSING_MODIFIERS]);
+// Hold a key to cross (#230) and the emergency return (#178): shared/crossing.js.
+const Crossing = require('../shared/crossing.js');
 
 class Kvm {
   // opts: link, helper, clip, fileDrop, fileRecv, settings (shared object), save(), onChange()
@@ -109,7 +111,10 @@ class Kvm {
     link.on(T.KVM_TAKE, (m) => this._onTake(m));
     link.on(T.KVM_LINK, (m) => this.setLinked(m.on !== false, false)); // the other side switched it: follow, no echo
     link.on(T.KVM_ACCEPT, (m) => {
-      if (this.mode === 'driving' && m.route === this.route) this._clearAccept();
+      if (this.mode === 'driving' && m.route === this.route) {
+        this._clearAccept();
+        if (m.crossingModifierV1 === true) this.helper.send('crossingWatch', {}); // it gates its way back: our held keys go there
+      }
     });
     link.on(T.KVM_REFUSE, (m) => {
       if (this.mode !== 'driving' || m.route !== this.route) return;
@@ -132,6 +137,7 @@ class Kvm {
     });
     for (const t of K_TYPES) link.on(t, (m) => this._onWire(m));
     link.on(T.K_GESTURE, (m) => this._onWire(m)); // Trackpad gestures
+    link.on(T.K_CROSSING_MODIFIERS, (m) => this._onWire(m)); // the driver's held modifiers (hold-to-cross)
     link.on(T.KVM_LOCK, (m) => {
       if (this.mode !== 'home') this.setLocked(m.on === true, false);
     });
@@ -196,7 +202,7 @@ class Kvm {
 
   // armReturn while driven: the way back, only where the monitors touch.
   _returnCfg() {
-    return { on: true, side: this.crossingSide, resistancePx: this.cfg.resistancePx, zones: this.map.zones() };
+    return { on: true, side: this.crossingSide, resistancePx: this.cfg.resistancePx, zones: this.map.zones(), requireModifier: !!this.drivenModifierState };
   }
 
   // The layout or the monitors changed while driven: the way back follows.
@@ -239,6 +245,8 @@ class Kvm {
       side: this.crossingSide,
       resistancePx: k.resistancePx,
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
+      crossingModifier: Crossing.modifier(k.crossingModifier), // leaving this computer at its edge needs this key held
+      emergencyKeys: Crossing.emergency(this.settings.keys.emergencyKeys),
       driveOther: !!(this.linked && k.driveOther && k.mouse && this.connected && !this._iphone() && this.crossingSide && !this.blockEdge() && !this.paused && !(this.locked && this.mode === 'home')),
       keyboard: !!k.keyboard,
       deadmanMs: P.HELPER_DEADMAN_MS,
@@ -380,7 +388,7 @@ class Kvm {
           // A file/folder drag crossed: the Mac shows it as its own drag; the data follows.
           const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut() ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
           const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
-          this._take({ side: P.opposite(this.crossingSide), offset: this.map.toPeer(msg.offset), ...(drag ? { drag: { count: drag.count } } : {}) });
+          this._take({ side: P.opposite(this.crossingSide), offset: this.map.toPeer(msg.offset), crossingFlags: Crossing.bits(msg.crossingFlags), ...(drag ? { drag: { count: drag.count } } : {}) });
           // A window grabbed with the move key crossed with the pointer (main.js onMoveWindow).
           if (!drag && msg.moving && this.onMoveWindow) this.onMoveWindow(msg);
           if (drag) { // order: kvm.take, drag.start, then the files
@@ -438,6 +446,7 @@ class Kvm {
         }
         break;
       case 'ev':
+        if (this.mode === 'driving' && msg.ev && msg.ev.t === T.K_CROSSING_MODIFIERS) { this._flushMove(); this._driveEvent({ ...msg.ev, flags: Crossing.bits(msg.ev.flags) }); break; }
         if (this.mode === 'driving' && msg.ev && (K_TYPES.has(msg.ev.t) || (msg.ev.t === T.K_GESTURE && this.cfg.gestures !== false))) {
           if (this.local && this.local.drives() && this._lockKeyHere(msg.ev)) break; // a phone has no lock key: ours counts there
           if (this.fileClip && this.fileClip.intercept(msg.ev)) { this.lane.skip(msg.ev, (x) => this.link.send(x)); break; } // copy/paste shortcut: done over there
@@ -455,6 +464,9 @@ class Kvm {
       case 'shake':
         if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
         break;
+      case 'emergency':
+        this._emergency();
+        break;
       case 'captureEnded': // dead-man or a local stop: input is back here
         if (this.mode === 'driving') this._release(msg.reason === 'secureDesktop' ? 'Back here for the administrator prompt or lock screen' : '');
         break;
@@ -471,7 +483,7 @@ class Kvm {
     this.lane.reset(this.route);
     const k = this.cfg;
     this.keyboardOnly = !where.side; // the hotkey in keyboard-only mode (edge crossings carry a side)
-    this._drive({ t: T.KVM_TAKE, route: this.route, ...where, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard });
+    this._drive({ t: T.KVM_TAKE, route: this.route, ...where, crossingModifierV1: true, crossingFlags: Crossing.bits(where.crossingFlags), mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard });
     if (!(this.local && this.local.drives())) this.caps.handOver((m) => this.link.send(m)); // our Caps Lock, there
     this._setMode('driving', '');
     this.clip.sendIfChanged('switch');
@@ -532,6 +544,7 @@ class Kvm {
       if (Number.isInteger(m.es)) return this.laneIn.event(m);
     }
     if (m.t === T.K_GESTURE) this._onGesture(m);
+    else if (m.t === T.K_CROSSING_MODIFIERS) this._crossingFlags(m);
     else this._inject(m);
   }
 
@@ -575,7 +588,8 @@ class Kvm {
       if (route <= this.peerRoute) return;
       this.injectMoves.drop();
       this.peerRoute = route;
-      this.link.send({ t: T.KVM_ACCEPT, route });
+      this.link.send({ t: T.KVM_ACCEPT, route, crossingModifierV1: true });
+      this._drivenCrossing(m);
       if (m.side && m.mouse !== false) this.helper.send('place', { side: m.side, offset: m.offset });
       this.laneIn.take(route); // the lane's totals start again (a move that came ahead goes now)
       return;
@@ -586,7 +600,8 @@ class Kvm {
       return;
     }
     this.peerRoute = route;
-    this.link.send({ t: T.KVM_ACCEPT, route });
+    this.link.send({ t: T.KVM_ACCEPT, route, crossingModifierV1: true });
+    this._drivenCrossing(m);
     this.keyboardOnly = m.mouse === false;
     this._setMode('driven', '');
     if (m.mouse !== false) {
@@ -719,6 +734,28 @@ class Kvm {
     else if (this.mode === 'driven') this._sendHome(undefined);
   }
 
+  // Driven: whether the driver reports its held modifiers (an older one can't, and the way back stays
+  // open), and the ones held as it crossed.
+  _drivenCrossing(m) {
+    this.drivenModifierState = m.crossingModifierV1 === true;
+    this.helper.send('crossingFlags', { flags: this.drivenModifierState ? Crossing.bits(m.crossingFlags) : 0 });
+  }
+
+  // k.mod from the driver: its held modifiers, for the way back (in order with its moves).
+  _crossingFlags(m) {
+    if (this.mode !== 'driven' || !this.drivenModifierState || !Crossing.validBits(m.flags)) return;
+    this.injectMoves.flush(); // after the moves before it
+    this.helper.send('crossingFlags', { flags: m.flags });
+  }
+
+  // The emergency shortcut (the helper already stopped capturing, or let go of what it injected):
+  // everything home, and sharing off until it's turned on again.
+  _emergency() {
+    this.home();
+    if (this.linked) this.setLinked(false);
+    this.helper.send('emergencyActive', { on: false }); // also when the capture stopped before the mode changed
+  }
+
   // ---- shared ----
 
   _setMode(mode, message) {
@@ -734,6 +771,7 @@ class Kvm {
       if (was === 'home') this.applyConfig();
     }
     if (was !== mode) this.lockKey.reset();
+    if (was !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' }); // the emergency shortcut works while a session is on
     if (was !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keyCodes.clear();
       this.zoomAcc = 0;

@@ -14,6 +14,9 @@
 'use strict';
 
 const P = require('../../shared/protocol.js');
+// Hold a key to cross (#230; in Multi-device, only this computer's own mouse or touchpad at its
+// edges) and the emergency return (#178).
+const Crossing = require('../../shared/crossing.js');
 const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
@@ -347,6 +350,8 @@ class Kvm {
       zones: edge.zones, // only where the monitors touch (shared/layout-world.js, #225)
       resistancePx: k.resistancePx,
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
+      crossingModifier: Crossing.modifier(k.crossingModifier),
+      emergencyKeys: Crossing.emergency(this.settings.keys.emergencyKeys),
       driveOther: sides.length > 0,
       keyboard: !!k.keyboard,
       takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
@@ -522,6 +527,9 @@ class Kvm {
       // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
       case 'shake':
         if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
+        break;
+      case 'emergency':
+        this._emergency();
         break;
       case 'captureEnded': // dead-man, or a grab another app holds: input is back here
         console.log('[kvm] capture ended by the helper: ' + (msg.reason || 'stopped'));
@@ -916,6 +924,14 @@ class Kvm {
   }
 
   // Tray "Bring Mouse and Keyboard Back".
+  // The emergency shortcut (#178; the helper already stopped capturing, or let go of what it
+  // injected): everything home, and sharing off until it's turned on again.
+  _emergency() {
+    this.home();
+    if (this.linked) this.setLinked(false);
+    this.helper.send('emergencyActive', { on: false });
+  }
+
   home() {
     if (this.mode === 'driving') this._release('');
     else if (this.mode === 'driven') this._sendHome(undefined);
@@ -943,6 +959,7 @@ class Kvm {
       if (was === 'home') this.applyConfig();
     }
     if (was !== mode) this.lockKey.reset();
+    if (was !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' }); // the emergency shortcut works while a session is on
     if (was !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();

@@ -132,6 +132,9 @@ static void forward(const char *k) { // k: a built k.* object
   emit(jo_end(&o));
 }
 
+void capture_forward(const char *k) { forward(k); }
+int capture_mouse(void) { return capturing && capMouse; }
+
 static void load_devices(void) {
   int n = 0;
   memset(isXtest, 0, sizeof isXtest);
@@ -207,6 +210,7 @@ void capture_config(const JObj *c) {
   dwellMs = jnum(c, "dwellMs", 150);
   nEdgeZ = zones_parse(jstr(c, "zones", NULL), edgeZ, MAX_ZONES);
   shortcut_config(c);
+  crossing_config(c);
   drop_config(c);
 #ifdef MULTI
   nsides = parse_sides(jstr(c, "sideList", NULL), side, sides);
@@ -355,6 +359,7 @@ void capture_stop(int toSide, double offset, int hasSide) {
     if (cursorHidden) { XFixesShowCursor(dpy_ev, root_ev); cursorHidden = 0; }
   }
   release_grabs();
+  crossing_reset();
   capture_arrived(hasSide ? toSide : SIDE_NONE);
 }
 
@@ -566,8 +571,28 @@ static void flush_hotkey(void) {
   send_key(ev, 1);
 }
 
+// The emergency shortcut: capture stops here first (or what we injected is let go), nothing crosses
+// until main has ended the session, then main is told.
+void capture_emergency(void) {
+  if (capturing) capture_stop(SIDE_NONE, 0, 0);
+  else { pen_leave(0); touch_leave(0); inject_release_all(); }
+  retArmed = 0;
+  local_watch(0);
+  driveOther = 0;
+  push = 0;
+#ifdef MULTI
+  memset(pushBy, 0, sizeof pushBy);
+#endif
+  crossing_emergency();
+}
+
 static void on_key(int ev, int down) {
   if (ev < 0 || ev > 255) return;
+  {
+    int cr = crossing_key(ev, down, capturing, capturing && capMouse, forward);
+    if (cr == 1) return;
+    if (cr == 2) { capture_emergency(); return; }
+  }
   shortcut_key(ev, down, !capturing, !(capturing && capKeys));
   int hot = detect_hotkey(ev, down);
   if (!down && swallowKeys[ev]) { swallowKeys[ev] = 0; release_grabs(); if (hot) fire_hotkey(); return; }
@@ -630,7 +655,7 @@ void capture_feed_return(int x, int y, double dx, double dy) {
   for (int i = 0; i < nret; i++) {
     int s = retSides[i];
     double outward = screens_outward(s, dx, dy);
-    if (!may_cross(s, outward)) { retPushBy[s] = 0; continue; }
+    if (!may_cross(s, outward) || !crossing_return_ok()) { retPushBy[s] = 0; continue; }
     if (outward <= 0 || !screens_on_outer_edge(x, y, s) || !zones_contain(retZ, nRetZ, x, y, s)) { retPushBy[s] = 0; continue; }
     if (now - retLastBy[s] > 300) retPushBy[s] = 0;
     retLastBy[s] = now;
@@ -658,7 +683,7 @@ static void multi_edge_push(int x, int y, unsigned mask, double rdx, double rdy)
   for (int i = 0; i < nsides; i++) {
     int s = sides[i];
     double outward = screens_outward(s, rdx, rdy);
-    if (!may_cross(s, outward)) { pushBy[s] = 0; continue; }
+    if (!may_cross(s, outward) || !crossing_edge_ok()) { pushBy[s] = 0; continue; }
     if (outward <= 0 || !screens_on_outer_edge(x, y, s) || !zones_contain(edgeZ, nEdgeZ, x, y, s)) { pushBy[s] = 0; continue; }
     if (now - lastPushBy[s] > 300) pushBy[s] = 0;
     lastPushBy[s] = now;
@@ -672,6 +697,7 @@ static void multi_edge_push(int x, int y, unsigned mask, double rdx, double rdy)
     JOut o;
     jo_begin(&o);
     jo_str(&o, "event", "edge");
+    jo_num(&o, "crossingFlags", crossing_bits());
     { unsigned long mw = wins_move_take(1); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
     jo_str(&o, "side", side_name(s));
     jo_num(&o, "offset", round(offset * 10000) / 10000);
@@ -683,7 +709,7 @@ static void multi_edge_push(int x, int y, unsigned mask, double rdx, double rdy)
 void capture_feed_return(int x, int y, double dx, double dy) {
   if (!retArmed || drop_holding()) return;
   double outward = screens_outward(retSide, dx, dy);
-  if (!may_cross(retSide, outward)) { retPush = 0; return; }
+  if (!may_cross(retSide, outward) || !crossing_return_ok()) { retPush = 0; return; }
   if (outward <= 0 || !screens_on_outer_edge(x, y, retSide) || !zones_contain(retZ, nRetZ, x, y, retSide)) { retPush = 0; return; }
   double now = now_ms();
   if (now - retLast > 300) retPush = 0;
@@ -728,7 +754,7 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
 #else
   if (!driveOther || side == SIDE_NONE || ((mask & (Button1Mask | Button2Mask | Button3Mask)) && !wins_grabbing())) { push = 0; return; } // rule 6 (a grabbed window may cross)
   double outward = screens_outward(side, rdx, rdy);
-  if (!may_cross(side, outward)) { push = 0; return; }
+  if (!may_cross(side, outward) || !crossing_edge_ok()) { push = 0; return; }
   if (outward <= 0 || !screens_on_outer_edge(x, y, side) || !zones_contain(edgeZ, nEdgeZ, x, y, side)) { push = 0; return; }
   double now = now_ms();
   if (now - lastPush > 300) push = 0;
@@ -743,6 +769,7 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
   JOut o;
   jo_begin(&o);
   jo_str(&o, "event", "edge");
+    jo_num(&o, "crossingFlags", crossing_bits());
   { unsigned long mw = wins_move_take(1); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
   jo_num(&o, "offset", round(offset * 10000) / 10000);
   emit(jo_end(&o));

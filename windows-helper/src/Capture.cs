@@ -242,6 +242,7 @@ namespace MacShare
             if (capturing) { capMouse = mouse; capKeys = keys; return; }
             mouseArrivalGuard = false;
             capturing = true; capMouse = mouse; capKeys = keys;
+            CrossingReset();
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear();
             Touch();
@@ -277,6 +278,7 @@ namespace MacShare
                 mouseArrivalGuard = true;
             }
             capturing = false;
+            CrossingReset();
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
             foreach (uint vk in heldVks) swallowVks.Add(vk);
             foreach (int b in heldButtons) swallowButtons.Add(b);
@@ -291,6 +293,10 @@ namespace MacShare
             }
             Arrived(side);
         }
+#endif
+
+#if !MULTI
+        void DisarmForEmergency() { retArmed = false; localWatch = false; push = 0; }
 #endif
 
         public bool Capturing { get { return capturing; } }
@@ -560,6 +566,9 @@ namespace MacShare
             // it was a Ctrl there too (Cmd on a Mac: AltGr+E was Cmd+Option+E, not €). With Right Alt as
             // the hotkey it doesn't break the double-tap, and it never counts for a Ctrl hotkey.
             bool fakeCtrl = k.vkCode == 0xA2 && k.scanCode == 0x21D;
+            if (!fakeCtrl) NoteModifier(k.vkCode, down); // hold-to-cross and the emergency shortcut (Crossing.cs)
+            if (CheckEmergency(k.vkCode, code, down)) return (IntPtr)1;
+            if (emergencyVks.Contains(k.vkCode)) { if (!down) emergencyVks.Remove(k.vkCode); return (IntPtr)1; } // the emergency key's repeats and release
             bool hotkey = !fakeCtrl && DetectHotkey(k.vkCode, down);
 
             if (!down && swallowVks.Remove(k.vkCode)) return (IntPtr)1;
@@ -665,6 +674,7 @@ namespace MacShare
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
             if (!DriveOther || Side == null || (AnyButtonDown() && !AppWindows.Grabbing)) { push = 0; return; } // Rule 6: no crossing mid-drag
+            if (!EdgeAllowed()) { push = 0; return; } // hold-to-cross: not without the key (Crossing.cs)
             double outward = Screens.Outward(Side, dx, dy);
             if (!MayCross(Side, outward)) { push = 0; return; }
             if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, Side) || !InZone(EdgeZones, p.x, p.y, Side)) { push = 0; return; }
@@ -680,6 +690,7 @@ namespace MacShare
             Dictionary<string, object> d = Ev("edge");
             AppWindows.AddMoving(d, true); // a window grabbed with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(offset, 4);
+            d["crossingFlags"] = LocalCrossingBits();
             emit(d);
         }
 
@@ -687,6 +698,7 @@ namespace MacShare
         public void FeedReturn(int x, int y, double dx, double dy)
         {
             if (!retArmed || HoldReturn) return;
+            if (!ReturnAllowed()) { retPush = 0; return; } // hold-to-cross on the way back (Crossing.cs)
             double outward = Screens.Outward(retSide, dx, dy);
             if (!MayCross(retSide, outward)) { retPush = 0; return; }
             if (outward <= 0 || !Screens.OnOuterEdge(x, y, retSide) || !InZone(ReturnZones, x, y, retSide)) { retPush = 0; return; }

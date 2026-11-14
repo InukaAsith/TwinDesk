@@ -138,11 +138,13 @@ int lane_move(double dx, double dy, JOut *k) {
 // A click, key or wheel (k: a built k.* object, "t" first): numbered, with where the moves before it
 // took the pointer. Returns k, or buf with the fence added.
 const char *lane_fence(const char *k, char *buf, size_t n) {
-  static const char *fenced[] = { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge" };
+  static const char *fenced[] = { "k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge", "k.mod" };
   if (!driving || strncmp(k, "{\"t\":\"", 6)) return k;
   int hit = 0;
-  for (size_t i = 0; i < sizeof fenced / sizeof *fenced; i++)
-    if (!strncmp(k + 6, fenced[i], 4) && k[10] == '"') hit = 1;
+  for (size_t i = 0; i < sizeof fenced / sizeof *fenced; i++) {
+    size_t fl = strlen(fenced[i]);
+    if (!strncmp(k + 6, fenced[i], fl) && k[6 + fl] == '"') hit = 1;
+  }
   size_t len = strlen(k);
   if (!hit || len < 2 || k[len - 1] != '}') return k;
   uint32_t r = 0, mn = 0;

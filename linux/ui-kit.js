@@ -432,11 +432,39 @@ const UI = {
 
   // "Control+Alt+C" → "Ctrl+Alt+C" (Electron accelerator → how Linux desktops write it).
   keysLabel(acc) {
-    return String(acc || '').split('+').map((p) => ({ Control: 'Ctrl', Super: 'Super', Scrolllock: 'Scroll Lock' }[p] || p)).join('+');
+    return String(acc || '').split('+').map((p) => ({ Control: 'Ctrl', Super: 'Super', Command: 'Super', Scrolllock: 'Scroll Lock' }[p] || p)).join('+');
+  },
+
+  // Hold a key to cross (#230) and the emergency return (#178), for the Cursor page. mesh: in
+  // Multi-device the key is for this computer's own mouse or touchpad at its edges only.
+  crossingOptions(mesh) {
+    const t = I18n.t;
+    const mod = UI.select([
+      { value: '', label: t('None') },
+      { value: 'Command', label: 'Super' },
+      { value: 'Control', label: 'Ctrl' },
+      { value: 'Alt', label: 'Alt' },
+      { value: 'Shift', label: 'Shift' },
+    ], (v) => UI.api.setKvm({ crossingModifier: v }));
+    mod.el.setAttribute('aria-label', t('Hold key to switch'));
+    const modRow = UI.row(t('Hold key to switch'), mesh ? t('Hold this key when this computer’s own mouse or touchpad leaves it at an edge.')
+      : t('Hold this key when leaving this computer. On return, the other computer needs a compatible version.'), [mod.el]);
+    const KEY = /(?:^|\+)(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|20)|Escape|Space|Tab|Backspace|Delete|Enter|Up|Down|Left|Right)$/;
+    const rec = UI.keyRecorder((v) => UI.api.setKeys({ emergencyKeys: v }), { bare: true, allowEscape: true, meta: 'Command', valid: (v) => KEY.test(v) });
+    const card = UI.card(t('Emergency return'), [UI.row(t('Return shortcut'), t('Stops input sharing and returns the pointer if the input helper responds. Set separately on each computer.'), [rec.el])]);
+    return {
+      modRow, card,
+      update(s) {
+        mod.set((s.kvm && s.kvm.crossingModifier) || '');
+        rec.set((s.keys && s.keys.emergencyKeys) || 'Control+Alt+Command+Escape');
+      },
+    };
   },
 
   // A shortcut recorder: click, press the keys (with Ctrl, Alt or Win), Esc cancels.
-  // onChange(accelerator). opts.bare: Scroll Lock and F13–F24 also count on their own.
+  // onChange(accelerator). opts.bare: Scroll Lock and F13–F24 also count on their own. opts.allowEscape:
+  // Esc with Ctrl, Alt or the Windows/Super key is a shortcut (not a cancel); opts.meta: the name the
+  // Windows/Super key gets ('Super'; the emergency shortcut says 'Command', as on a Mac); opts.valid(acc).
   keyRecorder(onChange, opts = {}) {
     const b = UI.el('button', { class: 'btn small keyrec' });
     let value = '', recording = false;
@@ -446,16 +474,18 @@ const UI = {
       if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
       if (/^F\d{1,2}$/.test(e.code)) return e.code;
       if (opts.bare && e.code === 'ScrollLock') return 'Scrolllock';
-      return { Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Enter: 'Enter', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' }[e.code] || '';
+      return { Escape: 'Escape', Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Enter: 'Enter', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' }[e.code] || '';
     };
     const bare = (key) => opts.bare && /^(?:Scrolllock|F(?:1[3-9]|2[0-4]))$/.test(key);
     const onKey = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (e.key === 'Escape') return stop();
+      if (e.key === 'Escape' && !(opts.allowEscape && (e.ctrlKey || e.altKey || e.metaKey))) return stop();
       const key = keyOf(e);
       if (!key || !(e.ctrlKey || e.altKey || e.metaKey || bare(key))) return; // wait for a real combination
-      value = [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super', key].filter(Boolean).join('+');
+      const acc = [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && (opts.meta || 'Super'), key].filter(Boolean).join('+');
+      if (opts.valid && !opts.valid(acc)) return;
+      value = acc;
       stop();
       onChange(value);
     };

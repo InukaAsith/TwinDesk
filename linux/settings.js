@@ -3,6 +3,7 @@
 // disk or from the UI goes through normalize(), so main never stores anything out of range.
 const P = require('../shared/protocol.js');
 const CL = require('../shared/cursorlock.js');
+const Crossing = require('../shared/crossing.js');
 const { savedLanguage } = require('../shared/i18n.js');
 const Look = require('../shared/look.js');
 const { normalizeFolder } = require('../shared/received.js');
@@ -65,6 +66,7 @@ function normalize(s) {
       driveOther: bool(kvm.driveOther, true),
       beDriven: bool(kvm.beDriven, true),
       resistancePx: Math.round(num(kvm.resistancePx, P.RESISTANCE_PX, 0, 400)),
+      crossingModifier: Crossing.modifier(kvm.crossingModifier), // held to leave this computer at an edge ('' none, #230)
       pcSide: P.SIDES.includes(kvm.pcSide) ? kvm.pcSide : null, // where this PC is, seen from the other computer (kvm.layout)
       along: typeof kvm.along === 'number' && Number.isFinite(kvm.along) ? Math.round(kvm.along) : null, // the other computer along our side, points (shared/kvm-geom.js); null: centred
       speed: Math.round(num(kvm.speed, 1.0, 0.25, 3) * 100) / 100,
@@ -80,7 +82,7 @@ function normalize(s) {
       ble: bool(kvm.ble, true), // cursor sharing while the session runs through Bluetooth (pair.sync 'ble')
     },
     // hotkey: double-tap = mouse and keyboard home. lockKeys: cursor lock on/off (shared/cursorlock.js)
-    keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN, lockKeys: CL.validKeys(keys.lockKeys, CL.DEFAULT_KEYS.linux) },
+    keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN, lockKeys: CL.validKeys(keys.lockKeys, CL.DEFAULT_KEYS.linux), emergencyKeys: Crossing.emergency(keys.emergencyKeys) }, // emergencyKeys: everything home, sharing off (#178)
     // hud: popup when switching computers. inputProtocol: udp = tdv2 input lane (default), tcp = tdv1
     app: { hud: bool(appS.hud, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true }, // keepPinging: General › Advanced (shared/quiet.js)
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored

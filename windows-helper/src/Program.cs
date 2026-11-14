@@ -62,6 +62,7 @@ namespace MacShare
             touch = new Touch(injector);
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
+            capture.ReleaseInjected = delegate { smoother.Clear(); stylus.Leave(); touch.Leave(); injector.ReleaseAll(); }; // the emergency return (Crossing.cs)
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move
             Lane.Init(delegate (double x, double y) { smoother.Flush(laneMove); laneMove(x, y); }, Emit); // the input lane (Lane.cs)
@@ -283,7 +284,12 @@ namespace MacShare
                         capture.DeadmanMs = (int)Json.Num(c, "deadmanMs", 1500);
                         capture.DoubleTapMs = (int)Json.Num(c, "doubleTapMs", 400);
                         capture.Gestures = Json.Bool(c, "gestures", true);
+                        capture.CrossingModifier = Json.Str(c, "crossingModifier", "");
+                        capture.Emergency = new EmergencyShortcut(Json.Str(c, "emergencyKeys", EmergencyShortcut.Fallback));
                         break;
+                    case "crossingWatch": capture.WatchCrossingFlags(); break; // hold-to-cross (Crossing.cs)
+                    case "crossingFlags": capture.RemoteCrossingBits = (int)Json.Num(c, "flags", 0) & 15; break;
+                    case "emergencyActive": capture.SetEmergencyActive(Json.Bool(c, "on", false)); break;
                     case "capture":
                         if (Json.Bool(c, "on", false)) capture.Begin(Json.Bool(c, "mouse", true), Json.Bool(c, "keyboard", true));
                         else capture.Stop(Json.Has(c, "offset") ? Json.Str(c, "side", null) : null, Json.Num(c, "offset", 0));
@@ -297,6 +303,7 @@ namespace MacShare
                         break;
                     case "armReturn":
                         capture.ReturnZones = Capture.ParseZones(Json.Str(c, "zones", null));
+                        capture.ReturnRequiresModifier = Json.Bool(c, "requireModifier", false);
 #if MULTI
                         // sides: every side with a device behind it; without it, the one side.
                         List<string> retSides = Json.Strs(c, "sides");

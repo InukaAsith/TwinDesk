@@ -85,6 +85,8 @@ final class Capture {
   private var edge = (push: 0.0, at: 0.0, since: 0.0)
   private var ret = (push: 0.0, at: 0.0, since: 0.0)
   private var returnSide: String?
+#endif
+  // The emergency return shortcut (#178), one-to-one and Multi-device.
   var emergencyActive = false
   var emergencyShortcut = EmergencyShortcut(EmergencyShortcut.fallback)
   private var emergencyGate = EmergencyInputGate()
@@ -94,7 +96,6 @@ final class Capture {
     emergencyActive = on
     emergencyGate.session(active: on)
   }
-#endif
   private var returnResistance = 120.0
   // Driven (armReturn on): the first input from this Mac's own mouse or trackpad takes the Mac back
   // (`local`): main sends the input home, so the driver gets its own pointer again where it left
@@ -605,7 +606,6 @@ final class Capture {
     hkStage = 0
     if down { flushHotkey() }
     let kc = UInt16(e.getIntegerValueField(.keyboardEventKeycode))
-#if !MULTI
     // Stop locally before asking main to release the peer. This still works if main is delayed,
     // provided the event tap and helper are responsive. Never intercept the chord at home.
     if emergencyActive || capturing {
@@ -617,7 +617,12 @@ final class Capture {
           DragIn.shared.cancel() // avoid dropping a file when releasing the injected mouse button
           injector.releaseAll()
         }
+#if MULTI
+        returnSides = []
+        edgeBy.removeAll()
+#else
         returnSide = nil
+#endif
         localWatch = false
         emergencyActive = false
         edgeEnabled = false
@@ -627,7 +632,6 @@ final class Capture {
       }
     }
     if down && swallowUps.contains(kc) { return true } // suppress autorepeat until the release
-#endif
     if capturing && capKeyboard {
       if !down && localDown.remove(kc) != nil { return false }
       guard let code = KeyCodes.code(kc, kbType: e.getIntegerValueField(.keyboardEventKeyboardType)) else { return true }

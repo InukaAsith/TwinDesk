@@ -13,6 +13,9 @@ namespace MacShare
 {
     class Injector
     {
+        // The emergency return (Crossing.cs) stopped the session: nothing more of it is injected until
+        // main has ended it.
+        public static volatile bool Blocked;
         readonly HashSet<int> heldScans = new HashSet<int>();
         readonly HashSet<int> heldButtons = new HashSet<int>();
         double fx, fy;              // sub-pixel remainder of relative moves (physical px)
@@ -81,6 +84,7 @@ namespace MacShare
         // Relative move in logical px (main already applied `speed`); scaled by the monitor's DPI.
         public void Move(double dx, double dy)
         {
+            if (Blocked) return;
             Native.POINT cur;
             Native.GetCursorPos(out cur);
             double scale = Screens.Scale(cur.x, cur.y);
@@ -298,6 +302,7 @@ namespace MacShare
         // A k.* event from the owner.
         public void Apply(Dictionary<string, object> ev)
         {
+            if (Blocked) return;
             switch (Json.Str(ev, "t", ""))
             {
                 case "k.mm": Move(Json.Num(ev, "dx", 0), Json.Num(ev, "dy", 0)); break;

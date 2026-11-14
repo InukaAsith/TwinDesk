@@ -16,6 +16,16 @@ was never released on its own.
 
 ### New
 
+- **Hold a key to cross** (#230): pick Command (Win, Super), Control, Alt or Shift on the Mouse page,
+  and the pointer leaves this computer at its edge only while it's held. One-to-one, the way back
+  needs it too when the other computer has 3.2. In Multi-device it's for this computer's own mouse
+  or trackpad at its edges. Mac, Windows and Linux (X11 and Wayland). Thanks
+  [@pengusto](https://github.com/pengusto).
+- **Emergency return** (#178): a shortcut (Control+Alt+Command+Esc by default, Win or Super for
+  Command, or your own, in Mouse) that stops sharing at once: the helper lets go first, then the
+  mouse and keyboard come home and sharing turns off. Nothing the other computer sends gets in until
+  then. Mac, Windows and Linux, one-to-one and Multi-device. Thanks
+  [@pengusto](https://github.com/pengusto).
 - **The tour in Multi-device:** someone new to TwinDesk gets the same tour in Multi-device as in
   one-to-one (how to install TwinDesk on the other device, pair it, and what each page does), with a
   last stop on the Multi-device page. After an update, What's new shows there too. Both are in
@@ -85,8 +95,8 @@ was never released on its own.
 
 ### Thanks
 
-Code from [@alexfoxtm](https://github.com/alexfoxtm) (#221, #227, #228) and
-[@youyouhdhd](https://github.com/youyouhdhd) (#226).
+Code from [@alexfoxtm](https://github.com/alexfoxtm) (#221, #227, #228),
+[@youyouhdhd](https://github.com/youyouhdhd) (#226) and [@pengusto](https://github.com/pengusto) (#178, #230).
 Reported by [@ElMahaster](https://github.com/ElMahaster) (#188).
 
 ## 3.1.0 (not released: in 3.2.0)

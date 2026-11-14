@@ -80,6 +80,16 @@ static void dispatch(const char *line) {
     return;
   }
 #endif
+  // Hold a key to cross and the emergency return (crossing.c): both backends.
+  if (!strcmp(cmd, "crossingWatch") || !strcmp(cmd, "crossingFlags") || !strcmp(cmd, "emergencyActive")) {
+    if (!strcmp(cmd, "crossingWatch")) crossing_watch(wl ? wl_mouse() : capture_mouse(), wl ? wl_forward : capture_forward);
+    else if (!strcmp(cmd, "crossingFlags")) crossing_remote((int)jnum(c, "flags", 0));
+    else crossing_session(jbool(c, "on", 0));
+    reply(c, NULL, NULL);
+    json_free(c);
+    return;
+  }
+  if (!strcmp(cmd, "armReturn")) crossing_require_return(jbool(c, "on", 0) && jbool(c, "requireModifier", 0));
   if (wl) {
     wl_touch();
     if (!strcmp(cmd, "ping") || !strcmp(cmd, "keepalive")) {

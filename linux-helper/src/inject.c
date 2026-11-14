@@ -101,12 +101,14 @@ static void wake(void) {
 
 // A relative move from the input lane (lane.c): straight to the move, no JSON per move.
 void inject_move(double dx, double dy) {
+  if (crossing_blocked()) return;
   wake();
   move(dx, dy);
 }
 
 // A k.* event from the owner (main already applied speed, key mapping and reverse scroll).
 void inject_apply(const JObj *ev) {
+  if (crossing_blocked()) return; // the emergency shortcut, until main ended the session
   wake();
   const char *t = jstr(ev, "t", "");
   if (!strcmp(t, "k.mm")) move(jnum(ev, "dx", 0), jnum(ev, "dy", 0));
