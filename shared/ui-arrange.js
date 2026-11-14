@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Arrange: the sidebar's pages in the order the person likes (Mac, Windows, Linux). Opened from
 // General › Look › Sidebar order, by holding the sidebar, or with a right click on it. General,
-// About and Multi-device stay at the bottom. The order is this window's own (localStorage), a
+// About, Multi-device and Full KVM stay at the bottom. The order is this window's own (localStorage), a
 // list of page ids; a page that's new since keeps its place after the one it follows by default.
 //
 // The shells (mac/ui-start.js, windows/app.js, linux/app.js) sort with UI.arrangeSort, mark each

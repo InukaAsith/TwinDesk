@@ -251,6 +251,23 @@
     return { to: best.dev, offset: Math.min(1, Math.max(0, (p - t.start) / Math.max(1, t.len))) };
   }
 
+  // The pointer comes back to device id through `side` from device dev at `offset` (0–1 along id's side):
+  // kept on the part of that side that touches dev (the nearest place of it). An offset that was never
+  // mapped (an older app, a crossing it couldn't place) put the pointer on a monitor that doesn't touch
+  // dev at all: past the end of the stretch, on the next monitor along. Nothing touches: unchanged.
+  function land(world, displays, ids, id, side, offset, dev, present = () => true, phone = () => false, skip = true) {
+    if (!SIDES.includes(side) || typeof offset !== 'number' || !Number.isFinite(offset)) return offset;
+    const st = stretches(world, displays, ids, id, present, phone, skip)[side].filter((x) => x.dev === dev);
+    const s = st.length ? spanOf(world, displays, id, side, phone) : null;
+    if (!s) return offset;
+    const a = s.start + Math.min(1, Math.max(0, offset)) * s.len;
+    const dist = (x) => (a < x.from ? x.from - a : a > x.to ? a - x.to : 0);
+    const best = st.reduce((u, v) => (dist(v) < dist(u) ? v : u));
+    if (!dist(best)) return offset;
+    const p = Math.min(best.to - 0.5, Math.max(best.from + 0.5, a));
+    return Math.min(1, Math.max(0, (p - s.start) / Math.max(1, s.len)));
+  }
+
   // ---- the editor ----
 
   const overlap = (a, b) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.5 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.5;
@@ -473,7 +490,7 @@
     return out;
   }
 
-  const api = { SIDES, OPPOSITE, MIN_TOUCH, normalize, bounds, screensOf, placed, fromCells, complete, stretches, spanOf, zonesText, sidesOf, cross, drop, settle, groupsOf, leaf };
+  const api = { SIDES, OPPOSITE, MIN_TOUCH, normalize, bounds, screensOf, placed, fromCells, complete, stretches, spanOf, zonesText, sidesOf, cross, land, drop, settle, groupsOf, leaf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LayoutWorld = api;
 })(typeof self !== 'undefined' ? self : this);

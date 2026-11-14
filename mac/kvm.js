@@ -167,7 +167,7 @@ class Kvm extends EventEmitter {
         this.dragOut = null;
       }
       if (m.drag && m.drag.count) this.drop.dragIn.expectHome(); // the PC's files follow as a drag here
-      this.helper.send('capture', typeof m.offset === 'number' ? { on: false, side: k.pcSide, offset: m.offset } : { on: false });
+      this.helper.send('capture', typeof m.offset === 'number' ? { on: false, side: k.pcSide, offset: this.map.land(m.offset) } : { on: false }); // on the edge that touches it
       this._setMode('home', '');
       if (back) {
         console.log(`[drag] back home: ${back.length} item(s)`);

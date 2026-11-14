@@ -103,7 +103,8 @@ class Kvm {
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
       const side = E.SIDES.includes(m.side) ? m.side : this._sideOf(from); // the monitor map says which side
-      this.helper.send('capture', has && side ? { on: false, side, offset: m.offset } : { on: false });
+      // kept on the part of that side that touches the device (an offset it never mapped went to another monitor)
+      this.helper.send('capture', has && side ? { on: false, side, offset: this.layoutSync.land(side, m.offset, from) } : { on: false });
       this._setMode('home', '');
     });
     for (const t of K_TYPES) bus.on(t, (m, from) => this._onWire(m, from));
@@ -742,6 +743,7 @@ class Kvm {
     console.log('[kvm] return watch on: ' + this._returnSides().join(',') + ' (partner ' + this.partner + ')');
     const { sides } = this.layoutSync.edgeConfig();
     // side: the first one, for a helper from before several sides (it watches that one; a newer one reads sides)
+    this.returnSide = sides[0] || null;
     this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, zones: null, sideList: sides.join(','), resistancePx: this.cfg.resistancePx });
   }
 
@@ -750,7 +752,9 @@ class Kvm {
   // behind that side: ignored. The watch is armed again unless we went home, so a driver that did not
   // take the device leaves the edge live.
   _onReturn(msg) {
-    const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
+    // An older (one-side) helper names none: it watches the first side we armed. Its offset is ours along that
+    // side and still needs mapping; sent as it was, the driver read it along its own edge (another monitor).
+    const side = E.SIDES.includes(msg.side) ? msg.side : this.returnSide || null;
     const r = side ? this.layoutSync.cross(side, msg.offset) : null; // the monitor map: who is there, where along it
     const to = r ? r.to : null;
     console.log('[kvm] return ' + side + ' -> ' + (to || 'nobody') + ' (partner ' + this.partner + ')');

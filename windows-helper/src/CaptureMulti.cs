@@ -50,6 +50,7 @@ namespace MacShare
         public void Begin(bool mouse, bool keys, string edge)
         {
             if (capturing) { capMouse = mouse; capKeys = keys; return; }
+            mouseArrivalGuard = false;
             capturing = true; capMouse = mouse; capKeys = keys;
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear();
@@ -77,6 +78,16 @@ namespace MacShare
         public void Stop(string side, double offset)
         {
             if (!capturing) return;
+            // Moves the hook already worked out from the parked spot (the middle) are dropped once the
+            // pointer is home (MouseArrivalGuard): let through, a fast move threw it back to the middle.
+            // Armed before capturing goes off, so the hook never sees one without the other.
+            Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
+            if (capMouse)
+            {
+                arrivedAt = p;
+                mouseCaptureStoppedAt = unchecked((uint)Environment.TickCount);
+                mouseArrivalGuard = true;
+            }
             capturing = false;
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
             foreach (uint vk in heldVks) swallowVks.Add(vk);
@@ -85,7 +96,6 @@ namespace MacShare
             hkPending = 0; hkRemote.Clear(); // a sent hotkey's release is in swallowVks (heldVks) now
             if (capMouse)
             {
-                Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
                 parkPad.Uncover();
                 Native.SetCursorPos(p.X, p.Y);
                 HideCursor.Show();

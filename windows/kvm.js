@@ -126,7 +126,7 @@ class Kvm {
       const d = m.drag && typeof m.drag === 'object' ? m.drag : null;
       const back = d && d.back && this.dragPending && this.fileDrop.drag && d.back === this.fileDrop.drag.drag ? this.dragOutPaths : null;
       if (d && d.count && this.dragRecv) this.dragRecv.expectHome();
-      this.helper.send('capture', has ? { on: false, side: this.crossingSide, offset: m.offset } : { on: false });
+      this.helper.send('capture', has ? { on: false, side: this.crossingSide, offset: this.map.land(m.offset) } : { on: false }); // on the edge that touches it
       this._setMode('home', '');
       if (back) this.helper.send('dragLocal', { drag: 'back', paths: back }); // Windows' own drag of them, at the pointer
     });

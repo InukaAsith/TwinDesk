@@ -179,11 +179,12 @@ async function writeClipImage(clipboard, img, png) {
 class ClipImages {
   // o: {cfg() → settings.clipboard, send(msg), backlog(), connected(), ble(), peerName(),
   //     remember(dir, item), popup(kind, text), onChange(), pasteKeys ('Ctrl+V' | '⌘V'), clipboard (default Electron's)}
+  get nativeImage() { return require('electron').nativeImage; }
+
   constructor(o) {
     this.o = o;
-    const { clipboard, nativeImage } = require('electron');
-    this.clipboard = o.clipboard || clipboard;
-    this.nativeImage = nativeImage;
+    // Electron's only when needed: a test (plain Node, no electron) gives its own clipboard and sends no pictures.
+    this.clipboard = o.clipboard || require('electron').clipboard;
     this.peerImages = false; // the other side's clip.policy: it takes pictures
     this.sig = { sent: '', received: '' }; // the last picture each way (sigOf)
     this.out = new ImageOut({ send: o.send, backlog: o.backlog, open: () => this.canSend });

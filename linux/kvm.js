@@ -134,7 +134,7 @@ class Kvm {
         this.dragRecv.expectHome();
         this.helper.send('watchRelease'); // `released`: our button came up here
       }
-      this.helper.send('capture', has ? { on: false, side: this.crossingSide, offset: m.offset } : { on: false });
+      this.helper.send('capture', has ? { on: false, side: this.crossingSide, offset: this.map.land(m.offset) } : { on: false }); // on the edge that touches it
       this._setMode('home', '');
     });
     for (const t of K_TYPES) link.on(t, (m) => this._onWire(m));

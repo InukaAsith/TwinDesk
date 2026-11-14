@@ -97,7 +97,9 @@ class Kvm extends EventEmitter {
         if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
         // driving a phone through a computer: back at the edge that led to the phone; else the side the monitor map says
         const side = this.viaSide || (E.SIDES.includes(m.side) ? m.side : this._sideOf(from));
-        this.helper.send('capture', typeof m.offset === 'number' && side ? { on: false, side, offset: m.offset } : { on: false });
+        // kept on the part of that side that touches the device (an offset it never mapped went to another monitor)
+        const offset = typeof m.offset === 'number' && !this.viaSide ? this.layoutSync.land(side, m.offset, from) : m.offset;
+        this.helper.send('capture', typeof m.offset === 'number' && side ? { on: false, side, offset } : { on: false });
         this._setMode('home', '');
       },
       [P.T.KVM_RELEASE]: (m, from) => {
@@ -719,6 +721,7 @@ class Kvm extends EventEmitter {
   _armReturn() {
     const { sides, zones } = this.layoutSync.edgeConfig();
     // side: the first one, for a helper from before several sides (it watches that one; a newer one reads sides)
+    this.returnSide = sides[0] || null;
     this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, zones, resistancePx: this.cfg.resistancePx });
   }
 
@@ -727,7 +730,9 @@ class Kvm extends EventEmitter {
   // that side: ignored. The watch is armed again unless we went home, so a driver that did not take the
   // device leaves the edge live.
   _onReturn(msg) {
-    const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
+    // An older (one-side) helper names none: it watches the first side we armed. Its offset is ours along that
+    // side and still needs mapping; sent as it was, the driver read it along its own edge (another monitor).
+    const side = E.SIDES.includes(msg.side) ? msg.side : this.returnSide || null;
     const r = side ? this.layoutSync.cross(side, msg.offset) : null; // the monitor map: who is there, where along it
     const to = r ? r.to : null;
     if (!side || to === this.partner || (!to && side === this.layoutSync.sideTo(this.partner))) {

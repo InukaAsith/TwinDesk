@@ -39,7 +39,8 @@ namespace MacShare
         DateTime parkedAt;
         const int StaleMs = 200, StalePx = 150;
         uint mouseCaptureStoppedAt;
-        bool mouseArrivalGuard;
+        volatile bool mouseArrivalGuard;
+        Point arrivedAt; // where Stop put the pointer (the guard's reference)
         public bool HoldReturn; // DropEdge.cs is catching a file drag on the way back: it goes home with it
         readonly HashSet<uint> heldVks = new HashSet<uint>(), swallowVks = new HashSet<uint>();
         readonly HashSet<int> heldButtons = new HashSet<int>(), swallowButtons = new HashSet<int>();
@@ -267,6 +268,14 @@ namespace MacShare
         public void Stop(string side, double offset)
         {
             if (!capturing) return;
+            // The guard first: a move the hook sees once capturing is off must already meet it.
+            Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
+            if (capMouse)
+            {
+                arrivedAt = p;
+                mouseCaptureStoppedAt = unchecked((uint)Environment.TickCount);
+                mouseArrivalGuard = true;
+            }
             capturing = false;
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
             foreach (uint vk in heldVks) swallowVks.Add(vk);
@@ -275,10 +284,7 @@ namespace MacShare
             hkPending = 0; hkRemote.Clear(); // a sent hotkey's release is in swallowVks (heldVks) now
             if (capMouse)
             {
-                Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
                 parkPad.Uncover();
-                mouseCaptureStoppedAt = unchecked((uint)Environment.TickCount);
-                mouseArrivalGuard = true;
                 Native.SetCursorPos(p.X, p.Y);
                 HideCursor.Show();
                 if (Flash != null) Flash.Play(p, side ?? (Side != null && Screens.OnOuterEdge(p.X, p.Y, Side) ? Side : null), false); // arriving
@@ -469,7 +475,8 @@ namespace MacShare
             {
                 uint now = unchecked((uint)Environment.TickCount);
                 if (MouseArrivalGuard.IsStale(m.time, mouseCaptureStoppedAt, now)) return (IntPtr)1;
-                mouseArrivalGuard = false;
+                if (MouseArrivalGuard.FromPark(m.pt.x, m.pt.y, parked.X, parked.Y, arrivedAt.X, arrivedAt.Y, mouseCaptureStoppedAt, now)) return (IntPtr)1;
+                if (unchecked(now - mouseCaptureStoppedAt) > MouseArrivalGuard.ParkMs) mouseArrivalGuard = false;
             }
             int button = ButtonOf(msg, m.mouseData);
             bool down = msg == Native.WM_LBUTTONDOWN || msg == Native.WM_RBUTTONDOWN || msg == Native.WM_MBUTTONDOWN || msg == Native.WM_XBUTTONDOWN;

@@ -157,6 +157,14 @@ class LayoutSync {
     return W.cross(this.world(), this.allDisplays(), ids, fromId, side, offset, (x) => this._present(x), (x) => this._isPhone(x), this.skips());
   }
 
+  // The pointer comes home through `side` from device dev at `offset`: kept where that side touches dev.
+  land(side, offset, dev) {
+    const v = this.view();
+    const ids = Object.keys(v.cells);
+    if (!ids.includes(this.selfId) || !ids.includes(dev)) return offset;
+    return W.land(this.world(), this.allDisplays(), ids, this.selfId, side, offset, dev, (x) => this._present(x), (x) => this._isPhone(x), this.skips());
+  }
+
   // A person's edit on the monitor map: device id dropped with its top-left at (x, y) in the plane;
   // it goes where it may (off the others, touching one, aligned within `snap`). Returns where it went.
   move(id, x, y, snap) {

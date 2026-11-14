@@ -15,6 +15,7 @@
   UI.tab({
     id: 'fullkvm',
     order: 96,
+    bottom: true, // with Multi-device, General and About: not one of the pages Arrange moves (shared/ui-arrange.js)
     for: ['computer', 'android'],
     icon: 'fullkvm', // the icon sets (windows/ and linux/ui-kit.js, mac/control.js)
     title: 'Full KVM',
