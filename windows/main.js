@@ -149,6 +149,7 @@ let link = null;
 let iosNet = null; // shared/iosnet.js: iPhones on a USB cable
 let settings = null;
 let device = null;
+let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
 let screen = null;
 let clip = null;
 let historyKeeper = null; // Clipboard and Notifications › History: kept encrypted when asked (shared/histkeeper.js)
@@ -259,6 +260,7 @@ function start() {
   });
   link = new Peer(guest);
   link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
+  if (settings.drive.on) loadDrive();
   // The files engine (shared/fx2.js) stays up while another TwinDesk computer is on the network: a
   // session with it then starts without waiting for it. Alone, it isn't running at all.
   const fx2Nearby = () => { if (link.fx2) link.fx2.need('nearby', discovery.found.size > 0); };
@@ -316,6 +318,7 @@ function start() {
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   helper = new Helper();
+  if (require('../shared/edition.js').fullKvm()) require('./fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   screen.helper = helper; // Wi-Fi low-latency mode while a screen is shown (Wlan.cs)
   clip.useHelper(helper); // its "clipboard" event: something was copied
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
@@ -449,7 +452,7 @@ function start() {
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
   web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     iosSign: () => iosSign, devctl: () => devctl, chats: () => chats, explorer: () => explorer, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -1163,6 +1166,27 @@ const fillAll = (o) => (typeof o === 'string' ? fillNames(o) : Array.isArray(o) 
   : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fillAll(v)])) : o);
 
 // The other computer's name for popups and the tray ("PC2" when it has none yet).
+// File Sharing › TwinDesk Drive (shared/drive-host.js, docs/drive.md): nothing of it loads until it's on.
+function loadDrive() {
+  if (drive) return drive;
+  drive = require('../shared/drive-host.js').create({
+    settings, save: saveSettings, me: device.id, meName: device.name, userData: app.getPath('userData'),
+    trash: (p) => require('electron').shell.trashItem(p),
+    adapter: {
+      on: (t, fn) => link.on(t, fn),
+      onUp: (fn) => link.on('welcome', () => fn()),
+      onDown: (fn) => link.on('closed', () => fn()),
+      onMoved: (fn) => link.on('transport', () => fn()),
+      send: (m) => link.send(m),
+      session: () => link._fxSession(),
+      peerName: () => peerName(),
+      setRequest: (fn) => { link.drive = fn; },
+    },
+    onChange: pushState,
+  });
+  return drive;
+}
+
 function peerName() {
   const p = peerView();
   return (p && p.name) || 'the other computer';
@@ -1263,6 +1287,7 @@ function buildState() {
     peerCtl: !P.isPhoneOs(link.peerOs) && devctl ? devctl.view : null, // a computer's controls on Overview
     iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
+    drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder },
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), ...hotspotView(), location: !!wifi && wifi.refusedLocation, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.state : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },

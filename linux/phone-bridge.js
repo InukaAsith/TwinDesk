@@ -813,6 +813,8 @@ class PhoneBridge extends EventEmitter {
   }
 
   _gesture(m) {
+    // A pinch: two fingers on the phone (shared/pinch.js, #222).
+    if (m.g === 'zoom') return void (this.pinch || (this.pinch = new (require('../shared/pinch.js').Pinch)())).feed(this.ctl, m, this.kvm, this._display());
     if (!this.ctl || m.phase === 'begin' || m.phase === 'change') return;
     const key = { back: ANDROID.BACK, overview: ANDROID.APP_SWITCH, appWindows: ANDROID.APP_SWITCH, desktop: ANDROID.HOME, launcher: ANDROID.ALL_APPS }[m.g];
     if (key) this.ctl.tap(key);

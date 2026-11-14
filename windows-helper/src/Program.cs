@@ -38,6 +38,9 @@ namespace MacShare
         {
             if (args.Length == 3 && args[0] == "--add-root-device") return Display.AddRootDevice(args[1], args[2]); // elevated, scripts\vdd-install.ps1
             if (args.Length == 2 && args[0] == "--cursor-guard") return CursorGuard(args[1]);
+#if FULLKVM
+            if (args.Length >= 1 && args[0] == "--agent") Agent.Start(); // before any window or hook (Agent.cs)
+#endif
             // Per-monitor v2: every coordinate is in physical pixels.
             try { if (!Native.SetProcessDpiAwarenessContext(new IntPtr(-4))) Native.SetProcessDPIAware(); }
             catch (Exception) { Native.SetProcessDPIAware(); }
@@ -62,15 +65,19 @@ namespace MacShare
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move
             Lane.Init(delegate (double x, double y) { smoother.Flush(laneMove); laneMove(x, y); }, Emit); // the input lane (Lane.cs)
-            UsbWatch.Init(Emit); // USB plug/unplug events for adb phones (UsbWatch.cs)
+            bool agent = false;
+#if FULLKVM
+            agent = Agent.On; // the mouse and keyboard only (Agent.cs)
+#endif
+            if (!agent) UsbWatch.Init(Emit); // USB plug/unplug events for adb phones (UsbWatch.cs)
             HideCursor.Restore(); // in case a crash left the cursors blank
-            StartCursorGuard();
+            if (!agent) StartCursorGuard();
             capture.Start();
             capture.Flash = new Flash();
-            AppWindows.Watch(delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "winShown"; Emit(e); }); // Menus
+            if (!agent) AppWindows.Watch(delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "winShown"; Emit(e); }); // Menus
             dropEdge = new DropEdge(capture, Emit);
-            try { clipWatch = new ClipWatch(Emit); } catch (Exception) { /* no clipboard events: clip.js polls */ }
-            Notifs.Emit = Emit; // // file drags across the edge (shown only while dragging)
+            if (!agent) { try { clipWatch = new ClipWatch(Emit); } catch (Exception) { /* no clipboard events: clip.js polls */ } }
+            if (!agent) Notifs.Emit = Emit; // // file drags across the edge (shown only while dragging)
 
             Thread writer = new Thread(WriteLoop);
             writer.IsBackground = true;
@@ -81,6 +88,9 @@ namespace MacShare
 
             Dictionary<string, object> ready = new Dictionary<string, object>();
             ready["event"] = "ready";
+#if FULLKVM
+            if (agent) ready["desktop"] = Agent.Desktop;
+#endif
             Emit(ready);
             Application.Run(new ApplicationContext());
             return 0;

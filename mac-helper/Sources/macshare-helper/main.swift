@@ -40,14 +40,25 @@ let virtualDisplay = VirtualDisplay()
 let injector = Injector()
 let pasteboardWatch = PasteboardWatch()
 
-/// kvmConfig / armReturn `zones` (shared/kvm-geom.js zonesText): "0.1-0.5,0.7-1" (a little wider,
-/// for rounding), "none" (nothing crosses), anything else nil (the whole side).
-func zones(_ v: Any?) -> [ClosedRange<Double>]? {
+/// kvmConfig / armReturn `zones` (shared/kvm-geom.js zonesText, shared/layout-world.js): "0.1-0.5,0.7-1"
+/// (a little wider, for rounding), "none" (nothing crosses), anything else nil (the whole side). An entry
+/// may name its side, "top:0.56-0.94" (the Multi-device monitor map, #225): it counts only there.
+func zones(_ v: Any?) -> [Zone]? {
   guard let text = v as? String else { return nil }
   if text == "none" { return [] }
-  let out = text.split(separator: ",").compactMap { part -> ClosedRange<Double>? in
-    let ab = part.split(separator: "-").compactMap { Double($0) }
-    return ab.count == 2 && ab[0] <= ab[1] ? (ab[0] - 0.002)...(ab[1] + 0.002) : nil
+  let sides: Set<String> = ["left", "right", "top", "bottom"]
+  var out: [Zone] = []
+  for part in text.split(separator: ",") {
+    var side: String? = nil
+    var range = Substring(part)
+    if let colon = part.firstIndex(of: ":") {
+      let name = String(part[..<colon])
+      guard sides.contains(name) else { continue }
+      side = name
+      range = part[part.index(after: colon)...]
+    }
+    let ab = range.split(separator: "-").compactMap { Double($0) }
+    if ab.count == 2 && ab[0] <= ab[1] { out.append(Zone(side: side, range: (ab[0] - 0.002)...(ab[1] + 0.002))) }
   }
   return out.isEmpty ? nil : out
 }

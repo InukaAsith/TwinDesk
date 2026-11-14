@@ -241,6 +241,25 @@ function setupIpc(ctx) {
   });
   handle('removeShare', () => smb.unshare());
   handle('openMacDrive', () => (smb.mounted ? smb.open() : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
+  // File Sharing › TwinDesk Drive (shared/drive-host.js): loaded when turned on, and only then.
+  handle('setDrive', async (on) => {
+    const d = on === true ? ctx.loadDrive() : ctx.getDrive();
+    if (d) await d.setOn(on === true);
+    else { settings.drive.on = false; ctx.save(); }
+    ctx.push();
+  });
+  const setDriveFolder = async (f) => {
+    const d = ctx.getDrive();
+    if (d) await d.setFolder(f);
+    else { settings.drive.folder = f; ctx.save(); }
+    ctx.push();
+  };
+  handle('pickDriveFolder', async () => {
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow(), { properties: ['openDirectory', 'createDirectory'] });
+    if (!r.canceled && r.filePaths[0]) await setDriveFolder(r.filePaths[0]);
+  });
+  handle('resetDriveFolder', () => setDriveFolder(''));
+  handle('openDriveFolder', () => { const d = ctx.getDrive(); if (d) shell.openPath(d.folder()); });
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {
     const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && path.isAbsolute(p)).slice(0, 1000);

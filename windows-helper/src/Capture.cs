@@ -81,19 +81,31 @@ namespace MacShare
         public List<double[]> EdgeZones, ReturnZones;
 
         // kvmConfig / armReturn `zones`: "0.1-0.5,0.7-1" (a little wider, for rounding), "none" (nothing
-        // crosses), anything else null (the whole side).
+        // crosses), anything else null (the whole side). An entry may name its side, "top:0.56-0.94" (the
+        // Multi-device monitor map, #225): it counts only there. Each zone: { from, to, side } with side
+        // the index in ZoneSides, -1 for every side.
+        static readonly string[] ZoneSides = { "left", "right", "top", "bottom" };
         public static List<double[]> ParseZones(string text)
         {
             if (text == null) return null;
             List<double[]> list = new List<double[]>();
             if (text == "none") return list;
-            foreach (string part in text.Split(','))
+            foreach (string entry in text.Split(','))
             {
+                string part = entry;
+                int side = -1;
+                int colon = part.IndexOf(':');
+                if (colon >= 0)
+                {
+                    side = Array.IndexOf(ZoneSides, part.Substring(0, colon));
+                    if (side < 0) continue;
+                    part = part.Substring(colon + 1);
+                }
                 string[] ab = part.Split('-');
                 double a, b;
                 if (ab.Length == 2 && double.TryParse(ab[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out a)
                     && double.TryParse(ab[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out b) && a <= b)
-                    list.Add(new double[] { a - 0.002, b + 0.002 });
+                    list.Add(new double[] { a - 0.002, b + 0.002, side });
             }
             return list.Count > 0 ? list : null;
         }
@@ -102,7 +114,12 @@ namespace MacShare
         {
             if (zones == null) return true;
             double o = Screens.Offset(x, y, side);
-            foreach (double[] z in zones) if (o >= z[0] && o <= z[1]) return true;
+            int s = Array.IndexOf(ZoneSides, side);
+            foreach (double[] z in zones)
+            {
+                if (z.Length > 2 && z[2] >= 0 && (int)z[2] != s) continue;
+                if (o >= z[0] && o <= z[1]) return true;
+            }
             return false;
         }
         const int GuardMs = 500;
@@ -386,6 +403,13 @@ namespace MacShare
         void Tick()
         {
             HideCursor.Retry();
+#if FULLKVM
+            // The Full KVM agent (Agent.cs) reaches every desktop, one at a time: another input desktop
+            // now, so the service starts the agent there. Out at once: this one's input lands nowhere.
+            string want = Agent.MovedTo();
+            if (want != null) Agent.Leave(want);
+            if (Agent.On) { CheckDeadman(); return; }
+#endif
             // A UAC prompt or the lock screen: nothing can be injected or captured there, so the
             // input goes home on both sides (main sends a driven PC's owner home).
             bool now = Native.SecureDesktop();
@@ -403,6 +427,11 @@ namespace MacShare
                 e["on"] = secure;
                 emit(e);
             }
+            CheckDeadman();
+        }
+
+        void CheckDeadman()
+        {
             if (capturing && (DateTime.UtcNow - lastCmd).TotalMilliseconds > DeadmanMs)
             {
                 Stop(null, 0); // Rule 1: a hung main or a dead link never keeps the user's input

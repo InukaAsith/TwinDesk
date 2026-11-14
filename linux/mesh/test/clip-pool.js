@@ -246,6 +246,21 @@ scenario('the size limit and concealed items are not sent', async () => {
   assert.match(devs.A.clip.view.lastSkip, /password/);
 });
 
+for (const instant of [false, true]) {
+  scenario(`the same text copied again after the other side copied something goes again (#223, ${instant ? 'instant' : 'switch'})`, async () => {
+    const { net, devs } = await world(['A', 'B'], [['A', 'B']], { instant });
+    await copy(net, devs.A, 'one');
+    await copy(net, devs.B, 'two');
+    await copy(net, devs.A, 'one');
+    assert.deepStrictEqual(writes(devs.B), ['one', 'one']);
+    await copy(net, devs.B, 'two');
+    assert.deepStrictEqual(writes(devs.A), ['two', 'two']);
+    await pollAll(devs, ['A', 'B']);
+    assert.deepStrictEqual(writes(devs.A), ['two', 'two'], 'and nothing bounces back');
+    assert.deepStrictEqual(writes(devs.B), ['one', 'one']);
+  });
+}
+
 async function main() {
   for (const s of scenarios) {
     try {

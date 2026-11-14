@@ -66,6 +66,8 @@ namespace MacShare
         }
 
         // Absolute move on the virtual desktop (avoids Windows applying pointer acceleration twice).
+        // SetCursorPos follows SendInput so GetCursorPos on the next call returns the updated position:
+        // on the lock screen SendInput alone may not update it, causing the cursor to appear frozen.
         public static void MoveTo(int x, int y)
         {
             int left = Native.GetSystemMetrics(Native.SM_XVIRTUALSCREEN), top = Native.GetSystemMetrics(Native.SM_YVIRTUALSCREEN);
@@ -73,6 +75,7 @@ namespace MacShare
             int ax = (int)Math.Round((x - left) * 65535.0 / (w - 1));
             int ay = (int)Math.Round((y - top) * 65535.0 / (h - 1));
             Send(Mouse(ax, ay, 0, Native.MOUSEEVENTF_MOVE | Native.MOUSEEVENTF_ABSOLUTE | Native.MOUSEEVENTF_VIRTUALDESK));
+            Native.SetCursorPos(x, y);
         }
 
         // Relative move in logical px (main already applied `speed`); scaled by the monitor's DPI.

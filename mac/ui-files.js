@@ -35,6 +35,8 @@ UI.tab({
     const folderRow = UI.row(I18n.t('Save to'), '', [UI.button(I18n.t('Choose…'), () => api.pickDropFolder(), 'small'), UI.button(I18n.t('Downloads'), () => api.resetDropFolder(), 'small')], { literalHint: true });
     const progress = el('div');
     const list = el('div', { class: 'history' });
+    // TwinDesk Drive (shared/ui-drive.js): hidden where the app has none (Multi-device for now).
+    const drive = UI.driveCard ? UI.driveCard(api, { tilde, manager: 'Finder' }) : null;
 
     // Send files: drop zone + Choose…
     const zoneText = el('div', { class: 'big', text: I18n.t('Drop files or folders here') });
@@ -74,6 +76,7 @@ UI.tab({
         UI.dir('w2m', [acceptRow, pcRow]),
       ),
       UI.card('', [dragRow, encryptRow], { cls: 'keep-on' }),
+      ...(drive ? [drive.card] : []),
       progress,
       UI.card(I18n.t('Arriving files'), [
         folderRow,
@@ -88,6 +91,7 @@ UI.tab({
       const f = s.files;
       const m = s.smb;
       if (!f || !m) return;
+      if (drive) drive.update(s);
       const pc = UI.peer(s).name;
       // Send files
       canSend = !!s.client;

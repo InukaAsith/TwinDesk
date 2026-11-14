@@ -367,6 +367,18 @@ function setupIpc(ctx) {
       if (typeof id !== 'string' || !id || id.length > 64 || !Number.isInteger(x) || !Number.isInteger(y)) return;
       ctx.layoutSync.place(id, x, y);
     },
+    // The monitor map (#225): a device dropped with its top-left at (x, y) in the plane; it goes where it may.
+    moveOnMap(arg) {
+      const { id, x, y, snap } = arg || {};
+      if (typeof id !== 'string' || !id || id.length > 64 || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      ctx.layoutSync.move(id, x, y, Number.isFinite(snap) ? Math.max(0, Math.min(2000, snap)) : undefined);
+    },
+    resetMap() {
+      ctx.layoutSync.resetWorld();
+    },
+    setMapSkip(on) { // offline computers: passed or not
+      ctx.layoutSync.setSkip(on === true);
+    },
     removeFromLayout(id) {
       if (typeof id !== 'string' || !id || id.length > 64) return;
       ctx.layoutSync.remove(id);
