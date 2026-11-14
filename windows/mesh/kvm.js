@@ -732,9 +732,9 @@ class Kvm {
 
   _armReturn() {
     console.log('[kvm] return watch on: ' + this._returnSides().join(',') + ' (partner ' + this.partner + ')');
-    const { sides, zones } = this.layoutSync.edgeConfig();
+    const { sides } = this.layoutSync.edgeConfig();
     // side: the first one, for a helper from before several sides (it watches that one; a newer one reads sides)
-    this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, zones, resistancePx: this.cfg.resistancePx });
+    this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, zones: null, resistancePx: this.cfg.resistancePx });
   }
 
   // The helper saw the pointer leave this PC (driven) through `side`. Back to the driver: kvm.home as
