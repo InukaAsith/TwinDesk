@@ -6,6 +6,12 @@
 // remotely are swallowed at home; no crossing during a drag.
 import Cocoa
 
+/// A stretch of a side where the pointer may cross (kvmConfig / armReturn zones): side nil = every side.
+struct Zone {
+  let side: String?
+  let range: ClosedRange<Double>
+}
+
 private let tapCallback: CGEventTapCallBack = { _, type, event, _ in
   Capture.shared.handle(type, event)
 }
@@ -91,8 +97,8 @@ final class Capture {
   }
   // Where along the side the other computer's monitors touch ours (shared/kvm-geom.js zones, 0–1 of
   // the bounding box, as `offset`): the edge and the way back only cross inside them. nil: anywhere.
-  var edgeZones: [ClosedRange<Double>]?
-  var returnZones: [ClosedRange<Double>]?
+  var edgeZones: [Zone]?
+  var returnZones: [Zone]?
   // No new crossing within `cooldown` of the last one, either way (kvmConfig `cooldownMs`,
   // KVM_CROSS_COOLDOWN_MS). After arriving, the edge it came through only counts once the pointer
   // moved 8 pt inward or `guardWindow` passed, so the end of a flick doesn't bounce straight back.
@@ -397,7 +403,7 @@ final class Capture {
 
   /// Accumulate outward motion on an outer edge; returns the offset when it went through.
   private func push(_ st: inout (push: Double, at: Double, since: Double), _ p: CGPoint, _ dx: Double, _ dy: Double,
-                    _ side: String, _ resistance: Double, _ zones: [ClosedRange<Double>]?) -> Double? {
+                    _ side: String, _ resistance: Double, _ zones: [Zone]?) -> Double? {
     let out = side == "right" ? dx : side == "left" ? -dx : side == "bottom" ? dy : -dy
     let t = now()
     if t - st.at > 0.3 { st.push = 0 }
@@ -415,7 +421,7 @@ final class Capture {
       arrival = nil
     }
     guard out > 0, Screens.isOuterEdge(p, side: side),
-          zones.map({ z in z.contains { $0.contains(Screens.offset(p, side: side)) } }) ?? true else {
+          zones.map({ z in z.contains { ($0.side == nil || $0.side == side) && $0.range.contains(Screens.offset(p, side: side)) } }) ?? true else {
       st.push = 0
       return nil
     }
