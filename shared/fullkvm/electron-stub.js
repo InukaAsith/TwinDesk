@@ -1,9 +1,11 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // What the machine node (headless.js) gives for require('electron'): it runs as plain Node
 // (ELECTRON_RUN_AS_NODE) at the login screen, with no windows and no display. app.getPath() is the
-// machine folder (TWINDESK_MACHINE_DIR, /var/lib/twindesk), so store.js and identity.js read the copy
-// of the person's settings and certificate that System-wide made (install.sh). The monitors come
-// from the kernel (DRM), as no display server is ours.
+// machine folder (TWINDESK_MACHINE_DIR: /var/lib/twindesk, %ProgramData%\TwinDesk\machine), so store.js
+// and identity.js read the copy of the person's settings and certificate that System-wide made
+// (linux/fullkvm/install.sh, Windows' twindesk-fullkvm.exe --apply). The monitors: the app's own when
+// System-wide was turned on (fullkvm-displays.json, written by manager.js), else, on Linux, the
+// kernel's (DRM), as no display server is ours.
 'use strict';
 
 const fs = require('fs');
@@ -12,7 +14,17 @@ const path = require('path');
 const { EventEmitter } = require('events');
 
 const DIR = process.env.TWINDESK_MACHINE_DIR || '/var/lib/twindesk';
-const pkg = (() => { try { return require('../package.json'); } catch (_) { return { version: '0.0.0' }; } })();
+const OS = path.join(__dirname, '..', '..', process.platform === 'win32' ? 'windows' : 'linux');
+const pkg = (() => { try { return require(path.join(OS, 'package.json')); } catch (_) { return { version: '0.0.0' }; } })();
+
+// The app's displays as it saw them (manager.js: Electron's bounds), or null.
+function saved() {
+  try {
+    const list = JSON.parse(fs.readFileSync(path.join(DIR, 'fullkvm-displays.json'), 'utf8'));
+    if (!Array.isArray(list) || !list.length) return null;
+    return list.map((d, i) => ({ id: d.id || i + 1, label: d.label || 'screen', bounds: d.bounds, workArea: d.bounds, scaleFactor: d.scaleFactor || 1, rotation: 0 }));
+  } catch (_) { return null; }
+}
 
 // Connected outputs and their first (preferred) mode, side by side in name order: { id, bounds }.
 function drmDisplays() {
@@ -30,13 +42,18 @@ function drmDisplays() {
       x += w;
     } catch (_) { /* not readable */ }
   }
-  if (!out.length) out.push({ id: 1, label: 'screen', bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1, rotation: 0 });
   return out;
 }
 
+const FALLBACK = [{ id: 1, label: 'screen', bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1, rotation: 0 }];
+function displays() {
+  if (process.platform !== 'win32') { const d = drmDisplays(); if (d.length) return d; }
+  return saved() || FALLBACK;
+}
+
 const screen = Object.assign(new EventEmitter(), {
-  getAllDisplays: drmDisplays,
-  getPrimaryDisplay: () => drmDisplays()[0],
+  getAllDisplays: displays,
+  getPrimaryDisplay: () => displays()[0],
   getCursorScreenPoint: () => ({ x: 0, y: 0 }),
 });
 
@@ -63,11 +80,13 @@ module.exports = {
   Notification,
   ipcMain: { handle() {}, on() {}, removeHandler() {} },
   shell: { openPath: async () => '', openExternal: async () => {} },
-  // Not here: windows, utilityProcess (fx2 goes on in this process), safeStorage, net.
+  // Not here: windows, utilityProcess (fx2 goes on in this process), net. No sealing: the machine
+  // folder is the service's own (System-wide wrote the certificate's passphrase there unsealed).
+  safeStorage: { isEncryptionAvailable: () => false, encryptString: (s) => Buffer.from(String(s)), decryptString: (b) => String(b) },
   BrowserWindow: undefined,
   utilityProcess: undefined,
-  safeStorage: undefined,
   net: undefined,
   clipboard: none,
+  displays,
   drmDisplays,
 };

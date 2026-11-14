@@ -135,4 +135,4 @@ class Helper extends EventEmitter {
 
 Helper.BIN = BIN;
 // The Full KVM build (docs/full-kvm.md): the mouse and keyboard through its service when it is there.
-module.exports = require('../shared/edition.js').fullKvm() ? require('./fullkvm/route.js')(Helper) : Helper;
+module.exports = require('../shared/edition.js').fullKvm() ? require('../shared/fullkvm/route.js')(Helper) : Helper;

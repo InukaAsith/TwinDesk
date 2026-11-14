@@ -403,6 +403,13 @@ namespace MacShare
         void Tick()
         {
             HideCursor.Retry();
+#if FULLKVM
+            // The Full KVM agent (Agent.cs) reaches every desktop, one at a time: another input desktop
+            // now, so the service starts the agent there. Out at once: this one's input lands nowhere.
+            string want = Agent.MovedTo();
+            if (want != null) Agent.Leave(want);
+            if (Agent.On) { CheckDeadman(); return; }
+#endif
             // A UAC prompt or the lock screen: nothing can be injected or captured there, so the
             // input goes home on both sides (main sends a driven PC's owner home).
             bool now = Native.SecureDesktop();
@@ -420,6 +427,11 @@ namespace MacShare
                 e["on"] = secure;
                 emit(e);
             }
+            CheckDeadman();
+        }
+
+        void CheckDeadman()
+        {
             if (capturing && (DateTime.UtcNow - lastCmd).TotalMilliseconds > DeadmanMs)
             {
                 Stop(null, 0); // Rule 1: a hung main or a dead link never keeps the user's input

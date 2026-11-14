@@ -1,18 +1,19 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Full KVM (docs/full-kvm.md), the Full KVM build only: ../helper.js wraps its Helper in this when
-// shared/edition.js says so (the normal build has no fullkvm/ folders and never loads it). With the
-// service there and this user's (service.js), the mouse-and-keyboard commands go to its helper (root:
-// the lock screen, polkit, the login screen) and its events come from there; everything else stays
-// with ours. Ours lets go of the mouse and keyboard while the service has them, and takes them back
+// Full KVM (docs/full-kvm.md), the Full KVM build only: linux/helper.js and windows/helper.js wrap
+// their Helper in this when shared/edition.js says so (the normal build has no fullkvm/ folders and
+// never loads it). With the service there and this user's (linux/fullkvm/service.js, Windows'
+// TwinDeskFullKvm), the mouse-and-keyboard commands go to its helper (root on Linux, the agent as
+// SYSTEM on Windows: the lock screen, polkit or UAC, the login screen) and its events come from
+// there; everything else stays with ours. Ours lets go of the mouse and keyboard while the service has them, and takes them back
 // when it goes. No native input lane through the service (it has no network): the Node lane injects
 // through it. One-to-one and Multi-device alike (mesh/helper.js extends ../helper.js).
 'use strict';
 
-const { SvcLink, KVM } = require('../../shared/fullkvm/svc-link.js');
+const { SvcLink, KVM } = require('./svc-link.js');
 
-const SVC_SOCK = process.env.TWINDESK_KVM_SOCK || '/run/twindesk/kvm.sock';
-// The helper's mouse-and-keyboard events (linux-helper/src: capture.c, wl.c).
-const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv']);
+const SVC_SOCK = process.env.TWINDESK_KVM_SOCK || (process.platform === 'win32' ? '\\\\.\\pipe\\TwinDesk.kvm' : '/run/twindesk/kvm.sock');
+// The helpers' mouse-and-keyboard events (linux-helper/src: capture.c, wl.c; windows-helper/src: Capture*.cs).
+const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv', 'hooksReinstalled', 'secureDesktop']);
 
 module.exports = (Helper) => class FullKvmHelper extends Helper {
   constructor(...args) {

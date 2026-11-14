@@ -37,32 +37,43 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
 ```
 
 - **The KVM helper in the service.** The same helper binary, privileged:
-  - Windows: `macshare-winhelper-multi.exe --agent`, started by the service (LocalSystem) in the
-    console session with a SYSTEM token on `winsta0`. It follows the input desktop (Default, Winlogon,
-    Screen-saver), re-attaching its hook and inject threads on every switch, as Synergy's does. Ctrl+Alt+Del
-    is `SendSAS` from the service.
+  - Windows: `macshare-winhelper-agent.exe --agent` (the multi helper's sources built with `FULLKVM`,
+    `windows-helper/src/Agent.cs`), started by the service (LocalSystem) in the console session with a
+    SYSTEM token. A thread with hooks can't change desktops, so an agent belongs to the input desktop it
+    started on (Default, Winlogon, Screen-saver); when that changes it exits with code 3 and the service
+    starts another there, giving it the last `kvmConfig`, `armReturn` and `capture` again: the app never
+    sees the switch. Ctrl+Alt+Del becomes `SendSAS` in the service (the policy
+    `SoftwareSASGeneration` = 1 is set while Full KVM is on, and put back after).
   - Linux: `macshare-linuxhelper-multi` with `MACSHARE_HELPER_BACKEND=uinput`, as root: evdev capture and
     uinput injection, below every display server, so it works the same at the lock screen and greeter.
 - **The kvm pipe.** JSON lines, the helper's own protocol, for the KVM commands only (`kvmConfig`,
   `screens`, `capture`, `place`, `armReturn`, `inject`, `releaseAll`, `watchRelease`, `moveTo`, `info`,
   `ping`): anything else (files, clipboard, windows) is refused, so the privileged side never reads a
   file or runs anything for its client. Who may connect:
-  - Windows: `\\.\pipe\TwinDesk.kvm.<session>`, its ACL the console session's user (and the machine
-    node's account); the agent checks the client's image is the installed TwinDesk.
+  - Windows: `\\.\pipe\TwinDesk.kvm`, its ACL the console session's user (or LOCAL SERVICE, the machine
+    node, while nobody is signed in), network logons denied; the service checks the client's image is
+    the TwinDesk.exe the administrator turned it on for (`%ProgramData%\TwinDesk\fullkvm.json`,
+    administrators and SYSTEM only).
   - Linux: `/run/twindesk/kvm.sock`, owned by the active seat0 user (or `twindesk` at the greeter), mode
     0600; a new owner drops the old connection.
-- **The app.** With the service there, `mesh/helper.js` sends the KVM commands down the pipe and takes
+- **The app.** With the service there, `shared/fullkvm/route.js` (wrapping `linux/helper.js`,
+  `windows/helper.js`) sends the KVM commands down the pipe and takes
   the KVM events from it; everything else stays with its own helper. No service: as before.
 - **The machine node (System-wide).** The mesh core without Electron's windows (`electron` stubbed:
   `app.getPath` is the machine folder), started by the service while nobody is signed in and stopped
   when someone is (their app takes over the same port). It runs as an unprivileged account (Linux
-  `twindesk`, Windows `NT SERVICE\TwinDeskNode`), never as root/SYSTEM: the network-facing part has no
+  `twindesk`, Windows LOCAL SERVICE in the `TwinDeskFullKvmNode` service), never as root/SYSTEM: the network-facing part has no
   privileges, the injecting part has no network.
   - Its identity is the user's: turning System-wide on copies the certificate, device id and the
     pairings (`identity/`, `device.json`, `paired*.json`, `pairing*.json`, the layout) to the machine
     folder (`/var/lib/twindesk`, `%ProgramData%\TwinDesk\machine`, readable by the service accounts and
     administrators only). The other devices see the same device, at the same place on the map.
-  - Pairing changes in the app are copied again while System-wide is on (the app asks the service).
+  - It is `shared/fullkvm/headless.js`, the same on both (the platform's own mesh modules).
+  - On Windows the app stages the copy in its own temp folder, with the certificate's passphrase
+    unsealed (DPAPI is the user's; LOCAL SERVICE couldn't open it) and its displays
+    (`fullkvm-displays.json`); `--apply` copies it and the app deletes the stage.
+  - Pairing changes made later reach the machine node the next time System-wide is turned on (to do:
+    copy them again on their own).
 
 ## Security
 
@@ -81,4 +92,18 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
 3. Linux System-wide: the machine node, `twindesk` account, GDM greeter test in the VM.
 4. Windows service, agent (desktop following, SendSAS), named pipe, installer hooks. Not built here:
    the user's Windows CI.
+
+## Windows files
+
+- `windows/fullkvm/service/Service.cs` → `windows/fullkvm/bin/twindesk-fullkvm.exe` (`build.cmd`, C# 5):
+  the `TwinDeskFullKvm` service, the `TwinDeskFullKvmNode` service (`--node`), and the setup the tab runs
+  (`--setup` asks for UAC and runs `--apply` elevated: `CreateService`, no PowerShell, no `sc.exe`).
+  `--state` for the tab, `--stop`/`--start` for the installer around an update.
+- `windows-helper/build.cmd` with `TWINDESK_EDITION=full-kvm` also builds the agent and calls
+  `windows/fullkvm/build.cmd`; `windows/installer/build.js` with it names the installer
+  `TwinDesk-FullKVM-Setup-…` and uses `installer-fullkvm.nsh` (stop/start the service around an
+  update, `--apply off` on uninstall). No Store package for this build.
+- `windows/fullkvm/manager.js`, `preload.js`: the tab's state and modes (as Linux's).
+- A dev checkout: the service runs `twindesk-fullkvm.exe` from the checkout as SYSTEM, so use it on a
+  test machine only (installed, it lives under Program Files, which only administrators can change).
 5. Multi-device test with the Mac and the Ubuntu VM: lock screen, polkit prompt, greeter.

@@ -1,14 +1,15 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Full KVM, System-wide (docs/full-kvm.md): the machine node. service.js starts it as the
-// unprivileged `twindesk` account while seat0 shows the login screen, and stops it when someone signs
-// in (their app takes the port and the mesh back). It is the mesh core of mesh/main.js without
+// Full KVM, System-wide (docs/full-kvm.md): the machine node, Linux and Windows alike. The service
+// starts it while nobody is signed in (Linux: linux/fullkvm/service.js, as the unprivileged `twindesk`
+// account, at seat0's login screen; Windows: the TwinDeskFullKvmNode service, as LOCAL SERVICE) and
+// stops it when someone signs in (their app takes the port and the mesh back). It is the mesh core of mesh/main.js without
 // windows: discovery, the links to the paired devices, our server, the shared layout and kvm.js, with
 // the mouse and keyboard through the service's helper (its socket is ours while we run). It is this
-// computer as the others know it: install.sh copied the person's certificate, device id, pairings
+// computer as the others know it: System-wide copied the person's certificate, device id, pairings
 // and layout to the machine folder. Here nobody can compare a pairing code: new pairings are refused.
 // No clipboard, files, screens or sound: only the mouse and keyboard.
 //   TWINDESK_MACHINE_DIR=/var/lib/twindesk TWINDESK_KVM_SOCK=/run/twindesk/kvm.sock \
-//   ELECTRON_RUN_AS_NODE=1 <electron> linux/fullkvm/headless.js
+//   ELECTRON_RUN_AS_NODE=1 <electron> shared/fullkvm/headless.js
 'use strict';
 
 const Module = require('module');
@@ -20,22 +21,26 @@ Module._load = function (request, ...rest) {
 
 const crypto = require('crypto');
 const os = require('os');
-const P = require('../../shared/protocol.js');
-const store = require('../store');
-const { Discovery } = require('../discovery');
-const { LinkManager } = require('../mesh/links');
-const { Mesh } = require('../../shared/mesh.js');
-const { Hub } = require('../mesh/hub');
-const { Server } = require('../mesh/server');
-const { Pairing: HostPairing } = require('../mesh/hostpair');
-const identity = require('../identity');
-const Kvm = require('../mesh/kvm');
-const LayoutSync = require('../mesh/layout-sync');
-const { load: loadSettings, save: storeSettings } = require('../mesh/settings');
-const { SvcLink } = require('../../shared/fullkvm/svc-link.js');
+const path = require('path');
+const P = require('../protocol.js');
+// This platform's app (linux/ or windows/): the same mesh modules on both.
+const OS = path.join(__dirname, '..', '..', process.platform === 'win32' ? 'windows' : 'linux');
+const mod = (m) => require(path.join(OS, m));
+const store = mod('store');
+const { Discovery } = mod('discovery');
+const { LinkManager } = mod('mesh/links');
+const { Mesh } = require('../mesh.js');
+const { Hub } = mod('mesh/hub');
+const { Server } = mod('mesh/server');
+const { Pairing: HostPairing } = mod('mesh/hostpair');
+const identity = mod('identity');
+const Kvm = mod('mesh/kvm');
+const LayoutSync = mod('mesh/layout-sync');
+const { load: loadSettings, save: storeSettings } = mod('mesh/settings');
+const { SvcLink } = require('./svc-link.js');
 
 const log = (...a) => console.log('[machine]', ...a);
-const SOCK = process.env.TWINDESK_KVM_SOCK || '/run/twindesk/kvm.sock';
+const SOCK = process.env.TWINDESK_KVM_SOCK || (process.platform === 'win32' ? '\\\\.\\pipe\\TwinDesk.kvm' : '/run/twindesk/kvm.sock');
 
 function loadDevice() {
   let d = store.read('device.json', null);
@@ -48,8 +53,10 @@ class ServiceHelper extends SvcLink {
   get running() { return this.ready; }
 }
 
+// Linux's helper is told the monitors (the uinput backend can't ask); Windows' asks Windows.
 function sendScreens(helper) {
-  const list = stub.drmDisplays().map((d, i) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, i === 0 ? 1 : 0].join(',')).join(';');
+  if (process.platform === 'win32') return;
+  const list = stub.displays().map((d, i) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, i === 0 ? 1 : 0].join(',')).join(';');
   helper.send('screens', { list });
 }
 
@@ -86,7 +93,7 @@ async function main() {
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; },
     endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
     online: (pid) => { const p = hub.peers({ indirect: true }).find((x) => x.id === pid); return !!p && (p.state === 'connected' || p.state === 'via'); },
-    myDisplays: () => require('../../shared/screen-mesh.js').fromElectron(stub.screen),
+    myDisplays: () => require('../screen-mesh.js').fromElectron(stub.screen),
     displaysStorage: { get: () => settings.layoutDisplays || null, set: (m) => { settings.layoutDisplays = m; save(); } },
     legacyEdges: () => settings.kvm.edges,
     onChange: () => { if (kvm) kvm.layoutChanged(); },

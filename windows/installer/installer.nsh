@@ -11,6 +11,9 @@
   nsExec::Exec 'taskkill /f /im macshare-calls.exe'
   System::Call 'user32::SystemParametersInfoW(i 0x57, i 0, i 0, i 2)'
   nsExec::Exec '"$INSTDIR\resources\app\windows\vendor\adb\adb.exe" kill-server'
+  !ifmacrodef fullKvmInit
+    !insertmacro fullKvmInit
+  !endif
 !macroend
 
 !macro customUnInit
@@ -57,6 +60,9 @@
   ; only (TrustedPeople, not a root). The app registers the package per user when Calls needs it.
   IfFileExists "$INSTDIR\resources\app\windows-helper\bin\twindesk-calls.cer" 0 +2
   nsExec::Exec 'certutil -f -addstore TrustedPeople "$INSTDIR\resources\app\windows-helper\bin\twindesk-calls.cer"'
+  !ifmacrodef fullKvmInstall
+    !insertmacro fullKvmInstall
+  !endif
 !macroend
 
 !macro customUnInstall
@@ -89,4 +95,7 @@
   DeleteRegKey HKCU "Software\Classes\Directory\Background\shell\TwinDesk"
   DeleteRegKey HKCU "Software\Classes\twindesk"
   SetShellVarContext all
+  !ifmacrodef fullKvmUnInstall
+    !insertmacro fullKvmUnInstall
+  !endif
 !macroend

@@ -188,7 +188,7 @@ class Service {
   _startNode() {
     if (this.node) return;
     const a = accountIds();
-    const script = path.join(ROOT, 'linux', 'fullkvm', 'headless.js');
+    const script = path.join(ROOT, 'shared', 'fullkvm', 'headless.js');
     if (!a || !fs.existsSync(script) || !fs.existsSync(path.join(MACHINE, 'device.json'))) {
       log('System-wide: no machine node (', !a ? 'no account' : !fs.existsSync(script) ? 'no headless.js' : 'nothing copied to ' + MACHINE, ')');
       return;
