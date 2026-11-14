@@ -99,6 +99,7 @@ const DEFAULT_SETTINGS = {
   // A phone as the peer: its screen window, apps and setup.
   phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, uhid: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
   mount: { on: false }, // the phone in Finder (phonedrive.js), only when Mount is clicked
+  drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
   // callAudio: the calls' sound on this Mac over Bluetooth (btDevices: which paired device each phone is).
   hub: { calls: false, messages: false, media: false, files: false, callAudio: true, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
@@ -120,7 +121,7 @@ function loadSettings() {
   const s = read('settings.json', {});
   if (s.sharing) s.sharing.on = false; // screen sharing never starts by itself
   const out = { ...DEFAULT_SETTINGS, ...s };
-  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub', 'camera', 'remote', 'web']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
+  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'drive', 'hub', 'camera', 'remote', 'web']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
   out.rezume = require('../shared/rezume.js').normalize(s.rezume);
   out.modules = require('../shared/modules.js').normalize(s.modules); // General › Modules
   out.ui.language = require('../shared/i18n.js').savedLanguage(out.ui.language);

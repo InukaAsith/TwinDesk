@@ -99,7 +99,7 @@ static void dispatch(const char *line) {
       wl_arrived(jbool(c, "center", 0) ? SIDE_NONE : side_of(jstr(c, "side", "left")) < 0 ? SIDE_LEFT : side_of(jstr(c, "side", "left")));
     } else if (!strcmp(cmd, "armReturn")) {
       wl_return_zones(jstr(c, "zones", NULL));
-      wl_arm_return(jbool(c, "on", 0), side_of(jstr(c, "side", NULL)), jnum(c, "resistancePx", 120));
+      wl_arm_return(jbool(c, "on", 0), jstr(c, "sideList", NULL), side_of(jstr(c, "side", NULL)), jnum(c, "resistancePx", 120));
     } else if (!strcmp(cmd, "inject")) {
       JObj *ev = jobj(c, "ev");
       if (ev) wl_inject(ev);

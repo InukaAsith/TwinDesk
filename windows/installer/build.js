@@ -23,7 +23,11 @@ const STAGE = path.join(WIN, 'dist', 'stage');
 const pkg = require(path.join(WIN, 'package.json'));
 const electronVersion = require(path.join(WIN, 'node_modules', 'electron', 'package.json')).version;
 
-const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json']); // tests (mesh/test) stay out of the package
+// The Full KVM build (docs/full-kvm.md, TWINDESK_EDITION=full-kvm): windows/fullkvm and shared/fullkvm
+// (the service, its agent and the tab); the normal installers have none of it, and the
+// Full KVM one is named apart. Never the Store's (its MSIX can't carry services).
+const FULL_KVM = process.env.TWINDESK_EDITION === 'full-kvm';
+const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json', ...(FULL_KVM ? ['service', 'build.cmd'] : ['fullkvm'])]); // tests (mesh/test) stay out of the package
 const STORE = process.argv.includes('store');
 const ARGS = process.argv.slice(2).filter((a) => a !== 'store');
 const ARCHS = ARGS.length ? ARGS : ['x64'];
@@ -71,7 +75,13 @@ async function main() {
   copy(WIN, path.join(STAGE, 'windows'), (name) => !SKIP.has(name));
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
-  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'playfair.wasm' || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver
+  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'playfair.wasm' || (FULL_KVM && name === 'fullkvm') || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver
+  if (FULL_KVM) {
+    for (const f of [path.join('windows-helper', 'bin', 'macshare-winhelper-agent.exe'), path.join('windows', 'fullkvm', 'bin', 'twindesk-fullkvm.exe')]) {
+      if (!fs.existsSync(path.join(ROOT, f))) throw new Error('The Full KVM build needs ' + f + ' (windows-helper\\build.cmd with TWINDESK_EDITION=full-kvm, on Windows)');
+      copy(path.join(ROOT, f), path.join(STAGE, f));
+    }
+  }
   // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
   // phone app's viewer and remote it reuses (android-web/).
   copy(path.join(ROOT, 'web'), path.join(STAGE, 'web'), (name) => name !== 'shortcuts-src');
@@ -177,6 +187,7 @@ async function newerAppxTools() {
 // The Microsoft Store's MSIX (appx target): unsigned, Partner Center signs it.
 async function packStore(arch) {
   await newerAppxTools();
+  if (FULL_KVM) throw new Error('No Store package for the Full KVM build');
   const name = 'TwinDesk-Store-' + pkg.version + '-' + arch + '.msix';
   console.log('Packaging the Store MSIX for ' + arch + '…');
   await builder.build({
@@ -207,7 +218,7 @@ async function packStore(arch) {
 }
 
 async function pack(arch) {
-  const name = 'TwinDesk-Setup-' + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
+  const name = (FULL_KVM ? 'TwinDesk-FullKVM-Setup-' : 'TwinDesk-Setup-') + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
   console.log('Packaging ' + arch + '…');
   await builder.build({
     targets: builder.Platform.WINDOWS.createTarget('nsis', builder.Arch[arch]),
@@ -235,7 +246,7 @@ async function pack(arch) {
         installerIcon: path.join(__dirname, 'icon.ico'),
         uninstallerIcon: path.join(__dirname, 'icon.ico'),
         license: path.join(ROOT, 'LICENSE'),
-        include: path.join(__dirname, 'installer.nsh'),
+        include: path.join(__dirname, FULL_KVM ? 'installer-fullkvm.nsh' : 'installer.nsh'),
         shortcutName: 'TwinDesk',
         createDesktopShortcut: true,
         createStartMenuShortcut: true,

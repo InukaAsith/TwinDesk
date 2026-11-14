@@ -82,6 +82,7 @@ class Peer {
     if (this.il) server.ilOffer = (ctx) => (ctx.ilOn = this.il.offer(ctx.ilWanted, ctx.address));
     server.https.on('request', (req, res) => {
       if (this.fx.request(req, res)) return;
+      if (this.drive && this.drive(req, res)) return; // TwinDesk Drive, while it's on (shared/drive-link.js)
       if (require('../shared/nativescreen.js').NativeScreen.request(req, res)) return; // a phone's own screen (Mirroring › Native)
       res.writeHead(404);
       res.end();

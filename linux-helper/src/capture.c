@@ -51,7 +51,7 @@ static int arrivalSide = SIDE_NONE;
 static double arrivalAt, arrivalInward;
 // Where along the side the other computer's monitors touch ours (shared/kvm-geom.js zones): the edge
 // and the way back only cross inside them. -1: anywhere.
-static double edgeZ[8][2], retZ[8][2];
+static double edgeZ[MAX_ZONES][3], retZ[MAX_ZONES][3];
 static int nEdgeZ = -1, nRetZ = -1;
 
 #ifdef MULTI
@@ -205,7 +205,7 @@ void capture_config(const JObj *c) {
   doubleTapMs = jnum(c, "doubleTapMs", 400);
   cooldownMs = jnum(c, "cooldownMs", 250);
   dwellMs = jnum(c, "dwellMs", 150);
-  nEdgeZ = zones_parse(jstr(c, "zones", NULL), edgeZ, 8);
+  nEdgeZ = zones_parse(jstr(c, "zones", NULL), edgeZ, MAX_ZONES);
   shortcut_config(c);
   drop_config(c);
 #ifdef MULTI
@@ -358,7 +358,7 @@ void capture_stop(int toSide, double offset, int hasSide) {
   capture_arrived(hasSide ? toSide : SIDE_NONE);
 }
 
-void capture_return_zones(const char *text) { nRetZ = zones_parse(text, retZ, 8); }
+void capture_return_zones(const char *text) { nRetZ = zones_parse(text, retZ, MAX_ZONES); }
 
 void capture_arm_return(int on, int s, double resistance) {
   local_watch(on);

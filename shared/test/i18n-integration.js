@@ -55,7 +55,9 @@ try {
   assert.ok(copyShared, 'found the shared resource copy rule');
   context.ROOT = ROOT;
   context.STAGE = temp;
+  context.FULL_KVM = false; // the normal build (docs/full-kvm.md)
   vm.runInContext(copyShared[0], context);
+  assert.ok(!fs.existsSync(path.join(temp, 'shared', 'fullkvm')), 'the normal build has no Full KVM');
   for (const filename of ['i18n.js', 'lang/en.js', 'lang/zh-CN.js']) {
     assert.ok(fs.existsSync(path.join(temp, 'shared', filename)), `${filename} is in the installed app`);
   }

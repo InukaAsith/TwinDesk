@@ -160,6 +160,9 @@ class Clip extends EventEmitter {
 
   // item: the text, or a picture (shared/clipimage.js).
   _remember(dir, item, from) {
+    // What went out last is no longer on the other side once something came in, and the other way
+    // round: copying it again must send it again (#223).
+    if (dir === 'in') this.lastSync.sent = null; else this.lastSync.received = null;
     const n = this.cfg.historySize;
     if (!n) return;
     if (typeof item === 'string') {

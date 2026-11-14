@@ -15,6 +15,8 @@ function normalize(s) {
   const ms = s.mesh || {};
   out.kvm.edges = E.normalizeEdges(kvm.edges); // each side of this screen -> the paired device behind it (shared/kvm-edges.js)
   out.layout = storedLayout(s.layout); // the mesh's shared layout (mesh/layout-sync.js); null until one was edited
+  // The other devices' monitors (the monitor map, #225), checked again by layout-sync.js.
+  out.layoutDisplays = s.layoutDisplays && typeof s.layoutDisplays === 'object' && !Array.isArray(s.layoutDisplays) ? s.layoutDisplays : null;
   // Joining everyone (docs/mesh.md): on unless switched off in the Multi-device tab, so every computer
   // the mouse goes through is connected to the others; a paired device can add others without a code.
   out.mesh = { autoJoin: bool(ms.autoJoin, true) };
@@ -58,15 +60,15 @@ function load(store) {
   // it was off by default and every save wrote that false, which isn't anyone's choice.
   const ms = m.mesh || {};
   const mesh = ms.autoJoin === false && ms.chosen !== true ? {} : ms;
-  return normalize({ ...s, kvm: { ...(s.kvm || {}), edges: (m.kvm || {}).edges }, layout: m.layout, mesh });
+  return normalize({ ...s, kvm: { ...(s.kvm || {}), edges: (m.kvm || {}).edges }, layout: m.layout, layoutDisplays: m.layoutDisplays, mesh });
 }
 
 function save(store, settings) {
-  const { layout, mesh, ...rest } = settings;
+  const { layout, layoutDisplays, mesh, ...rest } = settings;
   const { edges, ...kvm } = settings.kvm;
   store.write('settings.json', { ...rest, kvm });
   const off = mesh && mesh.autoJoin === false;
-  store.write(MULTI, { ...store.read(MULTI, {}), kvm: { edges }, layout, mesh: off ? { autoJoin: false, chosen: true } : { autoJoin: true } });
+  store.write(MULTI, { ...store.read(MULTI, {}), kvm: { edges }, layout, layoutDisplays, mesh: off ? { autoJoin: false, chosen: true } : { autoJoin: true } });
 }
 
 module.exports = { normalize, apply, migrateKvm, load, save };

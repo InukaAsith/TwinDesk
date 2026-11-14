@@ -125,6 +125,15 @@ function setupIpc(ctx) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
     return layoutSync.place(id, x, y);
   });
+  // The monitor map (#225): device `id` dropped with its top-left at (x, y) in the plane (it goes where it
+  // may, layout-world.js drop); snap: how close edges line up. Returns where it went, or null.
+  handle('moveOnMap', (id, x, y, snap) => {
+    if (typeof id !== 'string' || !id || id.length > 64 || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return layoutSync.move(id, x, y, Number.isFinite(snap) ? Math.max(0, Math.min(2000, snap)) : undefined);
+  });
+  // Off the map: the devices line up from the grid again.
+  handle('resetMap', () => layoutSync.resetWorld());
+  handle('setMapSkip', (on) => layoutSync.setSkip(on === true)); // offline computers: passed or not
   // A device off the map (its cell is removed from the shared layout). false when it has no cell.
   handle('removeFromLayout', (id) => {
     if (typeof id !== 'string' || !id || id.length > 64) return false;

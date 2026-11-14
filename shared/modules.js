@@ -49,7 +49,7 @@
     'kvm-geom.js': ['cursor'], 'kvm-map-ui.js': ['cursor'], 'cursor-portals.js': ['cursor'], 'ui-cursor-portals.js': ['cursor'], 'ui-cursor.js': ['cursor'], 'mesh-intro.js': ['cursor', 'multi'],
     'ui-keyboard.js': ['keyboard'], 'ui-clipboard.js': ['clipboard'], 'ui-notifs.js': ['notifications'],
     'ui-mic.js': ['audio'], 'ui-audio.js': ['audio'], 'ui-camera.js': ['camera'], 'ui-remote.js': ['remote'],
-    'ui-terminal.js': ['terminal'], 'ui-files.js': ['files'], 'ui-mount.js': ['mount'], 'ui-apps.js': ['apps'],
+    'ui-terminal.js': ['terminal'], 'ui-files.js': ['files'], 'ui-drive.js': ['files'], 'ui-mount.js': ['mount'], 'ui-apps.js': ['apps'],
     'ui-mirror.js': ['mirror', 'papps'], 'ui-ios-screen.js': ['mirror'], 'ui-multi.js': ['multi'],
     'ui-calls.js': ['calls'], 'ui-messages.js': ['messages'], 'ui-media.js': ['media'], 'ui-pfiles.js': ['pfiles'],
     'ui-deck.js': ['deck'], 'deck-model.js': ['deck'], 'deck-catalog.js': ['deck'], 'deck-icons.js': ['deck'],
