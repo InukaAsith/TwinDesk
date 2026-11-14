@@ -302,7 +302,9 @@ function setupIpc(ctx) {
     // Extend: Monitor 2 is the TwinDesk virtual display. Mirror: it shows this Mac's main screen.
     setDisplayMode(mode) {
       if (mode === 'mirror') {
-        settings.sharing.displayId = screen.getPrimaryDisplay().id;
+        const primary = ctx.displays.list().find((d) => d.primary && !d.virtual);
+        // A placeholder or temporary virtual primary is not a physical mirror preference.
+        if (primary) settings.sharing.displayId = primary.id;
         settings.virtual.enabled = false;
       } else {
         settings.sharing.displayId = null;
