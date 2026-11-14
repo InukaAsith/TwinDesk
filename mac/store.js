@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS = {
     driveOther: true,
     beDriven: true,
     resistancePx: 120,
+    crossingModifier: '', // optional modifier held while leaving this Mac at an edge
     speed: 1.0,
     reverseScroll: false,
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
@@ -121,6 +122,7 @@ function loadSettings() {
   if (s.sharing) s.sharing.on = false; // screen sharing never starts by itself
   const out = { ...DEFAULT_SETTINGS, ...s };
   for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'drive', 'hub', 'camera', 'remote', 'web']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
+  if (!['', 'Command', 'Control', 'Alt', 'Shift'].includes(out.kvm.crossingModifier)) out.kvm.crossingModifier = '';
   out.rezume = require('../shared/rezume.js').normalize(s.rezume);
   out.modules = require('../shared/modules.js').normalize(s.modules); // General › Modules
   out.ui.language = require('../shared/i18n.js').savedLanguage(out.ui.language);

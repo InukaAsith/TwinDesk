@@ -1957,6 +1957,8 @@
   "Move windows to {name}": "Move windows to {name}",
   "Key to hold": "Key to hold",
   "Hold it, then click anywhere in a window and drag": "Hold it, then click anywhere in a window and drag",
+  "Hold key to switch": "Hold key to switch",
+  "Hold this key when leaving this Mac. On return, the other computer needs a compatible version.": "Hold this key when leaving this Mac. On return, the other computer needs a compatible version.",
   "Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home": "Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home",
   "Right Windows key": "Right Windows key",
   "Left Windows key": "Left Windows key",

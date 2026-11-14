@@ -1956,6 +1956,8 @@
   "Move windows to {name}": "Pencereleri {name} cihazına taşı",
   "Key to hold": "Basılı tutulacak tuş",
   "Hold it, then click anywhere in a window and drag": "Basılı tutun, sonra pencerenin herhangi bir yerine tıklayıp sürükleyin",
+  "Hold key to switch": "Geçiş için basılı tutulacak tuş",
+  "Hold this key when leaving this Mac. On return, the other computer needs a compatible version.": "Bu Mac'ten ayrılırken bu tuşu basılı tutun. Dönüş için diğer bilgisayarda uyumlu bir sürüm gerekir.",
   "Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home": "Tuş basılıyken bir pencereyi kenarın ötesine sürükleyin: {name} üzerinde açılır ve bu ekrandan ayrılır. Geri getirmek için geri sürükleyin ya da orada kapatın",
   "Right Windows key": "Sağ Windows tuşu",
   "Left Windows key": "Sol Windows tuşu",

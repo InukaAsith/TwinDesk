@@ -1957,6 +1957,8 @@
   "Move windows to {name}": "将窗口移到 {name}",
   "Key to hold": "按住的键",
   "Hold it, then click anywhere in a window and drag": "按住它，然后在窗口任意位置点按并拖动",
+  "Hold key to switch": "切换时按住的按键",
+  "Hold this key when leaving this Mac. On return, the other computer needs a compatible version.": "离开此 Mac 时按住此键。返回时，另一台电脑需要兼容的版本。",
   "Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home": "按住该键将窗口拖过边缘：它会在 {name} 上打开并离开此屏幕。将它拖回或在那里关闭即可带回",
   "Right Windows key": "右 Windows 键",
   "Left Windows key": "左 Windows 键",

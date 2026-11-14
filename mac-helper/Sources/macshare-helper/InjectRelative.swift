@@ -45,6 +45,6 @@ extension Injector {
     e?.flags = flags
     post(e)
     if WindowGrab.shared.grabbing { WindowGrab.shared.move(to: to) } // a grabbed window follows (Grab.swift)
-    Capture.shared.checkReturn(to, dx: dx, dy: dy)
+    Capture.shared.checkReturn(to, dx: dx, dy: dy, flags: Capture.shared.remoteCrossingFlags)
   }
 }
