@@ -80,6 +80,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 const P = require('../shared/protocol.js');
+const Pick = require('../shared/screen-pick.js');
 const CL = require('../shared/cursorlock.js');
 const trayMenu = require('../shared/traymenu.js');
 const I18n = require('../shared/i18n.js');
@@ -303,14 +304,45 @@ function pushState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+
+// This Mac's apps are open on the virtual display, which is what is shared until they close.
+function appsHeld() {
+  return !!(svc && svc.displays && svc.displays.holds && svc.displays.holds.has('apps-open'));
+}
+
 function sendScreenState() {
   const c = peer && peer.current;
   if (!c || !svc) return void (screenStateKey = '');
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], ...Pick.stateFields(svc.displays.list(), svc.displays.target(), settings.sharing.remote !== false && !appsHeld()) };
   const key = JSON.stringify([c.deviceId, msg]);
   if (key === screenStateKey) return;
   screenStateKey = key;
   peer.sendToClient(msg);
+}
+
+// The viewer asked to mirror one real display. True: that request was handled (a refusal too).
+// False: no displayId, so Extend/Mirror below is unchanged. Never clears an owner's per-device choice.
+function mirrorDisplay(m) {
+  const pick = Pick.viewerPick(m, svc.displays.list(), { held: appsHeld() });
+  if (pick.skip) return false;
+  if (!pick.ok) {
+    screenStateKey = '';
+    pushState(); // the phone's list is stale, or the pick was not taken: say what is on now
+    return true;
+  }
+  const same = Number(settings.sharing.displayId) === pick.displayId && !(settings.virtual && settings.virtual.enabled);
+  if (!same) {
+    settings.virtual.enabled = false; // as Mirror does, without forcing the main display
+    settings.sharing.displayId = pick.displayId;
+    store.saveSettings(settings);
+  }
+  // One restart. selectDisplay restarts at once, and applyVirtual restarts again when the virtual
+  // display goes away. The setting is written first: capture and input both read displays.target().
+  const turningOn = m.share === true && !settings.sharing.on;
+  if (turningOn) actions.setSharing(true, 'remote');
+  else if (!same && settings.sharing.on) svc.displays.applyVirtual().then(() => svc.stream.restart('display selected'));
+  else if (!same) svc.displays.applyVirtual();
+  return true;
 }
 
 // The viewer on the other computer starts/stops our sharing or switches Extend/Mirror.
@@ -318,6 +350,7 @@ function onScreenCtl(m) {
   // The phone viewer's Close stops sharing even when the viewer may not start and switch it.
   if (m.share === false && m.close === true) return void (settings.sharing.on && actions.setSharing(false, 'remote'));
   if (settings.sharing.remote === false) return void (screenStateKey = '', pushState()); // re-send: remote false
+  if (m.share !== false && mirrorDisplay(m)) return;
   // Started from the viewer without a mode: Mirror (the virtual display doesn't always start); Extend is its switch.
   const mode = m.mode === 'extend' || m.mode === 'mirror' ? m.mode : m.share === true && !settings.sharing.on ? 'mirror' : null;
   if (mode && displayMode() !== mode) actions.setDisplayMode(mode);

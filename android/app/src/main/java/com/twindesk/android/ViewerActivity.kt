@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
@@ -139,29 +140,39 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                 .clip(RoundedCornerShape(9.dp)).background(Color(0x55FFFFFF)).clickable { bar = !bar },
         )
         AnimatedVisibility(bar, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)) {
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(name, color = Color.White, modifier = Modifier.padding(start = 8.dp))
-                // Which way the picture comes: the USB cable, or Wi-Fi.
-                Text(
-                    if (core.link.wired) "USB" else "Wi-Fi", color = Color.White, fontSize = 11.sp,
-                    modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(6.dp))
-                        .background(if (core.link.wired) Color(0xFF30D158).copy(alpha = 0.35f) else Color(0x33FFFFFF)).padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-                if (s.remote) {
-                    for (mode in listOf("mirror", "extend")) {
-                        val on = s.sharing && s.mode == mode
-                        val label = if (mode == "mirror") tr("Mirror") else tr("Extend")
-                        if (on) FilledTonalButton(onClick = { bar = true }) { Text(label) }
-                        else TextButton(onClick = { s.pick(mode); bar = true }) { Text(label, color = Color.White) }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(name, color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    // Which way the picture comes: the USB cable, or Wi-Fi.
+                    Text(
+                        if (core.link.wired) "USB" else "Wi-Fi", color = Color.White, fontSize = 11.sp,
+                        modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(6.dp))
+                            .background(if (core.link.wired) Color(0xFF30D158).copy(alpha = 0.35f) else Color(0x33FFFFFF)).padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                    if (s.remote) {
+                        for (mode in listOf("mirror", "extend")) {
+                            val on = s.sharing && (s.mode == mode || (mode == "mirror" && s.mode == "custom" && s.displayId.isNotEmpty()))
+                            val label = if (mode == "mirror") tr("Mirror") else tr("Extend")
+                            if (on) FilledTonalButton(onClick = { bar = true }) { Text(label) }
+                            else TextButton(onClick = { s.pick(mode); bar = true }) { Text(label, color = Color.White) }
+                        }
+                        if (s.sharing) TextButton(onClick = { s.control(share = false) }) { Text(tr("Stop"), color = Color.White) }
                     }
-                    if (s.sharing) TextButton(onClick = { s.control(share = false) }) { Text(tr("Stop"), color = Color.White) }
+                    TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
+                    TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
                 }
-                TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
-                TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
+                if (s.remote && s.displays.size > 1) {
+                    Row(
+                        Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        MacDisplayPick(s.displays, if (s.sharing && s.mode != "extend") s.displayId else "", onDark = true) { s.pickDisplay(it); bar = true }
+                    }
+                }
             }
         }
     }
