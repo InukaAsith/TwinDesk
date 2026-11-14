@@ -282,4 +282,4 @@ class DriveLink {
   }
 }
 
-module.exports = { DriveLink, PATH };
+module.exports = { DriveLink, PATH, HEADER };

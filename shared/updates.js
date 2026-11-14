@@ -150,7 +150,7 @@ const OTHER_ARCH = {
 function pickAsset(assets, platform, arch, prefer) {
   const kinds = {
     mac: [/\.dmg$/i, /(mac|darwin|osx).*\.zip$/i],
-    win: [/setup.*\.exe$/i, /\.exe$/i, /\.msi$/i],
+    win: prefer === 'portable' ? [/portable.*\.exe$/i, /setup.*\.exe$/i, /\.exe$/i] : [/setup.*\.exe$/i, /\.exe$/i, /\.msi$/i], // portable: TwinDesk Portable (windows/portable.js)
     linux: prefer === 'deb' ? [/\.deb$/i, /\.AppImage$/i] : [/\.AppImage$/i, /\.deb$/i],
   }[platform] || [];
   const list = (assets || []).filter((a) => a && a.name && a.browser_download_url);

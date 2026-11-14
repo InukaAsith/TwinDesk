@@ -11,6 +11,7 @@
 //   FeatureArt.dismissed(id)
 //   FeatureArt.create(id, { color, keep, onDismiss }) -> { el, set(show) }; color: the tab's (a CSS gradient),
 //     keep: Dismiss is remembered
+//   FeatureArt.picture(scene, { color }) -> a scene alone, part of a page (Full KVM's, shared/ui-fullkvm.js)
 (function () {
   const t = (text) => window.I18n ? window.I18n.t(text) : text;
   const FREE = ['overview', 'android-overview', 'ios-overview', 'multi', 'general', 'about', 'phone', 'calls', 'messages', 'media', 'pfiles', 'web', 'airplay', 'iossign', 'wd-overview', 'wd-share', 'wd-receive', 'wd-remote', 'wd-clipboard', 'wd-notifications', 'wd-files', 'wd-drop', 'wd-audio', 'wd-camera']; // web, airplay, wd-*: TwinDesk Web (shared/ui-web.js), its own server; iossign: TwinDesk iPhone, on its own
@@ -343,6 +344,40 @@
         + '<rect class="fa-c1" x="246" y="102" width="70" height="6" rx="3"/><rect class="fa-c1" x="246" y="112" width="50" height="6" rx="3"/>';
     },
   };
+  // Full KVM (shared/ui-fullkvm.js, at the bottom of its page): the pointer goes from the laptop onto a
+  // computer at its lock screen, types the password, and then answers an administrator prompt there.
+  SCENES.fullkvm = (id) => {
+    const D = 7;
+    const lockOff = fade(D, '1;0', '0;0.56', 'discrete'); // the lock screen, then the prompt
+    const promptOn = fade(D, '0;1', '0;0.56', 'discrete');
+    const click = (t) => fade(D, `0;0;0.55;0;0`, `0;${t};${(t + 0.02).toFixed(2)};${(t + 0.08).toFixed(2)};1`);
+    let out = '<ellipse class="fa-bg" cx="200" cy="122" rx="182" ry="104"/>'
+      + laptop(26, 98, 104, 64) + monitor(176, 30, 198, 128)
+      + '<path class="fa-dash" d="M86 124Q176 14 296 96"/>';
+    // The lock screen: a padlock, someone's picture and the password, typed a dot at a time.
+    out += `<g>${lockOff}`
+      + '<rect class="fa-c1" x="269" y="45" width="14" height="10" rx="2"/><path class="fa-band thin" d="M272 45v-3a4 4 0 0 1 8 0v3"/>'
+      + '<circle class="fa-c1" cx="276" cy="74" r="12"/>'
+      + '<rect class="fa-paper fa-out" x="224" y="96" width="104" height="20" rx="10"/>'
+      + [0, 1, 2, 3, 4].map((i) => `<circle class="fa-c2" cx="${244 + i * 14}" cy="106" r="3.5" opacity="0">${from(D, +(0.27 + i * 0.05).toFixed(2), 0.56)}</circle>`).join('')
+      + '</g>';
+    // Then an administrator prompt (UAC, polkit): Yes, clicked from the laptop.
+    out += `<g opacity="0">${promptOn}`
+      + '<rect class="fa-desk" x="182" y="36" width="186" height="116" rx="4"/>'
+      + '<rect class="fa-paper fa-out" x="214" y="52" width="124" height="84" rx="8"/>'
+      + `<path fill="url(#fa-g-${id})" d="M228 62l9-4 9 4v7c0 6-4 10-9 12-5-2-9-6-9-12z"/>`
+      + '<path class="fa-lines" d="M254 66h68M254 76h48M228 96h96"/>'
+      + `<rect fill="url(#fa-g-${id})" x="286" y="114" width="40" height="15" rx="7.5"/>`
+      + '<rect class="fa-paper fa-out" x="238" y="114" width="40" height="15" rx="7.5"/>'
+      + '</g>';
+    out += `<circle class="fa-c2" cx="290" cy="106" r="11" opacity="0">${click(0.24)}</circle>`
+      + `<circle class="fa-c2" cx="306" cy="121" r="11" opacity="0">${click(0.76)}</circle>`;
+    // The pointer: across, onto the password, then onto Yes; gone for a moment as it starts again.
+    out += `<g>${along(D, '80,124;180,26;288,104;288,104;304,119;304,119;304,119', '0;0.11;0.22;0.62;0.72;0.95;1')}`
+      + `${fade(D, '1;1;0', '0;0.95;1', 'discrete')}<path class="fa-ptr" transform="scale(1.4)" d="${POINTER}"/></g>`;
+    return out;
+  };
+
   // Tab ids -> scene: the Mac's screen tabs and the PC apps' are called differently.
   const SCENE = {
     cursor: 'cursor', keyboard: 'keyboard', clipboard: 'clipboard', notifications: 'notifications', audio: 'audio', apps: 'apps',
@@ -449,5 +484,24 @@
     };
   }
 
-  window.FeatureArt = { FREE, has, device, dismissed, create };
+  // A scene alone, as part of a page (no name, words or Dismiss): FeatureArt.picture('fullkvm', {color}).
+  function picture(scene, { color } = {}) {
+    const el = document.createElement('div');
+    el.className = 'feature-art fa-inline';
+    el.setAttribute('aria-hidden', 'true');
+    const [c1, c2] = String(color || '').match(/#[0-9a-f]{3,8}\b/gi) || [];
+    if (c1) el.style.setProperty('--fa1', c1);
+    if (c1) el.style.setProperty('--fa2', c2 || c1);
+    if (!SCENES[scene]) return el;
+    el.innerHTML = `<svg viewBox="0 0 400 240"><defs><linearGradient id="fa-g-${scene}-pic" x1="0" y1="0" x2="0.4" y2="1">`
+      + `<stop class="fa-s1" offset="0"/><stop class="fa-s2" offset="1"/></linearGradient></defs>${SCENES[scene](scene + '-pic')}</svg>`;
+    const svg = el.firstChild;
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches && svg.pauseAnimations) {
+      svg.pauseAnimations();
+      svg.setCurrentTime(2.6);
+    }
+    return el;
+  }
+
+  window.FeatureArt = { FREE, has, device, dismissed, create, picture };
 })();

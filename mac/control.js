@@ -38,6 +38,7 @@ const ICONS = {
   globe: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M2.5 10h15 M10 2.5c-2.2 2.3-2.2 12.7 0 15 M10 2.5c2.2 2.3 2.2 12.7 0 15', // Sharing
   link: 'M8.5 11.5a3.2 3.2 0 0 0 4.5 0l2.5-2.5a3.2 3.2 0 0 0-4.5-4.5l-.8.8 M11.5 8.5a3.2 3.2 0 0 0-4.5 0L4.5 11a3.2 3.2 0 0 0 4.5 4.5l.8-.8', // two chain links: Connection
   multi: 'M2 5h9v6.5H2z M5 14h3 M6.5 11.5V14 M13 4h5v12h-5z M15 13.5h1', // a computer and a phone: Multi-device
+  fullkvm: 'M1.5 8.5h11v8h-11z M4 11.3h1 M7 11.3h1 M10 11.3h0 M5 13.9h4 M14 5h4.5v4.5H14z M15.1 5V3.9a1.15 1.15 0 0 1 2.3 0V5', // a keyboard and a padlock: Full KVM (the lock screen, admin prompts)
 };
 
 const UI = {

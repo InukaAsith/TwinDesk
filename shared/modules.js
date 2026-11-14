@@ -39,12 +39,13 @@
     { id: 'airplay', label: 'AirPlay', pages: ['airplay'] },
     { id: 'iossign', label: 'TwinDesk iPhone', pages: ['iossign'] },
     { id: 'multi', label: 'Multi-device', pages: ['multi'] },
+    { id: 'fullkvm', label: 'Full KVM', pages: ['fullkvm'] }, // Windows and Linux (shared/ui-fullkvm.js); off: the app doesn't use the service either (shared/edition.js)
   ];
   // Always there: not modules.
   const FIXED = ['general', 'about', 'connection', 'overview', 'android-overview', 'ios-overview', 'phone', 'setup'];
   // Page scripts (basenames) that only modules use: loaded when any of the modules is on.
   const SCRIPTS = {
-    'ui-display.js': ['share'], 'ui-share.js': ['share'],
+    'ui-display.js': ['share'], 'ui-share.js': ['share'], 'ui-fullkvm.js': ['fullkvm'],
     'ui-display-pc.js': ['receive'], 'ui-receive.js': ['receive'],
     'kvm-geom.js': ['cursor'], 'kvm-map-ui.js': ['cursor'], 'ui-cursor.js': ['cursor'], 'mesh-intro.js': ['cursor', 'multi'],
     'ui-keyboard.js': ['keyboard'], 'ui-clipboard.js': ['clipboard'], 'ui-notifs.js': ['notifications'],

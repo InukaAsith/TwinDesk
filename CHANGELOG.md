@@ -17,7 +17,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   Each keeps its own copy and works offline; they swap what changed when they connect. A file
   changed on two at once keeps both, one as "(conflict from …)", and deleted files go to the Trash
   or Recycle Bin. Off until you turn it on, and nothing of it runs until then
-  ([how it works](docs/drive.md)). Mac, Windows and Linux in one-to-one mode for now.
+  ([how it works](docs/drive.md)). Mac, Windows and Linux, one-to-one and Multi-device: in
+  Multi-device every connected computer syncs, and a change passes on to the ones it didn't reach.
 - **The monitor map in Multi-device** (#225): every device's monitors in one picture, arranged by
   dragging. The pointer crosses only where monitors touch, keeps its place along the edge, and goes
   through an offline device to the next one. Phones hang off a computer's edge, and red shows where
@@ -26,9 +27,19 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   two-finger scrolling and pinch, read from the desktop's own settings (GNOME, KDE, Hyprland, Sway,
   niri). A pinch reaches an Android phone as two fingers.
 - **Overview cards end level** (#224): cards side by side are as tall as each other.
+- **The Full KVM page in every build** (Windows, Linux): with its own icon and an animation of it at
+  work. The normal build shows what it does and says it's only in the Full KVM builds; none of Full
+  KVM's service or helpers are in it. Full KVM is also a module now (General › Modules).
+- **TwinDesk Portable** (Windows): one .exe that runs without installing. Run normally it does
+  everything that needs no administrator (PORTABLE · LIMITED beside the name); run as administrator,
+  also the firewall, folder sharing, Wake on LAN and SSH keys of administrators (PORTABLE · FULL).
+  Drivers, OpenSSH Server, the calls' sound and Full KVM need the installed TwinDesk. General ›
+  Portable says which is which.
 
 ### Fixes
 
+- **Full KVM at the login screen** (Windows): after signing out, a computer connected but the pointer
+  didn't move. The service never told the machine node its helper was ready.
 - **Clipboard:** copying the same text again after the other side copied something sends it again
   (#223).
 

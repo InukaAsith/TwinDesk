@@ -58,6 +58,7 @@ class Server extends EventEmitter {
     this.https.on('request', (req, res) => {
       if (require('../../shared/nativescreen.js').NativeScreen.request(req, res)) return;
       if (this.fxRequest && this.fxRequest(req, res)) return; // fast files of a session (session.js)
+      if (this.driveRequest && this.driveRequest(req, res)) return; // TwinDesk Drive, while it's on (shared/drive-host.js createMesh)
       res.writeHead(404);
       res.end();
     });

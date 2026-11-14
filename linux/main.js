@@ -200,6 +200,7 @@ function start() {
   device = loadDevice();
   settings = normalize(store.read('settings.json', {}));
   modulesAtStart = settings.modules.off; // fixed for this run: the window's scripts are
+  require('../shared/edition.js').moduleOff(modulesAtStart.includes('fullkvm')); // General › Modules › Full KVM, before the helper is made
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));

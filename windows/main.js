@@ -220,6 +220,7 @@ function start() {
   device = loadDevice();
   settings = normalize(store.read('settings.json', {}));
   modulesAtStart = settings.modules.off; // fixed for this run: the window's scripts are
+  require('../shared/edition.js').moduleOff(modulesAtStart.includes('fullkvm')); // General › Modules › Full KVM, before the helper is made
   require('../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -437,8 +438,9 @@ function start() {
   helper.start();
   helper.once('ready', () => vdd.check()); // switches a virtual monitor left on by a crash off
   // New releases on GitHub: a notification once per version, the tray item and About › Updates.
+  // TwinDesk Portable (portable.js): a new version is downloaded by the browser, never installed by itself.
   updates = new Updates({
-    current: app.getVersion(), platform: 'win', store: Store.STORE, getSettings: () => settings, getLanguage: () => i18n.locale, save: saveSettings, onChange: pushState,
+    current: app.getVersion(), platform: 'win', store: Store.STORE, ...(require('./portable').ON ? { selfUpdate: null, prefer: 'portable' } : {}), getSettings: () => settings, getLanguage: () => i18n.locale, save: saveSettings, onChange: pushState,
     onShowModal: showUpdateWindow,
     isBusy: () => !!(link && link.current), // Install automatically waits for no session
     notify: (title, body, onClick) => {
@@ -1281,6 +1283,7 @@ function buildState() {
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
     apps: link.peerOs !== P.OS.MAC ? peerApps.view() : apps.view(), // A PC's (or Linux computer's) apps come through peerapps.js
     startup: getStartup(),
+    portable: require('./portable').view(), // TwinDesk Portable: its pill and General's card (null: installed)
     setup: { missing: miss, show: setupShows(miss) },
     phone: phone ? { ...phone.view, settings: settings.phone, ...phoneCtl() } : null,
     adbQr: adbQrState, // wireless debugging's pairing QR code (shared/ui-adbqr.js)

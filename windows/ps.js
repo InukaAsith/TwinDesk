@@ -68,6 +68,8 @@ function quote(a) {
 // Elevated through scripts/elevate.ps1: throws if the UAC prompt is declined. The script's errors
 // can't be read back directly, so callers re-check the state afterwards (or read its -Log file).
 function scriptElevated(name, args = {}, timeoutMs = 120000) {
+  const no = require('./portable').refuse(name); // TwinDesk Portable: as administrator only, and never an install
+  if (no) return Promise.reject(new Error(no));
   const line = [...BASE, file(name), ...argv(args)].map(quote).join(' ');
   return exec([...BASE, ELEVATE, '-ArgLine', line], timeoutMs);
 }

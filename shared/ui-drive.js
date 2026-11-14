@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The TwinDesk Drive card on the File Sharing page (Mac, Windows, Linux; docs/drive.md): the switch,
 // the folder and how it's doing. The app's state carries `drive` (shared/drive-host.js view(), or
-// {on: false, folder} while it isn't loaded); a state without it (Multi-device for now) hides it.
+// {on: false, folder} while it isn't loaded); a state without it hides it.
 //   const drive = UI.driveCard(api, {tilde, manager: 'Finder'}); body.append(drive.card); drive.update(s);
 // api: setDrive(on), pickDriveFolder(), resetDriveFolder(), openDriveFolder().
 'use strict';

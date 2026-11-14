@@ -4,8 +4,8 @@ One folder kept the same on every device that turns it on, like a cloud drive wi
 device keeps a full copy, so it works offline. When two devices meet in a session, they swap what
 changed since they last met.
 
-It's in **File Sharing › TwinDesk Drive** on the Mac, Windows and Linux (one-to-one mode). The folder
-is `~/TwinDesk Drive` unless you choose another one.
+It's in **File Sharing › TwinDesk Drive** on the Mac, Windows and Linux, in one-to-one mode and in
+Multi-device. The folder is `~/TwinDesk Drive` unless you choose another one.
 
 ## Off means off
 
@@ -94,23 +94,35 @@ failed download is tried again with the next index (a `drive.hello` with `again`
 Never over Bluetooth. A session on Bluetooth waits, and when it moves to Wi-Fi or a cable, the link
 kicks (`again`) and everything that waited goes.
 
+## Multi-device
+
+One engine and one index, and a link (`shared/drive-link.js`) to each connected computer, made when
+it comes up and dropped when it goes (`createMesh` in `shared/drive-host.js`, on the hub's bus).
+Phones never get one. Each link is the session's: guest or host, its own fast-files token. Our
+server's requests under `/twindesk/drive/` go to the link of the host session whose token they
+carry; any other token is refused.
+
+A change adopted from one computer is sent on to the others, so two computers that each meet only
+this one still end up the same. If two computers send the same new file at once, the second copy
+is thrown away when it lands and asked for again later, which finds nothing to do.
+
 ## Files
 
 | File | What |
 |---|---|
 | `shared/drive.js` | The engine: index, scan, merge, adopt, serve |
 | `shared/drive-link.js` | One session: messages, GET and PUT, the host's request handler |
-| `shared/drive-host.js` | The app's side: the switch, the folder, the adapter to the app's session |
+| `shared/drive-host.js` | The app's side: the switch, the folder, the adapter to the app's session (`create`), or to every computer in Multi-device (`createMesh`, `hubAdapter`) |
 | `shared/ui-drive.js` | The card on File Sharing |
 | `shared/test/drive.js` | 2 and 3 devices: edits, deletes, conflicts, relay, tampering, Windows names |
 | `shared/test/drive-link.js` | Over real HTTPS: GET, PUT, a 3 MB file, a bad token, a wrong certificate |
+| `shared/test/drive-mesh.js` | Multi-device: two computers and a phone, a change passed on, requests by token |
 
 The index lives in the app's data folder (`drive-index.json`). Choosing a new folder starts a new
 index there. The old folder's files stay where they are.
 
 ## Not yet
 
-- **Multi-device (mesh):** the card is hidden there for now.
 - **Android:** a full copy in the app's storage or a folder you pick.
 - **iPhone and iPad, without an extension:** a folder in the app's Documents (visible in Files).
   It syncs while the app runs, and in the background when iOS allows it.

@@ -11,6 +11,8 @@
 // out the calls' sparse package and its certificate, and refuses an iOS signer built with any-ipa.
 // The x64 one keeps the name every release has used; arm64 gets -arm64 (the update check picks by
 // that). One AnyCPU helper .exe serves both (build.cmd).
+// `node installer/build.js portable [x64] [arm64]`: TwinDesk Portable (windows/portable.js), one .exe that
+// runs without installing: the normal build, without the calls' sound package (it needs an install).
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -29,7 +31,9 @@ const electronVersion = require(path.join(WIN, 'node_modules', 'electron', 'pack
 const FULL_KVM = process.env.TWINDESK_EDITION === 'full-kvm';
 const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json', ...(FULL_KVM ? ['service', 'build.cmd'] : ['fullkvm'])]); // tests (mesh/test) stay out of the package
 const STORE = process.argv.includes('store');
-const ARGS = process.argv.slice(2).filter((a) => a !== 'store');
+const PORTABLE = process.argv.includes('portable');
+if (PORTABLE && (FULL_KVM || STORE)) throw new Error('TwinDesk Portable is the normal build only (no Full KVM, no Store)');
+const ARGS = process.argv.slice(2).filter((a) => a !== 'store' && a !== 'portable');
 const ARCHS = ARGS.length ? ARGS : ['x64'];
 // Partner Center › TwinDesk › Product identity.
 const STORE_ID = { identityName: 'InukaAsith.TwinDesk', publisher: 'CN=C369DC02-ED00-44E8-B6A6-C553635C0E0D', publisherDisplayName: 'Inuka Asith' };
@@ -101,7 +105,7 @@ async function main() {
   else console.log('note: no windows-helper/bin/macshare-winhelper-multi.exe — Multi-device uses the one-to-one helper (one edge)');
   // The calls' sound on this PC (callaudio.js): its .exe, its signed package and that certificate.
   // Not in the Store's MSIX: it has no phone line capabilities (store-manifest.xml).
-  for (const f of STORE ? [] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
+  for (const f of STORE || PORTABLE ? [] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) { // not portable: a package to install
     const from = path.join(ROOT, 'windows-helper', 'bin', f);
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
@@ -143,7 +147,7 @@ async function main() {
     license: pkg.license, author: 'inukaasith', main: 'windows/main.js', dependencies: pkg.dependencies,
   }, null, 2));
 
-  for (const arch of ARCHS) await (STORE ? packStore(arch) : pack(arch));
+  for (const arch of ARCHS) await (STORE ? packStore(arch) : PORTABLE ? packPortable(arch) : pack(arch));
 }
 
 // The Store's copy signs TwinDesk for iPhone only (ios-signer/build.cmd without
@@ -253,6 +257,29 @@ async function pack(arch) {
         runAfterFinish: true,
         artifactName: name,
       },
+    },
+  });
+  console.log('Done: ' + path.join(WIN, 'dist', name));
+}
+
+// TwinDesk Portable: electron-builder's portable .exe, which unpacks the app each run (as the user:
+// Run as administrator gives it its full level, windows/portable.js).
+async function packPortable(arch) {
+  const name = 'TwinDesk-Portable-' + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
+  console.log('Packaging TwinDesk Portable for ' + arch + '…');
+  await builder.build({
+    targets: builder.Platform.WINDOWS.createTarget('portable', builder.Arch[arch]),
+    projectDir: WIN,
+    config: {
+      appId: 'org.macshare.windows',
+      productName: 'TwinDesk',
+      copyright: 'Copyright (C) 2026 inukaasith',
+      electronVersion,
+      directories: { app: STAGE, output: path.join(WIN, 'dist') },
+      asar: false,
+      npmRebuild: false,
+      win: { icon: path.join(__dirname, 'icon.ico'), executableName: 'TwinDesk', forceCodeSigning: Boolean(process.env.WIN_CSC_LINK) },
+      portable: { artifactName: name, requestExecutionLevel: 'user', unpackDirName: 'TwinDesk-Portable' },
     },
   });
   console.log('Done: ' + path.join(WIN, 'dist', name));

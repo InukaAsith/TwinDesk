@@ -4,6 +4,18 @@ Branch `twindesk-full-kvm-v3.1.1`. The mouse and keyboard of the mesh reach ever
 Linux computer: UAC prompts, the lock screen, Ctrl+Alt+Del, windows run as administrator, polkit
 dialogs, and (System-wide) the login screen after a restart or sign-out. Chosen on the **Full KVM** tab.
 
+## The tab in every build
+
+`shared/ui-fullkvm.js` is the tab on Windows and Linux in every build, with a picture of it at work at
+the bottom (`FeatureArt.picture('fullkvm')`, `shared/feature-art.js`). The Full KVM build's preload
+gives it `window.tdFullKvm` and the choice works. The normal build has no preload, service, agent or
+helper of Full KVM (`shared/fullkvm/` and the platform's `fullkvm/` aren't in it): the tab shows the
+same choice, unusable, under a card saying it's only in the Full KVM builds, with a link to them.
+
+It's a module (Settings › General › Modules › Full KVM). Off, the page isn't loaded and the app doesn't
+connect to the service (`shared/edition.js` `moduleOff`, read before the helper is made). A service that
+is installed stays installed: Off / Signed in / Always is changed on the tab, before switching it off.
+
 ## Why the app alone can't
 
 - **Windows.** The helper runs as the signed-in user. A UAC prompt, the lock screen and Ctrl+Alt+Del
@@ -109,6 +121,9 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
   `TwinDesk-FullKVM-Setup-…` and uses `installer-fullkvm.nsh` (stop/start the service around an
   update, `--apply off` on uninstall). No Store package for this build.
 - `windows/fullkvm/manager.js`, `preload.js`: the tab's state and modes (as Linux's).
+- At the login screen (nobody signed in) the first agent starts on `Default` and moves to `Winlogon`
+  before it's ready: the service passes the client the first `ready` from whichever agent says it,
+  and only after that keeps a new agent's `ready` to itself (replaying the settings to it).
 - A dev checkout: the service runs `twindesk-fullkvm.exe` from the checkout as SYSTEM, so use it on a
   test machine only (installed, it lives under Program Files, which only administrators can change).
 5. Multi-device test with the Mac and the Ubuntu VM: lock screen, polkit prompt, greeter.

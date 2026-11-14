@@ -287,6 +287,7 @@ function publishState() {
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
     if (svc && svc.phoneDrive) state.mount = { ...svc.phoneDrive.view, on: !!settings.mount.on };
+    if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || require('path').join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
     sendScreenState();
@@ -658,6 +659,21 @@ app.whenReady().then(() => {
     return svc.mic;
   };
   svc.loadMic();
+  // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh, docs/drive.md): one engine, synced
+  // with every connected computer. Nothing of it is loaded until it's on.
+  svc.loadDrive = () => {
+    if (svc.drive) return svc.drive;
+    const host = require('../../shared/drive-host.js');
+    svc.drive = host.createMesh({
+      settings, save: () => store.saveSettings(settings), me: id.macId, meName: id.macName, userData: app.getPath('userData'),
+      trash: (p) => require('electron').shell.trashItem(p),
+      mesh: host.hubAdapter(hub, () => server),
+      onChange: pushState,
+    });
+    return svc.drive;
+  };
+  svc.getDrive = () => svc.drive || null;
+  if (settings.drive.on) svc.loadDrive();
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
   svc.kvm.onMoveWindow = (m, to) => {

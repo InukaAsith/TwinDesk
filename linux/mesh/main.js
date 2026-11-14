@@ -110,6 +110,7 @@ let devctl = null; // Overview's controls of the selected device (shared/devctl.
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let settings = null;
 let device = null;
+let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
 let clip = null;
@@ -183,6 +184,7 @@ function start() {
   device = loadDevice();
   settings = loadSettings(store); // settings.json and the mesh's own in multi.json (settings.js)
   modulesAtStart = require('../../shared/modules.js').normalize(settings.modules).off.filter((id) => id !== 'multi'); // the window's scripts are fixed at load
+  require('../../shared/edition.js').moduleOff(modulesAtStart.includes('fullkvm')); // General › Modules › Full KVM, before the helper is made
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -396,7 +398,8 @@ function start() {
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
-  const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  if (settings.drive.on) loadDrive();
+  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
@@ -973,6 +976,20 @@ function fillNames(t) {
 const fillAll = (o) => (typeof o === 'string' ? fillNames(o) : Array.isArray(o) ? o.map(fillAll)
   : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fillAll(v)])) : o);
 
+// File Sharing › TwinDesk Drive (docs/drive.md): one engine, synced with every connected computer.
+// Nothing of it loads until it's on.
+function loadDrive() {
+  if (drive) return drive;
+  const host = require('../../shared/drive-host.js');
+  drive = host.createMesh({
+    settings, save: saveSettings, me: device.id, meName: device.name, userData: app.getPath('userData'),
+    trash: (p) => require('electron').shell.trashItem(p),
+    mesh: host.hubAdapter(hub, () => hostServer),
+    onChange: pushState,
+  });
+  return drive;
+}
+
 function peerName() {
   const p = peerView();
   return (p && p.name) || 'the other computer';
@@ -1135,6 +1152,7 @@ function buildState() {
     phone: phone ? { ...phone.view, settings: settings.phone, ...meshPhoneCtl() } : null,
     peerCtl: devctl && !selectedIsPhone() ? devctl.view : null, // a computer's controls on Overview
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
+    drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder }, // File Sharing › TwinDesk Drive
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: phoneHub ? phoneHub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: false, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },

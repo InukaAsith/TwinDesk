@@ -99,7 +99,9 @@ UI.tab({
     const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const modules = UI.modulesCard ? UI.modulesCard() : { card: null, update() {} }; // General › Modules (shared/ui-modules.js; not in Multi-device)
+    const portable = UI.portableCard ? UI.portableCard() : { card: null, update() {} }; // TwinDesk Portable (shared/ui-portable.js)
     const sections = UI.sections([
+      ...(portable.card ? [portable.card] : []),
       UI.card(t('Permissions'), [fwRow, btRow, locRow]),
       UI.card(t('Startup'), [
         UI.row(t('Start with Windows'), t('TwinDesk waits in the tray'), [startup]),
@@ -134,6 +136,7 @@ UI.tab({
     return (s) => {
       engines.update(s);
       modules.update(s);
+      portable.update(s);
       if (s.app) {
         const proto = s.app.inputProtocol === 'tcp' ? 'tcp' : 'udp';
         if (protoStart === null) protoStart = proto;

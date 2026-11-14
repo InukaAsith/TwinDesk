@@ -18,6 +18,8 @@ const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'r
 module.exports = (Helper) => class FullKvmHelper extends Helper {
   constructor(...args) {
     super(...args);
+    this.svc = null;
+    if (!require('../edition.js').fullKvm()) return; // General › Modules › Full KVM is off: our own helper only
     this.svc = new SvcLink(SVC_SOCK);
     this.svc.on('ready', () => {
       console.log('[fullkvm] the service has the mouse and keyboard (' + SVC_SOCK + ')');

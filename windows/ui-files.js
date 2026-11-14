@@ -71,7 +71,7 @@ UI.tab({
     const cancelBtn = UI.button(I18n.t('Cancel'), () => api.cancelDrop(), 'small');
     const outRow = UI.row('', '', [cancelBtn], { literal: true });
     const inRow = UI.row('', '', [], { literal: true });
-    // TwinDesk Drive (shared/ui-drive.js): hidden where the app has none (Multi-device for now).
+    // TwinDesk Drive (shared/ui-drive.js): one-to-one and Multi-device alike; hidden where the state has none.
     const drive = UI.driveCard ? UI.driveCard(api, { tilde: (p) => p, manager: 'File Explorer' }) : null;
     body.append(
       UI.card('', [sendRow, zone], { cls: 'keep-on' }),

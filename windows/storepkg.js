@@ -23,6 +23,8 @@ const AUMID = FAMILY + '!TwinDesk'; // the manifest's Application Id
 
 // What a shortcut, a menu or the login item should start.
 function launcher() {
+  const portable = require('./portable');
+  if (portable.EXE) return portable.EXE; // TwinDesk Portable: its .exe, not the copy it unpacked this run
   if (!STORE) return process.execPath;
   const local = process.env.LOCALAPPDATA || path.join(require('os').homedir(), 'AppData', 'Local');
   return path.join(local, 'Microsoft', 'WindowsApps', 'TwinDesk.exe');
