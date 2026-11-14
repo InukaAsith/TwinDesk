@@ -113,7 +113,7 @@ func handle(_ line: String) {
     break
 #if !MULTI
   case "emergencyActive":
-    Capture.shared.emergencyActive = (msg["on"] as? Bool) ?? false
+    Capture.shared.setEmergencyActive((msg["on"] as? Bool) ?? false)
     reply(id)
 #endif
   case "place":

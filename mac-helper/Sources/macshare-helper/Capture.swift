@@ -83,6 +83,13 @@ final class Capture {
   private var returnSide: String?
   var emergencyActive = false
   var emergencyShortcut = EmergencyShortcut(EmergencyShortcut.fallback)
+  private var emergencyGate = EmergencyInputGate()
+  var allowsRemoteInput: Bool { emergencyGate.allowsInput }
+
+  func setEmergencyActive(_ on: Bool) {
+    emergencyActive = on
+    emergencyGate.session(active: on)
+  }
 #endif
   private var returnResistance = 120.0
   // Driven (armReturn on): the first input from this Mac's own mouse or trackpad takes the Mac back
@@ -586,8 +593,12 @@ final class Capture {
     if emergencyActive || capturing {
       if emergencyShortcut.matches(keyCode: kc, flags: e.flags, down: down, kbType: e.getIntegerValueField(.keyboardEventKeyboardType)) {
         let wasCapturing = capturing
+        emergencyGate.stop()
         if wasCapturing { stopCapture(side: nil, offset: nil) }
-        else { injector.releaseAll() }
+        else {
+          DragIn.shared.cancel() // avoid dropping a file when releasing the injected mouse button
+          injector.releaseAll()
+        }
         returnSide = nil
         localWatch = false
         emergencyActive = false

@@ -582,6 +582,7 @@ class Kvm extends EventEmitter {
       case 'emergency':
         this.home(); // helper has already stopped capturing or released injected keys locally
         if (this.linked) this.setLinked(false); // keep it off until explicitly re-enabled
+        this.helper.send('emergencyActive', { on: false }); // also acknowledge if capture stopped before main changed mode
         break;
       // This computer's own mouse or trackpad moved or clicked while driven (the helper's return
       // watch): it takes the computer back. The driver's pointer comes back where it left, ours stays

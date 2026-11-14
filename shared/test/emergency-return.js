@@ -58,4 +58,10 @@ assert.equal(kvm.mode, 'home');
 assert.equal(settings.kvm.linked, false);
 assert.ok(helper.commands.some((c) => c.cmd === 'releaseAll'));
 assert.ok(server.messages.some((m) => m.t === P.T.KVM_HOME));
+
+settings.kvm.linked = true;
+helper.commands.length = 0;
+helper.emit('event', 'emergency', {}); // capture may stop before the app enters driving mode
+assert.ok(helper.commands.some((c) => c.cmd === 'emergencyActive' && c.args.on === false),
+  'the helper can finish the old emergency session even if the app is already home');
 console.log('emergency return state machine: ok');
