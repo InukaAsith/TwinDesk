@@ -336,7 +336,10 @@ function setupIpc(ctx) {
       const peer = ctx.server.current;
       const rules = Portals.normalize(value);
       if (!peer || !rules || ctx.kvm.mode !== 'home') return;
-      if (rules.some((r) => !Portals.usableSource(ctx.kvm.map.mine, r) || !Portals.usableTarget(ctx.kvm.map.theirs, r.target))) return;
+      const previous = Portals.normalize((settings.kvm.portalsByPeer || {})[peer.deviceId]) || [];
+      // Keep an unchanged missing-display rule while removing another; never add or edit an invalid one.
+      if (rules.some((r) => (!Portals.usableSource(ctx.kvm.map.mine, r) || !Portals.usableTarget(ctx.kvm.map.theirs, r.target)) &&
+        !previous.some((p) => JSON.stringify(p) === JSON.stringify(r)))) return;
       settings.kvm.portalsByPeer = { ...(settings.kvm.portalsByPeer || {}), [peer.deviceId]: rules };
       save();
       ctx.kvm.config();

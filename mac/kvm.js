@@ -409,6 +409,10 @@ class Kvm extends EventEmitter {
 
   // The layout or the monitors changed while driven: the way back follows.
   _rearmReturn() {
+    if (this.mode === 'driven' && this.portalReturn && !Portals.usableTarget(this.map.mine, this.portalReturn.target)) {
+      this._sendHome(undefined, 'The portal display is no longer available');
+      return;
+    }
     if (this.mode === 'driven' && this.drivenMouse && !this.locked) this.helper.send('armReturn', this._returnCfg());
   }
 
@@ -707,6 +711,7 @@ class Kvm extends EventEmitter {
       if (this.pendingPortal !== pending) return;
       this.pendingPortal = null;
       if (this.server.current !== pending.peer || this.mode !== 'home') return;
+      if (!Portals.usableTarget(this.map.mine, target)) return refuse(P.REFUSE.NOT_ALLOWED);
       this.portalReturn = { target };
       this._onTake(m, true);
     }, () => {

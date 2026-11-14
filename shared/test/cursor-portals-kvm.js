@@ -97,10 +97,6 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
       B.kvm._rearmReturn();
       assert.equal(B.helper.commands.filter((c) => c.cmd === 'armReturn').at(-1).args.zones, '0.500000-1.000000',
         'return range follows desktop layout changes');
-      B.kvm.map.mine = before.filter((d) => d.id !== '3');
-      B.kvm._rearmReturn();
-      assert.deepEqual(B.helper.commands.filter((c) => c.cmd === 'armReturn').at(-1).args, { on: false },
-        'return disarms if the target display disappears');
       B.kvm.map.mine = before;
       B.kvm._rearmReturn();
     }
@@ -110,9 +106,35 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(B.kvm.mode, 'home');
     assert.deepEqual(A.helper.commands.filter((c) => c.cmd === 'capture').at(-1).args, { on: false }, 'returns to the captured source');
   }
+  for (const locked of [false, true]) {
+    A.helper.emit('event', 'portal', { id: 'msi', offset: 0.05 });
+    await tick();
+    assert.equal(B.kvm.mode, 'driven');
+    if (locked) B.kvm.setLocked(true);
+    const before = B.kvm.map.mine;
+    B.kvm.map.mine = before.filter((d) => d.id !== '3');
+    B.kvm.map.emit('change');
+    await tick();
+    assert.equal(B.kvm.mode, 'home', 'the driven Mac releases input when the portal display disappears');
+    assert.equal(A.kvm.mode, 'home', 'the driver returns home even when the cursor was locked');
+    assert.deepEqual(A.helper.commands.filter((c) => c.cmd === 'capture').at(-1).args, { on: false });
+    B.kvm.map.mine = before;
+    B.kvm.map.emit('change');
+    await tick();
+  }
   let finishPlacement;
   const originalRequest = B.helper.request;
   B.helper.request = (cmd, args) => cmd === 'placePortal' ? new Promise((resolve) => { finishPlacement = resolve; }) : originalRequest(cmd, args);
+  A.helper.emit('event', 'portal', { id: 'msi', offset: 0.05 });
+  await tick();
+  assert.ok(B.kvm.pendingPortal);
+  const beforePlacement = B.kvm.map.mine;
+  B.kvm.map.mine = beforePlacement.filter((d) => d.id !== '3');
+  finishPlacement({ ok: true });
+  await tick();
+  assert.equal(B.kvm.mode, 'home', 'a removed display cannot be accepted after placement');
+  assert.equal(A.kvm.mode, 'home', 'the sender comes home when placement loses its target');
+  B.kvm.map.mine = beforePlacement;
   A.helper.emit('event', 'portal', { id: 'msi', offset: 0.05 });
   await tick();
   assert.ok(B.kvm.pendingPortal, 'receiver awaits native placement');
