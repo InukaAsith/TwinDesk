@@ -62,6 +62,10 @@ final class Capture {
   private var edgeEnabled = false   // driveOther && mouse && link up (main decides)
   private var cfgKeyboard = true    // capture the keyboard when crossing at the edge
   private var dragFiles = true      // carry file drags across the edge (drag.policy, both sides)
+  var crossingModifier = ""         // empty: the normal edge needs no held modifier
+  var returnRequiresModifier = false // false for an older driver without modifier-state support
+  var remoteCrossingFlags: CGEventFlags = []
+  private var crossingWatch = false
   // capture
   private(set) var capturing = false
   private var capMouse = false, capKeyboard = false
@@ -192,6 +196,7 @@ final class Capture {
     capturing = true
     capMouse = mouse
     capKeyboard = keyboard
+    crossingWatch = false
     lastCross = now()
     arrival = nil
     if mouse {
@@ -215,6 +220,7 @@ final class Capture {
   func stopCapture(side: String?, offset: Double?) {
     guard capturing else { return }
     capturing = false
+    crossingWatch = false
     hkPending = nil
     deadman?.invalidate()
     deadman = nil
@@ -237,6 +243,12 @@ final class Capture {
     swallowUps.formUnion(remoteDown)
     remoteDown.removeAll()
     arrived(side: side)
+  }
+
+  func watchCrossingFlags() {
+    guard capturing && capMouse else { return }
+    crossingWatch = true
+    ev(["t": "k.mod", "flags": crossingBits(CGEventSource.flagsState(.combinedSessionState))])
   }
 
   /// Our own injected pointer (a window moved to the other computer, used from its copy there while
@@ -296,8 +308,9 @@ final class Capture {
 
   /// Return-edge check while driven; called for local moves and for injected relative moves.
   /// Any armed side counts: the way back to the driver, or an edge that leads on to another device.
-  func checkReturn(_ p: CGPoint, dx: Double, dy: Double) {
+  func checkReturn(_ p: CGPoint, dx: Double, dy: Double, flags: CGEventFlags) {
     guard !returnSides.isEmpty else { return }
+    guard !returnRequiresModifier || allowsCrossing(required: crossingModifier, flags: flags) else { retBy.removeAll(); return }
     var hit: (side: String, offset: Double)? = nil
     for side in returnSides {
       var st = retBy[side] ?? (push: 0.0, at: 0.0, since: 0.0)
@@ -336,7 +349,8 @@ final class Capture {
   }
 
   /// Return-edge check while driven; called for local moves and for injected relative moves.
-  func checkReturn(_ p: CGPoint, dx: Double, dy: Double) {
+  func checkReturn(_ p: CGPoint, dx: Double, dy: Double, flags: CGEventFlags) {
+    guard !returnRequiresModifier || allowsCrossing(required: crossingModifier, flags: flags) else { ret.push = 0; return }
     guard let side = returnSide, let off = push(&ret, p, dx, dy, side, returnResistance, returnZones) else { return }
     returnSide = nil
     lastCross = now()
@@ -463,6 +477,9 @@ final class Capture {
 
   /// Returns true to swallow.
   private func onFlags(_ e: CGEvent) -> Bool {
+    if capturing && capMouse && crossingWatch {
+      ev(["t": "k.mod", "flags": crossingBits(e.flags)])
+    }
     let kc = UInt16(e.getIntegerValueField(.keyboardEventKeycode))
     let flags = e.flags.rawValue
     if let dev = hkKeys[kc] { // the hotkey
@@ -656,7 +673,7 @@ final class Capture {
     if type == .leftMouseDown { dragPbCount = NSPasteboard(name: .drag).changeCount }
     // A file drag pushed through the crossing edge carries the files over.
 #if MULTI
-    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles,
+    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles, allowsCrossing(required: crossingModifier, flags: e.flags),
        let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
       let paths = draggedFiles()
       log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
@@ -669,7 +686,7 @@ final class Capture {
       }
     }
 #else
-    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles,
+    if type == .leftMouseDragged, !capturing, edgeEnabled, dragFiles, allowsCrossing(required: crossingModifier, flags: e.flags),
        let off = push(&edge, e.location, dx, dy, side, resistance, edgeZones) {
       let paths = draggedFiles()
       log("edge: drag through the edge, \(paths.count) file(s) on the drag pasteboard")
@@ -677,7 +694,7 @@ final class Capture {
         startCapture(mouse: true, keyboard: cfgKeyboard)
         DragIn.shared.swallowLocalDrag(at: e.location) // Finder's drag ends here, quietly
         Flash.shared.leave(at: e.location, side: side)
-        emit(["event": "edge", "offset": off, "drag": ["paths": paths]])
+        emit(["event": "edge", "offset": off, "crossingFlags": crossingBits(e.flags), "drag": ["paths": paths]])
         return true
       }
     }
@@ -686,7 +703,7 @@ final class Capture {
       // The system's own button state: counting downs and ups here stuck at 1 when the tap missed
       // an up (disabled by a timeout meanwhile), and nothing crossed again until a restart.
 #if MULTI
-      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0 || grab.grabbing,
+      if !capturing, edgeEnabled, allowsCrossing(required: crossingModifier, flags: e.flags), NSEvent.pressedMouseButtons == 0 || grab.grabbing,
          let hit = edgeCrossing(e.location, dx: dx, dy: dy) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
         Flash.shared.leave(at: e.location, side: hit.side)
@@ -697,18 +714,18 @@ final class Capture {
         return true
       }
 #else
-      if !capturing, edgeEnabled, NSEvent.pressedMouseButtons == 0 || grab.grabbing,
+      if !capturing, edgeEnabled, allowsCrossing(required: crossingModifier, flags: e.flags), NSEvent.pressedMouseButtons == 0 || grab.grabbing,
          let off = push(&edge, e.location, dx, dy, side, resistance, edgeZones) {
         startCapture(mouse: true, keyboard: cfgKeyboard) // capture first, so no motion leaks
         Flash.shared.leave(at: e.location, side: side)
-        var out: [String: Any] = ["event": "edge", "offset": off]
+        var out: [String: Any] = ["event": "edge", "offset": off, "crossingFlags": crossingBits(e.flags)]
         let moving = grab.take(keepUp: true)
         if moving != 0 { out["moving"] = moving; out["movingPid"] = WindowGrab.shared.pid } // a grabbed window goes along
         emit(out)
         return true
       }
 #endif
-      checkReturn(e.location, dx: dx, dy: dy)
+      checkReturn(e.location, dx: dx, dy: dy, flags: e.flags)
     }
     return false
   }

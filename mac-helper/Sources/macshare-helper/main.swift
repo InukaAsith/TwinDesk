@@ -77,6 +77,7 @@ func handle(_ line: String) {
   switch cmd {
   case "kvmConfig":
     Capture.shared.edgeZones = zones(msg["zones"])
+    Capture.shared.crossingModifier = (msg["crossingModifier"] as? String) ?? ""
     Capture.shared.takeBack = (msg["takeBack"] as? Bool) ?? true
     guard Capture.shared.startTap() else { return replyError(id, "event tap failed (Accessibility / Input Monitoring)") }
     Flash.shared.prepare()
@@ -108,6 +109,10 @@ func handle(_ line: String) {
     reply(id)
   case "keepalive":
     break
+  case "crossingWatch":
+    Capture.shared.watchCrossingFlags()
+  case "crossingFlags":
+    Capture.shared.remoteCrossingFlags = crossingFlags((msg["flags"] as? Int) ?? 0)
   case "place":
     let center = (msg["center"] as? Bool) == true
     let side = center ? nil : msg["side"] as? String
@@ -118,6 +123,7 @@ func handle(_ line: String) {
     reply(id)
   case "armReturn":
     Capture.shared.returnZones = zones(msg["zones"])
+    Capture.shared.returnRequiresModifier = (msg["requireModifier"] as? Bool) ?? false
 #if MULTI
     let sides = (msg["sides"] as? [String]) ?? [(msg["side"] as? String) ?? "right"]
     Capture.shared.armReturn(on: (msg["on"] as? Bool) ?? false, sides: sides, resistance: num("resistancePx", 120))
