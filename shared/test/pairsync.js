@@ -125,4 +125,100 @@ function pcs(a, b, savedA, savedB, only) {
   assert.deepStrictEqual(sent, [{ t: P.T.PAIR_SYNC, key: 'rezume', value: true }], 'on here reaches the phone');
 }
 
+const meshSettings = () => ({
+  pairSync: {},
+  clipboard: { send: false, receive: false },
+  monitor: { pacing: 'fast' },
+  kvm: { gestures: true, ble: true, keyboard: true, speed: 1, reverseScroll: false },
+});
+
+// One mesh hub node: the facade follows selection; pair.sync on the bus reaches PairSync for every device.
+function meshNode(selected, roles) {
+  const selectedRef = { id: selected };
+  const typeFns = new Map();
+  const peerFns = new Map();
+  const outbound = {};
+  const bus = {
+    selectedId: () => selectedRef.id,
+    on(type, fn) {
+      if (!typeFns.has(type)) typeFns.set(type, []);
+      typeFns.get(type).push(fn);
+    },
+    onPeer(ev, fn) {
+      if (!peerFns.has(ev)) peerFns.set(ev, []);
+      peerFns.get(ev).push(fn);
+    },
+    send(id, m) {
+      outbound[id] = outbound[id] || [];
+      outbound[id].push(JSON.parse(JSON.stringify(m)));
+    },
+  };
+  const settings = meshSettings();
+  const link = {
+    _handlers: {},
+    on(type, fn) { link._handlers[type] = fn; },
+    send: () => {},
+    snapshot: () => ({ session: { id: selectedRef.id } }),
+    status: { state: 'connected' },
+    peerOs: P.OS.MAC,
+    hosting: false,
+  };
+  const sync = new PcSync({
+    link, settings, save() {}, only: ['clipboard'],
+    set: (sec, part) => { Object.assign(settings[sec], part); sync.check(); },
+    bus, peerRole: (id) => roles[id], peerOs: () => P.OS.MAC,
+  });
+  link._handlers.welcome && link._handlers.welcome();
+  return {
+    settings,
+    sync,
+    bus,
+    select(id) {
+      selectedRef.id = id;
+      link._handlers.welcome && link._handlers.welcome();
+    },
+    fromBus(fromId, m) {
+      const fns = typeFns.get(P.T.PAIR_SYNC) || [];
+      for (const fn of fns) fn(m, fromId);
+    },
+    welcome(id) {
+      const fns = peerFns.get('welcome') || [];
+      for (const fn of fns) fn(id);
+    },
+    facadeSync(m) {
+      if (link._handlers[P.T.PAIR_SYNC]) link._handlers[P.T.PAIR_SYNC](m);
+    },
+    outbound,
+  };
+}
+
+// A flips a switch while another device is selected: stash only; selecting A restores it.
+{
+  const n = meshNode('C', { A: 'guest', C: 'guest' });
+  n.fromBus('A', { t: P.T.PAIR_SYNC, feature: 'clipboard', dir: 'out', on: true });
+  assert.strictEqual(n.settings.clipboard.receive, false, 'live switches stay with the selected pair');
+  assert.strictEqual(n.settings.pairSync.A.clipboard.in, true);
+  n.select('A');
+  assert.strictEqual(n.settings.clipboard.receive, true, 'selecting A applies the stashed pair');
+}
+
+// Host pushes saved values on the bus when a non-selected guest connects.
+{
+  const n = meshNode('C', { A: 'guest', C: 'guest' });
+  n.settings.pairSync.A = { clipboard: { out: true, in: false }, values: {} };
+  n.welcome('A');
+  assert.strictEqual(n.outbound.A.length, 1);
+  assert.deepStrictEqual(n.outbound.A[0], { t: P.T.PAIR_SYNC, all: n.settings.pairSync.A });
+}
+
+// The selected device still uses the facade; the bus path does not double-handle.
+{
+  const n = meshNode('A', { A: 'guest' });
+  n.sync.last = n.sync.values();
+  n.fromBus('A', { t: P.T.PAIR_SYNC, feature: 'clipboard', dir: 'out', on: true });
+  assert.strictEqual(n.settings.clipboard.receive, false, 'bus ignores the selected device');
+  n.facadeSync({ t: P.T.PAIR_SYNC, feature: 'clipboard', dir: 'out', on: true });
+  assert.strictEqual(n.settings.clipboard.receive, true);
+}
+
 console.log('pairsync: passed');

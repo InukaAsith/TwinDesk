@@ -24,6 +24,7 @@ final class Core: ObservableObject, LinkEvents {
     lazy var sync = PairSync(self)
     lazy var clip = Clip(self)
     lazy var notifs = Notifs(self)
+    lazy var history = History(self) // the clipboard's and notifications' history, kept encrypted when asked
     lazy var files = Files(self)
     lazy var fclip = FileClip(self)
     lazy var info = PhoneInfo(self)
@@ -40,6 +41,9 @@ final class Core: ObservableObject, LinkEvents {
     lazy var ble = Ble(self)
     lazy var shareIn = ShareIn(self)
     lazy var mic = Mic(self)
+    lazy var deck = Deck(self) // the Deck: tiles here the computer runs, while it offers it (Deck.swift)
+    lazy var signer = Signer(self) // TwinDesk signed with the person's own Apple ID, by the computer (SignerFeature.swift)
+    lazy var updates = Updates(self) // new releases on GitHub (About › Updates)
     lazy var peer = Peer(self) // another phone: its own link, one session with the computer's (Peer.swift)
 
     // Published copies for the UI (main thread).
@@ -79,15 +83,16 @@ final class Core: ObservableObject, LinkEvents {
     func quietCheck() {
         let busy = inFront || screen.viewing || screen.sharing || remote.active || mic.running || mirror.sharing
         if busy != busySnapshot { busySnapshot = busy; link.nudge() }
-        discovery.setSlow(!inFront && link.connected) // off screen and connected: a beacon a minute
+        discovery.setSlow(!inFront) // off screen: a beacon a minute, no subnet sweeps (the radio stays asleep)
     }
 
     func setFront(_ on: Bool) {
         inFront = on
-        if on { offScreenWork?.cancel(); offScreenWork = nil }
+        if on { offScreenWork?.cancel(); offScreenWork = nil; unfocused = false; Notifier.shared.cancel("net.need") }
         quietCheck()
         if on {
             link.wake()
+            updates.onScreen()
             if let h = resumeLater {
                 resumeLater = nil
                 if link.state == "idle", link.pair == nil, !peer.connected {
@@ -108,7 +113,7 @@ final class Core: ObservableObject, LinkEvents {
         discovery.wantSweep = { [unowned self] in !self.link.connected }
         discovery.onChange = { [unowned self] in self.refresh(); DispatchQueue.main.async { self.offBle(); self.ble.start() } }
         discovery.onInvite = { [unowned self] f in self.onInvite(f) }
-        features = [sync, clip, notifs, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic]
+        features = [sync, clip, notifs, signer, files, fclip, info, mirror, screen, sound, remote, media, dev, smb, hub, camera, usb, ble, shareIn, mic, deck]
         link.bleRx = { [unowned self] in self.ble.lastDown }
     }
 
@@ -153,7 +158,7 @@ final class Core: ObservableObject, LinkEvents {
             self.rttMs = l.rttMs
             self.nearby = self.discovery.list()
             self.hosts = self.store.hosts().sorted { $0.lastSeen > $1.lastSeen }
-            self.discovery.setSlow(!self.inFront && l.connected)
+            self.discovery.setSlow(!self.inFront)
         }
         if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
     }
@@ -169,9 +174,18 @@ final class Core: ObservableObject, LinkEvents {
         if usb.computerId == h.id { return connectWired(h, user: true) } // on the cable to it: through the cable
         resumeUntil = .distantPast
         var h = h
+        // Linked over Bluetooth and not on this network (or no network at all: discovery keeps what it
+        // saw a while after Wi-Fi goes off): the session through it.
+        if ble.has(h.id), discovery.get(h.id) == nil || Discovery.interfaces().isEmpty { return connectBle(h) }
         if let f = discovery.get(h.id) { h.address = f.address; h.port = f.port; store.putHost(h) }
-        // Not seen on this network but linked over Bluetooth: the session through it.
-        else if ble.has(h.id) { return connectBle(h) }
+        // Saved at the cable's address (paired over Bluetooth or the cable, never seen on a network)
+        // and the cable isn't in: 127.0.0.1 would only reach our own cable listener, a TLS error each
+        // time. It waits for its Bluetooth link instead (linking connects it: bleLinked).
+        else if h.address == "127.0.0.1" || h.address.isEmpty {
+            NSLog("TwinDesk: %@ not on this network or the cable: waiting for Bluetooth", h.name)
+            ble.start()
+            return
+        }
         if h.address == "127.0.0.1" { usb.aim(h.id) } // saved at the cable's address: only that computer's cable
         link.connect(h)
     }
@@ -181,13 +195,30 @@ final class Core: ObservableObject, LinkEvents {
         resumeUntil = .distantPast
         ble.openPipe(h.id) { [weak self] port in
             guard let self = self else { return }
-            guard let port = port else { return self.link.connect(h) } // no link after all: try the network
+            guard let port = port else { // no link after all: the network, if it was ever seen on one
+                if h.address != "127.0.0.1", !h.address.isEmpty { self.link.connect(h) }
+                return
+            }
             var b = h
             b.address = "127.0.0.1"
             b.port = port
+            // Connected on the network: the session moves onto the pipe without ending.
+            if self.link.connected, self.link.host?.id == h.id {
+                self.link.move(to: "127.0.0.1", port: port, ble: true) { ok in
+                    if !ok { NSLog("TwinDesk: the session stays on the network (the move onto Bluetooth didn’t work)") }
+                }
+                return
+            }
             NSLog("TwinDesk: session through Bluetooth")
             self.link.connect(b, force: true, ble: true)
         }
+    }
+
+    // A paired computer just linked over Bluetooth: connected through it if we're waiting for it
+    // (not on this network: offBle moves it onto the network as soon as it's seen there).
+    func bleLinked(_ id: String) {
+        guard !link.connected, link.state != "connecting", discovery.get(id) == nil else { return }
+        bleInvite(id)
     }
 
     // The computer asked over Bluetooth (its invite on CTRL, which also wakes the app): back on it
@@ -212,41 +243,77 @@ final class Core: ObservableObject, LinkEvents {
     // (Share Screen here, the computer's or a phone's screen watched here), the computer's sound
     // playing here, the camera, files, the microphone.
     private var networkBusy: Bool {
-        mirror.sharing || screen.viewing || sound.playing || camera.on || files.busy || mic.running || peer.screenOn
+        mirror.sharing || mirror.starting || screen.viewing || sound.playing || camera.on || files.busy || mic.running || peer.screenOn
     }
 
-    // Off screen for a while first (8 s): a quick look at another app and back costs no move.
+    // Off screen (closed, in the background, locked) or out of focus: onto Bluetooth at once. The
+    // session moves without ending (Link.move), so it costs nothing to go and come back. Out of focus
+    // (the scene inactive: an iPad window that isn't the one in use, the app switcher) waits a moment,
+    // so Control Center or a notification pulled down over TwinDesk doesn't move it.
     private var offScreenWork: DispatchWorkItem?
+    private var unfocused = false
     func backgrounded() {
+        offScreenWork?.cancel()
+        offScreenWork = nil
+        moveOffScreen()
+    }
+
+    func outOfFocus() {
+        unfocused = true
         offScreenWork?.cancel()
         let w = DispatchWorkItem { [weak self] in self?.moveOffScreen() }
         offScreenWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: w)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: w)
     }
 
     private func moveOffScreen() {
-        guard !inFront, Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
+        guard !inFront || unfocused, Background.shared.enabled, bleOffScreen, link.connected, !link.viaBle, link.pair == nil, let h = link.host, ble.has(h.id),
               !Background.shared.active, !networkBusy else { return }
         NSLog("TwinDesk: off screen: the session onto Bluetooth")
         connectBle(h)
     }
 
+    // The computer holds files back until the session is on Wi-Fi (net.need, netlink.js): on screen,
+    // the session moves now; off screen, a notification: opening TwinDesk moves it (wake).
+    private func computerNeedsNetwork(_ m: JSON) {
+        guard link.viaBle, link.connected, let h = link.host else { return }
+        if (inFront && !unfocused) || mirror.sharing { return needNetwork() } // sharing this screen: its picture needs it now
+        let title = m.str("why") == "screen" ? tr("{name} wants to show its screen", ["name": h.name]) : tr("{name} is sending files", ["name": h.name])
+        Notifier.shared.note("net.need", title, tr("Open TwinDesk to receive them over Wi-Fi."), sound: true)
+    }
+
     // Something that needs the network started while on Bluetooth (Share Screen, files): back on it.
     func needNetwork() {
         guard link.viaBle, link.connected else { return }
+        wantNetwork = true
         discovery.refresh()
         offBle()
     }
+    private var wantNetwork = false // needNetwork asked: off Bluetooth even off screen, once it's seen
 
-    // On Bluetooth and the computer showed up on the network: the session moves back to it.
+    // On Bluetooth and the computer showed up on the network: the session moves back to it. Only
+    // once discovery sees it here: its saved address on another network (or with Wi-Fi off) broke a
+    // working Bluetooth session for one that can't connect, again at every discovery change.
+    // Off screen (General › Background: Bluetooth) it stays on Bluetooth unless something needs the
+    // network (needNetwork).
     private func offBle() {
-        guard link.viaBle, link.connected, let h = link.host, let saved = store.host(h.id) else { return }
+        guard link.viaBle, link.connected, let h = link.host, let saved = store.host(h.id), let f = discovery.get(h.id) else { return }
+        guard wantNetwork || (inFront && !unfocused) || !bleOffScreen || !Background.shared.enabled else { return }
+        wantNetwork = false
         var w = saved
-        // Where discovery last saw it, else where it was before Bluetooth.
-        if let f = discovery.get(h.id) { w.address = f.address; w.port = f.port; store.putHost(w) }
+        w.address = f.address
+        w.port = f.port
+        store.putHost(w)
         guard !w.address.isEmpty, w.address != "127.0.0.1" else { return }
         NSLog("TwinDesk: back on the network from Bluetooth")
-        link.connect(w, force: true)
+        // Without ending the session (what's under way on it carries on); a computer that can't
+        // resume (an older one): a new session there, as before.
+        link.move(to: w.address, port: w.port, ble: false) { [weak self] ok in
+            if ok { self?.mirror.networkBack(); return }
+            guard let self = self, !ok, self.link.viaBle, self.link.connected, self.link.host?.id == w.id else { return }
+            if self.link.resumable { return } // it can, the network just didn't answer: stays on Bluetooth
+            self.link.connect(w, force: true)
+        }
     }
 
     // Onto the USB cable (Usb): the same computer at 127.0.0.1, the session moved there.
@@ -315,7 +382,7 @@ final class Core: ObservableObject, LinkEvents {
         guard !id.isEmpty, port > 0, !addrs.isEmpty else { return false }
         DispatchQueue.global().async {
             guard let address = addrs.first(where: { Self.reachable($0, port) }) else {
-                DispatchQueue.main.async { self.message = "Can’t reach \(name.isEmpty ? "the computer" : name). Is the \(Device.word) on the same network?" }
+                DispatchQueue.main.async { self.message = tr("Can’t reach {name}. Is the {device} on the same network?", ["name": name.isEmpty ? tr("the computer") : name, "device": Device.word]) }
                 return
             }
             DispatchQueue.main.async {
@@ -409,6 +476,8 @@ final class Core: ObservableObject, LinkEvents {
 
     func linkMessage(_ t: String, _ m: JSON) {
         DispatchQueue.main.async {
+            if t == "net.need" { return self.computerNeedsNetwork(m) }
+            if t.hasPrefix("net.") { return } // the computers' Wi-Fi links (netlink.js): nothing more here
             for f in self.features where f.onMessage(t, m) { return }
         }
     }
@@ -439,7 +508,11 @@ final class Core: ObservableObject, LinkEvents {
             return
         }
         let until = resumeUntil
-        if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) } else { connect(store.host(h.id) ?? h) }
+        if usb.computerId == h.id, let fresh = store.host(h.id) { connectWired(fresh) }
+        // Dropped and linked over Bluetooth: back through it at once (offBle moves it onto the network
+        // again as soon as discovery sees the computer there).
+        else if ble.has(h.id) { connectBle(store.host(h.id) ?? h) }
+        else { connect(store.host(h.id) ?? h) }
         resumeUntil = until
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.resume() }
     }

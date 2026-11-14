@@ -58,10 +58,23 @@ UI.tab({
       if (!confirmBig) { confirmBig = true; bigRemove.textContent = tr('Remove from the phone?'); bigRemove.classList.add('danger'); return; }
       remove([viewing.id]);
     });
+    // Copy and Share: the picture shown (the phone's large one, up to 1600 px), once it's here.
+    let bigData = ''; // that picture, a data: URL ('' while it comes)
+    const bigCopy = UI.button(tr('Copy'), () => {
+      if (!viewing || !bigData) return;
+      Promise.resolve(UI.api.hub({ do: 'copyImage', data: bigData })).then(() => {
+        bigCopy.textContent = tr('Copied');
+        setTimeout(() => { bigCopy.textContent = tr('Copy'); }, 1500);
+      }).catch(() => {});
+    });
+    const bigShare = UI.button(tr('Share'), () => {
+      if (!viewing || !bigData) return;
+      UI.api.hub({ do: 'shareImage', data: bigData, name: viewing.name });
+    });
     const closeBtn = UI.button(tr('Close'), () => view(null));
     const viewer = el('div', { class: 'hub-viewer', hidden: true }, [
       el('div', { class: 'hub-viewer-stage' }, [prev, bigImg, next]),
-      el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigRemove, bigSave, closeBtn]),
+      el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigRemove, bigCopy, bigShare, bigSave, closeBtn]),
     ]);
     body.append(top.el, wrap, viewer);
 
@@ -197,6 +210,8 @@ UI.tab({
       bigRemove.textContent = tr('Remove');
       bigRemove.classList.remove('danger');
       bigRemove.hidden = !canRemove();
+      bigData = '';
+      paintBig();
       if (!it) return;
       if (thumbs.get(it.id)) bigImg.src = thumbs.get(it.id); else bigImg.removeAttribute('src');
       bigName.textContent = it.name;
@@ -205,6 +220,14 @@ UI.tab({
       const i = items.indexOf(it);
       prev.disabled = i <= 0;
       next.disabled = i < 0 || i >= items.length - 1;
+    }
+
+    // Copy and Share: photos only (a video's is a still), Share where this computer has one.
+    function paintBig() {
+      const photo = !!viewing && !viewing.video;
+      bigCopy.hidden = !photo;
+      bigShare.hidden = !photo || !(UI.state && UI.state.hub && UI.state.hub.shareSheet);
+      bigCopy.disabled = bigShare.disabled = !bigData;
     }
 
     function step(d) {
@@ -250,6 +273,8 @@ UI.tab({
     UI.hubOn('media.view', (m) => {
       if (!viewing || viewing.id !== m.id || !m.data) return;
       bigImg.src = m.data;
+      bigData = m.data;
+      paintBig();
     });
 
     let loaded = false;

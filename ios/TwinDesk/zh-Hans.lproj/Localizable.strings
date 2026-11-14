@@ -1,0 +1,12 @@
+/* Shortcuts: the actions’ titles and descriptions (iOS shows them in the iPhone’s language). */
+"Send Clipboard to Computer" = "将剪贴板发送到电脑";
+"Sends what you copied on this iPhone to the connected computer." = "将你在此 iPhone 上复制的内容发送到已连接的电脑。";
+"Save Files Copied on Computer" = "保存电脑上复制的文件";
+"Brings the files copied on the computer (⌃⌥C there) to Files › TwinDesk." = "将电脑上复制的文件（在电脑上按 ⌃⌥C）带到“文件 › TwinDesk”。";
+"Connect to Computer" = "连接到电脑";
+"Send Files to Computer" = "将文件发送到电脑";
+"Sends files or photos to the connected computer (its Downloads)." = "将文件或照片发送到已连接的电脑（其“下载”文件夹）。";
+Files = "文件";
+"Show Computer’s Screen" = "显示电脑的屏幕";
+"Play or Pause on Computer" = "在电脑上播放或暂停";
+"Lock Computer" = "锁定电脑";

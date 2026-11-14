@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('macshare', {
   refreshFound: call('refreshFound'),
   copyText: call('copyText'),
   deviceDo: call('deviceDo'),
+  iosSign: call('iosSign'), iosSignIpa: call('iosSignIpa'), // TwinDesk iPhone (shared/iossign.js)
   setOverview: call('setOverview'),
   setChats: call('setChats'), // Messages: chat apps in one inbox // General › Overview: what it shows
   qrPair: call('qrPair'),
@@ -55,8 +56,11 @@ contextBridge.exposeInMainWorld('macshare', {
   setClipboard: call('setClipboard'),
   copyHistory: call('copyHistory'),
   clearHistory: call('clearHistory'),
+  history: call('history'),
   setTab: call('setTab'),
   setMulti: call('setMulti'),
+  setModules: call('setModules'), // General › Modules
+  deckSave: call('deckSave'), deckTry: call('deckTry'), deckApps: call('deckApps'), deckState: call('deckState'), deckRun: call('deckRun'), deckPick: call('deckPick'), // the Deck page
   relaunch: call('relaunch'),
   setEncoder: call('setEncoder'),
   setAudio: call('setAudio'),

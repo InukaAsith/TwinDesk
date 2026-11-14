@@ -33,6 +33,8 @@ final class Files: Feature {
         var pulling = false
         var heldEnd: JSON?
         var fx2Hashes: [String]? // fx2: the ranges' hashes, once every one is in (file.end {fx2} must match)
+        var stop2: (() -> Void)? // the fx2 fetch under way
+        var tries = 0 // which fetch is the live one (an older one's end is ignored)
         init(id: String, batch: String, name: String, rel: String, size: Int64, url: URL, handle: FileHandle) {
             self.id = id; self.batch = batch; self.name = name; self.rel = rel; self.size = size; self.url = url; self.handle = handle
         }
@@ -160,7 +162,7 @@ final class Files: Feature {
             if drop == "paste" && !expected.contains(batchId) { return refuse(id, "not_expected") }
             expected.remove(batchId)
             let count = max(1, m.int("count", 1))
-            batches.insert(Batch(id: batchId, dir: "in", name: count == 1 ? name : "\(count) items", count: count, bytes: m.int64("bytes", size)), at: 0)
+            batches.insert(Batch(id: batchId, dir: "in", name: count == 1 ? name : trCount(count, "item"), count: count, bytes: m.int64("bytes", size)), at: 0)
         }
         // Keep both: "name 2.ext" when one is already there.
         let target0 = targets[batchId]
@@ -187,6 +189,7 @@ final class Files: Feature {
 
     private func chunk(_ m: JSON) {
         guard let f = incoming[m.str("id", max: 128)] else { return }
+        if f.pulling && f.stop2 != nil && f.got == 0 { drop2(f) } // the computer gave up on fx2 (no bytes in time): its chunks instead
         if f.pulling { return abort(f.id, "out of order", tell: true) }
         guard let d = Data(base64Encoded: m.str("data", max: Proto.fileChunkBytes * 2)), m.int("seq") == f.seq,
               f.got + Int64(d.count) <= f.size else { return abort(f.id, "out of order", tell: true) }
@@ -226,6 +229,7 @@ final class Files: Feature {
     private func pull(_ m: JSON) {
         let id = m.str("id", max: 128)
         if m.has("fx2") { return pull2(id, m.int64("size", -1)) }
+        if let f = incoming[id], f.pulling, f.stop2 != nil, f.got == 0 { drop2(f) } // fx2 given up on by the computer: fx now
         guard let f = incoming[id], !fxBroken, !f.pulling, f.got == 0, f.seq == 0,
               let req = core.link.fxRequest(id, method: "GET") else {
             core.send(msg(Proto.T.filePull, ["id": id, "failed": true]))
@@ -265,6 +269,21 @@ final class Files: Feature {
         task.resume()
     }
 
+    // The computer gave up on the fx2 fetch before a byte came (fastfile.js PULL_MS) and went the fx or
+    // the chunk way: that fetch is stopped and forgotten, the file afresh for the new way. Before,
+    // a still-waiting fetch made the fallback fail too ("out of order"): the first send failed.
+    private func drop2(_ f: Incoming) {
+        NSLog("TwinDesk: fast file (fx2) %@: the computer went another way", f.name)
+        f.tries += 1
+        let stop = f.stop2
+        f.stop2 = nil
+        f.pulling = false
+        fx2Broken = true // as the computer: the fx way for the rest of the session
+        stop?()
+        try? f.handle.truncate(atOffset: 0)
+        try? f.handle.seek(toOffset: 0)
+    }
+
     // file.pull {fx2, size}: its ranges fetched at once, each written at its offset. {failed, fx2}
     // when we can't (before a byte): the computer sends it the fx way.
     private func pull2(_ id: String, _ size: Int64) {
@@ -274,12 +293,15 @@ final class Files: Feature {
             return
         }
         f.pulling = true
-        Fx2.get(to, id: id, url: f.url, size: f.size, progress: { [weak self] n in
-            guard let self = self, self.incoming[f.id] === f else { return }
+        f.tries += 1
+        let attempt = f.tries
+        f.stop2 = Fx2.get(to, id: id, url: f.url, size: f.size, progress: { [weak self] n in
+            guard let self = self, self.incoming[f.id] === f, f.tries == attempt else { return }
             self.addGot(f.batch, n)
         }) { [weak self] r in
-            guard let self = self else { return }
+            guard let self = self, f.tries == attempt else { return } // dropped: the computer went another way
             f.pulling = false
+            f.stop2 = nil
             guard self.incoming[f.id] === f else { return }
             switch r {
             case .success(let hs):
@@ -331,7 +353,7 @@ final class Files: Feature {
                 t.done(b.ok)
             } else if b.dir == "in" {
                 core.send(msg(Proto.T.filesDone, ["batch": b.id, "ok": b.ok, "where": "TwinDesk/Received", "files": b.done]))
-                Notifier.shared.filesIn(b.name, ok: b.ok, from: core.link.host?.name ?? "the computer")
+                Notifier.shared.filesIn(b.name, ok: b.ok, from: core.link.host?.name ?? tr("the computer"))
             }
         }
         core.changed()
@@ -404,7 +426,7 @@ final class Files: Feature {
             items.append((u, name, size))
         }
         let bytes = items.reduce(Int64(0)) { $0 + $1.2 }
-        batches.insert(Batch(id: batch, dir: "out", name: items.count == 1 ? items[0].1 : "\(items.count) items", count: items.count, bytes: bytes), at: 0)
+        batches.insert(Batch(id: batch, dir: "out", name: items.count == 1 ? items[0].1 : trCount(items.count, "item"), count: items.count, bytes: bytes), at: 0)
         for (index, it) in items.enumerated() {
             let id = UUID().uuidString
             let leaf = (it.1 as NSString).lastPathComponent
@@ -549,7 +571,7 @@ final class Files: Feature {
         batches[i].finished = true
         batches[i].ok = m.bool("ok")
         batches[i].done = batches[i].count
-        Notifier.shared.filesOut(batches[i].name, ok: batches[i].ok, to: core.link.host?.name ?? "the computer")
+        Notifier.shared.filesOut(batches[i].name, ok: batches[i].ok, to: core.link.host?.name ?? tr("the computer"))
         core.changed()
     }
 }
@@ -567,7 +589,7 @@ final class FileClip: Feature {
             let items = (m["items"] as? [JSON]) ?? []
             let names = items.prefix(3).map { $0.str("name", max: 100) }
             offer = (m.str("id", max: 128), m.int("files", items.count), m.int64("bytes"), names)
-            Notifier.shared.fclip(id: offer!.id, names: names, files: offer!.files, from: core.link.host?.name ?? "the computer")
+            Notifier.shared.fclip(id: offer!.id, names: names, files: offer!.files, from: core.link.host?.name ?? tr("the computer"))
             core.changed()
         case Proto.T.fclipGone:
             if offer?.id == m.str("id", max: 128) { offer = nil; Notifier.shared.cancelFclip(); core.changed() }

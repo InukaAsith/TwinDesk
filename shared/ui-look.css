@@ -32,3 +32,6 @@
    list just below it. The title's background is the page's, so the cards pass under it cleanly. */
 .page:has(.sections) .page-head { position: sticky; top: 0; z-index: 4; background: var(--content); }
 .page:has(.sections) .sec-nav { top: 84px; }
+
+/* General › Modules: a module switched since TwinDesk started, beside its switch */
+.mod-restart { color: var(--bad); font-weight: 600; font-size: 12.5px; white-space: nowrap; }

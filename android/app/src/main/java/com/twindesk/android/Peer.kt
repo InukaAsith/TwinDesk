@@ -58,9 +58,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private val xfer = Executors.newCachedThreadPool { r -> Thread(r, "td-peer-x").apply { isDaemon = true } }
 
     // ---- settings ----
-    // Connect with Android itself (on by default): off, other phones don't see this one (Discovery's
+    // Connect with Android itself (off until turned on): off, other phones don't see this one (Discovery's
     // peerOn), nothing hosts, a session with a phone ends.
-    val on get() = store.flag("peer.on", true)
+    val on get() = store.flag("peer.on", false)
     fun setOn(v: Boolean) {
         store.setFlag("peer.on", v)
         core.discovery.peerOn = v
@@ -82,6 +82,29 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun setClipOn(v: Boolean) { store.setFlag("peer.clip", v); core.changed() }
     val notifsOn get() = store.flag("peer.notifs", true)
     fun setNotifsOn(v: Boolean) { store.setFlag("peer.notifs", v); core.changed() }
+    val screenSound get() = store.flag("peer.screen.sound", true)
+    fun setScreenSound(v: Boolean) {
+        store.setFlag("peer.screen.sound", v)
+        if (v) PeerScreen.ensureAudioPlayer() else PeerScreen.stopAudio()
+        PeerScreen.wantSound(this, v)
+        core.changed()
+    }
+    val shareSound get() = store.flag("peer.share.sound", true)
+    fun setShareSound(v: Boolean) {
+        store.setFlag("peer.share.sound", v)
+        if (!v) PeerScreen.stopStandaloneSound(this)
+        else PeerScreen.capture?.update()
+        core.changed()
+    }
+    val isCapturingAudio get() = PeerScreen.capture?.capturingAudio == true
+    val isPlayingAudio get() = PeerScreen.audioPlayer?.isPlaying == true
+    val soundError get() = PeerScreen.soundError
+
+    fun peerAddress(): String? = when (role) {
+        "host" -> hostWs?.address
+        "guest" -> link.endpoint()?.first
+        else -> null
+    }
 
     // ---- the session ----
     @Volatile var role = "" ; private set // "" | host | guest
@@ -96,13 +119,13 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun can(c: String): Boolean = c in (peerCaps ?: defaultCaps(peerOs))
     // What this phone offers the other: the same names in our peer.info.
     fun myCaps(): Set<String> = buildSet {
-        addAll(listOf("clip", "notifs", "files", "screen", "photos"))
+        addAll(listOf("clip", "notifs", "files", "screen", "photos", "sound"))
         if (core.hub.perm("messages") != "none") add("messages")
         if (core.hub.perm("files") != "none") add("fs")
     }
     // A phone older than caps: an iPhone has no messages or storage to browse; an Android phone has all.
     private fun defaultCaps(os: String) = if (os == "ios") setOf("clip", "notifs", "files", "screen", "photos")
-        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs")
+        else setOf("clip", "notifs", "files", "screen", "photos", "messages", "fs", "sound")
     @Volatile var message = ""; private set
 
     // ---- pairing, as the host (mac/pairing.js) ----
@@ -126,6 +149,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun start() {
         core.discovery.peerOn = on
         core.discovery.onPeerAsk = { f, m -> main.post { onAsk(f, m) } }
+        link.busyHere = {
+            PeerScreen.screenActive || PeerScreen.standaloneSoundActive || PeerScreen.viewer != null || inFiles.isNotEmpty() || outFiles.isNotEmpty()
+        }
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         ctx.mainExecutor.execute { cm.addPrimaryClipChangedListener { clipNow() } }
         core.bg.scheduleWithFixedDelay({ runCatching { tick() }.onFailure { Log.e("TwinDesk", "peer", it) } }, 1, 1, TimeUnit.SECONDS)
@@ -151,13 +177,17 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         ticks++
         val now = System.currentTimeMillis()
         // The host's liveness: the guest pings every second (Link).
-        hostWs?.let { w -> if (now - w.lastRx > Proto.TIMEOUT_MS) { Log.i("TwinDesk", "peer: $peerName stopped answering"); w.close() } else w.send(msg(Proto.T.PING, "ts" to now).toString()) }
-        pairing?.let { p -> if (now - p.at > 60_000) { fail(p.ws, Proto.E.PAIR_TIMEOUT, "Pairing timed out"); pairing = null; core.changed() } }
+        hostWs?.let { w ->
+            val active = PeerScreen.screenActive || PeerScreen.standaloneSoundActive || PeerScreen.viewer != null
+            val timeout = if (active) 25_000L else Proto.TIMEOUT_MS
+            if (now - w.lastRx > timeout) { Log.i("TwinDesk", "peer: $peerName stopped answering"); w.close() } else w.send(msg(Proto.T.PING, "ts" to now).toString())
+        }
+        pairing?.let { p -> if (now - p.at > 60_000) { pairing = null; pairFailed(p.ws); fail(p.ws, Proto.E.PAIR_TIMEOUT, "Pairing timed out"); core.changed() } }
         // Waiting for the other phone to host: it's in its beacon (or peer.hosting) now.
         if (waitingFor.isNotEmpty()) {
             val f = core.discovery.phones[waitingFor]
             if (f != null && f.port > 0) { waitingFor = ""; main.post { connect(f) } }
-            else if (now > waitUntil) { waitingFor = ""; message = "${f?.name ?: "That phone"} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there."; core.changed() }
+            else if (now > waitUntil) { waitingFor = ""; message = tr("{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.", "name" to (f?.name ?: tr("That phone"))); core.changed() }
         }
         if (ticks % 5 == 0) hosting()
     }
@@ -262,22 +292,22 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
             Proto.T.PAIR_START -> pairStart(ws, m)
             Proto.T.PAIR_REVEAL -> pairing?.takeIf { it.ws === ws }?.let { p ->
                 val nonce = m.optString("nonce")
-                if (p.nw.isNotEmpty() || !Regex("^[0-9a-f]{32}$").matches(nonce) || Proto.commitOf(nonce) != p.commit) { pairing = null; fail(ws, Proto.E.PAIR_REFUSED, "Nonce does not match"); core.changed(); return }
+                if (p.nw.isNotEmpty() || !Regex("^[0-9a-f]{32}$").matches(nonce) || Proto.commitOf(nonce) != p.commit) { pairing = null; pairFailed(ws); fail(ws, Proto.E.PAIR_REFUSED, "Nonce does not match"); core.changed(); return }
                 p.nw = nonce
                 p.code = Proto.sasCode(myFp, p.nw, p.nm)
                 Log.i("TwinDesk", "peer: pairing code ready for ${p.name}")
                 core.changed()
-                main.post { Notify.peer(ctx, "Pair with ${p.name}?", "Check that both phones show the same code in TwinDesk.") }
+                main.post { Notify.peer(ctx, tr("Pair with {name}?", "name" to p.name), tr("Check that both phones show the same code in TwinDesk.")) }
             }
             Proto.T.PAIR_CONFIRM -> pairing?.takeIf { it.ws === ws && it.code.isNotEmpty() }?.let { it.confirmed = true; finishPair() }
-            Proto.T.PAIR_CANCEL -> { if (pairing?.ws === ws) { pairing = null; core.changed() }; ws.close() }
+            Proto.T.PAIR_CANCEL -> { if (pairing?.ws === ws) { pairing = null; pairFailed(ws); core.changed() }; ws.close() }
             Proto.T.HELLO -> hello(ws, m)
             else -> fail(ws, "bad_message", "\"$t\" before welcome")
         }
     }
 
     override fun onClose(ws: PeerServer.Ws) {
-        if (pairing?.ws === ws) { pairing = null; core.changed() }
+        if (pairing?.ws === ws) { pairing = null; pairFailed(ws); core.changed() }
         if (ws === hostWs) { hostWs = null; ended() }
     }
 
@@ -286,13 +316,31 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         ws.close()
     }
 
+    // Failed pairings per address, as shared/pairfail.js: after 5 in 10 minutes that address can't
+    // start another for a while, so a phone on the network can't keep popping the dialog.
+    private val pairFails = HashMap<String, MutableList<Long>>()
+    private fun pairFailed(ws: PeerServer.Ws) {
+        val a = ws.address
+        if (a.isEmpty() || a == "127.0.0.1") return
+        val now = System.currentTimeMillis()
+        synchronized(pairFails) { pairFails.getOrPut(a) { mutableListOf() }.apply { removeAll { now - it >= 600_000 }; add(now) } }
+    }
+    private fun pairLocked(ws: PeerServer.Ws): Boolean = synchronized(pairFails) {
+        val l = pairFails[ws.address] ?: return false
+        val now = System.currentTimeMillis()
+        l.removeAll { now - it >= 600_000 }
+        if (l.isEmpty()) pairFails.remove(ws.address)
+        l.size >= 5
+    }
+
     private fun pairStart(ws: PeerServer.Ws, m: JSONObject) {
+        if (pairLocked(ws)) return fail(ws, Proto.E.PAIR_REFUSED, "Too many failed pairing attempts; wait a few minutes and try again")
         val p = pairing
         if (p != null && p.ws !== ws) return fail(ws, Proto.E.BUSY, "Another pairing is in progress")
         if (m.optInt("v") != Proto.VERSION) return fail(ws, Proto.E.VERSION_MISMATCH, "Different TwinDesk version")
         val id = m.optString("id")
         val commit = m.optString("commit")
-        if (id.isEmpty() || !Regex("^[0-9a-f]{64}$").matches(commit)) return fail(ws, "bad_message", "pair.start needs id and commit")
+        if (id.isEmpty() || !Regex("^[0-9a-f]{64}$").matches(commit)) { pairFailed(ws); return fail(ws, "bad_message", "pair.start needs id and commit") }
         val nm = Proto.randomHex(16)
         pairing = PairReq(ws, id.take(64), m.optString("name").take(64).ifEmpty { "Phone" }, commit, nm)
         ws.send(msg(Proto.T.PAIR_NONCE, "nonce" to nm, "os" to Proto.OS).toString())
@@ -303,7 +351,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     // Allow / Deny here (the dialog).
     fun respondPair(allow: Boolean) {
         val p = pairing ?: return
-        if (!allow) { pairing = null; fail(p.ws, Proto.E.PAIR_REFUSED, "Refused"); core.changed(); return }
+        if (!allow) { pairing = null; pairFailed(p.ws); fail(p.ws, Proto.E.PAIR_REFUSED, "Refused"); core.changed(); return }
         if (p.code.isEmpty()) return
         p.allowed = true
         finishPair()
@@ -319,6 +367,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         store.setPrefsString(GUESTS, g.toString())
         p.ws.send(msg(Proto.T.PAIR_OK, "token" to token, "macId" to store.deviceId, "macName" to store.deviceName, "os" to Proto.OS).toString())
         pairing = null
+        synchronized(pairFails) { pairFails.remove(p.ws.address) }
         Log.i("TwinDesk", "peer: paired with ${p.name}")
         core.changed()
     }
@@ -357,7 +406,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         else -> false
     }
 
-    private fun queued(): Long = when (role) { "host" -> hostWs?.queued() ?: 0; "guest" -> link.queued(); else -> 0 }
+    fun queued(): Long = when (role) { "host" -> hostWs?.queued() ?: 0; "guest" -> link.queued(); else -> 0 }
 
     private fun started() {
         Log.i("TwinDesk", "peer: session with $peerName as $role")
@@ -375,7 +424,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         peerCaps = null
         val waiting = calls.values.toList()
         calls.clear()
-        main.post { for (cb in waiting) runCatching { cb(JSONObject().put("error", "Disconnected")) } }
+        main.post { for (cb in waiting) runCatching { cb(JSONObject().put("error", tr("Disconnected"))) } }
         for (id in inFiles.keys.toList()) inFailed(id)
         outFiles.clear()
         PeerScreen.stopAll(this)
@@ -392,7 +441,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 val last = asked
                 if (last != null && last.id == f.id) return
                 asked = f
-                Notify.peer(ctx, "${f.name} wants to connect", "Open TwinDesk to allow the connection.")
+                Notify.peer(ctx, tr("{name} wants to connect", "name" to f.name), tr("Open TwinDesk to allow the connection."))
                 core.changed()
             }
             "peer.hosting" -> {
@@ -401,7 +450,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                     core.discovery.phones[f.id] = (core.discovery.phones[f.id] ?: f).copy(address = f.address, port = port, lastSeen = System.currentTimeMillis())
                 }
             }
-            "peer.no" -> if (waitingFor == f.id) { waitingFor = ""; message = "${f.name} said not now."; core.changed() }
+            "peer.no" -> if (waitingFor == f.id) { waitingFor = ""; message = tr("{name} said not now.", "name" to f.name); core.changed() }
         }
     }
 
@@ -456,6 +505,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
             "screen.ready" -> PeerScreen.ready(this)
             "screen.stop" -> PeerScreen.remoteStop(this)
             "screen.state" -> PeerScreen.state(this, m)
+            Proto.T.PEER_SOUND, "peer.sound" -> PeerScreen.onSound(this, m)
+            Proto.T.PEER_SOUND_WANT, "peer.sound.want" -> PeerScreen.onSoundWant(this, m)
+            Proto.T.PEER_SOUND_STATE, "peer.sound.state" -> PeerScreen.onSoundState(this, m)
         }
     }
 
@@ -530,7 +582,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     private val outFiles = ConcurrentHashMap<String, OutFile>()
     private val inFiles = ConcurrentHashMap<String, InFile>()
     private val batches = ConcurrentHashMap<String, Batch>()
-    val busyLine: String? get() = batches.values.firstOrNull()?.let { b -> "${if (b.up) "Sending" else "Receiving"} ${b.name} · ${Files.pct(b.moved, b.bytes)}%" }
+    val busyLine: String? get() = batches.values.firstOrNull()?.let { b -> if (b.up) tr("Sending {file} · {pct}%", "file" to b.name, "pct" to Files.pct(b.moved, b.bytes)) else tr("Receiving {file} · {pct}%", "file" to b.name, "pct" to Files.pct(b.moved, b.bytes)) }
 
     // Send these to the other phone. rel: folders kept (its Files).
     fun sendFiles(items: List<Files.Item>): Boolean {
@@ -669,7 +721,7 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
         val now = System.currentTimeMillis()
         if (now - b.last < 400) return
         b.last = now
-        Notify.files(ctx, b.key, "${if (b.up) "Sending" else "Receiving"} ${b.name} ${if (b.up) "to" else "from"} $peerName", "${Files.pct(b.moved, b.bytes)}%", Files.pct(b.moved, b.bytes), null, up = b.up)
+        Notify.files(ctx, b.key, if (b.up) tr("Sending {file} to {name}", "file" to b.name, "name" to peerName) else tr("Receiving {file} from {name}", "file" to b.name, "name" to peerName), "${Files.pct(b.moved, b.bytes)}%", Files.pct(b.moved, b.bytes), null, up = b.up)
         core.changed()
     }
 
@@ -682,10 +734,10 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
             if (b.done < b.count) return
         }
         batches.remove(batch)
-        if (b.up) Notify.files(ctx, b.key, if (b.ok) "Sent ${b.name}" else "Not everything arrived", "On $peerName", null, null, up = true)
+        if (b.up) Notify.files(ctx, b.key, if (b.ok) tr("Sent {file}", "file" to b.name) else tr("Not everything arrived"), tr("On {name}", "name" to peerName), null, null, up = true)
         else {
             val open = b.only?.let { Notify.viewIntent(it.first, it.second) } ?: Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            Notify.files(ctx, b.key, if (b.ok) "${b.name} from $peerName" else "Not everything arrived from $peerName", if (b.ok) "In Downloads › TwinDesk. Tap to open." else "${b.name} is incomplete", null, open)
+            Notify.files(ctx, b.key, if (b.ok) tr("{what} from {from}", "what" to b.name, "from" to peerName) else tr("Some files didn’t arrive from {from}", "from" to peerName), if (b.ok) tr("In Downloads › TwinDesk. Tap to open.") else tr("{what} is incomplete", "what" to b.name), null, open)
         }
         core.changed()
     }
@@ -702,12 +754,12 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
 
     // Ask the other phone; the answer comes on the main thread ({error} when it can't).
     fun ask(op: String, args: JSONObject = JSONObject(), timeoutMs: Long = 20_000, cb: (JSONObject) -> Unit) {
-        if (!connected) { main.post { cb(JSONObject().put("error", "Not connected")) }; return }
+        if (!connected) { main.post { cb(JSONObject().put("error", tr("Not connected"))) }; return }
         val id = Proto.randomHex(8)
         calls[id] = cb
         args.put("t", "q").put("qid", id).put("op", op)
         send(args)
-        main.postDelayed({ calls.remove(id)?.let { it(JSONObject().put("error", "No answer")) } }, timeoutMs)
+        main.postDelayed({ calls.remove(id)?.let { it(JSONObject().put("error", tr("No answer"))) } }, timeoutMs)
     }
 
     private val messages by lazy { Messages(core.hub, core) }
@@ -769,7 +821,13 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
                 JSONObject().put("ok", true).put("n", items.size)
             }
         }
-        "screen.start" -> { main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600)) }; JSONObject().put("ok", true) }
+        "screen.start" -> {
+            val port = m.optInt("udpPort", 0)
+            val token = m.optLong("udpToken", 0L)
+            val key = PeerScreen.keyOf(m)
+            main.post { PeerScreen.asked(this, m.optInt("maxSize", 1600), m.optBoolean("audio", false), port, token, key) }
+            JSONObject().put("ok", true)
+        }
         else -> JSONObject().put("error", "unknown")
     }
 

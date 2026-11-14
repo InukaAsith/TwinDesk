@@ -7,6 +7,8 @@
 
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { PairFails } = require('../shared/pairfail.js');
+const { reclaimDecision } = require('../shared/reclaim.js');
 const store = require('./store');
 
 const HEX = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
@@ -22,8 +24,18 @@ class Pairing extends EventEmitter {
     this.id = identity;
     this.paired = store.read('paired.json', []);
     this.pending = null; // {ctx, id, name, commit, nm, nw, code, confirmed, allowed, timer}
+    this.fails = new PairFails(); // failed pairings per address: a lockout after too many (#136)
+    // Positive consent only: missing/unreadable/corrupt state cannot enable an automatic return.
+    let saved = null;
+    try {
+      const st = require('fs').lstatSync(store.filePath('phone-return.json'));
+      if (st.isFile() && !st.isSymbolicLink()) saved = store.read('phone-return.json', null);
+    } catch {}
+    this.returnPhone = saved && typeof saved.id === 'string' && this.paired.some((p) => p.id === saved.id && p.os === P.OS.ANDROID) ? saved.id : null;
     server.on('preauth', (ctx, msg) => this._onMessage(ctx, msg));
     server.on('closed', (ctx) => this._onClosed(ctx));
+    server.on('noreclaim', (id) => this.clearReturn(id));
+    server.on('client', (ctx) => this.rememberReturn(ctx));
   }
 
   list() {
@@ -43,7 +55,39 @@ class Pairing extends EventEmitter {
     this._save();
   }
 
+  _saveReturn(id) {
+    this.returnGeneration = (this.returnGeneration || 0) + 1;
+    this.returnPhone = null; // persistence must succeed before automatic return is authorized
+    try {
+      store.write('phone-return.json', id ? { id } : null);
+      this.returnPhone = id;
+      this.returnStorageFailed = false;
+      return true;
+    } catch (error) {
+      this.returnStorageFailed = true;
+      // The file is positive consent. Removing it is a fail-closed fallback on ENOSPC/rename
+      // failure. Never let an I/O exception escape into authentication or Disconnect handling.
+      try { require('fs').unlinkSync(store.filePath('phone-return.json')); }
+      catch (removeError) {
+        if (removeError.code !== 'ENOENT') console.error('[pairing] automatic return could not be revoked on disk; repair profile storage before restarting:', removeError.code);
+      }
+      console.error('[pairing] automatic return disabled: profile storage failed:', error.code || 'write');
+      return false;
+    }
+  }
+
+  rememberReturn(ctx) { return this._saveReturn(ctx.os === P.OS.ANDROID ? ctx.deviceId : null); }
+
+  clearReturn(id) {
+    if (id && this.returnPhone !== id && !this.returnStorageFailed) return true;
+    return this._saveReturn(null);
+  }
+
   forget(id) {
+    this.clearReturn(id);
+    // A pairing from it still going would add it straight back when it finishes: it ends here.
+    const p = this.pending;
+    if (p && p.id === id) { this._clear(); this.server.fail(p.ctx, P.E.PAIR_REFUSED, 'The pairing was forgotten'); }
     this.paired = this.paired.filter((x) => x.id !== id);
     this._save();
     this.server.closeDevice(id, P.E.BAD_TOKEN, 'This Mac forgot the pairing');
@@ -70,6 +114,9 @@ class Pairing extends EventEmitter {
 
     const p = this.pending;
     if (msg.t === P.T.PAIR_START) {
+      if (this.fails.locked(ctx.address)) {
+        return this.server.fail(ctx, P.E.PAIR_REFUSED, 'Too many failed pairing attempts from this address; wait a few minutes and try again');
+      }
       if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
       if (p && p.ctx !== ctx) return this.server.fail(ctx, P.E.BUSY, 'Another pairing is in progress');
       if (p) return this.server.fail(ctx, P.E.BAD_MESSAGE, 'Pairing already started');
@@ -77,6 +124,7 @@ class Pairing extends EventEmitter {
         return this.server.fail(ctx, P.E.VERSION_MISMATCH, `Mac speaks protocol v${P.PROTOCOL_VERSION}`);
       }
       if (typeof msg.id !== 'string' || !msg.id || typeof msg.commit !== 'string' || !HEX(64).test(msg.commit)) {
+        this.fails.fail(ctx.address);
         return this.server.fail(ctx, P.E.BAD_MESSAGE, 'pair.start needs id and commit');
       }
       const nm = P.randomHex(16);
@@ -122,6 +170,7 @@ class Pairing extends EventEmitter {
         this.emit('change');
         return this._maybeFinish();
       case P.T.PAIR_CANCEL:
+        this.fails.fail(p.ctx.address); // a cancel after an accepted start counts toward the lockout
         this._clear();
         ctx.ws.close();
         return;
@@ -138,8 +187,10 @@ class Pairing extends EventEmitter {
     this.paired = this.paired.filter((x) => x.id !== p.id);
     this.paired.push({ id: p.id, name: p.name, os: p.os, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now });
     this._save();
+    this.fails.clear(p.ctx.address);
     this.server.send(p.ctx, { t: P.T.PAIR_OK, token, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC });
     console.log(`[pairing] paired with ${p.name} (${p.id})`);
+    if (p.qr && this.consumeQr) this.consumeQr();
     this._clear();
   }
 
@@ -154,6 +205,10 @@ class Pairing extends EventEmitter {
     // A phone only says hello when someone asked for it (or to resume): it takes the session.
     // A computer waits while a phone holds it.
     const phone = P.isPhoneOs(Object.values(P.OS).includes(msg.os) ? msg.os : e.os);
+    // Reclaim (#192): the phone's grace window already ended. Authenticate this paired phone only
+    // when the session is free. Never yield another session and never end another phone's grace.
+    // Busy stays busy. The decision is taken again when authenticate commits (fast files may wait).
+    if (msg.rc === 1) return this._reclaim(ctx, msg, e, phone);
     // Take over (the person asked for it there, or here: Connect on it in this computer's list):
     // whoever holds the session is let go. Else a computer waits while another device holds it.
     const takeover = msg.takeover === true || (this.expected && this.expected.id === e.id && Date.now() < this.expected.until);
@@ -166,6 +221,38 @@ class Pairing extends EventEmitter {
       return this.server.fail(ctx, P.E.BUSY, `In use by ${this._phoneName()}`);
     } else if (this.busy()) return this.server.fail(ctx, P.E.BUSY, 'Connected to another device');
     else if (held) return this.server.fail(ctx, P.E.BUSY, `In use by ${held.name || 'another device'}`);
+    this._accept(ctx, msg, e);
+  }
+
+  // What is true right now. Called before the fast-files wait and again at the commit.
+  _reclaimNow(e, phone) {
+    const cur = this.server.current;
+    const grace = this.server.phoneGrace;
+    return reclaimDecision({
+      phone,
+      blocked: this.returnStorageFailed || this.returnPhone !== e.id,
+      selfId: e.id,
+      currentId: cur && cur.deviceId,
+      currentAuthed: !!(cur && cur.authed),
+      graceId: grace && Date.now() < grace.until ? grace.id : '',
+      busy: !!this.busy(),
+    });
+  }
+
+  _reclaim(ctx, msg, e, phone) {
+    const decision = this._reclaimNow(e, phone && e.os === P.OS.ANDROID);
+    if (!decision.ok) return this.server.fail(ctx, decision.code, decision.message);
+    // No yieldTo here. If the session is taken, or Disconnect / Stop lands, while welcome waits,
+    // authenticate asks again and refuses instead of evicting whoever is current.
+    ctx.automaticReturn = true;
+    ctx.returnBase = this.server.current;
+    this._accept(ctx, msg, e, () => this._reclaimNow(e, phone && e.os === P.OS.ANDROID));
+  }
+
+  _accept(ctx, msg, e, gate) {
+    const generation = this.returnGeneration || 0;
+    ctx.canRevokeReturn = () => generation === (this.returnGeneration || 0);
+    if (!Object.prototype.hasOwnProperty.call(ctx, 'returnBase')) ctx.returnBase = this.server.current;
     if (typeof msg.name === 'string' && msg.name && msg.name !== e.name) e.name = msg.name.slice(0, 64);
     if (Object.values(P.OS).includes(msg.os)) e.os = msg.os;
     e.lastSeen = Date.now();
@@ -176,7 +263,9 @@ class Pairing extends EventEmitter {
     ctx.ilWanted = msg.il && typeof msg.il === 'object' ? msg.il : null; // the input lane (shared/inputlane.js)
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC,
-    });
+      rc: 1, // this single-session Mac accepts a paired Android's non-takeover return
+      tail: require('../shared/tailnet.js').mine(), // its Tailscale addresses, for reconnecting away from this network (#161)
+    }, gate);
     this.emit('change');
   }
 
@@ -195,6 +284,7 @@ class Pairing extends EventEmitter {
   _abort(code, message) {
     const p = this.pending;
     if (!p) return;
+    this.fails.fail(p.ctx.address); // a denial, a wrong code, a timeout: all count toward the lockout
     this._clear();
     this.server.fail(p.ctx, code, message);
   }
@@ -207,7 +297,10 @@ class Pairing extends EventEmitter {
   }
 
   _onClosed(ctx) {
-    if (this.pending && this.pending.ctx === ctx) this._clear();
+    if (this.pending && this.pending.ctx === ctx) {
+      this.fails.fail(ctx.address); // a socket dropped mid-pairing counts like a cancel
+      this._clear();
+    }
     if (ctx.authed && ctx.deviceId) this.touch(ctx.deviceId);
     this.emit('change');
   }

@@ -91,7 +91,7 @@ final class PcMedia: Feature {
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: n.title,
             MPMediaItemPropertyArtist: n.artist.isEmpty ? (core.host?.name ?? "Computer") : n.artist,
-            MPMediaItemPropertyAlbumTitle: n.album.isEmpty ? "\(n.app) on \(core.host?.name ?? "the computer")" : n.album,
+            MPMediaItemPropertyAlbumTitle: n.album.isEmpty ? tr("{app} on {name}", ["app": n.app, "name": core.host?.name ?? tr("the computer")]) : n.album,
             MPNowPlayingInfoPropertyPlaybackRate: n.playing ? 1.0 : 0.0,
             MPNowPlayingInfoPropertyIsLiveStream: true,
         ]
@@ -138,7 +138,8 @@ final class DevCtl: Feature {
 
     private func sendState() {
         core.send(msg("dev.state", ["can": ["ring": true, "ringStop": true], "ringing": ringing,
-                                     "v": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""]))
+                                     // which TwinDesk (shared/appinfo.js): the computer warns when it's older
+                                     "app": ["v": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""]]))
     }
 
     override func onMessage(_ t: String, _ m: JSON) -> Bool {
@@ -183,7 +184,7 @@ final class DevCtl: Feature {
             AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
             if n >= 30 { t.invalidate(); self?.stopRing() }
         }
-        Notifier.shared.note("ring", "\(core.host?.name ?? "Your computer") is ringing this \(Device.word)", "Open TwinDesk to stop the sound.", sound: true)
+        Notifier.shared.note("ring", tr("{name} is ringing this {device}", ["name": core.host?.name ?? tr("Your computer"), "device": Device.word]), tr("Open TwinDesk to stop the sound."), sound: true)
         core.changed()
     }
 

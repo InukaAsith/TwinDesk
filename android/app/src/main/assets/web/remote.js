@@ -4,11 +4,17 @@
 // (relative, like the computers' own mouse and keyboard sharing); the computer answers
 // remote.state (whether it takes input from here). opts come from Remote.kt.
 //   touchpad  slide = move (never clicks) · tap = left click ("Tap to click", on unless switched off)
-//             hold = right click · two fingers = scroll · two-finger tap = right click
+//             hold = right click · two fingers = scroll · two-finger tap = right click · three-finger tap = middle click
 //   gamepad   left stick = four keys (WASD) · right stick = the mouse · buttons = their keys; or, when
 //             the computer takes it as a real gamepad (remote.state pad: Remote › Real gamepad there),
 //             the sticks, triggers and buttons as they are (remote.pad); or, while a computer is
 //             connected to this device as a Bluetooth gamepad (opts.bt: BtPad.kt), as HID reports (TD.pad)
+//   air mouse hold the big area and point: the pointer follows the phone as it turns (the gyroscope)
+//             · a quick tap = left click · Left click held + turning = a drag · the strip = scroll
+//   present   Next / Previous (Page Down / Page Up, which every slideshow app takes; Android's volume
+//             keys too) · Start, Black screen, End · Hold to point: the pointer follows the phone
+// The phone's motion: the app's own sensors (TD.motion → window.tdMotion), or the browser's
+// (devicemotion and deviceorientation) where there's no app (TwinDesk Web).
 'use strict';
 
 (() => {
@@ -18,7 +24,13 @@
   const hot = typeof TD.move === 'function';
   const tick = () => { try { TD.tick(); } catch (_) { /* older app */ } };
   const $ = (id) => document.getElementById(id);
-  let opts = { mode: 'pad', name: 'the computer', me: 'this device', connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
+  // The app's language (I18n.kt through TD.tr): {name} parts filled from vars, English without the app.
+  const t = (text, vars = {}) => (typeof TD.tr === 'function' ? TD.tr(text, JSON.stringify(vars))
+    : text.replace(/^[^|]*\|/, '').replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)));
+  for (const e of document.querySelectorAll('[data-i18n]')) e.textContent = t(e.dataset.i18n || e.textContent);
+  for (const e of document.querySelectorAll('[aria-label]')) e.setAttribute('aria-label', t(e.getAttribute('aria-label')));
+  for (const e of document.querySelectorAll('[placeholder]')) e.placeholder = t(e.placeholder);
+  let opts = { mode: 'pad', name: t('the computer'), me: t('this device'), connected: true, os: '', ble: false, speed: 1, tap: true, smooth: true, pad: {}, controls: [], keys: [] };
   let allowed = null; // the computer's remote.state
   let why = ''; // …and why it doesn't take it now
   let off = false; // …because its Remote is off: Turn on, here
@@ -50,6 +62,7 @@
   }
   const tapKey = (code) => { press(code, true); press(code, false); };
   function releaseAll() {
+    clutch.clear();
     for (const code of [...held.keys()]) { held.set(code, 1); press(code, false); }
     dropMods();
     padRelease();
@@ -59,32 +72,40 @@
   function render() {
     const game = opts.mode === 'gamepad';
     const voice = opts.mode === 'voice';
+    const air = opts.mode === 'air';
+    const present = opts.mode === 'present';
     document.body.classList.toggle('gamepad', game);
     document.body.classList.toggle('voice', voice);
-    document.body.classList.toggle('pad', !game && !voice);
-    $('name').textContent = game && opts.bt ? `Bluetooth gamepad · ${opts.btName || 'connected'}`
-      : `${game ? (real ? 'Gamepad (real)' : 'Gamepad') : voice ? 'Voice typing' : 'Touchpad'} · ${opts.name}`;
+    document.body.classList.toggle('air', air);
+    document.body.classList.toggle('present', present);
+    document.body.classList.toggle('pad', !game && !voice && !air && !present);
+    const name = opts.name, me = opts.me;
+    $('name').textContent = game && opts.bt ? t('Bluetooth gamepad · {name}', { name: opts.btName || t('connected') })
+      : `${game ? (real ? t('Gamepad (real)') : t('Gamepad')) : voice ? t('Voice typing') : air ? t('Air mouse') : present ? t('Presentation') : t('Touchpad')} · ${name}`;
     if (voice) voiceStatus();
+    motionWant(air || present);
     const note = game && opts.bt ? ''
-      : !opts.connected ? `Not connected to ${opts.name}. Connect from TwinDesk’s Overview.`
-      : voice && keyboardOff() ? `Keyboard is off on ${opts.name}: voice typing types there with it. Turn it on in TwinDesk’s Keyboard page there, or here.`
-      : voice && voiceOk === false ? (voiceWhy || `Not typing on ${opts.name}.`)
+      : !opts.connected ? t('Not connected to {name}. Connect from TwinDesk’s Overview.', { name })
+      : air && motionNone ? t('This device has no gyroscope, which the air mouse needs. Use the touchpad instead.')
+      : present && motionNone ? t('This device has no gyroscope, so Hold to point doesn’t move the pointer. Next and Previous work.')
+      : voice && keyboardOff() ? t('Keyboard is off on {name}: voice typing types there with it. Turn it on in TwinDesk’s Keyboard page there, or here.', { name })
+      : voice && voiceOk === false ? (voiceWhy || t('Not typing on {name}.', { name }))
       : voice && voiceOk === true ? ''
-      : allowed === false && off ? `Remote is off on ${opts.name}.`
-      : allowed === false ? (why || `${opts.name} doesn’t take input from ${opts.me}. On ${opts.name}, turn on Remote in TwinDesk.`)
-        : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? `${opts.name} doesn’t answer the remote: update TwinDesk there.`
+      : allowed === false && off ? t('Remote is off on {name}.', { name })
+      : allowed === false ? (why || t('{name} doesn’t take input from {me}. On {name}, turn on Remote in TwinDesk.', { name, me }))
+        : allowed === null && (opts.os === 'mac' || opts.os === 'linux') ? t('{name} doesn’t answer the remote: update TwinDesk there.', { name })
           : '';
     $('note-text').textContent = note;
     $('note').hidden = !note;
     const turnOn = voice && voiceOk !== null ? keyboardOff() : allowed === false && off;
-    $('note-on').textContent = voice && voiceOk !== null ? 'Turn on Keyboard' : 'Turn on Remote';
+    $('note-on').textContent = voice && voiceOk !== null ? t('Turn on Keyboard') : t('Turn on Remote');
     $('note-on').hidden = !(note && turnOn && opts.connected);
     // A real controller: what the computer sees it as.
     const sees = !game ? ''
-      : opts.bt ? `${opts.btName || 'The computer'} sees ${opts.me} as “TwinDesk Gamepad”, a Bluetooth game controller`
-        : real && opts.os === 'win' ? `Windows sees it as an Xbox 360 Controller: games take it as one (joy.cpl lists it under Game Controllers)`
-          : real && opts.os === 'linux' ? `${opts.name} sees it as “TwinDesk Gamepad”, an Xbox 360 controller`
-            : real ? `${opts.name} sees it as a game controller` : '';
+      : opts.bt ? t('{name} sees {me} as “TwinDesk Gamepad”, a Bluetooth game controller', { name: opts.btName || t('The computer'), me })
+        : real && opts.os === 'win' ? t('Windows sees it as an Xbox 360 Controller: games take it as one (joy.cpl lists it under Game Controllers)')
+          : real && opts.os === 'linux' ? t('{name} sees it as “TwinDesk Gamepad”, an Xbox 360 controller', { name })
+            : real ? t('{name} sees it as a game controller', { name }) : '';
     $('pad-note').textContent = sees;
     $('pad-note').hidden = !sees;
     if (!$('map').hidden) mapFill();
@@ -104,8 +125,8 @@
       list.append(row);
     }
     $('map-hint').textContent = asPad()
-      ? 'It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).'
-      : 'What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.';
+      ? t('It’s a real controller now: these keys are what it presses when it isn’t (Real gamepad off on the computer, not as a Bluetooth gamepad).')
+      : t('What each control presses on the computer. The left stick is four keys; the right stick moves the mouse.');
   }
   $('b-map').onclick = () => { releaseAll(); editEnd(); mapFill(); $('map').hidden = false; };
   $('map-done').onclick = () => { $('map').hidden = true; };
@@ -127,6 +148,9 @@
       voiceWhy = typeof m.voiceWhy === 'string' ? m.voiceWhy : '';
       if (opts.mode === 'voice' ? voiceBlocked() : !allowed) releaseAll();
       if ((m.pad === true) !== real) { releaseAll(); real = m.pad === true; } // what's held goes the old way
+    } else if (m.t === 'volkey') { // Android's volume keys on the presentation remote: Previous (up) and Next (down)
+      if (opts.mode === 'present') slide(m.dir > 0 ? -1 : 1);
+      return;
     } else return;
     render();
   };
@@ -137,7 +161,7 @@
     : { t: 'pair.sync', feature: 'remote', dir: 'out', on: true });
   // The touchpad held sideways (or upright again): the activity turns, the page follows.
   $('b-rotate').onclick = () => TD.event('rotate');
-  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); render(); });
   window.addEventListener('contextmenu', (e) => { if (e.target !== vbox) e.preventDefault(); }); // the voice box keeps its own (select, paste)
 
   // ---- pointer movement and scrolling: added up and sent once a frame (through Bluetooth, where
@@ -198,8 +222,8 @@
     } else if (fingers.size === 2) {
       if (one) { clearTimeout(one.timer); one = null; }
       const [a, b] = [...fingers.values()];
-      two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: performance.now(), moved: false };
-    }
+      two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t0: performance.now(), moved: false, n: 2 };
+    } else if (two) two.n = Math.max(two.n, fingers.size); // a third finger: a middle click if it's a tap
   });
 
   pad.addEventListener('pointermove', (e) => {
@@ -239,7 +263,8 @@
     if (!fingers.delete(e.pointerId)) return;
     if (two) {
       if (fingers.size > 0) return;
-      if (!two.moved && performance.now() - two.t0 < 300) { tapKey('Mouse1'); tick(); } // two-finger tap
+      // A two-finger tap: a right click; three fingers: a middle click.
+      if (!two.moved && performance.now() - two.t0 < 350) { tapKey(two.n >= 3 ? 'Mouse2' : 'Mouse1'); tick(); }
       two = null;
       return;
     }
@@ -408,8 +433,10 @@
     const live = !blocked && Date.now() - vlast < 1500;
     dot.className = blocked ? 'bad' : live ? 'live' : '';
     const words = vbox.value.trim() ? vbox.value.trim().split(/\s+/).length : 0;
-    hint.textContent = blocked ? (keyboardOff() ? `Keyboard is off on ${opts.name}` : `Not typing on ${opts.name}`) : live ? `Typing on ${opts.name}…`
-      : words ? `${words} word${words === 1 ? '' : 's'} typed on ${opts.name}` : `Click where you want to type on ${opts.name}, then speak`;
+    const name = opts.name;
+    hint.textContent = blocked ? (keyboardOff() ? t('Keyboard is off on {name}', { name }) : t('Not typing on {name}', { name })) : live ? t('Typing on {name}…', { name })
+      : words === 1 ? t('1 word typed on {name}', { name }) : words ? t('{count} words typed on {name}', { count: words, name })
+        : t('Click where you want to type on {name}, then speak', { name });
   }
   setInterval(() => { if (opts.mode === 'voice') voiceStatus(); }, 700);
   vbox.addEventListener('input', voiceSync);
@@ -578,7 +605,7 @@
   // ---- editing the gamepad (Edit): move, size, hide, rename and set the key of any control; add
   // buttons of your own. The layout: {items: {id: {x, y, s, hide, label}}, custom: [{id, label, key, x, y, s, hide}]},
   // x and y the control's middle as a share of the screen (kept by Remote.kt, TD.setLayout). ----
-  const UNITS = { lt: 'LT', lb: 'LB', rb: 'RB', rt: 'RT', back: 'Back', start: 'Start', ls: 'Left stick', rs: 'Right stick', dpad: 'D-pad', abxy: 'A B X Y', l3: 'L3', r3: 'R3' };
+  const UNITS = { lt: 'LT', lb: 'LB', rb: 'RB', rt: 'RT', back: t('gamepad|Back'), start: t('gamepad|Start'), ls: t('Left stick'), rs: t('Right stick'), dpad: t('D-pad'), abxy: 'A B X Y', l3: 'L3', r3: 'R3' };
   const KEYED = ['lt', 'lb', 'rb', 'rt', 'back', 'start', 'l3', 'r3']; // one button, one key
   let layout = { items: {}, custom: [] };
   let layoutIn = false; // the saved one is applied once (opts come again on every change)
@@ -642,7 +669,7 @@
     el.classList.add('sel');
     const it = itemOf(id);
     const custom = isCustom(id);
-    $('edit-name').textContent = custom ? (it.label || 'Button') : UNITS[id];
+    $('edit-name').textContent = custom ? (it.label || t('Button')) : UNITS[id];
     $('edit-size').value = String(Number(it.s) || 1);
     const keyed = custom || KEYED.includes(id);
     $('edit-key-row').hidden = !keyed;
@@ -653,7 +680,7 @@
       k.value = custom ? (it.key || '') : padKey(id);
       $('edit-label').value = (typeof it.label === 'string' && it.label) || el.dataset.def || '';
     }
-    $('edit-hide').textContent = it.hide ? 'Show' : 'Hide';
+    $('edit-hide').textContent = it.hide ? t('Show') : t('Hide');
     $('edit-del').hidden = !custom;
   }
 
@@ -675,7 +702,7 @@
     const it = itemOf(sel);
     it.label = $('edit-label').value.slice(0, 12);
     place(unitEl(sel), it);
-    if (isCustom(sel)) $('edit-name').textContent = it.label || 'Button';
+    if (isCustom(sel)) $('edit-name').textContent = it.label || t('Button');
   };
   $('edit-label').onchange = save;
   $('edit-hide').onclick = () => {
@@ -683,7 +710,7 @@
     const it = itemOf(sel);
     it.hide = !it.hide;
     place(unitEl(sel), it);
-    $('edit-hide').textContent = it.hide ? 'Show' : 'Hide';
+    $('edit-hide').textContent = it.hide ? t('Show') : t('Hide');
     save();
   };
   $('edit-del').onclick = () => {
@@ -763,6 +790,240 @@
   };
   game.addEventListener('pointerup', dragEnd, true);
   game.addEventListener('pointercancel', dragEnd, true);
+
+  // ---- the phone's motion: how far it turned, as the pointer's move ----
+  // tdMotion(ax, ay, az, ux, uy, uz): radians turned about the device's x, y and z since the last call,
+  // and which way is up (a unit vector), in the device's frame (x to its right, y to its top, z out of
+  // the screen); tdMotion(null): no gyroscope. Left and right is the turn about up, whichever way the
+  // phone is held; up and down is the turn about the screen's horizontal (its right, made level).
+  const nativeMotion = typeof TD.motion === 'function';
+  const clutch = new Set(); // what holds the pointer to the phone now (the air area, a click, Hold to point)
+  let motionOn = false;
+  let motionNone = false; // no gyroscope here
+  let motionSeen = false; // a reading came
+  let motionAt = 0;
+  let airDx = 0, airDy = 0; // the last smoothed move
+  let turnPx = 0; // how far the pointer went while the air area was held (a tap moves it hardly at all)
+  let up = [0, 0, 1];
+  const AIR = 1100; // pixels a radian at speed 1, turned slowly; up to 2.4× turned fast
+  function screenAngle() {
+    const a = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : Number(window.orientation) || 0;
+    return ((a % 360) + 360) % 360;
+  }
+  window.tdMotion = (ax, ay, az, ux, uy, uz) => {
+    if (ax == null) { if (!motionNone) { motionNone = true; render(); } return; }
+    if (!motionSeen) { motionSeen = true; if (motionNone) { motionNone = false; render(); } }
+    if (ux != null) up = [ux, uy, uz];
+    const now = performance.now();
+    const dt = Math.max(0.004, Math.min(0.1, (now - motionAt) / 1000));
+    motionAt = now;
+    if (!clutch.size) { airDx = airDy = 0; return; }
+    const [x, y, z] = up;
+    const yaw = ax * x + ay * y + az * z; // + turning left
+    const r = screenAngle() * Math.PI / 180;
+    const rx = Math.cos(r), ry = -Math.sin(r); // the screen's right, in the device's frame
+    const d = rx * x + ry * y;
+    const hx = rx - d * x, hy = ry - d * y, hz = -d * z;
+    const n = Math.hypot(hx, hy, hz);
+    const pitch = n > 0.3 ? (ax * hx + ay * hy + az * hz) / n : ax * rx + ay * ry; // + the far end going up
+    const rate = Math.hypot(yaw, pitch) / dt; // radians a second
+    if (rate < 0.02) return; // a still hand: the sensor's own noise
+    const soft = rate < 0.07 ? (rate - 0.02) / 0.05 : 1; // fine aim eases in
+    const g = soft * opts.speed * AIR * (1 + Math.min(1.4, rate / 2.5));
+    turnPx += Math.hypot(yaw, pitch) * g;
+    // Smoothed by how fast it turns: a slow aim is steadied (the hand's tremor), a quick flick
+    // passes almost as it is, so the pointer doesn't lag behind it.
+    const k = Math.min(0.9, 0.3 + rate / 3);
+    airDx += (-yaw * g - airDx) * k;
+    airDy += (-pitch * g - airDy) * k;
+    move(airDx, airDy);
+  };
+
+  // In a browser: rotationRate (degrees a second about z, x, y as alpha, beta, gamma) and the tilt
+  // (beta, gamma) for which way is up. An iPhone asks first, from a tap (Allow motion).
+  let webAt = 0;
+  let webAsk = null;
+  const onDM = (e) => {
+    const r = e.rotationRate;
+    if (!r || r.alpha == null) return;
+    const t = e.timeStamp || performance.now();
+    const dt = webAt ? Math.min(0.1, Math.max(0, (t - webAt) / 1000)) : 0;
+    webAt = t;
+    if (!dt) return;
+    const k = (Math.PI / 180) * dt;
+    window.tdMotion((r.beta || 0) * k, (r.gamma || 0) * k, (r.alpha || 0) * k);
+  };
+  const onDO = (e) => {
+    if (e.beta == null || e.gamma == null) return;
+    const b = (e.beta * Math.PI) / 180, g = (e.gamma * Math.PI) / 180;
+    up = [-Math.cos(b) * Math.sin(g), Math.sin(b), Math.cos(b) * Math.cos(g)];
+  };
+  function webStart() {
+    webAt = 0;
+    window.addEventListener('devicemotion', onDM);
+    window.addEventListener('deviceorientation', onDO);
+    clearTimeout(webAsk);
+    webAsk = setTimeout(() => { // nothing came: it asks first (iPhone), or there's no gyroscope
+      if (motionSeen || !motionOn) return;
+      const DM = window.DeviceMotionEvent;
+      if (DM && typeof DM.requestPermission === 'function') askMotion();
+      else if (!motionNone) { motionNone = true; render(); }
+    }, 900);
+  }
+  function webStop() {
+    clearTimeout(webAsk);
+    window.removeEventListener('devicemotion', onDM);
+    window.removeEventListener('deviceorientation', onDO);
+  }
+  function askMotion() {
+    $('motion-ask-text').textContent = t('The air mouse turns the pointer as you turn this device. Allow it to read the device’s motion.');
+    $('motion-ask').hidden = false;
+  }
+  $('motion-ok').onclick = async () => {
+    $('motion-ask').hidden = true;
+    try {
+      const a = await window.DeviceMotionEvent.requestPermission();
+      if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') await window.DeviceOrientationEvent.requestPermission().catch(() => {});
+      if (a !== 'granted') { motionNone = true; render(); return; }
+    } catch (_) { /* asked again on the next open */ }
+    if (motionOn) { webStop(); webStart(); }
+  };
+
+  function motionWant(on) {
+    on = on && !document.hidden;
+    if (on === motionOn) return;
+    motionOn = on;
+    motionAt = performance.now();
+    if (nativeMotion) { try { TD.motion(on); } catch (_) { /* older app */ } } else if (on) webStart(); else webStop();
+    if (!on) { clutch.clear(); $('motion-ask').hidden = true; try { unlock(); } catch (_) { /* not set up yet */ } }
+  }
+
+  // Held, the pointer follows the phone; let go, it stays where it is. It takes hold only after
+  // `wait` ms with the finger still down, so a tap (onUp with tap = true) never moves the pointer.
+  function hold(el, key, onUp, wait = 0) {
+    let id = null, t0 = 0, timer = 0, on = false;
+    const grab = () => { timer = 0; if (id == null) return; on = true; turnPx = 0; motionAt = performance.now(); clutch.add(key); el.classList.add('live'); };
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (id != null) return;
+      id = e.pointerId;
+      try { el.setPointerCapture(id); } catch (_) { /* gone */ }
+      t0 = performance.now();
+      on = false;
+      if (wait > 0) { el.classList.add('touch'); timer = setTimeout(grab, wait); } else grab();
+    });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      clearTimeout(timer); timer = 0;
+      clutch.delete(key);
+      el.classList.remove('live', 'touch');
+      if (onUp && e.type === 'pointerup') onUp(performance.now() - t0, !on);
+      on = false;
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+
+  // ---- air mouse ----
+  // The big area: a tap clicks where the pointer is; held a moment, the pointer follows the phone.
+  // Left click: a tap clicks; held, it locks down (a drag: hold the big area and point to select),
+  // and a tap on it or on the big area lets go. Right click: a tap. The buttons never move the pointer.
+  const AIR_WAIT = 180;
+  let leftLocked = false;
+  const unlock = () => { if (!leftLocked) return false; leftLocked = false; press('Mouse0', false); $('a-left').classList.remove('on'); render(); return true; };
+  hold($('air'), 'air', (ms, tap) => { if (tap && ms < TAP_MS) { if (!unlock()) tapKey('Mouse0'); tick(); } }, AIR_WAIT);
+  (() => {
+    const el = $('a-left');
+    let id = null, timer = 0, locked = false;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (id != null) return;
+      id = e.pointerId;
+      try { el.setPointerCapture(id); } catch (_) { /* gone */ }
+      el.classList.add('down');
+      locked = false;
+      if (!leftLocked) timer = setTimeout(() => { timer = 0; locked = true; leftLocked = true; press('Mouse0', true); el.classList.add('on'); tick(); render(); }, HOLD_MS);
+    });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      el.classList.remove('down');
+      clearTimeout(timer); timer = 0;
+      if (e.type !== 'pointerup' || locked) return;
+      if (!unlock()) tapKey('Mouse0');
+      tick();
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  })();
+  $('a-right').addEventListener('pointerdown', (e) => { e.preventDefault(); $('a-right').classList.add('down'); });
+  $('a-right').addEventListener('pointerup', () => { $('a-right').classList.remove('down'); tapKey('Mouse1'); tick(); });
+  $('a-right').addEventListener('pointercancel', () => $('a-right').classList.remove('down'));
+  // The strip: slide to scroll (the page follows the finger, as on the touchpad).
+  (() => {
+    const w = $('air-wheel');
+    let id = null, ly = 0;
+    w.addEventListener('pointerdown', (e) => { e.preventDefault(); if (id != null) return; id = e.pointerId; ly = e.clientY; try { w.setPointerCapture(id); } catch (_) { /* gone */ } w.classList.add('live'); });
+    w.addEventListener('pointermove', (e) => { if (e.pointerId !== id) return; scroll(0, (ly - e.clientY) * 3); ly = e.clientY; });
+    const end = (e) => { if (e.pointerId === id) { id = null; w.classList.remove('live'); } };
+    w.addEventListener('pointerup', end);
+    w.addEventListener('pointercancel', end);
+  })();
+
+  // ---- presentation remote ----
+  // Start: F5 (PowerPoint, LibreOffice Impress); on a Mac ⌥⌘P (Keynote's Play).
+  let timerFrom = 0; // when the talk started (the timer), 0: not started
+  function timerShow() {
+    const el = $('p-timer');
+    const s = timerFrom ? Math.floor((Date.now() - timerFrom) / 1000) : 0;
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    el.textContent = `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(sec).padStart(2, '0')}`;
+    el.classList.toggle('idle', !timerFrom);
+  }
+  const timerGo = () => { if (!timerFrom) { timerFrom = Date.now(); timerShow(); } };
+  setInterval(() => { if (opts.mode === 'present' && timerFrom) timerShow(); }, 1000);
+  $('p-timer').onclick = () => { timerFrom = 0; timerShow(); tick(); }; // tap: back to 0:00
+  function slide(dir) {
+    timerGo();
+    tapKey(dir > 0 ? 'PageDown' : 'PageUp');
+    tick();
+  }
+  function combo(mods, code) {
+    for (const m of mods) press(m, true);
+    tapKey(code);
+    for (const m of [...mods].reverse()) press(m, false);
+  }
+  const pkey = (id, fn) => $(id).addEventListener('click', () => { tick(); fn(); });
+  pkey('p-start', () => { timerGo(); if (opts.os === 'mac') combo(['MetaLeft', 'AltLeft'], 'KeyP'); else tapKey('F5'); });
+  pkey('p-black', () => tapKey('KeyB'));
+  pkey('p-exit', () => tapKey('Escape'));
+  for (const [id, dir] of [['p-next', 1], ['p-prev', -1]]) {
+    const b = $(id);
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); b.classList.add('down'); slide(dir); });
+    const up = () => b.classList.remove('down');
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+  }
+  hold($('p-point'), 'point');
+  // Laser (on unless turned off; kept on this device): while pointing, the computer shows a red dot
+  // that follows the pointer (remote.laser), gone again when the finger lifts.
+  let laser = true;
+  try { laser = localStorage.getItem('remote.laser') !== '0'; } catch (_) { /* default */ }
+  let lasing = false;
+  const laserTo = (on) => { if (on === lasing) return; lasing = on; send({ t: 'remote.laser', on }); };
+  const laserShow = () => { $('p-laser').classList.toggle('on', laser); $('p-point').textContent = laser ? t('Hold to point the laser') : t('Hold to point'); };
+  $('p-laser').addEventListener('click', () => {
+    laser = !laser;
+    try { localStorage.setItem('remote.laser', laser ? '1' : '0'); } catch (_) { /* this session */ }
+    laserShow();
+    tick();
+  });
+  laserShow();
+  $('p-point').addEventListener('pointerdown', () => { $('p-point').classList.add('down'); TD.haptic(); if (laser) laserTo(true); });
+  for (const ev of ['pointerup', 'pointercancel']) $('p-point').addEventListener(ev, () => { $('p-point').classList.remove('down'); laserTo(false); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) laserTo(false); });
+  timerShow();
 
   render();
   TD.ready();

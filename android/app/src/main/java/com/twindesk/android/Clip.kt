@@ -58,7 +58,7 @@ class Clip(core: Core) : Feature(core) {
     }
 
     // Clipboard › Pictures here: the computer's pictures land on this clipboard, and this device's go there.
-    val picturesOn: Boolean get() = core.store.flag("clip.images", core.store.was)
+    val picturesOn: Boolean get() = core.store.flag("clip.images", false)
     fun setPictures(v: Boolean) {
         core.store.setFlag("clip.images", v)
         sendPolicy()
@@ -143,7 +143,7 @@ class Clip(core: Core) : Feature(core) {
             core.send(msg(Proto.T.CLIP_IMAGE_PART, "id" to id, "i" to i, "data" to Base64.encodeToString(p.bytes, from, min(part, p.bytes.size - from), Base64.NO_WRAP)))
         }
         if (outId == id) outId = ""
-        remember(Item("out", "${if (shot) "Screenshot" else "Picture"} · ${p.w} × ${p.h}"))
+        remember(Item("out", "${if (shot) tr("Screenshot") else tr("Picture")} · ${p.w} × ${p.h}"))
         core.changed()
         return true
     }
@@ -164,6 +164,7 @@ class Clip(core: Core) : Feature(core) {
     }
 
     private fun remember(item: Item) {
+        if (item.picture == null) core.history.addClip(item.dir, item.text) // History.kt
         main.post {
             if (item.picture == null) history.removeAll { it.picture == null && it.text == item.text }
             history.addFirst(item)
@@ -230,7 +231,7 @@ class Clip(core: Core) : Feature(core) {
                     .onFailure { Log.w("TwinDesk", "picture from the computer: ${it.message}") }
             }
             val size = if (w > 0 && h > 0) "$w × $h" else "${png.size / 1024} KB"
-            remember(Item("in", "${if (shot) "Screenshot" else "Picture"} · $size", uri))
+            remember(Item("in", "${if (shot) tr("Screenshot") else tr("Picture")} · $size", uri))
         } catch (e: Exception) {
             Log.w("TwinDesk", "picture from the computer: ${e.message}")
         }

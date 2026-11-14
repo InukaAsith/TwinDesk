@@ -149,7 +149,7 @@ class DevCtl extends EventEmitter {
   get app() {
     if (!this.remote || !this.version) return null;
     const cur = this.link.current;
-    return AppInfo.check(this.version, this.remote.app, { phone: !!(cur && cur.os === 'android') });
+    return AppInfo.check(this.version, this.remote.app, { phone: !!(cur && (cur.os === 'android' || cur.os === 'ios')) });
   }
 
   // Once a session (and once per device and version while the app runs): 'outdated' {name, version,
@@ -161,7 +161,7 @@ class DevCtl extends EventEmitter {
     const k = (cur.deviceId || cur.name || '') + '|' + a.version;
     if (this.told.has(k)) return;
     this.told.add(k);
-    this.emit('outdated', { name: (this.peerName && this.peerName()) || cur.name || '', version: a.version, missing: a.missing, phone: cur.os === 'android' });
+    this.emit('outdated', { name: (this.peerName && this.peerName()) || cur.name || '', version: a.version, missing: a.missing, phone: cur.os === 'android' || cur.os === 'ios' });
   }
 
   // For the state: the other side's (null until it says), with app: the version check.

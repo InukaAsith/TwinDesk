@@ -39,10 +39,14 @@ class DragRecv {
     Object.assign(this, opts);
     this.root = path.join(app.getPath('userData'), 'drag');
     if (this.link && this.link.fx) this.link.fx.pressure((id) => { const f = this.cur && this.cur.byId.get(id); return streamPressure(f && f.out); });
-    // Fast files v2 (shared/fx2.js): the files engine writes the file into its tmp; we finish it.
+    // Fast files v2 (shared/fx2.js): the files engine writes the file, and we finish it. It sizes the
+    // file up front and fills 4 ranges at once, while the helper's stream reads the tmp as far as
+    // its length (DragSource.cs WaitingStream): Explorer copied zeros. So it writes beside the tmp
+    // and the whole verified file is moved onto the tmp before the helper hears 'ok' (_end).
     if (this.link && this.link.fx && this.link.fx.receiver) {
       this.link.fx.receiver(receiverHook({
         find: (id) => { const f = this.cur && this.cur.byId.get(id); return f && f.state === 'arriving' ? f : null; },
+        path: (f) => f.tmp + '.fx',
         end: (f) => this._end({ t: T.FILE_END, id: f.id, sha256: '' }),
         fail: (f, why) => this._fail(f),
       }));
@@ -193,7 +197,10 @@ class DragRecv {
     f.state = 'closing';
     f.out.once('close', () => {
       if (this.cur !== c || f.state !== 'closing') return;
-      const ok = f.got === f.size && (f.verified || f.hash.digest('hex') === m.sha256);
+      let ok = f.got === f.size && (f.verified || f.hash.digest('hex') === m.sha256);
+      if (ok && f.fx2) {
+        try { fs.renameSync(f.tmp + '.fx', f.tmp); } catch (_) { ok = false; } // see the constructor
+      }
       f.state = ok ? 'ok' : 'failed';
       this.helper.send('dragFile', { drag: c.drag, index: f.index, state: ok ? 'ok' : 'failed' });
       // A paste batch's sender waits for each file's file.done before the next one (filedrop.js),

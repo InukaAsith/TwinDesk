@@ -133,6 +133,7 @@ class CallAudio extends EventEmitter {
   }
 
   async _launch(gen, force) {
+    // Never in the Store's MSIX: it has no phone line capabilities (main.js passes no audio there).
     if (!fs.existsSync(EXE) || !fs.existsSync(MSIX)) {
       this.error = 'macshare-calls is missing (npm run build:helper)';
       return this._set('unavailable');

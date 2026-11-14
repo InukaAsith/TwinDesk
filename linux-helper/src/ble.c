@@ -890,6 +890,7 @@ static int notifying[C_N];
 static guint reg_ids[2 + C_N + 1]; // the application, the service, its characteristics, the advertisement
 static gboolean registered, advertising, host_wanted; // wanted: bleStart until bleStop
 static gboolean holding; // bleHold: quiet, the links kept
+static gboolean hold_ads; // bleHold {advertise}: held, still advertising (the session's iPhone not linked yet)
 static void adv_set(int on);
 static char host_state[16] = "off";
 
@@ -958,7 +959,7 @@ static Guest *guest_of(const char *dev, int mtu) {
     g->mtu = 23;
     g_hash_table_insert(guests, g_strdup(dev), g);
     g_thread_unref(g_thread_new("ble-guest", guest_run, g));
-    if (holding) adv_set(0); // found again: quiet once more
+    if (holding && !hold_ads) adv_set(0); // found again: quiet once more
   }
   if (mtu > 0) g->mtu = mtu;
   return g;
@@ -1168,6 +1169,7 @@ static void host_stop(void) {
                            g_variant_new("(o)", APP), NULL, G_DBUS_CALL_FLAGS_NONE, 5000, NULL, NULL, NULL);
   starting = FALSE;
   holding = FALSE;
+  hold_ads = FALSE;
   advertising = registered = FALSE;
   for (size_t i = 0; i < G_N_ELEMENTS(reg_ids); i++) {
     if (reg_ids[i]) g_dbus_connection_unregister_object(bus, reg_ids[i]);
@@ -1229,7 +1231,7 @@ static void host_start(const char *inf, double id) {
   char *was = info;
   info = g_strdup(inf ? inf : "{}");
   g_free(was);
-  if (registered && holding && !starting) { holding = FALSE; adv_set(1); reply(id, NULL); return; } // back from bleHold: links stay
+  if (registered && holding && !starting) { holding = FALSE; hold_ads = FALSE; adv_set(1); reply(id, NULL); return; } // back from bleHold: links stay
   if ((registered && advertising) || starting) { reply(id, NULL); return; } // a new name: INFO says it from now on
   host_stop();
   const char *why = no_radio();
@@ -1286,13 +1288,14 @@ static void adv_set(int on) {
 }
 
 // bleHold: quiet, but linked guests stay; with none, advertising stays so one can come back.
-static void host_hold(void) {
+static void host_hold(int ads) {
   if (!registered || starting) return;
   holding = TRUE;
+  hold_ads = ads;
   g_mutex_lock(&mu);
   int any = g_hash_table_size(guests) > 0;
   g_mutex_unlock(&mu);
-  adv_set(!any);
+  adv_set(!any || ads);
 }
 
 // ---- signals ----
@@ -1391,7 +1394,7 @@ static void command(char *line) {
     host_wanted = FALSE;
     host_stop();
   } else if (!strcmp(cmd, "bleHold")) {
-    host_hold();
+    host_hold(jbool(c, "advertise", 0));
   }
   else if (!strcmp(cmd, "bleCtrl")) {
     const char *m = jstr(c, "msg", "{}");

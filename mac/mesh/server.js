@@ -57,6 +57,7 @@ class Server extends EventEmitter {
     // A phone's own screen (an iPhone's Share Screen, Android's Mirroring › Native): its upload here.
     this.https.on('request', (req, res) => {
       if (require('../../shared/nativescreen.js').NativeScreen.request(req, res)) return;
+      if (this.fxRequest && this.fxRequest(req, res)) return; // fast files of a session (session.js)
       res.writeHead(404);
       res.end();
     });
@@ -126,6 +127,14 @@ class Server extends EventEmitter {
     };
     if (isLoopback(ctx.address) && this.blePorts.has(req.socket.remotePort)) ctx.transport = 'ble';
     Object.assign(ws, { ctx, lastRx: now, lastTx: now, transport: ctx.transport, address: ctx.address, blePort: ctx.transport === 'ble' ? req.socket.remotePort : 0 });
+    // At most 16 sockets from one address that haven't authenticated (a LAN peer can't open
+    // thousands and hold each for UNAUTH_TIMEOUT_MS): past that the oldest goes, never the new one,
+    // so a phone retrying on flaky Wi-Fi always gets in. Our own Bluetooth/wired pipes are loopback.
+    if (!isLoopback(ctx.address)) {
+      const waiting = [];
+      for (const c of this.sockets) if (!c.authed && c.address === ctx.address) waiting.push(c);
+      if (waiting.length >= 16) waiting[0].ws.terminate(); // a Set keeps insertion order: the oldest
+    }
     this.sockets.add(ctx);
     ws.on('message', (data, isBinary) => this._onMessage(ws.ctx, data, isBinary, ws));
     ws.on('close', () => this._onSocketClose(ws));
@@ -294,7 +303,16 @@ class Server extends EventEmitter {
 
   // Mark ctx authenticated. A client with the same device id replaces the older socket of that
   // device only; other devices are untouched.
-  authenticate(ctx, { deviceId, name, os }, welcome) {
+  authenticate(ctx, who, welcome) {
+    // The files engine (fx2, shared/meshfx.js) starts on demand and its port goes in this welcome:
+    // when it isn't listening yet the welcome waits for it, a few tens of ms, never long.
+    const wait = ctx.fxWanted && ctx.fx2Wanted && !ctx.fx2Waited && this.fx2Wait ? this.fx2Wait(1500) : null;
+    if (wait) {
+      ctx.fx2Waited = true;
+      const go = () => { if (!ctx.authed && this.sockets.has(ctx) && ctx.ws.readyState === ctx.ws.OPEN) this.authenticate(ctx, who, welcome); };
+      return void wait.then(go, go);
+    }
+    const { deviceId, name, os } = who;
     const old = this.clients.get(deviceId);
     if (old && old !== ctx) {
       this.clients.delete(deviceId);
@@ -310,7 +328,9 @@ class Server extends EventEmitter {
     this.clients.set(deviceId, ctx);
     // The input lane (shared/inputlane.js): a lane of its own, when its hello asked, over the network only.
     const il = ctx.ilWanted && ctx.transport !== 'ble' ? this.ilPool.offer(ctx, ctx.ilWanted, ctx.address) : null;
-    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}) });
+    ctx.fx = ctx.fxWanted ? P.randomHex(16) : ''; // fast files: this session's token (session.js routes its requests)
+    ctx.fx2 = ctx.fx && ctx.fx2Wanted && this.fx2Port ? this.fx2Port() || 0 : 0; // its files engine's port
+    this.send(ctx, { ...welcome, resume: ctx.resumeKey, ...(il ? { il } : {}), ...(ctx.fx ? { fx: ctx.fx } : {}), ...(ctx.fx2 ? { fx2: { port: ctx.fx2 } } : {}) });
     this.emit('client', ctx);
   }
 

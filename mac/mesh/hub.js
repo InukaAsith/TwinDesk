@@ -21,6 +21,7 @@
 
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
+const { Route, viewOf } = require('../../shared/hub-route.js');
 const { Sessions } = require('./session.js');
 
 const ROSTER = 'mesh.roster';
@@ -28,118 +29,6 @@ const ROSTER = 'mesh.roster';
 function addTo(map, key, fn) {
   if (!map.has(key)) map.set(key, []);
   map.get(key).push(fn);
-}
-
-// What a feature sees of its device: the one-to-one "client" object (role 'guest' = it connected to
-// this Mac, 'host' = this Mac is its guest), as peer.js always gave it.
-function viewOf(s) {
-  if (!s) return null;
-  const c = s.hostUp ? s.ctx : null;
-  return {
-    deviceId: s.id,
-    name: s.displayName(),
-    os: s.peerOs,
-    role: s.role,
-    transport: s.transport, // 'ble' (Bluetooth, blepipe.js) or 'ip'
-    address: c ? c.address : (s.link && s.link.pairing ? s.link.pairing.address : ''),
-    rttMs: s.status.rtt != null ? s.status.rtt : (c ? c.rttMs : null),
-    lastRx: s.lastRx,
-    authed: true,
-    ws: c ? c.ws : (s.link ? s.link.ws : null),
-    ice: c ? c.ice : null, // a phone through adb reverse: the relay's RTCConfiguration (wired.js)
-  };
-}
-
-// A view of one device for the features: events 'client' (view), 'closed' (view), 'rtt' (view),
-// 't:<type>' (msg, view) and 'message' (msg, view). The target is picked by pick(hub) -> device id;
-// it is only a target while connected. When it changes the listeners get 'closed' (old), then
-// 'client' (new): a feature starts clean.
-class Route extends EventEmitter {
-  constructor(hub, pick) {
-    super();
-    this.hub = hub;
-    this.pick = pick;
-    this.targetId = null;
-    this.lastView = null;
-    this.stateFns = [];
-  }
-
-  get session() {
-    return this.targetId ? this.hub.sessions.get(this.targetId) : null;
-  }
-
-  // The client object of the target (null when nobody).
-  get current() {
-    return viewOf(this.session);
-  }
-
-  // Re-pick the target; emits 'closed' and 'client' when it changed.
-  refresh() {
-    const want = this.pick(this.hub);
-    const s = want ? this.hub.sessions.get(want) : null;
-    const next = s && s.connected ? want : null;
-    if (next === this.targetId) {
-      this._stateChanged();
-      return;
-    }
-    this.drop();
-    if (next) {
-      this.targetId = next;
-      this.lastView = viewOf(this.hub.sessions.get(next));
-      this.emit('client', this.lastView);
-    }
-    this._stateChanged();
-  }
-
-  // The target device went away (or was replaced): 'closed' now, no new target until refresh().
-  drop(id) {
-    if (!this.targetId || (id && id !== this.targetId)) return;
-    const v = this.lastView || {};
-    this.targetId = null;
-    this.lastView = null;
-    this.emit('closed', v);
-  }
-
-  deliver(msg) {
-    const s = this.session;
-    if (!s) return false;
-    if (this.tap) this.tap(msg); // netlink.js: every message of the target
-    const v = viewOf(s);
-    this.emit(`t:${msg.t}`, msg, v);
-    this.emit('message', msg, v);
-    return true;
-  }
-
-  rtt(id) {
-    if (id !== this.targetId) return;
-    this.emit('rtt', viewOf(this.session));
-  }
-
-  // Send to the target (the ctx argument of peer.js is ignored: a route has one device). A message
-  // the hold hook takes (files waiting for Wi-Fi, netlink.js) is sent later through sendNow.
-  send(obj) {
-    if (this.hold && this.hold(obj)) return true;
-    return this.sendNow(obj);
-  }
-
-  sendNow(obj) {
-    const s = this.session;
-    return !!s && s.send(obj) === true;
-  }
-
-  // A message as if the target had sent it.
-  inject(msg) {
-    const s = this.session;
-    if (s && s.connected) this.deliver(msg);
-  }
-
-  onState(fn) {
-    this.stateFns.push(fn);
-  }
-
-  _stateChanged() {
-    for (const fn of this.stateFns) fn();
-  }
 }
 
 class Hub extends EventEmitter {
@@ -159,6 +48,7 @@ class Hub extends EventEmitter {
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];
+    this._audioSticky = {};
     this.facade = this.route(() => this.selectedId);
     this._addFacadeApi(this.facade);
     this._host = { on: false, error: '' };
@@ -183,6 +73,28 @@ class Hub extends EventEmitter {
   // The phone's route: the connected phone, whichever computer is selected.
   phoneRoute() {
     return this.route((hub) => hub._connectedIdWhere((s) => P.isPhoneOs(s.peerOs)));
+  }
+
+  // Sound and microphone: stay on the device of an active session until it ends (mesh #194).
+  audioRoute() {
+    if (!this._audioRoute) this._audioRoute = this.route((hub) => hub._pickAudioRoute());
+    return this._audioRoute;
+  }
+
+  // which: 'sound' | 'mic' — id while that feature's session is live, or null when it is not.
+  setAudioSticky(which, id) {
+    const next = id || null;
+    if (next) this._audioSticky[which] = next;
+    else delete this._audioSticky[which];
+    if (this._audioRoute) this._audioRoute.refresh();
+  }
+
+  _pickAudioRoute() {
+    for (const id of Object.values(this._audioSticky)) {
+      const s = id ? this.sessions.get(id) : null;
+      if (s && s.connected) return id;
+    }
+    return this.selectedId;
   }
 
   // The server (server.js) and the host pairing (pairing.js) of this Mac. They may arrive after the
@@ -539,4 +451,4 @@ class Hub extends EventEmitter {
   }
 }
 
-module.exports = { Hub, Route, viewOf };
+module.exports = { Hub, Route, viewOf }; // Route, viewOf: shared/hub-route.js

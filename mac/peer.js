@@ -110,7 +110,16 @@ class Peer extends EventEmitter {
   lane() {
     const c = this.current;
     if (!this.il || !this.il.started || !c || c.transport === 'ble') return null;
+    if (this.bleInput && this.server.current && this.bleInput.ready(c.ws, c.alt)) return null; // input through Bluetooth (#158)
     return this.il;
+  }
+
+  // Cursor › Mouse and keyboard over Bluetooth (#158): shared/bleinput.js only while it's on. This Mac
+  // hosts it (its guest connects through Bluetooth first); as a guest it goes as before.
+  useBleInput(on) {
+    if (!!this.bleInput === !!on) return;
+    this.bleInput = on ? require('../shared/bleinput.js') : null;
+    this.server.bleInput = this.bleInput;
   }
 
   // The authenticated session: {deviceId, name, os, role ('guest' = they connected to us,

@@ -221,11 +221,11 @@ class Rezume(core: Core) : Feature(core) {
 
     // The share sheet's "Open on computer": a link opened there now.
     fun pushUrl(text: String): String? {
-        val url = URL_IN.find(text)?.value ?: return "That has no link to open"
+        val url = URL_IN.find(text)?.value ?: return tr("That has no link to open")
         val p = peer
-        val name = core.host?.name ?: "your computer"
-        if (p == null) return "$name has no ReZume yet: update TwinDesk there"
-        if (!p.optBoolean("on") || !p.optBoolean("web", true)) return "ReZume is off on $name"
+        val name = core.host?.name ?: tr("your computer")
+        if (p == null) return tr("{name} has no ReZume yet: update TwinDesk there", "name" to name)
+        if (!p.optBoolean("on") || !p.optBoolean("web", true)) return tr("ReZume is off on {name}", "name" to name)
         send(JSONObject().put("kind", "web").put("url", url).put("title", Uri.parse(url).host?.removePrefix("www.") ?: url).put("app", "").put("appName", ""), true)
         return null
     }
@@ -252,7 +252,7 @@ class Rezume(core: Core) : Feature(core) {
                 core.changed()
             }
             Proto.T.RZ_TAKE -> core.send(msg(Proto.T.RZ_DONE, "id" to m.optString("id"), "ok" to false, "why" to "The phone has no document to send"))
-            Proto.T.RZ_DONE -> if (!m.optBoolean("ok")) { message = m.optString("why").take(200).ifEmpty { "It couldn’t be sent" }; core.changed() }
+            Proto.T.RZ_DONE -> if (!m.optBoolean("ok")) { message = m.optString("why").take(200).ifEmpty { tr("It couldn’t be sent") }; core.changed() }
             else -> return false
         }
         return true
@@ -280,7 +280,7 @@ class Rezume(core: Core) : Feature(core) {
         Log.i("TwinDesk", "rezume: ${o.kind} from the computer${if (m.optBoolean("push")) " (sent)" else ""}")
         if (push && Settings.canDrawOverlays(core.ctx)) return take(o) // Android lets an app with the overlay open things
         incoming = o
-        if (opt("notify") || push) Notify.rezume(core.ctx, core.host?.name ?: "your computer", o, loud = push)
+        if (opt("notify") || push) Notify.rezume(core.ctx, core.host?.name ?: tr("your computer"), o, loud = push)
         core.changed()
     }
 
@@ -299,9 +299,9 @@ class Rezume(core: Core) : Feature(core) {
         message = ""
         when (o.kind) {
             "web" -> runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(o.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                .onFailure { message = "No app here opens ${o.url}" }
+                .onFailure { message = tr("No app here opens {url}", "url" to o.url) }
             "doc" -> {
-                message = "Getting ${o.name}…"
+                message = tr("Getting {name}…", "name" to o.name)
                 core.files.expect("rz-${o.id}", Files.Target(true, onDone = { b -> opened(b, o.name) }))
                 core.send(msg(Proto.T.RZ_TAKE, "id" to o.id))
             }
@@ -310,7 +310,7 @@ class Rezume(core: Core) : Feature(core) {
     }
 
     private fun opened(b: Files.Batch, name: String) {
-        message = if (b.ok) "" else "$name didn’t arrive"
+        message = if (b.ok) "" else tr("{name} didn’t arrive", "name" to name)
         val f = b.placed.firstOrNull()
         if (b.ok && f != null) {
             val view = Notify.viewIntent(f.first, f.second)

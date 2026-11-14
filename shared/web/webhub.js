@@ -162,6 +162,11 @@ class WebHub extends EventEmitter {
     this.remoteBus = new EventEmitter();
     this.remoteBus.current = null;
     this.remoteBus.sendToClient = (m) => this.remoteBus.dev && this._send(this.remoteBus.dev, m);
+    // The Deck (shared/deck.js) the same way: deck.* from the device that last said deck.hello.
+    // Nothing listens while the Deck module is off: the page hears {off} and shows no Deck.
+    this.deckBus = new EventEmitter();
+    this.deckBus.current = null;
+    this.deckBus.sendToClient = (m) => this.deckBus.dev && this._send(this.deckBus.dev, m);
     // The screen viewer's input (the phone app's viewer.js: in.* normalized to the screen shared) as
     // a computer's input arrives in a session (mac/input.js and the others take it from here).
     this.inBus = new EventEmitter();
@@ -758,6 +763,18 @@ class WebHub extends EventEmitter {
       return;
     }
     if (t === 'rename') return this.rename(dev.id, m.name);
+    if (t.startsWith('deck.')) {
+      const bus = this.deckBus;
+      if (!bus.listenerCount('t:deck.hello')) return t === 'deck.hello' && this._sendWs(ws, { t: 'deck.layout', off: true });
+      if (!this.allow(dev).control) return t === 'deck.hello' && this._sendWs(ws, { t: 'deck.layout', off: true, why: `Control from ${dev.name} is off on ${this.self().name}` }); // the Deck types and opens apps: control
+      if (bus.dev !== dev.id) {
+        if (t !== 'deck.hello') return; // another device's Deck holds it: this one says hello first
+        if (bus.dev) { bus.current = null; bus.emit('closed'); }
+        bus.dev = dev.id;
+        bus.current = { id: dev.id, name: dev.name, os: 'web' };
+      }
+      return bus.emit(`t:${t}`, m);
+    }
     if (t.startsWith('remote.')) {
       if (!this.allow(dev).control) return t === 'remote.hello' && this._sendWs(ws, { t: 'remote.state', allowed: false, off: true, why: `Control from ${dev.name} is off on ${this.self().name}` });
       const bus = this.remoteBus;
@@ -774,6 +791,7 @@ class WebHub extends EventEmitter {
     if (this.screenDev === id) this._screenStop();
     if (this.camRecv) this.camRecv.stopDevice(id);
     this._remoteGone(id);
+    if (this.deckBus.dev && this.deckBus.dev === id) { this.deckBus.dev = null; this.deckBus.current = null; this.deckBus.emit('closed'); }
     this._wantNotifs();
   }
 

@@ -8,7 +8,7 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "2.6.1"
+    MARKETING_VERSION: "3.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: ""
@@ -51,6 +51,10 @@ targets:
     platform: iOS
     sources:
       - path: Broadcast
+      # The app's language (no shared app group, so they follow the iPhone's language).
+      - path: TwinDesk/Core/I18n.swift
+      - path: TwinDesk/Lang
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twindesk.ios.broadcast
@@ -64,6 +68,10 @@ targets:
     platform: iOS
     sources:
       - path: Share
+      # The app's language (no shared app group, so they follow the iPhone's language).
+      - path: TwinDesk/Core/I18n.swift
+      - path: TwinDesk/Lang
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twindesk.ios.share

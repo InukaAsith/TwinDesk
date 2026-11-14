@@ -107,7 +107,7 @@ struct AccentPicker: View {
     @AppStorage(Accent.key) private var accent = ""
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 34), spacing: 10)], spacing: 10) {
-            swatch("", Color(Accent.color(Accent.fallback)), label: "System")
+            swatch("", Color(Accent.color(Accent.fallback)), label: tr("System"))
             ForEach(Accent.swatches, id: \.self) { h in swatch(h, Color(Accent.color(h)), label: h) }
         }
     }
@@ -139,7 +139,7 @@ struct AccentPicker: View {
 enum Appearance: String, CaseIterable, Identifiable {
     case system, light, dark
     var id: String { rawValue }
-    var title: String { switch self { case .system: return "Automatic"; case .light: return "Light"; case .dark: return "Dark" } }
+    var title: String { switch self { case .system: return tr("Automatic"); case .light: return tr("Light"); case .dark: return tr("Dark") } }
     var scheme: ColorScheme? { switch self { case .system: return nil; case .light: return .light; case .dark: return .dark } }
 }
 
@@ -206,9 +206,9 @@ struct BrandHeader: View {
     }
     private var line: String {
         switch core.state {
-        case "connected": return "Connected"
-        case "connecting": return "Connecting…"
-        default: return "Not connected"
+        case "connected": return tr("Connected")
+        case "connecting": return tr("Connecting…")
+        default: return tr("Not connected")
         }
     }
 }
@@ -334,7 +334,9 @@ struct DenseRow<Trailing: View>: View {
                     if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(hintColor).lineLimit(2) }
                 }
                 Spacer(minLength: 8)
-                HStack(spacing: 8) { trailing() }.controlSize(.small)
+                // Buttons keep their size (two capsules beside a long hint were squeezed into circles);
+                // the title and hint give way instead.
+                HStack(spacing: 8) { trailing() }.controlSize(.small).lineLimit(1).fixedSize().layoutPriority(1)
             }
             .padding(.vertical, 9)
         }
@@ -424,8 +426,8 @@ struct NeedsComputer: View {
         HStack(spacing: 12) {
             Image(systemName: "bolt.horizontal.circle").font(.title2).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(core.state == "connecting" ? "Connecting…" : "Not connected").font(.headline)
-                Text("Connect to a computer to use \(what).").font(.caption).foregroundStyle(.secondary)
+                Text(core.state == "connecting" ? tr("Connecting…") : tr("Not connected")).font(.headline)
+                Text(tr("Connect to a computer to use {what}.", ["what": what])).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
         }

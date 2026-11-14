@@ -98,9 +98,9 @@ static int hidden(Window w) {
   return 0;
 }
 
-static void entry(char **buf, size_t *len, size_t *cap, int *first, Window w, int popup, Window owner) {
+static void entry(char **buf, size_t *len, size_t *cap, int *first, Window w, int popup, Window owner, int minimized) {
   int x, y, ww, hh, viewable, ovr;
-  if (!geometry(w, &x, &y, &ww, &hh, &viewable, &ovr) || !viewable || ww < 2 || hh < 2) return;
+  if (!geometry(w, &x, &y, &ww, &hh, &viewable, &ovr) || (!viewable && !minimized) || ww < 2 || hh < 2) return;
   int l, r, t, b;
   extents(w, &l, &r, &t, &b);
   if (l + r >= ww - 1 || t + b >= hh - 1) l = r = t = b = 0;
@@ -127,8 +127,9 @@ static void entry(char **buf, size_t *len, size_t *cap, int *first, Window w, in
 }
 
 // {"id":n,"ok":true,"windows":[…]}: app windows first, then pop-ups (each with `owner` when the
-// window says whose it is: WM_TRANSIENT_FOR).
-void wins_list(double id) {
+// window says whose it is: WM_TRANSIENT_FOR). minimized: only the minimized app windows instead
+// (the Deck's window space lists them apart; their place is where they were).
+void wins_list(double id, int minimized) {
   size_t cap = 8192, len = 0;
   char *buf = malloc(cap);
   char head[64];
@@ -142,13 +143,13 @@ void wins_list(double id) {
   int n = prop_longs(root_in, atom("_NET_CLIENT_LIST"), XA_WINDOW, list, 512);
   for (int i = 0; i < n; i++) {
     Window w = (Window)list[i];
-    if (has_type(w, SKIP) || hidden(w)) continue;
-    entry(&buf, &len, &cap, &first, w, 0, 0);
+    if (has_type(w, SKIP) || hidden(w) != minimized) continue;
+    entry(&buf, &len, &cap, &first, w, 0, 0, minimized);
   }
   // Menus and pop-ups: override-redirect children of the root.
   Window rr, pr, *kids = NULL;
   unsigned nk = 0;
-  if (XQueryTree(dpy_in, root_in, &rr, &pr, &kids, &nk)) {
+  if (!minimized && XQueryTree(dpy_in, root_in, &rr, &pr, &kids, &nk)) {
     for (unsigned i = 0; i < nk; i++) {
       XWindowAttributes a;
       if (!XGetWindowAttributes(dpy_in, kids[i], &a) || !a.override_redirect || a.map_state != IsViewable) continue;
@@ -156,7 +157,7 @@ void wins_list(double id) {
       if (!has_type(kids[i], POP) && !prop_longs(kids[i], atom("_NET_WM_PID"), XA_CARDINAL, &pid, 1)) continue;
       Window owner = 0;
       XGetTransientForHint(dpy_in, kids[i], &owner);
-      entry(&buf, &len, &cap, &first, kids[i], 1, owner);
+      entry(&buf, &len, &cap, &first, kids[i], 1, owner, 0);
     }
     if (kids) XFree(kids);
   }
@@ -186,6 +187,55 @@ void wins_raise(unsigned long wid) {
 }
 
 void wins_close(unsigned long wid) { client_message((Window)wid, "_NET_CLOSE_WINDOW", CurrentTime, 2); }
+
+// `winMin`: minimized (ICCCM, which the window managers turn into _NET_WM_STATE_HIDDEN).
+void wins_min(unsigned long wid) {
+  XIconifyWindow(dpy_in, (Window)wid, DefaultScreen(dpy_in));
+  XFlush(dpy_in);
+}
+
+// `winFrame {x, y, w, h}` (the Deck): brought back if minimized, no longer maximized or full
+// screen, then its outside (the window manager's frame included) to that rectangle, raised.
+void wins_frame(unsigned long wid, int x, int y, int w, int h) {
+  Window win = (Window)wid;
+  if (hidden(win)) client_message(win, "_NET_ACTIVE_WINDOW", 2, CurrentTime);
+  XEvent e;
+  memset(&e, 0, sizeof e);
+  e.xclient.type = ClientMessage;
+  e.xclient.window = win;
+  e.xclient.message_type = atom("_NET_WM_STATE");
+  e.xclient.format = 32;
+  e.xclient.data.l[0] = 0; // remove
+  e.xclient.data.l[1] = (long)atom("_NET_WM_STATE_MAXIMIZED_VERT");
+  e.xclient.data.l[2] = (long)atom("_NET_WM_STATE_MAXIMIZED_HORZ");
+  e.xclient.data.l[3] = 2;
+  XSendEvent(dpy_in, root_in, False, SubstructureRedirectMask | SubstructureNotifyMask, &e);
+  e.xclient.data.l[1] = (long)atom("_NET_WM_STATE_FULLSCREEN");
+  e.xclient.data.l[2] = 0;
+  XSendEvent(dpy_in, root_in, False, SubstructureRedirectMask | SubstructureNotifyMask, &e);
+  // The window manager's frame (outside the client) and the app's own shadow (inside it).
+  unsigned long fe[4] = { 0 };
+  if (prop_longs(win, atom("_NET_FRAME_EXTENTS"), XA_CARDINAL, fe, 4) != 4) fe[0] = fe[1] = fe[2] = fe[3] = 0;
+  int l, r, t, b;
+  extents(win, &l, &r, &t, &b);
+  int cx = x + (int)fe[0] - l, cy = y + (int)fe[2] - t;
+  int cw = w - (int)(fe[0] + fe[1]) + l + r, chh = h - (int)(fe[2] + fe[3]) + t + b;
+  if (cw < 100) cw = 100;
+  if (chh < 60) chh = 60;
+  memset(&e, 0, sizeof e);
+  e.xclient.type = ClientMessage;
+  e.xclient.window = win;
+  e.xclient.message_type = atom("_NET_MOVERESIZE_WINDOW");
+  e.xclient.format = 32;
+  e.xclient.data.l[0] = StaticGravity | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11) | (2 << 12); // x, y, w, h, from a pager / tool
+  e.xclient.data.l[1] = cx;
+  e.xclient.data.l[2] = cy;
+  e.xclient.data.l[3] = cw;
+  e.xclient.data.l[4] = chh;
+  XSendEvent(dpy_in, root_in, False, SubstructureRedirectMask | SubstructureNotifyMask, &e);
+  XFlush(dpy_in);
+  wins_raise(wid);
+}
 
 void wins_size(unsigned long wid, int w, int h) {
   int l, r, t, b;

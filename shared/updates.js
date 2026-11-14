@@ -1,11 +1,14 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Update check for all three apps: asks GitHub for the latest release of TwinDesk, compares its
-// tag with this app's version and picks the download for this platform and CPU. Nothing is
-// installed here; the app opens the download (or the release page) in the browser.
+// tag with this app's version and picks the download for this platform and CPU. Where this copy
+// can update itself (shared/selfupdate.js: the Mac app, the Windows installer, an AppImage or a
+// .deb) Update downloads the file and installs it in place; elsewhere it opens the download.
 //
-// new Updates({ current, platform: 'mac'|'win'|'linux', getSettings, save, notify, onChange, getLanguage })
-//   settings.updates = { auto, notified }: check on start and every 6 hours when auto is on;
-//   notify(title, body, onClick) once per new version; open() shows the download in the browser.
+// new Updates({ current, platform: 'mac'|'win'|'linux', getSettings, save, notify, onChange, getLanguage, isBusy })
+//   settings.updates = { auto, notified, skipped, install }: check on start and every 6 hours when
+//   auto is on; install: a new version is downloaded by itself and installed once nothing is going
+//   on (no session, isBusy() false, and no one at this computer for a few minutes).
+//   notify(title, body, onClick) once per new version; open() installs (or shows the download).
 'use strict';
 
 const I18n = require('./i18n.js');
@@ -157,7 +160,7 @@ function pickAsset(assets, platform, arch, prefer) {
     const mine = fit.find((a) => ARCH_WORDS[arch] && ARCH_WORDS[arch].test(a.name));
     const neutral = fit.find((a) => !(OTHER_ARCH[arch] || /$^/).test(a.name));
     const a = mine || neutral;
-    if (a) return { name: a.name, url: a.browser_download_url, size: a.size || 0 };
+    if (a) return { name: a.name, url: a.browser_download_url, size: a.size || 0, digest: typeof a.digest === 'string' ? a.digest : '' };
   }
   return null;
 }
@@ -185,6 +188,12 @@ class Updates {
     this.timeoutMs = opts.timeoutMs || CHECK_MS;
     this.openUrl = opts.openUrl || ((url) => require('electron').shell.openExternal(url));
     this.onShowModal = opts.onShowModal || (() => this.open());
+    this.isBusy = opts.isBusy || (() => false);
+    // The Microsoft Store's copy (windows/storepkg.js): the Store updates it. Nothing is checked,
+    // downloaded or installed here.
+    this.store = opts.store === true;
+    this.self = this.store ? null : opts.selfUpdate === undefined ? makeSelf(opts.platform, this.fetch) : opts.selfUpdate;
+    this.idleTimer = null;
     this.status = {
       checking: false,
       latest: null,
@@ -199,24 +208,34 @@ class Updates {
       noReleases: false,
       skipped: false,
       promptUpdate: false,
+      // In place: stage '' | 'downloading' | 'ready' (downloaded, waiting to install) | 'installing'.
+      canInstall: !!(this.self && this.self.kind),
+      stage: '',
+      progress: 0,
+      installError: '',
+      store: this.store,
     };
+    this.file = '';
     this.timer = null;
     this.first = null;
   }
 
   get cfg() {
     const s = this.getSettings();
-    if (!s.updates || typeof s.updates !== 'object') s.updates = { auto: true, notified: '', skipped: '' };
+    if (!s.updates || typeof s.updates !== 'object') s.updates = { auto: true, notified: '', skipped: '', install: false };
     if (typeof s.updates.skipped !== 'string') s.updates.skipped = '';
+    if (typeof s.updates.install !== 'boolean') s.updates.install = false;
     return s.updates;
   }
 
   // Start (or stop) the automatic checks after the setting changed.
   start() {
+    if (this.store) return;
     clearTimeout(this.first);
     clearInterval(this.timer);
     this.first = null;
     this.timer = null;
+    if (this.self && this.self.check) this.self.check().then(() => this._set({ canInstall: !!this.self.kind }), () => {});
     if (this.cfg.auto === false) return;
     this.first = setTimeout(() => this.check(false), FIRST_DELAY);
     this.timer = setInterval(() => this.check(false), EVERY);
@@ -245,7 +264,7 @@ class Updates {
   }
 
   async check(manual = true) {
-    if (this.status.checking) return;
+    if (this.store || this.status.checking) return;
     this._set({ checking: true, error: '', promptUpdate: false });
     try {
       const url = `${API}?_=${Date.now()}`;
@@ -270,6 +289,7 @@ class Updates {
       const skipped = this.cfg.skipped === latest;
       const isNewVersion = this.cfg.notified !== latest;
       const promptUpdate = available && !skipped && (manual || isNewVersion);
+      if (latest !== this.status.latest && this.status.stage === 'ready') { this.file = ''; this.status.stage = ''; } // a newer one than the download
 
       this._set({
         checking: false,
@@ -286,6 +306,7 @@ class Updates {
         promptUpdate,
       });
 
+      if (available && !skipped && this.cfg.install === true) this._autoInstall();
       if (available && isNewVersion) {
         this.cfg.notified = latest;
         this.save();
@@ -313,8 +334,63 @@ class Updates {
     return this.status.available && this.status.download ? this.status.download.url : this.status.releaseUrl;
   }
 
+  // Update: installed in place where this copy can be, else the download (or release page) opened.
   open() {
+    if (this.store) return this.openUrl('ms-windows-store://pdp/?ProductId=9NXNB01FXJ5N');
+    if (this._installable()) return this.install();
     this.openUrl(this.url);
+  }
+
+  _installable() {
+    const s = this.status;
+    return !!(this.self && this.self.kind && s.available && s.download && this.self.fits(s.download));
+  }
+
+  // Download (or reuse the download) and install now.
+  async install() {
+    if (!this._installable() || this.status.stage === 'downloading' || this.status.stage === 'installing') return;
+    try {
+      await this._fetchFile();
+      this._set({ stage: 'installing', installError: '' });
+      await this.self.install(this.file, this.status.latest);
+      // Windows: the installer closes this app; if its UAC prompt is declined, this one carries on.
+      if (this.platform === 'win') setTimeout(() => { if (this.status.stage === 'installing') this._set({ stage: 'ready' }); }, 120000);
+    } catch (e) {
+      this._set({ stage: this.file ? 'ready' : '', installError: (e && e.message) || 'The update didn’t install' });
+    }
+  }
+
+  async _fetchFile() {
+    const d = this.status.download;
+    if (this.file && this.status.stage === 'ready' && this.fileFor === d.url) return;
+    this._set({ stage: 'downloading', progress: 0, installError: '' });
+    this.file = await this.self.download(d, (f) => this._set({ progress: f }));
+    this.fileFor = d.url;
+    this._set({ stage: 'ready', progress: 1 });
+  }
+
+  // Install updates by itself: downloaded now, installed once the computer is idle and no session runs.
+  async _autoInstall() {
+    if (!this._installable() || this.status.stage) return;
+    try { await this._fetchFile(); } catch (e) { this._set({ stage: '', installError: (e && e.message) || '' }); return; }
+    clearInterval(this.idleTimer);
+    const tryNow = () => {
+      if (this.cfg.install !== true || this.status.stage !== 'ready') return clearInterval(this.idleTimer);
+      if (this.isBusy() || idleSeconds() < IDLE_S) return;
+      clearInterval(this.idleTimer);
+      this.install();
+    };
+    this.idleTimer = setInterval(tryNow, 60 * 1000);
+    if (this.idleTimer.unref) this.idleTimer.unref();
+    tryNow();
+  }
+
+  // Install updates automatically switched on: a version already found is fetched now.
+  setInstall(on) {
+    this.cfg.install = !!on;
+    this.save();
+    if (on && this.status.available && !this.status.skipped) this._autoInstall();
+    this.onChange();
   }
 
   _set(fields) {
@@ -326,10 +402,27 @@ class Updates {
     return {
       current: this.current,
       auto: this.cfg.auto !== false,
+      install: this.cfg.install === true,
       skippedVersion: this.cfg.skipped || '',
       ...this.status,
     };
   }
+}
+
+// How long no one has used this computer, in seconds (0 when unknown: never idle then).
+const IDLE_S = 5 * 60;
+function idleSeconds() {
+  try { return require('electron').powerMonitor.getSystemIdleTime(); } catch { return 0; }
+}
+
+function makeSelf(platform, fetchFn) {
+  try {
+    const { app } = require('electron');
+    if (!app || !app.getPath) return null;
+    const { SelfUpdate } = require('./selfupdate.js');
+    const path = require('path');
+    return new SelfUpdate({ platform, app, fetch: fetchFn, dir: path.join(app.getPath('userData'), 'updates') });
+  } catch { return null; }
 }
 
 module.exports = { Updates, compare, pickAsset, parse, formatReleaseNotes, REPO };

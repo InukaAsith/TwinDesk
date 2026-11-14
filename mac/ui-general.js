@@ -18,7 +18,7 @@ UI.tab({
     const { el, api } = UI;
     const t = (...args) => I18n.t(...args);
     const language = UI.select([
-      { value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }, { value: 'ru', label: 'Русский' }, { value: 'tr', label: 'Türkçe' },
+      { value: 'en', label: '🇬🇧 English' }, { value: 'zh-CN', label: '🇨🇳 简体中文' }, { value: 'ru', label: '🇷🇺 Русский' }, { value: 'tr', label: '🇹🇷 Türkçe' }, { value: 'pt-BR', label: '🇧🇷 Português (Brasil)' },
     ], (v) => api.setLanguage(v));
     language.set(I18n.locale);
     const PERMS = [
@@ -33,8 +33,10 @@ UI.tab({
     ];
     const perms = PERMS.map((p) => {
       const pill = el('span', { class: 'pill' });
-      const row = UI.row(p.label, p.note, [pill, UI.button(t('Open'), () => api.openSettings(p.kind), 'small')]);
-      return { p, pill, row };
+      let request = false;
+      const button = UI.button(t('Open'), () => request ? api.allowPermission(p.kind) : api.openSettings(p.kind), 'small');
+      const row = UI.row(p.label, p.note, [pill, button]);
+      return { p, pill, row, button, setRequest: (v) => { request = v; } };
     });
     const helperRow = UI.row(t('Background helper'), '');
     const helperVal = el('span', { class: 'value' });
@@ -53,6 +55,11 @@ UI.tab({
     const blePcSw = UI.switch((v) => api.setNet({ blePc: v }), { label: t('Bluetooth with computers') });
     const blePcRow = UI.row(t('Bluetooth with computers'), '', [blePcSw]);
     // Bluetooth off altogether while the session is on the same Wi-Fi (blepolicy.js wifiQuiet).
+    // Tailscale (#161, shared/tailnet.js): reaching a paired device away from its network.
+    const tailSw = UI.switch((v) => api.setNet({ tailscale: v }), { label: t('Connect through Tailscale') });
+    const tailRow = UI.row(t('Connect through Tailscale'), '', [tailSw]);
+    const tailHere = UI.row(t('This computer on Tailscale'), '', []);
+    const tailHow = UI.row(t('How to set it up'), t('To connect away from home, also from a phone on mobile data: install Tailscale on both devices and sign in to the same account. Pair them once on the same network, or with Connect by address and the other one’s Tailscale address (100.x.y.z). Afterwards, while Tailscale is on, TwinDesk reconnects through it when the other device isn’t on this network.'), []);
     const bleWifiSw = UI.switch((v) => api.setNet({ bleWifiOff: v }), { label: t('Turn off Bluetooth on Wi-Fi connections') });
     const bleWifiRow = UI.row(t('Turn off Bluetooth on Wi-Fi connections'), '', [bleWifiSw]);
     const shareRow = UI.row(t('TwinDesk in the Share menu'), t('Share › TwinDesk sends files to the other computer'),
@@ -91,6 +98,7 @@ UI.tab({
     const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
     const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
+    const modules = UI.modulesCard ? UI.modulesCard() : { card: null, update() {} }; // General › Modules (shared/ui-modules.js; not in Multi-device)
     const sections = UI.sections([
       UI.card(t('Permissions'), [
         ...perms.map((x) => x.row),
@@ -104,17 +112,24 @@ UI.tab({
         styleRow,
         themeRow,
         accentRow,
+        UI.arrangeRow ? UI.arrangeRow() : null,
         UI.row(t('Show a popup when switching'), t('When the mouse and keyboard move between devices'), [hudSw]),
         wallRow,
         media.el,
       ]),
       UI.card(t('Language'), [
-        UI.row(t('Language'), t('Changing the language reloads this window.'), [language]),
+        UI.row(t('Language'), t('Changing the language restarts TwinDesk.'), [language]),
+      ]),
+      UI.card(t('Tutorial'), [
+        UI.row(t('Tour of TwinDesk'), t('How to install TwinDesk on your other device, connect it, and what each page does.'), [UI.button(t('Show the tour'), () => window.Tour && Tour.start(), 'small')]),
+        UI.row(t('What’s new'), t('What came in this version.'), [UI.button(t('Show'), () => window.Tour && Tour.news(), 'small')]),
       ]),
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
+      UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
       UI.card(t('This computer'), [deviceRow, helperRow]),
       UI.card(t('Connections'), [pingRow]),
+      ...(modules.card ? [modules.card] : []),
       UI.card(t('Advanced'), [protoRow, ...engines.rows]),
     ]);
     body.append(sections);
@@ -132,13 +147,17 @@ UI.tab({
       sections.spy();
       media.update(s);
       engines.update(s);
+      modules.update(s);
       wallSw.set(!s.phone || !s.phone.settings || s.phone.settings.wallpaper !== false);
       const ov = (s.ui && s.ui.overview) || {};
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);
-      for (const { p, pill } of perms) {
+      for (const { p, pill, button, setRequest } of perms) {
         const v = p.state ? p.state(s) : s.permissions[p.kind];
         const ok = p.kind === 'screen' ? v === 'granted' : v === true;
         const unknown = v === null || v === undefined || v === 'unknown';
+        const request = !ok && ['screen', 'accessibility', 'inputMonitoring'].includes(p.kind);
+        setRequest(request);
+        button.textContent = t(request ? 'Allow' : 'Open');
         pill.className = `pill ${unknown ? 'muted' : ok ? 'good' : 'bad'}`;
         // macOS counts Accessibility as enough for TwinDesk's keyboard tap: Input Monitoring reads
         // as allowed then, with its own switch in System Settings still off (that's fine).
@@ -160,6 +179,9 @@ UI.tab({
         bleSw.set(s.net.ble);
         blePcSw.set(s.net.blePc === true);
         bleWifiSw.set(s.net.bleWifiOff !== false);
+        tailSw.set(s.net.tailscale !== false);
+        tailRow.setHint(s.net.tailscale === false ? t('Off: only this network, Bluetooth and the cable') : t('When the other device isn’t on this network, TwinDesk tries its Tailscale address'));
+        tailHere.setHint((s.net.tailnet || []).length ? s.net.tailnet.join(' · ') : t('Not on Tailscale now'));
         bleWifiRow.setHint(s.net.bleWifiOff === false ? t('Bluetooth stays on beside the Wi-Fi, the way back if it drops')
           : s.net.bleOff ? t('Off now: the session is on the same Wi-Fi. Bluetooth comes back when it ends')
             : t('On the same Wi-Fi network (not Wi-Fi Direct), Bluetooth goes off until the session ends. With a computer, phones can’t find this one meanwhile'));

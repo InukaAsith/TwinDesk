@@ -83,9 +83,11 @@ class BleHost extends EventEmitter {
   // accept({id, name, os}) -> false: that guest is turned away (Linux: Bluetooth with computers off).
   // hold() -> true while not enabled(): quiet, but the links that are up stay (the Mac helper's bleHold:
   // no advertising, a slow interval; an iPhone's link, which wakes TwinDesk there). Helpers without it: off.
-  constructor({ helper, server, info, enabled = () => true, accept = () => true, hold = () => false }) {
+  // holdAds() -> true: held, but still advertising (an iPhone in the session isn't linked yet: without
+  // it, any other device's link kept this computer silent and the iPhone never found it).
+  constructor({ helper, server, info, enabled = () => true, accept = () => true, hold = () => false, holdAds = () => false }) {
     super();
-    Object.assign(this, { helper, server, info, enabled, accept, hold });
+    Object.assign(this, { helper, server, info, enabled, accept, hold, holdAds });
     this.state = 'off';
     this.wanted = false; // advertising asked for (enabled(): blepolicy.js)
     this.guests = new Map(); // dev -> {id, name, os, at}
@@ -102,17 +104,21 @@ class BleHost extends EventEmitter {
     if (!this.helper.running) return;
     const on = !!this.enabled();
     const hold = !on && !!this.applied && !!this.hold(); // only from up: a stopped service has no links to keep
-    const key = on ? JSON.stringify(this.info()) : hold ? 'hold' : '';
+    const ads = hold && !!this.holdAds();
+    const key = on ? JSON.stringify(this.info()) : hold ? (ads ? 'hold+ads' : 'hold') : '';
     if (on !== this.wanted) {
       this.wanted = on;
       this.emit('change');
     }
     if (key === this.applied) return;
+    const wasHeld = this.applied === 'hold' || this.applied === 'hold+ads';
     this.applied = key;
     if (on) this.helper.request('bleStart', { info: key }).catch((e) => console.log(`[ble] ${e.message}`));
     else if (hold) {
-      this.helper.request('bleHold').catch(() => {});
-      for (const dev of [...this.pipes.keys()]) this._closePipe(dev); // the session is on Wi-Fi: links idle, guests kept
+      this.helper.request('bleHold', { advertise: ads }).catch(() => {});
+      // Into hold, the session is on Wi-Fi: links idle, guests kept. Only advertising changing within
+      // it (the iPhone just linked) leaves a pipe it may be opening alone.
+      if (!wasHeld) for (const dev of [...this.pipes.keys()]) this._closePipe(dev);
       this.emit('change');
     } else {
       this.helper.request('bleStop').catch(() => {});

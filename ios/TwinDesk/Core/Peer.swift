@@ -67,6 +67,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let at = Date()
     }
     private(set) var pairing: PairReq? // a phone pairing with us: the code, Allow / Deny
+    fileprivate var pairFails: [String: [Date]] = [:] // failed pairings per address (pairFailed)
     private(set) var asked: Found? // a phone asked us to host, not paired yet
     private var guests: [String: JSON] {
         get { (UserDefaults.standard.dictionary(forKey: "peer.guests") as? [String: JSON]) ?? [:] }
@@ -74,7 +75,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
     }
     private var myFp: String { PeerKey.fingerprint }
 
-    var on: Bool { core.store.flag("peer.on", true) }
+    var on: Bool { core.store.flag("peer.on", false) }
     var clipOn: Bool { core.store.flag("peer.clip", true) }
     var notifsOn: Bool { core.store.flag("peer.notifs", true) }
     var photosOn: Bool { core.store.flag("peer.photos", true) }
@@ -157,7 +158,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             if hostOn || guests[f.id] != nil || paired().contains(where: { $0.id == f.id }) { return allowHost(f) }
             if asked?.id == f.id { return }
             asked = f
-            Notifier.shared.note("peer.ask", "\(f.name) requests a connection", "Open TwinDesk to allow the connection.")
+            Notifier.shared.note("peer.ask", tr("{name} requests a connection", ["name": f.name]), tr("Open TwinDesk to allow the connection."))
             changed()
         case "peer.hosting":
             let p = m.int("port")
@@ -168,7 +169,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             g.port = UInt16(p)
             connect(g)
         case "peer.no":
-            if waitingFor == f.id { waitingFor = ""; message = "\(f.name) said not now."; changed() }
+            if waitingFor == f.id { waitingFor = ""; message = tr("{name} said not now.", ["name": f.name]); changed() }
         default: break
         }
     }
@@ -181,14 +182,14 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             if Date().timeIntervalSince(w.lastRx) > Proto.timeout { NSLog("TwinDesk: peer: %@ stopped answering", peerName); w.close(); wsClose(w) }
             else { w.send(text(msg(Proto.T.ping, ["ts": Int(Date().timeIntervalSince1970 * 1000)]))) }
         }
-        if let p = pairing, Date().timeIntervalSince(p.at) > 60 { fail(p.ws, Proto.E.pairTimeout, "Pairing timed out"); pairing = nil; changed() }
+        if let p = pairing, Date().timeIntervalSince(p.at) > 60 { pairing = nil; pairFailed(p.ws); fail(p.ws, Proto.E.pairTimeout, "Pairing timed out"); changed() }
         if ticks % 5 == 0 { hosting() }
         if !waitingFor.isEmpty {
             if let f = core.discovery.phone(waitingFor), f.port > 0 { waitingFor = ""; connect(f) }
             else if Date() > waitUntil {
-                let name = core.discovery.phone(waitingFor)?.name ?? "That phone"
+                let name = core.discovery.phone(waitingFor)?.name ?? tr("That phone")
                 waitingFor = ""
-                message = "\(name) didn’t answer. Open TwinDesk on it, or turn on Host for other phones there."
+                message = tr("{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.", ["name": name])
                 changed()
             }
         }
@@ -249,7 +250,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         screenAsked = nil
         let waiting = calls
         calls.removeAll()
-        for (_, cb) in waiting { cb(["error": "Disconnected"]) }
+        for (_, cb) in waiting { cb(["error": tr("Disconnected")]) }
         for id in Array(inFiles.keys) { inFailed(id) }
         outFiles.removeAll()
         screenEnded()
@@ -369,7 +370,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let batch = UUID().uuidString
         let items = urls.map { u -> (URL, Int64) in (u, Int64((try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)) }
         let bytes = items.reduce(0) { $0 + $1.1 }
-        batches[batch] = Batch(id: batch, up: true, name: items.count == 1 ? items[0].0.lastPathComponent : "\(items.count) items", count: items.count, bytes: bytes)
+        batches[batch] = Batch(id: batch, up: true, name: items.count == 1 ? items[0].0.lastPathComponent : trCount(items.count, "item"), count: items.count, bytes: bytes)
         for (i, it) in items.enumerated() {
             let id = UUID().uuidString
             let name = it.0.lastPathComponent
@@ -434,7 +435,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
         let bid = m.str("batch", max: 128).isEmpty ? id : m.str("batch", max: 128)
         let count = max(1, m.int("count", 1))
         if batches[bid] == nil {
-            batches[bid] = Batch(id: bid, up: false, name: count == 1 ? rel.last! : "\(count) items", count: count, bytes: m.int64("bytes", size))
+            batches[bid] = Batch(id: bid, up: false, name: count == 1 ? rel.last! : trCount(count, "item"), count: count, bytes: m.int64("bytes", size))
         }
         var dir = Files.receivedDir
         for p in rel.dropLast() { dir.appendPathComponent(p, isDirectory: true) }
@@ -514,14 +515,14 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
 
     // Ask the Android phone; the answer comes on main ({error} when it can't).
     func ask(_ op: String, _ args: JSON = [:], timeout: TimeInterval = 20, _ cb: @escaping (JSON) -> Void) {
-        guard connected else { return cb(["error": "Not connected"]) }
+        guard connected else { return cb(["error": tr("Not connected")]) }
         let id = Proto.randomHex(8)
         calls[id] = cb
         var m = args
         m["t"] = "q"; m["qid"] = id; m["op"] = op
         send(m)
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-            if let cb = self?.calls.removeValue(forKey: id) { cb(["error": "No answer"]) }
+            if let cb = self?.calls.removeValue(forKey: id) { cb(["error": tr("No answer")]) }
         }
     }
 
@@ -555,7 +556,7 @@ final class Peer: NSObject, LinkEvents, PeerServerHandler {
             guard core.mirror.sharing else {
                 // Remembered: starting Share Screen here sends it straight away (shareStarted).
                 screenAsked = size
-                Notifier.shared.note("peer.screen", "\(peerName) wants to see this screen", "Start Share Screen in TwinDesk to show it.")
+                Notifier.shared.note("peer.screen", tr("{name} wants to see this screen", ["name": peerName]), tr("Start Share Screen in TwinDesk to show it."))
                 return reply(["error": "Start Share Screen on \(core.store.deviceName) (TwinDesk › Share screen). It appears here once started."])
             }
             reply(["ok": true])
@@ -652,13 +653,13 @@ extension Peer {
             guard var p = pairing, p.ws === ws else { return }
             let nonce = m.str("nonce", max: 64)
             guard p.nw.isEmpty, Proto.isHex(nonce, min: 32, max: 32), Proto.commitOf(nonce) == p.commit else {
-                pairing = nil; changed()
+                pairing = nil; pairFailed(ws); changed()
                 return fail(ws, Proto.E.pairRefused, "Nonce does not match")
             }
             p.nw = nonce
             p.code = Proto.sasCode(fp: myFp, nw: nonce, nm: p.nm)
             pairing = p
-            Notifier.shared.note("peer.pair", "Pair with \(p.name)?", "Check that both phones show the same code in TwinDesk.")
+            Notifier.shared.note("peer.pair", tr("Pair with {name}?", ["name": p.name]), tr("Check that both phones show the same code in TwinDesk."))
             changed()
         case Proto.T.pairConfirm:
             guard var p = pairing, p.ws === ws, !p.code.isEmpty else { return }
@@ -666,7 +667,7 @@ extension Peer {
             pairing = p
             finishPair()
         case Proto.T.pairCancel:
-            if pairing?.ws === ws { pairing = nil; changed() }
+            if pairing?.ws === ws { pairing = nil; pairFailed(ws); changed() }
             ws.close()
         case Proto.T.hello: hello(ws, m)
         default: fail(ws, "bad_message", "\"\(type)\" before welcome")
@@ -674,7 +675,7 @@ extension Peer {
     }
 
     func wsClose(_ ws: PeerServer.Ws) {
-        if pairing?.ws === ws { pairing = nil; changed() }
+        if pairing?.ws === ws { pairing = nil; pairFailed(ws); changed() }
         if ws === hostWs { hostWs = nil; ended() }
     }
 
@@ -683,11 +684,25 @@ extension Peer {
         ws.close()
     }
 
+    // Failed pairings per address, as shared/pairfail.js: after 5 in 10 minutes that address can't
+    // start another for a while, so a phone on the network can't keep popping the dialog.
+    private func pairFailed(_ ws: PeerServer.Ws) {
+        let a = ws.address
+        guard !a.isEmpty, a != "127.0.0.1" else { return }
+        pairFails[a] = (pairFails[a] ?? []).filter { Date().timeIntervalSince($0) < 600 } + [Date()]
+    }
+    private func pairLocked(_ ws: PeerServer.Ws) -> Bool {
+        let live = (pairFails[ws.address] ?? []).filter { Date().timeIntervalSince($0) < 600 }
+        pairFails[ws.address] = live.isEmpty ? nil : live
+        return live.count >= 5
+    }
+
     private func pairStart(_ ws: PeerServer.Ws, _ m: JSON) {
+        if pairLocked(ws) { return fail(ws, Proto.E.pairRefused, "Too many failed pairing attempts; wait a few minutes and try again") }
         if let p = pairing, p.ws !== ws { return fail(ws, Proto.E.busy, "Another pairing is in progress") }
         if m.int("v") != Proto.version { return fail(ws, Proto.E.versionMismatch, "Different TwinDesk version") }
         let id = m.str("id", max: 64), commit = m.str("commit", max: 64)
-        guard !id.isEmpty, Proto.isHex(commit, min: 64, max: 64) else { return fail(ws, "bad_message", "pair.start needs id and commit") }
+        guard !id.isEmpty, Proto.isHex(commit, min: 64, max: 64) else { pairFailed(ws); return fail(ws, "bad_message", "pair.start needs id and commit") }
         guard !myFp.isEmpty else { return fail(ws, Proto.E.busy, "This iPhone can’t host") }
         let nm = Proto.randomHex(16)
         let name = m.str("name", max: 64)
@@ -700,7 +715,7 @@ extension Peer {
     // Allow / Deny here.
     func respondPair(_ allow: Bool) {
         guard var p = pairing else { return }
-        if !allow { pairing = nil; fail(p.ws, Proto.E.pairRefused, "Refused"); return changed() }
+        if !allow { pairing = nil; pairFailed(p.ws); fail(p.ws, Proto.E.pairRefused, "Refused"); return changed() }
         guard !p.code.isEmpty else { return }
         p.allowed = true
         pairing = p
@@ -717,6 +732,7 @@ extension Peer {
         guests = g
         p.ws.send(text(msg(Proto.T.pairOk, ["token": token, "macId": core.store.deviceId, "macName": core.store.deviceName, "os": Proto.os])))
         pairing = nil
+        pairFails[p.ws.address] = nil
         NSLog("TwinDesk: peer: paired with %@", p.name)
         changed()
     }

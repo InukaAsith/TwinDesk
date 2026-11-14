@@ -16,10 +16,9 @@ final class PairSync: Feature {
         "files": ("files.send", ""), // out: the computer takes files dropped from here (its Accept files)
         "mic": ("mic.send", ""), // out: this device's microphone on the computer (its Use the iPhone's microphone)
     ]
-    private let defaults: [String: Bool] = ["audio.in": false, "mic.send": false]
 
     // Shared values, the same on both sides (the computers' VALUES): stored as strings.
-    static let valueDefaults: [String: String] = ["pace": "fast"]
+    static let valueDefaults: [String: String] = ["pace": "fast", "res": "1080"] // res: the screen's Resolution (the computer's Share screen › Resolution)
 
     func value(_ key: String) -> String { core.store.string("value." + key, Self.valueDefaults[key] ?? "") }
 
@@ -46,7 +45,7 @@ final class PairSync: Feature {
         if feature == "notifs" && dir == "out" { return false }
         let k = dir == "out" ? o : i
         if k.isEmpty { return false }
-        return core.store.flag(k, defaults[k] ?? true)
+        return core.store.flag(k, false) // on only when saved on
     }
 
     // The person flipped a switch here: tell the computer, which follows.

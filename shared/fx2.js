@@ -28,8 +28,10 @@ function utility() {
 class Fx2 extends EventEmitter {
   // tls: the session server's https options ({key, cert} or {pfx, passphrase}); without, a client
   // only until listen(tls).
-  constructor({ tls = null, idleMs = IDLE_STOP_MS } = {}) {
+  // engine: the engine's file here (Multi-device runs its own, shared/meshfx2-engine.js).
+  constructor({ tls = null, idleMs = IDLE_STOP_MS, engine = 'fx2-engine.js' } = {}) {
     super();
+    this.engineFile = engine;
     this.tls = tls;
     this.idleMs = idleMs;
     this.port = 0;
@@ -166,7 +168,7 @@ class Fx2 extends EventEmitter {
 
   _fork(up) {
     try {
-      const child = up.fork(path.join(__dirname, 'fx2-engine.js'), [], { serviceName: 'TwinDesk Files', stdio: 'inherit' });
+      const child = up.fork(path.join(__dirname, this.engineFile), [], { serviceName: 'TwinDesk Files', stdio: 'inherit' });
       this.child = child;
       this.post = (m) => { try { child.postMessage(m); } catch (_) { /* gone */ } };
       child.on('message', (m) => this._on(m));
@@ -219,7 +221,7 @@ class Fx2 extends EventEmitter {
   }
 
   _inProcess() {
-    const { Engine } = require('./fx2-engine.js');
+    const { Engine } = require(path.join(__dirname, this.engineFile));
     const engine = new Engine((m) => setImmediate(() => this.engine === engine && this._on(m)));
     this.engine = engine;
     this.post = (m) => engine.handle(m);

@@ -1,6 +1,6 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Multi-device (Mesh mode, beta) in the one-to-one app: the picture of a mesh on its tab, and the popup
-// before it's turned on, which says it's in beta (docs/multi-device.md).
+// Multi-device (Mesh mode) in the one-to-one app: the picture of a mesh on its tab, and the popup
+// before it's turned on, which says to keep it off with only two devices (docs/multi-device.md).
 //   MeshIntro.art()                 -> an element: devices, each one linked to every other
 //   MeshIntro.confirm(onTurnOn)     -> the popup (styled as pairpop.js's .pair-pop); Turn on calls onTurnOn
 (function () {
@@ -36,7 +36,7 @@
     return wrap;
   }
 
-  // Said before it's turned on: it's in beta, and with two devices the one-to-one app is the one to use.
+  // Said before it's turned on: with two devices the one-to-one app is the one to use.
   function confirm(onTurnOn) {
     const el = (tag, cls, text) => {
       const e = document.createElement(tag);
@@ -50,10 +50,8 @@
     pop.setAttribute('aria-modal', 'true');
     const body = el('div', 'pop-body');
     const title = el('strong', '', t("Turn on Multi-device? "));
-    title.append(el('span', 'pill beta', t("Mesh · Beta")));
     body.append(
       title,
-      el('p', '', t("Mesh mode is still in beta, and you may run into some issues with it.")),
       el('p', '', t("If you connect only two devices, keep it off.")),
       el('div', 'hint', t("TwinDesk restarts when you turn it on or off.")),
     );
@@ -80,5 +78,34 @@
     ok.focus();
   }
 
-  window.MeshIntro = { art, confirm };
+  // A yes/no pop like confirm's, for any switch that needs one: {title, lines, hint, ok}; onOk on yes,
+  // onNo on Cancel or Escape (Cursor › Mouse and keyboard over Bluetooth).
+  function ask({ title, lines = [], hint = '', ok }, onOk, onNo = () => {}) {
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text) e.textContent = text;
+      return e;
+    };
+    const pop = el('div', 'pair-pop mesh-pop');
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-modal', 'true');
+    const body = el('div', 'pop-body');
+    body.append(el('strong', '', title), ...lines.map((l) => el('p', '', l)));
+    if (hint) body.append(el('div', 'hint', hint));
+    const no = el('button', 'btn', t('Cancel'));
+    const yes = el('button', 'btn primary', ok);
+    const actions = el('div', 'banner-actions');
+    actions.append(no, yes);
+    pop.append(body, actions);
+    const close = () => { document.removeEventListener('keydown', onKey, true); pop.remove(); };
+    function onKey(e) { if (e.key === 'Escape') { close(); onNo(); } }
+    no.onclick = () => { close(); onNo(); };
+    yes.onclick = () => { close(); onOk(); };
+    document.addEventListener('keydown', onKey, true);
+    document.body.append(pop);
+    yes.focus();
+  }
+
+  window.MeshIntro = { art, confirm, ask };
 })();

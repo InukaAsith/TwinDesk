@@ -6,6 +6,7 @@
 // takes the session over (hello {resume}); the Bluetooth one stays as the fallback (alt).
 const WebSocket = require('ws');
 const P = require('../shared/protocol.js');
+const Tailnet = require('../shared/tailnet.js'); // away from its network: its Tailscale address (#161)
 const Quiet = require('../shared/quiet.js'); // idle sessions stop pinging every second (#143)
 const { PairLimit, versionMessage } = require('../shared/pairlimit.js');
 
@@ -77,8 +78,19 @@ class Link {
 
   send(obj) {
     if (!this.authed || !this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
-    Quiet.sent(this.ws, obj);
-    this.ws.send(JSON.stringify(obj));
+    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
+    const ws = this.bleInput ? this.bleInput.route(this.ws, this.alt, obj) : this.ws;
+    Quiet.sent(ws, obj);
+    ws.send(JSON.stringify(obj));
+    return true;
+  }
+
+  // Mouse and keyboard over Bluetooth just went on: a session on the network alone, with the host
+  // near over Bluetooth, starts again through it (then moves to the network), so it has both.
+  bleAgain() {
+    if (!this.authed || this.transport !== 'ip' || this.alt || !this.pairing || !this.ble || !this.ble.get(this.pairing.macId)) return false;
+    console.log('[link] mouse and keyboard over Bluetooth: connecting again through it');
+    this._connect('session');
     return true;
   }
 
@@ -183,11 +195,15 @@ class Link {
       const seen = this.resolveAddress(target.macId);
       if (seen && !isBle(seen.address)) target = { ...target, address: seen.address, port: seen.port };
     }
+    if (mode === 'session' && this.dialAt) target = { ...target, address: this.dialAt }; // this attempt only (Tailnet.pick)
+    this.dialAt = '';
     const seq = ++this.seq;
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
     const hostId = mode === 'pair' ? target.id : target.macId;
     const near = this.ble && hostId && this.ble.get(hostId);
-    const viaBle = isBle(target.address) || (mode === 'session' && near && (!this.resolveAddress(hostId) || Date.now() < this.networkRetryAt));
+    // Mouse and keyboard over Bluetooth (shared/bleinput.js): through it first even on the same network,
+    // so the session keeps it beside the network one once it moves there.
+    const viaBle = isBle(target.address) || (mode === 'session' && near && (!this.resolveAddress(hostId) || Date.now() < this.networkRetryAt || !!this.bleInput));
     if (!viaBle) return this._open(target.address, target.port, 'ip');
     if (!near) {
       this.lastError = '{Name} isn’t nearby';
@@ -404,6 +420,8 @@ class Link {
     clearTimeout(this.timers.hello);
     this.authed = true;
     this.attempt = 0;
+    const tail = Tailnet.clean(msg.tail); // its Tailscale addresses (none: older, or not on it)
+    if (!Tailnet.same(tail, this.pairing.tail) && (tail.length || this.pairing.tail)) { this.pairing.tail = tail; this.store.save(this.pairing); }
     if (this.transport === 'ip') this.networkRetryAt = 0;
     this.resumeKey = typeof msg.resume === 'string' ? msg.resume : ''; // older hosts: none, no moving
     this.fxToken = typeof msg.fx === 'string' && /^[0-9a-f]{32}$/.test(msg.fx) ? msg.fx : ''; // fast files (shared/fastfile.js); older hosts: none
@@ -534,6 +552,9 @@ class Link {
         this.pairing.port = seen.port;
         this.store.save(this.pairing);
       }
+      // Not seen here: every other attempt through Tailscale, when both are on it.
+      const at = Tailnet.pick({ address: this.pairing.address, seen, tail: this.pairing.tail, attempt: this.attempt });
+      this.dialAt = at !== this.pairing.address ? at : '';
       this._connect('session');
     }, delay);
   }

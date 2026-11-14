@@ -153,8 +153,26 @@ class Peer {
 
   // The input lane while it can carry input (started with this session, and not through
   // Bluetooth), or null: input goes on WSS as it always has.
+  // Cursor › Mouse and keyboard over Bluetooth (#158): shared/bleinput.js only while it's on.
+  useBleInput(on) {
+    if (!!this.bleInput === !!on) return;
+    const m = on ? require('../shared/bleinput.js') : null;
+    this.bleInput = m;
+    if (this.server) this.server.bleInput = m;
+    if (this.link) this.link.bleInput = m;
+    if (on && !this.hosting && this.link.bleAgain) this.link.bleAgain();
+  }
+
+  // Input through Bluetooth now: the input lane steps aside.
+  _bleInputNow() {
+    if (!this.bleInput) return false;
+    if (this.hosting) return this.bleInput.ready(this.server.current.ws, this.server.current.alt);
+    return this.bleInput.ready(this.link.ws, this.link.alt);
+  }
+
   lane() {
     if (!this.il || !this.il.started) return null;
+    if (this._bleInputNow()) return null;
     if (this.hosting) return this.server.current.transport === 'ble' ? null : this.il;
     return this.link.authed && this.link.transport === 'ip' ? this.il : null;
   }

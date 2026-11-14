@@ -85,7 +85,7 @@ final class Hub: Feature {
         case "hub.ask":
             if m.str("what") == "media" {
                 if PhotoAccess.now == .ask && UIApplication.shared.applicationState == .active { askPhotos() }
-                else { Notifier.shared.note("hub.ask", "Allow Photos for TwinDesk", "Open TwinDesk › Photos to allow \(core.host?.name ?? "the computer") to view your photos.", sound: true) }
+                else { Notifier.shared.note("hub.ask", tr("Allow Photos for TwinDesk"), tr("Open TwinDesk › Photos to allow {name} to view your photos.", ["name": core.host?.name ?? tr("the computer")]), sound: true) }
             }
         case "call.do": core.send(msg("call.done", ["a": m.str("a", max: 20), "ok": false, "error": "off"]))
         case "sms.send": core.send(msg("sms.sent", ["ref": m.str("ref", max: 60), "ok": false, "error": "off"]))
@@ -300,7 +300,7 @@ final class Hub: Feature {
         deleting = Array(list.prefix(300))
         if UIApplication.shared.applicationState == .active { runDelete() }
         else {
-            Notifier.shared.note("media.delete", "Remove \(deleting.count) from Photos?", "Open TwinDesk to confirm.", sound: true)
+            Notifier.shared.note("media.delete", tr("Remove {count} from Photos?", ["count": deleting.count]), tr("Open TwinDesk to confirm."), sound: true)
             core.send(msg("media.delete", ["ids": [String](), "failed": 0, "confirm": deleting.count]))
         }
     }

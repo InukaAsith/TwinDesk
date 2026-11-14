@@ -20,7 +20,11 @@ contextBridge.exposeInMainWorld('macshare', {
   deviceDo: call('deviceDo'), // Overview: the selected device's controls
   setOverview: call('setOverview'), // General › Overview: what it shows
   setChats: call('setChats'), // Messages: chat apps in one inbox
+  history: call('history'), // Keep history (shared/histkeeper.js)
+  qrPair: call('qrPair'), // Connection: pair a phone with a QR code
+  adbQr: call('adbQr'), // wireless debugging: pair with a QR code (on / off)
   notifReply: call('notifReply'), // answer a phone chat's notification
+  importCancel: call('importCancel'), // Explorer's Import / Capture from phone: stop
   skipSetup: call('skipSetup'),
   confirmCode: call('confirmCode'),
   cancelPair: call('cancelPair'),
@@ -56,9 +60,19 @@ contextBridge.exposeInMainWorld('macshare', {
   clearHistory: call('clearHistory'),
   setTab: call('setTab'),
   setMulti: call('setMulti'),
+  setModules: call('setModules'), // General › Modules
   relaunch: call('relaunch'),
   setEncoder: call('setEncoder'),
   setAudio: call('setAudio'),
+  camera: call('camera'),
+  deckSave: call('deckSave'), deckTry: call('deckTry'), deckApps: call('deckApps'), deckState: call('deckState'), deckRun: call('deckRun'), deckPick: call('deckPick'), // the Deck page
+  iosSign: call('iosSign'), iosSignIpa: call('iosSignIpa'), // TwinDesk iPhone (shared/iossign.js)
+  setRemote: call('setRemote'), // Remote tab (shared/phone-remote.js)
+  setReZume: call('setReZume'), // ReZume tab (shared/rezume.js)
+  rezumeDo: call('rezumeDo'), // … Open, Dismiss, Send to
+  onCamPreview: (fn) => ipcRenderer.on('vcam:preview', (_e, buf) => fn(buf)), // Camera › the picture (a JPEG)
+  phoneMedia: call('phoneMedia'),
+  phoneBtPick: call('phoneBtPick'),
   setTerminal: call('setTerminal'),
   openTerminal: call('openTerminal'),
   setupSshd: call('setupSshd'),
@@ -86,6 +100,8 @@ contextBridge.exposeInMainWorld('macshare', {
   phoneUnmount: call('phoneUnmount'),
   phonePair: call('phonePair'),
   phoneScreen: call('phoneScreen'),
+  phoneCamera: call('phoneCamera'),
+  phoneListCameras: call('phoneListCameras'),
   phoneOpenApp: call('phoneOpenApp'),
   phoneCloseView: call('phoneCloseView'),
   phoneRetry: call('phoneRetry'),

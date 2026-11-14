@@ -6,6 +6,9 @@
 // The layout is kept so '../shared/protocol.js' and the helper path work unchanged; no asar, so
 // the helper .exe and the .ps1 scripts are real files Windows can run.
 // `node installer/build.js [x64] [arm64]`: one installer per architecture, x64 when none is named.
+// `node installer/build.js store [x64] [arm64]`: the Microsoft Store's MSIX instead (one per
+// architecture, for Partner Center; installer/store-manifest.xml, windows/storepkg.js). It leaves
+// out the calls' sparse package and its certificate, and refuses an iOS signer built with any-ipa.
 // The x64 one keeps the name every release has used; arm64 gets -arm64 (the update check picks by
 // that). One AnyCPU helper .exe serves both (build.cmd).
 const fs = require('fs');
@@ -21,7 +24,11 @@ const pkg = require(path.join(WIN, 'package.json'));
 const electronVersion = require(path.join(WIN, 'node_modules', 'electron', 'package.json')).version;
 
 const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json']); // tests (mesh/test) stay out of the package
-const ARCHS = process.argv.slice(2).length ? process.argv.slice(2) : ['x64'];
+const STORE = process.argv.includes('store');
+const ARGS = process.argv.slice(2).filter((a) => a !== 'store');
+const ARCHS = ARGS.length ? ARGS : ['x64'];
+// Partner Center › TwinDesk › Product identity.
+const STORE_ID = { identityName: 'InukaAsith.TwinDesk', publisher: 'CN=C369DC02-ED00-44E8-B6A6-C553635C0E0D', publisherDisplayName: 'Inuka Asith' };
 for (const a of ARCHS) if (a !== 'x64' && a !== 'arm64') throw new Error('Unknown architecture ' + a + ' (x64 or arm64)');
 
 function copy(from, to, filter = () => true) {
@@ -47,6 +54,7 @@ function copyDeps(names, seen = new Set()) {
 }
 
 async function main() {
+  if (STORE) delete process.env.TWINDESK_SIGNER_ANY_IPA; // ios-signer/build.cmd: TwinDesk's own IPA only
   // The helper needs Windows' C# compiler; elsewhere (a Mac) the installer reuses the .exe already
   // in windows-helper/bin/, e.g. one taken from the last release.
   if (process.platform === 'win32') {
@@ -70,12 +78,20 @@ async function main() {
   copy(path.join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'web'), path.join(STAGE, 'android-web'));
   copy(path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper.exe'),
     path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper.exe'));
+  // iPhone app signing's helper (ios-signer/, shared/iossign.js): optional, built with cargo.
+  if (process.platform === 'win32') {
+    try { execFileSync('cmd.exe', ['/c', path.join(ROOT, 'ios-signer', 'build.cmd')], { stdio: 'inherit' }); } catch { console.log('note: the iOS signing helper didn’t build'); }
+  }
+  if (STORE) checkSigner();
+  if (fs.existsSync(path.join(ROOT, 'ios-signer', 'bin'))) copy(path.join(ROOT, 'ios-signer', 'bin'), path.join(STAGE, 'ios-signer', 'bin'));
+  else console.log('note: no ios-signer/bin — iPhone app signing is left out (ios-signer/build.cmd, with cargo)');
   // Multi-device's helper (several watched sides, docs/multi-device.md): the same sources built with MULTI.
   const multiHelper = path.join(ROOT, 'windows-helper', 'bin', 'macshare-winhelper-multi.exe');
   if (fs.existsSync(multiHelper)) copy(multiHelper, path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper-multi.exe'));
   else console.log('note: no windows-helper/bin/macshare-winhelper-multi.exe — Multi-device uses the one-to-one helper (one edge)');
   // The calls' sound on this PC (callaudio.js): its .exe, its signed package and that certificate.
-  for (const f of ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
+  // Not in the Store's MSIX: it has no phone line capabilities (store-manifest.xml).
+  for (const f of STORE ? [] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
     const from = path.join(ROOT, 'windows-helper', 'bin', f);
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
@@ -117,7 +133,77 @@ async function main() {
     license: pkg.license, author: 'inukaasith', main: 'windows/main.js', dependencies: pkg.dependencies,
   }, null, 2));
 
-  for (const arch of ARCHS) await pack(arch);
+  for (const arch of ARCHS) await (STORE ? packStore(arch) : pack(arch));
+}
+
+// The Store's copy signs TwinDesk for iPhone only (ios-signer/build.cmd without
+// TWINDESK_SIGNER_ANY_IPA, unset for it in main()): the signer this PC can run is asked what it does.
+function checkSigner() {
+  const bin = path.join(ROOT, 'ios-signer', 'bin');
+  if (!fs.existsSync(bin)) return;
+  for (const a of fs.readdirSync(bin)) {
+    const exe = path.join(bin, a, 'twindesk-ios-signer.exe');
+    if (a !== process.arch) continue; // the other architecture's can't run here: built in the same run, same features
+    if (!fs.existsSync(exe)) continue;
+    if (process.platform !== 'win32') throw new Error('Not on Windows: can’t check ' + exe + ' is built without any-ipa (build the Store package on Windows)');
+    const out = execFileSync(exe, [], { input: '{"op":"info"}\n', timeout: 20000 }).toString();
+    const info = out.split('\n').map((l) => { try { return JSON.parse(l); } catch { return null; } }).find((m) => m && m.ev === 'info');
+    if (!info) throw new Error(exe + ' didn’t say what it does');
+    if (info.anyIpa !== false) throw new Error(exe + ' is built with any-ipa: rebuild it without TWINDESK_SIGNER_ANY_IPA for the Store');
+  }
+}
+
+// electron-builder's makeappx and makepri (winCodeSign 2.6.0) are from 2017's SDK and refuse the
+// newer parts of store-manifest.xml (uap13: the calls): the installed Windows SDK's, newest first,
+// go in their place in its cache (the same tools windows-helper/calls/pack.ps1 uses).
+let toolsDone = false;
+async function newerAppxTools() {
+  if (toolsDone || process.platform !== 'win32') return;
+  toolsDone = true;
+  const vendor = await require('app-builder-lib/out/binDownload').getBin('winCodeSign');
+  const kits = path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Windows Kits', '10', 'bin');
+  const vers = fs.existsSync(kits) ? fs.readdirSync(kits).filter((v) => /^10\./.test(v))
+    .sort((a, b) => b.split('.').map(Number).reduce((r, x, i) => r || x - Number(a.split('.')[i]), 0)) : [];
+  for (const a of ['x64', 'x86', 'arm64']) {
+    const dest = path.join(vendor, 'windows-10', a === 'x86' ? 'ia32' : a);
+    if (!fs.existsSync(dest)) continue;
+    const from = vers.map((v) => path.join(kits, v, a)).find((d) => fs.existsSync(path.join(d, 'makeappx.exe')));
+    if (!from) throw new Error('No Windows SDK makeappx.exe for ' + a + ': install the Windows 10/11 SDK');
+    for (const f of ['makeappx.exe', 'makepri.exe']) if (fs.existsSync(path.join(from, f))) fs.copyFileSync(path.join(from, f), path.join(dest, f));
+    console.log('appx tools from ' + from);
+  }
+}
+
+// The Microsoft Store's MSIX (appx target): unsigned, Partner Center signs it.
+async function packStore(arch) {
+  await newerAppxTools();
+  const name = 'TwinDesk-Store-' + pkg.version + '-' + arch + '.msix';
+  console.log('Packaging the Store MSIX for ' + arch + '…');
+  await builder.build({
+    targets: builder.Platform.WINDOWS.createTarget('appx', builder.Arch[arch]),
+    projectDir: WIN,
+    config: {
+      appId: 'org.macshare.windows',
+      productName: 'TwinDesk',
+      copyright: 'Copyright (C) 2026 inukaasith',
+      electronVersion,
+      // installer/appx: the Store's logos (from icon.png).
+      directories: { app: STAGE, output: path.join(WIN, 'dist'), buildResources: __dirname },
+      asar: false,
+      npmRebuild: false,
+      win: { icon: path.join(__dirname, 'icon.ico'), executableName: 'TwinDesk' },
+      appx: {
+        ...STORE_ID,
+        applicationId: 'TwinDesk', // windows/storepkg.js AUMID
+        displayName: 'TwinDesk',
+        backgroundColor: 'transparent',
+        languages: ['en-US', 'pt-BR', 'ru-RU', 'tr-TR', 'zh-CN'],
+        customManifestPath: path.join(__dirname, 'store-manifest.xml'),
+        artifactName: name,
+      },
+    },
+  });
+  console.log('Done: ' + path.join(WIN, 'dist', name));
 }
 
 async function pack(arch) {

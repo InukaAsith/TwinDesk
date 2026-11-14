@@ -16,20 +16,22 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         static let fclip = "fclip"
         static let invite = "invite"
         static let screen = "screen"
+        static let sign = "sign"
     }
 
     func setUp() {
         c.delegate = self
-        let copy = UNNotificationAction(identifier: "copy", title: "Copy", options: [])
-        let send = UNNotificationAction(identifier: "send", title: "Send", options: [.foreground]) // reading the clipboard needs us in front
-        let save = UNNotificationAction(identifier: "save", title: "Save", options: [])
-        let connect = UNNotificationAction(identifier: "connect", title: "Pair", options: [.foreground])
+        let copy = UNNotificationAction(identifier: "copy", title: tr("Copy"), options: [])
+        let send = UNNotificationAction(identifier: "send", title: tr("Send"), options: [.foreground]) // reading the clipboard needs us in front
+        let save = UNNotificationAction(identifier: "save", title: tr("Save"), options: [])
+        let connect = UNNotificationAction(identifier: "connect", title: tr("Pair"), options: [.foreground])
         c.setNotificationCategories([
             UNNotificationCategory(identifier: Cat.clipIn, actions: [copy], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.clipOut, actions: [send], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.fclip, actions: [save], intentIdentifiers: []),
             UNNotificationCategory(identifier: Cat.invite, actions: [connect], intentIdentifiers: []),
-            UNNotificationCategory(identifier: Cat.screen, actions: [UNNotificationAction(identifier: "view", title: "View", options: [.foreground])], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Cat.sign, actions: [UNNotificationAction(identifier: "refresh", title: tr("Refresh"), options: [.foreground])], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Cat.screen, actions: [UNNotificationAction(identifier: "view", title: tr("View"), options: [.foreground])], intentIdentifiers: []),
         ])
         c.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
@@ -47,17 +49,17 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func clipIn(_ text: String, from: String, copied: Bool) {
-        post("clip.in", copied ? "Copied from \(from)" : "\(from) copied", String(text.prefix(300)), cat: copied ? nil : Cat.clipIn,
+        post("clip.in", copied ? tr("Copied from {from}", ["from": from]) : tr("{from} copied", ["from": from]), String(text.prefix(300)), cat: copied ? nil : Cat.clipIn,
              info: ["text": String(text.prefix(Proto.clipMaxBytes))])
     }
 
     func clipOut(to: String, picture: Bool) {
-        post("clip.out", "Copied \(picture ? "a picture" : "text")", "Send to \(to)?", cat: Cat.clipOut)
+        post("clip.out", picture ? tr("Copied a picture") : tr("Copied text"), tr("Send to {to}?", ["to": to]), cat: Cat.clipOut)
     }
 
     func fclip(id: String, names: [String], files: Int, from: String) {
-        let what = files == 1 ? (names.first ?? "1 file") : "\(files) items"
-        post("fclip", "Copied on \(from)", "\(what). Save to this \(Device.word)?", cat: Cat.fclip, info: ["id": id], sound: true)
+        let what = files == 1 ? (names.first ?? tr("1 file")) : trCount(files, "item")
+        post("fclip", tr("Copied on {from}", ["from": from]), tr("{what}. Save to this {device}?", ["what": what, "device": Device.word]), cat: Cat.fclip, info: ["id": id], sound: true)
     }
 
     func cancelFclip() { c.removeDeliveredNotifications(withIdentifiers: ["fclip"]) }
@@ -67,12 +69,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func shareAsk(_ name: String, airplay: String? = nil) {
-        post("share", "\(name) wants to see this screen", airplay.map { "Tap to share, or select \($0) in Control Center › Screen Mirroring." } ?? "Open TwinDesk and tap Share Screen.", sound: true)
+        post("share", tr("{name} wants to see this screen", ["name": name]), airplay.map { tr("Tap to share, or select {name} in Control Center › Screen Mirroring.", ["name": $0]) } ?? tr("Open TwinDesk and tap Share Screen."), sound: true)
     }
 
     // The computer started sharing its screen while TwinDesk wasn't in front.
     func screen(_ name: String) {
-        post("screen", "\(name) is sharing its screen", "Tap to view.", cat: Cat.screen, sound: true)
+        post("screen", tr("{name} is sharing its screen", ["name": name]), tr("Tap to view."), cat: Cat.screen, sound: true)
     }
 
     func cancel(_ id: String) { c.removeDeliveredNotifications(withIdentifiers: [id]) }
@@ -81,17 +83,29 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     func note(_ id: String, _ title: String, _ body: String, sound: Bool = false) { post(id, title, body, sound: sound) }
 
     func invite(_ name: String) {
-        post("invite", "\(name) wants to connect", "Tap to pair this \(Device.word).", cat: Cat.invite, sound: true)
+        post("invite", tr("{name} wants to connect", ["name": name]), tr("Tap to pair this {device}.", ["device": Device.word]), cat: Cat.invite, sound: true)
+    }
+
+    // App refresh (SignerFeature.swift): an app here runs out soon. Tapping it opens TwinDesk and the refresh runs.
+    func signRefresh(app: String, name: String, left: String, computer: String) {
+        post("sign.want", tr("{name} needs a refresh", ["name": name]), [left, tr("Tap to refresh it from {computer}.", ["computer": computer])].filter { !$0.isEmpty }.joined(separator: " "),
+             cat: Cat.sign, info: ["app": app], sound: true)
+    }
+
+    // A newer TwinDesk, which the computer installs over this one (App refresh): tap to update.
+    func signUpdate(version: String, computer: String) {
+        post("sign.update", tr("TwinDesk {version} is available", ["version": version]), tr("Tap to install it from {computer}. Your data stays.", ["computer": computer]),
+             cat: Cat.sign, info: ["app": "#update"], sound: true)
     }
 
     func filesIn(_ name: String, ok: Bool, from: String) {
         guard UIApplication.shared.applicationState != .active else { return }
-        post("files.in." + UUID().uuidString, ok ? "Received \(name)" : "\(name) didn’t arrive", ok ? "From \(from) · Files › TwinDesk › Received" : "From \(from)")
+        post("files.in." + UUID().uuidString, ok ? tr("Received {name}", ["name": name]) : tr("{name} didn’t arrive", ["name": name]), ok ? tr("From {from} · Files › TwinDesk › Received", ["from": from]) : tr("From {from}", ["from": from]))
     }
 
     func filesOut(_ name: String, ok: Bool, to: String) {
         guard UIApplication.shared.applicationState != .active else { return }
-        post("files.out." + UUID().uuidString, ok ? "Sent \(name)" : "\(name) wasn’t sent", ok ? "To \(to)" : "To \(to)")
+        post("files.out." + UUID().uuidString, ok ? tr("Sent {name}", ["name": name]) : tr("{name} wasn’t sent", ["name": name]), ok ? tr("To {to}", ["to": to]) : tr("To {to}", ["to": to]))
     }
 
     // ---- delegate ----
@@ -118,8 +132,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         case (Cat.screen, _):
             core.screen.autoOpen = true
             core.changed()
+        case (Cat.sign, _):
+            core.signer.tappedNotification(app: info["app"] as? String)
         case (Cat.invite, _):
             if let f = core.invite { core.pair(f) }
+        case (_, UNNotificationDefaultActionIdentifier) where response.notification.request.identifier == "update":
+            core.updates.open() // a new release (Updates.swift): its IPA or page in Safari
         default: break
         }
         done()

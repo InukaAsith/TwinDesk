@@ -63,6 +63,14 @@ class Server extends EventEmitter {
     };
     if (isLoopback(ctx.address) && this.blePorts.has(req.socket.remotePort)) ctx.transport = 'ble';
     Object.assign(ws, { ctx, lastRx: now, transport: ctx.transport, address: ctx.address, blePort: ctx.transport === 'ble' ? req.socket.remotePort : 0 });
+    // At most 16 sockets from one address that haven't authenticated (a LAN peer can't open
+    // thousands and hold each for UNAUTH_TIMEOUT_MS): past that the oldest goes, never the new one,
+    // so a phone retrying on flaky Wi-Fi always gets in. Our own Bluetooth/wired pipes are loopback.
+    if (!isLoopback(ctx.address)) {
+      const waiting = [];
+      for (const c of this.sockets) if (!c.authed && c.address === ctx.address) waiting.push(c);
+      if (waiting.length >= 16) waiting[0].ws.terminate(); // a Set keeps insertion order: the oldest
+    }
     this.sockets.add(ctx);
     this._arm();
     ws.on('message', (data, isBinary) => this._onMessage(ws.ctx, data, isBinary, ws));
@@ -205,8 +213,10 @@ class Server extends EventEmitter {
     if (!ctx || ctx.ws.readyState !== ctx.ws.OPEN) return;
     // A phone on the USB cable: its WebRTC goes through the relay too (wired.js).
     if (ctx.ice && ICE_OFFERS.has(msg.t)) msg = { ...msg, ice: ctx.ice };
-    Quiet.sent(ctx.ws, msg);
-    ctx.ws.send(JSON.stringify(msg));
+    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
+    const ws = this.bleInput ? this.bleInput.route(ctx.ws, ctx.alt, msg) : ctx.ws;
+    Quiet.sent(ws, msg);
+    ws.send(JSON.stringify(msg));
   }
 
   // Send to the authenticated client, if any.

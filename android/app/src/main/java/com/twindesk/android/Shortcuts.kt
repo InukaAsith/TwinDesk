@@ -15,7 +15,7 @@ class Shortcuts(core: Core) : Feature(core) {
         runCatching {
             val s = ShortcutInfoCompat.Builder(core.ctx, "send-${host.id}")
                 .setShortLabel(host.name)
-                .setLongLabel("Send to ${host.name}")
+                .setLongLabel(tr("Send to {name}", "name" to host.name))
                 .setIcon(IconCompat.createWithResource(core.ctx, R.mipmap.ic_launcher))
                 .setCategories(setOf(category))
                 .setLongLived(true)

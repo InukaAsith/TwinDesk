@@ -106,7 +106,10 @@ namespace MacShare
             if (scan == 0 || scan > 0xFF) return null;
             int key = (int)scan | (extended ? 0xE000 : 0);
             string c;
-            return ToCode.TryGetValue(key, out c) ? c : null;
+            if (ToCode.TryGetValue(key, out c)) return c;
+            // Some keyboards (2.4 GHz receivers among them) flag keys as extended that aren't:
+            // right Shift arrives as E0 36 (#212). With no extended key of that scan, take the plain one.
+            return extended && ToCode.TryGetValue((int)scan, out c) ? c : null;
         }
     }
 }

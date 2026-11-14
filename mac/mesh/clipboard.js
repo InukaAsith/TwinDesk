@@ -3,7 +3,8 @@
 // devices that accept clipboard from us, a clip from any device is applied once and relayed by the
 // Pool. Instant and switch modes, the concealed (password) filter, size limit, clip.policy per
 // device and the in-memory Recent list (never on disk). Port of windows/clip.js; the Mac's helper
-// reports copies (instant mode) instead of the Windows poll.
+// reports copies (instant mode) instead of the Windows poll. Pictures (Clipboard › Pictures) go
+// straight to each connected device that takes them (shared/clipimage.js MeshClipImages).
 //
 // Events: 'change' — this.view changed.
 'use strict';
@@ -12,6 +13,7 @@ const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const { Pool } = require('../../shared/mesh.js');
 const { Latest } = require('../../shared/clipsync.js');
+const { MeshClipImages, trimPictures, itemView } = require('../../shared/clipimage.js');
 
 const PREVIEW = 300; // characters kept per history item for the UI
 
@@ -36,6 +38,8 @@ class Clip extends EventEmitter {
   //   clipboard  {readText() -> string|Promise, writeText(text)}; default Electron's
   //   helper   optional: the helper process {running, send(name, args), request(name, args) -> Promise,
   //            on('event' | 'ready')}: 'clipboard' events (instant mode) and 'clipboardInfo' (concealed)
+  //   session(id)    optional: hub.js's session of a device (bufferedAmount, transport), for pictures
+  // Events also: 'popup' (kind, text) — "Picture from … copied".
   constructor(opts) {
     super();
     this.bus = opts.bus;
@@ -50,23 +54,41 @@ class Clip extends EventEmitter {
     this.lastSkip = '';
     this.concealed = false; // the helper's last report for the current copy
     this.seen = null; // last clipboard text seen by instant mode
+    const sess = (id) => (opts.session ? opts.session(id) : null);
+    this.images = new MeshClipImages({
+      cfg: () => this.cfg, clipboard: this.clipboard,
+      ids: () => this.bus.connectedIds().filter((id) => this._accepts(id)),
+      send: (id, m) => this.bus.send(id, m),
+      backlog: (id) => { const x = sess(id); return (x && x.bufferedAmount) || 0; },
+      ble: (id) => { const x = sess(id); return !!x && x.transport === 'ble'; },
+      peerName: (id) => { const e = this.mesh.get(id); return (e && e.name) || ''; },
+      remember: (dir, item, from) => this._remember(dir, item, from),
+      popup: (kind, text, presentation) => this.emit('popup', kind, presentation || text),
+      onChange: () => this._changed(),
+      pasteKeys: '⌘V',
+    });
 
     const bus = this.bus;
     bus.on(P.T.CLIP, (m, from) => this._onClip(m, from));
+    bus.on(P.T.CLIP_IMAGE, (m, from) => this.images.header(m, from));
+    bus.on(P.T.CLIP_IMAGE_PART, (m, from) => this.images.part(m, from));
     bus.on(P.T.CLIP_POLICY, (m, from) => {
       const e = this.mesh.get(from);
       if (e) e.pool = m.accept !== false;
+      this.images.policy(m, from);
       this._changed();
     });
     bus.on(P.T.CLIP_REQUEST, () => this.sendIfChanged('request'));
     bus.onPeer('welcome', (id) => {
       const e = this.mesh.get(id);
       if (e) e.pool = true; // until its clip.policy says otherwise
+      this.images.reset(id);
       this._sendPolicy(id);
       this._applyWatch();
       this._changed();
     });
-    bus.onPeer('closed', () => {
+    bus.onPeer('closed', (id) => {
+      this.images.reset(id);
       this._applyWatch();
       this._changed();
     });
@@ -117,13 +139,14 @@ class Clip extends EventEmitter {
 
   _sendPolicy(id) {
     const c = this.cfg;
-    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive) });
+    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept });
   }
 
   // A copy was made on this Mac (helper event). Instant mode sends new copies only, not what was
   // already on the clipboard when the watch began (initial).
   onLocalCopy(ev) {
     this.concealed = !!(ev && ev.concealed);
+    this.remote = !!(ev && ev.remote); // Universal Clipboard: see ../clipboard.js (#211)
     if (this.cfg.mode === 'instant' && !(ev && ev.initial)) this.sendIfChanged('instant');
   }
 
@@ -135,12 +158,17 @@ class Clip extends EventEmitter {
     return String((await this.clipboard.readText()) || '');
   }
 
-  _remember(dir, text, from) {
+  // item: the text, or a picture (shared/clipimage.js).
+  _remember(dir, item, from) {
     const n = this.cfg.historySize;
     if (!n) return;
-    this.history = this.history.filter((h) => h.text !== text || h.dir !== dir);
-    this.history.unshift({ dir, at: Date.now(), text, size: Buffer.byteLength(text, 'utf8'), from: from || '' });
+    if (typeof item === 'string') {
+      this.history = this.history.filter((h) => h.text !== item || h.dir !== dir);
+      item = { text: item, size: Buffer.byteLength(item, 'utf8') };
+    }
+    this.history.unshift({ dir, at: Date.now(), ...item, from: from || '' });
     if (this.history.length > n) this.history.length = n;
+    trimPictures(this.history);
   }
 
   // Name of the device where an item started: the mesh entry, else the sender's own name.
@@ -162,9 +190,10 @@ class Clip extends EventEmitter {
     if (!this.latest.accept(r.msg, 'text')) return;
     const text = m.text;
     const name = this._nameOf(r.msg.o, m.on, from);
+    this.images.text(); // a picture still on its way either way is out of date
     this.lastSync.received = text;
     this.seen = text; // so instant mode doesn't publish it back
-    if ((await this._readText()) !== text) this.clipboard.writeText(text);
+    if (this.remote || (await this._readText()) !== text) this.clipboard.writeText(text);
     this._remember('in', text, name);
     this._changed();
   }
@@ -176,8 +205,10 @@ class Clip extends EventEmitter {
     const c = this.cfg;
     if (!c.enabled || !c.send || !this.bus.connectedIds().length) return;
     if (!this.peerAccepts) return this._skip("A connected device doesn’t accept this Mac’s clipboard");
+    if (why === 'instant' && this.remote) return; // Universal Clipboard: see ../clipboard.js (#211)
     const text = await this._readText();
-    if (!text || text === this.lastSync.sent || text === this.lastSync.received) return;
+    if (!text) return this._picture(why);
+    if (text === this.lastSync.sent || text === this.lastSync.received) return;
     if (c.skipConcealed && (await this._isConcealed(why))) {
       this.lastSync.sent = text; // don't retry this item
       return this._skip('skipped a password (concealed item)');
@@ -187,6 +218,7 @@ class Clip extends EventEmitter {
       this.lastSync.sent = text;
       return this._skip(`skipped ${Math.round(size / 1024)} KB (over ${c.maxKB} KB)`);
     }
+    this.images.text();
     const stamp = this.latest.copied('text'); // when the copy happened; the pool adds where (o)
     if (!this.pool.publish({ t: P.T.CLIP, text, ts: stamp.ts }).sent.length) return;
     this.lastSync.sent = text;
@@ -200,6 +232,19 @@ class Clip extends EventEmitter {
     if (why === 'instant' || !this.helper || !this.helper.running) return this.concealed;
     const info = await this.helper.request('clipboardInfo').catch(() => ({}));
     return !!(info && info.concealed);
+  }
+
+  // No text on the clipboard: its picture, if any, to the devices that take pictures.
+  async _picture(why) {
+    if (!this.images.canSend) return;
+    const concealed = this.cfg.skipConcealed && (await this._isConcealed(why));
+    const r = await this.images.offerClipboard(!!concealed);
+    if (r === 'sent') {
+      this.lastSkip = '';
+      this._changed();
+    } else if (r) {
+      this._skip(r);
+    }
   }
 
   // Ask the selected device for its text (it answers only if it changed).
@@ -218,6 +263,7 @@ class Clip extends EventEmitter {
   copyHistory(index) {
     const h = this.history[index];
     if (!h) return;
+    if (h.image) return void this.images.copy(h, h.dir).catch((e) => console.error('[clip] picture not copied:', e.message));
     this.clipboard.writeText(h.text);
     this.seen = h.text;
     if (h.dir === 'out') this.lastSync.sent = null;
@@ -235,10 +281,10 @@ class Clip extends EventEmitter {
   get view() {
     return {
       peerAccepts: this.peerAccepts,
+      peerImages: this.images.peerImages,
+      imageSupport: true,
       lastSkip: this.lastSkip,
-      history: this.history.map((h) => ({
-        dir: h.dir, at: h.at, size: h.size, text: h.text.slice(0, PREVIEW), from: h.from || '',
-      })),
+      history: this.history.map((h) => ({ ...itemView(h, PREVIEW), from: h.from || '' })),
     };
   }
 }

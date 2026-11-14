@@ -55,6 +55,8 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
   const pcView = new PcView({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   const pcApps = new PcApps({ server, getSettings: s });
   const notifs = new Notifs({ server, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) });
+  // History › Keep history: the clipboard's and notifications' history kept, encrypted (shared/histkeeper.js).
+  const history = new (require('../shared/histkeeper.js').HistoryKeeper)({ dir: require('electron').app.getPath('userData'), clip: clipboard, notifs, changed: pushState });
   const fileClip = new FileClip({ server, helper, fileSend, drop, getSettings: s });
   kvm.fileClip = fileClip;
   fileClip.kvm = kvm; // the shortcut while the pointer is over there (keyboard not shared)
@@ -102,7 +104,7 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
   helper.start();
 
   return {
-    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, pcView, pcApps, hub, fileSend, notifs, fileClip, wake, appSend, updateAwake,
+    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, pcView, pcApps, hub, fileSend, notifs, history, fileClip, wake, appSend, updateAwake,
     shutdown() {
       pcView.shutdown();
       pcApps.shutdown();

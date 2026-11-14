@@ -6,7 +6,7 @@
 // keyboard messages never sit behind a big file. Send files and pastes the other side
 // asked for go the same way as batches (`drop:'send'|'paste'`, `batch`, `rel`), ended by `files.done`.
 // With an app that can, on the network or a cable, the bytes go over HTTPS instead, up to four files
-// at once (shared/fastfile.js, link.fx; not in Multi-device).
+// at once (shared/fastfile.js, link.fx; in Multi-device the selected device's, shared/meshfx.js).
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');

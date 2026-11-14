@@ -27,14 +27,18 @@ UI.tab({
     const recvRow = UI.row(I18n.t('Show {name}’s notifications on {me}'), '', [recvSw]);
     const apps = el('div');
 
+    const hist = UI.historyCard('notifs', { list: true });
+
     body.append(
       UI.pair(UI.dir('m2w', [sendRow, fdaRow, hideRow]), UI.dir('w2m', [recvRow])),
       UI.card(I18n.t('Apps'), [apps]),
+      hist.el,
     );
 
     let key = '';
     return (s) => {
       const n = s.notifs;
+      hist.update(s);
       if (!n) return;
       const p = UI.peer(s);
       sendSw.set(n.send);

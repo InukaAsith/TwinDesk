@@ -15,6 +15,7 @@ class Peer {
   constructor(route, server = null) {
     this.route = route;
     this.server = server;
+    this.fx = fxOf(route);
   }
 
   // The device's client object ({deviceId, name, os, role, address, rttMs, lastRx, authed, ws}) or null.
@@ -37,10 +38,12 @@ class Peer {
   // Through Bluetooth, files wait for Wi-Fi (netlink.js): `hold` takes them, sendNow sends them later.
   send(ctx, msg) {
     if (!ctx) return false;
+    if (msg && msg.t === P.T.FILE_CHUNK) this.fx.sentChunk(); // Engines in use: the old way
     return this.route.send(msg);
   }
 
   sendNow(msg) {
+    if (msg && msg.t === P.T.FILE_CHUNK) this.fx.sentChunk();
     return this.route.sendNow(msg);
   }
 
@@ -70,6 +73,7 @@ class Peer {
   }
 
   sendToClient(msg) {
+    if (msg && msg.t === P.T.FILE_CHUNK) this.fx.sentChunk();
     return this.route.send(msg);
   }
 
@@ -107,4 +111,10 @@ class Peer {
   }
 }
 
-module.exports = { Peer };
+// Fast files (shared/meshfx.js) as the one-to-one features use them (filesend.js, drop.js, Engines):
+// the route's device's own (session.js); the receivers' hooks reach every device's.
+function fxOf(route) {
+  return require('../../shared/meshfx.js').facadeFx(() => route.session, () => route.hub.sessions.list(), route.hub.sessions.fxShared);
+}
+
+module.exports = { Peer, fxOf };

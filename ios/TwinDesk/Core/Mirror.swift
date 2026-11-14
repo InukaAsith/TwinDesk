@@ -27,7 +27,7 @@ final class Mirror: Feature {
     // A Mac whose AirPlay Receiver is off (want.airplayOff): the sheet says where to turn it on there.
     private(set) var airplayOff = false
     // Where Screen Mirroring goes: the receiver the computer named, else the computer's own name.
-    var airplayName: String { airplayTo ?? core.link.host?.name ?? "the computer" }
+    var airplayName: String { airplayTo ?? core.link.host?.name ?? tr("the computer") }
     private(set) var size: (w: Int, h: Int, sw: Int, sh: Int)?
     private var want: JSON? // the computer's phone.mirror.want, while its window is open
     private var key = ""
@@ -39,6 +39,14 @@ final class Mirror: Feature {
     private var sessionPacket: Data? // the size packet: first in every new request
     private var configPacket: Data? // SPS/PPS: next, so the window can decode from the first frame
     var peerTap: ((Data) -> Void)? // a phone watching (Peer.swift): every packet, as it comes
+    // Share was tapped and iOS's sheet is up (it takes the app out of focus): the session stays on
+    // Wi-Fi meanwhile (Core.networkBusy), so the picture has a way once the broadcast starts.
+    var starting: Bool { startUntil > Date() }
+    private var startUntil = Date.distantPast
+    func willStart() { startUntil = Date().addingTimeInterval(30) }
+    private var openPending = false // shared while the session was on Bluetooth: told once it's on the network
+    private var uploadPending = false // asked for while on Bluetooth: the stream starts once on the network
+    private var graceWork: DispatchWorkItem? // the session dropped while sharing: the broadcast waits this long
 
     override init(_ core: Core) {
         super.init(core)
@@ -72,6 +80,8 @@ final class Mirror: Feature {
         }
         c.start(queue: .main)
         sharing = true
+        startUntil = .distantPast
+        sendExt(["ack": 1]) // the extension knows the app has it (else it ends the broadcast, never recording for nothing)
         Background.shared.apply() // the app stays up while it relays the screen
         read(c)
         core.changed()
@@ -82,17 +92,49 @@ final class Mirror: Feature {
             return
         }
         if !core.connected {
-            // Nothing to share with: the broadcast stops itself and says why.
-            sendExt(["stop": 1])
+            // Nothing to share with: a session coming back soon still gets it (onWelcome), else the
+            // broadcast stops itself and says why.
+            waitForSession()
             return
         }
-        core.needNetwork() // gone onto Bluetooth on the way out: the picture needs the network
-        if want == nil {
-            // Started here: the computer opens its window and asks (phone.mirror.want).
-            core.send(msg("phone.mirror", ["open": true]))
-        } else {
-            configure()
+        announce()
+    }
+
+    // Shared from here: the computer opens its window and asks (phone.mirror.want). On Bluetooth the
+    // picture has no way: back onto the network first (told then, networkBack), or after a few
+    // seconds anyway (the computer says what it needs).
+    private func announce() {
+        guard sharing, core.connected else { return }
+        if want != nil { return configure() }
+        if core.link.viaBle {
+            openPending = true
+            core.needNetwork()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                guard let self = self, self.openPending, self.sharing, self.core.connected else { return }
+                self.openPending = false
+                self.core.send(msg("phone.mirror", ["open": true]))
+            }
+            return
         }
+        openPending = false
+        core.send(msg("phone.mirror", ["open": true]))
+    }
+
+    // The session moved from Bluetooth back onto the network (Core.offBle): what waited for it now.
+    func networkBack() {
+        guard sharing, core.connected, !core.link.viaBle else { return }
+        if openPending { openPending = false; core.send(msg("phone.mirror", ["open": true])) }
+        if uploadPending || want != nil { uploadPending = false; startUpload() } // a stream on the old way: again on this one
+    }
+
+    private func waitForSession() {
+        graceWork?.cancel()
+        let w = DispatchWorkItem { [weak self] in
+            guard let self = self, self.sharing, !self.core.connected, !self.core.peer.connected else { return }
+            self.sendExt(["stop": 1])
+        }
+        graceWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: w)
     }
 
     private func read(_ c: NWConnection) {
@@ -125,6 +167,10 @@ final class Mirror: Feature {
     private func extGone() {
         guard sharing else { return }
         sharing = false
+        graceWork?.cancel()
+        graceWork = nil
+        openPending = false
+        uploadPending = false
         Background.shared.apply()
         ext?.cancel()
         ext = nil
@@ -187,7 +233,7 @@ final class Mirror: Feature {
             core.send(msg("phone.mirror.state", ["on": false, "waiting": true, "key": key]))
             asking = true
             core.changed()
-            Notifier.shared.shareAsk(core.link.host?.name ?? "The computer", airplay: airplayTo)
+            Notifier.shared.shareAsk(core.link.host?.name ?? tr("The computer"), airplay: airplayTo)
         }
         return true
     }
@@ -215,17 +261,28 @@ final class Mirror: Feature {
         core.changed()
     }
 
+    // The session dropped (a Wi-Fi blip, the computer restarting): the broadcast waits a little for it
+    // to come back (onWelcome) before it stops, and encodes nothing meanwhile.
     override func onClosed() {
         asking = false
         want = nil
+        openPending = false
+        uploadPending = false
         endUpload()
-        if sharing { sendExt(["stop": 1]) }
+        if sharing { sendExt(["want": 0]); waitForSession() }
+    }
+
+    override func onWelcome(_ host: Computer, _ m: JSON) {
+        graceWork?.cancel()
+        graceWork = nil
+        if sharing { announce() }
     }
 
     private func configure() {
         guard let w = want else { return }
         sendExt(["maxSize": w.int("maxSize"), "bitrate": w.int("bitrate", 8_000_000), "fps": min(60, w.int("fps", 30)), "want": 1, "sync": 1])
-        startUpload()
+        if core.link.viaBle { uploadPending = true; core.needNetwork() } // no picture through Bluetooth (networkBack)
+        else { startUpload() }
         sendState()
     }
 

@@ -346,3 +346,8 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 @media (prefers-color-scheme: dark) {
   .app-mark { background-image: image-set(url(../assets/sidebar-icon@1x.png) 1x, url(../assets/sidebar-icon@2x.png) 2x, url(../assets/sidebar-icon@3x.png) 3x, url(../assets/sidebar-icon@4x.png) 4x); }
 }
+
+/* A dropdown's list is drawn by the system from the option's own colours: the Glass style's controls
+   are see-through, which left it white with white text in dark mode. Solid colours for the list. */
+select option, select optgroup { background-color: #ffffff; color: #1d1d1f; }
+@media (prefers-color-scheme: dark) { select option, select optgroup { background-color: #2c2c2e; color: #f5f5f7; } }

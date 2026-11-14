@@ -6,7 +6,7 @@
 // `file.end` with the SHA-256. The PC answers `drag.end` (dropped / cancelled / failed).
 //
 // With an app that can, on the network or a cable, the bytes go over HTTPS instead, up to four files
-// at once (shared/fastfile.js, this.server.fx; not in Multi-device).
+// at once (shared/fastfile.js, this.server.fx; in Multi-device the selected device's, shared/meshfx.js).
 //
 // `drag.policy {accept}` both ways: our Files switch "Drag files across the screen edge" and the PC's.
 //

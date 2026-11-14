@@ -263,8 +263,7 @@ class PcScreen {
       return this._stopSend(true);
     }
     this._stopSend(true);
-    // A phone over Wi-Fi: a high rate only fills the radio's queues (latency), it isn't sharper there.
-    const mbps = P.isPhoneOs(this.link.peerOs) ? Math.min(16, this.cfg.mbps) : this.cfg.mbps;
+    const mbps = this.cfg.mbps; // Share screen › Quality, for phones too
     const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen' } });
     this.sending = { session, displayId: d.id, rect, key };
     this.stats = null;

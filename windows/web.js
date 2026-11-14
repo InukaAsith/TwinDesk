@@ -96,6 +96,7 @@ function setupWeb(c) {
       bus.on('closed', () => ri.release());
       return ri;
     },
+    deck: c.deck, // the Deck (shared/deck.js), none while its module is off
     remote: (bus, getSettings) => new PhoneRemote({ server: bus, helper, getSettings, atHome: home, onChange: c.pushState,
       loadPad: () => require('./gamepad'), save: c.save }),
     notifs: c.notifs && c.notifs.want ? c.notifs : null,

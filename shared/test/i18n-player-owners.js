@@ -165,8 +165,9 @@ for (const language of [undefined, 'en', 'zh-CN']) {
   assert.strictEqual(f.windows[0].loaded.query.name, 'Camera {name} $&');
 }
 
-// Call the real language handler bodies without starting any application or service.
-for (const file of ['windows/main.js', 'windows/mesh/main.js', 'mac/main.js', 'mac/mesh/main.js']) {
+// A new language restarts TwinDesk (windows load only their language's catalog): the real handler
+// bodies relaunch and quit cleanly (never exit, which would skip before-quit), and message no window.
+for (const file of ['windows/main.js', 'windows/mesh/main.js', 'linux/main.js', 'linux/mesh/main.js', 'mac/main.js', 'mac/mesh/main.js']) {
   const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
   const start = source.indexOf('function changeLanguage() {');
   let depth = 0, end = start;
@@ -174,13 +175,15 @@ for (const file of ['windows/main.js', 'windows/mesh/main.js', 'mac/main.js', 'm
     if (source[i] === '{') depth++;
     if (source[i] === '}' && --depth === 0) { end = i + 1; break; }
   }
-  const messages = [], context = {
-    I18n, i18n: I18n.create('en'), settings: { ui: { language: 'zh-CN' } }, app: { getLocale: () => 'en' },
+  const calls = [], messages = [], context = {
+    process: { argv: ['electron', '.', '--hidden', '--x'] },
+    app: { relaunch: (o) => calls.push(['relaunch', o]), quit: () => calls.push(['quit']), exit: () => calls.push(['exit']) },
     BrowserWindow: { getAllWindows: () => [{ isDestroyed: () => false, webContents: { send: (...args) => messages.push(args) } }] },
-    updateTray() {}, trayKey: '', mainWin: null, win: null,
   };
   vm.runInNewContext(source.slice(start, end) + '\nchangeLanguage();', context, { filename: file });
-  assert.deepStrictEqual(messages, [['ui-language', 'zh-CN']], `${file} updates existing players without reloading them`);
+  assert.deepStrictEqual(calls.map((c) => c[0]), ['relaunch', 'quit'], `${file} restarts TwinDesk`);
+  if (calls[0][1]) assert.ok(!calls[0][1].args.includes('--hidden'), `${file} shows the window again`);
+  assert.deepStrictEqual(messages, [], `${file} messages no window`);
 }
 
 for (const file of ['windows/main.js', 'windows/mesh/main.js']) {

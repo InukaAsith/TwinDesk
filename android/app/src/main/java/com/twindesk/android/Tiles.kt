@@ -68,13 +68,14 @@ object Tiles {
     data class Placed(val item: Item, val col: Int, val row: Int, val w: Int, val h: Int)
 
     private const val KEY = "overview.tiles"
+    const val MAX_ROWS = 8 // as many rows as people like, up to a screenful
     // One row of four; the rest under Edit › Add.
     val DEFAULT = Layout(1, listOf(Item("screen", "s"), Item("voice", "s"), Item("touchpad", "s"), Item("files", "s")))
 
     fun load(store: Store): Layout = runCatching {
         val o = JSONObject(store.prefsString(KEY, ""))
         val a = o.getJSONArray("items")
-        Layout(if (o.optInt("rows", 1) == 2) 2 else 1, (0 until a.length()).map { a.getJSONObject(it) }
+        Layout(o.optInt("rows", 1).coerceIn(1, MAX_ROWS), (0 until a.length()).map { a.getJSONObject(it) }
             .map { Item(it.getString("id"), it.optString("s", "s").takeIf { s -> s in listOf("s", "w", "b") } ?: "s") }
             .distinctBy { it.id })
     }.getOrDefault(DEFAULT)
@@ -85,13 +86,31 @@ object Tiles {
 
     fun reset(store: Store) = store.setPrefsString(KEY, "")
 
+    // A shortcut on or off from its own page (Open Deck from the Deck page, a history from its page).
+    fun has(store: Store, id: String) = load(store).items.any { it.id == id }
+    fun set(store: Store, id: String, on: Boolean) {
+        val l = load(store)
+        val has = l.items.any { it.id == id }
+        if (on && !has) save(store, l.copy(items = l.items + Item(id, "s")))
+        else if (!on && has) save(store, l.copy(items = l.items.filter { it.id != id }))
+    }
+
+    // A Deck tile in the shortcuts ("deck:<its id>"): on or off from the Deck page's tile editor.
+    fun pinned(store: Store, tile: String) = load(store).items.any { it.id == "deck:$tile" }
+    fun pin(store: Store, tile: String, on: Boolean) {
+        val l = load(store)
+        val has = l.items.any { it.id == "deck:$tile" }
+        if (on && !has) save(store, l.copy(items = l.items + Item("deck:$tile", "s")))
+        else if (!on && has) save(store, l.copy(items = l.items.filter { it.id != "deck:$tile" }))
+    }
+
     // Column by column, each tile in the first place it fits, in order: a large tile with one row
     // is a wide one. The computers and the iPhone pack the same way.
     fun pack(items: List<Item>, rows: Int): List<Placed> {
         val taken = HashSet<Pair<Int, Int>>()
         return items.map { it ->
             val w = if (it.size == "s") 1 else 2
-            val h = if (it.size == "b" && rows == 2) 2 else 1
+            val h = if (it.size == "b" && rows >= 2) 2 else 1
             var col = 0
             var spot: Pair<Int, Int>? = null
             while (spot == null) {
@@ -130,34 +149,57 @@ fun TilesCard(core: Core) {
     val page = { tab: String -> MainActivity.openTab.value = tab }
     val now = core.pcMedia.now
     val defs = listOf(
-        Def("screen", "Its screen", Ico.display, g(0xFF5AC8FA, 0xFF0A84FF), state = { name }) {
+        Def("screen", tr("Its screen"), Ico.display, g(0xFF5AC8FA, 0xFF0A84FF), state = { name }) {
             ctx.startActivity(Intent(ctx, ViewerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         },
-        Def("voice", "Voice typing", Ico.mic, g(0xFFFF6482, 0xFFFF2D55), state = { "Speak, it types on $name" }) { remote("voice") },
-        Def("touchpad", "Touchpad", Ico.touchpad, g(0xFFFFB340, 0xFFFF9500), state = { "And keyboard" }) { remote("pad") },
-        Def("gamepad", "Gamepad", Ico.gamepad, g(0xFFBF5AF2, 0xFF8944AB), state = { "Keys or a controller" }) { remote("gamepad") },
-        Def("files", "Send files", Ico.send, g(0xFF64D2FF, 0xFF0A84FF), state = { "To Downloads" }) { pick.launch("*/*") },
-        Def("clipboard", "Send clipboard", Ico.clipboard, g(0xFF64D2FF, 0xFF30B0C7), state = { "What’s copied here" }) {
-            toast(if (core.clip.sendCurrent(true)) "Clipboard sent to $name" else "Nothing to send on the clipboard")
+        Def("voice", tr("Voice typing"), Ico.mic, g(0xFFFF6482, 0xFFFF2D55), state = { tr("Speak, it types on {name}", "name" to name) }) { remote("voice") },
+        Def("touchpad", tr("Touchpad"), Ico.touchpad, g(0xFFFFB340, 0xFFFF9500), state = { tr("And keyboard") }) { remote("pad") },
+        Def("gamepad", tr("Gamepad"), Ico.gamepad, g(0xFFBF5AF2, 0xFF8944AB), state = { tr("Keys or a controller") }) { remote("gamepad") },
+        Def("air", tr("Air mouse"), Ico.air, g(0xFF5AC8FA, 0xFF30B0C7), state = { tr("Point to move") }) { remote("air") },
+        Def("present", tr("Presentation"), Ico.present, g(0xFFFF9F0A, 0xFFFF6B00), state = { tr("Next, previous, pointer") }) { remote("present") },
+        Def("files", tr("Send files"), Ico.send, g(0xFF64D2FF, 0xFF0A84FF), state = { tr("To Downloads") }) { pick.launch("*/*") },
+        Def("clipboard", tr("Send clipboard"), Ico.clipboard, g(0xFF64D2FF, 0xFF30B0C7), state = { tr("What’s copied here") }) {
+            toast(if (core.clip.sendCurrent(true)) tr("Clipboard sent to {name}", "name" to name) else tr("Nothing to send on the clipboard"))
         },
-        Def("media", if (now?.playing == true) "Pause" else "Play", if (now?.playing == true) Ico.pause else Ico.play, g(0xFFFF6482, 0xFFBF5AF2),
-            on = { now?.playing == true }, state = { now?.let { listOf(it.title, it.artist).filter { s -> s.isNotEmpty() }.joinToString(" · ") } ?: "Nothing playing" },
+        Def("media", if (now?.playing == true) tr("Pause") else tr("Play"), if (now?.playing == true) Ico.pause else Ico.play, g(0xFFFF6482, 0xFFBF5AF2),
+            on = { now?.playing == true }, state = { now?.let { listOf(it.title, it.artist).filter { s -> s.isNotEmpty() }.joinToString(" · ") } ?: tr("Nothing playing") },
         ) { core.pcMedia.control("toggle") },
-        Def("next", "Next track", Ico.next, g(0xFFFF6482, 0xFFBF5AF2), state = { now?.title ?: "" }) { core.pcMedia.control("next") },
-        Def("lock", "Lock", Ico.lock, g(0xFF8E8E93, 0xFF48484A), has = { can?.optBoolean("lock") == true }, state = { name }) { core.dev.ask("lock") },
-        Def("sleep", "Sleep", Ico.sleep, g(0xFF7D7AFF, 0xFF5856D6), has = { can?.optBoolean("sleep") == true }, state = { name }) { core.dev.ask("sleep") },
-        Def("ring", if (c?.optBoolean("ringing") == true) "Stop ringing" else "Ring", Ico.bell, g(0xFFFF6961, 0xFFFF3B30), has = { can?.optBoolean("ring") == true },
-            on = { c?.optBoolean("ringing") == true }, state = { "Find $name" }) { core.dev.ask(if (c?.optBoolean("ringing") == true) "ringStop" else "ring") },
-        Def("dnd", "Do not disturb", Ico.dnd, g(0xFF7D7AFF, 0xFF5856D6), has = { can?.optBoolean("dnd") == true && c?.has("dnd") == true },
-            on = { c?.optBoolean("dnd") == true }, state = { if (c?.optBoolean("dnd") == true) "On" else "Off" }) { core.dev.ask("dnd", "on" to (c?.optBoolean("dnd") != true)) },
-        Def("bluetooth", "Bluetooth", Ico.bluetooth, g(0xFF5AC8FA, 0xFF0A84FF), has = { can?.optBoolean("bluetooth") == true && c?.has("bluetooth") == true },
-            on = { c?.optBoolean("bluetooth") == true }, state = { if (c?.optBoolean("bluetooth") == true) "On" else "Off" }) { core.dev.ask("bluetooth", "on" to (c?.optBoolean("bluetooth") != true)) },
-        Def("sound", "Sound", Ico.audio, g(0xFFFF6482, 0xFFFF2D55), on = { core.sync.get("audio", "in") }, state = { if (core.sync.get("audio", "in")) "Playing here" else "$name’s sound" }) { page("Sound") },
-        Def("camera", "Webcam", Ico.camera, g(0xFFBF5AF2, 0xFF8944AB), on = { core.adb.camera.on }, state = { "This camera on $name" }) { page("Camera") },
-        Def("mouse", "Mouse", Ico.cursor, g(0xFFFFB340, 0xFFFF9500), state = { "$name’s mouse here" }) { page("Cursor") },
-        Def("notifications", "Notifications", Ico.bell, g(0xFFFF6961, 0xFFFF3B30), state = { "Both ways" }) { page("Notifications") },
+        Def("next", tr("Next track"), Ico.next, g(0xFFFF6482, 0xFFBF5AF2), state = { now?.title ?: "" }) { core.pcMedia.control("next") },
+        Def("lock", tr("Lock"), Ico.lock, g(0xFF8E8E93, 0xFF48484A), has = { can?.optBoolean("lock") == true }, state = { name }) { core.dev.ask("lock") },
+        Def("sleep", tr("Sleep"), Ico.sleep, g(0xFF7D7AFF, 0xFF5856D6), has = { can?.optBoolean("sleep") == true }, state = { name }) { core.dev.ask("sleep") },
+        Def("ring", if (c?.optBoolean("ringing") == true) tr("Stop ringing") else tr("Ring"), Ico.bell, g(0xFFFF6961, 0xFFFF3B30), has = { can?.optBoolean("ring") == true },
+            on = { c?.optBoolean("ringing") == true }, state = { tr("Find {name}", "name" to name) }) { core.dev.ask(if (c?.optBoolean("ringing") == true) "ringStop" else "ring") },
+        Def("dnd", tr("Do not disturb"), Ico.dnd, g(0xFF7D7AFF, 0xFF5856D6), has = { can?.optBoolean("dnd") == true && c?.has("dnd") == true },
+            on = { c?.optBoolean("dnd") == true }, state = { if (c?.optBoolean("dnd") == true) tr("On") else tr("Off") }) { core.dev.ask("dnd", "on" to (c?.optBoolean("dnd") != true)) },
+        Def("bluetooth", tr("Bluetooth"), Ico.bluetooth, g(0xFF5AC8FA, 0xFF0A84FF), has = { can?.optBoolean("bluetooth") == true && c?.has("bluetooth") == true },
+            on = { c?.optBoolean("bluetooth") == true }, state = { if (c?.optBoolean("bluetooth") == true) tr("On") else tr("Off") }) { core.dev.ask("bluetooth", "on" to (c?.optBoolean("bluetooth") != true)) },
+        Def("sound", tr("Sound"), Ico.audio, g(0xFFFF6482, 0xFFFF2D55), on = { core.sync.get("audio", "in") }, state = { if (core.sync.get("audio", "in")) tr("Playing here") else tr("{name}’s sound", "name" to name) }) { page("Sound") },
+        Def("camera", tr("Webcam"), Ico.camera, g(0xFFBF5AF2, 0xFF8944AB), on = { core.adb.camera.on }, state = { tr("This camera on {name}", "name" to name) }) { page("Camera") },
+        Def("mouse", tr("Mouse"), Ico.cursor, g(0xFFFFB340, 0xFFFF9500), state = { tr("{name}’s mouse here", "name" to name) }) { page("Cursor") },
+        Def("deck", tr("Open Deck"), Ico.deck, g(0xFFBF5AF2, 0xFF5E5CE6), has = { core.deck.offered && core.moduleOn("deck") }, state = { tr("Full screen") }) { DeckActivity.open(ctx) },
+        // Shared straight from here (their pages have the details).
+        Def("camShare", tr("Share camera"), Ico.camera, g(0xFF5EE07A, 0xFF30B94D), has = { core.adb.paired || core.adb.known || core.adb.camera.on },
+            on = { core.adb.camera.on }, state = { if (core.adb.camera.on) tr("On {name}", "name" to name) else tr("Off") }) { core.adb.cameraOnComputer(!core.adb.camera.on) },
+        Def("soundShare", tr("Share sound"), Ico.audio, g(0xFFFF6482, 0xFFFF2D55), on = { core.sync.get("audio", "out") },
+            state = { if (core.sync.get("audio", "out")) tr("Playing on {name}", "name" to name) else tr("Off") }) { core.sync.set("audio", "out", !core.sync.get("audio", "out")) },
+        Def("micShare", tr("Share mic"), Ico.mic, g(0xFFFFB340, 0xFFFF9500), on = { core.sync.get("mic", "out") },
+            state = { if (core.sync.get("mic", "out")) tr("A microphone on {name}", "name" to name) else tr("Off") }) { core.sync.set("mic", "out", !core.sync.get("mic", "out")) },
+        Def("notifications", tr("Notifications"), Ico.bell, g(0xFFFF6961, 0xFFFF3B30), state = { tr("Both ways") }) { page("Notifications") },
+        // History's own views (History.kt).
+        Def("clipHistory", tr("Clipboard history"), Ico.history, g(0xFF64D2FF, 0xFF30B0C7), state = { tr("{count} items", "count" to core.history.clip().size) }) { History.view.value = "clip" },
+        Def("notifHistory", tr("Notification history"), Ico.history, g(0xFFFF6961, 0xFFFF3B30), state = { tr("{count} items", "count" to core.history.notifs().size) }) { History.view.value = "notifs" },
     )
-    val byId = defs.associateBy { it.id }
+    // Deck tiles pinned here: they run on the computer as on the Deck page.
+    val deckDefs = Tiles.load(core.store).items.filter { it.id.startsWith("deck:") }.map { item ->
+        val tid = item.id.removePrefix("deck:")
+        val found = core.deck.find(tid)?.first
+        val a = found?.optJSONObject("action")
+        val col = deckColor(found?.optString("color") ?: "#0a84ff")
+        Def(item.id, found?.let { deckLabel(it, core.deck.platform) } ?: tr("Deck"), found?.let { DeckCatalog.symbol(deckIcon(it)) } ?: Ico.deck, listOf(col, col),
+            has = { core.deck.offered && a != null && a.optString("k") !in listOf("nav", "none", "slider") && core.deck.runs(a) },
+        ) { core.deck.run(tid) }
+    }
+    val byId = (defs + deckDefs).associateBy { it.id }
 
     var layout by remember { mutableStateOf(Tiles.load(core.store)) }
     var editing by rememberSaveable { mutableStateOf(false) }
@@ -166,9 +208,9 @@ fun TilesCard(core: Core) {
     // What shows: the shortcuts this computer has (editing shows the rest greyed, to keep their place).
     val shown = layout.items.filter { byId[it.id]?.let { d -> editing || d.has() } == true }
 
-    MacCard("Shortcuts", action = {
+    MacCard(tr("Shortcuts"), action = {
         TextButton(onClick = { editing = !editing; sel = null }) {
-            Text(if (editing) "Done" else "Edit", color = pal.accent, fontSize = 14.sp, fontWeight = if (editing) FontWeight.SemiBold else null)
+            Text(if (editing) tr("Done") else tr("Edit"), color = pal.accent, fontSize = 14.sp, fontWeight = if (editing) FontWeight.SemiBold else null)
         }
     }) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(12.dp)) {
@@ -176,7 +218,7 @@ fun TilesCard(core: Core) {
             val cell = ((maxWidth - gap * 3) / 4).coerceAtMost(120.dp) // four across on a phone
             val placed = Tiles.pack(shown, layout.rows)
             val cols = (placed.maxOfOrNull { it.col + it.w } ?: 0)
-            if (placed.isEmpty()) Text(if (editing) "Add shortcuts below." else "No shortcuts. Tap Edit to add some.", color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
+            if (placed.isEmpty()) Text(if (editing) tr("Add shortcuts below.") else tr("No shortcuts. Tap Edit to add some."), color = pal.muted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
             else Box(Modifier.horizontalScroll(rememberScrollState())) {
                 Box(Modifier.width(cell * cols + gap * (cols - 1)).height(cell * layout.rows + gap * (layout.rows - 1))) {
                     for (p in placed) {
@@ -193,10 +235,12 @@ fun TilesCard(core: Core) {
         if (editing) {
             Line()
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // One row or two.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Rows", color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                    Segments(listOf("1" to "One", "2" to "Two"), layout.rows.toString()) { set(layout.copy(rows = it.toInt())) }
+                // How many rows: one up to MAX_ROWS.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tr("Rows"), color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    RoundButton(Ico.minus, layout.rows > 1) { set(layout.copy(rows = layout.rows - 1)) }
+                    Text("${layout.rows}", color = pal.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(22.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    RoundButton(Ico.plus, layout.rows < Tiles.MAX_ROWS) { set(layout.copy(rows = layout.rows + 1)) }
                 }
                 // The selected tile: earlier, later, its size.
                 val cur = sel?.let { id -> layout.items.firstOrNull { x -> x.id == id } }
@@ -209,18 +253,18 @@ fun TilesCard(core: Core) {
                         RoundButton(Ico.right, i < layout.items.size - 1) { set(layout.copy(items = layout.items.toMutableList().apply { add(i + 1, removeAt(i)) })) }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Size", color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text(tr("Size"), color = pal.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         // Large needs two rows (a square two by two): with one row, small or wide.
-                        val sizes = listOf("s" to "Small", "w" to "Wide") + if (layout.rows == 2) listOf("b" to "Large") else emptyList()
+                        val sizes = listOf("s" to tr("Small"), "w" to tr("Wide")) + if (layout.rows >= 2) listOf("b" to tr("Large")) else emptyList()
                         Segments(sizes, if (cur.size == "b" && layout.rows == 1) "w" else cur.size) { s ->
                             set(layout.copy(items = layout.items.map { x -> if (x.id == cur.id) x.copy(size = s) else x }))
                         }
                     }
-                } else Text("Tap a shortcut to move or resize it, or − to remove it.", color = pal.muted, fontSize = 13.sp)
+                } else Text(tr("Tap a shortcut to move or resize it, or − to remove it."), color = pal.muted, fontSize = 13.sp)
                 // The rest, to add.
                 val rest = defs.filter { d -> d.has() && layout.items.none { x -> x.id == d.id } }
                 if (rest.isNotEmpty()) {
-                    Text("Add", color = pal.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(tr("Add"), color = pal.muted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (d in rest) Row(
                             Modifier.clip(RoundedCornerShape(50)).background(pal.chip.takeIf { x -> x != Color.Transparent } ?: pal.hover)
@@ -235,7 +279,7 @@ fun TilesCard(core: Core) {
                     }
                 }
                 TextButton(onClick = { Tiles.reset(core.store); layout = Tiles.DEFAULT; sel = null }, modifier = Modifier.padding(start = 0.dp)) {
-                    Text("Reset to default", color = pal.bad, fontSize = 14.sp)
+                    Text(tr("Reset to default"), color = pal.bad, fontSize = 14.sp)
                 }
             }
         }
@@ -289,7 +333,7 @@ private fun TileView(d: Def, p: Tiles.Placed, cell: Dp, gap: Dp, editing: Boolea
             Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-4).dp).size(24.dp).clip(CircleShape)
                 .background(if (dark) Color(0xFF48484A) else Color(0xFF8E8E93)).clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
-        ) { Icon(Ico.minus, "Remove ${d.label}", tint = Color.White, modifier = Modifier.size(16.dp)) }
+        ) { Icon(Ico.minus, tr("Remove {label}", "label" to d.label), tint = Color.White, modifier = Modifier.size(16.dp)) }
     }
 }
 

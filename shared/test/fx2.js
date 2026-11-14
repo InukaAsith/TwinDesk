@@ -15,7 +15,7 @@ const { execFileSync, fork } = require('child_process');
 const P = require('../protocol.js');
 const { FastFiles, receiverHook } = require('../fastfile.js');
 const { Fx2 } = require('../fx2.js');
-const { plan } = require('../fx2-engine.js');
+const { Engine, plan, PATH, HEADER } = require('../fx2-engine.js');
 
 const T = P.T;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fx2-'));
@@ -347,6 +347,54 @@ async function arrived(to, id, p) {
     await until(() => g.state === 'stopped', 'stops after the job', 2000);
     h.close();
     g.close();
+  }
+
+  // A PUT killed while it waits for 'target' does not wedge the id: its range frees, the file
+  // fails, and a retry of the same id gets a fresh 'want' instead of a stale 409.
+  {
+    const posts = [];
+    const engine = new Engine((m) => posts.push(m));
+    engine.handle({ op: 'listen', tls: { key, cert } });
+    await until(() => engine.port > 0, 'the engine listens');
+    engine.handle({ op: 'tokens', list: [token] });
+    const put = (id) => https.request({
+      host: '127.0.0.1', port: engine.port, method: 'PUT', agent: false, rejectUnauthorized: false,
+      path: `${PATH}${id}?i=0&off=0&len=5000&total=5000`,
+      headers: { [HEADER]: token, 'content-length': 5000 },
+    });
+    const first = put('w');
+    first.on('error', () => {});
+    first.write(crypto.randomBytes(5000));
+    await until(() => posts.some((m) => m.ev === 'want' && m.id === 'w'), 'want posted');
+    first.destroy();
+    await until(() => posts.some((m) => m.ev === 'failed' && m.id === 'w'), 'the file fails');
+    assert.strictEqual(engine.incoming.size, 0, 'nothing left of w');
+    // 'target' arriving late is a no-op now; a retry starts over.
+    const target = path.join(dir, 'w.bin');
+    engine.handle({ op: 'target', id: 'w', path: target });
+    posts.length = 0;
+    const body = crypto.randomBytes(5000);
+    const status = new Promise((resolve) => {
+      const second = put('w');
+      second.on('response', (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      second.on('error', () => resolve(0));
+      second.end(body);
+    });
+    await until(() => posts.some((m) => m.ev === 'want' && m.id === 'w'), 'want again');
+    engine.handle({ op: 'target', id: 'w', path: target });
+    assert.strictEqual(await status, 200, 'the retried PUT is taken');
+    await until(() => posts.some((m) => m.ev === 'done' && m.id === 'w'), 'w completes');
+    assert.ok(fs.readFileSync(target).equals(body), 'the bytes arrived');
+    // The idle reaper drops a file nobody finishes and a served file nobody GETs.
+    engine.incoming.set('stale', { size: 1, path: 'x', fd: null, hashes: [undefined], left: 1, queue: [], reqs: new Set(), busy: new Set(), got: 0, touched: 0 });
+    engine.handle({ op: 'serve', id: 's1', path: target, size: 5000 });
+    engine.serving.get('s1').touched = 0;
+    posts.length = 0;
+    engine._reap();
+    assert.ok(!engine.incoming.has('stale') && !engine.serving.has('s1'), 'idle entries reaped');
+    assert.strictEqual(posts.filter((m) => m.ev === 'failed').length, 2, 'both reported failed');
+    engine.handle({ op: 'reset' });
+    engine.server.close();
   }
 
   // The engine as a process of its own (a utility process in the app; a forked node here).

@@ -211,7 +211,7 @@ class Hub(core: Core) : Feature(core) {
         if (what !in listOf("calls", "messages", "media", "files", "bt")) return
         val i = Intent(core.ctx, PermActivity::class.java).putExtra("what", what).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Settings.canDrawOverlays(core.ctx) || MainActivity.shown) runCatching { core.ctx.startActivity(i) }
-        else Notify.hubAsk(core.ctx, what, core.host?.name ?: "Your computer")
+        else Notify.hubAsk(core.ctx, what, core.host?.name ?: tr("Your computer"))
     }
 
     // ---- Bluetooth: calls' sound on the computer needs this phone paired with it ----
@@ -329,7 +329,7 @@ class Hub(core: Core) : Feature(core) {
             else -> wanted(what).first()
         }
 
-        fun label(what: String) = when (what) { "calls" -> "Calls"; "messages" -> "Messages"; "files" -> "Files"; "bt" -> "Calls on the computer"; else -> "Photos and videos" }
+        fun label(what: String) = when (what) { "calls" -> tr("Calls"); "messages" -> tr("Messages"); "files" -> tr("Files"); "bt" -> tr("Calls on the computer"); else -> tr("Photos and videos") }
     }
 }
 

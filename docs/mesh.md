@@ -70,6 +70,14 @@ string, `selected` is the session object; never overload them.
   counted from the time the app started, in ms, so a restarted app numbers past its last run) and
   `d` (the origin's direct links at that moment, array of ids). A pooled message without `o` comes
   from a one-to-one peer: it is applied and published into the pool as if the sender were its origin.
+- Fast files (`shared/meshfx.js`): the guest's `hello` carries `fx: 1`, the host's `welcome` a token of
+  that session (`fx`, 32 hex), as in the one-to-one app (`shared/fastfile.js`). Each session has its
+  own FastFiles; a request to the server goes to the session whose token it carries, and one with no
+  or another token isn't served. The files engine (`fx2`: hello `fx2: 1`, welcome `fx2: {port}`) is
+  Multi-device's own, `shared/meshfx2-engine.js` (the one-to-one `fx2-engine.js` as it is, extended):
+  one engine for every session, each session's files under a key of its own (`shared/meshfx2.js`), a
+  request taken under the key of the token it carries, so a device reaches only its own files and one
+  session ending stops only its own. Unencrypted transfers (`fxPlain`) stay one-to-one only.
 
 ## Pool rules (`Pool` in `shared/mesh.js`)
 

@@ -62,15 +62,18 @@ try {
     });
     assert.strictEqual(typeof exposed.setLanguage, 'function');
     const html = fs.readFileSync(path.join(ROOT, mode, 'control.html'), 'utf8');
-    for (const file of ['lang/en.js', 'lang/zh-CN.js', 'i18n.js']) assert.ok(html.includes('../shared/' + file), `${mode} loads shared ${file}`);
+    for (const file of ['lang/en.js', 'lang/pick.js', 'i18n.js']) assert.ok(html.includes('../shared/' + file), `${mode} loads shared ${file}`);
   }
   const build = fs.readFileSync(path.join(ROOT, 'mac/build-app.sh'), 'utf8');
   assert.ok(build.includes('"$ROOT/shared/lang" "$STAGE/shared/"'), 'Mac packages include the shared catalogs');
-  assert.ok(build.includes('zh-Hans.lproj'), 'Mac packages include Chinese system permission descriptions');
-  const descriptions = fs.readFileSync(path.join(ROOT, 'mac/locales/zh-Hans.lproj/InfoPlist.strings'), 'utf8');
-  for (const [, key] of build.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)) {
-    // The system extension has its own bundle; the app's permission descriptions live here.
-    if (key !== 'NSSystemExtensionUsageDescription') assert.ok(descriptions.includes('"' + key + '" = '), `Chinese system description: ${key}`);
+  for (const lproj of ['zh-Hans', 'ru', 'tr', 'pt-BR']) {
+    assert.ok(build.includes(`locales/${lproj}.lproj`), `Mac packages include ${lproj} system permission descriptions`);
+    assert.ok(build.includes(`<string>${lproj}</string>`), `Mac bundle lists the ${lproj} localization`);
+    const descriptions = fs.readFileSync(path.join(ROOT, `mac/locales/${lproj}.lproj/InfoPlist.strings`), 'utf8');
+    for (const [, key] of build.matchAll(/<key>(NS\w+UsageDescription)<\/key>/g)) {
+      // The system extension has its own bundle; the app's permission descriptions live here.
+      if (key !== 'NSSystemExtensionUsageDescription') assert.ok(descriptions.includes('"' + key + '" = '), `${lproj} system description: ${key}`);
+    }
   }
   for (const mode of ['mac', 'mac/mesh']) {
     const source = fs.readFileSync(path.join(ROOT, mode, 'main.js'), 'utf8');
@@ -85,7 +88,7 @@ try {
       Menu: { buildFromTemplate: (x) => x, setApplicationMenu() {} }, P: require('../protocol'),
       CL: require('../cursorlock'), trayMenu: require('../traymenu'),
       i18n, t: (...args) => i18n.t(...args), rezumeItems: () => [], displayMode: () => 'mirror', shareAs() {},
-      actions: {}, showWindow() {}, showUpdateWindow() {}, app: {},
+      actions: {}, showWindow() {}, showUpdateWindow() {}, app: {}, modulesAtStart: [],
     };
     vm.runInNewContext(code + '\nupdateTray();', context);
     const labels = (items) => items.flatMap((x) => [x.label, ...(x.submenu ? labels(x.submenu) : [])]).filter(Boolean);

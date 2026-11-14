@@ -276,7 +276,7 @@ class Input(core: Core) : Feature(core) {
                     "k" -> s.key(m.optInt("d") == 1, m.optInt("k"), m.optInt("m"))
                 }
             }
-            Proto.T.PHONE_INPUT_ASK -> if (!on) Notify.input(core.ctx, core.host?.name ?: "Your computer", supported) else changed()
+            Proto.T.PHONE_INPUT_ASK -> if (!on) Notify.input(core.ctx, core.host?.name ?: tr("Your computer"), supported) else changed()
             Proto.T.PHONE_INPUT_VIA -> {
                 val v = m.optString("via")
                 if (v == "adb" || v == "phone" || v == "auto") { core.store.setPrefsString("inputVia", v); told = "$on/$v"; core.changed() }

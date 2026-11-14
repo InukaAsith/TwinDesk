@@ -135,7 +135,9 @@ UI.tab({
     const adbPair = UI.button(t('Pair'), () => api.phonePair({ code: adbCode.value, where: adbWhere.value }), 'small primary');
     adbCode.onkeydown = adbWhere.onkeydown = (e) => { if (e.key === 'Enter') adbPair.click(); };
     const adbPairRow = UI.row(t('Pairing code'), t('Or type it on the phone, in TwinDesk’s notification'), [adbCode, adbWhere, adbPair]);
-    const adbCard = UI.card(t('Phone screen, mouse and keyboard'), [adbRow, adbPairRow]);
+    const adbQr = UI.adbQr ? UI.adbQr() : null; // Android's Pair device with QR code (shared/ui-adbqr.js)
+    const adbCard = UI.card(t('Phone screen, mouse and keyboard'), [adbRow, adbPairRow].concat(adbQr ? [adbQr.el] : []));
+    const qrPair = UI.qrPairCard ? UI.qrPairCard() : null; // pair a phone with a QR code (shared/ui-qrpair.js)
 
     // Every phone whose screen/mouse/keyboard connection (wireless debugging or cable) is not working yet, each with
     // a Fix button: it makes that phone the selected one (its pairing fields show below) and tries again.
@@ -161,6 +163,7 @@ UI.tab({
     body.append(
       UI.card('', [addrRow, ipRow]),
       UI.card(t('Found nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
+      ...(qrPair ? [qrPair.el] : []),
       hero,
       adbCard,
       pair.el,
@@ -240,7 +243,9 @@ UI.tab({
         adbRow.setHint(t(br.message || ''));
         adbPairRow.hidden = !pairable;
         if (UI.adbBle(s, adbCard, adbRow, adbPill)) adbPairRow.hidden = true;
+        if (adbQr) adbQr.update(s, pairable && !adbPairRow.hidden);
       }
+      if (qrPair) qrPair.update(s);
 
       // A phone that is only just connecting is not a problem yet: 'connecting' counts after 8 s.
       const now = Date.now();

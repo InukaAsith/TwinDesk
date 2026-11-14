@@ -1,0 +1,157 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* Arrange the sidebar (shared/ui-arrange.js) and Search (shared/ui-search.js). */
+
+.arrange-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.arrange-pop {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 18px 18px 14px;
+  background: var(--card, #fff);
+  color: var(--text, inherit);
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.arrange-pop h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.arrange-pop .hint { margin: 0; }
+
+.arrange-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.arrange-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  cursor: grab;
+  user-select: none;
+}
+
+.arrange-item:hover { background: var(--nav-hover, rgba(127, 127, 127, 0.1)); }
+.arrange-item.dragging { opacity: 0.45; }
+.arrange-item.muted .arrange-label { opacity: 0.6; }
+.arrange-item .tile { flex: none; }
+.arrange-grip { opacity: 0.4; font-size: 11px; letter-spacing: -2px; width: 12px; }
+.arrange-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.arrange-btn {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.arrange-btn:hover, .arrange-btn:focus-visible { opacity: 1; background: var(--nav-hover, rgba(127, 127, 127, 0.15)); }
+.arrange-actions { display: flex; align-items: center; gap: 8px; }
+.arrange-space { flex: 1; }
+
+/* Search: the palette near the top, the magnifier at the window's top right. */
+/* No blur (a window-wide backdrop filter costs every frame): a deeper dim and a solid panel. */
+.search-overlay { align-items: flex-start; padding-top: 12vh; background: rgba(0, 0, 0, 0.55); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.search-pop {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(520px, 76vh);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  /* Solid: what's behind it doesn't read through. */
+  background: var(--base, var(--card, #fff));
+  color: var(--text, inherit);
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 70px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.search-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.2)); }
+.search-bar svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; opacity: 0.7; }
+.search-input { flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 16px; }
+.search-input::-webkit-search-cancel-button { display: none; }
+.search-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; }
+.search-list:empty { display: none; }
+.search-item { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.search-item.on { background: var(--accent, #0a84ff); color: #fff; }
+.search-item.on .search-where { color: rgba(255, 255, 255, 0.8); }
+.search-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-where { flex: none; font-size: 12px; color: var(--muted, #888); }
+.search-empty { margin: 0; padding: 12px 16px 14px; }
+/* The search pill, level with the page's title: drawn as the style's other controls (Simple: the
+   control's fill, its line and shadow); with Glass, Liquid Glass (a translucent, blurred lens with a
+   bright rim and an inner highlight), in either theme. */
+.search-pill {
+  flex: none;
+  align-self: flex-start;
+  margin-top: -3px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--control-line, rgba(127, 127, 127, 0.3));
+  background: var(--control, var(--card, #222));
+  box-shadow: var(--shadow, none);
+  color: var(--text, inherit);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1), background-color 0.2s;
+}
+:root.glass .search-pill {
+  border-color: color-mix(in srgb, var(--text, #fff) 16%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #fff 14%, transparent), color-mix(in srgb, #fff 3%, transparent)),
+    color-mix(in srgb, var(--card, #222) 55%, transparent);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, #000 12%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.search-pill:hover { transform: scale(1.04); }
+:root.glass .search-pill:hover { border-color: color-mix(in srgb, var(--text, #fff) 26%, transparent); }
+.search-pill:active { transform: scale(0.97); }
+.search-pill svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; opacity: 0.85; }
+.search-keys { display: inline-flex; gap: 3px; }
+.search-keys kbd {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font: 600 12px/1 -apple-system, "Segoe UI", system-ui, sans-serif;
+  color: var(--muted, inherit);
+  background: color-mix(in srgb, var(--text, #fff) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text, #fff) 10%, transparent);
+}
+.search-row { display: flex; justify-content: flex-end; margin: 0 0 12px; }
+.search-row .search-pill { margin-top: 0; }

@@ -1,0 +1,7 @@
+/* Siri and Spotlight phrases. */
+"Send clipboard with ${applicationName}" = "Отправить буфер обмена через ${applicationName}";
+"Save copied files with ${applicationName}" = "Сохранить скопированные файлы через ${applicationName}";
+"Connect with ${applicationName}" = "Подключиться через ${applicationName}";
+"Show computer screen with ${applicationName}" = "Показать экран компьютера через ${applicationName}";
+"Play or pause with ${applicationName}" = "Пуск или пауза через ${applicationName}";
+"Lock computer with ${applicationName}" = "Заблокировать компьютер через ${applicationName}";

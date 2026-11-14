@@ -178,13 +178,20 @@
     // A page as a tile, with its sidebar icon and colour (left out where there's no such page);
     // has: shown for this device now.
     // Every page in the sidebar for the device in session (Overview aside), as tiles: shortcuts to any of them.
+    // TwinDesk Web's own pages (def.web) are a browser's, not this device's; one page per family
+    // (variantOf), in the sidebar's order, each with the sidebar's icon.
     pageTiles(s) {
-      return UI.tabs.filter((d) => UI.baseOf(d) !== 'overview' && !d.navHidden && !(d.hidden && d.hidden(s)))
-        .sort((a, b) => (a.order ?? 50) - (b.order ?? 50)).map((d) => P.pageTile(d.id, s));
+      const order = [...document.querySelectorAll('#nav .nav-item[data-base]')].map((b) => b.dataset.base);
+      const rank = (d) => { const i = order.indexOf(UI.baseOf(d)); return i < 0 ? 999 : i; };
+      const seen = new Set();
+      return UI.tabs.filter((d) => UI.baseOf(d) !== 'overview' && !d.navHidden && !d.web && !(d.hidden && d.hidden(s)))
+        .sort((a, b) => rank(a) - rank(b) || (a.order ?? 50) - (b.order ?? 50))
+        .filter((d) => !seen.has(UI.baseOf(d)) && seen.add(UI.baseOf(d)))
+        .map((d) => P.pageTile(d.id, s));
     },
     pageTile(id, s) {
       const def = UI.tabs.find((d) => d.id === id);
-      return def ? { id: 'p.' + id, label: t(def.title), icon: UI.icon(def.icon), color: def.color, has: !(def.hidden && def.hidden(s)), run: () => UI.go(id) } : null;
+      return def ? { id: 'p.' + id, label: t(def.title), icon: UI.icon(def.icon || def.id), color: def.color, has: !(def.hidden && def.hidden(s)), run: () => UI.go(id) } : null;
     },
 
     // ---- tiles, the way Control Center has them (the phones' Overview has the same: Tiles.kt,
@@ -206,7 +213,7 @@
           if (o && Array.isArray(o.items)) {
             const seen = new Set();
             return {
-              rows: o.rows === 2 ? 2 : 1,
+              rows: Math.max(1, Math.min(8, Number.isInteger(o.rows) ? o.rows : 1)), // as many rows as wanted, up to eight
               items: o.items.filter((x) => x && typeof x.id === 'string' && !seen.has(x.id) && seen.add(x.id))
                 .map((x) => ({ id: x.id, s: ['s', 'w', 'b'].includes(x.s) ? x.s : 's' })),
             };
@@ -224,7 +231,7 @@
       const grid = el('div', { class: 'dv-tiles' });
       const editor = el('div', { class: 'dv-tiles-edit' });
       editor.hidden = true;
-      const rowsSeg = UI.segmented([{ value: 1, label: t('One row') }, { value: 2, label: t('Two rows') }], (v) => { layout.rows = v; save(); draw(); });
+      const rowsSeg = UI.select([1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ value: String(n), label: String(n) })), (v) => { layout.rows = Number(v) || 1; save(); draw(); });
       const sizeSeg = UI.segmented([{ value: 's', label: t('Small') }, { value: 'w', label: t('Wide') }, { value: 'b', label: t('Large') }], (v) => {
         const it = layout.items.find((x) => x.id === sel);
         if (it) { it.s = v; save(); draw(); }
@@ -255,7 +262,7 @@
         const taken = new Set();
         return items.map((it) => {
           const w = it.s === 's' ? 1 : 2;
-          const h = it.s === 'b' && rows === 2 ? 2 : 1;
+          const h = it.s === 'b' && rows >= 2 ? 2 : 1;
           for (let col = 0; ; col++) {
             for (let r = 0; r + h <= rows; r++) {
               let free = true;
@@ -328,7 +335,7 @@
         // the editor
         editor.hidden = !editing;
         if (!editing) return;
-        rowsSeg.set(layout.rows);
+        rowsSeg.set(String(layout.rows));
         const it = layout.items.find((x) => x.id === sel);
         const d = it && byId.get(it.id);
         selRow.hidden = !d;

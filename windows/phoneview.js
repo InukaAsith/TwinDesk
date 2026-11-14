@@ -21,9 +21,11 @@ const P = require('../shared/protocol.js');
 const I18n = require('../shared/i18n.js');
 const { Session, ACTION, TYPE } = require('./scrcpy');
 const { NativeScreen } = require('../shared/nativescreen.js');
+const { uhidKey } = require('../shared/uhidkbd.js');
 const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
 const { writeClipImage } = require('../shared/clipimage.js');
+const { launcher } = require('./storepkg'); // the Store's MSIX starts its alias
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
@@ -557,6 +559,7 @@ class PhoneViews extends EventEmitter {
         const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
         if (this._special(v, code, !!m.down)) break;
         const e = v.keys.event(code, !!m.down);
+        if (uhidKey(s, (this.getSettings().phone || {}).uhid === true, code, !!m.down)) break; // a HID keyboard (#123)
         if (e) s.key(m.down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta, m.repeat ? 1 : 0);
         break;
       }
@@ -711,7 +714,7 @@ class PhoneViews extends EventEmitter {
   // How this copy of TwinDesk opens one phone app: "TwinDesk.exe --phone-app=<package>".
   static relaunch(pkg) {
     const args = (app.isPackaged ? [] : [app.getAppPath()]).concat('--phone-app=' + pkg);
-    return { target: process.execPath, args: args.map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ') };
+    return { target: launcher(), args: args.map((x) => (/\s/.test(x) ? '"' + x + '"' : x)).join(' ') };
   }
 
   _app(pkg) {

@@ -114,8 +114,8 @@ class PcMedia(core: Core) : Feature(core) {
                 .build(),
         )
         s.isActive = true
-        nm.createNotificationChannel(NotificationChannel(CH, "Computer’s media", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "What plays on your computer, with its controls"
+        nm.createNotificationChannel(NotificationChannel(CH, tr("Computer’s media"), NotificationManager.IMPORTANCE_LOW).apply {
+            description = tr("What plays on your computer, with its controls")
             setShowBadge(false)
         })
         val act = { icon: Int, label: String, a: String, req: Int ->
@@ -132,9 +132,9 @@ class PcMedia(core: Core) : Feature(core) {
             .setShowWhen(false)
             .setOngoing(n.playing)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .addAction(act(android.R.drawable.ic_media_previous, "Previous", "previous", 21))
-            .addAction(if (n.playing) act(android.R.drawable.ic_media_pause, "Pause", "pause", 22) else act(android.R.drawable.ic_media_play, "Play", "play", 22))
-            .addAction(act(android.R.drawable.ic_media_next, "Next", "next", 23))
+            .addAction(act(android.R.drawable.ic_media_previous, tr("Previous"), "previous", 21))
+            .addAction(if (n.playing) act(android.R.drawable.ic_media_pause, tr("Pause"), "pause", 22) else act(android.R.drawable.ic_media_play, tr("Play"), "play", 22))
+            .addAction(act(android.R.drawable.ic_media_next, tr("Next"), "next", 23))
             .setStyle(Notification.MediaStyle().setMediaSession(s.sessionToken).setShowActionsInCompactView(0, 1, 2))
         runCatching { nm.notify(ID, b.build()) }
     }

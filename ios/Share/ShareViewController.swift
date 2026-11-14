@@ -40,13 +40,13 @@ final class ShareViewController: UIViewController {
         icon.contentMode = .scaleAspectFit
         title_.font = .preferredFont(forTextStyle: .headline)
         title_.textColor = .white
-        title_.text = "Send to Computer"
+        title_.text = tr("Send to Computer")
         detail.font = .preferredFont(forTextStyle: .subheadline)
         detail.textColor = UIColor(white: 1, alpha: 0.6)
         detail.numberOfLines = 0
-        detail.text = "Getting the items ready…"
+        detail.text = tr("Getting the items ready…")
         bar.progressTintColor = icon.tintColor
-        button.setTitle("Cancel", for: .normal)
+        button.setTitle(tr("Cancel"), for: .normal)
         button.titleLabel?.font = .preferredFont(forTextStyle: .body)
         button.addTarget(self, action: #selector(close), for: .touchUpInside)
         let stack = UIStackView(arrangedSubviews: [icon, title_, detail, bar, button])
@@ -83,7 +83,7 @@ final class ShareViewController: UIViewController {
             if done {
                 self.finished = true
                 self.bar.isHidden = true
-                self.button.setTitle("Done", for: .normal)
+                self.button.setTitle(tr("Done"), for: .normal)
             }
         }
     }
@@ -159,7 +159,7 @@ final class ShareViewController: UIViewController {
     // ---- to the app ----
 
     private func deliver(_ items: [Item]) {
-        if items.isEmpty { return show("Nothing to send", "TwinDesk couldn’t read what was shared.", done: true) }
+        if items.isEmpty { return show(tr("Nothing to send"), tr("TwinDesk couldn’t read what was shared."), done: true) }
         for it in items { if case .file(let u, _) = it { total += Int64((try? u.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) } }
         let c = NWConnection(host: "127.0.0.1", port: 47831, using: .tcp)
         conn = c
@@ -175,8 +175,8 @@ final class ShareViewController: UIViewController {
                     guard let o = o, o["ok"] as? Bool == true else { return self.notRunning() }
                     let to = (o["to"] as? String) ?? ""
                     let on = o["connected"] as? Bool == true
-                    self.show(on ? "Sending to \(to.isEmpty ? "the computer" : to)" : "Send to Computer",
-                              on ? self.summary(items) : "TwinDesk isn’t connected: they go when it is.")
+                    self.show(on ? tr("Sending to {name}", ["name": to.isEmpty ? tr("the computer") : to]) : tr("Send to Computer"),
+                              on ? self.summary(items) : tr("TwinDesk isn’t connected: they go when it is."))
                     self.send(items, 0)
                 }
             case .failed, .waiting: if !started { started = true; self.notRunning() }
@@ -190,14 +190,14 @@ final class ShareViewController: UIViewController {
         let files = items.filter { if case .file = $0 { return true }; return false }.count
         let texts = items.count - files
         var parts: [String] = []
-        if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
-        if texts > 0 { parts.append("text to its clipboard") }
+        if files > 0 { parts.append(files == 1 ? tr("1 file") : tr("{files} files", ["files": files])) }
+        if texts > 0 { parts.append(tr("text to its clipboard")) }
         return parts.joined(separator: " and ")
     }
 
     private func notRunning() {
         conn?.cancel()
-        show("TwinDesk isn’t running", "Open TwinDesk, then share again. With Stay connected on (General) it keeps running in the background and this works from anywhere.", done: true)
+        show(tr("TwinDesk isn’t running"), tr("Open TwinDesk, then share again. With Stay connected on (General) it keeps running in the background and this works from anywhere."), done: true)
     }
 
     private func line(_ o: [String: Any]) {
@@ -211,8 +211,8 @@ final class ShareViewController: UIViewController {
             line(["t": "end"])
             return readLine(timeout: 30) { o in
                 let on = o?["sent"] as? Bool == true
-                self.show(o == nil ? "Something went wrong" : on ? "Sent" : "Waiting to send",
-                          o == nil ? "TwinDesk stopped answering." : on ? "It’s on its way to the computer." : "TwinDesk sends them once it’s connected.", done: true)
+                self.show(o == nil ? tr("Something went wrong") : on ? tr("Sent") : tr("Waiting to send"),
+                          o == nil ? tr("TwinDesk stopped answering.") : on ? tr("It’s on its way to the computer.") : tr("TwinDesk sends them once it’s connected."), done: true)
                 if o != nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { self.close() } }
             }
         }
@@ -235,7 +235,7 @@ final class ShareViewController: UIViewController {
                 left -= Int64(n)
                 conn?.send(content: d, completion: .contentProcessed { [weak self] e in
                     guard let self = self else { return }
-                    if e != nil { return self.show("Something went wrong", "TwinDesk stopped answering.", done: true) }
+                    if e != nil { return self.show(tr("Something went wrong"), tr("TwinDesk stopped answering."), done: true) }
                     self.sent += Int64(n)
                     self.lastProgress = Date()
                     let p = self.total > 0 ? Float(Double(self.sent) / Double(self.total)) : 0
@@ -257,7 +257,7 @@ final class ShareViewController: UIViewController {
                 guard let self = self, !self.finished else { return }
                 if Date().timeIntervalSince(self.lastProgress) > 20 {
                     self.conn?.cancel()
-                    return self.show("TwinDesk stopped answering", "iOS paused it in the background. Open TwinDesk, then share again.", done: true)
+                    return self.show(tr("TwinDesk stopped answering"), tr("iOS paused it in the background. Open TwinDesk, then share again."), done: true)
                 }
                 check()
             }

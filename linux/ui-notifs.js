@@ -27,11 +27,13 @@ UI.tab({
     const recvRow = pair.a.main, sendRow = pair.b.main;
     const apps = el('div');
 
-    body.append(note, pair.el, UI.card(I18n.t('Apps'), [apps]));
+    const hist = UI.historyCard('notifs', { list: true });
+    body.append(note, pair.el, UI.card(I18n.t('Apps'), [apps]), hist.el);
 
     let key = '';
     return (s) => {
       const n = s.notifs;
+      hist.update(s);
       const p = UI.peer(s);
       const connected = s.link.state === 'connected';
       pair.update(s);

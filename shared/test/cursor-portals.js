@@ -50,6 +50,18 @@ assert.deepEqual(route(rules, { display: '2', side: 'left', offset: 0.25 }, { mo
   { id: 'msi', display: 'remote', side: 'right', offset: 0.25 }, 'a different source reaches the same target');
 assert.equal(route(rules, { display: '2', side: 'left', offset: 0.25 }, { modifiers: ['Alt', 'Shift'], keys: [] }), null);
 assert.equal(route(rules, { display: '1', side: 'top', offset: 0.75 }, { modifiers: ['Command'], keys: [] }), null);
+// Two different targets on the same peer remain independent even when a local screen lies
+// between the originating displays. Neither route may fire without its held shortcut.
+const toSecondScreen = { id: 'second-target', source: { display: '2', side: 'left', from: 0, to: 1 },
+  target: { display: 'other', side: 'top', from: 0, to: 1 }, modifiers: [], key: 'KeyP' };
+const multipleTargets = normalize([laptop, toSecondScreen]);
+assert.ok(multipleTargets);
+assert.deepEqual(route(multipleTargets, { display: '1', side: 'top', offset: 0.25 }, { modifiers: ['Command'], keys: [] }),
+  { id: 'laptop', display: 'remote', side: 'bottom', offset: 0.5 });
+assert.equal(route(multipleTargets, { display: '2', side: 'left', offset: 0.5 }, { modifiers: [], keys: [] }), null);
+assert.deepEqual(route(multipleTargets, { display: '2', side: 'left', offset: 0.5 }, { modifiers: [], keys: ['KeyP'] }),
+  { id: 'second-target', display: 'other', side: 'top', offset: 0.5 });
+assert.deepEqual(entryPoint(displays, toSecondScreen.target, 0.5), { x: -640, y: 362 });
 const screen = new EventEmitter();
 screen.getPrimaryDisplay = () => ({ id: 1 });
 screen.getAllDisplays = () => [{ id: 1, bounds: { x: 0, y: 0, width: 100, height: 100 }, scaleFactor: 1 }];

@@ -41,7 +41,7 @@ struct DropOverlay: View {
             Color.black.opacity(0.25).ignoresSafeArea()
             VStack(spacing: 12) {
                 Image(systemName: connected ? "arrow.down.doc" : "xmark.circle").font(.system(size: 44, weight: .semibold))
-                Text(connected ? "Drop to send to \(name ?? "the computer")" : "Connect to a computer first").font(.title3.bold())
+                Text(connected ? tr("Drop to send to {name}", ["name": name ?? tr("the computer")]) : tr("Connect to a computer first")).font(.title3.bold())
             }
             .padding(36)
             .glassCard(32, tint: connected ? .blue : .orange)

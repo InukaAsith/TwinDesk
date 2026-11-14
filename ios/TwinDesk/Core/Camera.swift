@@ -53,7 +53,7 @@ final class Camera: Feature {
         host = nil
         if tell && core.connected { core.send(msg("cam.close")) }
         status = ""
-        UIApplication.shared.isIdleTimerDisabled = false
+        Awake.hold("camera", false)
         core.changed()
     }
 
@@ -63,14 +63,14 @@ final class Camera: Feature {
             guard share else { core.send(msg("cam.state", ["status": "refused"])); return true }
             guard UIApplication.shared.applicationState == .active else {
                 core.send(msg("cam.state", ["status": "failed", "error": "open TwinDesk on the \(Device.word): iOS runs the camera only for the app on screen"]))
-                Notifier.shared.note("camera", "\(core.host?.name ?? "The computer") requests this camera", "Open TwinDesk to share it.", sound: true)
+                Notifier.shared.note("camera", tr("{name} requests this camera", ["name": core.host?.name ?? tr("The computer")]), tr("Open TwinDesk to share it."), sound: true)
                 return true
             }
             status = "starting"
             error = ""
             core.send(msg("cam.state", ["status": "starting"]))
             page().post(["t": "start", "facing": front ? "user" : "environment"])
-            UIApplication.shared.isIdleTimerDisabled = true
+            Awake.hold("camera", true)
             core.changed()
         case "cam.answer": host?.post(["t": "answer", "sdp": m.str("sdp", max: 200_000)])
         case "cam.ice":
@@ -88,7 +88,7 @@ final class Camera: Feature {
     func pageStatus(_ m: JSON) {
         status = m.str("status") == "failed" ? "failed" : m.str("status")
         error = m.str("error")
-        if status == "failed" { UIApplication.shared.isIdleTimerDisabled = false }
+        if status == "failed" { Awake.hold("camera", false) }
         core.changed()
     }
 }

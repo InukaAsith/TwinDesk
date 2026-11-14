@@ -9,9 +9,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const https = require('https');
+const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 
-const ZIP_URL = 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip';
+// A fixed release (not platform-tools-latest, which changes under the pin) and its SHA-256, as
+// vdd.js and gamepad.js pin their downloads. A newer adb: bump both together.
+const ZIP_URL = 'https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip';
+const ZIP_SHA256 = '45F4D63113E895EBDE0C90F194099A4676B6AC653BD28D54314A9E022BBC1A99';
 const FILES = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll'];
 
 function download(url, to, hops = 5) {
@@ -40,6 +44,8 @@ async function fetchAdb(dest = path.join(__dirname, '..', 'vendor', 'adb')) {
     const zip = path.join(tmp, 'platform-tools.zip');
     console.log('Downloading adb (Android platform-tools)…');
     await download(ZIP_URL, zip);
+    const got = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex').toUpperCase();
+    if (got !== ZIP_SHA256) throw new Error('adb zip SHA-256 mismatch: got ' + got + ', expected ' + ZIP_SHA256);
     execFileSync('tar', ['-xf', zip, '-C', tmp], { stdio: 'inherit' });
     fs.mkdirSync(dest, { recursive: true });
     for (const f of FILES) fs.copyFileSync(path.join(tmp, 'platform-tools', f), path.join(dest, f));
