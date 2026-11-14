@@ -110,6 +110,24 @@ class InputService : AccessibilityService() {
         gesture(Path().apply { moveTo(x, y); lineTo(toX, toY) }, 120)
     }
 
+    // A touchpad's pinch (shared/pinch.js): two fingers on each side of (x, y) along the long side
+    // (vertical: up and down), from `from` px off the middle to `to`. One stroke each, as
+    // Accessibility can't hold a touch open across messages; each batch is a pinch of its own.
+    fun pinch(x: Float, y: Float, from: Float, to: Float, vertical: Boolean) {
+        if (!x.isFinite() || !y.isFinite() || !from.isFinite() || !to.isFinite() || abs(to - from) < 2) return
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels - 1f
+        val h = dm.heightPixels - 1f
+        val b = GestureDescription.Builder()
+        for (sign in floatArrayOf(-1f, 1f)) {
+            val p = Path()
+            if (vertical) { p.moveTo(x.coerceIn(1f, w), (y + sign * from).coerceIn(1f, h)); p.lineTo(x.coerceIn(1f, w), (y + sign * to).coerceIn(1f, h)) }
+            else { p.moveTo((x + sign * from).coerceIn(1f, w), y.coerceIn(1f, h)); p.lineTo((x + sign * to).coerceIn(1f, w), y.coerceIn(1f, h)) }
+            b.addStroke(GestureDescription.StrokeDescription(p, 0, 150))
+        }
+        dispatchGesture(b.build(), null, null)
+    }
+
     private fun gesture(p: Path, ms: Long) {
         val g = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p, 0, ms)).build()
         dispatchGesture(g, null, null)
@@ -273,6 +291,7 @@ class Input(core: Core) : Feature(core) {
                 when (val a = m.optString("a")) {
                     "d", "m", "u" -> s.touch(a, x, y)
                     "s" -> s.scroll(x, y, m.optDouble("h", 0.0), m.optDouble("v", 0.0))
+                    "z" -> s.pinch(x, y, m.optDouble("from", 0.0).toFloat(), m.optDouble("to", 0.0).toFloat(), m.optInt("vert") == 1)
                     "k" -> s.key(m.optInt("d") == 1, m.optInt("k"), m.optInt("m"))
                 }
             }

@@ -8,6 +8,8 @@
 //   phone.in {a: 'd'|'m'|'u', x, y}            touch down / move / up (phone pixels)
 //   phone.in {a: 's', x, y, h, v}              scroll (wheel steps, + = up / left)
 //   phone.in {a: 'k', d: 0|1, k, m}            key (Android keycode, meta state)
+//   phone.in {a: 'z', x, y, from, to, vert}    pinch: two fingers from `from` px off (x, y) to `to`,
+//                                              up and down when vert is 1 (shared/pinch.js)
 'use strict';
 
 const P = require('./protocol.js');
@@ -48,6 +50,10 @@ class PhoneInput {
       this.scrollAcc = null;
       if (acc.h || acc.v) this.send({ t: P.T.PHONE_IN, a: 's', x: Math.round(acc.x), y: Math.round(acc.y), h: acc.h, v: acc.v });
     }, SCROLL_MS);
+  }
+
+  pinch(x, y, from, to, vertical) {
+    if (!this.closed) this.send({ t: P.T.PHONE_IN, a: 'z', x: Math.round(x), y: Math.round(y), from: Math.round(from), to: Math.round(to), vert: vertical ? 1 : 0 });
   }
 
   key(action, keycode, meta = 0) {
