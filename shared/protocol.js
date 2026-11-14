@@ -310,6 +310,9 @@
       RZ_OFFER: 'rz.offer',
       RZ_CLEAR: 'rz.clear', // sender->receiver {id}: nothing to go on with any more
       RZ_TAKE: 'rz.take', // receiver->sender {id}: taken; a doc's file follows as file.offer drop 'rezume', batch 'rz-<id>' (only to a side that asked); a window's are streamed
+      // Multi-device: which device ReZume is with, the same on both (shared/rezume-solo.js). {on: true, at}: "I picked you"
+      // (at: when, ms); {on: false}: "not any more". Said again as the two connect ({on: true, at, again: true}): the newer pick wins.
+      RZ_PARTNER: 'rz.partner',
       RZ_DONE: 'rz.done', // sender->receiver {id, ok, why?}: a doc or window that couldn't be sent (gone, too big, not let through); ok: a window went
       PHONE_SEND: 'phone.send', // computer->phone: clicks the active app's Send button
       PHONE_ACTIVE_APP: 'phone.activeApp', // phone->computer {pkg}: current foreground package

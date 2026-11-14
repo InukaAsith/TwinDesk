@@ -632,6 +632,7 @@ function setupIpc(ctx) {
       else ctx.loadRezume();
     },
     rezumeDo(m) {
+      if (m && m.a === 'with' && ctx.rzSolo) return void ctx.rzSolo.choose(typeof m.id === 'string' ? m.id.slice(0, 64) : ''); // the device ReZume is with (shared/rezume-solo.js)
       const r = ctx.rezume();
       if (!r || !m) return;
       if (m.a === 'take') r.take();

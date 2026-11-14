@@ -283,6 +283,7 @@ function setupIpc(ctx) {
   // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
   handle('setReZume', (m) => change('rezume', m && typeof m === 'object' ? m : {}, () => (ctx.rezume ? ctx.rezume.apply() : ctx.loadReZume())));
   handle('rezumeDo', (m) => {
+    if (m && m.a === 'with' && ctx.rezumeWith) return void ctx.rezumeWith(typeof m.id === 'string' ? m.id.slice(0, 64) : ''); // the device ReZume is with (shared/rezume-solo.js)
     const h = ctx.rezume;
     if (!h || !m) return;
     if (m.a === 'take') h.take();

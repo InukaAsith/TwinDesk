@@ -540,9 +540,9 @@ each talking straight to the others with no hub in between.
 Turn it on in the **Multi-device** page, and off again any time with everything as you left it.
 Connecting just two devices? Keep it off: the one-to-one mode does the same with less. The one-to-one
 app's pages are here too: files (the fast way, over HTTPS), the Camera, the Remote, the Deck,
-TwinDesk iPhone, Modules and pictures on the clipboard. ReZume works while a phone is the only
-device connected. Not yet: the Bluetooth mouse and keyboard, and files dragged to more than one
-device at a time. The phone connects to
+TwinDesk iPhone, Modules and pictures on the clipboard. ReZume works with one device at a time,
+picked on its page (picking a computer picks this one there too). The mouse and keyboard over
+Bluetooth work between Macs and Windows PCs. Not yet: files dragged to more than one device at a time. The phone connects to
 one computer at a time, and Linux joins over the same Wi-Fi only. Mesh uses the tdv2 lane in Node.
 See [docs/mesh.md](docs/mesh.md).
 
