@@ -269,6 +269,7 @@ function pushState() {
     if (kvm && svc) svc.fileClip.syncConnected(!!kvm.server.current); // the file shortcuts too
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
+    if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || path.join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.chats = svc && svc.chats ? svc.chats.view() : null; // Messages' WhatsApp, Instagram… conversations
@@ -645,6 +646,24 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
   svc.kvm.laneReady.then(laneGo);
+  // File Sharing › TwinDesk Drive (shared/drive-host.js, docs/drive.md): nothing of it is loaded until it's on.
+  svc.loadDrive = () => svc.drive || (svc.drive = require('../shared/drive-host.js').create({
+    settings, save: () => store.saveSettings(settings), me: id.macId, meName: id.macName, userData: app.getPath('userData'),
+    trash: (p) => require('electron').shell.trashItem(p),
+    adapter: {
+      on: (t, fn) => peer.on(`t:${t}`, (m) => fn(m)),
+      onUp: (fn) => peer.on('client', () => fn()),
+      onDown: (fn) => peer.on('closed', () => !peer.current && fn()),
+      onMoved: (fn) => peer.on('transport', () => fn()),
+      send: (m) => peer.sendToClient(m),
+      session: () => peer._fxSession(),
+      peerName: () => (peer.current && peer.current.name) || '',
+      setRequest: (fn) => { peer.drive = fn; },
+    },
+    onChange: pushState,
+  }));
+  svc.getDrive = () => svc.drive || null;
+  if (settings.drive.on) svc.loadDrive();
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer’s window goes home there (pcapps.js); one of this Mac’s goes over
   // window by window, shared on its own (appsend.js, movewin.js), apart from how apps open.

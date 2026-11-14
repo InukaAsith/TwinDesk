@@ -272,6 +272,12 @@ Files › Encrypt file transfers, on by default. Turned off, file bytes can go o
   plain requests use their own HTTP/1.1 client (`FxHttp.kt`), since the app's network policy refuses
   cleartext everywhere else.
 
+### TwinDesk Drive
+
+A synced folder with its own `drive.*` messages on the session. Its bytes go over HTTPS on the
+host's session port, as fx's do: the guest GETs and PUTs on `/twindesk/drive/`, pinning the host's
+certificate and showing the session's fx token. Never over Bluetooth. See [drive.md](drive.md).
+
 ### File size
 
 `FILE_MAX_BYTES` is 16 TiB (it was 4 GiB, #143). Offers above an older app's 4 GiB are refused there

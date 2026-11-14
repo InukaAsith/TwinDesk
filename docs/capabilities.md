@@ -57,6 +57,15 @@ session, naming the feature.
 A device that sends no `app` at all is older than 2.5, and the app can't tell which features it
 lacks, so it shows only that it's older.
 
+## Features that say hello on their own
+
+Some features don't wait for hello and welcome. They send their own first message once switched on,
+and start only when the other side answers.
+
+| Message | Feature | An app without it |
+|---|---|---|
+| `drive.hello {v: 1}` | TwinDesk Drive ([drive.md](drive.md)), both sides switched on | ignores it, so Drive never starts |
+
 ## Phone capabilities
 
 | Message | Field | Values | Used for |

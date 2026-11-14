@@ -161,6 +161,13 @@
       FILE_END: 'file.end', // W->M {id, sha256}
       FILE_DONE: 'file.done', // M->W {id, ok, path?, error?}
       FILE_CANCEL: 'file.cancel', // either {id}
+      // TwinDesk Drive (docs/drive.md, shared/drive-link.js): one folder kept the same on every device
+      // that turns it on. An app without it never answers drive.hello, so it never starts.
+      DRIVE_HELLO: 'drive.hello', // either {v: 1, again?}: Drive is on here (again: send me everything once more)
+      DRIVE_INDEX: 'drive.index', // either {entries: [{p, s, m, h, d, v, by}], last}: everything this side has, in parts
+      DRIVE_UPDATE: 'drive.update', // either {entries}: what changed here since
+      DRIVE_WANT: 'drive.want', // host->guest {id, p, h}: PUT this file to /twindesk/drive/u?id=
+      DRIVE_GONE: 'drive.gone', // guest->host {id}: that version isn't here any more
       // Fast files (shared/fastfile.js), only between two apps that both said so (hello {fx: 1},
       // welcome {fx: token}) on Wi-Fi or a cable: the bytes go over HTTPS on PORT instead of file.chunk.
       FILE_PULL: 'file.pull', // host->guest {id}: come and get it (GET); guest->host {id, failed: true}: couldn't

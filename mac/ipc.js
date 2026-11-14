@@ -358,6 +358,29 @@ function setupIpc(ctx) {
       ctx.fileSend.sendPolicy();
       ctx.kvm.config();
     },
+    // File Sharing › TwinDesk Drive (shared/drive-host.js): loaded when turned on, and only then.
+    setDrive(on) {
+      const d = on ? ctx.loadDrive() : ctx.getDrive();
+      if (d) d.setOn(!!on).then(ctx.pushState, ctx.pushState);
+      else { settings.drive.on = false; save(); }
+    },
+    async pickDriveFolder() {
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Use This Folder') });
+      if (r.canceled || !r.filePaths[0]) return;
+      actions.setDriveFolder(r.filePaths[0]);
+    },
+    resetDriveFolder() {
+      actions.setDriveFolder('');
+    },
+    setDriveFolder(f) {
+      const d = ctx.getDrive();
+      if (d) d.setFolder(f).then(ctx.pushState, ctx.pushState);
+      else { settings.drive.folder = f; save(); }
+    },
+    openDriveFolder() {
+      const d = ctx.getDrive();
+      if (d) shell.openPath(d.folder());
+    },
     // Send files (paths from the drop zone or the Choose… dialog).
     sendFiles(paths) {
       const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && p.startsWith('/')).slice(0, 1000);

@@ -13,6 +13,11 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **TwinDesk Drive** (File Sharing): one folder kept the same on your computers, with no cloud.
+  Each keeps its own copy and works offline; they swap what changed when they connect. A file
+  changed on two at once keeps both, one as "(conflict from …)", and deleted files go to the Trash
+  or Recycle Bin. Off until you turn it on, and nothing of it runs until then
+  ([how it works](docs/drive.md)). Mac, Windows and Linux in one-to-one mode for now.
 - **The monitor map in Multi-device** (#225): every device's monitors in one picture, arranged by
   dragging. The pointer crosses only where monitors touch, keeps its place along the edge, and goes
   through an offline device to the next one. Phones hang off a computer's edge, and red shows where
