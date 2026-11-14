@@ -101,7 +101,9 @@
 .tour-demo-sub { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* What's new: a list, no pictures. */
-.tour-news { list-style: none; margin: 4px 0 0; padding: 0; max-height: min(52vh, 420px); overflow: auto; }
+.tour-news-wrap { margin: 4px 0 0; max-height: min(52vh, 420px); overflow: auto; }
+.tour-news { list-style: none; margin: 0; padding: 0; }
+.tour-news-head { margin: 14px 0 2px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .tour-news li { padding: 9px 0; border-top: 1px solid var(--row-line); font-size: 13px; line-height: 1.45; }
 .tour-news li:first-child { border-top: 0; }
 .tour-news strong { display: block; font-size: 13.5px; margin-bottom: 2px; }

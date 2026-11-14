@@ -9,10 +9,19 @@ switches on only when both sides have it ([how that's decided](docs/capabilities
 Numbers like (#143) are [issues and pull requests](https://github.com/InukaAsith/TwinDesk/issues).
 Everyone who sent code, reported a problem or tested is thanked under their version.
 
-## 3.1.1 (unreleased)
+## 3.2.0 (unreleased)
+
+The first release since 3.0.0: what was going to be 3.1.1, and everything under 3.1.0 below, which
+was never released on its own.
 
 ### New
 
+- **The tour in Multi-device:** someone new to TwinDesk gets the same tour in Multi-device as in
+  one-to-one (how to install TwinDesk on the other device, pair it, and what each page does), with a
+  last stop on the Multi-device page. After an update, What's new shows there too. Both are in
+  General › Tutorial.
+- **What's new for 3.2:** the list after updating covers everything since 3.0, including TwinDesk
+  Drive, the monitor map and the touchpad gestures.
 - **TwinDesk Drive** (File Sharing): one folder kept the same on your computers, with no cloud.
   Each keeps its own copy and works offline; they swap what changed when they connect. A file
   changed on two at once keeps both, one as "(conflict from …)", and deleted files go to the Trash
@@ -47,6 +56,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### Fixes
 
+- **Arrange looks like Search:** the sidebar's Arrange popup has the same deeper dim and solid panel
+  as Search instead of a blur over the window, in one-to-one and Multi-device.
 - **Full KVM at the login screen** (Windows): after signing out, a computer connected but the pointer
   didn't move. The service never told the machine node its helper was ready.
 - **Full KVM at the login screen after pairing again** (Windows): a computer paired again (or a
@@ -75,7 +86,7 @@ Code from [@alexfoxtm](https://github.com/alexfoxtm) (#221, #227, #228) and
 [@youyouhdhd](https://github.com/youyouhdhd) (#226).
 Reported by [@ElMahaster](https://github.com/ElMahaster) (#188).
 
-## 3.1.0 (unreleased)
+## 3.1.0 (not released: in 3.2.0)
 
 ### New
 

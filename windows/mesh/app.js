@@ -178,11 +178,11 @@
     // Tabs that don't apply to the peer (a phone has no terminal or screen to share to it…). A web
     // device picked: its own pages, then Connection, TwinDesk Web, AirPlay & SMB, General and About.
     for (const v of views.values()) {
-      const hide = UI.webDev ? !v.def.web && !UI.WEB_KEEP.includes(v.def.id)
+      const hide = UI.tourPeek === v.def.id ? false : UI.webDev ? !v.def.web && !UI.WEB_KEEP.includes(v.def.id)
         : !!v.def.web || !!(v.def.hidden && v.def.hidden(s));
       if (v.navBtn.parentElement) v.navBtn.parentElement.hidden = hide;
       // Hidden for the device now in session: its version of this page (shared/ui-kinds.js), else the start.
-      if (hide && current === v) { const twin = UI.webDev ? v.def.id : UI.pick(v.def.id, s); show(twin !== v.def.id ? twin : M.firstSection(kindOfState(s), availableFor(kindOfState(s))), false); }
+      if (hide && current === v && UI.tourPeek !== v.def.id) { const twin = UI.webDev ? v.def.id : UI.pick(v.def.id, s); show(twin !== v.def.id ? twin : M.firstSection(kindOfState(s), availableFor(kindOfState(s))), false); }
     }
     // A group with every tab hidden takes its gap with it.
     for (const v of views.values()) if (v.gap) v.gap.hidden = [...views.values()].every((x) => x.gap !== v.gap || !x.navBtn.parentElement || x.navBtn.parentElement.hidden);
@@ -416,6 +416,7 @@
   api.onState(render);
   api.getState().then((s) => {
     show((s.ui && s.ui.tab) === 'phone' && !(s.phone && s.phone.connected) ? 'connection' : (s.ui && s.ui.tab) || 'connection', false);
+    if (window.Tour) Tour.maybe(s); // new here: the tour, once; after an update: What's new (shared/ui-tour.js)
     render(s);
   });
 })();
