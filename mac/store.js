@@ -68,7 +68,7 @@ const DEFAULT_SETTINGS = {
   },
   // swap: keys from the PC, Ctrl -> Cmd, Win -> Control. hotkey: double-tap = everything home. lockKeys: cursor lock
   // on/off (shared/cursorlock.js): F14, where a PC keyboard's Scroll Lock lands on a Mac
-  keys: { swapCtrlCmd: true, hotkey: 'AltRight', lockKeys: 'F14' },
+  keys: { swapCtrlCmd: true, hotkey: 'AltRight', lockKeys: 'F14', emergencyKeys: 'Control+Alt+Command+Escape' },
   clipboard: {
     enabled: false,
     send: true, // this Mac -> PC

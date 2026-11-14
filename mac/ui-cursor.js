@@ -19,6 +19,12 @@ UI.tab({
     const { el, api } = UI;
     const status = UI.note('info', '', { literal: true });
     const lock = UI.cursorLock();
+    const emergencyKey = UI.keyRecorder((v) => api.setKeys({ emergencyKeys: v }), {
+      bare: true, allowEscape: true, valid: (v) => {
+        const f = /(?:^|\+)F(\d+)$/.exec(v);
+        return !f || (Number(f[1]) >= 1 && Number(f[1]) <= 20);
+      },
+    });
 
     // The crossing map: both computers' monitors; drag the other one where it is on the desk.
     const map = KvmMapUI.create({ onMove: (side, along) => api.moveKvm({ side, along }), onIdentify: () => api.identifyDisplays() });
@@ -76,6 +82,7 @@ UI.tab({
         UI.dir('w2m', [driven2 = peerRow(I18n.t('Use {name}’s mouse and keyboard on {me}'), '', [driven])]),
       ),
       lock.el,
+      UI.card(I18n.t('Emergency return'), [UI.row(I18n.t('Return shortcut'), I18n.t('Stops input sharing and returns the pointer if the input helper responds. Set separately on each Mac.'), [emergencyKey.el])]),
       UI.card(I18n.t('Where the other computer is'), [map.el]),
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
@@ -98,6 +105,7 @@ UI.tab({
       }
       const k = s.kvm;
       if (!k) return;
+      emergencyKey.set((s.keys && s.keys.emergencyKeys) || 'Control+Alt+Command+Escape');
       const p = UI.peer(s);
       const [kind, text] = UI.kvmStatus(s);
       status.className = `note ${kind}`;

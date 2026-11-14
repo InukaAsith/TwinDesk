@@ -357,16 +357,17 @@ const UI = {
       if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
       if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
       if (/^F\d{1,2}$/.test(e.code)) return e.code;
-      return { Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Enter: 'Enter', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' }[e.code] || '';
+      return { Escape: 'Escape', Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Enter: 'Enter', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' }[e.code] || '';
     };
     const onKey = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (e.key === 'Escape') return stop();
+      if (e.key === 'Escape' && !(opts.allowEscape && (e.ctrlKey || e.altKey || e.metaKey))) return stop();
       const key = keyOf(e);
       const bare = opts.bare && /^F(?:1[3-9]|2[0-4])$/.test(key);
       if (!key || !(e.ctrlKey || e.altKey || e.metaKey || bare)) return; // wait for a real combination
       const acc = [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Command', key].filter(Boolean).join('+');
+      if (opts.valid && !opts.valid(acc)) return;
       value = acc;
       stop();
       onChange(acc);
