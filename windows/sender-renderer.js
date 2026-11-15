@@ -10,6 +10,23 @@ const api = window.sender;
 const sessions = new Map(); // session → {session, pc, stream, pending, mbps, statsTimer, last}
 const alive = (me) => sessions.get(me.session) === me;
 
+window.addEventListener('message', async (event) => {
+  const m = event.data;
+  if (event.source !== window || !m || m.type !== 'twindesk-native-frame') return;
+  const frame = m.frame, me = sessions.get(m.session);
+  if (!frame) return;
+  // One write at a time; a frame that comes meanwhile is dropped (closed: its slot goes back to the
+  // capture exe). Dropping one must not clear `writing` for the write still going: then a second and
+  // third write went in, each holding its frame, and with all three slots held the capture stopped.
+  if (!me || !me.writer || me.writing) { frame.close(); return; }
+  me.writing = true;
+  try {
+    await me.writer.write(frame);
+  } catch (e) {
+    if (alive(me)) { report(me, 'failed', 'Native screen frame: ' + e.message); stop(me.session); }
+  } finally { frame.close(); me.writing = false; }
+});
+
 function report(me, status, error) {
   api.state({ session: me.session, status, error: error || '' });
 }
@@ -43,7 +60,7 @@ function withOpus(sdp) {
     : sdp.replace(m[0], m[0] + '\r\na=fmtp:' + m[1] + ' ' + extra);
 }
 
-// m: {session, sourceId, width, height, follow?, mbps, fps?, audio, offer: {kind, wid?}}
+// m: {session, sourceId, width, height, captureWidth?, captureHeight?, follow?, mbps, fps?, audio, offer: {kind, wid?}}
 // follow: the picture follows the source's size (an app window), up to width × height.
 // Every frame matters more than the last bit of sharpness: under pressure the encoder
 // lowers quality, never the frame rate (dropped frames are what feels jagged and adds lag).
@@ -53,12 +70,36 @@ async function start(m) {
   const fps = m.fps || 60;
   sessions.set(me.session, me);
   try {
-    const video = { chromeMediaSource: 'desktop', chromeMediaSourceId: m.sourceId, maxWidth: m.width, maxHeight: m.height, maxFrameRate: fps };
+    const video = { chromeMediaSource: 'desktop', chromeMediaSourceId: m.sourceId, maxWidth: m.captureWidth || m.width, maxHeight: m.captureHeight || m.height, maxFrameRate: fps };
+    // Capture the screen at native pixels; downscale the composed frame, including its pointer, once.
+    if (m.captureWidth && m.captureHeight) Object.assign(video, { minWidth: m.captureWidth, minHeight: m.captureHeight });
     if (m.follow) Object.assign(video, { minWidth: 2, minHeight: 2 }); // min ≠ max: any size within the limit, no scaling
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: m.audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false,
-      video: { mandatory: video },
-    });
+    let stream, native = false;
+    if (m.captureRect && api.nativeStart && typeof MediaStreamTrackGenerator !== 'undefined') {
+      me.generated = new MediaStreamTrackGenerator({ kind: 'video' });
+      me.writer = me.generated.writable.getWriter();
+      const reply = await api.nativeStart(me.session);
+      native = reply.available;
+      if (native && reply.width && reply.height) me.nativeSize = { width: reply.width, height: reply.height };
+      if (!alive(me)) return;
+      if (!native) { me.writer.close().catch(() => {}); me.generated.stop(); me.writer = null; me.generated = null; }
+    }
+    if (native) {
+      // Keep the existing loopback audio source; only its temporary video track is discarded.
+      const sound = m.audio ? await navigator.mediaDevices.getUserMedia({
+        audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: video },
+      }) : null;
+      if (!alive(me)) { if (sound) sound.getTracks().forEach(t => t.stop()); return; }
+      if (sound) sound.getVideoTracks().forEach(t => t.stop());
+      stream = new MediaStream([me.generated, ...(sound ? sound.getAudioTracks() : [])]);
+      me.native = true;
+      console.log('[sender] native capture with the system pointer; original pixels and existing encoder settings');
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: m.audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false,
+        video: { mandatory: video },
+      });
+    }
     if (!alive(me)) return stream.getTracks().forEach((t) => t.stop());
     me.stream = stream;
     const track = stream.getVideoTracks()[0];
@@ -80,8 +121,14 @@ async function start(m) {
     if (!alive(me)) return;
     const p = tr.sender.getParameters();
     if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+    const captured = native ? (me.nativeSize || { width: m.captureWidth, height: m.captureHeight }) : track.getSettings();
+    // Electron's rect for a scaled monitor can be a few pixels off (2562 × 1601 for 2560 × 1600), and the
+    // target was worked out from it: 2560 × 1600 came out as 2556 × 1598, every pixel resampled. Within
+    // 1% of the capture is the capture itself.
+    let scale = m.captureWidth && m.captureHeight ? Math.max(1, captured.width / m.width, captured.height / m.height) : 1;
+    if (scale < 1.01) scale = 1;
     Object.assign(p.encodings[0], {
-      maxBitrate: m.mbps * 1e6, maxFramerate: fps, scaleResolutionDownBy: 1,
+      maxBitrate: m.mbps * 1e6, maxFramerate: fps, scaleResolutionDownBy: scale,
       priority: 'high', networkPriority: 'high', // DSCP: Wi-Fi puts it in the video queue
     });
     p.degradationPreference = 'maintain-framerate';
@@ -175,7 +222,9 @@ function stop(session) {
   sessions.delete(session);
   clearInterval(me.statsTimer);
   if (me.pc) me.pc.close();
+  if (me.writer) me.writer.abort().catch(() => {});
   if (me.stream) me.stream.getTracks().forEach((t) => t.stop());
+  else if (me.generated) me.generated.stop();
 }
 
 api.on((m) => {
@@ -184,6 +233,9 @@ api.on((m) => {
     case 'stop': stop(m.session); break;
     case T.RTC2_ANSWER: onAnswer(m); break;
     case T.RTC2_ICE: onIce(m); break;
+    case 'native-error':
+      if (sessions.has(m.session)) { report(sessions.get(m.session), 'ended', m.error); stop(m.session); }
+      break;
   }
 });
 api.ready();

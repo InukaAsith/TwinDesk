@@ -48,6 +48,7 @@ const { PcScreenSet } = require('./pcscreenset');
 const PcApps = require('../pcapps');
 const PeerApps = require('../peerapps');
 const Sender = require('./sender');
+require('../native-screen').setting = () => settings && settings.pcScreen && settings.pcScreen.capture; // Share screen › Capture
 const Vdd = require('../vdd');
 const Hud = require('../hud');
 const Notifs = require('./notifs');
