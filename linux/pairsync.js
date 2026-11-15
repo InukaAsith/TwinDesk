@@ -68,7 +68,16 @@ class PairSync {
       if (saved) this._adopt(this._restorable(saved));
       if (this.link.hosting) this.link.send({ t: T.PAIR_SYNC, all: this.last }); // we are the host: ours win
     });
-    this.link.on('closed', () => { this.last = null; this.peerId = ''; });
+    // Before the selection moves on (or the device goes): what changed here goes out and that pair is kept as
+    // it is now, so a device that isn't selected goes by its own up-to-date pair (shared/pairfor.js, #245).
+    this.link.on('closed', () => {
+      if (this.last) {
+        this.check();
+        this._remember(this.values());
+      }
+      this.last = null;
+      this.peerId = '';
+    });
     this.link.on(T.PAIR_SYNC, (m) => { if (this.last) this._applySync(m); });
     if (this.bus) {
       this.bus.on(T.PAIR_SYNC, (m, fromId) => {

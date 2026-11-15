@@ -6,6 +6,7 @@
 const { BrowserWindow, ipcMain, session, desktopCapturer } = require('electron');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { pairFor } = require('../shared/pairfor.js');
 
 const T = P.T;
 
@@ -32,7 +33,7 @@ class Sound {
       this.apply();
     });
     link.on(T.AUDIO_OFFER, (m) => {
-      if (m.dir === 'm2w' && this.cfg.receive && typeof m.sdp === 'string') this._toWin({ ...m, ice: this._ice() });
+      if (m.dir === 'm2w' && this._on('receive') && typeof m.sdp === 'string') this._toWin({ ...m, ice: this._ice() });
     });
     link.on(T.AUDIO_ANSWER, (m) => { if (m.dir === 'w2m' && this.sending && m.session === this.sending.session) this._toWin(m); });
     link.on(T.AUDIO_ICE, (m) => this._toWin(m));
@@ -68,6 +69,14 @@ class Sound {
     return this.settings.audio;
   }
 
+  // Send / Play for the device the sound is with. In the mesh the Audio page's switches are the selected
+  // device's pair; sound that stays with another device (the sticky route) goes by that device's own (#245).
+  _on(key) {
+    const c = this.link.current;
+    const sel = this.meshHub ? this.meshHub.selectedId : null;
+    return !!pairFor(this.settings, sel, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', !!this.cfg[key]);
+  }
+
   _syncAudioSticky() {
     if (!this.meshHub) return;
     const live = !!(this.sending || this.status.receiving);
@@ -78,10 +87,11 @@ class Sound {
   // After welcome, a policy from the Mac, or a settings change.
   apply() {
     const connected = this.link.status.state === 'connected';
-    if (connected) this.link.send({ t: T.AUDIO_POLICY, accept: !!this.cfg.receive });
-    if (!this.cfg.receive) this._toWin({ t: T.AUDIO_STOP, dir: 'm2w' });
+    const receive = this._on('receive');
+    if (connected) this.link.send({ t: T.AUDIO_POLICY, accept: receive });
+    if (!receive) this._toWin({ t: T.AUDIO_STOP, dir: 'm2w' });
     this._toWin({ t: 'volume', volume: this.cfg.volume });
-    const want = connected && this.cfg.send && this.macAccepts;
+    const want = connected && this._on('send') && this.macAccepts;
     if (want && this.sending && this.sending.muteLocal !== this.cfg.muteLocal) this._stopSend(true); // restart with the new mute
     if (want && !this.sending) {
       this.sending = { session: ++this.session, muteLocal: this.cfg.muteLocal };
