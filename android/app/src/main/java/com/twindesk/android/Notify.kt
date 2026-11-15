@@ -425,8 +425,13 @@ object Notify {
             .setOngoing(progress != null)
             .setAutoCancel(progress == null)
         if (progress != null) {
-            if (Build.VERSION.SDK_INT >= 36) {
+            // ProgressStyle is Android 16; the promotion and the chip's text came with 16 QPR2
+            // (36.1), so a first-release 16 has the style without them: each is tried on its own,
+            // and a missing method never stops the transfer.
+            val styled = Build.VERSION.SDK_INT >= 36 && runCatching {
                 b.setStyle(Notification.ProgressStyle().setProgress(progress.coerceAtLeast(0)).setProgressIndeterminate(progress < 0).setStyledByProgress(true))
+            }.isSuccess
+            if (styled) runCatching {
                 b.setRequestPromotedOngoing(true)
                 if (progress >= 0) b.setShortCriticalText("$progress%")
             } else b.setProgress(100, progress, progress < 0)

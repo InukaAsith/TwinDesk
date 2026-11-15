@@ -193,7 +193,9 @@ class FileRecv {
     }
     const segs = rel.split('/');
     if (!b.tops.has(segs[0])) { // "Photos 2" when Photos is already there
-      const top = uniquePath(b.dir, segs[0]);
+      // Not a name another batch is still writing (two "IMG_1.jpg" at once would share one .part).
+      const reserved = new Set([...this.batches.values()].filter((o) => o !== b).flatMap((o) => o.placed));
+      const top = uniquePath(b.dir, segs[0], reserved);
       b.tops.set(segs[0], path.basename(top));
       b.placed.push(top);
     }
@@ -307,11 +309,12 @@ function safeRel(rel) {
 }
 
 // "name.txt" → "name 2.txt", "name 3.txt"… if taken.
-function uniquePath(dir, name) {
+// reserved: paths other batches have taken but not finished yet.
+function uniquePath(dir, name, reserved = new Set()) {
   const ext = path.extname(name);
   const base = name.slice(0, name.length - ext.length);
   let p = path.join(dir, name);
-  for (let i = 2; fs.existsSync(p); i++) p = path.join(dir, base + ' ' + i + ext);
+  for (let i = 2; fs.existsSync(p) || reserved.has(p); i++) p = path.join(dir, base + ' ' + i + ext);
   return p;
 }
 

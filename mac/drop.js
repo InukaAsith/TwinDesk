@@ -56,12 +56,13 @@ function cleanName(name) {
 }
 
 // "name.ext", "name 2.ext", "name 3.ext"…
-function uniquePath(dir, name) {
+// reserved (lower case: the Mac's disk ignores case): paths other batches haven't finished.
+function uniquePath(dir, name, reserved = new Set()) {
   const ext = path.extname(name);
   const base = name.slice(0, name.length - ext.length);
   for (let i = 1; ; i++) {
     const p = path.join(dir, i === 1 ? name : `${base} ${i}${ext}`);
-    if (!fs.existsSync(p)) return p;
+    if (!fs.existsSync(p) && !reserved.has(p.toLowerCase())) return p;
   }
 }
 
@@ -207,7 +208,9 @@ class Drop extends EventEmitter {
     const segs = String(m.rel || m.name).split('/').filter(Boolean).map(cleanName);
     if (!segs.length) segs.push(cleanName(m.name));
     if (!b.tops.has(segs[0])) {
-      const top = uniquePath(b.dir, segs[0]); // "Photos 2" when Photos is already there
+      // "Photos 2" when Photos is already there, or another batch is still writing it (one .part for two)
+      const reserved = new Set([...this.batches.values()].filter((o) => o !== b).flatMap((o) => o.placed).map((x) => x.toLowerCase()));
+      const top = uniquePath(b.dir, segs[0], reserved);
       b.tops.set(segs[0], path.basename(top));
       b.placed.push(top);
     }
