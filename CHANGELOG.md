@@ -9,6 +9,28 @@ switches on only when both sides have it ([how that's decided](docs/capabilities
 Numbers like (#143) are [issues and pull requests](https://github.com/InukaAsith/TwinDesk/issues).
 Everyone who sent code, reported a problem or tested is thanked under their version.
 
+## Next (unreleased)
+
+### New
+
+- **Sound › Only on the computer** (Android, on by default): without wireless debugging, the phone's
+  speaker goes quiet while its sound plays on the computer, and its volume comes back after.
+- **A laptop's battery** on the other computer's page.
+
+### Fixes
+
+- **Copy code** no longer takes a card's last digits, a price, an account, order or tracking number,
+  a date, a phone number or a zip, promo or error code for a one-time code.
+- **Android 15 and later:** one-time codes reach Copy code (the phone setup over wireless debugging
+  lets TwinDesk read the codes Android hides).
+- **Passwords copied on an Android phone** (marked sensitive by the password manager) stay on the
+  phone, as the computers' already did.
+- **Idle sessions use less:** a computer no longer reads its volume, Bluetooth and Do not disturb
+  every minute for the whole session (two PowerShell runs a minute on Windows), only while the
+  other computer shows them; and no `adb` process every 2 seconds while a phone is linked.
+- A phone on wireless debugging found by name (`adb-…(2)._adb-tls-connect`) kept its state, and
+  Mount no longer took it for a phone on the USB cable.
+
 ## 3.2.1 (unreleased)
 
 Ideas from [@rahulpatel902](https://github.com/rahulpatel902)'s list of suggestions (#231), in
