@@ -1210,5 +1210,9 @@
   "Linked with Android": "Vinculado pelo Android",
   "Link…": "Vincular…",
   "No computer found nearby": "Nenhum computador encontrado por perto",
-  "Start TwinDesk when it’s near": "Abrir o TwinDesk quando ele estiver perto"
+  "Start TwinDesk when it’s near": "Abrir o TwinDesk quando ele estiver perto",
+  "Couldn’t record": "Não foi possível gravar",
+  "Records a voice note and sends it to the computer": "Grava uma nota de voz e a envia para o computador",
+  "Voice note": "Nota de voz",
+  "Voice note for {name}": "Nota de voz para {name}"
 }

@@ -1210,5 +1210,9 @@
   "Linked with Android": "通过 Android 关联",
   "Link…": "关联…",
   "No computer found nearby": "附近没有找到电脑",
-  "Start TwinDesk when it’s near": "它在附近时启动 TwinDesk"
+  "Start TwinDesk when it’s near": "它在附近时启动 TwinDesk",
+  "Couldn’t record": "无法录音",
+  "Records a voice note and sends it to the computer": "录制语音备忘并发送到电脑",
+  "Voice note": "语音备忘",
+  "Voice note for {name}": "给 {name} 的语音备忘"
 }

@@ -1210,5 +1210,9 @@
   "Linked with Android": "Android ile bağlı",
   "Link…": "Bağla…",
   "No computer found nearby": "Yakında bilgisayar bulunamadı",
-  "Start TwinDesk when it’s near": "Yakındayken TwinDesk'i başlat"
+  "Start TwinDesk when it’s near": "Yakındayken TwinDesk'i başlat",
+  "Couldn’t record": "Kaydedilemedi",
+  "Records a voice note and sends it to the computer": "Bir sesli not kaydeder ve bilgisayara gönderir",
+  "Voice note": "Sesli not",
+  "Voice note for {name}": "{name} için sesli not"
 }

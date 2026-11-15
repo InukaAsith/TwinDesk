@@ -41,6 +41,9 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   computer are ready to paste with ⌘V or Ctrl+V.
 - **Take a photo with the phone** (Camera, with an Android phone): the phone's camera opens, and
   the photo comes to the computer already copied, ready to paste into a document or a chat.
+- **Voice note** (Android, a notification button to choose in General › Notification buttons):
+  records on the phone, and Send puts it on the computer (it waits if the computer isn't
+  connected). A copy stays in Recordings › TwinDesk.
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

@@ -16,6 +16,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 16 Live Updates: a file transfer's progress on the lock screen and in the status bar (Notify.files) -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- Android 17 (target 37): finding and reaching computers on this network (Discovery.kt, Link.kt) -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <!-- General › Linked with Android (CompanionLink.kt): while a computer is linked, Android lets TwinDesk run, use data and start its service in the background; and tells it when that computer is near -->
     <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_USE_DATA_IN_BACKGROUND" />
@@ -216,6 +218,14 @@
         <!-- The notification's Send files (QuickActions.kt): Android's picker, then to the computer -->
         <activity
             android:name=".PickActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
+        <!-- The notification's Voice note (VoiceNote.kt): records while on screen, then to the computer -->
+        <activity
+            android:name=".VoiceNoteActivity"
             android:exported="false"
             android:theme="@style/Theme.TwinDesk.Invisible"
             android:excludeFromRecents="true"

@@ -20,6 +20,7 @@ object QuickActions {
     val ALL get() = listOf(
         Btn("clip", tr("Send clipboard"), tr("Sends this phone’s clipboard to the computer")),
         Btn("files", tr("Send files"), tr("Opens the file picker")),
+        Btn("voice", tr("Voice note"), tr("Records a voice note and sends it to the computer")),
         Btn("remote", tr("Touchpad"), tr("Opens the Remote’s touchpad and keyboard")),
         Btn("media", tr("Play/Pause"), tr("Media playing on the computer")),
         Btn("ring", tr("Ring computer"), tr("Plays a sound on the computer")),
@@ -52,6 +53,7 @@ object QuickActions {
         val pi: PendingIntent = when (id) {
             "clip" -> activity(ctx, 30, Intent(ctx, ClipActivity::class.java))
             "files" -> activity(ctx, 31, Intent(ctx, PickActivity::class.java))
+            "voice" -> activity(ctx, 36, Intent(ctx, VoiceNoteActivity::class.java))
             "remote" -> activity(ctx, 32, Intent(ctx, RemoteActivity::class.java).putExtra("mode", "pad"))
             "media" -> Notify.action(ctx, ActionReceiver.PC_MEDIA, 33, "toggle")
             "ring" -> Notify.action(ctx, ActionReceiver.RING_PC, 34)

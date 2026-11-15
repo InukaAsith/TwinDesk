@@ -1210,5 +1210,9 @@
   "Linked with Android": "Связь через Android",
   "Link…": "Связать…",
   "No computer found nearby": "Рядом не найден компьютер",
-  "Start TwinDesk when it’s near": "Запускать TwinDesk, когда он рядом"
+  "Start TwinDesk when it’s near": "Запускать TwinDesk, когда он рядом",
+  "Couldn’t record": "Не удалось записать",
+  "Records a voice note and sends it to the computer": "Записывает голосовую заметку и отправляет её на компьютер",
+  "Voice note": "Голосовая заметка",
+  "Voice note for {name}": "Голосовая заметка для {name}"
 }
