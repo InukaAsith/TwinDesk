@@ -3,7 +3,7 @@
 // or a computer, whichever the session is with):
 //   dev.do    {do, on?, level?, mode?, id?, stream?}  ask the other side (ring, ringStop, lock, sleep,
 //             bluetooth, dnd, volume; a phone also qs {id, on} and ringer {mode})
-//   dev.state {can: {ring, lock, …}, ringing, bluetooth?, dnd?, volume?, qs?: {wifi, bluetooth, …,
+//   dev.state {can: {ring, lock, …}, ringing, bluetooth?, dnd?, volume?, battery?, charging?, qs?: {wifi, bluetooth, …,
 //             detail: {id: text}, panel: {id: true}, volume, ringer}, top?: [package]}
 // Sent at the start of every session and whenever something changed. A side that doesn't know them
 // (an older TwinDesk) never answers: Overview then leaves the controls out.
@@ -55,6 +55,8 @@ function clean(m) {
   }
   out.app = AppInfo.clean(m.app); // which TwinDesk it runs (null: older than 2.5)
   if (m.asks === 1) out.asks = 1; // it asks while it looks (see Looking above)
+  // A laptop's battery (a computer's dev.state; phones send theirs in phone.info).
+  if (Number.isInteger(m.battery) && m.battery >= 0 && m.battery <= 100) { out.battery = m.battery; out.charging = m.charging === true; }
   if (Array.isArray(m.top)) out.top = m.top.filter((x) => typeof x === 'string').slice(0, 12).map((x) => x.slice(0, 200));
   return out;
 }

@@ -61,6 +61,7 @@ lacks, so it shows only that it's older.
 
 | Field | Sent in | Meaning | An app without it |
 |---|---|---|---|
+| `battery`, `charging` | `dev.state` (a computer's) | A laptop's battery, shown on its page on the other computer (read with the rest of the state, so only while that page may be looked at) | no battery shown |
 | `asks: 1` | `dev.state` | This computer asks for the other side's controls (`ask: true`) while its window is on screen, at once and every minute. The other side then reads its own volume, Bluetooth and Do not disturb only while asked in the last 2½ minutes, not every minute of the session (`shared/devctl.js`) | the other side reads them every minute, as before |
 
 ## Features that say hello on their own

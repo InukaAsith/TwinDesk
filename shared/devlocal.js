@@ -50,6 +50,26 @@ $radios = Await ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Coll
 $bt = $radios | ? { $_.Kind -eq 'Bluetooth' } | Select-Object -First 1`;
 const WIN_DND_KEY = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings';
 
+// {battery, charging} for dev.state's laptop battery (Overview's hero), or {} when there's none.
+function battery(level, charging) {
+  const n = Math.round(Number(level));
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? { battery: n, charging: !!charging } : {};
+}
+
+// Linux: the kernel's power_supply files (no process): the first battery's capacity and status.
+function linuxBattery(root = '/sys/class/power_supply') {
+  try {
+    for (const d of fs.readdirSync(root)) {
+      const at = (f) => { try { return fs.readFileSync(path.join(root, d, f), 'utf8').trim(); } catch { return ''; } };
+      if (at('type') !== 'Battery' || at('scope') === 'Device') continue; // a mouse's or a headset's battery isn't the computer's
+      const cap = at('capacity');
+      if (cap === '') continue;
+      return battery(cap, /^(Charging|Full)$/.test(at('status')));
+    }
+  } catch {}
+  return {};
+}
+
 class DevLocal {
   constructor() {
     this.os = process.platform;
@@ -81,19 +101,30 @@ class DevLocal {
     try {
       if (this.os === 'win32') {
         const r = await ps(`${WIN_BT}
-$o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '${WIN_DND_KEY}' -Name NOC_GLOBAL_SETTING_TOASTS_ENABLED -ErrorAction SilentlyContinue).NOC_GLOBAL_SETTING_TOASTS_ENABLED; $o.dnd = ($v -eq 0); $o | ConvertTo-Json -Compress`, 15000);
+$o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '${WIN_DND_KEY}' -Name NOC_GLOBAL_SETTING_TOASTS_ENABLED -ErrorAction SilentlyContinue).NOC_GLOBAL_SETTING_TOASTS_ENABLED; $o.dnd = ($v -eq 0)
+$b = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1; if ($b) { $o.batt = [int]$b.EstimatedChargeRemaining; $o.plug = [int]$b.BatteryStatus }
+$o | ConvertTo-Json -Compress`, 15000);
         const v = await ps(`${WIN_VOL}\n[TdVol]::Get()`, 15000);
         const j = r.ok && r.out ? JSON.parse(r.out) : {};
         if (j.bt) s.bluetooth = j.bt === 'On';
         else this.caps.bluetooth = false;
         s.dnd = !!j.dnd;
         if (v.ok && v.out !== '') s.volume = clamp01(parseFloat(v.out.replace(',', '.')));
+        // A laptop's battery (Win32_Battery: 1 discharging, 2 on AC, 3 full, 6–9 charging).
+        if (Number.isFinite(j.batt)) Object.assign(s, battery(j.batt, [2, 3, 6, 7, 8, 9].includes(j.plug)));
       } else if (this.os === 'darwin') {
         const v = await run('osascript', ['-e', 'output volume of (get volume settings)']);
         if (v.ok) s.volume = clamp01(Number(v.out) / 100);
         if (this.caps.bluetooth) {
           const b = await run(this._blueutil(), ['-p']);
           if (b.ok) s.bluetooth = b.out === '1';
+        }
+        // A MacBook's battery; a Mac without one is asked once.
+        if (this.hasBattery !== false) {
+          const p = await run('pmset', ['-g', 'batt']);
+          const m = /InternalBattery[^\n]*?(\d+)%;\s*([a-z ]+)/i.exec(p.out || '');
+          this.hasBattery = !!m;
+          if (m) Object.assign(s, battery(Number(m[1]), !/discharging/i.test(m[2]) && /AC Power/.test(p.out)));
         }
       } else {
         if (this.caps.volume) {
@@ -110,6 +141,7 @@ $o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '
           const d = await run('gsettings', ['get', 'org.gnome.desktop.notifications', 'show-banners']);
           if (d.ok) s.dnd = d.out === 'false';
         }
+        Object.assign(s, linuxBattery());
       }
     } catch (e) { /* left out: not reported */ }
     return s;
@@ -220,4 +252,4 @@ $o = @{}; if ($bt) { $o.bt = [string]$bt.State }; $v = (Get-ItemProperty -Path '
   }
 }
 
-module.exports = { DevLocal };
+module.exports = { DevLocal, battery, linuxBattery };

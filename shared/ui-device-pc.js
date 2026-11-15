@@ -74,7 +74,7 @@
         const via = D.viaOf(s);
         desc.textContent = { mac: 'Mac', win: t('Windows PC'), linux: t('Linux computer') }[p.os] || '';
         hero.sub.textContent = [t('Connected'), via, rtt != null ? t('{value} ms', { value: rtt }) : ''].filter(Boolean).join(' · ');
-        hero.battery(s.peerInfo && s.peerInfo.battery, s.peerInfo && s.peerInfo.charging);
+        hero.battery(ctl && ctl.battery != null ? ctl.battery : null, !!(ctl && ctl.charging)); // a laptop's, from its dev.state
         ring.update(ctl);
         lockBtn.hidden = !can('lock');
         sleepBtn.hidden = !can('sleep');
