@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["ru"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "Отсюда: {address}",
+  "Connected · {address}": "Подключено · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} недоступен; пробуем другие его сети.",
+  "Network: automatic": "Сеть: автоматически",
+  "{address} (not seen now)": "{address} (сейчас не виден)",
+  "Network to {name}": "Сеть до {name}",
   "Follow Size ({width} × {height})": "Как в поле «Размер» ({width} × {height})",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "Настройте размер текста и приложений для этого экрана в Параметры Windows › Система › Дисплей.",
   "Width": "Ширина",
@@ -2282,4 +2288,13 @@
   "Low latency": "Низкая задержка",
   "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "По Wi-Fi изображение, звук и ввод идут прямо на этот компьютер в зашифрованном виде, а не через отладку по Wi-Fi. Если телефон недоступен, используется обычный способ",
   "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "Кодировщик телефона отправляет каждый кадр сразу, как он готов. Некоторые телефоны это игнорируют",
+  "Automatic": "Автоматически",
+  "Original (Chromium)": "Исходный (Chromium)",
+  "Desktop Duplication": "Дублирование рабочего стола",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Захват",
+  "As before: the pointer may show smaller than on this screen": "Как раньше: указатель может быть меньше, чем на этом экране",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "Указатель в реальном размере, без рамки. В удалённом рабочем столе указатель не виден",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "Указатель в реальном размере; Windows 10 рисует жёлтую рамку вокруг экрана",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Дублирование рабочего стола в Windows 10, Windows Graphics Capture в Windows 11",
 });

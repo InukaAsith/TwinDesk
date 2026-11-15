@@ -3,13 +3,20 @@
 ; so it adds the same firewall rules the app's Fix button would (firewall.js), for every network
 ; profile so a standard account on a Public network never needs Fix; the uninstaller removes them. A helper (or our adb server) left running would lock its .exe, so it is stopped first.
 ; Stopped while it drove another computer, its pointer would stay blank (HideCursor.cs): the
-; user's cursors are reloaded after it (SPI_SETCURSORS, SPIF_SENDCHANGE).
+; recovery reloads the user's cursors only if a transparent replacement remains.
+
+!define CURSOR_RECOVERY_HELPER "${__FILEDIR__}\..\..\windows-helper\bin\macshare-winhelper.exe"
+!macro RecoverCursor
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\TwinDesk-CursorRecovery.exe "${CURSOR_RECOVERY_HELPER}"
+  nsExec::Exec '"$PLUGINSDIR\TwinDesk-CursorRecovery.exe" --recover-cursor'
+!macroend
 
 !macro customInit
   nsExec::Exec 'taskkill /f /im macshare-winhelper.exe'
   nsExec::Exec 'taskkill /f /im macshare-winhelper-multi.exe'
   nsExec::Exec 'taskkill /f /im macshare-calls.exe'
-  System::Call 'user32::SystemParametersInfoW(i 0x57, i 0, i 0, i 2)'
+  !insertmacro RecoverCursor
   nsExec::Exec '"$INSTDIR\resources\app\windows\vendor\adb\adb.exe" kill-server'
   !ifmacrodef fullKvmInit
     !insertmacro fullKvmInit
@@ -20,7 +27,7 @@
   nsExec::Exec 'taskkill /f /im macshare-winhelper.exe'
   nsExec::Exec 'taskkill /f /im macshare-winhelper-multi.exe'
   nsExec::Exec 'taskkill /f /im macshare-calls.exe'
-  System::Call 'user32::SystemParametersInfoW(i 0x57, i 0, i 0, i 2)'
+  !insertmacro RecoverCursor
   nsExec::Exec '"$INSTDIR\resources\app\windows\vendor\adb\adb.exe" kill-server'
 !macroend
 
@@ -32,7 +39,7 @@
   nsExec::Exec 'taskkill /f /im macshare-winhelper.exe'
   nsExec::Exec 'taskkill /f /im macshare-winhelper-multi.exe'
   nsExec::Exec 'taskkill /f /im macshare-calls.exe'
-  System::Call 'user32::SystemParametersInfoW(i 0x57, i 0, i 0, i 2)'
+  !insertmacro RecoverCursor
   Sleep 500
   RMDir /r "$INSTDIR\resources\app"
 !macroend

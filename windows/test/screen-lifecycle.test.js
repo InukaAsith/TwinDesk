@@ -170,6 +170,7 @@ test('sender renderer loss fails all its sessions and clears queued starts', () 
   assert.equal(sender.live.size, 0); assert.equal(sender.queue.length, 0);
   assert.deepEqual(states, [[session, 'failed']]);
 });
+
 test('Follow Size respects both dimensions, aspect ratio and native size in both modes', () => {
   for (const ScreenType of [PcScreen, MeshPcScreen]) {
     const context = { cfg: { maxHeight: 'extend' }, _extendSize: () => [1920, 1200] };
@@ -180,4 +181,54 @@ test('Follow Size respects both dimensions, aspect ratio and native size in both
     context._extendSize = () => [2560, 1600];
     assert.deepEqual(ScreenType.prototype._streamSize.call(context, { width: 3840, height: 2400 }), [2560, 1600]);
   }
+});
+
+test('our capture receives native dimensions independently of the chosen stream size', async () => {
+  const NativeScreen = require('../native-screen'), setting = NativeScreen.setting;
+  const f = fixture(), pc = new PcScreen(f.opts), bounds = display.bounds;
+  display.bounds = { x: -2560, y: 0, width: 2560, height: 1440 };
+  NativeScreen.setting = () => 'auto';
+  try {
+    f.settings.pcScreen.maxHeight = 1080; pc.mac.accept = true;
+    await pc.setMode('mirror'); await tick();
+    assert.equal(f.starts[0].captureWidth, 2560); assert.equal(f.starts[0].captureHeight, 1440);
+    assert.equal(f.starts[0].width, 1920); assert.equal(f.starts[0].height, 1080);
+  } finally { NativeScreen.setting = setting; display.bounds = bounds; pc.shutdown(); }
+});
+
+test('Capture: Original (the default) starts the share as before, without our capture', async () => {
+  const f = fixture(), pc = new PcScreen(f.opts), bounds = display.bounds;
+  display.bounds = { x: -2560, y: 0, width: 2560, height: 1440 };
+  try {
+    f.settings.pcScreen.maxHeight = 1080; pc.mac.accept = true;
+    await pc.setMode('mirror'); await tick();
+    assert.equal(f.starts[0].captureRect, undefined); assert.equal(f.starts[0].captureWidth, undefined);
+    assert.equal(f.starts[0].width, 1920); assert.equal(f.starts[0].height, 1080);
+  } finally { display.bounds = bounds; pc.shutdown(); }
+});
+
+test('normalized pointer coordinates use native screen pixels, including a negative display origin', () => {
+  const f = fixture(), pc = new PcScreen(f.opts), moved = [];
+  pc.helper.send = (name, point) => { if (name === 'moveTo') moved.push(point); };
+  pc.sending = { rect: { x: -2560, y: 240, width: 2560, height: 1440 } };
+  pc._input({ t: P.T.IN_MOVE, x: 0, y: 0 });
+  pc._input({ t: P.T.IN_MOVE, x: .5, y: .5 });
+  pc._input({ t: P.T.IN_MOVE, x: 1, y: 1 });
+  assert.deepEqual(moved, [{ x: -2560, y: 240 }, { x: -1280, y: 960 }, { x: -1, y: 1679 }]);
+});
+
+test('the picture gets the session network: our adapter on the peer subnet, else none', () => {
+  const os = require('node:os'), interfaces = os.networkInterfaces;
+  os.networkInterfaces = () => ({
+    'Ethernet 3': [{ family: 'IPv4', internal: false, address: '192.168.50.3', netmask: '255.255.255.0' }],
+    'RDP adapter': [{ family: 'IPv4', internal: false, address: '10.6.0.1', netmask: '255.255.255.0' }],
+  });
+  try {
+    const net = (current) => new Sender(Object.assign(new EventEmitter(), { current }))._net();
+    assert.deepEqual(net({ transport: 'ip', address: '192.168.50.4' }), { address: '192.168.50.3', netmask: '255.255.255.0' });
+    assert.deepEqual(net({ transport: 'ip', address: '::ffff:10.6.0.4' }), { address: '10.6.0.1', netmask: '255.255.255.0' });
+    assert.equal(net({ transport: 'ip', address: '100.64.0.9' }), null); // through a router or VPN: any path
+    assert.equal(net({ transport: 'ble', address: 'ble:x' }), null);
+    assert.equal(net(null), null);
+  } finally { os.networkInterfaces = interfaces; }
 });

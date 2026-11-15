@@ -58,6 +58,7 @@ UI.tab({
       { value: 60, label: t('60 fps') },
       { value: 30, label: t('30 fps, lighter') },
     ], (v) => set({ fps: Number(v) }));
+    const captureRow = UI.captureRow((v) => set({ capture: v })); // Capture (native-screen.js)
     const sound = UI.switch((v) => set({ sound: v }), { label: t('Include sound') });
     const input = UI.switch((v) => set({ input: v }), { label: t('Receive input') });
     const inputRow = UI.row(t('Receive input'), '', [input], { literal: true }); // "Receive input from Mac" / "from PC2"
@@ -120,7 +121,7 @@ UI.tab({
       missing,
       screens,
       UI.card(t('Screen'), [UI.row(t('Mode'), '', [mode]), monitorRow, extendRow, customRow]),
-      UI.card(t('screen.picture'), [UI.row(t('Resolution'), t('Limits video height, preserving aspect ratio. Full size sends the original pixels.'), [streamSize]), UI.row(t('Quality'), '', [quality]), UI.row(t('Frame rate'), '', [frameRate]), paceRow], { cls: 'keep-on' }),
+      UI.card(t('screen.picture'), [UI.row(t('Resolution'), t('Limits video height, preserving aspect ratio. Full size sends the original pixels.'), [streamSize]), UI.row(t('Quality'), '', [quality]), UI.row(t('Frame rate'), '', [frameRate]), paceRow, captureRow], { cls: 'keep-on' }),
       UI.card(t('Sound and control'), [UI.row(t('Include sound'), '', [sound]), inputRow], { cls: 'keep-on' }),
       UI.card(t('Remote'), [remoteRow], { cls: 'keep-on' }),
       details,
@@ -147,6 +148,7 @@ UI.tab({
       customSize.set(p.extendPx);
       streamSize.options([...streamSizes, { value: 'extend', label: t('Follow Size ({width} × {height})', { width: p.extendPx[0], height: p.extendPx[1] }) }]);
       streamSize.set(p.maxHeight);
+      captureRow.render(p.capture);
       quality.set(p.mbps);
       frameRate.set(p.fps || 0);
       paceRow.render(s);

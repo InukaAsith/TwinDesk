@@ -28,6 +28,18 @@ test('clicking outside the video does not prevent toolbar controls from receivin
   f.events.mousedown(f.event({ clientY: 150, preventDefault: () => { prevented = true; } }));
   assert.equal(prevented, false); assert.equal(f.sent.length, 0);
 });
+
+test('pointer mapping accounts for a scaled video, letterboxing and CSS coordinates on a HiDPI display', () => {
+  const f = inputFixture();
+  f.video.videoWidth = 1920; f.video.videoHeight = 1200;
+  f.video.getBoundingClientRect = () => ({ left: 100, top: 50, width: 960, height: 720 });
+  f.events.mousedown(f.event({ clientX: 340, clientY: 560 }));
+  const down = f.sent.find(m => m.t === P.T.IN_DOWN);
+  assert.equal(down.x, .25); assert.equal(down.y, .75);
+  const count = f.sent.length;
+  f.events.mousedown(f.event({ clientX: 340, clientY: 60 }));
+  assert.equal(f.sent.length, count, 'letterbox margins do not generate input');
+});
 function rtcFixture(file) {
   const elements = new Map(), callbacks = {}, sent = [], states = [], connections = [], timers = [];
   const element = () => { const events = {}; return { events, srcObject: null, classList: { toggle() {} }, addEventListener(n, fn) { events[n] = fn; }, play: async () => {} }; };
@@ -43,12 +55,133 @@ function rtcFixture(file) {
   }
   const api = { send: m => sent.push(m), stats: s => sent.push(s), state: s => states.push(s), ready() {} };
   for (const name of ['onRtc', 'onRemote', 'onPacing', 'onAudio', 'onToggleStats', 'on']) api[name] = fn => { callbacks[name] = fn; };
-  const context = vm.createContext({ window: { PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, monitor: api, sender: api }, document: { getElementById: n => elements.get(n), body: { classList: { toggle() {} } } },
+  const windowEvents = {};
+  const context = vm.createContext({ window: { addEventListener: (name, fn) => { windowEvents[name] = fn; }, PlayerI18n: require('./support/player-i18n.js'), MacShareProtocol: P, monitor: api, sender: api }, document: { getElementById: n => elements.get(n), body: { classList: { toggle() {} } } },
     navigator: { mediaDevices: {} }, RTCPeerConnection: Peer, MediaStream: class { constructor(tracks) { this.tracks = tracks; } },
     location: { search: '' }, URLSearchParams, console, performance, setInterval: fn => { timers.push(fn); return timers.length; }, clearInterval() {} });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../' + file), 'utf8'), context);
-  return { context, callbacks, sent, states, connections, elements, timers };
+  return { context, callbacks, sent, states, connections, elements, timers, windowEvents };
 }
+
+test('screen encoder scales the whole native frame once; app-window capture retains its existing behavior', async () => {
+  for (const native of [true, false]) {
+    const f = rtcFixture('sender-renderer.js'), parameters = [];
+    let constraints;
+    const track = { getSettings: () => ({ width: 2560, height: 1440 }), stop() {} };
+    f.context.navigator.mediaDevices.getUserMedia = async c => {
+      constraints = c;
+      return { getVideoTracks: () => [track], getAudioTracks: () => [], getTracks: () => [track] };
+    };
+    f.context.RTCRtpSender = { getCapabilities: () => ({ codecs: [] }) };
+    f.context.window.TwinDeskScreenCodec = { order: c => c, RTPMAP: /H264/ };
+    f.context.RTCPeerConnection.prototype.createOffer = async () => ({ sdp: '' });
+    f.context.RTCPeerConnection.prototype.addTransceiver = () => ({ setCodecPreferences() {}, sender: {
+      getParameters: () => ({ encodings: [{}] }), setParameters: async p => parameters.push(p),
+    } });
+    const command = { session: 1, sourceId: 'screen:1', width: 1920, height: 1080, mbps: 20, offer: { kind: native ? 'screen' : 'window' },
+      ...(native ? { captureWidth: 2560, captureHeight: 1440 } : { follow: true }) };
+    f.context.command = command;
+    await vm.runInContext('start(command)', f.context);
+    assert.equal(f.states.some(s => s.status === 'failed'), false);
+    assert.equal(constraints.video.mandatory.maxWidth, native ? 2560 : 1920);
+    assert.equal(constraints.video.mandatory.minWidth, native ? 2560 : 2);
+    assert.equal(parameters[0].encodings[0].scaleResolutionDownBy, native ? 4 / 3 : 1);
+    assert.equal(parameters[0].encodings[0].maxBitrate, 20e6);
+  }
+});
+test('native cursor frames reach the same encoder without recapturing or changing resolution and bitrate', async () => {
+  for (const audio of [false, true]) {
+  const f = rtcFixture('sender-renderer.js'), parameters = [], frames = [];
+  let closed = 0, stopped = 0, oldCapture = 0, audioStopped = 0, temporaryStopped = 0, writeHook = null;
+  f.context.MediaStreamTrackGenerator = class {
+    constructor() { this.kind = 'video'; this.writable = { getWriter: () => ({ write: async frame => (writeHook ? writeHook(frame) : frames.push(frame)), abort: async () => {}, close: async () => {} }) }; }
+    stop() { stopped++; }
+  };
+  f.context.MediaStream = class {
+    constructor(tracks) { this.tracks = tracks; }
+    getVideoTracks() { return this.tracks.filter(t => t.kind === 'video'); }
+    getAudioTracks() { return this.tracks.filter(t => t.kind === 'audio'); }
+    getTracks() { return this.tracks; }
+  };
+  f.context.window.sender.nativeStart = async () => ({ available: true });
+  f.context.navigator.mediaDevices.getUserMedia = async () => {
+    oldCapture++;
+    const video = { stop: () => temporaryStopped++ }, sound = { kind: 'audio', stop: () => audioStopped++ };
+    return { getVideoTracks: () => [video], getAudioTracks: () => [sound], getTracks: () => [video, sound] };
+  };
+  f.context.RTCRtpSender = { getCapabilities: () => ({ codecs: [] }) };
+  f.context.window.TwinDeskScreenCodec = { order: c => c, RTPMAP: /H264/ };
+  f.context.RTCPeerConnection.prototype.createOffer = async () => ({ sdp: '' });
+  f.context.RTCPeerConnection.prototype.addTransceiver = () => ({ setCodecPreferences() {}, sender: {
+    getParameters: () => ({ encodings: [{}] }), setParameters: async p => parameters.push(p),
+  } });
+  f.context.command = { session: 1, width: 1920, height: 1080, captureWidth: 2560, captureHeight: 1440,
+    captureRect: { x: -2560, y: 0, width: 2560, height: 1440 }, fps: 60, mbps: 20, audio, offer: { kind: 'screen' } };
+  await vm.runInContext('start(command)', f.context);
+  assert.equal(oldCapture, audio ? 1 : 0); assert.equal(f.states.some(s => s.status === 'failed'), false);
+  assert.equal(temporaryStopped, audio ? 1 : 0);
+  assert.equal(parameters[0].encodings[0].scaleResolutionDownBy, 4 / 3);
+  assert.equal(parameters[0].encodings[0].maxBitrate, 20e6);
+  assert.equal(parameters[0].encodings[0].maxFramerate, 60);
+  const frame = { close: () => closed++ };
+  await f.windowEvents.message({ source: f.context.window, data: { type: 'twindesk-native-frame', session: 1, frame } });
+  assert.deepEqual(frames, [frame]); assert.equal(closed, 1);
+  // A frame while one is being written is closed at once (its slot goes back to the capture exe), and
+  // the write going on keeps the lock: the dropped one used to clear it, so writes piled up and held
+  // all three slots.
+  const slow = [];
+  let finish;
+  writeHook = (fr) => { slow.push(fr); return new Promise((r) => { finish = r; }); };
+  const count = () => ({ closed: 0, close() { this.closed++; } });
+  const busy = count(), late = count(), after = count();
+  const first = f.windowEvents.message({ source: f.context.window, data: { type: 'twindesk-native-frame', session: 1, frame: busy } });
+  await f.windowEvents.message({ source: f.context.window, data: { type: 'twindesk-native-frame', session: 1, frame: late } });
+  assert.equal(late.closed, 1, 'the frame that came during a write is dropped');
+  await f.windowEvents.message({ source: f.context.window, data: { type: 'twindesk-native-frame', session: 1, frame: after } });
+  assert.equal(slow.length, 1, 'one write at a time, even after a dropped frame');
+  assert.equal(after.closed, 1);
+  finish(); await first;
+  assert.equal(busy.closed, 1);
+  writeHook = null;
+  vm.runInContext('stop(1)', f.context);
+  await f.windowEvents.message({ source: f.context.window, data: { type: 'twindesk-native-frame', session: 1, frame } });
+  assert.equal(frames.length, 1); assert.equal(closed, 2); assert.equal(stopped, 1);
+  assert.equal(audioStopped, audio ? 1 : 0);
+  }
+});
+test('unavailable native capture releases its generator and uses the original capture constraints', async () => {
+  const f = rtcFixture('sender-renderer.js');
+  let closed = 0, stopped = 0, constraints;
+  f.context.MediaStreamTrackGenerator = class {
+    constructor() { this.writable = { getWriter: () => ({ close: async () => closed++ }) }; }
+    stop() { stopped++; }
+  };
+  f.context.window.sender.nativeStart = async () => ({ available: false });
+  f.context.navigator.mediaDevices.getUserMedia = async c => { constraints = c; throw new Error('fallback reached'); };
+  f.context.command = { session: 1, width: 1920, height: 1080, captureWidth: 2560, captureHeight: 1440,
+    captureRect: { x: 0, y: 0, width: 2560, height: 1440 }, mbps: 20, fps: 60, offer: { kind: 'screen' } };
+  await vm.runInContext('start(command)', f.context);
+  assert.equal(constraints.video.mandatory.minWidth, 2560);
+  assert.equal(constraints.video.mandatory.maxFrameRate, 60);
+  assert.equal(closed, 1); assert.equal(stopped, 1);
+  assert.match(f.states[0].error, /fallback reached/);
+});
+test('stopping during native startup releases the track and cannot start a late capture', async () => {
+  const f = rtcFixture('sender-renderer.js'), ready = deferred();
+  let aborted = 0, stopped = 0, oldCapture = 0;
+  f.context.MediaStreamTrackGenerator = class {
+    constructor() { this.writable = { getWriter: () => ({ abort: async () => aborted++ }) }; }
+    stop() { stopped++; }
+  };
+  f.context.window.sender.nativeStart = () => ready.promise;
+  f.context.navigator.mediaDevices.getUserMedia = async () => { oldCapture++; };
+  f.context.command = { session: 1, captureRect: {}, offer: { kind: 'screen' } };
+  const starting = vm.runInContext('start(command)', f.context);
+  vm.runInContext('stop(1)', f.context);
+  ready.resolve({ available: true }); await starting;
+  assert.equal(aborted, 1); assert.equal(stopped, 1);
+  assert.equal(oldCapture, 0); assert.equal(f.connections.length, 0); assert.equal(f.states.length, 0);
+});
 test('a late track from the old receive connection cannot replace the new picture', async () => {
   const f = rtcFixture('monitor.js');
   f.callbacks.onRtc({ t: P.T.RTC_OFFER, session: 1, sdp: '' });
@@ -83,6 +216,20 @@ test('ICE arriving during answer processing is added instead of being discarded'
   f.callbacks.on({ t: P.T.RTC2_ICE, session: 1, candidate: { candidate: 'second' } });
   adding.resolve(); await answer;
   assert.deepEqual(candidates, ['first', 'second']);
+});
+
+test('the picture keeps to the session network: candidates on another one are not taken', () => {
+  const f = rtcFixture('sender-renderer.js'), logged = [];
+  f.context.window.sender.log = (text) => logged.push(text);
+  vm.runInContext('globalThis.testPeer = new RTCPeerConnection(); sessions.set(1, {session: 1, pc: testPeer, pending: null, mbps: 20, net: {address: "192.168.50.3", netmask: "255.255.255.0"}})', f.context);
+  const candidates = []; f.connections[0].addIceCandidate = c => { candidates.push(c.candidate.split(' ')[4]); return Promise.resolve(); };
+  const c = (address) => ({ candidate: `candidate:1 1 udp 2122260223 ${address} 50000 typ host generation 0` });
+  for (const a of ['192.168.50.4', '10.6.0.4', 'abc.local', 'fe80::1']) f.callbacks.on({ t: P.T.RTC2_ICE, session: 1, candidate: c(a) });
+  assert.deepEqual(candidates, ['192.168.50.4', 'abc.local', 'fe80::1']); // names and IPv6: no network to tell
+  assert.equal(logged.length, 1);
+  vm.runInContext('sessions.get(1).net = null', f.context); // no session network (Bluetooth, a router between): every one
+  f.callbacks.on({ t: P.T.RTC2_ICE, session: 1, candidate: c('10.6.0.4') });
+  assert.equal(candidates.at(-1), '10.6.0.4');
 });
 
 function frameGenFixture() {

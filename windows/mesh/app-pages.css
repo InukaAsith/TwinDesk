@@ -300,3 +300,7 @@ body.setup #sidebar { display: none; }
 @keyframes ios-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 
 @keyframes ios-draw { 0%, 20% { stroke-dashoffset: 16; } 55%, 100% { stroke-dashoffset: 0; } }
+
+/* Found nearby: a computer on several networks, one row per network under its own (ui-overview.js). */
+.row.route-row { padding-left: 44px; }
+.row.route-row .label { font-weight: 400; }

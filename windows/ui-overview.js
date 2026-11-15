@@ -132,6 +132,21 @@ UI.tab({
       setTimeout(redraw, LIMIT_MS + 50);
     };
     const named = (text, dev) => String(text || '').replace(/\{name\}|\{Name\}/g, () => dev.name);
+    // The paired computer's Network: Automatic, or one of the networks it is on (and the chosen one even
+    // when it isn't seen now). {select, missed, now}.
+    const routeOf = (s) => {
+      const p = s.paired;
+      const seen = s.found.find((dev) => dev.id === p.macId);
+      const list = (seen && seen.routes) || [];
+      const options = [{ value: '', label: t('Network: automatic') }, ...list.map((x) => ({ value: x.address, label: x.via ? x.via + ' · ' + x.address : x.address }))];
+      if (p.route && !list.some((x) => x.address === p.route)) options.push({ value: p.route, label: t('{address} (not seen now)', { address: p.route }) });
+      if (options.length < 2) return { select: null, missed: p.routeMissed, now: p.now };
+      const sel = UI.select(options, (v) => api.setRoute(v));
+      sel.set(p.route || '');
+      sel.el.classList.add('route-pick');
+      sel.el.setAttribute('aria-label', t('Network to {name}', { name: p.macName }));
+      return { select: sel.el, missed: p.routeMissed, now: p.now };
+    };
     // {busy, text} | {code} | {wait} | {fail, text} | {ok, text} | null
     function rowState(s, dev, online) {
       const p = s.pairing && s.pairing.role !== 'host' && (s.pairing.id ? s.pairing.id === dev.id : s.pairing.address === dev.address) ? s.pairing : null;
@@ -248,14 +263,18 @@ UI.tab({
       if (fk !== foundKey) {
         foundKey = fk;
         let focus = null;
-        const rows = s.found.map((dev) => {
+        const rows = s.found.flatMap((dev) => {
           const isKnown = known.has(dev.id);
           const online = dev.id === live;
           const st = dev.os === 'android' || dev.os === 'ios' ? null : rowState(s, dev, online); // a phone has its own card
+          // On several networks (a cable and Wi-Fi): one row per network, each with its own Connect.
+          const routes = dev.os === 'android' || dev.os === 'ios' ? [] : dev.routes || [];
+          const many = routes.length > 1;
           const pairIt = () => go(dev, 'pair', () => api.pair(dev.id));
           // A Mac hosts; with a PC or Linux the one who clicks is the guest. A phone is asked to pair.
-          const btn = online || isKnown || (st && !st.fail) ? null
-            : UI.button(st ? t('Retry') : dev.os === 'mac' || dev.os === 'android' || dev.os === 'ios' ? t('Pair') : t('Connect'), pairIt, 'small' + (dev.invited || st ? ' primary' : ''));
+          const pairLabel = st ? t('Retry') : dev.os === 'mac' || dev.os === 'android' || dev.os === 'ios' ? t('Pair') : t('Connect');
+          const btn = online || isKnown || (st && !st.fail) || many ? null
+            : UI.button(pairLabel, pairIt, 'small' + (dev.invited || st ? ' primary' : ''));
           if (btn) btn.disabled = (busy && !st) || connected;
           // Paired: Take over (the computer we're a guest of: a takeover hello; one that connects to us:
           // invited, and its hello takes the session from whoever has it).
@@ -264,7 +283,8 @@ UI.tab({
           if (take) take.disabled = busy;
           const match = st && st.code ? UI.button(t('Codes match'), () => api.confirmCode(), 'small primary') : null;
           if (btn && dev.invited && !busy) focus = btn;
-          const hint = !st || st.ok ? dev.invited ? t('{address} · wants to connect', { address: dev.address }) : dev.address
+          const where = many ? routes.map((x) => x.address).join(' · ') : dev.address;
+          const hint = !st || st.ok ? dev.invited ? t('{address} · wants to connect', { address: where }) : where
             : st.code ? t('Check the code: {code} (the same on {name}?)', { code: st.code.slice(0, 3) + ' ' + st.code.slice(3), name: dev.name })
               : st.text;
           const r = UI.row(dev.name, hint, [
@@ -275,7 +295,16 @@ UI.tab({
           if (st && st.code) r.hint.classList.add('code-hint');
           r.querySelector('.text').prepend(UI.osIcon(dev.os));
           r.classList.add('with-ico');
-          return r;
+          if (!many || online || isKnown || (st && !st.fail)) return [r];
+          // The network rows: the adapter here and the address there; the one picked becomes its route.
+          return [r, ...routes.map((x) => {
+            const b = UI.button(pairLabel, () => go(dev, 'pair', () => api.pair(dev.id, x.address)), 'small' + (dev.invited ? ' primary' : ''));
+            b.disabled = (busy && !st) || connected;
+            if (dev.invited && !busy && !focus) focus = b;
+            const sub = UI.row(x.via ? x.via + ' · ' + x.address : x.address, x.local ? t('From {address} here', { address: x.local }) : '', [b], { literal: true });
+            sub.classList.add('route-row');
+            return sub;
+          })];
         });
         if (!rows.length && !blocked) rows.push(UI.row(t('Looking for computers…'), t('Open TwinDesk on the other computer.')));
         foundList.replaceChildren(...rows);
@@ -285,11 +314,12 @@ UI.tab({
       // paired
       const wk = s.wake || { peers: {} };
       const near = new Set(s.found.map((dev) => dev.id));
-      const pk = JSON.stringify([s.paired, s.guests, live, [...near], l.state, Object.keys(wk.peers), wk.waking]);
+      const pairedSeen = s.paired && s.found.find((dev) => dev.id === s.paired.macId);
+      const pk = JSON.stringify([s.paired, s.guests, live, [...near], l.state, Object.keys(wk.peers), wk.waking, pairedSeen ? pairedSeen.routes : null]);
       if (pk === pairedKey) return;
       pairedKey = pk;
       const all = [
-        ...(s.paired ? [{ id: s.paired.macId, name: s.paired.macName, os: s.paired.os, hint: s.paired.address, forget: () => api.forget(), connect: () => api.connectAgain() }] : []),
+        ...(s.paired ? [{ id: s.paired.macId, name: s.paired.macName, os: s.paired.os, hint: s.paired.address, mine: true, forget: () => api.forget(), connect: () => api.connectAgain() }] : []),
         ...s.guests.map((g) => ({ id: g.id, name: g.name, os: g.os, hint: g.lastSeen ? t('Last seen {time}', { time: UI.ago(g.lastSeen) }) : '', forget: () => api.forgetGuest(g.id),
           connect: near.has(g.id) ? () => api.connectGuest(g.id) : null })),
       ];
@@ -299,13 +329,17 @@ UI.tab({
         // An offline computer that told us how to wake it gets Wake.
         const wakeBtn = !online && wk.peers[x.id] ? UI.button(waking ? t('Waking…') : t('Wake'), () => api.wakePeer(x.id), 'small') : null;
         if (wakeBtn) wakeBtn.disabled = waking;
-        const r = UI.row(x.name, online ? t('Connected') : waking ? t('Waking {name}…', { name: x.name }) : x.hint, [
+        const route = x.mine ? routeOf(s) : null;
+        const status = online ? (route && route.now ? t('Connected · {address}', { address: route.now }) : t('Connected')) : waking ? t('Waking {name}…', { name: x.name }) : x.hint;
+        const r = UI.row(x.name, route && route.missed ? t('{route} can’t be reached; trying its other networks.', { route: route.missed }) : status, [
           online ? el('span', { class: 'pill good', text: t('Online') }) : null,
+          route ? route.select : null,
           wakeBtn,
           // Switch to it: whatever the session is now, it ends (paired, and nearby to be reached).
           !online && x.connect ? UI.button(live ? t('Switch') : t('Connect'), x.connect, 'small') : null,
           UI.button(t('Forget'), x.forget, 'small'),
         ], { literal: true });
+        if (route && route.missed) r.hint.classList.add('bad');
         r.querySelector('.text').prepend(UI.osIcon(x.os));
         r.classList.add('with-ico');
         return r;

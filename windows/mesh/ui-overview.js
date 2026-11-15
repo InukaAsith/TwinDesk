@@ -275,7 +275,7 @@ UI.tab({
       if (fk !== foundKey) {
         foundKey = fk;
         let focus = null;
-        const rows = s.found.map((dev) => {
+        const rows = s.found.flatMap((dev) => {
           const isKnown = known.has(dev.id);
           const online = up.has(dev.id);
           // A Mac hosts; with a PC or Linux the one who clicks is the guest. A phone is asked to pair.
@@ -287,11 +287,22 @@ UI.tab({
           const take = !online && isKnown ? UI.button(t('Take over'), () => (s.paired && dev.id === s.paired.macId ? api.connectAgain() : api.connectGuest(dev.id)), 'small') : null;
           if (take) take.disabled = busy;
           if (btn && dev.invited && !busy) focus = btn;
-          const r = UI.row(dev.name, dev.invited ? t('{address} · wants to connect', { address: dev.address }) : dev.address, [
-            online ? el('span', { class: 'pill good', text: t('Connected') }) : isKnown ? el('span', { class: 'pill muted', text: t('Paired') }) : null, btn, take], { literal: true });
+          // On several networks (a cable and Wi-Fi): one row per network, each with its own Connect.
+          const routes = dev.os === 'android' || dev.os === 'ios' ? [] : dev.routes || [];
+          const many = routes.length > 1 && !!btn;
+          const where = routes.length > 1 ? routes.map((x) => x.address).join(' · ') : dev.address;
+          const r = UI.row(dev.name, dev.invited ? t('{address} · wants to connect', { address: where }) : where, [
+            online ? el('span', { class: 'pill good', text: t('Connected') }) : isKnown ? el('span', { class: 'pill muted', text: t('Paired') }) : null, many ? null : btn, take], { literal: true });
           r.querySelector('.text').prepend(UI.osIcon(dev.os));
           r.classList.add('with-ico');
-          return r;
+          if (!many) return [r];
+          return [r, ...routes.map((x) => {
+            const b = UI.button(btn.textContent, () => api.pair(dev.id, x.address), 'small' + (dev.invited ? ' primary' : ''));
+            b.disabled = busy;
+            const sub = UI.row(x.via ? x.via + ' · ' + x.address : x.address, x.local ? t('From {address} here', { address: x.local }) : '', [b], { literal: true });
+            sub.classList.add('route-row');
+            return sub;
+          })];
         });
         if (!rows.length && !blocked) rows.push(UI.row(t('Looking for computers…'), t('Open TwinDesk on the other computer.')));
         foundList.replaceChildren(...rows);

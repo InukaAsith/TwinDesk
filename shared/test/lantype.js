@@ -20,4 +20,8 @@ assert.strictEqual(kindOf('Wi-Fi', 'win32'), 'Wi-Fi');
 assert.strictEqual(kindOf('WLAN', 'win32'), 'Wi-Fi');
 assert.strictEqual(kindOf('vEthernet (WSL)', 'win32'), 'Ethernet');
 assert.strictEqual(kindOf('', 'win32'), '');
+// Windows in Chinese names its adapters 以太网 / 以太网 3 and WLAN / 无线局域网: the cable was shown as Wi-Fi.
+assert.strictEqual(kindOf('以太网 3', 'win32'), 'Ethernet');
+assert.strictEqual(kindOf('以太网', 'win32'), 'Ethernet');
+assert.strictEqual(kindOf('无线局域网', 'win32'), 'Wi-Fi');
 console.log('lantype: ok');

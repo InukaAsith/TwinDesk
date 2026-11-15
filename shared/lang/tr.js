@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["tr"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "Buradan: {address}",
+  "Connected · {address}": "Bağlı · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} adresine ulaşılamıyor; diğer ağları deneniyor.",
+  "Network: automatic": "Ağ: otomatik",
+  "{address} (not seen now)": "{address} (şu an görünmüyor)",
+  "Network to {name}": "{name} için ağ",
   "Follow Size ({width} × {height})": "Boyutu izle ({width} × {height})",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "Bu ekranın metin ve uygulama boyutlarını Windows Ayarları › Sistem › Ekran bölümünden ayarlayın.",
   "Width": "Genişlik",
@@ -2282,4 +2288,13 @@
   "Low latency": "Düşük gecikme",
   "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "Wi-Fi üzerinden görüntü, ses ve giriş kablosuz hata ayıklama yerine şifreli olarak doğrudan bu bilgisayara gider. Telefona ulaşılamazsa kendiliğinden eski yönteme döner",
   "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "Telefonun kodlayıcısı her kareyi hazır olur olmaz gönderir. Bazı telefonlar bunu yok sayar",
+  "Automatic": "Otomatik",
+  "Original (Chromium)": "Özgün (Chromium)",
+  "Desktop Duplication": "Masaüstü Çoğaltma",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Yakalama",
+  "As before: the pointer may show smaller than on this screen": "Eskisi gibi: işaretçi bu ekrandakinden küçük görünebilir",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "İşaretçi gerçek boyutunda, çerçeve yok. Uzak Masaüstünde işaretçi görünmez",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "İşaretçi gerçek boyutunda; Windows 10 ekranın çevresine sarı bir çerçeve çizer",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Windows 10'da Masaüstü Çoğaltma, Windows 11'de Windows Graphics Capture",
 });

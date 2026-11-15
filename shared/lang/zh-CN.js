@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["zh-CN"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "本机 {address}",
+  "Connected · {address}": "已连接 · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} 无法连接，正在尝试它的其他网络。",
+  "Network: automatic": "网络：自动",
+  "{address} (not seen now)": "{address}（当前未发现）",
+  "Network to {name}": "连接 {name} 的网络",
   "Follow Size ({width} × {height})": "跟随尺寸（{width} × {height}）",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "文字和应用大小可在 Windows 设置 › 系统 › 显示中调整。",
   "Width": "宽度",
@@ -2283,4 +2289,13 @@
   "Low latency": "低延迟",
   "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "通过 Wi-Fi 时，画面、声音和输入加密后直接发送到这台电脑，而不经过无线调试。连不上手机时会自动改回原方式",
   "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "手机的编码器每帧一就绪就立即发送。部分手机会忽略此设置",
+  "Automatic": "自动",
+  "Original (Chromium)": "原始（Chromium）",
+  "Desktop Duplication": "桌面复制（Desktop Duplication）",
+  "Windows Graphics Capture": "Windows 图形捕获（WGC）",
+  "Capture": "采集方式",
+  "As before: the pointer may show smaller than on this screen": "与以前相同：指针可能比本机屏幕上的小",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "指针为实际大小，无边框。在远程桌面中不显示指针",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "指针为实际大小；Windows 10 会在屏幕四周画一圈黄色边框",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Windows 10 使用桌面复制，Windows 11 使用 Windows 图形捕获",
 });

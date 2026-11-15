@@ -65,7 +65,7 @@ class LinkManager extends EventEmitter {
   }
 
   // Dial the computer at target {address, port, macName} to pair with it. One pairing at a time.
-  startPairing({ address, port, macName } = {}) {
+  startPairing({ address, port, macName, route } = {}) {
     if (this.closed) return false;
     if (this.pairLink) {
       if (this.pairLink.pairState && this.pairLink.pairState.phase !== 'failed') return false;
@@ -74,7 +74,7 @@ class LinkManager extends EventEmitter {
     if (this.links.size >= P.MAX_DEVICES) return false;
     const link = this._newLink(null);
     this.pairLink = link;
-    link.startPairing({ address, port, macName });
+    link.startPairing({ address, port, macName, route }); // route: the network picked (Found nearby)
     return true;
   }
 

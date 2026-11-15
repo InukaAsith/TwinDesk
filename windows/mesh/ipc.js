@@ -33,15 +33,17 @@ function setupIpc(ctx) {
   // Calls, Messages and Photos (shared/phonehub.js, loaded the first time it's used).
   handle('hub', (r) => ctx.phoneHub().act(r));
 
-  const pairWith = (d) => {
+  // via: one of its routes (Found nearby lists each network it is on), else the best one.
+  const pairWith = (d, via) => {
     discovery.clearInvite(d.id);
     if (P.isPhoneOs(d.os)) return ctx.connectPhoneDev(d); // a phone has no server to pair with
-    link.startPairing({ address: d.address, port: d.port, macName: d.name, id: d.id }); // id: one met over Bluetooth
+    const address = via && (d.routes || []).some((r) => r.address === via) ? via : d.address;
+    link.startPairing({ address, port: d.port, macName: d.name, id: d.id, route: via && address === via ? via : '' }); // id: one met over Bluetooth
   };
-  handle('pair', (target) => {
+  handle('pair', (target, via) => {
     if (typeof target !== 'string' || !target.trim()) return;
     const found = discovery.get(target) || discovery.near(target);
-    if (found) return pairWith(found);
+    if (found) return pairWith(found, typeof via === 'string' ? via : '');
     const m = /^\s*([^\s:]+)(?::(\d{1,5}))?\s*$/.exec(target);
     if (!m) return;
     const port = m[2] ? Number(m[2]) : P.PORT;

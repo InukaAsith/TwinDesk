@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["en"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "From {address} here",
+  "Connected · {address}": "Connected · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} can’t be reached; trying its other networks.",
+  "Network: automatic": "Network: automatic",
+  "{address} (not seen now)": "{address} (not seen now)",
+  "Network to {name}": "Network to {name}",
   "Follow Size ({width} × {height})": "Follow Size ({width} × {height})",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "Set text and app sizes for this screen in Windows Settings › System › Display.",
   "Width": "Width",
@@ -2283,4 +2289,13 @@
   "Low latency": "Low latency",
   "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached",
   "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it",
+  "Automatic": "Automatic",
+  "Original (Chromium)": "Original (Chromium)",
+  "Desktop Duplication": "Desktop Duplication",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Capture",
+  "As before: the pointer may show smaller than on this screen": "As before: the pointer may show smaller than on this screen",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "The pointer at its real size, no border. Over Remote Desktop it shows no pointer",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "The pointer at its real size; Windows 10 draws a yellow border around the screen",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11",
 });
