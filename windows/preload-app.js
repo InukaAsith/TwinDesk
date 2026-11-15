@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('macshare', {
   forget: call('forget'),
   disconnect: call('disconnect'),
   connectAgain: call('connectAgain'),
+  setRoute: call('setRoute'), // the network to the paired computer ('' automatic)
   connectGuest: call('connectGuest'),
   respondPair: call('respondPair'),
   forgetGuest: call('forgetGuest'),

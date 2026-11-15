@@ -60,13 +60,33 @@ function withOpus(sdp) {
     : sdp.replace(m[0], m[0] + '\r\na=fmtp:' + m[1] + ' ' + extra);
 }
 
-// m: {session, sourceId, width, height, captureWidth?, captureHeight?, follow?, mbps, fps?, audio, offer: {kind, wid?}}
+// m.net: our adapter on the session's network {address, netmask} (sender.js _net()). Candidates on any
+// other network are neither sent nor taken, so the picture can't move to a second network mid-share
+// (a Remote Desktop adapter beside the cable did: parts of the picture behind, the bitrate up and down).
+// Names (mDNS) and IPv6 are kept: no way to tell their network here.
+const ip4 = (s) => (/^(\d{1,3})(\.\d{1,3}){3}$/.test(s) ? s.split('.').reduce((a, o) => ((a << 8) | Number(o)) >>> 0, 0) : null);
+function onNet(net, candidate) {
+  if (!net || !candidate) return true;
+  const text = typeof candidate === 'string' ? candidate : candidate.candidate || '';
+  const address = text.split(' ')[4] || '';
+  const a = ip4(address), mine = ip4(net.address), mask = ip4(net.netmask);
+  if (a == null || mine == null || mask == null) return true;
+  return ((a ^ mine) & mask) >>> 0 === 0;
+}
+function keep(me, candidate, side) {
+  if (onNet(me.net, candidate)) return true;
+  me.skipped = (me.skipped || 0) + 1;
+  if (me.skipped <= 4) api.log(`session ${me.session}: ${side} candidate off ${me.net.address} left out: ${String(candidate.candidate || candidate).split(' ').slice(4, 8).join(' ')}`);
+  return false;
+}
+
+// m: {session, sourceId, width, height, captureWidth?, captureHeight?, follow?, mbps, fps?, audio, offer: {kind, wid?}, net?}
 // follow: the picture follows the source's size (an app window), up to width × height.
 // Every frame matters more than the last bit of sharpness: under pressure the encoder
 // lowers quality, never the frame rate (dropped frames are what feels jagged and adds lag).
 async function start(m) {
   stop(m.session);
-  const me = { session: m.session, pending: [], mbps: m.mbps, codec: m.codec };
+  const me = { session: m.session, pending: [], mbps: m.mbps, codec: m.codec, net: m.ice ? null : m.net || null };
   const fps = m.fps || 60;
   sessions.set(me.session, me);
   try {
@@ -112,8 +132,9 @@ async function start(m) {
     // H.265 when both have it (shared/screencodec.js), then H.264 High, Main, Baseline: better quality per
     // bit, in hardware. Everything else stays as a fallback.
     tr.setCodecPreferences(window.TwinDeskScreenCodec.order(RTCRtpSender.getCapabilities('video').codecs, m.codec)); // the Encoder setting
-    pc.onicecandidate = (e) => e.candidate && alive(me) && api.send({ t: T.RTC2_ICE, session: me.session, candidate: e.candidate.toJSON() });
+    pc.onicecandidate = (e) => e.candidate && alive(me) && keep(me, e.candidate, 'our') && api.send({ t: T.RTC2_ICE, session: me.session, candidate: e.candidate.toJSON() });
     pc.onconnectionstatechange = () => alive(me) && report(me, pc.connectionState === 'connected' ? 'live' : pc.connectionState);
+    pc.onicecandidateerror = (e) => alive(me) && api.log('ice candidate error ' + (e.address || '') + ':' + (e.port || '') + ' ' + e.errorCode + ' ' + (e.errorText || ''));
 
     const offer = await pc.createOffer();
     if (!alive(me)) return;
@@ -149,6 +170,14 @@ async function start(m) {
 }
 
 // Once a second, as on the Mac: picture, fps, bitrate (and what the network allows), encoder.
+// "192.168.50.3:5000 -> 192.168.50.4:6000 udp host": the ICE pair in use, '' before there is one.
+function pathOf(byId, pair) {
+  if (!pair) return '';
+  const l = byId.get(pair.localCandidateId), r = byId.get(pair.remoteCandidateId);
+  if (!l || !r) return '';
+  return `${l.address || l.ip}:${l.port} -> ${r.address || r.ip}:${r.port} ${l.protocol || ''} ${l.candidateType || ''}`.trim();
+}
+
 async function stats(me) {
   if (!alive(me) || !me.pc) return;
   const report = await me.pc.getStats();
@@ -188,6 +217,7 @@ async function stats(me) {
     hw: out.powerEfficientEncoder === true,
     dropped: src && src.frames ? Math.max(0, src.frames - (out.framesEncoded || 0)) : 0, // captured, never encoded
     rttMs: pair && pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null,
+    path: pathOf(byId, pair), // the network the picture goes over (logged by sender.js when it changes)
   });
 }
 
@@ -211,7 +241,7 @@ async function onAnswer(m) {
 
 function onIce(m) {
   const me = sessions.get(m.session);
-  if (!me || !m.candidate) return;
+  if (!me || !m.candidate || !keep(me, m.candidate, 'their')) return;
   if (me.pending) me.pending.push(m.candidate);
   else if (me.pc) me.pc.addIceCandidate(m.candidate).catch(() => {});
 }

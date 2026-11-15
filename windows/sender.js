@@ -9,6 +9,7 @@ const path = require('path');
 const P = require('../shared/protocol.js');
 const ScreenCodec = require('../shared/screencodec.js');
 const NativeScreen = require('./native-screen');
+const { interfaces, isIPv4, sameNet } = require('./discovery');
 
 const T = P.T;
 
@@ -40,8 +41,16 @@ class Sender extends EventEmitter {
       if (this._fromWin(e) && s && this.live.has(s.session)) this.emit('state', s.session, { status: String(s.status || ''), error: String(s.error || '') });
     });
     ipcMain.on('sender-stats', (e, s) => {
-      if (this._fromWin(e) && s && this.live.has(s.session)) this.emit('stats', s.session, s);
+      if (!this._fromWin(e) || !s || !this.live.has(s.session)) return;
+      // The network the picture goes over, once per session and when it changes (a cable and Wi-Fi).
+      const path = typeof s.path === 'string' ? s.path.slice(0, 120) : '';
+      if (path && (this.paths || (this.paths = new Map())).get(s.session) !== path) {
+        this.paths.set(s.session, path);
+        console.log('[sender] session ' + s.session + ' video over ' + path);
+      }
+      this.emit('stats', s.session, s);
     });
+    ipcMain.on('sender-log', (e, text) => { if (this._fromWin(e)) console.warn('[sender] ' + String(text).slice(0, 300)); });
     ipcMain.on('sender-ready', (e) => {
       if (!this._fromWin(e)) return;
       this.ready = true;
@@ -89,8 +98,19 @@ class Sender extends EventEmitter {
     this.options.set(session, opts);
     if (opts.offer && opts.offer.kind === 'window') this.windows.add(session);
     // codec: Share screen › Encoder (settings.pcScreen.codec, shared/screencodec.js), for every session.
-    this._toWin({ ...opts, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), t: 'start', session });
+    this._toWin({ ...opts, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), net: this._net(), t: 'start', session });
     return session;
+  }
+
+  // The network the session is on, for the picture to stay on (sender-renderer.js): our adapter there
+  // {address, netmask}, or null (Bluetooth, or a peer reached through a router or VPN: any path).
+  // Without it WebRTC takes whichever network answers first, and moved between two (a cable and a
+  // Remote Desktop adapter) mid-share: blocks of the picture a moment behind, the bitrate up and down.
+  _net() {
+    const c = this.link.current;
+    const peer = c && c.transport !== 'ble' ? String(c.address || '').replace(/^::ffff:/, '') : '';
+    const nic = isIPv4(peer) && interfaces().find((i) => sameNet(i, peer));
+    return nic ? { address: nic.address, netmask: nic.netmask } : null;
   }
 
   // A phone on the USB cable: WebRTC through the relay (wired.js), else null.
@@ -102,6 +122,7 @@ class Sender extends EventEmitter {
   stop(session, tellMac = true) {
     if (!this.live.delete(session)) return;
     this.options.delete(session);
+    if (this.paths) this.paths.delete(session);
     const native = this.native.get(session);
     if (native) { this.native.delete(session); native.stop(); }
     const win = this.windows.delete(session);

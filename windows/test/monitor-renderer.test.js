@@ -218,6 +218,20 @@ test('ICE arriving during answer processing is added instead of being discarded'
   assert.deepEqual(candidates, ['first', 'second']);
 });
 
+test('the picture keeps to the session network: candidates on another one are not taken', () => {
+  const f = rtcFixture('sender-renderer.js'), logged = [];
+  f.context.window.sender.log = (text) => logged.push(text);
+  vm.runInContext('globalThis.testPeer = new RTCPeerConnection(); sessions.set(1, {session: 1, pc: testPeer, pending: null, mbps: 20, net: {address: "192.168.50.3", netmask: "255.255.255.0"}})', f.context);
+  const candidates = []; f.connections[0].addIceCandidate = c => { candidates.push(c.candidate.split(' ')[4]); return Promise.resolve(); };
+  const c = (address) => ({ candidate: `candidate:1 1 udp 2122260223 ${address} 50000 typ host generation 0` });
+  for (const a of ['192.168.50.4', '10.6.0.4', 'abc.local', 'fe80::1']) f.callbacks.on({ t: P.T.RTC2_ICE, session: 1, candidate: c(a) });
+  assert.deepEqual(candidates, ['192.168.50.4', 'abc.local', 'fe80::1']); // names and IPv6: no network to tell
+  assert.equal(logged.length, 1);
+  vm.runInContext('sessions.get(1).net = null', f.context); // no session network (Bluetooth, a router between): every one
+  f.callbacks.on({ t: P.T.RTC2_ICE, session: 1, candidate: c('10.6.0.4') });
+  assert.equal(candidates.at(-1), '10.6.0.4');
+});
+
 function frameGenFixture() {
   const f = rtcFixture('monitor.js'), generators = [];
   f.context.window.FrameGen = class {

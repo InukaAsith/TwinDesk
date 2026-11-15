@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["tr"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "Buradan: {address}",
+  "Connected · {address}": "Bağlı · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} adresine ulaşılamıyor; diğer ağları deneniyor.",
+  "Network: automatic": "Ağ: otomatik",
+  "{address} (not seen now)": "{address} (şu an görünmüyor)",
+  "Network to {name}": "{name} için ağ",
   "Follow Size ({width} × {height})": "Boyutu izle ({width} × {height})",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "Bu ekranın metin ve uygulama boyutlarını Windows Ayarları › Sistem › Ekran bölümünden ayarlayın.",
   "Width": "Genişlik",

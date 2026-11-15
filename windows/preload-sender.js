@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('sender', {
   state: (s) => ipcRenderer.send('sender-state', s),
   stats: (s) => ipcRenderer.send('sender-stats', s),
   ready: () => ipcRenderer.send('sender-ready'),
+  log: (text) => ipcRenderer.send('sender-log', String(text).slice(0, 300)), // into TwinDesk.log (main)
   nativeStart: (session) => new Promise((resolve) => {
     const ready = (_e, m) => {
       if (m.session !== session) return;

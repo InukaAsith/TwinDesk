@@ -22,6 +22,29 @@ function intToIp(n) {
   return [24, 16, 8, 0].map((s) => (n >>> s) & 255).join('.');
 }
 
+// The networks a device is seen on (its routes) and the order they are tried in (link.js).
+const VIRTUAL = /vEthernet|Hyper-V|WSL|VirtualBox|VMware|Loopback|tun|tap|TAP|VPN|WireGuard|Tailscale|ZeroTier|OpenVPN|Npcap|Bluetooth/i;
+const sameNet = (i, address) => ((ipToInt(i.address) ^ ipToInt(address)) & ipToInt(i.netmask)) === 0;
+// This PC's adapter on the network `address` is on: {name, address} or null (reached through a router).
+function adapterFor(address, list = interfaces()) {
+  if (!isIPv4(address)) return null;
+  const i = list.find((x) => sameNet(x, address));
+  return i ? { name: i.name, address: i.address } : null;
+}
+// Lower is better: on one of our networks, then a cable, Wi-Fi, others, and VPN or VM adapters last.
+function routeRank(r) {
+  if (!r.via) return 5;
+  return VIRTUAL.test(r.via) ? 4 : /^Ethernet|以太网/i.test(r.via) ? 1 : /^Wi-?Fi|WLAN|无线/i.test(r.via) ? 2 : 3;
+}
+// Routes in the order they are tried: the preferred address first (when it is there), then by rank.
+// routes: [{address, via, local}], prefer: an address or ''.
+function orderRoutes(routes, prefer) {
+  const list = routes.slice().sort((a, b) => routeRank(a) - routeRank(b) || a.address.localeCompare(b.address));
+  const i = prefer ? list.findIndex((r) => r.address === prefer) : -1;
+  if (i > 0) list.unshift(list.splice(i, 1)[0]);
+  return list;
+}
+
 // Non-internal IPv4 interfaces: [{name, address, netmask, broadcast}]
 function interfaces() {
   const out = [];
@@ -66,7 +89,11 @@ class Discovery extends EventEmitter {
   constructor(self) {
     super();
     this.self = { id: self.id, name: self.name, fp: self.fp || '', os: P.OS.WIN, port: self.port || P.PORT };
-    this.found = new Map(); // id -> {id, name, os, address, port, fp, lastSeen, invited}
+    // id -> {id, name, os, address, port, fp, lastSeen, invited, routes}. routes: address -> {address,
+    // via (this PC's adapter on that network, '' through a router), local, lastSeen}. A computer on a
+    // cable and on Wi-Fi is seen on both: each stays until it is quiet for DEVICE_STALE_MS, and
+    // `address` is the best of them (orderRoutes), not the one whose beacon came last.
+    this.found = new Map();
     this.status = { on: false, error: '' };
     this.waiters = new Map(); // address -> resolve(device) for unicast probes
     this.wantProbes = true; // main turns this off while connected
@@ -99,13 +126,19 @@ class Discovery extends EventEmitter {
   // On the network first; Bluetooth adds the ones it alone sees (ble: true, address 'ble:…').
   list() {
     const out = [...this.found.values()]
-      .map(({ id, name, os: o, address, port, fp, invited }) => ({ id, name, os: o, address, port, fp, invited: !!invited }));
+      .map(({ id, name, os: o, address, port, fp, invited, routes }) => ({ id, name, os: o, address, port, fp, invited: !!invited, routes: this._routes(routes) }));
     for (const x of this.extras) for (const d of x.list()) if (d.id !== this.self.id && !out.some((o) => o.id === d.id)) out.push({ ...d, invited: !!d.invited });
     return out.sort((a, b) => (b.invited - a.invited) || a.name.localeCompare(b.name));
   }
 
   get(id) {
-    return this.found.get(id) || null;
+    const d = this.found.get(id);
+    return d ? { ...d, routes: this._routes(d.routes) } : null;
+  }
+
+  // A device's routes for the app, best first: [{address, via, local}].
+  _routes(routes) {
+    return orderRoutes([...(routes || new Map()).values()].map(({ address, via, local }) => ({ address, via, local })), '');
   }
 
   // Seen over Bluetooth only (not on this network): the list entry, else null.
@@ -246,34 +279,45 @@ class Discovery extends EventEmitter {
     // Older beacons came only from Macs.
     const o = Object.values(P.OS).includes(m.os) ? m.os : P.OS.MAC;
     const old = this.found.get(m.id);
+    const now = Date.now();
+    const routes = new Map(old ? old.routes : []);
+    const added = !routes.has(rinfo.address);
+    const nic = adapterFor(rinfo.address);
+    routes.set(rinfo.address, { address: rinfo.address, via: nic ? nic.name : '', local: nic ? nic.address : '', lastSeen: now });
     const d = {
       id: m.id,
       name: typeof m.name === 'string' && m.name ? m.name.slice(0, 100) : DEFAULT_NAME[o],
       os: o,
-      address: rinfo.address,
+      address: orderRoutes([...routes.values()], '')[0].address,
       port,
       fp: P.normFingerprint(m.fp),
-      lastSeen: Date.now(),
+      lastSeen: now,
       invited: (old && old.invited) || m.t === P.T.INVITE,
+      routes,
     };
     this.found.set(m.id, d);
     const w = this.waiters.get(rinfo.address);
-    if (w) w(d);
-    if (m.t === P.T.INVITE) this.emit('invite', d);
-    if (!old || old.name !== d.name || old.address !== d.address || old.os !== d.os || old.invited !== d.invited) this.emit('change');
+    if (w) w(this.get(m.id));
+    if (m.t === P.T.INVITE) this.emit('invite', this.get(m.id));
+    if (!old || added || old.name !== d.name || old.address !== d.address || old.os !== d.os || old.invited !== d.invited) this.emit('change');
   }
 
   _prune() {
     const now = Date.now();
     let changed = false;
     for (const [id, d] of this.found) {
-      if (now - d.lastSeen > P.DEVICE_STALE_MS) {
+      for (const [address, r] of d.routes) {
+        if (now - r.lastSeen > P.DEVICE_STALE_MS) { d.routes.delete(address); changed = true; }
+      }
+      if (!d.routes.size) {
         this.found.delete(id);
-        changed = true;
+      } else {
+        const best = orderRoutes([...d.routes.values()], '')[0].address;
+        if (best !== d.address) { d.address = best; changed = true; }
       }
     }
     if (changed) this.emit('change');
   }
 }
 
-module.exports = { Discovery, interfaces, isIPv4, ipToInt };
+module.exports = { Discovery, interfaces, isIPv4, ipToInt, sameNet, adapterFor, orderRoutes };

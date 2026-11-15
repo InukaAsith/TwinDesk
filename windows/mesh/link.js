@@ -19,6 +19,14 @@ const BLE_AGAIN_MS = 5 * 60 * 1000; // mouse and keyboard over Bluetooth: a sess
 const KEEPALIVE_TICK_MS = 250; // how often the keep-alive decides whether to ping
 const RESUME_RETRY_MS = 5000; // a failed move to the network: try again after this
 const isBle = (a) => String(a || '').startsWith('ble:');
+const { orderRoutes } = require('../discovery');
+// The addresses to dial, in order: the chosen route first, the host's other networks, the saved one.
+function routesOf(seen, prefer, saved) {
+  const seenList = seen && Array.isArray(seen.routes) ? orderRoutes(seen.routes, prefer).map((r) => r.address) : seen && seen.address ? [seen.address] : [];
+  const out = [];
+  for (const a of [prefer, ...seenList, saved]) if (a && !isBle(a) && !out.includes(a)) out.push(a);
+  return out;
+}
 
 const PAIR_ERRORS = {
   [P.E.PAIR_REFUSED]: '{Name} refused pairing.',
@@ -120,9 +128,10 @@ class Link {
   }
 
   // id: the host's, for one seen over Bluetooth (address 'ble:…').
-  startPairing({ address, port, macName, id }) {
+  // route: the network picked in Found nearby, kept as its chosen route.
+  startPairing({ address, port, macName, id, route }) {
     clearTimeout(this.timers.reconnect);
-    this.pairState = { phase: 'connecting', address, port: port || P.PORT, macName: macName || address, id: id || '', code: '', error: '' };
+    this.pairState = { phase: 'connecting', address, port: port || P.PORT, macName: macName || address, id: id || '', route: route || '', code: '', error: '' };
     this._connect('pair');
     this._changed();
   }
@@ -206,6 +215,16 @@ class Link {
     this.nw = this.nm = null;
     let target = mode === 'pair' ? this.pairState : this.pairing;
     if (mode === 'session' && this.dialAt) target = { ...target, address: this.dialAt }; // this attempt only (Tailnet.pick)
+    // Every network the host is seen on, the chosen route first; one that can't be reached moves on to
+    // the next at once (_socketClosed). As windows/link.js.
+    this.routeQueue = [];
+    if (mode === 'session' && !this.dialAt && !isBle(target.address)) {
+      const list = routesOf(this.resolveAddress(target.macId), this.pairing.route, this.pairing.address);
+      if (list.length) {
+        target = { ...target, address: list[0] };
+        this.routeQueue = list.slice(1);
+      }
+    }
     this.dialAt = '';
     const seq = ++this.seq;
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
@@ -234,8 +253,18 @@ class Link {
   _open(address, port, transport) {
     const ws = this._socket(address, port, transport);
     this.ws = ws;
-    ws.on('open', () => ws === this.ws && this._onOpen(ws.fp));
+    ws.on('open', () => { ws.opened = true; if (ws === this.ws) this._onOpen(ws.fp); });
     ws.on('close', () => this._socketClosed(ws));
+  }
+
+  // A session's network address that didn't open: the next of the host's routes, at once.
+  _nextRoute(ws) {
+    if (this.mode !== 'session' || this.authed || ws.opened || ws.transport !== 'ip' || !this.routeQueue || !this.routeQueue.length) return false;
+    const address = this.routeQueue.shift();
+    console.log('[link] ' + ws.address + ' unreachable (' + (this.lastError || 'no answer') + '), trying ' + address);
+    this.ws = null;
+    this._open(address, ws.port, 'ip');
+    return true;
   }
 
   // A WSS to the host; messages go to whichever role it has then (session, fallback, moving).
@@ -245,7 +274,7 @@ class Link {
       maxPayload: P.MAX_PAYLOAD,
       handshakeTimeout: transport === 'ble' ? P.BLE_TIMEOUT_MS : 5000,
     });
-    Object.assign(ws, { transport, fp: '', lastRx: Date.now() });
+    Object.assign(ws, { transport, fp: '', lastRx: Date.now(), address, port });
     ws.on('upgrade', (res) => {
       ws.fp = P.normFingerprint(res.socket.getPeerCertificate().fingerprint256);
     });
@@ -280,6 +309,7 @@ class Link {
       console.log('[link] back on ' + (alt.transport === 'ble' ? 'Bluetooth' : 'the network'));
       return this._emit('transport', {});
     }
+    if (this._nextRoute(ws)) return;
     this._onClose();
   }
 
@@ -419,6 +449,7 @@ class Link {
       fp: this.seenFp,
       token: msg.token,
       os: osOf(msg.os), // the host's OS; older Macs send none
+      ...(ps.route ? { route: ps.route } : {}), // the network picked to pair through
     };
     this.store.save(this.pairing);
     this.pairState = null;

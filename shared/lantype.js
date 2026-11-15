@@ -63,7 +63,16 @@ function kindOf(name, platform = process.platform) {
     if (!port) return '';
     return /wi-?fi|airport/i.test(port) ? 'Wi-Fi' : /ethernet|lan|thunderbolt/i.test(port) && !/bridge/i.test(port) ? 'Ethernet' : '';
   }
-  return /wi-?fi|wlan|wireless/i.test(name) ? 'Wi-Fi' : /ethernet|^lan\b|local area connection/i.test(name) ? 'Ethernet' : '';
+  // The adapter's name is in the system's language (以太网 3, Ethernet 2, Ethernet-Verbindung, Подключение
+  // по локальной сети…, WLAN, 无线局域网…); its description (Realtek PCIe GbE Family Controller, Intel Wi-Fi 6
+  // AX201…) says it when the name doesn't.
+  const kind = (s) => /wi-?fi|wlan|wireless|802\.11|无线|無線|беспровод|kablosuz|sem fio/i.test(s) && !/^vEthernet/i.test(s) ? 'Wi-Fi'
+    : /ethernet|^lan\b|local area connection|以太网|乙太網路|本地连接|區域連線|gbe|gigabit|подключение по локальной|yerel ağ|conexão local/i.test(s) ? 'Ethernet' : '';
+  if (platform === 'win32') {
+    readWinDesc();
+    return kind(name) || kind((winDesc && winDesc[name]) || '');
+  }
+  return kind(name);
 }
 
 // The session's link to `address`: 'Wi-Fi', 'Ethernet' or ''. Kept 10 s (the state is built often).

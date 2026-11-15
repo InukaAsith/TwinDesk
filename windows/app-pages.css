@@ -157,3 +157,9 @@ body.setup #sidebar { display: none; }
 @media (prefers-color-scheme: dark) {
   .about-icon { background-image: image-set(url(assets/sidebar-icon@2x.png) 1x, url(assets/sidebar-icon@4x.png) 2x); }
 }
+
+/* Found nearby: a computer on several networks, one row per network under its own (ui-overview.js). */
+.row.route-row { padding-left: 44px; }
+.row.route-row .label { font-weight: 400; }
+/* Paired: the network to it (Automatic, or one of them). */
+select.route-pick { max-width: 220px; }
