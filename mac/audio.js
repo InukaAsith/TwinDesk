@@ -11,6 +11,7 @@ const path = require('path');
 const { BrowserWindow, ipcMain } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
+const { pairFor } = require('../shared/pairfor.js');
 
 const DROP_MS = 30000;
 
@@ -65,6 +66,15 @@ class Audio extends EventEmitter {
     return this.getSettings().audio;
   }
 
+  // Send / Play for the device the sound is with. In the mesh the Audio page's switches are the selected
+  // device's pair; sound that stays with another device (the sticky route) goes by that device's own (#245).
+  _on(key) {
+    const cur = !!this.cfg[key];
+    if (!this.meshHub) return cur;
+    const c = this.server.current;
+    return !!pairFor(this.getSettings(), this.meshHub.selectedId, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', cur);
+  }
+
   _syncAudioSticky() {
     if (!this.meshHub) return;
     const c = this.server.current;
@@ -93,13 +103,13 @@ class Audio extends EventEmitter {
   }
 
   _policy() {
-    this.server.sendToClient({ t: P.T.AUDIO_POLICY, accept: !!this.cfg.receive });
+    this.server.sendToClient({ t: P.T.AUDIO_POLICY, accept: this._on('receive') });
   }
 
   // m2w: start or stop sending to match the switches.
   async evaluate() {
     const screenCarries = this.stream.audio.on;
-    const want = !!(this.cfg.send && this.peerAccepts && this.server.current && !screenCarries);
+    const want = !!(this._on('send') && this.peerAccepts && this.server.current && !screenCarries);
     if (want && !this.sending) {
       const session = ++this.sendSession;
       this.sending = { session, status: 'starting' };
@@ -135,8 +145,7 @@ class Audio extends EventEmitter {
     clearTimeout(this.dropTimer);
     if (!this.win) return;
     this.dropTimer = setTimeout(() => {
-      const c = this.cfg;
-      if (this.sending || this.receiving || !this.win || (this.server.current && (c.send || c.receive))) return;
+      if (this.sending || this.receiving || !this.win || (this.server.current && (this._on('send') || this._on('receive')))) return;
       const w = this.win;
       this.win = null;
       if (!w.isDestroyed()) w.destroy();
@@ -145,7 +154,7 @@ class Audio extends EventEmitter {
 
   // w2m: the PC offers its sound.
   async _onOffer(m) {
-    if (!this.cfg.receive) return;
+    if (!this._on('receive')) return;
     this.receiving = { session: m.session, status: 'connecting' };
     await this._ensureWin();
     this._toWin('recv', { session: m.session, sdp: m.sdp, ice: (this.server.current && this.server.current.ice) || null });
@@ -165,7 +174,7 @@ class Audio extends EventEmitter {
   // After the Audio tab changed.
   applySettings() {
     this._policy();
-    if (!this.cfg.receive) this._stopRecv();
+    if (!this._on('receive')) this._stopRecv();
     this._toWin('volume', this.cfg.volume);
     this.hub.applyMute();
     this.evaluate();
