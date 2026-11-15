@@ -2305,4 +2305,8 @@
   "Couldn’t record: {error}": "Couldn’t record: {error}",
   "Recording stopped: {error}": "Recording stopped: {error}",
   "Recording saved in {folder}": "Recording saved in {folder}",
+  "Email": "Email",
+  "Put received files on the clipboard": "Put received files on the clipboard",
+  "Files sent here are ready to paste with ⌘V": "Files sent here are ready to paste with ⌘V",
+  "Files sent here are ready to paste with Ctrl+V": "Files sent here are ready to paste with Ctrl+V",
 });

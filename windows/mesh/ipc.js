@@ -157,6 +157,11 @@ function setupIpc(ctx) {
   handle('setMonitor', (partial) => change('monitor', partial, () => { screen.applyAudio(); pcScreen.apply(); })); // apply(): Playback › Steady takes a new session (pcscreen.js)
   handle('setClipboard', (partial) => change('clipboard', partial, () => clip.applySettings()));
   handle('copyHistory', (index) => clip.copyHistory(Number(index)));
+  handle('openClip', (index) => { // Recent's Open / Email / Call (shared/clipact.js): from the app's own copy
+    const h = (clip.history || [])[Number(index)];
+    const a = h && !h.image && require('../../shared/clipact.js').of(h.text);
+    if (a) shell.openExternal(a.url);
+  });
   handle('clearHistory', () => clip.clearHistory());
   handle('setTab', (tab) => change('ui', { tab }));
   handle('setChats', (on) => { change('ui', { chats: on === true }); if (ctx.chats && ctx.chats()) ctx.chats().sync(); }); // Messages: WhatsApp, Telegram and Instagram there too
@@ -185,7 +190,7 @@ function setupIpc(ctx) {
   handle('setFiles', (partial) => {
     // shareOn/shareFolder only change through share()/unshare()
     const p = partial && typeof partial === 'object' ? { dropToMac: partial.dropToMac, mountMac: partial.mountMac, acceptFromMac: partial.acceptFromMac, edgeDrag: partial.edgeDrag,
-      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys, outboxHours: [0, 1, 24, 168].includes(partial.outboxHours) ? partial.outboxHours : undefined } : {};
+      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys, outboxHours: [0, 1, 24, 168].includes(partial.outboxHours) ? partial.outboxHours : undefined, clipReceived: typeof partial.clipReceived === 'boolean' ? partial.clipReceived : undefined } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
     change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); });
   });

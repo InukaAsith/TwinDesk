@@ -2304,4 +2304,8 @@
   "Couldn’t record: {error}": "Kaydedilemedi: {error}",
   "Recording stopped: {error}": "Kayıt durdu: {error}",
   "Recording saved in {folder}": "Kayıt {folder} içine kaydedildi",
+  "Email": "E-posta",
+  "Put received files on the clipboard": "Alınan dosyaları panoya koy",
+  "Files sent here are ready to paste with ⌘V": "Buraya gönderilen dosyalar ⌘V ile yapıştırılmaya hazır",
+  "Files sent here are ready to paste with Ctrl+V": "Buraya gönderilen dosyalar Ctrl+V ile yapıştırılmaya hazır",
 });

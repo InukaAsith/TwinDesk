@@ -328,6 +328,9 @@ class FileRecv {
       if (b.kind === 'paste') this.helper.request('selectItems', { dir: b.dir, names: b.placed.map((p) => path.basename(p)) }).catch(() => {});
       else spawn('explorer.exe', ['/select,', b.placed[0]], { detached: true, stdio: 'ignore' }).unref();
     }
+    // Files › Put received files on the clipboard: Send files and shares, ready for Ctrl+V (the helper:
+    // as Explorer's Copy puts them).
+    if (b.ok && b.kind === 'send' && this.settings.files.clipReceived) this.helper.request('clipFiles', { paths: b.placed }).catch(() => {});
     if (this.onBatch) this.onBatch({ batch, kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed });
     this.onChange();
   }

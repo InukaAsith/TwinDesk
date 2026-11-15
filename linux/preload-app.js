@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('macshare', {
   setMonitor: call('setMonitor'),
   setClipboard: call('setClipboard'),
   copyHistory: call('copyHistory'),
+  openClip: call('openClip'),
   clearHistory: call('clearHistory'),
   history: call('history'),
   setTab: call('setTab'),

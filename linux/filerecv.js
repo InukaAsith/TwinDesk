@@ -270,6 +270,8 @@ class FileRecv {
     const name = b.placed.length === 1 ? path.basename(b.placed[0]) : b.placed.length + ' items';
     this.last = { name, ok: b.ok > 0, text: b.ok === b.count ? 'Saved to ' + b.dir : (b.count - b.ok) + ' of ' + b.count + ' failed', at: Date.now() };
     if (b.ok && b.reveal) fm.showItems(b.placed);
+    // Files › Put received files on the clipboard: Send files and shares, ready for Ctrl+V.
+    if (b.ok && b.kind === 'send' && this.settings.files.clipReceived) require('../shared/pastefiles.js').toClipboard(b.placed).catch(() => {});
     if (this.onBatch) this.onBatch({ kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed });
     this.onChange();
   }

@@ -2304,4 +2304,8 @@
   "Couldn’t record: {error}": "Не удалось записать: {error}",
   "Recording stopped: {error}": "Запись остановлена: {error}",
   "Recording saved in {folder}": "Запись сохранена в {folder}",
+  "Email": "Написать",
+  "Put received files on the clipboard": "Класть полученные файлы в буфер обмена",
+  "Files sent here are ready to paste with ⌘V": "Присланные сюда файлы сразу вставляются через ⌘V",
+  "Files sent here are ready to paste with Ctrl+V": "Присланные сюда файлы сразу вставляются через Ctrl+V",
 });

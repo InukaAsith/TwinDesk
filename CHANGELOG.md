@@ -34,6 +34,11 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   chooser, and Android keeps TwinDesk running and connected in the background, with no battery
   optimization prompt. **Start TwinDesk when it's near** (off unless switched on, Android 12+):
   Android watches for the computer over Bluetooth and TwinDesk starts and connects when it shows up.
+- **Open, Email and Call** in Clipboard › Recent: a copied link, email address or phone number gets
+  a button that opens it in the computer's own app (on every computer, and the phone's page in
+  Multi-device).
+- **Put received files on the clipboard** (Files, off unless switched on): files sent to this
+  computer are ready to paste with ⌘V or Ctrl+V.
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

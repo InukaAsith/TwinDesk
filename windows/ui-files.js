@@ -72,6 +72,8 @@ UI.tab({
     // Unencrypted file transfers (shared/fastfile.js fxPlain): the switch is on while they're encrypted.
     const encrypt = sw(I18n.t('Encrypt file transfers'), (v) => api.setFiles({ plain: !v }));
     const encryptRow = UI.row(I18n.t('Encrypt file transfers'), '', [encrypt]);
+    const clipSw = sw(I18n.t('Put received files on the clipboard'), (v) => api.setFiles({ clipReceived: v }));
+    const clipRow = UI.row(I18n.t('Put received files on the clipboard'), I18n.t('Files sent here are ready to paste with Ctrl+V'), [clipSw]);
     const cancelBtn = UI.button(I18n.t('Cancel'), () => api.cancelDrop(), 'small');
     const outRow = UI.row('', '', [cancelBtn], { literal: true });
     const inRow = UI.row('', '', [], { literal: true });
@@ -81,7 +83,7 @@ UI.tab({
       UI.card('', [sendRow, zone], { cls: 'keep-on' }),
       UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
       pair.el,
-      UI.card('', [edgeRow, encryptRow]),
+      UI.card('', [edgeRow, encryptRow, clipRow]),
       ...(outbox ? [outbox.card] : []),
       ...(drive ? [drive.card] : []),
       UI.card(I18n.t('Recent'), [outRow, inRow], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
@@ -94,6 +96,7 @@ UI.tab({
       pair.update(s);
       if (drive) drive.update(s);
       if (outbox) outbox.update(f);
+      clipSw.set(!!f.clipReceived);
       // Send files
       canSend = s.link.state === 'connected';
       // Not connected: they wait for the device last connected (shared/outbox.js), when that's on.

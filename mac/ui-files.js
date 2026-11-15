@@ -32,6 +32,7 @@ UI.tab({
     const encryptSw = UI.switch((v) => api.setFiles({ plain: !v }), { label: I18n.t('Encrypt file transfers') });
     const encryptRow = UI.row(I18n.t('Encrypt file transfers'), '', [encryptSw], { literalHint: true });
     const reveal = UI.switch((v) => api.setFiles({ reveal: v }), { label: I18n.t('Show in Finder') });
+    const clipSw = UI.switch((v) => api.setFiles({ clipReceived: v }), { label: I18n.t('Put received files on the clipboard') });
     const folderRow = UI.row(I18n.t('Save to'), '', [UI.button(I18n.t('Choose…'), () => api.pickDropFolder(), 'small'), UI.button(I18n.t('Downloads'), () => api.resetDropFolder(), 'small')], { literalHint: true });
     const progress = el('div');
     const list = el('div', { class: 'history' });
@@ -84,6 +85,7 @@ UI.tab({
       UI.card(I18n.t('Arriving files'), [
         folderRow,
         UI.row(I18n.t('Show in Finder'), '', [reveal]),
+        UI.row(I18n.t('Put received files on the clipboard'), I18n.t('Files sent here are ready to paste with ⌘V'), [clipSw]),
       ]),
       UI.card(I18n.t('Recent'), [list], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
     );
@@ -144,6 +146,7 @@ UI.tab({
             : m.mountError ? I18n.t('Couldn’t connect: {error}', { error: m.mountError })
               : I18n.t('Waiting for {device} to share a folder', { device: pc }));
       reveal.set(f.reveal);
+      clipSw.set(!!f.clipReceived);
       folderRow.setHint(tilde(f.folder || f.defaultFolder));
       // Files on their way: a batch as one line, a few single files, the rest counted. Redrawn only
       // when a line changes (10,000 small files made it jump for each one).

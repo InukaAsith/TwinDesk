@@ -2304,4 +2304,8 @@
   "Couldn’t record: {error}": "Não foi possível gravar: {error}",
   "Recording stopped: {error}": "Gravação parada: {error}",
   "Recording saved in {folder}": "Gravação salva em {folder}",
+  "Email": "E-mail",
+  "Put received files on the clipboard": "Pôr os arquivos recebidos na área de transferência",
+  "Files sent here are ready to paste with ⌘V": "Os arquivos enviados para cá ficam prontos para colar com ⌘V",
+  "Files sent here are ready to paste with Ctrl+V": "Os arquivos enviados para cá ficam prontos para colar com Ctrl+V",
 });

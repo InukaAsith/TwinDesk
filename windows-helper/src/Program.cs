@@ -165,6 +165,19 @@ namespace MacShare
             });
         }
 
+        // Files onto the clipboard as Explorer's Copy puts them (clipFiles: Files › Put received files
+        // on the clipboard; PasteFiles). On an STA thread.
+        static void ClipFiles(List<string> paths)
+        {
+            System.Collections.Specialized.StringCollection list = new System.Collections.Specialized.StringCollection();
+            foreach (string p in paths) if (File.Exists(p) || Directory.Exists(p)) list.Add(p);
+            if (list.Count == 0) throw new Exception("nothing to paste");
+            DataObject data = new DataObject();
+            data.SetFileDropList(list);
+            data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(1))); // DROPEFFECT_COPY
+            Clipboard.SetDataObject(data, true);
+        }
+
         [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
         [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
@@ -175,13 +188,7 @@ namespace MacShare
         // again). On the STA thread Async gives it; the keys go through the injector on the UI thread.
         static void PasteFiles(List<string> paths, long hwnd)
         {
-            System.Collections.Specialized.StringCollection list = new System.Collections.Specialized.StringCollection();
-            foreach (string p in paths) if (File.Exists(p) || Directory.Exists(p)) list.Add(p);
-            if (list.Count == 0) throw new Exception("nothing to paste");
-            DataObject data = new DataObject();
-            data.SetFileDropList(list);
-            data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(1))); // DROPEFFECT_COPY
-            Clipboard.SetDataObject(data, true);
+            ClipFiles(paths);
             int[] mods = { 0x10, 0x11, 0x12, 0x5B, 0x5C }; // Shift, Ctrl, Alt, both Windows keys
             for (int i = 0; i < 150 && Array.Exists(mods, k => (GetAsyncKeyState(k) & 0x8000) != 0); i++) Thread.Sleep(20);
             IntPtr w = new IntPtr(hwnd);
@@ -498,6 +505,10 @@ namespace MacShare
                         List<string> pastePaths = Strings(c, "paths");
                         long pasteWin = (long)Json.Num(c, "hwnd", 0);
                         Async(c, delegate (Dictionary<string, object> r) { PasteFiles(pastePaths, pasteWin); }, true);
+                        return;
+                    case "clipFiles": // received files onto the clipboard, ready to paste (filerecv.js)
+                        List<string> clipPaths = Strings(c, "paths");
+                        Async(c, delegate (Dictionary<string, object> r) { ClipFiles(clipPaths); }, true);
                         return;
                     case "selectItems":
                         string selDir = Json.Str(c, "dir", "");

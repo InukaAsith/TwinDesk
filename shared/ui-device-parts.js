@@ -548,6 +548,10 @@
                 el('div', { class: 'hist-preview', text: h.image ? (h.image.shot ? t('Screenshot') : t('Picture')) + ' · ' + h.image.w + ' × ' + h.image.h : String(h.text || '').replace(/\s+/g, ' ').trim() || t('(whitespace)') }),
                 el('div', { class: 'hint', text: t(h.dir === 'out' ? 'To {name}' : 'From {name}', { name: devName }) + ' · ' + UI.ago(h.at) }),
               ]),
+              (() => { // Open / Email / Call for a link, an address, a number (shared/clipact.js)
+                const a = !h.image && api.openClip && window.ClipAct && ClipAct.of(h.text);
+                return a ? UI.button(t({ link: 'Open', mail: 'Email', call: 'Call' }[a.kind]), () => api.openClip(i), 'small') : null;
+              })(),
               !h.image || h.image.copy ? UI.button(t('Copy'), () => api.copyHistory(i), 'small') : null,
             ])) : [row(cb.historySize === 0 ? t('Recent items are off') : t('Nothing yet'), cb.historySize === 0 ? t('Turn them on in Clipboard') : t('What’s copied on either side shows here'))]));
           }

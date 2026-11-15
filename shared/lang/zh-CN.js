@@ -2305,4 +2305,8 @@
   "Couldn’t record: {error}": "无法录制：{error}",
   "Recording stopped: {error}": "录制已停止：{error}",
   "Recording saved in {folder}": "录制已保存到 {folder}",
+  "Email": "发邮件",
+  "Put received files on the clipboard": "将收到的文件放到剪贴板",
+  "Files sent here are ready to paste with ⌘V": "发送到这里的文件可直接用 ⌘V 粘贴",
+  "Files sent here are ready to paste with Ctrl+V": "发送到这里的文件可直接用 Ctrl+V 粘贴",
 });

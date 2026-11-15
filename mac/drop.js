@@ -242,6 +242,8 @@ class Drop extends EventEmitter {
     const name = b.placed.length === 1 ? path.basename(b.placed[0]) : `${b.placed.length} items`;
     this._remember({ name, size: 0, path: b.placed[0] || null, ok: b.ok > 0, ...(b.ok === b.count ? {} : { error: `${b.count - b.ok} of ${b.count} failed` }) });
     if (b.ok && !b.app && (this.cfg.reveal || b.kind === 'paste')) shell.showItemInFolder(b.placed[0]);
+    // Files › Put received files on the clipboard: Send files and shares, ready for ⌘V.
+    if (b.ok && b.kind === 'send' && this.cfg.clipReceived) require('../shared/pastefiles.js').toClipboard(b.placed).catch(() => {});
     this.emit('batch', { kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed });
   }
 

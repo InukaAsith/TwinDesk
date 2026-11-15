@@ -45,7 +45,7 @@ const SCHEMA = {
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, engine: oneOf(['helper', 'system'], 'helper'), volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
-  files: { acceptDrops: bool, reveal: bool, dragEdge: bool, outboxHours: oneOf([0, 1, 24, 168], 24), plain: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
+  files: { acceptDrops: bool, reveal: bool, dragEdge: bool, outboxHours: oneOf([0, 1, 24, 168], 24), clipReceived: bool, plain: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
   notifs: { send: bool, receive: bool, hideText: bool },
   smb: { connectPc: bool },
   apps: { offer: bool, onVirtual: bool, moveWindows: bool, moveKey: oneOf(['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'], 'MetaRight') }, // moveWindows: Apps › Move windows (movewin.js)
@@ -628,6 +628,12 @@ function setupIpc(ctx) {
     },
     copyHistory(index) {
       ctx.clipboard.copyHistory(Number(index));
+    },
+    // Recent's Open / Email / Call (shared/clipact.js): from the app's own copy of the item.
+    openClip(index) {
+      const h = (ctx.clipboard.history || [])[Number(index)];
+      const a = h && !h.image && require('../shared/clipact.js').of(h.text);
+      if (a) shell.openExternal(a.url);
     },
     clearHistory() {
       ctx.clipboard.clearHistory();
