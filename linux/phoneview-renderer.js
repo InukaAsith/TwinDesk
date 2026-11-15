@@ -324,6 +324,10 @@
   window.addEventListener('keydown', onKey);
   // The title bar's panel and fullscreen buttons (phoneview.js keeps both; 'opts' says which is on).
   const panelBtn = document.getElementById('panelBtn');
+  // Keep on top: this window over the others (phoneview.js toggles it), lit while it is.
+  const pinBtn = document.getElementById('b-pin');
+  if (pinBtn) pinBtn.onclick = () => { api.send({ t: 'pin' }); canvas.focus(); };
+  api.on('opts', (m) => { if (m && pinBtn && typeof m.pinned === 'boolean') { pinBtn.classList.toggle('on', m.pinned); pinBtn.setAttribute('aria-pressed', String(m.pinned)); } });
   document.getElementById('fullBtn').onclick = () => { api.send({ t: 'full' }); canvas.focus(); };
   panelBtn.onclick = () => { api.send({ t: 'panel' }); canvas.focus(); };
   window.addEventListener('keydown', (e) => { if (e.key === 'F11') { e.preventDefault(); e.stopImmediatePropagation(); api.send({ t: 'full' }); } }, true);

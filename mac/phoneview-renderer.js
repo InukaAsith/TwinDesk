@@ -415,8 +415,12 @@
   if (enterBtn) enterBtn.onclick = () => api.send({ t: 'toggle', what: 'enterSends' });
   const swipeBtn = document.getElementById('b-swipe');
   if (swipeBtn) swipeBtn.onclick = () => api.send({ t: 'toggle', what: 'arrowSwipe' });
+  // Keep on top: this window over the others (phoneview.js toggles it), lit while it is.
+  const pinBtn = document.getElementById('b-pin');
+  if (pinBtn) pinBtn.onclick = () => { api.send({ t: 'pin' }); canvas.focus(); };
   api.on('opts', (m) => {
     if (!m) return;
+    if (pinBtn && typeof m.pinned === 'boolean') { pinBtn.classList.toggle('active', m.pinned); pinBtn.setAttribute('aria-pressed', String(m.pinned)); }
     if (powerBtn && typeof m.screenOff === 'boolean') powerBtn.classList.toggle('active', m.screenOff);
     if (enterBtn && typeof m.enterSends === 'boolean') enterBtn.classList.toggle('active', m.enterSends);
     if (swipeBtn && typeof m.arrowSwipe === 'boolean') swipeBtn.classList.toggle('active', m.arrowSwipe);

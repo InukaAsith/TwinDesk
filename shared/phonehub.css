@@ -213,21 +213,56 @@ body.callpop {
 body.callpop.missed .cp-sub { color: var(--bad); }
 
 /* The phone's media controls (ui-nowplaying.js): on the right of the Phone page's card. */
-.np { display: flex; align-items: center; gap: 12px; margin: 14px 4px 2px; padding: 10px 12px; border-radius: 12px; background: var(--hover); text-align: left; }
+.np { --np-tint: transparent; position: relative; display: flex; align-items: flex-start; gap: 14px; margin: 14px 4px 2px; padding: 12px 14px; border-radius: 14px; background: var(--hover); text-align: left; overflow: hidden; isolation: isolate; }
+/* The art's colour, washed behind the card (off in its menu): a soft glow from the art's corner. */
+.np.tinted::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(120% 140% at 0% 0%, rgb(from var(--np-tint) r g b / 0.45), rgb(from var(--np-tint) r g b / 0.12) 70%); }
 .phone-hero .np { margin: 0 0 0 auto; flex: 0 1 380px; min-width: 240px; }
 .np[hidden] { display: none; }
-.np-art { width: 52px; height: 52px; flex: none; border-radius: 8px; background: var(--track-off) center / cover no-repeat; }
+.np-art { width: 88px; height: 88px; flex: none; border-radius: 12px; background: var(--track-off) center / cover no-repeat; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2); }
 .np-art.none { background-image: linear-gradient(135deg, #bf5af2, #ff375f) !important; }
-.np-main { flex: 1; min-width: 0; }
+.np-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.np-head { display: flex; align-items: flex-start; gap: 2px; }
+.np-names { flex: 1; min-width: 0; }
 .np-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .np-sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.np-pos { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-.np-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--track-off); overflow: hidden; }
-.np-bar.seek { cursor: pointer; }
-.np-fill { height: 100%; width: 0; background: var(--accent); border-radius: 2px; }
-.np-time { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
-.np-ctl { display: flex; gap: 2px; flex: none; }
-.np-btn { width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.np-pos { display: flex; align-items: center; gap: 8px; }
+.np-pos[hidden], .np-extra[hidden], .np-volbox[hidden], .np-out[hidden] { display: none; }
+/* Seek and volume: a thin track filled to --np-k with the accent, a round thumb that shows on hover. */
+.np-seek { -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; height: 14px; margin: 0; background: transparent; cursor: pointer; --np-k: 0%; }
+.np-seek:disabled { cursor: default; }
+.np-seek::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--np-k), var(--track-off) var(--np-k)); }
+.np-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); opacity: 0; transition: opacity 0.15s; }
+.np-seek:hover::-webkit-slider-thumb, .np-seek:focus-visible::-webkit-slider-thumb, .np-seek:active::-webkit-slider-thumb { opacity: 1; }
+.np-seek:disabled::-webkit-slider-thumb { opacity: 0 !important; }
+.np-seek:focus-visible { outline: none; }
+.np-time { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; min-width: 32px; }
+.np-pos .np-time:last-child { text-align: right; }
+.np-ctl { display: flex; align-items: center; justify-content: center; gap: 4px; flex: none; }
+.np-btn { width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; color: var(--text); }
 .np-btn:hover:not(:disabled) { background: var(--track-off); }
 .np-btn:disabled { opacity: 0.35; cursor: default; }
-.np-btn svg { width: 18px; height: 18px; fill: var(--text); stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; }
+.np-btn[hidden] { display: none; }
+.np-btn svg { width: 18px; height: 18px; fill: var(--text); stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+.np-btn svg text { fill: var(--text); font-weight: 700; font-family: inherit; }
+.np-play { width: 42px; height: 42px; background: var(--control); box-shadow: var(--shadow); }
+.np-play svg { width: 20px; height: 20px; }
+.np-mini { width: 26px; height: 26px; opacity: 0.6; }
+.np-mini:hover { opacity: 1; }
+.np-mini svg { width: 15px; height: 15px; }
+.np-mini.on svg { fill: var(--accent); stroke: var(--accent); }
+.np-extra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.np-volbox { display: flex; align-items: center; gap: 6px; flex: 1 1 120px; min-width: 100px; }
+.np-ico svg { width: 16px; height: 16px; fill: var(--muted); stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; display: block; }
+.np-out button { font-size: 12px; padding: 2px 10px; }
+/* Smaller: one line, the art small, only the main buttons. */
+.np.small { align-items: center; padding: 8px 10px; gap: 10px; }
+.np.small .np-art { width: 44px; height: 44px; border-radius: 8px; }
+.np.small .np-main { flex-direction: row; align-items: center; gap: 8px; }
+.np.small .np-head { flex: 1; min-width: 0; align-items: center; }
+.np.small .np-pos, .np.small .np-extra, .np.small .np-skip, .np.small .np-head .np-mini:not(:last-child) { display: none; }
+.np.small .np-play { width: 34px; height: 34px; }
+/* Glass: the card a clear pane with the lit rim, the tint glowing through it. */
+.glass .np { background: linear-gradient(180deg, var(--sheen), transparent 40%), var(--control); box-shadow: var(--rim); }
+.glass .np-play { background: var(--accent-fill); box-shadow: var(--accent-lift); }
+.glass .np-play svg { fill: #fff; stroke: #fff; }

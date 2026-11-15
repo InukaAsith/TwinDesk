@@ -88,6 +88,12 @@ class PcView extends EventEmitter {
         this.emit('change');
       }
       if (m.fullScreen && this.win) this.win.setFullScreen(!this.win.isFullScreen());
+      // Keep on top (the bar's button): this window over other apps' windows, for this time.
+      if (m.pin && this.win && !this.win.isDestroyed()) {
+        const on = !this.win.isAlwaysOnTop();
+        this.win.setAlwaysOnTop(on, 'floating');
+        this._toWin({ t: 'pinned', on });
+      }
       if (m.share !== undefined || m.mode) this.control({ share: m.share, mode: m.mode });
       if (m.share === false) this.close(); // Stop on the bar: nothing left to watch
     });

@@ -390,7 +390,7 @@ class PhoneViews extends EventEmitter {
   // The window's switches as they are now (its controls light up).
   _opts(v) {
     const ph = this.getSettings().phone || {};
-    return { enterSends: ph.enterSends !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff };
+    return { enterSends: ph.enterSends !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff, pinned: !!(v.win && !v.win.isDestroyed() && v.win.isAlwaysOnTop()) };
   }
 
   // Enter sends / Arrow keys swipe changed (here, or on the Phone page): every window shows it.
@@ -426,6 +426,12 @@ class PhoneViews extends EventEmitter {
   }
 
   _input(v, m) {
+    // Keep on top (the title bar's pin): the window's own, no phone needed.
+    if (m.t === 'pin') {
+      const on = !v.win.isAlwaysOnTop();
+      v.win.setAlwaysOnTop(on);
+      return this._send(v, 'phoneview:opts', { pinned: on });
+    }
     // Fullscreen (its title-bar button, F11): only the picture, black around it; F11 again leaves.
     if (m.t === 'full') {
       const on = !v.win.isFullScreen();

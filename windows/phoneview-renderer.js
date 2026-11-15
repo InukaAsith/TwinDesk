@@ -449,7 +449,7 @@
   ].filter((c) => (c.in || PHONE).includes(kind));
   // The title bar has what the Mac's has: Back, Home, Recents, Notifications, and a camera's own.
   // Rotate, Phone screen off, Enter sends and Arrow keys swipe are on the Phone page.
-  const TOP = ['notifications', ...CAMERA];
+  const TOP = ['notifications', ...CAMERA, 'pin'];
   const OPT = { pin: 'pinned', screenOff: 'screenOff', enterSends: 'enterSends', arrowSwipe: 'arrowSwipe', torch: 'torch' };
   for (const c of CONTROLS) {
     c.el = document.createElement('button');

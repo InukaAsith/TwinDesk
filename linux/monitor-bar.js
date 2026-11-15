@@ -31,6 +31,9 @@
   btn('b-stop').onclick = () => api.ctl({ share: false });
   btn('b-fg').onclick = () => api.ctl({ framegen: !btn('b-fg').classList.contains('on') });
   btn('b-full').onclick = () => api.ctl({ fullScreen: true });
+  // Keep on top: this window over the others (screen.js toggles it and says, onPinned).
+  btn('b-pin').onclick = () => api.ctl({ pin: true });
+  if (api.onPinned) api.onPinned((on) => { btn('b-pin').classList.toggle('on', !!on); btn('b-pin').setAttribute('aria-pressed', String(!!on)); });
 
   let timer = null;
   function later() {

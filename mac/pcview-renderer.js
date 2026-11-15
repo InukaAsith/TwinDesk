@@ -77,8 +77,13 @@ function setFrameGen(on) {
 let remote = null;
 function showRemote(r) {
   remote = r;
-  bar.classList.toggle('hidden', !r);
-  if (!r) return;
+  // An older computer says nothing: the bar keeps only this window's own (Frame generation, Keep
+  // on top, Full screen).
+  bar.classList.remove('hidden');
+  if (!r) {
+    for (const id of ['b-extend', 'b-mirror', 'b-stop']) btn(id).hidden = true;
+    return;
+  }
   const can = r.remote && r.on;
   for (const m of ['extend', 'mirror']) {
     const b = btn(`b-${m}`);
@@ -94,6 +99,8 @@ btn('b-mirror').onclick = () => api.ctl({ mode: 'mirror' });
 btn('b-stop').onclick = () => api.ctl({ share: false });
 btn('b-fg').onclick = () => api.ctl({ framegen: !btn('b-fg').classList.contains('on') });
 btn('b-full').onclick = () => api.ctl({ fullScreen: true });
+btn('b-pin').onclick = () => api.ctl({ pin: true });
+showRemote(null); // until the other computer says what it can do
 let barTimer = null;
 function pokeBar(y) {
   if (y > 48 && !bar.matches(':hover')) return;
@@ -322,6 +329,10 @@ api.on((m) => {
       setFrameGen(!!m.framegen);
       break;
     case 'remote': showRemote(m); break;
+    case 'pinned':
+      btn('b-pin').classList.toggle('on', !!m.on);
+      btn('b-pin').setAttribute('aria-pressed', String(!!m.on));
+      break;
   }
 });
 api.ready();

@@ -412,7 +412,7 @@ class PhoneViews extends EventEmitter {
   // The window's switches as they are now (its buttons light up).
   _opts(v) {
     const ph = this.getSettings().phone || {};
-    return { enterSends: ph.enterSends !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff };
+    return { enterSends: ph.enterSends !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff, pinned: !!(v.win && !v.win.isDestroyed() && v.win.isAlwaysOnTop()) };
   }
 
   // Return sends / Arrow keys swipe changed (here, or on the Phone page): every window shows it.
@@ -448,6 +448,13 @@ class PhoneViews extends EventEmitter {
   }
 
   _input(v, m) {
+    // Keep on top (the title bar's pin): the window's own, no phone needed. 'floating': over other
+    // apps' windows, under menus and the Dock.
+    if (m.t === 'pin') {
+      const on = !v.win.isAlwaysOnTop();
+      v.win.setAlwaysOnTop(on, 'floating');
+      return this._send(v, 'phoneview:opts', { pinned: on });
+    }
     if (m.t === 'toggle' && (m.what === 'enterSends' || m.what === 'arrowSwipe')) {
       const ph = this.getSettings().phone;
       ph[m.what] = m.what === 'enterSends' ? ph.enterSends === false : ph.arrowSwipe !== true;
