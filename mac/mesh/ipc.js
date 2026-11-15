@@ -436,6 +436,8 @@ function setupIpc(ctx) {
     },
     setNotifs(partial) {
       setGroup('notifs', partial);
+      Object.assign(settings.notifs, require('../../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
+      save();
       ctx.notifs.applySettings();
     },
     muteNotifApp(arg) {
@@ -622,6 +624,7 @@ function setupIpc(ctx) {
       else if (m.do === 'vcamRemove' && vcam) vcam.remove();
       else if (m.do === 'vcamTarget' && vcam) vcam.setTarget(m.target);
       else if (m.do === 'rotate' && vcam) vcam.turn();
+      else if (m.do === 'mirror' && vcam) vcam.setMirror(m.on === true);
     },
     // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
     setRezume(m) {
@@ -727,7 +730,7 @@ function setupIpc(ctx) {
       if (ctx.adbQr) ctx.adbQr(on === true);
     },
     notifReply(r) {
-      if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
+      if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image, r.remove === true)); // a chat app's conversation (shared/chats.js)
       if (!r || typeof r !== 'object' || !ctx.notifs) return;
       if (r.dismiss) return void ctx.notifs.dismiss(String(r.id || '')); // Overview's × (shared/notifacts.js)
       if (Number.isInteger(r.act)) return void ctx.notifs.act(String(r.id || ''), r.act); // one of its buttons

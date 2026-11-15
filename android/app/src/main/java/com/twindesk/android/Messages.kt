@@ -38,6 +38,7 @@ class Messages(private val hub: Hub, private val core: Core) {
     private var checking = false
     private var req = 0
     private val names = HashMap<String, String>() // address -> contact name ("" when none)
+    private val photos = HashMap<String, String>() // address -> the contact's photo, a small JPEG data: URL ("" when none)
 
     fun start() {
         if (observer != null || !hub.granted(Manifest.permission.READ_SMS)) return
@@ -163,6 +164,24 @@ class Messages(private val hub: Hub, private val core: Core) {
     private fun thread(id: Long, addrs: List<String>, snippet: String, at: Long, unread: Boolean) = JSONObject()
         .put("id", id.toString()).put("addrs", jsonArray(addrs)).put("name", addrs.map { name(it).ifEmpty { it } }.joinToString(", "))
         .put("snippet", snippet.take(160)).put("at", at).put("unread", unread)
+        .apply { if (addrs.size == 1) photo(addrs[0]).takeIf { it.isNotEmpty() }?.let { put("photo", it) } } // the computer shows it in the list
+
+    // A contact's photo for the conversation list: 64 px, kept for next time.
+    private fun photo(addr: String): String {
+        if (addr.isEmpty() || !hub.granted(Manifest.permission.READ_CONTACTS)) return ""
+        synchronized(photos) { photos[addr]?.let { return it } }
+        val p = runCatching {
+            val uri = cr.query(Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(addr)), arrayOf(ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: return@runCatching ""
+            val b = cr.openInputStream(Uri.parse(uri))?.use { android.graphics.BitmapFactory.decodeStream(it) } ?: return@runCatching ""
+            val small = android.graphics.Bitmap.createScaledBitmap(b, 64, 64, true)
+            val out = java.io.ByteArrayOutputStream()
+            small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out)
+            "data:image/jpeg;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+        }.getOrDefault("")
+        synchronized(photos) { if (photos.size > 500) photos.clear(); photos[addr] = p }
+        return p
+    }
 
     // One conversation's messages, newest first, older than `before`: {id, before, items, more}.
     fun thread(m: JSONObject): JSONObject {

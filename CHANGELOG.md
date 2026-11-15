@@ -9,7 +9,48 @@ switches on only when both sides have it ([how that's decided](docs/capabilities
 Numbers like (#143) are [issues and pull requests](https://github.com/InukaAsith/TwinDesk/issues).
 Everyone who sent code, reported a problem or tested is thanked under their version.
 
-## 3.2.0 (unreleased)
+## 3.2.1 (unreleased)
+
+Ideas from [@rahulpatel902](https://github.com/rahulpatel902)'s list of suggestions (#231), in
+TwinDesk's own look.
+
+### New
+
+- **TwinDesk pop-ups** (Notifications › Showing here): a phone's notifications in TwinDesk's own
+  small window, the default on Windows and Linux. Reply is typed right in it, the app's own buttons
+  (Mark as read, Mute…) are there, a picture shows when the notification has one, a one-time code
+  has Copy, and a download or a timer fills its bar in place instead of a new notification each time.
+  On a Mac the system's notifications stay the default; either can be picked on every computer.
+- **Each app its own way:** Show, No pop-ups (only in Recent) or Hide for each phone app.
+- **Pause pop-ups on a schedule:** from one time to another, overnight too. Notifications still go
+  in Recent and Messages.
+- **Copy codes by themselves:** a one-time code goes on the clipboard when it arrives, never to the
+  other devices or the clipboard history, and off the clipboard after 2 minutes.
+- **Messages:** contact and chat pictures with the app's badge, a search box over the chats and the
+  texts, Delete for a chat or a text thread (here only), and Apps… to choose which chat apps show.
+  Progress notifications ("Sending video…", "Deleting…") no longer turn into chats.
+- **Photos:** the phone's albums in a sidebar, with their covers and counts. Open, and on Windows
+  Open with…, for the photo in the viewer.
+- **The media card** stays compact: its chevron slides open back and forward 10 s, the phone's
+  volume and where the sound plays. Its colour can follow the artwork (General).
+- **Calls pause the music** (Calls › Sound, off by default): a call ringing or under way pauses what
+  plays on this computer, and the end of the call plays it again, only if it was the call that
+  paused it.
+- **Camera:** Mirror (here, in its window and in the virtual camera), Quality from 720p to 4K, the
+  light, zoom in and out, and Snapshot for the picture as it shows.
+- **Keep on top:** a pin in the toolbar of the phone's screen, the phone's camera and a computer's
+  shared screen keeps that window over the others.
+
+### Fixes
+
+- Multi-device on a Mac: the Camera page's picture showed a broken image (the page didn't allow
+  it to load).
+
+### Thanks
+
+- [@rahulpatel902](https://github.com/rahulpatel902) for the suggestions in #231.
+
+## [3.2.0](https://github.com/InukaAsith/TwinDesk/releases/tag/v3.2.0) (2026-11-14)
 
 The first release since 3.0.0: what was going to be 3.1.1, and everything under 3.1.0 below, which
 was never released on its own.

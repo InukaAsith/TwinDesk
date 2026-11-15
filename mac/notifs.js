@@ -10,7 +10,8 @@ const { Notification, nativeImage } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { IconsOut, IconsIn } = require('../shared/notificon.js');
-const { actionsOf, withPhoneActions } = require('../shared/notifacts.js');
+const { actionsOf, withPhoneActions, hidden, present } = require('../shared/notifacts.js');
+const { richOf } = require('../shared/notifpop.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -57,7 +58,7 @@ class Notifs extends EventEmitter {
   }
 
   sendPolicy() {
-    this.server.sendToClient({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive });
+    this.server.sendToClient({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: true }); // rich: pictures and live progress shown here (notifpop.js)
   }
 
   applySettings() {
@@ -112,11 +113,11 @@ class Notifs extends EventEmitter {
   }
 
   _show(m) {
-    if (!this.cfg.receive) return;
+    if (!this.cfg.receive || hidden(this, m)) return; // an app set to Hide: not kept either
     const peer = this.server.current ? this.server.current.name : '';
     const appName = str(m.appName, 100);
     // The recent ones, for Overview and Messages' chat apps (as the PC keeps them).
-    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title: str(m.title, 200) || appName || peer, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true, actions: actionsOf(m) };
+    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title: str(m.title, 200) || appName || peer, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true, actions: actionsOf(m), ...richOf(m) };
     if (!this.historyIcons) this.historyIcons = new Map();
     if (item.app && typeof m.icon === 'string' && m.icon.startsWith('data:image/') && m.icon.length < 200000) {
       this.historyIcons.delete(item.app);
@@ -124,9 +125,12 @@ class Notifs extends EventEmitter {
       if (this.historyIcons.size > 60) this.historyIcons.delete(this.historyIcons.keys().next().value);
     }
     this.history = [item, ...(this.history || []).filter((x) => x.id !== item.id)].slice(0, 50);
-    if (!Notification.isSupported()) return void this.emit('change');
     // A one-time code: a Copy button on the notification.
     const code = require('../shared/otp.js').otpOf([item.title, item.body].join(' '));
+    // TwinDesk's window (Reply, buttons, picture, progress), the Mac's own, or none (quiet).
+    const how = present(this, item, m, { from: peer, code, icon: m.icon || this.historyIcons.get(item.app) });
+    if (how === 'popup') this.shown++;
+    if (how !== 'native' || !Notification.isSupported()) return void this.emit('change');
     const n = new Notification({
       title: item.title,
       subtitle: [appName, peer].filter(Boolean).join(' · '),
@@ -134,7 +138,10 @@ class Notifs extends EventEmitter {
       icon: this.iconsIn.for(m),
       // A one-time code's Copy, then the phone's own buttons (Mark as read…), tapped there.
       actions: [...(code ? ['Copy ' + code] : []), ...item.actions].map((text) => ({ type: 'button', text })),
+      // A chat's Reply, typed in the notification itself.
+      ...(item.reply ? { hasReply: true, replyPlaceholder: 'Reply' } : {}),
     });
+    n.on('reply', (_e, text) => this.reply(item.id, text));
     n.tdId = item.id;
     n.on('action', (_e, i) => {
       if (code && i === 0) return require('electron').clipboard.writeText(code);

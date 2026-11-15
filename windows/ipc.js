@@ -60,7 +60,7 @@ function setupIpc(ctx) {
   });
   handle('refreshFound', () => discovery.refresh());
   // A chat's answer (Messages' chat apps: shared/chats.js) or a notification's.
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image, r.remove === true))
     : r.dismiss ? notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
       : notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('qrPair', () => ctx.qrPair());
@@ -181,6 +181,7 @@ function setupIpc(ctx) {
     else if (m.do === 'virtual' && ctx.vcam) ctx.vcam.setOn(m.on === true);
     else if (m.do === 'vcamRemove' && ctx.vcam) ctx.vcam.remove();
     else if (m.do === 'rotate' && ctx.vcam) ctx.vcam.turn();
+    else if (m.do === 'mirror' && ctx.vcam) ctx.vcam.setMirror(m.on === true);
   });
   // ReZume tab (shared/rezume.js): loaded when it's first turned on.
   handle('setReZume', (m) => change('rezume', m && typeof m === 'object' ? m : {}, () => (ctx.rezume ? ctx.rezume.apply() : ctx.loadReZume())));
@@ -251,6 +252,7 @@ function setupIpc(ctx) {
   handle('setNotifs', (partial) => {
     const p = partial && typeof partial === 'object' ? { send: partial.send, receive: partial.receive, hideText: partial.hideText } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+    Object.assign(p, require('../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
     change('notifs', p, () => notifs.applySettings());
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));

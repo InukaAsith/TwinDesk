@@ -82,6 +82,7 @@ class Chats {
     c.name = str(m.name, 200) || c.name || '';
     c.group = m.group === true;
     c.pic = m.pic === true;
+    if (typeof m.avatar === 'string' && m.avatar.length < 60000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(m.avatar)) c.avatar = m.avatar; // the contact's or group's picture
     if (typeof m.id === 'string' && m.id) {
       c.id = str(m.id, 200);
       c.reply = m.reply === true;
@@ -109,7 +110,8 @@ class Chats {
 
   // An answer typed here: through the conversation's notification Reply; shown at once, the
   // phone's own copy (its notification updates with it) replaces it.
-  reply(key, text, image) {
+  reply(key, text, image, remove) {
+    if (remove) return this.remove(key); // Messages › Delete chat (from this list; a new message brings it back)
     const c = (this.phones[this.who()] || {})[key];
     const t = typeof text === 'string' ? text.trim().slice(0, 5000) : '';
     if (image) return this.picture(c, t, image);
@@ -148,6 +150,16 @@ class Chats {
     }
   }
 
+  // Off this computer's list (the chat on the phone stays). A new message from it starts it again.
+  remove(key) {
+    const convs = this.phones[this.who()];
+    if (!convs || !convs[key]) return false;
+    delete convs[key];
+    this._save();
+    this.onChange();
+    return true;
+  }
+
   clear() {
     delete this.phones[this.who()];
     this._save();
@@ -173,7 +185,7 @@ class Chats {
     const convs = this.phones[this.who()];
     if (!convs && !this.heard) return null;
     return Object.values(convs || {}).sort((a, b) => b.at - a.at).slice(0, VIEW_CONVS)
-      .map((c) => ({ key: c.key, app: c.app, appName: c.appName, name: c.name, group: c.group, reply: !!(c.reply && this.sessionUp), pic: !!(c.pic && this.sessionUp), at: c.at, items: c.items.slice(-VIEW_ITEMS) }));
+      .map((c) => ({ key: c.key, app: c.app, appName: c.appName, name: c.name, group: c.group, reply: !!(c.reply && this.sessionUp), pic: !!(c.pic && this.sessionUp), avatar: c.avatar || '', at: c.at, items: c.items.slice(-VIEW_ITEMS) }));
   }
 
   stop() {

@@ -136,6 +136,7 @@ class Clipboard extends EventEmitter {
     // fetches it from there, with macOS's "Pasting from …" dialog, #211); it goes on the switch.
     if (why === 'instant' && this.remote) return;
     const text = await readText();
+    if (require('../shared/otp.js').isQuiet(text)) return; // a code copied by itself (Notifications): kept here only
     // Files copied in Finder: the clipboard also holds their names and icon, which aren't the copy.
     // Files go with the Files tab's shortcuts (fclip.js).
     const src = await this.helper.request('fileSource').catch(() => ({}));

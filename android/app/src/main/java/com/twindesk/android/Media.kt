@@ -48,6 +48,12 @@ class Media(private val hub: Hub, private val core: Core) {
             },
         )
         val args = ArrayList<String>()
+        // One album's (Photos' albums, media.albums): its bucket.
+        val album = m.str("album", 24).takeIf { Regex("^-?\\d{1,20}$").matches(it) }
+        if (album != null) {
+            sel.append(" AND ${C.BUCKET_ID} = ?")
+            args += album
+        }
         val (bd, bi) = before.split(':').let { (it.getOrNull(0)?.toLongOrNull() ?: 0L) to (it.getOrNull(1)?.toLongOrNull() ?: 0L) }
         if (bd > 0) {
             sel.append(" AND (${C.DATE_ADDED} < ? OR (${C.DATE_ADDED} = ? AND ${BaseColumns._ID} < ?))")
@@ -76,7 +82,30 @@ class Media(private val hub: Hub, private val core: Core) {
                 last = "$added:$id"
             }
         }
-        return msg(Proto.T.MEDIA_LIST, "kind" to kind, "before" to before, "items" to items, "more" to more, "next" to last)
+        return msg(Proto.T.MEDIA_LIST, "kind" to kind, "before" to before, "items" to items, "more" to more, "next" to last).apply { if (album != null) put("album", album) }
+    }
+
+    // The albums (Camera, Screenshots, WhatsApp Images…): each one's name, how many and its newest
+    // as the cover, the biggest first.
+    fun albums(): JSONObject {
+        data class A(val id: String, var name: String, var n: Int, val cover: String)
+        val by = LinkedHashMap<String, A>()
+        cr.query(
+            MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL),
+            arrayOf(BaseColumns._ID, F.MEDIA_TYPE, C.BUCKET_ID, C.BUCKET_DISPLAY_NAME),
+            "${F.MEDIA_TYPE} IN (${F.MEDIA_TYPE_IMAGE}, ${F.MEDIA_TYPE_VIDEO})", null, "${C.DATE_ADDED} DESC, ${BaseColumns._ID} DESC",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val b = c.getString(2) ?: continue
+                val a = by[b]
+                if (a != null) { a.n++; continue }
+                val id = (if (c.getInt(1) == F.MEDIA_TYPE_VIDEO) "v" else "i") + c.getLong(0)
+                by[b] = A(b, (c.getString(3) ?: "").ifEmpty { "Other" }, 1, id)
+            }
+        }
+        val items = JSONArray()
+        for (a in by.values.sortedByDescending { it.n }.take(200)) items.put(JSONObject().put("id", a.id).put("name", a.name.take(100)).put("n", a.n).put("cover", a.cover))
+        return msg(Proto.T.MEDIA_ALBUMS, "items" to items)
     }
 
     private fun uri(id: String): Uri? {

@@ -43,7 +43,31 @@ UI.tab({
     const bar = el('div', { class: 'hub-media-bar' }, [filter.el, el('span', { class: 'hub-grow' }), status, removeBtn, saveBtn, selectBtn]);
     const grid = el('div', { class: 'hub-grid' });
     const sentinel = el('div', { class: 'hub-sentinel' });
-    const wrap = el('div', { class: 'hub-media' }, [bar, grid, sentinel]);
+    // Albums (a phone that lists them: media.albums): All, then each with its cover and count. The
+    // filters above work inside the one picked.
+    let album = ''; // '' all; else the album's id
+    let albums = []; // {id, name, n, cover}
+    const covers = new Set(); // cover ids still to get
+    const albumList = el('div', { class: 'hub-albums', hidden: true, attrs: { role: 'listbox', 'aria-label': tr('Albums') } });
+    const main = el('div', { class: 'hub-media-main' }, [bar, grid, sentinel]);
+    const wrap = el('div', { class: 'hub-media' }, [albumList, main]);
+    function paintAlbums() {
+      albumList.hidden = !albums.length;
+      wrap.classList.toggle('with-albums', !!albums.length);
+      if (!albums.length) return;
+      const total = albums.reduce((a, x) => a + x.n, 0);
+      const row = (id, name, n, cover) => {
+        const pic = el('span', { class: 'hub-album-pic' + (cover ? '' : ' all') });
+        if (cover && thumbs.get(cover)) pic.style.backgroundImage = `url("${thumbs.get(cover)}")`;
+        if (cover) pic.dataset.cover = cover;
+        const b = el('button', { class: 'hub-album' + (album === id ? ' on' : ''), attrs: { role: 'option', 'aria-selected': String(album === id), 'data-literal': '' } }, [
+          pic, el('span', { class: 'hub-album-text' }, [el('span', { class: 'hub-album-name', text: name }), el('span', { class: 'hub-album-n', text: String(n) })]),
+        ]);
+        b.onclick = () => { if (album === id) return; album = id; paintAlbums(); reset(); };
+        return b;
+      };
+      albumList.replaceChildren(row('', tr('All'), total, ''), ...albums.map((a) => row(a.id, a.name, a.n, a.cover)));
+    }
 
     // The viewer: one big, with its name and Save.
     const bigImg = el('img', { class: 'hub-big', alt: '' });
@@ -71,10 +95,15 @@ UI.tab({
       if (!viewing || !bigData) return;
       UI.api.hub({ do: 'shareImage', data: bigData, name: viewing.name });
     });
+    // Open: in this computer's own app for pictures; on Windows also Open with (its list of apps).
+    const bigOpen = UI.button(tr('Open'), () => viewing && bigData && UI.api.hub({ do: 'openImage', data: bigData, name: viewing.name }));
+    bigOpen.title = tr('Open it in this computer’s app for pictures');
+    const winPc = /Win/.test(navigator.platform || navigator.userAgent);
+    const bigOpenWith = UI.button(tr('Open with…'), () => viewing && bigData && UI.api.hub({ do: 'openImage', data: bigData, name: viewing.name, with: true }));
     const closeBtn = UI.button(tr('Close'), () => view(null));
     const viewer = el('div', { class: 'hub-viewer', hidden: true }, [
       el('div', { class: 'hub-viewer-stage' }, [prev, bigImg, next]),
-      el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigRemove, bigCopy, bigShare, bigSave, closeBtn]),
+      el('div', { class: 'hub-viewer-bar' }, [el('div', { class: 'hub-grow' }, [bigName, bigSub]), bigRemove, bigCopy, bigOpen, bigOpenWith, bigShare, bigSave, closeBtn]),
     ]);
     body.append(top.el, wrap, viewer);
 
@@ -135,10 +164,16 @@ UI.tab({
         // A little ahead too: the next row or two below.
         const last = items.findIndex((x) => x.id === [...visible].pop());
         if (last >= 0) for (const x of items.slice(last + 1, last + 13)) if (!thumbs.has(x.id) && !ids.includes(x.id)) ids.push(x.id);
-        for (const id of ids) thumbs.set(id, '');
+        for (const id of covers) if (!thumbs.get(id) && !ids.includes(id)) ids.push(id); // the albums' covers too, till they come
+        for (const id of ids) if (!thumbs.has(id)) thumbs.set(id, '');
         if (ids.length) UI.hubAsk({ t: 'media.thumb', ids });
       }, 120);
     }, { root: document.getElementById('content'), rootMargin: '200px 0px' });
+    const askCovers = () => {
+      if (UI.onBle(UI.state) || !covers.size) return;
+      const ids = [...visible].filter((id) => !thumbs.get(id)).concat([...covers].filter((id) => !thumbs.get(id)));
+      if (ids.length) UI.hubAsk({ t: 'media.thumb', ids });
+    };
 
     const end = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting) && more && !asking) page1();
@@ -148,7 +183,7 @@ UI.tab({
     function page1() {
       if (UI.onBle(UI.state)) return;
       asking = true;
-      UI.hubAsk({ t: 'media.list', kind, before: nextKey, n: 120 });
+      UI.hubAsk({ t: 'media.list', kind, before: nextKey, n: 120, ...(album ? { album } : {}) });
     }
 
     function reset() {
@@ -225,7 +260,9 @@ UI.tab({
     // Copy and Share: photos only (a video's is a still), Share where this computer has one.
     function paintBig() {
       const photo = !!viewing && !viewing.video;
-      bigCopy.hidden = !photo;
+      bigCopy.hidden = bigOpen.hidden = !photo;
+      bigOpenWith.hidden = !photo || !winPc;
+      bigOpen.disabled = bigOpenWith.disabled = !bigData;
       bigShare.hidden = !photo || !(UI.state && UI.state.hub && UI.state.hub.shareSheet);
       bigCopy.disabled = bigShare.disabled = !bigData;
     }
@@ -245,7 +282,7 @@ UI.tab({
     });
 
     UI.hubOn('media.list', (m) => {
-      if (m.kind !== kind || (m.before || '') !== nextKey) return; // an answer for an older filter
+      if (m.kind !== kind || (m.before || '') !== nextKey || (m.album || '') !== album) return; // an answer for an older filter or album
       asking = false;
       const fresh = (m.items || []).filter((x) => x && x.id && !tiles.has(x.id));
       items = items.concat(fresh);
@@ -258,9 +295,18 @@ UI.tab({
     UI.hubOn('media.thumb', (m) => {
       if (!m.data) return;
       thumbs.set(m.id, m.data);
+      if (covers.delete(m.id)) for (const p of albumList.querySelectorAll('[data-cover]')) if (p.dataset.cover === m.id) p.style.backgroundImage = `url("${m.data}")`;
       const t = tiles.get(m.id);
       if (t) t.querySelector('img').src = m.data;
       if (viewing && viewing.id === m.id && !bigImg.getAttribute('src')) bigImg.src = m.data;
+    });
+    UI.hubOn('media.albums', (m) => {
+      albums = (Array.isArray(m.items) ? m.items : []).filter((a) => a && typeof a.id === 'string' && typeof a.name === 'string')
+        .map((a) => ({ id: a.id.slice(0, 24), name: a.name.slice(0, 100), n: Math.max(0, Number(a.n) || 0), cover: typeof a.cover === 'string' ? a.cover.slice(0, 40) : '' }));
+      if (album && !albums.some((a) => a.id === album)) { album = ''; reset(); }
+      for (const a of albums) if (a.cover && !thumbs.get(a.cover)) covers.add(a.cover);
+      paintAlbums();
+      askCovers();
     });
     UI.hubOn('media.delete', (m) => {
       drop(Array.isArray(m.ids) ? m.ids.filter((x) => typeof x === 'string') : []);
@@ -269,6 +315,7 @@ UI.tab({
       if (m.confirm > 0) notes.push(tr('Tap the notification on the phone to remove {count} more', { count: m.confirm }));
       if (m.failed > 0) notes.push(tr('{count} couldn’t be removed', { count: m.failed }));
       if (notes.length) status.textContent = notes.join(' · ');
+      if (albums.length) UI.hubAsk({ t: 'media.albums' }); // their counts
     });
     UI.hubOn('media.view', (m) => {
       if (!viewing || viewing.id !== m.id || !m.data) return;
@@ -280,13 +327,17 @@ UI.tab({
     let loaded = false;
     UI.onShown(page, (shown) => {
       if (!shown) view(null);
-      else if (UI.hubReady(UI.state, 'media') && !UI.onBle(UI.state) && !loaded) { loaded = true; reset(); }
+      else if (UI.hubReady(UI.state, 'media') && !UI.onBle(UI.state) && !loaded) { loaded = true; reset(); UI.hubAsk({ t: 'media.albums' }); }
     });
     paint();
     UI.onDeviceChange(() => { // another device: its photos, not the previous one's
       loaded = false;
       view(null);
-      if (!page.hidden && UI.hubReady(UI.state, 'media') && !UI.onBle(UI.state)) { loaded = true; reset(); }
+      album = '';
+      albums = [];
+      covers.clear();
+      paintAlbums();
+      if (!page.hidden && UI.hubReady(UI.state, 'media') && !UI.onBle(UI.state)) { loaded = true; reset(); UI.hubAsk({ t: 'media.albums' }); }
     });
 
     return (s) => {
@@ -295,7 +346,7 @@ UI.tab({
       const ready = UI.hubReady(s, 'media') && !UI.onBle(s); // over Bluetooth: the Wi-Fi Direct note only
       wrap.hidden = !ready;
       if (!ready) { loaded = false; view(null); return; }
-      if (!loaded) { loaded = true; reset(); }
+      if (!loaded) { loaded = true; reset(); UI.hubAsk({ t: 'media.albums' }); }
     };
   },
 });

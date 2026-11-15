@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS = {
   files: { acceptDrops: false, folder: '', reveal: true, dragEdge: false, // '' = Downloads; dragEdge = drag.policy
     plain: false, // Encrypt file transfers off: plain HTTP for file bytes where both allow it (shared/fastfile.js fxPlain)
     shortcuts: false, copyKeys: 'Control+Alt+C', pasteKeys: 'Control+Alt+V' }, // Copy/paste files
-  notifs: { send: false, receive: false, hideText: false, muted: [] },
+  notifs: { send: false, receive: false, hideText: false, muted: [], style: '', otpCopy: false, quiet: { on: false, from: '22:00', to: '07:00' }, phoneApps: {} }, // style…phoneApps: how a phone's show here (shared/notifrules.js)
   apps: { offer: false, onVirtual: false, moveWindows: false, moveKey: 'MetaRight' }, // The PC can list and open this Mac's apps; onVirtual: they open on the virtual display, in Mirror mode too (off: on the shared display, as always); moveWindows: a window dragged past the edge with moveKey held moves there (movewin.js)
   papps: { on: false }, // PC apps on this Mac, each window here with its own Dock icon
   // A phone as the peer: its screen window, apps and setup.
@@ -102,7 +102,7 @@ const DEFAULT_SETTINGS = {
   drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
   // callAudio: the calls' sound on this Mac over Bluetooth (btDevices: which paired device each phone is).
-  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
+  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, callPause: false, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
   // Not on one network: Bluetooth for the session (blepipe.js), Wi-Fi for files and screens
   // (netlink.js). hotspots: {deviceId: {ssid, pass (safeStorage)}}, a phone's hotspot as typed once.
   net: { ble: true, blePc: false, bleWifiOff: true, hotspots: {}, tailscale: true, bleInput: false }, // ble: with phones, blePc: with computers; bleWifiOff: none on the same Wi-Fi (blepolicy.js wifiQuiet); tailscale: shared/tailnet.js; bleInput: mouse and keyboard over Bluetooth beside Wi-Fi (shared/bleinput.js)

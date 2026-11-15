@@ -5,7 +5,7 @@
 //   - while Virtual camera is on, the virtual camera's frames (shared/vcam.js): fitted into
 //     1280×720 with black bars and turned into NV12 on the GPU (WebGL2: one pass writes the Y rows,
 //     then the interleaved U/V rows, four bytes a pixel), at most 30 a second. BT.601, limited range.
-// Main says what to do ('vcam:set' {vcam, rotate}) after the window's hello.
+// Main says what to do ('vcam:set' {vcam, rotate, mirror}) after the window's hello.
 // window.CamOut() → {push(source, width, height), onRotate(fn)}; window.camout is the preload's bridge.
 'use strict';
 
@@ -25,10 +25,12 @@
   uniform sampler2D tex;
   uniform vec4 rect; // the (turned) picture in the frame: x, y, width, height (pixels)
   uniform int rot; // quarter turns clockwise
+  uniform int mir; // 1: mirrored left to right (Camera › Mirror), after the turn
   out vec4 o;
   vec4 at(vec2 p) {
     vec2 uv = (p - rect.xy) / rect.zw;
     if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return vec4(0.0);
+    if (mir == 1) uv.x = 1.0 - uv.x;
     if (rot == 1) uv = vec2(uv.y, 1.0 - uv.x);
     else if (rot == 2) uv = vec2(1.0 - uv.x, 1.0 - uv.y);
     else if (rot == 3) uv = vec2(1.0 - uv.y, uv.x);
@@ -77,15 +79,17 @@
     gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
     const rect = gl.getUniformLocation(prog, 'rect');
     const rot = gl.getUniformLocation(prog, 'rot');
+    const mir = gl.getUniformLocation(prog, 'mir');
     gl.viewport(0, 0, W / 4, H * 3 / 2);
     const out = new Uint8Array(W * H * 3 / 2);
-    return (source, sw, sh, deg) => {
+    return (source, sw, sh, deg, mirror) => {
       const q = (deg / 90) & 3;
       const [tw, th] = q & 1 ? [sh, sw] : [sw, sh]; // the turned picture's size
       const k = Math.min(W / tw, H / th);
       const cw = Math.round(tw * k), ch = Math.round(th * k);
       gl.uniform4f(rect, Math.floor((W - cw) / 2), Math.floor((H - ch) / 2), cw, ch);
       gl.uniform1i(rot, q);
+      gl.uniform1i(mir, mirror ? 1 : 0);
       try {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
       } catch {
@@ -100,7 +104,7 @@
   window.CamOut = () => {
     const bridge = window.camout;
     if (!bridge) return null;
-    let vcam = false, rotate = 0;
+    let vcam = false, rotate = 0, mirror = false;
     let toVcam = null;
     let lastFrame = 0, lastPreview = 0, previewing = false;
     const rotated = [];
@@ -111,9 +115,10 @@
       if (!m) return;
       vcam = !!m.vcam;
       const r = [0, 90, 180, 270].includes(m.rotate) ? m.rotate : 0;
-      if (r !== rotate) {
+      if (r !== rotate || !!m.mirror !== mirror) {
         rotate = r;
-        for (const fn of rotated) fn(rotate);
+        mirror = !!m.mirror;
+        for (const fn of rotated) fn(rotate, mirror);
       }
       if (vcam && !toVcam) {
         try {
@@ -131,7 +136,7 @@
         const now = performance.now();
         if (vcam && toVcam && now - lastFrame >= 1000 / FPS - 3) {
           lastFrame = now;
-          toVcam(source, sw, sh, rotate);
+          toVcam(source, sw, sh, rotate, mirror);
         }
         if (!previewing && now - lastPreview >= PREVIEW_MS) {
           lastPreview = now;
@@ -139,7 +144,7 @@
           const tw = side ? sh : sw, th = side ? sw : sh;
           const pw = PREVIEW_W, ph = Math.max(2, Math.round(PREVIEW_W * th / tw));
           if (preview.height !== ph) preview.height = ph;
-          pctx.setTransform(1, 0, 0, 1, pw / 2, ph / 2);
+          pctx.setTransform(mirror ? -1 : 1, 0, 0, 1, pw / 2, ph / 2); // mirrored: after the turn, as the virtual camera
           pctx.rotate((rotate * Math.PI) / 180);
           const dw = side ? ph : pw, dh = side ? pw : ph;
           try {
@@ -155,10 +160,10 @@
             .finally(() => { previewing = false; });
         }
       },
-      // The window's own picture turns too (its CSS).
+      // The window's own picture turns (and mirrors) too (its CSS): fn(degrees, mirrored).
       onRotate(fn) {
         rotated.push(fn);
-        fn(rotate);
+        fn(rotate, mirror);
       },
     };
   };

@@ -151,6 +151,7 @@ let vdd = null;
 let pcScreen = null;
 let notifs = null;
 let iosSign = null; // shared/iossign.js: TwinDesk iPhone
+let pcNowRef = null; // what plays here (shared/pcnow.js), for Calls › Pause what plays here
 let devctl = null; // Overview's controls of the other device, and this computer's for it (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let wake = null;
@@ -566,7 +567,7 @@ function startPhone(server, pairing) {
   loadDeck(); // the phones' Deck (General › Modules: not while it's off)
   loadNowPlaying(); // each only while it's on
   // What plays on this computer, for the phone's Media page and its media notification (shared/pcnow.js).
-  new (require('../shared/pcnow.js').PcNow)({ server: pl, key: (code) => {
+  pcNowRef = new (require('../shared/pcnow.js').PcNow)({ server: pl, key: (code) => {
     if (!helper) return;
     helper.send('inject', { ev: { t: P.T.K_KEY_DOWN, code } });
     helper.send('inject', { ev: { t: P.T.K_KEY_UP, code } });
@@ -832,6 +833,9 @@ function loadHub() {
     callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
+  // Calls › Pause what plays here: what plays on this computer pauses for a call (shared/callpause.js).
+  const callPause = new (require('../shared/callpause.js').CallPause)({ media: () => pcNowRef && pcNowRef.media, on: () => settings.hub.callPause === true });
+  hub.on('call', (c) => callPause.onCall(c));
   hub.on('change', popup);
   if (phoneLink.current && P.isPhoneOs(phoneLink.current.os)) hub.started();
   return hub;

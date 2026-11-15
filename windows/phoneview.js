@@ -143,7 +143,7 @@ class PhoneViews extends EventEmitter {
   }
 
   list() {
-    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, screenOff: !!v.screenOff, native: !!v.native, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
+    return [...this.views.values()].filter((v) => v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic').map((v) => ({ id: v.id, kind: v.kind, app: v.app || null, title: v.title, facing: v.facing || null, torch: !!v.torch, quality: v.kind === 'camera' ? this.camMax || 1920 : undefined, screenOff: !!v.screenOff, native: !!v.native, shown: !!(v.win && !v.win.isDestroyed() && v.win.isVisible()), error: v.error || '' }));
   }
 
   get focused() {
@@ -177,6 +177,15 @@ class PhoneViews extends EventEmitter {
     opts = opts && typeof opts === 'object' ? opts : {};
     const want = opts.facing === 'front' || opts.facing === 'back' ? opts.facing : null;
     const open = [...this.views.values()].find((v) => v.kind === 'camera' && !v.ending);
+    if ([1280, 1920, 3840].includes(opts.quality)) { // Camera › Quality: the long side (restarts a running one)
+      const was = this.camMax || 1920;
+      this.camMax = opts.quality;
+      if (open && was !== opts.quality) this._flip(open, open.facing);
+      this.emit('change');
+      return;
+    }
+    if (open && opts.do) return this._camDo(open, opts.do);
+    if (opts.do) return;
     if (open) {
       if (want && want !== open.facing) this._flip(open, want);
       if (opts.show) {
@@ -196,8 +205,21 @@ class PhoneViews extends EventEmitter {
     this.emit('change'); // with its facing, for the tab and the phone
   }
 
+  // Camera page's buttons for a running phone camera: its light and zoom (as its window's).
+  _camDo(v, what) {
+    const s = v.session;
+    if (!s) return;
+    if (what === 'torch') {
+      v.torch = !v.torch;
+      s.setTorch(v.torch);
+      this._send(v, 'phoneview:opts', { torch: v.torch });
+      this.emit('change');
+    } else if (what === 'zoomIn') s.zoomIn();
+    else if (what === 'zoomOut') s.zoomOut();
+  }
+
   _cameraOpts(facing, size) {
-    const cam = { videoSource: 'camera', cameraFacing: facing, cameraFps: 30, maxSize: 1920 };
+    const cam = { videoSource: 'camera', cameraFacing: facing, cameraFps: 30, maxSize: this.camMax || 1920 };
     if (/^\d{2,5}x\d{2,5}$/.test(String(size || ''))) cam.cameraSize = size;
     return this.bridge.sessionOpts('camera', cam);
   }

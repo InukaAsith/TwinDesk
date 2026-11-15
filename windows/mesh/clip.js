@@ -228,6 +228,7 @@ class Clip {
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
     // Read together: one await before the checks below, so no other copy or clip runs in between.
     const [text, concealed] = await Promise.all([this._readText(), c.skipConcealed && isConcealed(this.clipboard)]);
+    if (require('../../shared/otp.js').isQuiet(text)) { this.lastSync.sent = text; return; } // a code copied by itself (Notifications): kept here only
     if (!text) return this._picture(concealed);
     if (text === this.lastSync.sent || text === this.lastSync.received) return;
     if (concealed) {

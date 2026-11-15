@@ -211,6 +211,7 @@ class Clip extends EventEmitter {
     if (why === 'instant' && this.remote) return; // Universal Clipboard: see ../clipboard.js (#211)
     const text = await this._readText();
     if (!text) return this._picture(why);
+    if (require('../../shared/otp.js').isQuiet(text)) return; // a code copied by itself (Notifications): kept here only
     if (text === this.lastSync.sent || text === this.lastSync.received) return;
     if (c.skipConcealed && (await this._isConcealed(why))) {
       this.lastSync.sent = text; // don't retry this item

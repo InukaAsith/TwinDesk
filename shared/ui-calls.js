@@ -187,7 +187,10 @@ UI.tab({
     const which = UI.select([], (id) => id && api.hub({ do: 'opt', btDevice: id }));
     which.el.setAttribute('aria-label', tr('Which phone'));
     const statusRow = UI.row(tr('Bluetooth'), '', [which.el, retryBtn], { literal: true });
-    const soundCard = UI.card(tr('Sound'), [audioRow, statusRow]);
+    // What plays here: paused while a call rings or is under way, played again after (shared/callpause.js).
+    const pauseSw = UI.switch((v) => api.hub({ do: 'opt', callPause: v }), { label: tr('Pause what plays here during calls') });
+    const pauseRow = UI.row(tr('Pause what plays here during calls'), tr('Music and videos on {me} pause when a call comes in and play again when it ends'), [pauseSw]);
+    const soundCard = UI.card(tr('Sound'), [audioRow, statusRow, pauseRow]);
 
     // Setting it up: the person pairs the two in the systems' own Bluetooth settings, over classic
     // Bluetooth (what a call goes through); TwinDesk doesn't pair them itself, only says how, and
@@ -307,6 +310,7 @@ UI.tab({
       storeCard.hidden = !h.calls || !h.audioStore;
       if (!storeCard.hidden) storeRow.setHint(tr('Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}', { phone: UI.phoneName(s), me: UI.fill('{me}') }));
       audioSw.set(!!h.callAudio);
+      pauseSw.set(!!h.callPause);
       audioRow.setHint(tr(h.audioLimit || ''));
       const a = h.audio;
       const bt = h.perm && h.perm.bt;

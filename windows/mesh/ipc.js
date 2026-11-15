@@ -65,7 +65,7 @@ function setupIpc(ctx) {
   handle('history', (r) => { if (r && typeof r === 'object' && ctx.history) ctx.history(r); });
   handle('qrPair', () => ctx.qrPair()); // Connection: the phone pairing QR code's link
   handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image, r.remove === true))
     : !ctx.notifs ? false : r.dismiss ? ctx.notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? ctx.notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
       : ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
@@ -222,6 +222,7 @@ function setupIpc(ctx) {
   handle('setNotifs', (partial) => {
     const p = partial && typeof partial === 'object' ? { send: partial.send, receive: partial.receive, hideText: partial.hideText } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+    Object.assign(p, require('../../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
     change('notifs', p, () => notifs.applySettings());
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));
@@ -343,6 +344,7 @@ function setupIpc(ctx) {
     else if (m.do === 'virtual' && ctx.vcam) ctx.vcam.setOn(m.on === true);
     else if (m.do === 'vcamRemove' && ctx.vcam) ctx.vcam.remove();
     else if (m.do === 'rotate' && ctx.vcam) ctx.vcam.turn();
+    else if (m.do === 'mirror' && ctx.vcam) ctx.vcam.setMirror(m.on === true);
   });
   phone('phoneCamera', (open, opts) => {
     if (open === false) {

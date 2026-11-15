@@ -183,6 +183,7 @@ function normalize(s) {
       receive: bool(nf.receive, false),
       hideText: bool(nf.hideText, false),
       muted: Array.isArray(nf.muted) ? nf.muted.filter((x) => typeof x === 'string').map((x) => x.slice(0, 300)).slice(0, 500) : [],
+      ...require('../shared/notifrules.js').saved(nf), // style, otpCopy, quiet, phoneApps: how a phone's show here
     },
     pcScreen: { // Display › PC → Mac; Off/Mirror/Extend itself is never saved
       monitor: typeof pcs.monitor === 'string' ? pcs.monitor : '', // Electron display id for Mirror ('' = main)
@@ -235,6 +236,7 @@ function normalize(s) {
       shareMount: bool(hub.shareMount, false), shareServe: bool(hub.shareServe, false), shareFolder: typeof hub.shareFolder === 'string' ? hub.shareFolder.slice(0, 1000) : '',
     },
     macApps: { on: bool(mca.on, false) }, // The other computer's apps open here (pair.sync 'apps' in) // The Mac may open this PC's apps (it shows them only if it accepts)
+      callPause: bool(hub.callPause, false), // pause what plays here during a call (shared/callpause.js)
     // Setup screen: shown once. done: everything was ready, or 'Skip for now' was pressed; after that
     // General and Display show what's missing (a firewall that changes with the network, a helper
     // that restarts, a phone connecting don't bring the screen back).

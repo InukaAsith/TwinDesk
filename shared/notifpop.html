@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>TwinDesk</title>
+  <link rel="stylesheet" href="phonehub.css">
+</head>
+<body class="notifpop">
+  <div class="npop" id="card">
+    <div class="npop-head">
+      <span id="icon" class="npop-icon" aria-hidden="true"></span>
+      <span id="app" class="npop-app"></span>
+      <span id="time" class="npop-time"></span>
+      <button id="x" class="npop-x" title="Close" aria-label="Close" data-i18n-title="Close" data-i18n-label="Close">×</button>
+    </div>
+    <div class="npop-main" id="main" role="button" tabindex="-1">
+      <span id="avatar" class="npop-avatar" aria-hidden="true" hidden></span>
+      <div class="npop-text">
+        <div id="title" class="npop-title"></div>
+        <div id="body" class="npop-body"></div>
+      </div>
+    </div>
+    <img id="pic" class="npop-pic" alt="" hidden>
+    <div id="live" class="npop-live" hidden>
+      <div class="npop-track"><div id="fill" class="npop-fill"></div></div>
+      <span id="pct" class="npop-pct"></span>
+    </div>
+    <div id="buttons" class="npop-buttons"></div>
+    <form id="replyRow" class="npop-reply" hidden>
+      <input id="replyBox" type="text" autocomplete="off" spellcheck="true" placeholder="Reply" data-i18n-placeholder="Reply" aria-label="Reply" data-i18n-label="Reply">
+      <button id="send" type="submit" class="npop-btn primary" data-i18n="Send">Send</button>
+    </form>
+  </div>
+  <script src="lang/en.js"></script>
+  <script src="lang/pick.js"></script>
+  <script src="i18n.js"></script>
+  <script src="player-i18n.js"></script>
+  <script src="notifpop-page.js"></script>
+</body>
+</html>

@@ -80,6 +80,36 @@ UI.tab({
   build(body, page) {
     const { el, api } = UI;
     const top = UI.hubTop('messages');
+    // This window's own choices (localStorage): which chat apps show, and conversations deleted from
+    // the list here (each comes back with a newer message: key -> the time it was deleted at).
+    const loadPref = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || d; } catch (_) { return d; } };
+    const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* this time only */ } };
+    let hiddenApps = new Set(loadPref('td.msg.hiddenApps', []));
+    let gone = loadPref('td.msg.deleted', {});
+    const isGone = (key, at) => !!gone[key] && (at || 0) <= gone[key];
+    const forget = (key, at) => {
+      gone[key] = Math.max(at || 0, Date.now());
+      const keys = Object.keys(gone);
+      if (keys.length > 400) for (const k of keys.slice(0, keys.length - 400)) delete gone[k];
+      keep('td.msg.deleted', gone);
+    };
+    // Search: one box over each list, for names, numbers and the last message.
+    let query = '';
+    const matches = (...texts) => !query || texts.some((x) => String(x || '').toLowerCase().includes(query));
+    const searchBox = (onInput) => {
+      const i = el('input', { type: 'search', class: 'hub-input hub-search', placeholder: tr('Search'), spellcheck: false, attrs: { 'aria-label': tr('Search conversations') } });
+      i.addEventListener('input', () => { query = i.value.trim().toLowerCase(); for (const b of boxes) if (b !== i) b.value = i.value; onInput(); });
+      boxes.push(i);
+      return i;
+    };
+    const boxes = [];
+    // A conversation's picture, with its app's icon in the corner (the phone sends those with notifications).
+    const avatar = (name, photo, pkg) => {
+      const a = UI.avatar(name, photo);
+      const icon = pkg && UI.state && UI.state.notifs && (UI.state.notifs.historyIcons || {})[pkg];
+      if (!icon) return a;
+      return el('span', { class: 'hub-avatar-wrap' }, [a, el('img', { class: 'hub-avatar-app', src: icon, alt: '' })]);
+    };
     const list = el('div', { class: 'hub-threads' });
     const newBtn = UI.button(tr('New message'), () => openNew(), 'small');
     const head = el('div', { class: 'hub-conv-head', attrs: { 'data-literal': '' } });
@@ -101,7 +131,17 @@ UI.tab({
     const compose = el('div', { class: 'hub-compose-row' }, [simPick.el, pic.btn, el('div', { class: 'hub-compose-col' }, [pic.chip, box]), send, pic.input]);
     conv.append(head, scroll, groupNote, compose);
     const empty = el('div', { class: 'hub-empty hub-conv-empty', text: tr('Choose a conversation') });
-    const layout = el('div', { class: 'card hub-msgs' }, [el('div', { class: 'hub-side' }, [el('div', { class: 'hub-side-head' }, [newBtn]), list]), conv, empty]);
+    const textSearch = searchBox(() => { renderList(); paintChats(UI.state, true); });
+    const delText = UI.button(tr('Delete'), () => {
+      const t = thread();
+      if (!t) return;
+      forget('sms:' + t.id, t.at);
+      openId = null;
+      renderList();
+      renderConv();
+    }, 'small');
+    delText.title = tr('Delete this conversation from the list here (it stays on the phone, and comes back with a new message)');
+    const layout = el('div', { class: 'card hub-msgs' }, [el('div', { class: 'hub-side' }, [el('div', { class: 'hub-side-head' }, [textSearch, newBtn]), list]), conv, empty]);
     // ---- chat apps in one inbox (the switch here, settings.ui.chats): pills on top ----
     // Texts are the phone's SMS and MMS (above); the chat apps are their conversations as the phone
     // sends them (s.chats: shared/chats.js), kept here, or with an older phone their notifications
@@ -120,6 +160,22 @@ UI.tab({
       pills.append(b);
       return [id, b];
     });
+    // Which chat apps show (pills and All): a small panel under the pills.
+    const appsBtn = el('button', { class: 'msg-pill msg-apps-btn', text: tr('Apps…'), attrs: { 'aria-expanded': 'false' } });
+    const appsPanel = el('div', { class: 'msg-apps', hidden: true });
+    appsBtn.onclick = () => { appsPanel.hidden = !appsPanel.hidden; appsBtn.setAttribute('aria-expanded', String(!appsPanel.hidden)); };
+    const appsRows = CHAT.filter(([id]) => id !== 'all' && id !== 'texts').concat([['rcs', tr('Messages (RCS)')]]).map(([id, label]) => {
+      const sw = UI.switch((v) => {
+        if (v) hiddenApps.delete(id); else hiddenApps.add(id);
+        keep('td.msg.hiddenApps', [...hiddenApps]);
+        if (!v && pill === id) pill = 'all';
+        paintChats(UI.state, true);
+      }, { label });
+      sw.set(!hiddenApps.has(id));
+      return UI.row(label, '', [sw]);
+    });
+    appsPanel.append(...appsRows);
+    pills.append(appsBtn);
     const chatsSw = UI.switch((v) => api.setChats && api.setChats(v), { label: tr('Chat apps in Messages') });
     const chatsRow = UI.row(tr('Chat apps in Messages'), tr('WhatsApp, Instagram, Telegram and Messenger next to your texts. Reply from here.'), [chatsSw]);
     const chatsCard = UI.card('', [chatsRow]);
@@ -139,25 +195,35 @@ UI.tab({
     const chatCompose = el('div', { class: 'hub-compose-row' }, [chatPic.btn, el('div', { class: 'hub-compose-col' }, [chatPic.chip, chatBox]), chatSend, chatPic.input]);
     chatConv.append(chatHead, chatScroll, chatNote, chatCompose);
     const chatEmpty = el('div', { class: 'hub-empty hub-conv-empty', text: tr('Choose a conversation') });
-    const chatLayout = el('div', { class: 'card hub-msgs' }, [el('div', { class: 'hub-side' }, [chatList]), chatConv, chatEmpty]);
+    const chatSearch = searchBox(() => { renderList(); paintChats(UI.state, true); });
+    const chatLayout = el('div', { class: 'card hub-msgs' }, [el('div', { class: 'hub-side' }, [el('div', { class: 'hub-side-head' }, [chatSearch]), chatList]), chatConv, chatEmpty]);
     let chatOpen = ''; // app|title
     let chatKey = '';
     // The conversations: the phone's own (s.chats), else from the notifications, one per app and
     // title (the sender or the group).
     const synced = (s) => !!(s && Array.isArray(s.chats));
     function chatThreads(s) {
-      const own = synced(s) ? s.chats.map((c) => ({ key: c.key, app: appOf(c.app) || 'other', name: appOf(c.app) ? c.name || c.appName : [c.name, c.appName].filter(Boolean).join(' · '), group: !!c.group, reply: !!c.reply, pic: !!c.pic, at: c.at, msgs: c.items || [] })) : [];
+      const own = synced(s) ? s.chats.map((c) => ({ key: c.key, pkg: c.app, avatar: c.avatar || '', app: appOf(c.app) || 'other', name: appOf(c.app) ? c.name || c.appName : [c.name, c.appName].filter(Boolean).join(' · '), group: !!c.group, reply: !!c.reply, pic: !!c.pic, at: c.at, msgs: c.items || [] })) : [];
       const by = new Map();
       for (const h of ((s && s.notifs) || {}).history || []) {
         const app = appOf(h.app);
         if (!app || (synced(s) && app !== 'rcs')) continue; // synced: only RCS from notifications
+        if (h.live || BUSY.test(h.body || '') || BUSY.test(h.title || '')) continue; // the app at work, not a message
         const key = app + '|' + (h.title || h.appName);
-        const t = by.get(key) || { key, app, name: h.title || h.appName, items: [], at: 0 };
+        const t = by.get(key) || { key, pkg: h.app, avatar: h.avatar || '', app, name: h.title || h.appName, items: [], at: 0 };
         t.items.push(h);
         t.at = Math.max(t.at, h.at);
         by.set(key, t);
       }
-      return own.concat([...by.values()]).sort((a, b) => b.at - a.at);
+      return own.concat([...by.values()]).filter((t) => !hiddenApps.has(t.app) && !isGone(t.key, t.at)).sort((a, b) => b.at - a.at);
+    }
+    // A chat app's notice that isn't a message: "Sending video…", "Deleting chats… 100%".
+    const BUSY = /^(?:sending|uploading|downloading|deleting|backing up|restoring|checking for new messages|preparing|syncing)\b|\b\d{1,3}\s?%\s*$/i;
+    // A conversation's last message, as its row shows it.
+    function snippetOf(t) {
+      if (!t.msgs) return (t.items[0] && t.items[0].body) || '';
+      const m = t.msgs[t.msgs.length - 1];
+      return m ? m.me ? tr('You: {message}', { message: m.text }) : t.group && m.from ? tr('{sender}: {message}', { sender: m.from, message: m.text }) : m.text : '';
     }
     function chatReply() {
       const t = chatThreads(UI.state).find((x) => x.key === chatOpen);
@@ -180,16 +246,17 @@ UI.tab({
       }
       chatBox.value = '';
     }
-    const threadRow = (name, at, snippet, active, onClick) => {
-      const b = el('button', { class: `hub-thread${active ? ' active' : ''}`, attrs: { 'data-literal': '' } }, [UI.avatar(name), el('span', { class: 'hub-thread-text' }, [
+    const threadRow = (name, at, snippet, active, onClick, photo, pkg) => {
+      const b = el('button', { class: `hub-thread${active ? ' active' : ''}`, attrs: { 'data-literal': '' } }, [avatar(name, photo, pkg), el('span', { class: 'hub-thread-text' }, [
         el('span', { class: 'hub-thread-top' }, [el('span', { class: 'hub-thread-name', text: name }), el('span', { class: 'hub-thread-time', text: UI.clock(at) })]),
         el('span', { class: 'hub-thread-snippet', text: snippet }),
       ])]);
       b.onclick = onClick;
       return b;
     };
-    function paintChats(s) {
+    function paintChats(s, force) {
       if (!s) return;
+      if (force) chatKey = '';
       const on = !!(s.ui && s.ui.chats);
       chatsSw.set(on);
       pills.hidden = !on;
@@ -199,35 +266,41 @@ UI.tab({
       for (const [id, b] of pillBtns) {
         b.classList.toggle('on', id === pill);
         b.setAttribute('aria-selected', String(id === pill));
-        b.hidden = OPTIONAL.includes(id) && id !== pill && !all.some((t) => t.app === id);
+        b.hidden = hiddenApps.has(id) || (OPTIONAL.includes(id) && id !== pill && !all.some((t) => t.app === id));
       }
+      appsBtn.hidden = !on;
+      if (!on) appsPanel.hidden = true;
       chatLayout.hidden = pill === 'texts';
       if (pill === 'texts') return;
-      const shown = all.filter((t) => pill === 'all' || t.app === pill);
+      const shown = all.filter((t) => (pill === 'all' || t.app === pill) && (matches(t.name, snippetOf(t)) || t.key === chatOpen));
       const sum = (t) => (t.msgs ? [t.msgs.length, t.reply, t.pic, t.msgs.map((m) => m.pic || '').join()] : [t.items.length, t.items.map((h) => (h.replies || []).length)]);
-      const k = JSON.stringify([pill, chatOpen, shown.map((t) => [t.key, t.at, sum(t)]), pill === 'all' ? threads.map((t) => t.id + t.at) : 0, (s.notifs || {}).receive, synced(s)]);
+      const k = JSON.stringify([pill, chatOpen, query, shown.map((t) => [t.key, t.at, sum(t), !!t.avatar]), pill === 'all' ? threads.map((t) => t.id + t.at) : 0, (s.notifs || {}).receive, synced(s), Object.keys((s.notifs || {}).historyIcons || {}).length]);
       if (k === chatKey) return;
       chatKey = k;
       // The list: chats, and in All the texts too (opening one goes to Texts).
-      const snippet = (t) => {
-        if (!t.msgs) return t.items[0].body || '';
-        const m = t.msgs[t.msgs.length - 1];
-        return m ? m.me ? tr('You: {message}', { message: m.text }) : t.group && m.from ? tr('{sender}: {message}', { sender: m.from, message: m.text }) : m.text : '';
-      };
-      const rows = shown.map((t) => ({ at: t.at, el: threadRow(t.name, t.at, (APP_NAME[t.app] || '') + ' · ' + snippet(t), t.key === chatOpen, () => { chatOpen = t.key; paintChats(UI.state); }) }));
+      const snippet = snippetOf;
+      const rows = shown.map((t) => ({ at: t.at, el: threadRow(t.name, t.at, (APP_NAME[t.app] || '') + ' · ' + snippet(t), t.key === chatOpen, () => { chatOpen = t.key; paintChats(UI.state); }, t.avatar, t.pkg) }));
       if (pill === 'all') {
-        for (const t of threads) {
-          rows.push({ at: t.at || 0, el: threadRow(t.name || (t.addrs || []).join(', '), t.at, tr('Text · {message}', { message: t.snippet || '' }), false, () => { pill = 'texts'; paintChats(UI.state); layout.hidden = false; openThread(t.id); }) });
+        for (const t of visibleThreads()) {
+          rows.push({ at: t.at || 0, el: threadRow(t.name || (t.addrs || []).join(', '), t.at, tr('Text · {message}', { message: t.snippet || '' }), false, () => { pill = 'texts'; paintChats(UI.state); layout.hidden = false; openThread(t.id); }, t.photo) });
         }
       }
       rows.sort((a, b) => b.at - a.at);
       chatList.replaceChildren(...rows.map((r) => r.el));
-      if (!rows.length) chatList.append(el('div', { class: 'hub-empty', text: !synced(s) && !(s.notifs || {}).receive ? tr('Turn on Notifications to see chats here') : tr('No chats yet. They show here as messages arrive.') }));
+      if (!rows.length) chatList.append(el('div', { class: 'hub-empty', text: query ? tr('Nothing found') : !synced(s) && !(s.notifs || {}).receive ? tr('Turn on Notifications to see chats here') : tr('No chats yet. They show here as messages arrive.') }));
       const t = shown.find((x) => x.key === chatOpen);
       chatConv.hidden = !t;
       chatEmpty.hidden = !!t;
       if (!t) return;
-      chatHead.replaceChildren(UI.avatar(t.name), el('div', {}, [el('div', { class: 'hub-conv-name', text: t.name }), el('div', { class: 'hint', text: t.group ? tr('{app} · Group', { app: APP_NAME[t.app] || '' }) : (APP_NAME[t.app] || '') })]));
+      const del = UI.button(tr('Delete'), () => {
+        if (t.msgs && api.notifReply) api.notifReply({ chat: t.key, remove: true }); // off the list kept here (shared/chats.js)
+        forget(t.key, t.at); // and from notifications (an older phone): until a newer message
+        chatOpen = '';
+        paintChats(UI.state, true);
+      }, 'small');
+      del.classList.add('hub-del');
+      del.title = tr('Delete this chat from the list here (it stays on the phone, and comes back with a new message)');
+      chatHead.replaceChildren(avatar(t.name, t.avatar, t.pkg), el('div', { class: 'hub-conv-title' }, [el('div', { class: 'hub-conv-name', text: t.name }), el('div', { class: 'hint', text: t.group ? tr('{app} · Group', { app: APP_NAME[t.app] || '' }) : (APP_NAME[t.app] || '') })]), del);
       const msgs = [];
       let lastDay = '';
       for (const m of t.msgs || []) {
@@ -253,7 +326,7 @@ UI.tab({
       chatNote.textContent = t.msgs ? tr('Reply here once the phone shows this chat’s notification again.') : tr('Answer this one on the phone: its notification has no Reply.');
     }
 
-    body.append(top.el, pills, layout, chatLayout, chatsCard); // the messages first, the setting under them
+    body.append(top.el, pills, appsPanel, layout, chatLayout, chatsCard); // the messages first, the setting under them
     chatLayout.hidden = true;
 
     let threads = [];
@@ -266,10 +339,13 @@ UI.tab({
 
     const thread = () => threads.find((t) => t.id === openId);
 
+    // The texts as listed: not deleted here (until a newer message), and as searched.
+    const visibleThreads = () => threads.filter((t) => !isGone('sms:' + t.id, t.at) && (matches(t.name, (t.addrs || []).join(' '), t.snippet) || t.id === openId));
+
     function renderList() {
-      list.replaceChildren(...threads.map((t) => {
+      list.replaceChildren(...visibleThreads().map((t) => {
         const b = el('button', { class: `hub-thread${t.id === openId ? ' active' : ''}${t.unread ? ' unread' : ''}`, attrs: { 'data-literal': '' } }, [
-          UI.avatar(t.name),
+          avatar(t.name, t.photo),
           el('span', { class: 'hub-thread-text' }, [
             el('span', { class: 'hub-thread-top' }, [el('span', { class: 'hub-thread-name', text: t.name || (t.addrs || []).join(', ') }), el('span', { class: 'hub-thread-time', text: UI.clock(t.at) })]),
             el('span', { class: 'hub-thread-snippet', text: t.snippet || '' }),
@@ -278,7 +354,7 @@ UI.tab({
         b.onclick = () => openThread(t.id);
         return b;
       }));
-      if (!threads.length) list.append(el('div', { class: 'hub-empty', text: tr('No conversations') }));
+      if (!visibleThreads().length) list.append(el('div', { class: 'hub-empty', text: query ? tr('Nothing found') : tr('No conversations') }));
     }
 
     function renderConv() {
@@ -287,7 +363,7 @@ UI.tab({
       conv.hidden = openId === null;
       empty.hidden = openId !== null;
       to.hidden = !isNew;
-      head.replaceChildren(...(isNew ? [to] : t ? [el('div', { class: 'hub-conv-name', text: t.name || t.addrs.join(', ') }), el('div', { class: 'hint', text: t.name ? t.addrs.join(', ') : '' })] : []));
+      head.replaceChildren(...(isNew ? [to] : t ? [avatar(t.name, t.photo), el('div', { class: 'hub-conv-title' }, [el('div', { class: 'hub-conv-name', text: t.name || t.addrs.join(', ') }), el('div', { class: 'hint', text: t.name ? t.addrs.join(', ') : '' })]), delText] : []));
       const group = !!(t && t.addrs && t.addrs.length > 1);
       groupNote.hidden = !group || mmsOk(); // a phone that sends MMS answers groups too
       pic.show(mmsOk());
