@@ -27,10 +27,11 @@ const PAUSED_MS = 7 * 86400000;
 class Outbox extends EventEmitter {
   // file: where it's kept (null: memory only, the tests). hours(): settings.files.outboxHours.
   // send(entry): hands an entry to the sender while connected → true when it went.
-  // peer(): {id, name} of the device connected now, or null.
-  constructor({ file = null, hours = () => DEFAULT_HOURS, send, peer, now = Date.now } = {}) {
+  // peer(): {id, name} of the device connected now, or null. paired(): {id, name} of the device this
+  // one is paired with, for before any has connected since (just updated): files then wait for it.
+  constructor({ file = null, hours = () => DEFAULT_HOURS, send, peer, paired = () => null, now = Date.now } = {}) {
     super();
-    Object.assign(this, { file, hours, sendFn: send, peer, now });
+    Object.assign(this, { file, hours, sendFn: send, peer, paired, now });
     this.entries = [];
     this.last = null; // the last device connected {id, name}: where files sent while offline go
     this._load();
@@ -88,7 +89,7 @@ class Outbox extends EventEmitter {
   add(paths) {
     const p = this.peer();
     if (p && p.id && this.sendFn({ paths })) return 'sent';
-    const to = (p && p.id) ? p : this.last;
+    const to = (p && p.id) ? p : this.last || this._paired();
     if (!to || this.keepMs <= 0) return null;
     const list = paths.filter((x) => typeof x === 'string').slice(0, MAX_FILES);
     if (!list.length) return null;
@@ -100,12 +101,17 @@ class Outbox extends EventEmitter {
   // why: 'paused' (waits for Resume) or 'cut' (goes again on reconnect). cont: the first batch's id.
   keep(list, { why, cont, name, peer }) {
     const files = list.filter((f) => f && typeof f.path === 'string' && typeof f.rel === 'string').slice(0, MAX_FILES);
-    const to = peer || this.peer() || this.last;
+    const to = peer || this.peer() || this.last || this._paired();
     if (!files.length || !to || !to.id) return null;
     if (why !== 'paused' && this.keepMs <= 0) return null;
     const e = { id: crypto.randomUUID(), state: why === 'paused' ? 'paused' : 'waiting', list: files, name: name || nameOf(files.map((f) => f.path)), cont, peer: to.id, peerName: to.name || '', at: this.now() };
     this._push(e);
     return e.id;
+  }
+
+  _paired() {
+    const p = this.paired && this.paired();
+    return p && typeof p.id === 'string' && p.id ? { id: p.id, name: String(p.name || '') } : null;
   }
 
   _push(e) {

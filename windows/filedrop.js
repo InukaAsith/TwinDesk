@@ -45,6 +45,8 @@ class FileDrop {
     this.outbox = new Outbox({
       file: this.outboxFile || null,
       hours: () => ((this.settings && this.settings.files) || {}).outboxHours,
+      // Before any session since an update: the computer this one is paired with.
+      paired: () => { const p = this.link && this.link.snapshot && this.link.snapshot().paired; return p ? { id: p.macId, name: p.macName } : null; },
       peer: peerNow,
       send: (e) => !!this.link.status && this.link.status.state === 'connected' && !!(e.list ? this.sendList(e.list, 'send', crypto.randomUUID(), { cont: e.cont, name: e.name }) : this.sendBatch(e.paths, 'send')),
     });

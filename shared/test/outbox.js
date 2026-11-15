@@ -28,6 +28,12 @@ const make = () => new Outbox({ file, hours: () => hours, peer: () => peer, now:
 let o = make();
 // Never connected: nothing to keep it for.
 assert.strictEqual(o.add([a]), null);
+// Never connected, but paired: kept for the paired one (just updated).
+{
+  const o2 = new Outbox({ hours: () => 24, peer: () => null, paired: () => ({ id: 'mac1', name: 'Studio Mac' }), now: () => now, send: () => true });
+  assert.strictEqual(o2.add([a]), 'queued');
+  assert.strictEqual(o2.view[0].peerName, 'Studio Mac');
+}
 // Connected: it simply goes.
 peer = { id: 'pc1', name: 'Studio' };
 o.connected();
