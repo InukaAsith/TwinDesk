@@ -1705,6 +1705,40 @@ private fun ModulesCard(core: Core) {
     }
 }
 
+// General › Linked with Android (CompanionLink.kt): Android's companion device link with a computer.
+@Composable
+private fun LinkedCard(core: Core, v: Int) {
+    val ctx = LocalContext.current
+    if (!CompanionLink.supported(ctx)) return
+    var rev by remember { mutableStateOf(0) }
+    val linked = remember(v, rev) { CompanionLink.linked(ctx) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult(),
+    ) { CompanionLink.watch(ctx); rev++; core.changed() }
+    MacCard(tr("Linked with Android")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        MacRow(
+            if (linked.isEmpty()) tr("Link a computer") else tr("Link another computer"),
+            tr("Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth"),
+            first = true,
+        ) {
+            Secondary(tr("Link…")) {
+                CompanionLink.link(ctx, { ask.launch(androidx.activity.result.IntentSenderRequest.Builder(it).build()) }) { err ->
+                    android.widget.Toast.makeText(ctx, if (err.isBlank()) tr("No computer found nearby") else tr("Couldn’t link: {error}", "error" to err), android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        linked.forEach { l ->
+            MacRow(l.name, tr("Linked")) { TextButton(onClick = { CompanionLink.remove(ctx, l); rev++ }) { Text(tr("Remove"), color = pal.accent) } }
+        }
+        if (linked.isNotEmpty() && CompanionLink.canWatch()) SwitchRow(
+            tr("Start TwinDesk when it’s near"),
+            tr("Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up"),
+            CompanionLink.near(ctx),
+        ) { CompanionLink.setNear(ctx, it); rev++ }
+    }
+}
+
 @Composable
 private fun GeneralPage(core: Core, v: Int) {
     @Suppress("UNUSED_EXPRESSION") v // redraw on every Core change (Compose skips unread parameters)
@@ -1722,6 +1756,7 @@ private fun GeneralPage(core: Core, v: Int) {
         SwitchRow(tr("Prioritize performance over battery life"), if (core.performance) tr("Checks the connection every second, even when nothing is in use") else tr("Checks an idle connection every few minutes, and immediately when a feature starts"), core.performance, first = true) { core.performance = it }
         SwitchRow(tr("Reconnect in the background"), if (core.reconnectBg) tr("Restores a dropped connection while TwinDesk is closed") else tr("Restores a dropped connection when TwinDesk opens"), core.reconnectBg) { core.reconnectBg = it }
     }
+    LinkedCard(core, v) // CompanionLink.kt
     TailscaleCard(core, v) // #161 (Tailnet.kt)
     // Arrange (Arrange.kt): the pages' order, and which are in the bottom bar.
     MacCard(tr("Page order")) {

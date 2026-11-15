@@ -1200,5 +1200,15 @@
   "Turn back on after the banking app": "离开银行应用后重新开启",
   "You left {app}. Open TwinDesk to connect again.": "你已离开 {app}。打开 TwinDesk 以重新连接。",
   "Your launcher doesn’t take shortcuts": "你的启动器不支持快捷方式",
-  "{app} with banking pause": "{app}（银行暂停）"
+  "{app} with banking pause": "{app}（银行暂停）",
+  "Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth": "之后 Android 会让 TwinDesk 在后台保持运行和连接，无需询问电池优化。请在电脑上打开 TwinDesk 并开启蓝牙，或通过蓝牙配对它们",
+  "Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up": "Android 通过蓝牙留意它，它出现时 TwinDesk 会启动并连接",
+  "Couldn’t link: {error}": "无法关联：{error}",
+  "Link a computer": "关联一台电脑",
+  "Link another computer": "关联另一台电脑",
+  "Linked": "已关联",
+  "Linked with Android": "通过 Android 关联",
+  "Link…": "关联…",
+  "No computer found nearby": "附近没有找到电脑",
+  "Start TwinDesk when it’s near": "它在附近时启动 TwinDesk"
 }

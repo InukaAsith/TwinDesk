@@ -30,6 +30,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   leave the banking app (needs Usage access; Settings › Banking pause › Turn back on after the
   banking app), and its notice has Turn back on. **Open with banking pause** puts a home-screen
   shortcut for a banking app that switches debugging off first, then opens it.
+- **Linked with Android** (General): link a computer through Android's own companion device
+  chooser, and Android keeps TwinDesk running and connected in the background, with no battery
+  optimization prompt. **Start TwinDesk when it's near** (off unless switched on, Android 12+):
+  Android watches for the computer over Bluetooth and TwinDesk starts and connects when it shows up.
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

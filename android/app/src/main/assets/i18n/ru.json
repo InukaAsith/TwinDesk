@@ -1200,5 +1200,15 @@
   "Turn back on after the banking app": "Включать снова после банковского приложения",
   "You left {app}. Open TwinDesk to connect again.": "Вы вышли из {app}. Откройте TwinDesk, чтобы подключиться снова.",
   "Your launcher doesn’t take shortcuts": "Ваш лаунчер не принимает ярлыки",
-  "{app} with banking pause": "{app} с банковской паузой"
+  "{app} with banking pause": "{app} с банковской паузой",
+  "Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth": "Тогда Android сам держит TwinDesk запущенным и подключённым в фоне, без вопроса об оптимизации батареи. Откройте TwinDesk на компьютере с включённым Bluetooth или сопрягите их по Bluetooth",
+  "Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up": "Android следит за ним по Bluetooth, и TwinDesk запускается и подключается, когда он появляется рядом",
+  "Couldn’t link: {error}": "Не удалось связать: {error}",
+  "Link a computer": "Связать компьютер",
+  "Link another computer": "Связать ещё один компьютер",
+  "Linked": "Связан",
+  "Linked with Android": "Связь через Android",
+  "Link…": "Связать…",
+  "No computer found nearby": "Рядом не найден компьютер",
+  "Start TwinDesk when it’s near": "Запускать TwinDesk, когда он рядом"
 }

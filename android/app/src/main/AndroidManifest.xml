@@ -16,6 +16,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Android 16 Live Updates: a file transfer's progress on the lock screen and in the status bar (Notify.files) -->
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- General › Linked with Android (CompanionLink.kt): while a computer is linked, Android lets TwinDesk run, use data and start its service in the background; and tells it when that computer is near -->
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_USE_DATA_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /> <!-- About › Update: installs the new release over this one (Updates.kt) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -54,6 +59,7 @@
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
 
     <!-- The phone's apps for the Mac's app windows. -->
     <queries>
@@ -255,6 +261,16 @@
             android:name=".SoundService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- A linked computer is near (CompanionLink.kt): bound by Android only -->
+        <service
+            android:name=".CompanionPresence"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
 
         <!-- The calls themselves for the computer (CallCompanion.kt): no screen, the dialer stays the dialer -->
         <service
