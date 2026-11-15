@@ -26,6 +26,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   and saved in Pictures › TwinDesk), Record (the picture and the phone's sound, as MP4 in Movies ›
   TwinDesk; WebM where MP4 can't be made), the volume keys, Rotate, Power and Phone screen off. Its
   button in the title bar shows or hides it; on Windows it switches the side panel.
+- **Banking pause, gentler** (Android): debugging comes back on by itself a few minutes after you
+  leave the banking app (needs Usage access; Settings › Banking pause › Turn back on after the
+  banking app), and its notice has Turn back on. **Open with banking pause** puts a home-screen
+  shortcut for a banking app that switches debugging off first, then opens it.
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

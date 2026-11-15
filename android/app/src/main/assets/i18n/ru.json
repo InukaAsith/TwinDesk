@@ -1189,5 +1189,16 @@
   "Waiting for {device}": "Ждёт {device}",
   "Waiting to send": "Ждут отправки",
   "{items} wait for {name}: they go when it connects": "{items} ждут {name}: уйдут, когда он подключится",
-  "{what} from {from}: paused": "{what} с {from}: приостановлено"
+  "{what} from {from}: paused": "{what} с {from}: приостановлено",
+  "A few minutes after you leave it, without opening TwinDesk": "Через несколько минут после выхода из него, не открывая TwinDesk",
+  "A home screen shortcut that turns these off first, then opens the app, so it never sees them on": "Ярлык на главном экране: сначала выключает их, затем открывает приложение, и оно их не видит",
+  "Add to Home screen": "На главный экран",
+  "Debugging is back on": "Отладка снова включена",
+  "Needs Usage access, to see that you left it": "Нужен доступ к истории использования, чтобы видеть, что вы из него вышли",
+  "Open with banking pause": "Открывать с банковской паузой",
+  "Turn back on": "Включить снова",
+  "Turn back on after the banking app": "Включать снова после банковского приложения",
+  "You left {app}. Open TwinDesk to connect again.": "Вы вышли из {app}. Откройте TwinDesk, чтобы подключиться снова.",
+  "Your launcher doesn’t take shortcuts": "Ваш лаунчер не принимает ярлыки",
+  "{app} with banking pause": "{app} с банковской паузой"
 }

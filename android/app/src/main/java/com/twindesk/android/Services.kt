@@ -109,6 +109,8 @@ class ActionReceiver : BroadcastReceiver() {
             RING_PC -> core.dev.ask("ring")
             FILES_CANCEL -> core.files.cancel(arg) // a transfer's notification: Cancel
             FILES_PAUSE -> core.files.pause(arg) // … Pause (Send files): the rest waits on the Files page
+            BANK_CHECK -> core.bank.backCheck() // BankGuard's alarm: has the banking app been left?
+            BANK_BACK -> core.bank.restore() // BankGuard's notification: Turn back on
             LOCK_PC -> core.dev.ask("lock")
             PAIR_CODE -> {
                 val code = android.app.RemoteInput.getResultsFromIntent(intent)?.getCharSequence("code")?.toString() ?: ""
@@ -134,6 +136,8 @@ class ActionReceiver : BroadcastReceiver() {
         const val LOCK_PC = "com.twindesk.android.LOCK_PC"
         const val FILES_CANCEL = "com.twindesk.android.FILES_CANCEL"
         const val FILES_PAUSE = "com.twindesk.android.FILES_PAUSE"
+        const val BANK_CHECK = "com.twindesk.android.BANK_CHECK"
+        const val BANK_BACK = "com.twindesk.android.BANK_BACK"
     }
 }
 

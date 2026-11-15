@@ -150,6 +150,11 @@ fun BankCard(core: Core, v: Int) {
         if (b.on) {
             SwitchRow(tr("Turn off Developer options"), tr("Checked by most banking apps"), b.devOff) { b.setDevOff(it) }
             SwitchRow(tr("Restore when TwinDesk opens"), tr("Turns these settings back on the next time TwinDesk opens"), b.restoreOn) { b.setRestore(it) }
+            if (b.restoreOn) SwitchRow(
+                tr("Turn back on after the banking app"),
+                if (b.usageAccess) tr("A few minutes after you leave it, without opening TwinDesk") else tr("Needs Usage access, to see that you left it"),
+                b.autoBack,
+            ) { b.setAutoBack(it) }
             if (!core.adb.canEnable) MacRow(tr("Wireless debugging required"), tr("Without it, TwinDesk closes but can’t turn debugging off")) { }
             if (b.how.isEmpty()) MacRow(tr("Usage access"), tr("Detects when a banking app opens (or use the Accessibility service)")) {
                 TextButton(onClick = { runCatching { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text(tr("Allow"), color = pal.accent) }
@@ -169,6 +174,17 @@ fun BankCard(core: Core, v: Int) {
                     AppRow(core, a.pkg, a.label, if (b.auto(a.pkg)) tr("Detected as a banking app") else "", b.isBank(a.pkg), i == 0) { b.setBank(a.pkg, it) }
                 }
                 if (q.isBlank() && list.size < apps.size) Text(tr("Search to find more apps"), color = pal.muted, fontSize = 12.5.sp, modifier = Modifier.padding(20.dp))
+            }
+            // A home screen shortcut per banking app: debugging is off before it opens.
+            if (banks.isNotEmpty() && core.adb.canEnable) {
+                MacRow(tr("Open with banking pause"), tr("A home screen shortcut that turns these off first, then opens the app, so it never sees them on"))
+                banks.take(8).forEach { a ->
+                    MacRow(a.label, "") {
+                        TextButton(onClick = {
+                            if (!b.pinShortcut(a.pkg)) android.widget.Toast.makeText(ctx, tr("Your launcher doesn’t take shortcuts"), android.widget.Toast.LENGTH_SHORT).show()
+                        }) { Text(tr("Add to Home screen"), color = pal.accent) }
+                    }
+                }
             }
         }
     }

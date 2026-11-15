@@ -1189,5 +1189,16 @@
   "Waiting for {device}": "等待 {device}",
   "Waiting to send": "等待发送",
   "{items} wait for {name}: they go when it connects": "{items} 等待 {name}：连接后发送",
-  "{what} from {from}: paused": "来自 {from} 的 {what}：已暂停"
+  "{what} from {from}: paused": "来自 {from} 的 {what}：已暂停",
+  "A few minutes after you leave it, without opening TwinDesk": "离开它几分钟后，无需打开 TwinDesk",
+  "A home screen shortcut that turns these off first, then opens the app, so it never sees them on": "主屏幕快捷方式：先关闭这些，再打开该应用，让它看不到它们开启",
+  "Add to Home screen": "添加到主屏幕",
+  "Debugging is back on": "调试已重新开启",
+  "Needs Usage access, to see that you left it": "需要“使用情况访问权限”，以便知道你已离开它",
+  "Open with banking pause": "以银行暂停模式打开",
+  "Turn back on": "重新开启",
+  "Turn back on after the banking app": "离开银行应用后重新开启",
+  "You left {app}. Open TwinDesk to connect again.": "你已离开 {app}。打开 TwinDesk 以重新连接。",
+  "Your launcher doesn’t take shortcuts": "你的启动器不支持快捷方式",
+  "{app} with banking pause": "{app}（银行暂停）"
 }

@@ -1189,5 +1189,16 @@
   "Waiting for {device}": "Esperando {device}",
   "Waiting to send": "Esperando para enviar",
   "{items} wait for {name}: they go when it connects": "{items} esperando {name}: vão quando ele conectar",
-  "{what} from {from}: paused": "{what} de {from}: pausado"
+  "{what} from {from}: paused": "{what} de {from}: pausado",
+  "A few minutes after you leave it, without opening TwinDesk": "Alguns minutos depois de sair dele, sem abrir o TwinDesk",
+  "A home screen shortcut that turns these off first, then opens the app, so it never sees them on": "Um atalho na tela inicial que desliga isso primeiro e depois abre o app, que nunca os vê ligados",
+  "Add to Home screen": "Adicionar à tela inicial",
+  "Debugging is back on": "A depuração voltou a ficar ligada",
+  "Needs Usage access, to see that you left it": "Precisa do acesso ao uso, para ver que você saiu dele",
+  "Open with banking pause": "Abrir com pausa bancária",
+  "Turn back on": "Ligar de novo",
+  "Turn back on after the banking app": "Ligar de novo depois do app do banco",
+  "You left {app}. Open TwinDesk to connect again.": "Você saiu de {app}. Abra o TwinDesk para conectar de novo.",
+  "Your launcher doesn’t take shortcuts": "Seu launcher não aceita atalhos",
+  "{app} with banking pause": "{app} com pausa bancária"
 }

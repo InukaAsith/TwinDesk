@@ -190,6 +190,15 @@
             </intent-filter>
         </activity>
 
+        <!-- A banking app's "with banking pause" home screen shortcut (BankGuard.kt): debugging off, then the app -->
+        <activity
+            android:name=".BankLaunchActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="" />
+
         <!-- Capture from phone (the computer's Explorer menu): the camera app, each photo to the computer -->
         <activity
             android:name=".CaptureActivity"
