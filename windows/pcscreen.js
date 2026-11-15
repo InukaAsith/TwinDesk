@@ -12,6 +12,7 @@ const { desktopCapturer, powerMonitor, screen: displays } = require('electron');
 const P = require('../shared/protocol.js');
 const RemoteInput = require('./remote-input');
 const encoder = require('./encoder');
+const NativeScreen = require('./native-screen');
 const { StallWatch } = encoder;
 
 const T = P.T;
@@ -192,7 +193,8 @@ class PcScreen {
   }
 
   // Stream size: scale down (on the GPU, by the capturer) to at most maxHeight, keeping the shape,
-  // or ('extend') to fit Size, so the picture follows the virtual screen's custom size.
+  // or ('extend') to fit Size, so the picture follows the virtual screen's custom size. With our own
+  // capture (Share screen › Capture, native-screen.js) the encoder scales it, after the pointer is drawn.
   _streamSize(rect) {
     const max = this.cfg.maxHeight;
     if (max === 'extend') {
@@ -259,7 +261,7 @@ class PcScreen {
     const fps = PcScreen.fps(d, this.cfg.fps);
     // Playback › Steady is set up per session (shared/screencodec.js steady()): a change starts a new one.
     const steady = !!(this.settings.monitor && this.settings.monitor.pacing === 'steady');
-    const key = [d.id, rect.x, rect.y, rect.width, rect.height, width, this.cfg.mbps, this.cfg.sound, fps, transport, steady].join(',');
+    const key = [d.id, rect.x, rect.y, rect.width, rect.height, width, this.cfg.mbps, this.cfg.sound, fps, transport, steady, this.cfg.capture].join(',');
     if (this.sending && this.sending.key === key) return;
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
     if (revision !== this.revision || !this._wanted()) return;
@@ -270,7 +272,8 @@ class PcScreen {
     }
     this._stopSend(true);
     const mbps = this.cfg.mbps; // Share screen › Quality, for phones too
-    const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen' } });
+    const native = NativeScreen.mode() !== 'chromium' ? { captureRect: rect, captureWidth: rect.width, captureHeight: rect.height } : {};
+    const session = this.sender.start({ sourceId: src.id, ...native, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen' } });
     this.sending = { session, displayId: d.id, rect, key };
     this.stats = null;
     Object.assign(this.status, { status: 'starting', error: '', name: d.label || src.name, width: rect.width, height: rect.height });

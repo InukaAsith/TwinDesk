@@ -388,6 +388,27 @@ const UI = {
     return row;
   },
 
+  // How this computer captures its screen for sharing (native-screen.js): set(v) saves it; a share going
+  // on starts again with it. Returns the row with .render(value).
+  captureRow(set) {
+    const sel = UI.select([
+      { value: 'chromium', label: I18n.t('Original (Chromium)') },
+      { value: 'auto', label: I18n.t('Automatic') },
+      { value: 'dda', label: I18n.t('Desktop Duplication') },
+      { value: 'wgc', label: I18n.t('Windows Graphics Capture') },
+    ], (v) => set(v));
+    const row = UI.row(I18n.t('Capture'), '', [sel]);
+    row.render = (v) => {
+      v = ['auto', 'dda', 'wgc'].includes(v) ? v : 'chromium';
+      sel.set(v);
+      row.setHint(v === 'chromium' ? I18n.t('As before: the pointer may show smaller than on this screen')
+        : v === 'dda' ? I18n.t('The pointer at its real size, no border. Over Remote Desktop it shows no pointer')
+          : v === 'wgc' ? I18n.t('The pointer at its real size; Windows 10 draws a yellow border around the screen')
+            : I18n.t('Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11'));
+    };
+    return row;
+  },
+
   // A template with {me}, {name}, {Name}, … filled from the current state.
   fill(t) {
     if (!t || !String(t).includes('{')) return t || '';

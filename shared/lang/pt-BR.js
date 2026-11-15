@@ -2282,4 +2282,13 @@
   "Low latency": "Baixa latência",
   "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "Pelo Wi-Fi, a imagem, o som e a entrada vão direto para este computador, criptografados, em vez de passar pela depuração sem fio. Volta ao modo normal sozinho se o telefone não puder ser alcançado",
   "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "O codificador do telefone envia cada quadro assim que fica pronto. Alguns telefones ignoram isso",
+  "Automatic": "Automático",
+  "Original (Chromium)": "Original (Chromium)",
+  "Desktop Duplication": "Duplicação da Área de Trabalho",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Captura",
+  "As before: the pointer may show smaller than on this screen": "Como antes: o ponteiro pode aparecer menor do que nesta tela",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "O ponteiro no tamanho real, sem borda. Na Área de Trabalho Remota não mostra o ponteiro",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "O ponteiro no tamanho real; o Windows 10 desenha uma borda amarela ao redor da tela",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Duplicação da Área de Trabalho no Windows 10, Windows Graphics Capture no Windows 11",
 });

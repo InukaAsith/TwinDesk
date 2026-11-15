@@ -424,6 +424,7 @@ function start() {
   const sender = new Sender(link); // every rtc2 video session we send (screen, app windows)
   sender.on('stats', (_, s) => { screenStats = { codec: s.codec, encoder: s.encoder, at: Date.now() }; }); // Engines in use
   sender.codec = () => settings.pcScreen.codec; // Share screen › Encoder
+  require('./native-screen').setting = () => settings.pcScreen.capture; // Share screen › Capture
   pcScreen = new PcScreen({ link, helper, sender, vdd, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState, needDriver: () => goTab('pc-mac') });
   pcApps = new PcApps({ link, helper, sender, settings, inputAllowed: () => kvm.mode === 'home', onChange: pushState });
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
