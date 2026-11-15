@@ -474,6 +474,11 @@ class PhoneBridge extends EventEmitter {
       `cmd notification allow_dnd ${APP_ID}`,
       // Hold and the keypad on calls from the computer (CallCompanion.kt, Android 12+; older ones say no).
       `appops set ${APP_ID} MANAGE_ONGOING_CALLS allow`,
+      // Android 15+ hides a one-time code's text from notification listeners it doesn't trust; this
+      // lets the code reach Copy code. allow_listener again so Android reads the new trust (older
+      // phones say no to the first line, which is fine).
+      `appops set ${APP_ID} RECEIVE_SENSITIVE_NOTIFICATIONS allow`,
+      `cmd notification allow_listener ${APP_ID}/${APP_ID}.NotifListener`,
     ];
     if (this.getSettings().phone && this.getSettings().phone.wallpaper !== false) cmds.push(`appops set ${APP_ID} MANAGE_EXTERNAL_STORAGE allow`);
     for (const c of cmds) await this.adb.shell(serial, c, { timeout: 8000 });
