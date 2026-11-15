@@ -23,6 +23,7 @@ const { Session, ACTION, TYPE } = require('./scrcpy');
 const { NativeScreen } = require('../shared/nativescreen.js');
 const { uhidKey } = require('../shared/uhidkbd.js');
 const { KeyState, ANDROID } = require('./android-keys');
+const { MirrorSave } = require('../shared/mirror-save.js');
 const chat = require('../shared/phonechat.js');
 const { writeClipImage } = require('../shared/clipimage.js');
 const { launcher } = require('./storepkg'); // the Store's MSIX starts its alias
@@ -76,8 +77,15 @@ class PhoneViews extends EventEmitter {
       this.a11y = false;
     });
     this.on('change', () => bridge._sound()); // a Native screen window with its sound takes the phone's own capture
+    // The side rail's Screenshot and Record (shared/mirror-rail.js): copied and saved here.
+    this.saver = new MirrorSave({
+      electron: require('electron'),
+      popup: (key, vars) => this.bridge.emit('popup', 'away', { key, vars }),
+      name: () => (this.server.current && this.server.current.name) || this._i18n().t('Phone'),
+    });
     ipcMain.on('phoneview:in', (e, m) => {
       const v = [...this.views.values()].find((x) => x.win && !x.win.isDestroyed() && x.win.webContents === e.sender);
+      if (v && this.saver.handle(v.id, m)) return;
       if (v && m && typeof m === 'object') this._input(v, m);
     });
     // Files dropped on a phone window go to the phone (its Downloads).
@@ -378,6 +386,7 @@ class PhoneViews extends EventEmitter {
         try { v.session.setDisplayPower(true); } catch {}
       }
       if (v.session) v.session.stop();
+      this.saver.closed(id); // a recording keeps what it has
       this.views.delete(id);
       this.emit('change');
     });
@@ -540,6 +549,14 @@ class PhoneViews extends EventEmitter {
   _input(v, m) {
     // The window's own: no phone needed.
     if (m.t === 'shot') return this._shot(v, m.png);
+    // The title bar's side panel button: Phone › Side panel, at hand in every phone window.
+    if (m.t === 'sidePanel') {
+      const ph = this.getSettings().phone;
+      ph.controls = ph.controls === 'side' ? 'top' : 'side';
+      this.bridge.emit('save');
+      this.applyControls();
+      return this.emit('change');
+    }
     if (m.t === 'pin') {
       const on = !v.win.isAlwaysOnTop();
       v.win.setAlwaysOnTop(on);

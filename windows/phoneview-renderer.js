@@ -417,6 +417,7 @@
     enterSends: '<path d="M3.5 10l13-5.5-4 11-2.5-4.5z M10 11l6.5-6.5"/>',
     arrowSwipe: '<path d="M10 3.5v13 M7.5 6 10 3.5 12.5 6 M7.5 14l2.5 2.5 2.5-2.5"/>',
     shot: '<path d="M3.5 6.5h3l1.5-2h4l1.5 2h3v9h-13z"/><circle cx="10" cy="11" r="2.8"/>',
+    rec: '<circle cx="10" cy="10" r="6"/><circle class="dot" cx="10" cy="10" r="3"/>',
     pin: '<path d="M8 3.5h4l-.5 5 2.5 2.5h-8l2.5-2.5z M10 11v5.5"/>',
     torch: '<path d="M7 3.5h6v3.5l-2 3v6.5H9v-6.5l-2-3z M7 7h6"/>',
     flip: '<path d="M3.5 7h11 M12 4.5 14.5 7 12 9.5 M16.5 13h-11 M8 10.5 5.5 13 8 15.5"/>',
@@ -427,6 +428,8 @@
   // (the side panel's foot, or first in the title bar); toggle: lit while on (phoneview.js says, 'opts').
   const PHONE = ['screen', 'app'];
   const CAMERA = ['torch', 'flip', 'zoomIn', 'zoomOut'];
+  // Record (shared/mirror-rail.js, its recorder without a rail of its own: the side panel is ours).
+  const recorder = window.MirrorRail && !['sound', 'mic', 'netsound'].includes(kind) ? window.MirrorRail({ api, canvas, kind, sound: () => (actx && player ? { actx, node: player } : null) }) : null;
   const CONTROLS = [
     { k: 'volumeUp', title: 'Volume up' },
     { k: 'volumeDown', title: 'Volume down' },
@@ -436,7 +439,8 @@
     { k: 'flip', title: 'Front or back camera', in: ['camera'] },
     { k: 'zoomIn', title: 'Zoom in', in: ['camera'] },
     { k: 'zoomOut', title: 'Zoom out', in: ['camera'] },
-    { k: 'shot', title: 'Screenshot (copies it: paste with Ctrl+V)', in: ['screen', 'app', 'camera'] },
+    { k: 'shot', title: 'Screenshot (copied, and saved in Pictures › TwinDesk)', in: ['screen', 'app', 'camera'] },
+    { k: 'rec', title: 'Record (saved in Videos › TwinDesk)', in: ['screen', 'app', 'camera'] },
     { k: 'notifications', title: 'Notifications', in: ['screen'] },
     { k: 'settings', title: 'Quick settings', in: ['screen'] },
     { k: 'power', title: 'Power (lock or wake the phone)', in: ['screen'] },
@@ -455,12 +459,14 @@
   for (const c of CONTROLS) {
     c.el = document.createElement('button');
     c.el.className = 'ctl';
+    c.el.dataset.k = c.k;
     c.el.dataset.i18nTitle = c.title;
     c.el.dataset.i18nLabel = c.title;
     playerI18n.translate(c.el);
     c.el.innerHTML = `<svg viewBox="0 0 20 20">${ICONS[c.k]}</svg>`;
     c.el.onclick = () => {
       if (c.k === 'shot') return shot();
+      if (c.k === 'rec') return recorder && recorder.controls.find((x) => x.k === 'rec').el.click(); // shared/mirror-rail.js
       if (c.k === 'pin') return api.send({ t: 'pin' });
       if (c.k === 'enterSends' || c.k === 'arrowSwipe') api.send({ t: 'toggle', what: c.k });
       else if (c.k === 'screenOff') api.send({ t: 'nav', key: 'screenPower' });
@@ -473,6 +479,9 @@
   const els = (list) => list.map((c) => c.el);
   const fullBtn = document.getElementById('fullBtn');
   fullBtn.onclick = () => { api.send({ t: 'full' }); canvas.focus(); };
+  // The title bar's side panel button (Phone › Side panel, at hand): lit while it's down the right.
+  const sideBtn = document.getElementById('b-rail');
+  if (sideBtn) sideBtn.onclick = () => { api.send({ t: 'sidePanel' }); canvas.focus(); };
   window.addEventListener('keydown', (e) => { if (e.key === 'F11') { e.preventDefault(); e.stopPropagation(); api.send({ t: 'full' }); } }, true);
   function layout(mode) {
     mode = mode === 'side' ? 'side' : 'top';
@@ -488,9 +497,11 @@
     } else tools.append(...nav, ...els(TOP.map((k) => CONTROLS.find((c) => c.k === k)).filter(Boolean)));
   }
   layout(q.get('controls'));
+  if (sideBtn) sideBtn.classList.toggle('on', q.get('controls') === 'side');
   api.on('opts', (m) => {
     if (!m) return;
     if (m.controls) layout(m.controls);
+    if (m.controls && sideBtn) { sideBtn.classList.toggle('on', m.controls === 'side'); sideBtn.setAttribute('aria-pressed', String(m.controls === 'side')); }
     if (typeof m.full === 'boolean') { document.body.classList.toggle('full', m.full); fit(); }
     for (const c of CONTROLS) if (c.toggle && typeof m[OPT[c.k]] === 'boolean') c.el.classList.toggle('on', m[OPT[c.k]]);
   });
@@ -498,7 +509,7 @@
   // The picture as it is now, as a PNG (phoneview.js puts it on the clipboard).
   function shot() {
     if (!canvas.width || !canvas.height) return;
-    canvas.toBlob((blob) => { if (blob) blob.arrayBuffer().then((b) => api.send({ t: 'shot', png: new Uint8Array(b) })); }, 'image/png');
+    canvas.toBlob((blob) => { if (blob) blob.arrayBuffer().then((b) => api.send({ t: 'shot', png: new Uint8Array(b), save: true })); }, 'image/png');
   }
 
   canvas.focus();

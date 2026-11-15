@@ -22,6 +22,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Pause and Resume** a Send files batch: the files that hadn't arrived wait under Waiting to send.
   If the connection drops in the middle, the rest goes again by itself when it's back, into the same
   folders.
+- **Phone window side rail** (Mac and Linux; Windows' side panel gets the same): Screenshot (copied,
+  and saved in Pictures › TwinDesk), Record (the picture and the phone's sound, as MP4 in Movies ›
+  TwinDesk; WebM where MP4 can't be made), the volume keys, Rotate, Power and Phone screen off. Its
+  button in the title bar shows or hides it; on Windows it switches the side panel.
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

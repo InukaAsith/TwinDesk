@@ -14,13 +14,13 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); font
   -webkit-app-region: no-drag; width: 26px; height: 24px; border: 0; border-radius: 6px; background: none; display: grid; place-items: center; padding: 0;
 }
 .tools button:hover { background: var(--hover); }
-#panelBtn, #fullBtn, #b-pin {
+#panelBtn, #fullBtn, #b-pin, #b-rail {
   -webkit-app-region: no-drag; width: 26px; height: 24px; border: 0; border-radius: 6px; background: none; display: grid; place-items: center; padding: 0; flex: none;
 }
 #panelBtn { margin-right: 6px; }
 #fullBtn { margin-left: 2px; }
-#panelBtn:hover, #fullBtn:hover, #b-pin:hover { background: var(--hover); }
-#panelBtn svg, #fullBtn svg, #b-pin svg { width: 15px; height: 15px; fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#panelBtn:hover, #fullBtn:hover, #b-pin:hover, #b-rail:hover { background: var(--hover); }
+#panelBtn svg, #fullBtn svg, #b-pin svg, #b-rail svg { width: 15px; height: 15px; fill: none; stroke: var(--text); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 #panelBtn.on svg, #b-pin.on svg { stroke: #0a84ff; }
 /* The panel button off: only the title, like a clean window. Fullscreen: only the picture. */
 body.nopanel .tools { display: none; }

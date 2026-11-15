@@ -449,5 +449,10 @@
   if (bZoomIn) bZoomIn.onclick = () => api.send({ t: 'cameraZoomIn' });
   const bZoomOut = document.getElementById('b-zoomout');
   if (bZoomOut) bZoomOut.onclick = () => api.send({ t: 'cameraZoomOut' });
+  // The side rail (shared/mirror-rail.js): Screenshot, Record, volume, Rotate, Power; the title bar's
+  // rail button shows or hides it. Not in the hidden sound and mic windows.
+  if (window.MirrorRail && kind !== 'sound' && kind !== 'mic' && kind !== 'netsound') {
+    window.MirrorRail({ api, canvas, kind, sound: () => (actx && player ? { actx, node: player } : null) }).mount(document.querySelector('#bar .tools'));
+  }
   canvas.focus();
 })();

@@ -1,0 +1,28 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The phone window's side rail (shared/mirror-rail.js): down the right, under the title bar; the
+   picture keeps its shape in what's left. Uses the window's own --bar, --text and --hover. */
+#rail {
+  display: none; position: absolute; top: 32px; right: 0; bottom: 0; width: 44px; box-sizing: border-box; padding: 8px 0;
+  flex-direction: column; align-items: center; gap: 4px; background: var(--bar, #1c1c1e); overflow-y: auto; scrollbar-width: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+#rail::-webkit-scrollbar { display: none; }
+body.rail #rail { display: flex; }
+body.rail #stage { right: 44px; }
+body.full #rail { top: 0; }
+body.sound #rail, body.netsound #rail, body.mic #rail, body.sound #b-rail, body.netsound #b-rail, body.mic #b-rail { display: none !important; }
+#rail .ctl {
+  flex: none; width: 34px; height: 32px; border: 0; border-radius: 7px; background: none; display: grid; place-items: center; padding: 0; color: var(--text, #f5f5f7);
+}
+#rail .ctl:hover { background: var(--hover, rgba(255, 255, 255, 0.1)); }
+#rail svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#rail .ctl.on svg, #b-rail.on svg { stroke: #0a84ff; }
+/* Recording: the button red and its dot beating; the title bar's rail button too, while the rail's hidden. */
+.ctl.recording svg, body.recording:not(.rail) #b-rail svg { stroke: #ff453a; }
+.ctl .dot { stroke: none; fill: var(--text, #f5f5f7); opacity: 0.85; }
+.ctl.recording .dot { fill: #ff453a; animation: td-rec 1.2s ease-in-out infinite; }
+@keyframes td-rec { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .ctl.recording .dot { animation: none; } }
+/* Windows' side panel takes Record from here: lit the same way. */
+body.recording .ctl[data-k="rec"] svg { stroke: #ff453a; }
+body.recording .ctl[data-k="rec"] .dot { fill: #ff453a; animation: td-rec 1.2s ease-in-out infinite; }

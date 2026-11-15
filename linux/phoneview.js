@@ -19,6 +19,7 @@ const { Session, ACTION, TYPE } = require('./scrcpy');
 const { NativeScreen } = require('../shared/nativescreen.js');
 const { uhidKey } = require('../shared/uhidkbd.js');
 const { KeyState, ANDROID } = require('./android-keys');
+const { MirrorSave } = require('../shared/mirror-save.js');
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
@@ -66,8 +67,15 @@ class PhoneViews extends EventEmitter {
     bridge.on('change', () => this._openNotified());
     server.on('closed', () => { this.notified = null; });
     this.on('change', () => bridge._sound()); // a Native screen window with its sound takes the phone's own capture
+    // The side rail's Screenshot and Record (shared/mirror-rail.js): copied and saved here.
+    this.saver = new MirrorSave({
+      electron: require('electron'),
+      popup: (key, vars) => this.bridge.emit('popup', 'away', { key, vars }),
+      name: () => (this.server.current && this.server.current.name) || this._i18n().t('Phone'),
+    });
     ipcMain.on('phoneview:in', (e, m) => {
       const v = [...this.views.values()].find((x) => x.win && !x.win.isDestroyed() && x.win.webContents === e.sender);
+      if (v && this.saver.handle(v.id, m)) return;
       if (v && m && typeof m === 'object') this._input(v, m);
     });
     // Files dropped on a phone window go to the phone (its Downloads).
@@ -365,6 +373,7 @@ class PhoneViews extends EventEmitter {
     }
     win.on('closed', () => {
       if (v.session) v.session.stop();
+      this.saver.closed(id); // a recording keeps what it has
       this.views.delete(id);
       this.emit('change');
     });
@@ -502,7 +511,7 @@ class PhoneViews extends EventEmitter {
         break;
       }
       case 'nav': {
-        const k = { back: ANDROID.BACK, home: ANDROID.HOME, recents: ANDROID.APP_SWITCH, power: ANDROID.POWER }[m.key];
+        const k = { back: ANDROID.BACK, home: ANDROID.HOME, recents: ANDROID.APP_SWITCH, power: ANDROID.POWER, volumeUp: ANDROID.VOLUME_UP, volumeDown: ANDROID.VOLUME_DOWN }[m.key];
         if (m.key === 'back') { s.backOrScreenOn(ACTION.DOWN); s.backOrScreenOn(ACTION.UP); } else if (k) s.tap(k);
         if (m.key === 'notifications') s.simple(TYPE.EXPAND_NOTIFICATIONS);
         if (m.key === 'rotate') s.simple(TYPE.ROTATE);

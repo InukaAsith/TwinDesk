@@ -398,5 +398,12 @@
   if (bZoomIn) bZoomIn.onclick = () => api.send({ t: 'cameraZoomIn' });
   const bZoomOut = document.getElementById('b-zoomout');
   if (bZoomOut) bZoomOut.onclick = () => api.send({ t: 'cameraZoomOut' });
+  // The side rail (shared/mirror-rail.js): Screenshot, Record, volume, Rotate, Power; its button sits
+  // next to Keep on top. Not in the hidden sound and mic windows.
+  if (window.MirrorRail && kind !== 'sound' && kind !== 'mic' && kind !== 'netsound') {
+    const r = window.MirrorRail({ api, canvas, kind, sound: () => (actx && player ? { actx, node: player } : null) }).mount(null);
+    const pin = document.getElementById('b-pin');
+    pin.parentNode.insertBefore(r.btn, pin);
+  }
   canvas.focus();
 })();
