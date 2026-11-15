@@ -10,14 +10,31 @@
   // 4–8 digits, alone or in two groups ("482 913", "4829-13"); a G- prefix (Google) is allowed.
   const CODE = /(?:^|[^\w.,:/+-])(?:G-)?(\d{3,4}[ -]\d{2,4}|\d{4,8})(?![\w%/]|[.,]\d|:\d)/g;
 
+  // A "code" that isn't a one-time one: a zip code, a promo code, an error code…
+  const OTHER = 'zip|postal|area|country|promo|promotion(?:al)?|discount|coupon|voucher|gift|referral|invite|bar|qr|dress|source|error|status|fault|tracking|sort|swift|bic|ifsc|hs|colou?r|product|item|tax';
+  const OTHER_CODE = new RegExp(`\\b(?:${OTHER})[ -]codes?\\b`, 'gi');
+  const OTHER_END = new RegExp(`\\b(?:${OTHER})[ -]codes?\\s*(?:is|was|:|#|no\\.?)?\\s*$`, 'i');
+  // Right before the digits: money ("$1250", "Rs. 5000"), a card, account or order number, a
+  // country code ("+44 7911…").
+  const MONEY = /(?:[$€£¥₹₩₦₱]|\b(?:rs|inr|usd|eur|gbp|lkr|aud|cad)\.?)\s*$/i;
+  const NUMBER_OF = /(?:\b(?:ending(?: in)?|ends in|account|acct|a\/c|card|order|invoice|package|parcel|tracking|ref(?:erence)?|room|flight|seat)\s*(?:no\.?|number|#)?\s*[:#]?\s*|#\s*|\+\d{1,3}[ -]?)$/i;
+
   function otpOf(text) {
-    const t = String(text || '');
-    if (!t || !WORDS.test(t)) return '';
+    const raw = String(text || '');
+    if (!raw) return '';
+    // The other kinds of code don't count as a code word.
+    const t = raw.replace(OTHER_CODE, (w) => ' '.repeat(w.length));
+    if (!WORDS.test(t)) return '';
     let best = '';
     for (const m of t.matchAll(CODE)) {
       const digits = m[1].replace(/\D/g, '');
       if (digits.length < 4 || digits.length > 8) continue;
       if (/^(19|20)\d\d$/.test(digits) && !/\d[ -]\d/.test(m[1])) continue; // a year
+      const start = m.index + m[0].length - m[1].length;
+      const lead = raw.slice(Math.max(0, start - 24), start).replace(/G-$/, '');
+      if (OTHER_END.test(lead) || MONEY.test(lead) || NUMBER_OF.test(lead)) continue;
+      // More digit groups around it: a date (2026-10-08) or a phone number (+44 7911 123456).
+      if (/^[ -/]\d{2,}/.test(raw.slice(start + m[1].length)) || /\d[ -]$/.test(lead)) continue;
       best = digits;
       // The first code after a code word wins ("Code 1234 for order 99887766").
       const before = t.slice(Math.max(0, m.index - 40), m.index);
