@@ -65,7 +65,7 @@ final class Deck: Feature {
 
     func run(_ id: String) { done = nil; _ = core.send(msg("deck.run", ["id": id])) }
     func set(_ id: String, _ value: Double) { _ = core.send(msg("deck.set", ["id": id, "value": value])) }
-    func askState() { _ = core.send(msg("deck.state")) }
+    func askState(obs: Bool = false) { _ = core.send(obs ? msg("deck.state", ["obs": true]) : msg("deck.state")) } // obs: OBS Studio's scenes and sources too
     func askWins() { _ = core.send(msg("deck.wins")) }
     func askApps() { if apps == nil { _ = core.send(msg("deck.apps")) } }
     // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).

@@ -950,5 +950,13 @@
   "{shown} shown this session": "Показано за сеанс: {shown}",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
   "{what}. Save to this {device}?": "{what}. Сохранить на этот {device}?",
-  "Search button": "Кнопка поиска"
+  "Search button": "Кнопка поиска",
+  "Not live": "Не в эфире",
+  "Not recording": "Не записывает",
+  "OBS is off": "OBS выключен",
+  "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Откройте OBS Studio на компьютере, чтобы выбрать. Подключение настраивается на странице Deck компьютера.",
+  "Paused": "Пауза",
+  "Recording": "Идёт запись",
+  "Showing": "Показывается",
+  "Loading…": "Загрузка…"
 }

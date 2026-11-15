@@ -251,6 +251,8 @@ function normalize(s) {
     windows: s.windows && typeof s.windows === 'object' ? s.windows : {},
     modules: require('../shared/modules.js').normalize(s.modules), // General › Modules
     deck: s.deck && typeof s.deck === 'object' && JSON.stringify(s.deck).length < 400000 ? s.deck : null, // the Deck's layout (shared/deck-model.js normalizes it when read)
+    // OBS Studio for the Deck's OBS tiles (shared/obs.js): its port and the password, sealed.
+    deckObs: s.deckObs && typeof s.deckObs === 'object' ? { port: Number.isInteger(s.deckObs.port) && s.deckObs.port > 0 && s.deckObs.port < 65536 ? s.deckObs.port : 4455, pass: typeof s.deckObs.pass === 'string' && s.deckObs.pass.length < 2000 ? s.deckObs.pass : '' } : null,
   };
 }
 

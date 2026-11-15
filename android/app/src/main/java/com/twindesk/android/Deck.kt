@@ -199,7 +199,7 @@ class Deck(core: Core) : Feature(core) {
 
     fun run(id: String) { done = null; core.send(msg(Proto.T.DECK_RUN, "id" to id)) }
     fun set(id: String, value: Float) = core.send(msg(Proto.T.DECK_SET, "id" to id, "value" to value.toDouble()))
-    fun askState() = core.send(msg(Proto.T.DECK_STATE))
+    fun askState(obs: Boolean = false) = core.send(if (obs) msg(Proto.T.DECK_STATE, "obs" to true) else msg(Proto.T.DECK_STATE)) // obs: OBS Studio's scenes and sources too (an OBS tile's editor)
     fun askWins() = core.send(msg(Proto.T.DECK_WINS))
     fun askApps() { if (apps == null) core.send(msg(Proto.T.DECK_APPS)) }
     // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).
@@ -267,6 +267,17 @@ private fun stateText(a: JSONObject, s: JSONObject?): String {
             else if (bt.optBoolean("radio")) tr("On") else tr("Off")
         }
         "sys" -> if (w == "darkmode") (if (s.optBoolean("dark")) tr("Dark") else tr("Light")) else ""
+        "obs" -> {
+            val o = s.optJSONObject("obs") ?: return ""
+            if (!o.optBoolean("on")) tr("OBS is off")
+            else when (w) {
+                "record" -> if (o.optBoolean("record")) (if (o.optBoolean("paused")) tr("Paused") else tr("Recording")) else tr("Not recording")
+                "stream" -> if (o.optBoolean("stream")) tr("Live") else tr("Not live")
+                "vcam" -> if (o.optBoolean("vcam")) tr("On") else tr("Off")
+                "scene" -> if (a.optString("name").isNotEmpty() && o.optString("scene") == a.optString("name")) tr("Showing") else ""
+                else -> ""
+            }
+        }
         else -> ""
     }
 }
@@ -1496,7 +1507,7 @@ private fun ActionOptions(d: Deck, a: JSONObject, page: JSONObject, put: (Array<
         Text("$name: ${a.optInt(key, def)}" + if (key == "level") "%" else "", color = pal.muted, fontSize = 12.sp)
         Slider(a.optInt(key, def).toFloat(), { set(key to it.roundToInt()) }, valueRange = range.first.toFloat()..range.last.toFloat())
     }
-    LaunchedEffect(k) { if (k in listOf("output", "input", "bt", "bright", "slider")) d.askState() }
+    LaunchedEffect(k) { if (k in listOf("output", "input", "bt", "bright", "slider")) d.askState() else if (k == "obs") d.askState(obs = true) }
     when (k) {
         "keys" -> OutlinedTextField(a.optString("combo"), { set("combo" to it.trim()) }, label = { Text(tr("Shortcut, like Mod+Shift+KeyS")) }, singleLine = true,
             supportingText = { Text(tr("Mod is ⌘ on a Mac and Ctrl elsewhere. Or record it on the computer’s Deck page."), fontSize = 11.sp) })
@@ -1508,6 +1519,15 @@ private fun ActionOptions(d: Deck, a: JSONObject, page: JSONObject, put: (Array<
             }
         }
         "url" -> OutlinedTextField(a.optString("url"), { set("url" to it.trim()) }, label = { Text(tr("Website")) }, singleLine = true)
+        "obs" -> if (w == "scene" || w == "mute") {
+            val o = s?.optJSONObject("obs")
+            val names = o?.optJSONArray(if (w == "scene") "scenes" else "inputs")?.let { arr -> (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotEmpty() } } ?: emptyList()
+            when {
+                o == null -> Text(tr("Loading…"), color = pal.muted)
+                !o.optBoolean("on") -> Text(tr("Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page."), color = pal.muted, fontSize = 12.sp)
+                else -> pick((names + listOfNotNull(a.optString("name").takeIf { it.isNotEmpty() && it !in names })).map { it to it }, a.optString("name")) { set("name" to it) }
+            }
+        }
         "app" -> {
             val list = d.apps
             if (list == null) Text(tr("Loading apps…"), color = pal.muted)

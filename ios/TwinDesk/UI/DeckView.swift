@@ -68,6 +68,16 @@ private func stateText(_ a: JSON, _ s: JSON?) -> String {
         }
         return bt.bool("radio") ? tr("On") : tr("Off")
     case "sys": return w == "darkmode" ? (s.bool("dark") ? tr("Dark") : tr("Light")) : ""
+    case "obs":
+        guard let o = s.obj("obs") else { return "" }
+        if !o.bool("on") { return tr("OBS is off") }
+        switch w {
+        case "record": return o.bool("record") ? (o.bool("paused") ? tr("Paused") : tr("Recording")) : tr("Not recording")
+        case "stream": return o.bool("stream") ? tr("Live") : tr("Not live")
+        case "vcam": return o.bool("vcam") ? tr("On") : tr("Off")
+        case "scene": return !a.str("name").isEmpty && o.str("scene", max: 120) == a.str("name") ? tr("Showing") : ""
+        default: return ""
+        }
     default: return ""
     }
 }
@@ -1730,6 +1740,16 @@ struct DeckActionOptions: View {
                     let ds = (s?["displays"] as? [JSON]) ?? []
                     if ds.count > 1 { pick([("", tr("Every display"))] + ds.map { ($0.str("id"), $0.str("name", max: 60)) }, action.str("display")) { set(["display": $0]) } }
                 }
+            case "obs" where w == "scene" || w == "mute":
+                if let o = s?.obj("obs") {
+                    if o.bool("on") {
+                        let names = ((o[w == "scene" ? "scenes" : "inputs"] as? [Any]) ?? []).compactMap { $0 as? String }
+                        let all = names + (action.str("name").isEmpty || names.contains(action.str("name")) ? [] : [action.str("name")])
+                        pick(all.map { ($0, $0) }, action.str("name")) { set(["name": $0]) }
+                    } else {
+                        Text(tr("Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.")).font(.caption).foregroundStyle(.secondary)
+                    }
+                } else { Text(tr("Loading…")).foregroundStyle(.secondary) }
             case "nav" where w == "page":
                 pick(d.spaces.flatMap { ($0["pages"] as? [JSON]) ?? [] }.map { ($0.str("id"), $0.str("name", max: 30)) }, action.str("to")) { set(["to": $0]) }
             case "nav" where w == "space":
@@ -1737,7 +1757,7 @@ struct DeckActionOptions: View {
             default: EmptyView()
             }
         }
-        .onAppear { if ["output", "input", "bt", "bright", "slider"].contains(k) { d.askState() } }
+        .onAppear { if ["output", "input", "bt", "bright", "slider"].contains(k) { d.askState() } else if k == "obs" { d.askState(obs: true) } }
     }
 
     @ViewBuilder

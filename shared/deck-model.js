@@ -51,7 +51,7 @@
 'use strict';
 
 (function (root) {
-  const KINDS = ['keys', 'text', 'macro', 'media', 'volume', 'mic', 'output', 'input', 'bt', 'bright', 'slider', 'app', 'url', 'open', 'script', 'sys', 'win', 'clip', 'nav', 'widget', 'none'];
+  const KINDS = ['keys', 'text', 'macro', 'media', 'volume', 'mic', 'output', 'input', 'bt', 'bright', 'slider', 'app', 'url', 'open', 'script', 'sys', 'win', 'clip', 'obs', 'nav', 'widget', 'none'];
   const LOCAL = ['open', 'script']; // only set on this computer, never sent to a device
   const DEVICE = ['nav', 'widget', 'none']; // the device does these itself
   const MEDIA = { playpause: 'MediaPlayPause', next: 'MediaTrackNext', prev: 'MediaTrackPrevious', stop: 'MediaStop' };
@@ -65,6 +65,7 @@
     sys: ['lock', 'sleep', 'screenoff', 'desktop', 'switcher', 'overview', 'screenshot', 'shotarea', 'darkmode', 'dnd'],
     win: ['left', 'right', 'top', 'bottom', 'max', 'center', 'min', 'full', 'tl', 'tr', 'bl', 'br', 'third1', 'third2', 'third3', 'nextdisplay', 'close'],
     clip: ['copy', 'cut', 'paste', 'send'],
+    obs: ['record', 'pause', 'stream', 'replay', 'vcam', 'scene', 'mute'], // OBS Studio (shared/obs.js)
     nav: ['page', 'space', 'next', 'prev', 'nextspace', 'prevspace'],
     widget: ['clock', 'media', 'cpu', 'ram', 'temp'],
   };
@@ -79,7 +80,7 @@
     'play', 'pause', 'next', 'prev', 'stop', 'volume', 'volumeDown', 'mute', 'mic', 'micOff', 'speaker', 'headphones',
     'bluetooth', 'sun', 'sunDim', 'moon', 'clock', 'cpu', 'memory', 'thermo', 'lock', 'sleep', 'power', 'desktop', 'windows', 'switcher', 'camera', 'crop',
     'keyboard', 'command', 'text', 'macro', 'globe', 'app', 'folder', 'terminal', 'copy', 'cut', 'paste', 'send',
-    'left', 'right', 'up', 'down', 'maximize', 'minimize', 'display', 'grid', 'star', 'bolt', 'bell', 'bellOff', 'none',
+    'left', 'right', 'up', 'down', 'maximize', 'minimize', 'display', 'grid', 'star', 'bolt', 'bell', 'bellOff', 'record', 'broadcast', 'none',
   ];
 
   const str = (v, max) => (typeof v === 'string' ? v.replace(/\p{Cc}/gu, (c) => (c === '\n' || c === '\t' ? c : '')).slice(0, max) : '');
@@ -142,6 +143,10 @@
       case 'sys': return { k, what: what('lock') };
       case 'win': return { k, what: what('max') };
       case 'clip': return { k, what: what('copy') };
+      case 'obs': {
+        const w = what('record');
+        return w === 'scene' || w === 'mute' ? { k, what: w, name: line(a.name, 120) } : { k, what: w };
+      }
       case 'nav': {
         const w = what('next');
         const to = idOf(a.to);
@@ -378,6 +383,13 @@
     for (const s of l.spaces || []) for (const p of s.pages || []) { const t = p.tiles.find((x) => x.id === id); if (t) return t; }
     return null;
   }
+  // Whether any tile (or a step of a multi-action) uses an action kind.
+  function uses(l, k) {
+    for (const s of l.spaces || []) for (const p of s.pages || []) for (const t of p.tiles) {
+      if (t.action.k === k || (t.action.k === 'macro' && (t.action.steps || []).some((x) => x.action.k === k))) return true;
+    }
+    return false;
+  }
   function where(l, id) {
     for (const s of l.spaces || []) for (const p of s.pages || []) if (p.tiles.some((x) => x.id === id)) return { space: s, page: p };
     return null;
@@ -448,6 +460,7 @@
       case 'sys': return { lock: 'lock', sleep: 'sleep', screenoff: 'display', desktop: 'desktop', switcher: 'switcher', overview: 'windows', screenshot: 'camera', shotarea: 'crop', darkmode: 'moon', dnd: 'bellOff' }[w];
       case 'win': return { left: 'left', right: 'right', top: 'up', bottom: 'down', max: 'maximize', min: 'minimize', full: 'maximize', nextdisplay: 'display', close: 'none' }[w] || 'grid';
       case 'clip': return { copy: 'copy', cut: 'cut', paste: 'paste', send: 'send' }[w];
+      case 'obs': return { record: 'record', pause: 'pause', stream: 'broadcast', replay: 'star', vcam: 'camera', scene: 'display', mute: 'mic' }[w];
       case 'widget': return { clock: 'clock', media: 'play', cpu: 'cpu', ram: 'memory', temp: 'thermo' }[w];
       case 'nav': return { page: 'grid', space: 'windows', next: 'right', prev: 'left', nextspace: 'down', prevspace: 'up' }[w];
       default: return 'none';
@@ -458,7 +471,7 @@
   const api = {
     KINDS, LOCAL, DEVICE, MEDIA, WHATS, MODS, COLORS, SYMBOLS, GRID, SPAN, ZONE_GRID,
     normalize, fit, starter, starterLayouts, action, combo, codesOf, url, forDevice, fromDevice,
-    space, pageOf, find, where, fits, free, move, resize, symbolOf, iconOf, newId,
+    space, pageOf, find, uses, where, fits, free, move, resize, symbolOf, iconOf, newId,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.DeckModel = api;

@@ -144,7 +144,9 @@ function setupIpc(ctx) {
     return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
   });
   handle('deckRun', (a) => { const d = ctx.deck && ctx.deck(); return d && a && typeof a === 'object' ? d.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false }; }); // Try
-  handle('deckState', () => { const d = ctx.deck && ctx.deck(); return d ? d.state().catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays
+  handle('deckState', (obs) => { const d = ctx.deck && ctx.deck(); return d ? d.state(obs === true).catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays (OBS's: obs)
+  handle('deckObs', () => { const d = ctx.deck && ctx.deck(); return d ? d.obsConfig() : null; }); // OBS Studio's port, and whether a password is kept
+  handle('deckSetObs', (v) => { const d = ctx.deck && ctx.deck(); return d && v && typeof v === 'object' ? d.setObs(v) : { on: false }; }); // → OBS's state with them
   // General › Modules (shared/modules.js): {id, on, wasOn} a switch, {restored: id} its page is back on.
   handle('setModules', (m) => {
     if (!m || typeof m !== 'object') return;

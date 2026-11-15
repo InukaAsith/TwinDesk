@@ -1170,5 +1170,12 @@
   "Search button": "搜索按钮",
   "Only on {name}": "仅在 {name} 上",
   "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "未使用无线调试时，此手机在声音于对方播放期间调低媒体音量，结束后再调回。",
-  "This phone stays quiet while it plays on the computer.": "在电脑上播放时，此手机保持静音。"
+  "This phone stays quiet while it plays on the computer.": "在电脑上播放时，此手机保持静音。",
+  "Not live": "未直播",
+  "Not recording": "未录制",
+  "OBS is off": "OBS 未运行",
+  "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "在电脑上打开 OBS Studio 后即可选择。连接在电脑的 Deck 页面中设置。",
+  "Paused": "已暂停",
+  "Recording": "正在录制",
+  "Showing": "正在显示"
 }

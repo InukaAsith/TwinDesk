@@ -25,7 +25,7 @@ const SF = {
   macro: 'list.bullet.indent', globe: 'globe', app: 'app.fill', folder: 'folder.fill', terminal: 'terminal.fill', copy: 'doc.on.doc.fill',
   cut: 'scissors', paste: 'doc.on.clipboard.fill', send: 'paperplane.fill', left: 'arrow.left', right: 'arrow.right', up: 'arrow.up', down: 'arrow.down',
   maximize: 'arrow.up.left.and.arrow.down.right', minimize: 'minus', display: 'display', grid: 'square.grid.2x2.fill', star: 'star.fill',
-  bolt: 'bolt.fill', bell: 'bell.fill', bellOff: 'bell.slash.fill', none: 'minus',
+  bolt: 'bolt.fill', bell: 'bell.fill', bellOff: 'bell.slash.fill', record: 'record.circle', broadcast: 'dot.radiowaves.left.and.right', none: 'minus',
 };
 
 function make() {

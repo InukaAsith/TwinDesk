@@ -297,6 +297,14 @@
         if (a.k === 'bt' && a.id) { const d = ((dev.bt && dev.bt.devices) || []).find((x) => x.id === a.id); return d ? (d.connected ? t('Connected') : t('Not connected')) : ''; }
         if (a.k === 'bt') return dev.bt ? (dev.bt.radio ? t('On') : t('Off')) : '';
         if (a.k === 'sys' && a.what === 'darkmode') return dev.dark ? t('Dark') : t('Light');
+        if (a.k === 'obs' && dev.obs) {
+          const o = dev.obs;
+          if (!o.on) return t('OBS is off');
+          if (a.what === 'record') return o.record ? (o.paused ? t('Paused') : t('Recording')) : t('Not recording');
+          if (a.what === 'stream') return o.stream ? t('Live') : t('Not live');
+          if (a.what === 'vcam') return o.vcam ? t('On') : t('Off');
+          if (a.what === 'scene' && a.name) return o.scene === a.name ? t('Showing') : '';
+        }
         return '';
       }
 
@@ -499,6 +507,20 @@
             out.push(field(a.k === 'script' ? t('Script') : t('File or folder'), el('div', { class: 'deck-path-row' }, [shown, choose]), hint));
             break;
           }
+          case 'obs': {
+            const o = dev && dev.obs;
+            if (dev && !o) setTimeout(refresh, 0); // asked once with OBS's (its scenes and sources)
+            if (a.what === 'scene' || a.what === 'mute') {
+              const list = (o && (a.what === 'scene' ? o.scenes : o.inputs)) || [];
+              out.push(field(a.what === 'scene' ? t('Scene') : t('Source'), pick([
+                { value: '', label: !dev ? t('Loading…') : o && o.on ? (a.what === 'scene' ? t('Choose a scene') : t('Choose a source')) : t('Open OBS Studio to choose') },
+                ...list.map((n) => ({ value: n, label: n })),
+                ...(a.name && !list.includes(a.name) ? [{ value: a.name, label: a.name }] : []),
+              ], a.name || '', (name) => set((x) => { const was = C.entry(x.action); if (name && (!x.label || (was && x.label === t(C.text(was.name, platform))))) x.label = name; x.action = { ...x.action, name }; }))));
+            }
+            out.push(obsSetup(o));
+            break;
+          }
           case 'nav':
             if (a.what === 'page') out.push(field(t('Page'), pick(space().pages.map((x) => ({ value: x.id, label: x.name })), a.to, (to) => act({ to }))));
             if (a.what === 'space') out.push(field(t('Space'), pick(L.spaces.map((x) => ({ value: x.id, label: x.name })), a.to, (to) => act({ to }))));
@@ -507,6 +529,32 @@
         }
         return out;
       }
+      // OBS Studio's connection (shared/obs.js): whether it answers, its port and password. The
+      // password stays on this computer (sealed); the field never shows it back.
+      let obsCfg = null;
+      function obsSetup(o) {
+        const status = el('span', { class: 'deck-field-hint', text: !o ? t('Checking OBS Studio…') : o.on ? t('Connected to OBS Studio') : t(o.why || 'OBS isn’t running') });
+        const port = input(String((obsCfg && obsCfg.port) || 4455), () => {}, { inputmode: 'numeric', maxlength: 5, class: 'deck-obs-port' });
+        const pass = el('input', { type: 'password', value: '', attrs: { placeholder: obsCfg && obsCfg.hasPass ? t('Saved: type to change') : t('Password'), autocomplete: 'off' } });
+        const save = UI.button(t('Connect'), async () => {
+          if (!api.deckSetObs) return;
+          save.disabled = true;
+          const r = await api.deckSetObs({ port: Number(port.value), pass: pass.value });
+          pass.value = '';
+          obsCfg = api.deckObs ? await api.deckObs() : obsCfg;
+          dev = { ...(dev || {}), obs: r };
+          save.disabled = false;
+          draw();
+        }, 'small');
+        if (!obsCfg && api.deckObs) Promise.resolve(api.deckObs()).then((c) => { obsCfg = c; if (c) port.value = String(c.port); pass.placeholder = c && c.hasPass ? t('Saved: type to change') : t('Password'); }).catch(() => {});
+        return el('div', { class: 'deck-field' }, [
+          el('span', { class: 'deck-field-label', text: t('OBS Studio') }),
+          el('div', { class: 'deck-path-row' }, [port, pass, save]),
+          status,
+          el('span', { class: 'deck-field-hint', text: t('In OBS: Tools › WebSocket Server Settings › Enable WebSocket server. Show Connect Info has the port and password.') }),
+        ]);
+      }
+
       function rangeInput(value, min, max, onSet, fmt) {
         const s = UI.slider({ min, max, step: 1, format: fmt }, (v) => onSet(v));
         s.set(value);
@@ -737,7 +785,8 @@
       function refresh() {
         if (asking || !api.deckState) return;
         asking = true;
-        Promise.resolve(api.deckState()).then((s) => { dev = s || {}; }).catch(() => {}).finally(() => {
+        const tl = sel();
+        Promise.resolve(api.deckState(!!(tl && tl.action.k === 'obs'))).then((s) => { dev = s || {}; }).catch(() => {}).finally(() => {
           asking = false;
           const typing = body.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
           if (L && !typing) draw();

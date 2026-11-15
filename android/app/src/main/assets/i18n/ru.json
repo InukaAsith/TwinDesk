@@ -1170,5 +1170,12 @@
   "Search button": "Кнопка поиска",
   "Only on {name}": "Только на {name}",
   "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "Без отладки по Wi-Fi этот телефон убавляет громкость медиа, пока его звук играет там, и возвращает её потом.",
-  "This phone stays quiet while it plays on the computer.": "Пока звук играет на компьютере, телефон молчит."
+  "This phone stays quiet while it plays on the computer.": "Пока звук играет на компьютере, телефон молчит.",
+  "Not live": "Не в эфире",
+  "Not recording": "Не записывает",
+  "OBS is off": "OBS выключен",
+  "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Откройте OBS Studio на компьютере, чтобы выбрать. Подключение настраивается на странице Deck компьютера.",
+  "Paused": "Пауза",
+  "Recording": "Идёт запись",
+  "Showing": "Показывается"
 }

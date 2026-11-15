@@ -1170,5 +1170,12 @@
   "Search button": "Botão de pesquisa",
   "Only on {name}": "Só no {name}",
   "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "Sem a depuração por Wi-Fi, este celular abaixa o volume de mídia enquanto o som toca lá e volta depois.",
-  "This phone stays quiet while it plays on the computer.": "Este celular fica em silêncio enquanto toca no computador."
+  "This phone stays quiet while it plays on the computer.": "Este celular fica em silêncio enquanto toca no computador.",
+  "Not live": "Fora do ar",
+  "Not recording": "Sem gravar",
+  "OBS is off": "OBS desligado",
+  "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Abra o OBS Studio no computador para escolher. A conexão é definida na página Deck do computador.",
+  "Paused": "Pausado",
+  "Recording": "Gravando",
+  "Showing": "No ar"
 }

@@ -18,6 +18,7 @@
     { id: 'open', name: 'Apps and websites' },
     { id: 'files', name: 'Files and scripts' },
     { id: 'clipboard', name: 'Clipboard' },
+    { id: 'obs', name: 'OBS Studio' },
     { id: 'widgets', name: 'Widgets' },
     { id: 'deck', name: 'Deck navigation' },
   ];
@@ -99,6 +100,14 @@
     e('clipboard', 'Cut', 'Cuts the selection.', { k: 'clip', what: 'cut' }),
     e('clipboard', 'Paste', 'Pastes the clipboard.', { k: 'clip', what: 'paste' }),
     e('clipboard', 'Send clipboard to the phone', 'Sends what is copied on this computer to the device’s clipboard.', { k: 'clip', what: 'send' }),
+
+    e('obs', 'Record', 'Starts or stops recording in OBS Studio. The tile shows whether it records.', { k: 'obs', what: 'record' }),
+    e('obs', 'Pause recording', 'Pauses or resumes the recording in OBS Studio.', { k: 'obs', what: 'pause' }),
+    e('obs', 'Stream', 'Starts or stops streaming in OBS Studio. The tile shows whether it is live.', { k: 'obs', what: 'stream' }),
+    e('obs', 'Scene', 'Switches OBS Studio to a scene.', { k: 'obs', what: 'scene', name: '' }),
+    e('obs', 'Mute a source', 'Mutes or unmutes one of OBS Studio’s audio sources, like a microphone.', { k: 'obs', what: 'mute', name: '' }),
+    e('obs', 'Save replay', 'Saves the replay buffer in OBS Studio (turn the replay buffer on in OBS first).', { k: 'obs', what: 'replay' }),
+    e('obs', 'Virtual camera', 'Starts or stops OBS Studio’s virtual camera.', { k: 'obs', what: 'vcam' }),
 
     e('widgets', 'Clock', 'The time and date, on the device.', { k: 'widget', what: 'clock' }, { device: true, wide: true }),
     e('widgets', 'Media player', 'What is playing on this computer, with play, pause and skip.', { k: 'widget', what: 'media' }, { device: true, wide: true }),

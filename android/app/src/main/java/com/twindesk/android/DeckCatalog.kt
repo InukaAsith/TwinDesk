@@ -22,7 +22,7 @@ object DeckCatalog {
         val k: String get() = JSONObject(action).optString("k")
         val what: String? get() = JSONObject(action).optString("what").ifEmpty { null }
     }
-    val GROUPS = listOf("keyboard" to "Keyboard", "media" to "Media", "sound" to "Sound", "bluetooth" to "Bluetooth", "display" to "Display", "windows" to "Windows", "system" to "System", "open" to "Apps and websites", "files" to "Files and scripts", "clipboard" to "Clipboard", "widgets" to "Widgets", "deck" to "Deck navigation")
+    val GROUPS = listOf("keyboard" to "Keyboard", "media" to "Media", "sound" to "Sound", "bluetooth" to "Bluetooth", "display" to "Display", "windows" to "Windows", "system" to "System", "open" to "Apps and websites", "files" to "Files and scripts", "clipboard" to "Clipboard", "obs" to "OBS Studio", "widgets" to "Widgets", "deck" to "Deck navigation")
     val ENTRIES = listOf(
         Entry("keys", "keyboard", mapOf("" to "Keyboard shortcut"), mapOf("" to "Presses a key combination. Record it or type it."), "{\"k\":\"keys\",\"combo\":\"\"}", "", false, false, false),
         Entry("text", "keyboard", mapOf("" to "Type text"), mapOf("" to "Types a snippet as if from the keyboard, optionally followed by Return."), "{\"k\":\"text\",\"text\":\"\"}", "", false, false, false),
@@ -87,6 +87,13 @@ object DeckCatalog {
         Entry("clip.cut", "clipboard", mapOf("" to "Cut"), mapOf("" to "Cuts the selection."), "{\"k\":\"clip\",\"what\":\"cut\"}", "", false, false, false),
         Entry("clip.paste", "clipboard", mapOf("" to "Paste"), mapOf("" to "Pastes the clipboard."), "{\"k\":\"clip\",\"what\":\"paste\"}", "", false, false, false),
         Entry("clip.send", "clipboard", mapOf("" to "Send clipboard to the phone"), mapOf("" to "Sends what is copied on this computer to the device’s clipboard."), "{\"k\":\"clip\",\"what\":\"send\"}", "", false, false, false),
+        Entry("obs.record", "obs", mapOf("" to "Record"), mapOf("" to "Starts or stops recording in OBS Studio. The tile shows whether it records."), "{\"k\":\"obs\",\"what\":\"record\"}", "", false, false, false),
+        Entry("obs.pause", "obs", mapOf("" to "Pause recording"), mapOf("" to "Pauses or resumes the recording in OBS Studio."), "{\"k\":\"obs\",\"what\":\"pause\"}", "", false, false, false),
+        Entry("obs.stream", "obs", mapOf("" to "Stream"), mapOf("" to "Starts or stops streaming in OBS Studio. The tile shows whether it is live."), "{\"k\":\"obs\",\"what\":\"stream\"}", "", false, false, false),
+        Entry("obs.scene", "obs", mapOf("" to "Scene"), mapOf("" to "Switches OBS Studio to a scene."), "{\"k\":\"obs\",\"what\":\"scene\",\"name\":\"\"}", "", false, false, false),
+        Entry("obs.mute", "obs", mapOf("" to "Mute a source"), mapOf("" to "Mutes or unmutes one of OBS Studio’s audio sources, like a microphone."), "{\"k\":\"obs\",\"what\":\"mute\",\"name\":\"\"}", "", false, false, false),
+        Entry("obs.replay", "obs", mapOf("" to "Save replay"), mapOf("" to "Saves the replay buffer in OBS Studio (turn the replay buffer on in OBS first)."), "{\"k\":\"obs\",\"what\":\"replay\"}", "", false, false, false),
+        Entry("obs.vcam", "obs", mapOf("" to "Virtual camera"), mapOf("" to "Starts or stops OBS Studio’s virtual camera."), "{\"k\":\"obs\",\"what\":\"vcam\"}", "", false, false, false),
         Entry("widget.clock", "widgets", mapOf("" to "Clock"), mapOf("" to "The time and date, on the device."), "{\"k\":\"widget\",\"what\":\"clock\"}", "", false, true, true),
         Entry("widget.media", "widgets", mapOf("" to "Media player"), mapOf("" to "What is playing on this computer, with play, pause and skip."), "{\"k\":\"widget\",\"what\":\"media\"}", "", false, true, true),
         Entry("widget.cpu", "widgets", mapOf("" to "CPU"), mapOf("" to "How busy this computer’s processor is, live."), "{\"k\":\"widget\",\"what\":\"cpu\"}", "perf", false, true, false),
@@ -142,6 +149,8 @@ object DeckCatalog {
         "memory" to "M3.5 7.5h17v8h-17zM7 10.5v2M10.5 10.5v2M14 10.5v2M17.5 10.5v2M6 15.5v3M18 15.5v3",
         "thermo" to "M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0zM12 9v7.5",
         "lock" to "M6.5 10.5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM8.5 10.5v-3a3.5 3.5 0 0 1 7 0v3",
+        "record" to "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z",
+        "broadcast" to "M12 10.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13",
         "sleep" to "M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5zM15 4h4l-4 4h4",
         "power" to "M12 3v8M6.8 6.5a7.5 7.5 0 1 0 10.4 0",
         "desktop" to "M3.5 4.5h17a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-17a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1zM9 20.5h6M12 16.5v4",
@@ -181,7 +190,7 @@ object DeckCatalog {
         val d = PATHS[name] ?: return null
         return cache.getOrPut(name) { icon(name, d, name == "play" || name == "stop") }
     }
-    val SYMBOLS = listOf("play", "pause", "next", "prev", "stop", "volume", "volumeDown", "mute", "mic", "micOff", "speaker", "headphones", "bluetooth", "sun", "sunDim", "moon", "clock", "cpu", "memory", "thermo", "lock", "sleep", "power", "desktop", "windows", "switcher", "camera", "crop", "keyboard", "command", "text", "macro", "globe", "app", "folder", "terminal", "copy", "cut", "paste", "send", "left", "right", "up", "down", "maximize", "minimize", "display", "grid", "star", "bolt", "bell", "bellOff")
+    val SYMBOLS = listOf("play", "pause", "next", "prev", "stop", "volume", "volumeDown", "mute", "mic", "micOff", "speaker", "headphones", "bluetooth", "sun", "sunDim", "moon", "clock", "cpu", "memory", "thermo", "lock", "record", "broadcast", "sleep", "power", "desktop", "windows", "switcher", "camera", "crop", "keyboard", "command", "text", "macro", "globe", "app", "folder", "terminal", "copy", "cut", "paste", "send", "left", "right", "up", "down", "maximize", "minimize", "display", "grid", "star", "bolt", "bell", "bellOff")
 
     // The symbol a tile shows when it has none of its own (shared/deck-model.js symbolOf).
     fun symbolOf(a: JSONObject?): String {
@@ -205,6 +214,7 @@ object DeckCatalog {
             "sys" -> when (w) { "lock" -> "lock"; "sleep" -> "sleep"; "screenoff" -> "display"; "desktop" -> "desktop"; "switcher" -> "switcher"; "overview" -> "windows"; "screenshot" -> "camera"; "shotarea" -> "crop"; "darkmode" -> "moon"; "dnd" -> "bellOff"; else -> "lock" }
             "win" -> when (w) { "left" -> "left"; "right" -> "right"; "top" -> "up"; "bottom" -> "down"; "max" -> "maximize"; "center" -> "grid"; "min" -> "minimize"; "full" -> "maximize"; "tl" -> "grid"; "tr" -> "grid"; "bl" -> "grid"; "br" -> "grid"; "third1" -> "grid"; "third2" -> "grid"; "third3" -> "grid"; "nextdisplay" -> "display"; "close" -> "none"; else -> "left" }
             "clip" -> when (w) { "copy" -> "copy"; "cut" -> "cut"; "paste" -> "paste"; "send" -> "send"; else -> "copy" }
+            "obs" -> when (w) { "record" -> "record"; "pause" -> "pause"; "stream" -> "broadcast"; "replay" -> "star"; "vcam" -> "camera"; "scene" -> "display"; "mute" -> "mic"; else -> "record" }
             "nav" -> when (w) { "page" -> "grid"; "space" -> "windows"; "next" -> "right"; "prev" -> "left"; "nextspace" -> "down"; "prevspace" -> "up"; else -> "grid" }
             "widget" -> when (w) { "clock" -> "clock"; "media" -> "play"; "cpu" -> "cpu"; "ram" -> "memory"; "temp" -> "thermo"; else -> "clock" }
             "none" -> "none"

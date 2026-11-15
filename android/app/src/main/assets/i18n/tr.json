@@ -1170,5 +1170,12 @@
   "Search button": "Arama düğmesi",
   "Only on {name}": "Yalnızca {name} üzerinde",
   "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "Kablosuz hata ayıklama olmadan, bu telefon sesi orada çalarken medya sesini kısar ve sonra geri açar.",
-  "This phone stays quiet while it plays on the computer.": "Bilgisayarda çalarken bu telefon sessiz kalır."
+  "This phone stays quiet while it plays on the computer.": "Bilgisayarda çalarken bu telefon sessiz kalır.",
+  "Not live": "Yayında değil",
+  "Not recording": "Kaydetmiyor",
+  "OBS is off": "OBS kapalı",
+  "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Seçmek için bilgisayarda OBS Studio’yu açın. Bağlantısı bilgisayarın Deck sayfasında ayarlanır.",
+  "Paused": "Duraklatıldı",
+  "Recording": "Kaydediliyor",
+  "Showing": "Gösteriliyor"
 }
