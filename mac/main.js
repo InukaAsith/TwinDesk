@@ -679,6 +679,19 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
   svc.kvm.laneReady.then(laneGo);
+  // Camera › Take a photo with the phone (shared/phonephoto.js): its photo onto the clipboard.
+  {
+    const { PhonePhoto, copyPicture } = require('../shared/phonephoto.js');
+    const pp = new PhonePhoto({
+      send: (m) => peer.sendToClient(m),
+      phoneOn: () => !!peer.current && peer.current.os === P.OS.ANDROID,
+      popup: (key, vars) => hud && hud.show('driven', { key, vars }),
+      copy: (f) => copyPicture(require('electron'), f),
+    });
+    peer.on('t:cam.capture', (m) => { if (m && m.on === false) pp.ended(); });
+    svc.phonePhoto = pp;
+    svc.takePhoto = () => pp.take();
+  }
   // File Sharing › TwinDesk Drive (shared/drive-host.js, docs/drive.md): nothing of it is loaded until it's on.
   svc.loadDrive = () => svc.drive || (svc.drive = require('../shared/drive-host.js').create({
     settings, save: () => store.saveSettings(settings), me: id.macId, meName: id.macName, userData: app.getPath('userData'),
@@ -1128,6 +1141,7 @@ app.whenReady().then(() => {
   });
   svc.drop.on('batch', (b) => {
     liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerLabel() }) : '');
+    if (b.kind === 'send' && svc.phonePhoto && svc.phonePhoto.arrived(b.placed)) return; // Take a photo: copied
     if (svc.rz && svc.rz.received(b)) return; // a document taken here: it opens
     if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
   });

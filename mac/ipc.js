@@ -174,6 +174,9 @@ function setupIpc(ctx) {
         for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
       } else ctx.phoneViews.openCamera(opts);
     },
+    takePhoto() { // Camera › Take a photo with the phone (shared/phonephoto.js)
+      return !!ctx.takePhoto && ctx.takePhoto();
+    },
     phoneListCameras() {
       return ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : [];
     },

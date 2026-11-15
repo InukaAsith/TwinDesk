@@ -39,6 +39,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   Multi-device).
 - **Put received files on the clipboard** (Files, off unless switched on): files sent to this
   computer are ready to paste with ⌘V or Ctrl+V.
+- **Take a photo with the phone** (Camera, with an Android phone): the phone's camera opens, and
+  the photo comes to the computer already copied, ready to paste into a document or a chat.
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

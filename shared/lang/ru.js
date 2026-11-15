@@ -2308,4 +2308,11 @@
   "Put received files on the clipboard": "Класть полученные файлы в буфер обмена",
   "Files sent here are ready to paste with ⌘V": "Присланные сюда файлы сразу вставляются через ⌘V",
   "Files sent here are ready to paste with Ctrl+V": "Присланные сюда файлы сразу вставляются через Ctrl+V",
+  "Take a photo": "Сделать фото",
+  "Take a photo with the phone": "Сделать фото телефоном",
+  "Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files": "Откроется его камера. Фото придёт сюда, уже скопированным для вставки, и сохранится с полученными файлами",
+  "Take the photo on your phone": "Сделайте фото на телефоне",
+  "Photo copied, ready to paste": "Фото скопировано, можно вставлять",
+  "Photo saved, not copied: {error}": "Фото сохранено, но не скопировано: {error}",
+  "Connect your phone": "Подключите телефон",
 });

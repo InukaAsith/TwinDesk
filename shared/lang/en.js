@@ -2309,4 +2309,11 @@
   "Put received files on the clipboard": "Put received files on the clipboard",
   "Files sent here are ready to paste with ⌘V": "Files sent here are ready to paste with ⌘V",
   "Files sent here are ready to paste with Ctrl+V": "Files sent here are ready to paste with Ctrl+V",
+  "Take a photo": "Take a photo",
+  "Take a photo with the phone": "Take a photo with the phone",
+  "Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files": "Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files",
+  "Take the photo on your phone": "Take the photo on your phone",
+  "Photo copied, ready to paste": "Photo copied, ready to paste",
+  "Photo saved, not copied: {error}": "Photo saved, not copied: {error}",
+  "Connect your phone": "Connect your phone",
 });

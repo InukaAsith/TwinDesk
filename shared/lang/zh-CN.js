@@ -2309,4 +2309,11 @@
   "Put received files on the clipboard": "将收到的文件放到剪贴板",
   "Files sent here are ready to paste with ⌘V": "发送到这里的文件可直接用 ⌘V 粘贴",
   "Files sent here are ready to paste with Ctrl+V": "发送到这里的文件可直接用 Ctrl+V 粘贴",
+  "Take a photo": "拍照",
+  "Take a photo with the phone": "用手机拍照",
+  "Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files": "手机相机会打开。照片会传到这里，已复制可直接粘贴，并保存在收到的文件中",
+  "Take the photo on your phone": "请在手机上拍照",
+  "Photo copied, ready to paste": "照片已复制，可直接粘贴",
+  "Photo saved, not copied: {error}": "照片已保存，但未复制：{error}",
+  "Connect your phone": "请连接你的手机",
 });

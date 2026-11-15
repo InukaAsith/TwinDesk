@@ -132,7 +132,12 @@
 
       const note = UI.note('info', '');
       note.setAttribute('data-literal', '');
-      body.append(picCard, vCard, ourCard, note);
+      // Take a photo with the phone (shared/phonephoto.js): its camera app opens, the photo comes
+      // here onto the clipboard. Where the app has it (one-to-one), with an Android phone.
+      const photoBtn = UI.button(tr('Take a photo'), () => api.takePhoto && api.takePhoto());
+      const photoRow = UI.row(tr('Take a photo with the phone'), tr('Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files'), [photoBtn]);
+      const photoCard = UI.card('', [photoRow]);
+      body.append(photoCard, picCard, vCard, ourCard, note);
 
       let listed = false;
       return (s) => {
@@ -170,6 +175,7 @@
         startBtn.disabled = !c.on || (!on && !!why);
         startBtn.title = !on && why ? UI.fill(why) : '';
         facingSeg.el.hidden = !phone;
+        photoCard.hidden = !(phone && api.takePhoto && s.phone && s.phone.connected);
         rotate.disabled = !on;
         mirror.set(!!v.mirror);
         qualityRow.hidden = !phone;

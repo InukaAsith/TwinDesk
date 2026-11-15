@@ -2308,4 +2308,11 @@
   "Put received files on the clipboard": "Alınan dosyaları panoya koy",
   "Files sent here are ready to paste with ⌘V": "Buraya gönderilen dosyalar ⌘V ile yapıştırılmaya hazır",
   "Files sent here are ready to paste with Ctrl+V": "Buraya gönderilen dosyalar Ctrl+V ile yapıştırılmaya hazır",
+  "Take a photo": "Fotoğraf çek",
+  "Take a photo with the phone": "Telefonla fotoğraf çek",
+  "Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files": "Kamerası açılır. Fotoğraf buraya gelir, yapıştırmaya hazır kopyalanır ve alınan dosyalarla saklanır",
+  "Take the photo on your phone": "Fotoğrafı telefonunuzda çekin",
+  "Photo copied, ready to paste": "Fotoğraf kopyalandı, yapıştırmaya hazır",
+  "Photo saved, not copied: {error}": "Fotoğraf kaydedildi, kopyalanmadı: {error}",
+  "Connect your phone": "Telefonunuzu bağlayın",
 });

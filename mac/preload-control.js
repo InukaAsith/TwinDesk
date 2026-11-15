@@ -10,7 +10,7 @@ const ACTIONS = [
   'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti', 'setModules', 'deckSave', 'deckTry',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost', 'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup',
-  'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneCamera', 'phoneListCameras', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
+  'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneCamera', 'takePhoto', 'phoneListCameras', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',
   'deviceDo', 'setOverview', 'setChats', 'notifReply', 'adbQr', // the redesign: Overview, General › Overview, Messages, QR codes
   'webSet', 'webNewCode', 'webAllow', 'webChooseFolder', 'webForget', 'webDisconnect', 'webRename', 'webSendText', 'webSendFiles', 'webChooseFiles', 'webDeleteItem', 'webClearChat', 'webStopScreen', 'webStopCam', 'webShowScr', 'webAudio', 'webRemotePad', 'webOpenItem', 'webSaveItem', 'webCopy', 'webShareSet', 'webShareFolder', // TwinDesk Web (shared/web/webwire.js)
   'iosSign', 'iosSignIpa', // TwinDesk iPhone (shared/iossign.js)

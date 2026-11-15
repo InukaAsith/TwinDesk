@@ -377,6 +377,7 @@ function start() {
   });
   fileRecv.onBatch = (b) => {
     live.done('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), t('From {name}', { name: peerName() }));
+    if (b.kind === 'send' && phonePhoto && phonePhoto.arrived(b.placed)) return; // Take a photo: copied
     if (rezume && rezume.received(b)) return; // a document taken here: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
@@ -428,7 +429,7 @@ function start() {
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
   web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ takePhoto: () => !!phonePhoto && phonePhoto.take(), loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     iosSign: () => iosSign, devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -531,6 +532,16 @@ async function startHost(guest, tries = 0) {
 // through adb, not the helper.
 function startPhone(server, pairing) {
   const pl = new PhoneLink(link, server);
+  {
+    const { PhonePhoto, copyPicture } = require('../shared/phonephoto.js');
+    phonePhoto = new PhonePhoto({
+      send: (m) => pl.sendToClient(m),
+      phoneOn: () => !!(pl.current && pl.current.os === P.OS.ANDROID),
+      popup: (key, vars) => hud && hud.show('driven', { key, vars }),
+      copy: (f) => copyPicture(require('electron'), f),
+    });
+    pl.on('t:cam.capture', (m) => { if (m && m.on === false) phonePhoto.ended(); });
+  }
   phone = new Phone({ server: pl, raw: server, discovery, pairing });
   setupHub(pl);
   phone.on('change', pushState);
@@ -605,6 +616,7 @@ function startPhone(server, pairing) {
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
 let hub = null;
 let phoneLink = null; // phone-link.js, the phone's session (startPhone)
+let phonePhoto = null; // Camera › Take a photo with the phone (shared/phonephoto.js), made in startPhone
 let callwin = null;
 // Features loaded only while their switch is on: made (and applied) when it's first turned on.
 // Audio › Media controls: what plays on the phone.

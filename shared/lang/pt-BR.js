@@ -2308,4 +2308,11 @@
   "Put received files on the clipboard": "Pôr os arquivos recebidos na área de transferência",
   "Files sent here are ready to paste with ⌘V": "Os arquivos enviados para cá ficam prontos para colar com ⌘V",
   "Files sent here are ready to paste with Ctrl+V": "Os arquivos enviados para cá ficam prontos para colar com Ctrl+V",
+  "Take a photo": "Tirar foto",
+  "Take a photo with the phone": "Tirar foto com o celular",
+  "Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files": "A câmera dele abre. A foto vem para cá, copiada e pronta para colar, e fica com os arquivos recebidos",
+  "Take the photo on your phone": "Tire a foto no celular",
+  "Photo copied, ready to paste": "Foto copiada, pronta para colar",
+  "Photo saved, not copied: {error}": "Foto salva, não copiada: {error}",
+  "Connect your phone": "Conecte seu celular",
 });
