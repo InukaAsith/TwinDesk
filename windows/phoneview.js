@@ -278,7 +278,8 @@ class PhoneViews extends EventEmitter {
     // At least 2 pixels per point (sharp at 100% scaling); the dpi keeps 1 dp = 1 point, so the
     // app's text is as big as this computer's. The window's resizes use the same rule.
     const scale = Math.max(2, screen.getPrimaryDisplay().scaleFactor || 1);
-    const newDisplay = `${Math.round(w * scale)}x${Math.round(h * scale)}/${Math.round(160 * scale)}`;
+    const [dw, dh] = require('../shared/appsize.js').appSize(w * scale, h * scale); // a phone-like size (shared/appsize.js)
+    const newDisplay = `${dw}x${dh}/${Math.round(160 * scale)}`;
     this._open({ kind: 'app', app: pkg, title: name || pkg, width: w + c.w, height: h + c.h, opts: this.bridge.sessionOpts('app', { newDisplay }) });
   }
 
@@ -635,7 +636,7 @@ class PhoneViews extends EventEmitter {
         }
         break;
       case 'resize': // an app window changed size: its virtual display follows (flex)
-        if (v.kind === 'app' && m.w > 50 && m.h > 50) s.resizeDisplay(Math.round(m.w), Math.round(m.h));
+        if (v.kind === 'app' && m.w > 50 && m.h > 50) s.resizeDisplay(...require('../shared/appsize.js').appSize(m.w, m.h)); // a phone-like size (shared/appsize.js)
         break;
       case 'swipe':
         if (typeof m.dir === 'string') this._swipe(v, m.dir);

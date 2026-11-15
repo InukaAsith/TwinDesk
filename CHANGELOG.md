@@ -61,6 +61,11 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - A phone on wireless debugging found by name (`adb-…(2)._adb-tls-connect`) kept its state, and
   Mount no longer took it for a phone on the USB cable.
 
+### Fixed
+
+- Phone app windows open and resize to a phone-like size (a multiple of 16, no shape past 22:9):
+  some apps, a phone maker's Camera among them, stopped on odd sizes.
+
 ## 3.2.1 (unreleased)
 
 Ideas from [@rahulpatel902](https://github.com/rahulpatel902)'s list of suggestions (#231), in
