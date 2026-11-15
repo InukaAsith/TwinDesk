@@ -97,7 +97,11 @@ class PhoneDrive extends EventEmitter {
     // adb only while a phone is linked or one is on the cable (asked of the system, not adb).
     const here = this.adb.available && (this.phone.connected || await usbadb.present());
     const list = here ? await this.adb.run(['devices', '-l'], { timeout: 5000 }) : { out: '' };
-    const usb = list.out.split('\n').slice(1).map((l) => l.trim().split(/\s+/)).find((p) => p.length >= 2 && !p[0].includes(':') && !p[0].startsWith('emulator-'));
+    // "serial<TAB>state model:…": split at the tab, as a wireless debugging serial from mDNS has
+    // spaces and no ':' ("adb-R5CT-x (2)._adb-tls-connect._tcp") and isn't the cable.
+    const usb = list.out.split('\n').slice(1).map((l) => l.replace(/\r$/, '').split('\t'))
+      .filter((p) => p.length >= 2 && p[0].trim()).map(([serial, rest]) => [serial.trim(), ...rest.trim().split(/\s+/)])
+      .find((p) => !p[0].includes(':') && !p[0].includes('._adb-tls') && !p[0].startsWith('emulator-'));
     if (usb) {
       const [serial, state] = usb;
       const model = (usb.find((w) => w.startsWith('model:')) || '').slice(6).replace(/_/g, ' ');
