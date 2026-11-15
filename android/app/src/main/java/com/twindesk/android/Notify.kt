@@ -413,7 +413,9 @@ object Notify {
 
     // Files on their way (progress) and when they are here (open / show).
     // up: going to the computer (the upload arrow).
-    fun files(ctx: Context, key: Int, title: String, text: String, progress: Int?, open: Intent?, up: Boolean = false, cancel: String? = null) {
+    // While it moves, on Android 16+: a Live Update (promoted ongoing: on the lock screen and as a chip
+    // in the status bar with the percent), unless the user turned those off for TwinDesk.
+    fun files(ctx: Context, key: Int, title: String, text: String, progress: Int?, open: Intent?, up: Boolean = false, cancel: String? = null, pause: String? = null) {
         val b = Notification.Builder(ctx, CH_FILES)
             .setSmallIcon(if (up) (if (progress != null) android.R.drawable.stat_sys_upload else android.R.drawable.stat_sys_upload_done)
                 else if (progress != null) android.R.drawable.stat_sys_download else android.R.drawable.stat_sys_download_done)
@@ -422,7 +424,15 @@ object Notify {
             .setOnlyAlertOnce(true)
             .setOngoing(progress != null)
             .setAutoCancel(progress == null)
-        if (progress != null) b.setProgress(100, progress, progress < 0)
+        if (progress != null) {
+            if (Build.VERSION.SDK_INT >= 36) {
+                b.setStyle(Notification.ProgressStyle().setProgress(progress.coerceAtLeast(0)).setProgressIndeterminate(progress < 0).setStyledByProgress(true))
+                b.setRequestPromotedOngoing(true)
+                if (progress >= 0) b.setShortCriticalText("$progress%")
+            } else b.setProgress(100, progress, progress < 0)
+        }
+        // pause: the batch id; Pause stops it, the rest waits on the Files page (Files.pause)
+        if (progress != null && pause != null) b.addAction(Notification.Action.Builder(null, tr("Pause"), action(ctx, ActionReceiver.FILES_PAUSE, 0x20000 + key, pause)).build())
         // cancel: the batch id; Cancel stops it on both ends (Files.cancel)
         if (progress != null && cancel != null) b.addAction(Notification.Action.Builder(null, tr("Cancel"), action(ctx, ActionReceiver.FILES_CANCEL, 0x10000 + key, cancel)).build())
         if (open != null) b.setContentIntent(PendingIntent.getActivity(ctx, key, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
