@@ -3,8 +3,8 @@
 // (Android 10+, through a screen capture grant, asked for on the phone each time), Opus through
 // MediaCodec, over the session (phone.sound). The computer asks for it (phone.sound.want) while
 // "Play this device's sound" is on and adb can't carry it; when adb can, it says off again.
-// Apps that don't allow capture (some streaming apps, calls) stay silent there, and the sound keeps
-// playing on the phone as well: only adb can move it off the phone.
+// Apps that don't allow capture (some streaming apps, calls) stay silent there. The phone's own
+// speaker: Quiet below (Sound › Only on the computer, on by default).
 // The same grant shows the screen there (Mirror.kt): SoundService holds it for either or both, and
 // one Start covers both when they're asked for together.
 package com.twindesk.android
@@ -38,6 +38,8 @@ class PhoneSound(core: Core) : Feature(core) {
     @Volatile var wanted = false; private set // the computer asks for it
     val on get() = SoundService.running?.soundOn == true
     @Volatile var error = ""; private set
+
+    init { Quiet.back(core) } // a capture that ended with the app (a crash, a forced stop): the volume comes back
 
     override fun onClosed() = want(false)
 
@@ -236,6 +238,7 @@ class SoundService : Service() {
         codec = if (codecs != null) "opus" else "pcm"
         r.startRecording()
         capturing = true
+        Quiet.hush(core)
         thread = Thread({ loop(r) }, "td-sound").apply { start() }
     }
 
@@ -280,6 +283,7 @@ class SoundService : Service() {
     }
 
     private fun endSound() {
+        if (capturing) Quiet.back(core)
         capturing = false
         runCatching { thread?.join(500) }
         thread = null
@@ -314,5 +318,41 @@ class SoundService : Service() {
         fun stop(ctx: Context) {
             runCatching { ctx.stopService(Intent(ctx, SoundService::class.java)) }
         }
+    }
+}
+
+// The phone's speaker while its sound plays on the computer (Sound › Only on the computer). Android's
+// playback capture is a fixed-volume mix, so the media volume at 0 silences the speaker and not the
+// computer. The volume to give back is kept in the store until it's given back, so a capture that
+// ended with the app (a crash) still gets it back on the next start. If the person turned the volume
+// up meanwhile, that's what they want: it stays.
+object Quiet {
+    private const val KEY = "sound.quiet.was"
+    fun on(core: Core) = core.store.flag("sound.quiet", true)
+    fun setOn(core: Core, v: Boolean) {
+        core.store.setFlag("sound.quiet", v)
+        if (SoundService.running?.soundOn == true) { if (v) hush(core) else back(core) }
+        core.changed()
+    }
+
+    private fun am(core: Core) = core.ctx.getSystemService(android.media.AudioManager::class.java)
+
+    fun hush(core: Core) {
+        if (!on(core)) return
+        runCatching {
+            val a = am(core)
+            val now = a.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+            if (core.store.prefsString(KEY, "").isEmpty()) core.store.setPrefsString(KEY, now.toString())
+            if (now != 0) a.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, 0, 0)
+        }
+    }
+
+    fun back(core: Core) {
+        val was = core.store.prefsString(KEY, "").toIntOrNull() ?: return
+        runCatching {
+            val a = am(core)
+            if (a.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) a.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, was, 0)
+        }
+        core.store.setPrefsString(KEY, "")
     }
 }

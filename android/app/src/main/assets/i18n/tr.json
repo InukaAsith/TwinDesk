@@ -1167,5 +1167,8 @@
   "‹ Back": "‹ Geri",
   "‹ Up": "‹ Yukarı",
   "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘, Ctrl gibi çalışır; ⌘C kopyalar, ⌘V yapıştırır",
-  "Search button": "Arama düğmesi"
+  "Search button": "Arama düğmesi",
+  "Only on {name}": "Yalnızca {name} üzerinde",
+  "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "Kablosuz hata ayıklama olmadan, bu telefon sesi orada çalarken medya sesini kısar ve sonra geri açar.",
+  "This phone stays quiet while it plays on the computer.": "Bilgisayarda çalarken bu telefon sessiz kalır."
 }

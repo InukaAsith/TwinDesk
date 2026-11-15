@@ -1167,5 +1167,8 @@
   "‹ Back": "‹ Voltar",
   "‹ Up": "‹ Acima",
   "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ funciona como Ctrl, então ⌘C copia e ⌘V cola",
-  "Search button": "Botão de pesquisa"
+  "Search button": "Botão de pesquisa",
+  "Only on {name}": "Só no {name}",
+  "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "Sem a depuração por Wi-Fi, este celular abaixa o volume de mídia enquanto o som toca lá e volta depois.",
+  "This phone stays quiet while it plays on the computer.": "Este celular fica em silêncio enquanto toca no computador."
 }

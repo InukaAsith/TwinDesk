@@ -1167,5 +1167,8 @@
   "‹ Back": "‹ 返回",
   "‹ Up": "‹ 上一级",
   "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴",
-  "Search button": "搜索按钮"
+  "Search button": "搜索按钮",
+  "Only on {name}": "仅在 {name} 上",
+  "Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after.": "未使用无线调试时，此手机在声音于对方播放期间调低媒体音量，结束后再调回。",
+  "This phone stays quiet while it plays on the computer.": "在电脑上播放时，此手机保持静音。"
 }

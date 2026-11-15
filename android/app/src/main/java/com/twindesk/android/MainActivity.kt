@@ -1641,6 +1641,7 @@ private fun SoundPage(core: Core, v: Int) {
         @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         DirHead(me, true, name, false)
         SwitchRow(tr("Play this device’s sound on {name}", "name" to name), soundHint(core), core.sync.get("audio", "out"), first = true) { core.sync.set("audio", "out", it) }
+        SwitchRow(tr("Only on {name}", "name" to name), tr("Without wireless debugging, this phone turns its media volume down while its sound plays there, and back up after."), Quiet.on(core)) { Quiet.setOn(core, it) }
         SoundStart(core)
     }
     Note(tr("Audio from screen sharing plays in the screen view. See Screen › Playback."))
@@ -1661,7 +1662,7 @@ private fun SoundStart(core: Core) {
     if (core.mirror.wanted && !core.mirror.on) MacRow(tr("Show this screen"), core.mirror.error.ifEmpty { tr("Android asks once to share the screen") }) { Primary(tr("Start")) { core.sound.start(ctx) } }
     else if (core.mirror.on) MacRow(tr("Screen shared"), tr("Close its window on the computer, or Stop, to end it.")) { Secondary(tr("Stop")) { core.sound.stop() } }
     if (core.sound.wanted && !core.sound.on) MacRow(tr("Start the sound"), tr("Android asks for permission to capture audio")) { Primary(tr("Start")) { core.sound.start(ctx) } }
-    else if (core.sound.on) MacRow(tr("Captured sound"), tr("Audio also plays on this phone. Use wireless debugging to play it only on the computer.")) { Secondary(tr("Stop")) { core.sound.stop() } }
+    else if (core.sound.on) MacRow(tr("Captured sound"), if (Quiet.on(core)) tr("This phone stays quiet while it plays on the computer.") else tr("Audio also plays on this phone. Use wireless debugging to play it only on the computer.")) { Secondary(tr("Stop")) { core.sound.stop() } }
 }
 
 // ---- General ----
