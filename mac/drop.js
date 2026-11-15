@@ -207,6 +207,12 @@ class Drop extends EventEmitter {
     }
     const segs = String(m.rel || m.name).split('/').filter(Boolean).map(cleanName);
     if (!segs.length) segs.push(cleanName(m.name));
+    // The rest of a paused or cut-off batch resends only files that never arrived, so a file of its
+    // own name here now is another one (sent meanwhile): this one gets a new name, nothing is replaced.
+    if (b.cont && segs.length === 1 && b.tops.has(segs[0])) {
+      const old = path.join(b.dir, b.tops.get(segs[0]));
+      if (fs.existsSync(old)) { b.tops.delete(segs[0]); const i = b.placed.indexOf(old); if (i >= 0) b.placed.splice(i, 1); }
+    }
     if (!b.tops.has(segs[0])) {
       // "Photos 2" when Photos is already there, or another batch is still writing it (one .part for two)
       const reserved = new Set([...this.batches.values()].filter((o) => o !== b).flatMap((o) => o.placed).map((x) => x.toLowerCase()));

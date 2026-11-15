@@ -232,6 +232,12 @@ class FileRecv {
     if (b.count !== count || b.kind !== m.drop || b.offered >= b.count) return refuse('bad_message');
     b.offered++;
     const segs = rel.split('/');
+    // The rest of a paused or cut-off batch resends only files that never arrived, so a file of its
+    // own name here now is another one (sent meanwhile): this one gets a new name, nothing is replaced.
+    if (b.cont && segs.length === 1 && b.tops.has(segs[0])) {
+      const old = path.join(b.dir, b.tops.get(segs[0]));
+      if (fs.existsSync(old)) { b.tops.delete(segs[0]); const i = b.placed.indexOf(old); if (i >= 0) b.placed.splice(i, 1); }
+    }
     if (!b.tops.has(segs[0])) { // "Photos 2" when Photos is already there
       const reserved = new Set([...this.placements, ...[...this.batches.values()].flatMap((batch) => batch.placed).map((p) => p.toLowerCase())]);
       const top = uniquePath(b.dir, segs[0], reserved);

@@ -192,6 +192,12 @@ class FileRecv {
       this.expected.delete(m.batch);
     }
     const segs = rel.split('/');
+    // The rest of a paused or cut-off batch resends only files that never arrived, so a file of its
+    // own name here now is another one (sent meanwhile): this one gets a new name, nothing is replaced.
+    if (b.cont && segs.length === 1 && b.tops.has(segs[0])) {
+      const old = path.join(b.dir, b.tops.get(segs[0]));
+      if (fs.existsSync(old)) { b.tops.delete(segs[0]); const i = b.placed.indexOf(old); if (i >= 0) b.placed.splice(i, 1); }
+    }
     if (!b.tops.has(segs[0])) { // "Photos 2" when Photos is already there
       // Not a name another batch is still writing (two "IMG_1.jpg" at once would share one .part).
       const reserved = new Set([...this.batches.values()].filter((o) => o !== b).flatMap((o) => o.placed));
