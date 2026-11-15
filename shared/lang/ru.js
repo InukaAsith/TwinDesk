@@ -2278,4 +2278,8 @@
   "Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.": "Файл изменили на двух устройствах сразу? Сохраняются обе версии: одна с пометкой «(conflict from …)». Удалённые файлы попадают в Корзину.",
   "{count} file has a name this computer can’t hold: it stays on the other devices": "У {count} файла имя, которое этот компьютер не поддерживает: он остаётся на других устройствах",
   "{count} files have names this computer can’t hold: they stay on the other devices": "У файлов ({count}) имена, которые этот компьютер не поддерживает: они остаются на других устройствах",
+  "Skip adbd": "Без adbd",
+  "Low latency": "Низкая задержка",
+  "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "По Wi-Fi изображение, звук и ввод идут прямо на этот компьютер в зашифрованном виде, а не через отладку по Wi-Fi. Если телефон недоступен, используется обычный способ",
+  "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "Кодировщик телефона отправляет каждый кадр сразу, как он готов. Некоторые телефоны это игнорируют",
 });

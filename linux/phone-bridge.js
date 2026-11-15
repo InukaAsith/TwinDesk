@@ -832,7 +832,8 @@ class PhoneBridge extends EventEmitter {
   // Options for a new screen/app/camera session, from settings.
   sessionOpts(kind, extra = {}) {
     const ph = this.getSettings().phone || {};
-    const base = { video: true, control: true, maxFps: 60, videoBitRate: (ph.bitrateMbps || 8) * 1000000 };
+    // direct: Skip adbd over wireless debugging (scrcpy.js); lowLatency: the encoder's low-latency profile.
+    const base = { video: true, control: true, maxFps: 60, videoBitRate: (ph.bitrateMbps || 8) * 1000000, direct: !!ph.direct, lowLatency: !!ph.lowLatency };
     if (kind === 'camera') return { ...base, audio: false, stayAwake: true, flex: false, ...extra };
     if (kind === 'screen') return { ...base, audio: !!ph.sound, maxSize: ph.maxSize || 0, stayAwake: true, ...extra };
     return { ...base, audio: false, flex: true, ...extra };

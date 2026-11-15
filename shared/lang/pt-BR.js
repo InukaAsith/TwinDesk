@@ -2278,4 +2278,8 @@
   "Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.": "Alterado em dois dispositivos ao mesmo tempo? Os dois são mantidos: um como “(conflict from …)”. Arquivos apagados vão para a Lixeira.",
   "{count} file has a name this computer can’t hold: it stays on the other devices": "{count} arquivo tem um nome que este computador não aceita: ele fica nos outros dispositivos",
   "{count} files have names this computer can’t hold: they stay on the other devices": "{count} arquivos têm nomes que este computador não aceita: eles ficam nos outros dispositivos",
+  "Skip adbd": "Pular o adbd",
+  "Low latency": "Baixa latência",
+  "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "Pelo Wi-Fi, a imagem, o som e a entrada vão direto para este computador, criptografados, em vez de passar pela depuração sem fio. Volta ao modo normal sozinho se o telefone não puder ser alcançado",
+  "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "O codificador do telefone envia cada quadro assim que fica pronto. Alguns telefones ignoram isso",
 });

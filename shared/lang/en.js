@@ -2279,4 +2279,8 @@
   "Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.": "Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.",
   "{count} file has a name this computer can’t hold: it stays on the other devices": "{count} file has a name this computer can’t hold: it stays on the other devices",
   "{count} files have names this computer can’t hold: they stay on the other devices": "{count} files have names this computer can’t hold: they stay on the other devices",
+  "Skip adbd": "Skip adbd",
+  "Low latency": "Low latency",
+  "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached",
+  "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it",
 });

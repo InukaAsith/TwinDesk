@@ -83,6 +83,10 @@ async function main() {
   if (!fs.existsSync(path.join(LIN, 'vendor', 'scrcpy-server'))) {
     copy(path.join(ROOT, 'mac', 'vendor', 'scrcpy-server'), path.join(STAGE, 'linux', 'vendor', 'scrcpy-server'));
   }
+  // Mirroring › Skip adbd: the relay on the phone beside it (native/adb-relay).
+  if (!fs.existsSync(path.join(LIN, 'vendor', 'twindesk-relay.jar'))) {
+    copy(path.join(ROOT, 'mac', 'vendor', 'twindesk-relay.jar'), path.join(STAGE, 'linux', 'vendor', 'twindesk-relay.jar'));
+  }
   await fetchAdb(path.join(STAGE, 'linux', 'vendor', 'adb'));
   // The Android app with notification access, installed over the phone's through wireless debugging
   // (phone-bridge.js installFull).

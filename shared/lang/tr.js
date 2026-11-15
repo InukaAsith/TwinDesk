@@ -2278,4 +2278,8 @@
   "Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.": "Bir dosya iki cihazda aynı anda mı değişti? İkisi de saklanır: biri “(conflict from …)” adıyla. Silinen dosyalar Çöp Kutusu'na veya Geri Dönüşüm Kutusu'na gider.",
   "{count} file has a name this computer can’t hold: it stays on the other devices": "{count} dosyanın adı bu bilgisayarda kullanılamıyor: diğer cihazlarda kalır",
   "{count} files have names this computer can’t hold: they stay on the other devices": "{count} dosyanın adı bu bilgisayarda kullanılamıyor: diğer cihazlarda kalırlar",
+  "Skip adbd": "adbd'yi atla",
+  "Low latency": "Düşük gecikme",
+  "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "Wi-Fi üzerinden görüntü, ses ve giriş kablosuz hata ayıklama yerine şifreli olarak doğrudan bu bilgisayara gider. Telefona ulaşılamazsa kendiliğinden eski yönteme döner",
+  "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "Telefonun kodlayıcısı her kareyi hazır olur olmaz gönderir. Bazı telefonlar bunu yok sayar",
 });

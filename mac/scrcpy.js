@@ -12,14 +12,25 @@
 //
 // Events: 'name' (device name), 'size' ({width, height}), 'video' ({config, key, pts, data}),
 //         'audioCodec' (id), 'audio' ({config, pts, data}), 'clipboard' (text), 'ready', 'closed' (why).
+//
+// Skip adbd (opts.direct, Mirroring's setting, off by default): over wireless debugging the sockets
+// don't go through adb's forward but through a small relay on the phone (native/adb-relay, started
+// by adb as the shell user beside the server) straight over the Wi-Fi, AES-GCM with a key given to
+// it over adb. If the relay can't start or can't be reached (a VPN, client isolation), the session
+// falls back to adb's forward on its own. Over USB it always uses the forward.
+// Low latency (opts.lowLatency): the encoder holds at most one frame and runs at realtime priority.
 'use strict';
 
 const net = require('net');
+const path = require('path');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
+const { Duplex } = require('stream');
 const { EventEmitter } = require('events');
 
 const VERSION = '5.0.1';
 const DEVICE_JAR = '/data/local/tmp/twindesk-scrcpy-server.jar';
+const RELAY_JAR = '/data/local/tmp/twindesk-relay.jar';
 const CODEC = { h264: 0x68323634, h265: 0x68323635, av1: 0x00617631, opus: 0x6f707573, aac: 0x00616163, flac: 0x666c6163, raw: 0x00726177 };
 const TYPE = {
   INJECT_KEYCODE: 0, INJECT_TEXT: 1, INJECT_TOUCH: 2, INJECT_SCROLL: 3, BACK_OR_SCREEN_ON: 4,
@@ -31,6 +42,9 @@ const TYPE = {
 const ACTION = { DOWN: 0, UP: 1, MOVE: 2, HOVER_MOVE: 7, HOVER_EXIT: 10 };
 const POINTER_MOUSE = -1n;
 const pushed = new Map(); // serial -> the push of the jar (one per run, shared by every session)
+const relayPushed = new Map(); // serial -> the push of the relay
+// Only a phone on wireless debugging (adb connect's "1.2.3.4:5555") has an address to reach directly.
+const directHost = (serial) => { const m = /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/.exec(String(serial)); return m ? m[1] : null; };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const localError = (messageKey, messageVars = {}) => Object.assign(
@@ -39,7 +53,8 @@ const localError = (messageKey, messageVars = {}) => Object.assign(
 
 class Session extends EventEmitter {
   // opts: {video, audio, control, maxSize, maxFps, videoBitRate, newDisplay ('WxH/dpi'), flex, displayId,
-  //        clipboardAutosync, audioSource ('output'|'playback'), powerOn, stayAwake, keepActive}
+  //        clipboardAutosync, audioSource ('output'|'playback'), powerOn, stayAwake, keepActive,
+  //        direct (skip adbd), lowLatency}
   constructor(adb, serial, opts = {}) {
     super();
     this.adb = adb;
@@ -67,7 +82,16 @@ class Session extends EventEmitter {
     this.jar = `/data/local/tmp/twindesk-scrcpy-${this.scid}.jar`;
     const cp = await adb.shell(serial, `cp ${DEVICE_JAR} ${this.jar}`, { timeout: 8000 });
     if (cp.code !== 0) throw localError('Couldn’t prepare the screen helper ({error})', { error: cp.err.trim() || cp.out.trim() });
-    this.port = await adb.forward(serial, `scrcpy_${this.scid}`);
+    const kinds = [opts.video && 'video', opts.audio && 'audio', opts.control && 'control'].filter(Boolean);
+    const host = opts.direct && directHost(serial);
+    if (host) {
+      this.direct = await this._startRelay(host, kinds.length).catch((e) => {
+        console.log(`[scrcpy ${this.scid}] relay: ${e.message}; through adb's forward`);
+        this._stopRelay();
+        return null;
+      });
+    }
+    if (!this.direct) this.port = await adb.forward(serial, `scrcpy_${this.scid}`);
     // Only what differs from the server's defaults (video, audio, control, cleanup, power_on,
     // send_dummy_byte, clipboard_autosync and vd_destroy_content on; h264; audio from the output):
     // some Samsung phones (Galaxy A05, Android 15) abort in the video encoder's setup when the
@@ -82,6 +106,8 @@ class Session extends EventEmitter {
     if (opts.video && opts.maxSize) args.push(`max_size=${opts.maxSize | 0}`);
     if (opts.video && opts.maxFps) args.push(`max_fps=${opts.maxFps}`);
     if (opts.video && opts.videoBitRate) args.push(`video_bit_rate=${opts.videoBitRate | 0}`);
+    // KEY_LATENCY 1: the encoder hands each frame out before taking the next; KEY_PRIORITY 0: realtime.
+    if (opts.video && opts.lowLatency) args.push('video_codec_options=latency=1,priority=0');
     if (opts.audio && opts.audioSource && opts.audioSource !== 'output') args.push(`audio_source=${opts.audioSource}`);
     // An app's own display: no Android taskbar or status bar on it, only the app (the window has Back).
     if (opts.newDisplay != null) args.push(`new_display=${opts.newDisplay}`, 'vd_system_decorations=false');
@@ -111,7 +137,6 @@ class Session extends EventEmitter {
     this.proc.stderr.on('data', keep);
     this.proc.on('exit', () => this._close('the screen helper stopped', { messageKey: 'the screen helper stopped', messageVars: {} }));
 
-    const kinds = [opts.video && 'video', opts.audio && 'audio', opts.control && 'control'].filter(Boolean);
     let first = true;
     for (const kind of kinds) {
       const sock = first ? await this._connectFirst() : await this._connect();
@@ -125,10 +150,57 @@ class Session extends EventEmitter {
     this.emit('ready');
   }
 
+  // The relay on the phone (Skip adbd): pushed once per run, then started with the session's key on
+  // its stdin; resolves to {host, port, key} once it listens.
+  async _startRelay(host, count) {
+    const { adb, serial } = this;
+    const fs = require('fs');
+    const local = [adb.server && path.join(path.dirname(adb.server), 'twindesk-relay.jar'), path.join(__dirname, 'vendor', 'twindesk-relay.jar'),
+      path.join(__dirname, '..', 'mac', 'vendor', 'twindesk-relay.jar')].find((p) => p && fs.existsSync(p));
+    if (!local) throw new Error('no relay in this build');
+    if (!relayPushed.has(serial)) relayPushed.set(serial, adb.push(serial, local, RELAY_JAR));
+    const r = await relayPushed.get(serial);
+    if (r.code !== 0) { relayPushed.delete(serial); throw new Error(`push: ${(r.err || r.out).trim()}`); }
+    const key = crypto.randomBytes(16);
+    const p = this.relay = spawn(adb.bin, ['-s', serial, 'shell', `CLASSPATH=${RELAY_JAR} app_process / com.twindesk.relay.Relay scrcpy_${this.scid} ${count}`],
+      { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    p.on('error', () => {});
+    p.stdin.on('error', () => {});
+    p.stdin.write(key.toString('hex') + '\n'); // stdin stays open: when it closes the relay ends
+    return new Promise((resolve, reject) => {
+      let out = '';
+      const t = setTimeout(() => reject(new Error('it didn’t start')), 6000);
+      p.stdout.on('data', (d) => {
+        out += d;
+        const m = /TDRELAY (\d+)/.exec(out);
+        if (m) { clearTimeout(t); resolve({ host, port: Number(m[1]), key }); }
+      });
+      p.stderr.on('data', (d) => { if (/ERROR|Exception/.test(String(d))) console.log(`[scrcpy ${this.scid}] relay: ${String(d).trim()}`); });
+      p.on('exit', () => { clearTimeout(t); reject(new Error('it stopped')); });
+    });
+  }
+
+  _stopRelay() {
+    if (!this.relay) return;
+    try { this.relay.stdin.end(); } catch {}
+    try { this.relay.kill(); } catch {}
+    this.relay = null;
+  }
+
   // adb accepts the forward before the server listens: retry until the dummy byte arrives.
   async _connectFirst() {
+    let unreachable = 0;
     for (let i = 0; i < 100 && !this.closed; i++) {
-      const s = await this._connect().catch(() => null);
+      const s = await this._connect().catch(async (e) => {
+        // The relay can't be reached at all (not just the server not listening yet): adb's forward.
+        if (this.direct && e.unreachable && ++unreachable >= 2) {
+          console.log(`[scrcpy ${this.scid}] relay unreachable (${e.message}); through adb's forward`);
+          this.direct = null;
+          this._stopRelay();
+          this.port = await this.adb.forward(this.serial, `scrcpy_${this.scid}`).catch(() => null);
+        }
+        return null;
+      });
       if (s) {
         const ok = await new Promise((resolve) => {
           // Paused, so nothing that follows the dummy byte is lost before _reader takes over.
@@ -149,6 +221,7 @@ class Session extends EventEmitter {
   }
 
   _connect() {
+    if (this.direct) return connectSealed(this.direct);
     return new Promise((resolve, reject) => {
       const s = net.connect({ host: '127.0.0.1', port: this.port });
       s.setNoDelay(true);
@@ -254,6 +327,7 @@ class Session extends EventEmitter {
     this.closeMeta = metadata;
     for (const s of this.sockets) s.destroy();
     if (this.proc) try { this.proc.kill(); } catch {}
+    this._stopRelay();
     if (this.port) this.adb.unforward(this.serial, this.port);
     if (this.jar) this.adb.shell(this.serial, `rm -f ${this.jar}`, { timeout: 5000 });
     this.emit('closed', why, metadata);
@@ -444,4 +518,98 @@ class Session extends EventEmitter {
   }
 }
 
-module.exports = { Session, TYPE, ACTION, CODEC };
+// A socket to the phone's relay (Skip adbd), as a Duplex of the plain bytes: the relay's salt first,
+// then sealed frames each way (native/adb-relay/Relay.java). Rejects with e.unreachable when the
+// relay can't be reached; a connection the relay closes later (the server not listening yet) just
+// ends, as a forward's does.
+class Sealed extends Duplex {
+  constructor(tcp, key) {
+    super();
+    this.tcp = tcp;
+    this.key = key;
+    this.tx = 0n;
+    this.rx = 0n;
+  }
+
+  static nonce(dir, n) {
+    const b = Buffer.alloc(12);
+    b[0] = dir;
+    b.writeBigUInt64BE(n, 4);
+    return b;
+  }
+
+  seal(p) {
+    const c = crypto.createCipheriv('aes-128-gcm', this.key, Sealed.nonce(0, this.tx++));
+    const ct = Buffer.concat([c.update(p), c.final(), c.getAuthTag()]);
+    const h = Buffer.alloc(4);
+    h.writeUInt32BE(ct.length, 0);
+    return Buffer.concat([h, ct]);
+  }
+
+  open(ct) {
+    const d = crypto.createDecipheriv('aes-128-gcm', this.key, Sealed.nonce(1, this.rx++));
+    d.setAuthTag(ct.subarray(ct.length - 16));
+    return Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()]);
+  }
+
+  setNoDelay() {}
+
+  _write(chunk, enc, cb) {
+    for (let o = 0; o < chunk.length; o += 256 * 1024) this.tcp.write(this.seal(chunk.subarray(o, o + 256 * 1024)));
+    cb();
+  }
+
+  _read() {}
+
+  _destroy(err, cb) {
+    this.tcp.destroy();
+    cb(err);
+  }
+}
+
+function connectSealed({ host, port, key }) {
+  return new Promise((resolve, reject) => {
+    const tcp = net.connect({ host, port });
+    tcp.setNoDelay(true);
+    let buf = Buffer.alloc(0);
+    let s = null;
+    let settled = false;
+    const fail = (e) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      tcp.destroy();
+      reject(Object.assign(e, { unreachable: true }));
+    };
+    const timer = setTimeout(() => fail(new Error('timed out')), 3000);
+    tcp.on('error', (e) => (settled ? s && s.destroy() : fail(e)));
+    tcp.on('close', () => {
+      if (!settled) return fail(new Error('closed'));
+      if (s && !s.destroyed) { s.push(null); s.destroy(); }
+    });
+    tcp.on('data', (d) => {
+      buf = buf.length ? Buffer.concat([buf, d]) : d;
+      if (!s) {
+        if (buf.length < 16) return;
+        const k = crypto.createHmac('sha256', key).update(buf.subarray(0, 16)).digest().subarray(0, 16);
+        buf = buf.subarray(16);
+        s = new Sealed(tcp, k);
+        settled = true;
+        clearTimeout(timer);
+        tcp.write(s.seal(Buffer.from('TDR1')));
+        resolve(s);
+      }
+      while (buf.length >= 4) {
+        const len = buf.readUInt32BE(0);
+        if (buf.length < 4 + len) break;
+        const ct = buf.subarray(4, 4 + len);
+        buf = buf.subarray(4 + len);
+        let p;
+        try { p = s.open(ct); } catch { return void s.destroy(); }
+        s.push(p);
+      }
+    });
+  });
+}
+
+module.exports = { Session, TYPE, ACTION, CODEC, connectSealed };

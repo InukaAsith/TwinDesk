@@ -220,6 +220,10 @@ function normalize(s) {
       enterSends: bool(ph.enterSends, true),
       uhid: bool(ph.uhid, false), // Type as a hardware keyboard (shared/uhidkbd.js)
       arrowSwipe: bool(ph.arrowSwipe, false),
+      // Mirroring over wireless debugging: past adbd straight over the Wi-Fi (scrcpy.js), and the
+      // encoder's low-latency profile.
+      direct: bool(ph.direct, false),
+      lowLatency: bool(ph.lowLatency, false),
     },
     // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);
     // bleWifiOff: none at all while the session is on the same Wi-Fi (blepolicy.js wifiQuiet)

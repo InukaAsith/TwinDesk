@@ -132,6 +132,10 @@ async function main() {
   if (!fs.existsSync(path.join(WIN, 'vendor', 'scrcpy-server'))) {
     copy(path.join(ROOT, 'mac', 'vendor', 'scrcpy-server'), path.join(STAGE, 'windows', 'vendor', 'scrcpy-server'));
   }
+  // Mirroring › Skip adbd: the relay on the phone beside it (native/adb-relay).
+  if (!fs.existsSync(path.join(WIN, 'vendor', 'twindesk-relay.jar'))) {
+    copy(path.join(ROOT, 'mac', 'vendor', 'twindesk-relay.jar'), path.join(STAGE, 'windows', 'vendor', 'twindesk-relay.jar'));
+  }
   await fetchAdb(path.join(STAGE, 'windows', 'vendor', 'adb'));
   // TwinDesk for Android with notification access, which this PC installs over wireless debugging.
   const dist = path.join(ROOT, 'android', 'dist');

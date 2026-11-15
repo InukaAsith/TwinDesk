@@ -43,6 +43,13 @@ TwinDesk's own look.
   light, zoom in and out, and Snapshot for the picture as it shows.
 - **Keep on top:** a pin in the toolbar of the phone's screen, the phone's camera and a computer's
   shared screen keeps that window over the others.
+- **Skip adbd** (Mirroring, off unless you switch it on): over Wi-Fi the phone's screen, sound and input go straight to
+  this computer, encrypted, instead of through wireless debugging's adbd and adb server. Its
+  biggest gain is while adb is busy: with a big file going to the phone, a tap showed up in about
+  90 ms instead of 210 ms (400 ms at the slow end). If the phone can't be reached directly, it goes
+  through wireless debugging as before. Over USB nothing changes.
+- **Low latency** (Mirroring, off): asks the phone's video encoder to send each frame as soon as
+  it's ready. Some phones ignore it.
 
 ### Fixes
 

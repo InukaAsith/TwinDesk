@@ -2279,4 +2279,8 @@
   "Changed on two devices at once? Both are kept: one as “(conflict from …)”. Deleted files go to the Trash or Recycle Bin.": "两台设备同时改了同一个文件？两份都会保留：其中一份名为“(conflict from …)”。删除的文件会进入废纸篓或回收站。",
   "{count} file has a name this computer can’t hold: it stays on the other devices": "{count} 个文件的名称在这台电脑上无法使用：它留在其他设备上",
   "{count} files have names this computer can’t hold: they stay on the other devices": "{count} 个文件的名称在这台电脑上无法使用：它们留在其他设备上",
+  "Skip adbd": "跳过 adbd",
+  "Low latency": "低延迟",
+  "Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached": "通过 Wi-Fi 时，画面、声音和输入加密后直接发送到这台电脑，而不经过无线调试。连不上手机时会自动改回原方式",
+  "The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it": "手机的编码器每帧一就绪就立即发送。部分手机会忽略此设置",
 });
