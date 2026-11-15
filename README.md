@@ -12,13 +12,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0.apk"><img src=".github/assets/buttons/get-android.png" width="240" alt="Get it for Android"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1.apk"><img src=".github/assets/buttons/get-android.png" width="240" alt="Get it for Android"></a>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Setup-3.2.0.exe"><img src=".github/assets/buttons/get-windows.png" width="240" alt="Download for Windows"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-Setup-3.2.1.exe"><img src=".github/assets/buttons/get-windows.png" width="240" alt="Download for Windows"></a>
   <br>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-arm64.dmg"><img src=".github/assets/buttons/get-dmg.png" width="240" alt="Download for macOS (Apple silicon)"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-arm64.dmg"><img src=".github/assets/buttons/get-dmg.png" width="240" alt="Download for macOS (Apple silicon)"></a>
   <a href="#homebrew"><img src=".github/assets/buttons/get-brew.png" width="240" alt="Install with Homebrew"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-x86_64.AppImage"><img src=".github/assets/buttons/get-linux.png" width="240" alt="Download for Linux (AppImage)"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-x86_64.AppImage"><img src=".github/assets/buttons/get-linux.png" width="240" alt="Download for Linux (AppImage)"></a>
 </p>
 
 <p align="center">
@@ -120,8 +120,8 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 **🍎 macOS**<br><sub>13 Ventura or later</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-arm64.dmg"><img src="https://img.shields.io/badge/Apple_Silicon-.dmg-000000?style=for-the-badge" alt="macOS, Apple Silicon"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-x64_Intel.dmg"><img src="https://img.shields.io/badge/Intel-.dmg-555555?style=for-the-badge" alt="macOS, Intel"></a><br>
 <a href="#homebrew"><img src="https://img.shields.io/badge/Homebrew-cask-fbb040?style=for-the-badge" alt="macOS, Homebrew"></a>
 
 </td>
@@ -129,29 +129,29 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 **🪟 Windows**<br><sub>10 and 11</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Setup-3.2.0.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Setup-3.2.0-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Portable-3.2.0.exe"><img src="https://img.shields.io/badge/Portable-.exe-3a6ea5?style=for-the-badge" alt="Windows, Portable"></a><br>
-<sub>Portable runs without installing (<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-Portable-3.2.0-arm64.exe">ARM64</a>). <a href="#full-kvm">Full KVM</a>: <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-Setup-3.2.0.exe">x64</a> · <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-Setup-3.2.0-arm64.exe">ARM64</a></sub>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-Setup-3.2.1.exe"><img src="https://img.shields.io/badge/x64-Installer-0078d4?style=for-the-badge" alt="Windows, x64"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-Setup-3.2.1-arm64.exe"><img src="https://img.shields.io/badge/ARM64-Installer-005a9e?style=for-the-badge" alt="Windows on ARM"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-Portable-3.2.1.exe"><img src="https://img.shields.io/badge/Portable-.exe-3a6ea5?style=for-the-badge" alt="Windows, Portable"></a><br>
+<sub>Portable runs without installing (<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-Portable-3.2.1-arm64.exe">ARM64</a>). <a href="#full-kvm">Full KVM</a>: <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-FullKVM-Setup-3.2.1.exe">x64</a> · <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-FullKVM-Setup-3.2.1-arm64.exe">ARM64</a></sub>
 
 </td>
 <td width="20%" align="center" valign="top">
 
 **🐧 Linux**<br><sub>X11 and Wayland, x86_64</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-amd64.deb"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-.deb-d70a53?style=for-the-badge" alt="Linux, .deb"></a><br>
 <a href="#apt"><img src="https://img.shields.io/badge/Debian_·_Ubuntu-APT-a80030?style=for-the-badge" alt="Linux, APT repository"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/twindesk-bin-3.2.0-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
-<sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)<br><a href="#full-kvm">Full KVM</a>: <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-3.2.0-amd64.deb">.deb</a> · <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-FullKVM-3.2.0-x86_64.AppImage">AppImage</a></sub>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-x86_64.AppImage"><img src="https://img.shields.io/badge/Any_distro-AppImage-f0a30a?style=for-the-badge" alt="Linux, AppImage"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/twindesk-bin-3.2.1-1-x86_64.pkg.tar.zst"><img src="https://img.shields.io/badge/Arch-pkg.tar.zst-1793d1?style=for-the-badge" alt="Linux, Arch package"></a><br>
+<sub>NixOS: <code>nix run github:InukaAsith/TwinDesk</code> (<a href="#nixos--nix-flakes">more</a>)<br><a href="#full-kvm">Full KVM</a>: <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-FullKVM-3.2.1-amd64.deb">.deb</a> · <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-FullKVM-3.2.1-x86_64.AppImage">AppImage</a></sub>
 
 </td>
 <td width="20%" align="center" valign="top">
 
 **🤖 Android**<br><sub>10 or later, phones and tablets</sub>
 
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk-3.2.0-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1.apk"><img src="https://img.shields.io/badge/Phone_app-.apk-3ddc84?style=for-the-badge" alt="Android app"></a><br>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk-3.2.1-full.apk"><img src="https://img.shields.io/badge/Full_app-.apk-1b8a4c?style=for-the-badge" alt="Android full app"></a><br>
 <sub>The full app adds notifications, texts and Accessibility; the computer can install it for you</sub>
 
 </td>
@@ -161,7 +161,7 @@ A native Rust input lane over UDP, a parallel file engine, hardware video. [How]
 
 <a href="#twindesk-web"><img src="https://img.shields.io/badge/No_app-twindesk.local-5e5ce6?style=for-the-badge" alt="TwinDesk Web, no app"></a><br>
 <a href="#altstore"><img src="https://img.shields.io/badge/AltStore-source-1c8bd6?style=for-the-badge" alt="AltStore source"></a><br>
-<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
+<a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk.ipa"><img src="https://img.shields.io/badge/Sideload-.ipa-555555?style=for-the-badge" alt="iPhone IPA"></a>
 
 </td>
 </tr>
@@ -306,6 +306,14 @@ Also new: **search everywhere** (<kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd>), **Arrange
 **General › Modules** to switch off pages you don't use, **encrypted clipboard and notification
 history**, **updates that install in place**, a **tour** for someone new, and a Linux touchpad that
 drives the other device. Everything, with credits, is in the [changelog](CHANGELOG.md).
+
+**New in 3.2.1:** your phone's notifications can show in **TwinDesk's own pop-ups**, with Reply, the
+app's buttons, pictures, a code's Copy and progress that fills in place (the system's stay the
+default). Each phone app can be shown, kept out of pop-ups or hidden, pop-ups can pause on a
+schedule, and one-time codes can copy themselves. **Messages** gets contact pictures, search and
+Delete; **Photos** gets albums; a call **pauses the music** on the computer; the phone's **camera**
+gets mirror, quality, light, zoom and a snapshot; mirroring can **skip adbd** over Wi-Fi; and the
+phone's screen and a shared screen can **stay on top**.
 
 <a name="iphone-headline"></a>
 
@@ -457,7 +465,7 @@ the IPA with your own Apple ID:
 <p>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=altstore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src=".github/assets/buttons/get-altstore.png" width="240" alt="Add to AltStore"></a><br>
   <a href="https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://raw.githubusercontent.com/InukaAsith/TwinDesk/main/altstore.json"><img src="https://img.shields.io/badge/Add_to-SideStore-8e5cf6?style=for-the-badge&logo=apple&logoColor=white" alt="Add to SideStore"></a>
-  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.0/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
+  <a href="https://github.com/InukaAsith/TwinDesk/releases/download/v3.2.1/TwinDesk.ipa"><img src="https://img.shields.io/badge/Download-.ipa-555555?style=for-the-badge" alt="Download the IPA"></a>
 </p>
 
 1. Install [AltStore](https://altstore.io) or [SideStore](https://sidestore.io) on the iPhone.
@@ -703,7 +711,9 @@ storage, the latest clipboard and its most-used apps.
 Answer, decline and make your phone's calls from the computer. When it rings, a small window shows
 who's calling with **Answer** and **Decline**. With Bluetooth, the computer becomes **the phone's
 headset**, so you talk and listen right there. Read and reply to your texts, WhatsApp, Instagram and
-Telegram on **Messages**, pictures included.
+Telegram on **Messages**, pictures included, with the people's pictures, search, Delete and a
+choice of which chat apps show. A call can **pause what plays on the computer** and play it again
+when it ends (Calls › Sound).
 
 <p align="center">
   <img src=".github/assets/v25-phone.jpg" alt="The Mac's Calls, Phone apps, Mirroring and Remote pages for the connected phone" width="100%">
@@ -722,7 +732,8 @@ Install .apk files on the phone straight from the computer.
 
 ## 🖼 Photos, phone files and Mount
 
-Browse the phone's **photos and videos**, open any of them big, save or remove one or many.
+Browse the phone's **photos and videos** by **album**, open any of them big (or in another app with
+**Open with…**), save or remove one or many.
 **Phone Files** browses the phone's whole storage: save, upload, rename, delete, or just drop files
 on the page. **Shared folders work both ways.** On a Mac, **Mount** puts the phone in Finder like
 any drive.
@@ -732,7 +743,8 @@ any drive.
 ## 📷 Phone camera and microphone
 
 The phone's **back or front camera** in a window on the computer or as the **TwinDesk Camera**
-webcam in any video call, and the phone **as a microphone** for the computer.
+webcam in any video call, mirrored if you like, from 720p to 4K, with its light, zoom and a
+snapshot, and the phone **as a microphone** for the computer.
 
 ## 🖱 Your mouse and keyboard on the phone
 
@@ -778,7 +790,9 @@ to show what's on your screen. Use touch as the mouse, or switch on touchpad mod
 - **Files.** *Send to computer* or *Copy to computer* from any Android app's share menu; from the
   computer, the Share menu, *Send to*, a drag across the screen edge or <kbd>⌃⌥C</kbd> / <kbd>Ctrl+Alt+C</kbd>.
 - **Clipboard.** Text and pictures both ways, the phone's screenshots included.
-- **Notifications.** The phone's on the computer as native notifications, per app, and the other way around.
+- **Notifications.** The phone's on the computer as native notifications, or in TwinDesk's own
+  pop-ups with Reply, buttons, pictures and live progress; per app Show, No pop-ups or Hide, paused
+  on a schedule, one-time codes copied by themselves; and the other way around.
 - **Media.** What's playing on the phone, with play, pause, skip and seek on the computer, and the
   computer's Now Playing on the phone.
 - **Sound.** The phone's sound on the computer, or the computer's on the phone.
@@ -1369,8 +1383,8 @@ npm start                       # run from source
 npm run dist && npm run dmg     # build TwinDesk.app and TwinDesk-<version>-<arch>.dmg in mac/dist/
 ```
 
-The disk image is named after the app inside it: `TwinDesk-3.2.0-arm64.dmg` for Apple Silicon,
-`TwinDesk-3.2.0-x64.dmg` for Intel. Keep `arm64` and `x64` in the names on a release: the in-app
+The disk image is named after the app inside it: `TwinDesk-3.2.1-arm64.dmg` for Apple Silicon,
+`TwinDesk-3.2.1-x64.dmg` for Intel. Keep `arm64` and `x64` in the names on a release: the in-app
 updater picks the one for each Mac by them. `npm run dist:x64 && npm run dmg` (or `npm run
 dmg:intel`) builds the Intel app from an Apple Silicon Mac, cross-compiling the helpers and tdfast.
 
