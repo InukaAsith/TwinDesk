@@ -6,8 +6,10 @@
 //                update. Anything Windows keeps after this run (Start menu and Send to shortcuts,
 //                Explorer's menu, the login item) starts the app's alias instead, which the package
 //                keeps (%LOCALAPPDATA%\Microsoft\WindowsApps\TwinDesk.exe), never process.execPath.
-//   its identity the package's own app id; toasts, the calls' phone line (callaudio.js) and twindesk:
-//                links (declared in the manifest) go with it.
+//   its identity the package's own app id; toasts and twindesk: links (declared in the manifest) go
+//                with it.
+//   no calls     no calls' sound over Bluetooth (callaudio.js): Partner Center doesn't grant the
+//                phone line capabilities. Calls says it's the installer's only (main.js audioStore).
 //   updates      only the Store's (shared/updates.js: store).
 // Files and the registry are not virtualized (desktop6 in the manifest): settings stay in
 // %APPDATA%\MacShare, shared with an NSIS install of TwinDesk on the same PC.
@@ -21,6 +23,8 @@ const AUMID = FAMILY + '!TwinDesk'; // the manifest's Application Id
 
 // What a shortcut, a menu or the login item should start.
 function launcher() {
+  const portable = require('./portable');
+  if (portable.EXE) return portable.EXE; // TwinDesk Portable: its .exe, not the copy it unpacked this run
   if (!STORE) return process.execPath;
   const local = process.env.LOCALAPPDATA || path.join(require('os').homedir(), 'AppData', 'Local');
   return path.join(local, 'Microsoft', 'WindowsApps', 'TwinDesk.exe');

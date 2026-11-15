@@ -18,14 +18,14 @@ const DragRecv = require('../dragrecv');
 Module._load = load;
 function fixture(t) {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'twindesk-drag-'));
-  const dir = root, sent = [], events = [];
-  const link = Object.assign(new EventEmitter(), { send: m => { sent.push(m); return true; } });
+  const dir = root, sent = [], events = [], fx = {};
+  const link = Object.assign(new EventEmitter(), { send: m => { sent.push(m); return true; }, fx: { pressure() {}, receiver: h => { fx.hook = h; } } });
   const helper = Object.assign(new EventEmitter(), { send: (name, m) => events.push({ name, ...m }) });
   const recv = new DragRecv({ link, helper, settings: { files: { edgeDrag: true, acceptFromMac: true } }, isDriven: () => true, onChange() {} });
   t.after(() => { recv.cancel('cancelled', false); fs.rmSync(dir, { recursive: true, force: true }); });
   const paste = list => recv.startPaste({ batch: 'b', list, dir: 'target' });
   const offer = (rel = 'a', id = 'id', size = 1) => recv._offer({ drop: 'paste', batch: 'b', rel, id, size });
-  return { recv, sent, events, paste, offer, dir };
+  return { recv, sent, events, paste, offer, dir, fx };
 }
 for (const list of [[{ rel: 'a', size: '1' }], [{ rel: 'a', size: 0.5 }], [{ rel: 'A', size: 1 }, { rel: 'a', size: 1 }], [{ rel: 'a', size: 1 }, { rel: 'a/b', size: 1 }]]) {
   test('invalid tree leaves no temporary files: ' + JSON.stringify(list), t => {
@@ -80,4 +80,17 @@ test('late error from old drag cannot affect replacement', t => {
   f.paste([{ rel: 'new', size: 1 }]); const count = f.events.length;
   file.out.emit('error', new Error('late')); assert.equal(f.events.length, count);
   assert.equal(f.recv.cur.files.has('new'), true);
+});
+test('fast files never fill the file the helper streams to Windows', async t => {
+  const f = fixture(t); f.paste([{ rel: 'a', size: 4 }]); f.offer('a', 'id', 4);
+  const file = f.recv.cur.byId.get('id');
+  const target = await f.fx.hook.target('id', 4);
+  assert.notEqual(target, file.tmp);
+  fs.writeFileSync(target, Buffer.alloc(4)); // the engine sizes it up front, ranges still arriving
+  assert.equal(fs.statSync(file.tmp).size, 0); // the helper sees nothing to read yet
+  fs.writeFileSync(target, 'abcd');
+  const closed = new Promise(resolve => file.out.once('close', resolve));
+  f.fx.hook.adopt('id'); await closed;
+  assert.equal(file.state, 'ok'); assert.equal(fs.readFileSync(file.tmp, 'utf8'), 'abcd');
+  assert.equal(f.events.at(-1).state, 'ok');
 });

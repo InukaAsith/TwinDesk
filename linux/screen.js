@@ -83,6 +83,12 @@ class Screen {
         this.onChange();
       }
       if (m.fullScreen) this.win.setFullScreen(!this.win.isFullScreen());
+      // Keep on top (the bar's button): this window over the others, for this time.
+      if (m.pin) {
+        const on = !this.win.isAlwaysOnTop();
+        this.win.setAlwaysOnTop(on);
+        this.win.webContents.send('pinned', on);
+      }
       if (typeof m.share === 'boolean' || m.mode) this.control({ share: m.share, mode: m.mode });
       if (m.share === false) this.close(); // Stop on the bar: nothing left to watch
     });

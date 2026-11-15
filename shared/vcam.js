@@ -59,6 +59,18 @@ class VirtualCam {
     return [0, 90, 180, 270].includes(r) ? r : 0;
   }
 
+  get mirror() {
+    return this.cfg().mirror === true;
+  }
+
+  // Camera › Mirror: left and right swapped, here, in its window and in the virtual camera.
+  setMirror(on) {
+    this.cfg().mirror = !!on;
+    this.save();
+    this._tellAll();
+    this.onChange();
+  }
+
   // Camera › Rotate: a quarter turn clockwise.
   turn() {
     this.cfg().rotate = (this.rotate + 90) % 360;
@@ -68,7 +80,7 @@ class VirtualCam {
   }
 
   _tell(wc) {
-    if (!wc.isDestroyed()) wc.send('vcam:set', { vcam: this.ready, rotate: this.rotate });
+    if (!wc.isDestroyed()) wc.send('vcam:set', { vcam: this.ready, rotate: this.rotate, mirror: this.mirror });
   }
 
   _tellAll() {
@@ -228,6 +240,7 @@ class VirtualCam {
       live: this.ready && Date.now() - this.lastFrame < LIVE_MS, // the virtual camera gets frames
       picture: Date.now() - this.lastPreview < LIVE_MS, // the tab gets its picture
       rotate: this.rotate,
+      mirror: this.mirror,
     };
   }
 

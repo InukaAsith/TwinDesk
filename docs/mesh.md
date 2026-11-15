@@ -156,9 +156,36 @@ the phone on the Mac's right, every screen shows exactly that. The rules are in 
   driven computer passes input on only to a phone of its own). From this device, a tile is reached
   (next to a reached one, connected here), blocked (the pointer stops before it: red when it is in the
   mesh but not connected here) or behind (only past a blocked one: greyed).
-- The editor (Multi-device tab, every desktop app) draws the grid with every device as a tile; click a
-  tile and a free cell, or a tile and another tile to swap. Android stores and relays the layout and
-  can end a chain; editing from the phone is not in this change.
+- Phones don't hold the layout: the computers place them (with a phone's usual screen size on the
+  monitor map) and a phone ends a chain. Editing from a phone is not in this change.
+
+### The monitor map (#225)
+
+The grid says who is next to whom; the monitor map says where along the edge. Each computer sends its
+own monitors (`layout.displays { displays }`, its own pool `displays`, the usual stamps; Electron's
+`screen`, logical pixels, `shared/screen-mesh.js` `fromElectron`), and every device keeps the others'
+(`multi.json` `layoutDisplays`) for when they are offline. The rules are in `shared/layout-world.js`
+(pure, tested, also loaded by the editor).
+
+- The layout may carry `world: { deviceId: { x, y } }`: each device's top-left in one plane of pixels,
+  its monitors laid out inside as its OS lays them out. Without `world` (no one dragged yet) the world is
+  made from the grid (`fromCells`: rows side by side, touching), so nothing changes for a layout from
+  before. The grid is still kept from the world (`arrange`), so an older app sees the same order.
+- A crossing stretch (`stretches`) is a part of one of our outer edges with another device's monitor
+  right against it. The pointer may walk through an offline device's monitors to the next one, but
+  never over empty space, and never through an inner edge between two of our own monitors. A monitor
+  that only touches by a corner gives no stretch.
+- The helpers watch only those stretches: `kvmConfig` / `armReturn` carry `zones`, side-tagged
+  (`"right:0.0000-0.9093,top:0.7083-0.9583"`, or `"none"`), offsets along the bounding box of the
+  device's monitors. An older helper ignores `zones` and watches the whole side, as before.
+- A crossing (`cross`) maps the offset to the device beyond and to its own offset along the opposite
+  side, so the pointer comes out at the same place on the desk. `kvm.home` may carry `side`: the
+  driver's side it comes back through (any of them now). `kvm.next` keeps the driven device's own offset;
+  the owner maps it again from that device.
+- The editor draws every device's monitors in the plane and lights this device's stretches. Dropping a
+  device (`move`, `drop`) pushes it off the others, closes a gap so it touches one, and lines its edges
+  and centre up with the others' within a few pixels. Line up again (`resetWorld`) drops `world`, back
+  to the grid's arrangement. Arrow keys move the focused device.
 
 ## Transports per link (Bluetooth, Wi-Fi, USB cable)
 
@@ -239,7 +266,7 @@ messages.
 
 ## Not in this change
 
-Editing the layout from the phone, the phone as an extra monitor, multi-monitor edges, binary file chunks.
+Editing the layout from the phone, the phone as an extra monitor, binary file chunks.
 
 ## The phone in the mesh (Android)
 

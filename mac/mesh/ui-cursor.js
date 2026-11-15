@@ -30,6 +30,22 @@ UI.tab({
     const drive = UI.switch((v) => api.setKvm({ driveOther: v }), { label: I18n.t('Use here, control there') });
     const driven = UI.switch((v) => api.setKvm({ beDriven: v }), { label: I18n.t('Let it control this computer') });
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => `${v} px` }, (v) => api.setKvm({ resistancePx: v }));
+    // Hold a key to cross (#230; in Multi-device, this Mac's own mouse and trackpad at its edges) and
+    // the emergency return (#178).
+    const crossingModifier = UI.select([
+      { value: '', label: I18n.t('None') },
+      { value: 'Command', label: '⌘ Command' },
+      { value: 'Control', label: '⌃ Control' },
+      { value: 'Alt', label: '⌥ Option' },
+      { value: 'Shift', label: '⇧ Shift' },
+    ], (v) => api.setKvm({ crossingModifier: v }));
+    crossingModifier.el.setAttribute('aria-label', I18n.t('Hold key to switch'));
+    const emergencyKey = UI.keyRecorder((v) => api.setKeys({ emergencyKeys: v }), {
+      bare: true, allowEscape: true, valid: (v) => {
+        const f = /(?:^|\+)F(\d+)$/.exec(v);
+        return !f || (Number(f[1]) >= 1 && Number(f[1]) <= 20);
+      },
+    });
     const speed = UI.slider({ min: 0.25, max: 4, step: 0.25, format: (v) => `${v.toFixed(2)}×` }, (v) => api.setKvm({ speed: v }));
     const reverse = UI.switch((v) => api.setKvm({ reverseScroll: v }), { label: I18n.t('Reverse scrolling') });
     const gestures = UI.switch((v) => api.setKvm({ gestures: v }), { label: I18n.t('Trackpad gestures') });
@@ -40,6 +56,22 @@ UI.tab({
     const shakeRow = UI.row(I18n.t('Shake to bring the pointer back'), I18n.t('While you use another computer, shake this computer’s mouse or trackpad left and right: the pointer comes back here'), [shake]);
     const ble = UI.switch((v) => api.setKvm({ ble: v }), { label: I18n.t('Over Bluetooth') });
     const bleRow = UI.row(I18n.t('Over Bluetooth'), I18n.t('When {name} isn’t on this network and you’re connected through Bluetooth (slower). Off: nothing crosses until you’re on Wi-Fi again. The same on both'), [ble]);
+    // #158: the pointer and keys over Bluetooth while the rest stays on Wi-Fi (shared/bleinput.js), for
+    // crowded Wi-Fi, with every computer that has it on too. Off by default; turning it on asks first.
+    let bleInputOn = false;
+    const bleInput = UI.switch((v) => {
+      if (!v) return api.setNet({ bleInput: false });
+      bleInput.set(bleInputOn);
+      window.MeshIntro.ask({
+        title: I18n.t('Mouse and keyboard over Bluetooth?'),
+        lines: [I18n.t('The pointer and keys go over Bluetooth; screens, files and the clipboard stay on Wi-Fi. For crowded Wi-Fi, where the pointer stutters or lags in bursts.'),
+          I18n.t('Bluetooth then stays on beside the Wi-Fi for the whole session. On many computers the two share one radio and can interfere, slowing the Wi-Fi (on 2.4 GHz especially), and the pointer moves at Bluetooth’s pace.')],
+        hint: I18n.t('Turn it on on both computers, with Bluetooth with computers on (General). The session connects again through Bluetooth to start it.'),
+        ok: I18n.t('Turn on'),
+      }, () => api.setNet({ bleInput: true }));
+    }, { label: I18n.t('Mouse and keyboard over Bluetooth') });
+    const bleInputRow = UI.row(I18n.t('Mouse and keyboard over Bluetooth'), '', [bleInput]);
+    bleInputRow.hidden = !(window.MeshIntro && window.MeshIntro.ask);
 
     // A phone as the peer: how the pointer and keys reach it (settings.phone.input, the phone's own toggle too).
     const via = UI.segmented([{ value: 'adb', label: 'ADB' }, { value: 'phone', label: I18n.t('Accessibility') }], (v) => api.setPhone({ input: v, inputPicked: true }));
@@ -52,9 +84,11 @@ UI.tab({
         UI.dir('w2m', [driven2 = peerRow(I18n.t('Use {name}’s mouse and keyboard on {me}'), '', [driven])]),
       ),
       lock.el,
+      UI.card(I18n.t('Emergency return'), [UI.row(I18n.t('Return shortcut'), I18n.t('Stops input sharing and returns the pointer if the input helper responds. Set separately on each Mac.'), [emergencyKey.el])]),
       UI.note('info', I18n.t('Which device each edge of the screen leads to: Multi-device › Layout.')),
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
+        UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when this Mac’s own mouse or trackpad leaves it at an edge.'), [crossingModifier.el]),
         UI.row(I18n.t('Pointer speed here'), I18n.t('Another computer’s mouse on this Mac, and this Mac’s on a phone'), [speed]),
         peerRow(I18n.t('Reverse scrolling from {name}'), '', [reverse]),
         gestureRow,
@@ -62,9 +96,16 @@ UI.tab({
         shakeRow,
       ]),
       UI.card(I18n.t('Not on the same network'), [bleRow]),
+      UI.card(I18n.t('Crowded Wi-Fi'), [bleInputRow]),
     );
 
     return (s) => {
+      if (s.net) {
+        bleInputOn = s.net.bleInput === true;
+        bleInput.set(bleInputOn);
+        bleInputRow.setHint(bleInputOn ? I18n.t('On: the pointer and keys go over Bluetooth whenever the session has it, the rest over Wi-Fi. Needs it on both computers')
+          : I18n.t('For crowded Wi-Fi where the pointer stutters. Off: everything goes over Wi-Fi'));
+      }
       const k = s.kvm;
       if (!k) return;
       const [kind, text] = UI.kvmStatus(s);
@@ -75,6 +116,8 @@ UI.tab({
       drive.set(k.driveOther);
       driven.set(k.beDriven);
       resistance.set(k.resistancePx);
+      crossingModifier.set(k.crossingModifier || '');
+      emergencyKey.set((s.keys && s.keys.emergencyKeys) || 'Control+Alt+Command+Escape');
       speed.set(k.speed);
       reverse.set(k.reverseScroll);
       gestures.set(k.gestures !== false);

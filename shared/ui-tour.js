@@ -21,9 +21,46 @@
   const t = (...a) => I18n.t(...a);
   const KEY = 'td.tour';
   const MAC = /Mac/.test(navigator.platform);
+  // Multi-device (the mesh windows: mac/mesh, windows/mesh, linux/mesh): every device in one list.
+  const MESH = () => !!document.querySelector('.mesh-pill');
 
   // What's new, newest first: shown once when the app's version starts with `v` (3.1.0, 3.1.2…).
   const NEWS = [
+    { v: '3.2', items: [
+      ['TwinDesk pop-ups', 'Pick TwinDesk’s own pop-ups for a phone’s notifications: Reply right there, the app’s buttons, pictures, a one-time code’s Copy and progress that fills in place. In Notifications › Showing here; the system’s stay the default.'],
+      ['Each app its own way', 'Show, No pop-ups or Hide for each phone app, pop-ups paused on a schedule, and codes copied by themselves, kept out of the clipboard’s history.'],
+      ['Messages', 'Pictures of the people you write to, a search box, Delete, a choice of chat apps, and no more “Sending video…” chats.'],
+      ['Albums in Photos', 'Your phone’s albums beside its photos, with covers and counts, and Open or Open with… for a photo.'],
+      ['The player', 'The media card stays small: its chevron slides open back and forward 10 s, the volume and where the sound plays, tinted by the artwork.'],
+      ['Calls pause the music', 'A call on the phone pauses what plays on this computer, and it plays again when the call ends. In Calls › Sound.'],
+      ['Camera', 'Mirror, 720p to 4K, the light, zoom and a snapshot for the phone’s camera.'],
+      ['Keep on top', 'The phone’s screen and a computer’s shared screen can stay over your other windows: the pin in their toolbar.'],
+      ['Deck', 'Tiles on your phone that run shortcuts, media, sound, brightness and Bluetooth on this computer, full screen, with widgets and a window space to arrange your windows.'],
+      ['TwinDesk Drive', 'One folder kept the same on your computers, with no cloud. Each keeps its own copy and works offline. Off until you turn it on, in File Sharing.'],
+      ['Multi-device, out of beta', 'Every computer and phone at once, now with fast files, Camera, Remote, the Deck, ReZume, Drive and a tour of its own.'],
+      ['The monitor map', 'In Multi-device, every device’s monitors in one picture: drag them into place and the pointer crosses where they touch.'],
+      ['Air mouse and Presentation', 'Point the phone to move the pointer, or run your slides from it, with a laser pointer.'],
+      ['Search everywhere', 'Find any setting, shortcut or feature by what it does: the search button beside each page’s title, or {key}.'],
+      ['Arrange the sidebar', 'Put the pages in your own order, in General or by holding the sidebar.'],
+      ['History that stays', 'The clipboard’s and notifications’ history kept across restarts, encrypted, for a day up to a year. Off until you turn it on.'],
+      ['Touchpads and pinch', 'A Linux touchpad drives the other device with taps, scrolling and pinch, and pinching reaches Android phones from a Mac or Linux.'],
+      ['Updates install in place', 'Install now updates TwinDesk without a trip to the download page.'],
+      ['Modules', 'Switch off the pages you don’t use in General › Modules. They aren’t even loaded.'],
+      ['TwinDesk iPhone', 'Install the iPhone app with your own Apple ID from this computer, and keep it refreshed. Opt in.'],
+      ['A tour of TwinDesk', 'For someone new: how to install it on the other device, connect, and what each page does. In General › Tutorial, in Multi-device too.'],
+      ['Hold a key to cross', 'Pick a key on the Mouse page: the pointer leaves this computer at the edge only while you hold it. On every computer, in Multi-device too.'],
+      ['Emergency return', 'A shortcut that brings the mouse and keyboard home and turns sharing off, whatever the other computer is doing. Set it on the Mouse page.'],
+    ], changes: [
+      ['Pointer home on the right monitor', 'Coming back to a computer with two monitors, the pointer comes back on the edge it left from, also after a fast move.'],
+      ['Clipboard', 'Copying the same text again after the other side copied something sends it again, on computers, Android and iPhone.'],
+      ['Pinch on Android', 'Pinching in from a Mac trackpad or a Linux touchpad works, and a long pinch keeps zooming.'],
+      ['Which Mac display a phone mirrors', 'Pick the Mac display an Android phone shows, from the Screen page or the viewer’s toolbar.'],
+      ['Extend at any size', 'Windows: a custom width and height for the Extend screen, from 320 to 7680.'],
+      ['Phone keyboard layouts', 'Multi-device on Windows and Linux: Type as a hardware keyboard, so AZERTY and other layouts reach an Android phone as they are.'],
+      ['Overview cards', 'Cards side by side are as tall as each other.'],
+      ['Arrange', 'The Arrange popup has the same dim and solid panel as Search, without the blur.'],
+      ['Full KVM', 'The login screen keeps working after pairing again, and Full KVM stays at the bottom of the sidebar.'],
+    ] },
     { v: '3.1', items: [
       ['Deck', 'Tiles on your phone that run shortcuts, media, sound, brightness and Bluetooth on this computer, full screen, with widgets and a window space to arrange your windows.'],
       ['Multi-device, out of beta', 'Every computer and phone at once, now with fast files, Camera, Remote, the Deck and ReZume, and phones paired with a QR code.'],
@@ -213,12 +250,13 @@
 
   function demoOn(kind, name) {
     demoOff();
-    const where = document.getElementById(kind === 'pc' ? 'pcs' : 'phones');
+    const where = document.getElementById(kind === 'pc' ? 'pcs' : 'phones') || document.getElementById('phones'); // Multi-device: computers and phones in one list
     if (!where) return null;
     const dot = el('span', { class: 'spin', attrs: { 'aria-hidden': 'true' } });
     const sub = el('span', { class: 'tour-demo-sub', text: t('Connecting…') });
-    demo = el('div', { class: 'phone-tile tour-demo connected' }, [
-      el('span', { class: 'phone-wall tour-demo-wall' }, [UI.icon(kind === 'pc' ? 'display' : 'phone')]),
+    const pc = kind === 'pc';
+    demo = el('div', { class: 'phone-tile tour-demo connected' + (pc && MESH() ? ' computer' : '') }, [
+      el('span', { class: 'phone-wall tour-demo-wall' + (pc && MESH() ? ' computer-wall' : '') }, [UI.icon(pc ? 'display' : 'phone')]),
       el('span', { class: 'phone-text' }, [el('span', { class: 'phone-name', text: name }), sub]),
       dot,
     ]);
@@ -279,6 +317,9 @@
       [['rezume'], 'ReZume', 'Walk to the other computer and carry on with the tab, video or document you were on.'],
     ],
   };
+
+  // Multi-device's own page, last in its tour.
+  const MULTI = [['multi'], 'Multi-device', 'Every computer and phone at once. Arrange their monitors on the map so the pointer crosses where they touch, pick a device in the sidebar to see its pages, or go back to one-to-one here.'];
 
   const pageOf = (ids) => ids.find((id) => document.getElementById('page-' + id));
   const navOf = (id) => document.querySelector(`.nav-item[aria-controls="page-${id}"]`);
@@ -399,6 +440,7 @@
               ? t('Keep both on the same Wi-Fi. Open TwinDesk on the iPhone (or twindesk.local in Safari) and pick this computer, or scan the QR code on this page. Check that both show the same code.')
               : t('Keep both on the same Wi-Fi, or plug the phone in with a cable. Open TwinDesk on the phone and tap this computer, or scan the QR code on this page. Check that both show the same code.'))
             : t('Open TwinDesk on both. The other computer shows up here as Nearby: click it, and check that both show the same code. No shared Wi-Fi? A cable or Bluetooth works too.'),
+          extra: MESH() ? el('p', { class: 'hint', text: t('In Multi-device you pair each one the same way, and every computer and phone you pair is in the sidebar at once.') }) : null,
           art: connectArt(phone ? 'laptop' : 'laptop', phone ? 'phone' : 'laptop'),
           back: install,
           choices: [{ label: t('Show me a demo'), primary: true, go: () => demoStep(0) }],
@@ -406,7 +448,7 @@
       }, 120);
     };
 
-    const list = () => (FEATURES[a.use === 'pc' ? 'pc' : a.os] || []).map(([ids, title, text]) => ({ id: pageOf(ids), title, text })).filter((f) => f.id);
+    const list = () => [...(FEATURES[a.use === 'pc' ? 'pc' : a.os] || []), ...(MESH() ? [MULTI] : [])].map(([ids, title, text]) => ({ id: pageOf(ids), title, text })).filter((f) => f.id);
 
     const demoStep = (i) => {
       const feats = list();
@@ -419,7 +461,9 @@
         screen(card, {
           kicker: t('Demo'),
           title: t('Connected'),
-          text: t('This is how a connected device looks: here in the sidebar, with its ping{battery}. Click it to open its page. The demo isn’t a real connection: the pages next are the real ones, waiting for your device.', { battery: a.use === 'phone' ? t(' and battery') : '' }),
+          text: MESH()
+            ? t('This is how a connected device looks: here in the sidebar, with the others you pair. Click one and the pages show that device. The demo isn’t a real connection: the pages next are the real ones, waiting for your device.')
+            : t('This is how a connected device looks: here in the sidebar, with its ping{battery}. Click it to open its page. The demo isn’t a real connection: the pages next are the real ones, waiting for your device.', { battery: a.use === 'phone' ? t(' and battery') : '' }),
           back: connect,
           choices: [{ label: t('Show me what it can do'), primary: true, go: () => demoStep(1) }],
         });
@@ -461,6 +505,8 @@
 
   // ---- What's new ---------------------------------------------------------------------------------
 
+  const newsList = (rows, key) => el('ul', { class: 'tour-news' }, rows.map(([title, text]) => el('li', {}, [el('strong', { text: t(title) }), el('span', { text: t(text, { key }) })])));
+
   function news(version) {
     if (root) return;
     const n = newsFor(version) || NEWS[0];
@@ -472,20 +518,26 @@
       kicker: t('TwinDesk {version}', { version: version && version.startsWith(n.v) ? version : n.v }),
       title: t('What’s new'),
       wide: true,
-      extra: el('ul', { class: 'tour-news' }, n.items.map(([title, text]) => el('li', {}, [el('strong', { text: t(title) }), el('span', { text: t(text, { key }) })]))),
+      extra: el('div', { class: 'tour-news-wrap' }, [
+        newsList(n.items, key),
+        (n.changes || []).length ? el('h3', { class: 'tour-news-head', text: t('Changes and fixes') }) : null,
+        (n.changes || []).length ? newsList(n.changes, key) : null,
+      ].filter(Boolean)),
       choices: [{ label: t('Show me around'), go: () => { end(); start(); } }, { label: t('Continue'), primary: true, go: end }],
     });
   }
 
   // ---- once, at start ---------------------------------------------------------------------------
 
-  // Someone who already used TwinDesk: anything paired, or anything this window keeps.
+  // Someone who already used TwinDesk: anything paired, or anything this window keeps. Not phones
+  // merely seen nearby: a new install on a network where phones run TwinDesk sees them at once, and
+  // skipped the welcome for it.
   const used = (s) => {
     let kept = 0;
     try { kept = localStorage.length; } catch (_) { kept = 0; }
     const ph = s.phone || {};
     return kept > 0 || (Array.isArray(s.paired) ? s.paired.length > 0 : !!s.paired) || (s.guests || []).length > 0
-      || !!s.client || !!(s.link && s.link.state === 'connected') || !!ph.connected || (ph.nearby || []).length > 0 || (ph.paired || []).length > 0;
+      || !!s.client || !!(s.link && s.link.state === 'connected') || !!ph.connected || (ph.paired || []).length > 0;
   };
 
   const ready = () => {

@@ -40,6 +40,25 @@ assert.strictEqual(pick(both, 'win', 'arm64'), 'TwinDesk-Setup-2.3.0-arm64.exe')
 assert.strictEqual(pick(both, 'linux', 'x64'), 'TwinDesk-2.3.0-x86_64.AppImage');
 assert.strictEqual(pick(both, 'linux', 'x64', 'deb'), 'TwinDesk-2.3.0-amd64.deb');
 
+// One release, every edition (3.2.0 on): Full KVM's and Portable's files listed first on purpose.
+const pickE = (assets, platform, arch, prefer, full) => (pickAsset(assets, platform, arch, prefer, full) || {}).name || null;
+const editions = files('TwinDesk-FullKVM-Setup-3.2.0.exe', 'TwinDesk-FullKVM-Setup-3.2.0-arm64.exe', 'TwinDesk-FullKVM-3.2.0-x86_64.AppImage',
+  'TwinDesk-FullKVM-3.2.0-amd64.deb', 'TwinDesk-Portable-3.2.0.exe', 'TwinDesk-Portable-3.2.0-arm64.exe',
+  'TwinDesk-Setup-3.2.0.exe', 'TwinDesk-Setup-3.2.0-arm64.exe', 'TwinDesk-3.2.0-x86_64.AppImage', 'TwinDesk-3.2.0-amd64.deb', 'TwinDesk-3.2.0-arm64.dmg');
+assert.strictEqual(pickE(editions, 'win', 'x64'), 'TwinDesk-Setup-3.2.0.exe');
+assert.strictEqual(pickE(editions, 'win', 'arm64'), 'TwinDesk-Setup-3.2.0-arm64.exe');
+assert.strictEqual(pickE(editions, 'linux', 'x64'), 'TwinDesk-3.2.0-x86_64.AppImage');
+assert.strictEqual(pickE(editions, 'linux', 'x64', 'deb'), 'TwinDesk-3.2.0-amd64.deb');
+assert.strictEqual(pickE(editions, 'win', 'x64', 'portable'), 'TwinDesk-Portable-3.2.0.exe');
+assert.strictEqual(pickE(editions, 'win', 'arm64', 'portable'), 'TwinDesk-Portable-3.2.0-arm64.exe');
+assert.strictEqual(pickE(editions, 'win', 'x64', '', true), 'TwinDesk-FullKVM-Setup-3.2.0.exe');
+assert.strictEqual(pickE(editions, 'win', 'arm64', '', true), 'TwinDesk-FullKVM-Setup-3.2.0-arm64.exe');
+assert.strictEqual(pickE(editions, 'linux', 'x64', '', true), 'TwinDesk-FullKVM-3.2.0-x86_64.AppImage');
+assert.strictEqual(pickE(editions, 'linux', 'x64', 'deb', true), 'TwinDesk-FullKVM-3.2.0-amd64.deb');
+// A Full KVM build never takes the normal edition's file (a release without Full KVM: no update offered).
+assert.strictEqual(pickE(both, 'win', 'x64', '', true), null);
+assert.strictEqual(pickE(editions, 'mac', 'arm64'), 'TwinDesk-3.2.0-arm64.dmg');
+
 // Release notes formatting (Quotio-style markdown parser)
 const notes = `## What's Changed
 * Fix KVM socket backpressure coalescing by @InukaAsith in #54

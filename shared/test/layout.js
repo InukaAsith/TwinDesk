@@ -236,4 +236,26 @@ const L = require('../layout');
   assert.ok(!L.keepUnknown(L.remove(stored, 'c', 'a'), stored, ['a', 'b', 'c']).cells.c);
 }
 
+// world (#225): carried with the layout, cleaned, part of what is compared, kept through edits.
+{
+  const base = { rev: 3, by: 'a', cells: { a: { x: 0, y: 0 }, b: { x: 1, y: 0 } } };
+  assert.ok(!L.normalize(base).world, 'none until arranged');
+  const w = L.normalize({ ...base, world: { a: { x: 0, y: 0 }, b: { x: 1920.4, y: -10 }, ghost: { x: 5, y: 5 }, bad: { x: 'no' } } });
+  assert.deepStrictEqual(w.world, { a: { x: 0, y: 0 }, b: { x: 1920, y: -10 } }, 'only devices with a cell');
+  assert.notStrictEqual(L.canonical(base), L.canonical(w));
+  const r = L.arrange(base, { a: { x: 0, y: 0 }, b: { x: 0, y: 1080 } }, 'b');
+  assert.ok(r.ok);
+  assert.strictEqual(r.layout.rev, 4);
+  assert.deepStrictEqual(r.layout.world.b, { x: 0, y: 1080 });
+  assert.deepStrictEqual(r.layout.cells, base.cells, 'the grid stays for older apps');
+  assert.ok(!L.arrange(base, { z: { x: 0, y: 0 } }, 'a').ok, 'unknown devices only: nothing');
+  const moved = L.place(r.layout, 'b', 0, 1, 'a');
+  assert.deepStrictEqual(moved.layout.world, r.layout.world, 'a grid edit keeps the world');
+  const gone = L.remove(r.layout, 'b', 'a');
+  assert.deepStrictEqual(gone.world, { a: { x: 0, y: 0 } });
+  assert.deepStrictEqual(L.view(r.layout, ['a', 'b']).world, r.layout.world);
+  const kept = L.keepUnknown(L.normalize({ rev: 5, by: 'a', cells: { a: { x: 0, y: 0 } }, world: { a: { x: 0, y: 0 } } }), r.layout, ['a']);
+  assert.deepStrictEqual(kept.world.b, { x: 0, y: 1080 }, 'a device only others know keeps its place on the map');
+}
+
 console.log('layout: passed');

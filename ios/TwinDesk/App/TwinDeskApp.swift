@@ -6,11 +6,18 @@ import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        NavOrder.migrate()
         Notifier.shared.setUp()
         Core.shared.start()
         // Relaunched in the background by a significant location change: straight back on.
         if launchOptions?[.location] != nil { Core.shared.wake() }
         return true
+    }
+
+    // What the app allows right now (Orientation in Pages.swift): the Deck and the gamepad held
+    // sideways even with Portrait Orientation Lock on, which a geometry request alone didn't do.
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Orientation.mask
     }
 }
 
@@ -39,6 +46,7 @@ struct TwinDeskApp: App {
                 core.clip.appBecameActive()
                 core.hub.appBecameActive()
                 core.files.importInbox()
+                Orientation.reapply() // the Deck or the gamepad still sideways, laid out whole
             case .background:
                 core.setFront(false)
                 Background.shared.enteredBackground()

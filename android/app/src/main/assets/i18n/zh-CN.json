@@ -428,6 +428,7 @@
   "Messages access is required on {name}": "需要 {name} 上的信息访问权限",
   "Middle click": "中键单击",
   "Mirror": "镜像",
+  "Mirror one screen of {name}": "镜像 {name} 的一个屏幕",
   "Mod is ⌘ on a Mac and Ctrl elsewhere. Or record it on the computer’s Deck page.": "Mod 在 Mac 上是 ⌘，在其他系统上是 Ctrl。也可以在电脑的 Deck 页面上录制。",
   "Mode": "模式",
   "Modules": "模块",
@@ -1109,6 +1110,7 @@
   "{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.": "{name} 未通过蓝牙响应。在其上打开 TwinDesk，或将两者连接到同一 Wi-Fi，然后重新配对。",
   "{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.": "{name} 没有响应。在其上打开 TwinDesk，或在那里开启“为其他手机提供连接”。",
   "{name} didn’t arrive": "{name} 未到达",
+  "{name} didn’t confirm this pairing. Use Connect to try again.": "{name} 未确认此配对。请使用“连接”再试一次。",
   "{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.": "{name} 不接受来自此设备的输入。请在 {name} 的“共享屏幕”中开启“接收输入”。",
   "{name} doesn’t accept input from this device. Turn on Remote in TwinDesk on {name}.": "{name} 不接受来自此设备的输入。请在 {name} 上的 TwinDesk 中开启“远程控制”。",
   "{name} doesn’t answer the remote: update TwinDesk there.": "{name} 不响应远程控制：请在那里更新 TwinDesk。",
@@ -1164,5 +1166,6 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "{what}需要 WLAN 直连或同一 Wi-Fi 网络。你当前通过蓝牙连接。",
   "‹ Back": "‹ 返回",
   "‹ Up": "‹ 上一级",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ 相当于 Ctrl，因此 ⌘C 复制，⌘V 粘贴",
+  "Search button": "搜索按钮"
 }

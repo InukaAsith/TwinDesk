@@ -55,8 +55,9 @@ double screens_offset(int x, int y, int side);
 void screens_edge_point(int side, double offset, int *x, int *y);
 void screens_center(int *x, int *y);
 void screens_clamp(int x, int y, int fromX, int fromY, int *ox, int *oy);
-int zones_parse(const char *text, double z[][2], int max);
-int zones_contain(double z[][2], int n, int x, int y, int side);
+#define MAX_ZONES 32
+int zones_parse(const char *text, double z[][3], int max);
+int zones_contain(double z[][3], int n, int x, int y, int side);
 void screens_walk(int x, int y, int fromX, int fromY, const int *stops, int nstops, int *ox, int *oy);
 void screens_box(int *x, int *y, int *w, int *h);
 void screens_set(const char *list);
@@ -138,7 +139,7 @@ int wl_capture_begin(int mouse, int keys);
 void wl_capture_stop(int side, double offset, int hasSide);
 void wl_arrived(int side);
 void wl_return_zones(const char *text);
-void wl_arm_return(int on, int side, double resistance);
+void wl_arm_return(int on, const char *sideList, int side, double resistance);
 void wl_inject(const JObj *ev);
 void wl_move_rel(double dx, double dy);
 void wl_move_to(int x, int y);
@@ -164,6 +165,26 @@ int ble_handle(const char *line); // 1: a ble*/blp* command, taken
 void ble_shutdown(void);
 
 double now_ms(void);
+
+// ---- crossing.c: hold a key to cross (#230), the emergency return (#178), both backends ----
+void crossing_config(const JObj *c);
+int crossing_bits(void);
+int crossing_edge_ok(void);
+int crossing_return_ok(void);
+void crossing_require_return(int on);
+void crossing_remote(int bits);
+int crossing_blocked(void); // after the emergency shortcut, until main ends the session
+void crossing_watch(int capturingMouse, void (*fwd)(const char *));
+void crossing_reset(void);
+void crossing_session(int on);
+int crossing_key(int ev, int value, int capturing, int capturingMouse, void (*fwd)(const char *));
+void crossing_emergency(void);
+void capture_forward(const char *k); // capture.c's forward, for crossing_watch
+void wl_forward(const char *k);      // wl.c's
+int capture_mouse(void);             // capturing the mouse (X11)
+int wl_mouse(void);
+void capture_emergency(void);        // the backend's part of the emergency shortcut
+void wl_emergency(void);
 void shake_feed(double dx, double dy); // shake.c: a shake while capturing emits {"event":"shake"}
 
 // ---- localwatch.c: driven, this computer's own mouse or touchpad takes it back (`local`) ----

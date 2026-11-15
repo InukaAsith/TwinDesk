@@ -29,7 +29,7 @@
       "versions": [
         {
           "version": "3.0.0",
-          "buildVersion": "1",
+          "buildVersion": "46",
           "date": "2026-11-09",
           "localizedDescription": "The first TwinDesk for iPhone and iPad: every page of the Android app, native on iOS. Pairs with Mac, Windows and Linux, and with other phones.",
           "downloadURL": "https://github.com/InukaAsith/TwinDesk/releases/download/v3.0.0/TwinDesk.ipa",

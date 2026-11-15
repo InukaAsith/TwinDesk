@@ -428,6 +428,7 @@
   "Messages access is required on {name}": "Нужен доступ к сообщениям на {name}",
   "Middle click": "Средний щелчок",
   "Mirror": "Повтор",
+  "Mirror one screen of {name}": "Повтор одного экрана {name}",
   "Mod is ⌘ on a Mac and Ctrl elsewhere. Or record it on the computer’s Deck page.": "Mod — это ⌘ на Mac и Ctrl в остальных системах. Или запишите сочетание на странице Deck на компьютере.",
   "Mode": "Режим",
   "Modules": "Модули",
@@ -1109,6 +1110,7 @@
   "{name} didn’t answer over Bluetooth. Open TwinDesk on it, or put both on the same Wi-Fi, then Pair again.": "{name} не ответил по Bluetooth. Откройте на нём TwinDesk или подключите оба к одной сети Wi-Fi, затем повторите сопряжение.",
   "{name} didn’t answer. Open TwinDesk on it, or turn on Host for other phones there.": "{name} не ответил. Откройте на нём TwinDesk или включите там «Принимать другие телефоны».",
   "{name} didn’t arrive": "{name} не пришёл",
+  "{name} didn’t confirm this pairing. Use Connect to try again.": "{name} не подтвердил это сопряжение. Используйте «Подключить», чтобы попробовать снова.",
   "{name} doesn’t accept input from this device. Turn on Receive input in Share screen on {name}.": "{name} не принимает ввод с этого устройства. Включите «Принимать ввод» в «Демонстрации экрана» на {name}.",
   "{name} doesn’t accept input from this device. Turn on Remote in TwinDesk on {name}.": "{name} не принимает ввод с этого устройства. Включите «Пульт» в TwinDesk на {name}.",
   "{name} doesn’t answer the remote: update TwinDesk there.": "{name} не отвечает пульту: обновите там TwinDesk.",
@@ -1164,5 +1166,6 @@
   "{what} requires Wi-Fi Direct or the same Wi-Fi network. You’re connected over Bluetooth.": "Для «{what}» нужен Wi-Fi Direct или та же сеть Wi-Fi. Вы подключены по Bluetooth.",
   "‹ Back": "‹ Назад",
   "‹ Up": "‹ Вверх",
-  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ работает как Ctrl: ⌘C копирует, ⌘V вставляет"
+  "⌘ works as Ctrl, so ⌘C copies and ⌘V pastes": "⌘ работает как Ctrl: ⌘C копирует, ⌘V вставляет",
+  "Search button": "Кнопка поиска"
 }

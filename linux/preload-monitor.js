@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld('monitor', {
   onAudio: (fn) => ipcRenderer.on('audio', (_e, a) => fn(a)),
   onPacing: (fn) => ipcRenderer.on('pacing', (_e, p) => fn(p)),
   onRemote: (fn) => ipcRenderer.on('remote', (_e, r) => fn(r)), // the peer's screen.state
-  ctl: (m) => ipcRenderer.send('monitor-ctl', m), // toolbar: {share?, mode?, framegen?, fullScreen?}
+  ctl: (m) => ipcRenderer.send('monitor-ctl', m), // toolbar: {share?, mode?, framegen?, fullScreen?, pin?}
+  onPinned: (fn) => ipcRenderer.on('pinned', (_e, on) => fn(!!on)),
   pathFor: (file) => { try { return webUtils.getPathForFile(file); } catch (_) { return ''; } },
   drop: (paths, x, y) => ipcRenderer.send('drop', { paths, x, y }),
   onDropProgress: (fn) => ipcRenderer.on('drop-progress', (_e, v) => fn(v)),

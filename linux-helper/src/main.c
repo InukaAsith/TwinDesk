@@ -80,6 +80,16 @@ static void dispatch(const char *line) {
     return;
   }
 #endif
+  // Hold a key to cross and the emergency return (crossing.c): both backends.
+  if (!strcmp(cmd, "crossingWatch") || !strcmp(cmd, "crossingFlags") || !strcmp(cmd, "emergencyActive")) {
+    if (!strcmp(cmd, "crossingWatch")) crossing_watch(wl ? wl_mouse() : capture_mouse(), wl ? wl_forward : capture_forward);
+    else if (!strcmp(cmd, "crossingFlags")) crossing_remote((int)jnum(c, "flags", 0));
+    else crossing_session(jbool(c, "on", 0));
+    reply(c, NULL, NULL);
+    json_free(c);
+    return;
+  }
+  if (!strcmp(cmd, "armReturn")) crossing_require_return(jbool(c, "on", 0) && jbool(c, "requireModifier", 0));
   if (wl) {
     wl_touch();
     if (!strcmp(cmd, "ping") || !strcmp(cmd, "keepalive")) {
@@ -99,7 +109,7 @@ static void dispatch(const char *line) {
       wl_arrived(jbool(c, "center", 0) ? SIDE_NONE : side_of(jstr(c, "side", "left")) < 0 ? SIDE_LEFT : side_of(jstr(c, "side", "left")));
     } else if (!strcmp(cmd, "armReturn")) {
       wl_return_zones(jstr(c, "zones", NULL));
-      wl_arm_return(jbool(c, "on", 0), side_of(jstr(c, "side", NULL)), jnum(c, "resistancePx", 120));
+      wl_arm_return(jbool(c, "on", 0), jstr(c, "sideList", NULL), side_of(jstr(c, "side", NULL)), jnum(c, "resistancePx", 120));
     } else if (!strcmp(cmd, "inject")) {
       JObj *ev = jobj(c, "ev");
       if (ev) wl_inject(ev);

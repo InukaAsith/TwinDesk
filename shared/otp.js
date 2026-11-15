@@ -26,7 +26,25 @@
     return best;
   }
 
-  const api = { otpOf };
+  // A code put on the clipboard by itself (Notifications › Copy codes by themselves): kept out of
+  // clipboard sync and history (each clipboard module asks isQuiet before sending or keeping), and
+  // taken off the clipboard after 2 minutes if it's still there. Main process only.
+  const quiet = new Map(); // text -> until
+  function isQuiet(text) {
+    const now = Date.now();
+    for (const [k, until] of quiet) if (until < now) quiet.delete(k);
+    return typeof text === 'string' && quiet.has(text.trim());
+  }
+  function quietCopy(code, clipboard) {
+    if (!code) return;
+    const cb = clipboard || require('electron').clipboard;
+    quiet.set(code, Date.now() + 5 * 60000);
+    cb.writeText(code);
+    const t = setTimeout(() => { Promise.resolve().then(() => cb.readText()).then((now) => { if (String(now || '') === code) cb.writeText(''); }).catch(() => {}); }, 120000);
+    if (t && t.unref) t.unref();
+  }
+
+  const api = { otpOf, isQuiet, quietCopy };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.Otp = api;
 })(typeof window !== 'undefined' ? window : globalThis);

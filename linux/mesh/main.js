@@ -110,6 +110,7 @@ let devctl = null; // Overview's controls of the selected device (shared/devctl.
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let settings = null;
 let device = null;
+let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
 let clip = null;
@@ -120,7 +121,7 @@ let sound = null;
 let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
 let rezume = null; // ReZume (shared/rezume.js), only once it's turned on, and only with one phone (shared/rezume-solo.js)
 let rezumeShelf = null; // … its notification and taskbar button (shared/rezume-shelf.js)
-let rzSolo = null; // shared/rezume-solo.js: the phone while it is the only device connected
+let rzSolo = null; // shared/rezume-solo.js: the device ReZume is with (picked on its page; a phone alone without a pick)
 let camShare = null; // Camera tab: the selected computer's camera here, this one's there (shared/camshare.js)
 let vcam = null; // Camera: the running camera's picture, to the tab and the virtual camera (shared/vcam.js, ../vcam.js)
 let fileDrop = null;
@@ -183,6 +184,7 @@ function start() {
   device = loadDevice();
   settings = loadSettings(store); // settings.json and the mesh's own in multi.json (settings.js)
   modulesAtStart = require('../../shared/modules.js').normalize(settings.modules).off.filter((id) => id !== 'multi'); // the window's scripts are fixed at load
+  require('../../shared/edition.js').moduleOff(modulesAtStart.includes('fullkvm')); // General › Modules › Full KVM, before the helper is made
   require('../../shared/inputlane.js').setLaneProtocol(settings.app.inputProtocol); // General › Advanced, before any lane binds
   // Quiet links (#143): an idle session stops pinging every second; General › Advanced › Keep pinging.
   require('../../shared/quiet.js').use(() => !!(settings && settings.app && settings.app.keepPinging === true));
@@ -204,7 +206,11 @@ function start() {
   links = new LinkManager({ device, resolveAddress: (macId) => discovery.get(macId) });
   mesh = new Mesh({ selfId: device.id });
   hub = new Hub({ device, links, mesh });
-  rzSolo = require('../../shared/rezume-solo.js').soloLink({ bus: hub.bus, sessions: hub.sessions });
+  // ReZume with one device of the mesh, picked on the ReZume page and the same on both (settings.rezume.with).
+  rzSolo = require('../../shared/rezume-solo.js').soloLink({ bus: hub.bus, sessions: hub.sessions, partner: {
+    get: () => settings.rezume.with,
+    set: (v) => { settings.rezume.with = v; saveSettings(); pushState(); },
+  } });
   // ReZume off here (not loaded): still answer the phone's policy, so it shows ReZume as off
   hub.bus.on(P.T.RZ_POLICY, (m, from) => { if (!rezume && from && from === rzSolo.id()) hub.bus.send(from, { t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
   link = hub.facade;
@@ -252,6 +258,7 @@ function start() {
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
   // The helper: X11 (XInput2 + XTest), or on Wayland its uinput backend when /dev/uinput is ours.
   helper = new Helper(() => system.inputBlocker(session));
+  if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   hud = new Hud(() => settings);
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', popup: (kind, text) => hud.show(kind, text), onChange: pushState });
@@ -266,9 +273,14 @@ function start() {
     knownIds: () => hub.peers({ indirect: true }).map((p) => p.id), // with those known through a peer: one map everywhere
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
     endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
+    // The monitor map (#225): ours from Electron, the others' kept for when they are offline.
+    online: (pid) => { const p = hub.peers({ indirect: true }).find((x) => x.id === pid); return !!p && (p.state === 'connected' || p.state === 'via'); },
+    myDisplays: () => require('../../shared/screen-mesh.js').fromElectron(require('electron').screen),
+    displaysStorage: { get: () => settings.layoutDisplays || null, set: (m) => { settings.layoutDisplays = m; saveSettings(); } },
     legacyEdges: () => settings.kvm.edges, // settings from before the layout: once
     onChange: () => { if (kvm) kvm.layoutChanged(); pushState(); },
   });
+  for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   // Popups: a {key, vars} is translated in the popup (hud-renderer.js) with the device names added;
@@ -336,6 +348,7 @@ function start() {
   });
   fileRecv.onBatch = (b) => {
     live.done('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), t('From {name}', { name: peerName() }));
+    if (rezume && rezume.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
   };
@@ -390,9 +403,10 @@ function start() {
   historyKeeper = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: app.getPath('userData'), clip, notifs, changed: pushState });
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
-  const ipc = setupIpc({ history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  if (settings.drive.on) loadDrive();
+  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
-    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
+    get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
@@ -415,11 +429,15 @@ function start() {
 }
 
 // The Wayland backend can't ask the compositor for the monitors: tell it ours (logical px).
+let sentScreens = '';
 function sendScreens() {
-  if (!helper || helper.backend !== 'uinput') return;
+  if (!helper || (helper.kvmBackend || helper.backend) !== 'uinput') return; // ours on Wayland, or the Full KVM service's
   const { screen: displays } = require('electron');
   const primary = displays.getPrimaryDisplay().id;
   const list = displays.getAllDisplays().map((d) => [d.bounds.x, d.bounds.y, d.bounds.width, d.bounds.height, d.id === primary ? 1 : 0].join(',')).join(';');
+  // In the log once per change: where the pointer may go is only what this says (#183).
+  if (list !== sentScreens) console.log('[kvm] Wayland monitors (x,y,w,h,primary):', list);
+  sentScreens = list;
   helper.send('screens', { list });
 }
 
@@ -967,6 +985,20 @@ function fillNames(t) {
 const fillAll = (o) => (typeof o === 'string' ? fillNames(o) : Array.isArray(o) ? o.map(fillAll)
   : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, fillAll(v)])) : o);
 
+// File Sharing › TwinDesk Drive (docs/drive.md): one engine, synced with every connected computer.
+// Nothing of it loads until it's on.
+function loadDrive() {
+  if (drive) return drive;
+  const host = require('../../shared/drive-host.js');
+  drive = host.createMesh({
+    settings, save: saveSettings, me: device.id, meName: device.name, userData: app.getPath('userData'),
+    trash: (p) => require('electron').shell.trashItem(p),
+    mesh: host.hubAdapter(hub, () => hostServer),
+    onChange: pushState,
+  });
+  return drive;
+}
+
 function peerName() {
   const p = peerView();
   return (p && p.name) || 'the other computer';
@@ -1120,7 +1152,7 @@ function buildState() {
     iosSign: iosSign ? iosSign.view : null, // TwinDesk iPhone
     deck: deck ? deck.view() : null, // the Deck page: shown while a device has a Deck
     remote: (phoneRemote && phoneRemote.view) || REMOTE_OFF, // Remote tab: the active phone's
-    rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '' }, // ReZume tab; mesh: why not here (one phone only)
+    rezume: { ...(rezume ? rezume.view : { ...settings.rezume, connected: false }), mesh: rzSolo ? rzSolo.blocked() : '', meshWith: rzSolo ? rzSolo.view() : null }, // ReZume tab; mesh: why not (pick a device), and the picker
     camera: camShare ? { ...camShare.state, on: !!settings.camera.on } : { on: false }, // on: the switch (off, it stays loaded but stopped)
     vcam: vcam ? vcam.view() : { checked: true, supported: true, on: false },
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
@@ -1129,6 +1161,7 @@ function buildState() {
     phone: phone ? { ...phone.view, settings: settings.phone, ...meshPhoneCtl() } : null,
     peerCtl: devctl && !selectedIsPhone() ? devctl.view : null, // a computer's controls on Overview
     mount: { ...(phoneDrive ? phoneDrive.view : {}), on: settings.mount.on },
+    drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder }, // File Sharing › TwinDesk Drive
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: phoneHub ? phoneHub.view : { ...settings.hub, connected: false },
     net: { ...(net ? net.view : {}), ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: false, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },
@@ -1250,7 +1283,7 @@ function createMainWindow() {
       sandbox: true,
     },
   });
-  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, off: modulesAtStart.join(',') } });
+  mainWin.loadFile(path.join(__dirname, 'app.html'), { query: { language: i18n.locale, look: Look.style(settings.ui.style), off: modulesAtStart.join(',') } });
   const win = mainWin;
   let shown = false;
   const show = () => {
@@ -1350,6 +1383,7 @@ function updateTray(s) {
   };
   const kind = (os) => (os === 'mac' ? 'Mac' : os === 'linux' ? 'Linux' : os === 'ios' ? 'iPhone' : os === 'android' ? t('Phone') : 'PC');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    off: modulesAtStart, // General › Modules: menus of modules that are off aren't there
     t,
     connected,
     status: connected ? t('Connected to {name}', { name }) : t('Not connected'),
@@ -1451,6 +1485,9 @@ function loadReZumeNow() {
   const act = require('../activity').create({ helper });
   const solo = () => (phone && rzSolo.id() ? phone.unit(rzSolo.id()) : null);
   const name = () => { const pr = rzSolo.link.peer(); return pr ? pr.name : 'the phone'; };
+  // A document goes through Files, which is the selected device's: the device ReZume is with is
+  // selected for it (as crossing to it with the pointer does).
+  const toPartner = () => { const to = rzSolo.id(); return !!to && (hub.selectedId === to || !!hub.select(to)); };
   rezume = new ReZume({
     link: rzSolo.link,
     cfg: () => settings.rezume,
@@ -1461,6 +1498,8 @@ function loadReZumeNow() {
     pick: (o, ways) => require('../../shared/rzpick.js').pick(o, ways, { peer: name(), language: i18n.locale }),
     adb: () => { const u = solo(); return phoneAdb(u && u.bridge); },
     phoneApps: () => { const u = solo(); return (u && u.phone.apps) || []; },
+    sendFile: (p, batch) => toPartner() && !!fileDrop.sendBatch([p], 'rezume', batch),
+    expectFile: (batch, dir) => { if (toPartner()) fileRecv.expectBatch(batch, dir || receivedDir(settings, app.getPath('downloads')), 0, false); },
     save: saveSettings,
   });
   rezume.on('change', pushState);

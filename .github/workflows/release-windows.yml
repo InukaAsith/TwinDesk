@@ -15,6 +15,11 @@ on:
         description: Branch to build (releases come from main)
         required: false
         default: main
+      edition:
+        description: "normal: the installers and TwinDesk Portable. full-kvm: the Full KVM installers (docs/full-kvm.md), for their own release (e.g. v3.2.0-fullkvm), never the normal one: the updater, APT and winget would take them"
+        type: choice
+        options: [normal, full-kvm]
+        default: normal
 
 # Write: the installers go onto the release, and the full Android APK can come from a draft one.
 permissions:
@@ -51,10 +56,19 @@ jobs:
         working-directory: windows
         run: npm install
 
-      # No WIN_CSC_* here: unsigned on purpose.
+      # No WIN_CSC_* here: unsigned on purpose. TWINDESK_EDITION=full-kvm: windows-helper/build.cmd also
+      # builds the agent and the service, and the installers are TwinDesk-FullKVM-Setup-*.
       - name: Build the installers (x64 and arm64)
         working-directory: windows
+        env:
+          TWINDESK_EDITION: ${{ inputs.edition == 'full-kvm' && 'full-kvm' || '' }}
         run: npm run dist -- x64 arm64
+
+      # TwinDesk Portable (windows/portable.js): the normal edition only.
+      - name: Build TwinDesk Portable (x64 and arm64)
+        if: inputs.edition != 'full-kvm'
+        working-directory: windows
+        run: npm run dist:portable -- x64 arm64
 
       - name: Check the input lane is in
         shell: bash
@@ -64,13 +78,16 @@ jobs:
             if [ ! -s "$f" ]; then echo "::error::$f is missing: tdfast didn't build for $a"; exit 1; fi
             ls -l "$f"
           done
-          ls -l windows/dist/TwinDesk-Setup-*.exe
+          ls -l windows/dist/*.exe
 
       - name: Keep the installers with the run
         uses: actions/upload-artifact@v4
         with:
           name: twindesk-windows-unsigned
-          path: windows/dist/TwinDesk-Setup-*.exe
+          path: |
+            windows/dist/TwinDesk-Setup-*.exe
+            windows/dist/TwinDesk-FullKVM-Setup-*.exe
+            windows/dist/TwinDesk-Portable-*.exe
           if-no-files-found: error
 
       - name: Upload to the release
@@ -78,5 +95,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes ""
-          gh release upload "${{ inputs.tag }}" windows/dist/TwinDesk-Setup-*.exe --clobber
+          pre=""; [ "${{ inputs.edition }}" = full-kvm ] && pre="--prerelease"
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft $pre --target main --title "${{ inputs.tag }}" --notes ""
+          if [ "${{ inputs.edition }}" = full-kvm ]; then gh release upload "${{ inputs.tag }}" windows/dist/TwinDesk-FullKVM-Setup-*.exe --clobber
+          else gh release upload "${{ inputs.tag }}" windows/dist/TwinDesk-Setup-*.exe windows/dist/TwinDesk-Portable-*.exe --clobber; fi

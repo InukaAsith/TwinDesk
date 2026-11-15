@@ -21,6 +21,18 @@ const isInt = (n, lo, hi) => Number.isInteger(n) && n >= lo && n <= hi;
 // An untrusted display report made into a clean list. Bad entries are dropped, duplicate ids keep
 // the first, and at most MAX_DISPLAYS are kept. The first valid display marked primary wins; when
 // none is marked, the one at (0, 0) is primary.
+// Electron's screen (main process) as a display list: logical pixels, the way the monitor map (#225) and
+// the helpers' offsets see them.
+function fromElectron(screen) {
+  if (!screen || typeof screen.getAllDisplays !== 'function') return [];
+  const primary = screen.getPrimaryDisplay ? screen.getPrimaryDisplay().id : null;
+  return normalizeDisplays(screen.getAllDisplays().map((d) => ({
+    id: String(d.id), name: d.label || String(d.id),
+    x: Math.round(d.bounds.x), y: Math.round(d.bounds.y), w: Math.round(d.bounds.width), h: Math.round(d.bounds.height),
+    scale: d.scaleFactor, primary: d.id === primary,
+  })));
+}
+
 function normalizeDisplays(list) {
   const out = [];
   const seen = new Set();
@@ -172,5 +184,5 @@ function streams(table, knownIds, displays) {
 
 module.exports = {
   SIDES, MODES, MAX_DISPLAYS, MAX_DEVICES, VIRTUAL_LIMIT,
-  normalizeDisplays, bounds, arrange, overlaps, place, nudge, validChoice, prune, setChoice, streams,
+  normalizeDisplays, fromElectron, bounds, arrange, overlaps, place, nudge, validChoice, prune, setChoice, streams,
 };

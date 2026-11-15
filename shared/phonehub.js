@@ -30,14 +30,14 @@ const picture = (v, max) => (typeof v === 'string' && /^data:image\/(jpeg|png|we
 const ASKS = {
   [T.CALL_DO]: 'calls', [T.CALL_LOG]: 'calls', [T.CONTACTS]: 'calls',
   [T.SMS_THREADS]: 'messages', [T.SMS_THREAD]: 'messages', [T.SMS_PART]: 'messages', [T.SMS_SEND]: 'messages',
-  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_SAVE]: 'media', [T.MEDIA_DELETE]: 'media',
+  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_SAVE]: 'media', [T.MEDIA_DELETE]: 'media', [T.MEDIA_ALBUMS]: 'media',
   [T.FS_LIST]: 'files', [T.FS_DO]: 'files', [T.FS_SAVE]: 'files',
 };
 // The phone's answers, passed to the window.
 const ANSWERS = {
   [T.CALL_DONE]: 'calls', [T.CALL_LOG]: 'calls', [T.CONTACTS]: 'calls',
   [T.SMS_THREADS]: 'messages', [T.SMS_THREAD]: 'messages', [T.SMS_PART]: 'messages', [T.SMS_SENT]: 'messages', [T.SMS_NEW]: 'messages',
-  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_DELETE]: 'media',
+  [T.MEDIA_LIST]: 'media', [T.MEDIA_THUMB]: 'media', [T.MEDIA_VIEW]: 'media', [T.MEDIA_DELETE]: 'media', [T.MEDIA_ALBUMS]: 'media',
   [T.FS_LIST]: 'files', [T.FS_DONE]: 'files',
 };
 // A path on the phone, relative to its shared storage: no '..', no empty or odd segments.
@@ -61,9 +61,10 @@ const PAIR_POLL_MS = 3000;
 
 class PhoneHub extends EventEmitter {
   // audioLimit: what this computer can't do with the calls' sound, said under its switch (Windows).
-  constructor({ server, getSettings, save, audio, audioLimit, btSettings, send, choose, share, shareSheet }) {
+  // audioStore: the Microsoft Store's build, which has no calls' sound (Calls says so instead).
+  constructor({ server, getSettings, save, audio, audioLimit, audioStore, btSettings, send, choose, share, shareSheet }) {
     super();
-    Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', btSettings: btSettings || null, sendFiles: send || null, choose: choose || null, shareSheet: shareSheet || null });
+    Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', audioStore: !!audioStore, btSettings: btSettings || null, sendFiles: send || null, choose: choose || null, shareSheet: shareSheet || null });
     this.pairTimer = null; // looking for the phone's pairing (watchPair)
     this.share = null;
     if (share) {
@@ -181,6 +182,7 @@ class PhoneHub extends EventEmitter {
         return this.emit('change');
       case 'opt':
         if (typeof r.callAudio === 'boolean') s.callAudio = r.callAudio;
+        if (typeof r.callPause === 'boolean') s.callPause = r.callPause; // Calls › Pause what plays here (shared/callpause.js)
         if (typeof r.btDevice === 'string') this.btDevice(r.btDevice.slice(0, 400)); // Windows' device ids are long
         this.save();
         if (this.phone) this.policy();
@@ -208,6 +210,8 @@ class PhoneHub extends EventEmitter {
         return this.copyImage(r.data);
       case 'shareImage':
         return this.shareImage(r.data, r.name);
+      case 'openImage':
+        return this.openImage(r.data, r.name, r.with === true);
       default:
     }
   }
@@ -224,6 +228,28 @@ class PhoneHub extends EventEmitter {
   // the system's Share for it.
   shareImage(data, name) {
     if (!this.shareSheet || !photoImage(data)) return false;
+    const file = this.tempPhoto(data, name);
+    if (!file) return false;
+    this.shareSheet([file], require('path').basename(file, '.jpg'));
+    return true;
+  }
+
+  // Photos: the picture opened in this computer's own app for pictures (Photos, Preview, an image
+  // viewer); withPicker: Windows' "Open with" list.
+  openImage(data, name, withPicker) {
+    if (!photoImage(data)) return false;
+    const file = this.tempPhoto(data, name);
+    if (!file) return false;
+    if (withPicker && process.platform === 'win32') {
+      require('child_process').execFile('rundll32.exe', ['shell32.dll,OpenAs_RunDLL', file], { windowsHide: true }, () => {});
+      return true;
+    }
+    require('electron').shell.openPath(file).then((err) => err && console.warn('[hub] open:', err), () => {});
+    return true;
+  }
+
+  // The picture as a file in the temp folder's TwinDesk Photos (emptied of ones over an hour old).
+  tempPhoto(data, name) {
     const fs = require('fs');
     const path = require('path');
     const dir = path.join(require('os').tmpdir(), 'TwinDesk Photos');
@@ -236,11 +262,10 @@ class PhoneHub extends EventEmitter {
       const base = (fileName(name) || 'Photo').replace(/\.[^.]*$/, '').replace(/[\\:*?"<>|]/g, '_').slice(0, 120) || 'Photo';
       const file = path.join(dir, base + '.jpg');
       fs.writeFileSync(file, Buffer.from(String(data).slice(String(data).indexOf(',') + 1), 'base64'));
-      this.shareSheet([file], base);
-      return true;
+      return file;
     } catch (e) {
-      console.warn('[hub] share:', e.message);
-      return false;
+      console.warn('[hub] photo file:', e.message);
+      return '';
     }
   }
 
@@ -266,7 +291,8 @@ class PhoneHub extends EventEmitter {
         if (image) out.image = image;
         break;
       }
-      case T.MEDIA_LIST: Object.assign(out, { kind: ['all', 'photos', 'videos', 'screenshots'].includes(m.kind) ? m.kind : 'all', before: str(m.before, 40), n: n(m.n, 500, 120) }); break;
+      case T.MEDIA_LIST: Object.assign(out, { kind: ['all', 'photos', 'videos', 'screenshots'].includes(m.kind) ? m.kind : 'all', before: str(m.before, 40), n: n(m.n, 500, 120), ...(/^-?\d{1,20}$/.test(m.album || '') ? { album: m.album } : {}) }); break; // album: one album's (media.albums)
+      case T.MEDIA_ALBUMS: break;
       case T.MEDIA_THUMB: out.ids = ids(m.ids); break;
       case T.MEDIA_VIEW: out.id = str(m.id, 40); break;
       case T.MEDIA_SAVE: out.ids = ids(m.ids); break;
@@ -474,11 +500,11 @@ class PhoneHub extends EventEmitter {
   get view() {
     const s = this.settings;
     return {
-      calls: !!s.calls, messages: !!s.messages, media: !!s.media, files: !!s.files, callAudio: !!s.callAudio, btDevice: this.btDevice(),
+      calls: !!s.calls, messages: !!s.messages, media: !!s.media, files: !!s.files, callAudio: !!s.callAudio, callPause: !!s.callPause, btDevice: this.btDevice(),
       connected: !!this.phone, name: this.phone ? this.phone.name : '',
       supported: !!this.state, // the phone app answered (an older one doesn't know these)
       perm: this.state, call: this.call, ended: this.ended, unread: this.unread, muted: this.muted,
-      audio: this.audio ? this.audio.view : null, canAudio: !!this.makeAudio, audioLimit: this.audioLimit,
+      audio: this.audio ? this.audio.view : null, canAudio: !!this.makeAudio, audioLimit: this.audioLimit, audioStore: this.audioStore,
       btSettings: !!this.btSettings, pairWatch: !!this.pairTimer, // pairing for the calls' sound: Open Bluetooth settings, looking for the phone
       share: this.share ? this.share.view : null,
       shareSheet: !!this.shareSheet, // Photos' Share (none on Linux)

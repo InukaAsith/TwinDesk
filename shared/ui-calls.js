@@ -187,7 +187,10 @@ UI.tab({
     const which = UI.select([], (id) => id && api.hub({ do: 'opt', btDevice: id }));
     which.el.setAttribute('aria-label', tr('Which phone'));
     const statusRow = UI.row(tr('Bluetooth'), '', [which.el, retryBtn], { literal: true });
-    const soundCard = UI.card(tr('Sound'), [audioRow, statusRow]);
+    // What plays here: paused while a call rings or is under way, played again after (shared/callpause.js).
+    const pauseSw = UI.switch((v) => api.hub({ do: 'opt', callPause: v }), { label: tr('Pause what plays here during calls') });
+    const pauseRow = UI.row(tr('Pause what plays here during calls'), tr('Music and videos on {me} pause when a call comes in and play again when it ends'), [pauseSw]);
+    const soundCard = UI.card(tr('Sound'), [audioRow, statusRow, pauseRow]);
 
     // Setting it up: the person pairs the two in the systems' own Bluetooth settings, over classic
     // Bluetooth (what a call goes through); TwinDesk doesn't pair them itself, only says how, and
@@ -205,6 +208,9 @@ UI.tab({
     const unsure = () => { forgetBtn.dataset.sure = ''; forgetBtn.textContent = tr('Forget'); forgetBtn.classList.remove('danger'); };
     const forgetRow = UI.row(tr('Forget'), '', [forgetBtn], { literal: true });
     const setupCard = UI.card(tr('Bluetooth setup'), [step1, step2, step3, pairedRow, forgetRow]);
+    // The Microsoft Store's build has no calls' sound here (windows/storepkg.js): it says so instead.
+    const storeRow = UI.row(tr('Not in the Microsoft Store version'), '', [], { literal: true });
+    const storeCard = UI.card(tr('Sound'), [storeRow]);
     // Back in this window from pairing (Settings, or the phone): connected at once when they are.
     window.addEventListener('focus', () => {
       const a = UI.state && UI.state.hub && UI.state.hub.audio;
@@ -227,7 +233,7 @@ UI.tab({
       if (!recent.children.length) recent.append(el('div', { class: 'hub-empty', text: m.items ? tr('No calls yet') : '' }));
     });
 
-    body.append(top.el, nowCard, dialCard, recentCard, contactsCard, soundCard, setupCard);
+    body.append(top.el, nowCard, dialCard, recentCard, contactsCard, soundCard, setupCard, storeCard);
 
     let loaded = false;
     let hadCall = false;
@@ -301,7 +307,10 @@ UI.tab({
 
       // Sound
       soundCard.hidden = !h.calls || !h.canAudio;
+      storeCard.hidden = !h.calls || !h.audioStore;
+      if (!storeCard.hidden) storeRow.setHint(tr('Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}', { phone: UI.phoneName(s), me: UI.fill('{me}') }));
       audioSw.set(!!h.callAudio);
+      pauseSw.set(!!h.callPause);
       audioRow.setHint(tr(h.audioLimit || ''));
       const a = h.audio;
       const bt = h.perm && h.perm.bt;

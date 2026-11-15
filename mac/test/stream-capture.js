@@ -41,3 +41,13 @@ test('passes selected display, bounded dimensions and audio to the capture windo
   assert.equal(start.msg.height, 1080);
   assert.equal(start.msg.audio, 'loopback');
 });
+
+test('refuses a capture source for a different selected display', async () => {
+  const server = new EventEmitter();
+  const displays = new EventEmitter();
+  displays.target = () => ({ id: 3 });
+  const stream = new Stream(server, displays, () => ({}), { release() {}, loopback() {} });
+  // A selected display that is not in the capture list is refused. Headless recovery
+  // reports NO_DISPLAY and waits, instead of the older "no screens" permission error.
+  await assert.rejects(stream._source(), (err) => err && err.code === 'NO_DISPLAY' && /no display to share/.test(err.message));
+});

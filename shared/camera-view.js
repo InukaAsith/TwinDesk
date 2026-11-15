@@ -29,7 +29,7 @@ function place() {
     transform: `translate(-50%, -50%) rotate(${turn}deg)${document.body.classList.contains('mirror') ? ' scaleX(-1)' : ''}`,
   });
 }
-if (feed) feed.onRotate((deg) => { turn = deg; place(); });
+if (feed) feed.onRotate((deg, mir) => { turn = deg; document.body.classList.toggle('mirror', !!mir); place(); });
 addEventListener('resize', place);
 
 // Each frame of the track onward, as it comes (a hidden window paints none).

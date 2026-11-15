@@ -207,31 +207,44 @@ void screens_walk(int x, int y, int fromX, int fromY, const int *stops, int nsto
   screens_clamp(x, y, fromX, fromY, ox, oy);
 }
 
-// kvmConfig / armReturn `zones` (shared/kvm-geom.js zonesText): "0.1-0.5,0.7-1" (a little wider, for
-// rounding) or "none" (0 zones: nothing crosses). Missing or unreadable: -1 (the whole side).
-int zones_parse(const char *text, double z[][2], int max) {
+// kvmConfig / armReturn `zones` (shared/kvm-geom.js zonesText, shared/layout-world.js): "0.1-0.5,0.7-1"
+// (a little wider, for rounding) or "none" (0 zones: nothing crosses). An entry may name its side,
+// "top:0.56-0.94" (the Multi-device monitor map, #225): it counts only there. Missing or unreadable:
+// -1 (the whole side). z[i][2]: the entry's side, SIDE_NONE for every side.
+int zones_parse(const char *text, double z[][3], int max) {
   if (!text) return -1;
   if (!strcmp(text, "none")) return 0;
   int n = 0;
   const char *p = text;
   while (*p && n < max) {
+    int side = SIDE_NONE;
+    const char *colon = strchr(p, ':'), *comma = strchr(p, ',');
+    if (colon && (!comma || colon < comma)) {
+      char name[16] = "";
+      size_t len = (size_t)(colon - p);
+      if (len >= sizeof name) break;
+      memcpy(name, p, len);
+      side = side_of(name);
+      if (side == SIDE_NONE) break;
+      p = colon + 1;
+    }
     char *end;
     double a = strtod(p, &end);
     if (end == p || *end != '-') break;
     p = end + 1;
     double b = strtod(p, &end);
     if (end == p || a > b) break;
-    z[n][0] = a - 0.002; z[n][1] = b + 0.002; n++;
+    z[n][0] = a - 0.002; z[n][1] = b + 0.002; z[n][2] = side; n++;
     p = *end == ',' ? end + 1 : end;
   }
   return n ? n : -1;
 }
 
-// Inside one of the zones along `side` (n < 0: anywhere).
-int zones_contain(double z[][2], int n, int x, int y, int side) {
+// Inside one of the zones along `side` (n < 0: anywhere). Entries of another side don't count.
+int zones_contain(double z[][3], int n, int x, int y, int side) {
   if (n < 0) return 1;
   double o = screens_offset(x, y, side);
-  for (int i = 0; i < n; i++) if (o >= z[i][0] && o <= z[i][1]) return 1;
+  for (int i = 0; i < n; i++) if (((int)z[i][2] == SIDE_NONE || (int)z[i][2] == side) && o >= z[i][0] && o <= z[i][1]) return 1;
   return 0;
 }
 

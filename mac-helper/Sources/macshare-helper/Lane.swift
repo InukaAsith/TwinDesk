@@ -76,7 +76,7 @@ final class NativeLane {
     }
   }
 
-  private static let fenced: Set<String> = ["k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge"]
+  private static let fenced: Set<String> = ["k.md", "k.mu", "k.wh", "k.kd", "k.ku", "k.ge", "k.mod"]
 
   /// A click, key, wheel or gesture from the tap: numbered, with where the moves before it took the pointer.
   func fence(_ fields: inout [String: Any]) {

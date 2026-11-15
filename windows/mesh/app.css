@@ -163,6 +163,11 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .banner-actions { display: flex; gap: 8px; }
 
 /* ---------- Windows additions ---------- */
+.custom-screen-size { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.custom-screen-size label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.custom-screen-size input { box-sizing: border-box; width: 80px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--control-line); background: var(--control); box-shadow: var(--shadow); user-select: text; }
+.custom-screen-size input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 760px) { .row:has(.custom-screen-size) { flex-wrap: wrap; gap: 8px; } }
 #nav li.gap { height: 10px; }
 .nav-item .state.warn::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 input[type="text"], input[type="search"] { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--control-line); background: var(--control); box-shadow: var(--shadow); min-width: 190px; user-select: text; }
@@ -255,6 +260,10 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 .pair-pop .hint { color: var(--muted); font-size: 12px; }
 .pair-pop .banner-actions { justify-content: flex-end; }
 .pair-pop:not([hidden]) { animation: pop-in 0.3s var(--spring) both; }
+/* A yes/no popup before a switch that needs one (shared/mesh-intro.js ask: Cursor › Mouse and keyboard over Bluetooth). */
+.mesh-pop { border-color: #5e5ce6; }
+.mesh-pop .pill { margin-left: 4px; vertical-align: 2px; }
+.mesh-pop p { margin: 8px 0; }
 @keyframes pop-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 
 /* Wireless debugging over Bluetooth (UI.adbBle): greyed out, it says why. */
@@ -286,11 +295,16 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 .app-name .mesh-pill { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; vertical-align: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; line-height: 1.3;
   color: #fff; background: linear-gradient(#5e5ce6, #3634a3); white-space: nowrap; } /* TwinDesk [MESH beta]: Multi-device is on */
 .app-name .mesh-pill span { font-weight: 500; opacity: 0.85; }
+.app-name .portable-pill .portable-word { font-weight: 700; opacity: 1; }
+.app-name .portable-pill { background: linear-gradient(#30d158, #248a3d); } /* TwinDesk Portable as administrator: PORTABLE · FULL (shared/ui-portable.js) */
+.app-name .portable-pill.limited { background: linear-gradient(#ff9f0a, #c93400); } /* … without: PORTABLE · LIMITED */
+.app-name .portable-pill[hidden] { display: none; }
 
 /* A feature's introduction, in place of its settings until it's turned on (shared/feature-art.js);
    --fa1 / --fa2 are the two colours of its sidebar icon */
 .feature-art { --fa1: var(--accent); --fa2: var(--accent); --fa-dev: color-mix(in srgb, var(--text) 74%, var(--content)); --fa-scr: color-mix(in srgb, var(--fa1) 24%, var(--card));
   display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 190px); padding: 4px 0 28px; }
+.feature-art.fa-inline { display: block; min-height: 0; max-width: 520px; margin: 4px auto 0; padding: 0 0 8px; } /* a scene as part of a page (FeatureArt.picture): Full KVM */
 .feature-art .fa-hero { width: 100%; max-width: 580px; padding: 20px 22px 24px; text-align: center; border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow);
   background: linear-gradient(165deg, color-mix(in srgb, var(--fa1) 20%, var(--card)), var(--card) 70%); }
 .feature-art svg { display: block; width: 100%; height: auto; }

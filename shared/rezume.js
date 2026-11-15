@@ -101,6 +101,9 @@ function normalize(h) {
   const out = { ...DEFAULTS };
   for (const k of Object.keys(DEFAULTS)) if (h && typeof h[k] === 'boolean') out[k] = h[k];
   for (const k of Object.values(LISTS)) out[k] = records(h && h[k]);
+  // Multi-device: the device ReZume is with ({id, at}: when it was picked; shared/rezume-solo.js), or null.
+  const w = h && h.with;
+  out.with = w && typeof w.id === 'string' && w.id && w.id.length <= 64 ? { id: w.id, at: Number.isFinite(w.at) ? w.at : 0 } : null;
   return out;
 }
 

@@ -58,6 +58,7 @@ class Server extends EventEmitter {
     this.https.on('request', (req, res) => {
       if (require('../../shared/nativescreen.js').NativeScreen.request(req, res)) return;
       if (this.fxRequest && this.fxRequest(req, res)) return; // fast files of a session (session.js)
+      if (this.driveRequest && this.driveRequest(req, res)) return; // TwinDesk Drive, while it's on (shared/drive-host.js createMesh)
       res.writeHead(404);
       res.end();
     });
@@ -279,9 +280,11 @@ class Server extends EventEmitter {
     if (!ctx || ctx.ws.readyState !== ctx.ws.OPEN) return;
     // A phone on the USB cable: its WebRTC goes through the relay too (wired.js).
     if (ctx.ice && ICE_OFFERS.has(msg.t)) msg = { ...msg, ice: ctx.ice };
-    Quiet.sent(ctx.ws, msg);
-    this._raw(ctx.ws, msg);
-    ctx.lastTx = ctx.ws.lastTx;
+    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
+    const ws = this.bleInput ? this.bleInput.route(ctx.ws, ctx.alt, msg) : ctx.ws;
+    Quiet.sent(ws, msg);
+    this._raw(ws, msg);
+    ctx.lastTx = ws.lastTx;
   }
 
   // Send to the primary client, if any.

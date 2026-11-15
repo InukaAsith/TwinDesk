@@ -18,3 +18,7 @@ To find the logs, choose **Open Log Folder** in TwinDesk's menu bar or tray menu
 ## Pull requests
 
 During the freeze, only bug fixes and performance fixes will be merged. Keep each PR to one fix and say which issue it fixes.
+
+## Translations
+
+How to fix or add a language: [TRANSLATIONS.md](TRANSLATIONS.md).

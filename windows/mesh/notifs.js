@@ -12,7 +12,7 @@ const { IconsIn } = require('../../shared/notificon.js');
 
 const electronNotification = electron.Notification; // undefined under plain node (tests inject one)
 const { NotifGuard, isOwn } = require('../../shared/notif-guard.js');
-const { withMeshPhoneActions } = require('../../shared/notifacts.js');
+const { withMeshPhoneActions, hidden, present } = require('../../shared/notifacts.js');
 const { otpOf } = require('../../shared/otp.js');
 const xmlEsc = (t) => String(t).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 
@@ -117,7 +117,7 @@ class Notifs extends EventEmitter {
   }
 
   _sendPolicy(id) {
-    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive });
+    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: require('../../shared/notifpop.js').popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups
   }
 
   applySettings() {
@@ -197,12 +197,19 @@ class Notifs extends EventEmitter {
     const r = this.pool.receive(from, m);
     if (!r.fresh || !this.Notification.isSupported()) return;
     if (this.guard.repeat('in', m.app, m.title, m.body)) return; // a repeat of what was just shown
+    if (hidden(this, m)) return; // an app set to Hide (Notifications): not kept either
     const origin = this._nameOf(r.msg.o, m.on, from);
     const appName = str(m.appName, 100);
     // The recent ones, for Overview and Messages' chat apps; buttons and Reply go back to the device.
     const item = this.remember(m, { from, origin: r.msg.o || from, on: origin, direct: !r.msg.o || r.msg.o === from });
     const title = item.title;
     const body = str(m.body);
+    // TwinDesk's window (Reply, buttons, picture, progress), the system's, or none (quiet).
+    const how = present(this, item, m, { from: origin, code: require('../../shared/otp.js').otpOf([title, body].join(' ')), icon: m.icon || (this.historyIcons && this.historyIcons.get(item.app)) });
+    if (how !== 'native') {
+      if (how === 'popup') this.shown++;
+      return void this.changed();
+    }
     this.echoes.push({ title, body: body.slice(0, 80), until: Date.now() + 30000 });
     // Windows toasts have no subtitle: the first line is "<appName> · <device>".
     const icon = this.iconsIn ? this.iconsIn.for(m) : undefined;

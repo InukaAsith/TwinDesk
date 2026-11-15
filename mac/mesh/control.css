@@ -217,6 +217,10 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .pair-pop .hint { color: var(--muted); font-size: 12px; }
 .pair-pop .banner-actions { justify-content: flex-end; }
 .pair-pop:not([hidden]) { animation: pop-in 0.3s var(--spring) both; }
+/* A yes/no popup before a switch that needs one (shared/mesh-intro.js ask: Cursor › Mouse and keyboard over Bluetooth). */
+.mesh-pop { border-color: #5e5ce6; }
+.mesh-pop .pill { margin-left: 4px; vertical-align: 2px; }
+.mesh-pop p { margin: 8px 0; }
 @keyframes pop-in { from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 
 /* Wireless debugging over Bluetooth (UI.adbBle): greyed out, it says why. */
@@ -253,6 +257,7 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
    --fa1 / --fa2 are the two colours of its sidebar icon */
 .feature-art { --fa1: var(--accent); --fa2: var(--accent); --fa-dev: color-mix(in srgb, var(--text) 74%, var(--content)); --fa-scr: color-mix(in srgb, var(--fa1) 24%, var(--card));
   display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 190px); padding: 4px 0 28px; }
+.feature-art.fa-inline { display: block; min-height: 0; max-width: 520px; margin: 4px auto 0; padding: 0 0 8px; } /* a scene as part of a page (FeatureArt.picture): Full KVM */
 .feature-art .fa-hero { width: 100%; max-width: 580px; padding: 20px 22px 24px; text-align: center; border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow);
   background: linear-gradient(165deg, color-mix(in srgb, var(--fa1) 20%, var(--card)), var(--card) 70%); }
 .feature-art svg { display: block; width: 100%; height: auto; }

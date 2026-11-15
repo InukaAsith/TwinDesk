@@ -25,6 +25,7 @@ Module._load = function (id, ...args) {
   return load.call(this, id, ...args);
 };
 const PcScreen = require('../pcscreen');
+const MeshPcScreen = require('../mesh/pcscreen');
 const Screen = require('../screen');
 const Sender = require('../sender');
 Module._load = load;
@@ -168,4 +169,15 @@ test('sender renderer loss fails all its sessions and clears queued starts', () 
   sender.win.webContents.emit('render-process-gone', {}, { reason: 'crashed' });
   assert.equal(sender.live.size, 0); assert.equal(sender.queue.length, 0);
   assert.deepEqual(states, [[session, 'failed']]);
+});
+test('Follow Size respects both dimensions, aspect ratio and native size in both modes', () => {
+  for (const ScreenType of [PcScreen, MeshPcScreen]) {
+    const context = { cfg: { maxHeight: 'extend' }, _extendSize: () => [1920, 1200] };
+    for (const [width, height, expected] of [[1920, 1200, [1920, 1200]], [3840, 2400, [1920, 1200]],
+      [3840, 2160, [1920, 1080]], [3840, 1080, [1920, 540]], [1080, 1920, [674, 1200]], [1280, 800, [1280, 800]]]) {
+      assert.deepEqual(ScreenType.prototype._streamSize.call(context, { width, height }), expected);
+    }
+    context._extendSize = () => [2560, 1600];
+    assert.deepEqual(ScreenType.prototype._streamSize.call(context, { width: 3840, height: 2400 }), [2560, 1600]);
+  }
 });

@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS = {
     driveOther: true,
     beDriven: true,
     resistancePx: 120,
+    crossingModifier: '', // optional modifier held while leaving this Mac at an edge
     speed: 1.0,
     reverseScroll: false,
     linked: true, // mouse and keyboard sharing on (the hotkey's double-tap switches it); synced with the peer
@@ -68,7 +69,7 @@ const DEFAULT_SETTINGS = {
   },
   // swap: keys from the PC, Ctrl -> Cmd, Win -> Control. hotkey: double-tap = everything home. lockKeys: cursor lock
   // on/off (shared/cursorlock.js): F14, where a PC keyboard's Scroll Lock lands on a Mac
-  keys: { swapCtrlCmd: true, hotkey: 'AltRight', lockKeys: 'F14' },
+  keys: { swapCtrlCmd: true, hotkey: 'AltRight', lockKeys: 'F14', emergencyKeys: 'Control+Alt+Command+Escape' },
   clipboard: {
     enabled: false,
     send: true, // this Mac -> PC
@@ -92,15 +93,16 @@ const DEFAULT_SETTINGS = {
   files: { acceptDrops: false, folder: '', reveal: true, dragEdge: false, // '' = Downloads; dragEdge = drag.policy
     plain: false, // Encrypt file transfers off: plain HTTP for file bytes where both allow it (shared/fastfile.js fxPlain)
     shortcuts: false, copyKeys: 'Control+Alt+C', pasteKeys: 'Control+Alt+V' }, // Copy/paste files
-  notifs: { send: false, receive: false, hideText: false, muted: [] },
+  notifs: { send: false, receive: false, hideText: false, muted: [], style: '', otpCopy: false, quiet: { on: false, from: '22:00', to: '07:00' }, phoneApps: {} }, // style…phoneApps: how a phone's show here (shared/notifrules.js)
   apps: { offer: false, onVirtual: false, moveWindows: false, moveKey: 'MetaRight' }, // The PC can list and open this Mac's apps; onVirtual: they open on the virtual display, in Mirror mode too (off: on the shared display, as always); moveWindows: a window dragged past the edge with moveKey held moves there (movewin.js)
   papps: { on: false }, // PC apps on this Mac, each window here with its own Dock icon
   // A phone as the peer: its screen window, apps and setup.
-  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, uhid: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
+  phone: { sound: false, bitrateMbps: 8, maxSize: 0, wallpaper: true, input: 'adb', inputPicked: false, mirror: 'auto', soundVia: 'auto', enterSends: true, arrowSwipe: false, uhid: false, direct: false, lowLatency: false }, // mirror, soundVia: 'auto' | 'adb' | 'native' (shared/phonemodes.js) // input: 'adb' | 'phone' (phone-bridge.js ctl), automatic until picked (inputMode)
   mount: { on: false }, // the phone in Finder (phonedrive.js), only when Mount is clicked
+  drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
   // callAudio: the calls' sound on this Mac over Bluetooth (btDevices: which paired device each phone is).
-  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
+  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, callPause: false, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
   // Not on one network: Bluetooth for the session (blepipe.js), Wi-Fi for files and screens
   // (netlink.js). hotspots: {deviceId: {ssid, pass (safeStorage)}}, a phone's hotspot as typed once.
   net: { ble: true, blePc: false, bleWifiOff: true, hotspots: {}, tailscale: true, bleInput: false }, // ble: with phones, blePc: with computers; bleWifiOff: none on the same Wi-Fi (blepolicy.js wifiQuiet); tailscale: shared/tailnet.js; bleInput: mouse and keyboard over Bluetooth beside Wi-Fi (shared/bleinput.js)
@@ -119,7 +121,8 @@ function loadSettings() {
   const s = read('settings.json', {});
   if (s.sharing) s.sharing.on = false; // screen sharing never starts by itself
   const out = { ...DEFAULT_SETTINGS, ...s };
-  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'hub', 'camera', 'remote', 'web']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
+  for (const k of ['wake', 'sharing', 'virtual', 'kvm', 'keys', 'clipboard', 'ui', 'app', 'audio', 'terminal', 'files', 'smb', 'apps', 'receive', 'papps', 'notifs', 'updates', 'phone', 'mount', 'drive', 'hub', 'camera', 'remote', 'web']) out[k] = { ...DEFAULT_SETTINGS[k], ...(s[k] || {}) };
+  if (!['', 'Command', 'Control', 'Alt', 'Shift'].includes(out.kvm.crossingModifier)) out.kvm.crossingModifier = '';
   out.rezume = require('../shared/rezume.js').normalize(s.rezume);
   out.modules = require('../shared/modules.js').normalize(s.modules); // General › Modules
   out.ui.language = require('../shared/i18n.js').savedLanguage(out.ui.language);

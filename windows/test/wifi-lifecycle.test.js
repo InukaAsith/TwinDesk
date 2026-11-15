@@ -8,8 +8,9 @@ const tick = () => new Promise(r => setImmediate(r));
 const deferred = () => { let resolve, reject; const promise = new Promise((r, j) => { resolve = r; reject = j; }); return { promise, resolve, reject }; };
 function fixture() {
   const calls = [], files = new Map(), requests = [];
-  let command = async () => '';
-  const helper = { request: async (name, args) => { requests.push({ name, args }); return name === 'wfdRadio' ? { was: 'off' } : {}; } };
+  let command = async () => '', profile = async () => ({});
+  // The profile goes over the helper's pipe (wlanProfile), never through a file or netsh add.
+  const helper = { request: async (name, args) => { requests.push({ name, args }); if (name === 'wlanProfile') return profile(args); return name === 'wfdRadio' ? { was: 'off' } : {}; } };
   const mod = { exports: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../wifi.js'), 'utf8'), {
     require: name => ({ child_process: { execFile: (_file, args, _opts, cb) => { calls.push(args); command(args).then(out => cb(null, out), e => cb(e, '')); } },
@@ -17,12 +18,12 @@ function fixture() {
     module: mod, Buffer, process: { pid: 1 }, setTimeout: fn => setImmediate(fn), Date,
   });
   const wifi = new mod.exports.Wifi(helper);
-  return { wifi, calls, files, requests, helper, command: fn => { command = fn; } };
+  return { wifi, calls, files, requests, helper, command: fn => { command = fn; }, profile: fn => { profile = fn; } };
 }
 test('cancel during Wi-Fi profile setup prevents all connection retries and releases radio', async () => {
   const f = fixture(), wait = deferred();
   f.wifi._current = async () => 'Home';
-  f.command(async args => args.includes('add') ? wait.promise : '');
+  f.profile(() => wait.promise);
   const joining = f.wifi.join('TwinDesk-test', 'password'); const rejected = assert.rejects(joining, /cancelled/); await tick();
   const leaving = f.wifi.leave(); wait.resolve(''); await rejected; await leaving;
   assert.equal(f.calls.some(a => a.includes('ssid=TwinDesk-test')), false);
@@ -31,7 +32,7 @@ test('cancel during Wi-Fi profile setup prevents all connection retries and rele
 });
 test('failed Wi-Fi profile setup cleans up profile and restores radio', async () => {
   const f = fixture(); f.wifi._current = async () => 'Home';
-  f.command(async args => { if (args.includes('add')) throw new Error('failed profile'); return ''; });
+  f.profile(async () => { throw new Error('failed profile'); });
   await assert.rejects(f.wifi.join('TwinDesk-test', 'password'));
   assert.equal(f.wifi.holds.size, 0); assert.equal(f.files.size, 0);
   assert.ok(f.calls.some(a => a.includes('delete')));
@@ -42,7 +43,7 @@ test('superseded Wi-Fi join never touches the old profile', async () => {
   const old = f.wifi.join('Old', 'password'); const oldFailed = assert.rejects(old, /cancelled/);
   const next = f.wifi.join('Next', 'password'); const nextFailed = assert.rejects(next, /cancelled/);
   await f.wifi.leave(); await oldFailed; await nextFailed;
-  assert.equal(f.calls.some(a => a.includes('add')), false);
+  assert.equal(f.requests.some(r => r.name === 'wlanProfile'), false);
 });
 test('Wi-Fi host stop waits for an in-progress start', async () => {
   const f = fixture(), wait = deferred();

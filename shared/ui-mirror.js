@@ -49,9 +49,15 @@
         { value: '4', label: tr('Data saver · 4 Mb/s') }, { value: '8', label: tr('Balanced · 8 Mb/s') },
         { value: '16', label: tr('Sharp · 16 Mb/s') }, { value: '24', label: tr('Sharpest · 24 Mb/s') },
       ], (v) => api.setPhone({ bitrateMbps: Number(v) }));
+      // Full (ADB) over Wi-Fi: past adbd straight to this computer (scrcpy.js; settings.phone.direct, off
+      // by default: adb's forward as before), and the encoder's low-latency profile (settings.phone.lowLatency).
+      const direct = UI.switch((v) => api.setPhone({ direct: v }), { label: tr('Skip adbd') });
+      const lowLatency = UI.switch((v) => api.setPhone({ lowLatency: v }), { label: tr('Low latency') });
       const rows = [
         UI.row(tr('Play phone sound here'), tr('Android 11 or later'), [sound]),
         UI.row(tr('Picture quality'), tr('For the phone screen and app windows'), [quality]),
+        UI.row(tr('Skip adbd'), tr('Over Wi-Fi, the picture, sound and input go straight to this computer, encrypted, instead of through wireless debugging. Falls back on its own if the phone can’t be reached'), [direct]),
+        UI.row(tr('Low latency'), tr('The phone’s encoder sends each frame as soon as it’s ready. Some phones ignore it'), [lowLatency]),
       ];
       // Windows: Back, Home, Recents and Notifications in the title bar, as on the Mac; Side panel
       // (off) puts all the buttons down the right of each phone window instead (settings.phone.controls).
@@ -101,6 +107,8 @@
         const st = ph.settings || {};
         sound.set(!!st.sound);
         quality.set(String(st.bitrateMbps || 8));
+        direct.set(!!st.direct);
+        lowLatency.set(!!st.lowLatency);
         if (controls) controls.set(st.controls === 'side');
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);

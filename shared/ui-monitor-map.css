@@ -1,0 +1,18 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* The Multi-device tab's monitor map (shared/ui-monitor-map.js, #225). */
+.mm { position: relative; width: 100%; height: 260px; border-radius: 10px; overflow: hidden; touch-action: none;
+  background: color-mix(in srgb, var(--line, #8884) 18%, transparent); }
+.mm-stage { position: absolute; inset: 0; }
+.mm-dev { position: absolute; padding: 0; margin: 0; border: 0; background: transparent; cursor: grab; font: inherit; color: inherit; }
+.mm-dev:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.mm-dev.dragging { cursor: grabbing; z-index: 3; opacity: 0.85; }
+.mm-mon { position: absolute; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: 4px;
+  background: color-mix(in srgb, var(--card, #fff) 85%, currentColor 6%); }
+.mm-dev.here .mm-mon { border-color: var(--accent); background: var(--accent-soft, color-mix(in srgb, var(--accent) 18%, transparent)); }
+.mm-dev.off { opacity: 0.5; }
+.mm-dev.off .mm-mon { border-style: dashed; }
+.mm-label { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; overflow: hidden; pointer-events: none; }
+.mm-name { max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.mm-edge { position: absolute; z-index: 2; border-radius: 2px; background: var(--accent); pointer-events: none; box-shadow: 0 0 6px var(--accent); }
+.mm-edge.blocked { background: var(--bad); box-shadow: 0 0 6px var(--bad); pointer-events: auto; } /* an offline computer stops the pointer here */
+.mm-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 8px; }

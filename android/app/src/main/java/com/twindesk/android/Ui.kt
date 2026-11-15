@@ -20,12 +20,14 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -33,6 +35,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -392,6 +395,23 @@ fun MacRow(label: String, hint: String = "", first: Boolean = false, onClick: ((
 @Composable
 fun SwitchRow(label: String, hint: String, on: Boolean, first: Boolean = false, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
     MacRow(label, hint, first) { MacSwitch(on, onChange, enabled) }
+
+// Real displays the computer can mirror. Nothing when there is only one: Mirror already means that screen.
+// onDark: the full-screen viewer’s bar. selectedId empty means none of them is the picture (Extend).
+@Composable
+fun MacDisplayPick(displays: List<MacDisplay>, selectedId: String, onDark: Boolean = false, onPick: (String) -> Unit) {
+    if (displays.size < 2) return
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        for (d in displays) {
+            val label = d.label()
+            if (d.id == selectedId) FilledTonalButton(onClick = {}) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            else TextButton(onClick = { onPick(d.id) }) {
+                if (onDark) Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
+                else Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
 
 // A note in a tinted box (the Mac's `.note`): info, warn or bad.
 @Composable

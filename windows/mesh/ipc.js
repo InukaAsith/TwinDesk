@@ -65,7 +65,7 @@ function setupIpc(ctx) {
   handle('history', (r) => { if (r && typeof r === 'object' && ctx.history) ctx.history(r); });
   handle('qrPair', () => ctx.qrPair()); // Connection: the phone pairing QR code's link
   handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code
-  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image))
+  handle('notifReply', (r) => r && typeof r === 'object' && (r.chat ? !!(ctx.chats && ctx.chats() && ctx.chats().reply(String(r.chat), r.text, r.image, r.remove === true))
     : !ctx.notifs ? false : r.dismiss ? ctx.notifs.dismiss(String(r.id || '')) : Number.isInteger(r.act) ? ctx.notifs.act(String(r.id || ''), r.act) // Overview's × and buttons (shared/notifacts.js)
       : ctx.notifs.reply(String(r.id || ''), r.text))); // a phone chat's Reply, typed here
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
@@ -125,6 +125,15 @@ function setupIpc(ctx) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
     return layoutSync.place(id, x, y);
   });
+  // The monitor map (#225): device `id` dropped with its top-left at (x, y) in the plane (it goes where it
+  // may, layout-world.js drop); snap: how close edges line up. Returns where it went, or null.
+  handle('moveOnMap', (id, x, y, snap) => {
+    if (typeof id !== 'string' || !id || id.length > 64 || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return layoutSync.move(id, x, y, Number.isFinite(snap) ? Math.max(0, Math.min(2000, snap)) : undefined);
+  });
+  // Off the map: the devices line up from the grid again.
+  handle('resetMap', () => layoutSync.resetWorld());
+  handle('setMapSkip', (on) => layoutSync.setSkip(on === true)); // offline computers: passed or not
   // A device off the map (its cell is removed from the shared layout). false when it has no cell.
   handle('removeFromLayout', (id) => {
     if (typeof id !== 'string' || !id || id.length > 64) return false;
@@ -180,6 +189,25 @@ function setupIpc(ctx) {
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
     change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); });
   });
+  // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh): loaded when turned on, and only then.
+  handle('setDrive', async (on) => {
+    const d = on === true ? ctx.loadDrive() : ctx.getDrive();
+    if (d) await d.setOn(on === true);
+    else { settings.drive.on = false; ctx.save(); }
+    ctx.push();
+  });
+  const setDriveFolder = async (f) => {
+    const d = ctx.getDrive();
+    if (d) await d.setFolder(f);
+    else { settings.drive.folder = f; ctx.save(); }
+    ctx.push();
+  };
+  handle('pickDriveFolder', async () => {
+    const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow(), { properties: ['openDirectory', 'createDirectory'] });
+    if (!r.canceled && r.filePaths[0]) await setDriveFolder(r.filePaths[0]);
+  });
+  handle('resetDriveFolder', () => setDriveFolder(''));
+  handle('openDriveFolder', () => { const d = ctx.getDrive(); if (d) shell.openPath(d.folder()); });
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {
     const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && path.win32.isAbsolute(p)).slice(0, 1000);
@@ -194,6 +222,7 @@ function setupIpc(ctx) {
   handle('setNotifs', (partial) => {
     const p = partial && typeof partial === 'object' ? { send: partial.send, receive: partial.receive, hideText: partial.hideText } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+    Object.assign(p, require('../../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
     change('notifs', p, () => notifs.applySettings());
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));
@@ -255,6 +284,7 @@ function setupIpc(ctx) {
   // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
   handle('setReZume', (m) => change('rezume', m && typeof m === 'object' ? m : {}, () => (ctx.rezume ? ctx.rezume.apply() : ctx.loadReZume())));
   handle('rezumeDo', (m) => {
+    if (m && m.a === 'with' && ctx.rezumeWith) return void ctx.rezumeWith(typeof m.id === 'string' ? m.id.slice(0, 64) : ''); // the device ReZume is with (shared/rezume-solo.js)
     const h = ctx.rezume;
     if (!h || !m) return;
     if (m.a === 'take') h.take();
@@ -314,6 +344,7 @@ function setupIpc(ctx) {
     else if (m.do === 'virtual' && ctx.vcam) ctx.vcam.setOn(m.on === true);
     else if (m.do === 'vcamRemove' && ctx.vcam) ctx.vcam.remove();
     else if (m.do === 'rotate' && ctx.vcam) ctx.vcam.turn();
+    else if (m.do === 'mirror' && ctx.vcam) ctx.vcam.setMirror(m.on === true);
   });
   phone('phoneCamera', (open, opts) => {
     if (open === false) {

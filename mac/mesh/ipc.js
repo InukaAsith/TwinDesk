@@ -5,6 +5,7 @@
 const { ipcMain, shell, app, screen, dialog, clipboard, Menu } = require('electron');
 const P = require('../../shared/protocol.js');
 const CL = require('../../shared/cursorlock.js');
+const Crossing = require('../../shared/crossing.js');
 const { LINKS } = require('../../shared/about.js');
 const store = require('./store');
 const { planConnect, settleConnect, sessionIsUp } = require('../connect-plan');
@@ -37,9 +38,9 @@ const SCHEMA = {
   virtual: { enabled: bool, width: (v) => Math.round(clamp(640, 3840, 1920)(v)), height: (v) => Math.round(clamp(480, 2160, 1080)(v)), hiDPI: bool, hz: oneOf([30, 60], 60) },
   kvm: {
     pcSide: oneOf(P.SIDES, 'right'), mouse: bool, keyboard: bool, driveOther: bool, beDriven: bool,
-    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
+    resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: Crossing.modifier, speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
-  keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac) },
+  keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: Crossing.emergency },
   app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
   mesh: { autoJoin: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
@@ -52,7 +53,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool, direct: bool, lowLatency: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -368,6 +369,18 @@ function setupIpc(ctx) {
       if (typeof id !== 'string' || !id || id.length > 64 || !Number.isInteger(x) || !Number.isInteger(y)) return;
       ctx.layoutSync.place(id, x, y);
     },
+    // The monitor map (#225): a device dropped with its top-left at (x, y) in the plane; it goes where it may.
+    moveOnMap(arg) {
+      const { id, x, y, snap } = arg || {};
+      if (typeof id !== 'string' || !id || id.length > 64 || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      ctx.layoutSync.move(id, x, y, Number.isFinite(snap) ? Math.max(0, Math.min(2000, snap)) : undefined);
+    },
+    resetMap() {
+      ctx.layoutSync.resetWorld();
+    },
+    setMapSkip(on) { // offline computers: passed or not
+      ctx.layoutSync.setSkip(on === true);
+    },
     removeFromLayout(id) {
       if (typeof id !== 'string' || !id || id.length > 64) return;
       ctx.layoutSync.remove(id);
@@ -383,6 +396,29 @@ function setupIpc(ctx) {
     },
     openSharingSettings() {
       shell.openExternal('x-apple.systempreferences:com.apple.Sharing-Settings.extension');
+    },
+    // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh): loaded when turned on, and only then.
+    setDrive(on) {
+      const d = on ? ctx.loadDrive() : ctx.getDrive();
+      if (d) d.setOn(!!on).then(pushState, pushState);
+      else { settings.drive.on = false; save(); }
+    },
+    async pickDriveFolder() {
+      const r = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'], buttonLabel: t('Use This Folder') });
+      if (r.canceled || !r.filePaths[0]) return;
+      actions.setDriveFolder(r.filePaths[0]);
+    },
+    resetDriveFolder() {
+      actions.setDriveFolder('');
+    },
+    setDriveFolder(f) {
+      const d = ctx.getDrive();
+      if (d) d.setFolder(f).then(pushState, pushState);
+      else { settings.drive.folder = f; save(); }
+    },
+    openDriveFolder() {
+      const d = ctx.getDrive();
+      if (d) shell.openPath(d.folder());
     },
     setFiles(partial) {
       setGroup('files', partial);
@@ -401,6 +437,8 @@ function setupIpc(ctx) {
     },
     setNotifs(partial) {
       setGroup('notifs', partial);
+      Object.assign(settings.notifs, require('../../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
+      save();
       ctx.notifs.applySettings();
     },
     muteNotifApp(arg) {
@@ -587,6 +625,7 @@ function setupIpc(ctx) {
       else if (m.do === 'vcamRemove' && vcam) vcam.remove();
       else if (m.do === 'vcamTarget' && vcam) vcam.setTarget(m.target);
       else if (m.do === 'rotate' && vcam) vcam.turn();
+      else if (m.do === 'mirror' && vcam) vcam.setMirror(m.on === true);
     },
     // ReZume tab (shared/rezume.js): loaded when it's first turned on; here only with one phone (shared/rezume-solo.js).
     setRezume(m) {
@@ -598,6 +637,7 @@ function setupIpc(ctx) {
       else ctx.loadRezume();
     },
     rezumeDo(m) {
+      if (m && m.a === 'with' && ctx.rzSolo) return void ctx.rzSolo.choose(typeof m.id === 'string' ? m.id.slice(0, 64) : ''); // the device ReZume is with (shared/rezume-solo.js)
       const r = ctx.rezume();
       if (!r || !m) return;
       if (m.a === 'take') r.take();
@@ -691,7 +731,7 @@ function setupIpc(ctx) {
       if (ctx.adbQr) ctx.adbQr(on === true);
     },
     notifReply(r) {
-      if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image)); // a chat app's conversation (shared/chats.js)
+      if (r && typeof r === 'object' && r.chat) return void ((ctx.chats && ctx.chats()) && (ctx.chats && ctx.chats()).reply(String(r.chat), r.text, r.image, r.remove === true)); // a chat app's conversation (shared/chats.js)
       if (!r || typeof r !== 'object' || !ctx.notifs) return;
       if (r.dismiss) return void ctx.notifs.dismiss(String(r.id || '')); // Overview's × (shared/notifacts.js)
       if (Number.isInteger(r.act)) return void ctx.notifs.act(String(r.id || ''), r.act); // one of its buttons

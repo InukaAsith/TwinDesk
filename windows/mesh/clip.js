@@ -177,6 +177,9 @@ class Clip {
 
   // item: the text, or a picture (shared/clipimage.js).
   _remember(dir, item, from) {
+    // What went out last is no longer on the other side once something came in, and the other way
+    // round: copying it again must send it again (#223).
+    if (dir === 'in') this.lastSync.sent = null; else this.lastSync.received = null;
     const n = this.cfg.historySize;
     if (!n) return;
     if (typeof item === 'string') {
@@ -225,6 +228,7 @@ class Clip {
     if (!this.peerAccepts) return this._skip("{name} doesn't accept {me}’s clipboard");
     // Read together: one await before the checks below, so no other copy or clip runs in between.
     const [text, concealed] = await Promise.all([this._readText(), c.skipConcealed && isConcealed(this.clipboard)]);
+    if (require('../../shared/otp.js').isQuiet(text)) { this.lastSync.sent = text; return; } // a code copied by itself (Notifications): kept here only
     if (!text) return this._picture(concealed);
     if (text === this.lastSync.sent || text === this.lastSync.received) return;
     if (concealed) {

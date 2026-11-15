@@ -2,7 +2,16 @@
 
 Go on with what you were doing on the other device: the browser tab, the document, or the phone app
 in use there. It works between two computers (Mac, Windows, Linux) and between a computer and a
-phone, one-to-one (Multi-device doesn't have it yet).
+phone.
+
+In Multi-device it works with one device of the mesh at a time, picked on the ReZume page under
+**ReZume with** (`shared/rezume-solo.js`, `settings.rezume.with`). The pick is mutual between computers:
+A picks C, so C is told (`rz.partner {on: true, at}`) and is with A, and whoever either was with before
+is told it's over (`rz.partner {on: false}`). Picks made while apart are said again as the two meet
+(`again: true`); the newer one wins. A phone takes no part: picking it is the computer's own choice, and
+with nothing picked, a phone that is the only device connected is the one. Documents go through Files,
+which is the selected device's, so the partner is selected while a document goes (as crossing to it
+with the pointer does). App windows and documents edited in place stay one-to-one.
 
 Off until it's turned on (the ReZume tab on a computer, the ReZume page on the phone). Until then
 nothing is read and no permission is asked. It's one switch for the pair: turned on or off on either

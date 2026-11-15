@@ -19,6 +19,12 @@ UI.tab({
     const { el, api } = UI;
     const status = UI.note('info', '', { literal: true });
     const lock = UI.cursorLock();
+    const emergencyKey = UI.keyRecorder((v) => api.setKeys({ emergencyKeys: v }), {
+      bare: true, allowEscape: true, valid: (v) => {
+        const f = /(?:^|\+)F(\d+)$/.exec(v);
+        return !f || (Number(f[1]) >= 1 && Number(f[1]) <= 20);
+      },
+    });
 
     // The crossing map: both computers' monitors; drag the other one where it is on the desk.
     const map = KvmMapUI.create({ onMove: (side, along) => api.moveKvm({ side, along }), onIdentify: () => api.identifyDisplays() });
@@ -26,6 +32,15 @@ UI.tab({
     const drive = UI.switch((v) => api.setKvm({ driveOther: v }), { label: I18n.t('Use here, control there') });
     const driven = UI.switch((v) => api.setKvm({ beDriven: v }), { label: I18n.t('Let it control this computer') });
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => `${v} px` }, (v) => api.setKvm({ resistancePx: v }));
+    const crossingModifier = UI.select([
+      { value: '', label: I18n.t('None') },
+      { value: 'Command', label: '⌘ Command' },
+      { value: 'Control', label: '⌃ Control' },
+      { value: 'Alt', label: '⌥ Option' },
+      { value: 'Shift', label: '⇧ Shift' },
+    ], (v) => api.setKvm({ crossingModifier: v }));
+    crossingModifier.el.setAttribute('aria-label', I18n.t('Hold key to switch'));
+    let crossingModifierRow;
     const speed = UI.slider({ min: 0.25, max: 4, step: 0.25, format: (v) => `${v.toFixed(2)}×` }, (v) => api.setKvm({ speed: v }));
     const reverse = UI.switch((v) => api.setKvm({ reverseScroll: v }), { label: I18n.t('Reverse scrolling') });
     const gestures = UI.switch((v) => api.setKvm({ gestures: v }), { label: I18n.t('Trackpad gestures') });
@@ -76,9 +91,11 @@ UI.tab({
         UI.dir('w2m', [driven2 = peerRow(I18n.t('Use {name}’s mouse and keyboard on {me}'), '', [driven])]),
       ),
       lock.el,
+      UI.card(I18n.t('Emergency return'), [UI.row(I18n.t('Return shortcut'), I18n.t('Stops input sharing and returns the pointer if the input helper responds. Set separately on each Mac.'), [emergencyKey.el])]),
       UI.card(I18n.t('Where the other computer is'), [map.el]),
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
+        crossingModifierRow = UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when leaving this Mac. On return, the other computer needs a compatible version.'), [crossingModifier.el]),
         speedRow = peerRow(I18n.t('Pointer speed here'), '', [speed]),
         peerRow(I18n.t('Reverse scrolling from {name}'), '', [reverse]),
         gestureRow,
@@ -98,6 +115,7 @@ UI.tab({
       }
       const k = s.kvm;
       if (!k) return;
+      emergencyKey.set((s.keys && s.keys.emergencyKeys) || 'Control+Alt+Command+Escape');
       const p = UI.peer(s);
       const [kind, text] = UI.kvmStatus(s);
       status.className = `note ${kind}`;
@@ -109,6 +127,8 @@ UI.tab({
       drive.set(k.driveOther);
       driven.set(k.beDriven);
       resistance.set(k.resistancePx);
+      crossingModifierRow.hidden = !!s.mesh;
+      crossingModifier.set(k.crossingModifier || '');
       speed.set(k.speed);
       // A computer's mouse here is sped up by it; with a phone, it's this Mac's pointer there (phone-bridge.js).
       speedRow.label.dataset.peer = UI.isPhone(s) ? I18n.t('Pointer speed on {name}') : I18n.t('Pointer speed here');

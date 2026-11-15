@@ -4,7 +4,6 @@
 // small bar (tap the handle at the top): Mirror / Extend, Start / Stop, keyboard, close.
 package com.twindesk.android
 
-import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -14,13 +13,20 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
@@ -45,6 +51,10 @@ import kotlinx.coroutines.delay
 
 class ViewerActivity : ComponentActivity() {
     private var host: WebHost? = null
+    private var started = false
+    private var attached = false
+    private var viewport: Pair<Int, Int>? = null
+    private val resize = Runnable { updateViewport() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,31 +69,44 @@ class ViewerActivity : ComponentActivity() {
             if (ev == "playing" && data != null) core.screen.playing(data.optInt("w"), data.optInt("h"))
         }
         host = h
+        h.view.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                h.view.removeCallbacks(resize)
+                h.view.postDelayed(resize, 250)
+            }
+        }
         setContent { Theme { Viewer(core, h) { finish() } } }
     }
 
     override fun onStart() {
         super.onStart()
+        started = true
+        host?.view?.post(resize)
+    }
+
+    private fun updateViewport() {
+        if (!started) return
         val h = host ?: return
-        val m = resources.displayMetrics
-        // Physical pixels of this screen, landscape (the viewer is held landscape: a computer's
-        // screen is, and Windows' virtual monitor takes no portrait size): the computer makes Extend this shape.
-        // Android 11 and later: the window's metrics; Android 10 (minSdk) has only the display's real size (#93).
-        val (bw, bh) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.currentWindowMetrics.bounds.let { it.width() to it.height() }
-        } else {
-            val real = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION") windowManager.defaultDisplay.getRealMetrics(real)
-            real.widthPixels to real.heightPixels
-        }
-        val w = bw.coerceAtLeast(m.widthPixels)
-        val hpx = bh.coerceAtLeast(m.heightPixels)
-        Core.get(this).screen.attach(h, maxOf(w, hpx), minOf(w, hpx))
+        val w = h.view.width
+        val hpx = h.view.height
+        if (w <= 0 || hpx <= 0) return
+        val core = Core.get(this)
+        // The measured WebView follows folds, split windows and cutouts. Mac Extend can use
+        // portrait; other hosts keep the landscape policy their virtual monitors already expect.
+        val next = if (core.host?.os == "mac") w to hpx else maxOf(w, hpx) to minOf(w, hpx)
+        if (viewport == next) return
+        viewport = next
+        if (attached) core.screen.resize(h, next.first, next.second)
+        else { attached = true; core.screen.attach(h, next.first, next.second) }
     }
 
     override fun onStop() {
         super.onStop()
+        started = false
+        host?.view?.removeCallbacks(resize)
         host?.let { Core.get(this).screen.detach(it) }
+        attached = false
+        viewport = null
     }
 
     override fun onDestroy() {
@@ -109,7 +132,7 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
         else if (seenOn && s.autoOpened && s.state != null) close()
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.displayCutout)) {
         AndroidView(factory = { host.view.also { (it.parent as? android.view.ViewGroup)?.removeView(it) } }, modifier = Modifier.fillMaxSize())
         // A small handle at the top: tap for the bar (the rest of the screen is the Mac's).
         Box(
@@ -117,29 +140,39 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                 .clip(RoundedCornerShape(9.dp)).background(Color(0x55FFFFFF)).clickable { bar = !bar },
         )
         AnimatedVisibility(bar, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)) {
-            Row(
-                Modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(name, color = Color.White, modifier = Modifier.padding(start = 8.dp))
-                // Which way the picture comes: the USB cable, or Wi-Fi.
-                Text(
-                    if (core.link.wired) "USB" else "Wi-Fi", color = Color.White, fontSize = 11.sp,
-                    modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(6.dp))
-                        .background(if (core.link.wired) Color(0xFF30D158).copy(alpha = 0.35f) else Color(0x33FFFFFF)).padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-                if (s.remote) {
-                    for (mode in listOf("mirror", "extend")) {
-                        val on = s.sharing && s.mode == mode
-                        val label = if (mode == "mirror") tr("Mirror") else tr("Extend")
-                        if (on) FilledTonalButton(onClick = { bar = true }) { Text(label) }
-                        else TextButton(onClick = { s.pick(mode); bar = true }) { Text(label, color = Color.White) }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(name, color = Color.White, modifier = Modifier.padding(start = 8.dp))
+                    // Which way the picture comes: the USB cable, or Wi-Fi.
+                    Text(
+                        if (core.link.wired) "USB" else "Wi-Fi", color = Color.White, fontSize = 11.sp,
+                        modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(6.dp))
+                            .background(if (core.link.wired) Color(0xFF30D158).copy(alpha = 0.35f) else Color(0x33FFFFFF)).padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                    if (s.remote) {
+                        for (mode in listOf("mirror", "extend")) {
+                            val on = s.sharing && (s.mode == mode || (mode == "mirror" && s.mode == "custom" && s.displayId.isNotEmpty()))
+                            val label = if (mode == "mirror") tr("Mirror") else tr("Extend")
+                            if (on) FilledTonalButton(onClick = { bar = true }) { Text(label) }
+                            else TextButton(onClick = { s.pick(mode); bar = true }) { Text(label, color = Color.White) }
+                        }
+                        if (s.sharing) TextButton(onClick = { s.control(share = false) }) { Text(tr("Stop"), color = Color.White) }
                     }
-                    if (s.sharing) TextButton(onClick = { s.control(share = false) }) { Text(tr("Stop"), color = Color.White) }
+                    TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
+                    TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
                 }
-                TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
-                TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
+                if (s.remote && s.displays.size > 1) {
+                    Row(
+                        Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        MacDisplayPick(s.displays, if (s.sharing && s.mode != "extend") s.displayId else "", onDark = true) { s.pickDisplay(it); bar = true }
+                    }
+                }
             }
         }
     }

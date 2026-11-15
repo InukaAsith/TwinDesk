@@ -80,6 +80,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 const P = require('../shared/protocol.js');
+const Pick = require('../shared/screen-pick.js');
 const CL = require('../shared/cursorlock.js');
 const trayMenu = require('../shared/traymenu.js');
 const I18n = require('../shared/i18n.js');
@@ -269,6 +270,7 @@ function pushState() {
     if (kvm && svc) svc.fileClip.syncConnected(!!kvm.server.current); // the file shortcuts too
     if (svc) state.terminal = { ...settings.terminal, ...svc.terminal.view, toPc: svc.sshClient.view };
     if (svc) state.files = { ...settings.files, ...svc.drop.view, ...svc.fileSend.view, clip: svc.fileClip.view };
+    if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || path.join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     if (svc) state.notifs = { ...settings.notifs, ...svc.notifs.view };
     state.history = svc && svc.history ? svc.history.view() : null; // Keep history (shared/histkeeper.js)
     state.chats = svc && svc.chats ? svc.chats.view() : null; // Messages' WhatsApp, Instagram… conversations
@@ -302,14 +304,45 @@ function pushState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+
+// This Mac's apps are open on the virtual display, which is what is shared until they close.
+function appsHeld() {
+  return !!(svc && svc.displays && svc.displays.holds && svc.displays.holds.has('apps-open'));
+}
+
 function sendScreenState() {
   const c = peer && peer.current;
   if (!c || !svc) return void (screenStateKey = '');
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], ...Pick.stateFields(svc.displays.list(), svc.displays.target(), settings.sharing.remote !== false && !appsHeld()) };
   const key = JSON.stringify([c.deviceId, msg]);
   if (key === screenStateKey) return;
   screenStateKey = key;
   peer.sendToClient(msg);
+}
+
+// The viewer asked to mirror one real display. True: that request was handled (a refusal too).
+// False: no displayId, so Extend/Mirror below is unchanged. Never clears an owner's per-device choice.
+function mirrorDisplay(m) {
+  const pick = Pick.viewerPick(m, svc.displays.list(), { held: appsHeld() });
+  if (pick.skip) return false;
+  if (!pick.ok) {
+    screenStateKey = '';
+    pushState(); // the phone's list is stale, or the pick was not taken: say what is on now
+    return true;
+  }
+  const same = Number(settings.sharing.displayId) === pick.displayId && !(settings.virtual && settings.virtual.enabled);
+  if (!same) {
+    settings.virtual.enabled = false; // as Mirror does, without forcing the main display
+    settings.sharing.displayId = pick.displayId;
+    store.saveSettings(settings);
+  }
+  // One restart. selectDisplay restarts at once, and applyVirtual restarts again when the virtual
+  // display goes away. The setting is written first: capture and input both read displays.target().
+  const turningOn = m.share === true && !settings.sharing.on;
+  if (turningOn) actions.setSharing(true, 'remote');
+  else if (!same && settings.sharing.on) svc.displays.applyVirtual().then(() => svc.stream.restart('display selected'));
+  else if (!same) svc.displays.applyVirtual();
+  return true;
 }
 
 // The viewer on the other computer starts/stops our sharing or switches Extend/Mirror.
@@ -317,6 +350,7 @@ function onScreenCtl(m) {
   // The phone viewer's Close stops sharing even when the viewer may not start and switch it.
   if (m.share === false && m.close === true) return void (settings.sharing.on && actions.setSharing(false, 'remote'));
   if (settings.sharing.remote === false) return void (screenStateKey = '', pushState()); // re-send: remote false
+  if (m.share !== false && mirrorDisplay(m)) return;
   // Started from the viewer without a mode: Mirror (the virtual display doesn't always start); Extend is its switch.
   const mode = m.mode === 'extend' || m.mode === 'mirror' ? m.mode : m.share === true && !settings.sharing.on ? 'mirror' : null;
   if (mode && displayMode() !== mode) actions.setDisplayMode(mode);
@@ -604,7 +638,7 @@ app.whenReady().then(() => {
     pushState();
   });
 
-  discovery = new Discovery(id, server.port);
+  discovery = new Discovery(id, server.port, { rc: true }); // Android may reclaim after the grace window (#192)
   discovery.on('change', pushState);
   discovery.start();
   link = new Link(id, {
@@ -612,6 +646,7 @@ app.whenReady().then(() => {
     resolve: (hostId) => { const d = discovery.get(hostId); return d && !d.ble ? d : null; }, // a Mac host: on the network only
   });
   link.on('change', pushState);
+  link.on('welcome', () => pairing.clearReturn());
   link.on('request', showWindow);
   // Take over on a Mac we're a guest of: back to it, taking the session over (a device connected
   // to us goes first, as Take over here does).
@@ -644,6 +679,24 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
   svc.kvm.laneReady.then(laneGo);
+  // File Sharing › TwinDesk Drive (shared/drive-host.js, docs/drive.md): nothing of it is loaded until it's on.
+  svc.loadDrive = () => svc.drive || (svc.drive = require('../shared/drive-host.js').create({
+    settings, save: () => store.saveSettings(settings), me: id.macId, meName: id.macName, userData: app.getPath('userData'),
+    trash: (p) => require('electron').shell.trashItem(p),
+    adapter: {
+      on: (t, fn) => peer.on(`t:${t}`, (m) => fn(m)),
+      onUp: (fn) => peer.on('client', () => fn()),
+      onDown: (fn) => peer.on('closed', () => !peer.current && fn()),
+      onMoved: (fn) => peer.on('transport', () => fn()),
+      send: (m) => peer.sendToClient(m),
+      session: () => peer._fxSession(),
+      peerName: () => (peer.current && peer.current.name) || '',
+      setRequest: (fn) => { peer.drive = fn; },
+    },
+    onChange: pushState,
+  }));
+  svc.getDrive = () => svc.drive || null;
+  if (settings.drive.on) svc.loadDrive();
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer’s window goes home there (pcapps.js); one of this Mac’s goes over
   // window by window, shared on its own (appsend.js, movewin.js), apart from how apps open.
@@ -1335,6 +1388,9 @@ function loadHub() {
     callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
+  // Calls › Pause what plays here: what plays on this Mac pauses for a call (shared/callpause.js).
+  const callPause = new (require('../shared/callpause.js').CallPause)({ media: () => svc.pcNow && svc.pcNow.media, on: () => settings.hub.callPause === true });
+  hub.on('call', (c) => callPause.onCall(c));
   hub.on('change', popup);
   if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
   return hub;

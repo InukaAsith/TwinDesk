@@ -68,6 +68,26 @@ class KvmMap extends EventEmitter {
   }
 
   // For kvmConfig / armReturn: where the edge crosses (null: anywhere on the side).
+  // An offset from the other computer, where the pointer comes home along our side: kept on the part
+  // of it that touches the other computer. One it never mapped (it didn't know our monitors yet)
+  // otherwise put the pointer on a monitor of ours that doesn't touch it. Unknown layout: unchanged.
+  land(offset) {
+    const a = this.arrange;
+    if (!a || typeof offset !== 'number' || !Number.isFinite(offset)) return offset;
+    const z = G.zones(this.mine, this.theirs, a);
+    if (!z.length) return offset;
+    const o = Math.min(1, Math.max(0, offset));
+    if (z.some(([lo, hi]) => o >= lo && o <= hi)) return o;
+    const s = G.span(this.mine, a.side);
+    const pad = 0.5 / Math.max(1, s.len); // half a point inside the stretch
+    let best = null;
+    for (const [lo, hi] of z) {
+      const v = Math.min(hi - pad, Math.max(lo + pad, o));
+      if (best === null || Math.abs(v - o) < Math.abs(best - o)) best = v;
+    }
+    return best;
+  }
+
   zones() {
     const a = this.arrange;
     return a ? G.zonesText(this.mine, this.theirs, a) : null;

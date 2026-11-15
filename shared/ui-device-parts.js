@@ -475,6 +475,7 @@
         lower.hidden = !shown.length;
         if (lower.hidden) return;
         left.hidden = right.hidden = false; // a card in a hidden column measures 0
+        for (const c of cards) c.classList.remove('dv-fill'); // measured at their own height
         const one = shown.length < 2 || narrow.matches;
         let hl = 0;
         let hr = 0;
@@ -491,6 +492,10 @@
         left.hidden = !plan.some(([, x]) => x === left);
         right.hidden = !plan.some(([, x]) => x === right);
         lower.classList.toggle('one', left.hidden || right.hidden);
+        // The last card of each column reaches down to the other's bottom: the two end level (#224).
+        if (!lower.classList.contains('one')) {
+          for (const col of [left, right]) { const last = plan.filter(([, x]) => x === col).pop(); if (last) last[0].classList.add('dv-fill'); }
+        }
       };
       narrow.addEventListener('change', flow);
 

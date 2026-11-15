@@ -158,6 +158,7 @@ object Proto {
         const val SMS_SENT = "sms.sent"
         const val SMS_NEW = "sms.new"
         const val MEDIA_LIST = "media.list"
+        const val MEDIA_ALBUMS = "media.albums"
         const val MEDIA_THUMB = "media.thumb"
         const val MEDIA_VIEW = "media.view"
         const val MEDIA_SAVE = "media.save"

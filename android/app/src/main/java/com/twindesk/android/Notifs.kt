@@ -20,6 +20,10 @@ import org.json.JSONObject
 
 class Notifs(core: Core) : Feature(core) {
     @Volatile var peerAccepts = false; private set
+    // The computer shows pictures and progress bars that fill in place (its notif.policy says rich):
+    // only then are they sent (an older computer would show every update of a bar as a new one).
+    @Volatile private var peerRich = false
+    private val liveAt = HashMap<String, Long>() // key -> when its bar was last sent
     @Volatile var sent = 0; private set
     @Volatile var shown = 0; private set
     private val muted get() = core.store.prefsSet("notifs.muted")
@@ -112,6 +116,7 @@ class Notifs(core: Core) : Feature(core) {
 
     override fun onWelcome(host: Host) {
         peerAccepts = false
+        peerRich = false
         chatsWanted = false
         sendPolicy()
     }
@@ -206,6 +211,8 @@ class Notifs(core: Core) : Feature(core) {
         val n = sbn.notification ?: return
         if (sbn.packageName !in chatApps && !otherChat(sbn, n)) return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        // "Sending video…", "Deleting chats 100%", "Checking for new messages": the app at work, not a chat.
+        if (sbn.isOngoing || n.category == Notification.CATEGORY_PROGRESS || n.category == Notification.CATEGORY_SERVICE || liveOf(n) != null) return
         if (core.store.flag("notifs.hideText", false)) return
         val x = n.extras
         val title = extractTitle(x)
@@ -239,7 +246,7 @@ class Notifs(core: Core) : Feature(core) {
                 "chat.conv", "key" to key.take(300), "app" to sbn.packageName, "appName" to appNameOf(sbn.packageName),
                 "name" to name.take(200), "group" to group, "id" to sbn.key.take(200), "reply" to (reply != null), "items" to items,
                 "pic" to true, // takes a picture from the computer (chat.pic)
-            ),
+            ).apply { avatarOf(n)?.let { put("avatar", it) } }, // the contact's or the group's picture
         )
     }
 
@@ -265,10 +272,15 @@ class Notifs(core: Core) : Feature(core) {
         if (!peerAccepts || !core.sync.get("notifs", "out") || !core.link.connected) return
         val n = sbn.notification ?: return
         val pkg = sbn.packageName
-        if (pkg == core.ctx.packageName || sbn.isOngoing) return
+        if (pkg == core.ctx.packageName) return
+        // A progress bar (a download, an upload, a timer's): to a computer that fills it in place,
+        // at most once a second until it's done. Other ongoing ones (music, navigation) never.
+        val live = if (peerRich) liveOf(n) else null
+        if (sbn.isOngoing && live == null) return
 
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return // the group's children come too (a summary is "3 messages from 2 chats")
-        if (n.category == Notification.CATEGORY_TRANSPORT || n.category == Notification.CATEGORY_PROGRESS || n.category == Notification.CATEGORY_SERVICE) return
+        if (n.category == Notification.CATEGORY_TRANSPORT || n.category == Notification.CATEGORY_SERVICE) return
+        if (n.category == Notification.CATEGORY_PROGRESS && live == null) return
         if (n.category == Notification.CATEGORY_CALL && core.hub.callsOn) return // the computer shows the call itself
         seen(pkg)
         if (!sends(pkg)) return
@@ -278,13 +290,22 @@ class Notifs(core: Core) : Feature(core) {
         val text = extractText(x)
         if (title.isEmpty() && text.isEmpty()) return
 
-        // Deduplicate rapid duplicate notifications (e.g. summary + child sent at same instant)
-        val hash = "$pkg|$title|$text"
+        // Deduplicate rapid duplicate notifications (e.g. summary + child sent at same instant);
+        // a progress bar instead: once a second, and always its end.
         val now = System.currentTimeMillis()
-        synchronized(recentSent) {
-            val last = recentSent[hash] ?: 0L
-            if (now - last < 2000L) return
-            recentSent[hash] = now
+        if (live != null) {
+            synchronized(liveAt) {
+                if (!live.optBoolean("done") && now - (liveAt[sbn.key] ?: 0L) < 1000L) return
+                liveAt[sbn.key] = now
+                if (liveAt.size > 50) liveAt.keys.firstOrNull()?.let { liveAt.remove(it) }
+            }
+        } else {
+            val hash = "$pkg|$title|$text"
+            synchronized(recentSent) {
+                val last = recentSent[hash] ?: 0L
+                if (now - last < 2000L) return
+                recentSent[hash] = now
+            }
         }
 
         val pm = core.ctx.packageManager
@@ -312,6 +333,11 @@ class Notifs(core: Core) : Feature(core) {
                 if (icon != null) put("icon", icon)
                 if (reply != null) put("reply", true) // the computer may answer it (notif.reply)
                 if (buttons.isNotEmpty()) put("actions", jsonArray(buttons.map { it.title.toString().take(40) }))
+                if (live != null) put("live", live)
+                if (peerRich && !hide) {
+                    picOf(n)?.let { put("pic", it) } // a big picture (a photo sent in a chat, a screenshot)
+                    avatarOf(n)?.let { put("avatar", it) } // the sender's or the chat's picture
+                }
             },
         )
         sent++
@@ -338,7 +364,7 @@ class Notifs(core: Core) : Feature(core) {
                 val a = synchronized(actions) { actions[m.str("id", 200)] }?.getOrNull(m.optInt("i", -1)) ?: return true
                 runCatching { a.actionIntent.send() }
             }
-            Proto.T.NOTIF_POLICY -> peerAccepts = m.optBoolean("accept")
+            Proto.T.NOTIF_POLICY -> { peerAccepts = m.optBoolean("accept"); peerRich = m.optBoolean("rich") }
             "chat.want" -> {
                 chatsWanted = m.optBoolean("on") && hasAccess
                 if (chatsWanted) chatSnapshot()
@@ -420,6 +446,55 @@ class Notifs(core: Core) : Feature(core) {
     companion object {
         private val SMS_APPS = setOf("com.google.android.apps.messaging", "com.samsung.android.messaging", "com.android.mms", "com.android.messaging")
     }
+
+    // A notification's progress bar: {v, max, ind, done}, or null without one.
+    private fun liveOf(n: Notification): JSONObject? {
+        val x = n.extras ?: return null
+        val max = x.getInt(Notification.EXTRA_PROGRESS_MAX, 0)
+        val ind = x.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)
+        if (max <= 0 && !ind) return null
+        val v = x.getInt(Notification.EXTRA_PROGRESS, 0).coerceIn(0, maxOf(max, 0))
+        return JSONObject().put("v", v).put("max", max).put("ind", ind).put("done", max > 0 && v >= max)
+    }
+
+    // A JPEG data: URL of a bitmap at most `side` px wide and tall, or null.
+    private fun jpegOf(b: Bitmap?, side: Int, q: Int): String? = runCatching {
+        if (b == null || b.width <= 0 || b.height <= 0) return null
+        val k = minOf(1f, side.toFloat() / maxOf(b.width, b.height))
+        val small = if (k < 1f) Bitmap.createScaledBitmap(b, (b.width * k).toInt().coerceAtLeast(1), (b.height * k).toInt().coerceAtLeast(1), true) else b
+        val out = ByteArrayOutputStream()
+        small.compress(Bitmap.CompressFormat.JPEG, q, out)
+        "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }.getOrNull()
+
+    private fun bitmapOf(d: android.graphics.drawable.Drawable?, side: Int): Bitmap? {
+        if (d == null) return null
+        if (d is android.graphics.drawable.BitmapDrawable && d.bitmap != null) return d.bitmap
+        val w = if (d.intrinsicWidth > 0) d.intrinsicWidth else side
+        val h = if (d.intrinsicHeight > 0) d.intrinsicHeight else side
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        d.setBounds(0, 0, w, h)
+        d.draw(Canvas(bmp))
+        return bmp
+    }
+
+    // BigPictureStyle's picture (a Bitmap, or from Android 12 an Icon), up to 480 px.
+    @Suppress("DEPRECATION")
+    private fun picOf(n: Notification): String? = runCatching {
+        val x = n.extras ?: return null
+        val bmp: Bitmap? = when (val p = x.get(Notification.EXTRA_PICTURE)) {
+            is Bitmap -> p
+            is android.graphics.drawable.Icon -> bitmapOf(p.loadDrawable(core.ctx), 480)
+            else -> if (Build.VERSION.SDK_INT >= 31) (x.get(Notification.EXTRA_PICTURE_ICON) as? android.graphics.drawable.Icon)?.let { bitmapOf(it.loadDrawable(core.ctx), 480) } else null
+        }
+        jpegOf(bmp, 480, 72)?.takeIf { it.length < 380_000 }
+    }.getOrNull()
+
+    // The large icon (a contact's or a chat's picture), 72 px.
+    private fun avatarOf(n: Notification): String? = runCatching {
+        val icon = n.getLargeIcon() ?: return null
+        jpegOf(bitmapOf(icon.loadDrawable(core.ctx), 72), 72, 80)?.takeIf { it.length < 55_000 }
+    }.getOrNull()
 
     // A 64 px PNG of the app's icon as a data: URL, or null.
     private fun appIcon(pkg: String): String? = runCatching {

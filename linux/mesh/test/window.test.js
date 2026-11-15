@@ -15,14 +15,16 @@ const ROOT = path.join(__dirname, '..', '..', '..');
 function scripts(platform) {
   const html = fs.readFileSync(path.join(ROOT, platform, 'mesh', 'app.html'), 'utf8');
   assert.ok(html.includes('<base href="../">'), `${platform}: the page loads from its platform folder`);
-  return [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => path.posix.normalize(`${platform}/${m[1]}`));
+  // A module script (shared/modload.js) counts as the script it loads.
+  return [...html.matchAll(/<script src="([^"]+)"(?: data-src="([^"]+)")?><\/script>/g)].map((m) => path.posix.normalize(`${platform}/${m[2] || m[1]}`));
 }
 
 const linux = scripts('linux');
 const windows = scripts('windows');
 for (const s of [...linux, ...windows]) assert.ok(fs.existsSync(path.join(ROOT, s)), `${s} exists`);
 
-const shared = (list) => list.filter((s) => s.startsWith('shared/'));
+const WINDOWS_ONLY = ['shared/ui-portable.js']; // TwinDesk Portable is a Windows build (windows/portable.js)
+const shared = (list) => list.filter((s) => s.startsWith('shared/') && !WINDOWS_ONLY.includes(s));
 assert.deepStrictEqual(shared(linux), shared(windows), 'the same shared scripts, in the same order');
 assert.ok(linux.indexOf('shared/sidebar-model.js') >= 0 && linux.indexOf('shared/sidebar-model.js') < linux.indexOf('linux/mesh/app.js'),
   'sidebar-model.js before mesh/app.js, which uses it');

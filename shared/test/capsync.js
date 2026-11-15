@@ -51,27 +51,30 @@ const tick = () => new Promise((r) => setImmediate(r));
   assert.deepStrictEqual(none, [], 'helper says unknown: nothing');
 
   // Linux: the keyboard light, and a tap to change it
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-leds-'));
-  assert.strictEqual(linuxCaps(dir), null, 'no light: unknown');
-  fs.mkdirSync(path.join(dir, 'input3::capslock'));
-  fs.mkdirSync(path.join(dir, 'input3::numlock'));
-  fs.writeFileSync(path.join(dir, 'input3::capslock', 'brightness'), '0\n');
-  fs.writeFileSync(path.join(dir, 'input3::numlock', 'brightness'), '1\n');
-  assert.strictEqual(linuxCaps(dir), false);
-  const sent = [];
-  const lx = new CapsSync({ helper: { send: (cmd, a) => sent.push([cmd, a]) }, platform: 'linux', leds: dir });
-  const lo = [];
-  await lx.handOver((m) => lo.push(m));
-  assert.deepStrictEqual(lo, [{ t: P.T.KVM_CAPS, on: false }]);
-  lx.expect();
-  lx.onPeer({ on: false });
-  await tick();
-  assert.deepStrictEqual(sent, [], 'the same: no tap');
-  lx.expect();
-  lx.onPeer({ on: true });
-  await tick();
-  assert.deepStrictEqual(sent.map(([, a]) => a.ev), [{ t: P.T.K_KEY_DOWN, code: 'CapsLock' }, { t: P.T.K_KEY_UP, code: 'CapsLock' }], 'different: a Caps Lock tap');
-  fs.rmSync(dir, { recursive: true, force: true });
+  // (Linux's LED names have ':', which a Windows folder can't: there it is left out)
+  if (process.platform !== 'win32') {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-leds-'));
+    assert.strictEqual(linuxCaps(dir), null, 'no light: unknown');
+    fs.mkdirSync(path.join(dir, 'input3::capslock'));
+    fs.mkdirSync(path.join(dir, 'input3::numlock'));
+    fs.writeFileSync(path.join(dir, 'input3::capslock', 'brightness'), '0\n');
+    fs.writeFileSync(path.join(dir, 'input3::numlock', 'brightness'), '1\n');
+    assert.strictEqual(linuxCaps(dir), false);
+    const sent = [];
+    const lx = new CapsSync({ helper: { send: (cmd, a) => sent.push([cmd, a]) }, platform: 'linux', leds: dir });
+    const lo = [];
+    await lx.handOver((m) => lo.push(m));
+    assert.deepStrictEqual(lo, [{ t: P.T.KVM_CAPS, on: false }]);
+    lx.expect();
+    lx.onPeer({ on: false });
+    await tick();
+    assert.deepStrictEqual(sent, [], 'the same: no tap');
+    lx.expect();
+    lx.onPeer({ on: true });
+    await tick();
+    assert.deepStrictEqual(sent.map(([, a]) => a.ev), [{ t: P.T.K_KEY_DOWN, code: 'CapsLock' }, { t: P.T.K_KEY_UP, code: 'CapsLock' }], 'different: a Caps Lock tap');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 
   // every kvm.js hands it over and takes it
   const root = path.join(__dirname, '..', '..');

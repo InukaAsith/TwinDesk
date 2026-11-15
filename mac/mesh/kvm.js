@@ -22,6 +22,9 @@ const { LaneMesh, LANE_TYPES } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
 const store = require('./store');
+// Hold a key to cross (#230; in Multi-device, only this Mac's own mouse and trackpad at its edges)
+// and the emergency return (#178).
+const Crossing = require('../../shared/crossing.js');
 
 // {them} = the other computer's name (Kvm._them).
 const REFUSED = { busy: '{them} is using this computer right now', not_allowed: '{them} doesn’t accept input from here' };
@@ -95,8 +98,11 @@ class Kvm extends EventEmitter {
       },
       [P.T.KVM_HOME]: (m, from) => {
         if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
-        const side = this.viaSide || this._sideOf(from); // driving a phone through a computer: back at the edge that led to the phone
-        this.helper.send('capture', typeof m.offset === 'number' && side ? { on: false, side, offset: m.offset } : { on: false });
+        // driving a phone through a computer: back at the edge that led to the phone; else the side the monitor map says
+        const side = this.viaSide || (E.SIDES.includes(m.side) ? m.side : this._sideOf(from));
+        // kept on the part of that side that touches the device (an offset it never mapped went to another monitor)
+        const offset = typeof m.offset === 'number' && !this.viaSide ? this.layoutSync.land(side, m.offset, from) : m.offset;
+        this.helper.send('capture', typeof m.offset === 'number' && side ? { on: false, side, offset } : { on: false });
         this._setMode('home', '');
       },
       [P.T.KVM_RELEASE]: (m, from) => {
@@ -316,12 +322,15 @@ class Kvm extends EventEmitter {
   // Call after settings.kvm or the link changed.
   config() {
     const k = this.cfg;
-    const sides = this._watchedSides();
+    const edge = this._edgeConfig();
+    const sides = edge.sides;
     this.helper
       .request('kvmConfig', {
-        side: sides[0] || null, sides, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
+        side: sides[0] || null, sides, zones: edge.zones, resistancePx: k.resistancePx, keyboard: !!k.keyboard,
         driveOther: sides.length > 0,
         hotkey: this.getSettings().keys.hotkey || P.HOTKEY_MAC,
+        crossingModifier: Crossing.modifier(k.crossingModifier),
+        emergencyKeys: Crossing.emergency(this.getSettings().keys.emergencyKeys),
         cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
         dwellMs: P.KVM_EDGE_DWELL_MS,
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
@@ -333,10 +342,15 @@ class Kvm extends EventEmitter {
 
   // The sides the helper watches: a side whose device is connected, while cursor sharing is on.
   _watchedSides() {
+    return this._edgeConfig().sides;
+  }
+
+  // The monitor map (#225): the sides and the zones along them where the pointer may cross, only towards
+  // a device we may drive now (an iPhone can't be driven).
+  _edgeConfig() {
     const k = this.cfg;
-    if (!this.linked || !k.driveOther || !k.mouse || (this.locked && this.mode === 'home')) return [];
-    const edges = this.edges;
-    return E.SIDES.filter((side) => !!edges[side] && this._connectedTo(edges[side]) && !this._pausedFor(edges[side]));
+    if (!this.linked || !k.driveOther || !k.mouse || (this.locked && this.mode === 'home')) return { sides: [], zones: 'none' };
+    return this.layoutSync.edgeConfig((id) => this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && !this._pausedFor(id));
   }
 
   // Mouse and keyboard sharing as a whole (the hotkey's double-tap): off = everything home and
@@ -425,6 +439,7 @@ class Kvm extends EventEmitter {
       if (prev === 'home') this.config();
     }
     if (prev !== mode) this.lockKey.reset();
+    if (prev !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' }); // the emergency shortcut works while a session is on
     if (prev !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();
@@ -457,7 +472,7 @@ class Kvm extends EventEmitter {
   }
 
   _canDriveTo(id) {
-    return this._connectedTo(id) && !!this.cfg.driveOther && this.linked && !this._pausedFor(id);
+    return this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && !!this.cfg.driveOther && this.linked && !this._pausedFor(id);
   }
 
   // A connected computer (not a phone) we may drive, to drive the phone `id` through.
@@ -641,6 +656,9 @@ class Kvm extends EventEmitter {
       case 'shake':
         if (this.mode === 'driving' && this.cfg.shakeHome !== false) this.goHome('');
         break;
+      case 'emergency':
+        this._emergency();
+        break;
       case 'captureEnded':
         if (this.mode === 'driving') this.goHome(ev.reason === 'deadman' ? 'Input came back by itself (safety timeout)' : '');
         break;
@@ -661,7 +679,8 @@ class Kvm extends EventEmitter {
   _onEdge(ev) {
     // The one-to-one helper (macshare-helper-multi not built) says no side: it watches the first one we sent.
     const side = E.SIDES.includes(ev.side) ? ev.side : this._watchedSides()[0] || null;
-    const id = side ? this.edges[side] : null;
+    const r = side ? this.layoutSync.cross(side, ev.offset) : null; // the monitor map: who is there, where along it
+    const id = r ? r.to : null;
     if (this.mode !== 'home' || this.locked || !id || !this._canDriveTo(id) || !this.cfg.mouse || (!ev.moving && this.blockEdge && this.blockEdge())) {
       // The helper already captures (it started at the edge); undo that if we can't cross.
       this.helper.send('capture', { on: false });
@@ -672,7 +691,7 @@ class Kvm extends EventEmitter {
       this.helper.send('capture', { on: false });
       return;
     }
-    this._take({ where: { side: P.opposite(side), offset: ev.offset }, paths: ev.drag && ev.drag.paths }, id);
+    this._take({ where: { side: P.opposite(side), offset: r.offset }, paths: ev.drag && ev.drag.paths }, id);
     if (ev.moving && this.onMoveWindow) this.onMoveWindow(ev, id); // a window grabbed with the move key (main.js)
   }
 
@@ -705,14 +724,14 @@ class Kvm extends EventEmitter {
   // The sides of this Mac that have a device behind them: while we are driven the helper watches them
   // (the way back to the driver, and every edge that leads on to another device).
   _returnSides() {
-    const edges = this.edges;
-    return E.SIDES.filter((side) => !!edges[side]);
+    return this.layoutSync.edgeConfig().sides;
   }
 
   _armReturn() {
-    const sides = this._returnSides();
+    const { sides, zones } = this.layoutSync.edgeConfig();
     // side: the first one, for a helper from before several sides (it watches that one; a newer one reads sides)
-    this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, resistancePx: this.cfg.resistancePx });
+    this.returnSide = sides[0] || null;
+    this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, zones, resistancePx: this.cfg.resistancePx });
   }
 
   // The helper saw the pointer leave this Mac (driven) through msg.side. Back to the driver: kvm.home as
@@ -720,13 +739,17 @@ class Kvm extends EventEmitter {
   // that side: ignored. The watch is armed again unless we went home, so a driver that did not take the
   // device leaves the edge live.
   _onReturn(msg) {
-    const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
-    if (!side || side === this.layoutSync.sideTo(this.partner)) {
+    // An older (one-side) helper names none: it watches the first side we armed. Its offset is ours along that
+    // side and still needs mapping; sent as it was, the driver read it along its own edge (another monitor).
+    const side = E.SIDES.includes(msg.side) ? msg.side : this.returnSide || null;
+    const r = side ? this.layoutSync.cross(side, msg.offset) : null; // the monitor map: who is there, where along it
+    const to = r ? r.to : null;
+    if (!side || to === this.partner || (!to && side === this.layoutSync.sideTo(this.partner))) {
       if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg, this.partner); // a window grabbed with the move key (main.js)
-      return this._sendHome(msg.offset, '');
+      return this._sendHome(to === this.partner ? r.offset : msg.offset, '', side ? P.opposite(side) : null);
     }
-    const to = this.layoutSync.across(side);
-    if (to && to !== this.partner) this._send(this.partner, { t: P.T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
+    // offset: ours along that side; the driver maps it again through the map (cross from us)
+    if (to) this._send(this.partner, { t: P.T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
     this._armReturn();
   }
 
@@ -740,12 +763,13 @@ class Kvm extends EventEmitter {
     const side = E.SIDES.includes(m.side) ? m.side : null;
     const to = typeof m.to === 'string' ? m.to : '';
     if (!side || !to || to === from || to === this.hub.device.id) return;
-    if (this.layoutSync.across(side, from) !== to) return; // not the device next to `from` on that side
+    const r = this.layoutSync.cross(side, m.offset, from);
+    if (!r || r.to !== to) return; // not the device beyond `from` there (the monitor map)
     if (!this._canDriveTo(to) || !this.cfg.mouse) return; // connected, and our switch and cursor sharing for it
     if (!this.hub.select(to)) return;
     this.route++;
     this._send(from, { t: P.T.KVM_RELEASE, route: this.route }); // the device we drove goes home
-    this._take({ where: { side: P.opposite(side), offset: Number(m.offset) || 0 } }, to);
+    this._take({ where: { side: P.opposite(side), offset: r.offset } }, to);
   }
 
   _onK(m, from) {
@@ -853,10 +877,12 @@ class Kvm extends EventEmitter {
   }
 
   // Rows 8c: send the input home to the partner (return edge or hotkey).
-  _sendHome(offset, message) {
+  // side: the driver's side the pointer comes back through (the monitor map: it can be any of them).
+  _sendHome(offset, message, side = null) {
     if (this.mode !== 'driven') return;
     const msg = { t: P.T.KVM_HOME, route: this.peerRoute };
     if (typeof offset === 'number') msg.offset = offset;
+    if (side && typeof offset === 'number') msg.side = side;
     const to = this.partner;
     this._send(to, msg);
     this.caps.handOver((c) => this._send(to, c)); // our Caps Lock, home
@@ -872,6 +898,14 @@ class Kvm extends EventEmitter {
     this.helper.send('armReturn', { on: false });
     this._setMode('home', message);
     this.clipboard.sendIfChanged('switch');
+  }
+
+  // The emergency shortcut (#178; the helper already stopped capturing, or let go of what it
+  // injected): everything home, and sharing off until it's turned on again.
+  _emergency() {
+    this.home();
+    if (this.linked) this.setLinked(false);
+    this.helper.send('emergencyActive', { on: false });
   }
 
   // Menu bar "Bring Mouse and Keyboard Back".

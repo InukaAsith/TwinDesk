@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld('macshare', {
   openTerminal: call('openTerminal'),
   setupSshd: call('setupSshd'),
   setFiles: call('setFiles'),
+  setDrive: call('setDrive'), // File Sharing › TwinDesk Drive
+  pickDriveFolder: call('pickDriveFolder'),
+  resetDriveFolder: call('resetDriveFolder'),
+  openDriveFolder: call('openDriveFolder'),
   cancelDrop: call('cancelDrop'),
   clearFiles: call('clearFiles'),
   setShareOn: call('setShareOn'),

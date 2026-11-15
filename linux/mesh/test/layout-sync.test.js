@@ -46,6 +46,8 @@ async function node(name) {
     },
     knownIds: () => [...hub.peers().map((p) => p.id), ...n.extra],
     onChange: () => { n.changes++; },
+    myDisplays: () => n.disp || [],
+    online: (x) => (n.offline || []).every((o) => o.id !== x),
   });
   return n;
 }
@@ -372,6 +374,46 @@ test('the same arrangement on five computers, a full mesh: each edit arrives onc
     }
     assert.deepStrictEqual(N.C.ls.neighbors(), { left: N.B.id, right: N.D.id, top: null, bottom: null });
     assert.strictEqual(N.E.ls.across('left'), N.D.id);
+  } finally {
+    closeAll(N);
+  }
+});
+
+test('the monitor map (#225): every device gets the others\' monitors, an arrangement syncs, crossings follow it and pass an offline device', async () => {
+  const N = await world(['A', 'B', 'C'], full(['A', 'B', 'C']));
+  try {
+    const { A, B, C } = N;
+    A.disp = [{ id: '1', x: 0, y: 0, w: 1920, h: 1080 }, { id: '2', x: 1920, y: 0, w: 1920, h: 1080 }];
+    B.disp = [{ id: '1', x: 0, y: 0, w: 1440, h: 900 }];
+    C.disp = [{ id: '1', x: 0, y: 0, w: 1000, h: 800 }];
+    for (const n of [A, B, C]) n.ls.displaysChanged();
+    await waitFor(() => [A, B, C].every((n) => Object.keys(n.ls.displays).length === 2), 'everyone has the others\' monitors');
+    assert.strictEqual(B.ls.allDisplays()[A.id].length, 2);
+    // B above A's second monitor, C at A's right.
+    const r = L.arrange(A.ls.view(), { [A.id]: { x: 0, y: 0 }, [B.id]: { x: 1920, y: -900 }, [C.id]: { x: 3840, y: 0 } }, A.id);
+    A.ls._commit(r.layout);
+    const at = A.ls.move(B.id, 1920 + 200, -880);
+    assert.deepStrictEqual(at, { x: 2160, y: -900 }, 'dropped near: touching, centred over the second monitor (snap)');
+    await waitFor(() => sameStored(N), 'the arrangement everywhere');
+    assert.ok(B.ls.get().world, 'world kept in the stored layout');
+    // A's top: only over its second monitor; its right: C.
+    const e = A.ls.edgeConfig();
+    assert.deepStrictEqual(e.sides, ['right', 'top']);
+    assert.match(e.zones, /^right:0\.0000-0\.7407,top:0\.5625-0\.9375$/);
+    assert.strictEqual(A.ls.cross('top', 0.75).to, B.id);
+    assert.strictEqual(C.ls.cross('left', 0.5).to, A.id, 'computed the same on C');
+    const back = B.ls.cross('bottom', 0.5);
+    assert.strictEqual(back.to, A.id);
+    assert.ok(Math.abs(back.offset - (2160 + 720) / 3840) < 0.001);
+    // Only what the caller allows: a paused device is left out.
+    assert.deepStrictEqual(A.ls.edgeConfig((dev) => dev !== C.id).sides, ['top']);
+    // C offline: B's right… nothing; A's right edge has nothing beyond C either.
+    A.offline = [C];
+    assert.strictEqual(A.ls.cross('right', 0.5), null);
+    assert.ok(A.ls.state().map.monitors.length === 4 && A.ls.state().map.online[C.id] === false);
+    A.offline = [];
+    assert.ok(A.ls.resetWorld());
+    await waitFor(() => sameStored(N) && !C.ls.get().world, 'back to the grid everywhere');
   } finally {
     closeAll(N);
   }

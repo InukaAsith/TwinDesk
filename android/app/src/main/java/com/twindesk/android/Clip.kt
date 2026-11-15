@@ -117,6 +117,7 @@ class Clip(core: Core) : Feature(core) {
         if (!force && !peerAccepts) return false
         outId = "" // a picture still going is out of date
         lastOut = text
+        lastIn = null // the computer's copy before this one may be copied here again (#223)
         remember(Item("out", text))
         core.send(msg(Proto.T.CLIP, "text" to text))
         core.changed()
@@ -151,6 +152,7 @@ class Clip(core: Core) : Feature(core) {
     // The computer's copy (text) here, as if copied on the phone.
     fun receiveText(text: String) {
         lastIn = text
+        lastOut = null // … and what went out before it may go again
         remember(Item("in", text))
         cm.setPrimaryClip(ClipData.newPlainText("TwinDesk", text))
         core.changed()

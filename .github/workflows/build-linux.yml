@@ -11,6 +11,11 @@ on:
         description: Branch to build (a test branch; releases come from main).
         required: false
         default: main
+      edition:
+        description: "normal, or full-kvm: the Full KVM packages (docs/full-kvm.md, TwinDesk-FullKVM-*), for their own release (e.g. v3.2.0-fullkvm), never the normal one: APT and the updater would take them"
+        type: choice
+        options: [normal, full-kvm]
+        default: normal
 
 # Write: the full Android APK can come from a draft release, which a read-only token can't see.
 permissions:
@@ -84,6 +89,7 @@ jobs:
         working-directory: linux
         env:
           TWINDESK_HELPERS_PREBUILT: '1'
+          TWINDESK_EDITION: ${{ inputs.edition == 'full-kvm' && 'full-kvm' || '' }}
         run: npm run dist
 
       - name: Upload packages
@@ -98,5 +104,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft --target main --title "${{ inputs.tag }}" --notes "" || true
+          pre=""; [ "${{ inputs.edition }}" = full-kvm ] && pre="--prerelease"
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || gh release create "${{ inputs.tag }}" --draft $pre --target main --title "${{ inputs.tag }}" --notes "" || true
           gh release upload "${{ inputs.tag }}" linux/dist/TwinDesk-*.AppImage linux/dist/TwinDesk-*.deb --clobber

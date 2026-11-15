@@ -47,6 +47,14 @@ The driving side sums pointer deltas and sends `k.mm {dx, dy}` on the session. I
 back (still summed) while 64 KB wait on the socket. Clicks and keys (`k.md`, `k.mu`, `k.wh`, `k.kd`,
 `k.ku`, `k.ge`) go on the same stream.
 
+Mac one-to-one input can optionally require a held modifier at an edge. A compatible driver says
+`crossingModifierV1: true` and the physical modifier bits in `crossingFlags` on `kvm.take`; a
+compatible receiver echoes the capability on `kvm.accept`. After that the driver sends `k.mod`
+with `flags` whenever the physical modifiers change. Bits 0–3 represent Command, Control, Option
+and Shift. These messages are ordered and fenced with pointer movement on tdv2, and do not inject
+key events. If the driver does not advertise the capability, the receiver leaves the return edge
+ungated so older peers cannot trap the pointer.
+
 That's simple and reliable, but TCP delivers bytes strictly in order. On Wi-Fi:
 
 - **Head-of-line blocking.** One lost packet holds back every move behind it until it's resent,
@@ -271,6 +279,12 @@ Files › Encrypt file transfers, on by default. Turned off, file bytes can go o
 - **Never over the cable** on the phone: adb reverse carries only the session's port. The phone's
   plain requests use their own HTTP/1.1 client (`FxHttp.kt`), since the app's network policy refuses
   cleartext everywhere else.
+
+### TwinDesk Drive
+
+A synced folder with its own `drive.*` messages on the session. Its bytes go over HTTPS on the
+host's session port, as fx's do: the guest GETs and PUTs on `/twindesk/drive/`, pinning the host's
+certificate and showing the session's fx token. Never over Bluetooth. See [drive.md](drive.md).
 
 ### File size
 

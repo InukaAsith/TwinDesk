@@ -49,6 +49,7 @@ UI.tab({
     }, { label: t('Mouse and keyboard over Bluetooth') });
     const bleInputRow = UI.row(t('Mouse and keyboard over Bluetooth'), '', [bleInput]);
     bleInputRow.hidden = !(window.MeshIntro && window.MeshIntro.ask); // Multi-device: not there
+    const crossing = UI.crossingOptions(false); // hold a key to cross, the emergency return
     const resistance = UI.slider({ min: 0, max: 400, step: 10, format: (v) => (v ? v + ' px' : t('None')) }, (v) => set({ resistancePx: v }));
     // A phone as the peer: how the pointer and keys reach it (settings.phone.input, the phone's own toggle too).
     const via = UI.segmented([{ value: 'auto', label: t('Auto') }, { value: 'adb', label: t('Full (ADB)') }, { value: 'phone', label: t('Limited (Accessibility)') }],
@@ -64,6 +65,7 @@ UI.tab({
       ] },
       { on: { get: (s) => s.kvm.driveOther, set: (v) => set({ driveOther: v }) }, label: t('Use {me}’s mouse and keyboard on {name}'), hint: t('Push the pointer past the edge'), rows: [
         UI.row(t('Edge resistance'), t('Push a little further to cross'), [resistance]),
+        crossing.modRow,
       ] },
     );
 
@@ -76,6 +78,7 @@ UI.tab({
       viaCard,
       pair.el,
       lock.el,
+      crossing.card,
       UI.card(t('Feel'), [gestureRow, syncRow, shakeRow]),
       UI.card(t('Not on the same network'), [bleRow]),
       UI.card(t('Crowded Wi-Fi'), [bleInputRow]),
@@ -103,6 +106,7 @@ UI.tab({
           : br.state === 'ready' ? t('Full (ADB): full control through wireless debugging') : t('ADB: full control through wireless debugging (not set up yet)'));
       status.update(s);
       lock.update(s);
+      crossing.update(s);
       speed.set(k.speed);
       reverse.set(k.reverseScroll);
       gestures.set(k.gestures !== false);

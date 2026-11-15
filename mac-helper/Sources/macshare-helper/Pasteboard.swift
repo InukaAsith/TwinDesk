@@ -16,7 +16,11 @@ final class PasteboardWatch {
   static func info() -> [String: Any] {
     let pb = NSPasteboard.general
     let types = Set((pb.types ?? []).map { $0.rawValue })
-    return ["changeCount": pb.changeCount, "concealed": !types.isDisjoint(with: privateTypes)]
+    // remote: an item from another Apple device (Universal Clipboard). Its data is fetched from
+    // that device when it is first read, behind macOS's "Pasting from …" dialog (#211), so TwinDesk
+    // doesn't read it on its own. Reading the types fetches nothing.
+    return ["changeCount": pb.changeCount, "concealed": !types.isDisjoint(with: privateTypes),
+            "remote": types.contains("com.apple.is-remote-clipboard")]
   }
 
   func set(on: Bool) {

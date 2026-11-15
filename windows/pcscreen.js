@@ -191,9 +191,15 @@ class PcScreen {
     this.apply();
   }
 
-  // Stream size: scale down (on the GPU, by the capturer) to at most maxHeight, keeping the shape.
+  // Stream size: scale down (on the GPU, by the capturer) to at most maxHeight, keeping the shape,
+  // or ('extend') to fit Size, so the picture follows the virtual screen's custom size.
   _streamSize(rect) {
     const max = this.cfg.maxHeight;
+    if (max === 'extend') {
+      const [w, h] = this._extendSize();
+      const scale = Math.min(1, w / rect.width, h / rect.height);
+      return [Math.max(2, Math.floor(rect.width * scale / 2) * 2), Math.max(2, Math.floor(rect.height * scale / 2) * 2)];
+    }
     if (!max || rect.height <= max) return [rect.width, rect.height];
     return [Math.round((rect.width * max) / rect.height / 2) * 2, max];
   }

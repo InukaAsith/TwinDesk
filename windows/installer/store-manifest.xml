@@ -6,8 +6,8 @@
        desktop6      files and registry not virtualized: settings stay in %APPDATA%\MacShare, and the
                      elevated scripts, Explorer's menu and Send to see what the app writes
                      (unvirtualizedResources).
-       phone line    the capabilities windows-helper/calls/AppxManifest.xml gives the sparse package
-                     of the NSIS install; here macshare-calls.exe has this package's identity.
+       no calls      no phone line capabilities (Partner Center doesn't grant them): the calls' sound
+                     over Bluetooth is the NSIS install's only (storepkg.js; Calls says so).
        alias         TwinDesk.exe, which shortcuts and the login item start (the app's folder changes
                      with every update).
        firewall      the NSIS installer’s rules (installer.nsh), the package’s, kept up to date by Windows. -->
@@ -15,12 +15,11 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
-  xmlns:uap13="http://schemas.microsoft.com/appx/manifest/uap/windows10/13"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
   xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 uap13 desktop desktop2 desktop6 rescap">
+  IgnorableNamespaces="uap uap3 desktop desktop2 desktop6 rescap">
   <Identity Name="${identityName}" ProcessorArchitecture="${arch}" Publisher='${publisher}' Version="${version}"/>
   <Properties>
     <DisplayName>${displayName}</DisplayName>
@@ -37,11 +36,8 @@
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0"/>
   </Dependencies>
   <Capabilities>
-    <uap:Capability Name="phoneCall"/>
     <rescap:Capability Name="runFullTrust"/>
     <rescap:Capability Name="unvirtualizedResources"/>
-    <rescap:Capability Name="phoneLineTransportManagement"/>
-    <rescap:Capability Name="phoneCallSystem"/>
     <DeviceCapability Name="bluetooth"/>
   </Capabilities>
   <Applications>
@@ -61,8 +57,6 @@
             <uap:DisplayName>TwinDesk</uap:DisplayName>
           </uap3:Protocol>
         </uap3:Extension>
-        <!-- Without it RegisterApp does nothing and Windows drops the hands-free link (Calls.cs). -->
-        <uap13:Extension Category="windows.phoneCallActivation"/>
       </Extensions>
     </Application>
   </Applications>

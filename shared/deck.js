@@ -95,7 +95,8 @@ class Deck {
   async _apps() {
     let apps = [];
     try { apps = await this.sys.apps(); } catch (_) { /* none */ }
-    this.server.sendToClient({ t: T.DECK_APPS, apps: apps.slice(0, 400).map((a) => ({ id: a.id, name: a.name, icon: a.icon || '' })) });
+    const ble = this._ble();
+    this.server.sendToClient({ t: T.DECK_APPS, apps: apps.slice(0, 400).map((a) => ({ id: a.id, name: a.name, icon: ble ? '' : a.icon || '' })) });
   }
 
   // Levels, devices and switches for the device's tiles (and its pickers).
@@ -267,13 +268,25 @@ class Deck {
     return this.sys.frame(fw, zoneRect(at, { x: z[0], y: z[1], w: z[2], h: z[3] }));
   }
 
-  // The window space: running apps with their windows, and the displays.
+  // The device on Bluetooth: no app icons (pcnow.js sends no artwork there either). The window
+  // space's answer with an icon for each of 60 apps, asked again every 4 s, filled the link until
+  // it went silent and closed, and the device was back at Loading windows….
+  _ble() { return (this.server.current || {}).transport === 'ble'; }
+
+  // The window space: running apps with their windows, and the displays. One answer at a time:
+  // asked again while one is being put together, that one goes out.
   async _wins() {
+    if (this._winsBusy) return;
+    this._winsBusy = true;
+    try { await this._winsNow(); } finally { this._winsBusy = false; }
+  }
+
+  async _winsNow() {
     let out = { apps: [], displays: [], front: 0 };
     try {
       const { windows, minimized = [], front } = await this.sys.wins();
       const ds = this.sys.displays();
-      const icons = await this._appIcons().catch(() => new Map());
+      const icons = this._ble() ? new Map() : await this._appIcons().catch(() => new Map());
       // Linux: an app's name from its desktop file, not its window class.
       const names = new Map();
       if (this.platform === 'linux') for (const a of await this.sys.apps().catch(() => [])) for (const k of linuxKeys(a)) if (!names.has(k)) names.set(k, a.name);

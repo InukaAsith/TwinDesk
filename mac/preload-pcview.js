@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('pcview', {
   send: (msg) => ipcRenderer.send('pcview:out', msg),
   state: (s) => ipcRenderer.send('pcview:state', s),
   ready: () => ipcRenderer.send('pcview:ready'),
-  ctl: (m) => ipcRenderer.send('pcview:ctl', m), // Toolbar: {share?, mode?, framegen?, fullScreen?}
+  ctl: (m) => ipcRenderer.send('pcview:ctl', m), // Toolbar: {share?, mode?, framegen?, fullScreen?, pin?}
 });
 
 contextBridge.exposeInMainWorld('playerLanguage', {

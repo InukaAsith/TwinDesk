@@ -10,7 +10,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 const P = require('../shared/protocol.js');
 const { IconsIn } = require('../shared/notificon.js');
-const { actionsOf, withPhoneActions } = require('../shared/notifacts.js');
+const { actionsOf, withPhoneActions, hidden, present } = require('../shared/notifacts.js');
+const { richOf, popupOn } = require('../shared/notifpop.js');
+const { otpOf } = require('../shared/otp.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -58,7 +60,7 @@ class Notifs extends EventEmitter {
   }
 
   sendPolicy() {
-    if (this.connected) this.link.send({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive });
+    if (this.connected) this.link.send({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups (notifpop.js)
   }
 
   applySettings() {
@@ -174,12 +176,12 @@ class Notifs extends EventEmitter {
 
   // Desktop notifications have no subtitle: the first line is "<appName> · <peer>".
   _show(m) {
-    if (!this.cfg.receive) return;
+    if (!this.cfg.receive || hidden(this, m)) return; // an app set to Hide: not kept either
     const peer = this.peerName();
     const appName = str(m.appName, 100);
     const title = str(m.title, 200) || appName || peer;
     // The recent ones, for Overview and Messages' chat apps (as Windows keeps them).
-    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true, actions: actionsOf(m) };
+    const item = { id: str(m.id, 200) || String(Date.now()), app: str(m.app, 200), appName, title, subtitle: str(m.subtitle, 200), body: str(m.body, 1000), at: Math.round(Number(m.at)) || Date.now(), reply: m.reply === true, actions: actionsOf(m), ...richOf(m) };
     if (!this.historyIcons) this.historyIcons = new Map();
     if (item.app && typeof m.icon === 'string' && m.icon.startsWith('data:image/') && m.icon.length < 200000) {
       this.historyIcons.delete(item.app);
@@ -187,8 +189,29 @@ class Notifs extends EventEmitter {
       if (this.historyIcons.size > 60) this.historyIcons.delete(this.historyIcons.keys().next().value);
     }
     this.history = [item, ...(this.history || []).filter((x) => x.id !== item.id)].slice(0, 50);
-    if (!Notification.isSupported()) return void this.onChange();
+    // TwinDesk's window (Reply, buttons, picture, progress), the system's, or none (quiet).
+    const how = present(this, item, m, { from: peer, code: otpOf([title, item.body].join(' ')), icon: m.icon || this.historyIcons.get(item.app) });
+    if (how === 'popup') this.shown++;
+    if (how !== 'native' || !Notification.isSupported()) return void this.onChange();
     this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
+    // With buttons (the app's, a code's Copy): the system's own through notify-send (linuxnotify.js).
+    const code = otpOf([title, item.body].join(' '));
+    const btns = [...(code ? ['Copy ' + code] : []), ...item.actions];
+    const sys = require('../shared/linuxnotify.js').show({
+      title,
+      body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
+      icon: this.iconsIn.for(m),
+      actions: btns,
+      onAction: (i) => { if (code && i === 0) require('electron').clipboard.writeText(code); else this.act(item.id, i - (code ? 1 : 0)); },
+      onClick: () => this.onClick && this.onClick({ app: str(m.app, 200), appName }),
+      onClose: () => this.live.delete(sys),
+    });
+    if (sys) {
+      sys.tdId = item.id;
+      this.live.add(sys);
+      this.shown++;
+      return void this.onChange();
+    }
     const n = new Notification({
       title,
       icon: this.iconsIn.for(m),

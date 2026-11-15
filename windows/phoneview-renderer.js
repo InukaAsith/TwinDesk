@@ -16,6 +16,7 @@
   // while that's on (shared/vcam-feed.js); Camera › Rotate turns it here too.
   const vcam = kind === 'camera' && window.CamOut ? window.CamOut() : null;
   let turn = 0;
+  let mirrored = false; // Camera › Mirror (shared/vcam-feed.js)
   document.body.classList.add(kind);
   const titleKey = q.get('titleKey');
   const localTitle = ['Phone', 'Phone Camera', 'Phone sound', '{name} Camera'].includes(titleKey);
@@ -152,9 +153,9 @@
     const k = Math.min(stage.clientWidth / (side ? h : w), stage.clientHeight / (side ? w : h));
     canvas.style.width = `${Math.floor(w * k)}px`;
     canvas.style.height = `${Math.floor(h * k)}px`;
-    canvas.style.transform = turn ? `rotate(${turn}deg)` : '';
+    canvas.style.transform = [mirrored ? 'scaleX(-1)' : '', turn ? `rotate(${turn}deg)` : ''].join(' ').trim(); // Camera › Mirror: after the turn
   }
-  if (vcam) vcam.onRotate((deg) => { turn = deg; fit(); });
+  if (vcam) vcam.onRotate((deg, mir) => { turn = deg; mirrored = !!mir; fit(); });
   new ResizeObserver(() => {
     fit();
     // An app window: its virtual display follows the window (device pixels).
@@ -449,7 +450,7 @@
   ].filter((c) => (c.in || PHONE).includes(kind));
   // The title bar has what the Mac's has: Back, Home, Recents, Notifications, and a camera's own.
   // Rotate, Phone screen off, Enter sends and Arrow keys swipe are on the Phone page.
-  const TOP = ['notifications', ...CAMERA];
+  const TOP = ['notifications', ...CAMERA, 'pin'];
   const OPT = { pin: 'pinned', screenOff: 'screenOff', enterSends: 'enterSends', arrowSwipe: 'arrowSwipe', torch: 'torch' };
   for (const c of CONTROLS) {
     c.el = document.createElement('button');

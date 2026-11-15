@@ -312,6 +312,8 @@
   "Live on {name}": "Ao vivo em {name}",
   "Living Room": "Sala de Estar",
   "Loading apps…": "Carregando apps…",
+  "Loading Deck…": "Carregando o Deck…",
+  "Closing Deck…": "Fechando o Deck…",
   "Loading windows…": "Carregando janelas…",
   "Local Network": "Rede Local",
   "Location": "Localização",
@@ -947,5 +949,6 @@
   "{name}’s sound": "O som de {name}",
   "{shown} shown this session": "{shown} exibidas nesta sessão",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
-  "{what}. Save to this {device}?": "{what}. Salvar neste {device}?"
+  "{what}. Save to this {device}?": "{what}. Salvar neste {device}?",
+  "Search button": "Botão de pesquisa"
 }

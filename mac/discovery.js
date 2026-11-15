@@ -39,9 +39,10 @@ function interfaces() {
 const isIPv4 = (s) => /^(\d{1,3})(\.\d{1,3}){3}$/.test(s) && s.split('.').every((o) => Number(o) < 256);
 
 class Discovery extends EventEmitter {
-  constructor({ macId, macName, fp }, port = P.PORT) {
+  constructor({ macId, macName, fp }, port = P.PORT, opts = {}) {
     super();
     this.self = { id: macId, name: macName, fp, os: P.OS.MAC, port };
+    this.reclaim = !!(opts && opts.rc); // beacon rc:1: this host accepts a non-takeover phone reclaim (#192)
     this.found = new Map(); // id -> {id, name, os, address, port, fp, lastSeen, invited}
     this.status = { on: false, error: '', localNetwork: true };
     this.waiters = new Map(); // address -> resolve(device) for unicast probes
@@ -162,7 +163,9 @@ class Discovery extends EventEmitter {
 
   _beaconMsg() {
     const { id, name, os: o, port, fp } = this.self;
-    return { t: P.T.BEACON, v: P.PROTOCOL_VERSION, id, name, port, fp, os: o, role: 'host' };
+    const msg = { t: P.T.BEACON, v: P.PROTOCOL_VERSION, id, name, port, fp, os: o, role: 'host' };
+    if (this.reclaim) msg.rc = 1;
+    return msg;
   }
 
   _beacon() {

@@ -96,7 +96,15 @@ class Session extends EventEmitter {
   // … while it can carry input: started with this session, and not through Bluetooth.
   lane() {
     const l = this.il;
-    return l && l.started && this.transport === 'ip' ? l : null;
+    return l && l.started && this.transport === 'ip' && !this.bleInputNow() ? l : null;
+  }
+
+  // Cursor › Mouse and keyboard over Bluetooth (shared/bleinput.js): input goes through the session's
+  // Bluetooth socket now, beside the network one, so the input lane steps aside (one order on one path).
+  bleInputNow() {
+    if (this.linkUp) return !!this.link.bleInput && this.link.bleInput.ready(this.link.ws, this.link.alt);
+    if (this.hostUp) return !!(this.server && this.server.bleInput) && this.server.bleInput.ready(this.ctx.ws, this.ctx.alt);
+    return false;
   }
 
   // 'ble' while the session's socket runs through Bluetooth (blepipe.js), else 'ip'.

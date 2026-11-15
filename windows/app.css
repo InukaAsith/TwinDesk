@@ -43,6 +43,13 @@ button, input, select { font: inherit; color: inherit; }
 }
 .who { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .app-name { font-weight: 700; font-size: 18px; line-height: 1.2; text-align: left; letter-spacing: -0.2px; }
+.app-name .mesh-pill { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; vertical-align: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; line-height: 1.3;
+  color: #fff; background: linear-gradient(#5e5ce6, #3634a3); white-space: nowrap; } /* as Multi-device's MESH (mesh/app.css) */
+.app-name .mesh-pill span { font-weight: 500; opacity: 0.85; }
+.app-name .portable-pill .portable-word { font-weight: 700; opacity: 1; }
+.app-name .portable-pill { background: linear-gradient(#30d158, #248a3d); } /* TwinDesk Portable as administrator: PORTABLE · FULL (shared/ui-portable.js) */
+.app-name .portable-pill.limited { background: linear-gradient(#ff9f0a, #c93400); } /* … without: PORTABLE · LIMITED */
+.app-name .portable-pill[hidden] { display: none; }
 .peer { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 /* one line whatever the ping says: wrapping would move the icon beside it each time it changes */
 .peer { max-width: 100%; min-width: 0; }
@@ -157,6 +164,11 @@ select { padding: 3px 24px 3px 8px; border-radius: 6px; border: 1px solid var(--
 .banner-actions { display: flex; gap: 8px; }
 
 /* ---------- Windows additions ---------- */
+.custom-screen-size { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.custom-screen-size label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.custom-screen-size input { box-sizing: border-box; width: 80px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--control-line); background: var(--control); box-shadow: var(--shadow); user-select: text; }
+.custom-screen-size input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 760px) { .row:has(.custom-screen-size) { flex-wrap: wrap; gap: 8px; } }
 #nav li.gap { height: 10px; }
 .nav-item .state.warn::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 input[type="text"], input[type="search"] { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--control-line); background: var(--control); box-shadow: var(--shadow); min-width: 190px; user-select: text; }
@@ -255,6 +267,7 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
    --fa1 / --fa2 are the two colours of its sidebar icon */
 .feature-art { --fa1: var(--accent); --fa2: var(--accent); --fa-dev: color-mix(in srgb, var(--text) 74%, var(--content)); --fa-scr: color-mix(in srgb, var(--fa1) 24%, var(--card));
   display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 190px); padding: 4px 0 28px; }
+.feature-art.fa-inline { display: block; min-height: 0; max-width: 520px; margin: 4px auto 0; padding: 0 0 8px; } /* a scene as part of a page (FeatureArt.picture): Full KVM */
 .feature-art .fa-hero { width: 100%; max-width: 580px; padding: 20px 22px 24px; text-align: center; border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow);
   background: linear-gradient(165deg, color-mix(in srgb, var(--fa1) 20%, var(--card)), var(--card) 70%); }
 .feature-art svg { display: block; width: 100%; height: auto; }

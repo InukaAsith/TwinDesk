@@ -312,6 +312,8 @@
   "Live on {name}": "В эфире на {name}",
   "Living Room": "Гостиная",
   "Loading apps…": "Загрузка приложений…",
+  "Loading Deck…": "Загрузка Deck…",
+  "Closing Deck…": "Закрытие Deck…",
   "Loading windows…": "Загрузка окон…",
   "Local Network": "Локальная сеть",
   "Location": "Геолокация",
@@ -947,5 +949,6 @@
   "{name}’s sound": "Звук {name}",
   "{shown} shown this session": "Показано за сеанс: {shown}",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
-  "{what}. Save to this {device}?": "{what}. Сохранить на этот {device}?"
+  "{what}. Save to this {device}?": "{what}. Сохранить на этот {device}?",
+  "Search button": "Кнопка поиска"
 }

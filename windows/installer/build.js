@@ -11,6 +11,8 @@
 // out the calls' sparse package and its certificate, and refuses an iOS signer built with any-ipa.
 // The x64 one keeps the name every release has used; arm64 gets -arm64 (the update check picks by
 // that). One AnyCPU helper .exe serves both (build.cmd).
+// `node installer/build.js portable [x64] [arm64]`: TwinDesk Portable (windows/portable.js), one .exe that
+// runs without installing: the normal build, without the calls' sound package (it needs an install).
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -23,9 +25,15 @@ const STAGE = path.join(WIN, 'dist', 'stage');
 const pkg = require(path.join(WIN, 'package.json'));
 const electronVersion = require(path.join(WIN, 'node_modules', 'electron', 'package.json')).version;
 
-const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json']); // tests (mesh/test) stay out of the package
+// The Full KVM build (docs/full-kvm.md, TWINDESK_EDITION=full-kvm): windows/fullkvm and shared/fullkvm
+// (the service, its agent and the tab); the normal installers have none of it, and the
+// Full KVM one is named apart. Never the Store's (its MSIX can't carry services).
+const FULL_KVM = process.env.TWINDESK_EDITION === 'full-kvm';
+const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json', ...(FULL_KVM ? ['service', 'build.cmd'] : ['fullkvm'])]); // tests (mesh/test) stay out of the package
 const STORE = process.argv.includes('store');
-const ARGS = process.argv.slice(2).filter((a) => a !== 'store');
+const PORTABLE = process.argv.includes('portable');
+if (PORTABLE && (FULL_KVM || STORE)) throw new Error('TwinDesk Portable is the normal build only (no Full KVM, no Store)');
+const ARGS = process.argv.slice(2).filter((a) => a !== 'store' && a !== 'portable');
 const ARCHS = ARGS.length ? ARGS : ['x64'];
 // Partner Center › TwinDesk › Product identity.
 const STORE_ID = { identityName: 'InukaAsith.TwinDesk', publisher: 'CN=C369DC02-ED00-44E8-B6A6-C553635C0E0D', publisherDisplayName: 'Inuka Asith' };
@@ -71,7 +79,13 @@ async function main() {
   copy(WIN, path.join(STAGE, 'windows'), (name) => !SKIP.has(name));
   // Every shared module (a list missed new ones: the app then failed on its first require), and the
   // pages' styles and the call window (phonehub.css, callpop.html).
-  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'playfair.wasm' || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver
+  copy(path.join(ROOT, 'shared'), path.join(STAGE, 'shared'), (name) => name === 'lang' || name === 'web' || name === 'airplay' || name === 'playfair.wasm' || (FULL_KVM && name === 'fullkvm') || /\.(js|css|html)$/.test(name)); // airplay: the AirPlay receiver
+  if (FULL_KVM) {
+    for (const f of [path.join('windows-helper', 'bin', 'macshare-winhelper-agent.exe'), path.join('windows', 'fullkvm', 'bin', 'twindesk-fullkvm.exe')]) {
+      if (!fs.existsSync(path.join(ROOT, f))) throw new Error('The Full KVM build needs ' + f + ' (windows-helper\\build.cmd with TWINDESK_EDITION=full-kvm, on Windows)');
+      copy(path.join(ROOT, f), path.join(STAGE, f));
+    }
+  }
   // TwinDesk Web (shared/web/webwire.js): its server pieces, the page a browser loads (web/), and the
   // phone app's viewer and remote it reuses (android-web/).
   copy(path.join(ROOT, 'web'), path.join(STAGE, 'web'), (name) => name !== 'shortcuts-src');
@@ -90,8 +104,8 @@ async function main() {
   if (fs.existsSync(multiHelper)) copy(multiHelper, path.join(STAGE, 'windows-helper', 'bin', 'macshare-winhelper-multi.exe'));
   else console.log('note: no windows-helper/bin/macshare-winhelper-multi.exe — Multi-device uses the one-to-one helper (one edge)');
   // The calls' sound on this PC (callaudio.js): its .exe, its signed package and that certificate.
-  // The Store's MSIX gives macshare-calls.exe its own identity: no sparse package or certificate.
-  for (const f of STORE ? ['macshare-calls.exe'] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) {
+  // Not in the Store's MSIX: it has no phone line capabilities (store-manifest.xml).
+  for (const f of STORE || PORTABLE ? [] : ['macshare-calls.exe', 'twindesk-calls.msix', 'twindesk-calls.cer']) { // not portable: a package to install
     const from = path.join(ROOT, 'windows-helper', 'bin', f);
     if (fs.existsSync(from)) copy(from, path.join(STAGE, 'windows-helper', 'bin', f));
     else console.log('note: no windows-helper/bin/' + f + ' — calls won’t play on the PC (build the helper on Windows)');
@@ -118,6 +132,10 @@ async function main() {
   if (!fs.existsSync(path.join(WIN, 'vendor', 'scrcpy-server'))) {
     copy(path.join(ROOT, 'mac', 'vendor', 'scrcpy-server'), path.join(STAGE, 'windows', 'vendor', 'scrcpy-server'));
   }
+  // Mirroring › Skip adbd: the relay on the phone beside it (native/adb-relay).
+  if (!fs.existsSync(path.join(WIN, 'vendor', 'twindesk-relay.jar'))) {
+    copy(path.join(ROOT, 'mac', 'vendor', 'twindesk-relay.jar'), path.join(STAGE, 'windows', 'vendor', 'twindesk-relay.jar'));
+  }
   await fetchAdb(path.join(STAGE, 'windows', 'vendor', 'adb'));
   // TwinDesk for Android with notification access, which this PC installs over wireless debugging.
   const dist = path.join(ROOT, 'android', 'dist');
@@ -133,7 +151,7 @@ async function main() {
     license: pkg.license, author: 'inukaasith', main: 'windows/main.js', dependencies: pkg.dependencies,
   }, null, 2));
 
-  for (const arch of ARCHS) await (STORE ? packStore(arch) : pack(arch));
+  for (const arch of ARCHS) await (STORE ? packStore(arch) : PORTABLE ? packPortable(arch) : pack(arch));
 }
 
 // The Store's copy signs TwinDesk for iPhone only (ios-signer/build.cmd without
@@ -177,6 +195,7 @@ async function newerAppxTools() {
 // The Microsoft Store's MSIX (appx target): unsigned, Partner Center signs it.
 async function packStore(arch) {
   await newerAppxTools();
+  if (FULL_KVM) throw new Error('No Store package for the Full KVM build');
   const name = 'TwinDesk-Store-' + pkg.version + '-' + arch + '.msix';
   console.log('Packaging the Store MSIX for ' + arch + '…');
   await builder.build({
@@ -207,7 +226,7 @@ async function packStore(arch) {
 }
 
 async function pack(arch) {
-  const name = 'TwinDesk-Setup-' + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
+  const name = (FULL_KVM ? 'TwinDesk-FullKVM-Setup-' : 'TwinDesk-Setup-') + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
   console.log('Packaging ' + arch + '…');
   await builder.build({
     targets: builder.Platform.WINDOWS.createTarget('nsis', builder.Arch[arch]),
@@ -235,13 +254,36 @@ async function pack(arch) {
         installerIcon: path.join(__dirname, 'icon.ico'),
         uninstallerIcon: path.join(__dirname, 'icon.ico'),
         license: path.join(ROOT, 'LICENSE'),
-        include: path.join(__dirname, 'installer.nsh'),
+        include: path.join(__dirname, FULL_KVM ? 'installer-fullkvm.nsh' : 'installer.nsh'),
         shortcutName: 'TwinDesk',
         createDesktopShortcut: true,
         createStartMenuShortcut: true,
         runAfterFinish: true,
         artifactName: name,
       },
+    },
+  });
+  console.log('Done: ' + path.join(WIN, 'dist', name));
+}
+
+// TwinDesk Portable: electron-builder's portable .exe, which unpacks the app each run (as the user:
+// Run as administrator gives it its full level, windows/portable.js).
+async function packPortable(arch) {
+  const name = 'TwinDesk-Portable-' + pkg.version + (arch === 'x64' ? '' : '-' + arch) + '.exe';
+  console.log('Packaging TwinDesk Portable for ' + arch + '…');
+  await builder.build({
+    targets: builder.Platform.WINDOWS.createTarget('portable', builder.Arch[arch]),
+    projectDir: WIN,
+    config: {
+      appId: 'org.macshare.windows',
+      productName: 'TwinDesk',
+      copyright: 'Copyright (C) 2026 inukaasith',
+      electronVersion,
+      directories: { app: STAGE, output: path.join(WIN, 'dist') },
+      asar: false,
+      npmRebuild: false,
+      win: { icon: path.join(__dirname, 'icon.ico'), executableName: 'TwinDesk', forceCodeSigning: Boolean(process.env.WIN_CSC_LINK) },
+      portable: { artifactName: name, requestExecutionLevel: 'user', unpackDirName: 'TwinDesk-Portable' },
     },
   });
   console.log('Done: ' + path.join(WIN, 'dist', name));

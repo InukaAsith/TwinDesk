@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld('macshare', {
   setKvm: call('setKvm'),
   setLinkedFor: call('setLinkedFor'),
   setLayoutCell: call('setLayoutCell'),
+  moveOnMap: call('moveOnMap'),
+  resetMap: call('resetMap'),
+  setMapSkip: call('setMapSkip'),
   removeFromLayout: call('removeFromLayout'),
   devHelperEvent: call('devHelperEvent'), // dev only: the main process has no handler without MACSHARE_DEV_PORT
   setKeys: call('setKeys'),
@@ -75,6 +78,10 @@ contextBridge.exposeInMainWorld('macshare', {
   openTerminal: call('openTerminal'),
   setupSshd: call('setupSshd'),
   setFiles: call('setFiles'),
+  setDrive: call('setDrive'), // File Sharing › TwinDesk Drive
+  pickDriveFolder: call('pickDriveFolder'),
+  resetDriveFolder: call('resetDriveFolder'),
+  openDriveFolder: call('openDriveFolder'),
   cancelDrop: call('cancelDrop'),
   clearFiles: call('clearFiles'),
   setShareOn: call('setShareOn'),

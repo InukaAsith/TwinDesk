@@ -8,9 +8,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* No blur (a window-wide backdrop filter costs every frame, and reads as a smear over the sidebar):
+     a deeper dim and a solid panel, as Search. */
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .arrange-pop {
@@ -21,11 +21,12 @@
   gap: 10px;
   box-sizing: border-box;
   padding: 18px 18px 14px;
-  background: var(--card, #fff);
+  /* Solid: what's behind it doesn't read through. */
+  background: var(--base, var(--card, #fff));
   color: var(--text, inherit);
   border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
   border-radius: 14px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 70px rgba(0, 0, 0, 0.45);
 }
 
 .arrange-pop h2 { margin: 0; font-size: 15px; font-weight: 600; }

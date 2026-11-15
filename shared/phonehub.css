@@ -213,21 +213,136 @@ body.callpop {
 body.callpop.missed .cp-sub { color: var(--bad); }
 
 /* The phone's media controls (ui-nowplaying.js): on the right of the Phone page's card. */
-.np { display: flex; align-items: center; gap: 12px; margin: 14px 4px 2px; padding: 10px 12px; border-radius: 12px; background: var(--hover); text-align: left; }
+.np { --np-tint: transparent; position: relative; margin: 14px 4px 2px; padding: 10px 12px; border-radius: 12px; background: var(--hover); text-align: left; overflow: hidden; isolation: isolate; }
+/* The art's colour washed in from the art's side (General › Colour from the artwork). */
+.np.tinted::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(100deg, rgb(from var(--np-tint) r g b / 0.42), rgb(from var(--np-tint) r g b / 0.1) 75%); }
+.np-top { display: flex; align-items: center; gap: 12px; }
 .phone-hero .np { margin: 0 0 0 auto; flex: 0 1 380px; min-width: 240px; }
 .np[hidden] { display: none; }
-.np-art { width: 52px; height: 52px; flex: none; border-radius: 8px; background: var(--track-off) center / cover no-repeat; }
+.np-art { width: 52px; height: 52px; flex: none; border-radius: 8px; background: var(--track-off) center / cover no-repeat; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16); transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.np.open .np-art { transform: scale(1.06); }
 .np-art.none { background-image: linear-gradient(135deg, #bf5af2, #ff375f) !important; }
 .np-main { flex: 1; min-width: 0; }
 .np-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .np-sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .np-pos { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-.np-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--track-off); overflow: hidden; }
-.np-bar.seek { cursor: pointer; }
-.np-fill { height: 100%; width: 0; background: var(--accent); border-radius: 2px; }
+.np-pos[hidden], .np-volbox[hidden] { display: none; }
+/* Seek and volume: the old thin bar, now a range: filled to --np-k, a thumb that shows on hover. */
+.np-range { -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; height: 12px; margin: 0; background: transparent; cursor: pointer; --np-k: 0%; }
+.np-range:disabled { cursor: default; }
+.np-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--np-k), var(--track-off) var(--np-k)); }
+.np-range::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; margin-top: -3.5px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); transform: scale(0); transition: transform 0.15s; }
+.np-range:hover::-webkit-slider-thumb, .np-range:focus-visible::-webkit-slider-thumb, .np-range:active::-webkit-slider-thumb { transform: scale(1); }
+.np-range:disabled::-webkit-slider-thumb { transform: scale(0) !important; }
+.np-range:focus-visible { outline: none; }
 .np-time { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
-.np-ctl { display: flex; gap: 2px; flex: none; }
-.np-btn { width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.np-ctl { display: flex; align-items: center; gap: 2px; flex: none; }
+.np-btn { width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; color: var(--text); }
 .np-btn:hover:not(:disabled) { background: var(--track-off); }
 .np-btn:disabled { opacity: 0.35; cursor: default; }
-.np-btn svg { width: 18px; height: 18px; fill: var(--text); stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; }
+.np-btn[hidden] { display: none; }
+.np-btn svg { width: 18px; height: 18px; fill: var(--text); stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+.np-btn svg text { fill: var(--text); font-weight: 700; font-family: inherit; }
+/* The chevron: turns over as the drawer opens. */
+.np-more { width: 26px; height: 26px; margin-left: 2px; opacity: 0.7; }
+.np-more:hover { opacity: 1; }
+.np-more svg { width: 15px; height: 15px; transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.np.open .np-more svg { transform: rotate(180deg); }
+/* The drawer: slides open (its row's height from 0 to its own), fading and rising in. */
+.np-drawer { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.np.open .np-drawer { grid-template-rows: 1fr; }
+.np-drawer-in { min-height: 0; overflow: hidden; }
+.np-tools { display: flex; align-items: center; gap: 6px; padding: 8px 0 0 64px; opacity: 0; transform: translateY(-6px); transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.np.open .np-tools { opacity: 1; transform: none; transition-delay: 0.06s; }
+.np-skip { width: 30px; height: 30px; }
+.np-skip svg { width: 18px; height: 18px; }
+.np-volbox { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; margin-left: 4px; }
+.np-ico svg { width: 14px; height: 14px; fill: var(--muted); stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; display: block; }
+.np-out { width: 30px; height: 30px; flex: none; }
+.np-out svg { width: 16px; height: 16px; fill: none; stroke: var(--muted); }
+.np-out.on svg { stroke: var(--accent); }
+.phone-hero .np-tools { padding-left: 0; }
+@media (prefers-reduced-motion: reduce) { .np-drawer, .np-tools, .np-more svg, .np-art { transition: none !important; } }
+/* Glass: the card a clear pane with the lit rim, the tint glowing through it. */
+.glass .np { background: linear-gradient(180deg, var(--sheen), transparent 40%), var(--control); box-shadow: var(--rim); }
+/* General's media rows (UI.mediaControlsRow): two rows in a box, lined as the card's own. */
+.row + .np-rows > .row:first-child::before, .np-rows + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 1px; background: var(--row-line); }
+
+/* ---------- a phone's notification in TwinDesk's window (notifpop.js) ---------- */
+body.notifpop {
+  --text: #1d1d1f; --muted: #6e6e73; --card: #ffffff; --line: rgba(0, 0, 0, 0.08); --track-off: rgba(0, 0, 0, 0.1);
+  --accent: #0a84ff; --control: #f2f2f5;
+  margin: 0; overflow: hidden; background: var(--card); color: var(--text);
+  font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Ubuntu, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+@media (prefers-color-scheme: dark) {
+  body.notifpop { --text: #f5f5f7; --muted: #98989d; --card: #2a2a2c; --line: rgba(255, 255, 255, 0.08); --track-off: rgba(255, 255, 255, 0.14); --control: #3a3a3c; }
+}
+.npop { box-sizing: border-box; padding: 10px 14px 12px; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; animation: npop-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes npop-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .npop { animation: none; } }
+.npop [hidden] { display: none !important; }
+.npop-head { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.npop-icon { width: 16px; height: 16px; border-radius: 4px; flex: none; background: center / cover no-repeat; }
+.npop-icon.none { background-image: linear-gradient(135deg, #64d2ff, #0a84ff); }
+.npop-app { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.npop-time { flex: none; font-variant-numeric: tabular-nums; }
+.npop-x { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 2px; cursor: default; opacity: 0.6; }
+.npop-x:hover { opacity: 1; }
+.npop-main { display: flex; gap: 10px; align-items: flex-start; cursor: default; outline: none; }
+.npop-avatar { width: 38px; height: 38px; border-radius: 50%; flex: none; background: var(--track-off) center / cover no-repeat; }
+.npop-text { flex: 1; min-width: 0; }
+.npop-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.npop-body { margin-top: 2px; white-space: pre-line; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: break-word; }
+.npop-pic { display: block; width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; background: var(--track-off); }
+.npop-live { display: flex; align-items: center; gap: 8px; }
+.npop-track { flex: 1; height: 4px; border-radius: 2px; background: var(--track-off); overflow: hidden; position: relative; }
+.npop-fill { height: 100%; width: 0; border-radius: 2px; background: var(--accent); transition: width 0.4s ease; }
+.npop-live.ind .npop-fill { width: 35%; position: absolute; animation: npop-ind 1.2s ease-in-out infinite; }
+@keyframes npop-ind { from { left: -35%; } to { left: 100%; } }
+.npop-pct { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: none; min-width: 30px; text-align: right; }
+.npop-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.npop-btn { border: 0; border-radius: 7px; padding: 5px 11px; background: var(--control); color: var(--text); font: inherit; cursor: default; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.npop-btn:hover { filter: brightness(0.96); }
+.npop-btn.primary { background: var(--accent); color: #fff; }
+.npop-btn.done { background: #30b94d; color: #fff; }
+.npop-reply { display: flex; gap: 6px; margin: 0; }
+.npop-reply input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; background: var(--control); color: var(--text); font: inherit; outline: none; -webkit-user-select: text; user-select: text; }
+.npop-reply input:focus { border-color: var(--accent); }
+
+/* Notifications › Showing here (ui-notifrules.js). */
+.notif-hours { display: inline-flex; align-items: center; gap: 6px; }
+.notif-time { font: inherit; color: var(--text); background: var(--control); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.notif-apps-head { padding: 10px 14px 2px; text-transform: none; }
+.notif-apps-head[hidden] { display: none; }
+.row > .notif-app-ico { width: 24px; height: 24px; border-radius: 6px; flex: none; font-size: 11px; }
+
+/* Messages: search over each list, a chat's app on its picture, Delete, and which apps show. */
+.hub-side-head { gap: 6px; align-items: center; }
+.hub-search { flex: 1; min-width: 0; padding: 5px 9px; }
+.hub-avatar-wrap { position: relative; flex: none; display: inline-flex; }
+.hub-avatar-app { position: absolute; right: -2px; bottom: -2px; width: 15px; height: 15px; border-radius: 4px; box-shadow: 0 0 0 1.5px var(--card); background: var(--card); }
+.hub-conv-head { flex-direction: row; justify-content: flex-start; align-items: center; gap: 10px; }
+.hub-conv-head > .hub-to { flex: 1; }
+.hub-conv-title { flex: 1; min-width: 0; }
+.hub-del { flex: none; }
+.msg-apps { margin: 0 0 12px; border-radius: 10px; background: var(--card); box-shadow: var(--card-shadow, none); border: 1px solid var(--line); overflow: hidden; }
+.msg-apps[hidden] { display: none; }
+.msg-apps-btn { opacity: 0.8; }
+
+/* Photos' albums (ui-media.js): a list on the left, each with its cover and count. */
+.hub-media.with-albums { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 16px; align-items: start; }
+.hub-media-main { min-width: 0; }
+.hub-albums { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 140px); overflow-y: auto; padding: 6px; border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow, none); border: 1px solid var(--line); }
+.hub-albums[hidden] { display: none; }
+.hub-album { display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; border-radius: 8px; background: none; color: var(--text); text-align: left; cursor: default; font: inherit; }
+.hub-album:hover { background: var(--hover); }
+.hub-album.on { background: var(--sel-bg, var(--accent-soft)); box-shadow: var(--sel-shadow, none); }
+.hub-album-pic { width: 40px; height: 40px; flex: none; border-radius: 7px; background: var(--track-off) center / cover no-repeat; }
+.hub-album-pic.all { background-image: linear-gradient(135deg, #ffd60a, #ff9f0a); }
+.hub-album-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hub-album-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.hub-album-n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .hub-media.with-albums { grid-template-columns: 1fr; } .hub-albums { position: static; flex-direction: row; overflow-x: auto; max-height: none; } .hub-album { flex: none; } }

@@ -408,7 +408,9 @@ async function arrived(to, id, p) {
     child.kill();
   }
 
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Windows lets the folder go only once every file in it is closed: a failed transfer's stream can
+  // stay open until the process ends, so the cleanup there is best-effort (the temp folder).
+  try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch (e) { if (process.platform !== 'win32') throw e; }
   console.log('fx2: ok');
   process.exit(0);
 })().catch((e) => {

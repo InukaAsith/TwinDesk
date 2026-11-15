@@ -100,6 +100,7 @@ class Hub(core: Core) : Feature(core) {
             Proto.T.SMS_PART -> messages?.let { s -> val id = m.str("id", 40); run { core.send(msg(Proto.T.SMS_PART, "id" to id, "data" to s.part(id))) } }
             Proto.T.SMS_SEND -> messages?.send(m) ?: core.send(msg(Proto.T.SMS_SENT, "ref" to m.str("ref", 60), "ok" to false, "error" to "off"))
             // Pictures never go through Bluetooth (they held up everything else): USB, Wi-Fi, Wi-Fi Direct.
+            Proto.T.MEDIA_ALBUMS -> if (mediaOn && !core.link.ble) media().let { md -> run { core.send(md.albums()) } }
             Proto.T.MEDIA_LIST -> if (mediaOn && !core.link.ble) media().let { md -> run { core.send(md.list(m)) } }
             Proto.T.MEDIA_THUMB -> if (mediaOn && !core.link.ble) media().thumbs(m.optJSONArray("ids"))
             Proto.T.MEDIA_VIEW -> if (mediaOn && !core.link.ble) media().let { md -> val id = m.str("id", 40); run { core.send(msg(Proto.T.MEDIA_VIEW, "id" to id, "data" to md.view(id))) } }

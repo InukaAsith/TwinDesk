@@ -58,3 +58,9 @@ rem The virtual camera (windows/vcam.js), C++: built when Visual Studio's C++ to
 call "%~dp0vcam\build.cmd" || exit /b 1
 rem Real gamepad (windows/gamepad.js: Remote), C++ likewise.
 call "%~dp0pad\build.cmd" || exit /b 1
+rem The Full KVM build only (docs/full-kvm.md, TWINDESK_EDITION=full-kvm): the agent the service runs
+rem on every desktop (Agent.cs, FULLKVM) and the service itself (windows\fullkvm\build.cmd).
+if /i not "%TWINDESK_EDITION%"=="full-kvm" exit /b 0
+"%CSC%" /nologo /optimize+ /platform:anycpu /target:exe /define:MULTI;FULLKVM /out:"%BIN%\macshare-winhelper-agent.exe" ^
+  /r:System.Web.Extensions.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll %UIA% %WINRT% "%~dp0src\*.cs" || exit /b 1
+call "%~dp0..\windows\fullkvm\build.cmd" || exit /b 1

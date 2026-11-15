@@ -13,6 +13,9 @@
 'use strict';
 
 const P = require('../../shared/protocol.js');
+// Hold a key to cross (#230; in Multi-device, only this computer's own mouse or touchpad at its
+// edges) and the emergency return (#178).
+const Crossing = require('../../shared/crossing.js');
 const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
@@ -97,8 +100,9 @@ class Kvm {
       if (this.sub && from === this.sub.to && m.route === this.sub.route) return this._relayBack(m.offset); // the phone hands the pointer back
       if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
       const has = typeof m.offset === 'number';
-      const side = this._sideOf(from);
-      this.helper.send('capture', has && side ? { on: false, side, offset: m.offset } : { on: false });
+      const side = E.SIDES.includes(m.side) ? m.side : this._sideOf(from); // the monitor map says which side
+      // kept on the part of that side that touches the device (an offset it never mapped went to another monitor)
+      this.helper.send('capture', has && side ? { on: false, side, offset: this.layoutSync.land(side, m.offset, from) } : { on: false });
       this._setMode('home', '');
     });
     for (const t of K_TYPES) bus.on(t, (m, from) => this._onWire(m, from));
@@ -299,13 +303,15 @@ class Kvm {
   // device behind it is connected and cursor sharing for it is on.
   // Drags across the edge go out when our switch and our "send" are on and the device takes them.
   _watchedSides() {
+    return this._edgeConfig().sides;
+  }
+
+  // The monitor map (#225): the sides and the zones along them where the pointer may cross, only towards
+  // a device we may drive now (an iPhone can't be driven).
+  _edgeConfig() {
     const k = this.cfg;
-    if (!k.driveOther || !k.mouse || this.blockEdge() || (this.locked && this.mode === 'home')) return [];
-    const edges = this.edges;
-    return E.SIDES.filter((side) => {
-      const id = edges[side];
-      return !!id && this._connectedTo(id) && this._linkedFor(id) && !this._pausedFor(id);
-    });
+    if (!k.driveOther || !k.mouse || this.blockEdge() || (this.locked && this.mode === 'home')) return { sides: [], zones: 'none' };
+    return this.layoutSync.edgeConfig((id) => this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && this._linkedFor(id) && !this._pausedFor(id));
   }
 
   _dragsOut(id) {
@@ -320,8 +326,9 @@ class Kvm {
 
   applyConfig() {
     const k = this.cfg;
-    const sides = this._watchedSides();
-    const key = sides.map((x) => x + '=' + this.edges[x]).join(',');
+    const edge = this._edgeConfig();
+    const sides = edge.sides;
+    const key = sides.map((x) => x + '=' + this.edges[x]).join(',') + ' ' + edge.zones;
     if (key !== this._sidesKey) { // only a change is worth a line
       this._sidesKey = key;
       console.log('[kvm] watching sides: ' + (key || 'none') + ' (edges ' + JSON.stringify(this.edges) + ')');
@@ -333,8 +340,11 @@ class Kvm {
     this.helper.send('kvmConfig', {
       side: sides[0] || null, // the first side also drives the file-drag strip (DropEdge)
       sides,
+      zones: edge.zones, // only where the monitors touch (shared/layout-world.js, #225)
       resistancePx: k.resistancePx,
       hotkey: this.settings.keys.hotkey || P.HOTKEY_WIN,
+      crossingModifier: Crossing.modifier(k.crossingModifier),
+      emergencyKeys: Crossing.emergency(this.settings.keys.emergencyKeys),
       driveOther: sides.length > 0,
       keyboard: !!k.keyboard,
       deadmanMs: P.HELPER_DEADMAN_MS,
@@ -433,7 +443,7 @@ class Kvm {
 
   _canDriveTo(id) {
     const k = this.cfg;
-    return this._connectedTo(id) && this._linkedFor(id) && !this._pausedFor(id) && k.driveOther && (k.mouse || k.keyboard);
+    return this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && this._linkedFor(id) && !this._pausedFor(id) && k.driveOther && (k.mouse || k.keyboard);
   }
 
   _onHelper(name, msg) {
@@ -505,6 +515,9 @@ class Kvm {
       case 'shake':
         if (this.mode === 'driving' && this.cfg.shakeHome !== false) this._release('');
         break;
+      case 'emergency':
+        this._emergency();
+        break;
       case 'captureEnded': // dead-man or a local stop: input is back here
         console.log('[kvm] capture ended by the helper: ' + (msg.reason || 'stopped'));
         if (this.mode === 'driving') this._release(msg.reason === 'secureDesktop' ? 'Back here for the administrator prompt or lock screen' : '');
@@ -522,7 +535,8 @@ class Kvm {
     console.log('[kvm] edge ' + (msg && msg.side) + ' while ' + this.mode);
     if (this.mode === 'driving') return; // already capturing: a late edge is not ours to act on
     const side = E.SIDES.includes(msg.side) ? msg.side : this.crossingSide; // an older helper: the selected side
-    const id = side ? this.edges[side] : null;
+    const r = side ? this.layoutSync.cross(side, msg.offset) : null; // the monitor map: who is there, where along it
+    const id = r ? r.to : null;
     if (this.mode !== 'home' || this.locked || !id || !this._canDriveTo(id) || !this.cfg.mouse || !this.hub.select(id)) {
       console.log('[kvm] edge ' + side + ' not taken: mode=' + this.mode + ' device=' + (id || 'none') + ' canDrive=' + (id ? this._canDriveTo(id) : false) + ' mouse=' + this.cfg.mouse);
       this.helper.send('capture', { on: false });
@@ -531,7 +545,7 @@ class Kvm {
     // A file/folder drag crossed: the other device shows it as its own drag; the data follows.
     const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut(id) ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
     const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
-    this._take({ side: P.opposite(side), offset: msg.offset, ...(drag ? { drag: { count: drag.count } } : {}) }, id);
+    this._take({ side: P.opposite(side), offset: r.offset, ...(drag ? { drag: { count: drag.count } } : {}) }, id);
     if (!drag && msg.moving && this.onMoveWindow) this.onMoveWindow(msg, id); // a window grabbed with the move key (main.js)
     if (drag) { // order: kvm.take, drag.start, then the files
       this.fileDrop.beginDrag(drag);
@@ -652,12 +666,13 @@ class Kvm {
     const side = E.SIDES.includes(m.side) ? m.side : null;
     const to = typeof m.to === 'string' ? m.to : '';
     if (!side || !to || to === from || to === this.hub.device.id) return;
-    if (this.layoutSync.across(side, from) !== to) return; // not the device next to `from` on that side
+    const r = this.layoutSync.cross(side, m.offset, from);
+    if (!r || r.to !== to) return; // not the device beyond `from` there (the monitor map)
     if (!this._canDriveTo(to) || !this.cfg.mouse) return; // connected, and our switch and cursor sharing for it
     if (!this.hub.select(to)) return;
     this.route++;
     this._send(from, { t: T.KVM_RELEASE, route: this.route }); // the device we drove goes home
-    this._take({ side: P.opposite(side), offset: Number(m.offset) || 0 }, to);
+    this._take({ side: P.opposite(side), offset: r.offset }, to);
   }
 
   // Row 9.
@@ -721,15 +736,15 @@ class Kvm {
   // The sides of this PC that have a device behind them (the layout): the helper watches them while
   // this PC is driven, the way back to the driver and every edge that leads on to another device.
   _returnSides() {
-    const edges = this.edges;
-    return E.SIDES.filter((side) => !!edges[side]);
+    return this.layoutSync.edgeConfig().sides;
   }
 
   _armReturn() {
     console.log('[kvm] return watch on: ' + this._returnSides().join(',') + ' (partner ' + this.partner + ')');
-    const sides = this._returnSides();
+    const { sides } = this.layoutSync.edgeConfig();
     // side: the first one, for a helper from before several sides (it watches that one; a newer one reads sides)
-    this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, resistancePx: this.cfg.resistancePx });
+    this.returnSide = sides[0] || null;
+    this.helper.send('armReturn', { on: true, side: sides[0] || null, sides, zones: null, resistancePx: this.cfg.resistancePx });
   }
 
   // The helper saw the pointer leave this PC (driven) through `side`. Back to the driver: kvm.home as
@@ -737,15 +752,18 @@ class Kvm {
   // behind that side: ignored. The watch is armed again unless we went home, so a driver that did not
   // take the device leaves the edge live.
   _onReturn(msg) {
-    const side = E.SIDES.includes(msg.side) ? msg.side : null; // an older helper says nothing: the way back
-    const to = side ? this.layoutSync.across(side) : null;
+    // An older (one-side) helper names none: it watches the first side we armed. Its offset is ours along that
+    // side and still needs mapping; sent as it was, the driver read it along its own edge (another monitor).
+    const side = E.SIDES.includes(msg.side) ? msg.side : this.returnSide || null;
+    const r = side ? this.layoutSync.cross(side, msg.offset) : null; // the monitor map: who is there, where along it
+    const to = r ? r.to : null;
     console.log('[kvm] return ' + side + ' -> ' + (to || 'nobody') + ' (partner ' + this.partner + ')');
     // The way back: the side of the device that drives us (judged by who is there, not only by the side we expect).
-    if (!side || to === this.partner || side === this.layoutSync.sideTo(this.partner)) {
+    if (!side || to === this.partner || (!to && side === this.layoutSync.sideTo(this.partner))) {
       if (msg.moving && this.onMoveWindow) this.onMoveWindow(msg, this.partner); // a window grabbed with the move key (main.js)
-      return this._sendHome(msg.offset);
+      return this._sendHome(to === this.partner ? r.offset : msg.offset, '', side ? P.opposite(side) : null);
     }
-    if (to && to !== this.partner && this._canRelay(to)) return this._relayTo(to, side, Number(msg.offset) || 0);
+    if (to && to !== this.partner && this._canRelay(to)) return this._relayTo(to, side, r.offset);
     if (to && to !== this.partner) this._send(this.partner, { t: T.KVM_NEXT, route: this.peerRoute, to, side, offset: Number(msg.offset) || 0 });
     this._armReturn();
   }
@@ -866,8 +884,10 @@ class Kvm {
   }
 
   // Row 8c: we send the input home (return edge or hotkey).
-  _sendHome(offset, message = '') {
+  // side: the driver's side the pointer comes back through (the monitor map: it can be any of them).
+  _sendHome(offset, message = '', side = null) {
     const msg = typeof offset === 'number' ? { t: T.KVM_HOME, route: this.peerRoute, offset } : { t: T.KVM_HOME, route: this.peerRoute };
+    if (side && typeof offset === 'number') msg.side = side;
     const to = this.partner;
     this._send(to, msg);
     this.caps.handOver((c) => this._send(to, c)); // our Caps Lock, home
@@ -895,6 +915,14 @@ class Kvm {
   }
 
   // Tray "Bring Mouse and Keyboard Back".
+  // The emergency shortcut (#178; the helper already stopped capturing, or let go of what it
+  // injected): everything home, and sharing off until it's turned on again.
+  _emergency() {
+    this.home();
+    if (this.linked) this.setLinked(false);
+    this.helper.send('emergencyActive', { on: false });
+  }
+
   home() {
     if (this.mode === 'driving') this._release('');
     else if (this.mode === 'driven') this._sendHome(undefined);
@@ -922,6 +950,7 @@ class Kvm {
       if (was === 'home') this.applyConfig();
     }
     if (was !== mode) this.lockKey.reset();
+    if (was !== mode) this.helper.send('emergencyActive', { on: mode !== 'home' }); // the emergency shortcut works while a session is on
     if (was !== mode) { // crossing either way: what our keys type (the layout may have changed)
       this.keys.reset();
       if (mode !== 'home') this.keys.refresh();

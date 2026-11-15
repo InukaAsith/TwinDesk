@@ -42,7 +42,14 @@
 .dv-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .dv-two.one { grid-template-columns: minmax(0, 1fr); }
 .dv-two > .card-wrap, .dv-col { min-width: 0; }
-.dv-two { align-items: start; }
+/* Side by side, cards end level (#224): a pair's two are as tall as each other, and in the lower two
+   columns the last card of each reaches down to the other column's bottom (ui-device-parts.js, dv-fill). */
+.dv-two { align-items: stretch; }
+.dv-col { display: flex; flex-direction: column; }
+.dv-col > .card-wrap.dv-fill, .dv-pair.two > .card-wrap { display: flex; flex-direction: column; }
+.dv-col > .card-wrap.dv-fill { flex: 1; }
+.dv-col > .card-wrap.dv-fill > .card, .dv-pair.two > .card-wrap > .card { flex: 1; display: flex; flex-direction: column; }
+.dv-col > .card-wrap.dv-fill > .card > .dv-drop { flex: 1; min-height: 84px; height: auto; }
 .dv-col > .card-wrap[hidden], .dv-col[hidden] { display: none; }
 .dv-col .history { max-height: 260px; }
 .dv-drop { height: 84px; cursor: copy; }
@@ -194,7 +201,7 @@
 
 /* The Shortcuts and Quick actions cards: side by side when both fit at full size (D.tilePair). */
 .dv-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 14px; align-items: start; }
-.dv-pair.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dv-pair.two { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
 .dv-pair > [hidden] { display: none; }
 .dv-pair.two .row { flex-wrap: wrap; row-gap: 8px; } /* the volume row under narrower tiles */
 .dv-pair.two .row .controls { flex-wrap: wrap; }

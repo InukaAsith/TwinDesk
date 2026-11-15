@@ -28,11 +28,13 @@ UI.tab({
     const apps = el('div');
 
     const hist = UI.historyCard('notifs', { list: true });
-    body.append(note, pair.el, UI.card(I18n.t('Apps'), [apps]), hist.el);
+    const showing = UI.notifShowCard ? UI.notifShowCard() : null; // how they show here (shared/ui-notifrules.js)
+    body.append(note, pair.el, ...(showing ? [showing.el] : []), UI.card(I18n.t('Apps'), [apps]), hist.el);
 
     let key = '';
     return (s) => {
       const n = s.notifs;
+      if (showing) showing.update(s);
       hist.update(s);
       const p = UI.peer(s);
       const connected = s.link.state === 'connected';

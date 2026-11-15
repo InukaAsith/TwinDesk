@@ -39,7 +39,8 @@ namespace MacShare
         DateTime parkedAt;
         const int StaleMs = 200, StalePx = 150;
         uint mouseCaptureStoppedAt;
-        bool mouseArrivalGuard;
+        volatile bool mouseArrivalGuard;
+        Point arrivedAt; // where Stop put the pointer (the guard's reference)
         public bool HoldReturn; // DropEdge.cs is catching a file drag on the way back: it goes home with it
         readonly HashSet<uint> heldVks = new HashSet<uint>(), swallowVks = new HashSet<uint>();
         readonly HashSet<int> heldButtons = new HashSet<int>(), swallowButtons = new HashSet<int>();
@@ -81,19 +82,31 @@ namespace MacShare
         public List<double[]> EdgeZones, ReturnZones;
 
         // kvmConfig / armReturn `zones`: "0.1-0.5,0.7-1" (a little wider, for rounding), "none" (nothing
-        // crosses), anything else null (the whole side).
+        // crosses), anything else null (the whole side). An entry may name its side, "top:0.56-0.94" (the
+        // Multi-device monitor map, #225): it counts only there. Each zone: { from, to, side } with side
+        // the index in ZoneSides, -1 for every side.
+        static readonly string[] ZoneSides = { "left", "right", "top", "bottom" };
         public static List<double[]> ParseZones(string text)
         {
             if (text == null) return null;
             List<double[]> list = new List<double[]>();
             if (text == "none") return list;
-            foreach (string part in text.Split(','))
+            foreach (string entry in text.Split(','))
             {
+                string part = entry;
+                int side = -1;
+                int colon = part.IndexOf(':');
+                if (colon >= 0)
+                {
+                    side = Array.IndexOf(ZoneSides, part.Substring(0, colon));
+                    if (side < 0) continue;
+                    part = part.Substring(colon + 1);
+                }
                 string[] ab = part.Split('-');
                 double a, b;
                 if (ab.Length == 2 && double.TryParse(ab[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out a)
                     && double.TryParse(ab[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out b) && a <= b)
-                    list.Add(new double[] { a - 0.002, b + 0.002 });
+                    list.Add(new double[] { a - 0.002, b + 0.002, side });
             }
             return list.Count > 0 ? list : null;
         }
@@ -102,7 +115,12 @@ namespace MacShare
         {
             if (zones == null) return true;
             double o = Screens.Offset(x, y, side);
-            foreach (double[] z in zones) if (o >= z[0] && o <= z[1]) return true;
+            int s = Array.IndexOf(ZoneSides, side);
+            foreach (double[] z in zones)
+            {
+                if (z.Length > 2 && z[2] >= 0 && (int)z[2] != s) continue;
+                if (o >= z[0] && o <= z[1]) return true;
+            }
             return false;
         }
         const int GuardMs = 500;
@@ -224,6 +242,7 @@ namespace MacShare
             if (capturing) { capMouse = mouse; capKeys = keys; return; }
             mouseArrivalGuard = false;
             capturing = true; capMouse = mouse; capKeys = keys;
+            CrossingReset();
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear();
             Touch();
@@ -250,7 +269,16 @@ namespace MacShare
         public void Stop(string side, double offset)
         {
             if (!capturing) return;
+            // The guard first: a move the hook sees once capturing is off must already meet it.
+            Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
+            if (capMouse)
+            {
+                arrivedAt = p;
+                mouseCaptureStoppedAt = unchecked((uint)Environment.TickCount);
+                mouseArrivalGuard = true;
+            }
             capturing = false;
+            CrossingReset();
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
             foreach (uint vk in heldVks) swallowVks.Add(vk);
             foreach (int b in heldButtons) swallowButtons.Add(b);
@@ -258,16 +286,17 @@ namespace MacShare
             hkPending = 0; hkRemote.Clear(); // a sent hotkey's release is in swallowVks (heldVks) now
             if (capMouse)
             {
-                Point p = side != null ? Screens.EdgePoint(side, offset) : saved;
                 parkPad.Uncover();
-                mouseCaptureStoppedAt = unchecked((uint)Environment.TickCount);
-                mouseArrivalGuard = true;
                 Native.SetCursorPos(p.X, p.Y);
                 HideCursor.Show();
                 if (Flash != null) Flash.Play(p, side ?? (Side != null && Screens.OnOuterEdge(p.X, p.Y, Side) ? Side : null), false); // arriving
             }
             Arrived(side);
         }
+#endif
+
+#if !MULTI
+        void DisarmForEmergency() { retArmed = false; localWatch = false; push = 0; }
 #endif
 
         public bool Capturing { get { return capturing; } }
@@ -386,6 +415,13 @@ namespace MacShare
         void Tick()
         {
             HideCursor.Retry();
+#if FULLKVM
+            // The Full KVM agent (Agent.cs) reaches every desktop, one at a time: another input desktop
+            // now, so the service starts the agent there. Out at once: this one's input lands nowhere.
+            string want = Agent.MovedTo();
+            if (want != null) Agent.Leave(want);
+            if (Agent.On) { CheckDeadman(); return; }
+#endif
             // A UAC prompt or the lock screen: nothing can be injected or captured there, so the
             // input goes home on both sides (main sends a driven PC's owner home).
             bool now = Native.SecureDesktop();
@@ -403,6 +439,11 @@ namespace MacShare
                 e["on"] = secure;
                 emit(e);
             }
+            CheckDeadman();
+        }
+
+        void CheckDeadman()
+        {
             if (capturing && (DateTime.UtcNow - lastCmd).TotalMilliseconds > DeadmanMs)
             {
                 Stop(null, 0); // Rule 1: a hung main or a dead link never keeps the user's input
@@ -440,7 +481,8 @@ namespace MacShare
             {
                 uint now = unchecked((uint)Environment.TickCount);
                 if (MouseArrivalGuard.IsStale(m.time, mouseCaptureStoppedAt, now)) return (IntPtr)1;
-                mouseArrivalGuard = false;
+                if (MouseArrivalGuard.FromPark(m.pt.x, m.pt.y, parked.X, parked.Y, arrivedAt.X, arrivedAt.Y, mouseCaptureStoppedAt, now)) return (IntPtr)1;
+                if (unchecked(now - mouseCaptureStoppedAt) > MouseArrivalGuard.ParkMs) mouseArrivalGuard = false;
             }
             int button = ButtonOf(msg, m.mouseData);
             bool down = msg == Native.WM_LBUTTONDOWN || msg == Native.WM_RBUTTONDOWN || msg == Native.WM_MBUTTONDOWN || msg == Native.WM_XBUTTONDOWN;
@@ -524,6 +566,9 @@ namespace MacShare
             // it was a Ctrl there too (Cmd on a Mac: AltGr+E was Cmd+Option+E, not €). With Right Alt as
             // the hotkey it doesn't break the double-tap, and it never counts for a Ctrl hotkey.
             bool fakeCtrl = k.vkCode == 0xA2 && k.scanCode == 0x21D;
+            if (!fakeCtrl) NoteModifier(k.vkCode, down); // hold-to-cross and the emergency shortcut (Crossing.cs)
+            if (CheckEmergency(k.vkCode, code, down)) return (IntPtr)1;
+            if (emergencyVks.Contains(k.vkCode)) { if (!down) emergencyVks.Remove(k.vkCode); return (IntPtr)1; } // the emergency key's repeats and release
             bool hotkey = !fakeCtrl && DetectHotkey(k.vkCode, down);
 
             if (!down && swallowVks.Remove(k.vkCode)) return (IntPtr)1;
@@ -629,6 +674,7 @@ namespace MacShare
             Native.GetCursorPos(out p);
             if (retArmed) { FeedReturn(p.x, p.y, dx, dy); return; }
             if (!DriveOther || Side == null || (AnyButtonDown() && !AppWindows.Grabbing)) { push = 0; return; } // Rule 6: no crossing mid-drag
+            if (!EdgeAllowed()) { push = 0; return; } // hold-to-cross: not without the key (Crossing.cs)
             double outward = Screens.Outward(Side, dx, dy);
             if (!MayCross(Side, outward)) { push = 0; return; }
             if (outward <= 0 || !Screens.OnOuterEdge(p.x, p.y, Side) || !InZone(EdgeZones, p.x, p.y, Side)) { push = 0; return; }
@@ -644,6 +690,7 @@ namespace MacShare
             Dictionary<string, object> d = Ev("edge");
             AppWindows.AddMoving(d, true); // a window grabbed with the move key goes over with the pointer (pcapps.js)
             d["offset"] = Math.Round(offset, 4);
+            d["crossingFlags"] = LocalCrossingBits();
             emit(d);
         }
 
@@ -651,6 +698,7 @@ namespace MacShare
         public void FeedReturn(int x, int y, double dx, double dy)
         {
             if (!retArmed || HoldReturn) return;
+            if (!ReturnAllowed()) { retPush = 0; return; } // hold-to-cross on the way back (Crossing.cs)
             double outward = Screens.Outward(retSide, dx, dy);
             if (!MayCross(retSide, outward)) { retPush = 0; return; }
             if (outward <= 0 || !Screens.OnOuterEdge(x, y, retSide) || !InZone(ReturnZones, x, y, retSide)) { retPush = 0; return; }

@@ -109,6 +109,7 @@ fun NotifAppsCard(core: Core, name: String) {
             TextButton(onClick = { n.setAll(list.map { it.pkg }, false) }) { Text(tr("None"), color = pal.accent, fontSize = 13.sp) }
         }
     }) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         Choice(listOf("block" to tr("Block list"), "allow" to tr("Allow list")), if (allow) "allow" else "block") { n.setAllowMode(it == "allow") }
         Text(
             if (allow) tr("Only the apps switched on send notifications to {name}. New apps stay off.", "name" to name)
@@ -129,13 +130,17 @@ fun NotifAppsCard(core: Core, name: String) {
 // ---- General › Banking apps ----
 
 @Composable
-fun BankCard(core: Core) {
+fun BankCard(core: Core, v: Int) {
     val ctx = LocalContext.current
     val b = core.bank
     var open by rememberSaveable { mutableStateOf(false) }
     var q by rememberSaveable { mutableStateOf("") }
-    val banks = b.banks()
+    val apps = core.appList.get()
+    val added = core.store.prefsSet("bank.add")
+    val skipped = core.store.prefsSet("bank.skip")
+    val banks = remember(apps, added, skipped) { b.banks() }
     MacCard(tr("Banking apps")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
         SwitchRow(
             tr("Close TwinDesk for banking apps"),
             if (b.devOff) tr("When a banking app opens, TwinDesk turns off USB and wireless debugging, Developer options and its Accessibility service, then closes")
@@ -173,6 +178,7 @@ fun BankCard(core: Core) {
 
 @Composable
 fun NotifButtonsCard(core: Core) {
+    @Suppress("UNUSED_VARIABLE") val v = core.version.collectAsState().value
     val ctx = LocalContext.current
     val chosen = QuickActions.chosen(core)
     MacCard(tr("Notification buttons")) {

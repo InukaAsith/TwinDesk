@@ -312,6 +312,8 @@
   "Live on {name}": "正在 {name} 上直播",
   "Living Room": "客厅",
   "Loading apps…": "正在加载应用…",
+  "Loading Deck…": "正在加载 Deck…",
+  "Closing Deck…": "正在关闭 Deck…",
   "Loading windows…": "正在载入窗口…",
   "Local Network": "本地网络",
   "Location": "位置",
@@ -947,5 +949,6 @@
   "{name}’s sound": "{name} 的声音",
   "{shown} shown this session": "本次会话已显示 {shown} 条",
   "{systemName} {systemVersion}": "{systemName} {systemVersion}",
-  "{what}. Save to this {device}?": "{what}。保存到此 {device}？"
+  "{what}. Save to this {device}?": "{what}。保存到此 {device}？",
+  "Search button": "搜索按钮"
 }

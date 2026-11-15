@@ -338,6 +338,7 @@
     wasLinked = now;
     document.body.classList.toggle('no-peer', !linked(s)); // switches of what needs a device can't be changed (shared/feature-art.js)
     renderPeer(s);
+    if (UI.portablePill) UI.portablePill(s); // TwinDesk Portable: PORTABLE · LIMITED / FULL beside the name (shared/ui-portable.js)
     UI.setup.render(s);
     UI.fillTree(UI.setup.page);
     pages.hidden = !UI.setup.page.hidden;

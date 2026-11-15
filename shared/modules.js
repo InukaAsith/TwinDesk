@@ -39,17 +39,18 @@
     { id: 'airplay', label: 'AirPlay', pages: ['airplay'] },
     { id: 'iossign', label: 'TwinDesk iPhone', pages: ['iossign'] },
     { id: 'multi', label: 'Multi-device', pages: ['multi'] },
+    { id: 'fullkvm', label: 'Full KVM', pages: ['fullkvm'] }, // Windows and Linux (shared/ui-fullkvm.js); off: the app doesn't use the service either (shared/edition.js)
   ];
   // Always there: not modules.
   const FIXED = ['general', 'about', 'connection', 'overview', 'android-overview', 'ios-overview', 'phone', 'setup'];
   // Page scripts (basenames) that only modules use: loaded when any of the modules is on.
   const SCRIPTS = {
-    'ui-display.js': ['share'], 'ui-share.js': ['share'],
+    'ui-display.js': ['share'], 'ui-share.js': ['share'], 'ui-fullkvm.js': ['fullkvm'],
     'ui-display-pc.js': ['receive'], 'ui-receive.js': ['receive'],
     'kvm-geom.js': ['cursor'], 'kvm-map-ui.js': ['cursor'], 'ui-cursor.js': ['cursor'], 'mesh-intro.js': ['cursor', 'multi'],
     'ui-keyboard.js': ['keyboard'], 'ui-clipboard.js': ['clipboard'], 'ui-notifs.js': ['notifications'],
     'ui-mic.js': ['audio'], 'ui-audio.js': ['audio'], 'ui-camera.js': ['camera'], 'ui-remote.js': ['remote'],
-    'ui-terminal.js': ['terminal'], 'ui-files.js': ['files'], 'ui-mount.js': ['mount'], 'ui-apps.js': ['apps'],
+    'ui-terminal.js': ['terminal'], 'ui-files.js': ['files'], 'ui-drive.js': ['files'], 'ui-mount.js': ['mount'], 'ui-apps.js': ['apps'],
     'ui-mirror.js': ['mirror', 'papps'], 'ui-ios-screen.js': ['mirror'], 'ui-multi.js': ['multi'],
     'ui-calls.js': ['calls'], 'ui-messages.js': ['messages'], 'ui-media.js': ['media'], 'ui-pfiles.js': ['pfiles'],
     'ui-deck.js': ['deck'], 'deck-model.js': ['deck'], 'deck-catalog.js': ['deck'], 'deck-icons.js': ['deck'],

@@ -3,6 +3,7 @@
 // disk or from the UI goes through normalize(), so main never stores anything out of range.
 const P = require('../shared/protocol.js');
 const CL = require('../shared/cursorlock.js');
+const Crossing = require('../shared/crossing.js');
 const { savedLanguage } = require('../shared/i18n.js');
 const Look = require('../shared/look.js');
 const { normalizeFolder } = require('../shared/received.js');
@@ -54,6 +55,7 @@ function normalize(s) {
   const wk = s.wake || {};
   const ph = s.phone || {};
   const mt = s.mount || {};
+  const dr = s.drive || {};
   const hub = s.hub || {};
   const nt = s.net || {};
   return {
@@ -64,6 +66,7 @@ function normalize(s) {
       driveOther: bool(kvm.driveOther, true),
       beDriven: bool(kvm.beDriven, true),
       resistancePx: Math.round(num(kvm.resistancePx, P.RESISTANCE_PX, 0, 400)),
+      crossingModifier: Crossing.modifier(kvm.crossingModifier), // held to leave this computer at an edge ('' none, #230)
       pcSide: P.SIDES.includes(kvm.pcSide) ? kvm.pcSide : null, // where this PC is, seen from the other computer (kvm.layout)
       along: typeof kvm.along === 'number' && Number.isFinite(kvm.along) ? Math.round(kvm.along) : null, // the other computer along our side, points (shared/kvm-geom.js); null: centred
       speed: Math.round(num(kvm.speed, 1.0, 0.25, 3) * 100) / 100,
@@ -79,7 +82,7 @@ function normalize(s) {
       ble: bool(kvm.ble, true), // cursor sharing while the session runs through Bluetooth (pair.sync 'ble')
     },
     // hotkey: double-tap = mouse and keyboard home. lockKeys: cursor lock on/off (shared/cursorlock.js)
-    keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN, lockKeys: CL.validKeys(keys.lockKeys, CL.DEFAULT_KEYS.linux) },
+    keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN, lockKeys: CL.validKeys(keys.lockKeys, CL.DEFAULT_KEYS.linux), emergencyKeys: Crossing.emergency(keys.emergencyKeys) }, // emergencyKeys: everything home, sharing off (#178)
     // hud: popup when switching computers. inputProtocol: udp = tdv2 input lane (default), tcp = tdv1
     app: { hud: bool(appS.hud, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true }, // keepPinging: General › Advanced (shared/quiet.js)
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored
@@ -173,6 +176,7 @@ function normalize(s) {
       receive: bool(nf.receive, false),
       hideText: bool(nf.hideText, false),
       muted: Array.isArray(nf.muted) ? nf.muted.filter((x) => typeof x === 'string').map((x) => x.slice(0, 300)).slice(0, 500) : [],
+      ...require('../shared/notifrules.js').saved(nf), // style, otpCopy, quiet, phoneApps: how a phone's show here
     },
     pcScreen: { // Display › PC → Mac; Off/Mirror/Extend itself is never saved
       monitor: typeof pcs.monitor === 'string' ? pcs.monitor : '', // Electron display id for Mirror ('' = main)
@@ -207,17 +211,23 @@ function normalize(s) {
       enterSends: bool(ph.enterSends, true),
       uhid: bool(ph.uhid, false), // Type as a hardware keyboard (shared/uhidkbd.js)
       arrowSwipe: bool(ph.arrowSwipe, false),
+      // Mirroring over wireless debugging: past adbd straight over the Wi-Fi (scrcpy.js), and the
+      // encoder's low-latency profile.
+      direct: bool(ph.direct, false),
+      lowLatency: bool(ph.lowLatency, false),
     },
     // Bluetooth for devices not on this network (blepipe.js, netlink.js): with phones (ble), with computers (blePc);
     // bleWifiOff: none at all while the session is on the same Wi-Fi (blepolicy.js wifiQuiet)
     net: { ble: bool(nt.ble, true), blePc: bool(nt.blePc, false), bleWifiOff: bool(nt.bleWifiOff, true), hotspots: hotspots(nt.hotspots), keepWifi: bool(nt.keepWifi, true), tailscale: bool(nt.tailscale, true), bleInput: bool(nt.bleInput, false) }, // tailscale: shared/tailnet.js; bleInput: shared/bleinput.js
     mount: { on: bool(mt.on, false) }, // the phone as a drive (phonedrive.js), only when Mount is clicked
+    drive: { on: bool(dr.on, false), folder: typeof dr.folder === 'string' ? dr.folder.slice(0, 1024) : '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js); '' = ~/TwinDesk Drive
     // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
     // callAudio: the calls' sound here over Bluetooth; btDevices: which paired Bluetooth device each
     // phone is (its device id -> the Bluetooth device's id), found by its name or picked.
     hub: {
       calls: bool(hub.calls, false), messages: bool(hub.messages, false), media: bool(hub.media, false), files: bool(hub.files, false),
       callAudio: bool(hub.callAudio, true), btDevices: btDevices(hub.btDevices),
+      callPause: bool(hub.callPause, false), // pause what plays here during a call (shared/callpause.js)
       // Shared folders (shared/foldershare.js), both ways, off until switched on.
       shareMount: bool(hub.shareMount, false), shareServe: bool(hub.shareServe, false), shareFolder: typeof hub.shareFolder === 'string' ? hub.shareFolder.slice(0, 1000) : '',
     },

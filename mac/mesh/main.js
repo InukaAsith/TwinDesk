@@ -258,7 +258,7 @@ function publishState() {
     state.camera = svc && svc.camShare ? { ...svc.camShare.state, on: settings.camera.on !== false } : svc ? { on: false } : null; // Camera tab
     state.vcam = svc && svc.vcam ? svc.vcam.view() : svc ? { checked: true, supported: true, on: false } : null;
     // ReZume tab; mesh: why it isn't here (only with one phone, shared/rezume-solo.js)
-    state.rezume = svc ? { ...(svc.rz ? svc.rz.view : { ...settings.rezume, connected: false }), mesh: svc.rzSolo ? svc.rzSolo.blocked() : '' } : null;
+    state.rezume = svc ? { ...(svc.rz ? svc.rz.view : { ...settings.rezume, connected: false }), mesh: svc.rzSolo ? svc.rzSolo.blocked() : '', meshWith: svc.rzSolo ? svc.rzSolo.view() : null } : null;
     state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web
     state.chats = chats ? chats.view() : null; // Messages' WhatsApp, Instagram… conversations
     if (svc) {
@@ -287,6 +287,7 @@ function publishState() {
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
     if (svc && svc.phoneDrive) state.mount = { ...svc.phoneDrive.view, on: !!settings.mount.on };
+    if (svc) state.drive = svc.drive ? svc.drive.view() : { on: false, folder: settings.drive.folder || require('path').join(require('os').homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder };
     if (updates) state.updates = updates.view;
     if (pairSync) pairSync.check();
     sendScreenState();
@@ -297,9 +298,12 @@ function publishState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+
 function sendScreenState() {
   const c = peer && peer.current;
   if (!c || !svc) return void (screenStateKey = '');
+  // No display list. Mesh has one capture and one input target, and each device can be off or on
+  // its own screen. A phone pick would clear that choice and move every viewer that follows it.
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
   const key = JSON.stringify([c.deviceId, msg]);
   if (key === screenStateKey) return;
@@ -307,11 +311,18 @@ function sendScreenState() {
   peer.sendToClient(msg);
 }
 
+function displayPick(m) {
+  return !!m && Object.prototype.hasOwnProperty.call(m, 'displayId') && m.displayId != null && m.displayId !== '';
+}
+
 // The viewer on the other computer starts/stops our sharing or switches Extend/Mirror.
 function onScreenCtl(m) {
   // The phone viewer's Close stops sharing even when the viewer may not start and switch it.
   if (m.share === false && m.close === true) return void (settings.sharing.on && actions.setSharing(false, 'remote'));
   if (settings.sharing.remote === false) return void (screenStateKey = '', pushState()); // re-send: remote false
+  // One-to-one only. Ignore it here so the owner's per-device off or display, and every other
+  // viewer's picture, stay as they are. Stop (share false) still runs below.
+  if (m.share !== false && displayPick(m)) return;
   if (m.mode === 'extend' || m.mode === 'mirror') {
     if (displayMode() !== m.mode) actions.setDisplayMode(m.mode);
   }
@@ -487,6 +498,7 @@ function updateTray() {
   const found = (state.found || []).filter((d) => !c || d.id !== c.id);
   const other = c ? name : t('Other Computer');
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu.template({
+    off: modulesAtStart, // General › Modules: menus of modules that are off aren't there
     t,
     connected: !!c,
     status: c ? t('Connected to {name}', { name: c.name }) + (c.rttMs != null ? ' · ' + t('{ms} ms', { ms: c.rttMs }) : '') : t('Not connected'),
@@ -586,6 +598,10 @@ app.whenReady().then(() => {
     knownIds: () => hub.peers().map((p) => p.id),
     canDrive: (pid) => { const s = hub.sessions.get(pid); return !!s && s.connected; }, // the Multi-device tab's reach
     endsChain: (pid) => { const s = hub.sessions.get(pid); return !!s && P.isPhoneOs(s.peerOs); },
+    // The monitor map (#225): ours from Electron, the others' kept for when they are offline.
+    online: (pid) => { const p = hub.peers().find((x) => x.id === pid); return !!p && (p.state === 'connected' || p.state === 'via'); },
+    myDisplays: () => require('../../shared/screen-mesh.js').fromElectron(require('electron').screen),
+    displaysStorage: { get: () => settings.layoutDisplays || null, set: (m) => { settings.layoutDisplays = m; store.saveSettings(settings); } },
     legacyEdges: () => {
       const k = settings.kvm || {};
       if (k.edges && Object.values(k.edges).some(Boolean)) return k.edges;
@@ -597,6 +613,7 @@ app.whenReady().then(() => {
       pushState();
     },
   });
+  for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   // One-to-one features follow the SELECTED device; the phone follows the phone (see hub.js).
   peer = new Peer(hub.facade, server);
   peer.on('client', (ctx) => {
@@ -653,6 +670,21 @@ app.whenReady().then(() => {
     return svc.mic;
   };
   svc.loadMic();
+  // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh, docs/drive.md): one engine, synced
+  // with every connected computer. Nothing of it is loaded until it's on.
+  svc.loadDrive = () => {
+    if (svc.drive) return svc.drive;
+    const host = require('../../shared/drive-host.js');
+    svc.drive = host.createMesh({
+      settings, save: () => store.saveSettings(settings), me: id.macId, meName: id.macName, userData: app.getPath('userData'),
+      trash: (p) => require('electron').shell.trashItem(p),
+      mesh: host.hubAdapter(hub, () => server),
+      onChange: pushState,
+    });
+    return svc.drive;
+  };
+  svc.getDrive = () => svc.drive || null;
+  if (settings.drive.on) svc.loadDrive();
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
   svc.kvm.onMoveWindow = (m, to) => {
@@ -772,11 +804,14 @@ app.whenReady().then(() => {
   });
   svc.phone.on('change', pushState);
   svc.phoneViews = svc.phone.viewsProxy; // the windows of the active phone
-  // ReZume (shared/rezume.js) between this Mac and a phone, while that phone is the only device
-  // connected (shared/rezume-solo.js): between two computers it needs Multi-device off. Loaded the
+  // ReZume (shared/rezume.js) with one device of the mesh, picked on the ReZume page and the same on
+  // both (shared/rezume-solo.js, settings.rezume.with); a phone alone without a pick. Loaded the
   // first time it's turned on; its offers in the Dock (dockstub.js), the menu bar and a notification.
   const RzSolo = require('../../shared/rezume-solo.js');
-  svc.rzSolo = RzSolo.soloLink({ bus: hub.bus, sessions: hub.sessions });
+  svc.rzSolo = RzSolo.soloLink({ bus: hub.bus, sessions: hub.sessions, partner: {
+    get: () => settings.rezume.with,
+    set: (v) => { settings.rezume.with = v; store.saveSettings(settings); pushState(); },
+  } });
   hub.bus.on(P.T.RZ_POLICY, (m, from) => { if (!svc.rz && from && from === svc.rzSolo.id()) hub.bus.send(from, { t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); }); // off here: the phone shows it off
   svc.loadRezume = () => {
     if (svc.rz || !settings.rezume.on) return svc.rz || null;
@@ -787,6 +822,9 @@ app.whenReady().then(() => {
     svc.rzAct = require('../activity').create({ cfg: () => settings.rezume });
     const solo = () => (svc.rzSolo.id() ? svc.phone.unit(svc.rzSolo.id()) : null);
     const name = () => { const p = svc.rzSolo.link.peer(); return p ? p.name : 'the phone'; };
+    // A document goes through Files, which is the selected device's: the device ReZume is with is
+    // selected for it (as crossing to it with the pointer does).
+    const toPartner = () => { const to = svc.rzSolo.id(); return !!to && (hub.selectedId === to || !!hub.select(to)); };
     svc.rz = new ReZume({
       link: svc.rzSolo.link,
       cfg: () => settings.rezume,
@@ -809,6 +847,8 @@ app.whenReady().then(() => {
       pick: (o, ways) => require('../../shared/rzpick.js').pick(o, ways, { peer: name(), language: i18n.locale }),
       adb: () => { const u = solo(); return RzSolo.phoneAdb(u && u.bridge); },
       phoneApps: () => { const u = solo(); return (u && u.phone.apps) || []; },
+      sendFile: (p, batch) => toPartner() && !!svc.fileSend.sendBatch([p], 'rezume', batch),
+      expectFile: (batch, dir) => { if (toPartner()) svc.drop.expectBatch(batch, dir || '', true); },
       save: () => store.saveSettings(settings),
     });
     svc.rz.on('change', pushState);
@@ -971,6 +1011,7 @@ app.whenReady().then(() => {
     hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : 'Cursor sharing off' }, sub);
   });
   svc.drop.on('batch', (b) => {
+    if (svc.rz && svc.rz.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
   });
   createWindow();
@@ -1035,7 +1076,11 @@ function setupNet() {
     // The session on the same Wi-Fi a while (General's Turn off Bluetooth on Wi-Fi connections,
     // blepolicy.js wifiQuiet): no advertising, its pipes and the session's Bluetooth fallback closed;
     // back as it was when the session ends.
-    const off = bleQuiet({ on: settings.net.bleWifiOff !== false, current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
+    // Cursor › Mouse and keyboard over Bluetooth (#158, shared/bleinput.js): the sessions we host send the
+    // pointer and keys on their Bluetooth socket beside the network one, which then stays up. (The Mac
+    // dials over the network only, so a session it dialled has no Bluetooth to use.)
+    server.bleInput = settings.net.bleInput === true ? require('../../shared/bleinput.js') : null;
+    const off = bleQuiet({ on: settings.net.bleWifiOff !== false && settings.net.bleInput !== true, current: () => peer.current, onGroup: () => !!svc.net && svc.net.onGroup });
     if (off !== bleOff) {
       bleOff = off;
       console.log(`[ble] ${off ? 'off: the session is on the same Wi-Fi' : 'on again'}`);

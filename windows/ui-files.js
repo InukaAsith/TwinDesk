@@ -71,11 +71,14 @@ UI.tab({
     const cancelBtn = UI.button(I18n.t('Cancel'), () => api.cancelDrop(), 'small');
     const outRow = UI.row('', '', [cancelBtn], { literal: true });
     const inRow = UI.row('', '', [], { literal: true });
+    // TwinDesk Drive (shared/ui-drive.js): one-to-one and Multi-device alike; hidden where the state has none.
+    const drive = UI.driveCard ? UI.driveCard(api, { tilde: (p) => p, manager: 'File Explorer' }) : null;
     body.append(
       UI.card('', [sendRow, zone], { cls: 'keep-on' }),
       UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
       pair.el,
       UI.card('', [edgeRow, encryptRow]),
+      ...(drive ? [drive.card] : []),
       UI.card(I18n.t('Recent'), [outRow, inRow], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
     );
     const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
@@ -84,6 +87,7 @@ UI.tab({
       const m = f.smb;
       const p = UI.peer(s);
       pair.update(s);
+      if (drive) drive.update(s);
       // Send files
       canSend = s.link.state === 'connected';
       zone.classList.toggle('off', !canSend);

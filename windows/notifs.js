@@ -9,7 +9,8 @@ const path = require('path');
 const P = require('../shared/protocol.js');
 const { IconsIn } = require('../shared/notificon.js');
 const { otpOf } = require('../shared/otp.js');
-const { actionsOf, withPhoneActions } = require('../shared/notifacts.js');
+const { actionsOf, withPhoneActions, hidden, present } = require('../shared/notifacts.js');
+const { richOf, popupOn } = require('../shared/notifpop.js');
 
 const xmlEsc = (t) => String(t).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 
@@ -64,7 +65,7 @@ class Notifs extends EventEmitter {
   }
 
   sendPolicy() {
-    if (this.connected) this.link.send({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive });
+    if (this.connected) this.link.send({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups (notifpop.js)
   }
 
   applySettings() {
@@ -126,7 +127,7 @@ class Notifs extends EventEmitter {
 
   // Windows toasts have no subtitle: the first line is "<appName> · <peer>".
   _show(m) {
-    if (!this.cfg.receive) return;
+    if (!this.cfg.receive || hidden(this, m)) return; // an app set to Hide: not kept either
     const peer = this.peerName();
     const appName = str(m.appName, 100);
     const title = str(m.title, 200) || appName || peer;
@@ -140,6 +141,7 @@ class Notifs extends EventEmitter {
       at: Math.round(Number(m.at)) || Date.now(),
       reply: m.reply === true, // a phone chat's: answered with reply() (notif.reply)
       actions: actionsOf(m), // its buttons, clicked from Overview (act())
+      ...richOf(m), // a picture, the sender's picture, a progress bar (TwinDesk's window shows them)
     };
     if (item.app && typeof m.icon === 'string' && m.icon.startsWith('data:image/') && m.icon.length < 200000) {
       this.historyIcons.delete(item.app);
@@ -148,7 +150,10 @@ class Notifs extends EventEmitter {
     }
     this.history = [item, ...(this.history || []).filter((x) => x.id !== item.id)].slice(0, 50);
 
-    if (Notification.isSupported()) {
+    // TwinDesk's window (Reply, buttons, picture, progress), the system's toast, or none (quiet).
+    const how = present(this, item, m, { from: peer, code: otpOf([title, str(m.body)].join(' ')), icon: m.icon || this.historyIcons.get(item.app) });
+    if (how === 'popup') this.shown++;
+    if (how === 'native' && Notification.isSupported()) {
       this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
       const icon = this.iconsIn.for(m);
       const body = [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n');
@@ -169,8 +174,8 @@ class Notifs extends EventEmitter {
       n.on('click', () => this.onClick && this.onClick({ app: str(m.app, 200), appName }));
       setTimeout(drop, 60000);
       n.show();
+      this.shown++;
     }
-    this.shown++;
     this.onChange();
   }
 

@@ -24,6 +24,7 @@ function withPhoneActions(Cls) {
     gone(id) {
       id = str(id, 200);
       if (!id) return;
+      if (this.pop) this.pop.gone(id);
       const had = (this.history || []).length;
       this.history = (this.history || []).filter((h) => h.id !== id);
       for (const n of [...(this.live || [])]) {
@@ -112,4 +113,60 @@ function withMeshPhoneActions(Cls) {
   });
 }
 
-module.exports = { actionsOf, withPhoneActions, withMeshPhoneActions };
+// How a phone's notification is shown here (shared/notifrules.js, shared/notifpop.js), for every
+// notifs.js. Before anything: hidden(n, m) → true for an app set to Hide (not kept either). After
+// it's in the list: present(n, item, m, {from, code, icon}) → 'popup' (TwinDesk's window showed it),
+// 'native' (the caller shows the system's) or 'none' (quiet: the list only). A one-time code goes
+// on the clipboard by itself when that's on. A progress bar's updates fill TwinDesk's window in
+// place; with the system's, only its first one and its end show.
+const rules = () => require('./notifrules.js');
+function hidden(n, m) {
+  return rules().modeOf(n.cfg, m) === 'hide';
+}
+function present(n, item, m, { from, code, icon } = {}) {
+  const r = rules();
+  const mode = r.modeOf(n.cfg, m);
+  if (code && n.cfg.otpCopy && mode !== 'hide') { try { require('./otp.js').quietCopy(code); } catch (_) { /* no clipboard (tests) */ } }
+  if (mode !== 'show') return 'none';
+  const pop = require('./notifpop.js');
+  let electron = null;
+  try { electron = require('electron'); } catch (_) { /* plain node */ }
+  if (pop.popupOn(n.cfg) && electron && typeof electron === 'object' && electron.BrowserWindow) { // under plain node (tests): the system's
+    if (!n.pop) {
+      n.pop = new pop.NotifPop({
+        corner: process.platform === 'win32' ? 'bottom' : 'top',
+        getLanguage: () => languageOf(n),
+        act: (id, i) => n.act(id, i),
+        reply: (id, text) => n.reply(id, text),
+        dismiss: (id) => n.dismiss(id),
+        open: (it) => { const c = { app: it.app, appName: it.appName, ...(it.from ? { originId: it.from } : {}) }; if (n.onClick) n.onClick(c); else if (n.emit) n.emit('click', c); },
+        copy: (c) => require('electron').clipboard.writeText(c),
+      });
+    }
+    n.pop.show(item, { from, code, icon });
+    return 'popup';
+  }
+  if (item.live) {
+    if (!n.liveSeen) n.liveSeen = new Set();
+    const seen = n.liveSeen.has(item.id);
+    n.liveSeen.add(item.id);
+    if (n.liveSeen.size > 100) n.liveSeen.delete(n.liveSeen.values().next().value);
+    if (seen && !item.live.done) return 'none';
+  }
+  return 'native';
+}
+// Gone from the phone: its TwinDesk window too.
+function popGone(n, id) {
+  if (n.pop) n.pop.gone(id);
+}
+function languageOf(n) {
+  try {
+    const s = n.settings || (n.getSettings && n.getSettings()) || {};
+    const I18n = require('./i18n.js');
+    return I18n.resolveLanguage((s.ui && s.ui.language) || '', require('electron').app.getLocale());
+  } catch (_) {
+    return 'en';
+  }
+}
+
+module.exports = { actionsOf, withPhoneActions, withMeshPhoneActions, hidden, present, popGone };

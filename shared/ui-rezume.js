@@ -20,6 +20,26 @@
   const hostOf = (u) => { try { return new URL(u).host; } catch (_) { return ''; } };
   const size = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 
+  // Multi-device (shared/rezume-solo.js): the page is about the device ReZume is with, which needn't be
+  // the selected one, so its names are filled here from that device (the page is data-literal to the
+  // window's own filling, which names the selected device).
+  function partnerPeer(s, mw) {
+    const d = (mw.devices || []).find((x) => x.id === mw.with);
+    const who = d ? { os: d.os, name: d.name } : { os: 'win', name: mw.withName || tr('the other device') };
+    return UI.peer({ ...s, client: who, peer: who, session: who });
+  }
+  function fillAs(root, p) {
+    const put = (t) => String(t).replace(/\{(\w+)\}/g, (m, k) => (k in p ? p[k] : m));
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (/\{\w+\}/.test(n.nodeValue)) nodes.push(n);
+    for (const n of nodes) {
+      const el = n.parentElement;
+      if (el && el.childNodes.length === 1) el.dataset.peer = n.nodeValue; // a template written just now
+    }
+    for (const el of root.querySelectorAll('[data-peer]')) if (el.childNodes.length <= 1) el.textContent = put(el.dataset.peer);
+  }
+
   // The other device's offer: its icon, what it is, Open and Dismiss. update(s, always): shown while
   // there is one (always: on the ReZume tab; elsewhere only with "On the Apps and Phone pages").
   UI.rezumeCard = function () {
@@ -80,6 +100,11 @@
       info.setAttribute('data-literal', '');
       const offer = UI.rezumeCard();
 
+      // Multi-device: which device ReZume is with (the same on both: picking here picks this one there).
+      const withPick = UI.select([], (id) => api.rezumeDo({ a: 'with', id }));
+      const withRow = UI.row(tr('ReZume with'), tr('The device to go on with. It picks this computer there too, and the one either was with before lets go.'), [withPick.el], { literal: true });
+      const withCard = UI.card(tr('Multi-device'), [withRow]);
+      withCard.hidden = true;
       const status = UI.row('{name}', '');
       const out = UI.row('', '', [], { literal: true });
       const push = UI.button(tr('Send'), () => api.rezumeDo({ a: 'push' }), 'small');
@@ -142,12 +167,23 @@
       const tabRow = UI.row(tr('Apps and Phone pages'), '', [sw.tab.el]);
       const where = UI.card(tr('Show in'), [notifyRow, barRow, trayRow, tabRow]);
 
-      body.append(note, offer.el, now, info, what, ways, winList.el, fileList.el, where);
+      body.append(withCard, note, offer.el, now, info, what, ways, winList.el, fileList.el, where);
 
       return (s) => {
         const h = s.rezume || {};
-        out.label.textContent = UI.fill(tr('Offered to {name}'));
-        outRow.label.textContent = UI.fill(tr('Send to {name}'));
+        const mw = h.meshWith;
+        const p = mw ? partnerPeer(s, mw) : UI.peer(s);
+        const fill = (t) => String(t).replace(/\{(\w+)\}/g, (m, k) => (k in p ? p[k] : m));
+        withCard.hidden = !mw;
+        if (mw) {
+          body.setAttribute('data-literal', '');
+          const opts = [{ value: '', label: tr('No device') }, ...(mw.devices || []).map((d) => ({ value: d.id, label: d.name }))];
+          if (mw.with && !(mw.devices || []).some((d) => d.id === mw.with)) opts.push({ value: mw.with, label: tr('{name} (not connected)', { name: mw.withName || mw.with }) });
+          withPick.options(opts);
+          withPick.set(mw.with || '');
+        }
+        out.label.textContent = fill(tr('Offered to {name}'));
+        outRow.label.textContent = fill(tr('Send to {name}'));
         push.textContent = tr('Send');
         for (const k of Object.keys(sw)) {
           sw[k].set(h[k]);
@@ -182,14 +218,16 @@
         outRow.hidden = !h.on || !h.connected;
         push.disabled = !h.last;
         outRow.setHint(h.last ? h.last.title : tr('Nothing to send yet'));
-        // Multi-device (shared/rezume-solo.js): only while one phone is the only device connected.
-        const meshWhy = h.mesh === 'computer' ? tr('ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.')
+        // Multi-device (shared/rezume-solo.js): with the device picked above (an older app: only a phone alone).
+        const meshWhy = h.mesh === 'pick' ? tr('Pick the device to go on with above, under ReZume with.')
+          : h.mesh === 'computer' ? tr('ReZume with a computer needs Multi-device off: turn it off on the Multi-device page and connect the two directly. In Multi-device, ReZume works with one phone.')
           : h.mesh === 'many' ? tr('In Multi-device, ReZume works only while one phone is the only device connected. Disconnect the others, or turn Multi-device off on the Multi-device page for ReZume with a computer.') : '';
         note.set(meshWhy || (h.on ? tr(h.why || '') : ''));
         const template = h.message === '{name} has no ReZume yet: update TwinDesk there' || h.message === 'ReZume is off on {name}' || h.message === '{name} does not accept this item';
-        const message = h.on ? (h.waiting ? tr('Getting {item}…', { item: h.waiting }) : template ? tr(h.message, { name: UI.peer(s).name }) : tr(h.message || '')) : '';
+        const message = h.on ? (h.waiting ? tr('Getting {item}…', { item: h.waiting }) : template ? tr(h.message, { name: p.name }) : tr(h.message || '')) : '';
         info.textContent = message;
         info.hidden = !message;
+        if (mw) fillAs(body, p);
       };
     },
   });

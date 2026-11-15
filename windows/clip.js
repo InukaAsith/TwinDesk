@@ -142,6 +142,9 @@ class Clip {
   }
 
   _remember(dir, item) {
+    // What went out last is no longer on the other side once something came in, and the other way
+    // round: copying it again must send it again (#223).
+    if (dir === 'in') this.lastSync.sent = null; else this.lastSync.received = null;
     const n = this.cfg.historySize;
     if (!n) return;
     if (typeof item === 'string') {
@@ -175,6 +178,7 @@ class Clip {
     let text, concealed;
     // Read together: one await before the checks below (shared/eclip.js reads the formats).
     try { [text, concealed] = await Promise.all([readText(), c.skipConcealed && isConcealed()]); } catch (_) { return; }
+    if (require('../shared/otp.js').isQuiet(text)) { this.lastSync.sent = text; return true; } // a code copied by itself (Notifications): kept here only
     c = this.cfg;
     if (generation !== this.generation || sequence !== this.readSequence || !c.enabled || !c.send || !this.peerAccepts || this.link.status.state !== 'connected') return;
     if (!text) return this._result(await this.images.offerClipboard(c.skipConcealed && concealed));
