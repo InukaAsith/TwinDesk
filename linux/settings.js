@@ -159,6 +159,7 @@ function normalize(s) {
     },
     files: {
       dropToMac: bool(files.dropToMac, false),
+      outboxHours: [0, 1, 24, 168].includes(files.outboxHours) ? files.outboxHours : 24, // Keep files to send (shared/outbox.js), 0 = off
       shareOn: bool(files.shareOn, false), // set only by a successful share setup (smb.js)
       shareFolder: typeof files.shareFolder === 'string' ? files.shareFolder : '',
       mountMac: bool(files.mountMac, false),

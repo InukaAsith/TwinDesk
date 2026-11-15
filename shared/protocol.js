@@ -155,13 +155,13 @@
       SSH_KEY: 'ssh.key', // W->M {pub}
       SSH_INFO: 'ssh.info', // M->W {enabled, user, port, hostKeys, why?}
       SSH_FORGET: 'ssh.forget', // W->M
-      FILE_OFFER: 'file.offer', // W->M {id, name, size, x?, y?, index, count}
+      FILE_OFFER: 'file.offer', // W->M {id, name, size, x?, y?, index, count, cont?} (cont: the first batch's id, the rest of a paused or cut-off Send files batch, shared/outbox.js)
       FILE_ACCEPT: 'file.accept', // M->W {id}
       FILE_REFUSE: 'file.refuse', // M->W {id, why}
       FILE_CHUNK: 'file.chunk', // W->M {id, seq, data (base64)}
       FILE_END: 'file.end', // W->M {id, sha256}
       FILE_DONE: 'file.done', // M->W {id, ok, path?, error?}
-      FILE_CANCEL: 'file.cancel', // either {id}
+      FILE_CANCEL: 'file.cancel', // either {id, pause?} (pause: the sender paused its batch; it ends quietly)
       // TwinDesk Drive (docs/drive.md, shared/drive-link.js): one folder kept the same on every device
       // that turns it on. An app without it never answers drive.hello, so it never starts.
       DRIVE_HELLO: 'drive.hello', // either {v: 1, again?}: Drive is on here (again: send me everything once more)

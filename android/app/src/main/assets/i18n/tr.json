@@ -1177,5 +1177,17 @@
   "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Seçmek için bilgisayarda OBS Studio’yu açın. Bağlantısı bilgisayarın Deck sayfasında ayarlanır.",
   "Paused": "Duraklatıldı",
   "Recording": "Kaydediliyor",
-  "Showing": "Gösteriliyor"
+  "Showing": "Gösteriliyor",
+  "1 day": "1 gün",
+  "1 hour": "1 saat",
+  "1 week": "1 hafta",
+  "Keep files to send": "Gönderilecek dosyaları tut",
+  "Paused: {file}": "Duraklatıldı: {file}",
+  "Resume": "Sürdür",
+  "Resume it on the Files page": "Dosyalar sayfasından sürdürün",
+  "Sent while the computer isn’t connected, or cut off: they go when it’s back": "Bilgisayar bağlı değilken gönderilenler ya da yarıda kalanlar: geri geldiğinde gider",
+  "Waiting for {device}": "{device} bekleniyor",
+  "Waiting to send": "Gönderilmeyi bekleyenler",
+  "{items} wait for {name}: they go when it connects": "{items} {name} için bekliyor: bağlandığında gider",
+  "{what} from {from}: paused": "{from} cihazından {what}: duraklatıldı"
 }

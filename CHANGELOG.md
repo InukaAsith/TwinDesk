@@ -16,6 +16,17 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Sound › Only on the computer** (Android, on by default): without wireless debugging, the phone's
   speaker goes quiet while its sound plays on the computer, and its volume comes back after.
 - **A laptop's battery** on the other computer's page.
+- **Waiting to send:** files sent while the other device isn't connected wait for it and go when it
+  connects. Files › Keep files to send sets how long (1 hour, 1 day, 1 week, or off). On every
+  computer and on Android, phone ↔ computer and computer ↔ computer.
+- **Pause and Resume** a Send files batch: the files that hadn't arrived wait under Waiting to send.
+  If the connection drops in the middle, the rest goes again by itself when it's back, into the same
+  folders.
+- **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
+  in the status bar, with Pause and Cancel.
+- **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and
+  turn on the virtual camera, with the tile showing what OBS is doing. Uses OBS's own WebSocket
+  server on the computer.
 
 ### Fixes
 

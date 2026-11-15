@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const P = require('../shared/protocol.js');
 const awake = require('../shared/awake.js');
+const { Outbox } = require('../shared/outbox.js');
 
 const T = P.T;
 const HIGH_WATER = 1024 * 1024;
@@ -37,7 +38,20 @@ class FileDrop {
     this.link.on(T.DRAG_END, (m) => this._dragEnd(m));
     this.batches = new Map(); // Batch → {kind, name, files, bytes}
     this.link.on(T.FILES_DONE, (m) => this._batchDone(m));
+    // Files › Send files waiting for the other device: sent while away, paused, cut off (shared/outbox.js).
+    // opts.peer() → {id, name} of the device connected now; opts.outboxFile.
+    const peerNow = () => (this.link.status && this.link.status.state === 'connected' && this.peer ? this.peer() : null);
+    this.outbox = new Outbox({
+      file: this.outboxFile || null,
+      hours: () => ((this.settings && this.settings.files) || {}).outboxHours,
+      peer: peerNow,
+      send: (e) => !!this.link.status && this.link.status.state === 'connected' && !!(e.list ? this.sendList(e.list, 'send', crypto.randomUUID(), { cont: e.cont, name: e.name }) : this.sendBatch(e.paths, 'send')),
+    });
+    this.outbox.on('change', () => this._progress());
+    this.link.on('welcome', () => setImmediate(() => this.outbox.connected()));
     this.link.on('closed', () => {
+      // Send files cut off: what hadn't arrived goes again when the device is back.
+      for (const [batch, b] of [...this.batches]) if (b.kind === 'send' && this._keepRest(batch, 'cut', this.lastPeer)) this.batches.delete(batch);
       this._abortAll('{Name} disconnected');
       for (const batch of [...this.batches.keys()]) this._batchDone({ batch, ok: false });
     });
@@ -74,11 +88,65 @@ class FileDrop {
     const d = plan(paths);
     if (!d || !d.jobs.length) return null;
     const name = d.items.length === 1 ? d.items[0].name : d.items.length + ' items';
-    this.batches.set(batch, { kind, name, itemCount: d.items.length, files: d.jobs.length, bytes: d.bytes, sent: 0 });
-    d.jobs.forEach((j, i) => this.queue.push({ ...j, batch, kind, index: i, count: d.jobs.length }));
+    return { ...this._queueAll(d.jobs, kind, batch, { name, itemCount: d.items.length }), items: d.items };
+  }
+
+  // The rest of a batch (shared/outbox.js): jobs [{path, rel, size}] as planned, sizes read again.
+  // cont: the first batch's id, so the receiver puts them into the same folders.
+  sendList(list, kind, batch, { cont, name } = {}) {
+    if (this.link.status.state !== 'connected' || this.batches.has(batch)) return null;
+    const jobs = [];
+    for (const f of list) {
+      try { const st = fs.statSync(f.path); if (st.isFile() && st.size <= P.FILE_MAX_BYTES) jobs.push({ path: f.path, rel: f.rel, size: st.size }); } catch (_) { /* gone */ }
+    }
+    if (!jobs.length) return null;
+    const tops = new Set(jobs.map((j) => j.rel.split('/')[0]));
+    return this._queueAll(jobs, kind, batch, { name: name || (tops.size === 1 ? [...tops][0] : tops.size + ' items'), itemCount: tops.size, cont });
+  }
+
+  _queueAll(jobs, kind, batch, { name, itemCount, cont }) {
+    const bytes = jobs.reduce((s, j) => s + j.size, 0);
+    this.batches.set(batch, { kind, name, itemCount, files: jobs.length, bytes, sent: 0, jobs, arrived: new Set(), cont });
+    if (this.peer) this.lastPeer = this.peer();
+    jobs.forEach((j, i) => this.queue.push({ ...j, batch, kind, index: i, count: jobs.length }));
     this._progress();
     this._next();
-    return { batch, name, files: d.jobs.length, bytes: d.bytes, items: d.items };
+    return { batch, name, files: jobs.length, bytes };
+  }
+
+  // Files › Send files: now, or kept for the device last connected (shared/outbox.js).
+  send(paths) {
+    return this.outbox.add(paths);
+  }
+
+  // Pause on a batch on its way: the files on their way stop, the rest waits for Resume.
+  pause(batch) {
+    const b = this.batches.get(batch);
+    if (!b || b.kind !== 'send') return false;
+    this._keepRest(batch, 'paused', this.peer ? this.peer() : null);
+    this.batches.delete(batch);
+    this.queue = this.queue.filter((j) => j.batch !== batch);
+    for (const c of [...this.active.values()]) {
+      if (c.batch !== batch) continue;
+      this.link.send({ t: T.FILE_CANCEL, id: c.id, pause: true });
+      const w = this.waiters.get(c.id);
+      this.active.delete(c.id);
+      if (this.link.fx) this.link.fx.cancel(c.id);
+      if (w) w.reject(localError('Cancelled'));
+    }
+    this.current = [...this.active.values()].pop() || null;
+    this._progress();
+    return true;
+  }
+
+  resume(id) { return this.outbox.resume(id); }
+  forget(id) { this.outbox.remove(id); }
+
+  _keepRest(batch, why, peer) {
+    const b = this.batches.get(batch);
+    if (!b || !b.jobs) return null;
+    const rest = b.jobs.filter((j) => !b.arrived.has(j.rel)).map((j) => ({ path: j.path, rel: j.rel, size: j.size }));
+    return this.outbox.keep(rest, { why, cont: b.cont || batch, name: b.name, peer });
   }
 
   // What a set of paths would send (fclip.js announces it before anything is sent).
@@ -177,7 +245,10 @@ class FileDrop {
     this._progress();
     const offer = { t: T.FILE_OFFER, id, name, size: job.size, index: job.index, count: job.count };
     if (job.drag) Object.assign(offer, { drop: 'drag', drag: job.drag, rel: job.rel });
-    else if (job.batch) Object.assign(offer, { drop: job.kind, batch: job.batch, rel: job.rel, bytes: (this.batches.get(job.batch) || {}).bytes }); // bytes: the batch, for the receiver's progress
+    else if (job.batch) {
+      const b = this.batches.get(job.batch) || {};
+      Object.assign(offer, { drop: job.kind, batch: job.batch, rel: job.rel, bytes: b.bytes, ...(b.cont ? { cont: b.cont } : {}) }); // bytes: the batch, for the receiver's progress
+    }
     else if (job.release) offer.drop = 'release';
     else { offer.drop = 'point'; if (typeof job.x === 'number') { offer.x = job.x; offer.y = job.y; } }
     this.link.send(offer);
@@ -194,7 +265,11 @@ class FileDrop {
     if (job.drag) return; // the Mac answers file.done when the drop target has it; drag.end says how it went
     const d = await this._wait(id, [T.FILE_DONE, T.FILE_CANCEL], DONE_MS);
     if (d.t !== T.FILE_DONE || !d.ok) throw d.error ? new Error(d.error) : localError('{Name} couldn’t save it');
-    if (job.batch) return; // listed once, on files.done
+    if (job.batch) { // listed once, on files.done
+      const b = this.batches.get(job.batch);
+      if (b && b.arrived) b.arrived.add(job.rel);
+      return;
+    }
     this._report(name, true, d.path ? 'Saved on {name}: ' + d.path : 'Saved on {name}',
       d.path ? 'Saved on {name}: {path}' : 'Saved on {name}', d.path ? { path: d.path } : {});
   }
@@ -320,8 +395,10 @@ class FileDrop {
     return {
       current: c ? { name: c.name, size: c.size, sent: c.sent, index: c.index, count: c.count } : null,
       // The Send files / paste batch being sent, for the Files tab's progress bar
-      batch: b ? { name: b.name, files: b.files, index: c.index, bytes: b.bytes, sent: b.sent, kind: b.kind } : null,
+      batch: b ? { id: c.batch, name: b.name, files: b.files, index: c.index, bytes: b.bytes, sent: b.sent, kind: b.kind } : null,
       queued: this.queue.length,
+      outbox: this.outbox.view,
+      outboxPeer: this.outbox.last ? this.outbox.last.name : '',
       last: this.last,
     };
   }

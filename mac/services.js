@@ -43,7 +43,7 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
   });
   const clipboard = new Clipboard(server, helper, s);
   const drop = new Drop({ server, helper, displays, getSettings: s });
-  const fileSend = new FileSend(server, s);
+  const fileSend = new FileSend(server, s, { outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json') });
   kvm = new Kvm({ server, helper, getSettings: s, clipboard, input, drop, fileSend });
   require('../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   const terminal = new Terminal(server, s);

@@ -47,7 +47,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   });
   const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, session: (id) => meshHub.sessions.get(id) });
   const drop = new Drop({ server, helper, displays, getSettings: s });
-  const fileSend = new FileSend(server, s);
+  const fileSend = new FileSend(server, s, { outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json') });
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   const terminal = new Terminal(server, s);

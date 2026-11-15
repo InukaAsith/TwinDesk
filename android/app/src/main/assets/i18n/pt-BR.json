@@ -1177,5 +1177,17 @@
   "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Abra o OBS Studio no computador para escolher. A conexão é definida na página Deck do computador.",
   "Paused": "Pausado",
   "Recording": "Gravando",
-  "Showing": "No ar"
+  "Showing": "No ar",
+  "1 day": "1 dia",
+  "1 hour": "1 hora",
+  "1 week": "1 semana",
+  "Keep files to send": "Guardar arquivos para enviar",
+  "Paused: {file}": "Pausado: {file}",
+  "Resume": "Retomar",
+  "Resume it on the Files page": "Retome na página Arquivos",
+  "Sent while the computer isn’t connected, or cut off: they go when it’s back": "Enviados com o computador desconectado, ou interrompidos: vão quando ele voltar",
+  "Waiting for {device}": "Esperando {device}",
+  "Waiting to send": "Esperando para enviar",
+  "{items} wait for {name}: they go when it connects": "{items} esperando {name}: vão quando ele conectar",
+  "{what} from {from}: paused": "{what} de {from}: pausado"
 }

@@ -1549,7 +1549,7 @@ private fun FilesPage(core: Core, v: Int) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) core.files.send(core.files.describe(uris), "send") }
     val pickCopy = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) core.fclip.copy(core.files.describe(uris)) }
     PageHead(tr("Files"), tr("Send, copy and drag files between your devices."))
-    if (host == null) return NotConnected(core, v)
+    if (host == null) { NotConnected(core, v); WaitingToSend(core); return }
 
     core.fclip.incoming?.let { o ->
         MacCard(tr("Copied on {name}", "name" to name)) {
@@ -1608,6 +1608,7 @@ private fun FilesPage(core: Core, v: Int) {
             for ((label, pct, id) in moving) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("$label · $pct%", color = pal.text, modifier = Modifier.weight(1f))
+                    if (core.files.sending.any { it.id == id && it.kind == "send" }) Secondary(tr("Pause")) { core.files.pause(id) }
                     Secondary(tr("Cancel")) { core.files.cancel(id) }
                 }
                 LinearProgressIndicator(progress = { pct / 100f }, modifier = Modifier.fillMaxWidth(), color = pal.accent, trackColor = pal.trackOff)
@@ -1615,10 +1616,30 @@ private fun FilesPage(core: Core, v: Int) {
             if (core.fclip.status.isNotEmpty()) Text(core.fclip.status, color = pal.muted)
         }
     }
+    WaitingToSend(core)
     if (core.files.recent.isNotEmpty()) MacCard(tr("Recent")) {
         core.files.recent.take(10).forEachIndexed { i, r -> MacRow(r, "", first = i == 0) }
         MacRow(tr("Clear this list"), tr("Only the list here. The files stay where they are.")) { Secondary(tr("Clear")) { core.files.clearRecent() } }
         MacRow(tr("Downloads"), "") { Secondary(tr("Show")) { ctx.startActivity(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+}
+
+// Files waiting to go (Files.Waiting): sent while away, paused, cut off; Resume, Remove, and how long
+// they're kept.
+@Composable
+private fun WaitingToSend(core: Core) {
+    MacCard(tr("Waiting to send")) {
+        core.files.waiting.forEachIndexed { i, w ->
+            MacRow(w.name, if (w.paused) tr("Paused") else tr("Waiting for {device}", "device" to w.hostName), first = i == 0) {
+                if (w.paused) Primary(tr("Resume")) { core.files.resume(w.id) }
+                Secondary(tr("Remove")) { core.files.forget(w.id) }
+            }
+        }
+        val hours = core.files.keepHours
+        val label = when (hours) { 0 -> tr("Off"); 1 -> tr("1 hour"); 168 -> tr("1 week"); else -> tr("1 day") }
+        MacRow(tr("Keep files to send"), tr("Sent while the computer isn’t connected, or cut off: they go when it’s back") + " · " + label, first = core.files.waiting.isEmpty()) {
+            Secondary(tr("Change")) { core.files.setKeepHours(when (hours) { 0 -> 1; 1 -> 24; 24 -> 168; else -> 0 }) }
+        }
     }
 }
 

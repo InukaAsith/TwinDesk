@@ -217,7 +217,7 @@ function setupIpc(ctx) {
   handle('setFiles', (partial) => {
     // shareOn/shareFolder only change through share()/unshare()
     const p = partial && typeof partial === 'object' ? { dropToMac: partial.dropToMac, mountMac: partial.mountMac, acceptFromMac: partial.acceptFromMac, edgeDrag: partial.edgeDrag,
-      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys, plain: partial.plain } : {};
+      shortcuts: partial.shortcuts, copyKeys: partial.copyKeys, pasteKeys: partial.pasteKeys, plain: partial.plain, outboxHours: [0, 1, 24, 168].includes(partial.outboxHours) ? partial.outboxHours : undefined } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
     change('files', p, () => { smb.applyMount(); kvm.applyConfig(); fileClip.apply(); link.setPlain(settings.files.plain === true); });
   });
@@ -243,7 +243,7 @@ function setupIpc(ctx) {
   // Send files (paths from the drop zone or Choose…), notifications.
   const sendFiles = (paths) => {
     const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && path.win32.isAbsolute(p)).slice(0, 1000);
-    if (list.length) fileDrop.sendBatch(list, 'send');
+    if (list.length) fileDrop.send(list); // now, or when the device is back (shared/outbox.js)
   };
   handle('sendFiles', sendFiles);
   handle('chooseSendFiles', async () => {
@@ -278,6 +278,9 @@ function setupIpc(ctx) {
   handle('removeShare', () => smb.unshare());
   handle('openMacDrive', () => (smb.drive ? shell.openPath(smb.drive + '\\') : smb.openOverWifi && smb.openOverWifi())); // through Bluetooth: Wi-Fi Direct first
   handle('cancelDrop', () => fileDrop.cancel());
+  handle('pauseSend', (batch) => typeof batch === 'string' && fileDrop.pause(batch));
+  handle('resumeSend', (id) => typeof id === 'string' && fileDrop.resume(id));
+  handle('forgetSend', (id) => typeof id === 'string' && fileDrop.forget(id));
   handle('clearFiles', () => ctx.clearFiles && ctx.clearFiles());
   // With another PC the apps come through peerapps.js (no Monitor 2 or Start pinning).
   const pcPeer = () => link.peerOs !== P.OS.MAC; // a PC or a Linux computer

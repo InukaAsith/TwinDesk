@@ -1177,5 +1177,17 @@
   "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "Откройте OBS Studio на компьютере, чтобы выбрать. Подключение настраивается на странице Deck компьютера.",
   "Paused": "Пауза",
   "Recording": "Идёт запись",
-  "Showing": "Показывается"
+  "Showing": "Показывается",
+  "1 day": "1 день",
+  "1 hour": "1 час",
+  "1 week": "1 неделя",
+  "Keep files to send": "Хранить файлы для отправки",
+  "Paused: {file}": "Приостановлено: {file}",
+  "Resume": "Продолжить",
+  "Resume it on the Files page": "Продолжите на странице «Файлы»",
+  "Sent while the computer isn’t connected, or cut off: they go when it’s back": "Отправленные, пока компьютер не подключён, или прерванные: уйдут, когда он вернётся",
+  "Waiting for {device}": "Ждёт {device}",
+  "Waiting to send": "Ждут отправки",
+  "{items} wait for {name}: they go when it connects": "{items} ждут {name}: уйдут, когда он подключится",
+  "{what} from {from}: paused": "{what} с {from}: приостановлено"
 }

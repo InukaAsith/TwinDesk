@@ -38,7 +38,11 @@ UI.tab({
     const zone = el('div', { class: 'dropzone' }, [el('div', {}, [zoneText, zoneHint])]);
     const sendBtn = UI.button(I18n.t('Choose…'), () => api.chooseSendFiles(), 'small');
     const cancelSendBtn = UI.button(I18n.t('Cancel'), () => api.cancelDrop(), 'small'); // the send on its way (as Recent's Cancel)
-    const sendRow = UI.row(I18n.t('Send files'), '', [cancelSendBtn, sendBtn], { literal: true });
+    let pausing = '';
+    const pauseSendBtn = UI.button(I18n.t('Pause'), () => pausing && api.pauseSend(pausing), 'small'); // Send files: the rest waits under Waiting to send
+    const sendRow = UI.row(I18n.t('Send files'), '', [pauseSendBtn, cancelSendBtn, sendBtn], { literal: true });
+    // Waiting to send (shared/ui-outbox.js): sent while away, paused, cut off.
+    const outbox = UI.outboxCard ? UI.outboxCard(api) : null;
     const sendBar = el('div', { class: 'bar' }, [el('span')]);
     sendBar.hidden = true;
     sendRow.querySelector('.text').append(sendBar);
@@ -78,6 +82,7 @@ UI.tab({
       UI.card('', [keysRow, copyRow, pasteRow], { cls: 'keep-on' }),
       pair.el,
       UI.card('', [edgeRow, encryptRow]),
+      ...(outbox ? [outbox.card] : []),
       ...(drive ? [drive.card] : []),
       UI.card(I18n.t('Recent'), [outRow, inRow], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
     );
@@ -88,16 +93,22 @@ UI.tab({
       const p = UI.peer(s);
       pair.update(s);
       if (drive) drive.update(s);
+      if (outbox) outbox.update(f);
       // Send files
       canSend = s.link.state === 'connected';
-      zone.classList.toggle('off', !canSend);
-      zoneText.textContent = canSend ? I18n.t('Drop files or folders here') : I18n.t('Connect to send files');
+      // Not connected: they wait for the device last connected (shared/outbox.js), when that's on.
+      const later = !canSend && f.outboxHours !== 0 && !!f.outboxPeer;
+      zone.classList.toggle('off', !canSend && !later);
+      zoneText.textContent = canSend ? I18n.t('Drop files or folders here') : later ? I18n.t('Drop files here: they go when {device} connects', { device: f.outboxPeer }) : I18n.t('Connect to send files');
+      canSend = canSend || later;
       zoneHint.textContent = !canSend ? '' : p.phone ? I18n.t('They go to {device}’s Downloads', { device: p.the })
         : I18n.t('They go to {device}’s Downloads, or the folder chosen there for received files', { device: p.the });
       sendBtn.disabled = !canSend;
       const b = f.batch;
       sendBar.hidden = !b;
       cancelSendBtn.hidden = !b && !f.current;
+      pausing = b && b.kind === 'send' && b.id ? b.id : '';
+      pauseSendBtn.hidden = !pausing;
       if (b) sendBar.firstChild.style.width = Math.floor((100 * b.sent) / Math.max(1, b.bytes)) + '%';
       sendRow.setHint(b ? I18n.t(b.kind === 'paste' ? 'Pasting {file} to {device}{progress}' : 'Sending {file} to {device}{progress}', { file: b.name, device: p.the, progress: b.files > 1 ? I18n.t(' · {index} of {count}', { index: b.index + 1, count: b.files }) : '' }) : canSend ? I18n.t('To {device}', { device: p.the }) : '');
       // Shortcuts

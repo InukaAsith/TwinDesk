@@ -166,3 +166,41 @@ test('case-insensitive duplicate paths fail without corrupting the first file', 
   assert.ok(f.sent.some((m) => m.t === P.T.FILE_REFUSE && m.id === 'alias'));
   assert.ok(f.sent.some((m) => m.t === P.T.FILES_DONE && m.ok === false && m.files === 1));
 });
+
+test('a paused Send files batch ends quietly and its rest (cont) goes into the same folder', async (t) => {
+  const f = fixture(t);
+  fs.mkdirSync(path.join(f.dir, 'Photos')); // already there: the batch makes "Photos 2"
+  f.offer('a', 'a.txt', 1, { drop: 'send', batch: 'b1', count: 2, rel: 'Photos/a.txt' });
+  f.offer('b', 'b.txt', 1, { drop: 'send', batch: 'b1', count: 2, rel: 'Photos/b.txt' });
+  f.chunk('a', Buffer.from('a'));
+  f.end('a', Buffer.from('a'));
+  await until(() => f.sent.some((m) => m.t === P.T.FILE_DONE && m.id === 'a'));
+  f.link.emit(P.T.FILE_CANCEL, { id: 'b', pause: true });
+  await tick();
+  assert.equal(f.sent.some((m) => m.t === P.T.FILES_DONE), false); // no "not everything arrived"
+  assert.equal(f.recv.last.text, 'Paused');
+  f.offer('b2', 'b.txt', 1, { drop: 'send', batch: 'c1', count: 1, rel: 'Photos/b.txt', cont: 'b1' });
+  f.chunk('b2', Buffer.from('b'));
+  f.end('b2', Buffer.from('b'));
+  await until(() => f.sent.some((m) => m.t === P.T.FILES_DONE && m.batch === 'c1'));
+  assert.equal(fs.readFileSync(path.join(f.dir, 'Photos 2', 'a.txt'), 'utf8'), 'a');
+  assert.equal(fs.readFileSync(path.join(f.dir, 'Photos 2', 'b.txt'), 'utf8'), 'b');
+  assert.equal(fs.existsSync(path.join(f.dir, 'Photos 3')), false);
+});
+
+test('a batch cut off by a disconnect keeps its folder for the rest', async (t) => {
+  const f = fixture(t);
+  f.offer('a', 'a.txt', 1, { drop: 'send', batch: 'd1', count: 2, rel: 'Docs/a.txt' });
+  f.offer('b', 'b.txt', 1, { drop: 'send', batch: 'd1', count: 2, rel: 'Docs/b.txt' });
+  f.chunk('a', Buffer.from('a'));
+  f.end('a', Buffer.from('a'));
+  await until(() => f.sent.some((m) => m.t === P.T.FILE_DONE && m.id === 'a'));
+  f.link.emit('closed');
+  await tick();
+  f.offer('b2', 'b.txt', 1, { drop: 'send', batch: 'd2', count: 1, rel: 'Docs/b.txt', cont: 'd1' });
+  f.chunk('b2', Buffer.from('b'));
+  f.end('b2', Buffer.from('b'));
+  await until(() => f.sent.some((m) => m.t === P.T.FILES_DONE && m.batch === 'd2'));
+  assert.deepEqual(fs.readdirSync(path.join(f.dir, 'Docs')).sort(), ['a.txt', 'b.txt']);
+  assert.equal(fs.existsSync(path.join(f.dir, 'Docs 2')), false);
+});

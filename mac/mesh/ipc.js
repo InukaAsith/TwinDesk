@@ -46,7 +46,7 @@ const SCHEMA = {
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
-  files: { acceptDrops: bool, reveal: bool, dragEdge: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
+  files: { acceptDrops: bool, reveal: bool, dragEdge: bool, outboxHours: oneOf([0, 1, 24, 168], 24), shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
   notifs: { send: bool, receive: bool, hideText: bool },
   smb: { connectPc: bool },
   apps: { offer: bool, onVirtual: bool, moveWindows: bool, moveKey: oneOf(['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'], 'MetaRight') }, // moveWindows: Apps › Move windows (movewin.js)
@@ -428,8 +428,11 @@ function setupIpc(ctx) {
     // Send files (paths from the drop zone or the Choose… dialog).
     sendFiles(paths) {
       const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string' && p.startsWith('/')).slice(0, 1000);
-      if (list.length && ctx.server.current) ctx.fileSend.sendBatch(list, 'send');
+      if (list.length) ctx.fileSend.send(list); // now, or when the device is back (shared/outbox.js)
     },
+    pauseSend(batch) { if (typeof batch === 'string') ctx.fileSend.pause(batch); },
+    resumeSend(id) { if (typeof id === 'string') ctx.fileSend.resume(id); },
+    forgetSend(id) { if (typeof id === 'string') ctx.fileSend.forget(id); },
     async chooseSendFiles() {
       const r = await dialog.showOpenDialog({ properties: ['openFile', 'openDirectory', 'multiSelections'], buttonLabel: t('Send') });
       if (!r.canceled) actions.sendFiles(r.filePaths);

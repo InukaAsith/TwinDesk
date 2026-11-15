@@ -286,6 +286,22 @@ A synced folder with its own `drive.*` messages on the session. Its bytes go ove
 host's session port, as fx's do: the guest GETs and PUTs on `/twindesk/drive/`, pinning the host's
 certificate and showing the session's fx token. Never over Bluetooth. See [drive.md](drive.md).
 
+### Waiting to send, Pause and the rest of a batch
+
+Send files keeps what can't go now in an outbox (`shared/outbox.js` on the computers, `Files.Waiting`
+on Android): files sent while no device is connected, a batch's rest after Pause, and the files a
+dropped connection cut off. Only the paths are kept, never copies. Nothing polls: the outbox is
+looked at when a device connects.
+
+- **`file.cancel {id, pause: true}`:** the sender paused its batch. The receiver drops that file as
+  for a cancel, ends the batch without `files.done` and remembers its folders.
+- **`file.offer {…, cont}`:** a batch that carries on an earlier one. `cont` is the first batch's id.
+  A receiver that remembers it puts the files into the same folders (no "Photos 2"), and a receiver
+  that doesn't simply ignores it. Only files that didn't arrive (no `file.done ok`) are offered again.
+  A file is sent from its start.
+
+Both fields are optional: an older app ignores them, so no capability is needed.
+
 ### File size
 
 `FILE_MAX_BYTES` is 16 TiB (it was 4 GiB, #143). Offers above an older app's 4 GiB are refused there

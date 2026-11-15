@@ -32,6 +32,21 @@ class ShareActivity : Activity() {
             if (uris.isNotEmpty()) { core.peer.sendUris(uris); toast(tr("Sending {items} to {name}", "items" to trCount(uris.size, "item"), "name" to core.peer.peerName)) }
             return finish()
         }
+        // No computer now: Send files waits for the one last connected (Files › Keep files to send).
+        if (host == null && !copy && !open && core.files.keepHours > 0) {
+            val last = core.store.hosts().firstOrNull()
+            val uris = when (intent.action) {
+                Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+                Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+                else -> emptyList()
+            }
+            if (last != null && uris.isNotEmpty()) {
+                for (u in uris) runCatching { grantUriPermission(packageName, u, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                core.bg.execute { core.files.send(core.files.describe(uris), "send") }
+                toast(tr("{items} wait for {name}: they go when it connects", "items" to trCount(uris.size, "item"), "name" to last.name))
+                return finish()
+            }
+        }
         if (host == null) {
             toast(tr("Not connected. Open TwinDesk to connect to your computer."))
             return finish()

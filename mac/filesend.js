@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const awake = require('../shared/awake.js');
+const { Outbox } = require('../shared/outbox.js');
 
 const HIGH_WATER = 1024 * 1024; // pause reading while the socket has more than this queued
 const MAX_FILES = 10000;
@@ -67,15 +68,24 @@ function planDrag(paths) {
 }
 
 class FileSend extends EventEmitter {
-  constructor(server, getSettings) {
+  // outboxFile: where Send files keeps what waits for the other device (shared/outbox.js).
+  constructor(server, getSettings, { outboxFile = null } = {}) {
     super();
     this.server = server;
     this.getSettings = getSettings;
+    this.outbox = new Outbox({
+      file: outboxFile,
+      hours: () => (getSettings().files || {}).outboxHours,
+      peer: () => (server.current && server.current.authed !== false ? { id: server.current.deviceId || server.current.name || '', name: server.current.name || '' } : null),
+      send: (e) => !!server.current && !!(e.list ? this.sendList(e.list, 'send', crypto.randomUUID(), { cont: e.cont, name: e.name }) : this.sendBatch(e.paths, 'send')),
+    });
+    this.outbox.on('change', () => this._changed());
     this.peerDrag = true; // the PC takes drags across the edge (assumed until it says otherwise)
     server.on('client', () => {
       this.peerDrag = true;
       this.sendPolicy();
       this.emit('policy');
+      setImmediate(() => this.outbox.connected()); // after the other 'client' handlers: the session is set up
     });
     server.on(`t:${P.T.DRAG_POLICY}`, (m) => {
       this.peerDrag = m.accept !== false;
@@ -99,10 +109,17 @@ class FileSend extends EventEmitter {
     server.on(`t:${P.T.DRAG_END}`, (m) => this._dragEnd(m));
     server.on(`t:${P.T.FILES_DONE}`, (m) => this._batchDone(m));
     server.on(`t:${P.T.FILE_REFUSE}`, (m) => this._finish(m.id, false, `refused (${m.why || 'no reason'})`));
-    server.on(`t:${P.T.FILE_DONE}`, (m) => this._finish(m.id, !!m.ok, m.ok ? m.path : m.error));
+    server.on(`t:${P.T.FILE_DONE}`, (m) => {
+      const f = this.outgoing.get(m.id);
+      const b = f && f.batch && this.batches.get(f.batch);
+      if (b && m.ok) b.arrived.add(f.rel);
+      this._finish(m.id, !!m.ok, m.ok ? m.path : m.error);
+    });
     server.on(`t:${P.T.FILE_CANCEL}`, (m) => this._finish(m.id, false, `cancelled on ${this.server.current ? this.server.current.name : 'the other computer'}`));
     server.on('closed', () => {
       if (!server.current) {
+        // Send files cut off: what hadn't arrived goes again when the device is back (shared/outbox.js).
+        for (const [batch, b] of [...this.batches]) if (b.kind === 'send' && this._keepRest(batch, 'cut')) this._forgetBatch(batch);
         for (const id of [...this.outgoing.keys()]) this._finish(id, false, 'the other computer disconnected');
         for (const drag of [...this.drags.keys()]) this._dragEnd({ drag, result: 'failed' });
         for (const batch of [...this.batches.keys()]) this._batchDone({ batch, ok: false });
@@ -148,15 +165,71 @@ class FileSend extends EventEmitter {
     const plan = planDrag(paths);
     if (!plan || !plan.files) return null;
     const one = plan.items.length === 1;
-    this.batches.set(batch, { kind, name: one ? plan.items[0].name : `${plan.items.length} items`, items: plan.items.length, files: plan.files, bytes: plan.bytes, at: Date.now() });
-    plan.list.forEach((f, index) => {
+    return this._offerAll(plan.list, kind, batch, { name: one ? plan.items[0].name : `${plan.items.length} items`, items: plan.items.length });
+  }
+
+  // The rest of a batch (shared/outbox.js): list [{path, rel, size}] as it was planned; sizes read
+  // again (a file may have changed meanwhile). cont: the first batch's id, for the receiver's folders.
+  sendList(list, kind, batch, { cont, name } = {}) {
+    const files = [];
+    for (const f of list) {
+      try { const st = fs.statSync(f.path); if (st.isFile()) files.push({ path: f.path, rel: f.rel, size: st.size }); } catch { /* gone */ }
+    }
+    if (!files.length) return null;
+    const tops = new Set(files.map((f) => f.rel.split('/')[0]));
+    return this._offerAll(files, kind, batch, { name: name || (tops.size === 1 ? [...tops][0] : `${tops.size} items`), items: tops.size, cont });
+  }
+
+  _offerAll(list, kind, batch, { name, items, cont }) {
+    const bytes = list.reduce((s, f) => s + f.size, 0);
+    this.batches.set(batch, { kind, name, items, files: list.length, bytes, at: Date.now(), list, arrived: new Set(), cont });
+    list.forEach((f, index) => {
       const id = crypto.randomUUID();
-      const name = f.rel.slice(f.rel.lastIndexOf('/') + 1);
-      this.outgoing.set(id, { id, name, size: f.size, path: f.path, sent: 0, state: 'offered', batch });
-      this.server.sendToClient({ t: P.T.FILE_OFFER, id, name, size: f.size, drop: kind, batch, rel: f.rel, index, count: plan.files, bytes: plan.bytes }); // bytes: batch total, for the receiver's progress
+      const fname = f.rel.slice(f.rel.lastIndexOf('/') + 1);
+      this.outgoing.set(id, { id, name: fname, size: f.size, path: f.path, rel: f.rel, sent: 0, state: 'offered', batch });
+      this.server.sendToClient({ t: P.T.FILE_OFFER, id, name: fname, size: f.size, drop: kind, batch, rel: f.rel, index, count: list.length, bytes, ...(cont ? { cont } : {}) }); // bytes: batch total, for the receiver's progress
     });
     this._changed();
-    return { batch, files: plan.files, bytes: plan.bytes, name: this.batches.get(batch).name };
+    return { batch, files: list.length, bytes, name };
+  }
+
+  // Files › Send files: now, or kept for the device last connected (shared/outbox.js).
+  send(paths) {
+    return this.outbox.add(paths);
+  }
+
+  // Files › Pause on a batch on its way: the files on their way stop (the receiver keeps what
+  // arrived), the rest waits in the outbox for Resume.
+  pause(batch) {
+    const b = this.batches.get(batch);
+    if (!b || b.kind !== 'send') return false;
+    this._keepRest(batch, 'paused');
+    for (const f of [...this.outgoing.values()]) {
+      if (f.batch !== batch) continue;
+      if (this.server.fx) this.server.fx.cancel(f.id);
+      this.server.sendToClient({ t: P.T.FILE_CANCEL, id: f.id, pause: true });
+    }
+    this._forgetBatch(batch);
+    return true;
+  }
+
+  resume(id) { return this.outbox.resume(id); }
+  forget(id) { this.outbox.remove(id); }
+
+  // What of a batch hadn't arrived, into the outbox.
+  _keepRest(batch, why) {
+    const b = this.batches.get(batch);
+    if (!b || !b.list) return null;
+    const rest = b.list.filter((f) => !b.arrived.has(f.rel));
+    const c = this.server.current;
+    return this.outbox.keep(rest, { why, cont: b.cont || batch, name: b.name, peer: c ? { id: c.deviceId || c.name || '', name: c.name || '' } : null });
+  }
+
+  // A batch gone quietly (paused, or kept for later): not listed as failed.
+  _forgetBatch(batch) {
+    this.batches.delete(batch);
+    for (const f of [...this.outgoing.values()]) if (f.batch === batch) this.outgoing.delete(f.id);
+    this._changed();
   }
 
   // Files › Send files › Cancel: every file on its way that isn't a drag (a drag ends with its
@@ -322,7 +395,7 @@ class FileSend extends EventEmitter {
   // Files on their way: a batch as one entry {name, items, files, left, bytes, sent, at}; the others
   // one by one (the first few).
   get view() {
-    const batches = new Map([...this.batches].map(([id, b]) => [id, { kind: b.kind, name: b.name, items: b.items, files: b.files, left: 0, bytes: b.bytes, sent: b.bytes, at: b.at }]));
+    const batches = new Map([...this.batches].map(([id, b]) => [id, { id, kind: b.kind, name: b.name, items: b.items, files: b.files, left: 0, bytes: b.bytes, sent: b.bytes, at: b.at }]));
     const sending = [];
     let more = 0;
     for (const f of this.outgoing.values()) {
@@ -336,6 +409,8 @@ class FileSend extends EventEmitter {
       sending,
       sendingMore: more,
       outBatches: [...batches.values()],
+      outbox: this.outbox.view,
+      outboxPeer: this.outbox.last ? this.outbox.last.name : '',
       sent: this.recent,
     };
   }

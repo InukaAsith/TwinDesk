@@ -1177,5 +1177,17 @@
   "Open OBS Studio on the computer to choose. Its connection is set on the computer’s Deck page.": "在电脑上打开 OBS Studio 后即可选择。连接在电脑的 Deck 页面中设置。",
   "Paused": "已暂停",
   "Recording": "正在录制",
-  "Showing": "正在显示"
+  "Showing": "正在显示",
+  "1 day": "1 天",
+  "1 hour": "1 小时",
+  "1 week": "1 周",
+  "Keep files to send": "保留待发送的文件",
+  "Paused: {file}": "已暂停：{file}",
+  "Resume": "继续",
+  "Resume it on the Files page": "在“文件”页面继续",
+  "Sent while the computer isn’t connected, or cut off: they go when it’s back": "电脑未连接时发送的或中断的文件，会在它重新连接后发送",
+  "Waiting for {device}": "等待 {device}",
+  "Waiting to send": "等待发送",
+  "{items} wait for {name}: they go when it connects": "{items} 等待 {name}：连接后发送",
+  "{what} from {from}: paused": "来自 {from} 的 {what}：已暂停"
 }

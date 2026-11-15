@@ -295,7 +295,7 @@ function start() {
     onChange: pushState,
     isQuitting: () => quitting,
   });
-  fileDrop = new FileDrop({ link, settings, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
+  fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
   screen.fileDrop = fileDrop;
   sound = new Sound({ link, settings, onChange: pushState });
   loadMic();

@@ -65,6 +65,7 @@ class Files(core: Core) : Feature(core) {
         val tops = linkedSetOf<String>()
         val key = (id.hashCode() and 0x7fff)
         var lastNote = 0L
+        @Volatile var paused = false // the computer paused it: the rest comes on Resume there
     }
 
     class Outgoing(val id: String, val uri: Uri, val name: String, val size: Long, val batch: String) {
@@ -96,6 +97,88 @@ class Files(core: Core) : Feature(core) {
     val recent = java.util.concurrent.CopyOnWriteArrayList<String>() // newest first, one line each
     private val drags = ConcurrentHashMap<String, Int>() // drag id -> files announced (drag.start)
     private val dropped = java.util.Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>()) // batches cancelled here: the rest of their offers refused
+
+    // Waiting to send (as the computers' shared/outbox.js): files sent while no computer is connected,
+    // a paused batch's rest, and what a dropped connection cut off. They go when that computer
+    // connects (Resume for a paused one), the rest of a batch with cont: the first batch's id, so the
+    // computer puts it into the same folders. Kept while the app runs (a share's read grant lasts
+    // that long, ShareActivity), for Files › Keep files to send (files.outboxHours, 0 = off).
+    class Waiting(val id: String, val items: List<Item>, val name: String, val cont: String, val host: String, val hostName: String, @Volatile var paused: Boolean, @Volatile var at: Long)
+    val waiting = java.util.concurrent.CopyOnWriteArrayList<Waiting>()
+    private val offered = ConcurrentHashMap<String, Pair<String, String>>() // file id -> (batch, rel), for what arrived
+    private val outItems = ConcurrentHashMap<String, List<Item>>() // batch -> its items as offered
+    private val outCont = ConcurrentHashMap<String, String>() // batch -> the first batch's id
+    private val arrived = ConcurrentHashMap<String, MutableSet<String>>() // batch -> rels the computer saved
+    val keepHours: Int get() = core.store.prefsString("files.outboxHours", "24").toIntOrNull() ?: 24
+    fun setKeepHours(h: Int) { core.store.setPrefsString("files.outboxHours", h.toString()); prune(); core.changed() }
+
+    private fun prune() {
+        val now = System.currentTimeMillis()
+        val keep = keepHours * 3600_000L
+        waiting.removeIf { now - it.at >= if (it.paused) maxOf(keep, 7 * 86400_000L) else keep }
+    }
+
+    private fun lastHost(): Host? = core.host ?: core.store.hosts().firstOrNull()
+
+    // A batch on its way stops here; the files that hadn't arrived wait (paused: for Resume).
+    private fun keepRest(batch: String, paused: Boolean): Boolean {
+        val items = outItems[batch] ?: return false
+        val got = arrived[batch] ?: emptySet<String>()
+        val rest = items.filter { it.rel.ifEmpty { it.name } !in got }
+        val h = lastHost() ?: return false
+        if (rest.isEmpty() || (!paused && keepHours <= 0)) return false
+        val b = outBatches[batch]
+        waiting.add(Waiting(UUID.randomUUID().toString(), rest, b?.name ?: trCount(rest.size, "item"), outCont[batch] ?: batch, h.id, h.name, paused, System.currentTimeMillis()))
+        return true
+    }
+
+    // The notification's or the Files page's Pause: the files on their way stop (file.cancel pause),
+    // the rest waits for Resume.
+    fun pause(batchId: String) = io.execute {
+        val b = outBatches[batchId] ?: return@execute
+        if (b.kind != "send") return@execute
+        keepRest(batchId, true)
+        outBatches.remove(batchId)
+        for (f in outgoing.filter { it.batch == batchId }) {
+            outgoing.remove(f) // its upload thread sees it gone and stops
+            core.send(msg(Proto.T.FILE_CANCEL, "id" to f.id, "pause" to true))
+        }
+        forgetOut(batchId)
+        Notify.files(core.ctx, b.key, tr("Paused: {file}", "file" to b.name), tr("Resume it on the Files page"), null, null, up = true)
+        core.changed()
+    }
+
+    fun resume(id: String) {
+        val w = waiting.find { it.id == id } ?: return
+        w.paused = false
+        w.at = System.currentTimeMillis()
+        core.changed()
+        if (core.link.connected) core.bg.execute { flush() }
+    }
+
+    fun forget(id: String) {
+        waiting.removeIf { it.id == id }
+        core.changed()
+    }
+
+    // What waits for the computer connected now goes, oldest first.
+    private fun flush() {
+        prune()
+        val h = core.host ?: return
+        for (w in waiting.toList()) {
+            if (w.paused || w.host != h.id) continue
+            waiting.remove(w)
+            send(w.items, "send", UUID.randomUUID().toString(), w.cont)
+        }
+        core.changed()
+    }
+
+    private fun forgetOut(batch: String) {
+        outItems.remove(batch)
+        outCont.remove(batch)
+        arrived.remove(batch)
+        offered.values.removeIf { it.first == batch }
+    }
 
     // Cancel (the notification, the Files page): stops a batch either way. Each file gets file.cancel,
     // which the computer already takes as cancelled here (as when one end disconnects).
@@ -145,13 +228,16 @@ class Files(core: Core) : Feature(core) {
             Proto.T.FILE_CHUNK -> io.execute { chunk(m) }
             Proto.T.FILE_END -> io.execute { end(m) }
             Proto.T.FILE_PULL -> io.execute { pull(m) }
-            Proto.T.FILE_CANCEL -> io.execute { abort(m.optString("id"), "cancelled", false); cancelOut(m.optString("id")) }
+            Proto.T.FILE_CANCEL -> io.execute {
+                if (m.optBoolean("pause")) incoming[m.optString("id")]?.let { f -> batches[f.batch]?.paused = true } // the computer paused it
+                abort(m.optString("id"), "cancelled", false); cancelOut(m.optString("id"))
+            }
             Proto.T.FILE_ACCEPT -> {
                 outgoing.find { it.id == m.optString("id") }?.let { if (it.state == "offered") it.state = "accepted" }
                 pump.execute { pumpNext() }
             }
             Proto.T.FILE_REFUSE -> cancelOut(m.optString("id"))
-            Proto.T.FILE_DONE -> Unit
+            Proto.T.FILE_DONE -> if (m.optBoolean("ok")) offered[m.optString("id")]?.let { (batch, rel) -> arrived.getOrPut(batch) { java.util.concurrent.ConcurrentHashMap.newKeySet() }.add(rel) }
             Proto.T.FILES_DONE -> outDone(m)
             Proto.T.DRAG_POLICY -> Unit
             // The Mac's pointer crossed onto the phone dragging files: they land in Download/TwinDesk.
@@ -179,6 +265,7 @@ class Files(core: Core) : Feature(core) {
         fxBroken = false
         fx2Broken = false
         core.send(msg(Proto.T.DRAG_POLICY, "accept" to true)) // files dragged across the edge go to Downloads
+        if (waiting.isNotEmpty()) core.bg.execute { flush() }
     }
 
     override fun onClosed() {
@@ -188,6 +275,9 @@ class Files(core: Core) : Feature(core) {
             batches.clear()
             dropped.clear()
         }
+        // Send files cut off: what hadn't arrived goes again when the computer is back.
+        for (b in outBatches.values) if (b.kind == "send") { keepRest(b.id, false); Notify.cancelFiles(core.ctx, b.key) }
+        for (b in outBatches.keys.toList()) forgetOut(b)
         for (o in outgoing) cancelOut(o.id)
         outBatches.clear()
         awake.release()
@@ -521,6 +611,13 @@ class Files(core: Core) : Feature(core) {
         else core.send(msg(Proto.T.FILES_DONE, "batch" to b.id, "ok" to b.ok, "where" to where, "files" to b.done))
         val from = core.host?.name ?: tr("your computer")
         val what = if (b.tops.size == 1) b.tops.first() else trCount(b.tops.size, "item")
+        if (b.paused) { // paused on the computer: not a failure, the rest comes on Resume there
+            Notify.cancelFiles(core.ctx, b.key)
+            recent.add(0, tr("{what} from {from}: paused", "what" to what, "from" to from))
+            while (recent.size > 20) recent.removeAt(recent.size - 1)
+            core.changed()
+            return
+        }
         recent.add(0, if (b.ok) tr("Received {what} from {from}", "what" to what, "from" to from) else tr("Some of {what} from {from}", "what" to what, "from" to from))
         while (recent.size > 20) recent.removeAt(recent.size - 1)
         if (b.target.onDone != null) {
@@ -565,16 +662,32 @@ class Files(core: Core) : Feature(core) {
     }.getOrDefault(0L)
 
     // Offer every file now (kind 'send' = Send to computer, 'paste' = the computer pasted what we copied).
-    fun send(items: List<Item>, kind: String, batch: String = UUID.randomUUID().toString()): Boolean {
-        if (!core.link.connected || items.isEmpty()) return false
+    // Not connected, for Send files: kept for the computer last connected (Waiting, above), when that's on.
+    fun send(items: List<Item>, kind: String, batch: String = UUID.randomUUID().toString(), cont: String = ""): Boolean {
+        if (items.isEmpty()) return false
+        if (!core.link.connected) {
+            val h = lastHost()
+            if (kind != "send" || h == null || keepHours <= 0) return false
+            waiting.add(Waiting(UUID.randomUUID().toString(), items, if (items.size == 1) items[0].name else trCount(items.size, "item"), "", h.id, h.name, false, System.currentTimeMillis()))
+            core.changed()
+            return true
+        }
         val seen = mutableSetOf<String>()
         val unique = items.map { if (it.rel.contains('/')) return@map it; var n = it.name; var i = 2; while (!seen.add(n)) { n = it.name.substringBeforeLast('.') + " ${i++}" + it.name.substringAfterLast('.', "").let { e -> if (e.isEmpty()) "" else ".$e" } }; it.copy(name = n) }
         val bytes = unique.sumOf { it.size }
-        outBatches[batch] = OutBatch(batch, kind, if (unique.size == 1) unique[0].name else trCount(unique.size, "item"), unique.size, bytes)
+        val tops = unique.map { it.rel.ifEmpty { it.name }.substringBefore('/') }.toSet()
+        outBatches[batch] = OutBatch(batch, kind, if (tops.size == 1) tops.first() else trCount(tops.size, "item"), unique.size, bytes)
+        if (kind == "send") {
+            outItems[batch] = unique
+            if (cont.isNotEmpty()) outCont[batch] = cont
+        }
+        val more: Array<Pair<String, Any?>> = if (cont.isNotEmpty()) arrayOf("cont" to cont) else emptyArray()
         unique.forEachIndexed { index, it ->
             val id = UUID.randomUUID().toString()
+            val rel = it.rel.ifEmpty { it.name }
             outgoing.add(Outgoing(id, it.uri, it.name, it.size, batch))
-            core.send(msg(Proto.T.FILE_OFFER, "id" to id, "name" to it.name, "size" to it.size, "drop" to kind, "batch" to batch, "rel" to it.rel.ifEmpty { it.name }, "index" to index, "count" to unique.size, "bytes" to bytes))
+            if (kind == "send") offered[id] = batch to rel
+            core.send(msg(Proto.T.FILE_OFFER, "id" to id, "name" to it.name, "size" to it.size, "drop" to kind, "batch" to batch, "rel" to rel, "index" to index, "count" to unique.size, "bytes" to bytes, *more))
         }
         core.changed()
         return true
@@ -782,7 +895,7 @@ class Files(core: Core) : Feature(core) {
         // Over 5 MB: a notification with a live progress bar, as for files coming in.
         if (b.bytes > 5L * 1024 * 1024) {
             b.shown = true
-            Notify.files(core.ctx, b.key, tr("Sending {file} to {name}", "file" to b.name, "name" to (core.host?.name ?: tr("your computer"))), "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true, cancel = b.id)
+            Notify.files(core.ctx, b.key, tr("Sending {file} to {name}", "file" to b.name, "name" to (core.host?.name ?: tr("your computer"))), "${pct(b.sent, b.bytes)}%", pct(b.sent, b.bytes), null, up = true, cancel = b.id, pause = if (b.kind == "send") b.id else null)
             if (outBatches[b.id] == null) Notify.cancelFiles(core.ctx, b.key) // cancelled meanwhile
         }
     }
@@ -794,6 +907,7 @@ class Files(core: Core) : Feature(core) {
     private fun outDone(m: JSONObject) {
         val b = outBatches.remove(m.optString("batch")) ?: return
         outgoing.removeIf { it.batch == b.id }
+        forgetOut(b.id)
         val to = core.host?.name ?: tr("your computer")
         if (b.shown) Notify.files(core.ctx, b.key, if (m.optBoolean("ok")) tr("Sent {file}", "file" to b.name) else tr("Some files weren’t delivered"), tr("On {name}", "name" to to), null, null, up = true)
         recent.add(0, if (m.optBoolean("ok")) tr("Sent {file} to {name}", "file" to b.name, "name" to to) else tr("{file} didn’t all arrive on {name}", "file" to b.name, "name" to to))
