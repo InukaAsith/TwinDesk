@@ -44,6 +44,9 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Voice note** (Android, a notification button to choose in General › Notification buttons):
   records on the phone, and Send puts it on the computer (it waits if the computer isn't
   connected). A copy stays in Recordings › TwinDesk.
+- **Local API** (General, off unless switched on; Mac, Windows, Linux): your own scripts on this
+  computer can send files and set the clipboard, with a key that changes each start; nothing from
+  a browser ([docs/local-api.md](docs/local-api.md)).
 - **Live Updates on Android 16:** a file transfer's progress shows on the lock screen and as a chip
   in the status bar, with Pause and Cancel.
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and

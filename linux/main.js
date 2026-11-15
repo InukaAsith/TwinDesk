@@ -143,6 +143,7 @@ let kvm = null;
 let sound = null;
 let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
 let fileDrop = null;
+let localApi = null; // General › Local API (shared/localapi.js), made with fileDrop
 let fileRecv = null;
 let fileClip = null;
 let smb = null;
@@ -296,6 +297,15 @@ function start() {
     isQuitting: () => quitting,
   });
   fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
+  {
+    const { LocalApi } = require('../shared/localapi.js');
+    localApi = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => ({ connected: link.snapshot().link.state === 'connected', device: link.snapshot().link.state === 'connected' ? peerName() : '' }),
+      send: (paths) => fileDrop.send(paths),
+      clipboard: (text) => require('electron').clipboard.writeText(text),
+    } });
+    if (settings.app.localApi) applyLocalApi();
+  }
   screen.fileDrop = fileDrop;
   sound = new Sound({ link, settings, onChange: pushState });
   loadMic();
@@ -434,7 +444,7 @@ function start() {
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
-    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
+    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); applyLocalApi(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
   nativeTheme.on('updated', pushState);
   loadReZume(); // only while it's on
@@ -1274,6 +1284,12 @@ function enginesView() {
   });
 }
 
+// General › Local API switched (setApp → onApp).
+function applyLocalApi() {
+  if (!localApi) return;
+  localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+}
+
 function buildState() {
   const miss = missing();
   const snap = link.snapshot();
@@ -1312,6 +1328,7 @@ function buildState() {
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer
     updates: updates ? updates.view : null,
+    localApi: localApi ? localApi.view() : null,
     firewall: fw,
     session: { ...session, input: helper.backend || '', access: session.type === 'wayland' ? system.inputAccess() : null, inputNote, helperError: helper.error || '' },
     audio: { ...settings.audio, ...sound.view(), mic: mic ? mic.view() : null },
@@ -1643,6 +1660,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  if (localApi) localApi.stop();
   if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;

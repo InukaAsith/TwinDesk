@@ -99,6 +99,9 @@ UI.tab({
     // session nothing uses stops pinging every second so a phone or laptop can sleep; on, as before.
     const pingSw = UI.switch((v) => api.setApp({ keepPinging: v }), { label: t('Prioritize performance over battery life') });
     const pingRow = UI.row(t('Prioritize performance over battery life'), t('Checks the connection every second, even when nothing is in use. Off: an idle connection is checked every few minutes, and at once when something starts, so phones and laptops can sleep'), [pingSw]);
+    // Local API (shared/localapi.js): the person's own scripts on this computer.
+    const apiSw = UI.switch((v) => api.setApp({ localApi: v }), { label: t('Local API') });
+    const apiRow = UI.row(t('Local API'), '', [apiSw], { literalHint: true });
     const engines = UI.enginesRows(); // Engines in use, while connected (shared/ui-engines.js)
     const modules = UI.modulesCard ? UI.modulesCard() : { card: null, update() {} }; // General › Modules (shared/ui-modules.js; not in Multi-device)
     const sections = UI.sections([
@@ -127,7 +130,7 @@ UI.tab({
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, keepRow]),
       UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
       UI.card(t('This computer'), [deviceRow, sessRow, inRow, helperRow]),
-      UI.card(t('Connections'), [pingRow]),
+      UI.card(t('Connections'), [pingRow, apiRow]),
       ...(modules.card ? [modules.card] : []),
       UI.card(t('Advanced'), [protoRow, ...engines.rows]),
       UI.card(t('Quit'), [
@@ -156,6 +159,11 @@ UI.tab({
       startup.set(s.startup);
       hudSw.set(s.app.hud);
       pingSw.set(s.app.keepPinging === true);
+      apiRow.hidden = !s.localApi;
+      if (s.localApi) {
+        apiSw.set(!!s.localApi.on);
+        apiRow.setHint(s.localApi.on ? t('For your own scripts here: its address and key are in {file}, and the key changes each time it starts', { file: s.localApi.file }) : t('Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser'));
+      }
       const f = s.files || {};
       recvReset.hidden = !f.receivedFolder;
       const receivedDescription = t('Files sent to {me} from another computer or a phone, and what’s saved from a phone’s Files and Photos', { me: s.device.name });

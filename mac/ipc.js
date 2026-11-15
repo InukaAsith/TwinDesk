@@ -41,7 +41,7 @@ const SCHEMA = {
     resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: oneOf(['', 'Command', 'Control', 'Alt', 'Shift'], ''), speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: emergencyShortcut.valid },
-  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
+  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool, localApi: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, engine: oneOf(['helper', 'system'], 'helper'), volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
@@ -599,6 +599,7 @@ function setupIpc(ctx) {
       setGroup('app', partial);
       ctx.login.apply(settings.app.openAtLogin);
       ctx.updateAwake();
+      if (ctx.applyLocalApi) ctx.applyLocalApi();
     },
     setUpdates(partial) {
       setGroup('updates', partial);

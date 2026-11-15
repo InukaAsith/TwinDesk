@@ -2315,4 +2315,7 @@
   "Photo copied, ready to paste": "Fotoğraf kopyalandı, yapıştırmaya hazır",
   "Photo saved, not copied: {error}": "Fotoğraf kaydedildi, kopyalanmadı: {error}",
   "Connect your phone": "Telefonunuzu bağlayın",
+  "Local API": "Yerel API",
+  "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "Bu bilgisayardaki kendi betikleriniz için: adresi ve anahtarı {file} içinde, anahtar her başlatmada değişir",
+  "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Bu bilgisayardaki kendi betiklerinizin dosya göndermesine ve panoyu ayarlamasına izin verir. Tarayıcıdan erişilemez",
 });

@@ -2315,4 +2315,7 @@
   "Photo copied, ready to paste": "Foto copiada, pronta para colar",
   "Photo saved, not copied: {error}": "Foto salva, não copiada: {error}",
   "Connect your phone": "Conecte seu celular",
+  "Local API": "API local",
+  "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "Para seus próprios scripts aqui: o endereço e a chave ficam em {file}, e a chave muda a cada início",
+  "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Permite que seus scripts neste computador enviem arquivos e definam a área de transferência. Nada vindo de um navegador",
 });

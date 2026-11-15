@@ -2315,4 +2315,7 @@
   "Photo copied, ready to paste": "Фото скопировано, можно вставлять",
   "Photo saved, not copied: {error}": "Фото сохранено, но не скопировано: {error}",
   "Connect your phone": "Подключите телефон",
+  "Local API": "Локальный API",
+  "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "Для ваших скриптов на этом компьютере: адрес и ключ лежат в {file}, ключ меняется при каждом запуске",
+  "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Позволяет вашим скриптам на этом компьютере отправлять файлы и задавать буфер обмена. Из браузера — нельзя",
 });

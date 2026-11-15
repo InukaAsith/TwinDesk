@@ -293,6 +293,7 @@ function pushState() {
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     state.hub = phoneHub ? phoneHub.view : { ...settings.hub, connected: false };
     if (updates) state.updates = updates.view;
+    state.localApi = svc && svc.localApi ? svc.localApi.view() : null;
     state.web = web ? web.view() : { cfg: { ...settings.web }, devices: [] }; // TwinDesk Web (shared/web/webwire.js)
     if (pairSync) pairSync.check();
     sendScreenState();
@@ -691,6 +692,19 @@ app.whenReady().then(() => {
     peer.on('t:cam.capture', (m) => { if (m && m.on === false) pp.ended(); });
     svc.phonePhoto = pp;
     svc.takePhoto = () => pp.take();
+  }
+  // General › Local API (shared/localapi.js): off unless switched on.
+  {
+    const { LocalApi } = require('../shared/localapi.js');
+    const api = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => ({ connected: !!peer.current, device: peer.current ? peer.current.name : '' }),
+      send: (paths) => svc.fileSend.send(paths),
+      clipboard: (text) => require('electron').clipboard.writeText(text),
+    } });
+    svc.localApi = api;
+    svc.applyLocalApi = () => api.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+    if (settings.app.localApi) svc.applyLocalApi();
+    app.on('will-quit', () => { api.stop(); });
   }
   // File Sharing › TwinDesk Drive (shared/drive-host.js, docs/drive.md): nothing of it is loaded until it's on.
   svc.loadDrive = () => svc.drive || (svc.drive = require('../shared/drive-host.js').create({

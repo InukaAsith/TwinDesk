@@ -163,6 +163,7 @@ let helper = null;
 let terminal = null; // only while Terminal is on (loadTerminal)
 let phoneServer = null; // the phones' session (PhoneLink), for features loaded later
 let fileDrop = null;
+let localApi = null; // General › Local API (shared/localapi.js), made with fileDrop
 let smb = null;
 let apps = null;
 let sound = null;
@@ -316,6 +317,15 @@ function start() {
   loadTerminal(); // only while it's on
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
   fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress({ ...v, peerName: peerName() }); pushState(); } });
+  {
+    const { LocalApi } = require('../shared/localapi.js');
+    localApi = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => ({ connected: link.snapshot().link.state === 'connected', device: link.snapshot().link.state === 'connected' ? peerName() : '' }),
+      send: (paths) => fileDrop.send(paths),
+      clipboard: (text) => require('electron').clipboard.writeText(text),
+    } });
+    if (settings.app.localApi) applyLocalApi();
+  }
   screen.fileDrop = fileDrop;
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
@@ -464,7 +474,7 @@ function start() {
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, applyNet, joinHotspot,
-    checkFirewall, fixFirewall, setStartup, onApp: updateTray, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
+    checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); applyLocalApi(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
   systemPreferences.on('accent-color-changed', () => pushState());
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
@@ -1255,6 +1265,12 @@ function enginesView() {
   });
 }
 
+// General › Local API switched (setApp → onApp).
+function applyLocalApi() {
+  if (!localApi) return;
+  localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+}
+
 function buildState() {
   const miss = missing();
   return {
@@ -1290,6 +1306,7 @@ function buildState() {
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer
     updates: updates ? updates.view : null,
+    localApi: localApi ? localApi.view() : null,
     firewall: fw,
     audio: { ...settings.audio, ...sound.view(), mic: mic ? mic.view() : null },
     pcScreen: pcScreen.view(),
@@ -1601,6 +1618,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  if (localApi) localApi.stop();
   if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;

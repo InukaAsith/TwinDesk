@@ -2316,4 +2316,7 @@
   "Photo copied, ready to paste": "Photo copied, ready to paste",
   "Photo saved, not copied: {error}": "Photo saved, not copied: {error}",
   "Connect your phone": "Connect your phone",
+  "Local API": "Local API",
+  "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "For your own scripts here: its address and key are in {file}, and the key changes each time it starts",
+  "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser",
 });
