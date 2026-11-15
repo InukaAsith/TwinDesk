@@ -1549,7 +1549,7 @@ private fun FilesPage(core: Core, v: Int) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) core.files.send(core.files.describe(uris), "send") }
     val pickCopy = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris -> if (uris.isNotEmpty()) core.fclip.copy(core.files.describe(uris)) }
     PageHead(tr("Files"), tr("Send, copy and drag files between your devices."))
-    if (host == null) { NotConnected(core, v); WaitingToSend(core); return }
+    if (host == null) { NotConnected(core, v); WaitingToSend(core, v); return }
 
     core.fclip.incoming?.let { o ->
         MacCard(tr("Copied on {name}", "name" to name)) {
@@ -1616,7 +1616,7 @@ private fun FilesPage(core: Core, v: Int) {
             if (core.fclip.status.isNotEmpty()) Text(core.fclip.status, color = pal.muted)
         }
     }
-    WaitingToSend(core)
+    WaitingToSend(core, v)
     if (core.files.recent.isNotEmpty()) MacCard(tr("Recent")) {
         core.files.recent.take(10).forEachIndexed { i, r -> MacRow(r, "", first = i == 0) }
         MacRow(tr("Clear this list"), tr("Only the list here. The files stay where they are.")) { Secondary(tr("Clear")) { core.files.clearRecent() } }
@@ -1627,8 +1627,9 @@ private fun FilesPage(core: Core, v: Int) {
 // Files waiting to go (Files.Waiting): sent while away, paused, cut off; Resume, Remove, and how long
 // they're kept.
 @Composable
-private fun WaitingToSend(core: Core) {
+private fun WaitingToSend(core: Core, v: Int) {
     MacCard(tr("Waiting to send")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision: Remove and Resume show at once
         core.files.waiting.forEachIndexed { i, w ->
             MacRow(w.name, if (w.paused) tr("Paused") else tr("Waiting for {device}", "device" to w.hostName), first = i == 0) {
                 if (w.paused) Primary(tr("Resume")) { core.files.resume(w.id) }
