@@ -33,7 +33,7 @@ function setHandler() {
       const target = st._target();
       if (!target || target.id !== active.displayId) return cb({});
       const source = await st._source(target);
-      cb(st.active === active && st.win === win ? { video: source, ...(req.audioRequested ? { audio: 'loopback' } : {}) } : {});
+      cb(st.active === active && st.win === win && st._target()?.id === target.id ? { video: source, ...(req.audioRequested ? { audio: 'loopback' } : {}) } : {});
     } catch (e) {
       console.error(`[stream] no capture source: ${e.message}`);
       cb({});
@@ -159,8 +159,9 @@ class Stream extends EventEmitter {
   async _source(target = this._target()) {
     for (let attempt = 0; attempt < 6; attempt++) {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
+      const listed = this.displays.list?.() || [];
       const src = target && (sources.find((s) => s.display_id === String(target.id)) ||
-        (sources.length === 1 && !sources[0].display_id && this.displays.list?.().length === 1 ? sources[0] : null));
+        (sources.length === 1 && !sources[0].display_id && listed.length === 1 && String(listed[0].id) === String(target.id) ? sources[0] : null));
       if (src) return src;
       if (systemPreferences.getMediaAccessStatus('screen') !== 'granted') throw new Error('Screen Recording permission required');
       if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 200));
@@ -246,7 +247,7 @@ class Stream extends EventEmitter {
       await this._ensureWindow();
       if (!this.active || this.active.session !== s) return;
       const src = await this._source(target);
-      if (!this.active || this.active.session !== s) return;
+      if (!this.active || this.active.session !== s || this._target()?.id !== target.id) return;
       const set = this.getSettings();
       this._toWindow('start', {
         session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too
