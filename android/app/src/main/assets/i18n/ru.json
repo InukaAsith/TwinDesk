@@ -1214,5 +1214,7 @@
   "Couldn’t record": "Не удалось записать",
   "Records a voice note and sends it to the computer": "Записывает голосовую заметку и отправляет её на компьютер",
   "Voice note": "Голосовая заметка",
-  "Voice note for {name}": "Голосовая заметка для {name}"
+  "Voice note for {name}": "Голосовая заметка для {name}",
+  "Waiting for {name}": "Ждёт {name}",
+  "Saved in Recordings › TwinDesk": "Сохранено в «Записи › TwinDesk»"
 }

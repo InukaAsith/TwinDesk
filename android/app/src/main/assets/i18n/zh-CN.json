@@ -1214,5 +1214,7 @@
   "Couldn’t record": "无法录音",
   "Records a voice note and sends it to the computer": "录制语音备忘并发送到电脑",
   "Voice note": "语音备忘",
-  "Voice note for {name}": "给 {name} 的语音备忘"
+  "Voice note for {name}": "给 {name} 的语音备忘",
+  "Waiting for {name}": "等待 {name}",
+  "Saved in Recordings › TwinDesk": "已保存在 录音 › TwinDesk"
 }

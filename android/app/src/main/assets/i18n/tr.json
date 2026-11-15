@@ -1214,5 +1214,7 @@
   "Couldn’t record": "Kaydedilemedi",
   "Records a voice note and sends it to the computer": "Bir sesli not kaydeder ve bilgisayara gönderir",
   "Voice note": "Sesli not",
-  "Voice note for {name}": "{name} için sesli not"
+  "Voice note for {name}": "{name} için sesli not",
+  "Waiting for {name}": "{name} bekleniyor",
+  "Saved in Recordings › TwinDesk": "Kayıtlar › TwinDesk içine kaydedildi"
 }

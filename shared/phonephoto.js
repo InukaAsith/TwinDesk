@@ -29,7 +29,7 @@ class PhonePhoto {
   take() {
     if (!this.phoneOn()) { this.popup('Connect your phone'); return false; }
     this.until = this.now() + WAIT_MS;
-    this.send({ t: 'cam.capture', on: true });
+    this.send({ t: 'cam.capture', on: true, once: true }); // once: the phone closes its camera after the photo (older phones: on: false below)
     this.popup('Take the photo on your phone');
     return true;
   }

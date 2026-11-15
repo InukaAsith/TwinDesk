@@ -1214,5 +1214,7 @@
   "Couldn’t record": "Não foi possível gravar",
   "Records a voice note and sends it to the computer": "Grava uma nota de voz e a envia para o computador",
   "Voice note": "Nota de voz",
-  "Voice note for {name}": "Nota de voz para {name}"
+  "Voice note for {name}": "Nota de voz para {name}",
+  "Waiting for {name}": "Aguardando {name}",
+  "Saved in Recordings › TwinDesk": "Salvo em Gravações › TwinDesk"
 }

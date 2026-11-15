@@ -101,10 +101,38 @@ class Files(core: Core) : Feature(core) {
     // Waiting to send (as the computers' shared/outbox.js): files sent while no computer is connected,
     // a paused batch's rest, and what a dropped connection cut off. They go when that computer
     // connects (Resume for a paused one), the rest of a batch with cont: the first batch's id, so the
-    // computer puts it into the same folders. Kept while the app runs (a share's read grant lasts
-    // that long, ShareActivity), for Files › Keep files to send (files.outboxHours, 0 = off).
+    // computer puts it into the same folders. For Files › Keep files to send (files.outboxHours, 0 =
+    // off). Saved (files.waiting), so a restart keeps them: what can still be read then goes (the
+    // phone's own files, a voice note, a photo); a file another app shared, whose read grant ended
+    // with the app, is left out.
     class Waiting(val id: String, val items: List<Item>, val name: String, val cont: String, val host: String, val hostName: String, @Volatile var paused: Boolean, @Volatile var at: Long)
     val waiting = java.util.concurrent.CopyOnWriteArrayList<Waiting>()
+
+    private fun saveWaiting() {
+        val a = org.json.JSONArray()
+        for (w in waiting) a.put(JSONObject().put("id", w.id).put("name", w.name).put("cont", w.cont).put("host", w.host).put("hostName", w.hostName)
+            .put("paused", w.paused).put("at", w.at)
+            .put("items", org.json.JSONArray(w.items.map { JSONObject().put("uri", it.uri.toString()).put("name", it.name).put("size", it.size).put("rel", it.rel) })))
+        core.store.setPrefsString("files.waiting", a.toString())
+    }
+
+    private fun readable(u: Uri) = runCatching { core.ctx.contentResolver.openFileDescriptor(u, "r")?.use { true } ?: false }.getOrDefault(false)
+
+    private fun loadWaiting() {
+        val a = runCatching { org.json.JSONArray(core.store.prefsString("files.waiting", "[]")) }.getOrNull() ?: return
+        for (i in 0 until a.length()) runCatching {
+            val o = a.getJSONObject(i)
+            val its = o.getJSONArray("items")
+            val items = (0 until its.length()).map { its.getJSONObject(it) }
+                .map { Item(Uri.parse(it.getString("uri")), it.getString("name"), it.getLong("size"), it.optString("rel")) }
+                .filter { readable(it.uri) }
+            if (items.isNotEmpty()) waiting.add(Waiting(o.getString("id"), items, o.optString("name"), o.optString("cont"), o.getString("host"), o.optString("hostName"), o.optBoolean("paused"), o.getLong("at")))
+        }
+        prune()
+    }
+    // Read once, off the main thread (each file is checked).
+    init { Thread { runCatching { loadWaiting(); if (waiting.isNotEmpty()) core.changed() } }.apply { isDaemon = true }.start() }
+
     private val offered = ConcurrentHashMap<String, Pair<String, String>>() // file id -> (batch, rel), for what arrived
     private val outItems = ConcurrentHashMap<String, List<Item>>() // batch -> its items as offered
     private val outCont = ConcurrentHashMap<String, String>() // batch -> the first batch's id
@@ -115,7 +143,7 @@ class Files(core: Core) : Feature(core) {
     private fun prune() {
         val now = System.currentTimeMillis()
         val keep = keepHours * 3600_000L
-        waiting.removeIf { now - it.at >= if (it.paused) maxOf(keep, 7 * 86400_000L) else keep }
+        if (waiting.removeIf { now - it.at >= if (it.paused) maxOf(keep, 7 * 86400_000L) else keep }) saveWaiting()
     }
 
     private fun lastHost(): Host? = core.host ?: core.store.hosts().firstOrNull()
@@ -129,6 +157,7 @@ class Files(core: Core) : Feature(core) {
         if (rest.isEmpty() || (!paused && keepHours <= 0)) return false
         val b = outBatches[batch]
         waiting.add(Waiting(UUID.randomUUID().toString(), rest, b?.name ?: trCount(rest.size, "item"), outCont[batch] ?: batch, h.id, h.name, paused, System.currentTimeMillis()))
+        saveWaiting()
         return true
     }
 
@@ -152,12 +181,14 @@ class Files(core: Core) : Feature(core) {
         val w = waiting.find { it.id == id } ?: return
         w.paused = false
         w.at = System.currentTimeMillis()
+        saveWaiting()
         core.changed()
         if (core.link.connected) core.bg.execute { flush() }
     }
 
     fun forget(id: String) {
         waiting.removeIf { it.id == id }
+        saveWaiting()
         core.changed()
     }
 
@@ -170,6 +201,7 @@ class Files(core: Core) : Feature(core) {
             waiting.remove(w)
             send(w.items, "send", UUID.randomUUID().toString(), w.cont)
         }
+        saveWaiting()
         core.changed()
     }
 
@@ -669,6 +701,7 @@ class Files(core: Core) : Feature(core) {
             val h = lastHost()
             if (kind != "send" || h == null || keepHours <= 0) return false
             waiting.add(Waiting(UUID.randomUUID().toString(), items, if (items.size == 1) items[0].name else trCount(items.size, "item"), "", h.id, h.name, false, System.currentTimeMillis()))
+            saveWaiting()
             core.changed()
             return true
         }

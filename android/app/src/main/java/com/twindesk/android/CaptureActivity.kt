@@ -2,7 +2,8 @@
 // Capture from phone (the computer's Explorer › TwinDesk, cam.capture): the phone's own camera app
 // opens, and every photo taken goes to the computer, into the folder that was right-clicked there,
 // then the camera opens again for the next one. Back in the camera ends it, and the computer hears
-// it (cam.capture {on: false}); the computer ending it closes this. The photos also stay in the
+// it (cam.capture {on: false}); the computer ending it closes this. {once: true} (the computer's
+// Camera › Take a photo): one photo, then it closes by itself. The photos also stay in the
 // phone's Pictures/TwinDesk.
 package com.twindesk.android
 
@@ -31,7 +32,7 @@ class CaptureActivity : ComponentActivity() {
         uri = null
         if (ok && u != null && core.link.connected) {
             core.bg.execute { core.files.send(core.files.describe(listOf(u)), "send") }
-            next()
+            if (intent.getBooleanExtra("once", false)) end(tell = false) else next() // once: Camera › Take a photo (shared/phonephoto.js), one photo
         } else {
             if (u != null && !ok) runCatching { contentResolver.delete(u, null, null) } // nothing was taken
             end()

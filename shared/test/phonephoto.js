@@ -18,7 +18,7 @@ const { PhonePhoto, WAIT_MS } = require('../phonephoto.js');
 
   assert.strictEqual(pp.arrived(['/d/IMG_1.jpg']), false); // not asked: a normal file
   assert.ok(pp.take());
-  assert.deepStrictEqual(sent.pop(), { t: 'cam.capture', on: true });
+  assert.deepStrictEqual(sent.pop(), { t: 'cam.capture', on: true, once: true });
   assert.strictEqual(pp.arrived(['/d/notes.pdf']), false);
   assert.strictEqual(pp.arrived(['/d/IMG_2.JPG']), true);
   assert.deepStrictEqual(sent.pop(), { t: 'cam.capture', on: false });

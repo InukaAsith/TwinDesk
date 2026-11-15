@@ -64,7 +64,9 @@ class VoiceNoteActivity : Activity() {
             discard()
             return finish()
         }
-        dialog = AlertDialog.Builder(this)
+        // The system's own dialog look, light or dark as the phone is.
+        val night = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        dialog = AlertDialog.Builder(this, if (night) android.R.style.Theme_DeviceDefault_Dialog_Alert else android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
             .setTitle(tr("Voice note for {name}", "name" to name))
             .setMessage("0:00")
             .setPositiveButton(tr("Send")) { _, _ -> finishNote(send = true) }
@@ -117,8 +119,14 @@ class VoiceNoteActivity : Activity() {
         } else {
             runCatching { contentResolver.update(u, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null) }
             val core = Core.get(this)
-            core.files.send(core.files.describe(listOf(u)), "send")
-            Toast.makeText(applicationContext, tr("Sending to {name}", "name" to (core.host?.name ?: tr("your computer"))), Toast.LENGTH_SHORT).show()
+            val now = core.link.connected
+            val went = core.files.send(core.files.describe(listOf(u)), "send")
+            val name = core.host?.name ?: core.hosts().firstOrNull()?.name ?: tr("your computer")
+            Toast.makeText(applicationContext, when {
+                now -> tr("Sending to {name}", "name" to name)
+                went -> tr("Waiting for {name}", "name" to name) // Waiting to send
+                else -> tr("Saved in Recordings › TwinDesk")
+            }, Toast.LENGTH_SHORT).show()
         }
         dialog?.dismiss()
         finish()
