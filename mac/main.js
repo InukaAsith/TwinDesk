@@ -739,6 +739,8 @@ app.whenReady().then(() => {
   const { DevCtl } = require('../shared/devctl.js');
   const { DevLocal } = require('../shared/devlocal.js');
   svc.devctl = new DevCtl({
+    watching: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
+   
     link: {
       on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
       send: (m) => peer.sendToClient(m),
@@ -752,6 +754,7 @@ app.whenReady().then(() => {
     },
   });
   svc.devctl.on('change', pushState);
+  app.on('browser-window-focus', () => svc.devctl && svc.devctl.look()); // back on screen: a fresh state of the other side now
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
   if (!modulesAtStart.includes('iossign')) svc.iosSign = require('../shared/iossign-host.js').create({ // off in General › Modules: not loaded
     app, safeStorage: require('electron').safeStorage,

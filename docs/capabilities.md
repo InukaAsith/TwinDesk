@@ -57,6 +57,12 @@ session, naming the feature.
 A device that sends no `app` at all is older than 2.5, and the app can't tell which features it
 lacks, so it shows only that it's older.
 
+## Lighter Overview controls (dev.state)
+
+| Field | Sent in | Meaning | An app without it |
+|---|---|---|---|
+| `asks: 1` | `dev.state` | This computer asks for the other side's controls (`ask: true`) while its window is on screen, at once and every minute. The other side then reads its own volume, Bluetooth and Do not disturb only while asked in the last 2½ minutes, not every minute of the session (`shared/devctl.js`) | the other side reads them every minute, as before |
+
 ## Features that say hello on their own
 
 Some features don't wait for hello and welcome. They send their own first message once switched on,

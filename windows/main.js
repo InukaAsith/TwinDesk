@@ -274,11 +274,14 @@ function start() {
     pushState();
   });
   clip = new Clip(link, () => settings.clipboard, pushState, { popup: (kind, text) => hud && hud.show(kind, text), peerName });
-  devctl = new DevCtl({ link, local: new DevLocal(), version: app.getVersion(), peerName, adb: () => {
+  devctl = new DevCtl({
+    watching: () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
+    link, local: new DevLocal(), version: app.getVersion(), peerName, adb: () => {
     const br = phone && phone.bridge;
     return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
   } });
   devctl.on('change', pushState);
+  app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
   // TwinDesk iPhone (shared/iossign.js): TwinDesk for iPhone signed with the person's Apple ID.
   if (!modulesAtStart.includes('iossign')) iosSign = require('../shared/iossign-host.js').create({ // off in General › Modules: not loaded
     app, safeStorage: require('electron').safeStorage, link,

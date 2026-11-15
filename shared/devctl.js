@@ -7,6 +7,11 @@
 //             detail: {id: text}, panel: {id: true}, volume, ringer}, top?: [package]}
 // Sent at the start of every session and whenever something changed. A side that doesn't know them
 // (an older TwinDesk) never answers: Overview then leaves the controls out.
+// Looking (asks: 1 in our dev.state): this side's window shows the other side's controls only while
+// it's on screen (watching()), and then asks (ask: true) at once and every POLL_MS. A side whose peer
+// says asks reads its own volume, Bluetooth… (processes: PowerShell on Windows) only while asked
+// within ASKED_MS, instead of every POLL_MS for the whole session. A peer without asks (an older
+// TwinDesk, a phone): every POLL_MS as before.
 // link: on(type | 'welcome' | 'closed', fn), send(msg), current? (the session's ctx: os)
 // local: DevLocal (shared/devlocal.js); adb() → {adb, serial} while a phone's wireless debugging is
 // ready (what an app can't switch on the phone goes that way: shared/devadb.js), else null.
@@ -21,6 +26,7 @@ const T = { DO: 'dev.do', STATE: 'dev.state' };
 const DOS = ['ring', 'ringStop', 'lock', 'sleep', 'bluetooth', 'dnd', 'volume', 'qs', 'ringer', 'mediaHere'];
 const QS = ['wifi', 'bluetooth', 'data', 'hotspot', 'torch', 'dnd', 'rotate', 'saver'];
 const POLL_MS = 60000;
+const ASKED_MS = 150000; // a peer that asks: our state stays fresh this long after its last ask
 const str = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
 const bool = (v) => (typeof v === 'boolean' ? v : undefined);
 const level = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1, Number(v))) : undefined);
@@ -48,6 +54,7 @@ function clean(m) {
     out.info = { storageUsed: n(i.storageUsed), storageTotal: n(i.storageTotal), wifi: str(i.wifi, 64), cell: str(i.cell, 64), signal: str(i.signal, 20) };
   }
   out.app = AppInfo.clean(m.app); // which TwinDesk it runs (null: older than 2.5)
+  if (m.asks === 1) out.asks = 1; // it asks while it looks (see Looking above)
   if (Array.isArray(m.top)) out.top = m.top.filter((x) => typeof x === 'string').slice(0, 12).map((x) => x.slice(0, 200));
   return out;
 }
@@ -55,9 +62,11 @@ function clean(m) {
 class DevCtl extends EventEmitter {
   // version: this app's (sent as dev.state's app, checked against the other side's: 'outdated').
   // peerName(): the other side's name for that message (else link.current.name).
-  constructor({ link, local, adb, version = '', peerName = null }) {
+  // watching(): this side's window is on screen (so it asks the other side); null: never asks.
+  constructor({ link, local, adb, version = '', peerName = null, watching = null }) {
     super();
-    Object.assign(this, { link, local, adb: adb || (() => null), version, peerName });
+    Object.assign(this, { link, local, adb: adb || (() => null), version, peerName, watching });
+    this.askedAt = 0; // the other side's last ask
     this.told = new Set(); // device|version already told about this run
     this.remote = null; // the other side's dev.state (null: nothing said yet)
     this.mine = null; // this computer's last state, sent with it
@@ -76,6 +85,7 @@ class DevCtl extends EventEmitter {
     });
     link.on(T.STATE, (m) => {
       const first = !this.remote;
+      if (m && m.ask === true) this.askedAt = Date.now();
       this.remote = clean(m || {});
       this.emit('change');
       // The other side's first word in a session: ours again, so the two always have each other's
@@ -85,7 +95,31 @@ class DevCtl extends EventEmitter {
     });
     link.on(T.DO, (m) => this._asked(m || {}));
     if (local) local.onStop = () => this._sendState(true); // ringing stopped by itself
-    this.timer = setInterval(() => this.sessionUp && this._sendState(false), POLL_MS);
+    this.timer = setInterval(() => {
+      if (!this.sessionUp) return;
+      if (this.polls) this._sendState(false);
+      if (this._looking()) this._ask();
+    }, POLL_MS);
+  }
+
+  // Our own state is read every POLL_MS only while someone may be looking at it.
+  get polls() {
+    return !(this.remote && this.remote.asks) || Date.now() - this.askedAt < ASKED_MS;
+  }
+
+  _looking() {
+    return !!(this.watching && this.watching() && this.sessionUp && this.remote && this.remote.asks);
+  }
+
+  // Ask the other side for a fresh state: ours again (as last sent, nothing read) with ask.
+  _ask() {
+    if (!this.mine) return this._sendState(true);
+    this.link.send({ ...JSON.parse(this.mine), ask: true });
+  }
+
+  // The main window came on screen (main.js): a fresh state now rather than at the next minute.
+  look() {
+    if (this._looking()) this._ask();
   }
 
   // Overview's buttons: to the other side. A guess is shown at once; its dev.state corrects it.
@@ -138,7 +172,7 @@ class DevCtl extends EventEmitter {
   async _sendState(force) {
     if (!this.local || !this.sessionUp) return;
     const st = await this.local.state();
-    const msg = { t: T.STATE, can: this.local.can(), ...st, ...(this.version ? { app: { v: this.version, f: AppInfo.mine() } } : {}) };
+    const msg = { t: T.STATE, can: this.local.can(), ...st, ...(this.version ? { app: { v: this.version, f: AppInfo.mine() } } : {}), ...(this.watching ? { asks: 1 } : {}) };
     const k = JSON.stringify(msg);
     if (!force && k === this.mine) return;
     this.mine = k;

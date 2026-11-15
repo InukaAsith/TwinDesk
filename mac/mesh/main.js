@@ -628,6 +628,8 @@ app.whenReady().then(() => {
     const { DevCtl } = require('../../shared/devctl.js');
     const { DevLocal } = require('../../shared/devlocal.js');
     devctl = new DevCtl({
+    watching: () => !!(win && !win.isDestroyed() && win.isVisible() && !win.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
+   
       link: {
         on: (ev, fn) => (ev === 'welcome' ? peer.on('client', fn) : ev === 'closed' ? peer.on('closed', fn) : peer.on('t:' + ev, fn)),
         send: (m) => peer.sendToClient(m),
@@ -641,6 +643,7 @@ app.whenReady().then(() => {
       },
     });
     devctl.on('change', pushState);
+    app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
     // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
     devctl.on('outdated', (o) => {
       const { FEATURES } = require('../../shared/appinfo.js');

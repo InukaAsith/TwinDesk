@@ -236,11 +236,14 @@ function start() {
   // Overview's controls of the selected device (a computer or a phone), and this computer's for it.
   const { DevCtl } = require('../../shared/devctl.js');
   const { DevLocal } = require('../../shared/devlocal.js');
-  devctl = new DevCtl({ link, local: new DevLocal(), version: app.getVersion(), adb: () => {
+  devctl = new DevCtl({
+    watching: () => !!(mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && !mainWin.isMinimized()), // Overview may show the other side's controls (shared/devctl.js Looking)
+    link, local: new DevLocal(), version: app.getVersion(), adb: () => {
     const br = phone && phone.bridge;
     return br && br.state === 'ready' && br.serial ? { adb: br.adb, serial: br.serial } : null;
   } });
   devctl.on('change', pushState);
+  app.on('browser-window-focus', () => devctl && devctl.look()); // back on screen: a fresh state of the other side now
   // The selected device runs an older TwinDesk (shared/appinfo.js): say so once.
   devctl.on('outdated', (o) => {
     const { FEATURES } = require('../../shared/appinfo.js');
