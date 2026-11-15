@@ -13,11 +13,20 @@ UI.mediaControlsRow = () => {
   const t = (...args) => typeof I18n === 'undefined' ? args[0] : I18n.t(...args);
   const sw = UI.switch((v) => UI.api.setAudio({ phoneMedia: v }), { label: t('Media controls on the Phone page') });
   const row = UI.row(t('Media controls on the Phone page'), '', [sw]);
+  // The card's tint from the artwork: this window's own (localStorage), on unless turned off.
+  const tintSw = UI.switch((v) => {
+    try { localStorage.setItem('td.np.tint', v ? 'on' : 'off'); } catch (_) { /* this time only */ }
+    window.dispatchEvent(new Event('td-np-tint'));
+  }, { label: t('Colour from the artwork') });
+  const tintRow = UI.row(t('Colour from the artwork'), t('The media card takes a soft tint of what plays'), [tintSw]);
+  const wrap = UI.el('div', { class: 'np-rows' }, [row, tintRow]);
   return {
-    el: row,
+    el: wrap,
     update(s) {
       const on = (s.audio || {}).phoneMedia !== false;
       sw.set(on);
+      tintSw.set(UI.npTint());
+      tintRow.hidden = !on;
       const m = s.phoneMedia;
       row.setHint(on && m && m.why === 'listener'
         ? t('Needs the full TwinDesk app on the phone, with its notification access on')
@@ -76,11 +85,13 @@ UI.phoneAudioCard = () => {
   };
 };
 
-// The card itself, in the window's own look (Glass or Simple): the art, title and artist; a seek bar
-// you can drag (where the app can seek) with the time gone and the time left; back and forward 10
-// seconds, Previous, Play/Pause and Next; the phone's media volume (phone.qs.volume, deviceDo volume)
-// and where its sound plays (the phone, or here: Audio › Play sound here). A tint of the art behind
-// it (off in its menu) and a smaller one-line card (collapse): both kept in this window (localStorage).
+// The card itself, in the window's own look (Glass or Simple), compact as before: the art, title and
+// artist, a seek bar you can drag (where the app can seek) with the time gone and left, Previous,
+// Play/Pause and Next. Its chevron slides open a drawer under it (open or not kept in this window):
+// back and forward 10 seconds, the phone's media volume (phone.qs.volume, deviceDo volume) and where
+// its sound plays (the phone, or here: Audio › Play sound here). Behind it a soft tint of the art's colour
+// (General › Media controls on the Phone page › Colour from the artwork, kept in this window).
+UI.npTint = () => { try { return localStorage.getItem('td.np.tint') !== 'off'; } catch (_) { return true; } };
 UI.nowPlaying = () => {
   const t = (...args) => typeof I18n === 'undefined' ? args[0] : I18n.t(...args);
   const { el, api } = UI;
@@ -92,10 +103,11 @@ UI.nowPlaying = () => {
   };
   const PLAY = '<path d="M6.5 4.5v11l9-5.5z"/>';
   const PAUSE = '<path d="M6 4.5h2.5v11H6z M11.5 4.5H14v11h-2.5z"/>';
-  const BACK = '<path fill="none" d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/><text x="10" y="12.6" text-anchor="middle" font-size="6" stroke="none">10</text>';
-  const FWD = '<path fill="none" d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9 M15.5 3.5v3h-3"/><text x="10" y="12.6" text-anchor="middle" font-size="6" stroke="none">10</text>';
-  const pref = (() => { try { return JSON.parse(localStorage.getItem('td.np') || '{}') || {}; } catch (_) { return {}; } })();
-  const savePref = () => { try { localStorage.setItem('td.np', JSON.stringify(pref)); } catch (_) { /* this session only */ } };
+  const BACK = '<path fill="none" d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/><text x="10.4" y="12.4" text-anchor="middle" font-size="5.6" stroke="none">10</text>';
+  const FWD = '<path fill="none" d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9 M15.5 3.5v3h-3"/><text x="9.6" y="12.4" text-anchor="middle" font-size="5.6" stroke="none">10</text>';
+  const VOL = '<path d="M3.5 8h3l4-3.5v11l-4-3.5h-3z"/><path fill="none" d="M13.5 7.5a3.5 3.5 0 0 1 0 5"/>';
+  const ON_PHONE = '<path fill="none" d="M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2"/>';
+  const ON_HERE = '<path fill="none" d="M3 4h14v9H3z M7 17h6 M10 13v4"/>';
   const btn = (d, label, fn, cls = '') => {
     const b = el('button', { class: 'np-btn' + (cls ? ' ' + cls : ''), title: label, attrs: { 'aria-label': label } }, [svg(d)]);
     b.onclick = fn;
@@ -117,17 +129,17 @@ UI.nowPlaying = () => {
   const sub = el('div', { class: 'np-sub' });
   const back = btn(BACK, t('Back 10 seconds'), () => jump(-10000), 'np-skip');
   const prev = btn('<path d="M5 4.5v11 M15.5 4.5v11L7 10z"/>', t('Previous'), () => api.phoneMedia({ a: 'prev' }));
-  const play = btn(PLAY, t('Play'), () => api.phoneMedia({ a: 'toggle' }), 'np-play');
+  const play = btn(PLAY, t('Play'), () => api.phoneMedia({ a: 'toggle' }));
   const next = btn('<path d="M15 4.5v11 M4.5 4.5v11L13 10z"/>', t('Next'), () => api.phoneMedia({ a: 'next' }));
   const fwd = btn(FWD, t('Forward 10 seconds'), () => jump(10000), 'np-skip');
   // The seek bar: a range input, so it drags, takes the arrow keys and reads out its place.
-  const seek = el('input', { type: 'range', class: 'np-seek', attrs: { min: '0', max: '1000', step: '1', value: '0', 'aria-label': t('Position') } });
+  const seek = el('input', { type: 'range', class: 'np-range', attrs: { min: '0', max: '1000', step: '1', value: '0', 'aria-label': t('Position') } });
   const gone = el('span', { class: 'np-time' });
   const left = el('span', { class: 'np-time' });
-  const paint = (k) => seek.style.setProperty('--np-k', (k * 100).toFixed(1) + '%');
+  const paint = (r, k) => r.style.setProperty('--np-k', (k * 100).toFixed(1) + '%');
   seek.addEventListener('input', () => {
     dragging = true;
-    paint(seek.value / 1000);
+    paint(seek, seek.value / 1000);
     if (now && now.duration > 0) gone.textContent = clock(now.duration * seek.value / 1000);
   });
   seek.addEventListener('change', () => {
@@ -139,57 +151,47 @@ UI.nowPlaying = () => {
     tick();
   });
   const posRow = el('div', { class: 'np-pos' }, [gone, seek, left]);
-  // The phone's media volume and where its sound plays.
-  const VOL = '<path d="M3.5 8h3l4-3.5v11l-4-3.5h-3z M13.5 7.5a3.5 3.5 0 0 1 0 5"/>';
-  const volIco = el('span', { class: 'np-ico', attrs: { 'aria-hidden': 'true' } }, [svg(VOL)]);
-  const vol = el('input', { type: 'range', class: 'np-seek np-vol', attrs: { min: '0', max: '100', step: '1', value: '0', 'aria-label': t('Media volume') } });
+  // Under the buttons: the volume, and where the sound plays (one button: the phone or this computer).
+  const vol = el('input', { type: 'range', class: 'np-range np-vol', attrs: { min: '0', max: '100', step: '1', value: '0', 'aria-label': t('Media volume') } });
   let volAt = 0;
   vol.addEventListener('input', () => {
     volAt = Date.now();
-    vol.style.setProperty('--np-k', vol.value + '%');
+    paint(vol, vol.value / 100);
     clearTimeout(vol.timer);
     vol.timer = setTimeout(() => api.deviceDo && api.deviceDo({ do: 'volume', stream: 'media', level: vol.value / 100 }), 80);
   });
-  const volBox = el('div', { class: 'np-volbox' }, [volIco, vol]);
-  const out = UI.segmented([{ value: 'phone', label: t('Phone') }, { value: 'here', label: t('This computer') }], (v) => api.setAudio({ receive: v === 'here' }));
-  out.el.classList.add('np-out');
-  out.el.title = t('Where the phone’s sound plays');
-  const extra = el('div', { class: 'np-extra' }, [volBox, out.el]);
-  // Its menu: the tint, and collapse.
-  const tintBtn = btn('<circle cx="10" cy="10" r="6.5" fill="none"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13z" stroke="none"/>', t('Colour from the artwork'), () => {
-    pref.tint = pref.tint === false;
-    savePref();
-    applyTint();
-  }, 'np-mini');
-  const foldBtn = btn('<path fill="none" d="M5.5 8l4.5 4.5L14.5 8"/>', t('Smaller'), () => {
-    pref.small = !pref.small;
-    savePref();
-    applyFold();
-  }, 'np-mini');
+  const volBox = el('div', { class: 'np-volbox', title: t('Media volume') }, [el('span', { class: 'np-ico', attrs: { 'aria-hidden': 'true' } }, [svg(VOL)]), vol]);
+  let here = false;
+  const out = btn(ON_PHONE, '', () => api.setAudio({ receive: !here }), 'np-out');
+  const tools = el('div', { class: 'np-tools' }, [back, fwd, volBox, out]);
+  const drawer = el('div', { class: 'np-drawer' }, [el('div', { class: 'np-drawer-in' }, [tools])]);
+  const more = btn('<path fill="none" d="M6 8l4 4 4-4"/>', t('More controls'), () => setOpen(!open), 'np-more');
   const box = el('div', { class: 'np', hidden: true }, [
-    art,
-    el('div', { class: 'np-main' }, [
-      el('div', { class: 'np-head' }, [el('div', { class: 'np-names' }, [title, sub]), tintBtn, foldBtn]),
-      posRow,
-      el('div', { class: 'np-ctl' }, [back, prev, play, next, fwd]),
-      extra,
+    el('div', { class: 'np-top' }, [
+      art,
+      el('div', { class: 'np-main' }, [title, sub, posRow]),
+      el('div', { class: 'np-ctl' }, [prev, play, next, more]),
     ]),
+    drawer,
   ]);
+  let open = (() => { try { return localStorage.getItem('td.np.open') === '1'; } catch (_) { return false; } })();
+  const setOpen = (v) => {
+    open = !!v;
+    try { localStorage.setItem('td.np.open', open ? '1' : '0'); } catch (_) { /* this time only */ }
+    box.classList.toggle('open', open);
+    more.setAttribute('aria-expanded', String(open));
+    more.title = open ? t('Fewer controls') : t('More controls');
+    more.setAttribute('aria-label', more.title);
+    drawer.inert = !open;
+  };
+  setOpen(open);
 
-  // The art's colour: its average, a little darker in light and lighter in dark, read from a tiny copy.
+  // The art's colour: its average (colourful pixels count more than grey ones), from a tiny copy.
   let tint = '';
   const applyTint = () => {
-    const on = pref.tint !== false && !!tint;
+    const on = UI.npTint() && !!tint;
     box.classList.toggle('tinted', on);
     box.style.setProperty('--np-tint', on ? tint : 'transparent');
-    tintBtn.classList.toggle('on', pref.tint !== false);
-    tintBtn.setAttribute('aria-pressed', String(pref.tint !== false));
-  };
-  const applyFold = () => {
-    box.classList.toggle('small', !!pref.small);
-    foldBtn.replaceChildren(svg(pref.small ? '<path fill="none" d="M5.5 12l4.5-4.5 4.5 4.5"/>' : '<path fill="none" d="M5.5 8l4.5 4.5L14.5 8"/>'));
-    foldBtn.title = pref.small ? t('Larger') : t('Smaller');
-    foldBtn.setAttribute('aria-label', foldBtn.title);
   };
   const readTint = (url) => {
     tint = '';
@@ -205,8 +207,7 @@ UI.nowPlaying = () => {
         const d = g.getImageData(0, 0, 12, 12).data;
         let r = 0, gg = 0, b = 0, n = 0;
         for (let i = 0; i < d.length; i += 4) {
-          const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
-          const w = 1 + (mx - mn) / 32; // colourful pixels count more than grey ones
+          const w = 1 + (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) / 32;
           r += d[i] * w; gg += d[i + 1] * w; b += d[i + 2] * w; n += w;
         }
         if (url !== lastArt) return;
@@ -216,8 +217,7 @@ UI.nowPlaying = () => {
     };
     img.src = url;
   };
-  applyTint();
-  applyFold();
+  window.addEventListener('td-np-tint', applyTint);
 
   const clock = (ms) => {
     const s = Math.max(0, Math.round(ms / 1000));
@@ -231,7 +231,7 @@ UI.nowPlaying = () => {
     posRow.hidden = !(d > 0 && now.position >= 0);
     const k = d > 0 ? p / d : 0;
     seek.value = String(Math.round(k * 1000));
-    paint(k);
+    paint(seek, k);
     gone.textContent = clock(p);
     left.textContent = '−' + clock(Math.max(0, d - p));
   };
@@ -263,11 +263,17 @@ UI.nowPlaying = () => {
       volBox.hidden = !qs || qs.volume == null || !api.deviceDo;
       if (!volBox.hidden && Date.now() - volAt > 1500) {
         vol.value = String(Math.round(qs.volume * 100));
-        vol.style.setProperty('--np-k', vol.value + '%');
+        paint(vol, qs.volume);
       }
-      out.el.hidden = !api.setAudio || !s.audio;
-      if (!out.el.hidden) out.set(s.audio.receive ? 'here' : 'phone');
-      extra.hidden = volBox.hidden && out.el.hidden;
+      out.hidden = !api.setAudio || !s.audio;
+      if (!out.hidden) {
+        here = !!s.audio.receive;
+        out.replaceChildren(svg(here ? ON_HERE : ON_PHONE));
+        out.title = here ? t('Playing on this computer: click to play on the phone') : t('Playing on the phone: click to play on this computer');
+        out.setAttribute('aria-label', out.title);
+        out.classList.toggle('on', here);
+      }
+      more.hidden = !now.seek && volBox.hidden && out.hidden; // nothing to open
       tick();
     },
   };
