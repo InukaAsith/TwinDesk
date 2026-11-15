@@ -11,7 +11,7 @@ const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { IconsOut, IconsIn } = require('../shared/notificon.js');
 const { actionsOf, withPhoneActions, hidden, present } = require('../shared/notifacts.js');
-const { richOf } = require('../shared/notifpop.js');
+const { richOf, popupOn } = require('../shared/notifpop.js');
 
 const T = P.T;
 const str = (v, n = 500) => (typeof v === 'string' ? v.slice(0, n) : '');
@@ -58,7 +58,7 @@ class Notifs extends EventEmitter {
   }
 
   sendPolicy() {
-    this.server.sendToClient({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: true }); // rich: pictures and live progress shown here (notifpop.js)
+    this.server.sendToClient({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups (notifpop.js)
   }
 
   applySettings() {

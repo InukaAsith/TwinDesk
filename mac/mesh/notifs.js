@@ -118,7 +118,7 @@ class Notifs extends EventEmitter {
   }
 
   _sendPolicy(id) {
-    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive });
+    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: require('../../shared/notifpop.js').popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups
   }
 
   applySettings() {

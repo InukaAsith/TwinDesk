@@ -184,12 +184,10 @@ class NotifPop {
   }
 }
 
-// Notifications › Style: 'twindesk' (this window) or 'system'. Unset: TwinDesk's on Windows and
-// Linux, where the system's can't take a Reply; the system's on a Mac, whose can.
+// Notifications › Pop-ups: 'twindesk' (this window) or 'system'. Unset: the system's, the lightest
+// (no window, and the phone sends no pictures or progress: notifs.js's policy, rich).
 function popupOn(cfg) {
-  const s = cfg && cfg.style;
-  if (s === 'twindesk' || s === 'system') return s === 'twindesk';
-  return process.platform !== 'darwin';
+  return !!cfg && cfg.style === 'twindesk';
 }
 
 module.exports = { NotifPop, richOf, popupOn, str };

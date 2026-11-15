@@ -27,7 +27,7 @@
   // What's new, newest first: shown once when the app's version starts with `v` (3.1.0, 3.1.2…).
   const NEWS = [
     { v: '3.2', items: [
-      ['TwinDesk pop-ups', 'A phone’s notifications in TwinDesk’s own pop-ups: Reply right there, the app’s buttons, pictures, a one-time code’s Copy and progress that fills in place. In Notifications › Showing here.'],
+      ['TwinDesk pop-ups', 'Pick TwinDesk’s own pop-ups for a phone’s notifications: Reply right there, the app’s buttons, pictures, a one-time code’s Copy and progress that fills in place. In Notifications › Showing here; the system’s stay the default.'],
       ['Each app its own way', 'Show, No pop-ups or Hide for each phone app, pop-ups paused on a schedule, and codes copied by themselves, kept out of the clipboard’s history.'],
       ['Messages', 'Pictures of the people you write to, a search box, Delete, a choice of chat apps, and no more “Sending video…” chats.'],
       ['Albums in Photos', 'Your phone’s albums beside its photos, with covers and counts, and Open or Open with… for a photo.'],

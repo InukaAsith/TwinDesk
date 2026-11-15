@@ -47,7 +47,7 @@ UI.notifShowCard = () => {
       const n = s.notifs || {};
       card.hidden = !n.receive;
       if (card.hidden) return;
-      const st = n.style === 'twindesk' || n.style === 'system' ? n.style : mac ? 'system' : 'twindesk';
+      const st = n.style === 'twindesk' ? 'twindesk' : 'system';
       style.set(st);
       styleRow.setHint(st === 'twindesk' ? t('TwinDesk’s own: Reply, the app’s buttons, pictures and progress right in it') : mac ? t('macOS notifications, with Reply and the app’s buttons') : t('The system’s notifications'));
       otp.set(!!n.otpCopy);

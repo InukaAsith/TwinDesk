@@ -11,7 +11,7 @@ const { spawn } = require('child_process');
 const P = require('../shared/protocol.js');
 const { IconsIn } = require('../shared/notificon.js');
 const { actionsOf, withPhoneActions, hidden, present } = require('../shared/notifacts.js');
-const { richOf } = require('../shared/notifpop.js');
+const { richOf, popupOn } = require('../shared/notifpop.js');
 const { otpOf } = require('../shared/otp.js');
 
 const T = P.T;
@@ -60,7 +60,7 @@ class Notifs extends EventEmitter {
   }
 
   sendPolicy() {
-    if (this.connected) this.link.send({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: true }); // rich: pictures and live progress shown here (notifpop.js)
+    if (this.connected) this.link.send({ t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups (notifpop.js)
   }
 
   applySettings() {
@@ -194,6 +194,24 @@ class Notifs extends EventEmitter {
     if (how === 'popup') this.shown++;
     if (how !== 'native' || !Notification.isSupported()) return void this.onChange();
     this.echoes.push({ title, body: str(m.body).slice(0, 80), until: Date.now() + 30000 });
+    // With buttons (the app's, a code's Copy): the system's own through notify-send (linuxnotify.js).
+    const code = otpOf([title, item.body].join(' '));
+    const btns = [...(code ? ['Copy ' + code] : []), ...item.actions];
+    const sys = require('../shared/linuxnotify.js').show({
+      title,
+      body: [[appName, peer].filter(Boolean).join(' · '), str(m.subtitle, 200), str(m.body)].filter(Boolean).join('\n'),
+      icon: this.iconsIn.for(m),
+      actions: btns,
+      onAction: (i) => { if (code && i === 0) require('electron').clipboard.writeText(code); else this.act(item.id, i - (code ? 1 : 0)); },
+      onClick: () => this.onClick && this.onClick({ app: str(m.app, 200), appName }),
+      onClose: () => this.live.delete(sys),
+    });
+    if (sys) {
+      sys.tdId = item.id;
+      this.live.add(sys);
+      this.shown++;
+      return void this.onChange();
+    }
     const n = new Notification({
       title,
       icon: this.iconsIn.for(m),

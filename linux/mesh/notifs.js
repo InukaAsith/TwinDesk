@@ -115,7 +115,7 @@ class Notifs extends EventEmitter {
   }
 
   _sendPolicy(id) {
-    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive });
+    this.bus.send(id, { t: T.NOTIF_POLICY, accept: !!this.cfg.receive, rich: require('../../shared/notifpop.js').popupOn(this.cfg) }); // rich: pictures and live progress, only for TwinDesk's pop-ups
   }
 
   applySettings() {
@@ -264,6 +264,24 @@ class Notifs extends EventEmitter {
     }
     this.echoes.push({ title, body: body.slice(0, 80), until: Date.now() + 30000 });
     // Desktop notifications have no subtitle: the first line is "<appName> · <device>".
+    // With buttons (the app's, a code's Copy): the system's own through notify-send (linuxnotify.js).
+    const code = require('../../shared/otp.js').otpOf([title, body].join(' '));
+    const btns = [...(code ? ['Copy ' + code] : []), ...(item.actions || [])];
+    const sys = require('../../shared/linuxnotify.js').show({
+      title,
+      body: [[appName, origin].filter(Boolean).join(' · '), str(m.subtitle, 200), body].filter(Boolean).join('\n'),
+      icon: this.iconsIn ? this.iconsIn.for(m) : undefined,
+      actions: btns,
+      onAction: (i) => { if (code && i === 0) require('electron').clipboard.writeText(code); else this.act(item.id, i - (code ? 1 : 0)); },
+      onClick: () => this.onClick && this.onClick({ app: str(m.app, 200), appName, originId: r.msg.o }),
+      onClose: () => this.live.delete(sys),
+    });
+    if (sys) {
+      sys.tdId = item.id;
+      this.live.add(sys);
+      this.shown++;
+      return void this.onChange();
+    }
     const n = new this.Notification({
       title,
       icon: this.iconsIn ? this.iconsIn.for(m) : undefined,

@@ -77,7 +77,7 @@ Richer notifications and messages (3.2.1). Each is a field an older app ignores:
 
 | Message | Field | Meaning | An app without it |
 |---|---|---|---|
-| `notif.policy` (computer to phone) | `rich: true` | This computer shows pictures and live progress, so the phone may send them | the phone sends neither, and skips ongoing progress notifications as before |
+| `notif.policy` (computer to phone) | `rich: true` | This computer shows pictures and live progress (Pop-ups: TwinDesk, one-to-one and Multi-device), so the phone may send them. Pop-ups: System sends `rich: false` | the phone sends neither, and skips ongoing progress notifications as before |
 | `notif` (phone to computer) | `live: {v, max, ind?, done?}` | A progress bar or timer, updated in place (at most once a second, always when done) | shown once as plain text |
 | `notif` | `pic`, `avatar` | A notification's picture (a JPEG data URL up to 480 px) and the person's or chat's picture (72 px) | not shown |
 | `chat.conv` | `avatar` | The chat's picture in Messages | a letter |
