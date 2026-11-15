@@ -520,7 +520,9 @@ class Peer(val core: Core) : PeerServer.Handler, Link.Events {
     fun clipNow() {
         if (!connected || !clipOn) return
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val text = runCatching { cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }.getOrNull() ?: return
+        val clip = runCatching { cm.primaryClip?.takeIf { it.itemCount > 0 } }.getOrNull() ?: return
+        if (Clip.isSensitive(clip.description)) return // a password manager's copy stays here
+        val text = clip.getItemAt(0)?.text?.toString() ?: return
         clipOut(text)
     }
 

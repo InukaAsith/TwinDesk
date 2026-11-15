@@ -90,6 +90,8 @@ class Clip(core: Core) : Feature(core) {
     // the share sheet / tile, which bring us to the front for a moment).
     fun sendCurrent(force: Boolean): Boolean {
         val clip = runCatching { cm.primaryClip?.takeIf { it.itemCount > 0 } }.getOrNull() ?: return false
+        // A password manager's copy (marked sensitive): stays on this phone, as the computer keeps its own.
+        if (isSensitive(clip.description)) return false
         val item = clip.getItemAt(0)
         // A picture or files on the clipboard (files copied from the computer, a screenshot): no
         // text to send. coerceToText would make one of their content:// address, which would
@@ -263,6 +265,10 @@ class Clip(core: Core) : Feature(core) {
 
     companion object {
         private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+        // ClipDescription.EXTRA_IS_SENSITIVE (Android 13+); password managers set it on older ones too.
+        fun isSensitive(d: android.content.ClipDescription?): Boolean =
+            runCatching { d?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true }.getOrDefault(false)
+
         fun isPng(b: ByteArray) = b.size > 8 && (0 until 8).all { b[it] == PNG_SIGNATURE[it] }
 
         // A picture as a PNG of at most CLIP_IMAGE_MAX_BYTES: a PNG as it is, anything else (a JPEG
