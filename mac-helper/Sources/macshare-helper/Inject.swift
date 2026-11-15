@@ -182,7 +182,7 @@ final class Injector {
     if let kt = KeyCodes.system[code] { return systemKey(kt, down: down) }
     if code == "Space" {
       let held = Set(heldMods.map(Injector.kind))
-      if down && (held == ["Control"] || held == ["Control", "Alt"]) {
+      if down && InputSourceShortcut.shouldSwitch(heldKinds: held) {
         swallowSpace = true
         modsOnly = false
         InputSources.next()
@@ -272,13 +272,22 @@ final class Injector {
 
 // The keyboard layouts and input methods the person enabled, as the input menu lists them.
 enum InputSources {
+  private static let selectableProps: CFDictionary = [
+    kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String,
+    kTISPropertyInputSourceIsSelectCapable as String: true,
+  ] as CFDictionary
+
+  private static func selectableList() -> [TISInputSource] {
+    guard let list = TISCreateInputSourceList(selectableProps, false)?.takeRetainedValue() as? [TISInputSource] else { return [] }
+    return list
+  }
+
+  static func selectableCount() -> Int { selectableList().count }
+
   /// The next one after the current (Ctrl+Space's "previous input source" with two of them).
   static func next() {
-    let props = [
-      kTISPropertyInputSourceCategory as String: kTISCategoryKeyboardInputSource as String,
-      kTISPropertyInputSourceIsSelectCapable as String: true,
-    ] as CFDictionary
-    guard let list = TISCreateInputSourceList(props, false)?.takeRetainedValue() as? [TISInputSource], list.count > 1 else { return }
+    let list = selectableList()
+    guard list.count > 1 else { return }
     let id = { (s: TISInputSource) -> String in
       guard let p = TISGetInputSourceProperty(s, kTISPropertyInputSourceID) else { return "" }
       return Unmanaged<CFString>.fromOpaque(p).takeUnretainedValue() as String
