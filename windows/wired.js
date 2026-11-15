@@ -56,6 +56,8 @@ class Wired extends EventEmitter {
       this.emit('change');
     });
     this.timer = setInterval(() => this._poll().catch((e) => console.log(`[wired] ${e.message}`)), POLL_MS);
+    // adb's device feed (adb.js): a cable phone appearing or going is seen at once, not at the next poll.
+    if (this.adb.track) this.adb.track.on('change', () => this._poll().catch((e) => console.log(`[wired] ${e.message}`)));
   }
 
   // The USB serial of a phone connected through the cable, or null.

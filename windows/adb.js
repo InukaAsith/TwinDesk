@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile, spawn } = require('child_process');
 const adbmdns = require('../shared/adbmdns.js');
+const { AdbTrack, parse } = require('../shared/adbtrack.js');
 
 // A developer's own adb comes first: the one named by ADB (scrcpy's setting), else the Android
 // SDK's platform-tools, which Flutter, Android Studio and a terminal use. Two different adb
@@ -43,6 +44,7 @@ class Adb {
   constructor() {
     this.bin = findAdb();
     this.server = findServer();
+    this.track = new AdbTrack(); // connects on the first devices()
   }
 
   // A phone is linked: from now on keep its announcements (mdns() finds them).
@@ -66,9 +68,13 @@ class Adb {
 
   // [{serial, state}]
   async devices() {
+    // The adb server's own feed once it's up (shared/adbtrack.js): no process per poll.
+    if (this.track.list) return this.track.list.map((d) => ({ ...d }));
     const r = await this.run(['devices']);
-    return r.out.split(/\r?\n/).slice(1).map((l) => l.trim().split(/\s+/)).filter((p) => p.length >= 2).map(([serial, state]) => ({ serial, state }));
+    this.track.ensure();
+    return parse(r.out.split('\n').slice(1).join('\n'));
   }
+
 
   // The phone's wireless debugging services: [{name, type: 'pairing'|'connect', address, port}].
   // adb's own mDNS often sees nothing where the system's does, so ours (shared/adbmdns.js, which
