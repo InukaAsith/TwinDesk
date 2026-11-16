@@ -113,7 +113,19 @@ class BleHost extends EventEmitter {
     if (key === this.applied) return;
     const wasHeld = this.applied === 'hold' || this.applied === 'hold+ads';
     this.applied = key;
-    if (on) this.helper.request('bleStart', { info: key }).catch((e) => console.log(`[ble] ${e.message}`));
+    if (on) {
+      clearTimeout(this.retry);
+      this.helper.request('bleStart', { info: key }).then(() => { this.fails = 0; }, (e) => {
+        console.log(`[ble] ${e.message}`);
+        // BlueZ refusing one advertisement (busy controller, a registration still going away: "Failed to
+        // register advertisement") isn't for good: start again in 10 s, 30 s, … up to 5 min. Not with the
+        // radio off or missing (its own state change brings the next apply) or once stopped meanwhile.
+        if (/stopped|Bluetooth is off|no Bluetooth/.test(e.message) || this.applied !== key) return;
+        const wait = Math.min(300000, 10000 * 3 ** Math.min(4, this.fails = (this.fails || 0) + 1));
+        this.retry = setTimeout(() => { if (this.applied === key) { this.applied = null; this.apply(); } }, wait);
+        if (this.retry.unref) this.retry.unref();
+      });
+    }
     else if (hold) {
       this.helper.request('bleHold', { advertise: ads }).catch(() => {});
       // Into hold, the session is on Wi-Fi: links idle, guests kept. Only advertising changing within
