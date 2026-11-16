@@ -2,7 +2,7 @@
 // What plays on this computer, for the phone (its Media page and the media notification in its
 // shade, PcMedia.kt): read (shared/web/pcmedia.js) only while the phone asks (pc.media.want), sent
 // on every change (pc.media), and Play, Pause, Next and Previous from there (pc.media.ctl).
-//   macOS: any app in its Now Playing, with the artwork (Music and Spotify without mac-helper's dylib). Linux: any MPRIS player (playerctl). Windows: the system media session.
+//   macOS: any app in its Now Playing, with the artwork (Music and Spotify without mac-helper's dylib). Linux: any MPRIS player (D-Bus, shared/mpris.js). Windows: the system media session.
 // server: the phone link ('client', 'closed', 't:<type>', sendToClient, current); key(code) presses a media key.
 'use strict';
 

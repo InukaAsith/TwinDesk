@@ -6,7 +6,7 @@
 //   mac-helper's libtwindesk-nowplaying.dylib loaded into /usr/bin/perl (MediaRemote answers only
 //   Apple's own processes), which streams each change and takes the controls. Without it: Music
 //   and Spotify through AppleScript (only when they're running; nothing is launched).
-//   Linux: MPRIS through playerctl, when it's installed.
+//   Linux: MPRIS over D-Bus (shared/mpris.js, gdbus; playerctl only where there's no gdbus).
 //   Windows: the system media session (the player Windows shows in its own volume flyout), read by
 //   TwinDesk's own helper (windows-helper/src/DeckMix.cs, deckMedia): no PowerShell or other
 //   program. Windows' main hands it over once (PcMedia.useHelper); without it nothing is read.
@@ -50,6 +50,13 @@ function readMac() {
 }
 
 function readLinux() {
+  return require('../mpris.js').now().then((p) => {
+    if (p === undefined) return readPlayerctl(); // no gdbus here
+    return p ? JSON.stringify({ app: p.app, title: p.title, artist: p.artist, album: p.album, playing: p.playing }) : '{}';
+  });
+}
+
+function readPlayerctl() {
   const fmt = '{{status}}\t{{playerName}}\t{{xesam:title}}\t{{xesam:artist}}\t{{xesam:album}}';
   return new Promise((resolve) => execFile('playerctl', ['metadata', '--format', fmt], { timeout: 3000 }, (err, out) => {
     if (err) return resolve('{}');
@@ -175,7 +182,9 @@ class PcMedia extends EventEmitter {
     }
     if (this.platform === 'linux') {
       const pc = { toggle: 'play-pause', play: 'play', pause: 'pause', next: 'next', previous: 'previous' }[cmd];
-      execFile('playerctl', [pc], { timeout: 3000 }, (err) => { if (err && KEYS[cmd]) this.key(KEYS[cmd]); });
+      require('../mpris.js').act(cmd).then((ok) => {
+        if (!ok) execFile('playerctl', [pc], { timeout: 3000 }, (err) => { if (err && KEYS[cmd]) this.key(KEYS[cmd]); });
+      });
     } else if (KEYS[cmd]) {
       this.key(KEYS[cmd]);
     }

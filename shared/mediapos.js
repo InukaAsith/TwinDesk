@@ -2,7 +2,7 @@
 // Where the video playing in a browser here is, for ReZume's video handoff (shared/rezume.js): the
 // other device opens the same video at the same second. From the system's media controls:
 // Windows' media session (TwinDesk's helper, deckMedia: no PowerShell), Linux's MPRIS
-// (playerctl). The Mac has no system-wide position an app may read: the browser in front is asked
+// (shared/mpris.js over D-Bus). The Mac has no system-wide position an app may read: the browser in front is asked
 // through Apple Events instead (Safari, Chrome, Edge, Brave, Vivaldi, Opera, Arc), which works only
 // where the browser allows JavaScript from Apple Events (its Develop / View › Developer menu); null
 // otherwise.
@@ -33,7 +33,10 @@ function run(argv) {
 async function position(app) {
   let out = '';
   if (process.platform === 'win32') out = await require('./web/pcmedia.js').PcMedia.ask('deckMedia').then((r) => String((r && r.playing && r.playing.position) || ''), () => '');
-  else if (process.platform === 'linux') out = await run('playerctl', ['--player=chromium,chrome,firefox,brave,%any', 'position']);
+  else if (process.platform === 'linux') {
+    const p = await require('./mpris.js').now(/chrom|firefox|brave|vivaldi|opera|edge|librewolf|zen/i); // a browser's first
+    out = p === undefined ? await run('playerctl', ['--player=chromium,chrome,firefox,brave,%any', 'position']) : p && p.position !== null ? String(p.position) : '';
+  }
   else if (process.platform === 'darwin' && /^[A-Za-z0-9.-]{1,200}$/.test(String(app || '')) && !/firefox|librewolf|zen/i.test(app)) {
     out = await run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC, app], 5000);
   }
