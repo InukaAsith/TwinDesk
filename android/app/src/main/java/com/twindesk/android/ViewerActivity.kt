@@ -76,6 +76,7 @@ class ViewerActivity : ComponentActivity() {
             }
         }
         setContent { Theme { Viewer(core, h) { finish() } } }
+        MirrorRail(this).attach() // the side rail: Auto-rotate, Screenshot
     }
 
     override fun onStart() {

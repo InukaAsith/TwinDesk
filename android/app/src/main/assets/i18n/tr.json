@@ -1224,5 +1224,11 @@
   "In Spotify: Share › Copy link, then paste it here.": "Spotify'da: Paylaş › Bağlantıyı kopyala, sonra buraya yapıştırın.",
   "Playlist, album or song": "Çalma listesi, albüm veya şarkı",
   "The phone’s wallpaper shows through the Deck, its tiles and widgets see-through": "Telefonun duvar kağıdı Deck'in arkasında görünür, kutucuklar ve widget'lar yarı saydamdır",
-  "Your wallpaper behind it": "Arkada duvar kağıdınız"
+  "Your wallpaper behind it": "Arkada duvar kağıdınız",
+  "Screenshot (saved in Pictures › TwinDesk)": "Ekran görüntüsü (Resimler › TwinDesk içine kaydedilir)",
+  "Side rail: rotation and screenshot": "Yan çubuk: döndürme ve ekran görüntüsü",
+  "Auto-rotate is on: the screen turns with this phone": "Otomatik döndürme açık: ekran bu telefonla birlikte döner",
+  "Auto-rotate is off: the screen stays as it is": "Otomatik döndürme kapalı: ekran olduğu gibi kalır",
+  "Couldn’t take the screenshot": "Ekran görüntüsü alınamadı",
+  "Screenshot saved in Pictures › TwinDesk": "Ekran görüntüsü Resimler › TwinDesk içine kaydedildi"
 }

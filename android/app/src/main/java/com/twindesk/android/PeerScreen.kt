@@ -856,6 +856,7 @@ class PeerViewActivity : Activity(), SurfaceHolder.Callback {
         frame.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
         frame.addView(label, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         setContentView(frame)
+        MirrorRail(this) { view }.attach() // the side rail: Auto-rotate, Screenshot
         view.holder.addCallback(this)
         val peer = Core.get(this).peer
         if (!peer.connected) { finish(); return }

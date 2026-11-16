@@ -1224,5 +1224,11 @@
   "In Spotify: Share › Copy link, then paste it here.": "В Spotify: «Поделиться › Копировать ссылку», затем вставьте её сюда.",
   "Playlist, album or song": "Плейлист, альбом или песня",
   "The phone’s wallpaper shows through the Deck, its tiles and widgets see-through": "Обои телефона видны сквозь Deck, плитки и виджеты полупрозрачные",
-  "Your wallpaper behind it": "Ваши обои на фоне"
+  "Your wallpaper behind it": "Ваши обои на фоне",
+  "Screenshot (saved in Pictures › TwinDesk)": "Снимок экрана (сохраняется в «Изображения › TwinDesk»)",
+  "Side rail: rotation and screenshot": "Боковая панель: поворот и снимок экрана",
+  "Auto-rotate is on: the screen turns with this phone": "Автоповорот включён: экран поворачивается вместе с телефоном",
+  "Auto-rotate is off: the screen stays as it is": "Автоповорот выключен: экран остаётся как есть",
+  "Couldn’t take the screenshot": "Не удалось сделать снимок экрана",
+  "Screenshot saved in Pictures › TwinDesk": "Снимок экрана сохранён в «Изображения › TwinDesk»"
 }

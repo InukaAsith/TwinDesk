@@ -1224,5 +1224,11 @@
   "In Spotify: Share › Copy link, then paste it here.": "在 Spotify 中：分享 › 复制链接，然后粘贴到这里。",
   "Playlist, album or song": "歌单、专辑或歌曲",
   "The phone’s wallpaper shows through the Deck, its tiles and widgets see-through": "手机壁纸透过 Deck 显示，按钮和小组件半透明",
-  "Your wallpaper behind it": "以你的壁纸为背景"
+  "Your wallpaper behind it": "以你的壁纸为背景",
+  "Screenshot (saved in Pictures › TwinDesk)": "截图（保存在“图片 › TwinDesk”）",
+  "Side rail: rotation and screenshot": "侧边栏：旋转和截图",
+  "Auto-rotate is on: the screen turns with this phone": "自动旋转已开启：画面随这部手机旋转",
+  "Auto-rotate is off: the screen stays as it is": "自动旋转已关闭：画面保持当前方向",
+  "Couldn’t take the screenshot": "无法截图",
+  "Screenshot saved in Pictures › TwinDesk": "截图已保存在“图片 › TwinDesk”"
 }
