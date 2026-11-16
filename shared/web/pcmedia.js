@@ -7,8 +7,9 @@
 //   Apple's own processes), which streams each change and takes the controls. Without it: Music
 //   and Spotify through AppleScript (only when they're running; nothing is launched).
 //   Linux: MPRIS through playerctl, when it's installed.
-//   Windows: the system media session (GlobalSystemMediaTransportControlsSessionManager) through
-//   PowerShell, the player Windows shows in its own volume flyout.
+//   Windows: the system media session (the player Windows shows in its own volume flyout), read by
+//   TwinDesk's own helper (windows-helper/src/DeckMix.cs, deckMedia): no PowerShell or other
+//   program. Windows' main hands it over once (PcMedia.useHelper); without it nothing is read.
 // new PcMedia({key(code)}) — key presses one media key (MediaPlayPause, MediaTrackNext, …).
 // state() → {title, artist, album, playing, app} or {}; art() → a data: URL or ''; do(cmd); active(on).
 // Events: 'change'.
@@ -43,20 +44,6 @@ function run() {
   return JSON.stringify(out[0] || {});
 }`;
 
-const WIN_SCRIPT = `
-$ErrorActionPreference = 'Stop'
-try {
-  Add-Type -AssemblyName System.Runtime.WindowsRuntime
-  $as = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
-  function Await($op, $type) { $t = $as.MakeGenericMethod($type).Invoke($null, @($op)); $t.Wait(-1) | Out-Null; $t.Result }
-  [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
-  $m = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
-  $s = $m.GetCurrentSession()
-  if (-not $s) { '{}'; exit }
-  $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
-  $st = $s.GetPlaybackInfo().PlaybackStatus.ToString()
-  @{ app = $s.SourceAppUserModelId; title = $p.Title; artist = $p.Artist; album = $p.AlbumTitle; playing = ($st -eq 'Playing') } | ConvertTo-Json -Compress
-} catch { '{}' }`;
 
 function readMac() {
   return new Promise((resolve) => execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC_SCRIPT], { timeout: 4000 }, (err, out) => resolve(err ? '{}' : out)));
@@ -72,15 +59,23 @@ function readLinux() {
   }));
 }
 
+let winHelper = null; // (cmd, args) → Promise, from windows/main.js
 function readWin() {
-  return new Promise((resolve) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', WIN_SCRIPT],
-    { timeout: 8000, windowsHide: true }, (err, out) => resolve(err ? '{}' : out)));
+  if (!winHelper) return Promise.resolve('{}');
+  return winHelper('deckMedia', {}).then((r) => {
+    const p = r && r.playing;
+    if (!p || !p.title) return '{}';
+    return JSON.stringify({ app: p.app || '', title: p.title, artist: p.artist || '', album: p.album || '', playing: p.state === 'playing' });
+  }, () => '{}');
 }
 
 const READ = { darwin: readMac, linux: readLinux, win32: readWin };
 const KEYS = { toggle: 'MediaPlayPause', play: 'MediaPlayPause', pause: 'MediaPlayPause', next: 'MediaTrackNext', previous: 'MediaTrackPrevious' };
 
 class PcMedia extends EventEmitter {
+  // Windows: the helper's request(cmd, args), once at startup.
+  static useHelper(fn) { winHelper = typeof fn === 'function' ? fn : null; }
+  static ask(cmd, args = {}) { return winHelper ? winHelper(cmd, args) : Promise.reject(new Error('no helper')); }
   constructor({ key, platform = process.platform } = {}) {
     super();
     this.key = key;

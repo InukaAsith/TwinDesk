@@ -361,7 +361,7 @@ namespace MacShare
                     // The Deck (DeckSys.cs): sound devices, Bluetooth, brightness, windows, lock and sleep, apps
                     case "deckAudio": case "deckAudioDefault": case "deckVolume": case "deckBt": case "deckBtRadio": case "deckBtConnect":
                     case "deckBright": case "deckBrightSet": case "deckWinFront": case "deckMinWins": case "deckWinFrame": case "deckWinOp": case "deckSys":
-                    case "deckState": case "deckApps": case "deckAppOpen":
+                    case "deckState": case "deckApps": case "deckAppOpen": case "deckMix": case "deckMixSet": case "deckMedia": case "deckMediaCtl":
                         {
                             string dc = cmd;
                             Async(c, delegate (Dictionary<string, object> r) { DeckSys.Dispatch(dc, c, r); }, dc == "deckApps" || dc == "deckAppOpen");

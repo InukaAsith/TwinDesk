@@ -333,6 +333,7 @@ function start() {
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
   helper = new Helper();
+  require('../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../shared/edition.js').fullKvm()) require('./fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   screen.helper = helper; // Wi-Fi low-latency mode while a screen is shown (Wlan.cs)
   clip.useHelper(helper); // its "clipboard" event: something was copied

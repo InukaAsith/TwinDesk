@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Where the video playing in a browser here is, for ReZume's video handoff (shared/rezume.js): the
 // other device opens the same video at the same second. From the system's media controls:
-// Windows' media sessions (GlobalSystemMediaTransportControls, through PowerShell), Linux's MPRIS
+// Windows' media session (TwinDesk's helper, deckMedia: no PowerShell), Linux's MPRIS
 // (playerctl). The Mac has no system-wide position an app may read: the browser in front is asked
 // through Apple Events instead (Safari, Chrome, Edge, Brave, Vivaldi, Opera, Arc), which works only
 // where the browser allows JavaScript from Apple Events (its Develop / View › Developer menu); null
@@ -17,14 +17,6 @@ const run = (cmd, args, timeout = 6000) => new Promise((resolve) => {
   execFile(cmd, args, { timeout, windowsHide: true }, (err, out) => resolve(err ? '' : String(out || '').trim()));
 });
 
-const WIN = `
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$await = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
-function Await($op, $t) { $task = $await.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
-[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime] | Out-Null
-$m = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
-$s = $m.GetSessions() | ? { $_.SourceAppUserModelId -match 'chrome|msedge|firefox|brave|opera|vivaldi|arc' } | Select-Object -First 1
-if ($s) { $t = $s.GetTimelineProperties(); $p = $s.GetPlaybackInfo(); $pos = $t.Position.TotalSeconds; if ($p.PlaybackStatus -eq 'Playing') { $pos += ((Get-Date).ToUniversalTime() - $t.LastUpdatedTime.UtcDateTime).TotalSeconds }; [math]::Floor($pos) }`;
 
 // The playing (else the first) video element's time, in the front tab of a Mac browser.
 const MAC_JS = "(function(){var v=[].slice.call(document.querySelectorAll('video'));var p=v.filter(function(x){return !x.paused})[0]||v[0];return p?Math.floor(p.currentTime):''})()";
@@ -40,7 +32,7 @@ function run(argv) {
 
 async function position(app) {
   let out = '';
-  if (process.platform === 'win32') out = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', WIN], 8000);
+  if (process.platform === 'win32') out = await require('./web/pcmedia.js').PcMedia.ask('deckMedia').then((r) => String((r && r.playing && r.playing.position) || ''), () => '');
   else if (process.platform === 'linux') out = await run('playerctl', ['--player=chromium,chrome,firefox,brave,%any', 'position']);
   else if (process.platform === 'darwin' && /^[A-Za-z0-9.-]{1,200}$/.test(String(app || '')) && !/firefox|librewolf|zen/i.test(app)) {
     out = await run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', MAC, app], 5000);

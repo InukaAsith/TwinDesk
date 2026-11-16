@@ -13,6 +13,7 @@
 //     deckWinOp {wid, op: min|max|close|restore}
 //   deckSys {what: lock|sleep|screenoff|darkmode|dnd, on?}
 //   deckApps -> {apps: [{id, name}]}: the Start menu's apps; deckAppOpen {id}: opened by the shell
+//   deckMix, deckMixSet, deckMedia, deckMediaCtl: each app's volume and the media session (DeckMix.cs)
 // C# 5 (build.cmd).
 using System;
 using System.Collections.Generic;
@@ -595,7 +596,7 @@ namespace MacShare
                 case "deckState": foreach (KeyValuePair<string, object> kv in State()) r[kv.Key] = kv.Value; break;
                 case "deckApps": r["apps"] = Apps(); break;
                 case "deckAppOpen": AppOpen(Json.Str(c, "dev", "")); break;
-                default: throw new Exception("unknown");
+                default: if (!DeckMix.Dispatch(cmd, c, r)) throw new Exception("unknown"); break; // the mixer and media (DeckMix.cs)
             }
         }
     }
