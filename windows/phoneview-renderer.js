@@ -89,11 +89,20 @@
       },
       error: (e) => {
         console.warn('decoder', e.message);
+        // The GPU's decoder refused this stream (some drivers, a high H.264 level): the window waited
+        // for the picture for good (#233), as a closed decoder takes nothing more. Software from then on.
+        if (hwDecode) {
+          hwDecode = false;
+          console.warn('decoder: trying software decoding');
+          setTimeout(() => { makeDecoder(codec); waitingKey = true; needKey(); }, 0);
+          return;
+        }
         needKey();
       },
     });
-    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: 'prefer-hardware' });
+    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: hwDecode ? 'prefer-hardware' : 'prefer-software' });
   }
+  let hwDecode = true;
 
   api.on('video', (p) => {
     const data = p.data instanceof Uint8Array ? p.data : new Uint8Array(p.data);

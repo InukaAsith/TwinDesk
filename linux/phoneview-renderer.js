@@ -89,12 +89,21 @@
       },
       error: (e) => {
         console.warn('decoder', e.message);
+        // A decoder that failed (a broken VA-API driver, a high H.264 level) takes nothing more: the
+        // window waited for the picture for good (#233). Software from then on.
+        if (hwDecode) {
+          hwDecode = false;
+          console.warn('decoder: trying software decoding');
+          setTimeout(() => { makeDecoder(codec); waitingKey = true; needKey(); }, 0);
+          return;
+        }
         needKey();
       },
     });
     // No preference: many Linux setups have no hardware H.264 decoding (VA-API) for Chromium.
-    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: 'no-preference' });
+    decoder.configure({ codec, optimizeForLatency: true, hardwareAcceleration: hwDecode ? 'no-preference' : 'prefer-software' });
   }
+  let hwDecode = true;
 
   api.on('video', (p) => {
     const data = p.data instanceof Uint8Array ? p.data : new Uint8Array(p.data);
