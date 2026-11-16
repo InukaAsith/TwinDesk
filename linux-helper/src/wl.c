@@ -276,14 +276,55 @@ static void grab_all(int on) {
 
 // ---- injection ----
 
-static void abs_to(double x, double y) {
-  int bx, by, bw, bh;
-  screens_box(&bx, &by, &bw, &bh);
+static void abs_in(double x, double y, int bx, int by, int bw, int bh) {
   int ax = (int)lround((x - bx) * ABS_MAXV / (bw > 1 ? bw - 1 : 1));
   int ay = (int)lround((y - by) * ABS_MAXV / (bh > 1 ? bh - 1 : 1));
   uemit(uabs, EV_ABS, ABS_X, ax < 0 ? 0 : ax > ABS_MAXV ? ABS_MAXV : ax);
   uemit(uabs, EV_ABS, ABS_Y, ay < 0 ? 0 : ay > ABS_MAXV ? ABS_MAXV : ay);
   usyn(uabs);
+}
+
+// Where an absolute pointer's 0..65535 lands. Most compositors spread it over all the monitors (the
+// box around them). COSMIC (#244) puts it on the monitor the cursor is on now, so the box's far side
+// meant that monitor's edge and the next monitor was never reached. There the position is told
+// within the cursor's monitor, and going to another one is first a step across their border with
+// the relative device (a relative move lands on whichever monitor it reaches, as a mouse's does),
+// then the place on the new one. TWINDESK_POINTER=output|box sets it on any desktop.
+static int per_output = -1;
+static double lastX = -1, lastY = -1; // where the last move put the cursor
+
+static int abs_per_output(void) {
+  if (per_output < 0) {
+    const char *e = getenv("TWINDESK_POINTER");
+    const char *d = getenv("XDG_CURRENT_DESKTOP");
+    per_output = e && *e ? !strcmp(e, "output") : (d && (strstr(d, "COSMIC") || strstr(d, "cosmic")));
+    if (per_output) fprintf(stderr, "[wl] pointer: placed within the cursor's monitor (%s)\n", e && *e ? "TWINDESK_POINTER" : "COSMIC");
+  }
+  return per_output;
+}
+
+static void abs_to(double x, double y) {
+  int mx, my, mw, mh, ox, oy, ow, oh;
+  if (abs_per_output() && screens_monitor((int)x, (int)y, &mx, &my, &mw, &mh)) {
+    if (lastX >= 0 && screens_monitor((int)lastX, (int)lastY, &ox, &oy, &ow, &oh) && (ox != mx || oy != my || ow != mw || oh != mh)) {
+      // To this monitor's side that faces the target, then across it.
+      double ex = x < ox ? ox : x > ox + ow - 1 ? ox + ow - 1 : x;
+      double ey = y < oy ? oy : y > oy + oh - 1 ? oy + oh - 1 : y;
+      abs_in(ex, ey, ox, oy, ow, oh);
+      int sx = x < ox ? -8 : x > ox + ow - 1 ? 8 : 0;
+      int sy = y < oy ? -8 : y > oy + oh - 1 ? 8 : 0;
+      if (sx) uemit(urel, EV_REL, REL_X, sx);
+      if (sy) uemit(urel, EV_REL, REL_Y, sy);
+      usyn(urel);
+    }
+    abs_in(x, y, mx, my, mw, mh);
+  } else {
+    int bx, by, bw, bh;
+    screens_box(&bx, &by, &bw, &bh);
+    abs_in(x, y, bx, by, bw, bh);
+  }
+  lastX = x;
+  lastY = y;
 }
 
 void wl_move_to(int x, int y) {
