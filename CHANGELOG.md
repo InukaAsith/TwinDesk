@@ -56,6 +56,7 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   its app (a video in full screen), the phone's screen with the phone; switch it off to keep the
   window's shape. On Android, the computer's screen and another phone's screen get a side rail too
   (a tab at the right edge): Auto-rotate and Screenshot.
+- **iPhone and iPad:** the computer's screen gets Auto-rotate and Screenshot (into Photos) in its bar.
 
 - **Cursor portals** (Mac): a stretch of one display's edge leads to a chosen stretch of the other
   computer's screen, and the pointer comes back through it (#177 by [@pengusto](https://github.com/pengusto)).
@@ -91,6 +92,13 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Android clipboard:** on a phone whose copies didn't reach the computer in the background
   (Android 17), they do now (#257). A Pixel on the USB cable is no longer asked again and again to
   turn on wireless debugging (#239).
+- **Phone windows** no longer wait for the picture for good when the computer's video decoder fails
+  on the phone's stream: they switch to software decoding (#233).
+- **Several phones on adb:** one phone's address no longer matches another's that starts the same
+  (192.168.8.17 and 192.168.8.175), so screens, apps and the camera come from the right phone (#239).
+- **The log** can't fill the disk: a line repeated in a loop is written once and counted, and a
+  packaged Linux app started from the menu no longer copies everything to the desktop's own log (#239).
+- **Linux on Wayland** (Hyprland, niri): the log says why a push against the screen's edge didn't cross (#237).
 - **Windows:** a key held while the pointer comes home no longer stays down (#248); the pointer
   coming home always gets its cursors back (#238).
 - **Android 15 and later:** one-time codes reach Copy code (the phone setup over wireless debugging
