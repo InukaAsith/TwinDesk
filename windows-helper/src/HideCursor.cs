@@ -115,7 +115,8 @@ namespace MacShare
         {
             bool was = hidden;
             hidden = false;
-            if (was) Restore(); else Recover(); // not hidden here: reloaded only if the arrow is blank
+            // Hidden here, or a restore still pending: the scheme reloaded. Not hidden by this process: only if the arrow is blank.
+            if (was || restorePending || saved.Count != 0) Restore(); else Recover();
             again = 2;
             againAt = Environment.TickCount + 400;
             Console.Error.WriteLine("[cursor] " + (restorePending ? "restore failed, trying again" : "restored") + (was ? "" : " (it wasn't hidden here)"));
