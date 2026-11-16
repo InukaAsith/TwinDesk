@@ -27,9 +27,15 @@ class TwinService : Service() {
         } catch (e: Exception) {
             Log.w("TwinDesk", "foreground service: ${e.message}")
         }
+        // Closed (Exit, or for a banking app) and Android started the service again by itself:
+        // no "Ready to connect", it stops at once. Opening TwinDesk (Core.wake) clears this.
+        if (closed(core)) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    private fun closed(core: Core) = core.store.flag("exited", false) || core.bank.pending
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int =
+        if (closed(Core.get(this))) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(startId); START_NOT_STICKY } else START_STICKY
 
     // Swiped away from Recents with General › Run in the background off: TwinDesk stops, as Exit does.
     override fun onTaskRemoved(rootIntent: Intent?) {

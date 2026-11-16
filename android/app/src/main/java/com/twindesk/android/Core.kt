@@ -596,6 +596,6 @@ class Core private constructor(val ctx: Context) : Link.Events {
             instance ?: Core(ctx.applicationContext).also { instance = it; it.start() }
         }
 
-        fun wake(ctx: Context): Core = get(ctx).also { it.store.setFlag("exited", false); it.start() }
+        fun wake(ctx: Context): Core = get(ctx).also { it.store.setFlag("exited", false); it.bank.opened(); it.start() } // opened: what a banking app had switched off comes back first
     }
 }
