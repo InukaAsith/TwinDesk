@@ -43,6 +43,7 @@ namespace MacShare
         Point arrivedAt; // where Stop put the pointer (the guard's reference)
         public bool HoldReturn; // DropEdge.cs is catching a file drag on the way back: it goes home with it
         readonly HashSet<uint> heldVks = new HashSet<uint>(), swallowVks = new HashSet<uint>();
+        readonly Dictionary<uint, uint> swallowSeen = new Dictionary<uint, uint>(); // swallowVks: when each was last seen (#248)
         readonly HashSet<int> heldButtons = new HashSet<int>(), swallowButtons = new HashSet<int>();
         DateTime lastCmd = DateTime.UtcNow;
         // Driven (armReturn on): the first input from this PC's own mouse or touchpad takes the PC back
@@ -280,7 +281,8 @@ namespace MacShare
             capturing = false;
             CrossingReset();
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
-            foreach (uint vk in heldVks) swallowVks.Add(vk);
+            uint stopAt = unchecked((uint)Environment.TickCount);
+            foreach (uint vk in heldVks) { swallowVks.Add(vk); swallowSeen[vk] = stopAt; }
             foreach (int b in heldButtons) swallowButtons.Add(b);
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear(); // a sent hotkey's release is in swallowVks (heldVks) now
@@ -571,7 +573,16 @@ namespace MacShare
             if (emergencyVks.Contains(k.vkCode)) { if (!down) emergencyVks.Remove(k.vkCode); return (IntPtr)1; } // the emergency key's repeats and release
             bool hotkey = !fakeCtrl && DetectHotkey(k.vkCode, down);
 
-            if (!down && swallowVks.Remove(k.vkCode)) return (IntPtr)1;
+            // Still held from over there (#248): its auto-repeat presses stay here too, or Windows would
+            // have the key down and never see it come up (its release is swallowed). A press after 1.5 s
+            // with nothing in between is a new one (the release got lost): that one goes through.
+            if (down && swallowVks.Contains(k.vkCode))
+            {
+                uint now = unchecked((uint)Environment.TickCount), last;
+                if (!swallowSeen.TryGetValue(k.vkCode, out last) || unchecked(now - last) < 1500) { swallowSeen[k.vkCode] = now; return (IntPtr)1; }
+                swallowVks.Remove(k.vkCode); swallowSeen.Remove(k.vkCode);
+            }
+            if (!down && swallowVks.Remove(k.vkCode)) { swallowSeen.Remove(k.vkCode); return (IntPtr)1; }
             // The Ctrl Windows injects for a touchpad pinch (Ctrl+wheel) stays here.
             bool ctrl = k.vkCode == 0xA2 || k.vkCode == 0xA3 || k.vkCode == 0x11;
             if (ctrl && !down && padCtrl.Remove(k.vkCode)) return (IntPtr)1;

@@ -92,7 +92,8 @@ namespace MacShare
             capturing = false;
             CrossingReset();
             // Rule 5: whatever is still held was pressed remotely; its release stays swallowed here.
-            foreach (uint vk in heldVks) swallowVks.Add(vk);
+            uint stopAt = unchecked((uint)Environment.TickCount);
+            foreach (uint vk in heldVks) { swallowVks.Add(vk); swallowSeen[vk] = stopAt; }
             foreach (int b in heldButtons) swallowButtons.Add(b);
             heldVks.Clear(); heldButtons.Clear();
             hkPending = 0; hkRemote.Clear(); // a sent hotkey's release is in swallowVks (heldVks) now
