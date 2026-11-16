@@ -52,6 +52,7 @@ UI.tab({
     const blePcRow = UI.row(t('Bluetooth with computers'), '', [blePcSw]);
     // Bluetooth off altogether while the session is on the same Wi-Fi (blepolicy.js wifiQuiet).
     // Tailscale (#161, shared/tailnet.js): reaching a paired device away from its network.
+    const relayCard = UI.relayCard ? UI.relayCard() : null; // General › Your own relay
     const tailSw = UI.switch((v) => api.setNet({ tailscale: v }), { label: t('Connect through Tailscale') });
     const tailRow = UI.row(t('Connect through Tailscale'), '', [tailSw]);
     const tailHere = UI.row(t('This computer on Tailscale'), '', []);
@@ -129,6 +130,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, keepRow]),
       UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
+      relayCard ? relayCard.el : null, // your own relay (shared/ui-relay.js)
       UI.card(t('This computer'), [deviceRow, sessRow, inRow, helperRow]),
       UI.card(t('Connections'), [pingRow, apiRow]),
       ...(modules.card ? [modules.card] : []),
@@ -221,6 +223,7 @@ UI.tab({
       tailSw.set(n.tailscale !== false);
       tailRow.setHint(n.tailscale === false ? t('Off: only this network, Bluetooth and the cable') : t('When the other device isn’t on this network, TwinDesk tries its Tailscale address'));
       tailHere.setHint((n.tailnet || []).length ? n.tailnet.join(' · ') : t('Not on Tailscale now'));
+      if (relayCard) relayCard.update(n.relay);
       bleWifiRow.setHint(n.bleWifiOff === false ? t('Bluetooth stays on beside the Wi-Fi, the way back if it drops')
         : n.bleOff ? t('Off now: the session is on the same Wi-Fi. Bluetooth comes back when it ends')
           : t('On the same Wi-Fi network (not Wi-Fi Direct), Bluetooth goes off until the session ends. With a computer, phones can’t find this one meanwhile'));

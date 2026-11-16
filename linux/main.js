@@ -494,6 +494,7 @@ async function startHost(guest, tries = 0) {
     pairing.on('request', showMain); // a code to compare: bring the window up
     link.attachHost(server, pairing);
     hostServer = server;
+    applyNet(); // your own relay, now that there's a server to hand its connections to
     bleHost = new BleHost({
       helper, server,
       info: () => ({ id: device.id, name: device.name.slice(0, 40), os: P.OS.LINUX, port: server.port, fp: id.fp }),
@@ -1083,6 +1084,8 @@ function lookForPhones() {
 
 // Bluetooth on or off (General), or the helper restarted.
 function applyNet() {
+  // Your own relay (shared/relay.js): started, changed or stopped with its setting.
+  if (hostServer) require('../shared/relay.js').apply({ server: hostServer, fp: discovery && discovery.self && discovery.self.fp, relay: settings.net.relay, onState: () => pushState() });
   applyBle();
   pushState();
 }
@@ -1351,7 +1354,7 @@ function buildState() {
     drive: drive ? drive.view() : { on: false, folder: settings.drive.folder || path.join(os.homedir(), 'TwinDesk Drive'), custom: !!settings.drive.folder },
     // Calls, Messages and Photos: the settings alone until the hub is loaded (setupHub).
     hub: hub ? hub.view : { ...settings.hub, connected: false },
-    net: { ...(net ? net.view : {}), ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },
+    net: { ...(net ? net.view : {}), relay: { ...require('../shared/relay.js').clean(settings.net.relay), ...require('../shared/relay.js').view() }, ...hotspotView(), side: wifi ? wifi.side : null, location: false, ble: settings.net.ble, blePc: settings.net.blePc, bleWifiOff: settings.net.bleWifiOff, bleOff, radio: bleHost ? bleHost.radio : bleGuest ? bleGuest.state : 'off', transport: link.current ? link.current.transport : '', lan: lanType(link.current && link.current.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true },
   };
 }
 

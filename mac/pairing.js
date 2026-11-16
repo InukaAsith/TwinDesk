@@ -265,6 +265,7 @@ class Pairing extends EventEmitter {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.macId, macName: this.id.macName, os: P.OS.MAC,
       rc: 1, // this single-session Mac accepts a paired Android's non-takeover return
       tail: require('../shared/tailnet.js').mine(), // its Tailscale addresses, for reconnecting away from this network (#161)
+      relay: require('../shared/relay.js').welcome() || null, // your own relay (shared/relay.js), for reconnecting away from this network; null: none
     }, gate);
     this.emit('change');
   }

@@ -493,7 +493,9 @@ function setupIpc(ctx) {
       if (typeof partial.bleWifiOff === 'boolean') settings.net.bleWifiOff = partial.bleWifiOff; // blepolicy.js wifiQuiet
       if (typeof partial.tailscale === 'boolean') settings.net.tailscale = partial.tailscale; // shared/tailnet.js
       if (typeof partial.bleInput === 'boolean') settings.net.bleInput = partial.bleInput; // shared/bleinput.js
+      if (partial.relay !== undefined) settings.net.relay = require('../shared/relay.js').clean(partial.relay); // your own relay
       save();
+      if (partial.relay !== undefined && ctx.applyRelay) ctx.applyRelay();
       ctx.ble.apply();
       if (partial.blePc === false && ctx.bleLook) ctx.bleLook.look(false); // computers off: stop looking now, not at the next tick
       pushState();

@@ -307,9 +307,25 @@ class Core private constructor(val ctx: Context) : Link.Events {
                 return
             }
         }
+        // Not seen here either way: every other Connect through the computer's own relay, if it has one.
+        val r = h.relay
+        if (seen == null && r != null) {
+            relayTurn = !relayTurn
+            if (relayTurn) {
+                bg.execute {
+                    val port = Relay.open(r)
+                    if (port != null) {
+                        Log.i("TwinDesk", "${h.name} isn’t on this network: through its relay")
+                        link.connect(h.copy(address = "127.0.0.1", port = port))
+                    } else link.connect(h)
+                }
+                return
+            }
+        }
         link.connect(h)
     }
     @Volatile private var tailTurn = false
+    @Volatile private var relayTurn = false
 
     // A PC opened a pipe on its own (its Pair or Connect, an invite): a paired one connects through
     // it now, an unpaired one is shown as an invite (Pair asks it for a pipe again).

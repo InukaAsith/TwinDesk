@@ -216,7 +216,7 @@ function pushState() {
     state.client = c ? { id: c.deviceId, name: c.name, os: c.os, role: c.role, address: c.address, rttMs: c.rttMs, transport: c.transport || 'ip' } : null;
     if (svc && svc.net) {
       const hs = c && settings.net.hotspots[c.deviceId];
-      state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass), lan: lanType(c && c.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true };
+      state.net = { ...svc.net.view, ble: settings.net.ble !== false, blePc: settings.net.blePc === true, bleWifiOff: settings.net.bleWifiOff !== false, bleOff, radio: svc.ble.state, hotspotSsid: hs ? hs.ssid : '', hotspotSaved: !!(hs && hs.pass), lan: lanType(c && c.address), tailscale: settings.net.tailscale !== false, tailnet: require('../shared/tailnet.js').mine(), bleInput: settings.net.bleInput === true, relay: { ...require('../shared/relay.js').clean(settings.net.relay), ...require('../shared/relay.js').view() } };
     }
     const { helper, displays, stream, clipboard: clip, kvm } = svc || {};
     state.helper.running = !!(helper && helper.running);
@@ -622,6 +622,7 @@ app.whenReady().then(() => {
 
   server = new Server(id, { hold: true }); // listens once the helper's input lane is settled (afterLane below)
   server.on('listening', () => console.log(`[server] listening on 0.0.0.0:${server.port}`));
+  applyRelay();
   server.on('listenError', (err) => {
     state.serverError = `Cannot listen on port ${P.PORT}: ${err.code || err.message}`;
     console.error(`[server] ${state.serverError}`);
@@ -1089,7 +1090,7 @@ app.whenReady().then(() => {
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
   setupWeb();
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates, applyRelay });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   hud.keep = () => !!peer.current; // the popup's window lives while a session is on (mac/hud.js)
@@ -1554,3 +1555,9 @@ app.on('before-quit', () => {
   if (link) link.stop();
   if (server) server.close();
 });
+
+// Your own relay (General › Your own relay, shared/relay.js): started, changed or stopped with its setting.
+function applyRelay() {
+  if (!server || !state.fp) return;
+  require('../shared/relay.js').apply({ server, fp: state.fp, relay: settings.net && settings.net.relay, onState: () => pushState() });
+}

@@ -579,8 +579,11 @@ class Link(
         reclaimHello = false
         m.optString("macName").takeIf { it.isNotEmpty() }?.let { h.name = it.take(64) }
         if (m.has("tail")) h.tail = Tailnet.clean(m.optJSONArray("tail")) // its Tailscale addresses (Tailnet.kt)
+        if (m.has("relay")) h.relay = RelayInfo.from(m.optJSONObject("relay")) // its own relay, or none now (Relay.kt)
         h.lastSeen = System.currentTimeMillis()
-        store.putHost(h, hostsKey)
+        // Through the relay: this attempt's address is the local pipe, never the computer's to keep.
+        val kept = if (h.address == "127.0.0.1" && h.port in Relay.ports) store.hosts().find { it.id == h.id } else null
+        store.putHost(if (kept != null) h.copy(address = kept.address, port = kept.port) else h, hostsKey)
         rttMs = null
         resumeKey = m.optString("resume")
         fxToken = m.optString("fx").takeIf { Regex("^[0-9a-f]{32}$").matches(it) } ?: ""
