@@ -114,7 +114,7 @@ object Search {
     fun items(pages: List<Pair<String, String>>): List<Item> {
         val names = pages.toMap()
         return pages.map { (id, en) -> Item(en, tr(en), id, id, "", "", true) } +
-            SearchIndex.ENTRIES.filter { it.page in names }.map { Item(it.en, it.title(), it.k, it.page, it.dir, tr(names[it.page] ?: ""), false) }
+            (SearchIndex.ENTRIES + SearchIndex.SETTINGS).filter { it.page in names }.map { Item(it.en, it.title(), it.k, it.page, it.dir, tr(names[it.page] ?: ""), false) }
     }
 }
 

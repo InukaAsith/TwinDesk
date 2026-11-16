@@ -21,7 +21,32 @@
     }
     const pages = Object.entries(names).map(([id, name]) => ({ t: name, k: id, id, isPage: true }));
     const feats = S.forApp(app).filter((e) => ids.has(e.id)).map((e) => ({ ...e, pageTitle: names[e.id] || '' }));
-    return pages.concat(feats);
+    return pages.concat(feats, settings(names));
+  }
+
+  // Every setting on the pages in this window: each row's name (as shown, in this language), its
+  // hint as the words to find it by. Read from the pages only when search opens, nothing kept.
+  // Rows that are data (a file, a device: data-literal) or hidden under a switch that's off aren't.
+  function settings(names) {
+    const out = [];
+    const seen = new Set();
+    for (const [id, pageTitle] of Object.entries(names)) {
+      const page = document.getElementById('page-' + id);
+      if (!page) continue;
+      for (const row of page.querySelectorAll('.row')) {
+        if (row.dataset.literal !== undefined) continue;
+        let hidden = false;
+        for (let n = row; n && n !== page; n = n.parentElement) if (n.hidden) { hidden = true; break; }
+        if (hidden) continue;
+        const l = row.querySelector(':scope > .text > .label');
+        const label = l && l.textContent.trim();
+        if (!label || label.length > 80 || seen.has(id + '\n' + label)) continue;
+        seen.add(id + '\n' + label);
+        const h = row.querySelector(':scope > .text > .hint');
+        out.push({ t: label, k: h && !h.hidden ? h.textContent : '', id, row, pageTitle, isSetting: true });
+      }
+    }
+    return out;
   }
 
   let open = null;
@@ -34,15 +59,25 @@
     const empty = el('p', { class: 'hint search-empty', text: t('Try “share pc audio to phone”, “dark mode” or “send a file”') });
     let found = [];
     let at = 0;
-    const pick = (e) => { close(); UI.go(e.id); };
+    const pick = (e) => {
+      close();
+      UI.go(e.id);
+      // A setting: scrolled to and lit up for a moment.
+      if (e.row) setTimeout(() => {
+        e.row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        e.row.classList.add('search-hit');
+        setTimeout(() => e.row.classList.remove('search-hit'), 1600);
+      }, 60);
+    };
+    const own = (e) => e.isPage || e.isSetting; // already as shown, not a key to translate
     const mark = () => [...list.children].forEach((li, i) => { li.classList.toggle('on', i === at); if (i === at) li.scrollIntoView({ block: 'nearest' }); });
     const draw = () => {
       const q = input.value.trim();
-      found = q ? S.match(q, all, (e) => t(e.t)).slice(0, 12) : [];
+      found = q ? S.match(q, all, (e) => (own(e) ? e.t : t(e.t))).slice(0, 12) : [];
       at = 0;
       list.replaceChildren(...found.map((e, i) => {
         const li = el('li', { class: 'search-item', attrs: { role: 'option' } }, [
-          el('span', { class: 'search-title', text: e.isPage ? e.t : t(e.t), attrs: { 'data-literal': '' } }),
+          el('span', { class: 'search-title', text: own(e) ? e.t : t(e.t), attrs: { 'data-literal': '' } }),
           el('span', { class: 'search-where', text: e.isPage ? t('Page') : e.pageTitle, attrs: { 'data-literal': '' } }),
         ]);
         li.onmousemove = () => { if (at !== i) { at = i; mark(); } };

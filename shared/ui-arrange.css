@@ -156,3 +156,8 @@
 }
 .search-row { display: flex; justify-content: flex-end; margin: 0 0 12px; }
 .search-row .search-pill { margin-top: 0; }
+
+/* Search › a setting: the row it opened, lit up for a moment (ui-search.js). */
+.row.search-hit { animation: search-hit 1.6s ease-out; border-radius: 8px; }
+@keyframes search-hit { 0%, 40% { background: color-mix(in srgb, var(--accent, #0a84ff) 22%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .row.search-hit { animation: none; outline: 2px solid var(--accent, #0a84ff); } }

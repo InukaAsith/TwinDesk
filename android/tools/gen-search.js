@@ -13,6 +13,82 @@ const OUT = path.join(__dirname, '..', 'app', 'src', 'main', 'java', 'com', 'twi
 const q = (s) => JSON.stringify(String(s)).replace(/\$/g, '\\$');
 const set = (a) => `setOf(${a.map(q).join(', ')})`;
 
+// Every setting on the phone's pages: the cards' titles and their rows' names, found in the app's
+// own code. Each page's composable (MainActivity's `Tab.X -> XPage(...)`) and the composables it
+// calls, and theirs, are followed, so a row is listed under the page it shows on (the first, if
+// more than one). A name with a {placeholder} (a device's, an app's) isn't a setting to look for.
+const SRC = path.join(__dirname, '..', 'app', 'src', 'main', 'java', 'com', 'twindesk', 'android');
+
+function skipString(code, i) {
+  if (code.startsWith('"""', i)) return code.indexOf('"""', i + 3) + 2;
+  for (i++; i < code.length; i++) {
+    if (code[i] === '\\') i++;
+    else if (code[i] === '"') return i;
+  }
+  return i;
+}
+
+// Kotlin's functions and their bodies (braces matched outside strings and comments).
+function functions(code) {
+  const out = {};
+  const re = /\bfun\s+(?:[A-Za-z_.<>]+\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+  let m;
+  while ((m = re.exec(code))) {
+    let i = m.index + m[0].length;
+    let depth = 1; // the parameter list
+    for (; i < code.length && depth; i++) {
+      const c = code[i];
+      if (c === '(') depth++;
+      else if (c === ')') depth--;
+      else if (c === '"') i = skipString(code, i);
+    }
+    while (i < code.length && code[i] !== '{' && code[i] !== '=' && code[i] !== '\n') i++;
+    if (code[i] !== '{') continue;
+    const start = i;
+    depth = 0;
+    for (; i < code.length; i++) {
+      const c = code[i];
+      if (c === '"') { i = skipString(code, i); continue; }
+      if (c === '/' && code[i + 1] === '/') { i = code.indexOf('\n', i); if (i < 0) i = code.length; continue; }
+      if (c === '/' && code[i + 1] === '*') { i = code.indexOf('*/', i) + 1; continue; }
+      if (c === '{') depth++;
+      else if (c === '}' && !--depth) break;
+    }
+    if (!out[m[1]]) out[m[1]] = code.slice(start, i + 1);
+  }
+  return out;
+}
+
+function settings(already) {
+  const files = fs.readdirSync(SRC).filter((f) => f.endsWith('.kt') && f !== 'SearchIndex.kt').sort();
+  const code = files.map((f) => fs.readFileSync(path.join(SRC, f), 'utf8')).join('\n');
+  const fns = functions(code);
+  const roots = [...code.matchAll(/Tab\.([A-Za-z]+)\s*->\s*([A-Z][A-Za-z0-9]*)\(/g)].map((m) => [m[1], m[2]]);
+  const seen = new Set(already);
+  const out = [];
+  const label = /\b(MacCard|SwitchRow|MacRow)\(\s*tr\("((?:[^"\\]|\\.)*)"/g;
+  for (const [page, root] of roots) {
+    const visited = new Set();
+    const queue = [root];
+    while (queue.length) {
+      const f = queue.shift();
+      if (visited.has(f) || !fns[f]) continue;
+      visited.add(f);
+      const body = fns[f];
+      let card = '';
+      for (const m of body.matchAll(label)) {
+        const t = JSON.parse('"' + m[2] + '"');
+        if (m[1] === 'MacCard') card = t;
+        if (t.includes('{') || t.length > 80 || seen.has(t)) continue;
+        seen.add(t);
+        out.push({ t, page, card: m[1] === 'MacCard' ? '' : card });
+      }
+      for (const c of body.matchAll(/\b([A-Z][A-Za-z0-9]*)\(/g)) if (fns[c[1]] && !visited.has(c[1])) queue.push(c[1]);
+    }
+  }
+  return out;
+}
+
 function make() {
   const L = [];
   L.push('// TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.');
@@ -25,6 +101,11 @@ function make() {
   L.push('');
   L.push('    val ENTRIES = listOf(');
   for (const e of S.forApp('android')) L.push(`        Entry(${q(e.t)}, { tr(${q(e.t)}) }, ${q(e.k)}, ${q(e.id)}, ${q(e.dir || '')}),`);
+  L.push('    )');
+  L.push('');
+  L.push('    // Each setting on the pages (found in the app’s own code), after the entries above.');
+  L.push('    val SETTINGS = listOf(');
+  for (const e of settings(S.forApp('android').map((x) => x.t))) L.push(`        Entry(${q(e.t)}, { tr(${q(e.t)}) }, ${q(e.card)}, ${q(e.page)}, ""),`);
   L.push('    )');
   L.push('');
   const syn = Object.entries(S.SYN);
