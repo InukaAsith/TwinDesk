@@ -121,7 +121,8 @@ class BleHost extends EventEmitter {
         // register advertisement") isn't for good: start again in 10 s, 30 s, … up to 5 min. Not with the
         // radio off or missing (its own state change brings the next apply) or once stopped meanwhile.
         if (/stopped|Bluetooth is off|no Bluetooth/.test(e.message) || this.applied !== key) return;
-        const wait = Math.min(300000, 10000 * 3 ** Math.min(4, this.fails = (this.fails || 0) + 1));
+        this.fails = (this.fails || 0) + 1;
+        const wait = Math.min(300000, 10000 * 3 ** Math.min(4, this.fails - 1));
         this.retry = setTimeout(() => { if (this.applied === key) { this.applied = null; this.apply(); } }, wait);
         if (this.retry.unref) this.retry.unref();
       });
