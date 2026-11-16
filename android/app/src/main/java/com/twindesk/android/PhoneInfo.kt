@@ -269,6 +269,7 @@ class Adb(core: Core) : Feature(core) {
 
     val devOptions get() = Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
     // Wireless debugging only runs while USB debugging is on, and MIUI switches that off too.
+    private val usbReach get() = core.link.wired && Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1
     val wifiDebugging get() = Settings.Global.getInt(cr, Settings.Global.ADB_ENABLED, 0) == 1 && Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1
     val canEnable get() = core.ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED
     val isHotspotActive get(): Boolean = runCatching {
@@ -351,7 +352,10 @@ class Adb(core: Core) : Feature(core) {
     fun check(tries: Int = 3) {
         main.removeCallbacksAndMessages(null)
         trying = false
-        if (!core.link.connected || wifiDebugging || !onWifiNetwork || !needed) return settle(false) // not used there: nothing to ask
+        // Not asked either while the computer reaches adb anyway (#239: a Pixel on the USB cable, its
+        // wireless debugging off, was asked again and again): paired is its adb answering now, and
+        // on the cable with USB debugging on, that's the way it goes.
+        if (!core.link.connected || wifiDebugging || !onWifiNetwork || !needed || paired || usbReach) return settle(false) // not used there: nothing to ask
         if (!unlocked) return
         trying = enable(true)
         main.postDelayed({
