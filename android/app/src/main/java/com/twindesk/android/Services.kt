@@ -109,8 +109,6 @@ class ActionReceiver : BroadcastReceiver() {
             RING_PC -> core.dev.ask("ring")
             FILES_CANCEL -> core.files.cancel(arg) // a transfer's notification: Cancel
             FILES_PAUSE -> core.files.pause(arg) // … Pause (Send files): the rest waits on the Files page
-            BANK_CHECK -> core.bank.backCheck() // BankGuard's alarm: has the banking app been left?
-            BANK_BACK -> core.bank.restore() // BankGuard's notification: Turn back on
             LOCK_PC -> core.dev.ask("lock")
             PAIR_CODE -> {
                 val code = android.app.RemoteInput.getResultsFromIntent(intent)?.getCharSequence("code")?.toString() ?: ""
@@ -136,8 +134,6 @@ class ActionReceiver : BroadcastReceiver() {
         const val LOCK_PC = "com.twindesk.android.LOCK_PC"
         const val FILES_CANCEL = "com.twindesk.android.FILES_CANCEL"
         const val FILES_PAUSE = "com.twindesk.android.FILES_PAUSE"
-        const val BANK_CHECK = "com.twindesk.android.BANK_CHECK"
-        const val BANK_BACK = "com.twindesk.android.BANK_BACK"
     }
 }
 
@@ -149,6 +145,7 @@ class WiredReceiver : BroadcastReceiver() {
         val port = intent.getIntExtra("port", 0)
         if (port <= 0 || port > 65535) return
         if (!Core.get(ctx).background && !MainActivity.shown) return // Run in the background off: only while the app is open
+        if (Core.get(ctx).bank.pending) return // closed for a banking app: only opening TwinDesk brings it back
         runCatching { TwinService.start(ctx) }
         Core.get(ctx).connectWired(id, port, intent.getStringExtra("nonce") ?: "", intent.getStringExtra("name")?.take(64) ?: "")
     }
@@ -158,6 +155,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         // General › Run in the background off: only when the app is opened.
         if (!Core.get(ctx).background) return
+        if (Core.get(ctx).bank.pending) return // closed for a banking app: only opening TwinDesk brings it back
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) TwinService.start(ctx)
     }
 }

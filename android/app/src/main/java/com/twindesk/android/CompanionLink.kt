@@ -131,7 +131,7 @@ object CompanionLink {
         if (now - lastNear < 30_000) return // one appearance, several callbacks
         lastNear = now
         val core = Core.get(ctx)
-        if (!core.background) return
+        if (!core.background || core.bank.pending || core.store.flag("exited", false)) return // closed (Exit, a banking app): stays closed
         Log.i("TwinDesk", "companion: the linked computer is near")
         TwinService.start(ctx)
         core.bg.execute { core.near() }
