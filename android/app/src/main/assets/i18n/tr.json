@@ -1202,7 +1202,7 @@
   "Your launcher doesn’t take shortcuts": "Başlatıcınız kısayolları desteklemiyor",
   "{app} with banking pause": "Bankacılık duraklatmasıyla {app}",
   "Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth": "Android bundan sonra pil optimizasyonunu sormadan TwinDesk'i arka planda çalışır ve bağlı tutar. Bilgisayarda Bluetooth açıkken TwinDesk'i açın veya ikisini Bluetooth ile eşleştirin",
-  "Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up": "Android onu Bluetooth ile izler; göründüğünde TwinDesk başlar ve bağlanır",
+  "Android watches for it over Bluetooth: when it shows up, TwinDesk starts and goes back to the session it was in": "Android onu Bluetooth ile izler: göründüğünde TwinDesk başlar ve içinde olduğu oturuma geri döner",
   "Couldn’t link: {error}": "Bağlanamadı: {error}",
   "Link a computer": "Bir bilgisayar bağla",
   "Link another computer": "Başka bir bilgisayar bağla",

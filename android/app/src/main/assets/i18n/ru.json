@@ -1202,7 +1202,7 @@
   "Your launcher doesn’t take shortcuts": "Ваш лаунчер не принимает ярлыки",
   "{app} with banking pause": "{app} с банковской паузой",
   "Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth": "Тогда Android сам держит TwinDesk запущенным и подключённым в фоне, без вопроса об оптимизации батареи. Откройте TwinDesk на компьютере с включённым Bluetooth или сопрягите их по Bluetooth",
-  "Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up": "Android следит за ним по Bluetooth, и TwinDesk запускается и подключается, когда он появляется рядом",
+  "Android watches for it over Bluetooth: when it shows up, TwinDesk starts and goes back to the session it was in": "Android следит за ним по Bluetooth: когда он появляется рядом, TwinDesk запускается и возвращается в прежний сеанс",
   "Couldn’t link: {error}": "Не удалось связать: {error}",
   "Link a computer": "Связать компьютер",
   "Link another computer": "Связать ещё один компьютер",

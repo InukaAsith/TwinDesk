@@ -134,7 +134,7 @@ object CompanionLink {
         if (!core.background) return
         Log.i("TwinDesk", "companion: the linked computer is near")
         TwinService.start(ctx)
-        core.link.wake()
+        core.bg.execute { core.near() }
     }
 }
 

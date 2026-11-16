@@ -178,6 +178,12 @@ class Core private constructor(val ctx: Context) : Link.Events {
         bg.execute { connect(known) }
     }
     fun background() { if (inBackground() && returnHost() != null) link.pauseConnecting() }
+    // A linked computer came near (CompanionLink): the return to it starts now rather than at the next
+    // tick. Only a return (a Mac this phone was in a session with, never taking over): nothing else.
+    fun near() {
+        link.wake()
+        if (returnHost() != null) { returnAfter = 0L; returnTick() }
+    }
     private fun inBackground() = !reconnectBg && !MainActivity.shown
 
     // Every 2 s: Bluetooth scans while it may be needed (not connected, or connected through it),

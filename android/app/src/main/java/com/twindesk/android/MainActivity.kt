@@ -1734,7 +1734,7 @@ private fun LinkedCard(core: Core, v: Int) {
         }
         if (linked.isNotEmpty() && CompanionLink.canWatch()) SwitchRow(
             tr("Start TwinDesk when it’s near"),
-            tr("Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up"),
+            tr("Android watches for it over Bluetooth: when it shows up, TwinDesk starts and goes back to the session it was in"),
             CompanionLink.near(ctx),
         ) { CompanionLink.setNear(ctx, it); rev++ }
     }

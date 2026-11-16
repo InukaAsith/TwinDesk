@@ -1202,7 +1202,7 @@
   "Your launcher doesn’t take shortcuts": "你的启动器不支持快捷方式",
   "{app} with banking pause": "{app}（银行暂停）",
   "Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth": "之后 Android 会让 TwinDesk 在后台保持运行和连接，无需询问电池优化。请在电脑上打开 TwinDesk 并开启蓝牙，或通过蓝牙配对它们",
-  "Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up": "Android 通过蓝牙留意它，它出现时 TwinDesk 会启动并连接",
+  "Android watches for it over Bluetooth: when it shows up, TwinDesk starts and goes back to the session it was in": "Android 通过蓝牙留意它：它出现时 TwinDesk 会启动，并回到之前的会话",
   "Couldn’t link: {error}": "无法关联：{error}",
   "Link a computer": "关联一台电脑",
   "Link another computer": "关联另一台电脑",

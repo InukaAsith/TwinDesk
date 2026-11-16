@@ -1202,7 +1202,7 @@
   "Your launcher doesn’t take shortcuts": "Seu launcher não aceita atalhos",
   "{app} with banking pause": "{app} com pausa bancária",
   "Android then keeps TwinDesk running and connected in the background, without asking about battery optimization. Open TwinDesk on the computer, with Bluetooth on, or pair them over Bluetooth": "Assim o Android mantém o TwinDesk rodando e conectado em segundo plano, sem perguntar sobre otimização de bateria. Abra o TwinDesk no computador, com o Bluetooth ligado, ou pareie os dois por Bluetooth",
-  "Android watches for it over Bluetooth, and TwinDesk starts and connects when it shows up": "O Android procura por ele via Bluetooth, e o TwinDesk abre e conecta quando ele aparece",
+  "Android watches for it over Bluetooth: when it shows up, TwinDesk starts and goes back to the session it was in": "O Android procura por ele via Bluetooth: quando ele aparece, o TwinDesk abre e volta à sessão em que estava",
   "Couldn’t link: {error}": "Não foi possível vincular: {error}",
   "Link a computer": "Vincular um computador",
   "Link another computer": "Vincular outro computador",
