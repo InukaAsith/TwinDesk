@@ -1206,5 +1206,18 @@
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "Para {app}: a depuração está desligada. Abra o TwinDesk para religá-la.",
   "TwinDesk is fully closed": "O TwinDesk está totalmente fechado",
   "When you open TwinDesk again, what it turned off comes back on": "Quando você abrir o TwinDesk de novo, o que ele desligou volta a ligar",
-  "{on} of {all} on": "{on} de {all} ligados"
+  "{on} of {all} on": "{on} de {all} ligados",
+  "Already granted": "Já permitido",
+  "Get Shizuku": "Obter o Shizuku",
+  "Grant": "Conceder",
+  "Grant what the computer would, on this phone, with Shizuku (free and open source)": "Conceda neste telefone o que o computador concederia, com o Shizuku (gratuito e de código aberto)",
+  "Granted": "Concedido",
+  "Granted, except {count} this Android doesn’t have": "Concedido, exceto {count} que este Android não tem",
+  "Granting…": "Concedendo…",
+  "Grants what the computer would, through Shizuku": "Concede pelo Shizuku o que o computador concederia",
+  "Not allowed in Shizuku": "Não permitido no Shizuku",
+  "Open Shizuku": "Abrir o Shizuku",
+  "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "O Shizuku recusou antes: permita o TwinDesk na lista de apps do Shizuku",
+  "Start Shizuku in its app, then come back and Grant": "Inicie o Shizuku no app dele, depois volte e toque em Conceder",
+  "Without a computer": "Sem computador"
 }

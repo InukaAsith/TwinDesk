@@ -39,8 +39,10 @@ function kotlinString(src, i) {
 
 function keys() {
   const found = new Set(DYNAMIC);
-  for (const f of fs.readdirSync(KT).filter((n) => n.endsWith('.kt'))) {
-    const src = fs.readFileSync(path.join(KT, f), 'utf8');
+  // The main code and each flavor's own (src/shizuku: the full build's Shizuku).
+  const dirs = [KT, ...fs.readdirSync(path.join(APP, '..')).filter((d) => d !== 'main').map((d) => path.join(APP, '..', d, 'java/com/twindesk/android'))].filter((d) => fs.existsSync(d));
+  for (const [dir, f] of dirs.flatMap((d) => fs.readdirSync(d).filter((n) => n.endsWith('.kt')).map((n) => [d, n]))) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
     for (const m of src.matchAll(/\btr\(\s*"/g)) {
       const [text] = kotlinString(src, m.index + m[0].length);
       if (text !== null) found.add(text);

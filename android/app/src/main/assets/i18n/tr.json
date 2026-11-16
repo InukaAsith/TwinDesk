@@ -1206,5 +1206,18 @@
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "{app} için: hata ayıklama kapalı. Yeniden açmak için TwinDesk'i açın.",
   "TwinDesk is fully closed": "TwinDesk tamamen kapatıldı",
   "When you open TwinDesk again, what it turned off comes back on": "TwinDesk'i yeniden açtığınızda, kapattığı her şey yeniden açılır",
-  "{on} of {all} on": "{all} modülden {on} tanesi açık"
+  "{on} of {all} on": "{all} modülden {on} tanesi açık",
+  "Already granted": "Zaten izin verildi",
+  "Get Shizuku": "Shizuku'yu edinin",
+  "Grant": "İzin ver",
+  "Grant what the computer would, on this phone, with Shizuku (free and open source)": "Bilgisayarın vereceği izinleri bu telefonda Shizuku ile verin (ücretsiz ve açık kaynak)",
+  "Granted": "İzin verildi",
+  "Granted, except {count} this Android doesn’t have": "İzin verildi; bu Android'de olmayan {count} tanesi hariç",
+  "Granting…": "İzin veriliyor…",
+  "Grants what the computer would, through Shizuku": "Bilgisayarın vereceği izinleri Shizuku ile verir",
+  "Not allowed in Shizuku": "Shizuku'da izin verilmedi",
+  "Open Shizuku": "Shizuku'yu aç",
+  "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "Shizuku daha önce reddetti: Shizuku'nun uygulama listesinde TwinDesk'e izin verin",
+  "Start Shizuku in its app, then come back and Grant": "Shizuku'yu kendi uygulamasında başlatın, sonra geri dönüp İzin ver'e dokunun",
+  "Without a computer": "Bilgisayar olmadan"
 }

@@ -1828,6 +1828,26 @@ private fun GeneralPage(core: Core, v: Int) {
                 Primary(tr("Guide")) { Guide.open.value = true }
             }
         }
+        // Without a computer (Elevate.kt): the same grants through Shizuku, if the person has it.
+        val el = remember(v) { Elevate.state(ctx) }
+        if (Elevate.supported) MacRow(
+            tr("Without a computer"),
+            when {
+                Elevate.last.isNotEmpty() -> Elevate.last
+                core.adb.canEnable -> tr("Already granted")
+                el == Elevate.State.Missing -> tr("Grant what the computer would, on this phone, with Shizuku (free and open source)")
+                el == Elevate.State.Stopped -> tr("Start Shizuku in its app, then come back and Grant")
+                else -> tr("Grants what the computer would, through Shizuku")
+            },
+        ) {
+            @Suppress("UNUSED_EXPRESSION") v
+            when {
+                core.adb.canEnable && Elevate.last.isEmpty() -> Pill(tr("Allowed"), "good")
+                el == Elevate.State.Missing -> Secondary(tr("Get Shizuku")) { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/"))) } }
+                el == Elevate.State.Stopped -> Secondary(tr("Open Shizuku")) { ctx.packageManager.getLaunchIntentForPackage(Elevate.SHIZUKU)?.let { runCatching { ctx.startActivity(it) } } }
+                else -> Primary(if (Elevate.busy) tr("Granting…") else tr("Grant")) { Elevate.grant(ctx, core) }
+            }
+        }
         // Off until switched on (Adb.autoOffEnabled): only what TwinDesk switched on goes off again.
         SwitchRow(
             tr("Turn off wireless debugging when disconnected"),

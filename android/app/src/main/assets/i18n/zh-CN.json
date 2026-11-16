@@ -1206,5 +1206,18 @@
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "为了 {app}：调试已关闭。打开 TwinDesk 即可重新开启。",
   "TwinDesk is fully closed": "TwinDesk 已完全关闭",
   "When you open TwinDesk again, what it turned off comes back on": "再次打开 TwinDesk 时，它关闭的设置会重新开启",
-  "{on} of {all} on": "已开启 {on}/{all}"
+  "{on} of {all} on": "已开启 {on}/{all}",
+  "Already granted": "已授予",
+  "Get Shizuku": "获取 Shizuku",
+  "Grant": "授予",
+  "Grant what the computer would, on this phone, with Shizuku (free and open source)": "用 Shizuku（免费开源）在这台手机上授予电脑会授予的权限",
+  "Granted": "已授予",
+  "Granted, except {count} this Android doesn’t have": "已授予，此 Android 版本没有的 {count} 项除外",
+  "Granting…": "正在授予…",
+  "Grants what the computer would, through Shizuku": "通过 Shizuku 授予电脑会授予的权限",
+  "Not allowed in Shizuku": "Shizuku 未允许",
+  "Open Shizuku": "打开 Shizuku",
+  "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "Shizuku 之前拒绝了：请在 Shizuku 的应用列表中允许 TwinDesk",
+  "Start Shizuku in its app, then come back and Grant": "先在 Shizuku 应用中启动它，再回来点“授予”",
+  "Without a computer": "无需电脑"
 }

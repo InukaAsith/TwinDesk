@@ -1206,5 +1206,18 @@
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "Для {app}: отладка выключена. Откройте TwinDesk, чтобы включить её снова.",
   "TwinDesk is fully closed": "TwinDesk полностью закрыт",
   "When you open TwinDesk again, what it turned off comes back on": "Когда вы снова откроете TwinDesk, всё выключенное включится обратно",
-  "{on} of {all} on": "Включено {on} из {all}"
+  "{on} of {all} on": "Включено {on} из {all}",
+  "Already granted": "Уже разрешено",
+  "Get Shizuku": "Скачать Shizuku",
+  "Grant": "Разрешить",
+  "Grant what the computer would, on this phone, with Shizuku (free and open source)": "Выдайте на этом телефоне то, что выдал бы компьютер, с помощью Shizuku (бесплатно, открытый код)",
+  "Granted": "Разрешено",
+  "Granted, except {count} this Android doesn’t have": "Разрешено, кроме {count}, которых нет в этой версии Android",
+  "Granting…": "Выдача…",
+  "Grants what the computer would, through Shizuku": "Выдаёт через Shizuku то, что выдал бы компьютер",
+  "Not allowed in Shizuku": "Не разрешено в Shizuku",
+  "Open Shizuku": "Открыть Shizuku",
+  "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "Shizuku ранее отказал: разрешите TwinDesk в списке приложений Shizuku",
+  "Start Shizuku in its app, then come back and Grant": "Запустите Shizuku в его приложении, затем вернитесь и нажмите «Разрешить»",
+  "Without a computer": "Без компьютера"
 }
