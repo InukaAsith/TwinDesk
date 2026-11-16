@@ -130,7 +130,7 @@ class BankGuard(private val core: Core) {
 
     // Core.start: watch the screen going on and off; turn back on what was on before (we're open again).
     fun start() {
-        runCatching { restore() }
+        runCatching { startRestore() }
         val f = IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) }
         ctx.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) = check()
@@ -277,6 +277,27 @@ class BankGuard(private val core: Core) {
             .setContentIntent(PendingIntent.getActivity(ctx, 19, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE))
             .setTimeoutAfter(60_000).setAutoCancel(true).build())
     }
+
+    // Switched off for a banking app and not back on yet.
+    val pending: Boolean get() = core.store.prefsString("bank.was", "").isNotEmpty()
+
+    // TwinDesk started without being opened (Android starting it for a linked computer, the alarm,
+    // a restart): while the banking app is still in front nothing comes back under it, it waits
+    // (the alarm, or TwinDesk opened, or Turn back on). Opened by the person: MainActivity, opened().
+    private fun startRestore() {
+        if (!pending) return
+        val pkg = core.store.prefsString("bank.app", "")
+        val front = if (usageAccess) frontSince(System.currentTimeMillis() - BACK_FOR_MS) else null
+        if (front != null && front != ctx.packageName && (front == pkg || isBank(front))) {
+            tripped = true
+            if (autoBack && usageAccess && restoreOn) later()
+            return
+        }
+        restore()
+    }
+
+    // TwinDesk's window opened: Restore when TwinDesk opens.
+    fun opened() { if (pending) runCatching { restore() } }
 
     // Opening TwinDesk again: what was on comes back (only what we switched off).
     fun restore() {
