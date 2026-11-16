@@ -2320,4 +2320,6 @@
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Permite que seus scripts neste computador enviem arquivos e definam a área de transferência. Nada vindo de um navegador",
   "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "Requer uma sessão Xorg: o Wayland não deixa apps moverem janelas de outros apps",
   "Switch on Move windows on {name} too": "Ative Mover janelas em {name} também",
+  "Auto-rotate: the window turns with the app": "Girar automaticamente: a janela gira com o app",
+  "Auto-rotate: the window turns with the phone": "Girar automaticamente: a janela gira com o celular",
 });

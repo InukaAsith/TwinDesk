@@ -2321,4 +2321,6 @@
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "让你在本机的脚本发送文件并设置剪贴板。浏览器无法使用",
   "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "需要 Xorg 会话：Wayland 不允许应用移动其他应用的窗口",
   "Switch on Move windows on {name} too": "也请在 {name} 上打开“移动窗口”",
+  "Auto-rotate: the window turns with the app": "自动旋转：窗口随应用旋转",
+  "Auto-rotate: the window turns with the phone": "自动旋转：窗口随手机旋转",
 });

@@ -2320,4 +2320,6 @@
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Bu bilgisayardaki kendi betiklerinizin dosya göndermesine ve panoyu ayarlamasına izin verir. Tarayıcıdan erişilemez",
   "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "Xorg oturumu gerekir: Wayland uygulamaların diğer uygulamaların pencerelerini taşımasına izin vermez",
   "Switch on Move windows on {name} too": "{name} üzerinde de Pencereleri taşı'yı açın",
+  "Auto-rotate: the window turns with the app": "Otomatik döndür: pencere uygulamayla birlikte döner",
+  "Auto-rotate: the window turns with the phone": "Otomatik döndür: pencere telefonla birlikte döner",
 });

@@ -2321,4 +2321,6 @@
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser",
   "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows",
   "Switch on Move windows on {name} too": "Switch on Move windows on {name} too",
+  "Auto-rotate: the window turns with the app": "Auto-rotate: the window turns with the app",
+  "Auto-rotate: the window turns with the phone": "Auto-rotate: the window turns with the phone",
 });

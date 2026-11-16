@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // The phone window's side rail (Mac and Linux; Windows has its side panel and takes Screenshot and
 // Record from here too): a column down the right with Screenshot, Record, the volume keys, Rotate,
-// Power and Phone screen off. The title bar's rail button shows or hides it, remembered here.
+// Auto-rotate (the window turns with the app or the phone), Power and Phone screen off. The title bar's rail button shows or hides it, remembered here.
 //
 // Screenshot: the picture as a PNG, copied and saved (shared/mirror-save.js, in the app).
 // Record: the picture, and the phone's sound when it plays here, as MP4 where Chromium can (else
@@ -19,6 +19,7 @@
     volumeUp: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M14 7.5v5 M11.5 10h5"/>',
     volumeDown: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M11.5 10h5"/>',
     rotate: '<path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/>',
+    autoRotate: '<rect x="6.5" y="4" width="7" height="12" rx="1.5"/><path d="M3 8.5a7.5 7.5 0 0 1 2-4 M17 11.5a7.5 7.5 0 0 1-2 4 M3.5 4.2l1.5.3-.2 1.6 M16.5 15.8l-1.5-.3.2-1.6"/>',
     power: '<path d="M10 3.5v6 M6.2 6a5.5 5.5 0 1 0 7.6 0"/>',
     screenOff: '<rect x="6" y="3" width="8" height="14" rx="1.5"/><path d="M3.5 3.5l13 13"/>',
     rail: '<rect x="3" y="4" width="14" height="12" rx="2"/><path d="M12.5 4v12"/>',
@@ -48,11 +49,10 @@
         { k: 'volumeUp', title: 'Volume up' },
         { k: 'volumeDown', title: 'Volume down' },
         { k: 'rotate', title: kind === 'app' ? 'Rotate the window' : 'Rotate' },
+        { k: 'autoRotate', title: kind === 'app' ? 'Auto-rotate: the window turns with the app' : 'Auto-rotate: the window turns with the phone', toggle: 'autoRotate' },
       ] : []),
-      ...(kind === 'screen' ? [
-        { k: 'power', title: 'Power (lock or wake the phone)' },
-        { k: 'screenOff', title: 'Phone screen off (it keeps showing here, and saves the battery)', toggle: 'screenOff' },
-      ] : []),
+      ...(kind === 'screen' ? [{ k: 'power', title: 'Power (lock or wake the phone)' }] : []),
+      ...(phone ? [{ k: 'screenOff', title: 'Phone screen off (it keeps showing here, and saves the battery)', toggle: 'screenOff' }] : []),
     ];
 
     // ---- record ----
@@ -142,6 +142,7 @@
         if (c.k === 'shot') shot();
         else if (c.k === 'rec') (rec ? stopRec : startRec)();
         else if (c.k === 'screenOff') api.send({ t: 'nav', key: 'screenPower' });
+        else if (c.k === 'autoRotate') api.send({ t: 'toggle', what: 'autoRotate' });
         else api.send({ t: 'nav', key: c.k });
         canvas.focus();
       };

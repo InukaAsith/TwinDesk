@@ -424,7 +424,7 @@ class PhoneViews extends EventEmitter {
   // The window's switches as they are now (its controls light up).
   _opts(v) {
     const ph = this.getSettings().phone || {};
-    return { enterSends: ph.enterSends !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff, pinned: !!(v.win && !v.win.isDestroyed() && v.win.isAlwaysOnTop()), torch: !!v.torch };
+    return { enterSends: ph.enterSends !== false, autoRotate: ph.autoRotate !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff, pinned: !!(v.win && !v.win.isDestroyed() && v.win.isAlwaysOnTop()), torch: !!v.torch };
   }
 
   // Enter sends / Arrow keys swipe changed (here, or on the Phone page): every window shows it.
@@ -530,7 +530,10 @@ class PhoneViews extends EventEmitter {
     s.on('size', (size) => {
       v.size = size;
       this._send(v, 'phoneview:size', size);
-      if (v.kind === 'screen' || v.kind === 'camera') this._fit(v, 'long');
+      const auto = require('../shared/appturn.js').autoRotate(this.getSettings());
+      if (v.kind === 'app') require('../shared/appturn.js').appSized(v, size, auto); // the app turned its display round (#258)
+      else if (v.kind === 'camera' || auto || !v.shaped) this._fit(v, 'long'); // Auto-rotate off: the window keeps its shape
+      v.shaped = true;
     });
     s.on('video', (p) => this._send(v, 'phoneview:video', p));
     s.on('audio', (p) => !p.config && this._send(v, 'phoneview:audio', p.data));
@@ -543,6 +546,9 @@ class PhoneViews extends EventEmitter {
       }
     });
     await s.start();
+    // An app window on an asleep phone waited for a picture that never came (#247, #239): the phone
+    // wakes first (a phone that's awake ignores it), so its new display draws.
+    if (v.app && !v.native) s.tap(ANDROID.WAKEUP);
     if (v.app) setTimeout(() => s.startApp(v.app), 300);
     this._send(v, 'phoneview:status', { ready: true, via });
   }
@@ -570,9 +576,9 @@ class PhoneViews extends EventEmitter {
       v.win.setFullScreen(on);
       return this._send(v, 'phoneview:opts', { full: on });
     }
-    if (m.t === 'toggle' && (m.what === 'enterSends' || m.what === 'arrowSwipe')) {
+    if (m.t === 'toggle' && (m.what === 'enterSends' || m.what === 'arrowSwipe' || m.what === 'autoRotate')) {
       const ph = this.getSettings().phone;
-      ph[m.what] = m.what === 'enterSends' ? ph.enterSends === false : ph.arrowSwipe !== true;
+      ph[m.what] = m.what === 'arrowSwipe' ? ph.arrowSwipe !== true : ph[m.what] === false; // the others are on unless switched off
       this.bridge.emit('save');
       this.applyOpts();
       return this.emit('change');
@@ -613,7 +619,7 @@ class PhoneViews extends EventEmitter {
         if (m.key === 'settings') s.simple(TYPE.EXPAND_SETTINGS);
         if (m.key === 'rotate') s.simple(TYPE.ROTATE);
         // The phone's own screen off, its picture still here (scrcpy's display power).
-        if (m.key === 'screenPower' && v.kind === 'screen' && !v.native) {
+        if (m.key === 'screenPower' && (v.kind === 'screen' || v.kind === 'app') && !v.native) { // an app window too: its app runs with the phone dark (#247)
           v.screenOff = !v.screenOff;
           s.setDisplayPower(!v.screenOff);
           this._send(v, 'phoneview:opts', { screenOff: v.screenOff });
@@ -636,7 +642,7 @@ class PhoneViews extends EventEmitter {
         }
         break;
       case 'resize': // an app window changed size: its virtual display follows (flex)
-        if (v.kind === 'app' && m.w > 50 && m.h > 50) s.resizeDisplay(...require('../shared/appsize.js').appSize(m.w, m.h)); // a phone-like size (shared/appsize.js)
+        if (v.kind === 'app' && m.w > 50 && m.h > 50) s.resizeDisplay(...require('../shared/appturn.js').appResized(v, m)); // a phone-like size (shared/appsize.js), swapped back while the app has it turned (#258)
         break;
       case 'swipe':
         if (typeof m.dir === 'string') this._swipe(v, m.dir);

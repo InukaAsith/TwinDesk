@@ -162,7 +162,7 @@
     if (kind === 'app') {
       clearTimeout(fit.timer);
       const stage = document.getElementById('stage');
-      fit.timer = setTimeout(() => api.send({ t: 'resize', w: stage.clientWidth * appScale(), h: stage.clientHeight * appScale() }), 250);
+      fit.timer = setTimeout(() => api.send({ t: 'resize', w: stage.clientWidth * appScale(), h: stage.clientHeight * appScale(), cw: stage.clientWidth, ch: stage.clientHeight }), 250);
     }
   }).observe(document.getElementById('stage'));
 
@@ -409,6 +409,7 @@
     notifications: '<path d="M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0"/>',
     settings: '<path d="M4 6h12 M4 10h12 M4 14h12"/><circle cx="7.5" cy="6" r="1.6"/><circle cx="12.5" cy="10" r="1.6"/><circle cx="8.5" cy="14" r="1.6"/>',
     rotate: '<path d="M4.5 10a5.5 5.5 0 1 0 1.6-3.9 M4.5 3.5v3h3"/>',
+    autoRotate: '<rect x="6.5" y="4" width="7" height="12" rx="1.5"/><path d="M3 8.5a7.5 7.5 0 0 1 2-4 M17 11.5a7.5 7.5 0 0 1-2 4 M3.5 4.2l1.5.3-.2 1.6 M16.5 15.8l-1.5-.3.2-1.6"/>',
     volumeUp: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M14 7.5v5 M11.5 10h5"/>',
     volumeDown: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M11.5 10h5"/>',
     mute: '<path d="M3.5 8h2.5l3.5-3v10l-3.5-3H3.5z M12 8l4 4 M16 8l-4 4"/>',
@@ -444,7 +445,8 @@
     { k: 'notifications', title: 'Notifications', in: ['screen'] },
     { k: 'settings', title: 'Quick settings', in: ['screen'] },
     { k: 'power', title: 'Power (lock or wake the phone)', in: ['screen'] },
-    { k: 'screenOff', title: 'Phone screen off (it keeps showing here, and saves the battery)', in: ['screen'], toggle: true },
+    { k: 'autoRotate', title: kind === 'app' ? 'Auto-rotate: the window turns with the app' : 'Auto-rotate: the window turns with the phone', in: ['screen', 'app'], toggle: true },
+    { k: 'screenOff', title: 'Phone screen off (it keeps showing here, and saves the battery)', in: ['screen', 'app'], toggle: true },
     { k: 'enterSends', title: 'Enter sends in WhatsApp, Instagram and Telegram (Shift+Enter: a new line)', toggle: true },
     { k: 'arrowSwipe', title: 'Arrow keys swipe the screen (feeds, Reels, Shorts)', toggle: true },
     { k: 'pin', title: 'Keep on top', in: ['screen', 'app', 'camera'], toggle: true },
@@ -455,7 +457,7 @@
   // The title bar has what the Mac's has: Back, Home, Recents, Notifications, and a camera's own.
   // Rotate, Phone screen off, Enter sends and Arrow keys swipe are on the Phone page.
   const TOP = ['notifications', ...CAMERA, 'pin'];
-  const OPT = { pin: 'pinned', screenOff: 'screenOff', enterSends: 'enterSends', arrowSwipe: 'arrowSwipe', torch: 'torch' };
+  const OPT = { pin: 'pinned', screenOff: 'screenOff', autoRotate: 'autoRotate', enterSends: 'enterSends', arrowSwipe: 'arrowSwipe', torch: 'torch' };
   for (const c of CONTROLS) {
     c.el = document.createElement('button');
     c.el.className = 'ctl';
@@ -468,7 +470,7 @@
       if (c.k === 'shot') return shot();
       if (c.k === 'rec') return recorder && recorder.controls.find((x) => x.k === 'rec').el.click(); // shared/mirror-rail.js
       if (c.k === 'pin') return api.send({ t: 'pin' });
-      if (c.k === 'enterSends' || c.k === 'arrowSwipe') api.send({ t: 'toggle', what: c.k });
+      if (c.k === 'enterSends' || c.k === 'arrowSwipe' || c.k === 'autoRotate') api.send({ t: 'toggle', what: c.k });
       else if (c.k === 'screenOff') api.send({ t: 'nav', key: 'screenPower' });
       else if (CAMERA.includes(c.k)) api.send({ t: 'camera', what: c.k });
       else api.send({ t: 'nav', key: c.k });
