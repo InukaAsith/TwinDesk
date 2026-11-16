@@ -523,6 +523,7 @@ class PhoneBridge extends EventEmitter {
     });
     await s.start();
     this.control = s;
+    if (!this.clipWatch) this.clipWatch = require('../../shared/clippoll.js').clipWatch(this); // copies a missing listener doesn't report (#257)
     // A session that ended without its hover exit (the Wi-Fi gone, the app quit) left Android a mouse
     // hovering over the status bar or the gesture area: edges and gesture navigation stop answering
     // until the phone restarts. Any hover exit from here clears it.
