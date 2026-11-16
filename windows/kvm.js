@@ -473,6 +473,7 @@ class Kvm {
       // A UAC prompt or the lock screen here: the other computer's input can't reach it, so it
       // goes home (else its pointer stays hidden there while nothing moves here).
       case 'secureDesktop':
+        console.log(`[kvm] administrator prompt or lock screen ${msg.on ? 'up' : 'gone'} here (${this.mode})`); // #210
         if (msg.on && this.mode === 'driven') this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');
         break;
     }
