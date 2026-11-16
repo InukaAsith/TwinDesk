@@ -440,7 +440,11 @@
               ? t('Keep both on the same Wi-Fi. Open TwinDesk on the iPhone (or twindesk.local in Safari) and pick this computer, or scan the QR code on this page. Check that both show the same code.')
               : t('Keep both on the same Wi-Fi, or plug the phone in with a cable. Open TwinDesk on the phone and tap this computer, or scan the QR code on this page. Check that both show the same code.'))
             : t('Open TwinDesk on both. The other computer shows up here as Nearby: click it, and check that both show the same code. No shared Wi-Fi? A cable or Bluetooth works too.'),
-          extra: MESH() ? el('p', { class: 'hint', text: t('In Multi-device you pair each one the same way, and every computer and phone you pair is in the sidebar at once.') }) : null,
+          extra: (MESH() || a.os === 'android') ? el('div', {}, [
+            MESH() ? el('p', { class: 'hint', text: t('In Multi-device you pair each one the same way, and every computer and phone you pair is in the sidebar at once.') }) : null,
+            // Banking apps (the phone's General › Banking apps): many refuse to open with debugging on.
+            a.os === 'android' ? el('p', { class: 'hint', text: t('A banking app won’t open with debugging on? Pick it in the phone’s General › Banking apps: when it opens, TwinDesk turns debugging off and closes, and opening TwinDesk turns it back on.') }) : null,
+          ].filter(Boolean)) : null,
           art: connectArt(phone ? 'laptop' : 'laptop', phone ? 'phone' : 'laptop'),
           back: install,
           choices: [{ label: t('Show me a demo'), primary: true, go: () => demoStep(0) }],
