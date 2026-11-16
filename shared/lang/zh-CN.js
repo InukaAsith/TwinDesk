@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["zh-CN"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "本机 {address}",
+  "Connected · {address}": "已连接 · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} 无法连接，正在尝试它的其他网络。",
+  "Network: automatic": "网络：自动",
+  "{address} (not seen now)": "{address}（当前未发现）",
+  "Network to {name}": "连接 {name} 的网络",
   "Follow Size ({width} × {height})": "跟随尺寸（{width} × {height}）",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "文字和应用大小可在 Windows 设置 › 系统 › 显示中调整。",
   "Width": "宽度",

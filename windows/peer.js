@@ -270,6 +270,7 @@ class Peer {
   // ---- guest side (link.js) ----
   start() { this.link.start(); }
   startPairing(t) { this.link.startPairing(t); }
+  setRoute(address) { this.link.setRoute(address); }
   confirmCode() { this.link.confirmCode(); }
   cancelPair() {
     if (this.pairing && this.pairing.pending) this.pairing.respond(false);

@@ -216,3 +216,19 @@ test('normalized pointer coordinates use native screen pixels, including a negat
   pc._input({ t: P.T.IN_MOVE, x: 1, y: 1 });
   assert.deepEqual(moved, [{ x: -2560, y: 240 }, { x: -1280, y: 960 }, { x: -1, y: 1679 }]);
 });
+
+test('the picture gets the session network: our adapter on the peer subnet, else none', () => {
+  const os = require('node:os'), interfaces = os.networkInterfaces;
+  os.networkInterfaces = () => ({
+    'Ethernet 3': [{ family: 'IPv4', internal: false, address: '192.168.50.3', netmask: '255.255.255.0' }],
+    'RDP adapter': [{ family: 'IPv4', internal: false, address: '10.6.0.1', netmask: '255.255.255.0' }],
+  });
+  try {
+    const net = (current) => new Sender(Object.assign(new EventEmitter(), { current }))._net();
+    assert.deepEqual(net({ transport: 'ip', address: '192.168.50.4' }), { address: '192.168.50.3', netmask: '255.255.255.0' });
+    assert.deepEqual(net({ transport: 'ip', address: '::ffff:10.6.0.4' }), { address: '10.6.0.1', netmask: '255.255.255.0' });
+    assert.equal(net({ transport: 'ip', address: '100.64.0.9' }), null); // through a router or VPN: any path
+    assert.equal(net({ transport: 'ble', address: 'ble:x' }), null);
+    assert.equal(net(null), null);
+  } finally { os.networkInterfaces = interfaces; }
+});

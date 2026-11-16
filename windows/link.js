@@ -17,6 +17,15 @@ const HELLO_TIMEOUT_MS = P.HELLO_TIMEOUT_MS; // no `welcome` this long after hel
 const RESUME_RETRY_MS = 5000; // a failed move to the network: try again after this
 const NETWORK_RETRY_MS = 15000;
 const isBle = (a) => String(a || '').startsWith('ble:');
+const { orderRoutes } = require('./discovery');
+// The addresses to dial, in order: the chosen route (pairing.route) first even when discovery doesn't
+// see it (broadcasts may not cross), then the host's other networks best first, then the saved one.
+function routesOf(seen, prefer, saved) {
+  const seenList = seen && Array.isArray(seen.routes) ? orderRoutes(seen.routes, prefer).map((r) => r.address) : seen && seen.address ? [seen.address] : [];
+  const out = [];
+  for (const a of [prefer, ...seenList, saved]) if (a && !isBle(a) && !out.includes(a)) out.push(a);
+  return out;
+}
 
 const PAIR_ERRORS = {
   [P.E.PAIR_REFUSED]: '{Name} refused pairing.',
@@ -101,17 +110,35 @@ class Link {
 
   snapshot() {
     const p = this.pairing;
+    // route: the chosen one ('' = automatic); missed: it was tried and not reached; now: the address in use.
+    const now = this.authed && this.transport === 'ip' && this.ws ? this.ws.address : '';
     return {
       link: { ...this.status, busy: this.authed ? '' : this.busyBy, macName: p ? p.macName : '', address: p ? p.address : '', transport: this.authed ? this.transport : '' },
       pairing: this.pairState ? { ...this.pairState } : null,
-      paired: p ? { macId: p.macId, macName: p.macName, address: p.address, port: p.port, os: osOf(p.os) } : null,
+      paired: p ? { macId: p.macId, macName: p.macName, address: p.address, port: p.port, os: osOf(p.os), route: p.route || '', routeMissed: p.route && this.routeMissed === p.route && now !== p.route ? p.route : '', now } : null,
     };
   }
 
+  // The network to reach the host through ('' = automatic, the best one seen). It is used first; when it
+  // can't be reached the others are tried, and the session moves back to it once it can.
+  setRoute(address) {
+    if (!this.pairing) return;
+    const route = typeof address === 'string' && /^(\d{1,3})(\.\d{1,3}){3}$/.test(address) ? address : '';
+    if ((this.pairing.route || '') === route) return;
+    if (route) this.pairing.route = route; else delete this.pairing.route;
+    this.store.save(this.pairing);
+    this.routeMissed = '';
+    this._changed();
+    if (!route || this.stopped || this.pairingActive) return;
+    if (this.authed && this.transport === 'ip') { this.resumeAt = 0; this.networkRetryAt = 0; this._tryResume(); } // moves now, without dropping the session
+    else if (!this.authed) this.poke();
+  }
+
   // id: the host's, for one seen over Bluetooth (address 'ble:…').
-  startPairing({ address, port, macName, id }) {
+  // route: the network picked in Found nearby, kept as the paired computer's chosen route.
+  startPairing({ address, port, macName, id, route }) {
     clearTimeout(this.timers.reconnect);
-    this.pairState = { phase: 'connecting', address, port: port || P.PORT, macName: macName || address, id: id || '', code: '', error: '' };
+    this.pairState = { phase: 'connecting', address, port: port || P.PORT, macName: macName || address, id: id || '', route: route || '', code: '', error: '' };
     this._connect('pair');
     this._changed();
   }
@@ -196,6 +223,18 @@ class Link {
       if (seen && !isBle(seen.address)) target = { ...target, address: seen.address, port: seen.port };
     }
     if (mode === 'session' && this.dialAt) target = { ...target, address: this.dialAt }; // this attempt only (Tailnet.pick)
+    // Every network the host is seen on, the chosen route first: one that can't be reached moves on to
+    // the next at once (_socketClosed), not after the reconnect delay.
+    this.routeQueue = [];
+    this.routeMissed = '';
+    if (mode === 'session' && !this.dialAt && !isBle(target.address)) {
+      const seen = this.resolveAddress(target.macId);
+      const list = routesOf(seen, this.pairing.route, this.pairing.address);
+      if (list.length) {
+        target = { ...target, address: list[0] };
+        this.routeQueue = list.slice(1);
+      }
+    }
     this.dialAt = '';
     const seq = ++this.seq;
     // Bluetooth: a host met there (pairing), or a paired one that isn't on the network but is near.
@@ -222,8 +261,19 @@ class Link {
   _open(address, port, transport) {
     const ws = this._socket(address, port, transport);
     this.ws = ws;
-    ws.on('open', () => ws === this.ws && this._onOpen(ws.fp));
+    ws.on('open', () => { ws.opened = true; if (ws === this.ws) this._onOpen(ws.fp); });
     ws.on('close', () => this._socketClosed(ws));
+  }
+
+  // A session's network address that didn't open: the next of the host's routes, at once.
+  _nextRoute(ws) {
+    if (this.mode !== 'session' || this.authed || ws.opened || ws.transport !== 'ip' || !this.routeQueue || !this.routeQueue.length) return false;
+    const address = this.routeQueue.shift();
+    console.log('[link] ' + ws.address + ' unreachable (' + (this.lastError || 'no answer') + '), trying ' + address);
+    if (this.pairing && ws.address === this.pairing.route) { this.routeMissed = ws.address; this._changed(); } // shown: the chosen route is out
+    this.ws = null;
+    this._open(address, ws.port, 'ip');
+    return true;
   }
 
   // A WSS to the host; messages go to whichever role it has then (session, fallback, moving).
@@ -269,15 +319,23 @@ class Link {
       console.log('[link] back on ' + (alt.transport === 'ble' ? 'Bluetooth' : 'the network'));
       return this._emit('transport', {});
     }
+    if (this._nextRoute(ws)) return;
     this._onClose();
   }
 
   // On Bluetooth and the host is on the network now: move the session there.
+  // On another network than the chosen route, and the host is seen on that one again: move back to it.
   _tryResume() {
-    if (!this.authed || this.transport !== 'ble' || this.pending || !this.resumeKey || Date.now() < Math.max(this.resumeAt || 0, this.networkRetryAt)) return;
+    if (!this.authed || this.pending || !this.resumeKey || Date.now() < Math.max(this.resumeAt || 0, this.networkRetryAt)) return;
     const seen = this.resolveAddress(this.pairing.macId);
     if (!seen || isBle(seen.address)) return;
-    const ws = this._socket(seen.address, seen.port, 'ip');
+    let address = seen.address;
+    if (this.transport === 'ip') {
+      const route = this.pairing.route;
+      if (!route || !this.ws || this.ws.address === route || !(seen.routes || []).some((r) => r.address === route)) return;
+      address = route;
+    } else if (this.transport !== 'ble') return;
+    const ws = this._socket(address, seen.port, 'ip');
     this.pending = ws;
     ws.on('open', () => {
       if (ws !== this.pending) return;
@@ -297,13 +355,16 @@ class Link {
       return;
     }
     this.pending = null;
-    if (this.alt) { // moved before: the newest path replaces the current one (the server does the same)
+    // Back on the chosen route from another network: one network at a time, the other one goes.
+    const routeBack = this.ws && this.ws.transport === 'ip';
+    if (this.alt || routeBack) { // moved before: the newest path replaces the current one (the server does the same)
       const old = this.ws;
       this.ws = null;
       old.terminate();
     } else {
       this.alt = this.ws;
     }
+    if (routeBack) { this.routeMissed = ''; console.log('[link] back on the chosen route ' + ws.address); }
     this.ws = ws;
     this.transport = ws.transport;
     this.networkRetryAt = 0;
@@ -407,6 +468,7 @@ class Link {
       fp: this.seenFp,
       token: msg.token,
       os: osOf(msg.os), // the host's OS; older Macs send none
+      ...(ps.route ? { route: ps.route } : {}), // the network picked to pair through
     };
     this.store.save(this.pairing);
     this.pairState = null;

@@ -3,6 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = messages;
   else (root.TwinDeskLanguages = root.TwinDeskLanguages || {})["pt-BR"] = messages;
 })(typeof globalThis !== 'undefined' ? globalThis : this, {
+  "From {address} here": "Daqui: {address}",
+  "Connected · {address}": "Conectado · {address}",
+  "{route} can’t be reached; trying its other networks.": "{route} não está acessível; tentando as outras redes dele.",
+  "Network: automatic": "Rede: automática",
+  "{address} (not seen now)": "{address} (não visto agora)",
+  "Network to {name}": "Rede para {name}",
   "Follow Size ({width} × {height})": "Seguir tamanho ({width} × {height})",
   "Set text and app sizes for this screen in Windows Settings › System › Display.": "Ajuste o tamanho de textos e aplicativos desta tela em Configurações do Windows › Sistema › Tela.",
   "Width": "Largura",
