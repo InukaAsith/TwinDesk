@@ -10,23 +10,28 @@
 'use strict';
 
 const POLL_MS = 1500;
+const GRACE_MS = 1500;
 
 function clipWatch(bridge) {
   let timer = null;
   const stop = () => { clearInterval(timer); timer = null; };
   bridge.server.on('t:clip', (m) => {
-    if (!m || typeof m.text !== 'string' || !m.text || m.text === bridge.lastPhoneClip) return; // ours (scrcpy's), injected
+    if (!m || typeof m.text !== 'string' || !m.text || m.text === bridge.lastPhoneClip || timer) return; // ours (scrcpy's), injected
     const c = bridge.control;
     if (!c || c.closed) return; // no control session: nothing missed it
-    bridge.lastPhoneClip = m.text;
-    if (timer) return;
-    console.log('[phone] the phone’s copies don’t reach TwinDesk in the background: asking for them every 1.5 s');
-    timer = setInterval(() => {
-      const s = bridge.control;
-      if (!s || s.closed) return;
-      try { s.getClipboard(); } catch (_) { stop(); }
-    }, POLL_MS);
-    if (timer.unref) timer.unref();
+    // The app's copy may come a moment before scrcpy's: missed only if scrcpy still hasn't said so.
+    const t = setTimeout(() => {
+      if (timer || bridge.lastPhoneClip === m.text || bridge.control !== c || c.closed) return;
+      bridge.lastPhoneClip = m.text;
+      console.log('[phone] the phone’s copies don’t reach TwinDesk in the background: asking for them every 1.5 s');
+      timer = setInterval(() => {
+        const s = bridge.control;
+        if (!s || s.closed) return;
+        try { s.getClipboard(); } catch (_) { stop(); }
+      }, POLL_MS);
+      if (timer.unref) timer.unref();
+    }, GRACE_MS);
+    if (t.unref) t.unref();
   });
   return { stop, get polling() { return !!timer; } };
 }
