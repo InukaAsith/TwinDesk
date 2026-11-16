@@ -222,7 +222,7 @@ class PcScreen {
     }
     this._stopSend(true);
     const mbps = this.cfg.mbps; // Share screen › Quality, for phones too
-    const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen' } });
+    const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: this.cfg.sound, offer: { kind: 'screen', width, height } }); // its size: a viewer shapes its window to it (#255)
     this.sending = { session, displayId: d.id, rect, key };
     this.stats = null;
     Object.assign(this.status, { status: 'starting', error: '', name: d.label || src.name, width: rect.width, height: rect.height });

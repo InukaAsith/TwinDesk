@@ -71,6 +71,7 @@ class Screen {
     ipcMain.on('monitor-stats', (e, st) => {
       if (!this.win || e.sender !== this.win.webContents || !st || typeof st !== 'object' || this.state.state !== 'on') return;
       this.state = { ...this.state, stats: st };
+      this._shape(Number(st.width) | 0, Number(st.height) | 0);
       this.onChange();
     });
     // The window's toolbar: the peer's sharing (as the Receive tab), frame generation, full screen.
@@ -150,10 +151,56 @@ class Screen {
   policy() {
     if (this.link.status.state !== 'connected') return;
     const accept = this.watching();
-    if (accept === this.sentAccept) return;
+    // With the size for an Extend screen "Same as the other screen" (#254): the monitor Monitor 2 is
+    // on (else the main one) in points, as the Mac sends it, so text is the size it is here; a
+    // portrait monitor gives a portrait screen. Sent again when that size changes.
+    const size = this._mySize();
+    const key = `${size.width}x${size.height}`;
+    if (accept === this.sentAccept && key === this.sentSize) return;
     this.sentAccept = accept;
-    this.link.send({ t: T.SCREEN_POLICY, accept });
+    this.sentSize = key;
+    this.link.send({ t: T.SCREEN_POLICY, accept, ...size });
     this.onChange();
+  }
+
+  // The picture's real size (the renderer's stats, once a second): a sender that told none, or 0 × 0
+  // (#255), or an Extend screen that changed shape. The window takes its shape, fitted in the room it
+  // has now, so a portrait screen isn't a small picture between black bars.
+  _shape(width, height) {
+    if (width < 64 || height < 64 || (width === this.state.width && height === this.state.height)) return;
+    const old = this.state.width && this.state.height ? this.state.width / this.state.height : 0;
+    const a = width / height;
+    if (old && Math.abs(old - a) / old < 0.02) return; // the same shape (WebRTC scales a busy stream down)
+    this.state = { ...this.state, width, height };
+    const w = this.win;
+    if (!w || w.isDestroyed()) return;
+    w.streamSize = { width, height };
+    w.setAspectRatio(a);
+    if (w.isFullScreen() || w.isMaximized()) return;
+    const b = w.getBounds();
+    const long = Math.max(b.width, b.height); // its long side stays: a landscape window turns portrait
+    let nw = a >= 1 ? long : Math.round(long * a);
+    let nh = a >= 1 ? Math.round(long / a) : long;
+    const area = require('electron').screen.getDisplayMatching(b).workArea;
+    const k = Math.min(1, area.width / nw, area.height / nh);
+    nw = Math.round(nw * k); nh = Math.round(nh * k);
+    w.setBounds({ x: Math.max(area.x, Math.min(b.x, area.x + area.width - nw)), y: Math.max(area.y, Math.min(b.y, area.y + area.height - nh)), width: nw, height: nh });
+  }
+
+  _mySize() {
+    try {
+      const { screen } = require('electron');
+      const w = this.win && !this.win.isDestroyed() ? this.win : null;
+      const d = w ? screen.getDisplayMatching(w.getBounds()) : screen.getPrimaryDisplay();
+      const even = (v) => Math.round(v / 2) * 2;
+      if (!this.sizeWatch) { // rotated, a new resolution, a monitor added: the size may change
+        this.sizeWatch = () => this.policy();
+        screen.on('display-metrics-changed', this.sizeWatch);
+        screen.on('display-added', this.sizeWatch);
+        screen.on('display-removed', this.sizeWatch);
+      }
+      return { width: even(d.size.width), height: even(d.size.height) };
+    } catch (_) { return {}; }
   }
 
   _onState(m) {
@@ -289,7 +336,7 @@ class Screen {
     if (this.apps) this.apps.attach(win); // Mac app windows open from this renderer
     win.loadFile(path.join(__dirname, 'monitor.html'), { query: { ...(this.test ? { test: '1' } : {}), language: i18n.locale } });
     win.once('ready-to-show', () => { if (!this.startHidden) win.show(); this.startHidden = false; });
-    for (const ev of ['show', 'hide', 'minimize', 'restore', 'closed']) win.on(ev, () => this.policy());
+    for (const ev of ['show', 'hide', 'minimize', 'restore', 'closed', 'moved']) win.on(ev, () => this.policy()); // moved: onto a monitor of another size
     win.on('page-title-updated', (e) => e.preventDefault());
     // Clipboard follows the focus: our text goes over on focus, the Mac's comes back on blur.
     win.on('focus', () => { if (!this.test && this.state.state === 'on') this.clip.sendIfChanged(); });
