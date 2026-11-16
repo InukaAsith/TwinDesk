@@ -60,7 +60,21 @@
     const recording = () => !!rec;
     function startRec() {
       if (rec || !canvas.width || !canvas.captureStream) return;
-      const stream = canvas.captureStream(30);
+      // The window's canvas is low-latency (desynchronized), and Chromium's captureStream gets no
+      // frames from one: while recording, what it shows is copied into a plain canvas of the same
+      // size once a display frame, and that one is recorded. Nothing runs when not recording.
+      const copy = canvas.ownerDocument.createElement('canvas');
+      copy.width = canvas.width;
+      copy.height = canvas.height;
+      const g = copy.getContext('2d', { alpha: false });
+      let copying = true;
+      const step = () => {
+        if (!copying) return;
+        try { g.drawImage(canvas, 0, 0, copy.width, copy.height); } catch (_) {}
+        root.requestAnimationFrame(step);
+      };
+      step();
+      const stream = copy.captureStream(30);
       const s = sound();
       let dest = null;
       if (s && s.actx && s.node) {
@@ -74,6 +88,7 @@
       const done = () => {
         if (dest && s.node) try { s.node.disconnect(dest); } catch (_) {}
         for (const tr of stream.getTracks()) tr.stop();
+        copying = false;
       };
       const id = `${Date.now()}`;
       // One format; the app hears of it with its first second (begin), so a format that fails to

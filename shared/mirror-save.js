@@ -30,7 +30,9 @@ class MirrorSave {
   folder(kind) {
     const { app } = this.e;
     let base;
-    try { base = app.getPath(kind === 'shot' ? 'pictures' : process.platform === 'darwin' ? 'movies' : 'videos'); } catch (_) { base = app.getPath('home'); }
+    // 'videos' is ~/Movies on a Mac: Electron has no 'movies' (asking for it threw, so recordings
+    // landed in ~/TwinDesk).
+    try { base = app.getPath(kind === 'shot' ? 'pictures' : 'videos'); } catch (_) { base = app.getPath('home'); }
     const dir = path.join(base, 'TwinDesk');
     fs.mkdirSync(dir, { recursive: true });
     return dir;
