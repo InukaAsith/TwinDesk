@@ -275,6 +275,16 @@ function start() {
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
   fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress({ ...v, peerName: peerName() }); pushState(); } });
   screen.fileDrop = fileDrop;
+  // Monitor 2 shows the selected device's screen. Open and showing nothing, it follows a device that
+  // starts sharing (#256: a PC driving this one shared its Extend screen while another device was
+  // selected, and nothing came).
+  hub.bus.on(P.T.SCREEN_STATE, (m, from) => {
+    if (m.on !== true || from === hub.selectedId || screen.state.state === 'on') return;
+    const w = screen.win;
+    if (!w || w.isDestroyed() || !w.isVisible()) return;
+    console.log(`[screen] Monitor 2 follows ${from}: it shares its screen`);
+    hub.select(from);
+  });
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
   sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });

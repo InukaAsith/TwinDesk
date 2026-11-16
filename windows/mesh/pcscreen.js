@@ -179,7 +179,18 @@ class PcScreen {
     if (this.mode === 'extend') {
       const mon = await this.vdd.find().catch(() => null);
       if (!mon) return null;
-      return all.find((d) => { const r = displays.dipToScreenRect(null, d.bounds); return r.x === mon.x && r.y === mon.y; }) || null;
+      // With monitors at different scales the conversion can miss the virtual monitor's origin by a
+      // few pixels (#256): the nearest within 16 px, else none (said in the log, not silently).
+      let best = null;
+      let gap = 16;
+      for (const d of all) {
+        const r = displays.dipToScreenRect(null, d.bounds);
+        const g = Math.abs(r.x - mon.x) + Math.abs(r.y - mon.y);
+        if (g <= gap) { best = d; gap = g; }
+      }
+      if (!best && !this.missLogged) { this.missLogged = true; console.log(`[share] Extend: the virtual monitor at ${mon.x},${mon.y} isn't among the displays`); }
+      if (best) this.missLogged = false;
+      return best;
     }
     return all.find((d) => String(d.id) === (this.monitorId || this.cfg.monitor)) || displays.getPrimaryDisplay();
   }

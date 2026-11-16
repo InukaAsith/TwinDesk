@@ -254,6 +254,16 @@ function start() {
   });
   fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress(fillAll(v)); pushState(); } });
   screen.fileDrop = fileDrop;
+  // Monitor 2 shows the selected device's screen. Open and showing nothing, it follows a device that
+  // starts sharing (#256: a PC driving this one shared its Extend screen while another device was
+  // selected, and nothing came).
+  hub.bus.on(P.T.SCREEN_STATE, (m, from) => {
+    if (m.on !== true || from === hub.selectedId || screen.state.state === 'on') return;
+    const w = screen.win;
+    if (!w || w.isDestroyed() || !w.isVisible()) return;
+    console.log(`[screen] Monitor 2 follows ${from}: it shares its screen`);
+    hub.select(from);
+  });
   sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
   loadMic();
   smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
