@@ -620,8 +620,55 @@
         }));
         const add = UI.button(t('Add a step…'), () => picker(null, (a) => set((x) => { x.action.steps.push({ action: a, wait: 0 }); }), { forMacro: true }), 'small');
         add.disabled = steps.length >= 20;
-        return field(t('Steps'), el('div', {}, [steps.length ? list : el('p', { class: 'deck-field-hint', text: t('No steps yet.') }), add]),
-          t('Shortcut and text steps take the options of a tile of their own: set one up on a tile, then copy it with Duplicate and change its action to Multi-action.'));
+        // Record steps: what's pressed while this button has the focus (in this window only, nothing
+        // system-wide), each shortcut a step, typed letters one Type text step, the pauses kept.
+        let rec = null; // {steps, text, last} while recording
+        const recBtn = UI.button(t('Record steps'), () => (rec ? stop() : start()), 'small');
+        const left = () => 20 - steps.length - (rec ? rec.steps.length + (rec.text ? 1 : 0) : 0);
+        const gap = () => { const n = Date.now(), w = rec.last ? Math.min(10000, Math.round((n - rec.last) / 50) * 50) : 0; rec.last = n; return w; };
+        const flush = () => { if (rec.text) { rec.steps.push({ action: { k: 'text', text: rec.text.s, enter: false }, wait: rec.text.wait }); rec.text = null; } };
+        const show = () => { recBtn.textContent = rec ? t('Stop · {count} steps', { count: rec.steps.length + (rec.text ? 1 : 0) }) : t('Record steps'); };
+        function start() {
+          rec = { steps: [], text: null, last: 0 };
+          recBtn.classList.add('primary');
+          show();
+          recBtn.focus();
+        }
+        function stop() {
+          if (!rec) return;
+          flush();
+          const got = rec.steps;
+          rec = null;
+          recBtn.classList.remove('primary');
+          show();
+          if (got.length) set((x) => { x.action.steps.push(...got.slice(0, 20 - x.action.steps.length)); });
+        }
+        recBtn.onkeydown = (e) => {
+          if (!rec) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (MOD_OF[e.code] || e.repeat) return;
+          const w = gap();
+          const plain = !e.ctrlKey && !e.altKey && !e.metaKey;
+          if (plain && e.key.length === 1) { // a letter, digit or symbol: part of the text being typed
+            if (!rec.text) { if (left() <= 0) return stop(); rec.text = { s: '', wait: w }; }
+            rec.text.s += e.key;
+          } else if (plain && e.code === 'Enter' && rec.text) {
+            if (rec.text.s) rec.steps.push({ action: { k: 'text', text: rec.text.s, enter: true }, wait: rec.text.wait });
+            rec.text = null;
+          } else {
+            flush();
+            if (left() <= 0) return stop();
+            const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Meta'].filter(Boolean);
+            rec.steps.push({ action: { k: 'keys', combo: M.combo([...mods, e.code].join('+')) }, wait: w });
+          }
+          show();
+          if (left() <= 0) stop();
+        };
+        recBtn.onblur = () => stop();
+        recBtn.disabled = steps.length >= 20;
+        return field(t('Steps'), el('div', {}, [steps.length ? list : el('p', { class: 'deck-field-hint', text: t('No steps yet.') }), el('div', { class: 'deck-path-row' }, [add, recBtn])]),
+          t('Record steps: press the shortcuts and type the text here, with the pauses you want between them; click Stop when done. Only keys pressed in this window are recorded.'));
       }
 
       function appField(a, set) {
