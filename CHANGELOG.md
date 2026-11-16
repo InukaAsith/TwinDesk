@@ -57,6 +57,16 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   window's shape. On Android, the computer's screen and another phone's screen get a side rail too
   (a tab at the right edge): Auto-rotate and Screenshot.
 
+- **Cursor portals** (Mac): a stretch of one display's edge leads to a chosen stretch of the other
+  computer's screen, and the pointer comes back through it (#177 by [@pengusto](https://github.com/pengusto)).
+- **Share screen › Capture** (Windows): Original (Chromium, the default), Automatic, Desktop
+  Duplication or Windows Graphics Capture; the pointer is shared at its real size, an enlarged
+  accessibility pointer too (#235 by MOVE).
+- **Several networks** (Windows): with a cable and Wi-Fi (or a VPN) on both computers, Found nearby
+  lists each network, and a paired computer has a Network menu: Automatic or one of them (#236 by MOVE).
+- **Mac with no display** (lid closed, monitor unplugged): screen sharing goes on through a TwinDesk
+  virtual display until a real one is back (#219 by [@alexfoxtm](https://github.com/alexfoxtm), #184).
+
 ### Fixes
 
 - **Copy code** no longer takes a card's last digits, a price, an account, order or tracking number,
