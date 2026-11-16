@@ -21,6 +21,7 @@ const { KvmMoves } = require('../../shared/kvm-moves.js');
 const { LaneMesh, LANE_TYPES } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
+const { pairFor } = require('../../shared/pairfor.js');
 const store = require('./store');
 // Hold a key to cross (#230; in Multi-device, only this Mac's own mouse and trackpad at its edges)
 // and the emergency return (#178).
@@ -46,6 +47,7 @@ class Kvm extends EventEmitter {
     this.mode = 'home';
     this.route = 0;
     this.peerRoute = 0;
+    this.selBack = null; // the device selected before a crossing selected the partner, until it accepts (#245)
     this.partner = null; // the device our input goes to (driving) or comes from (driven); null at home
     this._busyId = null; // the partner link marked busy while driving/driven (see _markBusy)
     this.keyboardOnly = false; // the hotkey moved the keyboard only (no edge, no mouse)
@@ -91,10 +93,12 @@ class Kvm extends EventEmitter {
       [P.T.KVM_LINK]: (m, from) => this._onLink(m, from), // the other side switched it: follow, no echo
       [P.T.KVM_LAYOUT]: (m, from) => this._onOldLayout(m, from), // a one-to-one app's edge: placed as it says
       [P.T.KVM_ACCEPT]: (m, from) => {
-        if (this.mode === 'driving' && from === this.partner && m.route === this.route) clearTimeout(this.acceptTimer);
+        if (this.mode === 'driving' && from === this.partner && m.route === this.route) { clearTimeout(this.acceptTimer); this.selBack = null; }
       },
       [P.T.KVM_REFUSE]: (m, from) => {
-        if (this.mode === 'driving' && from === this.partner && m.route === this.route) this.goHome(this._them(REFUSED[m.why] || '{them} refused', from), false);
+        if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
+        this.goHome(this._them(REFUSED[m.why] || '{them} refused', from), false);
+        this._selectBack();
       },
       [P.T.KVM_HOME]: (m, from) => {
         if (this.mode !== 'driving' || from !== this.partner || m.route !== this.route) return;
@@ -204,8 +208,8 @@ class Kvm extends EventEmitter {
     }
     this._bleCheck(this.partner); // config() too
     const k = this.cfg;
-    if (this.mode === 'driving' && !k.driveOther) this.goHome('Turned off');
-    if (this.mode === 'driven' && !k.beDriven) this._sendHome(undefined, 'Turned off');
+    if (this.mode === 'driving' && !this._driveOtherFor(this.partner)) this.goHome('Turned off');
+    if (this.mode === 'driven' && !this._beDrivenFor(this.partner)) this._sendHome(undefined, 'Turned off');
   }
 
   // Messages name the other computer (it may be gone already: the last name we knew).
@@ -254,6 +258,23 @@ class Kvm extends EventEmitter {
   }
 
   // Device id -> connected now.
+  // Cursor sharing for one device: the selected one uses the switch, the others their own memory (#245).
+  _linkedFor(id) {
+    if (id && id === this.hub.selectedId) return this.linked;
+    return !!id && (this.cfg.linkedBy || {})[id] !== false;
+  }
+
+  // Drive other devices / Let other devices drive this Mac, for one device. The settings hold the selected
+  // device's pair (pair.sync); every other device goes by its own (shared/pairfor.js), so selecting a
+  // device whose side doesn't share its mouse and keyboard doesn't stop the others (#245).
+  _driveOtherFor(id) {
+    return !!pairFor(this.getSettings(), this.hub.selectedId, id, 'cursor', 'out', !!this.cfg.driveOther);
+  }
+
+  _beDrivenFor(id) {
+    return !!pairFor(this.getSettings(), this.hub.selectedId, id, 'cursor', 'in', !!this.cfg.beDriven);
+  }
+
   _connectedTo(id) {
     const s = id ? this.hub.sessions.get(id) : null;
     return !!s && s.connected;
@@ -349,8 +370,8 @@ class Kvm extends EventEmitter {
   // a device we may drive now (an iPhone can't be driven).
   _edgeConfig() {
     const k = this.cfg;
-    if (!this.linked || !k.driveOther || !k.mouse || (this.locked && this.mode === 'home')) return { sides: [], zones: 'none' };
-    return this.layoutSync.edgeConfig((id) => this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && !this._pausedFor(id));
+    if (!k.mouse || (this.locked && this.mode === 'home')) return { sides: [], zones: 'none' };
+    return this.layoutSync.edgeConfig((id) => this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && !this._pausedFor(id) && this._linkedFor(id) && this._driveOtherFor(id));
   }
 
   // Mouse and keyboard sharing as a whole (the hotkey's double-tap): off = everything home and
@@ -388,7 +409,11 @@ class Kvm extends EventEmitter {
   // The selection changed: cursor sharing follows the selected device's own memory.
   _onSelected(id) {
     const by = this.cfg.linkedBy || {};
-    if (id && id in by && by[id] !== this.linked) this.setLinked(by[id], false, false);
+    if (id && id in by && by[id] !== this.linked) { // the switch shows its pair; the pointer stays where it is (#245)
+      this.cfg.linked = by[id];
+      store.saveSettings(this.getSettings());
+      this.emit('change');
+    }
     this.config();
   }
 
@@ -472,7 +497,7 @@ class Kvm extends EventEmitter {
   }
 
   _canDriveTo(id) {
-    return this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && !!this.cfg.driveOther && this.linked && !this._pausedFor(id);
+    return this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && this._driveOtherFor(id) && this._linkedFor(id) && !this._pausedFor(id);
   }
 
   // A connected computer (not a phone) we may drive, to drive the phone `id` through.
@@ -485,7 +510,9 @@ class Kvm extends EventEmitter {
   }
 
   // id: the device the input goes to (the selected one for the hotkey, the neighbour for an edge).
-  _take(fields, id) {
+  // back: the device selected before a crossing selected id, selected again if id doesn't take the input.
+  _take(fields, id, back = null) {
+    this.selBack = back && back !== id ? back : null;
     const k = this.cfg;
     this.route++;
     // A phone this Mac has no working bridge to (wireless debugging not set up here, or down): another
@@ -516,8 +543,19 @@ class Kvm extends EventEmitter {
     clearTimeout(this.acceptTimer);
     const route = this.route;
     this.acceptTimer = setTimeout(() => {
-      if (this.mode === 'driving' && this.route === route) this.goHome(this._them('{them} didn’t answer'));
+      if (this.mode === 'driving' && this.route === route) {
+        this.goHome(this._them('{them} didn’t answer'));
+        this._selectBack();
+      }
     }, P.KVM_TAKE_TIMEOUT_MS);
+  }
+
+  // A take that failed (refused, or no answer): the selection goes back to the device it was on, so a
+  // device that doesn't accept input doesn't take the one-to-one features, nor its pair's switches (#245).
+  _selectBack() {
+    const id = this.selBack;
+    this.selBack = null;
+    if (id) this.hub.select(id);
   }
 
   // Row 9: take our input home (helper stops capturing). Tells the partner unless it refused.
@@ -681,6 +719,7 @@ class Kvm extends EventEmitter {
     const side = E.SIDES.includes(ev.side) ? ev.side : this._watchedSides()[0] || null;
     const r = side ? this.layoutSync.cross(side, ev.offset) : null; // the monitor map: who is there, where along it
     const id = r ? r.to : null;
+    const before = this.hub.selectedId;
     if (this.mode !== 'home' || this.locked || !id || !this._canDriveTo(id) || !this.cfg.mouse || (!ev.moving && this.blockEdge && this.blockEdge())) {
       // The helper already captures (it started at the edge); undo that if we can't cross.
       this.helper.send('capture', { on: false });
@@ -691,7 +730,7 @@ class Kvm extends EventEmitter {
       this.helper.send('capture', { on: false });
       return;
     }
-    this._take({ where: { side: P.opposite(side), offset: r.offset }, paths: ev.drag && ev.drag.paths }, id);
+    this._take({ where: { side: P.opposite(side), offset: r.offset }, paths: ev.drag && ev.drag.paths }, id, before);
     if (ev.moving && this.onMoveWindow) this.onMoveWindow(ev, id); // a window grabbed with the move key (main.js)
   }
 
@@ -701,7 +740,7 @@ class Kvm extends EventEmitter {
     const refuse = (why) => this._send(from, { t: P.T.KVM_REFUSE, route: m.route, why });
     if (this.mode === 'driving') return refuse(P.REFUSE.BUSY);
     if (this.mode === 'driven' && from !== this.partner) return refuse(P.REFUSE.BUSY); // another device drives us
-    if (!this.cfg.beDriven || !this.linked || this._pausedFor(from)) return refuse(P.REFUSE.NOT_ALLOWED);
+    if (!this._beDrivenFor(from) || !this._linkedFor(from) || this._pausedFor(from)) return refuse(P.REFUSE.NOT_ALLOWED);
     if (this.mode === 'driven' && !(m.route > this.peerRoute)) return;
     const first = this.mode !== 'driven';
     this.partner = from;
@@ -769,7 +808,7 @@ class Kvm extends EventEmitter {
     if (!this.hub.select(to)) return;
     this.route++;
     this._send(from, { t: P.T.KVM_RELEASE, route: this.route }); // the device we drove goes home
-    this._take({ where: { side: P.opposite(side), offset: r.offset } }, to);
+    this._take({ where: { side: P.opposite(side), offset: r.offset } }, to, from);
   }
 
   _onK(m, from) {
