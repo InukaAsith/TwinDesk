@@ -32,6 +32,16 @@ const read = (f) => { try { return fs.readFileSync(path.join(dir, f), 'utf8'); }
     assert.ok(/Z hello world\n/.test(log), 'console.log, formatted');
     assert.ok(/WARN \[helper\] something/.test(log), 'warn says so');
 
+    // The same line in a loop (#239: 52 GB): once, then counted at 10, 100, and when another line comes.
+    for (let i = 0; i < 150; i++) console.log('[phone] connecting: again');
+    console.log('[phone] ready');
+    await wait(50);
+    log = read('TwinDesk.log');
+    assert.strictEqual((log.match(/\[phone\] connecting: again/g) || []).length, 1, 'written once');
+    assert.ok(/the line above 10 more times so far/.test(log) && /the line above 100 more times so far/.test(log), 'counted');
+    assert.ok(/the line above 149 more times since/.test(log), 'the total when another line comes');
+    assert.ok(/\[phone\] ready/.test(log));
+
     // Past the size: TwinDesk.log -> .1 -> .2, never a fourth.
     for (let i = 0; i < 400; i++) console.log('line %d %s', i, 'x'.repeat(40));
     await wait(100);

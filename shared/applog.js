@@ -154,13 +154,39 @@ function start(app, opts = {}) {
   terminal = console.error.bind(console);
   watchPipe(process.stdout);
   watchPipe(process.stderr);
+  // Packaged and started without a terminal (the menu, autostart): the console went to the desktop's
+  // own log (the journal, ~/.xsession-errors, which nothing caps), a second copy of TwinDesk.log.
+  // #239: 52 GB of it during a reconnect loop. Only TwinDesk.log then.
+  if (opts.quietConsole !== undefined ? opts.quietConsole : (app.isPackaged && process.platform === 'linux' && !(process.stdout && process.stdout.isTTY))) consoleDead = true;
+  let last = '';
+  let repeats = 0; // the same line again since it was written
+  let told = 0; // … of which the log already has a count
+  let firstAt = '';
+  const flush = () => {
+    if (repeats > told) write(`${stamp()} (the line above ${repeats} more time${repeats === 1 ? '' : 's'} since ${firstAt})\n`);
+    repeats = told = 0;
+  };
   for (const level of LEVELS) {
     const orig = console[level].bind(console);
     console[level] = (...args) => {
+      let text;
+      try { text = `${level === 'log' || level === 'info' ? '' : level.toUpperCase() + ' '}${util.format(...args)}`; } catch (_) { return; }
+      // The same line over and over (a loop): written once, then counted; the count at 10, 100, 1000…
+      if (text === last) {
+        if (!repeats) firstAt = stamp();
+        repeats++;
+        if (repeats >= 10 && milestone(repeats)) {
+          write(`${stamp()} (the line above ${repeats} more times so far, since ${firstAt})\n`);
+          told = repeats;
+        }
+        return;
+      }
+      flush();
+      last = text;
       if (!consoleDead) {
         try { orig(...args); } catch (_) { consoleDead = true; /* no terminal (EPIPE) */ }
       }
-      try { write(`${stamp()} ${level === 'log' || level === 'info' ? '' : level.toUpperCase() + ' '}${util.format(...args)}\n`); } catch (_) { /* best effort */ }
+      try { write(`${stamp()} ${text}\n`); } catch (_) { /* best effort */ }
     };
   }
   write(`${stamp()} ---- TwinDesk ${app.getVersion()} started (${process.platform} ${process.arch}, Electron ${process.versions.electron || ''}) ----\n`);
