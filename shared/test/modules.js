@@ -20,6 +20,10 @@ assert.ok(!M.pageOff(['web'], 'general'));
 
 // Scripts: a module's own is skipped, a shared one stays while any of its modules is on.
 assert.ok(!M.scriptOn(['terminal'], 'ui-terminal.js'));
+for (const src of ['../shared/cursor-portals.js', 'ui-cursor-portals.js']) {
+  assert.ok(!M.scriptOn(['cursor'], src), `${src} follows the cursor module`);
+  assert.ok(M.scriptOn([], src), `${src} loads when the cursor module is enabled`);
+}
 assert.ok(!M.scriptOn(['calls'], '../shared/ui-calls.js'));
 assert.ok(M.scriptOn(['cursor'], '../shared/mesh-intro.js'), 'Multi-device still needs it');
 assert.ok(!M.scriptOn(['cursor', 'multi'], '../shared/mesh-intro.js'));

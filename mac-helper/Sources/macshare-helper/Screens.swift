@@ -38,7 +38,10 @@ enum Screens {
   /// True when `p` sits on `side`'s edge of its display (within ~1 pt) and no other display
   /// continues past that edge at that point.
   static func isOuterEdge(_ p: CGPoint, side: String) -> Bool {
-    let ds = displays()
+    isOuterEdge(p, side: side, displays: displays())
+  }
+
+  private static func isOuterEdge(_ p: CGPoint, side: String, displays ds: [CGRect]) -> Bool {
     guard let d = containing(p, ds) else { return false }
     let tol: CGFloat = 1.5
     switch side {
@@ -99,9 +102,13 @@ enum Screens {
   /// Where a relative move from `from` to `to` ends: like `clamp`, but it follows the path display
   /// by display and stops on the edge of a `stops` side where it is an outer edge, so a large jump
   /// can't land on a display past the return edge (the rest counts toward the resistance).
-  static func walk(from: CGPoint, to: CGPoint, stops: [String]) -> CGPoint {
-    let ds = displays()
-    if stops.isEmpty { return clamp(to, from: from) }
+  static func walk(from: CGPoint, to: CGPoint, stops: [String], portalStop: PortalReturnStop? = nil) -> CGPoint {
+    walk(from: from, to: to, stops: stops, portalStop: portalStop, displays: displays())
+  }
+
+  // Geometry with an explicit display list also allows deterministic tests without an event tap.
+  static func walk(from: CGPoint, to: CGPoint, stops: [String], portalStop: PortalReturnStop? = nil, displays ds: [CGRect]) -> CGPoint {
+    if stops.isEmpty && portalStop == nil { return clamp(to, from: from, displays: ds) }
     var p = from
     for _ in 0..<8 {
       guard let d = containing(p, ds) else { break }
@@ -114,19 +121,23 @@ enum Screens {
       if vy < 0, to.y < d.minY { let k = (d.minY - p.y) / vy; if k < t { t = k; side = "top" } }
       if side.isEmpty { break }
       let e = CGPoint(x: min(max(p.x + vx * t, d.minX), d.maxX - 1), y: min(max(p.y + vy * t, d.minY), d.maxY - 1))
-      if stops.contains(side) && isOuterEdge(e, side: side) { return e }
+      if let portal = portalStop, portal.display == d, portal.side == side, portalReturnContains(e, stop: portal) { return e }
+      if stops.contains(side) && isOuterEdge(e, side: side, displays: ds) { return e }
       // Step just over the edge, onto the next display (or off the desktop: clamp below).
       let next = CGPoint(x: side == "right" ? d.maxX : side == "left" ? d.minX - 1 : e.x,
                          y: side == "bottom" ? d.maxY : side == "top" ? d.minY - 1 : e.y)
       if containing(next, ds) == nil { break }
       p = next
     }
-    return clamp(to, from: from)
+    return clamp(to, from: from, displays: ds)
   }
 
   /// `to` if it is on a display, else `to` clamped into the display that holds `from`.
   static func clamp(_ to: CGPoint, from: CGPoint) -> CGPoint {
-    let ds = displays()
+    clamp(to, from: from, displays: displays())
+  }
+
+  private static func clamp(_ to: CGPoint, from: CGPoint, displays ds: [CGRect]) -> CGPoint {
     if containing(to, ds) != nil { return to }
     guard let d = containing(from, ds) ?? ds.first else { return to }
     return CGPoint(x: min(max(to.x, d.minX), d.maxX - 1), y: min(max(to.y, d.minY), d.maxY - 1))

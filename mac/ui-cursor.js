@@ -25,6 +25,7 @@ UI.tab({
         return !f || (Number(f[1]) >= 1 && Number(f[1]) <= 20);
       },
     });
+    const portals = CursorPortalsUI.create();
 
     // The crossing map: both computers' monitors; drag the other one where it is on the desk.
     const map = KvmMapUI.create({ onMove: (side, along) => api.moveKvm({ side, along }), onIdentify: () => api.identifyDisplays() });
@@ -93,6 +94,7 @@ UI.tab({
       lock.el,
       UI.card(I18n.t('Emergency return'), [UI.row(I18n.t('Return shortcut'), I18n.t('Stops input sharing and returns the pointer if the input helper responds. Set separately on each Mac.'), [emergencyKey.el])]),
       UI.card(I18n.t('Where the other computer is'), [map.el]),
+      portals.el,
       UI.card(I18n.t('Feel'), [
         UI.row(I18n.t('Edge resistance'), I18n.t('Push a little further to cross'), [resistance]),
         crossingModifierRow = UI.row(I18n.t('Hold key to switch'), I18n.t('Hold this key when leaving this Mac. On return, the other computer needs a compatible version.'), [crossingModifier.el]),
@@ -121,6 +123,7 @@ UI.tab({
       status.className = `note ${kind}`;
       status.set(text);
       lock.update(s);
+      portals.update(s);
       const m = (s.input && s.input.map) || { mine: [], theirs: [], along: null };
       map.update({ mine: m.mine, theirs: m.theirs, side: k.pcSide, along: m.along, me: p.me, them: p.Name });
       driven2.setHint(I18n.t('Double-tap the hotkey to take everything back'));

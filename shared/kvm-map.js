@@ -20,10 +20,12 @@ class KvmMap extends EventEmitter {
   // electron: { screen, BrowserWindow }. send(msg): to the other computer (false when not connected).
   // side(): the side of this computer the other one is on (null: not set). getAlong / setAlong: the
   // saved `along` (null = centred).
-  constructor({ electron, send, side, getAlong, setAlong }) {
+  constructor({ electron, send, side, getAlong, setAlong, portalVersion = 0 }) {
     super();
     Object.assign(this, { electron, send, side, getAlong, setAlong });
     this.theirs = [];
+    this.portalVersion = portalVersion;
+    this.peerPortalVersion = 0;
     this.mine = this._read();
     this.timer = null;
     const changed = () => {
@@ -47,18 +49,20 @@ class KvmMap extends EventEmitter {
   }
 
   sendDisplays() {
-    this.send({ t: P.T.KVM_DISPLAYS, displays: this.mine });
+    this.send({ t: P.T.KVM_DISPLAYS, displays: this.mine, ...(this.portalVersion ? { portalVersion: this.portalVersion } : {}) });
   }
 
   // kvm.displays from the other computer.
   onDisplays(m) {
     this.theirs = normalizeDisplays(m && m.displays);
+    this.peerPortalVersion = Number.isInteger(m && m.portalVersion) && m.portalVersion > 0 ? m.portalVersion : 0;
     this.emit('change');
   }
 
   // A new connection: the other computer's monitors come again (an older one never sends them).
   reset() {
     this.theirs = [];
+    this.peerPortalVersion = 0;
     this.emit('change');
   }
 

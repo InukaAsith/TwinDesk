@@ -29,7 +29,8 @@ extension Injector {
   func moveRel(_ dx: Double, _ dy: Double) {
     guard Capture.shared.allowsRemoteInput else { return }
     let cur = CGEvent(source: nil)?.location ?? .zero
-    let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops)
+    let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops,
+                          portalStop: Capture.shared.portalReturnStop)
     var type = CGEventType.mouseMoved
     var b = 0
     if let held = heldButtons.min() {

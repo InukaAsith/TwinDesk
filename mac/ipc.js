@@ -6,6 +6,7 @@ const { ipcMain, shell, app, screen, dialog, clipboard, Menu, systemPreferences 
 const P = require('../shared/protocol.js');
 const CL = require('../shared/cursorlock.js');
 const emergencyShortcut = require('./emergency-shortcut');
+const Portals = require('../shared/cursor-portals.js');
 const { LINKS } = require('../shared/about.js');
 const store = require('./store');
 const { planConnect, settleConnect, sessionIsUp } = require('./connect-plan');
@@ -336,6 +337,18 @@ function setupIpc(ctx) {
     },
     identifyDisplays() {
       ctx.kvm.map.identify();
+    },
+    setPortals(value) {
+      const peer = ctx.server.current;
+      const rules = Portals.normalize(value);
+      if (!peer || !rules || ctx.kvm.mode !== 'home') return;
+      const previous = Portals.normalize((settings.kvm.portalsByPeer || {})[peer.deviceId]) || [];
+      // Keep an unchanged missing-display rule while removing another; never add or edit an invalid one.
+      if (rules.some((r) => (!Portals.usableSource(ctx.kvm.map.mine, r) || !Portals.usableTarget(ctx.kvm.map.theirs, r.target)) &&
+        !previous.some((p) => JSON.stringify(p) === JSON.stringify(r)))) return;
+      settings.kvm.portalsByPeer = { ...(settings.kvm.portalsByPeer || {}), [peer.deviceId]: rules };
+      save();
+      ctx.kvm.config();
     },
     setKvm(partial) {
       const prev = { ...settings.kvm };
