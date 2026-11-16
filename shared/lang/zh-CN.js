@@ -2323,4 +2323,13 @@
   "Switch on Move windows on {name} too": "也请在 {name} 上打开“移动窗口”",
   "Auto-rotate: the window turns with the app": "自动旋转：窗口随应用旋转",
   "Auto-rotate: the window turns with the phone": "自动旋转：窗口随手机旋转",
+  "Automatic": "自动",
+  "Original (Chromium)": "原始（Chromium）",
+  "Desktop Duplication": "桌面复制（Desktop Duplication）",
+  "Windows Graphics Capture": "Windows 图形捕获（WGC）",
+  "Capture": "采集方式",
+  "As before: the pointer may show smaller than on this screen": "与以前相同：指针可能比本机屏幕上的小",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "指针为实际大小，无边框。在远程桌面中不显示指针",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "指针为实际大小；Windows 10 会在屏幕四周画一圈黄色边框",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Windows 10 使用桌面复制，Windows 11 使用 Windows 图形捕获",
 });

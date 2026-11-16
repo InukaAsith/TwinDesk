@@ -2322,4 +2322,13 @@
   "Switch on Move windows on {name} too": "Ative Mover janelas em {name} também",
   "Auto-rotate: the window turns with the app": "Girar automaticamente: a janela gira com o app",
   "Auto-rotate: the window turns with the phone": "Girar automaticamente: a janela gira com o celular",
+  "Automatic": "Automático",
+  "Original (Chromium)": "Original (Chromium)",
+  "Desktop Duplication": "Duplicação da Área de Trabalho",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Captura",
+  "As before: the pointer may show smaller than on this screen": "Como antes: o ponteiro pode aparecer menor do que nesta tela",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "O ponteiro no tamanho real, sem borda. Na Área de Trabalho Remota não mostra o ponteiro",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "O ponteiro no tamanho real; o Windows 10 desenha uma borda amarela ao redor da tela",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Duplicação da Área de Trabalho no Windows 10, Windows Graphics Capture no Windows 11",
 });

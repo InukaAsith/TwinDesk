@@ -2322,4 +2322,13 @@
   "Switch on Move windows on {name} too": "Включите «Перемещение окон» и на {name}",
   "Auto-rotate: the window turns with the app": "Автоповорот: окно поворачивается вместе с приложением",
   "Auto-rotate: the window turns with the phone": "Автоповорот: окно поворачивается вместе с телефоном",
+  "Automatic": "Автоматически",
+  "Original (Chromium)": "Исходный (Chromium)",
+  "Desktop Duplication": "Дублирование рабочего стола",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Захват",
+  "As before: the pointer may show smaller than on this screen": "Как раньше: указатель может быть меньше, чем на этом экране",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "Указатель в реальном размере, без рамки. В удалённом рабочем столе указатель не виден",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "Указатель в реальном размере; Windows 10 рисует жёлтую рамку вокруг экрана",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Дублирование рабочего стола в Windows 10, Windows Graphics Capture в Windows 11",
 });

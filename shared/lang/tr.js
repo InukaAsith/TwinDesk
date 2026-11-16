@@ -2322,4 +2322,13 @@
   "Switch on Move windows on {name} too": "{name} üzerinde de Pencereleri taşı'yı açın",
   "Auto-rotate: the window turns with the app": "Otomatik döndür: pencere uygulamayla birlikte döner",
   "Auto-rotate: the window turns with the phone": "Otomatik döndür: pencere telefonla birlikte döner",
+  "Automatic": "Otomatik",
+  "Original (Chromium)": "Özgün (Chromium)",
+  "Desktop Duplication": "Masaüstü Çoğaltma",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Yakalama",
+  "As before: the pointer may show smaller than on this screen": "Eskisi gibi: işaretçi bu ekrandakinden küçük görünebilir",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "İşaretçi gerçek boyutunda, çerçeve yok. Uzak Masaüstünde işaretçi görünmez",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "İşaretçi gerçek boyutunda; Windows 10 ekranın çevresine sarı bir çerçeve çizer",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Windows 10'da Masaüstü Çoğaltma, Windows 11'de Windows Graphics Capture",
 });

@@ -196,6 +196,9 @@ function normalize(s) {
       sound: bool(pcs.sound, false), // the screen's sound in the same session
       input: bool(pcs.input, true), // the Mac's mouse and keyboard drive this PC
       codec: pcs.codec === 'h265' ? 'h265' : 'h264', // Encoder (shared/screencodec.js)
+      // Capture (native-screen.js): 'chromium' the original, by default (the pointer at its 32 × 32 size);
+      // 'auto' our helper, Desktop Duplication on Windows 10 and WGC on 11; or one of those two.
+      capture: ['auto', 'chromium', 'dda', 'wgc'].includes(pcs.capture) ? pcs.capture : 'chromium',
       remote: bool(pcs.remote, true), // The viewer may start/stop and switch it (screen.ctl)
     },
     pairSync: pairSync(s.pairSync), // {deviceId: {feature: {out, in}}} (pairsync.js)

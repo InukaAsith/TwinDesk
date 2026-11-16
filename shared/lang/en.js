@@ -2323,4 +2323,13 @@
   "Switch on Move windows on {name} too": "Switch on Move windows on {name} too",
   "Auto-rotate: the window turns with the app": "Auto-rotate: the window turns with the app",
   "Auto-rotate: the window turns with the phone": "Auto-rotate: the window turns with the phone",
+  "Automatic": "Automatic",
+  "Original (Chromium)": "Original (Chromium)",
+  "Desktop Duplication": "Desktop Duplication",
+  "Windows Graphics Capture": "Windows Graphics Capture",
+  "Capture": "Capture",
+  "As before: the pointer may show smaller than on this screen": "As before: the pointer may show smaller than on this screen",
+  "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "The pointer at its real size, no border. Over Remote Desktop it shows no pointer",
+  "The pointer at its real size; Windows 10 draws a yellow border around the screen": "The pointer at its real size; Windows 10 draws a yellow border around the screen",
+  "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11",
 });
