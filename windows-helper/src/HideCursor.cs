@@ -22,6 +22,7 @@ namespace MacShare
         {
             if (hidden) return;
             hidden = true;
+            Console.Error.WriteLine("[cursor] hidden (driving the other computer)");
             byte[] and = new byte[32 * 32 / 8], xor = new byte[32 * 32 / 8];
             for (int i = 0; i < and.Length; i++) and[i] = 0xFF; // transparent everywhere
             foreach (uint id in Ids)
@@ -31,12 +32,19 @@ namespace MacShare
             }
         }
 
+        // Back home: reloaded even if this process doesn't think it hid them (a helper restarted
+        // meanwhile, a hide another build left), and again twice in the next 2 s (Retry): a reload that
+        // reported success while Windows still drew the blank arrow left the pointer invisible (#238).
         public static void Show()
         {
-            if (!hidden) return;
+            bool was = hidden;
             hidden = false;
             Restore();
+            again = 2;
+            againAt = Environment.TickCount + 400;
+            Console.Error.WriteLine("[cursor] " + (restorePending ? "restore failed, trying again" : "restored") + (was ? "" : " (it wasn't hidden here)"));
         }
+        static int again, againAt;
 
         // Reloading can fail (a UAC prompt on the secure desktop, an elevated window in front): it
         // is tried again every tick (Retry) until it works, so a pointer is never left blank.
@@ -50,7 +58,14 @@ namespace MacShare
 
         public static void Retry()
         {
-            if (restorePending && !hidden) Restore();
+            if (hidden) return;
+            if (restorePending) { Restore(); if (!restorePending) Console.Error.WriteLine("[cursor] restored"); return; }
+            if (again > 0 && unchecked(Environment.TickCount - againAt) >= 0)
+            {
+                again--;
+                againAt = Environment.TickCount + 1200;
+                Restore();
+            }
         }
     }
 }
