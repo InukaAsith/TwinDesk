@@ -445,6 +445,13 @@
         const a = tl.action;
         const act = (patch) => set((x) => { x.action = { ...x.action, ...patch }; });
         const out = [];
+        // One app, by its name (each app's volume): typed, or picked from those playing sound now.
+        const mixField = () => {
+          const n = input(a.name || '', () => {}, { placeholder: t('App name, such as Spotify'), spellcheck: false });
+          n.onchange = () => set((x) => { x.action = { ...x.action, name: n.value.trim() }; if (!x.label) x.label = n.value.trim(); });
+          const now = (dev && dev.mix) || [];
+          out.push(field(t('App'), n, now.length ? t('Playing sound now: {apps}', { apps: now.map((x) => x.name).join(', ') }) : t('Start the app’s sound once to see its name here.')));
+        };
         switch (a.k) {
           case 'keys': out.push(recorder(tl, act)); break;
           case 'text': {
@@ -489,8 +496,17 @@
                 dev && !ds.length ? t('No display here lets its brightness be changed: built-in screens do, and on Windows external monitors with DDC/CI on.') : ''));
             }
             if (a.k === 'bright' && a.what === 'set') out.push(field(t('Level'), rangeInput(a.level, 0, 100, (v) => act({ level: v }), (v) => `${v}%`)));
+            if (a.k === 'slider' && a.what === 'app') mixField();
             break;
           case 'app': out.push(appField(a, set)); break;
+          case 'mix': mixField(); break;
+          case 'spotify':
+            if (a.what === 'play') {
+              const u = input(a.uri || '', () => {}, { placeholder: 'https://open.spotify.com/playlist/…', spellcheck: false });
+              u.onchange = () => act({ uri: u.value });
+              out.push(field(t('Playlist, album or song'), u, a.uri ? t('Opens {uri} in Spotify', { uri: a.uri }) : t('In Spotify: Share › Copy link, then paste it here.')));
+            }
+            break;
           case 'url': {
             const u = input(a.url || '', () => {}, { placeholder: 'https://', spellcheck: false });
             u.onchange = () => act({ url: u.value });
@@ -786,7 +802,7 @@
         if (asking || !api.deckState) return;
         asking = true;
         const tl = sel();
-        Promise.resolve(api.deckState(!!(tl && tl.action.k === 'obs'))).then((s) => { dev = s || {}; }).catch(() => {}).finally(() => {
+        Promise.resolve(api.deckState(tl && tl.action.k === 'obs' ? true : tl && (tl.action.k === 'mix' || (tl.action.k === 'slider' && tl.action.what === 'app')) ? 'mix' : false)).then((s) => { dev = s || {}; }).catch(() => {}).finally(() => {
           asking = false;
           const typing = body.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
           if (L && !typing) draw();

@@ -81,9 +81,10 @@ function sys(platform, { helper, press }) {
     platform,
     // What this computer can do, for the editor and the device (sub-steps are checked when run).
     caps() {
-      const c = { audio: true, outputs: true, mic: true, bt: true, bright: true, win: true, windows: !linux || X11, darkmode: true, dnd: platform !== 'mac', screenoff: !linux, perf: true, temp: platform === 'mac' || (linux && thermal().length > 0) };
+      const c = { audio: true, outputs: true, mic: true, mixer: platform !== 'mac', spotify: true, spotifyModes: platform !== 'mac', bt: true, bright: true, win: true, windows: !linux || X11, darkmode: true, dnd: platform !== 'mac', screenoff: !linux, perf: true, temp: platform === 'mac' || (linux && thermal().length > 0) };
       if (linux) {
-        c.audio = c.outputs = c.mic = which('pactl');
+        c.audio = c.outputs = c.mic = c.mixer = which('pactl');
+        c.spotifyModes = which('gdbus');
         c.bt = which('bluetoothctl');
         c.bright = which('brightnessctl');
         c.darkmode = c.dnd = which('gsettings');
@@ -117,6 +118,54 @@ function sys(platform, { helper, press }) {
       const dev = o.input ? '@DEFAULT_SOURCE@' : '@DEFAULT_SINK@';
       if (o.level !== undefined) await run('pactl', [o.input ? 'set-source-volume' : 'set-sink-volume', dev, `${Math.round(clamp01(o.level) * 100)}%`]);
       if (o.mute !== undefined) await run('pactl', [o.input ? 'set-source-mute' : 'set-sink-mute', dev, o.mute ? '1' : '0']);
+    },
+
+    // ---- Each app's volume (Windows' Volume mixer, Linux's PulseAudio/PipeWire streams; macOS has none) ----
+    // [{name, level 0–1, muted}], one per app (by its name: an app keeps it across restarts).
+    async mix() {
+      if (!linux) return ((await H('deckMix')).apps || []).map((a) => ({ name: String(a.name || ''), level: Number(a.level) || 0, muted: !!a.muted, id: a.id }));
+      const out = await run('pactl', ['list', 'sink-inputs']);
+      const by = new Map();
+      for (const b of out.split(/\n(?=Sink Input #)/)) {
+        const id = (/^Sink Input #(\d+)/.exec(b) || [])[1];
+        const name = (/application\.name = "([^"]*)"/.exec(b) || [])[1];
+        if (!id || !name) continue;
+        const a = by.get(name) || { name, level: Number((/^\s*Volume:.*?(\d+)%/m.exec(b) || [])[1]) / 100 || 0, muted: /^\s*Mute:\s*yes/m.test(b), ids: [] };
+        a.ids.push(id);
+        by.set(name, a);
+      }
+      return [...by.values()];
+    },
+    // {name, level?, mute?}: every stream of that app.
+    async mixSet(o) {
+      const app = (await api.mix()).find((a) => a.name.toLowerCase() === String(o.name || '').toLowerCase());
+      if (!app) throw new Error(`${o.name || 'That app'} isn’t playing sound now`);
+      if (!linux) return H('deckMixSet', { dev: app.id, ...(o.level !== undefined ? { level: clamp01(o.level) } : {}), ...(o.mute !== undefined ? { mute: !!o.mute } : {}) });
+      for (const id of app.ids) {
+        if (o.level !== undefined) await run('pactl', ['set-sink-input-volume', id, `${Math.round(clamp01(o.level) * 100)}%`]);
+        if (o.mute !== undefined) await run('pactl', ['set-sink-input-mute', id, o.mute ? '1' : '0']);
+      }
+    },
+
+    // ---- Spotify: its own app, its own links; no internet from here, no permission asked ----
+    // play: the link opened in the Spotify app (Linux: MPRIS OpenUri, which also starts it).
+    // shuffle, repeat: Windows' media session (the helper), Linux's MPRIS; macOS would need the
+    // Automation permission, so it has neither.
+    async spotify(o) {
+      if (o.what === 'play') {
+        if (!o.uri) throw new Error('No playlist, album or song set for this tile');
+        if (linux && which('gdbus')) {
+          const ok = await run('gdbus', ['call', '--session', '--dest', 'org.mpris.MediaPlayer2.spotify', '--object-path', '/org/mpris/MediaPlayer2', '--method', 'org.mpris.MediaPlayer2.Player.OpenUri', o.uri]).then(() => true, () => false);
+          if (ok) return;
+        }
+        return el().shell.openExternal(o.uri);
+      }
+      if (!linux) return H('deckMediaCtl', { a: o.what, app: 'Spotify' });
+      const prop = o.what === 'shuffle' ? 'Shuffle' : 'LoopStatus';
+      const MP = ['--session', '--dest', 'org.mpris.MediaPlayer2.spotify', '--object-path', '/org/mpris/MediaPlayer2'];
+      const cur = await run('gdbus', ['call', ...MP, '--method', 'org.freedesktop.DBus.Properties.Get', 'org.mpris.MediaPlayer2.Player', prop]).catch(() => { throw new Error('Spotify isn’t open'); });
+      const next = o.what === 'shuffle' ? (/true/.test(cur) ? 'false' : 'true') : (/'None'/.test(cur) ? "'Playlist'" : "'None'");
+      await run('gdbus', ['call', ...MP, '--method', 'org.freedesktop.DBus.Properties.Set', 'org.mpris.MediaPlayer2.Player', prop, `<${next}>`]);
     },
 
     // ---- Bluetooth ----

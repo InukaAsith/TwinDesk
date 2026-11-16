@@ -1219,5 +1219,8 @@
   "Open Shizuku": "Abrir o Shizuku",
   "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "O Shizuku recusou antes: permita o TwinDesk na lista de apps do Shizuku",
   "Start Shizuku in its app, then come back and Grant": "Inicie o Shizuku no app dele, depois volte e toque em Conceder",
-  "Without a computer": "Sem computador"
+  "Without a computer": "Sem computador",
+  "App name, such as Spotify": "Nome do app, como Spotify",
+  "In Spotify: Share › Copy link, then paste it here.": "No Spotify: Compartilhar › Copiar link, depois cole aqui.",
+  "Playlist, album or song": "Playlist, álbum ou música"
 }

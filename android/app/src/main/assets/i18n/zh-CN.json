@@ -1219,5 +1219,8 @@
   "Open Shizuku": "打开 Shizuku",
   "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "Shizuku 之前拒绝了：请在 Shizuku 的应用列表中允许 TwinDesk",
   "Start Shizuku in its app, then come back and Grant": "先在 Shizuku 应用中启动它，再回来点“授予”",
-  "Without a computer": "无需电脑"
+  "Without a computer": "无需电脑",
+  "App name, such as Spotify": "应用名称，例如 Spotify",
+  "In Spotify: Share › Copy link, then paste it here.": "在 Spotify 中：分享 › 复制链接，然后粘贴到这里。",
+  "Playlist, album or song": "歌单、专辑或歌曲"
 }

@@ -51,7 +51,7 @@
 'use strict';
 
 (function (root) {
-  const KINDS = ['keys', 'text', 'macro', 'media', 'volume', 'mic', 'output', 'input', 'bt', 'bright', 'slider', 'app', 'url', 'open', 'script', 'sys', 'win', 'clip', 'obs', 'nav', 'widget', 'none'];
+  const KINDS = ['keys', 'text', 'macro', 'media', 'volume', 'mic', 'output', 'input', 'bt', 'bright', 'slider', 'mix', 'spotify', 'app', 'url', 'open', 'script', 'sys', 'win', 'clip', 'obs', 'nav', 'widget', 'none'];
   const LOCAL = ['open', 'script']; // only set on this computer, never sent to a device
   const DEVICE = ['nav', 'widget', 'none']; // the device does these itself
   const MEDIA = { playpause: 'MediaPlayPause', next: 'MediaTrackNext', prev: 'MediaTrackPrevious', stop: 'MediaStop' };
@@ -61,7 +61,9 @@
     mic: ['mute', 'unmute', 'toggle'],
     bt: ['on', 'off', 'toggle', 'connect', 'disconnect', 'toggleconn'],
     bright: ['up', 'down', 'set'],
-    slider: ['volume', 'mic', 'bright'],
+    slider: ['volume', 'mic', 'bright', 'app'], // app: one app's volume (name)
+    mix: ['toggle', 'mute', 'unmute'], // one app's mute, by its name (Windows, Linux)
+    spotify: ['play', 'shuffle', 'repeat'], // play: a playlist, album, song… (uri)
     sys: ['lock', 'sleep', 'screenoff', 'desktop', 'switcher', 'overview', 'screenshot', 'shotarea', 'darkmode', 'dnd'],
     win: ['left', 'right', 'top', 'bottom', 'max', 'center', 'min', 'full', 'tl', 'tr', 'bl', 'br', 'third1', 'third2', 'third3', 'nextdisplay', 'close'],
     clip: ['copy', 'cut', 'paste', 'send'],
@@ -87,6 +89,11 @@
   const line = (v, max) => str(v, max).replace(/[\n\t]/g, ' ');
   const int = (v, lo, hi, d) => (v !== null && v !== '' && v !== undefined && Number.isInteger(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d);
   const idOf = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v) ? v : '');
+  // A Spotify link (open.spotify.com/playlist/…, a Share › Copy link) or URI → spotify:kind:id; '' if neither.
+  function spotifyUri(v) {
+    const m = /(?:open\.spotify\.com\/(?:intl-[a-z-]+\/)?|spotify:)(track|album|playlist|artist|episode|show)[/:]([A-Za-z0-9]{22})/.exec(String(v || ''));
+    return m ? `spotify:${m[1]}:${m[2]}` : '';
+  }
   const pickOf = (k, v, d) => (WHATS[k].includes(v) ? v : d);
   let seq = 0;
   const newId = (p = 't') => `${p}${Date.now().toString(36)}${(seq++ % 1296).toString(36)}`;
@@ -135,7 +142,9 @@
       case 'output': case 'input': return { k, id: str(a.id, 300), name: line(a.name, 80) };
       case 'bt': return { k, what: what('toggle'), id: str(a.id, 100), name: line(a.name, 80) };
       case 'bright': return { k, what: what('up'), level: int(a.level, 0, 100, 70), display: str(a.display, 100) };
-      case 'slider': return { k, what: what('volume'), display: str(a.display, 100) };
+      case 'slider': { const w = what('volume'); return w === 'app' ? { k, what: w, name: line(a.name, 80) } : { k, what: w, display: str(a.display, 100) }; }
+      case 'mix': return { k, what: what('toggle'), name: line(a.name, 80) };
+      case 'spotify': { const w = what('play'); return w === 'play' ? { k, what: w, uri: spotifyUri(a.uri), name: line(a.name, 80) } : { k, what: w }; }
       case 'app': return { k, id: str(a.id, 500), name: line(a.name, 80) };
       case 'url': return { k, url: url(a.url) };
       case 'open': return { k, path: str(a.path, 2000).trim() };
@@ -452,7 +461,9 @@
       case 'input': return 'mic';
       case 'bt': return 'bluetooth';
       case 'bright': return w === 'down' ? 'sunDim' : 'sun';
-      case 'slider': return { volume: 'volume', mic: 'mic', bright: 'sun' }[w];
+      case 'slider': return { volume: 'volume', mic: 'mic', bright: 'sun', app: 'volume' }[w];
+      case 'mix': return w === 'unmute' ? 'volume' : 'mute';
+      case 'spotify': return { play: 'play', shuffle: 'switcher', repeat: 'macro' }[w] || 'play';
       case 'app': return 'app';
       case 'url': return 'globe';
       case 'open': return 'folder';

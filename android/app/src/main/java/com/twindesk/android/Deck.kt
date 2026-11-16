@@ -199,7 +199,7 @@ class Deck(core: Core) : Feature(core) {
 
     fun run(id: String) { done = null; core.send(msg(Proto.T.DECK_RUN, "id" to id)) }
     fun set(id: String, value: Float) = core.send(msg(Proto.T.DECK_SET, "id" to id, "value" to value.toDouble()))
-    fun askState(obs: Boolean = false) = core.send(if (obs) msg(Proto.T.DECK_STATE, "obs" to true) else msg(Proto.T.DECK_STATE)) // obs: OBS Studio's scenes and sources too (an OBS tile's editor)
+    fun askState(obs: Boolean = false, mix: Boolean = false) = core.send(if (obs) msg(Proto.T.DECK_STATE, "obs" to true) else if (mix) msg(Proto.T.DECK_STATE, "mix" to true) else msg(Proto.T.DECK_STATE)) // obs: OBS Studio's scenes and sources too (an OBS tile's editor)
     fun askWins() = core.send(msg(Proto.T.DECK_WINS))
     fun askApps() { if (apps == null) core.send(msg(Proto.T.DECK_APPS)) }
     // Apps side by side: [{key, wid?, zone}] on a display (one not running is opened on the computer).
@@ -258,6 +258,7 @@ private fun stateText(a: JSONObject, s: JSONObject?): String {
         "slider" -> level(a, s)?.let { pct(it.toDouble()) } ?: ""
         "volume" -> if (w == "toggle" || w == "mute" || w == "unmute") (if (s.optBoolean("muted")) tr("Muted") else pct(s.optDouble("volume", 0.0))) else ""
         "mic" -> if (s.optBoolean("micMuted")) tr("Muted") else tr("Live")
+        "mix" -> app(a, s)?.let { if (it.optBoolean("muted")) tr("Muted") else pct(it.optDouble("level", 0.0)) } ?: ""
         "output", "input" -> s.optJSONArray(if (a.optString("k") == "output") "outputs" else "inputs").objs()
             .firstOrNull { d -> if (a.optString("id").isNotEmpty()) d.optString("id") == a.optString("id") else d.optBoolean("on") }?.str("name", 60) ?: ""
         "bt" -> {
@@ -281,11 +282,15 @@ private fun stateText(a: JSONObject, s: JSONObject?): String {
         else -> ""
     }
 }
+// One app's volume in the computer's mixer (deck.state mix), by its name.
+private fun app(a: JSONObject, s: JSONObject): JSONObject? = s.optJSONArray("mix").objs().firstOrNull { it.optString("name").equals(a.optString("name"), true) }
+
 private fun level(a: JSONObject, s: JSONObject?): Float? {
     s ?: return null
     return when (a.optString("what")) {
         "volume" -> s.optDouble("volume", Double.NaN)
         "mic" -> s.optDouble("micVolume", Double.NaN)
+        "app" -> app(a, s)?.optDouble("level", Double.NaN) ?: Double.NaN
         else -> s.optJSONArray("displays").objs().firstOrNull { d -> a.optString("display").isEmpty() || d.optString("id") == a.optString("display") }?.optDouble("level", Double.NaN) ?: Double.NaN
     }.takeIf { !it.isNaN() }?.toFloat()
 }
@@ -1507,7 +1512,13 @@ private fun ActionOptions(d: Deck, a: JSONObject, page: JSONObject, put: (Array<
         Text("$name: ${a.optInt(key, def)}" + if (key == "level") "%" else "", color = pal.muted, fontSize = 12.sp)
         Slider(a.optInt(key, def).toFloat(), { set(key to it.roundToInt()) }, valueRange = range.first.toFloat()..range.last.toFloat())
     }
-    LaunchedEffect(k) { if (k in listOf("output", "input", "bt", "bright", "slider")) d.askState() else if (k == "obs") d.askState(obs = true) }
+    LaunchedEffect(k, w) { if (k == "mix" || (k == "slider" && w == "app")) d.askState(mix = true) else if (k in listOf("output", "input", "bt", "bright", "slider")) d.askState() else if (k == "obs") d.askState(obs = true) }
+    // One app, by its name: typed, or one of those playing sound on the computer now.
+    @Composable fun appName() {
+        OutlinedTextField(a.optString("name"), { set("name" to it.take(80)) }, label = { Text(tr("App name, such as Spotify")) }, singleLine = true)
+        val now = s?.optJSONArray("mix").objs().map { it.str("name", 60) }
+        if (now.isNotEmpty()) pick(now.map { it to it }, a.optString("name")) { set("name" to it) }
+    }
     when (k) {
         "keys" -> OutlinedTextField(a.optString("combo"), { set("combo" to it.trim()) }, label = { Text(tr("Shortcut, like Mod+Shift+KeyS")) }, singleLine = true,
             supportingText = { Text(tr("Mod is ⌘ on a Mac and Ctrl elsewhere. Or record it on the computer’s Deck page."), fontSize = 11.sp) })
@@ -1542,7 +1553,11 @@ private fun ActionOptions(d: Deck, a: JSONObject, page: JSONObject, put: (Array<
             pick(devs.map { it.optString("id") to it.str("name", 60) }, a.optString("id")) { id -> set("id" to id, "name" to (devs.firstOrNull { it.optString("id") == id }?.str("name", 80) ?: "")) }
         }
         "volume" -> when (w) { "up", "down" -> amount(tr("Step"), "step", 6, 1..25); "set" -> amount(tr("Level"), "level", 50, 0..100) }
+        "mix" -> appName()
+        "spotify" -> if (w == "play") OutlinedTextField(a.optString("uri"), { set("uri" to it.trim().take(300)) }, label = { Text(tr("Playlist, album or song")) }, singleLine = true,
+            supportingText = { Text(tr("In Spotify: Share › Copy link, then paste it here."), fontSize = 11.sp) })
         "bright", "slider" -> {
+            if (k == "slider" && w == "app") appName()
             if (k == "bright" && w == "set") amount(tr("Level"), "level", 70, 0..100)
             if (k == "bright" || w == "bright") {
                 val ds = s?.optJSONArray("displays").objs()

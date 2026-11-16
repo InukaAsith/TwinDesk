@@ -21,7 +21,7 @@ const api = {
   getState: () => ipcRenderer.invoke('getState'),
   phoneAssets: () => ipcRenderer.invoke('phoneAssets'),
   deckApps: () => ipcRenderer.invoke('deckApps'), // the Deck page's app picker
-  deckState: (obs) => ipcRenderer.invoke('deckState', obs === true), // its sound, Bluetooth and display pickers (OBS's: obs)
+  deckState: (obs) => ipcRenderer.invoke('deckState', obs === true || obs === 'mix' ? obs : false), // its sound, Bluetooth and display pickers (OBS's: obs)
   deckObs: () => ipcRenderer.invoke('deckObs'), // OBS Studio's port, and whether a password is kept
   deckSetObs: (v) => ipcRenderer.invoke('deckSetObs', v), // {port, pass} → OBS's state
   deckPick: (o) => ipcRenderer.invoke('deckPick', o), // a file, folder or script for a tile

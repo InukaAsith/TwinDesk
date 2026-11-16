@@ -7,7 +7,8 @@
 //   deckMixSet {dev, level?, mute?}: that app's level 0–1 and mute, as the Volume mixer sets them
 //   deckMedia -> {playing: {id, app, title, artist, album, state, position, duration} | null,
 //     sessions: [{id, app, title, state}]}: the system media session (what the media keys control)
-//   deckMediaCtl {a: toggle|play|pause|next|prev|stop, dev?}: to that app's session, else the current
+//   deckMediaCtl {a: toggle|play|pause|next|prev|stop|shuffle|repeat, dev?, app?}: to that app's
+//     session (dev: its id; app: its name, "Spotify"), else the current
 // C# 5 (build.cmd). Read only when asked: nothing is watched in between.
 using System;
 using System.Collections.Generic;
@@ -260,7 +261,10 @@ namespace MacShare
             GlobalSystemMediaTransportControlsSessionManager m = Manager();
             string id = Json.Str(c, "dev", "");
             GlobalSystemMediaTransportControlsSession s = null;
-            if (id.Length > 0) foreach (GlobalSystemMediaTransportControlsSession x in m.GetSessions()) if (x.SourceAppUserModelId == id) { s = x; break; }
+            string app = Json.Str(c, "app", "");
+            foreach (GlobalSystemMediaTransportControlsSession x in m.GetSessions())
+                if ((id.Length > 0 && x.SourceAppUserModelId == id) || (app.Length > 0 && string.Equals(AppOf(x.SourceAppUserModelId), app, StringComparison.OrdinalIgnoreCase))) { s = x; break; }
+            if (s == null && app.Length > 0) throw new Exception(app + " isn’t open");
             if (s == null) s = m.GetCurrentSession();
             if (s == null) throw new Exception("Nothing is playing");
             bool ok;
@@ -271,6 +275,20 @@ namespace MacShare
                 case "next": ok = s.TrySkipNextAsync().AsTask().Result; break;
                 case "prev": ok = s.TrySkipPreviousAsync().AsTask().Result; break;
                 case "stop": ok = s.TryStopAsync().AsTask().Result; break;
+                case "shuffle": // on ↔ off
+                    {
+                        GlobalSystemMediaTransportControlsSessionPlaybackInfo p = s.GetPlaybackInfo();
+                        bool on = p != null && p.IsShuffleActive.HasValue && p.IsShuffleActive.Value;
+                        ok = s.TryChangeShuffleActiveAsync(!on).AsTask().Result;
+                        break;
+                    }
+                case "repeat": // off → the list → off (as Spotify's own button goes, but one song stays its own)
+                    {
+                        GlobalSystemMediaTransportControlsSessionPlaybackInfo p = s.GetPlaybackInfo();
+                        bool on = p != null && p.AutoRepeatMode.HasValue && p.AutoRepeatMode.Value != Windows.Media.MediaPlaybackAutoRepeatMode.None;
+                        ok = s.TryChangeAutoRepeatModeAsync(on ? Windows.Media.MediaPlaybackAutoRepeatMode.None : Windows.Media.MediaPlaybackAutoRepeatMode.List).AsTask().Result;
+                        break;
+                    }
                 default: ok = s.TryTogglePlayPauseAsync().AsTask().Result; break;
             }
             if (!ok) throw new Exception("The app didn’t take it");

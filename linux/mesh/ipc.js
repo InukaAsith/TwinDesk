@@ -323,7 +323,7 @@ function setupIpc(ctx) {
     return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
   });
   handle('deckRun', (a) => { const d = ctx.deck && ctx.deck(); return d && a && typeof a === 'object' ? d.exec(a).then(() => ({ ok: true }), (e) => ({ ok: false, why: e.message })) : { ok: false }; }); // Try
-  handle('deckState', () => { const d = ctx.deck && ctx.deck(); return d ? d.state().catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays
+  handle('deckState', (o) => { const d = ctx.deck && ctx.deck(); return d ? d.state(false, o === 'mix').catch(() => ({})) : {}; }); // sound devices, Bluetooth devices, displays
   // Remote tab: each phone's Remote page here (shared/perphone.js phoneRemote).
   handle('setRemote', (m) => {
     if (!m || typeof m !== 'object') return;

@@ -1219,5 +1219,8 @@
   "Open Shizuku": "Shizuku'yu aç",
   "Shizuku said no before: allow TwinDesk in Shizuku’s app list": "Shizuku daha önce reddetti: Shizuku'nun uygulama listesinde TwinDesk'e izin verin",
   "Start Shizuku in its app, then come back and Grant": "Shizuku'yu kendi uygulamasında başlatın, sonra geri dönüp İzin ver'e dokunun",
-  "Without a computer": "Bilgisayar olmadan"
+  "Without a computer": "Bilgisayar olmadan",
+  "App name, such as Spotify": "Uygulama adı, ör. Spotify",
+  "In Spotify: Share › Copy link, then paste it here.": "Spotify'da: Paylaş › Bağlantıyı kopyala, sonra buraya yapıştırın.",
+  "Playlist, album or song": "Çalma listesi, albüm veya şarkı"
 }

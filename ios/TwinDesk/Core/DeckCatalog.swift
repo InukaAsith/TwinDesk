@@ -14,7 +14,7 @@ enum DeckCatalog {
         var k: String { action.str("k") }
         var what: String? { let w = action.str("what"); return w.isEmpty ? nil : w }
     }
-    static let groups: [(String, String)] = [("keyboard", "Keyboard"), ("media", "Media"), ("sound", "Sound"), ("bluetooth", "Bluetooth"), ("display", "Display"), ("windows", "Windows"), ("system", "System"), ("open", "Apps and websites"), ("files", "Files and scripts"), ("clipboard", "Clipboard"), ("obs", "OBS Studio"), ("widgets", "Widgets"), ("deck", "Deck navigation")]
+    static let groups: [(String, String)] = [("keyboard", "Keyboard"), ("media", "Media"), ("sound", "Sound"), ("spotify", "Spotify"), ("bluetooth", "Bluetooth"), ("display", "Display"), ("windows", "Windows"), ("system", "System"), ("open", "Apps and websites"), ("files", "Files and scripts"), ("clipboard", "Clipboard"), ("obs", "OBS Studio"), ("widgets", "Widgets"), ("deck", "Deck navigation")]
     static let entries: [Entry] = [
         Entry(id: "keys", group: "keyboard", names: ["": "Keyboard shortcut"], descs: ["": "Presses a key combination. Record it or type it."], actionJSON: "{\"k\":\"keys\",\"combo\":\"\"}", needs: "", local: false, device: false, wide: false),
         Entry(id: "text", group: "keyboard", names: ["": "Type text"], descs: ["": "Types a snippet as if from the keyboard, optionally followed by Return."], actionJSON: "{\"k\":\"text\",\"text\":\"\"}", needs: "", local: false, device: false, wide: false),
@@ -34,8 +34,16 @@ enum DeckCatalog {
         Entry(id: "mic.mute", group: "sound", names: ["": "Mute microphone"], descs: ["": "Mutes the default microphone."], actionJSON: "{\"k\":\"mic\",\"what\":\"mute\"}", needs: "mic", local: false, device: false, wide: false),
         Entry(id: "mic.unmute", group: "sound", names: ["": "Unmute microphone"], descs: ["": "Unmutes the default microphone."], actionJSON: "{\"k\":\"mic\",\"what\":\"unmute\"}", needs: "mic", local: false, device: false, wide: false),
         Entry(id: "slider.mic", group: "sound", names: ["": "Microphone level"], descs: ["": "A slider for the input level of the default microphone."], actionJSON: "{\"k\":\"slider\",\"what\":\"mic\"}", needs: "mic", local: false, device: false, wide: true),
+        Entry(id: "slider.app", group: "sound", names: ["": "App volume slider"], descs: ["": "A slider for one app’s volume, as the volume mixer has it. Type the app’s name, or pick one that is playing."], actionJSON: "{\"k\":\"slider\",\"what\":\"app\",\"name\":\"\"}", needs: "mixer", local: false, device: false, wide: true),
+        Entry(id: "mix.toggle", group: "sound", names: ["": "Mute an app"], descs: ["": "Mutes or unmutes one app, such as a game or a browser, leaving the rest."], actionJSON: "{\"k\":\"mix\",\"what\":\"toggle\",\"name\":\"\"}", needs: "mixer", local: false, device: false, wide: false),
         Entry(id: "output", group: "sound", names: ["": "Audio output"], descs: ["": "Makes a chosen speaker or headset the default output, or cycles through them."], actionJSON: "{\"k\":\"output\",\"id\":\"\",\"name\":\"\"}", needs: "outputs", local: false, device: false, wide: false),
         Entry(id: "input", group: "sound", names: ["": "Audio input"], descs: ["": "Makes a chosen microphone the default input."], actionJSON: "{\"k\":\"input\",\"id\":\"\",\"name\":\"\"}", needs: "outputs", local: false, device: false, wide: false),
+        Entry(id: "spotify.play", group: "spotify", names: ["": "Play a playlist, album or song"], descs: ["": "Opens it in the Spotify app: paste its link (Share › Copy link). Spotify’s own link, nothing goes over the internet from TwinDesk."], actionJSON: "{\"k\":\"spotify\",\"what\":\"play\",\"uri\":\"\",\"name\":\"\"}", needs: "spotify", local: false, device: false, wide: false),
+        Entry(id: "media.playpause", group: "spotify", names: ["": "Play or pause"], descs: ["": "Plays or pauses Spotify, or what is playing."], actionJSON: "{\"k\":\"media\",\"what\":\"playpause\"}", needs: "", local: false, device: false, wide: false),
+        Entry(id: "media.next", group: "spotify", names: ["": "Next song"], descs: ["": "Skips to the next song."], actionJSON: "{\"k\":\"media\",\"what\":\"next\"}", needs: "", local: false, device: false, wide: false),
+        Entry(id: "media.prev", group: "spotify", names: ["": "Previous song"], descs: ["": "Goes back to the previous song."], actionJSON: "{\"k\":\"media\",\"what\":\"prev\"}", needs: "", local: false, device: false, wide: false),
+        Entry(id: "spotify.shuffle", group: "spotify", names: ["": "Shuffle"], descs: ["": "Turns Spotify’s shuffle on or off."], actionJSON: "{\"k\":\"spotify\",\"what\":\"shuffle\"}", needs: "spotifyModes", local: false, device: false, wide: false),
+        Entry(id: "spotify.repeat", group: "spotify", names: ["": "Repeat"], descs: ["": "Turns Spotify’s repeat on or off."], actionJSON: "{\"k\":\"spotify\",\"what\":\"repeat\"}", needs: "spotifyModes", local: false, device: false, wide: false),
         Entry(id: "bt.toggleconn", group: "bluetooth", names: ["": "Connect or disconnect"], descs: ["": "Connects a paired device, or disconnects it if it is connected."], actionJSON: "{\"k\":\"bt\",\"what\":\"toggleconn\",\"id\":\"\",\"name\":\"\"}", needs: "bt", local: false, device: false, wide: false),
         Entry(id: "bt.connect", group: "bluetooth", names: ["": "Connect device"], descs: ["": "Connects a paired device, such as headphones or a speaker."], actionJSON: "{\"k\":\"bt\",\"what\":\"connect\",\"id\":\"\",\"name\":\"\"}", needs: "bt", local: false, device: false, wide: false),
         Entry(id: "bt.disconnect", group: "bluetooth", names: ["": "Disconnect device"], descs: ["": "Disconnects a paired device."], actionJSON: "{\"k\":\"bt\",\"what\":\"disconnect\",\"id\":\"\",\"name\":\"\"}", needs: "bt", local: false, device: false, wide: false),
@@ -134,7 +142,9 @@ enum DeckCatalog {
         case "input": return "mic"
         case "bt": return (["on": "bluetooth", "off": "bluetooth", "toggle": "bluetooth", "connect": "bluetooth", "disconnect": "bluetooth", "toggleconn": "bluetooth"] as [String: String])[w] ?? "bluetooth"
         case "bright": return (["up": "sun", "down": "sunDim", "set": "sun"] as [String: String])[w] ?? "sun"
-        case "slider": return (["volume": "volume", "mic": "mic", "bright": "sun"] as [String: String])[w] ?? "volume"
+        case "slider": return (["volume": "volume", "mic": "mic", "bright": "sun", "app": "volume"] as [String: String])[w] ?? "volume"
+        case "mix": return (["toggle": "mute", "mute": "mute", "unmute": "volume"] as [String: String])[w] ?? "mute"
+        case "spotify": return (["play": "play", "shuffle": "switcher", "repeat": "macro"] as [String: String])[w] ?? "play"
         case "app": return "app"
         case "url": return "globe"
         case "open": return "folder"

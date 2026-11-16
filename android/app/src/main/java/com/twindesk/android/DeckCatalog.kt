@@ -22,7 +22,7 @@ object DeckCatalog {
         val k: String get() = JSONObject(action).optString("k")
         val what: String? get() = JSONObject(action).optString("what").ifEmpty { null }
     }
-    val GROUPS = listOf("keyboard" to "Keyboard", "media" to "Media", "sound" to "Sound", "bluetooth" to "Bluetooth", "display" to "Display", "windows" to "Windows", "system" to "System", "open" to "Apps and websites", "files" to "Files and scripts", "clipboard" to "Clipboard", "obs" to "OBS Studio", "widgets" to "Widgets", "deck" to "Deck navigation")
+    val GROUPS = listOf("keyboard" to "Keyboard", "media" to "Media", "sound" to "Sound", "spotify" to "Spotify", "bluetooth" to "Bluetooth", "display" to "Display", "windows" to "Windows", "system" to "System", "open" to "Apps and websites", "files" to "Files and scripts", "clipboard" to "Clipboard", "obs" to "OBS Studio", "widgets" to "Widgets", "deck" to "Deck navigation")
     val ENTRIES = listOf(
         Entry("keys", "keyboard", mapOf("" to "Keyboard shortcut"), mapOf("" to "Presses a key combination. Record it or type it."), "{\"k\":\"keys\",\"combo\":\"\"}", "", false, false, false),
         Entry("text", "keyboard", mapOf("" to "Type text"), mapOf("" to "Types a snippet as if from the keyboard, optionally followed by Return."), "{\"k\":\"text\",\"text\":\"\"}", "", false, false, false),
@@ -42,8 +42,16 @@ object DeckCatalog {
         Entry("mic.mute", "sound", mapOf("" to "Mute microphone"), mapOf("" to "Mutes the default microphone."), "{\"k\":\"mic\",\"what\":\"mute\"}", "mic", false, false, false),
         Entry("mic.unmute", "sound", mapOf("" to "Unmute microphone"), mapOf("" to "Unmutes the default microphone."), "{\"k\":\"mic\",\"what\":\"unmute\"}", "mic", false, false, false),
         Entry("slider.mic", "sound", mapOf("" to "Microphone level"), mapOf("" to "A slider for the input level of the default microphone."), "{\"k\":\"slider\",\"what\":\"mic\"}", "mic", false, false, true),
+        Entry("slider.app", "sound", mapOf("" to "App volume slider"), mapOf("" to "A slider for one app’s volume, as the volume mixer has it. Type the app’s name, or pick one that is playing."), "{\"k\":\"slider\",\"what\":\"app\",\"name\":\"\"}", "mixer", false, false, true),
+        Entry("mix.toggle", "sound", mapOf("" to "Mute an app"), mapOf("" to "Mutes or unmutes one app, such as a game or a browser, leaving the rest."), "{\"k\":\"mix\",\"what\":\"toggle\",\"name\":\"\"}", "mixer", false, false, false),
         Entry("output", "sound", mapOf("" to "Audio output"), mapOf("" to "Makes a chosen speaker or headset the default output, or cycles through them."), "{\"k\":\"output\",\"id\":\"\",\"name\":\"\"}", "outputs", false, false, false),
         Entry("input", "sound", mapOf("" to "Audio input"), mapOf("" to "Makes a chosen microphone the default input."), "{\"k\":\"input\",\"id\":\"\",\"name\":\"\"}", "outputs", false, false, false),
+        Entry("spotify.play", "spotify", mapOf("" to "Play a playlist, album or song"), mapOf("" to "Opens it in the Spotify app: paste its link (Share › Copy link). Spotify’s own link, nothing goes over the internet from TwinDesk."), "{\"k\":\"spotify\",\"what\":\"play\",\"uri\":\"\",\"name\":\"\"}", "spotify", false, false, false),
+        Entry("media.playpause", "spotify", mapOf("" to "Play or pause"), mapOf("" to "Plays or pauses Spotify, or what is playing."), "{\"k\":\"media\",\"what\":\"playpause\"}", "", false, false, false),
+        Entry("media.next", "spotify", mapOf("" to "Next song"), mapOf("" to "Skips to the next song."), "{\"k\":\"media\",\"what\":\"next\"}", "", false, false, false),
+        Entry("media.prev", "spotify", mapOf("" to "Previous song"), mapOf("" to "Goes back to the previous song."), "{\"k\":\"media\",\"what\":\"prev\"}", "", false, false, false),
+        Entry("spotify.shuffle", "spotify", mapOf("" to "Shuffle"), mapOf("" to "Turns Spotify’s shuffle on or off."), "{\"k\":\"spotify\",\"what\":\"shuffle\"}", "spotifyModes", false, false, false),
+        Entry("spotify.repeat", "spotify", mapOf("" to "Repeat"), mapOf("" to "Turns Spotify’s repeat on or off."), "{\"k\":\"spotify\",\"what\":\"repeat\"}", "spotifyModes", false, false, false),
         Entry("bt.toggleconn", "bluetooth", mapOf("" to "Connect or disconnect"), mapOf("" to "Connects a paired device, or disconnects it if it is connected."), "{\"k\":\"bt\",\"what\":\"toggleconn\",\"id\":\"\",\"name\":\"\"}", "bt", false, false, false),
         Entry("bt.connect", "bluetooth", mapOf("" to "Connect device"), mapOf("" to "Connects a paired device, such as headphones or a speaker."), "{\"k\":\"bt\",\"what\":\"connect\",\"id\":\"\",\"name\":\"\"}", "bt", false, false, false),
         Entry("bt.disconnect", "bluetooth", mapOf("" to "Disconnect device"), mapOf("" to "Disconnects a paired device."), "{\"k\":\"bt\",\"what\":\"disconnect\",\"id\":\"\",\"name\":\"\"}", "bt", false, false, false),
@@ -206,7 +214,9 @@ object DeckCatalog {
             "input" -> "mic"
             "bt" -> when (w) { "on" -> "bluetooth"; "off" -> "bluetooth"; "toggle" -> "bluetooth"; "connect" -> "bluetooth"; "disconnect" -> "bluetooth"; "toggleconn" -> "bluetooth"; else -> "bluetooth" }
             "bright" -> when (w) { "up" -> "sun"; "down" -> "sunDim"; "set" -> "sun"; else -> "sun" }
-            "slider" -> when (w) { "volume" -> "volume"; "mic" -> "mic"; "bright" -> "sun"; else -> "volume" }
+            "slider" -> when (w) { "volume" -> "volume"; "mic" -> "mic"; "bright" -> "sun"; "app" -> "volume"; else -> "volume" }
+            "mix" -> when (w) { "toggle" -> "mute"; "mute" -> "mute"; "unmute" -> "volume"; else -> "mute" }
+            "spotify" -> when (w) { "play" -> "play"; "shuffle" -> "switcher"; "repeat" -> "macro"; else -> "play" }
             "app" -> "app"
             "url" -> "globe"
             "open" -> "folder"
