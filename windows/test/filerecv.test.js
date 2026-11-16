@@ -204,3 +204,18 @@ test('a batch cut off by a disconnect keeps its folder for the rest', async (t) 
   assert.deepEqual(fs.readdirSync(path.join(f.dir, 'Docs')).sort(), ['a.txt', 'b.txt']);
   assert.equal(fs.existsSync(path.join(f.dir, 'Docs 2')), false);
 });
+
+test('files the phone was asked for are taken with Take files from off (#239)', async (t) => {
+  const f = fixture(t);
+  f.recv.settings.files.acceptFromMac = false;
+  f.offer('unasked', 'x.jpg', 1, { drop: 'send', batch: 'u', count: 1 });
+  await tick();
+  assert.ok(f.sent.some((m) => m.t === P.T.FILE_REFUSE && m.id === 'unasked'), 'a Send nobody asked for is refused');
+  f.recv.askedSends();
+  f.offer('photo', 'PXL_1.jpg', 1, { drop: 'send', batch: 'p', count: 1 });
+  f.chunk('photo', Buffer.from('p'));
+  f.end('photo', Buffer.from('p'));
+  await until(() => f.sent.some((m) => m.t === P.T.FILES_DONE && m.batch === 'p'));
+  assert.ok(f.sent.some((m) => m.t === P.T.FILE_ACCEPT && m.id === 'photo'), 'the asked-for photo is accepted');
+  assert.ok(fs.existsSync(path.join(f.dir, 'PXL_1.jpg')));
+});

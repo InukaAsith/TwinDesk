@@ -325,6 +325,9 @@ class PhoneHub extends EventEmitter {
         break;
       default: return;
     }
+    // Photos › Save, Files › Save: the files come back as an ordinary Send (file.offer, drop 'send'),
+    // taken even with Take files from {name} off, since they were asked for here (#239: stuck at 0%).
+    if (out.t === T.MEDIA_SAVE || out.t === T.FS_SAVE) this.emit('asked');
     this.server.sendToClient(out);
   }
 

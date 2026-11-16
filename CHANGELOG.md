@@ -96,6 +96,8 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   on the phone's stream: they switch to software decoding (#233).
 - **Several phones on adb:** one phone's address no longer matches another's that starts the same
   (192.168.8.17 and 192.168.8.175), so screens, apps and the camera come from the right phone (#239).
+- **Photos › Save and Files › Save** from a phone (Windows, Linux): the files are taken even with
+  Take files from {name} off, since they were asked for; they stayed at 0% (#239).
 - **The log** can't fill the disk: a line repeated in a loop is written once and counted, and a
   packaged Linux app started from the menu no longer copies everything to the desktop's own log (#239).
 - **Linux on Wayland** (Hyprland, niri): the log says why a push against the screen's edge didn't cross (#237).

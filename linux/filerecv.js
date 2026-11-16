@@ -66,6 +66,12 @@ class FileRecv {
     try { fs.rmSync(this.dir, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
   }
 
+  // The phone was asked for files here (Photos › Save, Files › Save: PhoneHub 'asked'): a Send batch
+  // starting in the next 2 minutes is taken whatever Take files from says (#239).
+  askedSends(ms = 120000) {
+    this.askedUntil = Date.now() + ms;
+  }
+
   _offer(m) {
     if (typeof m.id !== 'string' || this.files.has(m.id) || this.bfiles.has(m.id) || m.drop === 'drag') return; // drags: dragrecv.js
     if (this.claims && this.claims(m)) return; // a paste Windows copies itself (dragrecv.js)
@@ -183,7 +189,7 @@ class FileRecv {
     if (!b) {
       const pasted = this.expected.get(m.batch);
       if ((m.drop === 'paste' || m.drop === 'rezume') && !pasted) return refuse('not_allowed'); // we never asked for it
-      if (m.drop === 'send' && !this.settings.files.acceptFromMac) return refuse('not_allowed');
+      if (m.drop === 'send' && !this.settings.files.acceptFromMac && !(Date.now() < this.askedUntil)) return refuse('not_allowed');
       // total: the whole batch's bytes (file.offer `bytes`, or what fclip.offer said); 0 = unknown.
       const total = Number(m.bytes) > 0 ? Number(m.bytes) : pasted ? pasted.bytes : 0;
       const was = m.drop === 'send' && typeof m.cont === 'string' ? this.kept.get(m.cont) : null; // the rest of an earlier one

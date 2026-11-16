@@ -651,6 +651,7 @@ function loadHub() {
       wifi: (on) => (!net ? Promise.resolve(false) : on ? net.need('folder') : Promise.resolve(net.release('folder'))), // through Bluetooth
     },
   });
+  phoneHub.on('asked', () => { if (fileRecv) fileRecv.askedSends(); }); // its files come back as a Send (#239)
   phoneHub.on('change', pushState);
   phoneHub.on('data', (m) => mainWin && !mainWin.isDestroyed() && mainWin.webContents.send('hub', m));
   const popup = () => {
