@@ -1205,5 +1205,6 @@
   "For {app}: debugging and Developer options are off. Open TwinDesk to turn them back on.": "Para {app}: a depuração e as Opções do desenvolvedor estão desligadas. Abra o TwinDesk para religá-las.",
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "Para {app}: a depuração está desligada. Abra o TwinDesk para religá-la.",
   "TwinDesk is fully closed": "O TwinDesk está totalmente fechado",
-  "When you open TwinDesk again, what it turned off comes back on": "Quando você abrir o TwinDesk de novo, o que ele desligou volta a ligar"
+  "When you open TwinDesk again, what it turned off comes back on": "Quando você abrir o TwinDesk de novo, o que ele desligou volta a ligar",
+  "{on} of {all} on": "{on} de {all} ligados"
 }

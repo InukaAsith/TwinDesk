@@ -1695,10 +1695,17 @@ private fun SoundStart(core: Core) {
 private fun ModulesCard(core: Core) {
     val ctx = LocalContext.current
     var off by remember { mutableStateOf(Modules.off(core.store)) }
+    var open by remember { mutableStateOf(false) } // collapsed each time the page opens
+    val all = Tab.entries.filter { it.name.lowercase() !in Modules.FIXED }
     MacCard(tr("Modules")) {
-        MacRow(tr("Modules"), tr("A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on."), first = true)
+        MacRow(
+            tr("Modules"),
+            if (open) tr("A module that’s off isn’t loaded at all: no page, no menu items, nothing running. General, About, Connection and Overview are always on.")
+            else tr("{on} of {all} on", "on" to all.count { it.name.lowercase() !in off }, "all" to all.size),
+            first = true, onClick = { open = !open },
+        ) { Text(if (open) tr("Done") else tr("Choose"), color = pal.accent, fontSize = 14.sp) }
         if (off != core.modulesAtStart) MacRow(tr("Restart to apply"), tr("Modules load or unload when TwinDesk starts")) { Primary(tr("Restart")) { Modules.restart(ctx) } }
-        for (t in Tab.entries) {
+        if (open) for (t in Tab.entries) {
             val id = t.name.lowercase()
             if (id in Modules.FIXED) continue
             SwitchRow(tr(t.title), "", id !in off) { Modules.set(core.store, id, it); off = Modules.off(core.store) }

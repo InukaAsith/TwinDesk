@@ -1205,5 +1205,6 @@
   "For {app}: debugging and Developer options are off. Open TwinDesk to turn them back on.": "{app} için: hata ayıklama ve Geliştirici seçenekleri kapalı. Yeniden açmak için TwinDesk'i açın.",
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "{app} için: hata ayıklama kapalı. Yeniden açmak için TwinDesk'i açın.",
   "TwinDesk is fully closed": "TwinDesk tamamen kapatıldı",
-  "When you open TwinDesk again, what it turned off comes back on": "TwinDesk'i yeniden açtığınızda, kapattığı her şey yeniden açılır"
+  "When you open TwinDesk again, what it turned off comes back on": "TwinDesk'i yeniden açtığınızda, kapattığı her şey yeniden açılır",
+  "{on} of {all} on": "{all} modülden {on} tanesi açık"
 }

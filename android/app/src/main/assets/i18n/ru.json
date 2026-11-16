@@ -1205,5 +1205,6 @@
   "For {app}: debugging and Developer options are off. Open TwinDesk to turn them back on.": "Для {app}: отладка и параметры разработчика выключены. Откройте TwinDesk, чтобы включить их снова.",
   "For {app}: debugging is off. Open TwinDesk to turn it back on.": "Для {app}: отладка выключена. Откройте TwinDesk, чтобы включить её снова.",
   "TwinDesk is fully closed": "TwinDesk полностью закрыт",
-  "When you open TwinDesk again, what it turned off comes back on": "Когда вы снова откроете TwinDesk, всё выключенное включится обратно"
+  "When you open TwinDesk again, what it turned off comes back on": "Когда вы снова откроете TwinDesk, всё выключенное включится обратно",
+  "{on} of {all} on": "Включено {on} из {all}"
 }
