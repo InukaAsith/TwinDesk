@@ -375,11 +375,15 @@ function start() {
   peerApps = new PeerApps({ link, settings, popup: (kind, text) => hud.show(kind, text), peerName, onChange: pushState });
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (peerapps.js); one of this PC's goes over (pcapps.js).
+  // In Multi-device it goes to the device the pointer went to, selected first, with what that
+  // device said about taking windows (shared/mesh-movewin.js: #250, #251).
+  const meshMoves = require('../../shared/mesh-movewin.js').meshMoves(hub, P.T);
   kvm.onMoveWindow = (m, to) => {
     const wid = Number(m.moving);
-    if (to && to !== hub.selectedId) return; // apps and windows go to the selected device only
     if (!wid || peerApps.returnWindow(wid)) return;
-    if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
+    if (!settings.pcApps.moveWindows) return;
+    if (!meshMoves.ready(to, (v) => { pcApps.macAccepts = v; })) return;
+    pcApps.moveOut(wid, m.fromX !== undefined ? { x: Number(m.fromX), y: Number(m.fromY) } : undefined).then((ok) => ok || console.log(`[apps] window not moved: ${pcApps.macAccepts ? 'it can’t go (Bluetooth, gone, already there)' : 'Move windows is off on the other computer'}`));
   };
   helper.on('exit', pushState);
   helper.on('ready', () => { sendScreens(); pushState(); });

@@ -2318,4 +2318,6 @@
   "Local API": "Yerel API",
   "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "Bu bilgisayardaki kendi betikleriniz için: adresi ve anahtarı {file} içinde, anahtar her başlatmada değişir",
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Bu bilgisayardaki kendi betiklerinizin dosya göndermesine ve panoyu ayarlamasına izin verir. Tarayıcıdan erişilemez",
+  "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "Xorg oturumu gerekir: Wayland uygulamaların diğer uygulamaların pencerelerini taşımasına izin vermez",
+  "Switch on Move windows on {name} too": "{name} üzerinde de Pencereleri taşı'yı açın",
 });

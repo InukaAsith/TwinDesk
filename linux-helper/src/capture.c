@@ -668,7 +668,7 @@ void capture_feed_return(int x, int y, double dx, double dy) {
     JOut o;
     jo_begin(&o);
     jo_str(&o, "event", "return");
-    { unsigned long mw = wins_move_take(0); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
+    { unsigned long mw = wins_move_take(0); if (mw) { int fx, fy; wins_move_from(&fx, &fy); jo_num(&o, "moving", (double)mw); jo_num(&o, "fromX", fx); jo_num(&o, "fromY", fy); } } // a grabbed window goes along
     jo_str(&o, "side", side_name(s));
     jo_num(&o, "offset", round(screens_offset(x, y, s) * 10000) / 10000);
     emit(jo_end(&o));
@@ -698,7 +698,7 @@ static void multi_edge_push(int x, int y, unsigned mask, double rdx, double rdy)
     jo_begin(&o);
     jo_str(&o, "event", "edge");
     jo_num(&o, "crossingFlags", crossing_bits());
-    { unsigned long mw = wins_move_take(1); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
+    { unsigned long mw = wins_move_take(1); if (mw) { int fx, fy; wins_move_from(&fx, &fy); jo_num(&o, "moving", (double)mw); jo_num(&o, "fromX", fx); jo_num(&o, "fromY", fy); } } // a grabbed window goes along
     jo_str(&o, "side", side_name(s));
     jo_num(&o, "offset", round(offset * 10000) / 10000);
     emit(jo_end(&o));
@@ -722,7 +722,7 @@ void capture_feed_return(int x, int y, double dx, double dy) {
   JOut o;
   jo_begin(&o);
   jo_str(&o, "event", "return");
-  { unsigned long mw = wins_move_take(0); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
+  { unsigned long mw = wins_move_take(0); if (mw) { int fx, fy; wins_move_from(&fx, &fy); jo_num(&o, "moving", (double)mw); jo_num(&o, "fromX", fx); jo_num(&o, "fromY", fy); } } // a grabbed window goes along
   jo_num(&o, "offset", round(screens_offset(x, y, retSide) * 10000) / 10000);
   emit(jo_end(&o));
 }
@@ -770,7 +770,7 @@ static void on_motion(double dx, double dy, double rdx, double rdy) {
   jo_begin(&o);
   jo_str(&o, "event", "edge");
     jo_num(&o, "crossingFlags", crossing_bits());
-  { unsigned long mw = wins_move_take(1); if (mw) jo_num(&o, "moving", (double)mw); } // a grabbed window goes along
+  { unsigned long mw = wins_move_take(1); if (mw) { int fx, fy; wins_move_from(&fx, &fy); jo_num(&o, "moving", (double)mw); jo_num(&o, "fromX", fx); jo_num(&o, "fromY", fy); } } // a grabbed window goes along
   jo_num(&o, "offset", round(offset * 10000) / 10000);
   emit(jo_end(&o));
 #endif

@@ -337,6 +337,7 @@ static unsigned mvMod;       // its modifier mask (the passive grab)
 static Window mvGrab;        // the app window following the pointer
 static int mvDx, mvDy;       // the pointer's place in it (its client window)
 static int mvUp;             // the left button's release is not passed on (its press wasn't)
+static int mvFromX, mvFromY; // its visible frame's top left when grabbed: where it comes back to (#252)
 
 static const unsigned MV_IGNORED[] = { 0, LockMask, Mod2Mask, LockMask | Mod2Mask }; // Caps Lock, Num Lock
 
@@ -405,6 +406,10 @@ int wins_move_xevent(XEvent *e) {
         mvDx = e->xbutton.x_root - wx;
         mvDy = e->xbutton.y_root - wy;
         mvUp = 1;
+        int l, r, t, b;
+        extents(c, &l, &r, &t, &b);
+        mvFromX = wx - l; // as `windows` lists it, and winPlace takes it
+        mvFromY = wy - t;
         client_message(c, "_NET_ACTIVE_WINDOW", 2, CurrentTime);
         XAllowEvents(dpy_in, AsyncPointer, e->xbutton.time); // ours: the app never sees the click
         XFlush(dpy_in);
@@ -437,6 +442,9 @@ int wins_move_eat_up(void) {
 
 // Crossing with a grabbed window: its id (capture.c adds `moving`), and the grab ends. keepUp: the
 // button is still down here (the home side), its release comes later and is not passed on.
+// The window wins_move_take gave: where it was when it was grabbed (fromX/fromY next to `moving`).
+void wins_move_from(int *x, int *y) { *x = mvFromX; *y = mvFromY; }
+
 unsigned long wins_move_take(int keepUp) {
   Window w = mvGrab;
   mvGrab = 0;

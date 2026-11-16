@@ -2318,4 +2318,6 @@
   "Local API": "Локальный API",
   "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "Для ваших скриптов на этом компьютере: адрес и ключ лежат в {file}, ключ меняется при каждом запуске",
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "Позволяет вашим скриптам на этом компьютере отправлять файлы и задавать буфер обмена. Из браузера — нельзя",
+  "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "Нужен сеанс Xorg: Wayland не позволяет приложениям перемещать окна других приложений",
+  "Switch on Move windows on {name} too": "Включите «Перемещение окон» и на {name}",
 });

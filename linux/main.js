@@ -415,7 +415,7 @@ function start() {
   kvm.onMoveWindow = (m) => {
     const wid = Number(m.moving);
     if (!wid || peerApps.returnWindow(wid)) return;
-    if (settings.pcApps.moveWindows) pcApps.moveOut(wid);
+    if (settings.pcApps.moveWindows) pcApps.moveOut(wid, m.fromX !== undefined ? { x: Number(m.fromX), y: Number(m.fromY) } : undefined);
   };
   helper.on('exit', pushState);
   helper.on('ready', () => { sendScreens(); pushState(); });

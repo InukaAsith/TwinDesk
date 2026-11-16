@@ -690,11 +690,15 @@ app.whenReady().then(() => {
   if (settings.drive.on) svc.loadDrive();
   // Apps › Move windows: a window grabbed with the move key crossed with the pointer. A
   // copy of the other computer's window goes home there (pcapps.js); one of this Mac's goes over (appsend.js).
+  // In Multi-device it goes to the device the pointer went to, selected first, with what that
+  // device said about taking windows (shared/mesh-movewin.js: #250, #251).
+  const meshMoves = require('../../shared/mesh-movewin.js').meshMoves(hub, P.T);
   svc.kvm.onMoveWindow = (m, to) => {
     const wid = Number(m.moving);
-    if (to && to !== hub.selectedId) return; // apps and windows go to the selected device only
     if (!wid || svc.pcApps.returnWindow(wid)) return;
-    if (settings.apps.moveWindows) svc.appSend.moveOut(wid, Number(m.movingPid));
+    if (!settings.apps.moveWindows) return;
+    if (!meshMoves.ready(to, (v) => { svc.appSend.accepts = v; })) return;
+    svc.appSend.moveOut(wid, Number(m.movingPid));
   };
   if (settings.app.openAtLogin !== login.isOn()) login.apply(settings.app.openAtLogin);
 

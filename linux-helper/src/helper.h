@@ -125,6 +125,7 @@ int wins_move_xevent(XEvent *e);         // the grab's core events (main.c's dpy
 int wins_grabbing(void);                 // a window follows the pointer
 int wins_move_eat_up(void);              // the grab's left-button release: not passed on
 unsigned long wins_move_take(int keepUp); // crossing: the grabbed window (0: none); the grab ends
+void wins_move_from(int *x, int *y); // …and its visible top left when it was grabbed
 void wins_park(unsigned long wid);
 void wins_place(unsigned long wid, int x, int y);
 

@@ -44,8 +44,10 @@ UI.tab({
     const moveSw = UI.switch((v) => api.setPcApps({ moveWindows: v }), { label: t('Move windows') });
     const moveKey = UI.select(MOVE_KEYS.map(([value, label]) => ({ value, label })), (v) => api.setPcApps({ moveKey: v }));
     const moveKeyRow = UI.row(t('Key to hold'), t('Hold it, then click anywhere in a window and drag'), [moveKey]);
+    const MOVE_HINT = 'Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home';
+    const moveRow = UI.row(t('Move windows to {name}'), t(MOVE_HINT), [moveSw]);
     const moveCard = UI.card(t('Move windows'), [
-      UI.row(t('Move windows to {name}'), t('Drag a window past the edge with the key held: it opens on {name} and leaves this screen. Drag it back or close it there to bring it home'), [moveSw]),
+      moveRow,
       moveKeyRow,
     ]);
     const listCard = UI.card(t('Mac apps'), [UI.row(t('Search'), '', [filter]), grid, status], { actions: [refresh] });
@@ -59,7 +61,14 @@ UI.tab({
       rezume.update(s);
       moveSw.set(!!s.pcApps.moveWindows);
       moveKey.set(s.pcApps.moveKey || 'ControlRight');
-      moveKeyRow.hidden = !s.pcApps.moveWindows;
+      // Wayland can't grab another app's window (#249); the other side takes windows only with its own
+      // Move windows on too (#253): both said here instead of a drag that does nothing.
+      const noMove = !!s.pcApps.wayland;
+      moveSw.disable(noMove);
+      moveKeyRow.hidden = !s.pcApps.moveWindows || noMove;
+      moveRow.setHint(noMove ? t('Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows')
+        : s.pcApps.moveWindows && s.link.state === 'connected' && !s.pcApps.macAccepts ? t('Switch on Move windows on {name} too')
+          : t(MOVE_HINT));
       const a = s.apps;
       const connected = s.link.state === 'connected';
       pair.update(s); // the two direction switches follow the settings

@@ -2319,4 +2319,6 @@
   "Local API": "本地 API",
   "For your own scripts here: its address and key are in {file}, and the key changes each time it starts": "供你在本机的脚本使用：地址和密钥在 {file} 中，每次启动时密钥都会更换",
   "Lets your own scripts on this computer send files and set the clipboard. Nothing from a browser": "让你在本机的脚本发送文件并设置剪贴板。浏览器无法使用",
+  "Needs an Xorg session: Wayland doesn’t let apps move other apps’ windows": "需要 Xorg 会话：Wayland 不允许应用移动其他应用的窗口",
+  "Switch on Move windows on {name} too": "也请在 {name} 上打开“移动窗口”",
 });
