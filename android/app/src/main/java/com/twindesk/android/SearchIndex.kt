@@ -121,6 +121,7 @@ object SearchIndex {
         Entry("Hold the phone", { tr("Hold the phone") }, "Settings", "Deck", ""),
         Entry("Swipe between pages", { tr("Swipe between pages") }, "Settings", "Deck", ""),
         Entry("Three-finger swipes", { tr("Three-finger swipes") }, "Settings", "Deck", ""),
+        Entry("Your wallpaper behind it", { tr("Your wallpaper behind it") }, "Settings", "Deck", ""),
         Entry("Open Deck on the Overview", { tr("Open Deck on the Overview") }, "Settings", "Deck", ""),
         Entry("Tiles", { tr("Tiles") }, "", "Deck", ""),
         Entry("Send the clipboard now", { tr("Send the clipboard now") }, "", "Clipboard", ""),

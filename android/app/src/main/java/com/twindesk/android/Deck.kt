@@ -161,6 +161,9 @@ class Deck(core: Core) : Feature(core) {
 
     val mac get() = platform == "mac"
     val spaces: List<JSONObject> get() = layout?.optJSONArray("spaces").objs()
+    // The phone's own wallpaper behind the full-screen Deck (this phone's choice, not the layout's):
+    // Android draws it (FLAG_SHOW_WALLPAPER), so nothing is read or kept here and no permission is asked.
+    val wallpaper get() = core.store.flag("deck.wallpaper", true)
     val swipePages get() = layout?.optJSONObject("swipe")?.optBoolean("pages", true) ?: true
     val swipeSpaces get() = layout?.optJSONObject("swipe")?.optBoolean("spaces", true) ?: true
     // How the full-screen Deck is held (layout.orient, set on the computer's Deck page or here): landscape unless portrait.
@@ -361,6 +364,7 @@ fun DeckPage(core: Core, v: Int) {
         SwitchRow(tr("Three-finger swipes"), tr("Along the screen’s long side for the next space, across it for the next page; past the last, back to the first"), d.swipeSpaces) { on ->
             d.edit { l -> (l.optJSONObject("swipe") ?: JSONObject().also { l.put("swipe", it) }).put("spaces", on) }
         }
+        SwitchRow(tr("Your wallpaper behind it"), tr("The phone’s wallpaper shows through the Deck, its tiles and widgets see-through"), d.wallpaper) { on -> core.store.setFlag("deck.wallpaper", on); core.changed() }
         SwitchRow(tr("Open Deck on the Overview"), tr("A shortcut among the Overview’s tiles"), pinned) { on -> Tiles.set(core.store, "deck", on); pinned = on }
     }
     Note(tr("The Deck opens full screen and keeps the screen on. Swipe with three fingers to change page or space; tap × in its corner to close it."))
@@ -400,7 +404,7 @@ fun DeckFull(core: Core, close: () -> Unit) {
     val d = core.deck
     val spaces = d.spaces
     var touched by remember { mutableStateOf(false) } // the first touch anywhere puts the hint away
-    Box(Modifier.fillMaxSize().background(pal.content).windowInsetsPadding(WindowInsets.safeDrawing).padding(6.dp)
+    Box(Modifier.fillMaxSize().background(if (d.wallpaper) Color.Black.copy(alpha = 0.28f) else pal.content).windowInsetsPadding(WindowInsets.safeDrawing).padding(6.dp)
         .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); waitForUpOrCancellation(PointerEventPass.Initial); touched = true } }) {
         if (d.layout == null || spaces.isEmpty()) {
             Text(tr("Waiting for {name}…", "name" to (core.host?.name ?: "")), color = pal.muted, modifier = Modifier.align(Alignment.Center))
@@ -679,6 +683,7 @@ class DeckActivity : ComponentActivity() {
         hold(core.deck.portrait)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        wallpaper(core.deck.wallpaper)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -690,8 +695,20 @@ class DeckActivity : ComponentActivity() {
                 // Disconnected, or the computer took the Deck away: closed.
                 if (core.host == null || !core.deck.offered) LaunchedEffect(Unit) { delay(1500); if (core.host == null || !core.deck.offered) finish() }
                 LaunchedEffect(core.deck.portrait) { hold(core.deck.portrait) }
+                LaunchedEffect(core.deck.wallpaper) { wallpaper(core.deck.wallpaper) }
                 DeckFull(core) { finish() }
             }
+        }
+    }
+
+    // The phone's wallpaper behind the window (the system composites it), or the app's own background.
+    private fun wallpaper(on: Boolean) {
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(null)
         }
     }
 
@@ -817,8 +834,10 @@ private fun TileView(d: Deck, t: JSONObject, cw: Dp, ch: Dp, gap: Dp, editing: B
     val id = t.optString("id")
     val a = t.optJSONObject("action") ?: JSONObject()
     val w = t.optInt("w", 1); val h = t.optInt("h", 1)
-    val bg = deckColor(t.optString("color"))
-    val fg = if (bg.luminance() > 0.6f) Color(0xFF1D1D1F) else Color.White
+    val solid = deckColor(t.optString("color"))
+    val fg = if (solid.luminance() > 0.6f && !(d.wallpaper && a.optString("k") == "widget")) Color(0xFF1D1D1F) else Color.White // glass over a wallpaper: white reads best
+    // See-through: widgets always (glass over the Deck), other tiles a little over the wallpaper.
+    val bg = solid.copy(alpha = solid.alpha * when { a.optString("k") == "widget" -> if (d.wallpaper) 0.32f else 0.55f; d.wallpaper -> 0.8f; else -> 1f })
     val runs = d.runs(a)
     val failed = d.done?.first == id && d.done?.second?.isNotEmpty() == true && d.done?.second != "busy"
     val label = deckLabel(t, d.platform)
