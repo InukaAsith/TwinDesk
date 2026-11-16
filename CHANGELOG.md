@@ -52,11 +52,37 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 - **Deck › OBS Studio:** record, pause, stream, switch scenes, mute a source, save a replay and
   turn on the virtual camera, with the tile showing what OBS is doing. Uses OBS's own WebSocket
   server on the computer.
+- **Auto-rotate** on the phone window's side rail and Windows' side panel: an app window turns with
+  its app (a video in full screen), the phone's screen with the phone; switch it off to keep the
+  window's shape. On Android, the computer's screen and another phone's screen get a side rail too
+  (a tab at the right edge): Auto-rotate and Screenshot.
 
 ### Fixes
 
 - **Copy code** no longer takes a card's last digits, a price, an account, order or tracking number,
   a date, a phone number or a zip, promo or error code for a one-time code.
+- **Phone app windows:** a video in full screen came in landscape into a portrait window, small
+  between bars (#258); an app opened on an asleep phone waited for a picture that never came (#247,
+  #239), and its window has Phone screen off too.
+- **Mac:** Ctrl+Space and Ctrl+Option+Space reach apps on a controlled Mac unless they are its
+  input-source shortcut with two or more sources (#241, #243 by [@hughesyadaddy](https://github.com/hughesyadaddy)).
+- **Multi-device:** moving the pointer to another computer no longer stops the sound playing to a
+  third one, and one computer without cursor sharing no longer blocks the rest (#245, #220, #246 by
+  [@icariantk](https://github.com/icariantk)). Move windows sends a window to the computer the pointer went to, also back to the
+  one driving this one (#250, #251); Monitor 2 follows a computer that starts sharing (#256).
+- **Move windows:** a window brought back returns where it was (Windows Multi-device and Linux,
+  #252); the Apps page says when the other computer's Move windows is off (#253), and that Wayland
+  can't move windows (#249).
+- **Extend to a Linux or Windows viewer** is the viewer's size and shape, portrait too, instead of
+  1920 × 1080 (#254), and Monitor 2 takes the shape of what it shows (#255).
+- **Linux:** the phone's Media page shows what plays without playerctl (MPRIS over D-Bus, #242); on
+  COSMIC the pointer from another computer reaches every monitor (#244); Bluetooth that BlueZ
+  refused once is tried again instead of staying off until a restart.
+- **Android clipboard:** on a phone whose copies didn't reach the computer in the background
+  (Android 17), they do now (#257). A Pixel on the USB cable is no longer asked again and again to
+  turn on wireless debugging (#239).
+- **Windows:** a key held while the pointer comes home no longer stays down (#248); the pointer
+  coming home always gets its cursors back (#238).
 - **Android 15 and later:** one-time codes reach Copy code (the phone setup over wireless debugging
   lets TwinDesk read the codes Android hides).
 - **Passwords copied on an Android phone** (marked sensitive by the password manager) stay on the
