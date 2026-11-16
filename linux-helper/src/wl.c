@@ -666,6 +666,18 @@ static void on_wheel(int horiz, int v) {
   forward(jo_end(&k));
 }
 
+// Why a push against the screen's edge didn't cross (#237: Hyprland, niri), in the log: each reason
+// once, again only after 20 s.
+static void edge_why(const char *why) {
+  static char last[160];
+  static double at;
+  double now = now_ms();
+  if (!strncmp(last, why, sizeof last - 1) && now - at < 20000) return;
+  snprintf(last, sizeof last, "%s", why);
+  at = now;
+  fprintf(stderr, "[edge] not crossing: %s\n", why);
+}
+
 // libinput's pointer acceleration for a mouse (filter-flat.c, filter-linear.c) at the desktop's
 // speed s: flat, 1 + s; adaptive (the default), slow hands slowed a little, 1:1 up to a
 // threshold, then steeper up to 2 + 1.5 s. v: units per ms.
@@ -719,14 +731,31 @@ static void on_motion(double rdx, double rdy, double tMs) {
   int ix = (int)lround(px + dx), iy = (int)lround(py + dy), cx, cy;
   screens_clamp(ix, iy, (int)px, (int)py, &cx, &cy);
   px = cx; py = cy;
+  int pinned = cx != ix || cy != iy; // pushed against the screens' outline: a crossing may be meant
   if (local_note(rdx, rdy, 0)) { retArmed = 0; return; }
   if (retArmed) { feed_return(rdx, rdy); return; }
-  if (!driveOther || !nEdgeSides || any(localButtons, 8)) { memset(pushBy, 0, sizeof pushBy); return; } // rule 6
+  if (!driveOther || !nEdgeSides || any(localButtons, 8)) { // rule 6
+    if (pinned) edge_why(!driveOther ? "crossing to the other device is off now (not connected, paused, Mouse off, or a phone window has focus)" : !nEdgeSides ? "no edge leads to the other device" : "a mouse button is held");
+    memset(pushBy, 0, sizeof pushBy);
+    return;
+  }
   for (int i = 0; i < nEdgeSides; i++) {
     int s = edgeSides[i];
     double outward = screens_outward(s, rdx, rdy);
-    if (!may_cross(s, outward) || !crossing_edge_ok()) { pushBy[s] = 0; continue; }
-    if (outward <= 0 || !screens_on_outer_edge((int)px, (int)py, s) || !zones_contain(edgeZ, nEdgeZ, (int)px, (int)py, s)) { pushBy[s] = 0; continue; }
+    if (!may_cross(s, outward) || !crossing_edge_ok()) {
+      if (pinned && outward > 0) edge_why(crossing_edge_ok() ? "just crossed back: waiting a moment" : "hold the crossing key to cross");
+      pushBy[s] = 0;
+      continue;
+    }
+    if (outward <= 0 || !screens_on_outer_edge((int)px, (int)py, s) || !zones_contain(edgeZ, nEdgeZ, (int)px, (int)py, s)) {
+      if (pinned && i == nEdgeSides - 1) {
+        char m[160];
+        snprintf(m, sizeof m, "the pointer (%d,%d, as followed here) is at a screen edge, the other device is on the %s side%s", (int)px, (int)py, side_name(s), outward > 0 ? ", outside its zone" : "");
+        edge_why(m);
+      }
+      pushBy[s] = 0;
+      continue;
+    }
     if (now - lastPushBy[s] > 300) pushBy[s] = 0;
     lastPushBy[s] = now;
     if (pushBy[s] == 0) pushSinceBy[s] = now;

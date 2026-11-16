@@ -250,6 +250,11 @@ class Kvm {
   applyConfig() {
     const k = this.cfg;
     const f = this.settings.files;
+    // Which condition keeps the edge from crossing, in the log when it changes (#237).
+    const off = [!this.linked && 'not linked', !k.driveOther && 'Mouse and keyboard to the other device is off', !k.mouse && 'Mouse is off',
+      !this.connected && 'not connected', !this.crossingSide && 'no side set in the layout', this.blockEdge() && 'a phone window has focus',
+      this.paused && 'paused', this.locked && this.mode === 'home' && 'locked'].filter(Boolean).join(', ');
+    if (off !== this.edgeOff) { this.edgeOff = off; console.log(off ? `[kvm] edge off: ${off}` : `[kvm] edge on: the ${this.crossingSide} side`); }
     this.helper.send('kvmConfig', {
       side: this.crossingSide,
       resistancePx: k.resistancePx,
