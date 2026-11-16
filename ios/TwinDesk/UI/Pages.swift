@@ -2,6 +2,7 @@
 // The feature pages: Receive screen (and its full-screen viewer), Share screen, Remote (and its
 // full-screen pad), Notifications, Audio, Media, AirPlay & SMB, Shortcuts, About.
 import SwiftUI
+import Photos
 import AVKit
 import UIKit
 
@@ -102,11 +103,19 @@ struct ViewerScreen: View {
     @State private var keyboard = false
     @State private var seenOn = false
     @State private var hide: DispatchWorkItem?
+    // As the computers' phone windows and Android's side rail: Auto-rotate (off: held the way it is
+    // now) and Screenshot (the picture, into Photos).
+    @AppStorage("viewer.autoRotate") private var autoRotate = true
+    @State private var note: String?
 
     var body: some View {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             if let h = host { WebPageView(host: h).ignoresSafeArea() }
+            if let n = note {
+                Text(n).font(.subheadline).foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.black.opacity(0.7), in: Capsule()).padding(.top, 80).transition(.opacity)
+            }
             KeyProxyView(on: $keyboard, screen: core.screen).frame(width: 1, height: 1).opacity(0.01)
             Capsule().fill(Color.white.opacity(0.35)).frame(width: 72, height: 6).padding(.top, 6)
                 .padding(.horizontal, 30).padding(.bottom, 14).contentShape(Rectangle())
@@ -120,11 +129,13 @@ struct ViewerScreen: View {
             let h = host ?? WebHost("viewer.html", core: core)
             host = h
             core.screen.attach(h)
+            if !autoRotate { Orientation.lockAsNow() }
             autoHide()
         }
         .onDisappear {
             if let h = host { core.screen.detach(h); h.destroy() }
             host = nil
+            if !autoRotate { Orientation.free() }
         }
         .onChange(of: core.tick) { _ in
             if core.screen.sharing { seenOn = true }
@@ -151,6 +162,11 @@ struct ViewerScreen: View {
                     s.setOpt("screen.touchpad", !s.touchpad)
                 }
                 barButton(tr("Keyboard"), icon: "keyboard", selected: keyboard) { keyboard.toggle() }
+                barButton(tr("Auto-rotate"), icon: autoRotate ? "arrow.triangle.2.circlepath" : "lock.rotation", selected: autoRotate) {
+                    autoRotate.toggle()
+                    if autoRotate { Orientation.free() } else { Orientation.lockAsNow() }
+                }
+                barButton(tr("Screenshot"), icon: "camera.viewfinder") { shot() }
                 barButton(tr("Close"), icon: "xmark") { s.end(); close() }
             }
             .padding(.horizontal, 6).padding(.vertical, 5)
@@ -183,6 +199,37 @@ struct ViewerScreen: View {
     }
 
     private func close() { if ui.cover == .viewer { ui.cover = nil } }
+
+    // The picture as the page shows it: the video drawn into a canvas there (a snapshot of the web
+    // view leaves a video black), into Photos.
+    private func shot() {
+        guard let h = host else { return }
+        let js = """
+        const v = document.getElementById('video');
+        if (!v || !v.videoWidth) return '';
+        const c = document.createElement('canvas');
+        c.width = v.videoWidth; c.height = v.videoHeight;
+        c.getContext('2d').drawImage(v, 0, 0);
+        return c.toDataURL('image/png');
+        """
+        h.view.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+            guard case .success(let any) = r, let url = any as? String, let comma = url.firstIndex(of: ","),
+                  let data = Data(base64Encoded: String(url[url.index(after: comma)...])), let img = UIImage(data: data) else {
+                return show(tr("Couldn’t take the screenshot"))
+            }
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { st in
+                guard st == .authorized || st == .limited else { return DispatchQueue.main.async { show(tr("Allow TwinDesk to add photos in Settings")) } }
+                PHPhotoLibrary.shared().performChanges({ PHAssetChangeRequest.creationRequestForAsset(from: img) }) { ok, _ in
+                    DispatchQueue.main.async { show(ok ? tr("Screenshot saved in Photos") : tr("Couldn’t take the screenshot")) }
+                }
+            }
+        }
+    }
+
+    private func show(_ text: String) {
+        withAnimation { note = text }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { withAnimation { if note == text { note = nil } } }
+    }
 }
 
 // The on-screen keyboard for the viewer (KeyProxy takes what's typed).
@@ -381,6 +428,8 @@ enum Orientation {
     static func landscape() { request(.landscape) }
     static func portrait() { request(.portrait) }
     static func free() { request(Device.isPad ? .all : .allButUpsideDown) }
+    // Held the way it is now (the viewer's Auto-rotate off).
+    static func lockAsNow() { request(scene?.interfaceOrientation.isLandscape == true ? .landscape : .portrait) }
     // The window's size as it is now: the full Deck waits on it to turn before drawing its tiles.
     static var size: CGSize { scene?.keyWindow?.bounds.size ?? scene?.coordinateSpace.bounds.size ?? .zero }
     // The app's allowed orientations (AppDelegate): what was last asked for.

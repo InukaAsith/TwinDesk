@@ -6,3 +6,4 @@ NSCameraUsageDescription = "Bu kamerayı izin verdiğiniz sürece bilgisayarın�
 NSMicrophoneUsageDescription = "Bu mikrofonun sesini izin verdiğiniz sürece bilgisayarınıza gönderin.";
 NSBluetoothAlwaysUsageDescription = "TwinDesk bilgisayarınızla Bluetooth bağlantısını sürdürür; böylece bildirimleri arka planda size ulaşır ve oturum Wi-Fi’dan uzakta da devam eder.";
 NSLocationAlwaysAndWhenInUseUsageDescription = "TwinDesk yaklaşık konumunuzu (GPS yok) yalnızca ekranda değilken bilgisayarınıza bağlı kalmak için kullanır. Nerede olduğunuzu asla saklamaz veya göndermez.";
+"NSPhotoLibraryAddUsageDescription" = "Bilgisayarın ekranının ekran görüntülerini kaydetmek için.";

@@ -958,5 +958,10 @@
   "Paused": "已暂停",
   "Recording": "正在录制",
   "Showing": "正在显示",
-  "Loading…": "正在加载…"
+  "Loading…": "正在加载…",
+  "Auto-rotate": "自动旋转",
+  "Screenshot": "屏幕截图",
+  "Couldn’t take the screenshot": "无法截图",
+  "Screenshot saved in Photos": "截图已保存到“照片”",
+  "Allow TwinDesk to add photos in Settings": "请在“设置”中允许 TwinDesk 添加照片"
 }

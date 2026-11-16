@@ -958,5 +958,10 @@
   "Paused": "Duraklatıldı",
   "Recording": "Kaydediliyor",
   "Showing": "Gösteriliyor",
-  "Loading…": "Yükleniyor…"
+  "Loading…": "Yükleniyor…",
+  "Auto-rotate": "Otomatik döndür",
+  "Screenshot": "Ekran görüntüsü",
+  "Couldn’t take the screenshot": "Ekran görüntüsü alınamadı",
+  "Screenshot saved in Photos": "Ekran görüntüsü Fotoğraflar’a kaydedildi",
+  "Allow TwinDesk to add photos in Settings": "Ayarlar’da TwinDesk’in fotoğraf eklemesine izin verin"
 }

@@ -6,3 +6,4 @@ NSCameraUsageDescription = "Используйте эту камеру на ко
 NSMicrophoneUsageDescription = "Передавайте звук этого микрофона на компьютер, пока вы разрешаете.";
 NSBluetoothAlwaysUsageDescription = "TwinDesk держит связь с компьютером по Bluetooth, чтобы его уведомления приходили в фоне, а сеанс продолжался без Wi-Fi.";
 NSLocationAlwaysAndWhenInUseUsageDescription = "TwinDesk использует ваше приблизительное местоположение (без GPS) только чтобы оставаться на связи с компьютером, пока не на экране. Он никогда не хранит и не отправляет, где вы.";
+"NSPhotoLibraryAddUsageDescription" = "Чтобы сохранять снимки экрана компьютера.";
