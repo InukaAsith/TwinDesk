@@ -949,6 +949,8 @@ class LaneMesh {
       route: () => (this.o.partner() === id ? this.o.route() : 0),
       move: (dx, dy) => this.o.move(dx, dy, id),
       deliver: (m) => this.o.deliver(m, id),
+      ...(this.o.native ? { native: () => this.o.native(id) } : {}),
+      ...(this.o.speed ? { speed: this.o.speed } : {}),
     });
     const entry = { lane: l, driven: d };
     this.lanes.set(id, entry);

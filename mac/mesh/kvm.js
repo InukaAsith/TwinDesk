@@ -18,7 +18,7 @@ const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
 const { KvmMoves } = require('../../shared/kvm-moves.js');
-const { LaneMesh, LANE_TYPES } = require('../../shared/inputlane.js');
+const { LaneMesh, LANE_TYPES, InputLane, laneOff } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
 const { pairFor } = require('../../shared/pairfor.js');
@@ -67,6 +67,8 @@ class Kvm extends EventEmitter {
     });
     // The input lane (shared/inputlane.js) of each device with an app that has one: moves over UDP,
     // events numbered on both. Through the partner's lane only, never through the phone bridge.
+    this.il = laneOff() ? null : new InputLane();
+    if (this.il) this.il.bind();
     this.lanes = new LaneMesh({
       lane: (id) => (!id || (this.local && this.local.drives(id)) ? null : this._session(id) && this._session(id).lane()),
       il: (id) => (this._session(id) && this._session(id).il) || null,
@@ -74,6 +76,8 @@ class Kvm extends EventEmitter {
       route: () => this.peerRoute,
       move: (dx, dy, id) => this._laneMove(dx, dy, id),
       deliver: (m, id) => (m.t === P.T.K_GESTURE ? this._onGesture(m, id) : this._onK(m, id)),
+      native: (id) => (this.mode === 'driven' && id === this.partner && this.il && this.il.native ? this.il : null),
+      speed: () => this.cfg.speed,
     });
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
@@ -135,7 +139,15 @@ class Kvm extends EventEmitter {
     this.hub.on('selected', (id) => this._onSelected(id));
 
     setInterval(() => this._tick(), 250);
-    helper.on('ready', () => setTimeout(() => this.config(), 150));
+    if (this.il) {
+      let laneSettled;
+      this.laneReady = new Promise((r) => (laneSettled = r));
+      const useNative = () => this.il.useNative(helper).then(laneSettled, laneSettled);
+      helper.on('ready', () => { useNative(); setTimeout(() => this.config(), 150); });
+      if (helper.running) useNative();
+    } else {
+      helper.on('ready', () => setTimeout(() => this.config(), 150));
+    }
     helper.on('exit', () => {
       if (this.mode === 'driving') this.goHome('The helper stopped');
       else if (this.mode === 'driven') this._drivenHome('The helper stopped');
