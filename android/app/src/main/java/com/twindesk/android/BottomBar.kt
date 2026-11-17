@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -154,9 +155,9 @@ private fun RowScope.PhoneBottomBar(dests: List<BottomDest>) {
         val widthsPx = slots.widths.map { with(density) { it.roundToPx() } }
         val spare = bottomSpare(widthsPx, with(density) { maxWidth.roundToPx() }, window, slots.scroll)
         // Initial value is applied before the first draw. A new selection starts a new position.
-        val scrollState = remember(spare.scrollPx) { ScrollState(spare.scrollPx) }
+        val scrollState = remember(selected, spare.scrollPx) { ScrollState(spare.scrollPx) }
         Row(
-            Modifier.then(if (slots.scroll) Modifier.horizontalScroll(scrollState) else Modifier),
+            Modifier.selectableGroup().then(if (slots.scroll) Modifier.horizontalScroll(scrollState) else Modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             dests.forEachIndexed { i, d ->
