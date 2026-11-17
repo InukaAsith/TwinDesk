@@ -18,9 +18,13 @@ function user(uid, locked) {
 
 assert.strictEqual(lockedConsole([user(501, true)], 501), true);
 assert.strictEqual(lockedConsole([user(501, false)], 501), false);
-assert.strictEqual(lockedConsole([user(501, true)], 502), false);
-assert.strictEqual(lockedConsole([user(501, true), user(501, true)], 501), false);
-assert.strictEqual(lockedConsole(null, 501), false);
+assert.strictEqual(lockedConsole([user(501, true)], 502), null);
+assert.strictEqual(lockedConsole([user(501, true), user(501, true)], 501), null);
+assert.strictEqual(lockedConsole(null, 501), null);
+assert.strictEqual(lockedConsole([], 501), null);
+assert.strictEqual(lockedConsole([user(501, undefined)], 501), false);
+assert.strictEqual(lockedConsole([{ ...user(501, false), kCGSessionLoginDoneKey: false }], 501), null);
+assert.strictEqual(lockedConsole([user(501, 'false')], 501), null);
 assert.strictEqual(Preview.screenUnlocked(false), true);
 assert.strictEqual(Preview.screenUnlocked(true), false);
 assert.strictEqual(Preview.screenUnlocked(null), false);
