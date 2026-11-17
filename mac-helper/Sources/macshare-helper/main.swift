@@ -273,16 +273,39 @@ func handle(_ line: String) {
       case .failure(let err): replyError(id, err.message)
       }
     }
+  case "displayShot":
+    // One display. macOS 14 ScreenCaptureKit, or an honest refusal. It does not switch desktops,
+    // prompt for Screen Recording, or capture any display other than displayId.
+    // The token is taken before the hop, so a cancel that arrives while the screenshot
+    // is in flight makes that reply stale instead of a JPEG.
+    let shotId = (msg["displayId"] as? NSNumber)?.uint32Value ?? 0
+    guard shotId != 0 else { return replyError(id, "display") }
+    let shotToken = ShotEpoch.begin()
+    Task {
+      let shot = await DisplayShot.take(displayId: shotId, token: shotToken)
+      if let why = shot["unavailable"] as? String { reply(id, ["unavailable": why]) }
+      else { reply(id, shot) }
+    }
+  case "displayShotCancel":
+    // Drops a screenshot that has already left this thread. The capture call itself
+    // cannot be aborted; the reply comes back unavailable, with no JPEG.
+    ShotEpoch.cancel()
+    reply(id)
   case "spacesLook": // read which desktops each display owns; does not move one.
     // A hidden read may resume remote input. An unknown read does not. This
     // command never opens Mission Control or presses a thumbnail.
+    // overview is a fresh accessibility read, including when TwinDesk itself is not
+    // holding input. inputHeld is not that read: a Mission Control the person opened
+    // leaves it false. "unknown" is not hidden.
     SpaceOverview.shared.recoverHidden()
     var looked = MacSpaces.look()
     if let err = looked["error"] as? String { replyError(id, err) } else {
       let held = injector.remoteOverview
+      let overview = MissionControlAccess.snapshot()
       looked["ax"] = AXIsProcessTrusted()
       looked["inputHeld"] = held
-      if held { looked["holdWhy"] = spaceHoldWhy(MissionControlAccess.snapshot()) }
+      looked["overview"] = OverviewReport.token(overview)
+      if held { looked["holdWhy"] = spaceHoldWhy(overview) }
       reply(id, looked)
     }
   case "spacesAbort": // before AXPress. A replaced session is this command, not a check after the press.

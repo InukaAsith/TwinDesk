@@ -112,6 +112,23 @@ enum RootChildren {
   }
 }
 
+/// The word a desktop preview may trust. Only a fresh hidden show is "hidden".
+/// Unreadable and an ambiguous host are "unknown" and fail closed. A stub or a
+/// tree means Mission Control is on screen, including the empty Dock stub macOS 27
+/// leaves up while the overview is showing.
+enum OverviewReport {
+  static func token(_ input: PollInput) -> String {
+    switch input {
+    case .show(.hidden):
+      return "hidden"
+    case .unreadable, .ambiguousHost:
+      return "unknown"
+    case .show:
+      return "visible"
+    }
+  }
+}
+
 enum MCPlan: Equatable {
   case incomplete
   case refuse(String)

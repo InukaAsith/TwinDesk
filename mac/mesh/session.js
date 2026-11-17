@@ -34,7 +34,8 @@ class Session extends EventEmitter {
     this._up = false;
     this._linkMesh = false; // the guest link's welcome said mesh: 1
     this.meshCapable = false; // the device speaks the mesh (hello/welcome `mesh: 1`); set when it comes up
-    this.taps = []; // hub: fn(msg) -> true when it consumed the message (see _deliver)
+    this.taps = []; // hub: fn(msg, source) -> true when it consumed the message (see _deliver)
+    this._inbound = null; // the socket of the delivery now running, else null
     this.lifeFns = []; // hub: fn(up, replaced) when the device becomes connected or stops being connected
     // Fast files (shared/fastfile.js): this device's file bytes over HTTPS, when both apps can (hello
     // fx: 1, welcome fx: token). Not the files engine (fx2): it serves one session at a time.
@@ -248,15 +249,28 @@ class Session extends EventEmitter {
 
   // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
   // source: the guest link or host ctx that carried this message. inject() has none.
+  // inbound() is that same object while taps and handlers run, so a preview ask cannot
+  // treat the guest link as the host socket. A nested delivery restores the previous one.
   _deliver(msg, raw = false, source = null) {
     if (!raw && this.fx.incoming(msg)) return;
-    for (const tap of this.taps) if (tap(msg, source) === true) return;
-    const fns = this.handlers.get(msg.t);
-    if (fns) for (const fn of fns) fn(msg);
-    else if (!this.unknown.has(msg.t)) {
-      this.unknown.add(msg.t);
-      console.log('[session] ignoring message type', msg.t, 'from', this.id);
+    const prev = this._inbound;
+    this._inbound = source || null;
+    try {
+      for (const tap of this.taps) if (tap(msg, source) === true) return;
+      const fns = this.handlers.get(msg.t);
+      if (fns) for (const fn of fns) fn(msg);
+      else if (!this.unknown.has(msg.t)) {
+        this.unknown.add(msg.t);
+        console.log('[session] ignoring message type', msg.t, 'from', this.id);
+      }
+    } finally {
+      this._inbound = prev;
     }
+  }
+
+  // The socket this delivery arrived on. Null for inject(), and null outside _deliver.
+  inbound() {
+    return this._inbound || null;
   }
 
   // Emits 'welcome' when the device becomes connected and 'closed' when it stops being connected.

@@ -57,7 +57,7 @@ import kotlinx.coroutines.delay
 
 class ViewerActivity : ComponentActivity() {
     private var host: WebHost? = null
-    private var started = false
+    private var started by mutableStateOf(false)
     private var attached = false
     private var viewport: Pair<Int, Int>? = null
     private val resize = Runnable { updateViewport() }
@@ -84,7 +84,7 @@ class ViewerActivity : ComponentActivity() {
                 h.view.postDelayed(resize, 250)
             }
         }
-        setContent { Theme { Viewer(core, h) { finish() } } }
+        setContent { Theme { Viewer(core, h, started) { finish() } } }
         MirrorRail(this).attach() // the side rail: Auto-rotate, Screenshot
     }
 
@@ -114,6 +114,7 @@ class ViewerActivity : ComponentActivity() {
         super.onStop()
         started = false
         host?.view?.removeCallbacks(resize)
+        Core.get(this).screen.previewSheet(false)
         host?.let { Core.get(this).screen.detach(it) }
         attached = false
         viewport = null
@@ -127,7 +128,7 @@ class ViewerActivity : ComponentActivity() {
 }
 
 @androidx.compose.runtime.Composable
-private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
+private fun Viewer(core: Core, host: WebHost, started: Boolean, close: () -> Unit) {
     val v by core.version.collectAsState()
     @Suppress("UNUSED_EXPRESSION") v
     var bar by remember { mutableStateOf(true) }
@@ -151,6 +152,9 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
     val sheetReady = desks != null && desks.displays.isNotEmpty() && core.host?.os == "mac" && s.sharing && s.inputOn
     LaunchedEffect(overview) { if (overview) s.refreshDesktops() }
     LaunchedEffect(sheetReady) { if (!sheetReady) overview = false }
+    LaunchedEffect(overview, sheetReady, started, s.previewEpoch) {
+        s.previewSheet(overview && sheetReady && started)
+    }
     val name = core.host?.name ?: "Mac"
     // Opened because the computer started sharing: it closes when the computer stops.
     var seenOn by remember { mutableStateOf(false) }
@@ -232,6 +236,8 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                     sharing = s.sharing,
                     remote = s.remote,
                     reduceMotion = reduceMotion,
+                    previews = s.desktopPreviews,
+                    spaceHold = s.state?.optString("spaceHold").orEmpty(),
                     onDone = { overview = false },
                     onDesktop = { displayId, spaceId -> s.selectDesktop(displayId, spaceId) },
                     onDisplay = { id -> if (id != desks.viewing && id != s.pendingDisplayId) s.selectDisplay(id) },
