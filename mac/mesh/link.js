@@ -63,6 +63,7 @@ class Link extends EventEmitter {
     this.seenFp = '';
     this.onAny = null; // session.js: gets every message after welcome
     this.stateFns = [];
+    this.yieldWanted = false; // inbound link came up before welcome: drop this outbound dial
   }
 
   // ---- public API ----
@@ -153,9 +154,17 @@ class Link extends EventEmitter {
   // The host dialled us (mesh): drop our own socket to it, so there is one link. Our link waits
   // until the inbound one ends (poke()).
   yieldSession() {
-    if (!this.authed) return;
-    this._closeSocket();
-    this._scheduleReconnect();
+    if (this.destroyed) return;
+    if (this.authed) {
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
+    this.yieldWanted = true;
+    if (this.ws) {
+      this._closeSocket();
+      clearTimeout(this.timers.reconnect);
+      this._scheduleReconnect();
+    }
   }
 
   // Stop for good: no socket, no reconnect (the manager closes its links this way).
@@ -302,6 +311,11 @@ class Link extends EventEmitter {
   _onWelcome(msg) {
     if (this.mode !== 'session' || this.authed) return;
     clearTimeout(this.timers.hello);
+    if (this.yieldWanted) {
+      this.yieldWanted = false;
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
     this.authed = true;
     this.attempt = 0;
     const tail = Tailnet.clean(msg.tail); // its Tailscale addresses (none: older, or not on it)

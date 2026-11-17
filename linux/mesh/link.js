@@ -67,6 +67,7 @@ class Link {
     this.timers = {};
     this.handlers = new Map();
     this.stateFns = [];
+    this.yieldWanted = false; // inbound link came up before welcome: drop this outbound dial
     this.unknown = new Set();
   }
 
@@ -163,9 +164,17 @@ class Link {
   // A phone took the session (hostpair.js): drop the computer we're a guest of. Reconnecting
   // waits while blocked(); poke() tries again at once when the phone lets go.
   yieldSession() {
-    if (!this.authed) return;
-    this._closeSocket();
-    this._scheduleReconnect();
+    if (this.destroyed) return;
+    if (this.authed) {
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
+    this.yieldWanted = true;
+    if (this.ws) {
+      this._closeSocket();
+      clearTimeout(this.timers.reconnect);
+      this._scheduleReconnect();
+    }
   }
 
   // Stop for good: no socket, no reconnect (the mesh manager closes its links this way).
@@ -423,6 +432,11 @@ class Link {
   _onWelcome(msg) {
     if (this.mode !== 'session' || this.authed) return;
     clearTimeout(this.timers.hello);
+    if (this.yieldWanted) {
+      this.yieldWanted = false;
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
     this.authed = true;
     this.attempt = 0;
     const tail = Tailnet.clean(msg.tail); // its Tailscale addresses (none: older, or not on it)
