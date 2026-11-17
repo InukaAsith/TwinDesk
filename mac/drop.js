@@ -22,6 +22,7 @@ const { shell, screen } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { receiverHook } = require('../shared/fastfile.js');
+const { AskedSends } = require('../shared/asked-send.js');
 const { DragIn } = require('./dragin');
 
 const DESKTOP = path.join(os.homedir(), 'Desktop');
@@ -110,6 +111,8 @@ class Drop extends EventEmitter {
       }));
     }
     this.expected = new Map(); // batch (fclip id) -> dir chosen when this Mac pasted
+    // Photos › Save / Files › Save (#239): one Send from the session that was asked, with Accept files off.
+    this.asked = new AskedSends();
     this.dragIn = new DragIn({ server, helper, getSettings, remember: (r) => this._remember(r) });
     this.dragIn.replayOffer = (m) => this._offer(m);
     this.dragIn.onAbort = (drag) => {
@@ -117,11 +120,12 @@ class Drop extends EventEmitter {
     };
 
     const on = (t, fn) => server.on(`t:${t}`, fn);
-    on(P.T.FILE_OFFER, (m) => this._offer(m));
+    on(P.T.FILE_OFFER, (m, ctx) => this._offer(m, ctx));
     on(P.T.FILE_CHUNK, (m) => this._chunk(m));
     on(P.T.FILE_END, (m) => this._end(m));
     on(P.T.FILE_CANCEL, (m) => (m.pause ? this._paused(m.id) : this._abort(m.id, 'cancelled', false)));
-    server.on('closed', () => {
+    server.on('closed', (ctx) => {
+      this.asked.release(ctx); // Stop / Forget / the session replaced: this Save is over
       if (!server.current) {
         for (const [batch, b] of this.batches) this._keep(batch, b);
         for (const id of [...this.active.keys()]) this._abort(id, 'disconnected', false);
@@ -155,10 +159,19 @@ class Drop extends EventEmitter {
     return fallback;
   }
 
-  async _offer(m) {
+  // The phone was asked for files here (PhoneHub 'asked'): one Send from that session.
+  allowAsked(session, ms) {
+    return this.asked.grant(session, ms);
+  }
+
+  clearAsked() {
+    this.asked.clear();
+  }
+
+  async _offer(m, ctx) {
     const refuse = (why) => this.server.sendToClient({ t: P.T.FILE_REFUSE, id: m.id, why });
     if (typeof m.id !== 'string' || this.active.has(m.id)) return;
-    if (m.drop === 'send' || m.drop === 'paste' || m.drop === 'rezume') return this._offerBatch(m, refuse); // rezume: a document taken here (shared/rezume.js)
+    if (m.drop === 'send' || m.drop === 'paste' || m.drop === 'rezume') return this._offerBatch(m, refuse, ctx); // rezume: a document taken here (shared/rezume.js)
     if (!this.cfg.acceptDrops) return refuse('not_allowed');
     const size = Number(m.size);
     if (!Number.isFinite(size) || size < 0 || size > P.FILE_MAX_BYTES) return refuse('too_big');
@@ -189,7 +202,7 @@ class Drop extends EventEmitter {
   }
 
   // One file of a Send files / paste batch.
-  _offerBatch(m, refuse) {
+  _offerBatch(m, refuse, ctx) {
     const size = Number(m.size);
     const count = Number(m.count);
     if (typeof m.batch !== 'string' || !m.batch || !Number.isInteger(count) || count < 1) return refuse('bad_message');
@@ -198,13 +211,17 @@ class Drop extends EventEmitter {
     if (!b) {
       const pasted = this.expected.get(m.batch);
       if ((m.drop === 'paste' || m.drop === 'rezume') && !pasted) return refuse('not_allowed'); // we never asked for it
-      if (m.drop === 'send' && !this.cfg.acceptDrops) return refuse('not_allowed');
+      const asked = m.drop === 'send' && this.asked.allow(ctx, m);
+      if (m.drop === 'send' && !this.cfg.acceptDrops && !asked) return refuse('not_allowed');
       const was = m.drop === 'send' && typeof m.cont === 'string' ? this.kept.get(m.cont) : null; // the rest of an earlier one
       b = { kind: m.drop, dir: was ? was.dir : (pasted && pasted.dir) || this.cfg.folder || DOWNLOADS, app: !!(pasted && pasted.app), count, done: 0, ok: 0, tops: was ? was.tops : new Map(), placed: was ? was.placed : [],
-        bytes: Number(m.bytes) > 0 ? Number(m.bytes) : 0, doneBytes: 0, at: Date.now(), cont: was ? m.cont : '' }; // bytes: the batch's total, when the sender says
+        bytes: Number(m.bytes) > 0 ? Number(m.bytes) : 0, doneBytes: 0, at: Date.now(), cont: was ? m.cont : '',
+        askedGrant: !this.cfg.acceptDrops && asked ? this.asked.open : null }; // bytes: the batch's total, when the sender says
       this.batches.set(m.batch, b);
       this.expected.delete(m.batch);
+      if (asked) this.asked.take(m.batch);
     }
+    if (b.askedGrant && (this.asked.open !== b.askedGrant || !this.asked.allow(ctx, m))) return refuse('not_allowed');
     const segs = String(m.rel || m.name).split('/').filter(Boolean).map(cleanName);
     if (!segs.length) segs.push(cleanName(m.name));
     // The rest of a paused or cut-off batch resends only files that never arrived, so a file of its
@@ -244,6 +261,7 @@ class Drop extends EventEmitter {
     if (ok) b.ok++;
     if (b.done < b.count) return this._changed();
     this.batches.delete(batch);
+    if (b.ok === b.count) this.asked.finish(batch, b.cont); // the asked-for transfer is in: the exception ends
     if (b.ok < b.count) this._keep(batch, b);
     else if (b.cont) this.kept.delete(b.cont);
     const where = b.dir.replace(os.homedir(), '~');

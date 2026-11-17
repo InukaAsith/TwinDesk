@@ -9,6 +9,11 @@ const { EventEmitter } = require('events');
 function viewOf(s) {
   if (!s) return null;
   const c = s.hostUp ? s.ctx : null;
+  // The live authenticated session, shared by every view of it. A host's ctx stays put when the
+  // transport moves and is replaced when another socket takes over. A guest link has no ctx;
+  // its socket is the session, and the next dial is a new one. Not a protocol field.
+  const guest = !c && s.linkUp && s.link && s.link.ws ? s.link.ws : null;
+  const conn = (c && c.authed === true ? c : null) || guest;
   return {
     deviceId: s.id,
     name: s.displayName(),
@@ -21,6 +26,7 @@ function viewOf(s) {
     authed: true,
     ws: c ? c.ws : (s.link ? s.link.ws : null),
     ice: c ? c.ice : null,
+    conn,
   };
 }
 
