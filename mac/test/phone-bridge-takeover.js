@@ -27,17 +27,18 @@ function phone(id, address) {
   return { deviceId: id, name: id, os: 'android', transport: 'ip', address };
 }
 
-function harness() {
+function harness(input = 'adb') {
   const server = new EventEmitter();
   server.current = null;
-  server.sendToClient = () => {};
+  const sent = [];
+  server.sendToClient = (msg) => sent.push({ msg, deviceId: server.current && server.current.deviceId });
   server.inject = () => {};
   server.keySwap = () => false;
   const phoneHub = new EventEmitter();
   phoneHub.info = null;
   phoneHub.adb = null;
   const settings = {
-    phone: { input: 'adb', inputPicked: true, mirror: 'adb', soundVia: 'adb', wallpaper: false },
+    phone: { input, inputPicked: true, mirror: 'adb', soundVia: 'adb', wallpaper: false },
     audio: {},
     kvm: {},
   };
@@ -67,7 +68,7 @@ function harness() {
     screenWithSound: false,
   };
   return {
-    server, phoneHub, bridge, calls,
+    server, phoneHub, bridge, calls, sent,
     setDevices(fn) { devices = fn; },
     stop() {
       clearInterval(bridge.pollTimer);
@@ -77,7 +78,8 @@ function harness() {
 }
 
 test('a second Android phone releases the first and looks that phone up', async () => {
-  const h = harness();
+  for (const input of ['adb', 'phone']) {
+  const h = harness(input);
   try {
     const a = phone('phone-a', '10.0.0.2');
     const b = phone('phone-b', '10.1.1.8');
@@ -93,7 +95,9 @@ test('a second Android phone releases the first and looks that phone up', async 
     h.bridge.serial = 'serial-a';
     h.bridge.control = controlA;
     h.bridge.state = 'ready';
-    h.bridge.kvm = { route: 1, x: 10, y: 20, side: 'left', push: 0, buttons: 0, mouse: true };
+    h.bridge.phoneInput = true;
+    h.bridge.kvm = { route: 1, x: 10, y: 20, side: 'left', push: 0, buttons: input === 'phone' ? 1 : 0, mouse: true };
+    h.bridge.input.scroll(10, 20, 1080, 2400, 0, 1);
     h.server.current = b;
     h.server.emit('client', b);
     // The old socket closes after current is already B (authenticate does this).
@@ -105,7 +109,7 @@ test('a second Android phone releases the first and looks that phone up', async 
     assert.equal(h.phoneHub.adb, null);
     assert.equal(h.calls.control, 1);
     assert.equal(h.calls.views, 1);
-    assert.equal(h.calls.mouse, 1);
+    assert.equal(h.calls.mouse, input === 'adb' ? 1 : 0);
     h.phoneHub.adb = { wifi: true, address: '10.1.1.8', port: 38000, devOptions: true, canEnable: true, full: true, net: true };
     await wait(200);
     assert.ok(h.calls.devices > 0);
@@ -114,8 +118,15 @@ test('a second Android phone releases the first and looks that phone up', async 
     assert.notEqual(h.bridge.state, 'ready');
     assert.equal(h.calls.control, 1);
     assert.equal(h.calls.views, 1);
+    assert.ok(!h.sent.some(({ msg, deviceId }) => msg.t === 'phone.in' && deviceId === 'phone-b'), 'old touch release or queued scroll reached the new phone');
+    h.phoneHub.info = { model: 'Phone B' };
+    h.server.current = { deviceId: 'iphone', os: 'ios' };
+    h.server.emit('client', h.server.current);
+    assert.equal(h.phoneHub.info, null);
+    assert.equal(h.phoneHub.adb, null, 'an intervening non-Android peer must not preserve the retired phone address');
   } finally {
     h.stop();
+  }
   }
 });
 

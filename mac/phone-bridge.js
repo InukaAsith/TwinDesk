@@ -80,7 +80,9 @@ class PhoneBridge extends EventEmitter {
     this.control = null; // control-only session
     // Without wireless debugging: the phone applies the input itself (shared/phoneinput.js), when
     // it says it can (phone.input {on}).
-    this.input = new PhoneInput((m) => this.server.sendToClient(m));
+    this.input = new PhoneInput((m) => {
+      if (this._currentPhone(this.server.current)) this.server.sendToClient(m);
+    });
     this.phoneInput = false;
     this.kvm = null; // the pointer while the Mac drives the phone: {route, x, y, push}
     this.keys = new KeyState();
@@ -197,6 +199,7 @@ class PhoneBridge extends EventEmitter {
   // Buttons, keys and the hover the old phone was still holding. The up and the hover
   // exit go out through whatever is driving it now, and only then does that path drop.
   _releaseInput() {
+    this.input.stop();
     if (this.pinch) this.pinch.cancel();
     if (this.kvm) this._kvmEnd(false);
     this.phoneInput = false;
@@ -299,8 +302,8 @@ class PhoneBridge extends EventEmitter {
 
   _stopAll(message) {
     this._epoch++; // an adb lookup still running for the phone that left must not land after this
-    this._boundId = null;
     this._releaseInput(); // before the control session goes: its button up and hover exit
+    this._boundId = null;
     this._dropControl();
     if (this.views) this.views.closeAll();
     this.serial = null;
@@ -309,6 +312,7 @@ class PhoneBridge extends EventEmitter {
     this.misses = 0;
     this.canPair = false;
     this.install = null;
+    this._resetPhoneInfo();
     this._set('off', message);
   }
 
