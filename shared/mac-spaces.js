@@ -379,27 +379,32 @@ function streamInputGate(ctx, readCurrent) {
   };
 }
 
-// Mesh session. The live connection is the guest link when that is up, otherwise the host
-// socket. A replacement socket or a link that is no longer authenticated fails the later check.
-function meshGate(readSession) {
-  const live = (ctx) => !!(ctx && ctx.authed === true && !ctx.released && ctx.ws && ctx.ws.readyState === 1);
-  const session = readSession();
-  if (!session || session.connected !== true) return null;
-  let token = null;
-  if (session.linkUp === true) {
-    if (!live(session.link)) return null;
-    token = { kind: 'link', link: session.link, ws: session.link.ws };
-  } else if (session.hostUp === true) {
-    if (!live(session.ctx)) return null;
-    token = { kind: 'ctx', ctx: session.ctx, ws: session.ctx.ws };
-  }
-  if (!token) return null;
-  return () => {
-    const now = readSession();
-    if (!now || now.connected !== true) return false;
-    if (token.kind === 'link') return now.link === token.link && now.linkUp === true && live(now.link) && now.link.ws === token.ws;
-    return now.hostUp === true && now.linkUp !== true && now.ctx === token.ctx && live(now.ctx) && now.ctx.ws === token.ws;
-  };
+// Mesh session. `source` is the physical connection that carried this message: the guest
+// link, or the host socket when that link is not up. A session looked up by device id is
+// not a source. A released host socket stays unauthorized while the guest link is up.
+// The later check is that same object, still authenticated and still the live connection.
+function meshGate(readSession, source) {
+  const live = (conn) => !!(conn && conn.authed === true && !conn.released && conn.ws && conn.ws.readyState === 1);
+  if (!live(source) || !meshOwns(readSession(), source)) return null;
+  const bound = source;
+  return () => live(bound) && meshOwns(readSession(), bound);
+}
+
+// The mesh bus hands features the socket a message came on (hub.js, as hub-route does): this is the
+// connection that owns it, the guest link or the host ctx (its session socket or, after a resume, its
+// fallback). A socket no part of this session holds is no source.
+function meshSource(session, sock) {
+  if (!session || !sock || typeof sock !== 'object') return null;
+  if (session.link && session.link.ws === sock) return session.link;
+  const ctx = session.ctx;
+  if (ctx && (ctx.ws === sock || ctx.alt === sock)) return ctx;
+  return null;
+}
+
+function meshOwns(session, source) {
+  if (!session || session.connected !== true || !source) return false;
+  if (session.linkUp === true) return session.link === source;
+  return session.hostUp === true && session.linkUp !== true && session.ctx === source;
 }
 
 // '' when remote input is not paused. Otherwise the reason a touch must not be sent.
@@ -410,6 +415,6 @@ function spaceHold(look) {
 
 module.exports = {
   dirOf, absoluteRequest, viewedDisplay, resolveTarget, viewToken, sameView, fenceView, noteGeneration,
-  planSwitch, planSelect, desktopCatalog, catalogOffer, offerSpaces, spaceHold, streamInputGate, meshGate,
+  planSwitch, planSelect, desktopCatalog, catalogOffer, offerSpaces, spaceHold, streamInputGate, meshGate, meshSource,
   MAX_DISPLAYS, MAX_LISTED, MAX_COUNT,
 };

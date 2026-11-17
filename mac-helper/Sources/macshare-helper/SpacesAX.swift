@@ -64,6 +64,54 @@ enum PollInput: Equatable {
   case show(MCShow)
 }
 
+/// What one AX identifier read means. cannotComplete and invalidUIElement are not
+/// "this element has no identifier": dropping them makes a visible overview look hidden.
+enum AXTextCode: Equatable {
+  case success
+  case noValue
+  case unsupported
+  case cannotComplete
+  case invalidElement
+  case failed
+}
+
+enum IdentifierRead: Equatable {
+  case text(String)
+  case absent
+  case unreadable
+
+  static func interpret(_ code: AXTextCode, text: String?) -> IdentifierRead {
+    switch code {
+    case .success:
+      guard let text, !text.isEmpty else { return .absent }
+      return .text(text)
+    case .noValue, .unsupported:
+      return .absent
+    case .cannotComplete, .invalidElement, .failed:
+      return .unreadable
+    }
+  }
+}
+
+enum RootChildren {
+  /// Indexes whose identifier equals `want`. Nil when any child cannot be read.
+  /// The caller must not treat that nil as an empty list.
+  static func indexes(_ ids: [IdentifierRead], equalTo want: String) -> [Int]? {
+    var hit: [Int] = []
+    for (index, id) in ids.enumerated() {
+      switch id {
+      case .unreadable:
+        return nil
+      case .absent:
+        continue
+      case .text(let value):
+        if value == want { hit.append(index) }
+      }
+    }
+    return hit
+  }
+}
+
 enum MCPlan: Equatable {
   case incomplete
   case refuse(String)

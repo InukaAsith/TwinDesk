@@ -11,12 +11,13 @@ import org.junit.Test
 class DesktopSelectTest {
     @Test
     fun sameDisplaySendsOneDesktopAndDoesNotSendTheCurrentOne() {
-        val catalog = catalog(viewGen = 4)
-        val current = DesktopSelect.tap(catalog, "1", "10", true, 0)
+        val catalog = catalog(viewGen = 4, capture = 9)
+        val frame = DesktopSelect.Frame(9, 4)
+        val current = DesktopSelect.tap(catalog, "1", "10", true, 0, frame = frame)
         assertEquals("already", (current.action as DesktopSelect.Action.Note).code)
         assertNull(current.pending)
 
-        val next = DesktopSelect.tap(catalog, "1", "11", true, 0)
+        val next = DesktopSelect.tap(catalog, "1", "11", true, 0, frame = frame)
         val space = next.action as DesktopSelect.Action.Space
         assertNull(next.pending)
         assertEquals("1", space.displayId)
@@ -190,18 +191,68 @@ class DesktopSelectTest {
         assertEquals("timeout", (timed.action as DesktopSelect.Action.Note).code)
         assertNull(timed.pending)
 
-        val arrived = catalog(viewing = "2", viewGen = 9, rev = 40)
-        assertTrue(DesktopSelect.afterTimeout("", arrived, "2") is DesktopSelect.Action.None)
-        assertTrue(DesktopSelect.afterTimeout("2", catalog(), "2") is DesktopSelect.Action.None)
-        val late = DesktopSelect.afterTimeout("2", arrived, "2") as DesktopSelect.Action.Note
+        val arrived = catalog(viewing = "2", viewGen = 9, rev = 40, capture = 9)
+        assertTrue(DesktopSelect.afterTimeout("", arrived, "2", DesktopSelect.Frame(9, 9)) is DesktopSelect.Action.None)
+        assertTrue(DesktopSelect.afterTimeout("2", catalog(), "2", DesktopSelect.Frame(9, 4)) is DesktopSelect.Action.None)
+        assertTrue(DesktopSelect.afterTimeout("2", arrived, "2") is DesktopSelect.Action.None)
+        assertTrue(DesktopSelect.afterTimeout("2", arrived, "2", DesktopSelect.Frame(8, 9)) is DesktopSelect.Action.None)
+        val late = DesktopSelect.afterTimeout("2", arrived, "2", DesktopSelect.Frame(9, 9)) as DesktopSelect.Action.Note
         assertEquals("late", late.code)
         assertEquals("Studio", late.name)
     }
 
     @Test
+    fun catalogViewingIsNotASendUntilThisFrameIsDecoded() {
+        val shown = catalog(
+            viewing = "2",
+            viewGen = 5,
+            rev = 12,
+            capture = 9,
+            rows = listOf(
+                screen("1", "Built-in", 0, listOf("10", "11", "12")),
+                screen("2", "Studio", 0, listOf("20", "21", "22")),
+            ),
+        )
+        val early = DesktopSelect.tap(shown, "2", "21", true, 2_000)
+        assertEquals("wait", (early.action as DesktopSelect.Action.Note).code)
+        assertNull(early.pending)
+        val staleCapture = DesktopSelect.tap(shown, "2", "21", true, 2_000, frame = DesktopSelect.Frame(8, 5))
+        assertEquals("wait", (staleCapture.action as DesktopSelect.Action.Note).code)
+        val staleGeneration = DesktopSelect.tap(shown, "2", "21", true, 2_000, frame = DesktopSelect.Frame(9, 4))
+        assertEquals("wait", (staleGeneration.action as DesktopSelect.Action.Note).code)
+        val currentEarly = DesktopSelect.tap(shown, "2", "20", true, 2_000, frame = DesktopSelect.Frame(9, 4))
+        assertEquals("wait", (currentEarly.action as DesktopSelect.Action.Note).code)
+        assertNull(currentEarly.pending)
+
+        val held = DesktopSelect.Pending("2", "21", "Studio", 10, 3, 1_000, session = 4, fromDisplay = "1")
+        val again = DesktopSelect.tap(shown, "2", "22", true, 2_000, frame = DesktopSelect.Frame(8, 5), held = held)
+        assertTrue(again.action is DesktopSelect.Action.None)
+        assertEquals(held, again.pending)
+        assertEquals(10L, again.pending?.sinceRev)
+        assertEquals(3L, again.pending?.sinceGen)
+
+        val card = DesktopSelect.switchDisplay(shown, "2", true, 2_000, frame = DesktopSelect.Frame(8, 5), held = held)
+        assertTrue(card.action is DesktopSelect.Action.None)
+        assertEquals(held, card.pending)
+        val cardEarly = DesktopSelect.switchDisplay(shown, "2", true, 2_000)
+        assertEquals("wait", (cardEarly.action as DesktopSelect.Action.Note).code)
+        assertNull(cardEarly.pending)
+
+        val ready = DesktopSelect.tap(shown, "2", "22", true, 2_000, frame = DesktopSelect.Frame(9, 5))
+        val space = ready.action as DesktopSelect.Action.Space
+        assertNull(ready.pending)
+        assertEquals("22", space.spaceId)
+        val already = DesktopSelect.tap(shown, "2", "20", true, 2_000, frame = DesktopSelect.Frame(9, 5))
+        assertEquals("already", (already.action as DesktopSelect.Action.Note).code)
+        val showing = DesktopSelect.switchDisplay(shown, "2", true, 2_000, frame = DesktopSelect.Frame(9, 5))
+        assertEquals("showing", (showing.action as DesktopSelect.Action.Note).code)
+        assertNull(showing.pending)
+    }
+
+    @Test
     fun displayCardWaitsForThePictureAndDoesNotChangeTheDesktop() {
-        val start = catalog(viewGen = 3)
-        val here = DesktopSelect.switchDisplay(start, "1", true, 1_000, session = 4)
+        val start = catalog(viewGen = 3, capture = 7)
+        val here = DesktopSelect.switchDisplay(start, "1", true, 1_000, session = 4, frame = DesktopSelect.Frame(7, 3))
         assertEquals("showing", (here.action as DesktopSelect.Action.Note).code)
         assertNull(here.pending)
 
@@ -250,7 +301,8 @@ class DesktopSelectTest {
         val timed = DesktopSelect.onState(pending, fresh, "2", 1_000 + DesktopSelect.WAIT_MS, DesktopSelect.Frame(9, 4))
         assertEquals("timeout", (timed.action as DesktopSelect.Action.Note).code)
         assertNull(timed.pending)
-        val late = DesktopSelect.afterTimeout("2", fresh, "2")
+        assertTrue(DesktopSelect.afterTimeout("2", fresh, "2") is DesktopSelect.Action.None)
+        val late = DesktopSelect.afterTimeout("2", fresh, "2", DesktopSelect.Frame(9, 4))
         assertEquals("late", (late as DesktopSelect.Action.Note).code)
 
         assertEquals("stop", DesktopSelect.cancelReason(pending, false, true, true, 4, fresh, "2"))

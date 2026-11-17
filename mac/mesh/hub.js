@@ -59,7 +59,7 @@ class Hub extends EventEmitter {
     this.selectedId = null;
     this.sessions = new Sessions({ links });
     this.bus = this._makeBus();
-    this._busHandlers = new Map(); // type -> [fn(msg, fromId)]
+    this._busHandlers = new Map(); // type -> [fn(msg, fromId, source)]
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];

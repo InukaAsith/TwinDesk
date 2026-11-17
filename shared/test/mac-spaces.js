@@ -286,23 +286,53 @@ async function main() {
     const hostWs = { readyState: 1 };
     const host = { authed: true, ws: hostWs };
     let session = { connected: true, linkUp: true, link, hostUp: false, ctx: null };
-    const meshStill = S.meshGate(() => session);
+    const meshStill = S.meshGate(() => session, link);
     assert.strictEqual(meshStill(), true);
     link.ws.readyState = 2;
     assert.strictEqual(meshStill(), false);
     link.ws.readyState = 1;
-    session = { ...session, link: { authed: true } };
+    session = { ...session, link: { authed: true, ws: { readyState: 1 } } };
     assert.strictEqual(meshStill(), false);
     session = { connected: true, linkUp: false, hostUp: true, ctx: host };
-    const hostStill = S.meshGate(() => session);
+    const hostStill = S.meshGate(() => session, host);
     assert.strictEqual(hostStill(), true);
-    session = { ...session, ctx: { authed: true, ws: {} } };
+    session = { ...session, ctx: { authed: true, ws: { readyState: 1 } } };
     assert.strictEqual(hostStill(), false);
     session = { connected: true, linkUp: true, link, hostUp: true, ctx: host };
     assert.strictEqual(hostStill(), false);
-    assert.strictEqual(S.meshGate(() => ({ connected: false })), null);
-    assert.strictEqual(S.meshGate(() => ({ connected: true, linkUp: true, link: { authed: false } })), null);
-    assert.strictEqual(S.meshGate(() => ({ connected: true, linkUp: false, hostUp: true, ctx: { authed: true } })), null);
+    assert.strictEqual(S.meshGate(() => session, host), null);
+    const guestStill = S.meshGate(() => session, link);
+    assert.strictEqual(guestStill(), true);
+    const releasedHost = { authed: true, released: true, ws: { readyState: 1 } };
+    session = { connected: true, linkUp: true, link, hostUp: true, ctx: releasedHost };
+    assert.strictEqual(S.meshGate(() => session, releasedHost), null);
+    assert.strictEqual(S.meshGate(() => session), null);
+    assert.strictEqual(guestStill(), true);
+    link.released = true;
+    assert.strictEqual(guestStill(), false);
+    link.released = false;
+    assert.strictEqual(S.meshGate(() => ({ connected: false }), link), null);
+    assert.strictEqual(S.meshGate(() => ({ connected: true, linkUp: true, link: { authed: false, ws: { readyState: 1 } } }), link), null);
+    assert.strictEqual(S.meshGate(() => ({ connected: true, linkUp: false, hostUp: true, ctx: { authed: true, ws: { readyState: 1 } } })), null);
+
+    // The bus hands a socket (hub.js): meshSource finds the connection that holds it.
+    {
+      const lws = { readyState: 1 }, hws = { readyState: 1 }, alt = { readyState: 1 }, stray = { readyState: 1 };
+      const gl = { authed: true, ws: lws };
+      const hc = { authed: true, ws: hws, alt };
+      const both = { connected: true, linkUp: true, link: gl, hostUp: true, ctx: hc };
+      assert.strictEqual(S.meshSource(both, lws), gl);
+      assert.strictEqual(S.meshSource(both, hws), hc);
+      assert.strictEqual(S.meshSource(both, alt), hc, 'a resumed session\'s fallback socket is its host ctx');
+      assert.strictEqual(S.meshSource(both, stray), null);
+      assert.strictEqual(S.meshSource(null, lws), null);
+      assert.strictEqual(S.meshSource(both, null), null);
+      assert.strictEqual(S.meshGate(() => both, S.meshSource(both, hws)), null, 'host socket while the guest link is up: refused');
+      assert.ok(S.meshGate(() => both, S.meshSource(both, lws)), 'guest link socket: allowed');
+      const hostOnly = { connected: true, linkUp: false, hostUp: true, ctx: hc };
+      assert.ok(S.meshGate(() => hostOnly, S.meshSource(hostOnly, alt)), 'host ctx via its fallback socket: allowed');
+      assert.strictEqual(S.meshGate(() => hostOnly, S.meshSource(hostOnly, stray)), null);
+    }
   }
 
   // Main path: arm names the viewed display and the exact next index. The press is the commit, after the arm.
@@ -359,19 +389,20 @@ async function main() {
 
     // Queued requests remain bound to the session that sent them, even if that device reconnects.
     {
-      let session = { connected: true, linkUp: true, link: { authed: true, ws: { readyState: 1 } } };
+      const link = { authed: true, ws: { readyState: 1 } };
+      let session = { connected: true, linkUp: true, link, hostUp: false, ctx: null };
       let deliver, release;
       const calls = [], replies = [];
       new SpaceSwitch({
         listen(fn) { deliver = fn; },
-        authorize: () => S.meshGate(() => session),
+        authorize: (ctx) => S.meshGate(() => session, ctx && ctx.source),
         enabled: () => true,
         targetFor: () => ({ id: 1 }),
         reply: (_ctx, msg) => replies.push(msg),
         helper: { request(cmd) { calls.push(cmd); return new Promise((resolve) => { release = () => resolve(SEPARATE); }); } },
       });
-      deliver({ dir: 'next' }, { id: 'phone' });
-      deliver({ dir: 'next' }, { id: 'phone' });
+      deliver({ dir: 'next' }, { id: 'phone', source: link });
+      deliver({ dir: 'next' }, { id: 'phone', source: link });
       await until(() => calls.length === 1);
       session = { connected: true, linkUp: true, link: { authed: true, ws: { readyState: 1 } } };
       release();
@@ -463,7 +494,8 @@ async function main() {
 
   // Replaced mesh session while the overview is arming: the abort command reaches the helper.
   {
-    let session = { connected: true, linkUp: true, link: { authed: true, ws: { readyState: 1 } } };
+    const link = { authed: true, ws: { readyState: 1 } };
+    let session = { connected: true, linkUp: true, link, hostUp: false, ctx: null };
     let deliver;
     const calls = [];
     const replies = [];
@@ -472,7 +504,7 @@ async function main() {
     let pressed = false;
     new SpaceSwitch({
       listen(fn) { deliver = fn; },
-      authorize: () => S.meshGate(() => session),
+      authorize: (ctx) => S.meshGate(() => session, ctx && ctx.source),
       enabled: () => true,
       targetFor: () => ({ id: 1 }),
       reply: (_ctx, msg) => replies.push(msg),
@@ -496,9 +528,9 @@ async function main() {
         },
       },
     });
-    deliver({ dir: 'next' }, { id: 'phone' });
+    deliver({ dir: 'next' }, { id: 'phone', source: link });
     await until(() => calls.includes('spacesSwitch'));
-    session = { connected: true, linkUp: true, link: { authed: true, ws: { readyState: 1 } } };
+    session = { connected: true, linkUp: true, link: { authed: true, ws: { readyState: 1 } }, hostUp: false, ctx: null };
     await until(() => calls.includes('spacesAbort') && cancelled);
     assert.strictEqual(pressed, false);
     await until(() => replies.length === 1);
@@ -959,6 +991,50 @@ async function main() {
     helper.release(SEPARATE);
     await until(() => replies.length === 3);
     assert.deepStrictEqual(replies[2], { t: P.T.SCREEN_DESKTOPS, ok: true, epoch: 0 });
+  }
+
+  // A released host socket must not become the guest link's desktop request.
+  // The bus hands the socket it came on; services.js maps it to its connection (meshSource) for meshGate.
+  {
+    process.env.TWINDESK_NO_FX2 = '1';
+    const { EventEmitter } = require('events');
+    const { Hub } = require('../../mac/mesh/hub.js');
+    const links = new EventEmitter();
+    links.list = () => [];
+    const hub = new Hub({ device: { id: 'mac', name: 'This Mac' }, links, mesh: null });
+    const session = hub.sessions.ensure('phone');
+    const guest = { authed: true, ws: { readyState: 1 }, pairing: {} };
+    const host = { authed: true, released: true, ws: { readyState: 1 }, deviceId: 'phone', name: 'Phone' };
+    session.link = guest;
+    session.ctx = host;
+    const seen = [];
+    hub.bus.on(P.T.SCREEN_SPACE, (msg, id, source) => seen.push({ id, source, dir: msg.dir }));
+    const authorize = (ctx) => S.meshGate(() => hub.sessions.get(ctx && ctx.id), S.meshSource(hub.sessions.get(ctx && ctx.id), ctx && ctx.source));
+    session.fromHost({ t: P.T.SCREEN_SPACE, dir: 'next' }, host, host.ws);
+    assert.strictEqual(seen.length, 0);
+    assert.strictEqual(authorize({ id: 'phone', source: host.ws }), null);
+    host.released = false;
+    session.fromHost({ t: P.T.SCREEN_SPACE, dir: 'next' }, host, host.ws);
+    assert.strictEqual(seen.length, 1);
+    assert.strictEqual(seen[0].id, 'phone');
+    assert.strictEqual(seen[0].source, host.ws);
+    assert.strictEqual(authorize({ id: 'phone', source: seen[0].source }), null);
+    session._fromLink({ t: P.T.SCREEN_SPACE, dir: 'prev' }, guest.ws);
+    assert.strictEqual(seen.length, 2);
+    assert.strictEqual(seen[1].source, guest.ws);
+    const still = authorize({ id: 'phone', source: seen[1].source });
+    assert.strictEqual(typeof still, 'function');
+    assert.strictEqual(still(), true);
+    guest.released = true;
+    assert.strictEqual(still(), false);
+    guest.released = false;
+    const replaced = { authed: true, ws: { readyState: 1 }, pairing: {} };
+    session.link = replaced;
+    assert.strictEqual(still(), false);
+    assert.strictEqual(authorize({ id: 'phone', source: replaced.ws })(), true);
+    const other = { authed: true, ws: { readyState: 1 } };
+    session.fromHost({ t: P.T.SCREEN_SPACE, dir: 'next' }, other, other.ws);
+    assert.strictEqual(seen.length, 2);
   }
 
   console.log('mac-spaces: fake helper only; arm, abort-before-press, and refusals. Not a live desktop switch.');

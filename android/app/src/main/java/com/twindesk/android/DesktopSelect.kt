@@ -4,8 +4,12 @@
 // The desktop message waits until a later screen.state says this viewer is capturing
 // that display, the catalog revision moved, and a decoded frame belongs to that
 // capture session and view generation. A frame already playing does not count.
-// A display card asks only for that screen. The same wait ends in a note, including
-// when the picture arrives after a timeout, and never becomes a desktop change.
+// A catalog that already names the new display is not that frame. Space, already,
+// showing, and late all wait for the decoded frame of this capture. A second tap
+// before that frame keeps the wait it was given, including the revision it started
+// from, and does not send. A display card asks only for that screen. The same wait
+// ends in a note, including when the picture arrives after a timeout, and never
+// becomes a desktop change.
 // Stop, revoked input, a new session, a closed viewer, or a picture that landed on
 // some other display cancels the wait, so it cannot run after the picture returns.
 package com.twindesk.android
@@ -102,15 +106,29 @@ object DesktopSelect {
         return Catalog(rev, shown, gen, if (shown.isEmpty()) null else cap, displays)
     }
 
-    fun tap(catalog: Catalog?, displayId: String, spaceId: String, canSwitchDisplay: Boolean, now: Long, session: Long = 0): Result {
+    fun tap(
+        catalog: Catalog?,
+        displayId: String,
+        spaceId: String,
+        canSwitchDisplay: Boolean,
+        now: Long,
+        session: Long = 0,
+        frame: Frame? = null,
+        held: Pending? = null,
+    ): Result {
         val cat = catalog ?: return Result(null, Action.Note("unavailable"))
         val display = cat.displays.find { it.id == displayId } ?: return Result(null, Action.Note("display"))
         val desk = display.desktops.find { it.id == spaceId } ?: return Result(null, Action.Note("space"))
         if (!desk.selectable || display.count > MAX_COUNT) return Result(null, Action.Note("space"))
         val name = display.name
-        if (display.id == cat.viewing && desk.current) return Result(null, Action.Note("already", name))
         if (display.id == cat.viewing) {
-            if (cat.viewGen == null) return Result(null, Action.Note("wait", name))
+            // The catalog can name this display before its frame is decoded. That is not a send,
+            // and it must not replace a wait that still has the earlier revision.
+            if (!pictureReady(cat, frame)) {
+                if (held != null) return Result(held, Action.None)
+                return Result(null, Action.Note("wait", name))
+            }
+            if (desk.current) return Result(null, Action.Note("already", name))
             return Result(null, Action.Space(display.id, desk.id, desk.index, display.count, cat.rev, name))
         }
         if (!canSwitchDisplay) return Result(null, Action.Note("display", name))
@@ -121,11 +139,25 @@ object DesktopSelect {
     // The overview's display card. Already showing it, or a screen this viewer cannot
     // mirror, sends nothing. Otherwise the picture has to catch up before the note
     // may say it is showing. spaceId stays empty, so this wait cannot name a desktop.
-    fun switchDisplay(catalog: Catalog?, displayId: String, canSwitchDisplay: Boolean, now: Long, session: Long = 0): Result {
+    fun switchDisplay(
+        catalog: Catalog?,
+        displayId: String,
+        canSwitchDisplay: Boolean,
+        now: Long,
+        session: Long = 0,
+        frame: Frame? = null,
+        held: Pending? = null,
+    ): Result {
         val cat = catalog ?: return Result(null, Action.Note("unavailable"))
         val display = cat.displays.find { it.id == displayId } ?: return Result(null, Action.Note("display"))
         val name = display.name
-        if (display.id == cat.viewing) return Result(null, Action.Note("showing", name))
+        if (display.id == cat.viewing) {
+            if (!pictureReady(cat, frame)) {
+                if (held != null) return Result(held, Action.None)
+                return Result(null, Action.Note("wait", name))
+            }
+            return Result(null, Action.Note("showing", name))
+        }
         if (!canSwitchDisplay) return Result(null, Action.Note("display", name))
         val pending = Pending(display.id, "", name, cat.rev, cat.viewGen, now, session, cat.viewing, displayOnly = true)
         return Result(pending, Action.DisplayThenWait(display.id, name, pending))
@@ -199,11 +231,20 @@ object DesktopSelect {
 
     // The wait gave up, and a later state shows the display anyway. Say so, and do not
     // send the desktop change that was no longer being waited for.
-    fun afterTimeout(displayId: String, catalog: Catalog?, mirroredId: String): Action {
+    fun afterTimeout(displayId: String, catalog: Catalog?, mirroredId: String, frame: Frame? = null): Action {
         if (displayId.isEmpty() || catalog == null) return Action.None
         if (catalog.viewing != displayId || mirroredId != displayId) return Action.None
+        if (!pictureReady(catalog, frame)) return Action.None
         val name = catalog.displays.find { it.id == displayId }?.name.orEmpty()
         return Action.Note("late", name)
+    }
+
+    // The decoded frame is this catalog's capture and view generation. A newer catalog
+    // row with an older picture does not count, and neither does a frame from another capture.
+    private fun pictureReady(cat: Catalog, frame: Frame?): Boolean {
+        val cap = cat.capture ?: return false
+        val gen = cat.viewGen ?: return false
+        return frame != null && frame.capture == cap && frame.viewGen == gen
     }
 
     private fun cleanId(id: String): String? {
