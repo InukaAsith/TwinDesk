@@ -387,7 +387,8 @@ function meshGate(readSession, source) {
   const live = (conn) => !!(conn && conn.authed === true && !conn.released && conn.ws && conn.ws.readyState === 1);
   if (!live(source) || !meshOwns(readSession(), source)) return null;
   const bound = source;
-  return () => live(bound) && meshOwns(readSession(), bound);
+  const ws = source.ws;
+  return () => live(bound) && bound.ws === ws && meshOwns(readSession(), bound);
 }
 
 // The mesh bus hands features the socket a message came on (hub.js, as hub-route does): this is the

@@ -303,6 +303,10 @@ async function main() {
     assert.strictEqual(S.meshGate(() => session, host), null);
     const guestStill = S.meshGate(() => session, link);
     assert.strictEqual(guestStill(), true);
+    const originalGuestWs = link.ws;
+    link.ws = { readyState: 1 };
+    assert.strictEqual(guestStill(), false, 'a reconnect on the same Link invalidates the old gate');
+    link.ws = originalGuestWs;
     const releasedHost = { authed: true, released: true, ws: { readyState: 1 } };
     session = { connected: true, linkUp: true, link, hostUp: true, ctx: releasedHost };
     assert.strictEqual(S.meshGate(() => session, releasedHost), null);
