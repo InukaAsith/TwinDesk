@@ -307,10 +307,19 @@ enum MissionControlAccess {
     let dockChildren = childrenOf(docks.first)
     let managerChildren = childrenOf(managers.first)
     guard let dockChildren, let managerChildren else { return .unreadable }
-    let dockGroups = dockChildren.filter { axString($0, kAXIdentifierAttribute as CFString) == "mc" }
-    if dockGroups.count > 1 { return .ambiguousHost }
-    let dockDisplays = dockGroups.first.map { readDisplays($0) } ?? []
-    let windowDisplays = readDisplays(of: managerChildren)
+    // An identifier that cannot be read is not "not mc". Treating the error as nil
+    // drops a visible overview and the next hidden check resumes input.
+    guard let dockMC = RootChildren.indexes(dockChildren.map { axIdentifier($0) }, equalTo: "mc") else { return .unreadable }
+    if dockMC.count > 1 { return .ambiguousHost }
+    let dockGroups = dockMC.map { dockChildren[$0] }
+    let dockDisplays: [MCDisplay]
+    if let group = dockGroups.first {
+      guard let displays = readDisplays(group) else { return .unreadable }
+      dockDisplays = displays
+    } else {
+      dockDisplays = []
+    }
+    guard let windowDisplays = readDisplays(of: managerChildren) else { return .unreadable }
     return MissionControlPlan.classify(HostSnapshot(
       dockCount: docks.count, windowManagerCount: managers.count, dockMCCount: dockGroups.count,
       dockHasMC: dockGroups.count == 1, dockDisplays: dockDisplays, windowDisplays: windowDisplays))
@@ -368,22 +377,47 @@ enum MissionControlAccess {
     return buttons
   }
 
-  private static func readDisplays(_ root: AXUIElement) -> [MCDisplay] {
-    guard let children = axChildren(root) else { return [] }
+  /// Nil when the element's children, or any of their identifiers, cannot be read.
+  private static func readDisplays(_ root: AXUIElement) -> [MCDisplay]? {
+    guard let children = axChildren(root) else { return nil }
     return readDisplays(of: children)
   }
 
-  private static func readDisplays(of children: [AXUIElement]) -> [MCDisplay] {
-    children.filter { axString($0, kAXIdentifierAttribute as CFString) == "mc.display" }.map { display in
-      let kids = axChildren(display) ?? []
-      let spaces = kids.filter { axString($0, kAXIdentifierAttribute as CFString) == "mc.spaces" }
-      let lists: [[Bool]] = spaces.flatMap { space -> [[Bool]] in
-        let inner = axChildren(space) ?? []
-        return inner.filter { axString($0, kAXIdentifierAttribute as CFString) == "mc.spaces.list" }.map { list in
-          (axChildren(list) ?? []).map { axString($0, kAXRoleAttribute as CFString) == (kAXButtonRole as String) }
-        }
+  /// Nil when any root child's identifier cannot be read. An empty list is a real miss.
+  private static func readDisplays(of children: [AXUIElement]) -> [MCDisplay]? {
+    guard let indexes = RootChildren.indexes(children.map { axIdentifier($0) }, equalTo: "mc.display") else { return nil }
+    return indexes.map { readDisplay(children[$0]) }
+  }
+
+  private static func readDisplay(_ display: AXUIElement) -> MCDisplay {
+    let kids = axChildren(display) ?? []
+    let spaces = kids.filter { axString($0, kAXIdentifierAttribute as CFString) == "mc.spaces" }
+    let lists: [[Bool]] = spaces.flatMap { space -> [[Bool]] in
+      let inner = axChildren(space) ?? []
+      return inner.filter { axString($0, kAXIdentifierAttribute as CFString) == "mc.spaces.list" }.map { list in
+        (axChildren(list) ?? []).map { axString($0, kAXRoleAttribute as CFString) == (kAXButtonRole as String) }
       }
-      return MCDisplay(displayID: axDisplayID(display), spaceGroups: spaces.count, lists: lists)
+    }
+    return MCDisplay(displayID: axDisplayID(display), spaceGroups: spaces.count, lists: lists)
+  }
+
+  private static func axIdentifier(_ element: AXUIElement) -> IdentifierRead {
+    var value: CFTypeRef?
+    let err = AXUIElementCopyAttributeValue(element, kAXIdentifierAttribute as CFString, &value)
+    switch err {
+    case .success:
+      guard let text = value as? String else { return value == nil ? .absent : .unreadable }
+      return IdentifierRead.interpret(.success, text: text)
+    case .noValue:
+      return IdentifierRead.interpret(.noValue, text: nil)
+    case .attributeUnsupported:
+      return IdentifierRead.interpret(.unsupported, text: nil)
+    case .cannotComplete:
+      return IdentifierRead.interpret(.cannotComplete, text: nil)
+    case .invalidUIElement:
+      return IdentifierRead.interpret(.invalidElement, text: nil)
+    default:
+      return IdentifierRead.interpret(.failed, text: nil)
     }
   }
 

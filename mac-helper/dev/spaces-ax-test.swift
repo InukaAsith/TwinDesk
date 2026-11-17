@@ -858,6 +858,33 @@ func machineTests() {
   }
 }
 
+func rootTests() {
+  check(IdentifierRead.interpret(.cannotComplete, text: nil) == .unreadable, "cannotComplete is unreadable")
+  check(IdentifierRead.interpret(.invalidElement, text: nil) == .unreadable, "invalidUIElement is unreadable")
+  check(IdentifierRead.interpret(.failed, text: "mc") == .unreadable, "a failed read is not its text")
+  check(IdentifierRead.interpret(.noValue, text: nil) == .absent, "no value is absent")
+  check(IdentifierRead.interpret(.unsupported, text: nil) == .absent, "an unsupported identifier is absent")
+  check(IdentifierRead.interpret(.success, text: "mc") == .text("mc"), "a read identifier is kept")
+  check(IdentifierRead.interpret(.success, text: "") == .absent, "an empty identifier is absent")
+  check(IdentifierRead.interpret(.success, text: nil) == .absent, "success with no string is absent")
+
+  check(RootChildren.indexes([.unreadable], equalTo: "mc") == nil, "cannotComplete on a Dock child is not an empty root")
+  check(RootChildren.indexes([.unreadable], equalTo: "mc.display") == nil, "invalidUIElement on a WindowManager child is not hidden")
+  check(RootChildren.indexes([.text("mc"), .unreadable], equalTo: "mc") == nil, "an unreadable sibling is not dropped")
+  check(RootChildren.indexes([.text("mc.display"), .unreadable], equalTo: "mc.display") == nil, "a visible display beside an unreadable child stays unreadable")
+  check(RootChildren.indexes([.absent, .text("other")], equalTo: "mc") == [], "readable roots with no mc can be hidden")
+  check(RootChildren.indexes([.text("mc"), .text("dock")], equalTo: "mc") == [0], "the mc group is kept")
+  check(RootChildren.indexes([.text("mc"), .text("mc")], equalTo: "mc") == [0, 1], "two mc groups stay visible to the ambiguous check")
+
+  // Collapsing the error to absent is the old bug: classify then says hidden, and input resumes.
+  check(RootChildren.indexes([.absent], equalTo: "mc") == [], "absent is an empty match")
+  check(MissionControlPlan.classify(host()) == .show(.hidden), "empty roots are hidden")
+  check(InputRecovery.allowRestore(phase: .releasing, input: .show(.hidden)), "a hidden read may restore")
+  check(!InputRecovery.allowRestore(phase: nil, input: .unreadable), "an unreadable root does not restore with no attempt")
+  check(!InputRecovery.allowRestore(phase: .releasing, input: .unreadable), "an unreadable root does not restore while releasing")
+  check(!InputRecovery.allowRestore(phase: .settled, input: .unreadable), "an unreadable root does not restore after settle")
+}
+
 func recoveryTests() {
   check(InputRecovery.allowRestore(phase: nil, input: .show(.hidden)), "no machine and hidden may restore")
   check(InputRecovery.allowRestore(phase: .settled, input: .show(.hidden)), "settled and hidden may restore")
@@ -925,12 +952,13 @@ struct SpacesAXTest {
     planTests()
     compositionTests()
     moveTests()
+    rootTests()
     machineTests()
     recoveryTests()
     if failures != 0 {
       FileHandle.standardError.write(Data("spaces-ax-test: \(failures) failed\n".utf8))
       exit(1)
     }
-    print("spaces-ax-test: classify, plan, composition, postcheck, overview machine, and input recovery. No AX, no SkyLight, no notification. Not a live desktop switch.")
+    print("spaces-ax-test: classify, plan, composition, postcheck, root identifiers, overview machine, and input recovery. No AX, no SkyLight, no notification. Not a live desktop switch.")
   }
 }

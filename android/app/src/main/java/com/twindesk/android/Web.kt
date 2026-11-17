@@ -401,7 +401,10 @@ class Screen(core: Core) : Feature(core) {
             displays.any { it.id == id },
             System.currentTimeMillis(),
             sessionEpoch,
+            frameFor(),
+            pending,
         )
+        if (step.pending === pending && step.action is DesktopSelect.Action.None) return
         takeDesktop(step, "")
         core.changed()
     }
@@ -418,7 +421,12 @@ class Screen(core: Core) : Feature(core) {
             displays.any { it.id == displayId },
             System.currentTimeMillis(),
             sessionEpoch,
+            frameFor(),
+            pending,
         )
+        // A catalog that already says this display is showing, before its frame is decoded,
+        // must not send and must not replace the wait (its revision is what the frame is compared to).
+        if (step.pending === pending && step.action is DesktopSelect.Action.None) return
         takeDesktop(step, "")
         core.changed()
     }
@@ -531,7 +539,7 @@ class Screen(core: Core) : Feature(core) {
                     stickyNote = false
                     spaceNote = transitionNote("switching", waiting.name)
                 } else if (timeoutDisplay.isNotEmpty()) {
-                    val late = DesktopSelect.afterTimeout(timeoutDisplay, desktopCatalog, displayId)
+                    val late = DesktopSelect.afterTimeout(timeoutDisplay, desktopCatalog, displayId, frameFor())
                     if (late is DesktopSelect.Action.Note) {
                         timeoutDisplay = ""
                         stickyNote = true

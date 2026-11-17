@@ -230,22 +230,27 @@ class Session extends EventEmitter {
     this._sync();
   }
 
-  // Messages from the server ctx (only the one that is current): delivered as they are.
+  // Messages from the server ctx. Only the current authenticated socket, and the tap
+  // receives that exact object. A released socket is not delivered. The guest link, when
+  // it is up, is a different connection: a host message is not labeled as that link.
   fromHost(msg, ctx) {
-    if (ctx !== this.ctx) return;
-    this._deliver(msg);
+    if (ctx !== this.ctx || !physical(ctx)) return;
+    this._deliver(msg, false, ctx);
   }
 
   // ---- internals ----
 
   _fromLink(msg) {
-    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m);
+    const link = this.link;
+    if (!physical(link)) return;
+    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, link);
   }
 
   // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
-  _deliver(msg, raw = false) {
+  // source: the guest link or host ctx that carried this message. inject() has none.
+  _deliver(msg, raw = false, source = null) {
     if (!raw && this.fx.incoming(msg)) return;
-    for (const tap of this.taps) if (tap(msg) === true) return;
+    for (const tap of this.taps) if (tap(msg, source) === true) return;
     const fns = this.handlers.get(msg.t);
     if (fns) for (const fn of fns) fn(msg);
     else if (!this.unknown.has(msg.t)) {
@@ -351,6 +356,11 @@ class Sessions extends EventEmitter {
     const id = link.pairing && link.pairing.macId;
     if (id) this.ensure(id).setLink(link);
   }
+}
+
+// The same shape meshGate rechecks. A missing socket, a release, or a closed socket is not live.
+function physical(conn) {
+  return !!(conn && conn.authed === true && !conn.released && conn.ws && conn.ws.readyState === 1);
 }
 
 module.exports = { Session, Sessions };
