@@ -279,7 +279,44 @@ class Stream extends EventEmitter {
     return !!(this.server.current && P.isPhoneOs(this.server.current.os));
   }
 
+  // Advances when this device's picture or choice mode changes, including a return
+  // to an id that was current earlier. Mode is part of the key: _target() still
+  // names the shared display while this device's picture is off, and off then on
+  // must not look like the same selection. A desktop switch captured the previous number.
+  noteViewIdentity() {
+    const Spaces = require('../../shared/mac-spaces.js');
+    if (!this.viewSlot) this.viewSlot = { key: null, generation: 0 };
+    const mode = this.choice && this.choice.mode ? this.choice.mode : 'default';
+    let id = '';
+    try {
+      const want = this._target();
+      if (want && want.id != null) id = String(want.id);
+    } catch (_) { id = 'err'; }
+    return Spaces.noteGeneration(this.viewSlot, `${mode}:${id}:${this.session}`);
+  }
+
+  // This device's picture, including a per-device choice that is not the shared input display.
+  // Null while that picture is off or the capture has not caught up, so a desktop switch cannot
+  // land on a display this viewer is not being shown.
+  // generation is the selection epoch above, so A→B→A does not look unchanged.
+  viewedDisplay() {
+    const generation = this.noteViewIdentity();
+    const view = require('../../shared/mac-spaces.js').viewedDisplay({
+      viewer: this.viewer,
+      waitingPolicy: this.waitingPolicy,
+      sharing: this.getSettings().sharing.on === true,
+      choiceMode: this.choice && this.choice.mode,
+      activeId: this.active ? this.active.displayId : null,
+      want: this._target(),
+    });
+    if (!view) return null;
+    // session is the capture that active names. It is assigned before a frame is decoded.
+    const session = this.active && this.active.session;
+    return { ...view, generation, session };
+  }
+
   _displaysChanged() {
+    this.noteViewIdentity();
     if (!this.active) {
       if (this.awaitingDisplay && this._target()) this.restart('display available');
       return;

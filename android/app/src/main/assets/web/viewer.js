@@ -33,6 +33,9 @@
   let pc = null;
   let session = null;
   let pending = null;
+  let viewerGeneration = 0;
+  let videoOwner = null;
+  let frameProbe = 0;
   let name = t('the computer'); // the one we're connected to (opts)
   let streamAudio = false;
   let sound = true;
@@ -58,7 +61,36 @@
   }
   const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 
+  function reportVideo(playing, owner = videoOwner) {
+    if (!playing) frameProbe++;
+    if (owner && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream &&
+        (!playing || owner.pc.connectionState === 'connected') && typeof TD.videoState === 'function' && Number.isInteger(owner.generation) && owner.generation > 0 && Number.isInteger(owner.session)) {
+      TD.videoState(owner.generation, owner.session, playing);
+    }
+  }
+
+  function requireCurrentFrame(owner = videoOwner) {
+    if (typeof TD.videoState !== 'function') return;
+    if (!owner || owner !== videoOwner || owner.pc !== pc || video.srcObject !== owner.stream) return;
+    const probe = ++frameProbe;
+    const current = () => probe === frameProbe && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream;
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      video.requestVideoFrameCallback(() => { if (current()) reportVideo(true, owner); });
+    } else {
+      const started = video.currentTime;
+      let left = 60;
+      const check = () => {
+        if (!current()) return;
+        if (video.currentTime > started && video.videoWidth > 0 && video.videoHeight > 0) reportVideo(true, owner);
+        else if (--left > 0) requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    }
+  }
+
   function closePc() {
+    reportVideo(false);
+    videoOwner = null;
     if (pc) pc.close();
     pc = null;
     session = null;
@@ -77,9 +109,11 @@
     // On a USB cable the computer sends its relay (msg.ice): the picture goes through adb.
     const my = (pc = new RTCPeerConnection(msg.ice || { iceServers: [] }));
     session = msg.session;
+    viewerGeneration = msg.viewerGeneration || 0;
     const queue = (pending = []);
     setOverlay(t('Connecting to {name}…', { name }));
     my.ontrack = (e) => {
+      if (my !== pc) return;
       if (e.track.kind === 'audio') {
         if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
         audio.srcObject = new MediaStream([e.track]);
@@ -87,7 +121,9 @@
         return;
       }
       pace(e.receiver);
-      video.srcObject = new MediaStream([e.track]);
+      const stream = new MediaStream([e.track]);
+      videoOwner = { pc: my, stream, generation: viewerGeneration, session: msg.session };
+      video.srcObject = stream;
       video.play().catch(() => {});
     };
     my.onicecandidate = (e) => {
@@ -95,8 +131,9 @@
     };
     my.onconnectionstatechange = () => {
       if (my !== pc) return;
-      if (my.connectionState === 'failed') setOverlay(t('Reconnecting…'));
-      else if (my.connectionState === 'disconnected') setOverlay(t('The video connection was interrupted…'));
+      if (my.connectionState === 'connected') requireCurrentFrame();
+      else if (my.connectionState === 'failed') { reportVideo(false); setOverlay(t('Reconnecting…')); }
+      else if (my.connectionState === 'disconnected') { reportVideo(false); setOverlay(t('The video connection was interrupted…')); }
     };
     try {
       await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(msg.sdp) });
@@ -115,12 +152,25 @@
   video.addEventListener('playing', () => {
     setOverlay('');
     TD.playing(video.videoWidth, video.videoHeight);
+    requireCurrentFrame();
+  });
+  for (const event of ['waiting', 'stalled', 'emptied', 'ended']) video.addEventListener(event, () => {
+    reportVideo(false);
+    if (event === 'waiting' || event === 'stalled') requireCurrentFrame();
   });
   video.addEventListener('resize', () => TD.playing(video.videoWidth, video.videoHeight));
 
   window.tdRecv = (msg) => {
     if (msg.t !== 'rtc.ice') console.log(`viewer <- ${msg.t}${msg.session != null ? ` #${msg.session}` : ''}`);
     switch (msg.t) {
+      case 'viewer.probe':
+        if (videoOwner && msg.session === session && Number.isInteger(msg.viewerGeneration) && msg.viewerGeneration > 0) {
+          reportVideo(false);
+          viewerGeneration = msg.viewerGeneration;
+          videoOwner = { ...videoOwner, generation: viewerGeneration };
+          if (msg.accept === true) requireCurrentFrame();
+        }
+        break;
       case 'stream.info': // its name is the display shared, not the computer
         streamAudio = msg.audio === true;
         applyAudio();

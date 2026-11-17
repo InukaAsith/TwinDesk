@@ -9,6 +9,9 @@ const { Helper } = require('./helper');
 const { Displays } = require('./displays');
 const { Stream } = require('./stream');
 const { Input } = require('./input');
+const { SpaceSwitch, SpaceLook, DesktopRefresh } = require('./space-switch');
+const P = require('../shared/protocol.js');
+const Spaces = require('../shared/mac-spaces.js');
 const { Clipboard } = require('./clipboard');
 const { Kvm } = require('./kvm');
 const { Terminal } = require('./terminal');
@@ -40,6 +43,25 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
   const input = new Input(server, helper, displays, {
     enabled: () => s().streamInput !== false && (!kvm || kvm.mode === 'home'),
     swapKeys: () => server.keySwap(s()), // never between two Macs
+  });
+  // Previous/next desktop on the display this viewer is being shown. Same gate as stream input.
+  const spaces = new SpaceSwitch({
+    listen: (fn) => server.on(`t:${P.T.SCREEN_SPACE}`, fn),
+    helper,
+    enabled: () => s().streamInput !== false && (!kvm || kvm.mode === 'home'),
+    authorize: (ctx) => Spaces.streamInputGate(ctx, () => server.current),
+    targetFor: () => stream.viewedDisplay(),
+    reply: (ctx, msg) => server.send(ctx, msg),
+    names: () => Spaces.catalogOffer(displays.list(), { remote: s().sharing.remote !== false, held: displays.holds.has('apps-open') }).named,
+    offerDisplays: () => Spaces.catalogOffer(displays.list(), { remote: s().sharing.remote !== false, held: displays.holds.has('apps-open') }).offerDisplays,
+  });
+  const spaceLook = new SpaceLook(helper, pushState);
+  const desktopRefresh = new DesktopRefresh({
+    listen: (fn) => server.on(`t:${P.T.SCREEN_DESKTOPS}`, fn),
+    authorize: (ctx) => Spaces.streamInputGate(ctx, () => server.current),
+    viewFor: () => stream.viewedDisplay(),
+    spaceLook,
+    reply: (ctx, msg) => server.send(ctx, msg),
   });
   const clipboard = new Clipboard(server, helper, s);
   const drop = new Drop({ server, helper, displays, getSettings: s });
@@ -104,7 +126,7 @@ function startServices({ server, getSettings, pushState, onHelperReady }) {
   helper.start();
 
   return {
-    helper, displays, stream, input, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, pcView, pcApps, hub, fileSend, notifs, history, fileClip, wake, appSend, updateAwake,
+    helper, displays, stream, input, spaces, spaceLook, desktopRefresh, clipboard, kvm, terminal, drop, smb, apps, sshClient, audio, pcView, pcApps, hub, fileSend, notifs, history, fileClip, wake, appSend, updateAwake,
     shutdown() {
       pcView.shutdown();
       pcApps.shutdown();
