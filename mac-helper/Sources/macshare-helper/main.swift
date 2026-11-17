@@ -36,6 +36,17 @@ func replyError(_ id: Any?, _ message: String) {
   emit(["id": id!, "ok": false, "error": message])
 }
 
+/// Why remote input is paused. Hidden while a switch is still opening stays
+/// "overview": that read is not a safe place to send a touch.
+func spaceHoldWhy(_ input: PollInput) -> String {
+  switch input {
+  case .unreadable, .ambiguousHost:
+    return "accessibility"
+  case .show:
+    return "overview"
+  }
+}
+
 let virtualDisplay = VirtualDisplay()
 let injector = Injector()
 let pasteboardWatch = PasteboardWatch()
@@ -262,6 +273,31 @@ func handle(_ line: String) {
       case .failure(let err): replyError(id, err.message)
       }
     }
+  case "spacesLook": // read which desktops each display owns; does not move one.
+    // A hidden read may resume remote input. An unknown read does not. This
+    // command never opens Mission Control or presses a thumbnail.
+    SpaceOverview.shared.recoverHidden()
+    var looked = MacSpaces.look()
+    if let err = looked["error"] as? String { replyError(id, err) } else {
+      let held = injector.remoteOverview
+      looked["ax"] = AXIsProcessTrusted()
+      looked["inputHeld"] = held
+      if held { looked["holdWhy"] = spaceHoldWhy(MissionControlAccess.snapshot()) }
+      reply(id, looked)
+    }
+  case "spacesAbort": // before AXPress. A replaced session is this command, not a check after the press.
+    SpaceOverview.shared.abort(id: id, token: (msg["token"] as? String) ?? "")
+  case "spacesCommit": // next turn presses unless abort already settled it. The reply waits for the postcheck.
+    SpaceOverview.shared.commit(id: id, token: (msg["token"] as? String) ?? "")
+  case "spacesSwitch": // arms the overview. The reply is phase armed, or a why. It does not press.
+    guard let displayId = (msg["displayId"] as? NSNumber)?.uint32Value, displayId != 0,
+          let space = msg["spaceId"] as? String, !space.isEmpty, space.allSatisfy({ $0.isNumber }),
+          let spaceId = UInt64(space), spaceId != 0,
+          let index = (msg["index"] as? NSNumber)?.intValue, index >= 0,
+          let count = (msg["count"] as? NSNumber)?.intValue, count > index,
+          let token = msg["token"] as? String
+    else { return replyError(id, "unavailable") }
+    SpaceOverview.shared.begin(id: id, displayId: displayId, spaceId: spaceId, index: index, count: count, token: token)
   case "input":
     guard let ev = msg["ev"] as? [String: Any], let b = msg["bounds"] as? [String: Any],
           let x = (b["x"] as? NSNumber)?.doubleValue, let y = (b["y"] as? NSNumber)?.doubleValue,
@@ -398,6 +434,10 @@ DispatchQueue.global().async {
     DispatchQueue.main.async { handle(line) }
   }
   DispatchQueue.main.async {
+    // The app connection is gone. Drop overview ownership first: close only when a
+    // fresh read shows an overview we opened, never toggle on an unknown tree, and
+    // leave remote input held unless that read is already a hidden confirmation.
+    SpaceOverview.shared.shutdown()
     Capture.shared.stopCapture(side: nil, offset: nil) // also shows the pointer again
     injector.releaseAll()
     virtualDisplay.destroy()
@@ -405,8 +445,10 @@ DispatchQueue.global().async {
   }
 }
 
-// Killed or hung up: never leave the pointer hidden or frozen. (A crash ends our WindowServer
-// connection, which shows the pointer and frees it by itself; main's helper.on('exit') goes home.)
+// Killed or hung up: never leave the pointer hidden or frozen. A signal has no fresh
+// accessibility read, so it does not toggle Mission Control; an unknown tree stays
+// untouched. (A crash ends our WindowServer connection, which shows the pointer and
+// frees it by itself; main's helper.on('exit') goes home.)
 for sig in [SIGTERM, SIGINT, SIGHUP] {
   signal(sig) { _ in
     CGAssociateMouseAndMouseCursorPosition(1)

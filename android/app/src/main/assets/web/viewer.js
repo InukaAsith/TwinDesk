@@ -327,6 +327,14 @@
   window.tdRecv = (msg) => {
     if (msg.t !== 'rtc.ice') console.log(`viewer <- ${msg.t}${msg.session != null ? ` #${msg.session}` : ''}`);
     switch (msg.t) {
+      case 'viewer.probe':
+        if (videoOwner && msg.session === session && Number.isInteger(msg.viewerGeneration) && msg.viewerGeneration > 0) {
+          reportVideo(false);
+          viewerGeneration = msg.viewerGeneration;
+          videoOwner = { ...videoOwner, generation: viewerGeneration };
+          if (msg.accept === true) requireCurrentFrame();
+        }
+        break;
       case 'stream.info': // its name is the display shared, not the computer
         streamAudio = msg.audio === true;
         applyAudio();

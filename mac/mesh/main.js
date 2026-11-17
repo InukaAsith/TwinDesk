@@ -332,10 +332,39 @@ function sendScreenState() {
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], by: sharingBy };
   msg.input = !!svc.input.enabled(); // the screen-input gate: Android shows its touchpad cue only while input applies (#288)
   const ids = hub.bus.connectedIds();
-  const key = JSON.stringify([ids, msg]);
+  // Displays & desktops (#264), per device: the read covers every display (it never opens Mission Control
+  // nor changes a desktop, mac-helper Spaces.swift); each device's spaces and desktops are for the display
+  // that device is shown. Another viewer's display is not a choice for it.
+  const Spaces = require('../../shared/mac-spaces.js');
+  const viewedBy = new Map(ids.map((pid) => {
+    const st = svc.stream && svc.stream.byId ? svc.stream.byId.get(pid) : null;
+    return [pid, st && st.viewedDisplay ? st.viewedDisplay() : null];
+  }));
+  // Read only while a device is shown a display: nobody watching, no helper call. The read is fenced on the
+  // first such device's view (a read that raced its picture moving is not published); each device's own
+  // screen.desktops ask is fenced on its own view (DesktopRefresh).
+  const fenceId = [...viewedBy.keys()].find((pid) => viewedBy.get(pid));
+  if (svc.spaceLook && fenceId != null) svc.spaceLook.refresh({
+    view: () => {
+      const st = svc.stream && svc.stream.byId ? svc.stream.byId.get(fenceId) : null;
+      return st && st.viewedDisplay ? st.viewedDisplay() : null;
+    },
+  });
+  const look = svc.spaceLook ? svc.spaceLook.current() : null;
+  const offer = Spaces.catalogOffer(svc.displays.list(), { remote: settings.sharing.remote !== false, held: !!(svc.displays.holds && svc.displays.holds.has('apps-open')), mesh: true });
+  const spaceHold = Spaces.spaceHold(look);
+  const per = ids.map((pid) => {
+    const viewed = viewedBy.get(pid);
+    const m = { ...msg, spaces: Spaces.offerSpaces(look, viewed) };
+    const desktops = Spaces.desktopCatalog(look, viewed, offer.named, { offerDisplays: false });
+    if (desktops) m.desktops = desktops;
+    if (spaceHold) m.spaceHold = spaceHold;
+    return [pid, m];
+  });
+  const key = JSON.stringify(per);
   if (key === screenStateKey) return;
   screenStateKey = key;
-  for (const pid of ids) hub.bus.send(pid, msg);
+  for (const [pid, m] of per) hub.bus.send(pid, m);
 }
 
 function updateScreenInputOwner() {
