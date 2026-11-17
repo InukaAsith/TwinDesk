@@ -153,7 +153,7 @@ class Session extends EventEmitter {
       return ws && ws.readyState === 1 && ws.released !== true ? ws : null;
     }
     if (this.hostUp && this.ctx && this.ctx.released !== true && this.ctx.authed !== false) {
-      const ws = this.ctx.ws;
+      const ws = this.server && typeof this.server.socketFor === 'function' ? this.server.socketFor(this.ctx) : this.ctx.ws;
       return ws && ws.readyState === 1 && ws.released !== true ? ws : null;
     }
     return null;

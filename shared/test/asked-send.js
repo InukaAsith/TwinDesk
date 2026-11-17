@@ -58,7 +58,7 @@ function setup() {
   const windowsAsked = [];
   hub.on('asked', () => windowsAsked.push(true)); // Windows/Linux ignore the session and open their own window
   wireAsked(hub, drop);
-  const offer = (m, ctx) => server.emit(`t:${P.T.FILE_OFFER}`, m, ctx);
+  const offer = (m, ctx, ws) => server.emit(`t:${P.T.FILE_OFFER}`, m, ctx, ws);
   return { dir, sent, server, settings, drop, hub, offer, windowsAsked };
 }
 
@@ -191,7 +191,11 @@ function refused(sent, id) {
     direct.server.emit('client', raw);
     direct.hub.act({ do: 'send', msg: { t: P.T.FS_SAVE, paths: ['DCIM/Camera/PXL_1.jpg'] } });
     const body = Buffer.from('direct');
-    direct.offer({ t: P.T.FILE_OFFER, id: 'd1', name: 'PXL_1.jpg', size: body.length, drop: 'send', batch: 'direct-1', count: 2 }, raw);
+    const first = { t: P.T.FILE_OFFER, id: 'd1', name: 'PXL_1.jpg', size: body.length, drop: 'send', batch: 'direct-1', count: 2 };
+    raw.alt = sock('fallback');
+    direct.offer({ ...first, id: 'd-fallback' }, raw, raw.alt);
+    assert.ok(refused(direct.sent, 'd-fallback'), 'the same ctx on a different ingress is not the asked socket');
+    direct.offer(first, raw, raw.ws);
     assert.ok(direct.sent.some((m) => m.t === P.T.FILE_ACCEPT && m.id === 'd1'), 'the same connection\'s first file is accepted');
     direct.offer({ t: P.T.FILE_OFFER, id: 'd2', name: 'PXL_2.jpg', size: 1, drop: 'send', batch: 'direct-1', count: 2 }, raw);
     assert.ok(direct.sent.some((m) => m.t === P.T.FILE_ACCEPT && m.id === 'd2'), 'a later file of that batch is checked again and allowed');

@@ -32,15 +32,17 @@ function asSocket(sock) {
 }
 
 // The physical socket of this view. Mesh passes source(): the outbound socket for a Save,
-// or the socket a message arrived on (captured then, checked again here). One-to-one passes
-// the ctx; its socket is ws. A released ctx or a closed socket is refused now, not when
-// 'closed' arrives. Device id is not an identity.
-function connectionOf(ctx) {
+// or the socket a message arrived on. One-to-one passes the ctx and the actual socket.
+// A released ctx or a closed socket is refused now, before 'closed' arrives.
+function connectionOf(ctx, socket) {
   if (!ctx || typeof ctx !== 'object') return null;
   if (ctx.released === true || ctx.authed !== true) return null;
   if (typeof ctx.deviceId !== 'string' || !ctx.deviceId) return null;
   let sock = null;
-  if (typeof ctx.source === 'function') {
+  if (socket !== undefined) {
+    if (socket !== ctx.ws && socket !== ctx.alt) return null;
+    sock = socket;
+  } else if (typeof ctx.source === 'function') {
     try { sock = ctx.source(); } catch { return null; }
   } else if (Object.prototype.hasOwnProperty.call(ctx, 'conn')) {
     sock = ctx.conn;
@@ -63,9 +65,9 @@ class AskedSends {
   }
 
   // One pending transfer for this session. A later ask replaces it.
-  grant(session, ms = this.ms) {
+  grant(session, ms = this.ms, socket) {
     this.clear();
-    const live = connectionOf(session);
+    const live = connectionOf(session, socket);
     if (!live) return false;
     const open = { conn: live.conn, deviceId: live.deviceId, until: this.now() + ms, batch: '', timer: null };
     this.open = open;
@@ -78,13 +80,13 @@ class AskedSends {
   // continuation of that same batch. Nothing else, and nothing after the wait.
   // The first offer is not matched to the Save. Any new batch on this socket may take it.
   // The socket is checked again: Stop, a close, or a replacement refuses before 'closed'.
-  allow(ctx, msg) {
+  allow(ctx, msg, socket) {
     const g = this.open;
     if (!g || !socketOpen(g.conn)) {
       if (g) this.clear();
       return false;
     }
-    const live = connectionOf(ctx);
+    const live = connectionOf(ctx, socket);
     if (!live || live.conn !== g.conn || live.deviceId !== g.deviceId) return false;
     if (this.now() >= g.until) {
       this.clear();
