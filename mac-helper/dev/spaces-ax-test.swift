@@ -885,6 +885,15 @@ func rootTests() {
   check(!InputRecovery.allowRestore(phase: .settled, input: .unreadable), "an unreadable root does not restore after settle")
 }
 
+func overviewTests() {
+  check(OverviewReport.token(.show(.hidden)) == "hidden", "only a hidden show is hidden")
+  check(OverviewReport.token(.unreadable) == "unknown", "an unreadable tree fails closed")
+  check(OverviewReport.token(.ambiguousHost) == "unknown", "an ambiguous host fails closed")
+  check(OverviewReport.token(.show(.stub)) == "visible", "a Dock stub is visible")
+  let tree = MCDisplay(displayID: 1, spaceGroups: 1, lists: [[true]])
+  check(OverviewReport.token(.show(.tree([tree]))) == "visible", "a desktop tree is visible")
+}
+
 func recoveryTests() {
   check(InputRecovery.allowRestore(phase: nil, input: .show(.hidden)), "no machine and hidden may restore")
   check(InputRecovery.allowRestore(phase: .settled, input: .show(.hidden)), "settled and hidden may restore")
@@ -955,10 +964,11 @@ struct SpacesAXTest {
     rootTests()
     machineTests()
     recoveryTests()
+    overviewTests()
     if failures != 0 {
       FileHandle.standardError.write(Data("spaces-ax-test: \(failures) failed\n".utf8))
       exit(1)
     }
-    print("spaces-ax-test: classify, plan, composition, postcheck, root identifiers, overview machine, and input recovery. No AX, no SkyLight, no notification. Not a live desktop switch.")
+    print("spaces-ax-test: classify, plan, composition, postcheck, root identifiers, overview machine, input recovery, and the preview overview word. No AX, no SkyLight, no notification. Not a live desktop switch.")
   }
 }

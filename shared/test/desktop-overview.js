@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// The Mac viewer still has its old controls, and the new sheet does not pretend to show the desktop.
+// The Mac viewer still has its old controls. The sheet shows a still of a desktop, or says it has none.
 // Run with: node shared/test/desktop-overview.js
 'use strict';
 
@@ -24,14 +24,37 @@ assert.ok(viewer.includes('s.space("next")'));
 assert.ok(viewer.includes('heightIn(min = 48.dp)'));
 
 assert.ok(sheet.includes('tr("Done")'));
-assert.ok(sheet.includes('tr("Illustration only. This is not a live view of the desktop.")'));
+assert.ok(sheet.includes('tr("Not previewed yet")'));
+assert.ok(sheet.includes('tr("Last seen this session")'));
+assert.ok(sheet.includes('tr("Current preview")'));
+assert.ok(sheet.includes('tr("Current")'));
+assert.ok(sheet.includes('tr("Last seen")'));
+assert.ok(sheet.includes('tr("No preview")'));
+assert.ok(sheet.includes('tr("Desktop previews need macOS 14.")'));
+assert.ok(sheet.includes('tr("Desktop previews need Screen Recording.")'));
+assert.ok(!sheet.includes('Illustration only'));
+assert.ok(!sheet.includes('They are not windows from the Mac'));
+assert.ok(!sheet.includes('desktopCapturer'));
+assert.ok(!sheet.includes('getSources'));
+assert.ok(!sheet.includes('Brush.linearGradient'));
+assert.ok(sheet.includes('if (bitmap == null) DesktopPreview.Status.NONE'));
 assert.ok(sheet.includes('minHeight = 48.dp'));
-assert.ok(sheet.includes('maxWidth < 400.dp'));
-assert.ok(sheet.includes('maxWidth < 600.dp'));
+assert.ok(sheet.includes('height(48.dp)'));
+assert.ok(sheet.includes('contentAlignment = Alignment.Center'));
 assert.ok(sheet.includes('widthIn(max = 720.dp)'));
 assert.ok(sheet.includes('BackHandler(onBack = onDone)'));
-assert.ok(!/screenshot|Bitmap|ImageBitmap/i.test(sheet));
-assert.ok(sheet.includes('They are not windows from the Mac'));
+assert.ok(sheet.includes('LazyColumn'));
+assert.ok(sheet.includes('deskColumnCount'));
+assert.ok(sheet.includes('fontScale'));
+assert.ok(sheet.includes('withContext(Dispatchers.Default)'));
+assert.ok(sheet.includes('inJustDecodeBounds = true'));
+assert.ok(sheet.includes('previewIntrinsicOk'));
+const boundsAt = sheet.indexOf('inJustDecodeBounds = true');
+const pixelsAt = sheet.indexOf('inSampleSize = sample');
+assert.ok(boundsAt > 0 && pixelsAt > boundsAt, 'intrinsic bounds are known before pixels are allocated');
+assert.ok(sheet.includes('indication = ripple('));
+assert.ok(!sheet.includes('indication = null, role = Role.Button'));
+assert.ok(!sheet.includes('remember(shot'));
 
 assert.ok(gestures.includes('function reportVideo'));
 assert.ok(gestures.includes('function requireCurrentFrame'));
@@ -64,17 +87,21 @@ const welcomeAt = screenSrc.indexOf('override fun onWelcome');
 const welcome = screenSrc.slice(welcomeAt, screenSrc.indexOf('override fun onClosed', welcomeAt));
 assert.ok(welcome.includes('sessionEpoch++'));
 assert.ok(welcome.includes('cancelDesktopWait()'));
+assert.ok(welcome.includes('endPreviewSession()'));
+assert.ok(welcome.includes('previewEpoch++'));
+assert.ok(welcome.includes('DesktopPreview.empty(session)'));
 const closed = web.slice(web.indexOf('override fun onClosed'), web.indexOf('override fun onMessage'));
 assert.ok(closed.includes('cancelDesktopWait()'));
+assert.ok(closed.includes('endPreviewSession()'));
 const inputOff = web.slice(web.indexOf('"stream.input"'), web.indexOf('"screen.space.result"'));
 assert.ok(inputOff.includes('if (!inputOn)'));
 assert.ok(inputOff.includes('cancelDesktopWait()'));
+assert.ok(inputOff.includes('endPreviewSession()'));
 const resultAt = web.indexOf('"screen.space.result"');
 const result = web.slice(resultAt, web.indexOf('"screen.desktops"', resultAt));
 assert.ok(result.includes('refreshDesktops()'));
 
 assert.ok(sheet.includes('onDisplay(display.id)'));
-assert.ok(sheet.includes('.clickable(interactionSource = press, indication = null, role = Role.Button)'));
 assert.ok(sheet.includes('val marked = desk.current'));
 assert.ok(sheet.includes('selected = marked'));
 assert.ok(sheet.includes('val viewingThis = marked && display.id == viewingId'));
@@ -103,6 +130,17 @@ assert.ok(chosen.includes('DesktopSelect.switchDisplay'));
 assert.ok(!chosen.includes('screen.space'));
 assert.ok(!chosen.includes('spaceId'));
 assert.ok(viewer.includes('tr("Stop")'));
+assert.ok(viewer.includes('previews = s.desktopPreviews'));
+assert.ok(web.includes('"screen.preview"'));
+assert.ok(web.includes('screen.preview.want'));
+assert.ok(web.includes('fun previewSheet'));
+assert.ok(web.includes('DesktopPreview.reduce'));
+assert.ok(web.includes('DesktopPreview.retain'));
+assert.ok(viewer.includes('s.previewSheet(overview && sheetReady && started)'));
+assert.ok(viewer.includes('screen.previewSheet(false)'));
+const state = web.slice(web.indexOf('"screen.state"'), web.indexOf('"stream.input"'));
+assert.ok(state.includes('endPreviewSession()'));
+assert.ok(state.includes('DesktopPreview.retain'));
 
 for (const file of ['mac/services.js', 'mac/mesh/services.js']) {
   const src = read(file);
@@ -116,4 +154,4 @@ for (const file of ['windows/main.js', 'windows/mesh/main.js', 'linux/main.js', 
   assert.ok(!read(file).includes('desktopCatalog'), file);
 }
 
-console.log('desktop-overview: controls, illustration, and no Windows or Linux catalog.');
+console.log('desktop-overview: controls, honest preview labels, and no Windows or Linux catalog.');

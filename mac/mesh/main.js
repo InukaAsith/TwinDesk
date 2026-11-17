@@ -318,12 +318,64 @@ function publishState() {
 let screenInputOwner = null;
 let screenStateKey = '';
 let sharingBy = ''; // the device whose screen.ctl started our sharing ('' = this Mac's own menu): screen.state's by
+let previewShots = null;
+let previewPid = null; // the device whose Displays & desktops sheet asked for stills last (one at a time: one capture budget)
+
+// Displays & desktops stills (#264), for one device: its picture only. conn is the connection that device's
+// session.send writes (the guest link while up, else the host ctx); a released host is not used. Only the
+// display that device is shown is offered.
+function previewSample(pid = previewPid) {
+  const Preview = require('../../shared/display-preview.js');
+  if (!svc || !hub || pid == null) return null;
+  const session = hub.sessions.get(pid);
+  const conn = Preview.outbound(session);
+  if (!Preview.liveConn(conn)) return null;
+  const Spaces = require('../../shared/mac-spaces.js');
+  const st = svc.stream && svc.stream.byId ? svc.stream.byId.get(pid) : null;
+  const look = svc.spaceLook ? svc.spaceLook.current() : null;
+  const viewed = st && st.viewedDisplay ? st.viewedDisplay() : null;
+  const held = !!(svc.displays.holds && svc.displays.holds.has('apps-open'));
+  const offer = Spaces.catalogOffer(svc.displays.list(), { remote: settings.sharing.remote !== false, held, mesh: true });
+  const catalog = Spaces.desktopCatalog(look, viewed, offer.named, { offerDisplays: false });
+  const capture = viewed && Number.isSafeInteger(viewed.session) ? viewed.session : 0;
+  const viewGen = viewed && Number.isSafeInteger(viewed.generation) ? viewed.generation : -1;
+  const input = settings.sharing.remote !== false && settings.streamInput !== false;
+  return { conn, sharing: settings.sharing.on === true, input, catalog, capture, viewGen };
+}
+
+// A device's screen.preview.want, with the socket it came on (the bus hands it over, hub.js). Accepted only
+// on the connection that device's session writes: an ask on a host socket while the guest link is up is not.
+function onPreviewWant(m, pid, ws) {
+  const Preview = require('../../shared/display-preview.js');
+  if (!previewShots || !hub) return;
+  const session = hub.sessions.get(pid);
+  const inbound = require('../../shared/mac-spaces.js').meshSource(session, ws);
+  const sample = previewSample(pid);
+  const auth = Preview.authorizeWant(sample && sample.conn, inbound);
+  if (!auth || !inbound || auth.ws !== inbound.ws) return;
+  if (!m || m.on !== true) {
+    if (previewPid === pid && previewShots.watched && Preview.askEpoch(m && m.epoch) === previewShots.watched.epoch) previewShots.cancel('close');
+    return;
+  }
+  if (!sample.sharing || !sample.input) {
+    if (previewPid === pid) previewShots.cancel('session');
+    return;
+  }
+  const ask = Preview.askEpoch(m.epoch);
+  if (ask == null) return;
+  previewPid = pid; // another device's sheet: watch() ends the previous device's (its stills cleared on its own socket)
+  previewShots.watch(auth.conn, ask);
+}
 
 // To every connected device (each may watch this Mac's screen; the facade told the selected one only), once
 // per device and change.
 function sendScreenState() {
   updateScreenInputOwner();
-  if (!svc || !hub) return void (screenStateKey = '');
+  if (!svc || !hub) {
+    screenStateKey = '';
+    if (previewShots) previewShots.kick();
+    return;
+  }
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
   if (!settings.sharing.on) sharingBy = '';
@@ -362,9 +414,13 @@ function sendScreenState() {
     return [pid, m];
   });
   const key = JSON.stringify(per);
-  if (key === screenStateKey) return;
+  if (key === screenStateKey) {
+    if (previewShots) previewShots.kick();
+    return;
+  }
   screenStateKey = key;
   for (const [pid, m] of per) hub.bus.send(pid, m);
+  if (previewShots) previewShots.kick();
 }
 
 function updateScreenInputOwner() {
@@ -701,11 +757,15 @@ app.whenReady().then(() => {
   hub.bus.onPeer('welcome', (pid) => {
     const x = hub.sessions.get(pid);
     if (x) console.log(`[peer] session with ${x.displayName()} (${x.peerOs}, ${x.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
+    if (previewShots && pid === previewPid) previewShots.cancel('session'); // a new session: its old stills go
     pushState();
   });
   // Whether this Mac takes input from its stream: to every device (each may watch it), not only the selected one.
   hub.bus.onPeer('welcome', (pid) => hub.bus.send(pid, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false }));
-  hub.bus.onPeer('closed', pushState);
+  hub.bus.onPeer('closed', (pid) => {
+    if (previewShots && pid === previewPid) previewShots.cancel('session');
+    pushState();
+  });
   // Overview's controls of the selected device, and this Mac's for it (shared/devctl.js).
   {
     const { DevCtl } = require('../../shared/devctl.js');
@@ -794,6 +854,24 @@ app.whenReady().then(() => {
     } });
     if (settings.app.localApi) applyLocalApi();
   }
+  previewShots = new (require('../display-shots.js').DisplayShots)({
+    helper: svc.helper,
+    readLocked: () => require('../console-lock').readLocked(),
+    freshLook: () => svc.helper.request('spacesLook', {}, 2000),
+    sample: () => previewSample(),
+    // To the device whose connection this is, while its session still writes on it.
+    send: (conn, msg) => {
+      const Preview = require('../../shared/display-preview.js');
+      if (!conn || !conn.ws || !hub) return;
+      for (const session of hub.sessions.list()) {
+        const bound = Preview.outbound(session);
+        if (bound === conn && bound.ws === conn.ws) return void session.send(msg);
+      }
+    },
+  });
+  require('electron').powerMonitor.on('lock-screen', () => {
+    if (previewShots) previewShots.cancel('session');
+  });
   // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
   svc.loadMic = () => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
@@ -1101,6 +1179,7 @@ app.whenReady().then(() => {
   svc.kvm.blockEdge = () => blockEdge() || svc.phone.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
   hub.bus.on(P.T.SCREEN_CTL, (m, from) => onScreenCtl(m, from)); // from any device watching this Mac's screen
+  hub.bus.on(P.T.SCREEN_PREVIEW_WANT, (m, from, ws) => onPreviewWant(m, from, ws)); // Displays & desktops stills, per device
   // Two-way switches shared with the other computer, per pair (pairsync.js).
   const SYNC_ACTIONS = {
     clipboard: (dir, on) => actions.setClipboard({ [dir === 'out' ? 'send' : 'receive']: on }),
