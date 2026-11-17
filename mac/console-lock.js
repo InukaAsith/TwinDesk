@@ -18,13 +18,16 @@ function run(file, args, input) {
   });
 }
 
-// True only for this user's single console session with login finished and the
-// screen locked. Anything else that is still a user list is not that lock.
+// Only this user's single, fully logged-in console session proves a usable read.
+// IOConsoleUsers omits ScreenIsLocked when unlocked on macOS 27; a read-only
+// probe confirmed that shape here. A missing/foreign/ambiguous session is unknown.
 function lockedConsole(users, uid) {
-  if (!Array.isArray(users)) return false;
+  if (!Array.isArray(users) || !Number.isInteger(uid) || uid < 0) return null;
   const consoleUsers = users.filter((u) => u && u.kCGSSessionOnConsoleKey === true);
-  return consoleUsers.length === 1 && consoleUsers[0].kCGSSessionUserIDKey === uid &&
-    consoleUsers[0].kCGSessionLoginDoneKey === true && consoleUsers[0].CGSSessionScreenIsLocked === true;
+  if (consoleUsers.length !== 1 || consoleUsers[0].kCGSSessionUserIDKey !== uid ||
+      consoleUsers[0].kCGSessionLoginDoneKey !== true) return null;
+  const locked = consoleUsers[0].CGSSessionScreenIsLocked;
+  return locked === true ? true : (locked === false || locked === undefined) ? false : null;
 }
 
 // false: unlocked. true: locked. null: unknown, which must not capture.

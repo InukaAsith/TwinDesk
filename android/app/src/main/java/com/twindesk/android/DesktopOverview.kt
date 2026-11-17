@@ -210,6 +210,9 @@ fun DesktopOverview(
     LaunchedEffect(Unit) { arrived = true }
     val decodes = remember(previews.session) { PreviewDecodes() }
     DisposableEffect(decodes) { onDispose { decodes.clear() } }
+    LaunchedEffect(decodes, previews.shots.isEmpty()) {
+        if (previews.shots.isEmpty()) decodes.clear()
+    }
     val alpha by animateFloatAsState(if (arrived) 1f else 0f, tween(if (reduceMotion) 0 else 220, easing = FastOutSlowInEasing), label = "sheet")
     val offset by animateFloatAsState(if (arrived || reduceMotion) 0f else 28f, tween(if (reduceMotion) 0 else 220, easing = FastOutSlowInEasing), label = "sheetMove")
     Box(Modifier.fillMaxSize()) {
