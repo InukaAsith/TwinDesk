@@ -1238,5 +1238,6 @@
   "Put the latest on the clipboard": "Помещать последнее в буфер обмена",
   "When queued copies arrive here, the newest one is pasted next": "Когда сюда приходит накопленное, следующей вставкой будет самое новое",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} ждут {name}: попадут в его «Недавние», а не в буфер обмена",
-  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Скопированное, пока {name} не на связи, попадёт в его «Недавние», когда он вернётся, а не в буфер обмена"
+  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Скопированное, пока {name} не на связи, попадёт в его «Недавние», когда он вернётся, а не в буфер обмена",
+  "If {app} already showed a warning, close it and open it again.": "Если {app} уже показал предупреждение, закройте его и откройте снова."
 }

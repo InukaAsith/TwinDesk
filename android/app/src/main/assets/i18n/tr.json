@@ -1238,5 +1238,6 @@
   "Put the latest on the clipboard": "En sonuncuyu panoya koy",
   "When queued copies arrive here, the newest one is pasted next": "Sıradaki kopyalar buraya gelince, bir sonraki yapıştırma en yenisi olur",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} öğe {name} için bekliyor: panosuna değil, Son kullanılanlar'ına gider",
-  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} uzaktayken kopyalananlar, geri geldiğinde panosuna değil Son kullanılanlar'ına gider"
+  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} uzaktayken kopyalananlar, geri geldiğinde panosuna değil Son kullanılanlar'ına gider",
+  "If {app} already showed a warning, close it and open it again.": "{app} zaten bir uyarı gösterdiyse, kapatıp yeniden açın."
 }
