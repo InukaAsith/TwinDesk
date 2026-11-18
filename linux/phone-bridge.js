@@ -120,6 +120,11 @@ class PhoneBridge extends EventEmitter {
     this.setup = false; // set up on purpose this session (Connection's Set Up, a pairing code)
     server.on('client', (ctx) => {
       if (isPhone(ctx)) {
+        // Another Android phone took over before the first one's socket closed (#263): the first
+        // one's adb session, windows and address go, or its screen kept showing for the new one.
+        const id = typeof ctx.deviceId === 'string' ? ctx.deviceId : '';
+        if (this.boundId && id && id !== this.boundId) this._switchPhone();
+        if (id) this.boundId = id;
         this.setup = false;
         if (this.need) this.adb.wake();
         this._tellPhone();
@@ -217,6 +222,19 @@ class PhoneBridge extends EventEmitter {
     this.emit('change');
   }
 
+  _switchPhone() {
+    this.phoneEpoch = (this.phoneEpoch || 0) + 1; // a lookup still running for the old phone is redone
+    NativeScreen.closeAll();
+    this._stopAll('');
+    this.inputBlocked = false;
+    this.pairing = null;
+    this.misses = 0;
+    this.canPair = false;
+    // phone.adb / phone.info / its apps still describe the phone that left; the new one sends its own
+    // (after 'client'), so its adb address isn't the old phone's.
+    if (this.phone && typeof this.phone._reset === 'function') this.phone._reset();
+  }
+
   _stopAll(message) {
     if (this.kvm) this._kvmEnd(false); // before the control session goes: its button up and hover exit
     if (this.control) this.control.stop();
@@ -283,6 +301,7 @@ class PhoneBridge extends EventEmitter {
       }
     }
     this.polling = true;
+    const epoch = this.phoneEpoch || 0;
     try {
       await this._step();
     } catch (e) {
@@ -290,6 +309,12 @@ class PhoneBridge extends EventEmitter {
       this._set('error', e.message);
     } finally {
       this.polling = false;
+      // The phone changed while this ran: what it found was the old phone's. Start again.
+      if (epoch !== (this.phoneEpoch || 0) && isPhone(this.server.current)) {
+        if (this.control) this._stopAll('');
+        else this.serial = null;
+        this._kick();
+      }
     }
   }
 
