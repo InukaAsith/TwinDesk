@@ -78,6 +78,7 @@ and start only when the other side answers.
 | Message | Feature | An app without it |
 |---|---|---|
 | `drive.hello {v: 1}` | TwinDesk Drive ([drive.md](drive.md)), both sides switched on | ignores it, so Drive never starts |
+| `tether.state {can: true}` (phone to computer, as its session starts) | Internet over USB (`shared/tether.js`, `Tether.kt`) | an older phone never sends it, so the computer shows no Internet over USB card and never sends `tether`; an older computer ignores it |
 
 ## Phone capabilities
 

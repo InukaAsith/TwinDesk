@@ -2356,4 +2356,12 @@
   "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "指针为实际大小，无边框。在远程桌面中不显示指针",
   "The pointer at its real size; Windows 10 draws a yellow border around the screen": "指针为实际大小；Windows 10 会在屏幕四周画一圈黄色边框",
   "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Windows 10 使用桌面复制，Windows 11 使用 Windows 图形捕获",
+  "Waiting for the cable": "等待数据线",
+  "Internet over USB": "通过 USB 上网",
+  "The phone uses this computer’s internet through the USB cable, as a VPN there. Needs USB debugging. It comes back by itself when the phone is plugged in again.": "手机通过 USB 数据线使用这台电脑的网络（在手机上作为 VPN）。需要 USB 调试。手机重新插入时会自动恢复。",
+  "{down} down, {up} up through this computer": "经这台电脑下载 {down}，上传 {up}",
+  "Plug the phone into this computer with USB debugging on.": "请在开启 USB 调试的情况下将手机连接到这台电脑。",
+  "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "在手机上的 TwinDesk 通知中点按“允许”，然后确认 Android 的 VPN 请求。",
+  "It stopped.": "已停止。",
+  "Starting on the phone…": "正在手机上启动…",
 });

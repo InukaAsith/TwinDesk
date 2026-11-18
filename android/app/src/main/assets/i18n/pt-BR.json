@@ -1239,5 +1239,16 @@
   "When queued copies arrive here, the newest one is pasted next": "Quando as cópias guardadas chegam aqui, a mais nova é a próxima a ser colada",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} aguardando {name}: vão para Recentes, não para a área de transferência",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Cópias feitas enquanto {name} está ausente vão para Recentes quando ele voltar, não para a área de transferência",
-  "If {app} already showed a warning, close it and open it again.": "Se o {app} já mostrou um aviso, feche-o e abra de novo."
+  "If {app} already showed a warning, close it and open it again.": "Se o {app} já mostrou um aviso, feche-o e abra de novo.",
+  "Android didn’t let TwinDesk ask for the VPN permission": "O Android não deixou o TwinDesk pedir a permissão de VPN",
+  "Android didn’t start the VPN (the permission was taken back?)": "O Android não iniciou a VPN (a permissão foi retirada?)",
+  "Another VPN took over, or the VPN was switched off in Android’s settings": "Outra VPN assumiu, ou a VPN foi desligada nas configurações do Android",
+  "Internet over USB": "Internet via USB",
+  "Something else answered on the cable, not TwinDesk on the computer": "Outra coisa respondeu pelo cabo, não o TwinDesk no computador",
+  "The VPN permission wasn’t given on the phone": "A permissão de VPN não foi dada no celular",
+  "The cable or the computer ended it": "O cabo ou o computador encerrou",
+  "The computer closed the connection": "O computador fechou a conexão",
+  "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "Este celular pode usar a internet de {name} pelo cabo USB. Toque em Permitir e confirme o pedido de VPN do Android.",
+  "Use {name}’s internet?": "Usar a internet de {name}?",
+  "Using {name}’s internet over USB": "Usando a internet de {name} via USB"
 }

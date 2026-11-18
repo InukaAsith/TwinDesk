@@ -102,3 +102,39 @@ UI.adbCard = () => {
   }
   return { el: card, update };
 };
+
+// Internet over USB (#277, shared/tether.js): the phone on the cable uses this computer's internet.
+// Shown only for a phone that can (an older TwinDesk there never says so). On the Connection page.
+// UI.tetherCard() → {el, update(state)}.
+UI.tetherCard = () => {
+  const { api } = UI;
+  const t = (text, vars) => window.I18n ? window.I18n.t(text, vars) : text.replace(/\{(\w+)\}/g, (m, k) => vars && Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m);
+  const STATES = {
+    on: ['good', t('Connected')], starting: ['muted', t('Starting…')], ask: ['muted', t('Allow on the phone')],
+    cable: ['muted', t('Waiting for the cable')], error: ['bad', t('Problem')], off: ['muted', t('Off')],
+  };
+  const pill = UI.el('span', { class: 'pill muted' });
+  const sw = UI.switch((v) => api.hub({ do: 'tether', a: 'set', on: v }), { label: t('Internet over USB') });
+  const row = UI.row(t('Internet over USB'), '', [pill, sw], { literal: true });
+  const card = UI.card(t('Internet over USB'), [row]);
+  const mb = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${Math.round(n / 1e6)} MB`);
+
+  function update(s) {
+    const v = s.hub && s.hub.tether;
+    const c = s.phone && s.phone.connected;
+    card.hidden = !c || !v || !v.can;
+    if (card.hidden) return;
+    sw.set(!!v.on);
+    const [cls, label] = STATES[v.state] || STATES.off;
+    pill.className = 'pill ' + cls;
+    pill.textContent = label;
+    pill.hidden = !v.on;
+    row.setHint(!v.on ? t('The phone uses this computer’s internet through the USB cable, as a VPN there. Needs USB debugging. It comes back by itself when the phone is plugged in again.')
+      : v.state === 'on' ? t('{down} down, {up} up through this computer', { down: mb(v.down), up: mb(v.up) })
+        : v.state === 'cable' ? t('Plug the phone into this computer with USB debugging on.')
+          : v.state === 'ask' ? t('Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.')
+            : v.state === 'error' ? t(v.why || 'It stopped.')
+              : t('Starting on the phone…'));
+  }
+  return { el: card, update };
+};

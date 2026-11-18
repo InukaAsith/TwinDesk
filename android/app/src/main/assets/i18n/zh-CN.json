@@ -1239,5 +1239,16 @@
   "When queued copies arrive here, the newest one is pasted next": "排队的内容到达时，下次粘贴的是最新一条",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} 条等待发送到 {name}：会进入其“最近”，不会放入其剪贴板",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} 离线时复制的内容会在其重新连接后进入其“最近”，不会放入其剪贴板",
-  "If {app} already showed a warning, close it and open it again.": "如果 {app} 已经显示了警告，请关闭它再重新打开。"
+  "If {app} already showed a warning, close it and open it again.": "如果 {app} 已经显示了警告，请关闭它再重新打开。",
+  "Android didn’t let TwinDesk ask for the VPN permission": "Android 不允许 TwinDesk 请求 VPN 权限",
+  "Android didn’t start the VPN (the permission was taken back?)": "Android 未启动 VPN（权限被收回了？）",
+  "Another VPN took over, or the VPN was switched off in Android’s settings": "另一个 VPN 已接管，或 VPN 已在 Android 设置中关闭",
+  "Internet over USB": "通过 USB 上网",
+  "Something else answered on the cable, not TwinDesk on the computer": "通过数据线应答的不是电脑上的 TwinDesk",
+  "The VPN permission wasn’t given on the phone": "手机上未授予 VPN 权限",
+  "The cable or the computer ended it": "数据线或电脑结束了连接",
+  "The computer closed the connection": "电脑关闭了连接",
+  "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "此手机可以通过 USB 数据线使用 {name} 的网络。点按“允许”，然后确认 Android 的 VPN 请求。",
+  "Use {name}’s internet?": "使用 {name} 的网络？",
+  "Using {name}’s internet over USB": "正在通过 USB 使用 {name} 的网络"
 }

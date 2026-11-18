@@ -2355,4 +2355,12 @@
   "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "O ponteiro no tamanho real, sem borda. Na Área de Trabalho Remota não mostra o ponteiro",
   "The pointer at its real size; Windows 10 draws a yellow border around the screen": "O ponteiro no tamanho real; o Windows 10 desenha uma borda amarela ao redor da tela",
   "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Duplicação da Área de Trabalho no Windows 10, Windows Graphics Capture no Windows 11",
+  "Waiting for the cable": "Aguardando o cabo",
+  "Internet over USB": "Internet via USB",
+  "The phone uses this computer’s internet through the USB cable, as a VPN there. Needs USB debugging. It comes back by itself when the phone is plugged in again.": "O celular usa a internet deste computador pelo cabo USB, como uma VPN nele. Precisa da depuração USB. Volta sozinho quando o celular é conectado de novo.",
+  "{down} down, {up} up through this computer": "{down} recebidos, {up} enviados por este computador",
+  "Plug the phone into this computer with USB debugging on.": "Conecte o celular a este computador com a depuração USB ligada.",
+  "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Toque em Permitir na notificação do TwinDesk no celular e confirme o pedido de VPN do Android.",
+  "It stopped.": "Parou.",
+  "Starting on the phone…": "Iniciando no celular…",
 });

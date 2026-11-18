@@ -41,6 +41,7 @@ object Notify {
     const val ID_DIAL = 16 // a code from the computer (*#06#…): tap to open the dialer with it
     const val ID_MEDIA_DEL = 17 // Remove on the computer's Photos page, without All files access: tap for Android's confirmation
     const val ID_PEER = 18 // Connect with Android (Peer.kt): a phone asks to connect, to pair, to see the screen
+    const val ID_TETHER = 19 // Internet over USB (Tether.kt): Allow, then while it runs, Stop
     const val ID_SOUND = 12 // the sound capture: asking for Start, then its service's own
     private const val ID_FILES_BASE = 1000
     private const val ID_COMPUTER_BASE = 100000

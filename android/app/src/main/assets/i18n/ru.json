@@ -1239,5 +1239,16 @@
   "When queued copies arrive here, the newest one is pasted next": "Когда сюда приходит накопленное, следующей вставкой будет самое новое",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} ждут {name}: попадут в его «Недавние», а не в буфер обмена",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Скопированное, пока {name} не на связи, попадёт в его «Недавние», когда он вернётся, а не в буфер обмена",
-  "If {app} already showed a warning, close it and open it again.": "Если {app} уже показал предупреждение, закройте его и откройте снова."
+  "If {app} already showed a warning, close it and open it again.": "Если {app} уже показал предупреждение, закройте его и откройте снова.",
+  "Android didn’t let TwinDesk ask for the VPN permission": "Android не дал TwinDesk запросить разрешение VPN",
+  "Android didn’t start the VPN (the permission was taken back?)": "Android не запустил VPN (разрешение отозвано?)",
+  "Another VPN took over, or the VPN was switched off in Android’s settings": "Другой VPN занял его место, или VPN выключен в настройках Android",
+  "Internet over USB": "Интернет через USB",
+  "Something else answered on the cable, not TwinDesk on the computer": "По кабелю ответил не TwinDesk на компьютере, а что-то другое",
+  "The VPN permission wasn’t given on the phone": "На телефоне не дано разрешение VPN",
+  "The cable or the computer ended it": "Кабель или компьютер завершили его",
+  "The computer closed the connection": "Компьютер закрыл соединение",
+  "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "Этот телефон может пользоваться интернетом {name} через USB-кабель. Нажмите «Разрешить», затем подтвердите запрос VPN от Android.",
+  "Use {name}’s internet?": "Пользоваться интернетом {name}?",
+  "Using {name}’s internet over USB": "Интернет {name} через USB"
 }

@@ -107,7 +107,7 @@ const DEFAULT_SETTINGS = {
   drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
   // callAudio: the calls' sound on this Mac over Bluetooth (btDevices: which paired device each phone is).
-  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, callPause: false, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
+  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, callPause: false, shareMount: false, shareServe: false, shareFolder: '', tether: false }, // share*: shared folders (foldershare.js); tether: Internet over USB (tether.js)
   // Not on one network: Bluetooth for the session (blepipe.js), Wi-Fi for files and screens
   // (netlink.js). hotspots: {deviceId: {ssid, pass (safeStorage)}}, a phone's hotspot as typed once.
   net: { ble: true, blePc: false, bleWifiOff: true, hotspots: {}, tailscale: true, bleInput: false }, // ble: with phones, blePc: with computers; bleWifiOff: none on the same Wi-Fi (blepolicy.js wifiQuiet); tailscale: shared/tailnet.js; bleInput: mouse and keyboard over Bluetooth beside Wi-Fi (shared/bleinput.js)

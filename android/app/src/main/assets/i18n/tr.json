@@ -1239,5 +1239,16 @@
   "When queued copies arrive here, the newest one is pasted next": "Sıradaki kopyalar buraya gelince, bir sonraki yapıştırma en yenisi olur",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} öğe {name} için bekliyor: panosuna değil, Son kullanılanlar'ına gider",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} uzaktayken kopyalananlar, geri geldiğinde panosuna değil Son kullanılanlar'ına gider",
-  "If {app} already showed a warning, close it and open it again.": "{app} zaten bir uyarı gösterdiyse, kapatıp yeniden açın."
+  "If {app} already showed a warning, close it and open it again.": "{app} zaten bir uyarı gösterdiyse, kapatıp yeniden açın.",
+  "Android didn’t let TwinDesk ask for the VPN permission": "Android, TwinDesk’in VPN izni istemesine izin vermedi",
+  "Android didn’t start the VPN (the permission was taken back?)": "Android VPN’i başlatmadı (izin geri mi alındı?)",
+  "Another VPN took over, or the VPN was switched off in Android’s settings": "Başka bir VPN devraldı ya da VPN Android ayarlarından kapatıldı",
+  "Internet over USB": "USB üzerinden internet",
+  "Something else answered on the cable, not TwinDesk on the computer": "Kablodan bilgisayardaki TwinDesk değil, başka bir şey yanıt verdi",
+  "The VPN permission wasn’t given on the phone": "Telefonda VPN izni verilmedi",
+  "The cable or the computer ended it": "Kablo ya da bilgisayar sonlandırdı",
+  "The computer closed the connection": "Bilgisayar bağlantıyı kapattı",
+  "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "Bu telefon USB kablosu üzerinden {name} bilgisayarının internetini kullanabilir. İzin ver’e dokunun, ardından Android’in VPN isteğini onaylayın.",
+  "Use {name}’s internet?": "{name} internetini kullanmak istiyor musunuz?",
+  "Using {name}’s internet over USB": "USB üzerinden {name} interneti kullanılıyor"
 }

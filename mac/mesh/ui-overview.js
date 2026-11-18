@@ -109,6 +109,7 @@ UI.tab({
     // The phone's wireless debugging: the one-to-one app's card (shared/ui-adb.js): state, steps, pairing by code or
     // QR code, and the full app over the standard one. It follows the selected phone.
     const adb = UI.adbCard();
+    const tether = UI.tetherCard ? UI.tetherCard() : null; // Internet over USB (shared/ui-adb.js)
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null; // pair a phone with a QR code (shared/ui-qrpair.js)
     const pairedList = el('div');
     const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
@@ -122,6 +123,7 @@ UI.tab({
       ...(qrPair ? [qrPair.el] : []),
       hero,
       adb.el,
+      ...(tether ? [tether.el] : []),
       UI.pair(UI.dir('m2w', m2w.map((x) => x.row)), UI.dir('w2m', w2m.map((x) => x.row))),
       UI.card(tr('Devices'), [devicesList]),
       UI.card(tr('Paired'), [pairedList]),
@@ -235,7 +237,9 @@ UI.tab({
       wifiBtn.hidden = !c || !(wifiOn || c.transport === 'ble');
       hotspotBtn.hidden = !c || wifiOn || n.state === 'hotspot' || c.transport !== 'ble' || !UI.isPhone(s);
 
-      adb.update(s); // the phone's wireless debugging (shared/ui-adb.js)
+      adb.update(s);
+
+      if (tether) tether.update(s); // the phone's wireless debugging (shared/ui-adb.js)
       if (qrPair) qrPair.update(s);
 
       for (const x of quick) {

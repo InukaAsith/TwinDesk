@@ -1186,11 +1186,12 @@ function setupNet() {
 // one of them on, or the first time a page uses it. Before that none of it exists: no module, no
 // listener, nothing sent to the phone. The call window (shared/callwin.js) only with a call.
 function setupHub() {
-  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe;
+  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
   peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   peer.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
   peer.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
+  peer.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
 }
 
 let callwin = null;
@@ -1204,6 +1205,7 @@ function loadHub() {
     shareSheet: (paths) => new (require('electron').ShareMenu)({ filePaths: paths }).popup(win && !win.isDestroyed() ? { browserWindow: win } : {}), // Photos › Share
     choose: () => dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, { properties: ['openFile', 'openDirectory', 'multiSelections'] })
       .then((r) => (r.canceled ? [] : r.filePaths)),
+    tether: { adb: svc && svc.phone.bridge.adb, cableSerial: (id) => svc && svc.wired && svc.wired.cableSerial(id) }, // Internet over USB (shared/tether.js)
     share: { // shared folders with the phone (shared/foldershare.js)
       mounter: require('../phonedrive').mounter, adb: svc && svc.phone.bridge.adb, serialOf: (id) => svc && svc.wired && svc.wired.serialOf(id),
       chooseFolder: () => dialog.showOpenDialog(win && !win.isDestroyed() ? win : undefined, { properties: ['openDirectory', 'createDirectory'] }).then((r) => (r.canceled ? '' : r.filePaths[0])),

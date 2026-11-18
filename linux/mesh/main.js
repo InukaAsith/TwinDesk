@@ -632,11 +632,12 @@ let phoneLink = null; // phone-link.js, the phones' sessions (startPhone)
 let callwin = null;
 function setupHub(pl) {
   phoneLink = pl;
-  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe;
+  const anyOn = () => settings.hub.calls || settings.hub.messages || settings.hub.media || settings.hub.files || settings.hub.shareServe || settings.hub.tether;
   pl.on('client', (ctx) => P.isPhoneOs(ctx.os) && !phoneHub && anyOn() && loadHub());
   // The phone shares a folder: loaded for it (its listener comes with it, so this one passes it on).
   pl.on(`t:${P.T.SHARE_OFFER}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.onOffer(m));
   pl.on(`t:${P.T.SHARE_SET}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && !phoneHub && loadHub().share && phoneHub.share.act('serve', { on: !!m.serve }));
+  pl.on('t:tether.state', (m, ctx) => ctx && ctx.os === P.OS.ANDROID && m.can === true && !phoneHub && loadHub().tether && phoneHub.tether._state(m)); // a phone that can take Internet over USB (shared/tether.js)
 }
 
 function loadHub() {
@@ -649,6 +650,7 @@ function loadHub() {
     send: (paths, batch) => !!(fileDrop && fileDrop.sendBatch(paths, 'send', batch)), // Files: into a folder on the phone
     choose: () => require('electron').dialog.showOpenDialog(mainWin && !mainWin.isDestroyed() ? mainWin : undefined, { properties: ['openFile', 'multiSelections'] }) // files only: with folders too it picks only folders here
       .then((r) => (r.canceled ? [] : r.filePaths)),
+    tether: { adb: phone && phone.bridge && phone.bridge.adb, cableSerial: (id) => wired && wired.cableSerial(id) }, // Internet over USB (shared/tether.js)
     share: { // shared folders with the phone (shared/foldershare.js)
       mounter: require('../phonedrive').mounter, adb: phone && phone.bridge && phone.bridge.adb, serialOf: (id) => wired && wired.serialOf(id),
       chooseFolder: () => require('electron').dialog.showOpenDialog(mainWin && !mainWin.isDestroyed() ? mainWin : undefined, { properties: ['openDirectory', 'createDirectory'] }).then((r) => (r.canceled ? '' : r.filePaths[0])),
