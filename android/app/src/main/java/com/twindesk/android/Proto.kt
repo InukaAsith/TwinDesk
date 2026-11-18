@@ -53,6 +53,7 @@ object Proto {
         const val BYE = "bye" // Disconnect on purpose: the computer doesn't wait for us to come back
         const val CLIP = "clip"
         const val CLIP_POLICY = "clip.policy"
+        const val CLIP_QUEUE = "clip.queue" // {items: [{text, at}]}: copies made while the other side was away, for Recent
         const val CLIP_IMAGE = "clip.image" // either way {id, w, h, bytes, parts, shot?}: a picture on the clipboard, in parts (Clip.kt)
         const val CLIP_IMAGE_PART = "clip.image.part" // either way {id, i, data (base64)}
         const val NOTIF = "notif"
