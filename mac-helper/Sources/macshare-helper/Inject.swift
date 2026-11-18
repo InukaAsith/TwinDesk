@@ -15,6 +15,9 @@ final class Injector {
   private var heldMods = Set<String>()         // modifier DOM codes we pressed
   private var capsLock = false
   var heldButtons = Set<Int>()                 // P.BUTTON values
+  /// Mission Control is ours. Remote pointers and keys are dropped. Restore clears the flag
+  /// and does not press anything that holdRemoteForOverview already released.
+  private(set) var remoteOverview = false
   private var lastDown: (at: TimeInterval, point: CGPoint, button: Int, count: Int64)?
   var clickCount: [Int: Int64] = [:]           // button -> click state of its current press
   // Input source shortcuts from the other computer are done here (InputSources.next): macOS's
@@ -118,6 +121,7 @@ final class Injector {
 
   /// One `in.*` message (key codes already swapped by main) onto the display at `bounds`.
   func input(_ ev: [String: Any], bounds: CGRect) {
+    if remoteOverview { return }
     guard let t = ev["t"] as? String else { return }
     // At a window's copy over there: the hidden pointer stays where we put it (Capture.injectedPointer).
     if t == "in.mm" || t == "in.md" || t == "in.mu" { Capture.shared.injectedPointer(at: point(ev, bounds)) }
@@ -240,6 +244,7 @@ final class Injector {
   /// Text typed as it is, whatever this Mac's layout: a letter of another alphabet from the other
   /// computer's layout (shared/keylayout.js) or the phone Remote's keyboard. Without modifiers.
   func type(_ text: String) {
+    if remoteOverview { return }
     for ch in text.prefix(64) {
       let u = Array(String(ch).utf16)
       for down in [true, false] {
@@ -249,6 +254,19 @@ final class Injector {
         post(e)
       }
     }
+  }
+
+  /// Drop remote input for an overview we opened. Buttons we were holding go up first,
+  /// then stay up: restoreRemoteAfterOverview does not press them again.
+  func holdRemoteForOverview() {
+    if remoteOverview { return }
+    DragIn.shared.cancel()
+    releaseAll()
+    remoteOverview = true
+  }
+
+  func restoreRemoteAfterOverview() {
+    remoteOverview = false
   }
 
   /// Key-up every key and button we hold, clear modifiers.

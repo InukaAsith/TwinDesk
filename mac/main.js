@@ -305,20 +305,86 @@ function pushState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+let previewShots = null;
 
 // This Mac's apps are open on the virtual display, which is what is shared until they close.
 function appsHeld() {
   return !!(svc && svc.displays && svc.displays.holds && svc.displays.holds.has('apps-open'));
 }
 
+// The picture already being shown. Null unless that socket is still the authenticated one.
+// The catalog is the same list screen.state just offered, so a preview cannot name a display
+// the viewer was not given. This does not switch a desktop.
+function previewSample() {
+  const Preview = require('../shared/display-preview.js');
+  const conn = peer && peer.current;
+  if (!svc || !Preview.liveConn(conn)) return null;
+  const Spaces = require('../shared/mac-spaces.js');
+  const look = svc.spaceLook ? svc.spaceLook.current() : null;
+  const viewed = svc.stream && svc.stream.viewedDisplay ? svc.stream.viewedDisplay() : null;
+  const held = appsHeld();
+  const offer = Spaces.catalogOffer(svc.displays.list(), { remote: settings.sharing.remote !== false, held });
+  const catalog = Spaces.desktopCatalog(look, viewed, offer.named, { offerDisplays: offer.offerDisplays });
+  const capture = viewed && Number.isSafeInteger(viewed.session) ? viewed.session : 0;
+  const viewGen = viewed && Number.isSafeInteger(viewed.generation) ? viewed.generation : -1;
+  const input = settings.sharing.remote !== false && settings.streamInput !== false;
+  return { conn, sharing: settings.sharing.on === true, input, catalog, capture, viewGen };
+}
+
+// The sheet ask is accepted only from the socket this preview would answer on.
+function onPreviewWant(m, inbound) {
+  const Preview = require('../shared/display-preview.js');
+  if (!previewShots) return;
+  const sample = previewSample();
+  // A message that did not arrive on the outbound socket is not this viewer.
+  const auth = Preview.authorizeWant(sample && sample.conn, inbound);
+  if (!auth || auth.ws !== inbound.ws) return;
+  if (!m || m.on !== true) {
+    if (previewShots.watched && Preview.askEpoch(m && m.epoch) === previewShots.watched.epoch) previewShots.cancel('close');
+    return;
+  }
+  if (!sample.sharing || !sample.input) {
+    previewShots.cancel('session');
+    return;
+  }
+  const ask = Preview.askEpoch(m.epoch);
+  if (ask == null) return;
+  previewShots.watch(auth.conn, ask);
+}
+
 function sendScreenState() {
   const c = peer && peer.current;
-  if (!c || !svc) return void (screenStateKey = '');
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], ...Pick.stateFields(svc.displays.list(), svc.displays.target(), settings.sharing.remote !== false && !appsHeld()) };
+  if (!c || !svc) {
+    screenStateKey = '';
+    if (previewShots) previewShots.kick();
+    return;
+  }
+  // spaces is true only when the display in this picture has its own other desktop and
+  // the helper's read says the windows on screen belong to the desktops that are current.
+  // A window still visible from another desktop keeps it false. The read does not open
+  // Mission Control or call a space setter (mac-helper Spaces.swift).
+  if (svc.spaceLook) svc.spaceLook.refresh({
+    view: () => (svc.stream && svc.stream.viewedDisplay ? svc.stream.viewedDisplay() : null),
+  });
+  const look = svc.spaceLook ? svc.spaceLook.current() : null;
+  const Spaces = require('../shared/mac-spaces.js');
+  const viewed = svc.stream && svc.stream.viewedDisplay ? svc.stream.viewedDisplay() : null;
+  const spaces = Spaces.offerSpaces(look, viewed);
+  const held = appsHeld();
+  const offer = Spaces.catalogOffer(svc.displays.list(), { remote: settings.sharing.remote !== false, held });
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], spaces, ...Pick.stateFields(svc.displays.list(), svc.displays.target(), settings.sharing.remote !== false && !held) };
+  const desktops = Spaces.desktopCatalog(look, viewed, offer.named, { offerDisplays: offer.offerDisplays });
+  if (desktops) msg.desktops = desktops;
+  const spaceHold = Spaces.spaceHold(look);
+  if (spaceHold) msg.spaceHold = spaceHold;
   const key = JSON.stringify([c.deviceId, msg]);
-  if (key === screenStateKey) return;
+  if (key === screenStateKey) {
+    if (previewShots) previewShots.kick();
+    return;
+  }
   screenStateKey = key;
   peer.sendToClient(msg);
+  if (previewShots) previewShots.kick();
 }
 
 // The viewer asked to mirror one real display. True: that request was handled (a refusal too).
@@ -336,6 +402,7 @@ function mirrorDisplay(m) {
     settings.virtual.enabled = false; // as Mirror does, without forcing the main display
     settings.sharing.displayId = pick.displayId;
     store.saveSettings(settings);
+    if (svc.stream && typeof svc.stream.noteViewIdentity === 'function') svc.stream.noteViewIdentity();
   }
   // One restart. selectDisplay restarts at once, and applyVirtual restarts again when the virtual
   // display goes away. The setting is written first: capture and input both read displays.target().
@@ -674,12 +741,29 @@ app.whenReady().then(() => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
     screenStateKey = ''; // a new connection (one replacing the same device's too) hears screen.state: its Extend/Mirror
+    if (previewShots) previewShots.cancel('session');
     pushState();
   });
-  peer.on('closed', pushState);
+  peer.on('closed', () => {
+    if (previewShots) previewShots.cancel('session');
+    pushState();
+  });
   peer.on('rtt', pushState);
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
+  previewShots = new (require('./display-shots.js').DisplayShots)({
+    helper: svc.helper,
+    readLocked: () => require('./console-lock').readLocked(),
+    freshLook: () => svc.helper.request('spacesLook', {}, 2000),
+    sample: previewSample,
+    send: (conn, msg) => {
+      if (!conn || peer.current !== conn || !conn.ws || peer.current.ws !== conn.ws) return;
+      peer.send(conn, msg);
+    },
+  });
+  require('electron').powerMonitor.on('lock-screen', () => {
+    if (previewShots) previewShots.cancel('session');
+  });
   svc.kvm.laneReady.then(laneGo);
   // Camera › Take a photo with the phone (shared/phonephoto.js): its photo onto the clipboard.
   {
@@ -1053,6 +1137,7 @@ app.whenReady().then(() => {
   svc.kvm.blockEdge = () => blockEdge() || svc.phoneViews.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
   peer.on(`t:${P.T.SCREEN_CTL}`, (m) => onScreenCtl(m));
+  peer.on(`t:${P.T.SCREEN_PREVIEW_WANT}`, (m, ctx) => onPreviewWant(m, ctx));
   // Two-way switches shared with the other computer, per pair (pairsync.js).
   const SYNC_ACTIONS = {
     clipboard: (dir, on) => actions.setClipboard({ [dir === 'out' ? 'send' : 'receive']: on }),

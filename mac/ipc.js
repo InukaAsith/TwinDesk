@@ -302,6 +302,7 @@ function setupIpc(ctx) {
     selectDisplay(displayId) {
       settings.sharing.displayId = displayId == null ? null : Number(displayId);
       save();
+      if (typeof ctx.stream.noteViewIdentity === 'function') ctx.stream.noteViewIdentity();
       ctx.stream.restart('display selected');
     },
     // Extend: Monitor 2 is the TwinDesk virtual display. Mirror: it shows this Mac's main screen.
@@ -316,6 +317,7 @@ function setupIpc(ctx) {
         settings.virtual.enabled = true;
       }
       save();
+      if (typeof ctx.stream.noteViewIdentity === 'function') ctx.stream.noteViewIdentity();
       ctx.displays.applyVirtual().then(() => ctx.stream.restart(`mode ${mode}`));
     },
     setVirtual(partial) {

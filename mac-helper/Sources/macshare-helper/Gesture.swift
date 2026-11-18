@@ -61,6 +61,7 @@ enum GesturePost {
   }
 
   static func handle(_ msg: [String: Any]) {
+    if injector.remoteOverview { return }
     let num = { (k: String) -> Double in (msg[k] as? NSNumber)?.doubleValue ?? 0 }
     switch msg["kind"] as? String {
     case "zoom": magnify(num("v"), phase: msg["phase"] as? String)

@@ -6,6 +6,7 @@ import Cocoa
 extension Injector {
   func injectRel(_ ev: [String: Any]) {
     guard Capture.shared.allowsRemoteInput else { return }
+    if remoteOverview { return }
     guard let t = ev["t"] as? String else { return }
     let num = { (k: String) in (ev[k] as? NSNumber)?.doubleValue ?? 0 }
     let here = { CGEvent(source: nil)?.location ?? .zero }
@@ -28,6 +29,7 @@ extension Injector {
   /// A relative move (the input lane's, Lane.swift, and `inject` k.mm): no dictionary per move.
   func moveRel(_ dx: Double, _ dy: Double) {
     guard Capture.shared.allowsRemoteInput else { return }
+    if remoteOverview { return }
     let cur = CGEvent(source: nil)?.location ?? .zero
     let to = Screens.walk(from: cur, to: CGPoint(x: cur.x + dx, y: cur.y + dy), stops: Capture.shared.returnStops,
                           portalStop: Capture.shared.portalReturnStop)

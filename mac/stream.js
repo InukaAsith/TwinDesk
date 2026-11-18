@@ -259,7 +259,39 @@ class Stream extends EventEmitter {
     return !!(this.server.current && P.isPhoneOs(this.server.current.os));
   }
 
+  // Advances when the selected display id changes, including a return to an id
+  // that was current earlier. A desktop switch captured the previous number.
+  noteViewIdentity() {
+    const Spaces = require('../shared/mac-spaces.js');
+    if (!this.viewSlot) this.viewSlot = { key: null, generation: 0 };
+    let id = '';
+    try {
+      const want = this.displays.target();
+      if (want && want.id != null) id = String(want.id);
+    } catch (_) { id = 'err'; }
+    return Spaces.noteGeneration(this.viewSlot, `default:${id}:${this.session}`);
+  }
+
+  // The display this viewer is being shown, or null while the picture is off or still catching
+  // up with a newly picked screen. A desktop switch uses this and no other display.
+  // generation is the selection epoch above, so A→B→A does not look unchanged.
+  viewedDisplay() {
+    const generation = this.noteViewIdentity();
+    const view = require('../shared/mac-spaces.js').viewedDisplay({
+      viewer: this.viewer,
+      waitingPolicy: this.waitingPolicy,
+      sharing: this.getSettings().sharing.on === true,
+      activeId: this.active ? this.active.displayId : null,
+      want: this.displays.target(),
+    });
+    if (!view) return null;
+    // session is the capture that active names. It is assigned before a frame is decoded.
+    const session = this.active && this.active.session;
+    return { ...view, generation, session };
+  }
+
   _displaysChanged() {
+    this.noteViewIdentity();
     if (!this.active) {
       if (this.awaitingDisplay && this.displays.target()) this.restart('display available');
       return;

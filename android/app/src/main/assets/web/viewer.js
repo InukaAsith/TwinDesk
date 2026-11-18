@@ -3,8 +3,8 @@
 // plays the picture (and its sound), and sends input back as in.* (normalized 0–1):
 //   touch   touchpad (opts.touch 'pad', the default): slide = move the pointer (never clicks) ·
 //           tap = left click ("Tap to click", on unless switched off) · hold = right click ·
-//           two fingers = scroll
-//           direct ('direct'): tap = click · hold = right click · drag = drag · two fingers = scroll
+//           Android/Mac: two fingers scroll, pinch zooms, three fingers pan the view
+//           direct ('direct'): tap = click · hold = right click · drag = drag
 //           (the Mac's pointer follows the finger, so it is a touch screen for the Mac)
 //   mouse   and a hardware keyboard work as on a computer
 //   stylus  a pen on the computer: where it points, with its pressure, tilt, eraser and side button
@@ -33,6 +33,10 @@
   let pc = null;
   let session = null;
   let pending = null;
+  let viewerGeneration = 0;
+  let videoOwner = null;
+  let frameProbe = 0;
+  let frameAllowed = true;
   let name = t('the computer'); // the one we're connected to (opts)
   let streamAudio = false;
   let sound = true;
@@ -43,6 +47,50 @@
   let penOn = true; // a stylus is a pen (opts.pen); off: a mouse
   let penFast = false; // Fast writing (opts.penFast): a stroke's samples in one in.mm (pts); off: each its own, paced
   let realTouch = false; // the computer injects real touch (screen.state touch): Direct sends in.tc
+  let zoom = 1, panX = 0, panY = 0;
+  const PRESETS = ['fit', 'fill', 'actual'];
+  let scalePreset = 'fit', scaleMode = 'fit';
+  let viewGestures = false; // Android explicitly opts into local Mac-view gestures
+
+  function fitRect() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (!vw || !vh || W <= 0 || H <= 0) return null;
+    const k = Math.min(W / vw, H / vh);
+    return { x: (W - vw * k) / 2, y: (H - vh * k) / 2, w: vw * k, h: vh * k };
+  }
+  function presetZoom(mode, r) {
+    if (!r) return 1;
+    if (mode === 'fill') return Math.max(window.innerWidth / r.w, window.innerHeight / r.h);
+    if (mode === 'actual') return video.videoWidth / (r.w * (window.devicePixelRatio || 1));
+    return 1;
+  }
+
+  function reportScale(mode) {
+    if (scaleMode === mode) return;
+    scaleMode = mode;
+    if (viewGestures && typeof TD.event === 'function') TD.event('viewer.scale.' + mode);
+  }
+
+  function selectScale(mode) {
+    if (!viewGestures || !PRESETS.includes(mode)) return;
+    cancelInput();
+    scalePreset = mode;
+    reportScale(mode);
+    panX = panY = 0;
+    applyViewport();
+  }
+
+  function applyViewport() {
+    const r = fitRect();
+    if (scaleMode !== 'custom') zoom = presetZoom(scaleMode, r);
+    const dx = r ? Math.max(0, (r.w * zoom - window.innerWidth) / 2) : 0;
+    const dy = r ? Math.max(0, (r.h * zoom - window.innerHeight) / 2) : 0;
+    panX = Math.max(-dx, Math.min(dx, panX));
+    panY = Math.max(-dy, Math.min(dy, panY));
+    video.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  }
+  window.addEventListener('resize', () => { if (viewGestures) cancelViewTouch(); applyViewport(); });
 
   function setOverlay(t) {
     overlay.textContent = t || '';
@@ -58,7 +106,37 @@
   }
   const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 
+  function reportVideo(playing, owner = videoOwner) {
+    if (!playing) frameProbe++;
+    else if (!frameAllowed) return;
+    if (owner && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream &&
+        (!playing || owner.pc.connectionState === 'connected') && typeof TD.videoState === 'function' && Number.isInteger(owner.generation) && owner.generation > 0 && Number.isInteger(owner.session)) {
+      TD.videoState(owner.generation, owner.session, playing, video.videoWidth, video.videoHeight);
+    }
+  }
+
+  function requireCurrentFrame(owner = videoOwner) {
+    if (typeof TD.videoState !== 'function') return;
+    if (!frameAllowed || !owner || owner !== videoOwner || owner.pc !== pc || video.srcObject !== owner.stream) return;
+    const probe = ++frameProbe;
+    const current = () => probe === frameProbe && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream;
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      video.requestVideoFrameCallback(() => { if (current()) reportVideo(true, owner); });
+    } else {
+      const started = video.currentTime;
+      let left = 60;
+      const check = () => {
+        if (!current()) return;
+        if (video.currentTime > started && video.videoWidth > 0 && video.videoHeight > 0) reportVideo(true, owner);
+        else if (--left > 0) requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    }
+  }
+
   function closePc() {
+    reportVideo(false);
+    videoOwner = null;
     if (pc) pc.close();
     pc = null;
     session = null;
@@ -77,9 +155,12 @@
     // On a USB cable the computer sends its relay (msg.ice): the picture goes through adb.
     const my = (pc = new RTCPeerConnection(msg.ice || { iceServers: [] }));
     session = msg.session;
+    viewerGeneration = msg.viewerGeneration || 0;
+    frameAllowed = true;
     const queue = (pending = []);
     setOverlay(t('Connecting to {name}…', { name }));
     my.ontrack = (e) => {
+      if (my !== pc) return;
       if (e.track.kind === 'audio') {
         if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
         audio.srcObject = new MediaStream([e.track]);
@@ -87,7 +168,9 @@
         return;
       }
       pace(e.receiver);
-      video.srcObject = new MediaStream([e.track]);
+      const stream = new MediaStream([e.track]);
+      videoOwner = { pc: my, stream, generation: viewerGeneration, session: msg.session };
+      video.srcObject = stream;
       video.play().catch(() => {});
     };
     my.onicecandidate = (e) => {
@@ -95,8 +178,9 @@
     };
     my.onconnectionstatechange = () => {
       if (my !== pc) return;
-      if (my.connectionState === 'failed') setOverlay(t('Reconnecting…'));
-      else if (my.connectionState === 'disconnected') setOverlay(t('The video connection was interrupted…'));
+      if (my.connectionState === 'connected') requireCurrentFrame();
+      else if (my.connectionState === 'failed') { reportVideo(false); setOverlay(t('Reconnecting…')); }
+      else if (my.connectionState === 'disconnected') { reportVideo(false); setOverlay(t('The video connection was interrupted…')); }
     };
     try {
       await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(msg.sdp) });
@@ -114,37 +198,80 @@
 
   video.addEventListener('playing', () => {
     setOverlay('');
+    applyViewport();
     TD.playing(video.videoWidth, video.videoHeight);
+    requireCurrentFrame();
   });
-  video.addEventListener('resize', () => TD.playing(video.videoWidth, video.videoHeight));
+  for (const event of ['waiting', 'stalled', 'emptied', 'ended']) video.addEventListener(event, () => {
+    reportVideo(false);
+    if (event === 'waiting' || event === 'stalled') requireCurrentFrame();
+  });
+  let videoAspect = 0;
+  video.addEventListener('resize', () => {
+    const aspect = video.videoHeight ? video.videoWidth / video.videoHeight : 0;
+    const nextZoom = scaleMode === 'custom' ? zoom : presetZoom(scaleMode, fitRect());
+    if (viewGestures && videoAspect && (Math.abs(aspect - videoAspect) > 0.001 || nextZoom !== zoom)) cancelInput();
+    videoAspect = aspect;
+    applyViewport(); TD.playing(video.videoWidth, video.videoHeight);
+    requireCurrentFrame();
+  });
 
   window.tdRecv = (msg) => {
     if (msg.t !== 'rtc.ice') console.log(`viewer <- ${msg.t}${msg.session != null ? ` #${msg.session}` : ''}`);
     switch (msg.t) {
+      case 'viewer.probe':
+        if (pc && msg.session === session && Number.isInteger(msg.viewerGeneration) && msg.viewerGeneration > viewerGeneration) {
+          reportVideo(false);
+          viewerGeneration = msg.viewerGeneration;
+          if (videoOwner) videoOwner = { ...videoOwner, generation: viewerGeneration };
+          frameAllowed = msg.accept === true;
+          if (frameAllowed) requireCurrentFrame();
+        }
+        break;
       case 'stream.info': // its name is the display shared, not the computer
         streamAudio = msg.audio === true;
         applyAudio();
         if (!pc) setOverlay(t('Waiting for {name}…', { name }));
         break;
-      case 'rtc.offer': onOffer(msg); break;
+      case 'rtc.offer':
+        setOverlay(t('Waiting for {name}…', { name }));
+        onOffer(msg); break;
       case 'rtc.ice':
         if (!pc || msg.session !== session || !msg.candidate) break;
         if (pending) pending.push(msg.candidate);
         else pc.addIceCandidate(msg.candidate).catch(() => {});
         break;
       case 'stream.stop':
+        if (viewGestures) cancelInput();
         closePc();
         setOverlay(t('{name} isn’t sharing its screen', { name }));
         break;
       case 'screen.state':
         if ('touch' in msg) realTouch = msg.touch === true;
-        if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name }) : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
+        if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name })
+          : viewGestures ? t('{name} isn’t sharing its screen', { name })
+          : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
         break;
-      case 'opts':
+      case 'viewer.scale':
+        selectScale(msg.mode);
+        break;
+      case 'opts': {
+        const gestures = msg.viewGestures === true;
+        if (viewGestures !== gestures) {
+          cancelInput();
+          viewGestures = gestures;
+          scalePreset = 'fit';
+          reportScale('fit');
+          panX = panY = 0;
+          applyViewport();
+        }
+        if (viewGestures && msg.viewScale !== scalePreset) selectScale(msg.viewScale);
         if (msg.name) name = msg.name;
         sound = msg.sound !== false;
         pacing = ['smooth', 'steady'].includes(msg.pacing) ? msg.pacing : 'fast';
-        touchMode = msg.touch === 'direct' ? 'direct' : 'pad';
+        const touch = msg.touch === 'direct' ? 'direct' : 'pad';
+        if (touch !== touchMode) cancelInput();
+        touchMode = touch;
         if (Number(msg.speed) > 0) speed = Number(msg.speed);
         tapClick = msg.tap === true;
         if (msg.pen === false && penOn) penLeave(); // switched off while it is near
@@ -156,6 +283,7 @@
         applyAudio();
         if (pc) for (const r of pc.getReceivers()) if (r.track.kind === 'video') pace(r);
         break;
+      }
       case 'keyboard':
         if (msg.on) { kbd.value = ''; sent = ''; kbd.focus(); } else kbd.blur();
         break;
@@ -166,11 +294,10 @@
   // ---- input ----
 
   function drawn() {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return null;
+    const r = fitRect();
+    if (!r) return null;
     const W = window.innerWidth, H = window.innerHeight;
-    const k = Math.min(W / vw, H / vh);
-    return { x: (W - vw * k) / 2, y: (H - vh * k) / 2, w: vw * k, h: vh * k };
+    return { x: (W - r.w * zoom) / 2 + panX, y: (H - r.h * zoom) / 2 + panY, w: r.w * zoom, h: r.h * zoom };
   }
   function norm(cx, cy, clamp) {
     const r = drawn();
@@ -182,11 +309,105 @@
     return { x, y };
   }
 
-  // Touch: one finger is the Mac's pointer; two fingers scroll.
+  // Android Mac view: one finger controls, two scroll or pinch, three pan locally.
+  // Other viewers retain two-finger scrolling.
   const touches = new Map(); // pointerId -> {x, y}
   let one = null; // {start, at, moved, dragging, timer, right}
   let two = null; // {x, y} average of the two fingers
   const SLOP = 10;
+  let gesture = null;
+  function cancelFinger() {
+    if (one) {
+      clearTimeout(one.timer);
+      if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
+    }
+    one = null; two = null;
+  }
+  function cancelViewTouch() { cancelFinger(); gesture = null; touches.clear(); }
+  function fingerGeometry(ids) {
+    const p = ids.map((id) => touches.get(id));
+    if (p.some((v) => !v)) return null;
+    return { x: p.reduce((n, v) => n + v.x, 0) / p.length,
+      y: p.reduce((n, v) => n + v.y, 0) / p.length,
+      span: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) };
+  }
+  function beginGesture() {
+    cancelFinger();
+    if (touches.size >= 4) { if (gesture) gesture.frozen = true; return; }
+    if (gesture && gesture.frozen) return;
+    if (gesture && gesture.latched) {
+      if (gesture.ids.length !== 2 || touches.size !== 3 || performance.now() - gesture.started >= 150) return;
+      zoom = gesture.zoom; panX = gesture.panX; panY = gesture.panY; reportScale(gesture.scale); applyViewport();
+    }
+    const ids = [...touches.keys()];
+    const at = fingerGeometry(ids);
+    gesture = { ids, at, last: at, zoom, panX, panY, scale: scaleMode, started: performance.now(), latched: false, frozen: false, mode: null, queued: false };
+  }
+  function moveGesture(e) {
+    const g = gesture;
+    if (g.frozen || !g.ids.includes(e.pointerId)) return;
+    // A frame contains both fingers' moves; classifying the first event alone
+    // makes parallel scrolling look like a pinch.
+    if (g.queued) return;
+    g.queued = true;
+    requestAnimationFrame(() => { g.queued = false; if (gesture === g) updateGesture(); });
+  }
+  function updateGesture(ending = false) {
+    const g = gesture;
+    if (!g || g.frozen) return;
+    const at = fingerGeometry(g.ids);
+    if (!at) { g.frozen = true; return; }
+    if (!g.latched) {
+      if (Math.hypot(at.x - g.at.x, at.y - g.at.y) <= SLOP &&
+          (g.ids.length !== 2 || Math.abs(at.span - g.at.span) <= SLOP)) return;
+      g.latched = true;
+      g.mode = g.ids.length === 3 ? 'pan' :
+        Math.abs(at.span - g.at.span) > Math.hypot(at.x - g.at.x, at.y - g.at.y) * 1.5 ? 'pinch' : 'scroll';
+    }
+    if (g.mode === 'scroll') {
+      // Let a slightly staggered third finger turn the gesture into a local
+      // pan before committing any remote scroll. A lift settles two fingers.
+      const wait = 150 - (performance.now() - g.started);
+      if (!ending && wait > 0) {
+        if (!g.scrollTimer) g.scrollTimer = setTimeout(() => {
+          g.scrollTimer = null;
+          if (gesture === g) updateGesture();
+        }, wait);
+        return;
+      }
+      const dx = (g.last.x - at.x) * 2, dy = (g.last.y - at.y) * 2;
+      if (Math.abs(dx) + Math.abs(dy) >= 1) { send({ t: 'in.wh', dx, dy }); g.last = at; }
+      return;
+    }
+    if (!fitRect()) return;
+    if (g.mode === 'pan') {
+      panX = g.panX + at.x - g.at.x;
+      panY = g.panY + at.y - g.at.y;
+      applyViewport();
+      return;
+    }
+    const preset = presetZoom(scalePreset, fitRect());
+    const min = Math.min(1, preset, g.zoom);
+    const max = Math.max(4, preset, g.zoom);
+    const next = Math.max(min, Math.min(max, g.at.span > 0 ? g.zoom * at.span / g.at.span : g.zoom));
+    reportScale('custom');
+    zoom = Math.abs(next - 1) < 0.05 ? 1 : next;
+    panX = at.x - window.innerWidth / 2 - (g.at.x - window.innerWidth / 2 - g.panX) * zoom / g.zoom;
+    panY = at.y - window.innerHeight / 2 - (g.at.y - window.innerHeight / 2 - g.panY) * zoom / g.zoom;
+    applyViewport();
+  }
+  function followCursor() {
+    if (!viewGestures) return;
+    const r = drawn();
+    if (!r || (r.w <= window.innerWidth && r.h <= window.innerHeight)) return;
+    const x = r.x + cur.x * r.w, y = r.y + cur.y * r.h;
+    const margin = 32;
+    if (x < margin) panX += margin - x;
+    else if (x > window.innerWidth - margin) panX += window.innerWidth - margin - x;
+    if (y < margin) panY += margin - y;
+    else if (y > window.innerHeight - margin) panY += window.innerHeight - margin - y;
+    applyViewport();
+  }
 
   // Real touch (Direct, the computer takes in.tc): every finger as a finger on its touch screen, so
   // a swipe scrolls, a pinch zooms, as the computer's own touch screen does. Moves go once a frame.
@@ -223,6 +444,7 @@
     if (penNear || performance.now() - Math.max(penAway, penAt) < PALM_MS) return; // the hand holding the pen
     if (real()) return tcDown(e);
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (viewGestures && (touches.size > 1 || gesture)) { beginGesture(); return; }
     if (touchMode === 'pad') return padDown(e);
     if (touches.size === 1) {
       const p = norm(e.clientX, e.clientY, false);
@@ -251,6 +473,7 @@
     if (slots.size) return tcMove(e);
     if (!touches.has(e.pointerId)) return;
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (viewGestures && gesture) return moveGesture(e);
     if (two && touches.size >= 2) {
       const [a, b] = [...touches.values()];
       const c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -279,7 +502,13 @@
 
   function fingerUp(e) {
     if (slots.has(e.pointerId)) return tcUp(e);
+    if (viewGestures && gesture) updateGesture(true);
     touches.delete(e.pointerId);
+    if (viewGestures && gesture) {
+      if (gesture.ids.includes(e.pointerId)) gesture.frozen = true;
+      if (!touches.size) gesture = null;
+      return;
+    }
     if (touches.size === 0) two = null;
     if (!one) return;
     if (touchMode === 'pad') return padUp(e);
@@ -297,6 +526,7 @@
   const cur = { x: 0.5, y: 0.5 };
   function padDown(e) {
     if (touches.size === 1) {
+      followCursor();
       one = { id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, t0: performance.now(), moved: false, right: false };
       one.timer = setTimeout(() => { // held still: a right click
         if (!one || one.moved) return;
@@ -328,6 +558,7 @@
     const g = speed * (1 + Math.min(1, Math.hypot(dx, dy) / 30));
     cur.x = Math.min(1, Math.max(0, cur.x + (dx * g) / r.w));
     cur.y = Math.min(1, Math.max(0, cur.y + (dy * g) / r.h));
+    followCursor();
     sendAt(cur.x, cur.y);
   }
   function padUp(e) {
@@ -401,6 +632,7 @@
       }
       one = null;
       two = null;
+      gesture = null;
       touches.clear();
       if (slots.size) { slots.clear(); tcSend(); }
     }
@@ -567,6 +799,21 @@
   // A mouse (or trackpad) on the phone: as on a computer.
   const BUTTONS = { 0: B.LEFT, 1: B.MIDDLE, 2: B.RIGHT, 3: 3, 4: 4 };
   const held = new Set();
+  const keyHeld = new Set();
+  let mouseLast = { x: 0.5, y: 0.5 };
+  function cancelInput() {
+    if (one) {
+      clearTimeout(one.timer);
+      if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
+    }
+    one = two = null; gesture = null; touches.clear();
+    if (slots.size) { slots.clear(); tcSend(); }
+    if (penNear || penLast || penHeld.size) penLeave();
+    for (const b of held) send({ t: 'in.mu', ...mouseLast, b });
+    held.clear();
+    for (const code of keyHeld) send({ t: 'in.ku', code });
+    keyHeld.clear();
+  }
   window.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'pen' && penOn) return penDown(e);
     if (e.pointerType === 'touch') return fingerDown(e);
@@ -574,6 +821,7 @@
     const p = norm(e.clientX, e.clientY, false);
     const b = BUTTONS[e.button];
     if (!p || b === undefined) return;
+    mouseLast = p;
     held.add(b);
     send({ t: 'in.md', x: p.x, y: p.y, b });
   });
@@ -585,7 +833,7 @@
     if (e.pointerType === 'pen' && penOn) return RAW ? undefined : penMove(e);
     if (e.pointerType === 'touch') return fingerMove(e);
     const p = norm(e.clientX, e.clientY, held.size > 0);
-    if (p) sendAt(p.x, p.y);
+    if (p) { mouseLast = p; sendAt(p.x, p.y); }
   });
   window.addEventListener('pointerup', (e) => {
     if (e.pointerType === 'pen' && penOn) return penUp(e);
@@ -598,8 +846,13 @@
   });
   window.addEventListener('pointercancel', (e) => {
     if (e.pointerType === 'pen') { if (penOn) penLeave(); }
-    else if (e.pointerType === 'touch') fingerUp(e);
+    else if (e.pointerType === 'touch') {
+      if (viewGestures && !real()) { cancelFinger(); touches.delete(e.pointerId); if (gesture) gesture.frozen = true; if (!touches.size) gesture = null; }
+      else fingerUp(e);
+    }
   });
+  document.addEventListener('visibilitychange', () => { if (viewGestures && document.hidden) cancelInput(); });
+  window.addEventListener('blur', () => { if (viewGestures) cancelInput(); });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -613,11 +866,13 @@
   window.addEventListener('keydown', (e) => {
     if (!keyCode(e) || e.keyCode === 229 || e.isComposing) return; // composing on the soft keyboard: see 'input'
     e.preventDefault();
+    keyHeld.add(keyCode(e));
     send({ t: 'in.kd', code: keyCode(e) });
   });
   window.addEventListener('keyup', (e) => {
     if (!keyCode(e) || e.keyCode === 229 || e.isComposing) return;
     e.preventDefault();
+    keyHeld.delete(keyCode(e));
     send({ t: 'in.ku', code: keyCode(e) });
   });
 
