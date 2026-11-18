@@ -160,7 +160,11 @@ class Clip {
     const c = this.cfg;
     if (!c.enabled || !c.receive || !P.clipAllowed(m.text)) return;
     ++this.readSequence;
-    try { clipboard.writeText(m.text); } catch (_) { return; }
+    // The same text again (a phone's copy comes from its app and from scrcpy's clipboard watch, and
+    // ours echoes back that way): written once, so Windows' clipboard history (Win+V) holds it once.
+    let same = false;
+    try { same = (await readText()) === m.text; } catch (_) { /* busy: write it */ }
+    if (!same) try { clipboard.writeText(m.text); } catch (_) { return; }
     this.images.text();
     this.lastSync.received = m.text;
     this.seen = m.text; // so instant mode doesn't bounce it back
