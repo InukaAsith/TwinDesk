@@ -104,6 +104,7 @@ function phoneRemote({ PhoneRemote, opts, wanted, phones }) {
     get loaded() { return set.made.size > 0; },
     setAllow(on) { set.each((r) => r.setAllow(on)); },
     setPad(on) { const r = active(); if (r) r.setPad(on); },
+    setPadKind(kind) { const r = active(); if (r) r.setPadKind(kind); }, // Xbox 360 or DualShock 4 (#266)
     refresh() { set.each((r) => r.refresh()); },
     get view() { const r = active() || set.made.values().next().value; return r ? r.view : null; },
   };

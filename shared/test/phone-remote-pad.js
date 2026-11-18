@@ -26,11 +26,14 @@ assert.ok(padBytes({ lx: 'x' }).equals(Buffer.alloc(12)));
   const settings = { remote: { allow: true } };
   const written = [];
   let loads = 0, installs = 0, installed = false, ended = 0;
+  const feeds = []; // the controller kind each feed was started with
   const driver = {
     name: 'Xbox 360 controller',
+    kinds: ['xbox', 'ds4'],
     check: async () => ({ supported: true, installed }),
     install: async () => { installs++; installed = true; },
-    feed: () => {
+    feed: (_onExit, kind) => {
+      feeds.push(kind);
       const p = new EventEmitter();
       p.stdin = { write: (buf) => written.push(Buffer.from(buf)), end: () => ended++ };
       p.kill = () => {};
@@ -51,7 +54,15 @@ assert.ok(padBytes({ lx: 'x' }).equals(Buffer.alloc(12)));
   assert.strictEqual(installs, 1, 'installed the first time');
   assert.ok(r.padProc, 'feeding');
   assert.strictEqual(sent.pop().pad, true);
-  assert.deepStrictEqual(r.view.pad, { on: true, supported: true, live: true, busy: '', message: '', name: 'Xbox 360 controller' });
+  assert.deepStrictEqual(r.view.pad, { on: true, supported: true, live: true, busy: '', message: '', name: 'Xbox 360 controller', kind: 'xbox', kinds: ['xbox', 'ds4'] });
+  // A PlayStation controller instead (#266): plugged in again as one.
+  r.setPadKind('ds4');
+  assert.strictEqual(settings.remote.padKind, 'ds4');
+  await new Promise((res) => setTimeout(res, 350)); await tick(); await tick(); await tick();
+  assert.deepStrictEqual(feeds, ['xbox', 'ds4']);
+  assert.strictEqual(r.view.pad.name, 'DualShock 4');
+  assert.ok(r.padProc, 'feeding again');
+  written.length = 0; ended = 0; // the first one's release, before the second
 
   server.emit('t:remote.pad', { b: 1, lx: 1 });
   assert.strictEqual(written.length, 1);

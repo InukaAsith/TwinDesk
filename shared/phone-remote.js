@@ -152,6 +152,20 @@ class PhoneRemote {
     this.onChange();
   }
 
+  // Which controller (#266): 'xbox' (an Xbox 360 controller) or 'ds4' (a PlayStation DualShock 4).
+  get padKind() {
+    const r = this.getSettings().remote;
+    return r && r.padKind === 'ds4' ? 'ds4' : 'xbox';
+  }
+
+  setPadKind(kind) {
+    const s = this.getSettings();
+    s.remote = { ...(s.remote || {}), padKind: kind === 'ds4' ? 'ds4' : 'xbox' };
+    this.save();
+    if (this.padProc) { this._padStop(); setTimeout(() => this._padStart(), 300); } // plugged in again as the other one
+    this.onChange();
+  }
+
   async _padStart() {
     if (this.padProc || this.padBusy || !this.loadPad || !isPhone(this.server.current)) return;
     const say = (busy, message = this.padMessage) => {
@@ -188,7 +202,7 @@ class PhoneRemote {
       if (this.padOn && code !== 0 && code !== null) this.padMessage = 'The controller stopped: turn Real gamepad off and on again';
       this._state();
       this.onChange();
-    });
+    }, this.padKind);
     this.padProc = p;
     this._state();
     this.onChange();
@@ -277,7 +291,9 @@ class PhoneRemote {
         live: !!this.padProc,
         busy: this.padBusy,
         message: this.padSupported ? this.padMessage : (this.padMessage || this.padNote),
-        name: this.pad ? this.pad.name : '',
+        name: this.pad ? (this.pad.kinds && this.padKind === 'ds4' ? 'DualShock 4' : this.pad.name) : '',
+        kind: this.padKind,
+        kinds: this.pad ? this.pad.kinds || [] : (this.padSupported ? ['xbox', 'ds4'] : []), // a choice where the driver has one (Windows, Linux)
       },
     };
   }
