@@ -70,44 +70,59 @@ class Clip(core: Core) : Feature(core) {
 
     fun sendPolicy() {
         val accept = core.sync.get("clipboard", "in")
+        if (!core.sync.get("clipboard", "out")) away.disableOutgoing()
         core.send(msg(Proto.T.CLIP_POLICY, "accept" to accept, "images" to (accept && picturesOn), "queue" to true)) // queue: clip.queue understood here
     }
 
     // ---- Clipboard › While away (shared/clipqueue.js on the computers) ----
     // Copies made here while the computer is away wait (in memory, up to 50) and go to its Recent
-    // when it's back, not on its clipboard. Queued copies from it land in our Recent; on our
-    // clipboard only the latest, with Put the latest on the clipboard on.
+    // when it's back, not on its clipboard. They belong to the pair welcome authenticated (its known
+    // id and fingerprint). A different computer, a pair made again (a new fingerprint), or a socket
+    // that is no longer this one does not receive them. The same pair reconnecting does.
+    // Queued copies from it land in our Recent; on our clipboard only the latest, with Put the
+    // latest on the clipboard on. That paste is posted: a closed session drops it.
     val queueOn: Boolean get() = core.store.flag("clip.queue", true)
-    fun setQueue(v: Boolean) { core.store.setFlag("clip.queue", v); if (!v) synchronized(queue) { queue.clear() }; core.changed() }
+    fun setQueue(v: Boolean) { core.store.setFlag("clip.queue", v); if (!v) away.disableQueue(); core.changed() }
     val queueLatest: Boolean get() = core.store.flag("clip.queueLatest", false)
     fun setQueueLatest(v: Boolean) { core.store.setFlag("clip.queueLatest", v); core.changed() }
-    private val queue = ArrayList<Pair<String, Long>>() // oldest first
-    val queued: Int get() = synchronized(queue) { queue.size }
+    private val away = ClipAway()
+    private val latest = LatestGate()
+    val queued: Int get() = away.size
+    // Set for the message being handled (Core, on the main thread). Null outside that.
+    // A deliberate disconnect ends collection until the next authenticated welcome.
+    fun abandonQueue() { away.explicitDisconnect(); latest.drop(); core.changed() }
+
+    fun forgetQueue(id: String) { away.forget(id); latest.drop(); core.changed() }
+
+    // The computer forgot this phone (bad_token). A drop, sleep or replace keeps the queue.
+    fun onSessionEnded(code: String?, id: String) {
+        latest.drop()
+        if (code == Proto.E.BAD_TOKEN) away.forget(id)
+    }
+
+    private fun knownPair(id: String, fp: String): Boolean {
+        val saved = core.store.hosts().find { it.id == id } ?: return false
+        return saved.fp == fp && fp.isNotEmpty()
+    }
 
     private fun enqueue(text: String) {
-        if (!queueOn || !core.sync.get("clipboard", "out") || text.isEmpty() || text.toByteArray().size > Proto.CLIP_MAX_BYTES) return
-        synchronized(queue) {
-            if (queue.lastOrNull()?.first == text) return
-            queue.removeAll { it.first == text }
-            queue.add(text to System.currentTimeMillis())
-            while (queue.size > 50) queue.removeAt(0)
-            while (queue.size > 1 && queue.sumOf { it.first.toByteArray().size } > 1024 * 1024) queue.removeAt(0)
-        }
-        core.changed()
+        if (away.add(text, System.currentTimeMillis(), queueOn, core.sync.get("clipboard", "out"), 50, 1024 * 1024, Proto.CLIP_MAX_BYTES, ::knownPair)) core.changed()
     }
 
-    private fun flushQueue() {
-        val items = synchronized(queue) { queue.toList().also { queue.clear() } }
-        if (items.isEmpty()) return
+    private fun flushQueue(route: Link.TrustedRoute?) {
+        if (route == null) return
+        if (!core.link.accepts(route)) return
+        val batch = away.beginFlush(route.id, route.fp, queueOn, core.sync.get("clipboard", "out"), peerAccepts, ::knownPair) ?: return
         val arr = org.json.JSONArray()
-        for ((t, at) in items) arr.put(JSONObject().put("text", t).put("at", at))
-        core.send(msg(Proto.T.CLIP_QUEUE, "items" to arr))
-        for ((t, _) in items) remember(Item("out", t))
+        for (item in batch.items) arr.put(JSONObject().put("text", item.text).put("at", item.at))
+        if (!core.link.sendFor(route, msg(Proto.T.CLIP_QUEUE, "items" to arr)) || !away.commit(batch)) return
+        for (item in batch.items) remember(Item("out", item.text))
         core.changed()
     }
 
-    private fun receiveQueue(m: JSONObject) {
+    private fun receiveQueue(m: JSONObject, route: Link.TrustedRoute?) {
         if (!core.sync.get("clipboard", "in")) return
+        if (route == null || !core.link.accepts(route)) return
         val arr = m.optJSONArray("items") ?: return
         var last: String? = null
         for (i in maxOf(0, arr.length() - 50) until arr.length()) {
@@ -117,7 +132,11 @@ class Clip(core: Core) : Feature(core) {
             last = t
         }
         val l = last ?: return
-        if (queueLatest) main.post {
+        if (!queueLatest) return
+        val ticket = latest.issue()
+        main.post {
+            if (!latest.current(ticket) || !queueLatest || !core.sync.get("clipboard", "in")) return@post
+            if (!core.link.accepts(route)) return@post
             lastIn = l
             lastOut = null
             runCatching { cm.setPrimaryClip(ClipData.newPlainText("TwinDesk", l)) }
@@ -127,6 +146,9 @@ class Clip(core: Core) : Feature(core) {
     override fun onWelcome(host: Host) {
         peerAccepts = false
         peerImages = false
+        latest.drop()
+        val saved = core.store.hosts().find { it.id == host.id }
+        away.bind(host.id, host.fp, saved?.fp)
         sendPolicy()
     }
 
@@ -135,6 +157,7 @@ class Clip(core: Core) : Feature(core) {
         peerImages = false
         outId = ""
         pics.execute { inPic = null }
+        latest.drop()
     }
 
     // What is on the clipboard now goes to the computer (works while we are in front, or from
@@ -293,20 +316,23 @@ class Clip(core: Core) : Feature(core) {
         }
     }
 
-    override fun onMessage(t: String, m: JSONObject): Boolean {
+    override fun onMessage(t: String, m: JSONObject): Boolean = onMessage(t, m, null)
+
+    internal fun onMessage(t: String, m: JSONObject, route: Link.TrustedRoute?): Boolean {
         when (t) {
             Proto.T.CLIP_POLICY -> {
                 peerAccepts = m.optBoolean("accept")
                 peerImages = m.optBoolean("images")
-                if (peerAccepts && m.optBoolean("queue") && core.sync.get("clipboard", "out")) flushQueue()
+                if (peerAccepts && m.optBoolean("queue") && core.sync.get("clipboard", "out")) flushQueue(route)
             }
             Proto.T.CLIP -> {
+                latest.drop()
                 outId = ""
                 pics.execute { inPic = null }
                 val text = m.optString("text")
                 if (core.sync.get("clipboard", "in") && text.isNotEmpty() && text.toByteArray().size <= Proto.CLIP_MAX_BYTES) receiveText(text)
             }
-            Proto.T.CLIP_QUEUE -> receiveQueue(m)
+            Proto.T.CLIP_QUEUE -> receiveQueue(m, route)
             Proto.T.CLIP_IMAGE -> pics.execute { header(m) }
             Proto.T.CLIP_IMAGE_PART -> pics.execute { part(m) }
             else -> return false
