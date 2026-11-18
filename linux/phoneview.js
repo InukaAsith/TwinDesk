@@ -420,7 +420,7 @@ class PhoneViews extends EventEmitter {
     // An app window on an asleep phone waited for a picture that never came (#247, #239): the phone
     // wakes first (a phone that's awake ignores it), so its new display draws.
     if (v.app && !v.native) s.tap(ANDROID.WAKEUP);
-    if (v.app) setTimeout(() => s.startApp(v.app), 300);
+    if (v.app) setTimeout(() => require('../shared/appstart.js').startApp(s, { adb: this.bridge.adb, serial: this.bridge.serial, maker: ((this.phone && this.phone.info) || {}).maker, app: v.app }), 300); // full screen on HyperOS (#265)
     this._send(v, 'phoneview:status', { ready: true, via });
     this._send(v, 'phoneview:opts', this._opts(v));
   }
