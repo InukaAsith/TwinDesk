@@ -5,7 +5,8 @@
 // number and fence for Node. Driven: the lane's moves are injected here (deduplicated, speed applied,
 // after the event they wait for); its events go to Node as {"event":"laneEv"} and come back as
 // `inject` in order. Command `lane {op: bind | start | stop | active | route | event | driven | hold |
-// fence | done}`. Without tdfast.dll next to the .exe, `lane` fails (DllNotFoundException) and Node
+// fence | done}`. With `lane: N` (N > 0, Multi-device, #273): that device's own lane (td_lane_*),
+// `close` too, and its events say `lane: N`; without it, lane 0 as always. Without tdfast.dll next to the .exe, `lane` fails (DllNotFoundException) and Node
 // keeps its own lane (shared/inputlane.js), which speaks the same wire.
 using System;
 using System.Collections.Generic;
@@ -38,6 +39,19 @@ namespace MacShare
         [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_hold(int on);
         [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern int td_fence_apply(uint route, uint mn, double cx, double cy, out double dx, out double dy);
         [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_done(uint es);
+        // Multi-device: one lane per device (#273). An older tdfast.dll lacks them: EntryPointNotFound, Node keeps its lane.
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern ushort td_lane_bind(uint id);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)]
+        static extern int td_lane_start(uint id, int role, [MarshalAs(UnmanagedType.LPStr)] string keyHex, [MarshalAs(UnmanagedType.LPStr)] string ip, ushort port, Callback cb, IntPtr ctx);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_stop(uint id);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_close(uint id);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_active(uint id, int on);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_drive_reset(uint id, uint route);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_send_event(uint id, byte[] json, UIntPtr len, uint es);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_driven(uint id, uint route, double speed);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_hold(uint id, int on);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern int td_lane_fence_apply(uint id, uint route, uint mn, double cx, double cy, out double dx, out double dy);
+        [DllImport("tdfast.dll", CallingConvention = CallingConvention.Cdecl)] static extern void td_lane_done(uint id, uint es);
 
         static readonly Callback callback = OnLane; // kept alive: the lane's thread calls it
         static readonly JavaScriptSerializer json = new JavaScriptSerializer();
@@ -46,6 +60,8 @@ namespace MacShare
         static Action<Dictionary<string, object>> emit;
         static volatile bool driving;
         static bool started, loaded;
+        static uint driveLane; // the lane the hook's moves go on (route > 0 on it last); 0: the one-to-one lane
+        static readonly HashSet<uint> laneStarted = new HashSet<uint>();
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
 
@@ -73,6 +89,8 @@ namespace MacShare
         {
             string op = Json.Str(c, "op", "");
             if (!loaded) throw new Exception("no tdfast.dll"); // Node keeps its own lane
+            uint lid = U32(c, "lane");
+            if (lid > 0) { HandleLane(lid, op, c); return; }
             switch (op)
             {
                 case "bind":
@@ -86,15 +104,15 @@ namespace MacShare
                     int role = Json.Str(c, "role", "") == "host" ? 0 : 1;
                     double p = Json.Num(c, "port", 0);
                     started = td_start(role, key, ip, (ushort)(p > 0 && p < 65536 ? p : 0), callback, IntPtr.Zero) == 1;
-                    driving = false;
+                    if (driveLane == 0) driving = false;
                     if (!started) throw new Exception("lane start failed");
                     break;
-                case "stop": td_stop(); started = false; driving = false; break;
+                case "stop": td_stop(); started = false; if (driveLane == 0) driving = false; break;
                 case "active": td_active(Json.Bool(c, "on", false) ? 1 : 0); break;
                 case "route":
                     uint r = U32(c, "route");
                     td_drive_reset(r);
-                    driving = started && r != 0;
+                    if (r != 0) { driveLane = 0; driving = started; } else if (driveLane == 0) driving = false;
                     break;
                 case "event":
                     string text = Json.Str(c, "json", null); // Node sends the event as JSON text for us
@@ -109,6 +127,55 @@ namespace MacShare
                     if (td_fence_apply(U32(c, "route"), U32(c, "mn"), Json.Num(c, "cx", 0), Json.Num(c, "cy", 0), out fx, out fy) == 1) inject(fx, fy);
                     break;
                 case "done": td_done(U32(c, "es")); break;
+                default: throw new Exception("unknown lane op " + op);
+            }
+        }
+
+        // Multi-device: that device's lane (#273).
+        static void HandleLane(uint lid, string op, Dictionary<string, object> c)
+        {
+            switch (op)
+            {
+                case "bind":
+                    ushort port = td_lane_bind(lid);
+                    if (port == 0) throw new Exception("no lane socket");
+                    c["port"] = (int)port;
+                    break;
+                case "start":
+                    string key = Json.Str(c, "key", null), ip = Json.Str(c, "ip", null);
+                    if (key == null || ip == null) throw new Exception("bad lane start");
+                    int role = Json.Str(c, "role", "") == "host" ? 0 : 1;
+                    double p = Json.Num(c, "port", 0);
+                    bool ok = td_lane_start(lid, role, key, ip, (ushort)(p > 0 && p < 65536 ? p : 0), callback, new IntPtr(lid)) == 1;
+                    if (ok) laneStarted.Add(lid); else laneStarted.Remove(lid);
+                    if (driveLane == lid) driving = false;
+                    if (!ok) throw new Exception("lane start failed");
+                    break;
+                case "stop":
+                case "close":
+                    if (op == "close") td_lane_close(lid); else td_lane_stop(lid);
+                    laneStarted.Remove(lid);
+                    if (driveLane == lid) { driving = false; driveLane = 0; }
+                    break;
+                case "active": td_lane_active(lid, Json.Bool(c, "on", false) ? 1 : 0); break;
+                case "route":
+                    uint r = U32(c, "route");
+                    td_lane_drive_reset(lid, r);
+                    if (r != 0) { driveLane = lid; driving = laneStarted.Contains(lid); } else if (driveLane == lid) driving = false;
+                    break;
+                case "event":
+                    string text = Json.Str(c, "json", null);
+                    if (text == null) break;
+                    byte[] b = Encoding.UTF8.GetBytes(text);
+                    td_lane_send_event(lid, b, (UIntPtr)b.Length, U32(c, "es"));
+                    break;
+                case "driven": td_lane_driven(lid, U32(c, "route"), Json.Num(c, "speed", 1)); break;
+                case "hold": td_lane_hold(lid, Json.Bool(c, "on", false) ? 1 : 0); break;
+                case "fence":
+                    double fx, fy;
+                    if (td_lane_fence_apply(lid, U32(c, "route"), U32(c, "mn"), Json.Num(c, "cx", 0), Json.Num(c, "cy", 0), out fx, out fy) == 1) inject(fx, fy);
+                    break;
+                case "done": td_lane_done(lid, U32(c, "es")); break;
                 default: throw new Exception("unknown lane op " + op);
             }
         }
@@ -154,6 +221,7 @@ namespace MacShare
         {
             try
             {
+                long lane = ctx.ToInt64(); // Multi-device: the lane id; 0 for the one-to-one lane, whose events stay as they were
                 switch (kind)
                 {
                     case TD_MOVE:
@@ -169,16 +237,19 @@ namespace MacShare
                         Dictionary<string, object> ev = new Dictionary<string, object>();
                         ev["event"] = "laneEv";
                         ev["msg"] = msg;
+                        if (lane > 0) ev["lane"] = (double)lane;
                         emit(ev);
                         break;
                     case TD_UP:
                         Dictionary<string, object> up = new Dictionary<string, object>();
                         up["event"] = "lane"; up["up"] = true; up["rtt"] = dx;
+                        if (lane > 0) up["lane"] = (double)lane;
                         emit(up);
                         break;
                     case TD_DOWN:
                         Dictionary<string, object> down = new Dictionary<string, object>();
                         down["event"] = "lane"; down["up"] = false;
+                        if (lane > 0) down["lane"] = (double)lane;
                         emit(down);
                         break;
                 }

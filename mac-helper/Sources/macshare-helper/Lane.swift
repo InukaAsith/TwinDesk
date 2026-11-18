@@ -5,6 +5,8 @@
 // lane's moves are injected here (deduplicated, speed applied, after the event they wait for); its
 // events go to Node as {"event":"laneEv"} and come back as `inject` in order.
 // Command `lane {op: bind | start | stop | active | route | event | driven | hold | fence | done}`.
+// With `lane: N` (N > 0, Multi-device, #273): that device's own lane (td_lane_*), `close` too, and its
+// events say `lane: N`. Without it, lane 0 exactly as before (the one-to-one app).
 // Built only when build.sh found cargo (-D TDFAST); without it, `lane` is an unknown command and
 // Node keeps its own lane (shared/inputlane.js), which speaks the same wire.
 #if TDFAST
@@ -17,11 +19,16 @@ final class NativeLane {
   private(set) var driving = false
   private var started = false
 
+  /// The lane the tap's moves go on (route > 0 on it last), for the driving flag.
+  private var driveLane: UInt32 = 0
+
   func handle(_ msg: [String: Any], id: Any?) {
     let op = msg["op"] as? String ?? ""
     let num = { (k: String) -> Double in (msg[k] as? NSNumber)?.doubleValue ?? 0 }
     let u32 = { (k: String) -> UInt32 in UInt32(max(0, min(Double(UInt32.max), num(k).rounded()))) }
     let on = { (msg["on"] as? Bool) == true ? Int32(1) : Int32(0) }
+    let lid = u32("lane")
+    if lid > 0 { return handleLane(lid, op, msg, id, num: num, u32: u32, on: on) }
     switch op {
     case "bind":
       let port = td_bind()
@@ -32,18 +39,18 @@ final class NativeLane {
       let role: Int32 = (msg["role"] as? String) == "host" ? 0 : 1
       let ok = td_start(role, key, ip, UInt16(clamping: Int(num("port"))), laneCallback, nil)
       started = ok == 1
-      driving = false
+      if driveLane == 0 { driving = false }
       reply(id, ["ok": started])
     case "stop":
       td_stop()
       started = false
-      driving = false
+      if driveLane == 0 { driving = false }
     case "active":
       td_active(on())
     case "route":
       let r = u32("route")
       td_drive_reset(r)
-      driving = started && r != 0
+      if r != 0 { driveLane = 0; driving = started } else if driveLane == 0 { driving = false }
     case "event":
       guard let m = msg["msg"] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: m) else { return }
       let es = u32("es")
@@ -59,6 +66,53 @@ final class NativeLane {
       }
     case "done":
       td_done(u32("es"))
+    default:
+      replyError(id, "unknown lane op \(op)")
+    }
+  }
+
+  /// Multi-device: one lane per device (#273).
+  private var laneStarted = Set<UInt32>()
+
+  private func handleLane(_ lid: UInt32, _ op: String, _ msg: [String: Any], _ id: Any?,
+                          num: (String) -> Double, u32: (String) -> UInt32, on: () -> Int32) {
+    switch op {
+    case "bind":
+      let port = td_lane_bind(lid)
+      if port == 0 { return replyError(id, "no lane socket") }
+      reply(id, ["port": Int(port), "lane": Int(lid)])
+    case "start":
+      guard let key = msg["key"] as? String, let ip = msg["ip"] as? String else { return replyError(id, "bad lane start") }
+      let role: Int32 = (msg["role"] as? String) == "host" ? 0 : 1
+      let ok = td_lane_start(lid, role, key, ip, UInt16(clamping: Int(num("port"))), laneCallback, UnsafeMutableRawPointer(bitPattern: UInt(lid)))
+      if ok == 1 { laneStarted.insert(lid) } else { laneStarted.remove(lid) }
+      if driveLane == lid { driving = false }
+      reply(id, ["ok": ok == 1])
+    case "stop", "close":
+      if op == "close" { td_lane_close(lid) } else { td_lane_stop(lid) }
+      laneStarted.remove(lid)
+      if driveLane == lid { driving = false; driveLane = 0 }
+    case "active":
+      td_lane_active(lid, on())
+    case "route":
+      let r = u32("route")
+      td_lane_drive_reset(lid, r)
+      if r != 0 { driveLane = lid; driving = laneStarted.contains(lid) } else if driveLane == lid { driving = false }
+    case "event":
+      guard let m = msg["msg"] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: m) else { return }
+      let es = u32("es")
+      data.withUnsafeBytes { p in td_lane_send_event(lid, p.bindMemory(to: UInt8.self).baseAddress, data.count, es) }
+    case "driven":
+      td_lane_driven(lid, u32("route"), num("speed"))
+    case "hold":
+      td_lane_hold(lid, on())
+    case "fence":
+      var dx = 0.0, dy = 0.0
+      if td_lane_fence_apply(lid, u32("route"), u32("mn"), num("cx"), num("cy"), &dx, &dy) == 1 {
+        injector.moveRel(dx, dy)
+      }
+    case "done":
+      td_lane_done(lid, u32("es"))
     default:
       replyError(id, "unknown lane op \(op)")
     }
@@ -111,7 +165,10 @@ private func drainMoves() {
 private let drainItem: @convention(block) () -> Void = { drainMoves() }
 
 /// The lane's thread.
-private let laneCallback: td_callback = { _, kind, dx, dy, json, len in
+private let laneCallback: td_callback = { ctx, kind, dx, dy, json, len in
+  // ctx: the lane id (Multi-device); nil for lane 0, whose events stay as they always were.
+  let lane = Int(bitPattern: ctx)
+  let tag: [String: Any] = lane > 0 ? ["lane": lane] : [:]
   switch kind {
   case Int32(TD_MOVE):
     pendLock.lock()
@@ -124,11 +181,11 @@ private let laneCallback: td_callback = { _, kind, dx, dy, json, len in
   case Int32(TD_EVENT):
     guard let json = json,
           let obj = try? JSONSerialization.jsonObject(with: Data(bytes: json, count: len)) as? [String: Any] else { return }
-    DispatchQueue.main.async { emit(["event": "laneEv", "msg": obj]) }
+    DispatchQueue.main.async { emit(["event": "laneEv", "msg": obj].merging(tag) { a, _ in a }) }
   case Int32(TD_UP):
-    emit(["event": "lane", "up": true, "rtt": dx])
+    emit(["event": "lane", "up": true, "rtt": dx].merging(tag) { a, _ in a })
   case Int32(TD_DOWN):
-    emit(["event": "lane", "up": false])
+    emit(["event": "lane", "up": false].merging(tag) { a, _ in a })
   default:
     break
   }

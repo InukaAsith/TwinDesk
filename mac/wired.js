@@ -78,6 +78,12 @@ class Wired extends EventEmitter {
     return typeof nonce === 'string' && nonce.length > 0 && [...this.plugged.values()].some((p) => p.nonce === nonce);
   }
 
+  // This phone's USB serial while it's on a cable here, whichever way its session runs (Internet
+  // over USB, shared/tether.js), or null.
+  cableSerial(deviceId) {
+    return deviceId ? this._serialFor(deviceId) : null;
+  }
+
   // The USB serial this phone is on, or null: known from phone.wired, else the only phone on a
   // cable here that isn't known as another.
   _serialFor(deviceId) {

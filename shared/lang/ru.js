@@ -2355,4 +2355,12 @@
   "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "Указатель в реальном размере, без рамки. В удалённом рабочем столе указатель не виден",
   "The pointer at its real size; Windows 10 draws a yellow border around the screen": "Указатель в реальном размере; Windows 10 рисует жёлтую рамку вокруг экрана",
   "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Дублирование рабочего стола в Windows 10, Windows Graphics Capture в Windows 11",
+  "Waiting for the cable": "Ждём кабель",
+  "Internet over USB": "Интернет через USB",
+  "The phone uses this computer’s internet through the USB cable, as a VPN there. Needs USB debugging. It comes back by itself when the phone is plugged in again.": "Телефон пользуется интернетом этого компьютера через USB-кабель (как VPN на телефоне). Нужна отладка по USB. Включается снова сама, когда телефон подключат опять.",
+  "{down} down, {up} up through this computer": "{down} получено, {up} отправлено через этот компьютер",
+  "Plug the phone into this computer with USB debugging on.": "Подключите телефон к этому компьютеру кабелем с включённой отладкой по USB.",
+  "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Нажмите «Разрешить» в уведомлении TwinDesk на телефоне, затем подтвердите запрос VPN от Android.",
+  "It stopped.": "Остановлено.",
+  "Starting on the phone…": "Запуск на телефоне…",
 });

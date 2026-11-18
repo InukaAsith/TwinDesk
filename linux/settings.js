@@ -234,6 +234,7 @@ function normalize(s) {
       callPause: bool(hub.callPause, false), // pause what plays here during a call (shared/callpause.js)
       // Shared folders (shared/foldershare.js), both ways, off until switched on.
       shareMount: bool(hub.shareMount, false), shareServe: bool(hub.shareServe, false), shareFolder: typeof hub.shareFolder === 'string' ? hub.shareFolder.slice(0, 1000) : '',
+      tether: bool(hub.tether, false), // Internet over USB (shared/tether.js)
     },
     macApps: { on: bool(mca.on, false) }, // The other computer's apps open here (pair.sync 'apps' in) // The Mac may open this PC's apps (it shows them only if it accepts)
     // Setup screen: shown once. done: everything was ready, or 'Skip for now' was pressed; after that

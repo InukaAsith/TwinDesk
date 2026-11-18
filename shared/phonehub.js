@@ -10,6 +10,7 @@
 // btSettings(): opens this computer's Bluetooth settings, where the phone is paired for that.
 // send(paths, batch): files to the phone (the file sender's sendBatch); choose(): files picked here.
 // share: shared folders' options (foldershare.js), when this computer has them.
+// tether: Internet over USB's options (tether.js: adb, cableSerial), when this computer has them.
 // shareSheet(paths, title): the system's Share for files here (the Mac's share menu, Windows' Share
 // through the helper); none on Linux. Photos' Copy and Share use the picture the viewer shows.
 //
@@ -62,7 +63,7 @@ const PAIR_POLL_MS = 3000;
 class PhoneHub extends EventEmitter {
   // audioLimit: what this computer can't do with the calls' sound, said under its switch (Windows).
   // audioStore: the Microsoft Store's build, which has no calls' sound (Calls says so instead).
-  constructor({ server, getSettings, save, audio, audioLimit, audioStore, btSettings, send, choose, share, shareSheet }) {
+  constructor({ server, getSettings, save, audio, audioLimit, audioStore, btSettings, send, choose, share, shareSheet, tether }) {
     super();
     Object.assign(this, { server, getSettings, save, makeAudio: audio || null, audioLimit: audioLimit || '', audioStore: !!audioStore, btSettings: btSettings || null, sendFiles: send || null, choose: choose || null, shareSheet: shareSheet || null });
     this.pairTimer = null; // looking for the phone's pairing (watchPair)
@@ -70,6 +71,11 @@ class PhoneHub extends EventEmitter {
     if (share) {
       this.share = new (require('./foldershare.js').FolderShare)(this, share);
       this.share.on('change', () => this.emit('change'));
+    }
+    this.tether = null;
+    if (tether && tether.adb) {
+      this.tether = new (require('./tether.js').Tether)(this, tether);
+      this.tether.on('change', () => this.emit('change'));
     }
     this.state = null; // hub.state: the phone's permissions (null: no phone, or one too old to know these)
     this.call = null; // {state: 'ringing'|'offhook', number, name, photo, dir, since}
@@ -146,12 +152,14 @@ class PhoneHub extends EventEmitter {
     this.policy();
     this.applyAudio();
     if (this.share) this.share.started();
+    if (this.tether) this.tether.started();
     this.emit('change');
   }
 
   stopped() {
     this.emit('unasked'); // Stop: the Save's files may no longer arrive on this session
     if (this.share) this.share.stopped();
+    if (this.tether) this.tether.stopped();
     const had = this.call;
     this.state = null;
     this.call = null;
@@ -208,6 +216,8 @@ class PhoneHub extends EventEmitter {
         return this.callAct(String(r.a || ''), r);
       case 'share':
         return this.share && this.share.act(String(r.a || ''), r);
+      case 'tether': // Internet over USB: {a: 'set', on}
+        return this.tether && this.tether.act(String(r.a || ''), r);
       case 'copyImage':
         return this.copyImage(r.data);
       case 'shareImage':
@@ -516,6 +526,7 @@ class PhoneHub extends EventEmitter {
       audio: this.audio ? this.audio.view : null, canAudio: !!this.makeAudio, audioLimit: this.audioLimit, audioStore: this.audioStore,
       btSettings: !!this.btSettings, pairWatch: !!this.pairTimer, // pairing for the calls' sound: Open Bluetooth settings, looking for the phone
       share: this.share ? this.share.view : null,
+      tether: this.tether ? this.tether.view : null, // Internet over USB (null: not on this computer)
       shareSheet: !!this.shareSheet, // Photos' Share (none on Linux)
     };
   }

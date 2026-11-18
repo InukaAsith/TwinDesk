@@ -93,6 +93,7 @@ UI.tab({
 
     // ---- a connected phone's wireless debugging (shared/ui-adb.js) and pairing by QR code (shared/ui-qrpair.js) ----
     const adb = UI.adbCard();
+    const tether = UI.tetherCard ? UI.tetherCard() : null; // Internet over USB (shared/ui-adb.js)
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null;
 
     const pairedList = el('div');
@@ -109,6 +110,7 @@ UI.tab({
       hero,
       returnCard,
       adb.el,
+      ...(tether ? [tether.el] : []),
       UI.card(t('Paired'), [pairedList]),
       ...(webCard ? [webCard.el] : []),
     );
@@ -227,6 +229,9 @@ UI.tab({
 
 
       adb.update(s);
+
+
+      if (tether) tether.update(s);
       if (qrPair) qrPair.update(s);
 
       // this computer

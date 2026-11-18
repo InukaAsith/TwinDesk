@@ -2356,4 +2356,12 @@
   "The pointer at its real size, no border. Over Remote Desktop it shows no pointer": "The pointer at its real size, no border. Over Remote Desktop it shows no pointer",
   "The pointer at its real size; Windows 10 draws a yellow border around the screen": "The pointer at its real size; Windows 10 draws a yellow border around the screen",
   "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11": "Desktop Duplication on Windows 10, Windows Graphics Capture on Windows 11",
+  "Waiting for the cable": "Waiting for the cable",
+  "Internet over USB": "Internet over USB",
+  "The phone uses this computer’s internet through the USB cable, as a VPN there. Needs USB debugging. It comes back by itself when the phone is plugged in again.": "The phone uses this computer’s internet through the USB cable, as a VPN there. Needs USB debugging. It comes back by itself when the phone is plugged in again.",
+  "{down} down, {up} up through this computer": "{down} down, {up} up through this computer",
+  "Plug the phone into this computer with USB debugging on.": "Plug the phone into this computer with USB debugging on.",
+  "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.",
+  "It stopped.": "It stopped.",
+  "Starting on the phone…": "Starting on the phone…",
 });

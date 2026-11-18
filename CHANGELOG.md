@@ -13,6 +13,13 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **Internet over USB** (Connection page, Android, off until switched on): the phone on the cable
+  uses this computer's internet, through a VPN on the phone and USB debugging, with nothing else to
+  install. It comes back by itself when the phone is plugged in again; Stop in the phone's
+  notification switches it off. IPv4 only; DNS goes to this computer's own DNS server (#277).
+- **Multi-device uses the helper's fast input lane for every device**, as one-to-one already did:
+  the pointer and keys to each computer go from the native helper, not through the app (#273, from
+  #274 by [@hughesyadaddy](https://github.com/hughesyadaddy)). An older helper keeps the old lane.
 - **Clipboard › While away** (on every computer, Multi-device and Android; on by default): copies
   made while the other device is away wait (in memory, up to 50) and go to its Recent when it's back,
   not onto its clipboard. **Put the latest on the clipboard** (off) puts the newest one there.

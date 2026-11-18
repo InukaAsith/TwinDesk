@@ -257,6 +257,22 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.TwinDesk" />
 
+        <!-- Internet over USB (Tether.kt): the computer's internet through the cable, a VPN to its relay -->
+        <service
+            android:name=".TetherVpn"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name=".TetherActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TwinDesk.Invisible"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
         <!-- This phone's sound on the computer without wireless debugging (Sound.kt) -->
         <service
             android:name=".SoundService"

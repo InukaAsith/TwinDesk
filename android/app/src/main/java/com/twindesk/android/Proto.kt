@@ -172,6 +172,9 @@ object Proto {
         const val SHARE_OFFER = "share.offer" // phone->computer {on, port, secret, name}: our shared folder over WebDAV (FolderShare.kt)
         const val SHARE_HOST = "share.host" // computer->phone {on, port, token, name}: its shared folder, in the Files app (PcShareProvider.kt)
         const val SHARE_SET = "share.set" // phone->computer {serve}: the computer's folder for this phone on or off (its setting)
+        const val TETHER = "tether" // computer->phone {on, port, token}: Internet over USB, its relay on our 127.0.0.1:<port> (Tether.kt)
+        const val TETHER_STATE = "tether.state" // phone->computer {can, state, why}
+        const val TETHER_SET = "tether.set" // phone->computer {on: false}: Stop here, or the VPN permission refused
     }
 
     object E {
