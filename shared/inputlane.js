@@ -297,8 +297,50 @@ class InputLane extends EventEmitter {
     }, () => false);
   }
 
+  // ---- Multi-device (#273): a helper lane of this device's own, by id ----
+  // Bound now, used from the next session on: the swap happens when this lane's port is next handed
+  // out (helloField / offer), never while a hello or welcome with the old port is in flight. A helper
+  // that doesn't know numbered lanes (it doesn't answer with `lane`) leaves this the JS lane.
+  useNativeLane(helper, id) {
+    if (this.native || this._natPending || this._natAsking || !id) return Promise.resolve(false);
+    if (laneOff() || process.env.TWINDESK_NO_TDFAST) return Promise.resolve(false);
+    if (!helper || typeof helper.request !== 'function') return Promise.resolve(false);
+    let asked;
+    try { asked = Promise.resolve(helper.request('lane', { op: 'bind', lane: id })); } catch (_) { return Promise.resolve(false); }
+    this._natAsking = true;
+    return asked.then((r) => {
+      this._natAsking = false;
+      const port = r && Number(r.port);
+      if (!port || !r || Number(r.lane) !== id) return false; // an older helper: lane 0's port, not ours
+      if (this.closed || this.native) { try { helper.send('lane', { op: 'close', lane: id }); } catch (_) { /* gone */ } return false; }
+      this._natPending = { helper, id, port };
+      if (!this.keys && !this._given) this._swapNative(); // nothing handed out yet: at once
+      return true;
+    }, () => { this._natAsking = false; return false; });
+  }
+
+  _swapNative() {
+    const p = this._natPending;
+    if (!p || this.keys || this.native) return;
+    this._natPending = null;
+    this.nat = p.helper;
+    this.natLane = p.id;
+    this.native = true;
+    if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
+    this.sock = null;
+    this.port = p.port;
+    this._binding = Promise.resolve(p.port);
+    if (!this._natHooked) {
+      this._natHooked = true;
+      p.helper.on('event', (name, ev) => this._onNative(name, ev));
+      p.helper.on('exit', () => { this._natPending = null; this._nativeLost(); });
+    }
+    console.log(`[lane] native lane ${p.id} (the helper's), port ${p.port}`);
+  }
+
   _onNative(name, ev) {
     if (!this.native || !this.keys) return;
+    if (((ev && ev.lane) || 0) !== (this.natLane || 0)) return; // another device's lane, or lane 0
     if (name === 'lane') {
       if (typeof ev.rtt === 'number' && ev.rtt >= 0) this.rttMs = ev.rtt;
       if (!!ev.up === this.up) return;
@@ -313,7 +355,6 @@ class InputLane extends EventEmitter {
   // The helper stopped: its lane is gone with it. This session goes on the WSS; the next one binds again.
   _nativeLost() {
     if (!this.native) return;
-    const helper = this.nat;
     this.native = false;
     this.nat = null;
     this.port = 0;
@@ -327,7 +368,7 @@ class InputLane extends EventEmitter {
 
   // Native: what the helper does for the side that drives / is driven (shared/inputlane.js's glue).
   nativeSend(op, args = {}) {
-    if (this.native && this.nat) this.nat.send('lane', { op, ...args });
+    if (this.native && this.nat) this.nat.send('lane', { op, ...args, ...(this.natLane ? { lane: this.natLane } : {}) });
   }
 
   // The socket, dual-stack where it can be. Resolves the port (0: no lane on this computer).
@@ -372,7 +413,9 @@ class InputLane extends EventEmitter {
 
   // hello's field (the guest), or null: no lane.
   helloField() {
+    this._swapNative();
     if (laneOff() || !this.port) return null;
+    this._given = true;
     return { v: 1, port: this.port };
   }
 
@@ -380,7 +423,9 @@ class InputLane extends EventEmitter {
   // welcome's field, or null.
   offer(il, ip) {
     this.stop();
+    this._swapNative();
     if (laneOff() || !this.port || !il || il.v !== 1) return null;
+    this._given = true;
     const port = Number(il.port);
     if (!Number.isInteger(port) || port < 1 || port > 65535 || !this._target(ip)) return null;
     const key = crypto.randomBytes(32).toString('hex');
@@ -408,7 +453,7 @@ class InputLane extends EventEmitter {
       this.peer = { address: ip, port };
       this.es = 0;
       this.rttMs = null;
-      this.nat.send('lane', { op: 'start', role: this.role, key: keyHex, ip: String(ip).replace(/^::ffff:/, ''), port });
+      this.nat.send('lane', { op: 'start', role: this.role, key: keyHex, ip: String(ip).replace(/^::ffff:/, ''), port, ...(this.natLane ? { lane: this.natLane } : {}) });
       this.emit('start');
       return;
     }
@@ -587,6 +632,14 @@ class InputLane extends EventEmitter {
 
   close() {
     this.stop();
+    this.closed = true;
+    // A device lane of the helper's (Multi-device) goes with it: its socket and thread there.
+    for (const l of [this.native && this.natLane ? { helper: this.nat, id: this.natLane } : null, this._natPending]) {
+      if (l) try { l.helper.send('lane', { op: 'close', lane: l.id }); } catch (_) { /* gone */ }
+    }
+    this._natPending = null;
+    if (this.native && this.natLane) { this.native = false; this.nat = null; this.natLane = 0; }
+    meshLanes.delete(this);
     if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
     this.sock = null;
     this.port = 0;
@@ -700,13 +753,18 @@ class LaneDrive {
     this.t.reset(route);
     this.natTotals = null;
     const lane = this.getLane();
+    // Multi-device: the device driven before may be another one; its lane stops taking the tap's moves.
+    if (this.routed && this.routed !== lane && this.routed.native) this.routed.nativeSend('route', { route: 0 });
+    this.routed = lane && lane.native ? lane : null;
     if (lane && lane.native) lane.nativeSend('route', { route }); // the helper's tap sends the moves now
   }
 
-  // Not driving any more: the helper's tap stops sending moves on the lane.
+  // Not driving any more: the helper's tap stops sending moves on the lane (the one it was given,
+  // even when the partner changed since).
   idle() {
-    const lane = this.getLane();
+    const lane = this.routed || this.getLane();
     if (lane && lane.native) lane.nativeSend('route', { route: 0 });
+    this.routed = null;
     this.natTotals = null;
   }
 
@@ -877,12 +935,31 @@ function peerIp(ws, fallback) {
 
 // ---- the multi-device apps (*/mesh/): a lane of its own for each device's session ----
 
+// The multi-device apps' lanes, each with an id of its own for the helper's native lane (#273):
+// kvm.js calls meshNative(helper) when the helper is ready (again), and every lane, made before or
+// after, asks for its own. An older helper says no and they stay JS lanes, as before.
+const meshLanes = new Set();
+let meshHelper = null;
+let nextLaneId = 1;
+
+function meshLane(l) {
+  l.laneId = nextLaneId++;
+  meshLanes.add(l);
+  if (meshHelper) l.useNativeLane(meshHelper, l.laneId);
+  return l;
+}
+
+function meshNative(helper) {
+  meshHelper = helper;
+  for (const l of meshLanes) l.useNativeLane(helper, l.laneId);
+}
+
 // The guest side: one lane per Link (link.js), bound when the link is made; null with the kill switch.
 function linkLane() {
   if (laneOff()) return null;
   const l = new InputLane();
   l.bind();
-  return l;
+  return meshLane(l);
 }
 
 // The host side (server.js): a bound lane is always ready, so welcome can carry its port at once.
@@ -897,6 +974,7 @@ class LanePool {
     if (laneOff() || this.spare) return;
     this.spare = new InputLane();
     this.spare.bind();
+    meshLane(this.spare);
   }
 
   // welcome's `il` for ctx (its hello's `il` as sent, the address it came from), or null.
@@ -949,6 +1027,8 @@ class LaneMesh {
       route: () => (this.o.partner() === id ? this.o.route() : 0),
       move: (dx, dy) => this.o.move(dx, dy, id),
       deliver: (m) => this.o.deliver(m, id),
+      native: () => (l.native ? l : null), // the helper's lane for this device (#273): it injects the moves itself
+      ...(this.o.speed ? { speed: this.o.speed } : {}),
     });
     const entry = { lane: l, driven: d };
     this.lanes.set(id, entry);
@@ -997,6 +1077,6 @@ class LaneMesh {
 
 module.exports = {
   InputLane, MoveTotals, MoveApply, EventOrder, LaneDrive, LaneDriven, ReplayWindow,
-  LanePool, LaneMesh, linkLane, peerIp, LANE_TYPES,
+  LanePool, LaneMesh, linkLane, meshNative, peerIp, LANE_TYPES,
   seal, open, deriveKeys, encodeMove, decodeMove, encodeEvents, decodeEvents, laneOff, setLaneProtocol, TYPE,
 };

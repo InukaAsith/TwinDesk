@@ -570,6 +570,7 @@ namespace MacShare
             if (cmd == "displays") reply["displays"] = c["displays"];
             if (cmd == "caps" && c.ContainsKey("on")) reply["on"] = c["on"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
+            if (cmd == "lane" && c.ContainsKey("port") && c.ContainsKey("lane")) reply["lane"] = c["lane"]; // a device lane (#273): an older helper never says it
             if (cmd == "usbWatch" && c.ContainsKey("present")) reply["present"] = c["present"];
             if (cmd == "wifiLowLatency" && c.ContainsKey("applied")) reply["applied"] = c["applied"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];

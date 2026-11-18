@@ -7,8 +7,9 @@
 // td_move runs on the event tap's thread: a short lock and a send, never a wait.
 
 use crate::wire::*;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -87,6 +88,7 @@ pub struct Lane {
     epoch: Instant,
     pub sent: u64,
     pub received: u64,
+    closed: bool, // close_lane(): its thread ends and its socket goes
 }
 
 fn now_us(epoch: Instant) -> u64 {
@@ -98,7 +100,7 @@ impl Lane {
         let loss = std::env::var("TWINDESK_LANE_LOSS").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
         Lane {
             sock: None, sock4: None, v6: true, port: 0, active: false, sess: None, sink: None, loss,
-            rng: 0x9E3779B97F4A7C15 ^ (std::process::id() as u64), epoch: Instant::now(), sent: 0, received: 0,
+            rng: 0x9E3779B97F4A7C15 ^ (std::process::id() as u64), epoch: Instant::now(), sent: 0, received: 0, closed: false,
         }
     }
 
@@ -377,20 +379,30 @@ impl Session {
     }
 }
 
-// ---- the one lane of the process ----
+// ---- the lanes of the process ----
+// Lane 0 is the one-to-one app's (the API without an id). The multi-device apps make one per device
+// (its session's lane, #273), each with its own socket and thread. The tap's moves and fences go on
+// the lane that drives (drive_reset with a route): one at a time, as there's one pointer.
 
-static LANE: OnceLock<Mutex<Lane>> = OnceLock::new();
+type Shared = Arc<Mutex<Lane>>;
+static LANES: OnceLock<Mutex<HashMap<u32, Shared>>> = OnceLock::new();
+static DRIVE: AtomicU32 = AtomicU32::new(0);
 
-fn lane() -> &'static Mutex<Lane> {
-    LANE.get_or_init(|| Mutex::new(Lane::new()))
+fn lanes() -> &'static Mutex<HashMap<u32, Shared>> {
+    LANES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn with<R>(f: impl FnOnce(&mut Lane, &mut Vec<Out>) -> R) -> R {
+fn lane(id: u32) -> Shared {
+    let mut m = lanes().lock().unwrap_or_else(|e| e.into_inner());
+    m.entry(id).or_insert_with(|| Arc::new(Mutex::new(Lane::new()))).clone()
+}
+
+fn with_lane<R>(l: &Shared, f: impl FnOnce(&mut Lane, &mut Vec<Out>) -> R) -> R {
     let mut out = Vec::new();
     let (r, sink) = {
-        let mut l = lane().lock().unwrap_or_else(|e| e.into_inner());
-        let r = f(&mut l, &mut out);
-        (r, l.sink.clone())
+        let mut g = l.lock().unwrap_or_else(|e| e.into_inner());
+        let r = f(&mut g, &mut out);
+        (r, g.sink.clone())
     };
     if let Some(sink) = sink {
         for o in out {
@@ -398,6 +410,16 @@ fn with<R>(f: impl FnOnce(&mut Lane, &mut Vec<Out>) -> R) -> R {
         }
     }
     r
+}
+
+// A lane by id; one not bound (or closed already) answers as a lane with no session would, and
+// isn't made (lane 0 always is, as before).
+fn with<R>(id: u32, f: impl FnOnce(&mut Lane, &mut Vec<Out>) -> R) -> R {
+    let l = if id == 0 { Some(lane(0)) } else { lanes().lock().unwrap_or_else(|e| e.into_inner()).get(&id).cloned() };
+    match l {
+        Some(l) => with_lane(&l, f),
+        None => with_lane(&Arc::new(Mutex::new(Lane::new())), f),
+    }
 }
 
 // The lane's socket: dual-stack where it can be, IPv4 otherwise. On Windows, an IPv6-only socket and
@@ -445,12 +467,15 @@ fn tune(s: socket2::Socket, is6: bool) -> UdpSocket {
     s.into()
 }
 
-fn run(sock: Arc<UdpSocket>) {
+fn run(me: Shared, sock: Arc<UdpSocket>) {
     let mut buf = [0u8; 2048];
     let mut cur = FAST;
     loop {
         let got = sock.recv_from(&mut buf);
-        let next = with(|l, out| {
+        let next = with_lane(&me, |l, out| {
+            if l.closed {
+                return None;
+            }
             if let Ok((n, from)) = got {
                 if n <= MAX_PACKET {
                     l.packet(&buf[..n], from, out);
@@ -458,8 +483,9 @@ fn run(sock: Arc<UdpSocket>) {
             }
             let now = Instant::now();
             l.tick(now, out);
-            l.wait(now)
+            Some(l.wait(now))
         });
+        let next = match next { Some(n) => n, None => return }; // closed: the socket goes with this thread
         if next != cur && sock.set_read_timeout(Some(next)).is_ok() {
             cur = next;
         }
@@ -469,8 +495,9 @@ fn run(sock: Arc<UdpSocket>) {
 // ---- the API (ffi.rs wraps it for C) ----
 
 /// The socket (once, dual-stack where it can be) and its thread: the port, 0 when there's none.
-pub fn bind() -> u16 {
-    with(|l, _| {
+pub fn bind_lane(id: u32) -> u16 {
+    let me = lane(id);
+    with_lane(&me.clone(), |l, _| {
         if l.port != 0 {
             return l.port;
         }
@@ -480,23 +507,25 @@ pub fn bind() -> u16 {
         l.sock = Some(s.clone());
         l.v6 = v6;
         l.port = port;
-        std::thread::Builder::new().name("tdfast-lane".into()).spawn(move || run(s)).ok();
+        let m1 = me.clone();
+        std::thread::Builder::new().name("tdfast-lane".into()).spawn(move || run(m1, s)).ok();
         if let Some(s4) = s4 {
             let s4 = Arc::new(s4);
             l.sock4 = Some(s4.clone());
-            std::thread::Builder::new().name("tdfast-lane4".into()).spawn(move || run(s4)).ok();
+            let m2 = me.clone();
+            std::thread::Builder::new().name("tdfast-lane4".into()).spawn(move || run(m2, s4)).ok();
         }
         port
     })
 }
 
-pub fn set_sink(sink: Option<Sink>) {
-    with(|l, _| l.sink = sink.map(Arc::new));
+pub fn set_sink_lane(id: u32, sink: Option<Sink>) {
+    with(id, |l, _| l.sink = sink.map(Arc::new));
 }
 
 /// A session: role "host" | "guest", the welcome's key (64 hex), the peer's address. false: can't.
-pub fn start(role: &str, key_hex: &str, ip: &str, port: u16) -> bool {
-    with(|l, out| {
+pub fn start_lane(id: u32, role: &str, key_hex: &str, ip: &str, port: u16) -> bool {
+    with(id, |l, out| {
         let key = match hex32(key_hex) { Some(k) => k, None => return false };
         let addr = match l.target(ip) { Some(a) => a, None => return false };
         if l.sock.is_none() || port == 0 {
@@ -529,20 +558,20 @@ fn stop_in(l: &mut Lane, out: &mut Vec<Out>) {
 }
 
 /// The session ended: no keys, no pings; the socket stays for the next one.
-pub fn stop() {
-    with(|l, out| stop_in(l, out));
+pub fn stop_lane(id: u32) {
+    with(id, |l, out| stop_in(l, out));
 }
 
-pub fn is_up() -> bool {
-    with(|l, _| l.sess.as_ref().map_or(false, |s| s.up))
+pub fn is_up_lane(id: u32) -> bool {
+    with(id, |l, _| l.sess.as_ref().map_or(false, |s| s.up))
 }
 
-pub fn rtt_ms() -> f64 {
-    with(|l, _| l.sess.as_ref().map_or(-1.0, |s| s.rtt_ms))
+pub fn rtt_ms_lane(id: u32) -> f64 {
+    with(id, |l, _| l.sess.as_ref().map_or(-1.0, |s| s.rtt_ms))
 }
 
-pub fn active(on: bool) {
-    with(|l, _| {
+pub fn active_lane(id: u32, on: bool) {
+    with(id, |l, _| {
         if l.active == on {
             return;
         }
@@ -558,8 +587,11 @@ pub fn active(on: bool) {
 }
 
 /// Driving from this crossing (route 0: not driving).
-pub fn drive_reset(route: u32) {
-    with(|l, _| {
+pub fn drive_reset_lane(id: u32, route: u32) {
+    if route != 0 {
+        DRIVE.store(id, Ordering::SeqCst);
+    }
+    with(id, |l, _| {
         if let Some(s) = &mut l.sess {
             s.drive_route = route;
             s.mn = 0;
@@ -577,7 +609,7 @@ pub fn drive_reset(route: u32) {
 
 /// A move while driving: (sent on the lane, the totals). None: not driving on a lane (as always).
 pub fn move_by(dx: f64, dy: f64) -> Option<(bool, Move)> {
-    with(|l, _| {
+    with(DRIVE.load(Ordering::SeqCst), |l, _| {
         let now = Instant::now();
         let (up, m, flush_now) = {
             let s = l.sess.as_mut()?;
@@ -611,7 +643,7 @@ pub fn move_by(dx: f64, dy: f64) -> Option<(bool, Move)> {
 /// A click, key, wheel or gesture while driving: its event number and fence (where the moves took the
 /// pointer). None: no session.
 pub fn fence() -> Option<(u32, Move)> {
-    with(|l, _| {
+    with(DRIVE.load(Ordering::SeqCst), |l, _| {
         let s = l.sess.as_mut()?;
         s.es += 1;
         Some((s.es, Move { route: s.drive_route, mn: s.mn, es: s.es, cx: s.cx, cy: s.cy }))
@@ -619,8 +651,8 @@ pub fn fence() -> Option<(u32, Move)> {
 }
 
 /// An event (its JSON without es; es from fence()) on the lane, with the few before it.
-pub fn send_event(json: &[u8], es: u32) {
-    with(|l, _| {
+pub fn send_event_lane(id: u32, json: &[u8], es: u32) {
+    with(id, |l, _| {
         if json.len() > MAX_PACKET - HDR - TAG - 7 {
             return; // too big: its WSS copy is enough
         }
@@ -643,8 +675,8 @@ pub fn send_event(json: &[u8], es: u32) {
 }
 
 /// Driven by this crossing (kvm.take), with this speed; route 0: not driven.
-pub fn driven(route: u32, speed: f64) {
-    with(|l, out| {
+pub fn driven_lane(id: u32, route: u32, speed: f64) {
+    with(id, |l, out| {
         if let Some(s) = &mut l.sess {
             s.d_route = route;
             s.speed = if speed.is_finite() && speed > 0.0 { speed } else { 1.0 };
@@ -665,8 +697,8 @@ pub fn driven(route: u32, speed: f64) {
 
 /// Hold the moves (a drag from the other computer starts where the pointer came in): summed, then
 /// injected as one when it ends.
-pub fn hold(on: bool) {
-    with(|l, out| {
+pub fn hold_lane(id: u32, on: bool) {
+    with(id, |l, out| {
         if let Some(s) = &mut l.sess {
             s.hold = on;
             if !on && (s.held_d.0 != 0.0 || s.held_d.1 != 0.0) {
@@ -678,8 +710,8 @@ pub fn hold(on: bool) {
 }
 
 /// A fence (an event's, or a WSS k.mm's totals): the delta to inject first (speed applied), if any.
-pub fn fence_apply(route: u32, mn: u32, cx: f64, cy: f64) -> Option<(f64, f64)> {
-    with(|l, _| {
+pub fn fence_apply_lane(id: u32, route: u32, mn: u32, cx: f64, cy: f64) -> Option<(f64, f64)> {
+    with(id, |l, _| {
         let s = l.sess.as_mut()?;
         let d = s.take(Move { route, mn, es: 0, cx, cy })?;
         if s.hold {
@@ -692,8 +724,8 @@ pub fn fence_apply(route: u32, mn: u32, cx: f64, cy: f64) -> Option<(f64, f64)> 
 }
 
 /// Every event up to es is through (after it was injected): a move that waited for it goes now.
-pub fn done(es: u32) {
-    with(|l, out| {
+pub fn done_lane(id: u32, es: u32) {
+    with(id, |l, out| {
         if let Some(s) = &mut l.sess {
             if es > s.done {
                 s.done = es;
@@ -708,6 +740,34 @@ pub fn done(es: u32) {
     })
 }
 
-pub fn counts() -> (u64, u64) {
-    with(|l, _| (l.sent, l.received))
+pub fn counts_lane(id: u32) -> (u64, u64) {
+    with(id, |l, _| (l.sent, l.received))
 }
+
+/// A multi-device lane is done with (its device went): the session stops, its thread ends within a
+/// second and its socket closes. Lane 0 keeps its socket (close() only stops it).
+pub fn close_lane(id: u32) {
+    let l = match lanes().lock().unwrap_or_else(|e| e.into_inner()).remove(&id) { Some(l) => l, None => return };
+    let _ = DRIVE.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+    with_lane(&l, |l, out| {
+        stop_in(l, out);
+        l.closed = true;
+        l.wake();
+    });
+}
+
+// Lane 0, the one-to-one app's: the API as it always was.
+pub fn bind() -> u16 { bind_lane(0) }
+pub fn set_sink(sink: Option<Sink>) { set_sink_lane(0, sink) }
+pub fn start(role: &str, key_hex: &str, ip: &str, port: u16) -> bool { start_lane(0, role, key_hex, ip, port) }
+pub fn stop() { stop_lane(0) }
+pub fn is_up() -> bool { is_up_lane(0) }
+pub fn rtt_ms() -> f64 { rtt_ms_lane(0) }
+pub fn active(on: bool) { active_lane(0, on) }
+pub fn drive_reset(route: u32) { drive_reset_lane(0, route) }
+pub fn send_event(json: &[u8], es: u32) { send_event_lane(0, json, es) }
+pub fn driven(route: u32, speed: f64) { driven_lane(0, route, speed) }
+pub fn hold(on: bool) { hold_lane(0, on) }
+pub fn fence_apply(route: u32, mn: u32, cx: f64, cy: f64) -> Option<(f64, f64)> { fence_apply_lane(0, route, mn, cx, cy) }
+pub fn done(es: u32) { done_lane(0, es) }
+pub fn counts() -> (u64, u64) { counts_lane(0) }

@@ -18,7 +18,7 @@ const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
 const { KvmMoves } = require('../../shared/kvm-moves.js');
-const { LaneMesh, LANE_TYPES } = require('../../shared/inputlane.js');
+const { LaneMesh, LANE_TYPES, meshNative } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
 const { pairFor } = require('../../shared/pairfor.js');
@@ -74,6 +74,7 @@ class Kvm extends EventEmitter {
       route: () => this.peerRoute,
       move: (dx, dy, id) => this._laneMove(dx, dy, id),
       deliver: (m, id) => (m.t === P.T.K_GESTURE ? this._onGesture(m, id) : this._onK(m, id)),
+      speed: () => this.cfg.speed, // the helper's lane applies it to the moves it injects
     });
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
@@ -135,7 +136,8 @@ class Kvm extends EventEmitter {
     this.hub.on('selected', (id) => this._onSelected(id));
 
     setInterval(() => this._tick(), 250);
-    helper.on('ready', () => setTimeout(() => this.config(), 150));
+    helper.on('ready', () => { meshNative(helper); setTimeout(() => this.config(), 150); }); // each device's own helper lane (#273)
+    if (helper.running) meshNative(helper);
     helper.on('exit', () => {
       if (this.mode === 'driving') this.goHome('The helper stopped');
       else if (this.mode === 'driven') this._drivenHome('The helper stopped');
@@ -456,6 +458,7 @@ class Kvm extends EventEmitter {
     const prev = this.mode;
     if (prev !== mode) console.log(`[kvm] ${prev} -> ${mode}${message ? ` (${message})` : ''}`);
     this.mode = mode;
+    if (prev === 'driving' && mode !== 'driving') this.lanes.drive.idle(); // the helper's lane: no more moves from the tap
     this.lanes.active(mode !== 'home'); // the partner's lane pinged more often
     // The partner link is busy while input is shared; idle at home.
     this._markBusy(mode === 'home' ? null : this.partner);
@@ -677,11 +680,13 @@ class Kvm extends EventEmitter {
         }
         break;
       case 'ev': {
-        if (this.mode !== 'driving' || !ev.ev) return;
+        if (!ev.ev) return;
         const e = ev.ev;
+        if (this.mode !== 'driving') return this.lanes.drive.skip(e, this._driveWss); // numbered by the helper's lane: its number goes all the same
         if (this.local && this.local.drives(this.partner) && this._lockKeyHere(e)) return; // a phone has no lock key: ours counts there
-        if (this.fileClip && this.fileClip.intercept(e)) return; // copy/paste shortcut: done over there
+        if (this.fileClip && this.fileClip.intercept(e)) return this.lanes.drive.skip(e, this._driveWss); // copy/paste shortcut: done over there
         if (e.t === P.T.K_MOVE) {
+          this.lanes.drive.nativeTotals(e); // the helper's lane is down: its totals go with the move
           this.moves.add(e.dx, e.dy);
           return;
         }

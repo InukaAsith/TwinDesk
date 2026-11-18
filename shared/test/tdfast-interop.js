@@ -131,6 +131,60 @@ async function pairUp(loss) {
     await until(() => !js.up, 'down after 3 intervals', 5000);
     js.close();
   }
+  // 3. Multi-device (#273): one native process, a lane per device (td_lane_*), each with its own
+  // socket, key and JS peer. The pointer drives one at a time; a lane closed goes alone.
+  {
+    process.env.TWINDESK_LANE_LOSS = '0';
+    delete require.cache[require.resolve('../inputlane.js')];
+    const L = require('../inputlane.js');
+    const rust = rustPeer(0);
+    const devs = [];
+    for (const id of [1, 2]) {
+      const js = new L.InputLane();
+      await js.bind();
+      rust.cmd({ op: 'bind', lane: id });
+      await until(() => rust.got.find((x) => x.ev === 'port' && x.lane === id), 'lane ' + id + ' port');
+      const port = rust.got.find((x) => x.ev === 'port' && x.lane === id).port;
+      assert.ok(port > 0);
+      const offer = js.offer({ v: 1, port }, '127.0.0.1');
+      rust.cmd({ op: 'start', lane: id, role: 'guest', key: offer.key, ip: '127.0.0.1', port: offer.port });
+      await until(() => js.up && rust.got.some((x) => x.ev === 'up' && x.lane === id), 'lane ' + id + ' up');
+      devs.push({ id, js, port });
+    }
+    assert.notStrictEqual(devs[0].port, devs[1].port, 'a socket each');
+    // Drive device 2, then device 1: moves go only to the lane that drives.
+    const got = { 1: [0, 0], 2: [0, 0] };
+    for (const d of devs) {
+      const ma = new L.MoveApply();
+      ma.reset(d.id === 1 ? 11 : 22);
+      d.js.on('move', (s) => { const m = ma.take(s); if (m) { got[d.id][0] += m.dx; got[d.id][1] += m.dy; } });
+    }
+    rust.cmd({ op: 'drive', lane: 2, route: 22 });
+    for (let i = 0; i < 50; i++) rust.cmd({ op: 'move', dx: 2, dy: 1 });
+    await until(() => got[2][0] === 100 && got[2][1] === 50, 'device 2 gets the moves');
+    rust.cmd({ op: 'drive', lane: 2, route: 0 });
+    rust.cmd({ op: 'drive', lane: 1, route: 11 });
+    for (let i = 0; i < 30; i++) rust.cmd({ op: 'move', dx: -1, dy: 3 });
+    await until(() => got[1][0] === -30 && got[1][1] === 90, 'then device 1');
+    assert.deepStrictEqual(got[2], [100, 50], 'device 2 got nothing more');
+    // Driven by device 2 on its lane, while device 1 is untouched.
+    rust.cmd({ op: 'driven', lane: 2, route: 5, speed: 1 });
+    await sleep(20);
+    const t = new L.MoveTotals();
+    t.reset(5);
+    devs[1].js.sendMove(t.add(7, -2));
+    await until(() => rust.got.some((x) => x.ev === 'move' && x.lane === 2 && x.dx === 7 && x.dy === -2), 'injected from lane 2');
+    // Close lane 1 (its device went): lane 2 still carries.
+    rust.cmd({ op: 'close', lane: 1 });
+    await until(() => !devs[0].js.up, 'lane 1 down after close', 5000);
+    devs[1].js.sendMove(t.add(1, 1));
+    await until(() => rust.got.some((x) => x.ev === 'move' && x.lane === 2 && x.dx === 1 && x.dy === 1), 'lane 2 still up');
+    // The one-to-one lane (no id) is there as always, beside them.
+    rust.cmd({ op: 'bind' });
+    await until(() => rust.got.some((x) => x.ev === 'port' && !x.lane), 'lane 0 port');
+    rust.p.kill();
+    for (const d of devs) d.js.close();
+  }
   console.log('tdfast-interop: ok');
   process.exit(0);
 })().catch((e) => {
