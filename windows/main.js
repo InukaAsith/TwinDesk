@@ -230,7 +230,7 @@ function start() {
   require('../shared/tailnet.js').use(() => !(settings && settings.net && settings.net.tailscale === false)); // General › Tailscale (#161)
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
 
-  discovery = new Discovery(device);
+  discovery = new Discovery({ ...device, rc: true }); // a paired Android may come back by itself after a long drop (#266)
   discovery.on('change', pushState);
   discovery.on('invite', (d) => {
     // Connect on this computer in our host's list: back to it, taking the session over.
@@ -516,6 +516,7 @@ async function startHost(guest) {
     // A phone's hello takes the session: the computer we're a guest of is dropped (yieldTo).
     const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp }, { busy: () => guest.authed, yieldTo: () => guest.yieldSession() });
     pairing.on('request', showMain); // a code to compare: bring the window up
+    guest.on('welcome', () => pairing.clearReturn()); // a guest of another computer now: the phone doesn't come back by itself (as on the Mac)
     link.attachHost(server, pairing);
     hostServer = server;
     applyNet(); // your own relay, now that there's a server to hand its connections to

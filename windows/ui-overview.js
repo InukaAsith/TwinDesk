@@ -101,12 +101,16 @@ UI.tab({
     const pairedList = el('div');
     const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
     const airplay = UI.airplayPlaying ? UI.airplayPlaying() : null; // music an iPhone plays here (AirPlay)
+    // A paired phone that dropped and may come back by itself (shared/reclaim.js): Disconnect stops it.
+    const returnRow = UI.row('', t('Reconnecting…'), [UI.button(t('Disconnect'), () => api.disconnectPhone(), 'small')], { literal: true });
+    const returnCard = UI.card('', [returnRow]);
     body.append(
       ...(airplay ? [airplay.el] : []),
       UI.card('', [addrRow, ipRow]),
       UI.card(t('Found nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
       hero,
+      returnCard,
       adb.el,
       UI.card(t('Paired'), [pairedList]),
       ...(webCard ? [webCard.el] : []),
@@ -181,6 +185,9 @@ UI.tab({
       return { busy: true, text: mine.kind === 'take' ? t('Taking over…') : t('Connecting…') };
     }
     const update = (s) => {
+      const returning = s.phone && s.phone.returning;
+      returnCard.hidden = !returning;
+      if (returning) returnRow.label.textContent = returning.name;
       if (webCard) webCard.render(s);
       if (airplay) airplay.update(s);
       last = s;

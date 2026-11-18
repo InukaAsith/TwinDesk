@@ -211,7 +211,7 @@ function start() {
   theme.setPref(settings.ui.theme);
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
 
-  discovery = new Discovery(device);
+  discovery = new Discovery({ ...device, rc: true }); // a paired Android may come back by itself after a long drop (#266)
   discovery.on('change', pushState);
   // Asleep: the session we host ends and dark wakes refuse it; awake, the device that was connected is invited back.
   require('../shared/sleepwake.js').sleepWake({ powerMonitor: require('electron').powerMonitor, server: () => hostServer, discovery: () => discovery });
@@ -495,6 +495,7 @@ async function startHost(guest, tries = 0) {
     // A phone's hello takes the session: the computer we're a guest of is dropped (yieldTo).
     const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp }, { busy: () => guest.authed, yieldTo: () => guest.yieldSession() });
     pairing.on('request', showMain); // a code to compare: bring the window up
+    guest.on('welcome', () => pairing.clearReturn()); // a guest of another computer now: the phone doesn't come back by itself (as on the Mac)
     link.attachHost(server, pairing);
     hostServer = server;
     applyNet(); // your own relay, now that there's a server to hand its connections to

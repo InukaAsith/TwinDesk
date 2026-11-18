@@ -29,7 +29,7 @@ function unauthRoute(msg, opts) {
 // A revoked owner is final; a sleeping/busy host never yields its current session.
 function reclaimDecision(s) {
   if (!s || !s.phone) return { ok: false, code: 'bad_message', message: 'Reclaim is only for a paired phone' };
-  if (s.blocked) return { ok: false, code: 'released', message: 'The Mac disconnected' };
+  if (s.blocked) return { ok: false, code: 'released', message: s.releasedMessage || 'The Mac disconnected' };
   if (s.busy) return { ok: false, code: 'busy', message: 'Connected to another device' };
   if (s.currentAuthed && s.currentId && s.currentId !== s.selfId) return { ok: false, code: 'busy', message: 'In use by another device' };
   if (s.graceId && s.graceId !== s.selfId) return { ok: false, code: 'busy', message: 'In use by another phone' };
