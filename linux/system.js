@@ -62,7 +62,7 @@ async function fixFirewall(tool) {
     throw new Error('On NixOS, add networking.firewall.allowedTCPPorts = [ 47800 ]; and networking.firewall.allowedUDPPorts = [ 47801 5353 ]; in configuration.nix (or enable services.twindesk.enable).');
   }
   const script = tool === 'firewalld'
-    ? 'firewall-cmd --permanent --add-port=' + PORTS.tcp + '/tcp --add-port=' + PORTS.udp + '/udp --add-service=mdns && firewall-cmd --reload'
+    ? 'firewall-cmd --permanent --add-port=' + PORTS.tcp + '/tcp --add-port=' + PORTS.udp + '/udp && firewall-cmd --permanent --add-service=mdns && firewall-cmd --reload'
     : 'ufw allow ' + PORTS.tcp + '/tcp && ufw allow ' + PORTS.udp + '/udp && ufw allow 5353/udp';
   const r = await run('pkexec', ['sh', '-c', script], 120000);
   if (r.ok) return true;
