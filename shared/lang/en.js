@@ -1538,6 +1538,8 @@
   "Use hotspot": "Use hotspot",
   "Use several devices at once": "Use several devices at the same time",
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Use the phone as this computer’s touchpad, keyboard or gamepad.",
+  "No pop-ups, and nothing in the system’s notification center: they go in Recent only": "No pop-ups, and nothing in the system’s notification center: they go in Recent only",
+  "In Recent only, no pop-ups": "In Recent only, no pop-ups",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Use this PC’s own mouse for the administrator prompt or lock screen",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build",
   "Use this window as an extra screen of the other computer": "Use this window as an extra screen of the other computer",

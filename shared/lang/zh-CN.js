@@ -1538,6 +1538,8 @@
   "Use hotspot": "使用热点",
   "Use several devices at once": "同时使用多台设备",
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "将手机用作此电脑的触控板、键盘或手柄。",
+  "No pop-ups, and nothing in the system’s notification center: they go in Recent only": "不弹出，也不进入系统通知中心：只出现在“最近”中",
+  "In Recent only, no pop-ups": "仅在“最近”中，不弹出",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "请使用本机鼠标操作管理员权限提示或锁屏界面",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "此处以管理员身份运行的窗口不接受另一台电脑的鼠标。请使用本机鼠标，或使用 Full KVM 版本",
   "Use this window as an extra screen of the other computer": "将此窗口用作另一台电脑的扩展屏幕",

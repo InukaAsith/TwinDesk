@@ -1538,6 +1538,8 @@
   "Use hotspot": "Erişim noktası kullan",
   "Use several devices at once": "Birkaç cihazı aynı anda kullanın",
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Telefonu bu bilgisayarın dokunmatik yüzeyi, klavyesi veya oyun kumandası olarak kullanın.",
+  "No pop-ups, and nothing in the system’s notification center: they go in Recent only": "Açılır bildirim yok, sistemin bildirim merkezine de gitmez: yalnızca Son kullanılanlar'da görünür",
+  "In Recent only, no pop-ups": "Yalnızca Son kullanılanlar'da, açılır bildirim yok",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Yönetici istemi veya kilit ekranı için bu PC'nin kendi faresini kullan",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "Burada yönetici olarak çalışan bir pencere başka bir bilgisayarın faresini kabul etmiyor. Bu PC'nin kendi faresini ya da Full KVM sürümünü kullanın",
   "Use this window as an extra screen of the other computer": "Bu pencereyi diğer bilgisayarın ek ekranı olarak kullan",

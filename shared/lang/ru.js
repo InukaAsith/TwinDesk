@@ -1538,6 +1538,8 @@
   "Use hotspot": "Использовать точку доступа",
   "Use several devices at once": "Используйте несколько устройств одновременно",
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Используйте телефон как тачпад, клавиатуру или геймпад этого компьютера.",
+  "No pop-ups, and nothing in the system’s notification center: they go in Recent only": "Без всплывающих уведомлений и без центра уведомлений системы: только в «Недавних»",
+  "In Recent only, no pop-ups": "Только в «Недавних», без всплывающих",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Использовать собственную мышь этого ПК для запроса администратора или экрана блокировки",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "Окно, запущенное здесь от имени администратора, не принимает мышь другого компьютера. Используйте мышь этого ПК или сборку Full KVM",
   "Use this window as an extra screen of the other computer": "Использовать это окно как дополнительный экран другого компьютера",
