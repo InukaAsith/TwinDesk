@@ -35,7 +35,8 @@ is installed stays installed: Off / Signed in / Always is changed on the tab, be
 | Pairing | per user | per user | per user, plus a machine copy |
 | Installs | nothing | the service | the service and the machine node |
 
-Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab's button.
+Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab's button. On NixOS the
+service is declared instead (`programs.twindesk.fullKvm`, `nix/fullkvm.nix`, docs/nixos.md) and the tab shows it.
 
 ## The pieces
 

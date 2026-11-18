@@ -27,6 +27,8 @@ const ACCOUNT = 'twindesk';
 const ROOT = path.join(__dirname, '..', '..'); // the app: linux/, shared/, linux-helper/
 const BIN = path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper-multi');
 const BIN_ONE = path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper');
+// What the helper and the machine node get as PATH. TWINDESK_FULLKVM_PATH (the NixOS module's unit sets it) goes first.
+const PATH = [process.env.TWINDESK_FULLKVM_PATH, '/usr/sbin:/usr/bin:/sbin:/bin'].filter(Boolean).join(':');
 const SEAT_MS = 1000;
 const MAX_LINE = 256 * 1024;
 // The helper's mouse-and-keyboard commands (linux-helper/src/main.c, its uinput branch).
@@ -135,7 +137,7 @@ class Service {
     // The file mode already said who may connect; one client at a time, the newest wins.
     this._drop();
     const bin = fs.existsSync(BIN) ? BIN : BIN_ONE;
-    const env = { PATH: '/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8', MACSHARE_HELPER_BACKEND: 'uinput' };
+    const env = { PATH, LANG: 'C.UTF-8', MACSHARE_HELPER_BACKEND: 'uinput' };
     const helper = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'], env });
     const c = { sock, helper, inBuf: '', outBuf: '' };
     this.client = c;
@@ -193,7 +195,7 @@ class Service {
       log('System-wide: no machine node (', !a ? 'no account' : !fs.existsSync(script) ? 'no headless.js' : 'nothing copied to ' + MACHINE, ')');
       return;
     }
-    const env = { PATH: '/usr/sbin:/usr/bin:/sbin:/bin', LANG: 'C.UTF-8', HOME: MACHINE, ELECTRON_RUN_AS_NODE: '1', TWINDESK_MACHINE_DIR: MACHINE, TWINDESK_KVM_SOCK: SOCK };
+    const env = { PATH, LANG: 'C.UTF-8', HOME: MACHINE, ELECTRON_RUN_AS_NODE: '1', TWINDESK_MACHINE_DIR: MACHINE, TWINDESK_KVM_SOCK: SOCK };
     const node = spawn(process.execPath, [script], { uid: a.uid, gid: a.gid, cwd: MACHINE, env, stdio: ['ignore', 'pipe', 'pipe'] });
     this.node = node;
     log('machine node started', node.pid);

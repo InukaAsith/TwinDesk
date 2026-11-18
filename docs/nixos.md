@@ -51,7 +51,9 @@ Add TwinDesk to your system flake inputs and enable the NixOS module:
 }
 ```
 
-> **Note:** Both `programs.twindesk` and `services.twindesk` are accepted by the module.
+> **Note:** Both `programs.twindesk` and `services.twindesk` are accepted by the module (every option above exists under both).
+>
+> The flake also has `packages.<system>.twindesk-fullkvm`, the Full KVM variant of the package (`nix run .#twindesk-fullkvm`).
 
 ---
 
@@ -67,6 +69,8 @@ Add TwinDesk to your system flake inputs and enable the NixOS module:
 | `programs.twindesk.uinput` | `bool` | `true` | Wayland mouse and keyboard sharing: loads uinput, gives `/dev/uinput` to the `input` group, and installs the helper as `/run/wrappers/bin/twindesk-linuxhelper` (setgid `input`). |
 | `programs.twindesk.enableWifiDirect` | `bool` | `true` | Creates `/run/wrappers/bin/twindesk-wifiap` with `CAP_NET_ADMIN` so Wi-Fi Direct interface management works seamlessly without root password prompts. |
 | `programs.twindesk.virtualCamera` | `bool` | `true` | Loads the `v4l2loopback` kernel module and adds a `TwinDesk Camera` device at boot, for Camera › Virtual camera. |
+| `programs.twindesk.fullKvm` | `bool` | `false` | The Full KVM build (see below): uses the `twindesk-fullkvm` package (unless `package` is set) and declares the `twindesk-fullkvm` system service, which the Full KVM tab would otherwise install with `pkexec`. |
+| `programs.twindesk.fullKvmMode` | `enum` `"simple"` `"system"` | `"simple"` | `"simple"`: the lock screen, polkit dialogs and windows run as administrator. `"system"`: also the login screen (adds the `twindesk` user and `/var/lib/twindesk`). Only with `fullKvm`. |
 
 ---
 
@@ -138,3 +142,60 @@ Creating a secondary access point interface on supported Wi-Fi adapters requires
 ### 5. File Sharing & Remote Terminal
 - **OpenSSH (Terminal)**: Enable `services.openssh.enable = true;` in your NixOS configuration.
 - **Samba (Folder Sharing)**: Enable `services.samba.enable = true;` in your NixOS configuration.
+
+### 6. Full KVM (lock screen, polkit dialogs, login screen)
+
+Full KVM ([docs/full-kvm.md](full-kvm.md)) carries the mesh's mouse and keyboard to everything on the
+computer, not only the signed-in desktop: the lock screen, polkit dialogs, windows run as administrator
+and, System-wide, the login screen. It needs a system service, and a build of TwinDesk that has the
+service's files. The normal Nix package leaves them out (as the normal `.deb` does), so with it the Full
+KVM tab is shown but unusable.
+
+```nix
+programs.twindesk = {
+  enable = true;
+  fullKvm = true;
+  fullKvmMode = "simple"; # or "system": the login screen too
+};
+```
+
+`fullKvm = true` does what `linux/fullkvm/install.sh` does on other distributions, declared:
+
+- **Package**: `programs.twindesk.package` becomes `packages.<system>.twindesk-fullkvm`: the normal
+  package plus `linux/fullkvm` and `shared/fullkvm`. (For your own package, make it with
+  `nix/fullkvm.nix`'s `package pkgs yourPackage`; the module checks its `passthru.fullKvm`.)
+- **Service**: `systemd.services.twindesk-fullkvm`, wanted by `graphical.target`, `Restart=always`. It
+  runs `linux/fullkvm/service.js` as root with Electron as Node (`ELECTRON_RUN_AS_NODE=1`), through a boot
+  file in the store like the one `install.sh` writes to `/usr/local/lib/twindesk`. Its helper is the
+  `uinput` backend (`MACSHARE_HELPER_BACKEND=uinput`: evdev capture and uinput injection, below every
+  display server), which is why a root service is the one that reads `/dev/input` and writes `/dev/uinput`
+  here: no group and no setgid wrapper. It hands them to the person signed in on seat0 over
+  `/run/twindesk/kvm.sock` (mode `0600`, theirs). `hardware.uinput.enable` is turned on for it.
+- **Config**: `/etc/twindesk/fullkvm.json` is `{"mode": "<fullKvmMode>", "declarative": true}`. Changing
+  `fullKvmMode` and rebuilding restarts the service.
+- **System-wide** (`fullKvmMode = "system"`): the `twindesk` system user and group (the login screen's
+  machine node runs as it, never as root) and `/var/lib/twindesk` (`0700`).
+
+**The Full KVM tab** shows what the configuration says (choosing another mode there only says so: change
+`fullKvmMode`, or remove `fullKvm`, and rebuild) and changes nothing: the usual `pkexec` install can't work on NixOS (`/etc/systemd` and `/usr/local` are
+read-only), so `install.sh` refuses `install`, `mode` and `remove` there, and the tab says to use the
+configuration.
+
+**System-wide's pairings.** The machine node is the same device as your TwinDesk to the others, so it needs
+a copy of your identity and pairings (`~/.config/MacShare`) in `/var/lib/twindesk`. That is yours to give,
+not the configuration's: run
+
+```sh
+twindesk-fullkvm-sync          # asks for your password once (pkexec); then the service reloads
+```
+
+once after turning System-wide on, and again after you pair or forget a device. (`twindesk-fullkvm-sync
+<folder>` for a settings folder elsewhere.) Until then the log (`journalctl -u twindesk-fullkvm`) says
+`System-wide: no machine node (nothing copied to /var/lib/twindesk)`.
+
+**Undo it.** Set `fullKvm = false;` and rebuild: the service, `/etc/twindesk`, the account and
+`hardware.uinput` (if nothing else wants it) go. `/var/lib/twindesk` stays (it holds a copy of your pairings):
+`sudo rm -rf /var/lib/twindesk`.
+
+**Wiring from another flake**: `nix/fullkvm.nix` is `{ self, lib }: { package, module, … }`; the
+flake's `nixosModules.twindesk` imports `module`, so nothing else is needed.

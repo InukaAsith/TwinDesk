@@ -21,9 +21,23 @@ function run(cmd, args, ms = 10000) {
     resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, out: String(out || ''), err: String(errOut || '').trim() })));
 }
 
+function readConf() {
+  try { return JSON.parse(fs.readFileSync(CONF, 'utf8')) || {}; } catch (_) { return {}; }
+}
+
 function readMode() {
   if (!fs.existsSync(UNIT)) return 'off';
-  try { return JSON.parse(fs.readFileSync(CONF, 'utf8')).mode === 'system' ? 'system' : 'simple'; } catch (_) { return 'simple'; }
+  return readConf().mode === 'system' ? 'system' : 'simple';
+}
+
+// NixOS (docs/nixos.md): the unit, its config (marked "declarative") and the account are the system
+// configuration's (programs.twindesk.fullKvm), and /etc/systemd and /usr/local can't be written, so
+// install.sh has nothing to do here: the tab shows what the configuration says and changes nothing.
+function declarative() {
+  return readConf().declarative === true;
+}
+function nixos() {
+  return declarative() || fs.existsSync('/etc/NIXOS');
 }
 
 let helper = null;
@@ -32,7 +46,7 @@ let lastError = '';
 async function state() {
   const mode = readMode();
   const active = mode !== 'off' && (await run('systemctl', ['is-active', 'twindesk-fullkvm.service'])).out.trim() === 'active';
-  return { os: 'linux', mode, active, connected: !!(helper && helper.viaService), error: lastError };
+  return { os: 'linux', mode, active, connected: !!(helper && helper.viaService), error: lastError, ...(declarative() ? { declarative: true } : {}) };
 }
 
 // install.sh as root: its text through `pkexec sh -c` (inside an AppImage root can't read our mount).
@@ -49,6 +63,11 @@ async function set(mode) {
   lastError = '';
   try {
     if (mode === now) return state();
+    if (nixos()) {
+      throw new Error(declarative()
+        ? 'Full KVM is set in the NixOS configuration (programs.twindesk.fullKvm and fullKvmMode); change it there and rebuild'
+        : 'On NixOS, turn Full KVM on in the configuration (programs.twindesk.fullKvm = true) and rebuild');
+    }
     const cfg = app.getPath('userData'); // System-wide: our certificate, device id and pairings for the machine node
     if (mode === 'off') await asRoot(['remove']);
     else if (now === 'off') {
