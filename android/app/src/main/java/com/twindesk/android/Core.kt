@@ -402,7 +402,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
         resumeUntil = 0
         resumeHost = null
         resumeLater = null
-        link.disconnect()
+        link.disconnect() // parting first, so a queue flush already in flight cannot send
+        clip.abandonQueue()
     }
 
     // Another paired computer, while connected: this one is let go (bye), then that one.
@@ -451,6 +452,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     fun forget(id: String) {
+        clip.forgetQueue(id)
         if (returnHost()?.id == id) stopReturn()
         if (link.host?.id == id) link.disconnect()
         store.forgetHost(id)
@@ -505,11 +507,15 @@ class Core private constructor(val ctx: Context) : Link.Events {
         changed()
     }
 
-    override fun onMessage(m: JSONObject) {
+    override fun onMessage(m: JSONObject) = onMessage(m, null)
+
+    override fun onMessage(m: JSONObject, route: Link.TrustedRoute?) {
         val t = m.optString("t")
         main.post {
             for (f in features) {
-                val mine = try { f.onMessage(t, m) } catch (e: Exception) { Log.e("TwinDesk", "message $t", e); true }
+                val mine = try {
+                    if (f === clip) clip.onMessage(t, m, route) else f.onMessage(t, m)
+                } catch (e: Exception) { Log.e("TwinDesk", "message $t", e); true }
                 if (mine) return@post
             }
         }
@@ -517,6 +523,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     override fun onClosed(host: Host, code: String?) {
         main.post {
+            // bad_token forgets the pair in Link before this runs. A drop keeps the while-away queue.
+            clip.onSessionEnded(code, host.id)
             for (f in features) runCatching { f.onClosed() }
             changed()
         }

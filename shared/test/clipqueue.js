@@ -29,7 +29,11 @@ const { ClipQueue, MeshClipQueue, itemsOf } = require('../clipqueue.js');
     _remember: (dir, t, from, at) => history.push({ dir, t, from, at }),
     clipboard: { writeText: (t) => writes.push(t) },
   };
-  const m = new MeshClipQueue(clip, { nameOf: (id) => 'dev-' + id });
+  const pairs = new Map([['A', {}], ['B', {}]]);
+  const m = new MeshClipQueue(clip, {
+    nameOf: (id) => 'dev-' + id, activePair: (id) => pairs.get(id),
+    knownPair: (id, pair) => pairs.get(id) === pair,
+  });
   m.destroy();
   m.welcome('A'); m.welcome('B');
   await m._look(); // nobody away
@@ -51,6 +55,15 @@ const { ClipQueue, MeshClipQueue, itemsOf } = require('../clipqueue.js');
   clip.cfg.queueLatest = true;
   await m.receive({ items: [{ text: 'r3', at: 7 }] }, 'B');
   assert.deepStrictEqual(writes, ['r3']);
+  connected.delete('B');
+  await m._look();
+  text = 'later sample'; await m._look();
+  m.forget('B');
+  pairs.set('B', {});
+  connected.add('B');
+  m.welcome('B');
+  m.policy('B', { accept: true, queue: true });
+  assert.strictEqual(sent.length, 1, 'a new pair with the same device id gets no prior copies');
   // queue off
   clip.cfg.queue = false; connected.delete('A');
   text = 'three'; await m._look(); text = 'four'; await m._look();

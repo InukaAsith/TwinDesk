@@ -160,12 +160,14 @@ class Hub extends EventEmitter {
 
   // Forget a device: its guest link (we dialled it) and its host entry (it dialled us), both.
   forgetPeer(id) {
+    this._peerEvent('forgotten', id);
     this.forgotten.add(id);
     if (this.links.get(id)) this.links.forget(id);
     if (this.pairing && this.pairing.list().some((x) => x.id === id)) this.pairing.forget(id);
   }
 
   forgetGuest(id) {
+    this._peerEvent('forgotten', id);
     if (this.pairing) this.pairing.forget(id);
   }
 
@@ -297,7 +299,7 @@ class Hub extends EventEmitter {
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
       consumed = true;
-      for (const fn of fns) fn(msg, s.id);
+      for (const fn of fns) fn(msg, s.id, source);
     }
     for (const r of this.routes) {
       // A route takes the message only when someone listens for it (as the Windows facade does).

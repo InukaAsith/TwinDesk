@@ -50,6 +50,7 @@ class Link(
         fun onChange()
         fun onWelcome(host: Host)
         fun onMessage(m: JSONObject)
+        fun onMessage(m: JSONObject, route: TrustedRoute?) = onMessage(m)
         fun onClosed(host: Host, code: String?)
     }
 
@@ -243,6 +244,34 @@ class Link(
         events.onChange()
     }
 
+    // The socket welcome authenticated, with the pair it authenticated. A later socket is a new one.
+    class TrustedRoute(val marker: Any, val id: String, val fp: String)
+
+    private fun trustedRoute(w: WebSocket): TrustedRoute? {
+        if (w !== ws) return null
+        val h = host ?: return null
+        if (parting || state != "connected" || h.id.isEmpty() || h.fp.isEmpty()) return null
+        return TrustedRoute(w, h.id, h.fp)
+    }
+
+    fun accepts(route: TrustedRoute?): Boolean = matches(route) != null
+
+    // Only on the socket that is still this route. A retired socket, or a pair that has since
+    // connected, gets nothing: the caller keeps the bytes for a later consenting socket of this pair.
+    fun sendFor(route: TrustedRoute?, m: JSONObject): Boolean {
+        val w = matches(route) ?: return false
+        if (quietSince != 0L && probeAt == 0L) probeAt = System.currentTimeMillis()
+        return w.send(m.toString())
+    }
+
+    private fun matches(route: TrustedRoute?): WebSocket? {
+        if (parting || route == null) return null
+        val w = ws ?: return null
+        val h = host ?: return null
+        if (w !== route.marker || state != "connected" || h.id != route.id || h.fp != route.fp || h.id.isEmpty() || h.fp.isEmpty()) return null
+        return w
+    }
+
     fun send(m: JSONObject): Boolean {
         val w = ws ?: return false
         if (state != "connected") return false
@@ -432,7 +461,7 @@ class Link(
                 val m = runCatching { JSONObject(text) }.getOrNull()
                 if (m?.optString("t") == Proto.T.WELCOME && m.optBoolean("resumed")) promote(webSocket)
                 else { pending = null; webSocket.cancel() }
-            } else if (webSocket === ws || webSocket === alt) onText(text)
+            } else if (webSocket === ws || webSocket === alt) onText(text, webSocket)
         }
         // The computer closed it (Disconnect, Forget…): answer at once. OkHttp waits for us to,
         // and until then neither side saw the session end.
@@ -484,7 +513,7 @@ class Link(
         helloTimer = exec.schedule({ if (state != "connected") { message = tr("No answer"); ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
 
-    private fun onText(text: String) {
+    private fun onText(text: String, from: WebSocket) {
         val m = runCatching { JSONObject(text) }.getOrNull() ?: return
         val t = m.optString("t")
         lastRx = System.currentTimeMillis()
@@ -498,7 +527,10 @@ class Link(
             Proto.T.PONG -> { if (m.has("ts")) rttMs = maxOf(0, System.currentTimeMillis() - m.optLong("ts")); return }
             QUIET_IDLE -> { if (state == "connected") { val was = peerIdle; peerIdle = m.optBoolean("on"); if (was != peerIdle) nudge() }; return }
         }
-        if (state == "connected") events.onMessage(m)
+        if (state == "connected") {
+            if (t == Proto.T.CLIP_POLICY || t == Proto.T.CLIP_QUEUE) events.onMessage(m, trustedRoute(from))
+            else events.onMessage(m)
+        }
     }
 
     private fun onNonce(m: JSONObject) {
