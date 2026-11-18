@@ -175,6 +175,8 @@ object Ico {
     val files = lineIcon("files", "M3 5h5l1.5 2H17v9H3z")
     val audio = lineIcon("audio", "M4 8h3l4-3v10l-4-3H4z M14 7.5c1 .8 1 4.2 0 5 M16 5.5c2.2 1.8 2.2 7.2 0 9")
     val general = lineIcon("general", "M10 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M10 2.5v2 M10 15.5v2 M2.5 10h2 M15.5 10h2 M4.7 4.7l1.4 1.4 M13.9 13.9l1.4 1.4 M4.7 15.3l1.4-1.4 M13.9 6.1l1.4-1.4")
+    val viewScale = lineIcon("viewScale", "M7 3H3v4 M13 3h4v4 M17 13v4h-4 M7 17H3v-4 M7 7h6v6H7z")
+    val check = lineIcon("check", "M4.5 10l3.5 3.5 7.5-7.5")
     val about = lineIcon("about", "M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z M10 9v5 M10 6.2v.1")
     val bell = lineIcon("bell", "M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5h-12z M8.5 16.5a1.5 1.5 0 0 0 3 0")
     val phone = lineIcon("phone", "M6.5 2.5h7a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z M9 15h2")

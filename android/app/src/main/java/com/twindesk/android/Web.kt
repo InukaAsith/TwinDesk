@@ -69,7 +69,9 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
             queue.clear()
             onEvent("ready", null)
         }.let { }
-        @JavascriptInterface fun videoState(generation: Int, session: Int, playing: Boolean) = main.post { onEvent("videoState", JSONObject().put("generation", generation).put("session", session).put("playing", playing)) }.let { }
+        @JavascriptInterface fun videoState(generation: Int, session: Int, playing: Boolean, w: Int, h: Int) = main.post {
+            onEvent("videoState", msg("videoState", "generation" to generation, "session" to session, "playing" to playing, "w" to w, "h" to h))
+        }.let { }
         @JavascriptInterface fun playing(w: Int, h: Int) = main.post { onEvent("playing", JSONObject().put("w", w).put("h", h)) }.let { }
         @JavascriptInterface fun haptic() = main.post { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }.let { }
         // A light tap (a gamepad or touchpad button going down).
@@ -151,7 +153,11 @@ class Screen(core: Core) : Feature(core) {
     private val pendingTimer = Handler(Looper.getMainLooper())
     private val pendingTick = Runnable { onPendingClock() }
     @Volatile var viewing = false; private set
-    @Volatile var size: Pair<Int, Int>? = null; private set // the picture playing now
+    @Volatile var size: Pair<Int, Int>? = null; private set
+    @Volatile var decodedSize: Pair<Int, Int>? = null; private set
+    var viewScale = "fit"; private set
+    private val scalePresets = setOf("fit", "fill", "actual")
+    private val savedScale get() = core.store.prefsString("screen.viewScale", "fit").takeIf { it in scalePresets } ?: "fit"
     private var host: WebHost? = null
     private var lastInfo: JSONObject? = null
     private var videoGeneration = 0
@@ -192,6 +198,7 @@ class Screen(core: Core) : Feature(core) {
         host = h
         resetVideo()
         viewing = true
+        viewScale = savedScale
         h.post(opts()) // first: the computer's name for the messages below
         lastInfo?.let { h.post(it) }
         state?.let { h.post(it) }
@@ -288,7 +295,7 @@ class Screen(core: Core) : Feature(core) {
     // pen: a stylus is a pen on the computer (its pressure, tilt, eraser), else a mouse; penFast: a
     // stroke's samples batched per event (Fast writing), else each its own, paced (every point lands).
     fun opts(): JSONObject = msg("opts", "sound" to core.store.flag("screen.sound", false), "pacing" to (core.store.flag("screen.smooth", false).let { if (it) "smooth" else "fast" }),
-        "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
+        "viewGestures" to (core.host?.os == "mac"), "viewScale" to savedScale, "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
         "speed" to core.remote.speed.toDouble(), "tap" to core.remote.tapClick, "pen" to core.store.flag("screen.pen", true),
         "penFast" to core.store.flag("screen.penFast", false))
 
@@ -301,11 +308,27 @@ class Screen(core: Core) : Feature(core) {
         core.changed()
     }
 
+    // These controls affect only the currently open viewer, never a replacement host or its display.
+    fun setViewScale(h: WebHost, mode: String) {
+        if (host !== h || !viewing || core.host?.os != "mac" || mode !in scalePresets) return
+        core.store.setPrefsString("screen.viewScale", mode)
+        viewScale = mode
+        h.post(msg("viewer.scale", "mode" to mode))
+        core.changed()
+    }
+
+    fun viewScaleChanged(h: WebHost, mode: String) {
+        if (host !== h || !viewing || core.host?.os != "mac" || (mode != "custom" && mode != savedScale) || mode == viewScale) return
+        viewScale = mode
+        core.changed()
+    }
+
     private fun resetVideo() {
         videoGeneration++
         videoSession = null
         videoMarker = null
         videoPlaying = false
+        decodedSize = null
         decodedCapture = null
     }
 
@@ -351,6 +374,7 @@ class Screen(core: Core) : Feature(core) {
     override fun onWelcome(host: Host) {
         sessionEpoch++
         endPreviewSession()
+        this.host?.post(opts())
         // Disconnect already cleared this session, so the clear above changes nothing and
         // does not ask again. The sheet can still be open on this new link. A later
         // composition subscribes once more. A closed sheet sends nothing.
@@ -365,11 +389,16 @@ class Screen(core: Core) : Feature(core) {
         }
     }
 
-    fun videoState(h: WebHost, generation: Int, session: Int, playing: Boolean) {
+    fun videoState(h: WebHost, generation: Int, session: Int, playing: Boolean, w: Int, height: Int) {
         if (host !== h || !viewing || videoGeneration != generation || videoSession != session ||
             videoMarker == null || core.link.sessionMarker() !== videoMarker || !core.link.connected) return
         if (playing) decodedCapture = session.toLong() else if (decodedCapture == session.toLong()) decodedCapture = null
-        if (videoPlaying != playing) { videoPlaying = playing; core.changed() }
+        val nextSize = if (playing && w > 0 && height > 0) w to height else null
+        if (videoPlaying != playing || decodedSize != nextSize) {
+            videoPlaying = playing
+            decodedSize = nextSize
+            core.changed()
+        }
         if (!playing || pending == null) return
         if (dropWait(sharing)) { core.changed(); return }
         val step = DesktopSelect.onState(pending, desktopCatalog, displayId, System.currentTimeMillis(), frameFor())

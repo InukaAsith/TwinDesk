@@ -1274,5 +1274,16 @@
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "无法读取 Mission Control 的辅助功能状态，因此在能够读取之前，远程控制保持暂停。不会发送触摸。",
   "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Mission Control 打开期间远程控制保持暂停，以免触摸被发送进去。",
   "Pointer over the lock screen": "锁屏上的指针",
-  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "除非开启 TwinDesk 的无障碍服务，否则 Android 会在锁屏上和通知栏下方隐藏指针"
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "除非开启 TwinDesk 的无障碍服务，否则 Android 会在锁屏上和通知栏下方隐藏指针",
+  "Actual size": "实际大小",
+  "Auto-rotate": "自动旋转",
+  "Direct touch": "直接触控",
+  "Fill": "填充",
+  "Fit": "适合屏幕",
+  "Hide viewer controls": "隐藏查看器控件",
+  "Scale": "缩放",
+  "Show viewer controls": "显示查看器控件",
+  "View options": "查看选项",
+  "Open Mac login screen": "打开 Mac 登录屏幕",
+  "Screen capture is unavailable on {name}. Check the Mac’s lock and Screen Recording settings. Retrying…": "无法捕捉 {name} 的屏幕。请检查 Mac 的锁定状态和屏幕录制设置。正在重试…"
 }

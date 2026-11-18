@@ -11,17 +11,18 @@ const root = path.join(__dirname, '../..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
 
 const viewer = read('android/app/src/main/java/com/twindesk/android/ViewerActivity.kt');
+const toolbar = read('android/app/src/main/java/com/twindesk/android/MacViewerToolbar.kt');
 const sheet = read('android/app/src/main/java/com/twindesk/android/DesktopOverview.kt');
 const web = read('android/app/src/main/java/com/twindesk/android/Web.kt');
 const gestures = read('android/app/src/main/assets/web/viewer.js');
 
 for (const label of ['tr("Mirror")', 'tr("Extend")', 'tr("Previous desktop")', 'tr("Next desktop")', 'tr("Displays & desktops")']) {
-  assert.ok(viewer.includes(label), label);
+  assert.ok(toolbar.includes(label), label);
 }
 assert.ok(viewer.includes('MacDisplayPick('));
-assert.ok(viewer.includes('s.space("prev")'));
-assert.ok(viewer.includes('s.space("next")'));
-assert.ok(viewer.includes('heightIn(min = 48.dp)'));
+assert.ok(toolbar.includes('onSpace("prev")'));
+assert.ok(toolbar.includes('onSpace("next")'));
+assert.ok(toolbar.includes('size(48.dp)'));
 
 assert.ok(sheet.includes('tr("Done")'));
 assert.ok(sheet.includes('tr("Not previewed yet")'));
@@ -60,8 +61,9 @@ assert.ok(gestures.includes('function reportVideo'));
 assert.ok(gestures.includes('function requireCurrentFrame'));
 assert.ok(gestures.includes('let videoOwner'));
 assert.ok(gestures.includes('viewerGeneration'));
-assert.ok(!gestures.includes("g.ids.length === 3 ? 'pan'"));
-assert.ok(!gestures.includes('three fingers pan the view'));
+assert.ok(gestures.includes("g.ids.length === 3 ? 'pan'"));
+assert.ok(gestures.includes('three fingers pan the view'));
+assert.ok(gestures.includes('if (viewGestures && (touches.size > 1 || gesture))'));
 
 assert.ok(web.includes('result.action is DesktopSelect.Action.Space'));
 assert.ok(web.includes('pending = previous'));
@@ -82,8 +84,9 @@ assert.ok(web.includes('if (!inputOn)'));
 assert.ok(web.includes('core.link.sessionMarker() !== videoMarker'));
 assert.ok(web.includes('fun videoState'));
 assert.ok(!web.includes('fun lockChanged'));
-assert.ok(!web.includes('viewGestures'));
+assert.ok(web.includes('"viewGestures" to (core.host?.os == "mac")'));
 assert.ok(!web.includes('lockView'));
+assert.ok(!web.includes('videoUnavailable'));
 const screenSrc = web.slice(web.indexOf('class Screen'), web.indexOf('class MacSound'));
 const welcome = screenSrc.slice(screenSrc.indexOf('override fun onWelcome'), screenSrc.indexOf('fun videoState'));
 assert.ok(welcome.includes('sessionEpoch++'));
@@ -114,6 +117,8 @@ assert.ok(viewer.includes('!sheetReady && s.remote && s.displays.size > 1'));
 assert.ok(viewer.includes('!sheetReady && s.spaces && s.sharing && s.inputOn'));
 assert.ok(!viewer.includes('showLogin'));
 assert.ok(!viewer.includes('lockView'));
+assert.ok(toolbar.includes('if (sheetReady) onOverview() else onMenu("display")'));
+assert.ok(viewer.includes('spaces = s.spaces && s.sharing && s.inputOn'));
 assert.ok(viewer.includes('LaunchedEffect(overview)'));
 assert.ok(viewer.includes('s.refreshDesktops()'));
 assert.ok(viewer.includes('onDisplay = { id -> if (id != desks.viewing && id != s.pendingDisplayId) s.selectDisplay(id) }'));
