@@ -120,7 +120,10 @@ class Hub extends EventEmitter {
       this.pairing.on('change', () => this._change());
       this.pairing.on('request', () => this._change());
     }
+    this.links.hostPairing = pairing; // mutual pairs: a device that holds us as its host
+    this.links.bindServer(server);
     this.sessions.attachServer(server); // new sessions are attached by the 'session' event
+    if (this.selectedId) server.setPrimary(this.selectedId);
     this._change();
   }
 

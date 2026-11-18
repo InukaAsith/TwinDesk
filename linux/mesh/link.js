@@ -163,9 +163,16 @@ class Link {
   // A phone took the session (hostpair.js): drop the computer we're a guest of. Reconnecting
   // waits while blocked(); poke() tries again at once when the phone lets go.
   yieldSession() {
-    if (!this.authed) return;
-    this._closeSocket();
-    this._scheduleReconnect();
+    if (this.destroyed) return;
+    if (this.authed) {
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
+    if (this.ws) { // still dialling: drop it, the inbound link is the one
+      this._closeSocket();
+      clearTimeout(this.timers.reconnect);
+      this._scheduleReconnect();
+    }
   }
 
   // Stop for good: no socket, no reconnect (the mesh manager closes its links this way).
