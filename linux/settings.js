@@ -112,7 +112,7 @@ function normalize(s) {
     },
     // Remote tab (shared/phone-remote.js): the phone's Remote page moves the pointer and types here
     // Real gamepad (pad): its sticks and buttons as a controller here, off until turned on
-    remote: { allow: bool((s.remote || {}).allow, false), pad: bool((s.remote || {}).pad, false) },
+    remote: { allow: bool((s.remote || {}).allow, false), pad: bool((s.remote || {}).pad, false), padKind: (s.remote || {}).padKind === 'ds4' ? 'ds4' : 'xbox' },
     // TwinDesk Web (shared/web/webwire.js): off until turned on; what new web devices may do.
     web: (() => {
       const w = s.web || {};

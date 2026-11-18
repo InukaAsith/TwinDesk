@@ -27,6 +27,7 @@ function writable() {
 
 const driver = {
   name: 'TwinDesk Gamepad',
+  kinds: ['xbox', 'ds4'], // or a PlayStation DualShock 4 (#266)
 
   async check() {
     if (!fs.existsSync(WRITER)) return { supported: false, message: 'Not in this build of TwinDesk' };
@@ -42,8 +43,8 @@ const driver = {
     if (!writable()) throw new Error('/dev/uinput is there but not this user’s yet: log out and in again');
   },
 
-  feed(onExit) {
-    const p = spawn(WRITER, [], { stdio: ['pipe', 'ignore', 'pipe'] });
+  feed(onExit, kind) {
+    const p = spawn(WRITER, kind === 'ds4' ? ['ds4'] : [], { stdio: ['pipe', 'ignore', 'pipe'] });
     p.stderr.on('data', (d) => console.log('[pad] ' + String(d).trim()));
     p.on('exit', onExit);
     p.on('error', onExit);

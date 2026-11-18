@@ -212,6 +212,7 @@ function setupIpc(ctx) {
     if ('allow' in m && !ctx.phoneRemote && m.allow === true) { ctx.settings.remote.allow = true; ctx.loadRemote(); }
     else if ('allow' in m && ctx.phoneRemote) ctx.phoneRemote.setAllow(m.allow === true);
     if ('pad' in m && ctx.phoneRemote) ctx.phoneRemote.setPad(m.pad === true); // Real gamepad
+    if ('padKind' in m && ctx.phoneRemote) ctx.phoneRemote.setPadKind(m.padKind === 'ds4' ? 'ds4' : 'xbox'); // Xbox 360 or DualShock 4 (#266)
     ctx.save();
     ctx.push();
   });
