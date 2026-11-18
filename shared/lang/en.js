@@ -1549,6 +1549,8 @@
   "Copies made while {name} is away aren’t kept": "Copies made while {name} is away aren’t kept",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} waiting for {name}: they go in its Recent, not on its clipboard",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard",
+  "Incoming {app} call": "Incoming {app} call",
+  "{app} call · {time}": "{app} call · {time}",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Use this PC’s own mouse for the administrator prompt or lock screen",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build",
   "Use this window as an extra screen of the other computer": "Use this window as an extra screen of the other computer",

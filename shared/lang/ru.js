@@ -1549,6 +1549,8 @@
   "Copies made while {name} is away aren’t kept": "Скопированное, пока {name} не на связи, не сохраняется",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} ждут {name}: попадут в его «Недавние», а не в буфер обмена",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Скопированное, пока {name} не на связи, попадёт в его «Недавние», когда он вернётся, а не в буфер обмена",
+  "Incoming {app} call": "Входящий звонок {app}",
+  "{app} call · {time}": "Звонок {app} · {time}",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Использовать собственную мышь этого ПК для запроса администратора или экрана блокировки",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "Окно, запущенное здесь от имени администратора, не принимает мышь другого компьютера. Используйте мышь этого ПК или сборку Full KVM",
   "Use this window as an extra screen of the other computer": "Использовать это окно как дополнительный экран другого компьютера",

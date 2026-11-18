@@ -392,6 +392,7 @@ class PhoneHub extends EventEmitter {
         held: !!m.held,
         silenced: !!m.silenced,
         can: Array.isArray(m.can) ? m.can.filter((x) => ['hold', 'dtmf', 'silence'].includes(x)) : [], // an older phone app: none
+        app: str(m.app, 60), // a call in an app (WhatsApp, Instagram…): its name; '' for the phone line
       };
     }
     // A call under way with the hands-free link up: its sound comes here (the phone may keep it
