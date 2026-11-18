@@ -6,6 +6,7 @@
 #   install.sh install <simple|system> <runtime> <app> [<config dir>]
 #   install.sh mode <simple|system> [<config dir>]
 #   install.sh remove
+#   install.sh sync [<config dir>]     NixOS only (see below)
 #
 #   runtime     the Electron binary that runs service.js as Node (ELECTRON_RUN_AS_NODE=1), or the
 #               AppImage (copied to /usr/local/lib/twindesk: the one in Downloads may move)
@@ -13,6 +14,11 @@
 #   config dir  System-wide: the person's TwinDesk settings folder (~/.config/MacShare), whose
 #               certificate, device id and pairings the machine node takes (the same device to
 #               the others, at the same place on their map)
+#
+# NixOS (docs/nixos.md): the service, /etc/twindesk/fullkvm.json (marked "declarative": true), the account
+# and /var/lib/twindesk come from the configuration (programs.twindesk.fullKvm), and /etc/systemd and
+# /usr/local aren't writable. So install, mode and remove stop here, and the one thing that stays the
+# person's, the machine copy of their pairings (System-wide), is `sync`.
 set -eu
 umask 022
 
@@ -24,6 +30,12 @@ ACCOUNT=twindesk
 
 die() { echo "fullkvm: $*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || die "run as root (pkexec)"
+
+declared=0
+grep -q '"declarative": *true' "$CONF_DIR/fullkvm.json" 2>/dev/null && declared=1
+if [ "$declared" = 1 ] || [ -e /etc/NIXOS ]; then
+  [ "$declared" = 1 ] && [ "${1:-}" = sync ] || die "Full KVM is set in the NixOS configuration (programs.twindesk.fullKvm and fullKvmMode), not here"
+fi
 
 mode_ok() { case "$1" in simple|system) ;; *) die "mode is simple or system" ;; esac; }
 
@@ -124,6 +136,13 @@ EOF
     reload_service
     echo "mode $mode"
     ;;
+  sync)
+    cfg=${2:-}
+    grep -q '"mode": *"system"' "$CONF_DIR/fullkvm.json" 2>/dev/null || die "sync is for System-wide (fullKvmMode = \"system\")"
+    copy_state "$cfg"
+    reload_service
+    echo synced
+    ;;
   remove)
     systemctl disable --now twindesk-fullkvm.service >/dev/null 2>&1 || true
     rm -f "$UNIT" "$LIB/fullkvm-boot.js" "$LIB/TwinDesk-FullKVM.AppImage" "$CONF_DIR/fullkvm.json"
@@ -134,5 +153,5 @@ EOF
     rm -rf /run/twindesk
     echo removed
     ;;
-  *) die "install | mode | remove" ;;
+  *) die "install | mode | sync | remove" ;;
 esac
