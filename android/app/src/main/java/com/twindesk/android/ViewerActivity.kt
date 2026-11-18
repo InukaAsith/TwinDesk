@@ -284,12 +284,7 @@ private fun Viewer(core: Core, host: WebHost, rail: MirrorRail, started: Boolean
                         MacDisplayPick(s.displays, if (s.sharing && s.mode != "extend") s.displayId else "", onDark = true) { s.pickDisplay(it); bar = true }
                     }
                 }
-                if (!macViewer && !sheetReady && s.spaces && s.sharing && s.inputOn && core.host?.os == "mac") {
-                    MacDesktopRow(
-                        onPrev = { s.space("prev"); bar = true },
-                        onNext = { s.space("next"); bar = true },
-                    )
-                }
+
                 if (s.spaceNote.isNotEmpty() && !overview) Text(
                     s.spaceNote,
                     color = Color.White,
@@ -317,20 +312,5 @@ private fun Viewer(core: Core, host: WebHost, rail: MirrorRail, started: Boolean
                 )
             }
         }
-    }
-}
-
-// Previous and next macOS desktop. Its own composable so the scroll state is not created
-// on a condition inside Viewer. Shown only while this Mac is sharing and taking input.
-@androidx.compose.runtime.Composable
-private fun MacDesktopRow(onPrev: () -> Unit, onNext: () -> Unit) {
-    Row(
-        Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124))
-            .horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = onPrev) { Text(tr("Previous desktop"), color = Color.White) }
-        TextButton(onClick = onNext) { Text(tr("Next desktop"), color = Color.White) }
     }
 }

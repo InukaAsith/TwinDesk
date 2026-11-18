@@ -114,7 +114,8 @@ assert.ok(!sheet.includes('val current = desk.current && display.id == viewingId
 assert.ok(viewer.includes('val sheetReady'));
 assert.ok(viewer.includes('if (!sheetReady)'));
 assert.ok(viewer.includes('!sheetReady && s.remote && s.displays.size > 1'));
-assert.ok(viewer.includes('!sheetReady && s.spaces && s.sharing && s.inputOn'));
+assert.ok(viewer.includes('spaces = s.spaces && s.sharing && s.inputOn'));
+assert.ok(toolbar.includes('if (sheetReady) onOverview() else onMenu("display")'));
 assert.ok(!viewer.includes('showLogin'));
 assert.ok(!viewer.includes('lockView'));
 assert.ok(toolbar.includes('if (sheetReady) onOverview() else onMenu("display")'));

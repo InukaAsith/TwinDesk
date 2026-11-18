@@ -5,6 +5,10 @@
 // through CallCompanion.kt (allowed over wireless debugging once); Silence mutes the ringer for
 // this call only. A number with * or # (a code: *#06#, call forwarding) is never dialed from the
 // computer: the phone's dialer opens with it, to be tapped there.
+// Calls in apps (WhatsApp, Instagram, Messenger, Telegram, Signal…): their call notification
+// (CallStyle, or category call with Answer/Decline/Hang up buttons) is the call; Answer, Decline and
+// End press its buttons. Shown while the phone line itself is idle. Its sound goes where the app
+// sends it: the phone, or this computer when it's the phone's Bluetooth headset.
 package com.twindesk.android
 
 import android.Manifest
@@ -27,6 +31,9 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import android.app.Notification
+import android.app.PendingIntent
+import android.service.notification.StatusBarNotification
 
 class Calls(private val hub: Hub, private val core: Core) {
     private val ctx = core.ctx
@@ -42,6 +49,47 @@ class Calls(private val hub: Hub, private val core: Core) {
     private var dialedAt = 0L
     // Silence: the ringer muted for this ringing call (put back when it stops ringing).
     private var silenced = false
+
+    // A call in an app, from its notification (appPosted).
+    private class AppCall(val key: String, val pkg: String, val app: String, val who: String, val ringing: Boolean,
+                          val answer: PendingIntent?, val decline: PendingIntent?, val hangUp: PendingIntent?, val since: Long, val dir: String)
+    @Volatile private var appCall: AppCall? = null
+
+    // The phone's own dialer and in-call screens: their notifications are the SIM's call, seen above.
+    private val telephony = setOf("com.android.server.telecom", "com.android.incallui", "com.samsung.android.incallui",
+        "com.google.android.dialer", "com.android.dialer", "com.samsung.android.dialer", "com.android.phone", "com.miui.voip", "com.android.contacts")
+
+    private fun action(n: Notification, extra: String, title: Regex): PendingIntent? {
+        @Suppress("DEPRECATION") (n.extras.get(extra) as? PendingIntent)?.let { return it }
+        return n.actions?.firstOrNull { title.containsMatchIn(it.title?.toString().orEmpty()) }?.actionIntent
+    }
+
+    // From Notifs: a call notification of an app. True: it's a call shown by Calls (not sent as a notification).
+    fun appPosted(sbn: StatusBarNotification, appName: String, title: String): Boolean {
+        val n = sbn.notification ?: return false
+        if (n.category != Notification.CATEGORY_CALL || sbn.packageName in telephony) return false
+        val dialer = runCatching { ctx.getSystemService(TelecomManager::class.java).defaultDialerPackage }.getOrNull()
+        if (sbn.packageName == dialer) return false
+        val answer = action(n, "android.answerIntent", Regex("answer|accept|ответ|принять|接听|cevapla|atender", RegexOption.IGNORE_CASE))
+        val decline = action(n, "android.declineIntent", Regex("decline|reject|dismiss|отклон|拒绝|reddet|recusar", RegexOption.IGNORE_CASE))
+        val hangUp = action(n, "android.hangUpIntent", Regex("hang ?up|end|leave|заверш|挂断|kapat|desligar|encerrar", RegexOption.IGNORE_CASE))
+        val callType = n.extras.getInt("android.callType", 0) // CallStyle: 1 incoming, 2 ongoing, 3 screening
+        val ringing = if (callType != 0) callType == 1 || callType == 3 else answer != null
+        if (answer == null && decline == null && hangUp == null) return false // no way to act on it: a plain notification
+        val was = appCall?.takeIf { it.key == sbn.key }
+        val now = System.currentTimeMillis()
+        val since = if (was != null && was.ringing == ringing) was.since else now
+        val dir = was?.dir ?: if (ringing) "in" else "out"
+        appCall = AppCall(sbn.key, sbn.packageName, appName, title, ringing, answer, decline, hangUp, since, dir)
+        if (state == "idle") report()
+        return true
+    }
+
+    fun appRemoved(key: String) {
+        if (appCall?.key != key) return
+        appCall = null
+        if (state == "idle") report()
+    }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -97,6 +145,12 @@ class Calls(private val hub: Hub, private val core: Core) {
     }
 
     private fun report() {
+        val ac = appCall
+        if (state == "idle" && ac != null) {
+            core.send(msg(Proto.T.CALL_STATE, "state" to (if (ac.ringing) "ringing" else "offhook"), "number" to "", "name" to ac.who, "dir" to ac.dir, "since" to ac.since,
+                "held" to false, "silenced" to false, "can" to jsonArrayOf(), "app" to ac.app, "pkg" to ac.pkg))
+            return
+        }
         val st = state; val d = dir; val at = since
         // Without the call log Android leaves the number out; the companion has it.
         val n = number.ifEmpty { if (st != "idle") CallCompanion.number().also { number = it } else "" }
@@ -118,6 +172,15 @@ class Calls(private val hub: Hub, private val core: Core) {
     fun act(m: JSONObject) {
         val a = m.str("a", 20)
         val telecom = ctx.getSystemService(TelecomManager::class.java)
+        val ac = appCall
+        if (state == "idle" && ac != null && a in setOf("answer", "end", "silence")) { // a call in an app: its own buttons
+            val r = runCatching {
+                val pi = when (a) { "answer" -> ac.answer; "end" -> if (ac.ringing) ac.decline ?: ac.hangUp else ac.hangUp ?: ac.decline; else -> ac.decline }
+                (pi ?: error(a)).send()
+            }
+            core.send(msg(Proto.T.CALL_DONE, "a" to a, "ok" to r.isSuccess, "error" to r.exceptionOrNull()?.message))
+            return
+        }
         val r = runCatching {
             when (a) {
                 "dial" -> {
@@ -277,3 +340,5 @@ class Calls(private val hub: Hub, private val core: Core) {
         "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }.getOrNull()
 }
+
+private fun jsonArrayOf() = JSONArray()

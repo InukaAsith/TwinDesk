@@ -1460,6 +1460,14 @@ private fun ClipboardPage(core: Core, v: Int) {
             if (shots.lastSent.isNotEmpty()) MacRow(tr("Last screenshot sent"), shots.lastSent)
         }
     }
+    MacCard(tr("While away")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        SwitchRow(tr("Queue copies while away"),
+            if (clip.queued > 0) tr("{count} waiting for {name}: they go in its Recent, not on its clipboard", "count" to clip.queued.toString(), "name" to name)
+            else tr("Copies made while {name} is away go in its Recent when it’s back, not on its clipboard", "name" to name),
+            clip.queueOn, first = true) { clip.setQueue(it) }
+        SwitchRow(tr("Put the latest on the clipboard"), tr("When queued copies arrive here, the newest one is pasted next"), clip.queueLatest) { clip.setQueueLatest(it) }
+    }
     HistoryCard(core, "clip") // History.kt
     if (clip.history.isNotEmpty()) MacCard(tr("Recent")) {
         @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content

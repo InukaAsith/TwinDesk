@@ -79,7 +79,6 @@ internal fun MacViewerToolbar(
     onScreenshot: () -> Unit,
     onStop: (() -> Unit)?,
     onClose: () -> Unit,
-    onOpenLogin: (() -> Unit)? = null,
 ) {
     MaterialTheme(colorScheme = menuColors) {
         BoxWithConstraints {
@@ -137,7 +136,6 @@ internal fun MacViewerToolbar(
                             ViewerChoice(tr("Sound"), audio, onMenu) { onAudio(!audio) }
                             ViewerChoice(tr("Auto-rotate"), autoRotate, onMenu, onRotate)
                             ViewerChoice(tr("Screenshot"), false, onMenu, onScreenshot)
-                            if (onOpenLogin != null) ViewerChoice(tr("Open Mac login screen"), false, onMenu, onOpenLogin)
                             if (onStop != null) {
                                 HorizontalDivider()
                                 ViewerChoice(tr("Stop"), false, onMenu, onStop)

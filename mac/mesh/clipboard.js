@@ -68,18 +68,23 @@ class Clip extends EventEmitter {
       pasteKeys: '⌘V',
     });
 
+    // Copies made while a device is away go to its Recent when it's back (shared/clipqueue.js).
+    this.away = new (require('../../shared/clipqueue.js').MeshClipQueue)(this, { concealed: () => this._isConcealed('request'), nameOf: (id) => { const e = this.mesh.get(id); return (e && e.name) || id; } });
     const bus = this.bus;
     bus.on(P.T.CLIP, (m, from) => this._onClip(m, from));
+    bus.on(P.T.CLIP_QUEUE, (m, from) => this.away.receive(m, from));
     bus.on(P.T.CLIP_IMAGE, (m, from) => this.images.header(m, from));
     bus.on(P.T.CLIP_IMAGE_PART, (m, from) => this.images.part(m, from));
     bus.on(P.T.CLIP_POLICY, (m, from) => {
       const e = this.mesh.get(from);
       if (e) e.pool = m.accept !== false;
       this.images.policy(m, from);
+      this.away.policy(from, m);
       this._changed();
     });
     bus.on(P.T.CLIP_REQUEST, () => this.sendIfChanged('request'));
     bus.onPeer('welcome', (id) => {
+      this.away.welcome(id);
       const e = this.mesh.get(id);
       if (e) e.pool = true; // until its clip.policy says otherwise
       this.images.reset(id);
@@ -139,7 +144,7 @@ class Clip extends EventEmitter {
 
   _sendPolicy(id) {
     const c = this.cfg;
-    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept });
+    this.bus.send(id, { t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept, queue: true }); // queue: clip.queue understood here
   }
 
   // A copy was made on this Mac (helper event). Instant mode sends new copies only, not what was
@@ -159,7 +164,7 @@ class Clip extends EventEmitter {
   }
 
   // item: the text, or a picture (shared/clipimage.js).
-  _remember(dir, item, from) {
+  _remember(dir, item, from, at = Date.now()) {
     // What went out last is no longer on the other side once something came in, and the other way
     // round: copying it again must send it again (#223).
     if (dir === 'in') this.lastSync.sent = null; else this.lastSync.received = null;
@@ -169,7 +174,7 @@ class Clip extends EventEmitter {
       this.history = this.history.filter((h) => h.text !== item || h.dir !== dir);
       item = { text: item, size: Buffer.byteLength(item, 'utf8') };
     }
-    this.history.unshift({ dir, at: Date.now(), ...item, from: from || '' });
+    this.history.unshift({ dir, at, ...item, from: from || '' });
     if (this.history.length > n) this.history.length = n;
     trimPictures(this.history);
   }
@@ -288,6 +293,7 @@ class Clip extends EventEmitter {
       peerImages: this.images.peerImages,
       imageSupport: true,
       lastSkip: this.lastSkip,
+      queued: this.away.size,
       history: this.history.map((h) => ({ ...itemView(h, PREVIEW), from: h.from || '' })),
     };
   }

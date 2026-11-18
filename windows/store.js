@@ -32,4 +32,4 @@ function remove(name) {
   }
 }
 
-module.exports = { read, write, remove };
+module.exports = { read, write, remove, filePath: file };

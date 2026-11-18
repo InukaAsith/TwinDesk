@@ -1549,6 +1549,8 @@
   "Copies made while {name} is away aren’t kept": "{name} uzaktayken kopyalananlar saklanmaz",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} öğe {name} için bekliyor: panosuna değil, Son kullanılanlar'ına gider",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} uzaktayken kopyalananlar, geri geldiğinde panosuna değil Son kullanılanlar'ına gider",
+  "Incoming {app} call": "Gelen {app} araması",
+  "{app} call · {time}": "{app} araması · {time}",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Yönetici istemi veya kilit ekranı için bu PC'nin kendi faresini kullan",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "Burada yönetici olarak çalışan bir pencere başka bir bilgisayarın faresini kabul etmiyor. Bu PC'nin kendi faresini ya da Full KVM sürümünü kullanın",
   "Use this window as an extra screen of the other computer": "Bu pencereyi diğer bilgisayarın ek ekranı olarak kullan",

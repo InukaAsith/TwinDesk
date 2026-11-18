@@ -1541,6 +1541,8 @@
   "Copies made while {name} is away aren’t kept": "Cópias feitas enquanto {name} está ausente não são guardadas",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} aguardando {name}: vão para Recentes, não para a área de transferência",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Cópias feitas enquanto {name} está ausente vão para Recentes quando ele voltar, não para a área de transferência",
+  "Incoming {app} call": "Chamada de {app} recebida",
+  "{app} call · {time}": "Chamada de {app} · {time}",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Usar o mouse deste PC na solicitação de administrador ou na tela de bloqueio",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "Uma janela executada como administrador aqui não aceita o mouse de outro computador. Use o mouse deste PC ou a versão Full KVM",
   "Use this window as an extra screen of the other computer": "Usar esta janela como tela extra do outro computador",

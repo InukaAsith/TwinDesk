@@ -148,6 +148,7 @@ let discovery = null;
 let link = null;
 let iosNet = null; // shared/iosnet.js: iPhones on a USB cable
 let settings = null;
+let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
 let screen = null;
@@ -229,7 +230,7 @@ function start() {
   require('../shared/tailnet.js').use(() => !(settings && settings.net && settings.net.tailscale === false)); // General › Tailscale (#161)
   i18n = I18n.create(I18n.resolveLanguage(settings.ui.language, app.getLocale()));
 
-  discovery = new Discovery(device);
+  discovery = new Discovery({ ...device, rc: true }); // a paired Android may come back by itself after a long drop (#266)
   discovery.on('change', pushState);
   discovery.on('invite', (d) => {
     // Connect on this computer in our host's list: back to it, taking the session over.
@@ -262,6 +263,8 @@ function start() {
     resolveAddress: (macId) => discovery.get(macId),
   });
   link = new Peer(guest);
+  // General › Keep the display awake while a computer is connected (shared/keepawake.js, #240).
+  awake = require('../shared/keepawake.js').keepAwake(() => settings.app.keepAwake !== false && link && link.status.state === 'connected' && !(link.current && P.isPhoneOs(link.current.os)));
   link.setPlain(settings.files.plain === true); // Files › Encrypt file transfers
   if (settings.drive.on) loadDrive();
   // The files engine (shared/fx2.js) stays up while another TwinDesk computer is on the network: a
@@ -476,7 +479,7 @@ function start() {
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
     get net() { return net; }, applyNet, joinHotspot,
-    checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); applyLocalApi(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
+    checkFirewall, fixFirewall, setStartup, onApp: () => { updateTray(); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => Look.applyTheme(nativeTheme, settings.ui.theme) });
   Look.applyTheme(nativeTheme, settings.ui.theme);
   systemPreferences.on('accent-color-changed', () => pushState());
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set }); // Two-way switches per pair
@@ -513,6 +516,7 @@ async function startHost(guest) {
     // A phone's hello takes the session: the computer we're a guest of is dropped (yieldTo).
     const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp }, { busy: () => guest.authed, yieldTo: () => guest.yieldSession() });
     pairing.on('request', showMain); // a code to compare: bring the window up
+    guest.on('welcome', () => pairing.clearReturn()); // a guest of another computer now: the phone doesn't come back by itself (as on the Mac)
     link.attachHost(server, pairing);
     hostServer = server;
     applyNet(); // your own relay, now that there's a server to hand its connections to

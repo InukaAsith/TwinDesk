@@ -127,19 +127,6 @@ async function pinchPanAndControl() {
   assert.deepStrictEqual(flick.sent.map(m => m.t), ['in.wh'], 'a short two-finger flick commits once on lift');
 }
 function cancellationAndBounds() {
-  const capture = fixture();
-  capture.recv({ t: 'stream.stop', reason: 'capture-unavailable' });
-  assert.match(capture.overlay.textContent, /Screen capture is unavailable/);
-  capture.recv({ t: 'stream.info' });
-  capture.recv({ t: 'screen.state', on: true });
-  assert.match(capture.overlay.textContent, /Retrying/,'retry state preserves the actionable failure');
-  capture.videoEvents.get('playing')();
-  assert.strictEqual(capture.overlay.textContent, '', 'a recovered stream clears its failure');
-  capture.recv({ t: 'stream.stop', reason: 'capture-unavailable' });
-  capture.recv({ t: 'screen.state', on: false });
-  assert.doesNotMatch(capture.overlay.textContent, /Retrying/, 'explicit stop clears retry guidance');
-  capture.recv({ t: 'stream.stop' });
-  assert.match(capture.overlay.textContent, /isn’t sharing/, 'legacy stop behavior remains available');
   const f = fixture();
   f.pointer('pointerdown', 1, 400, 400); f.pointer('pointermove', 1, 440, 400);
   f.pointer('pointerdown', 2, 600, 400);

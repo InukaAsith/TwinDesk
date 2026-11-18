@@ -38,9 +38,9 @@ class BankGuard(private val core: Core) {
         private const val ID = 19
         // Words in an app's name or package that mean money: a bank, a wallet, a payments app. These
         // count anywhere ("MobileBanking", "com.x.sparkasse"); the rest only as words of their own.
-        private val ANYWHERE = Regex("bank|banque|banco|bancaria|banca|sparkasse|wallet|finanz|finance|paytm|phonepe|paypal|revolut|binance|coinbase|wellsfargo|bankofamerica|americanexpress|capitalone|commbank", RegexOption.IGNORE_CASE)
+        private val ANYWHERE = Regex("bank|banque|banco|bancaria|banca|sparkasse|wallet|finanz|finance|paytm|phonepe|paypal|revolut|binance|coinbase|wellsfargo|bankofamerica|americanexpress|capitalone|commbank|creditagricole|credit ?agricole|cr[eé]dit ?mutuel|soci[eé]t[eé] ?g[eé]n[eé]rale|caisse ?d|boursorama|fortuneo|unicredit|intesa|mediolanum|bradesco|ita[uú]|nubank|picpay|mercadopago|mercado ?pago|tinkoff|sberbank|ziraat|garanti|yapikredi|yap[iı] ?kredi|alipay|unionpay|icbc|kaspi|nordea|danske|abnamro|abn ?amro|bunq|knab", RegexOption.IGNORE_CASE)
         private val WORDS = Regex(
-            "volksbank|raiffeisen|credit ?union|kredit|upi|bhim|gpay|venmo|monzo|wise|n26|chase|barclays|hsbc|santander|citi|amex|bofa|lloyds|natwest|halifax|ing|bbva|bnp|" +
+            "volksbank|raiffeisen|credit ?union|kredit|kredi|lcl|cic|bper|vtb|caixa|halkbank|kbc|belfius|bancolombia|bci|upi|bhim|gpay|venmo|monzo|wise|n26|chase|barclays|hsbc|santander|citi|amex|bofa|lloyds|natwest|halifax|ing|bbva|bnp|" +
                 "sampath|hnb|ntb|nationstrust|combank|boc|ndb|seylan|dfcc|frimi|genie|sbi|yono|icici|hdfc|axis|kotak|idfc|pnb|canara|maybank|dbs|ocbc|uob|anz|westpac|nab",
             RegexOption.IGNORE_CASE,
         )
@@ -251,11 +251,14 @@ class BankGuard(private val core: Core) {
         val text = if (switched) if (devOff) tr("For {app}: debugging and Developer options are off. Open TwinDesk to turn them back on.", "app" to label)
             else tr("For {app}: debugging is off. Open TwinDesk to turn it back on.", "app" to label)
         else tr("Turn off USB and wireless debugging in Developer options if {app} still refuses to open.", "app" to label)
+        // A bank's app looks at the phone as it starts, before its window is up: the first time it may have seen it all still on.
+        val again = tr("If {app} already showed a warning, close it and open it again.", "app" to label)
+        val body = "$text $again"
         nm.notify(
             ID,
             Notification.Builder(ctx, CH).setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle(tr("TwinDesk is fully closed"))
-                .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text))
+                .setContentText(text).setStyle(Notification.BigTextStyle().bigText(body))
                 .setContentIntent(PendingIntent.getActivity(ctx, 19, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE))
                 .setAutoCancel(true).build(),
         )

@@ -1231,6 +1231,15 @@
   "Auto-rotate is off: the screen stays as it is": "Otomatik döndürme kapalı: ekran olduğu gibi kalır",
   "Couldn’t take the screenshot": "Ekran görüntüsü alınamadı",
   "Screenshot saved in Pictures › TwinDesk": "Ekran görüntüsü Resimler › TwinDesk içine kaydedildi",
+  "Pointer over the lock screen": "Kilit ekranında işaretçi",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "TwinDesk'in Erişilebilirlik hizmeti açık değilse Android, işaretçiyi kilit ekranında ve bildirim panelinin altında gizler",
+  "While away": "Uzaktayken",
+  "Queue copies while away": "Uzaktayken kopyalananları sıraya al",
+  "Put the latest on the clipboard": "En sonuncuyu panoya koy",
+  "When queued copies arrive here, the newest one is pasted next": "Sıradaki kopyalar buraya gelince, bir sonraki yapıştırma en yenisi olur",
+  "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} öğe {name} için bekliyor: panosuna değil, Son kullanılanlar'ına gider",
+  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} uzaktayken kopyalananlar, geri geldiğinde panosuna değil Son kullanılanlar'ına gider",
+  "If {app} already showed a warning, close it and open it again.": "{app} zaten bir uyarı gösterdiyse, kapatıp yeniden açın.",
   "Previous desktop": "Önceki masaüstü",
   "Next desktop": "Sonraki masaüstü",
   "Displays & desktops": "Ekranlar ve masaüstleri",
@@ -1273,8 +1282,6 @@
   "Couldn’t change the desktop": "Masaüstü değiştirilemedi",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "Mission Control erişilebilirlik durumu okunamıyor, bu yüzden okunana kadar uzaktan kontrol duraklatılır. Dokunuşlar gönderilmez.",
   "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Mission Control açıkken uzaktan kontrol duraklatılır; dokunuşlar ona gönderilmez.",
-  "Pointer over the lock screen": "Kilit ekranında işaretçi",
-  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "TwinDesk'in Erişilebilirlik hizmeti açık değilse Android, işaretçiyi kilit ekranında ve bildirim panelinin altında gizler",
   "Actual size": "Gerçek boyut",
   "Auto-rotate": "Otomatik döndür",
   "Direct touch": "Doğrudan dokunma",
@@ -1283,7 +1290,5 @@
   "Hide viewer controls": "Görüntüleyici denetimlerini gizle",
   "Scale": "Ölçek",
   "Show viewer controls": "Görüntüleyici denetimlerini göster",
-  "View options": "Görünüm seçenekleri",
-  "Open Mac login screen": "Mac giriş ekranını aç",
-  "Screen capture is unavailable on {name}. Check the Mac’s lock and Screen Recording settings. Retrying…": "{name} üzerinde ekran yakalama kullanılamıyor. Mac’in kilidini ve Ekran Kaydı ayarlarını kontrol edin. Yeniden deneniyor…"
+  "View options": "Görünüm seçenekleri"
 }

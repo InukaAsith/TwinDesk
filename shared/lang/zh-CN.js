@@ -1549,6 +1549,8 @@
   "Copies made while {name} is away aren’t kept": "{name} 离线时复制的内容不会保留",
   "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} 条等待发送到 {name}：会进入其“最近”，不会放入其剪贴板",
   "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "{name} 离线时复制的内容会在其重新连接后进入其“最近”，不会放入其剪贴板",
+  "Incoming {app} call": "{app} 来电",
+  "{app} call · {time}": "{app} 通话 · {time}",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "请使用本机鼠标操作管理员权限提示或锁屏界面",
   "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "此处以管理员身份运行的窗口不接受另一台电脑的鼠标。请使用本机鼠标，或使用 Full KVM 版本",
   "Use this window as an extra screen of the other computer": "将此窗口用作另一台电脑的扩展屏幕",

@@ -275,7 +275,8 @@ UI.tab({
         avatarSlot.replaceChildren(UI.avatar(c.name || c.number, c.photo));
         who.textContent = c.name || c.number || tr('Unknown number');
         const bt = h.audio && h.audio.state === 'ready';
-        sub.textContent = c.state === 'ringing' ? c.name && c.number ? tr('Incoming call · {number}', { number: c.number }) : tr('Incoming call')
+        sub.textContent = c.app ? (c.state === 'ringing' ? tr('Incoming {app} call', { app: c.app }) : tr('{app} call · {time}', { app: c.app, time: UI.duration((Date.now() - c.since) / 1000) }))
+          : c.state === 'ringing' ? c.name && c.number ? tr('Incoming call · {number}', { number: c.number }) : tr('Incoming call')
           : tr(bt ? (h.audio.here ? '{state} · {duration} · Sound here' : '{state} · {duration} · Sound on the phone') : '{state} · {duration}', { state: tr(c.dir === 'out' ? 'Calling' : 'On a call'), duration: UI.duration((Date.now() - c.since) / 1000) });
         const ringing = c.state === 'ringing';
         answer.hidden = !ringing;

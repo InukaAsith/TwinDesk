@@ -1231,6 +1231,15 @@
   "Auto-rotate is off: the screen stays as it is": "Girar automaticamente desativado: a tela fica como está",
   "Couldn’t take the screenshot": "Não foi possível fazer a captura de tela",
   "Screenshot saved in Pictures › TwinDesk": "Captura de tela salva em Imagens › TwinDesk",
+  "Pointer over the lock screen": "Ponteiro na tela de bloqueio",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "O Android esconde o ponteiro na tela de bloqueio e sob a aba de notificações, a menos que o serviço de Acessibilidade do TwinDesk esteja ativado",
+  "While away": "Enquanto ausente",
+  "Queue copies while away": "Guardar cópias enquanto ausente",
+  "Put the latest on the clipboard": "Colocar a mais recente na área de transferência",
+  "When queued copies arrive here, the newest one is pasted next": "Quando as cópias guardadas chegam aqui, a mais nova é a próxima a ser colada",
+  "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} aguardando {name}: vão para Recentes, não para a área de transferência",
+  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Cópias feitas enquanto {name} está ausente vão para Recentes quando ele voltar, não para a área de transferência",
+  "If {app} already showed a warning, close it and open it again.": "Se o {app} já mostrou um aviso, feche-o e abra de novo.",
   "Previous desktop": "Área de trabalho anterior",
   "Next desktop": "Próxima área de trabalho",
   "Displays & desktops": "Telas e áreas de trabalho",
@@ -1273,8 +1282,6 @@
   "Couldn’t change the desktop": "Não foi possível mudar a área de trabalho",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "Não dá para ler o estado de acessibilidade do Mission Control, então o controle remoto fica pausado até dar. Toques não são enviados.",
   "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "O controle remoto fica pausado enquanto o Mission Control está aberto, para os toques não irem para ele.",
-  "Pointer over the lock screen": "Ponteiro na tela de bloqueio",
-  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "O Android esconde o ponteiro na tela de bloqueio e sob a aba de notificações, a menos que o serviço de Acessibilidade do TwinDesk esteja ativado",
   "Actual size": "Tamanho real",
   "Auto-rotate": "Giro automático",
   "Direct touch": "Toque direto",
@@ -1283,7 +1290,5 @@
   "Hide viewer controls": "Ocultar controles do visualizador",
   "Scale": "Escala",
   "Show viewer controls": "Mostrar controles do visualizador",
-  "View options": "Opções de visualização",
-  "Open Mac login screen": "Abrir tela de início de sessão do Mac",
-  "Screen capture is unavailable on {name}. Check the Mac’s lock and Screen Recording settings. Retrying…": "A captura de tela está indisponível em {name}. Verifique o bloqueio do Mac e os ajustes de Gravação da Tela. Tentando novamente…"
+  "View options": "Opções de visualização"
 }

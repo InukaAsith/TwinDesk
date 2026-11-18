@@ -88,6 +88,7 @@ class Discovery extends EventEmitter {
   // self: {id, name, fp?, port?}
   constructor(self) {
     super();
+    this.reclaim = !!self.rc;
     this.self = { id: self.id, name: self.name, fp: self.fp || '', os: P.OS.WIN, port: self.port || P.PORT };
     // id -> {id, name, os, address, port, fp, lastSeen, invited, routes}. routes: address -> {address,
     // via (this PC's adapter on that network, '' through a router), local, lastSeen}. A computer on a
@@ -246,7 +247,9 @@ class Discovery extends EventEmitter {
 
   _beaconMsg() {
     const { id, name, os: o, port, fp } = this.self;
-    return { t: P.T.BEACON, v: P.PROTOCOL_VERSION, id, name, port, fp, os: o, role: 'host' };
+    const msg = { t: P.T.BEACON, v: P.PROTOCOL_VERSION, id, name, port, fp, os: o, role: 'host' };
+    if (this.reclaim) msg.rc = 1; // a paired Android may come back by itself (shared/reclaim.js)
+    return msg;
   }
 
   _beacon() {

@@ -575,7 +575,7 @@ class Link(
             ws?.cancel()
             return
         }
-        canReclaim = m.optInt("rc", 0) == 1 && h.os == "mac"
+        canReclaim = m.optInt("rc", 0) == 1 && h.os in Core.RETURN_OS
         reclaimHello = false
         m.optString("macName").takeIf { it.isNotEmpty() }?.let { h.name = it.take(64) }
         if (m.has("tail")) h.tail = Tailnet.clean(m.optJSONArray("tail")) // its Tailscale addresses (Tailnet.kt)
