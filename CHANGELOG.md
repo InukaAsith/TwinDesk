@@ -13,6 +13,23 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **Clipboard › While away** (on every computer, Multi-device and Android; on by default): copies
+  made while the other device is away wait (in memory, up to 50) and go to its Recent when it's back,
+  not onto its clipboard. **Put the latest on the clipboard** (off) puts the newest one there.
+- **Calls from WhatsApp, Instagram and other apps** on the computer: their incoming call shows in the
+  call window as Incoming WhatsApp call, with Answer, Decline and End.
+- **Phones come back by themselves to Windows and Linux** (#266): a paired Android that dropped for
+  longer than half a minute reconnects without Take over or Tap to connect, as with a Mac (never
+  taking the session from another device). Overview shows Reconnecting… with Disconnect (#217 by
+  [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Keep the display awake** on Windows and Linux (General, on like the Mac's): while another
+  computer is connected the display stays on and the computer doesn't sleep (#240).
+- **Real gamepad as a PlayStation controller** (Remote, Windows and Linux): Controller › PlayStation
+  (DualShock 4) for games that take only one (#266).
+- **Notifications › Pop-ups › None:** the other device's notifications go in Recent only (#266).
+- **Photos and Phone Files:** an Into {folder}… button shows where Save puts things and changes it (#266).
+- **Pointer over the lock screen** (Android, Pointer): says why the pointer can't show there and
+  turns on the Accessibility service that lets it (#261).
 - **Sound › Only on the computer** (Android, on by default): without wireless debugging, the phone's
   speaker goes quiet while its sound plays on the computer, and its volume comes back after.
 - **A laptop's battery** on the other computer's page.
@@ -26,10 +43,10 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
   and saved in Pictures › TwinDesk), Record (the picture and the phone's sound, as MP4 in Movies ›
   TwinDesk; WebM where MP4 can't be made), the volume keys, Rotate, Power and Phone screen off. Its
   button in the title bar shows or hides it; on Windows it switches the side panel.
-- **Banking pause, gentler** (Android): debugging comes back on by itself a few minutes after you
-  leave the banking app (needs Usage access; Settings › Banking pause › Turn back on after the
-  banking app), and its notice has Turn back on. **Open with banking pause** puts a home-screen
-  shortcut for a banking app that switches debugging off first, then opens it.
+- **Banking apps** (Android): when a banking app opens, TwinDesk switches off debugging, Developer
+  options and its Accessibility service and closes; opening TwinDesk turns them back on. More banks
+  are recognized (France, Italy, Brazil, Turkey, Russia, China, the Nordics, Benelux), and the
+  notice says to reopen a bank's app that already warned (#279).
 - **Linked with Android** (General): link a computer through Android's own companion device
   chooser, and Android keeps TwinDesk running and connected in the background, with no battery
   optimization prompt. **Start TwinDesk when it's near** (off unless switched on, Android 12+):
@@ -70,6 +87,21 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### Fixes
 
+- **Typing into a phone** from a French (AZERTY) or other non-US keyboard: letters, AltGr's @ and
+  €, accents and Ctrl+A land as typed, and the numpad works (#260).
+- **Several Android phones** (Windows, Linux, Mac): a second phone no longer shows the first one's
+  screen or takes its input (#263, #269 by [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Phone app windows on Xiaomi, Redmi and POCO** (HyperOS): the app fills its window (#265).
+- **Multi-device on Linux and Windows:** Mount works (#259). Two computers that list each other keep
+  one link, so control no longer flaps (#272, #275 by [@hughesyadaddy](https://github.com/hughesyadaddy)).
+- **Fedora (firewalld):** Fix firewall opens the ports in every active zone (#267, #268 by
+  [@DistroAgnostic](https://github.com/DistroAgnostic)).
+- **Windows:** the pointer stuck over a window run as administrator now comes home with a note
+  about it (#278); a copy arriving from the other device shows once in Win+V, not twice.
+- **Mac:** Photos and Files saves from a phone are taken with Accept files off (#270 by
+  [@alexfoxtm](https://github.com/alexfoxtm)).
+- **Android:** the bottom bar's labels (Shortcuts and the rest) are readable (#266, #271 by
+  [@alexfoxtm](https://github.com/alexfoxtm)).
 - **Copy code** no longer takes a card's last digits, a price, an account, order or tracking number,
   a date, a phone number or a zip, promo or error code for a one-time code.
 - **Phone app windows:** a video in full screen came in landscape into a portrait window, small

@@ -36,10 +36,16 @@ old behaviour.
 | `fx2: 1` | hello and welcome | fx2: the file engine in its own process, parallel ranges | fx, then `file.chunk` |
 | `fxPlain: 1` | hello and welcome | Unencrypted file bytes allowed on the local network (Files › Encrypt file transfers off on both) | encrypted fx2 |
 | `il: {…}` | hello and welcome | tdv2: the encrypted UDP input lane, with its port | tdv1 (input on the session) |
-| `rc: 1` | hello / welcome | A paired phone may return to its session without taking it over | plain hello (takes the session) |
+| `rc: 1` | hello / welcome (and the beacon) | A paired phone may return to its session without taking it over (Mac; Windows and Linux too since #266) | plain hello (takes the session) |
 | `resume: key` | welcome, then hello | The session may move to another path (Bluetooth to Wi-Fi, the cable) without ending | a new session |
 | `tail: [addresses]` | welcome | This computer's Tailscale addresses, for reaching it away from home (#161) | local discovery only |
 | `takeover: true` | hello | Take the session from the device that holds it | refused while busy |
+
+## Clipboard policy
+
+`clip.policy` says what a device wants from the other side's clipboard: `accept`, `images`, and
+`queue: true` when it understands `clip.queue {items: [{text, at}]}`, the copies made while it was
+away (shared/clipqueue.js). Without `queue` nothing is queued for it.
 
 ## Features in dev.state
 
