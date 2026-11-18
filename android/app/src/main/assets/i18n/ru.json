@@ -1230,5 +1230,7 @@
   "Auto-rotate is on: the screen turns with this phone": "Автоповорот включён: экран поворачивается вместе с телефоном",
   "Auto-rotate is off: the screen stays as it is": "Автоповорот выключен: экран остаётся как есть",
   "Couldn’t take the screenshot": "Не удалось сделать снимок экрана",
-  "Screenshot saved in Pictures › TwinDesk": "Снимок экрана сохранён в «Изображения › TwinDesk»"
+  "Screenshot saved in Pictures › TwinDesk": "Снимок экрана сохранён в «Изображения › TwinDesk»",
+  "Pointer over the lock screen": "Указатель на экране блокировки",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "Android скрывает указатель на экране блокировки и под шторкой уведомлений, если не включена служба специальных возможностей TwinDesk"
 }

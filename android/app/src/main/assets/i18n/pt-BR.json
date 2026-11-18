@@ -1230,5 +1230,7 @@
   "Auto-rotate is on: the screen turns with this phone": "Girar automaticamente ativado: a tela gira com este celular",
   "Auto-rotate is off: the screen stays as it is": "Girar automaticamente desativado: a tela fica como está",
   "Couldn’t take the screenshot": "Não foi possível fazer a captura de tela",
-  "Screenshot saved in Pictures › TwinDesk": "Captura de tela salva em Imagens › TwinDesk"
+  "Screenshot saved in Pictures › TwinDesk": "Captura de tela salva em Imagens › TwinDesk",
+  "Pointer over the lock screen": "Ponteiro na tela de bloqueio",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "O Android esconde o ponteiro na tela de bloqueio e sob a aba de notificações, a menos que o serviço de Acessibilidade do TwinDesk esteja ativado"
 }

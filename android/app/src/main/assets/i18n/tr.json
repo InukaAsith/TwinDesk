@@ -1230,5 +1230,7 @@
   "Auto-rotate is on: the screen turns with this phone": "Otomatik döndürme açık: ekran bu telefonla birlikte döner",
   "Auto-rotate is off: the screen stays as it is": "Otomatik döndürme kapalı: ekran olduğu gibi kalır",
   "Couldn’t take the screenshot": "Ekran görüntüsü alınamadı",
-  "Screenshot saved in Pictures › TwinDesk": "Ekran görüntüsü Resimler › TwinDesk içine kaydedildi"
+  "Screenshot saved in Pictures › TwinDesk": "Ekran görüntüsü Resimler › TwinDesk içine kaydedildi",
+  "Pointer over the lock screen": "Kilit ekranında işaretçi",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "TwinDesk'in Erişilebilirlik hizmeti açık değilse Android, işaretçiyi kilit ekranında ve bildirim panelinin altında gizler"
 }

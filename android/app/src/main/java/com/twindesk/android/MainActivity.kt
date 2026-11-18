@@ -1236,6 +1236,13 @@ private fun CursorPage(core: Core, v: Int) {
         SwitchRow(tr("Reverse scrolling"), tr("Invert the scroll direction on this device"), core.sync.value("reverseScroll") == "true") { core.sync.setValue("reverseScroll", it) }
         MacRow(tr("Right-click"), tr("Back"))
         MacRow(tr("Middle click"), tr("Home"))
+        // Without the Accessibility service the arrow is an app's overlay: Android draws it under the
+        // notification shade and hides it on the lock screen (#261). The service's window is above both.
+        if (core.input.supported && InputService.running == null) {
+            MacRow(tr("Pointer over the lock screen"), tr("Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on")) {
+                Primary(tr("Allow")) { core.input.openSettings() }
+            }
+        }
     }
     MacCard(tr("Not on the same network")) {
         @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content

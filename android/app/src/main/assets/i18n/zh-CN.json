@@ -1230,5 +1230,7 @@
   "Auto-rotate is on: the screen turns with this phone": "自动旋转已开启：画面随这部手机旋转",
   "Auto-rotate is off: the screen stays as it is": "自动旋转已关闭：画面保持当前方向",
   "Couldn’t take the screenshot": "无法截图",
-  "Screenshot saved in Pictures › TwinDesk": "截图已保存在“图片 › TwinDesk”"
+  "Screenshot saved in Pictures › TwinDesk": "截图已保存在“图片 › TwinDesk”",
+  "Pointer over the lock screen": "锁屏上的指针",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "除非开启 TwinDesk 的无障碍服务，否则 Android 会在锁屏上和通知栏下方隐藏指针"
 }
