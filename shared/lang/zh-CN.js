@@ -1539,6 +1539,7 @@
   "Use several devices at once": "同时使用多台设备",
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "将手机用作此电脑的触控板、键盘或手柄。",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "请使用本机鼠标操作管理员权限提示或锁屏界面",
+  "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "此处以管理员身份运行的窗口不接受另一台电脑的鼠标。请使用本机鼠标，或使用 Full KVM 版本",
   "Use this window as an extra screen of the other computer": "将此窗口用作另一台电脑的扩展屏幕",
   "All your computers and phones as one desk": "让你的所有电脑和手机共用一个工作台",
   "Use {me} as a second screen for {name}.": "将 {me} 用作 {name} 的第二块屏幕。",

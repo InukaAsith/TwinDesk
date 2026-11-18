@@ -67,6 +67,7 @@ namespace MacShare
             touch = new Touch(injector);
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
+            injector.Stuck = delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "adminWindow"; Emit(e); }; // Inject.cs WatchStuck (#278)
             capture.ReleaseInjected = delegate { smoother.Clear(); stylus.Leave(); touch.Leave(); injector.ReleaseAll(); }; // the emergency return (Crossing.cs)
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move

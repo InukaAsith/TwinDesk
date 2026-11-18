@@ -1539,6 +1539,7 @@
   "Use several devices at once": "Use several devices at the same time",
   "Use the phone as this computer’s touchpad, keyboard or gamepad.": "Use the phone as this computer’s touchpad, keyboard or gamepad.",
   "Use this PC’s own mouse for the administrator prompt or lock screen": "Use this PC’s own mouse for the administrator prompt or lock screen",
+  "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build": "A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build",
   "Use this window as an extra screen of the other computer": "Use this window as an extra screen of the other computer",
   "All your computers and phones as one desk": "All your computers and phones as one desk",
   "Use {me} as a second screen for {name}.": "Use {me} as a second screen for {name}.",
