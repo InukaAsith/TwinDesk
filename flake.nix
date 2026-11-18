@@ -7,6 +7,7 @@
 
   outputs = { self, nixpkgs }:
     let
+      fullkvm = import ./nix/fullkvm.nix { inherit self; lib = nixpkgs.lib; };
       supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
       nixpkgsFor = forAllSystems (system: import nixpkgs { inherit system; });
@@ -23,6 +24,25 @@
             url = "https://registry.npmjs.org/ws/-/ws-8.22.0.tgz";
             hash = "sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==";
           };
+          # The input lane's library (native/tdfast): the helpers link it (-DTDFAST), as linux-helper/build.sh does.
+          tdfast = pkgs.rustPlatform.buildRustPackage {
+            pname = "tdfast";
+            version = "0.1.0";
+            src = "${self}/native/tdfast";
+            cargoLock.lockFile = ./native/tdfast/Cargo.lock;
+            doCheck = false;
+          };
+          # iPhone app signing's helper (ios-signer/), built as the Linux packages do: the one that also
+          # installs an IPA the person picks (TWINDESK_SIGNER_ANY_IPA=1).
+          iosSigner = pkgs.rustPlatform.buildRustPackage {
+            pname = "twindesk-ios-signer";
+            version = "3.0.0";
+            src = "${self}/ios-signer";
+            cargoLock.lockFile = ./ios-signer/Cargo.lock;
+            buildFeatures = [ "any-ipa" ];
+            doCheck = false;
+          };
+          nodeArch = if system == "aarch64-linux" then "arm64" else "x64";
         in
         rec {
           twindesk = pkgs.stdenv.mkDerivation rec {
@@ -44,6 +64,7 @@
               pkgs.libxext
               pkgs.libxrandr
               pkgs.libxfixes
+              tdfast
             ];
 
             runtimeDeps = [
@@ -56,6 +77,19 @@
               pkgs.networkmanager
               pkgs.android-tools
               pkgs.xrandr
+              pkgs.libnotify         # notify-send: notifications
+              pkgs.playerctl         # media controls
+              pkgs.wl-clipboard      # wl-copy / wl-paste: Wayland clipboard
+              pkgs.bluez             # bluetoothctl
+              pkgs.openssh           # ssh, sshd, ssh-keygen: Terminal and the SSH feature
+              pkgs.iproute2          # ip, ss
+              pkgs.iw
+              pkgs.systemd           # busctl, loginctl, systemctl
+              pkgs.glib.bin          # gdbus
+              pkgs.brightnessctl
+              pkgs.util-linux
+              pkgs.unzip
+              pkgs.p7zip
               pythonEnv
             ];
 
@@ -64,6 +98,8 @@
 
               mkdir -p linux-helper/bin
               BLE_FLAGS="$(pkg-config --cflags --libs gio-2.0)"
+              # The native input lane (native/tdfast): libtdfast.a built by the tdfast derivation
+              BLE_FLAGS="$BLE_FLAGS -DTDFAST -Inative/tdfast -L${tdfast}/lib -ltdfast -ldl"
 
               $CC -O2 -Wall -Wextra -std=gnu11 linux-helper/src/*.c \
                 -o linux-helper/bin/macshare-linuxhelper \
@@ -105,6 +141,16 @@
               # The Full KVM build's service (docs/full-kvm.md) isn't in the Nix package: without
               # shared/fullkvm its hooks (shared/edition.js) stay off, as in the normal .deb.
               rm -rf "$share/shared/fullkvm"
+
+              # TwinDesk Web (shared/web/webwire.js): the page a browser loads, and the phone app's viewer
+              # and remote it reuses (android-web/), at the paths it looks for.
+              cp -r web "$share/web"
+              rm -rf "$share/web/shortcuts-src"
+              cp -r android/app/src/main/assets/web "$share/android-web"
+
+              # iPhone app signing's helper (shared/iossign-host.js looks in ios-signer/bin/<arch>/)
+              mkdir -p "$share/ios-signer/bin/${nodeArch}"
+              cp ${iosSigner}/bin/twindesk-ios-signer "$share/ios-signer/bin/${nodeArch}/"
 
               # Copy helper binaries
               cp linux-helper/bin/macshare-linuxhelper "$share/linux-helper/bin/"
@@ -193,6 +239,9 @@ EOF
             };
           };
 
+          inherit tdfast;
+          twindesk-fullkvm = fullkvm.package pkgs twindesk;
+          ios-signer = iosSigner;
           default = twindesk;
         }
       );
@@ -221,6 +270,8 @@ EOF
               pkgs.electron
               pkgs.pkg-config
               pkgs.gcc
+              pkgs.cargo   # linux-helper/build.sh builds native/tdfast with it; ios-signer/build.sh too
+              pkgs.rustc
               pkgs.glib
               pkgs.libx11
               pkgs.libxi
@@ -319,6 +370,7 @@ EOF
             enabled = config.services.twindesk.enable || config.programs.twindesk.enable;
           in
           {
+            imports = [ fullkvm.module ];
             options.services.twindesk = mkTwindeskOptions;
             options.programs.twindesk = mkTwindeskOptions;
 
