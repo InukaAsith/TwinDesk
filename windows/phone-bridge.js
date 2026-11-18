@@ -844,7 +844,7 @@ class PhoneBridge extends EventEmitter {
   _key(m) {
     if (!this.kvm || !this.ctl || typeof m.code !== 'string') return;
     const swap = this.server.keySwap(this.getSettings());
-    const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
+    let code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
 
     // Enter in a chat app sends (shared/phonechat.js; the setting is the phone windows' one). Its
@@ -871,9 +871,12 @@ class PhoneBridge extends EventEmitter {
       }
     }
 
-    const e = this.keys.event(code, down);
     // Phone › Type as a hardware keyboard: a HID keyboard on the phone, its own layout (#123).
-    if (uhidKey(this.ctl, (this.getSettings().phone || {}).uhid === true, code, down)) return;
+    const uhid = (this.getSettings().phone || {}).uhid === true;
+    // Else letters by what they type here (an AZERTY Ctrl+A is Ctrl+A there, shared/phonetype.js, #260).
+    if (!uhid) code = (this.keyType || (this.keyType = new (require('../shared/phonetype.js').PhoneType)())).fromHelper(code, down, m.ch).code || code;
+    const e = this.keys.event(code, down);
+    if (uhidKey(this.ctl, uhid, code, down)) return;
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
 
