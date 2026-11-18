@@ -48,12 +48,45 @@ async function checkFirewall(fixed) {
   }
   const fwd = await run('firewall-cmd', ['--state']);
   if (fwd.out === 'running') {
-    const tcp = await run('firewall-cmd', ['--query-port=' + PORTS.tcp + '/tcp']);
-    const udp = await run('firewall-cmd', ['--query-port=' + PORTS.udp + '/udp']);
-    const ok = tcp.out === 'yes' && udp.out === 'yes';
+    const ok = await firewalldOpen();
     return { ok, tool: 'firewalld', message: ok ? 'firewalld lets TwinDesk in' : 'firewalld blocks TwinDesk.' };
   }
   return { ok: true, tool: '', message: 'No firewall is on' };
+}
+
+// The zones firewalld uses now (each network interface's, else the default one).
+async function firewalldZones() {
+  const act = await run('firewall-cmd', ['--get-active-zones']);
+  // "FedoraWorkstation\n  interfaces: wlp2s0\n": zone names are the lines that don't start with a space
+  const zones = act.ok ? act.out.split('\n').filter((l) => l && !/^\s/.test(l)).map((l) => l.trim()) : [];
+  if (zones.length) return zones;
+  const def = await run('firewall-cmd', ['--get-default-zone']);
+  return def.ok && def.out ? [def.out] : [];
+}
+
+// "1025-65535/tcp 47801/udp" covers port/proto?
+function portsCover(list, port, proto) {
+  return String(list || '').split(/\s+/).some((p) => {
+    const m = /^(\d+)(?:-(\d+))?\/(\w+)$/.exec(p);
+    return !!m && m[3] === proto && port >= Number(m[1]) && port <= Number(m[2] || m[1]);
+  });
+}
+
+// Both ports open in every active zone, as a port or inside a range (Fedora Workstation's zone opens
+// 1025-65535, which --query-port doesn't count) (#267).
+async function firewalldOpen() {
+  const zones = await firewalldZones();
+  if (!zones.length) {
+    const tcp = await run('firewall-cmd', ['--query-port=' + PORTS.tcp + '/tcp']);
+    const udp = await run('firewall-cmd', ['--query-port=' + PORTS.udp + '/udp']);
+    return tcp.out === 'yes' && udp.out === 'yes';
+  }
+  for (const z of zones) {
+    const r = await run('firewall-cmd', ['--zone=' + z, '--list-ports']);
+    if (!r.ok) return false;
+    if (!portsCover(r.out, PORTS.tcp, 'tcp') || !portsCover(r.out, PORTS.udp, 'udp')) return false;
+  }
+  return true;
 }
 
 // Also mDNS (5353/udp): adb finds a phone's wireless debugging with it (phone-bridge.js).
@@ -61,9 +94,14 @@ async function fixFirewall(tool) {
   if (fs.existsSync('/etc/NIXOS')) {
     throw new Error('On NixOS, add networking.firewall.allowedTCPPorts = [ 47800 ]; and networking.firewall.allowedUDPPorts = [ 47801 5353 ]; in configuration.nix (or enable services.twindesk.enable).');
   }
-  const script = tool === 'firewalld'
-    ? 'firewall-cmd --permanent --add-port=' + PORTS.tcp + '/tcp --add-port=' + PORTS.udp + '/udp --add-service=mdns && firewall-cmd --reload'
-    : 'ufw allow ' + PORTS.tcp + '/tcp && ufw allow ' + PORTS.udp + '/udp && ufw allow 5353/udp';
+  let script;
+  if (tool === 'firewalld') {
+    // Each active zone (an interface in a zone other than the default one is let in too); one
+    // permanent change per command, as some firewalld versions refuse ports and a service together.
+    const zones = (await firewalldZones()).filter((z) => /^[\w.-]+$/.test(z));
+    const zs = zones.length ? zones.map((z) => ' --zone=' + z) : [''];
+    script = zs.map((z) => 'firewall-cmd --permanent' + z + ' --add-port=' + PORTS.tcp + '/tcp --add-port=' + PORTS.udp + '/udp && firewall-cmd --permanent' + z + ' --add-service=mdns').join(' && ') + ' && firewall-cmd --reload';
+  } else script = 'ufw allow ' + PORTS.tcp + '/tcp && ufw allow ' + PORTS.udp + '/udp && ufw allow 5353/udp';
   const r = await run('pkexec', ['sh', '-c', script], 120000);
   if (r.ok) return true;
   throw new Error(r.code === 126 ? 'the password prompt was closed' : r.err || 'pkexec failed');
@@ -209,4 +247,5 @@ async function removeInput() {
   return true;
 }
 
-module.exports = { session, checkFirewall, fixFirewall, inputBlocker, inputAccess, fixInput, leaveInputGroup, removeInput, helperBin };
+module.exports = {
+  portsCover, session, checkFirewall, fixFirewall, inputBlocker, inputAccess, fixInput, leaveInputGroup, removeInput, helperBin };

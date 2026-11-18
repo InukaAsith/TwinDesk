@@ -268,6 +268,10 @@ class Notifs(core: Core) : Feature(core) {
     // From NotifListener: a new notification on this phone.
     fun posted(sbn: StatusBarNotification) {
         runCatching { chatPosted(sbn) }
+        // A call in an app (WhatsApp, Instagram…): the computer's call window, with Answer and Decline (Calls.kt).
+        val cn = sbn.notification
+        if (cn != null && cn.category == Notification.CATEGORY_CALL && sbn.packageName != core.ctx.packageName &&
+            runCatching { core.hub.appCallPosted(sbn, appNameOf(sbn.packageName), extractTitle(cn.extras)) }.getOrDefault(false)) return
         runCatching { core.peer.notifPosted(sbn, this) } // and to a phone connected with Connect with Android (Peer.kt)
         if (!peerAccepts || !core.sync.get("notifs", "out") || !core.link.connected) return
         val n = sbn.notification ?: return
@@ -347,6 +351,7 @@ class Notifs(core: Core) : Feature(core) {
     // From NotifListener: gone from this phone (swiped, opened, or the app took it back): from the
     // computer's list too.
     fun removed(sbn: StatusBarNotification) {
+        runCatching { core.hub.appCallRemoved(sbn.key) }
         val had = synchronized(actions) { actions.remove(sbn.key) } != null
         synchronized(replies) { replies.remove(sbn.key) }
         if (had && peerAccepts && core.link.connected) core.send(msg("notif.gone", "id" to sbn.key.take(200)))

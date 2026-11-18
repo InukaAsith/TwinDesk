@@ -117,9 +117,17 @@ class Phone extends EventEmitter {
   }
 
   // Let the phone go: it won't resume, and the computer reconnects by itself.
+  // A dropped phone only inside the grace window has no socket to bye, so its return is revoked
+  // here too; a hello whose welcome is still deferred is closed (releasePending).
   disconnect() {
+    const c = this.raw && this.raw.current;
+    const grace = this.raw && this.raw.phoneGrace;
+    const id = c && P.isPhoneOs(c.os) ? c.deviceId : ((grace && grace.id) || this.pairing.returnPhone);
+    if (this.raw && typeof this.raw.releasePending === 'function') this.raw.releasePending(id);
+    if (id && this.raw && typeof this.raw.noteReleased === 'function') this.raw.noteReleased(id);
     if (this.raw.current && P.isPhoneOs(this.raw.current.os)) this.raw.release();
     else this.raw.endPhoneGrace(); // dropped and waiting to resume: let it go too
+    this.emit('change');
   }
 
   _fail(message) {
@@ -151,8 +159,10 @@ class Phone extends EventEmitter {
 
   get view() {
     const c = this.server.current;
+    const returning = !isPhone(c) && this.pairing.returnPhone && this.pairing.list().find((p) => p.id === this.pairing.returnPhone);
     return {
       nearby: this.nearby(),
+      returning: returning ? { id: returning.id, name: returning.name } : null, // it may come back by itself (Disconnect stops that)
       connected: isPhone(c) ? { id: c.deviceId, name: c.name, os: c.os, rttMs: c.rttMs, usb: !!c.ice } : null,
       connecting: this.connecting ? { id: this.connecting.id, name: this.connecting.name } : null,
       message: this.message,

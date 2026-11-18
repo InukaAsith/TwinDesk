@@ -549,7 +549,7 @@ class PhoneViews extends EventEmitter {
     // An app window on an asleep phone waited for a picture that never came (#247, #239): the phone
     // wakes first (a phone that's awake ignores it), so its new display draws.
     if (v.app && !v.native) s.tap(ANDROID.WAKEUP);
-    if (v.app) setTimeout(() => s.startApp(v.app), 300);
+    if (v.app) setTimeout(() => require('../shared/appstart.js').startApp(s, { adb: this.bridge.adb, serial: this.bridge.serial, maker: ((this.phone && this.phone.info) || {}).maker, app: v.app }), 300); // full screen on HyperOS (#265)
     this._send(v, 'phoneview:status', { ready: true, via });
   }
 
@@ -602,10 +602,17 @@ class PhoneViews extends EventEmitter {
       case 'key': {
         if (typeof m.code !== 'string') return;
         const swap = P.keySwapNeeded(P.OS.WIN, P.OS.ANDROID) && this.getSettings().keys.swapCtrlCmd !== false;
-        const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
+        let code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
         if (this._special(v, code, !!m.down)) break;
+        const uhid = (this.getSettings().phone || {}).uhid === true;
+        if (!uhid) { // by what the key types here, not its place on Android's QWERTY (shared/phonetype.js, #260)
+          const r = (v.type || (v.type = new (require('../shared/phonetype.js').PhoneType)())).fromWindow({ code, down: !!m.down, repeat: !!m.repeat, key: m.key, shift: !!m.shift, ctrl: !!m.ctrl, meta: !!m.meta, altGr: !!m.altGr });
+          if (r.text) { s.text(r.text); break; }
+          if (!r.code) break;
+          code = r.code;
+        }
         const e = v.keys.event(code, !!m.down);
-        if (uhidKey(s, (this.getSettings().phone || {}).uhid === true, code, !!m.down)) break; // a HID keyboard (#123)
+        if (uhidKey(s, uhid, code, !!m.down)) break; // a HID keyboard (#123)
         if (e) s.key(m.down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta, m.repeat ? 1 : 0);
         break;
       }

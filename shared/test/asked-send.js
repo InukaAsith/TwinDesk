@@ -381,6 +381,7 @@ async function meshOverlap() {
   const links = new EventEmitter();
   links.list = () => [];
   links.pairState = () => null;
+  links.bindServer = () => {};
   const mesh = {
     addPeer() {}, removePeer() {}, handle() { return false; }, get() { return null; },
     rosterMessage() { return { t: 'mesh.roster' }; },
@@ -409,6 +410,7 @@ async function meshOverlap() {
   const server = new EventEmitter();
   server.clients = new Map();
   server.port = 0;
+  server.setPrimary = () => {};
   hub.attachHost(server, null);
 
   const box = setup();

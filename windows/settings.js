@@ -91,7 +91,7 @@ function normalize(s) {
     // hotkey: double-tap = mouse and keyboard home. lockKeys: cursor lock on/off (shared/cursorlock.js)
     keys: { swapCtrlCmd: bool(keys.swapCtrlCmd, true), hotkey: P.HOTKEYS.includes(keys.hotkey) ? keys.hotkey : P.HOTKEY_WIN, lockKeys: CL.validKeys(keys.lockKeys, CL.DEFAULT_KEYS.win), emergencyKeys: Crossing.emergency(keys.emergencyKeys) }, // emergencyKeys: everything home, sharing off (#178)
     // hud: popup when switching computers. inputProtocol: udp = tdv2 input lane (default), tcp = tdv1
-    app: { hud: bool(appS.hud, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true, localApi: appS.localApi === true }, // localApi: General › Local API (shared/localapi.js) // keepPinging: General › Advanced (shared/quiet.js)
+    app: { hud: bool(appS.hud, true), keepAwake: bool(appS.keepAwake, true), inputProtocol: appS.inputProtocol === 'tcp' ? 'tcp' : 'udp', keepPinging: appS.keepPinging === true, localApi: appS.localApi === true }, // localApi: General › Local API (shared/localapi.js) // keepPinging: General › Advanced (shared/quiet.js)
     // New releases on GitHub (shared/updates.js); notified = the last version announced, skipped = version ignored
     updates: { auto: bool(up.auto, true), notified: typeof up.notified === 'string' ? up.notified.slice(0, 40) : '', skipped: typeof up.skipped === 'string' ? up.skipped.slice(0, 40) : '', install: up.install === true }, // install: install new versions by themselves (shared/selfupdate.js)
     clipboard: {
@@ -105,6 +105,8 @@ function normalize(s) {
       skipConcealed: bool(c.skipConcealed, true),
       maxKB: Math.round(num(c.maxKB, 256, 1, P.CLIP_MAX_BYTES / 1024)),
       historySize: Math.round(num(c.historySize, 20, 0, 100)),
+      queue: bool(c.queue, true), // copies made while the other device is away go to its Recent when it's back (shared/clipqueue.js)
+      queueLatest: bool(c.queueLatest, false), // … and the latest of those it sends lands on this clipboard
     },
     monitor: {
       volume: Math.round(num(mon.volume, 1, 0, 1) * 100) / 100,

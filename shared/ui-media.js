@@ -40,7 +40,8 @@ UI.tab({
     }, 'small');
     const canRemove = () => !!(UI.state && UI.state.hub && UI.state.hub.perm && UI.state.hub.perm.media && UI.state.hub.perm.media.remove);
     const status = el('span', { class: 'hint hub-media-status', attrs: { 'data-literal': '' } });
-    const bar = el('div', { class: 'hub-media-bar' }, [filter.el, el('span', { class: 'hub-grow' }), status, removeBtn, saveBtn, selectBtn]);
+    const folderBtn = UI.saveFolderButton();
+    const bar = el('div', { class: 'hub-media-bar' }, [filter.el, el('span', { class: 'hub-grow' }), status, folderBtn, removeBtn, saveBtn, selectBtn]);
     const grid = el('div', { class: 'hub-grid' });
     const sentinel = el('div', { class: 'hub-sentinel' });
     // Albums (a phone that lists them: media.albums): All, then each with its cover and count. The
@@ -342,6 +343,7 @@ UI.tab({
 
     return (s) => {
       top.render(s);
+      folderBtn.update(s);
       bigSave.textContent = tr('Save to {me}', { me: UI.fill('{me}') });
       const ready = UI.hubReady(s, 'media') && !UI.onBle(s); // over Bluetooth: the Wi-Fi Direct note only
       wrap.hidden = !ready;

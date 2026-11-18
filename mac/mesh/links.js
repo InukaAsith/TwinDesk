@@ -177,7 +177,7 @@ class LinkManager extends EventEmitter {
     this.inbound.add(id);
     this.waitSince.delete(id);
     const link = this.links.get(id);
-    if (link && link.authed) link.yieldSession();
+    if (link) link.yieldSession(); // authenticated, or still dialling: it yields either way
   }
 
   // The inbound link of device id ended: we wait for it to come back, then dial ourselves.

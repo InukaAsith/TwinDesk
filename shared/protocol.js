@@ -142,7 +142,8 @@
       // clipboard text
       CLIP: 'clip',
       CLIP_REQUEST: 'clip.request',
-      CLIP_POLICY: 'clip.policy', // either way: {accept, images} — whether this side applies clip (and clip.image) from the other
+      CLIP_POLICY: 'clip.policy', // either way: {accept, images, queue} — whether this side applies clip (and clip.image) from the other
+      CLIP_QUEUE: 'clip.queue', // either way: {items: [{text, at}]}: copies made while the other was away, for its Recent (shared/clipqueue.js); sent only to a side whose clip.policy has queue
       // The latest copy wins (shared/clipsync.js; Multi-device's clipboard for now): `clip` carries {ts, o}:
       // when the copy happened (a hybrid logical clock, ms) and on which device. An older item never replaces a newer one.
       CLIP_IMAGE: 'clip.image', // either way: {id, ts, o, w, h, png: base64} an image on the clipboard

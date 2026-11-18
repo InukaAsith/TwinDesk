@@ -109,6 +109,7 @@ let link = null; // hub.facade: the SELECTED device, for every one-to-one featur
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let settings = null;
+let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
@@ -214,6 +215,8 @@ function start() {
   // ReZume off here (not loaded): still answer the phone's policy, so it shows ReZume as off
   hub.bus.on(P.T.RZ_POLICY, (m, from) => { if (!rezume && from && from === rzSolo.id()) hub.bus.send(from, { t: P.T.RZ_POLICY, on: false, web: false, docs: false, apps: false, push: false }); });
   link = hub.facade;
+  // General › Keep the display awake while a computer is connected (shared/keepawake.js, #240).
+  awake = require('../../shared/keepawake.js').keepAwake(() => settings.app.keepAwake !== false && hub && hub._connectedIds().length > 0);
   // Overview's controls of the selected device (a computer or a phone), and this computer's for it.
   const { DevCtl } = require('../../shared/devctl.js');
   const { DevLocal } = require('../../shared/devlocal.js');
@@ -426,7 +429,7 @@ function start() {
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
-    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => updateTray(buildState()), onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
+    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
     bus: hub.bus,
     peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
@@ -613,6 +616,9 @@ function startPhone(server, pairing) {
     const u = phone.unit(m.originId);
     if (u && u.link.current) u.views.openNotified(m.app, m.appName);
   };
+  // Mount: the active phone's storage as a drive here (it was never made, so Mount did nothing, #259).
+  phoneDrive = new PhoneDrive({ adb, bridge: phone.bridgeProxy, phone });
+  phoneDrive.on('change', pushState);
   kvm.local = phone; // driving a phone goes through adb, by the partner: phone.drives(id) / handle(msg, id)
   kvm.blockEdge = () => phone.focused; // moving inside the phone window never crosses
   pushState();

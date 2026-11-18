@@ -1230,5 +1230,14 @@
   "Auto-rotate is on: the screen turns with this phone": "Girar automaticamente ativado: a tela gira com este celular",
   "Auto-rotate is off: the screen stays as it is": "Girar automaticamente desativado: a tela fica como está",
   "Couldn’t take the screenshot": "Não foi possível fazer a captura de tela",
-  "Screenshot saved in Pictures › TwinDesk": "Captura de tela salva em Imagens › TwinDesk"
+  "Screenshot saved in Pictures › TwinDesk": "Captura de tela salva em Imagens › TwinDesk",
+  "Pointer over the lock screen": "Ponteiro na tela de bloqueio",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "O Android esconde o ponteiro na tela de bloqueio e sob a aba de notificações, a menos que o serviço de Acessibilidade do TwinDesk esteja ativado",
+  "While away": "Enquanto ausente",
+  "Queue copies while away": "Guardar cópias enquanto ausente",
+  "Put the latest on the clipboard": "Colocar a mais recente na área de transferência",
+  "When queued copies arrive here, the newest one is pasted next": "Quando as cópias guardadas chegam aqui, a mais nova é a próxima a ser colada",
+  "{count} waiting for {name}: they go in its Recent, not on its clipboard": "{count} aguardando {name}: vão para Recentes, não para a área de transferência",
+  "Copies made while {name} is away go in its Recent when it’s back, not on its clipboard": "Cópias feitas enquanto {name} está ausente vão para Recentes quando ele voltar, não para a área de transferência",
+  "If {app} already showed a warning, close it and open it again.": "Se o {app} já mostrou um aviso, feche-o e abra de novo."
 }

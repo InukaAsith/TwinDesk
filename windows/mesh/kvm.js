@@ -542,6 +542,12 @@ class Kvm {
         break;
       // A UAC prompt or the lock screen here: the other computer's input can't reach it, so it
       // goes home (else its pointer stays hidden there while nothing moves here).
+      // The pointer stopped over a window run as administrator here (Inject.cs WatchStuck): Windows
+      // lets no other app's input into it, so it goes home rather than sit there dead (#278).
+      case 'adminWindow':
+        console.log(`[kvm] the pointer stopped over a window run as administrator (${this.mode})`);
+        if (this.mode === 'driven') this._sendHome(undefined, 'A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build');
+        break;
       case 'secureDesktop':
         console.log(`[kvm] administrator prompt or lock screen ${msg.on ? 'up' : 'gone'} here (${this.mode})`); // #210
         if (msg.on && this.mode === 'driven') this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');

@@ -154,9 +154,16 @@ class Link extends EventEmitter {
   // The host dialled us (mesh): drop our own socket to it, so there is one link. Our link waits
   // until the inbound one ends (poke()).
   yieldSession() {
-    if (!this.authed) return;
-    this._closeSocket();
-    this._scheduleReconnect();
+    if (this.destroyed) return;
+    if (this.authed) {
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
+    if (this.ws) { // still dialling: drop it, the inbound link is the one
+      this._closeSocket();
+      clearTimeout(this.timers.reconnect);
+      this._scheduleReconnect();
+    }
   }
 
   // Stop for good: no socket, no reconnect (the manager closes its links this way).

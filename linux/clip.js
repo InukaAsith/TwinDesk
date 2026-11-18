@@ -5,6 +5,7 @@
 const clipboard = require('./wlclip').clipboard(); // wl-clipboard on Wayland desktops that need it (#97)
 const P = require('../shared/protocol.js');
 const { ClipImages, trimPictures, itemView } = require('../shared/clipimage.js');
+const { ClipQueue } = require('../shared/clipqueue.js');
 const eclip = require('../shared/eclip.js');
 
 // Newer Electron returns a Promise from clipboard.readText() in main; await works for both.
@@ -27,6 +28,12 @@ class Clip {
     this.peerAccepts = true; // the Mac's last clip.policy
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size} or a picture (clipimage.js)
     this.lastSkip = '';
+    this.queue = new ClipQueue(); // copies made while the other device was away
+    // No helper word on copies here: while nobody is connected, a look every 2 s finds new ones for
+    // the queue (connected, the instant poll does). What was there when it went away isn't a copy.
+    this.awaySeen = null;
+    this.awayTimer = setInterval(() => this._awayLook(), 2000);
+    if (this.awayTimer.unref) this.awayTimer.unref();
     this.poll = null;
     this.ticks = 0;
     this.seen = null; // last clipboard text the instant poll saw
@@ -49,11 +56,13 @@ class Clip {
     this.watched = false; // the helper says when anything is copied (useHelper)
 
     link.on(P.T.CLIP, (m) => this._onClip(m));
+    link.on(P.T.CLIP_QUEUE, (m) => this._onQueue(m));
     link.on(P.T.CLIP_IMAGE, (m) => this.images.header(m));
     link.on(P.T.CLIP_IMAGE_PART, (m) => this.images.part(m));
     link.on(P.T.CLIP_POLICY, (m) => {
       this.peerAccepts = m.accept !== false;
       this.images.policy(m);
+      if (m.queue === true && m.accept !== false) this._flushQueue();
       this.onChange();
     });
     link.on('welcome', () => {
@@ -79,6 +88,7 @@ class Clip {
       if (name !== 'clipboard') return;
       this.watched = true;
       this.copied = true;
+      if (this.link.status.state !== 'connected') this._queueNow(); // nobody to send it to: queued
     });
   }
 
@@ -94,7 +104,7 @@ class Clip {
 
   sendPolicy() {
     const c = this.cfg;
-    this.link.send({ t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept });
+    this.link.send({ t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept, queue: true }); // queue: clip.queue understood here
   }
 
   _startPoll() {
@@ -123,7 +133,7 @@ class Clip {
     this.poll = null;
   }
 
-  _remember(dir, item) {
+  _remember(dir, item, at = Date.now()) {
     // What went out last is no longer on the other side once something came in, and the other way
     // round: copying it again must send it again (#223).
     if (dir === 'in') this.lastSync.sent = null; else this.lastSync.received = null;
@@ -133,7 +143,7 @@ class Clip {
       this.history = this.history.filter((h) => h.text !== item || h.dir !== dir);
       item = { text: item, size: Buffer.byteLength(item, 'utf8') };
     }
-    this.history.unshift({ dir, at: Date.now(), ...item });
+    this.history.unshift({ dir, at, ...item });
     if (this.history.length > n) this.history.length = n;
     trimPictures(this.history);
   }
@@ -216,12 +226,66 @@ class Clip {
     this.onChange();
   }
 
+  // ---- Clipboard › Queue copies while away (shared/clipqueue.js) ----
+
+  async _awayLook() {
+    const c = this.cfg;
+    if (this.link.status.state === 'connected' || !c.enabled || !c.send || c.queue === false) { this.awaySeen = null; return; }
+    let t;
+    try { t = await readText(); } catch (_) { return; }
+    if (this.awaySeen === null) { this.awaySeen = t; return; }
+    if (t === this.awaySeen) return;
+    this.awaySeen = t;
+    this._queueNow();
+  }
+
+  // A copy here with nobody connected: kept for when the other device is back.
+  async _queueNow() {
+    const c = this.cfg;
+    if (!c.enabled || !c.send || c.queue === false || this.link.status.state === 'connected') return;
+    let text;
+    try { text = await readText(); } catch (_) { return; }
+    if (!text || require('../shared/otp.js').isQuiet(text)) return;
+    if (c.skipConcealed && (await isConcealed().catch(() => false))) return;
+    if (this.queue.add(text, c.maxKB)) this.onChange();
+  }
+
+  // The other side takes queued copies (its clip.policy says queue): they go now, into its Recent.
+  _flushQueue() {
+    const c = this.cfg;
+    if (!c.enabled || !c.send || !this.queue.size || !this.link.status.state === 'connected') return;
+    const m = this.queue.take();
+    if (!this.link.send(m)) { for (const x of m.items) this.queue.add(x.text, c.maxKB); return; }
+    for (const x of m.items) this._remember('out', x.text, x.at);
+    this.onChange();
+  }
+
+  // Copies the other side made while we were away: in Recent; on the clipboard only the latest,
+  // and only with Put the latest on the clipboard on.
+  async _onQueue(m) {
+    const c = this.cfg;
+    if (!c.enabled || !c.receive) return;
+    const items = require('../shared/clipqueue.js').itemsOf(m);
+    if (!items.length) return;
+    for (const x of items) this._remember('in', x.text, x.at);
+    if (c.queueLatest) {
+      const last = items[items.length - 1].text;
+      let same = false;
+      try { same = (await readText()) === last; } catch (_) { /* write it */ }
+      if (!same) try { clipboard.writeText(last); } catch (_) { /* busy */ }
+      this.lastSync.received = last;
+      this.seen = last;
+    }
+    this.onChange();
+  }
+
   get view() {
     return {
       peerAccepts: this.peerAccepts,
       peerImages: this.images.peerImages,
       imageSupport: true, // the one-to-one clipboard (Multi-device's has no pictures yet)
       lastSkip: this.lastSkip,
+      queued: this.queue.size,
       history: this.history.map((h) => itemView(h, PREVIEW)),
     };
   }
