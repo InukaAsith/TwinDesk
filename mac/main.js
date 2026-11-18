@@ -1412,6 +1412,7 @@ function loadHub() {
     },
   });
   phoneHub = hub;
+  require('../shared/asked-send.js').wireAsked(hub, svc.drop); // Photos/Files › Save comes back as one Send (#239)
   hub.on('change', pushState);
   hub.on('data', (m) => win && !win.isDestroyed() && win.webContents.send('hub', m));
   const popup = () => {
