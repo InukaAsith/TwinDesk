@@ -60,4 +60,89 @@ function itemsOf(m) {
   return out;
 }
 
-module.exports = { ClipQueue, itemsOf, MAX, MAX_BYTES };
+
+// Multi-device: a queue for each device seen since this app started that isn't connected now. A
+// copy here (a look every 2 s, only while some device is away) goes in the queue of each one away;
+// when one is back and its clip.policy says queue, its own queue goes to it (clip.queue, straight
+// to it, not through the pool). clip: the mesh Clip (cfg, bus, lastSync, _readText, _remember,
+// clipboard, onChange); concealed(): the clipboard holds a password now.
+class MeshClipQueue {
+  constructor(clip, { concealed = async () => false, nameOf = (id) => id } = {}) {
+    this.clip = clip;
+    this.concealed = concealed;
+    this.nameOf = nameOf;
+    this.queues = new Map(); // device id -> ClipQueue
+    this.known = new Set();
+    this.seen = null;
+    this.timer = setInterval(() => this._look(), 2000);
+    if (this.timer.unref) this.timer.unref();
+  }
+
+  get size() {
+    let n = 0;
+    for (const q of this.queues.values()) n += q.size;
+    return n;
+  }
+
+  welcome(id) { this.known.add(id); }
+
+  _away() {
+    const on = new Set(this.clip.bus.connectedIds());
+    return [...this.known].filter((id) => !on.has(id));
+  }
+
+  async _look() {
+    const c = this.clip.cfg;
+    const away = c.enabled && c.send && c.queue !== false ? this._away() : [];
+    if (!away.length) { this.seen = null; return; }
+    let t;
+    try { t = await this.clip._readText(); } catch (_) { return; }
+    if (this.seen === null) { this.seen = t; return; } // what was there already isn't a copy
+    if (t === this.seen) return;
+    this.seen = t;
+    if (!t || t === this.clip.lastSync.received || require('./otp.js').isQuiet(t)) return;
+    if (c.skipConcealed && (await this.concealed().catch(() => false))) return;
+    let added = false;
+    for (const id of this._away()) {
+      if (!this.queues.has(id)) this.queues.set(id, new ClipQueue());
+      if (this.queues.get(id).add(t, c.maxKB)) added = true;
+    }
+    if (added) this.clip.onChange();
+  }
+
+  // Its clip.policy: it takes queued copies (and the clipboard at all).
+  policy(id, m) {
+    const q = this.queues.get(id);
+    const c = this.clip.cfg;
+    if (!q || !q.size || !m || m.queue !== true || m.accept === false || !c.enabled || !c.send) return;
+    const msg = q.take();
+    if (!this.clip.bus.send(id, msg)) { for (const x of msg.items) q.add(x.text, c.maxKB); return; }
+    this.clip.onChange();
+  }
+
+  // Copies a device made while we were away: in Recent; on the clipboard only the latest, with
+  // Put the latest on the clipboard on.
+  async receive(m, from) {
+    const clip = this.clip;
+    const c = clip.cfg;
+    if (!c.enabled || !c.receive) return;
+    const items = itemsOf(m);
+    if (!items.length) return;
+    const name = this.nameOf(from);
+    for (const x of items) clip._remember('in', x.text, name, x.at);
+    if (c.queueLatest) {
+      const last = items[items.length - 1].text;
+      let now = '';
+      try { now = await clip._readText(); } catch (_) { /* write it */ }
+      if (now !== last) clip.clipboard.writeText(last);
+      clip.lastSync.received = last;
+      clip.seen = last;
+      this.seen = last;
+    }
+    clip.onChange();
+  }
+
+  destroy() { clearInterval(this.timer); }
+}
+
+module.exports = { ClipQueue, MeshClipQueue, itemsOf, MAX, MAX_BYTES };
