@@ -1272,5 +1272,7 @@
   "This Mac can’t change the desktop on the screen being shown": "Этот Mac не может сменить рабочий стол на показанном экране",
   "Couldn’t change the desktop": "Не удалось сменить рабочий стол",
   "Mission Control’s accessibility status can’t be read, so remote control stays paused until it can. Touches are not sent.": "Состояние доступности Mission Control прочитать не удаётся, поэтому удалённое управление на паузе, пока это не получится. Касания не отправляются.",
-  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Удалённое управление на паузе, пока Mission Control открыт, чтобы касания не попадали в него."
+  "Remote control stays paused while Mission Control is open, so touches are not sent into it.": "Удалённое управление на паузе, пока Mission Control открыт, чтобы касания не попадали в него.",
+  "Pointer over the lock screen": "Указатель на экране блокировки",
+  "Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on": "Android скрывает указатель на экране блокировки и под шторкой уведомлений, если не включена служба специальных возможностей TwinDesk"
 }

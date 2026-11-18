@@ -105,6 +105,7 @@ object SearchIndex {
         Entry("Reverse scrolling", { tr("Reverse scrolling") }, "Pointer", "Cursor", ""),
         Entry("Right-click", { tr("Right-click") }, "Pointer", "Cursor", ""),
         Entry("Middle click", { tr("Middle click") }, "Pointer", "Cursor", ""),
+        Entry("Pointer over the lock screen", { tr("Pointer over the lock screen") }, "Pointer", "Cursor", ""),
         Entry("Not on the same network", { tr("Not on the same network") }, "", "Cursor", ""),
         Entry("Over Bluetooth", { tr("Over Bluetooth") }, "Not on the same network", "Cursor", ""),
         Entry("Hotkey", { tr("Hotkey") }, "", "Keyboard", ""),

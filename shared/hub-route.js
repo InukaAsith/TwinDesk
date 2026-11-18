@@ -6,6 +6,39 @@ const { EventEmitter } = require('events');
 
 // What a feature sees of its device: the one-to-one "client" object (role 'guest' = it connected to
 // this computer, 'host' = this computer is its guest).
+const OPEN = 1; // WebSocket.OPEN
+
+function socketOpen(ws) {
+  return !!ws && typeof ws === 'object' && ws.readyState === OPEN && ws.released !== true;
+}
+
+// The socket send() writes. The guest link wins when it is up (Mac Session.send, and Windows
+// and Linux once they are not hosting). The host socket is used only when the guest link is not.
+// Not the host ctx, and not the device id. ws, address and ice below stay as they were.
+function outboundOf(s) {
+  if (!s || typeof s !== 'object') return null;
+  if (typeof s.outbound === 'function') {
+    let ws = null;
+    try { ws = s.outbound(); } catch { return null; }
+    return socketOpen(ws) ? ws : null;
+  }
+  if (s.linkUp && s.link && s.link.authed !== false) return socketOpen(s.link.ws) ? s.link.ws : null;
+  const ctx = s.ctx;
+  if (s.hostUp && ctx && ctx.authed === true && ctx.released !== true) return socketOpen(ctx.ws) ? ctx.ws : null;
+  return null;
+}
+
+// The socket a message arrived on, still held by this session. A reconnect keeps the Link and
+// replaces link.ws: the previous socket does not pass. A released host ctx does not pass either.
+function ingressOf(s, sock) {
+  if (!socketOpen(sock) || !s) return null;
+  if (s.link && s.link.ws === sock) return s.linkUp && s.link.authed !== false ? sock : null;
+  const ctx = s.ctx;
+  if (!ctx || ctx.released === true || ctx.authed === false) return null;
+  if (ctx.ws !== sock && ctx.alt !== sock) return null;
+  return s.hostUp || ctx.authed === true ? sock : null;
+}
+
 function viewOf(s) {
   if (!s) return null;
   const c = s.hostUp ? s.ctx : null;
@@ -21,6 +54,10 @@ function viewOf(s) {
     authed: true,
     ws: c ? c.ws : (s.link ? s.link.ws : null),
     ice: c ? c.ice : null,
+    // Save binds this: the outbound socket. Route.deliver replaces it with the ingress socket
+    // when a message names the one it arrived on. Not a protocol field.
+    conn: outboundOf(s),
+    source: () => outboundOf(s),
   };
 }
 
@@ -68,11 +105,20 @@ class Route extends EventEmitter {
     this.emit('closed', v);
   }
 
-  deliver(msg) {
+  // ingress: the physical socket that received msg. Without it (Windows and Linux routes,
+  // and a one-argument deliver) the view stays the outbound socket of current(), and nothing
+  // else about the view changes. With it, conn/source are that socket, checked again against
+  // the session — not whatever send() would use now.
+  deliver(msg, ingress) {
     const s = this.session;
     if (!s) return false;
     if (this.tap) this.tap(msg);
     const v = viewOf(s);
+    if (arguments.length > 1) {
+      const captured = ingress && typeof ingress === 'object' ? ingress : null;
+      v.conn = ingressOf(s, captured);
+      v.source = () => ingressOf(s, captured);
+    }
     this.emit(`t:${msg.t}`, msg, v);
     this.emit('message', msg, v);
     return true;
@@ -107,4 +153,4 @@ class Route extends EventEmitter {
   }
 }
 
-module.exports = { Route, viewOf };
+module.exports = { Route, viewOf, outboundOf, ingressOf };

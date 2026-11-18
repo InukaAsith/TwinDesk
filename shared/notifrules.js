@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // How a phone's notifications show here (Notifications › Showing here). Mac, Windows and Linux,
 // settings.notifs:
-//   style       'twindesk' | 'system' | '' (unset: TwinDesk's window on Windows and Linux, the Mac's own there)
+//   style       'twindesk' | 'system' | 'none' (no pop-ups at all: Recent only, #266) | '' (unset: the system's)
 //   otpCopy     a one-time code goes on the clipboard by itself (kept out of clipboard sync and history)
 //   quiet       {on, from: 'HH:MM', to: 'HH:MM'} Pause pop-ups on a schedule: none in those hours
 //               (across midnight too)
@@ -18,7 +18,7 @@ const MAX_APPS = 300;
 function clean(partial, cur) {
   const p = partial && typeof partial === 'object' ? partial : {};
   const out = {};
-  if (p.style === 'twindesk' || p.style === 'system' || p.style === '') out.style = p.style;
+  if (p.style === 'twindesk' || p.style === 'system' || p.style === 'none' || p.style === '') out.style = p.style;
   if (typeof p.otpCopy === 'boolean') out.otpCopy = p.otpCopy;
   if (p.quiet && typeof p.quiet === 'object') {
     const q = { ...(cur && cur.quiet) || { on: false, from: '22:00', to: '07:00' } };
@@ -59,6 +59,7 @@ function modeOf(cfg, m, date) {
   const own = app && c.phoneApps && c.phoneApps[app];
   if (own && own.mode === 'hide') return 'hide';
   if (own && own.mode === 'quiet') return 'quiet';
+  if (c.style === 'none') return 'quiet'; // Pop-ups › None: every app's go in Recent only
   if (inQuiet(c.quiet, date)) return 'quiet';
   return 'show';
 }

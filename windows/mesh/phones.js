@@ -70,6 +70,16 @@ class PhoneSet extends EventEmitter {
 
   get bridge() { return this.active.bridge; }
   get views() { return this.active.views; }
+  // The active phone's bridge, read at each use (phonedrive.js keeps the object it's given).
+  get bridgeProxy() {
+    return new Proxy({}, {
+      get: (_t, name) => {
+        const target = this.active.bridge;
+        const v = target[name];
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+  }
   get info() { return this.active.phone.info; }
   get adb() { return this.active.phone.adb; }
   get apps() { return this.active.phone.apps; }

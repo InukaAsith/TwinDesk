@@ -613,6 +613,9 @@ function startPhone(server, pairing) {
     const u = phone.unit(m.originId);
     if (u && u.link.current) u.views.openNotified(m.app, m.appName);
   };
+  // Mount: the active phone's storage as a drive here (it was never made, so Mount did nothing, #259).
+  phoneDrive = new PhoneDrive({ adb, bridge: phone.bridgeProxy, phone });
+  phoneDrive.on('change', pushState);
   kvm.local = phone; // driving a phone goes through adb, by the partner: phone.drives(id) / handle(msg, id)
   kvm.blockEdge = () => phone.focused; // moving inside the phone window never crosses
   pushState();

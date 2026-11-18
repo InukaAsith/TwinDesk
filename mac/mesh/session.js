@@ -35,7 +35,7 @@ class Session extends EventEmitter {
     this._linkMesh = false; // the guest link's welcome said mesh: 1
     this.meshCapable = false; // the device speaks the mesh (hello/welcome `mesh: 1`); set when it comes up
     this.taps = []; // hub: fn(msg, source) -> true when it consumed the message (see _deliver)
-    this._inbound = null; // the socket of the delivery now running, else null
+    this._inbound = null; // the guest link or host ctx of the delivery now running, else null
     this.lifeFns = []; // hub: fn(up, replaced) when the device becomes connected or stops being connected
     // Fast files (shared/fastfile.js): this device's file bytes over HTTPS, when both apps can (hello
     // fx: 1, welcome fx: token). Not the files engine (fx2): it serves one session at a time.
@@ -145,6 +145,21 @@ class Session extends EventEmitter {
     return false;
   }
 
+  // The socket send() writes right now, or null. Same choice as send(): the guest link when it
+  // is up, otherwise the host socket. A Save is bound to this object, not to the device id and
+  // not to the host ctx while the guest link is the one in use.
+  outbound() {
+    if (this.linkUp) {
+      const ws = this.link && this.link.ws;
+      return ws && ws.readyState === 1 && ws.released !== true ? ws : null;
+    }
+    if (this.hostUp && this.ctx && this.ctx.released !== true && this.ctx.authed !== false) {
+      const ws = this.server && typeof this.server.socketFor === 'function' ? this.server.socketFor(this.ctx) : this.ctx.ws;
+      return ws && ws.readyState === 1 && ws.released !== true ? ws : null;
+    }
+    return null;
+  }
+
   // A message as if the device had sent it.
   inject(msg) {
     if (this.connected) this._deliver(msg);
@@ -204,8 +219,8 @@ class Session extends EventEmitter {
     this.link = link;
     if (link && !this._subscribed.has(link)) {
       this._subscribed.add(link);
-      link.onAny = (msg) => {
-        if (this.link === link) this._fromLink(msg);
+      link.onAny = (msg, ws) => {
+        if (this.link === link) this._fromLink(msg, ws);
       };
       link.on('welcome', (msg) => {
         this._linkMesh = !!(msg && msg.mesh);
@@ -231,30 +246,51 @@ class Session extends EventEmitter {
     this._sync();
   }
 
-  // Messages from the server ctx. Only the current authenticated socket, and the tap
-  // receives that exact object. A released socket is not delivered. The guest link, when
-  // it is up, is a different connection: a host message is not labeled as that link.
-  fromHost(msg, ctx) {
-    if (ctx !== this.ctx || !physical(ctx)) return;
-    this._deliver(msg, false, ctx);
+  // Messages from the server ctx (only the one that is current). ws, when the server
+  // passes it, is the socket that received this message (the primary or its fallback),
+  // not whichever send() would use now. The bus stamp is this ctx only while it is still
+  // that live connection. A two-argument call (no ws) is the ctx's own socket.
+  fromHost(msg, ctx, ws) {
+    if (ctx !== this.ctx) return;
+    const explicitWs = arguments.length >= 3;
+    let sock = null;
+    let stamp = null;
+    if (!explicitWs) {
+      sock = (ctx && ctx.ws) || null;
+      stamp = physical(ctx) ? ctx : null;
+    } else {
+      sock = ws && typeof ws === 'object' ? ws : null;
+      const owns = !!(sock && ctx && (ctx.ws === sock || ctx.alt === sock));
+      stamp = owns && physical(ctx) ? ctx : null;
+    }
+    this._deliver(msg, false, { arrived: true, conn: stamp, ws: sock });
   }
 
   // ---- internals ----
 
-  _fromLink(msg) {
+  // ws: the socket link.js passed from the message callback. Not this.link.ws read again —
+  // a reconnect on that same Link replaces it. Without ws, the link's current socket is
+  // the one, and a link that is not live is not delivered.
+  _fromLink(msg, ws) {
     const link = this.link;
-    if (!physical(link)) return;
-    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, link);
+    const explicitWs = arguments.length >= 2;
+    if (!explicitWs && !physical(link)) return;
+    const sock = explicitWs ? (ws && typeof ws === 'object' ? ws : null) : ((link && link.ws) || null);
+    const stamp = !explicitWs ? link : (sock && link && link.ws === sock && physical(link) ? link : null);
+    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, { arrived: true, conn: stamp, ws: sock });
   }
 
   // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
-  // source: the guest link or host ctx that carried this message. inject() has none.
-  // inbound() is that same object while taps and handlers run, so a preview ask cannot
-  // treat the guest link as the host socket. A nested delivery restores the previous one.
-  _deliver(msg, raw = false, source = null) {
+  // source: an arrival { arrived, conn, ws }, or absent when inject() built the message.
+  // conn is the guest link or host ctx. inbound() is that object while taps and handlers
+  // run, so a preview ask cannot treat the guest link as the host socket. ws is the
+  // socket the callback passed, for the route's duplex check. A nested delivery restores
+  // the previous inbound connection.
+  _deliver(msg, raw = false, source) {
     if (!raw && this.fx.incoming(msg)) return;
+    const arrived = !!(source && source.arrived === true);
     const prev = this._inbound;
-    this._inbound = source || null;
+    this._inbound = arrived ? (source.conn || null) : null;
     try {
       for (const tap of this.taps) if (tap(msg, source) === true) return;
       const fns = this.handlers.get(msg.t);
@@ -268,7 +304,8 @@ class Session extends EventEmitter {
     }
   }
 
-  // The socket this delivery arrived on. Null for inject(), and null outside _deliver.
+  // The guest link or host ctx this delivery arrived on. Null for inject(), for a
+  // socket that is no longer that connection, and outside _deliver.
   inbound() {
     return this._inbound || null;
   }
@@ -339,9 +376,9 @@ class Sessions extends EventEmitter {
       const s = this.sessions.get(ctx.deviceId);
       if (s) s._changed();
     });
-    server.on('message', (msg, ctx) => {
+    server.on('message', (msg, ctx, ws) => {
       const s = this.sessions.get(ctx.deviceId);
-      if (s) s.fromHost(msg, ctx);
+      if (s) s.fromHost(msg, ctx, ws);
     });
     for (const ctx of server.clients.values()) this.ensure(ctx.deviceId).setCtx(ctx);
   }

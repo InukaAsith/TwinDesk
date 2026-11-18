@@ -93,8 +93,62 @@ namespace MacShare
             Point p = Screens.Walk(ix, iy, cur.x, cur.y, Stops != null ? Stops() : null);
             if (p.X != ix || p.Y != iy) { fx = 0; fy = 0; } // stopped by an edge: drop the remainder
             else { fx = tx - ix; fy = ty - iy; }
-            if (p.X != cur.x || p.Y != cur.y) MoveTo(p.X, p.Y);
+            if (p.X != cur.x || p.Y != cur.y)
+            {
+                MoveTo(p.X, p.Y);
+                WatchStuck(cur);
+            }
             if (Moved != null) Moved(p.X, p.Y, dx, dy);
+        }
+
+        // A window run as administrator under the pointer (or in front) takes no injected input
+        // (UIPI): the pointer stops there, never reaches the edge that sends it home, and the other
+        // computer's mouse seems dead (#278). Moves that don't land for a while over such a window
+        // say so once (Stuck); main sends the pointer home. Only for an elevated window, so a game
+        // that clips the cursor isn't taken for one.
+        public Action Stuck;
+        int stuckMoves, stuckSince;
+        bool stuckSaid;
+        void WatchStuck(Native.POINT before)
+        {
+            Native.POINT after;
+            if (!Native.GetCursorPos(out after)) return;
+            if (after.x != before.x || after.y != before.y) { stuckMoves = 0; stuckSaid = false; return; }
+            int now = Environment.TickCount;
+            if (stuckMoves++ == 0) stuckSince = now;
+            if (stuckSaid || stuckMoves < 8 || unchecked(now - stuckSince) < 250) return;
+            stuckSaid = true;
+            if (Stuck != null && (Elevated(WindowFromPoint(after)) || Elevated(Native.GetForegroundWindow()))) Stuck();
+        }
+
+        [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+        [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int cls, out int info, int len, out int retLen);
+
+        // The window's process runs elevated. A token we may not even read (TOKEN_QUERY refused) is
+        // an administrator's; a process we can't open at all (protected) is left alone.
+        static bool Elevated(IntPtr w)
+        {
+            if (w == IntPtr.Zero) return false;
+            IntPtr root = GetAncestor(w, 2); // GA_ROOT
+            uint pid;
+            GetWindowThreadProcessId(root != IntPtr.Zero ? root : w, out pid);
+            if (pid == 0) return false;
+            IntPtr h = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+            if (h == IntPtr.Zero) return false;
+            try
+            {
+                IntPtr tok;
+                if (!OpenProcessToken(h, 0x0008, out tok)) return Marshal.GetLastWin32Error() == 5; // TOKEN_QUERY; ERROR_ACCESS_DENIED
+                try
+                {
+                    int elevated, len;
+                    return GetTokenInformation(tok, 20, out elevated, 4, out len) && elevated != 0; // TokenElevation
+                }
+                finally { CloseHandle(tok); }
+            }
+            finally { CloseHandle(h); }
         }
 
         public void Button(int b, bool down)

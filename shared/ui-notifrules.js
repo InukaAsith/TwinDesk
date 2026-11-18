@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Notifications › Showing here (Mac, PC and Linux, one-to-one and Multi-device): how the other
 // device's notifications show on this computer (shared/notifrules.js, settings.notifs):
-//   Pop-ups        TwinDesk's own (Reply, its buttons, pictures, progress) or the system's
+//   Pop-ups        TwinDesk's own (Reply, its buttons, pictures, progress), the system's, or none (Recent only)
 //   Copy codes by themselves
 //   Pause pop-ups on a schedule, from … to …
 //   each phone app: Show, No pop-ups (Recent only) or Hide
@@ -14,7 +14,7 @@ UI.notifShowCard = () => {
   const set = (p) => api.setNotifs(p);
   const mac = /Mac/.test(navigator.platform || navigator.userAgent);
 
-  const style = UI.segmented([{ value: 'twindesk', label: t('TwinDesk') }, { value: 'system', label: t('System') }], (v) => set({ style: v }));
+  const style = UI.segmented([{ value: 'twindesk', label: t('TwinDesk') }, { value: 'system', label: t('System') }, { value: 'none', label: t('None') }], (v) => set({ style: v }));
   const styleRow = UI.row(t('Pop-ups'), '', [style.el]);
 
   const otp = UI.switch((v) => set({ otpCopy: v }), { label: t('Copy codes by themselves') });
@@ -47,9 +47,9 @@ UI.notifShowCard = () => {
       const n = s.notifs || {};
       card.hidden = !n.receive;
       if (card.hidden) return;
-      const st = n.style === 'twindesk' ? 'twindesk' : 'system';
+      const st = n.style === 'twindesk' || n.style === 'none' ? n.style : 'system';
       style.set(st);
-      styleRow.setHint(st === 'twindesk' ? t('TwinDesk’s own: Reply, the app’s buttons, pictures and progress right in it') : mac ? t('macOS notifications, with Reply and the app’s buttons') : t('The system’s notifications'));
+      styleRow.setHint(st === 'none' ? t('No pop-ups, and nothing in the system’s notification center: they go in Recent only') : st === 'twindesk' ? t('TwinDesk’s own: Reply, the app’s buttons, pictures and progress right in it') : mac ? t('macOS notifications, with Reply and the app’s buttons') : t('The system’s notifications'));
       otp.set(!!n.otpCopy);
       const q = n.quiet || { on: false, from: '22:00', to: '07:00' };
       quiet.set(!!q.on);

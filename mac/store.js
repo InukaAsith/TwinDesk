@@ -80,6 +80,8 @@ const DEFAULT_SETTINGS = {
     maxKB: 256,
     historySize: 20, // memory only
     images: false, // pictures too, up to 10 MB (shared/clipimage.js); screenshots put on the clipboard among them
+    queue: true, // copies made while the other device is away go to its Recent when it's back (shared/clipqueue.js)
+    queueLatest: false, // … and the latest of those it sends lands on this clipboard
   },
   // setupSkipped: the missing items when Setup was skipped; setupDone: Setup has been through once
   // (everything allowed, or skipped), so it never takes over the window again (General shows the rest).

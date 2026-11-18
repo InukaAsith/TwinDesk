@@ -635,6 +635,9 @@ function startPhone(server, pairing) {
     goTab, popup: (kind, text, sub) => hud && hud.show(kind, text, sub), onChange: pushState,
   });
   explorer.install();
+  // Mount: the active phone's storage as a drive here (it was never made, so Mount did nothing, #259).
+  phoneDrive = new PhoneDrive({ adb, bridge: phone.bridgeProxy, phone });
+  phoneDrive.on('change', pushState);
   kvm.local = phone; // driving a phone goes through adb, by the partner: phone.drives(id) / handle(msg, id)
   kvm.blockEdge = () => phone.focused; // moving inside the phone window never crosses
   pushState();

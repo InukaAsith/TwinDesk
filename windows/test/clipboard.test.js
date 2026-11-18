@@ -104,3 +104,34 @@ test('received copy during pending poll is not overwritten or echoed', async t =
   wait.resolve('local'); await poll; assert.equal(f.clip.seen, 'remote');
   assert.equal(f.sent.filter(m => m.t === P.T.CLIP).length, 0);
 });
+test('copies made while away are queued and go to the other side\'s Recent when it is back (clip.queue)', async () => {
+  const f = fixture(); f.link.status.state = 'closed';
+  const helper = new EventEmitter(); f.clip.useHelper(helper);
+  read = () => 'first'; helper.emit('event', 'clipboard'); await new Promise(r => setImmediate(r));
+  read = () => 'second'; helper.emit('event', 'clipboard'); await new Promise(r => setImmediate(r));
+  assert.equal(f.clip.view.queued, 2);
+  f.link.status.state = 'connected';
+  f.link.emit(P.T.CLIP_POLICY, { accept: true }); // an older side: no queue
+  assert.equal(f.sent.some(m => m.t === P.T.CLIP_QUEUE), false);
+  f.link.emit(P.T.CLIP_POLICY, { accept: true, queue: true });
+  const q = f.sent.find(m => m.t === P.T.CLIP_QUEUE);
+  assert.deepEqual(q.items.map(x => x.text), ['first', 'second']);
+  assert.equal(f.clip.view.queued, 0);
+});
+test('with the queue off nothing is kept while away', async () => {
+  const f = fixture(); f.link.status.state = 'closed'; f.cfg.queue = false;
+  const helper = new EventEmitter(); f.clip.useHelper(helper);
+  read = () => 'x'; helper.emit('event', 'clipboard'); await new Promise(r => setImmediate(r));
+  assert.equal(f.clip.view.queued, 0);
+});
+test('queued copies that arrive go in Recent, and on the clipboard only with Put the latest on', async () => {
+  const f = fixture(); read = () => 'mine';
+  f.link.emit(P.T.CLIP_QUEUE, { items: [{ text: 'a', at: Date.now() - 5000 }, { text: 'b', at: Date.now() - 1000 }] });
+  await new Promise(r => setImmediate(r));
+  assert.deepEqual(writes, []);
+  assert.deepEqual(f.clip.history.filter(h => h.dir === 'in').map(h => h.text), ['b', 'a']);
+  f.cfg.queueLatest = true;
+  f.link.emit(P.T.CLIP_QUEUE, { items: [{ text: 'c', at: Date.now() }] });
+  await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+  assert.deepEqual(writes, ['c']);
+});

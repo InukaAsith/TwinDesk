@@ -378,7 +378,7 @@
   const onKey = (e) => {
     if (e.altKey && e.code === 'F4') return;
     e.preventDefault();
-    api.send({ t: 'key', code: e.code, down: e.type === 'keydown', repeat: e.repeat });
+    api.send({ t: 'key', code: e.code, down: e.type === 'keydown', repeat: e.repeat, key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey, meta: e.metaKey, altGr: !!(e.getModifierState && e.getModifierState('AltGraph')) }); // key: what it types here (shared/phonetype.js)
   };
   window.addEventListener('keydown', onKey);
   window.addEventListener('keyup', onKey);

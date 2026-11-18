@@ -41,6 +41,10 @@ async function mount(url, { port, host }) {
     await new Promise((res) => setTimeout(res, 250));
   }
   const why = `${r.errOut}\n${r.out}`.trim().split('\n').map((s) => s.trim()).filter(Boolean).pop();
+  // gio comes with GLib, GVFS's WebDAV backend doesn't (Arch: gvfs and gvfs-dnssd; Debian: gvfs-backends) (#259)
+  if (/not supported|isn.t supported|not mountable|no such (method|backend)/i.test(why || '')) {
+    throw new Error('GVFS’s WebDAV backend is missing (install gvfs with gvfs-dnssd, or gvfs-backends)');
+  }
   throw new Error(why || (r.err ? 'GVFS didn’t mount it' : 'GVFS mounted it, but its folder isn’t there (gvfs-fuse missing?)'));
 }
 
