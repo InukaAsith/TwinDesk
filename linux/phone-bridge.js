@@ -329,7 +329,7 @@ class PhoneBridge extends EventEmitter {
     // for a phone this computer reached before: connect quietly (Automatic then goes through it).
     // ReZume's phone apps (Mirror apps) open through it as well: with wireless debugging on there,
     // it's used even when the mouse, the screen and the sound are all Limited.
-    if (!this.need && !(a.wifi && (this.known.has(this.server.current.deviceId) || this._rzApps()))) {
+    if (!this.need && !(a.wifi && ((!!this.server.current && this.known.has(this.server.current.deviceId)) || this._rzApps()))) {
       this.misses = 0;
       return this._set('idle', 'Not in use: the mouse and keyboard, the screen and the sound are set to Limited.');
     }
@@ -398,7 +398,7 @@ class PhoneBridge extends EventEmitter {
     // Paired before (this phone reached us since TwinDesk started): keep looking, with the code
     // field there in case its pairing really was removed.
     if (unpaired) this._known(false);
-    const known = !unpaired && this.known.has(this.server.current.deviceId);
+    const known = !unpaired && (!!this.server.current && this.known.has(this.server.current.deviceId));
     if (!unpaired && !this.pairing && (known || this.lastPort.has(address) || this.misses < 5)) {
       this.canPair = this.misses >= 5; // the code field (here and on the phone), in case its pairing really is gone
       return this._set('connecting', this.canPair
