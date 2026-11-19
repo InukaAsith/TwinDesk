@@ -82,6 +82,7 @@ UI.tab({
 
     // ---- settings ----
     const sound = UI.switch((v) => api.setPhone({ sound: v }), { label: I18n.t('Phone sound') });
+    const keepPanelOff = UI.switch((v) => api.setPhone({ keepPanelOff: v }), { label: I18n.t('Keep phone screen off while using apps') });
     const quality = UI.select([
       { value: '4', label: I18n.t('Data saver (4 Mb/s)') }, { value: '8', label: I18n.t('Balanced (8 Mb/s)') },
       { value: '16', label: I18n.t('Sharp (16 Mb/s)') }, { value: '24', label: I18n.t('Sharpest (24 Mb/s)') },
@@ -94,6 +95,7 @@ UI.tab({
     const optsCard = UI.card(I18n.t('Settings'), [
       UI.row(I18n.t('Phone sound in the screen window'), I18n.t('Android 11 or later'), [sound]),
       UI.row(I18n.t('Picture'), I18n.t('For the screen window and app windows'), [quality]),
+      UI.row(I18n.t('Keep phone screen off while using apps'), I18n.t('Opening from sleep can briefly light the phone, and the phone may require an unlock.'), [keepPanelOff]),
       UI.row(I18n.t('Return sends messages'), I18n.t('In WhatsApp, Instagram and Telegram, in a phone window or with this keyboard on the phone. ⇧Return: a new line'), [enterSends]),
       UI.row(I18n.t('Arrow keys swipe'), I18n.t('In a phone window: up and down through feeds, Reels and Shorts, left and right through pages. Off: they move the cursor'), [arrowSwipe]),
       UI.row(I18n.t('Type as a hardware keyboard'), I18n.t('Keys reach the phone as from a USB keyboard, in the layout set on the phone (Settings › System › Keyboard › Physical keyboard), so every symbol and accented letter comes out as it does there. Needs wireless debugging. Off: keys go as Android key codes in the US layout'), [uhid]),
@@ -175,6 +177,7 @@ UI.tab({
       const settings = ph.settings || {};
       sound.set(!!settings.sound);
       quality.set(String(settings.bitrateMbps || 8));
+      keepPanelOff.set(settings.keepPanelOff === true);
       wall.set(settings.wallpaper !== false);
       enterSends.set(settings.enterSends !== false);
       uhid.set(settings.uhid === true);
