@@ -59,10 +59,12 @@ test('wake once, blank after an app frame, and keep the panel off until the last
 test('a replaced socket cannot wake, blank, or send display commands to a replacement controller', async () => {
   const f = fixture();
   const view = {};
+  const owner = f.panel.capture();
   const lease = f.panel.begin(view);
   const ready = f.panel.waitUnlocked(lease, () => true, () => assert.fail('retired'));
   f.server.socket = { readyState: 1 }; // mesh and direct can both reconnect as the same paired phone
   assert.equal(await ready, false);
+  assert.equal(f.panel.wake(owner), false);
   assert.equal(f.panel.blank(lease, view), false);
   assert.deepEqual(f.writes, []);
 

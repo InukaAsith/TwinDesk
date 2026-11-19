@@ -160,7 +160,7 @@ function setupIpc(ctx) {
       if (partial && 'input' in partial) ctx.phone.bridge.tellVia();
       if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial)) ctx.phone.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js)
       if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts(); // the open phone windows light their buttons
-      if (partial && 'keepPanelOff' in partial && !settings.phone.keepPanelOff && ctx.phoneViews) ctx.phoneViews.applyOpts(); // off: the open windows can light the phone's screen again (#247)
+      if (partial && 'keepPanelOff' in partial) ctx.phoneViews?.panelPreferenceChanged();
     },
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);

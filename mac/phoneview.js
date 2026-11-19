@@ -288,7 +288,13 @@ class PhoneViews extends EventEmitter {
 
   openApp(pkg, name) {
     const open = [...this.views.values()].find((v) => v.kind === 'app' && v.app === pkg);
-    if (open) return open.win.show(), open.win.focus();
+    if (open) {
+      const dark = this.getSettings().phone?.keepPanelOff === true;
+      if (!open.session?.closed && open.keepPanelOff === dark && !(open.started && !open.session?.videoStarted)) {
+        return open.win.show(), open.win.focus();
+      }
+      this.close(open.id);
+    }
     const w = 412;
     const h = 860;
     // At least 2 pixels per point (sharp at 100% scaling); the dpi keeps 1 dp = 1 point, so the
@@ -430,6 +436,8 @@ class PhoneViews extends EventEmitter {
   async _start(v, opts) {
     const { adb, serial } = this.bridge;
     const dark = v.kind === 'app' && !v.native && this.getSettings().phone?.keepPanelOff === true;
+    const appOwner = v.app && !v.native && !dark ? this.appPanel.capture() : null;
+    v.keepPanelOff = dark;
     const s = v.usb ? new iosusb.IosUsbScreen({ ...opts, id: v.usb }) : v.native ? new NativeScreen(this.server, opts)
       : new Session(adb, serial, dark ? { ...opts, powerOn: false, keepActive: true } : opts);
     const current = () => this.views.get(v.id) === v && v.session === s && !v.ending && !s.closed
@@ -469,13 +477,15 @@ class PhoneViews extends EventEmitter {
     };
     if (dark && !await waitForUnlock()) return;
     if (v.app && !live()) return;
+    if (appOwner && !this.appPanel.wake(appOwner)) { s.stop(); return; }
     await s.start();
     if (v.app && !live()) { s.stop(); return; }
+    v.started = true;
     this._send(v, 'phoneview:status', { ready: true, via });
     if (!v.app) return;
 
     // Give scrcpy time to announce the app display for the HyperOS full-screen launch.
-    if (!dark && !v.native) s.tap(ANDROID.WAKEUP);
+    if (!dark && !v.native && !appOwner) s.tap(ANDROID.WAKEUP);
     const maker = this.phone?.info?.maker;
     await new Promise((resolve) => setTimeout(resolve, 300));
     if (!live() || (dark && !await waitForUnlock()) || !live()) return;
@@ -501,6 +511,17 @@ class PhoneViews extends EventEmitter {
   applyOpts() {
     if (!this.getSettings().phone?.keepPanelOff) this.appPanel?.release();
     this._sendOpts();
+  }
+
+  panelPreferenceChanged() {
+    this.applyOpts();
+    if (this.getSettings().phone?.keepPanelOff !== true) return;
+    // A black window has no app session to preserve. Retry it with the newly enabled wake path.
+    for (const v of [...this.views.values()]) {
+      if (v.kind === 'app' && !v.keepPanelOff && (v.session?.closed || (v.started && !v.session?.videoStarted))) {
+        this.openApp(v.app, v.title);
+      }
+    }
   }
 
   _sendOpts() {

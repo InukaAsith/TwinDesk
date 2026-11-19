@@ -18,31 +18,40 @@ class AppPanel {
     this.current = null;
   }
 
-  begin(view) {
+  capture() {
     const { bridge, server } = this;
     const phone = server.current;
-    const control = bridge.control;
-    const socket = phone?.conn || phone?.ws;
-    if (!phone?.deviceId || !socket || !control || control.serial !== bridge.serial) return null;
+    const owner = { socket: phone?.conn || phone?.ws, id: phone?.deviceId, control: bridge.control };
+    return this.matches(owner) ? owner : null;
+  }
+
+  matches(owner) {
+    const phone = this.server.current;
+    const { id, socket, control } = owner;
+    return !!(id && socket && control && phone?.deviceId === id && phone.os === OS.ANDROID && phone.authed === true
+      && !phone.released && (phone.conn || phone.ws) === socket && socket.readyState === 1
+      && this.bridge.control === control && this.bridge.serial === control.serial && !control.closed);
+  }
+
+  wake(owner) {
+    if (!this.matches(owner)) return false;
+    owner.control.tap(ANDROID.WAKEUP);
+    return true;
+  }
+
+  begin(view) {
     if (!this.owns(this.current)) {
       this.release();
-      this.current = { socket, id: phone.deviceId, control, views: new Set(), off: false, wakeSent: false, manual: false };
+      const owner = this.capture();
+      if (!owner) return null;
+      this.current = { ...owner, views: new Set(), off: false, wakeSent: false, manual: false };
     }
-    const lease = this.current;
-    if (!this.owns(lease)) {
-      this.release();
-      return null;
-    }
-    lease.views.add(view);
-    return lease;
+    this.current.views.add(view);
+    return this.current;
   }
 
   owns(lease) {
-    if (!lease || this.current !== lease) return false;
-    const phone = this.server.current;
-    const { control, socket, id } = lease;
-    return phone?.deviceId === id && phone.os === OS.ANDROID && phone.authed === true && !phone.released && (phone.conn || phone.ws) === socket && socket.readyState === 1
-      && this.bridge.control === control && this.bridge.serial === control.serial && !control.closed;
+    return !!lease && this.current === lease && this.matches(lease);
   }
 
   async waitUnlocked(lease, live, waitingForUnlock) {
@@ -71,7 +80,7 @@ class AppPanel {
       }
       if (sleeping && !lease.wakeSent) {
         lease.wakeSent = true;
-        lease.control.tap(ANDROID.WAKEUP);
+        this.wake(lease);
       }
       if (awake && !warned) {
         warned = true;
