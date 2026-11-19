@@ -53,7 +53,7 @@ const SCHEMA = {
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
   sharing: { remote: bool, pace: oneOf(['fast', 'smooth', 'steady'], 'fast'), codec: oneOf(['h264', 'h265'], 'h264'), fps: oneOf([0, 30, 60], 0) },
   papps: { on: bool },
-  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool, direct: bool, lowLatency: bool },
+  phone: { sound: bool, bitrateMbps: (v) => Math.round(clamp(2, 40, 8)(v)), maxSize: oneOf([0, 1920, 1600, 1280, 1024], 0), wallpaper: bool, input: oneOf(['adb', 'phone'], 'adb'), inputPicked: bool, mirror: oneOf(['auto', 'adb', 'native'], 'auto'), soundVia: oneOf(['auto', 'adb', 'native'], 'auto'), enterSends: bool, arrowSwipe: bool, uhid: bool, direct: bool, lowLatency: bool, keepPanelOff: bool },
   mount: { on: bool },
   clipboard: {
     enabled: bool, send: bool, receive: bool, mode: oneOf(['switch', 'instant'], 'instant'),
@@ -160,6 +160,7 @@ function setupIpc(ctx) {
       if (partial && 'input' in partial) ctx.phone.bridge.tellVia();
       if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial)) ctx.phone.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js)
       if (partial && ('enterSends' in partial || 'arrowSwipe' in partial) && ctx.phoneViews) ctx.phoneViews.applyOpts(); // the open phone windows light their buttons
+      if (partial && 'keepPanelOff' in partial) ctx.phoneViews?.panelPreferenceChanged();
     },
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);

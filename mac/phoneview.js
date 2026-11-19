@@ -25,6 +25,8 @@ const { KeyState, ANDROID } = require('./android-keys');
 const chat = require('../shared/phonechat.js');
 const { MirrorSave } = require('../shared/mirror-save.js');
 const { DockStub, addToDock } = require('./dockstub');
+const { AppPanel } = require('./app-panel.js');
+const { startApp } = require('../shared/appstart.js');
 
 const T = P.T;
 const NOTIFIED_MS = 60000; // how long a clicked notification waits for the unlock and wireless debugging
@@ -36,6 +38,7 @@ class PhoneViews extends EventEmitter {
   constructor({ bridge, phone, getSettings, server, fileSend }) {
     super();
     Object.assign(this, { bridge, phone, getSettings, server, fileSend });
+    this.appPanel = new AppPanel(bridge, server);
     this.views = new Map(); // id -> {id, kind, app, title, win, session, keys, size}
     this.stubs = new Map(); // package -> DockStub, while that app has a window here
     bridge.views = this;
@@ -54,6 +57,7 @@ class PhoneViews extends EventEmitter {
     server.on('closed', () => {
       this.activeApp = '';
       this.a11y = false;
+      if (!this.appPanel.owns(this.appPanel.current)) this.releaseAppPanel();
     });
     server.on(`t:${T.PHONE_AWAKE}`, (m) => this._awake(m));
     // The phone's own Show and Close (its Screen page): its screen in a window here (openScreen
@@ -71,7 +75,10 @@ class PhoneViews extends EventEmitter {
         for (const v of this.list()) this.close(v.id);
       } else this.openScreen();
     });
-    bridge.on('change', () => this._openNotified());
+    bridge.on('change', () => {
+      if (this.appPanel.current && !this.appPanel.owns(this.appPanel.current)) this.releaseAppPanel();
+      this._openNotified();
+    });
     server.on('closed', () => { this.notified = null; });
     // The side rail's Screenshot and Record (shared/mirror-rail.js): copied and saved here.
     this.saver = new MirrorSave({
@@ -281,7 +288,16 @@ class PhoneViews extends EventEmitter {
 
   openApp(pkg, name) {
     const open = [...this.views.values()].find((v) => v.kind === 'app' && v.app === pkg);
-    if (open) return open.win.show(), open.win.focus();
+    if (open) {
+      const dark = this.getSettings().phone?.keepPanelOff === true;
+      if (!open.session?.closed && open.keepPanelOff === dark && !(open.started && !open.session?.videoStarted)) {
+        open.win.show();
+        open.win.focus();
+        if (dark) this._resumeDarkApp(open);
+        return;
+      }
+      this.close(open.id);
+    }
     const w = 412;
     const h = 860;
     // At least 2 pixels per point (sharp at 100% scaling); the dpi keeps 1 dp = 1 point, so the
@@ -296,6 +312,7 @@ class PhoneViews extends EventEmitter {
   // the app once the phone is unlocked and wireless debugging is back (MIUI drops it while locked).
   openNotified(pkg, name) {
     if (!pkg || !this.server.current) return;
+    if (this.getSettings().phone?.keepPanelOff) return this.openApp(pkg, name);
     const n = { pkg, name, at: Date.now(), unlocked: false, answered: false };
     this.notified = n;
     this.server.sendToClient({ t: T.PHONE_WAKE });
@@ -346,6 +363,7 @@ class PhoneViews extends EventEmitter {
   }
 
   closeAll() {
+    this.releaseAppPanel();
     for (const v of [...this.views.values()]) this.close(v.id);
   }
 
@@ -392,6 +410,7 @@ class PhoneViews extends EventEmitter {
     }
     win.on('closed', () => {
       if (v.swipeTimer) clearInterval(v.swipeTimer);
+      if (this.appPanel.remove(v)) this._sendOpts();
       if (v.screenOff && v.session && !v.session.closed) {
         try { v.session.setDisplayPower(true); } catch {}
       }
@@ -403,6 +422,8 @@ class PhoneViews extends EventEmitter {
     });
     this.emit('change');
     if (kind !== 'netsound' && !net) this._start(v, opts).catch((e) => {
+      if (this.appPanel.remove(v)) this._sendOpts();
+      if (v.kind === 'app') v.session?.stop();
       console.log(`[phone] ${kind} window: ${e.message}`);
       this._send(v, 'phoneview:status', { error: e.message, errorKey: e.messageKey, errorVars: e.messageVars });
     });
@@ -416,7 +437,14 @@ class PhoneViews extends EventEmitter {
   }
 
   async _start(v, opts) {
-    const s = v.usb ? new iosusb.IosUsbScreen({ ...opts, id: v.usb }) : v.native ? new NativeScreen(this.server, opts) : new Session(this.bridge.adb, this.bridge.serial, opts);
+    const { adb, serial } = this.bridge;
+    const dark = v.kind === 'app' && !v.native && this.getSettings().phone?.keepPanelOff === true;
+    const appOwner = v.app && !v.native && !dark ? this.appPanel.capture() : null;
+    v.keepPanelOff = dark;
+    const s = v.usb ? new iosusb.IosUsbScreen({ ...opts, id: v.usb }) : v.native ? new NativeScreen(this.server, opts)
+      : new Session(adb, serial, dark ? { ...opts, powerOn: false, keepActive: true } : opts);
+    const current = () => this.views.get(v.id) === v && v.session === s && !v.ending && !s.closed
+      && this.bridge.serial === serial && !v.win.isDestroyed();
     const via = v.native || v.usb ? null : this.bridge.via;
     if (v.native && !v.usb) setImmediate(() => this.bridge._sound()); // its sound, when it plays it
     if (v.native) s.on('waiting', () => this._send(v, 'phoneview:status', { error: 'Tap Start on the phone to share its screen', errorKey: 'Tap Start on the phone to share its screen' }));
@@ -433,28 +461,106 @@ class PhoneViews extends EventEmitter {
     s.on('audio', (p) => !p.config && this._send(v, 'phoneview:audio', p.data));
     s.on('closed', (why, metadata) => {
       if (v.session !== s) return; // one a flip replaced
+      v.appFrame = null;
+      if (this.appPanel.remove(v)) this._sendOpts();
       this._send(v, 'phoneview:status', { closed: why, closedKey: metadata && metadata.messageKey, closedVars: metadata && metadata.messageVars });
       if (v.kind === 'camera' && why !== 'stopped') {
         v.error = why;
         this.emit('change');
       }
     });
+    const panel = dark ? this.appPanel.begin(v) : null;
+    v.panelLease = panel;
+    const live = () => current() && (!dark || this.appPanel.owns(panel));
+    const waitForUnlock = async () => {
+      const errorKey = 'Wake and unlock the phone to open this app.';
+      const waiting = () => this._showUnlock(v);
+      if (panel && await this.appPanel.waitUnlocked(panel, live, waiting)) return true;
+      if (current()) throw Object.assign(new Error(errorKey), { messageKey: errorKey });
+      return false;
+    };
+    if (dark && !await waitForUnlock()) return;
+    if (v.app && !live()) return;
+    if (appOwner && !this.appPanel.wake(appOwner)) { s.stop(); return; }
     await s.start();
-    // An app window on an asleep phone waited for a picture that never came (#247, #239): the phone
-    // wakes first (a phone that's awake ignores it), so its new display draws.
-    if (v.app && !v.native) s.tap(ANDROID.WAKEUP);
-    if (v.app) setTimeout(() => require('../shared/appstart.js').startApp(s, { adb: this.bridge.adb, serial: this.bridge.serial, maker: ((this.phone && this.phone.info) || {}).maker, app: v.app }), 300); // full screen on HyperOS (#265)
+    if (v.app && !live()) { s.stop(); return; }
+    v.started = true;
     this._send(v, 'phoneview:status', { ready: true, via });
+    if (!v.app) return;
+
+    // Give scrcpy time to announce the app display for the HyperOS full-screen launch.
+    if (!dark && !v.native && !appOwner) s.tap(ANDROID.WAKEUP);
+    const maker = this.phone?.info?.maker;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!live() || (dark && !await waitForUnlock()) || !live()) return;
+    await startApp(s, { adb, serial, maker, app: v.app, live });
+    if (dark) await this._blankAfterAppFrame(v, s, panel, live);
+  }
+
+  _showUnlock(v) {
+    const errorKey = 'Wake and unlock the phone to open this app.';
+    this._send(v, 'phoneview:status', { error: errorKey, errorKey });
+  }
+
+  async _blankAfterAppFrame(v, s, panel, live) {
+    if (!live() || this.appPanel.off || !await this.appPanel.waitForApp(s, v.app, live) || !live()) return false;
+    v.appFrame = { panel, capture: s.scid };
+    this._send(v, 'phoneview:status', { appFrame: s.scid });
+    s.simple(TYPE.RESET_VIDEO);
+    return true;
+  }
+
+  async _resumeDarkApp(v) {
+    const { session: s, panelLease: panel } = v;
+    const live = () => this.views.get(v.id) === v && v.session === s && !v.ending && !s?.closed
+      && this.appPanel.owns(panel);
+    if (!live()) return;
+    this.appPanel.retry(panel);
+    // Before the first picture, the existing startup routine will notice the retry.
+    if (!s?.videoStarted || v.resuming) return;
+    v.appFrame = null;
+    v.resuming = true;
+    try {
+      if (!await this.appPanel.waitUnlocked(panel, live, () => this._showUnlock(v))) {
+        if (live()) this._showUnlock(v);
+        return;
+      }
+      if (!await this._blankAfterAppFrame(v, s, panel, live) && live()) s.simple(TYPE.RESET_VIDEO);
+    } catch (_) {
+      if (live()) this._showUnlock(v);
+    } finally {
+      v.resuming = false;
+    }
+  }
+
+  releaseAppPanel() {
+    if (this.appPanel?.release()) this._sendOpts();
   }
 
   // The window's switches as they are now (its buttons light up).
   _opts(v) {
     const ph = this.getSettings().phone || {};
-    return { enterSends: ph.enterSends !== false, autoRotate: ph.autoRotate !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff, pinned: !!(v.win && !v.win.isDestroyed() && v.win.isAlwaysOnTop()) };
+    return { enterSends: ph.enterSends !== false, autoRotate: ph.autoRotate !== false, arrowSwipe: ph.arrowSwipe === true, screenOff: !!v.screenOff || (!v.native && (v.kind === 'app' || v.kind === 'screen') && this.appPanel?.off === true), pinned: !!(v.win && !v.win.isDestroyed() && v.win.isAlwaysOnTop()) };
   }
 
   // Return sends / Arrow keys swipe changed (here, or on the Phone page): every window shows it.
   applyOpts() {
+    if (!this.getSettings().phone?.keepPanelOff) this.appPanel?.release();
+    this._sendOpts();
+  }
+
+  panelPreferenceChanged() {
+    this.applyOpts();
+    if (this.getSettings().phone?.keepPanelOff !== true) return;
+    // A black window has no app session to preserve. Retry it with the newly enabled wake path.
+    for (const v of [...this.views.values()]) {
+      if (v.kind === 'app' && !v.keepPanelOff && (v.session?.closed || (v.started && !v.session?.videoStarted))) {
+        this.openApp(v.app, v.title);
+      }
+    }
+  }
+
+  _sendOpts() {
     for (const v of this.views.values()) if (v.kind !== 'sound' && v.kind !== 'netsound' && v.kind !== 'mic') this._send(v, 'phoneview:opts', this._opts(v));
   }
 
@@ -507,6 +613,14 @@ class PhoneViews extends EventEmitter {
     if (v.kind === 'camera' && (m.t === 'touch' || m.t === 'scroll' || m.t === 'key')) return;
     const num = (x) => (Number.isFinite(x) ? x : 0);
     switch (m.t) {
+      case 'appFrame': {
+        const frame = v.appFrame;
+        if (v.kind !== 'app' || v.ending || !frame || m.capture !== s.scid || frame.capture !== s.scid) break;
+        v.appFrame = null;
+        if (this.getSettings().phone?.keepPanelOff && ![...this.views.values()].some((window) => window.screenOff)
+            && this.appPanel.blank(frame.panel, v)) this._sendOpts();
+        break;
+      }
       case 'touch': // a finger (pointer ≥ 0) or the mouse (-1) at video coordinates
         if (!size) return;
         s.touch(m.action | 0, Math.max(-3, Math.min(9, m.pointer | 0)), num(m.x), num(m.y), size.width, size.height,
@@ -540,6 +654,10 @@ class PhoneViews extends EventEmitter {
         if (m.key === 'rotate') s.simple(TYPE.ROTATE);
         // The phone's own screen off, its picture still here (scrcpy's display power).
         if (m.key === 'screenPower' && (v.kind === 'screen' || v.kind === 'app') && !v.native) { // an app window too: its app runs with the phone dark (#247)
+          if (![...this.views.values()].some((window) => window.screenOff) && this.appPanel?.toggle()) {
+            this._sendOpts();
+            break;
+          }
           v.screenOff = !v.screenOff;
           s.setDisplayPower(!v.screenOff);
           this._send(v, 'phoneview:opts', { screenOff: v.screenOff });

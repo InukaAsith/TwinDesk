@@ -73,6 +73,12 @@
         arrowSwipe = UI.switch((v) => api.setPhone({ arrowSwipe: v }), { label: tr('Arrow keys swipe') });
         rows.push(UI.row(tr('Arrow keys swipe'), tr('Up and down through feeds and Shorts, left and right through pages. Off: arrows move the text cursor.'), [arrowSwipe]));
       }
+      // The phone's own screen stays dark while an app window is open (settings.phone.keepPanelOff, #247).
+      let keepOff = null;
+      if (mac) {
+        keepOff = UI.switch((v) => api.setPhone({ keepPanelOff: v }), { label: tr('Keep phone screen off while using apps') });
+        rows.push(UI.row(tr('Keep phone screen off while using apps'), tr('Opening from sleep can briefly light the phone, and the phone may require an unlock.'), [keepOff]));
+      }
       // The phone screen window's Rotate and screen off, here rather than in its title bar (Windows'
       // side panel has them too).
       let rotateBtn = null, screenOff = null, rotateRow = null, offRow = null;
@@ -112,6 +118,7 @@
         if (controls) controls.set(st.controls === 'side');
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);
+        if (keepOff) keepOff.set(st.keepPanelOff === true);
         const wins = br.windows || [];
         if (rotateBtn) {
           const scr = wins.find((w) => w.kind === 'screen');

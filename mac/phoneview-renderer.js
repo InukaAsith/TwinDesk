@@ -72,6 +72,7 @@
     return 'avc1.42e01f';
   }
 
+  let appFrame = null;
   function makeDecoder(codec) {
     if (decoder && decoder.state !== 'closed') try { decoder.close(); } catch {}
     decoder = new VideoDecoder({
@@ -85,6 +86,10 @@
         if (vcam) vcam.push(frame, frame.displayWidth, frame.displayHeight);
         frame.close();
         if (!status.hidden) setStatus('');
+        if (kind === 'app' && appFrame) {
+          api.send({ t: 'appFrame', capture: appFrame });
+          appFrame = null;
+        }
       },
       error: (e) => {
         console.warn('decoder', e.message);
@@ -131,6 +136,8 @@
   });
 
   api.on('status', (s) => {
+    if (kind === 'app' && typeof s.appFrame === 'string') appFrame = s.appFrame;
+    if (s.closed || s.error) appFrame = null;
     if (s.via) {
       const el = document.getElementById('via');
       I.literal(el, s.via === 'usb' ? 'USB' : 'Wi-Fi');
