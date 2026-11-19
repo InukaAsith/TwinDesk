@@ -33,7 +33,8 @@ function fixture() {
     },
   };
   const bridge = { serial: 'first', control };
-  return { server, bridge, panel: new AppPanel(bridge, server), writes, unlock: () => { locked = false; } };
+  return { server, bridge, panel: new AppPanel(bridge, server), writes,
+    unlock: () => { locked = false; }, lock: () => { locked = true; awake = false; } };
 }
 
 test('wake once, blank after an app frame, and keep the panel off until the last window closes', async () => {
@@ -50,10 +51,15 @@ test('wake once, blank after an app frame, and keep the panel off until the last
   assert.equal(f.panel.begin(second), lease);
   assert.equal(await f.panel.waitUnlocked(lease, () => true, () => assert.fail('already unlocked')), true);
   assert.equal(f.panel.blank(lease, second), false);
+  f.lock();
+  f.panel.retry(lease);
+  assert.equal(await f.panel.waitUnlocked(lease, () => true, f.unlock), true);
+  assert.deepEqual(f.writes, [ANDROID.WAKEUP, false, true, ANDROID.WAKEUP], 'show the normal lock screen before waking');
+  assert.equal(f.panel.blank(lease, first), true);
   f.panel.remove(first);
-  assert.deepEqual(f.writes, [ANDROID.WAKEUP, false]);
+  assert.deepEqual(f.writes, [ANDROID.WAKEUP, false, true, ANDROID.WAKEUP, false]);
   f.panel.remove(second);
-  assert.deepEqual(f.writes, [ANDROID.WAKEUP, false, true]);
+  assert.deepEqual(f.writes, [ANDROID.WAKEUP, false, true, ANDROID.WAKEUP, false, true]);
 });
 
 test('a replaced socket cannot wake, blank, or send display commands to a replacement controller', async () => {

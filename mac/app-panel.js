@@ -54,6 +54,10 @@ class AppPanel {
     return !!lease && this.current === lease && this.matches(lease);
   }
 
+  retry(lease) {
+    if (this.owns(lease)) lease.wakeSent = false;
+  }
+
   async waitUnlocked(lease, live, waitingForUnlock) {
     const { adb, serial } = lease.control;
     const deadline = Date.now() + UNLOCK_MS;
@@ -68,6 +72,8 @@ class AppPanel {
       const sleeping = power.code === 0 && /\bmWakefulness=(?:Asleep|Dozing|Dreaming)\b/.test(power.out);
       const keyguard = policy.code === 0 && /KeyguardServiceDelegate\s+showing=(true|false)\b/.exec(policy.out)?.[1];
       if ((!awake && !sleeping) || !keyguard) return false;
+      // A display-off scrcpy controller otherwise blanks again when it handles WAKEUP.
+      if (lease.off && (sleeping || keyguard === 'true')) this.restore();
       if (awake && keyguard === 'false') {
         const trust = await adb.shell(serial, 'dumpsys trust', { timeout: ADB_READ_MS });
         if (!live() || !this.owns(lease)) return false;

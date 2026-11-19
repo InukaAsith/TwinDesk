@@ -291,7 +291,10 @@ class PhoneViews extends EventEmitter {
     if (open) {
       const dark = this.getSettings().phone?.keepPanelOff === true;
       if (!open.session?.closed && open.keepPanelOff === dark && !(open.started && !open.session?.videoStarted)) {
-        return open.win.show(), open.win.focus();
+        open.win.show();
+        open.win.focus();
+        if (dark) this._resumeDarkApp(open);
+        return;
       }
       this.close(open.id);
     }
@@ -467,10 +470,11 @@ class PhoneViews extends EventEmitter {
       }
     });
     const panel = dark ? this.appPanel.begin(v) : null;
+    v.panelLease = panel;
     const live = () => current() && (!dark || this.appPanel.owns(panel));
     const waitForUnlock = async () => {
       const errorKey = 'Wake and unlock the phone to open this app.';
-      const waiting = () => this._send(v, 'phoneview:status', { error: errorKey, errorKey });
+      const waiting = () => this._showUnlock(v);
       if (panel && await this.appPanel.waitUnlocked(panel, live, waiting)) return true;
       if (current()) throw Object.assign(new Error(errorKey), { messageKey: errorKey });
       return false;
@@ -490,10 +494,42 @@ class PhoneViews extends EventEmitter {
     await new Promise((resolve) => setTimeout(resolve, 300));
     if (!live() || (dark && !await waitForUnlock()) || !live()) return;
     await startApp(s, { adb, serial, maker, app: v.app, live });
-    if (dark && !this.appPanel.off && await this.appPanel.waitForApp(s, v.app, live) && live()) {
-      v.appFrame = { panel, capture: s.scid };
-      this._send(v, 'phoneview:status', { appFrame: s.scid });
-      s.simple(TYPE.RESET_VIDEO);
+    if (dark) await this._blankAfterAppFrame(v, s, panel, live);
+  }
+
+  _showUnlock(v) {
+    const errorKey = 'Wake and unlock the phone to open this app.';
+    this._send(v, 'phoneview:status', { error: errorKey, errorKey });
+  }
+
+  async _blankAfterAppFrame(v, s, panel, live) {
+    if (!live() || this.appPanel.off || !await this.appPanel.waitForApp(s, v.app, live) || !live()) return false;
+    v.appFrame = { panel, capture: s.scid };
+    this._send(v, 'phoneview:status', { appFrame: s.scid });
+    s.simple(TYPE.RESET_VIDEO);
+    return true;
+  }
+
+  async _resumeDarkApp(v) {
+    const { session: s, panelLease: panel } = v;
+    const live = () => this.views.get(v.id) === v && v.session === s && !v.ending && !s?.closed
+      && this.appPanel.owns(panel);
+    if (!live()) return;
+    this.appPanel.retry(panel);
+    // Before the first picture, the existing startup routine will notice the retry.
+    if (!s?.videoStarted || v.resuming) return;
+    v.appFrame = null;
+    v.resuming = true;
+    try {
+      if (!await this.appPanel.waitUnlocked(panel, live, () => this._showUnlock(v))) {
+        if (live()) this._showUnlock(v);
+        return;
+      }
+      if (!await this._blankAfterAppFrame(v, s, panel, live) && live()) s.simple(TYPE.RESET_VIDEO);
+    } catch (_) {
+      if (live()) this._showUnlock(v);
+    } finally {
+      v.resuming = false;
     }
   }
 
