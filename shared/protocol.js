@@ -96,6 +96,7 @@
       RTC_OFFER: 'rtc.offer',
       RTC_ANSWER: 'rtc.answer',
       RTC_ICE: 'rtc.ice',
+      RTC_DETAIL: 'rtc.detail', // Android -> desktop: {session, height}; an advertised offer tier, or 0 for the baseline
       // input inside the Monitor 2 window (absolute, normalized), Windows -> Mac. From a phone's
       // stylus, in.mm/md/mu carry `pen` (P.penOf): the helpers inject a tablet pen; without it, a mouse
       IN_MOVE: 'in.mm',
