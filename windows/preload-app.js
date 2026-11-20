@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('macshare', {
   connectAddress: call('connectAddress'),
   refreshFound: call('refreshFound'),
   copyText: call('copyText'),
+  copyLiteral: call('copyLiteral'), // Activity: a notification or a call, text only
   deviceDo: call('deviceDo'),
   iosSign: call('iosSign'), iosSignIpa: call('iosSignIpa'), // TwinDesk iPhone (shared/iossign.js)
   setOverview: call('setOverview'),
@@ -85,6 +86,7 @@ contextBridge.exposeInMainWorld('macshare', {
   resumeSend: call('resumeSend'),
   forgetSend: call('forgetSend'),
   clearFiles: call('clearFiles'),
+  revealDrop: call('revealDrop'), // Activity: show a received file by its index
   setShareOn: call('setShareOn'),
   chooseReceivedFolder: call('chooseReceivedFolder'),
   resetReceivedFolder: call('resetReceivedFolder'),

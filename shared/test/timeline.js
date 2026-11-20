@@ -229,7 +229,7 @@ meta['bad key'] = 1;
 meta.ok = true;
 assert.doesNotThrow(() => TL.build({ files: { recent: [{ name: 'm', path: '/m', at: 3, ok: true, extra: meta }] } }));
 
-// Wiring: both Mac windows, no new protocol, search stays on the Mac.
+// Wiring: Mac, Windows and Linux, one-to-one and Mesh. No new protocol. Phones stay out.
 const pageSrc = read('mac/ui-timeline.js');
 assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(pageSrc));
 assert.ok(!/search\.value\s*=/.test(pageSrc));
@@ -253,20 +253,70 @@ assert.ok(Modules.scriptOn([], 'mac/ui-timeline.js'));
 assert.ok(!Side.isScoped('activity'));
 assert.ok(Side.sectionVisible('activity', 'phone') && Side.sectionVisible('activity', 'computer'));
 assert.ok(Search.forApp('mac').some((e) => e.id === 'activity' && e.t === 'Activity'));
-for (const os of ['windows', 'linux', 'android', 'ios']) {
+for (const os of ['windows', 'linux']) {
+  assert.ok(Search.forApp(os).some((e) => e.id === 'activity' && e.page === 'activity' && e.t === 'Activity'), os);
+}
+for (const os of ['android', 'ios']) {
   assert.ok(!Search.forApp(os).some((e) => e.id === 'activity' || e.page === 'activity'), os);
 }
 assert.strictEqual(Search.match('activity timeline', Search.forApp('mac'))[0].t, 'Activity');
+assert.strictEqual(Search.match('activity timeline', Search.forApp('windows'))[0].t, 'Activity');
+assert.strictEqual(Search.match('activity timeline', Search.forApp('linux'))[0].t, 'Activity');
 assert.ok(read('mac/control.js').includes("activity:"));
+const pageSrcWin = read('shared/ui-timeline.js');
+assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(pageSrcWin));
+assert.ok(!/search\.value\s*=/.test(pageSrcWin));
+assert.ok(!/shell\.|exec\(|spawn\(/.test(pageSrcWin));
+assert.ok(pageSrcWin.includes('Show in Explorer') && pageSrcWin.includes('Show in folder'));
+assert.ok(pageSrcWin.includes('revealDrop'));
+assert.ok(!pageSrcWin.includes('showItemInFolder'));
+for (const html of ['windows/app.html', 'windows/mesh/app.html', 'linux/app.html', 'linux/mesh/app.html']) {
+  const s = read(html);
+  assert.ok(s.includes('../shared/timeline.js'), html);
+  assert.ok(s.includes('data-src="../shared/ui-timeline.js"'), html);
+  assert.ok(s.indexOf('../shared/timeline.js') < s.indexOf('data-src="../shared/ui-timeline.js"'), html);
+}
+for (const f of ['windows/ipc.js', 'windows/mesh/ipc.js', 'linux/ipc.js', 'linux/mesh/ipc.js']) {
+  const s = read(f);
+  const i = s.indexOf("handle('copyLiteral'");
+  assert.ok(i >= 0, f);
+  const body = s.slice(i, i + 320);
+  assert.ok(body.includes('256 * 1024'), f);
+  assert.ok(!/shell|exec\(|spawn\(/.test(body), f);
+  assert.ok(s.includes('revealDrop'), f);
+  assert.ok(!/showItemInFolder/.test(s), f);
+}
+for (const f of ['windows/preload-app.js', 'windows/mesh/preload-app.js', 'linux/preload-app.js', 'linux/mesh/preload-app.js']) {
+  const s = read(f);
+  assert.ok(s.includes('copyLiteral'), f);
+  assert.ok(s.includes('revealDrop'), f);
+}
+for (const f of ['windows/settings.js', 'linux/settings.js']) assert.ok(read(f).includes("'activity'"), f);
+for (const f of ['windows/app.js', 'windows/mesh/app.js', 'linux/app.js', 'linux/mesh/app.js']) {
+  const s = read(f);
+  assert.ok(s.includes('activity: 4'), f);
+  assert.ok(s.includes('activity: 39'), f);
+}
+for (const f of ['windows/ui-kit.js', 'linux/ui-kit.js']) assert.ok(read(f).includes('activity:'), f);
+for (const f of ['windows/filerecv.js', 'linux/filerecv.js']) {
+  const s = read(f);
+  assert.ok(s.includes('reveal(index)'), f);
+  assert.ok(!/reveal\s*\(\s*path/.test(s), f);
+  assert.ok(s.includes('Number.isInteger(index)'), f);
+  assert.ok(s.includes('showItemInFolder'), f);
+}
+for (const f of ['windows/main.js', 'windows/mesh/main.js', 'linux/main.js', 'linux/mesh/main.js']) {
+  assert.ok(read(f).includes('fileRecv.recent'), f);
+}
 for (const locale of ['zh-CN', 'ru', 'pt-BR', 'tr']) {
   const catalog = require(`../lang/${locale}.js`);
-  for (const key of ['Activity', 'No activity yet', 'No matching items', 'Search activity', 'Clipboard, notifications, files and calls, newest first.']) {
+  for (const key of ['Activity', 'No activity yet', 'No matching items', 'Search activity', 'Clipboard, notifications, files and calls, newest first.', 'Show in Explorer', 'Show in folder']) {
     assert.notStrictEqual(catalog[key], key, `${locale} ${key}`);
   }
 }
 
 // The page: literal text, search caret, copy and reveal, history unlock only while it is open.
-function harness(api) {
+function harness(api, src = 'mac/ui-timeline.js', platform = 'MacIntel') {
   class El {
     constructor(tag, props = {}, children = []) {
       this.tag = tag; this.children = []; this.attrs = {}; this.hidden = false; this._text = '';
@@ -297,7 +347,7 @@ function harness(api) {
   };
   const I18n = { t: (s, v) => (v && v.count != null ? String(s).replace('{count}', v.count) : s) };
   const window = {};
-  vm.runInNewContext(read('shared/timeline.js') + '\n' + read('mac/ui-timeline.js'), { UI, I18n, window }, { filename: 'mac/ui-timeline.js' });
+  vm.runInNewContext(read('shared/timeline.js') + '\n' + read(src), { UI, I18n, window, navigator: { platform } }, { filename: src });
   const page = { isConnected: false, hidden: true, offsetParent: null };
   const body = el('div');
   const render = tab.build(body, page);
@@ -436,6 +486,43 @@ function harness(api) {
   h.list.children[0].children.find((c) => c.tag === 'button').onclick();
   assert.deepStrictEqual(calls, ['short']);
   assert.doesNotThrow(() => h.render(null));
+}
+
+for (const [platform, label] of [['Win32', 'Show in Explorer'], ['Linux x86_64', 'Show in folder']]) {
+  const calls = [];
+  const h = harness({
+    history: (m) => calls.push(m),
+    copyLiteral: (t) => calls.push(['lit', t]),
+    revealDrop: (i) => calls.push(['reveal', i]),
+  }, 'shared/ui-timeline.js', platform);
+  assert.strictEqual(h.tab.id, 'activity');
+  h.render({ history: { save: true, open: {} }, clipboard: { history: [{ at: 1, text: 'hidden' }] } });
+  assert.deepStrictEqual(calls, [], platform + ' stays locked until the page is open');
+  h.page.isConnected = true; h.page.hidden = false; h.page.offsetParent = {};
+  h.render({
+    history: { save: true, open: { clip: true, notifs: true } },
+    notifs: { history: [{ id: 'n', at: 8, title: 'Ping', body: 'hello' }] },
+    files: {
+      recent: [{ name: 'a.txt', path: '/tmp/a.txt', at: 50, ok: true }, { name: 'bad.txt', at: 49, ok: false }],
+      sent: [{ name: 'c.txt', at: 48, ok: true }],
+    },
+  });
+  const titleOf = (row) => row.children[1].children[0].textContent;
+  const buttons = (row) => row.children.filter((c) => c.tag === 'button').map((b) => b.textContent);
+  const file = h.list.children.find((r) => titleOf(r) === 'a.txt');
+  assert.deepStrictEqual(buttons(file), [label], platform);
+  assert.strictEqual(file.children[1].children[0].attrs['data-literal'], '');
+  calls.length = 0;
+  file.children.find((c) => c.tag === 'button').onclick();
+  assert.deepStrictEqual(calls, [['reveal', 0]], platform);
+  const failed = h.list.children.find((r) => titleOf(r) === 'bad.txt');
+  assert.ok(!buttons(failed).includes(label), platform);
+  const sent = h.list.children.find((r) => titleOf(r) === 'c.txt');
+  assert.ok(!buttons(sent).includes(label), platform);
+  const note = h.list.children.find((r) => titleOf(r).startsWith('Ping'));
+  calls.length = 0;
+  note.children.find((c) => c.tag === 'button').onclick();
+  assert.deepStrictEqual(calls, [['lit', 'Ping\nhello']], platform);
 }
 
 console.log('timeline: ok');

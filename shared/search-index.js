@@ -34,7 +34,7 @@ const PAGES = {
   deck: { desk: 'deck', android: 'Deck', ios: 'deck' },
   clipboard: { desk: 'clipboard', android: 'Clipboard', ios: 'clipboard' },
   notifications: { desk: 'notifications', android: 'Notifications', ios: 'notifications' },
-  activity: { mac: 'activity' }, // Mac only: the page lives in mac/ui-timeline.js
+  activity: { desk: 'activity' }, // Mac, Windows and Linux. Phones have no Activity page.
   files: { desk: 'files', android: 'Files', ios: 'files' },
   rezume: { desk: 'rezume', android: 'Rezume' },
   audio: { desk: 'audio', android: 'Sound', ios: 'audio' },

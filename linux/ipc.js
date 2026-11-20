@@ -71,6 +71,11 @@ function setupIpc(ctx) {
   handle('qrPair', () => ctx.qrPair()); // Connection: the phone pairing QR code's link
   handle('adbQr', (on) => ctx.adbQr(on === true)); // wireless debugging: pair with a QR code
   handle('copyText', (text) => typeof text === 'string' && text.length < 1000 && clipboard.writeText(text));
+  // Activity copies a notification or a call. Text only, capped, never a path and never a shell.
+  handle('copyLiteral', (text) => {
+    if (typeof text !== 'string' || !text || text.length > 256 * 1024) return;
+    clipboard.writeText(text);
+  });
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
   handle('forget', () => { link.forget(); sshd.revokeAll(); }); // forgotten: it may not log in any more
@@ -291,6 +296,11 @@ function setupIpc(ctx) {
   handle('pauseSend', (batch) => typeof batch === 'string' && fileDrop.pause(batch));
   handle('resumeSend', (id) => typeof id === 'string' && fileDrop.resume(id));
   handle('forgetSend', (id) => typeof id === 'string' && fileDrop.forget(id));
+  // Activity › Show in folder: index into the received list, never a path from the page.
+  handle('revealDrop', (index) => {
+    const recv = ctx.fileRecv;
+    if (recv && typeof recv.reveal === 'function') recv.reveal(index);
+  });
   handle('clearFiles', () => ctx.clearFiles && ctx.clearFiles());
   handle('setPcScreen', (partial) => {
     const size = settings.pcScreen.extendSize;

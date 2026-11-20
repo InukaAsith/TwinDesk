@@ -32,6 +32,7 @@ class FileDrop {
     this.active = new Map(); // id → {id, name, size, sent, index, count, …} being sent
     this.current = null; // the newest of them, for the view
     this.last = null; // {name, ok, text}
+    this.sent = []; // newest first; Activity lists finished sends. No path: reveal is received files only.
     this.waiters = new Map(); // id → {resolve, types}
     for (const t of [T.FILE_ACCEPT, T.FILE_REFUSE, T.FILE_DONE, T.FILE_CANCEL]) this.link.on(t, (m) => this._answer(m));
     this.drag = null; // {drag, name} while a drag's files are being sent
@@ -388,6 +389,11 @@ class FileDrop {
 
   _report(name, ok, text, messageKey, messageVars = {}, itemCount) {
     this.last = { name, ok, text, at: Date.now(), ...(messageKey ? { messageKey, messageVars } : {}), ...(itemCount > 1 ? { itemCount } : {}) };
+    if (typeof name === 'string' && name) {
+      const files = itemCount > 1 ? itemCount : 0;
+      this.sent.unshift({ name, ok: !!ok, at: this.last.at, ...(files > 1 ? { files } : {}) });
+      if (this.sent.length > 20) this.sent.length = 20;
+    }
     this.onProgress(this.view());
   }
 
@@ -401,6 +407,7 @@ class FileDrop {
       queued: this.queue.length,
       outbox: this.outbox.view,
       outboxPeer: this.outbox.last ? this.outbox.last.name : '',
+      sent: this.sent,
       last: this.last,
     };
   }
