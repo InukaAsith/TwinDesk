@@ -155,33 +155,36 @@ class CaptureActivity : ComponentActivity() {
         DocScanPdf.saving = true
         note = ""
         val gen = ++DocScanPdf.saveGen
-        val host = this
-        core.bg.execute {
+        val appCtx = applicationContext
+        val appCore = core
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        appCore.bg.execute {
             val uri = try {
-                DocScanPdf.save(host, shot)
+                DocScanPdf.save(appCtx, shot)
             } catch (e: Exception) {
-                host.runOnUiThread {
+                main.post {
+                    if (gen != DocScanPdf.saveGen) return@post
                     val act = running
-                    if (gen != DocScanPdf.saveGen || act == null) DocScanPdf.saving = false
+                    if (act == null) DocScanPdf.saving = false
                     else act.onSaveFailed(gen, e)
                 }
                 return@execute
             }
             if (gen != DocScanPdf.saveGen) {
-                DocScanPdf.discard(host, uri)
+                DocScanPdf.discard(appCtx, uri)
                 return@execute
             }
             // files.send queues a file while disconnected. A scan is not a queued send.
-            val connected = core.link.connected
-            val items = if (connected) core.files.describe(listOf(uri)) else emptyList()
-            val sent = connected && items.isNotEmpty() && core.files.send(items, "send")
-            host.runOnUiThread {
+            val connected = appCore.link.connected
+            val items = if (connected) appCore.files.describe(listOf(uri)) else emptyList()
+            val sent = connected && items.isNotEmpty() && appCore.files.send(items, "send")
+            if (!sent) DocScanPdf.discard(appCtx, uri)
+            main.post {
+                if (gen != DocScanPdf.saveGen) return@post
                 val act = running
-                if (gen != DocScanPdf.saveGen || act == null) {
-                    DocScanPdf.saving = false
-                    if (!sent) DocScanPdf.discard(host, uri)
-                } else if (sent) act.onSaveSent(gen)
-                else act.onSaveNotSent(gen, uri, connected)
+                if (act == null) DocScanPdf.saving = false
+                else if (sent) act.onSaveSent(gen)
+                else act.onSaveNotSent(gen, connected)
             }
         }
     }
@@ -203,13 +206,8 @@ class CaptureActivity : ComponentActivity() {
         end(tell = false) // the computer closes the camera when the PDF arrives
     }
 
-    private fun onSaveNotSent(gen: Int, uri: Uri, connected: Boolean) {
-        if (gen != DocScanPdf.saveGen || dead) {
-            DocScanPdf.discard(this, uri)
-            DocScanPdf.saving = false
-            return
-        }
-        DocScanPdf.discard(this, uri)
+    private fun onSaveNotSent(gen: Int, connected: Boolean) {
+        if (gen != DocScanPdf.saveGen || dead) return
         DocScanPdf.saving = false
         toast(if (!connected) tr("The computer isn’t connected. The scan was not sent.") else tr("Couldn’t make the PDF: {error}", "error" to "unreadable"))
         if (!connected) {
@@ -272,9 +270,9 @@ class CaptureActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (running === this) running = null
-        // A rotation makes a new instance that restores the same files. Anything else drops them,
-        // unless the PDF was already handed to the file sender.
-        if (scanning && !isChangingConfigurations && !savedPdf) cleanupPages()
+        // Only drop temp pages when finishing; Android may destroy and recreate this activity
+        // while the system camera is open (memory pressure or "Don't keep activities").
+        if (scanning && isFinishing && !savedPdf) cleanupPages()
         super.onDestroy()
     }
 }

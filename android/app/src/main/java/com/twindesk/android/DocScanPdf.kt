@@ -163,18 +163,28 @@ object DocScanPdf {
         }
         val uri = runCatching { resolver.insert(MediaStore.Files.getContentUri("external"), values) }.getOrNull()
         if (uri != null) {
-            try {
-                resolver.openOutputStream(uri)?.use { write(pages, it) } ?: error("no stream")
-                resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-                return uri
-            } catch (_: Exception) {
-                runCatching { resolver.delete(uri, null, null) }
+            val stream = runCatching { resolver.openOutputStream(uri) }.getOrNull()
+            if (stream != null) {
+                try {
+                    stream.use { write(pages, it) }
+                    resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+                    return uri
+                } catch (e: Exception) {
+                    runCatching { resolver.delete(uri, null, null) }
+                    throw e
+                }
             }
+            runCatching { resolver.delete(uri, null, null) }
         }
         val dir = File(ctx.cacheDir, "scan_pdf").apply { mkdirs() }
         val file = File(dir, name)
-        FileOutputStream(file).use { write(pages, it) }
-        return FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
+        try {
+            FileOutputStream(file).use { write(pages, it) }
+            return FileProvider.getUriForFile(ctx, ctx.packageName + ".files", file)
+        } catch (e: Exception) {
+            file.delete()
+            throw e
+        }
     }
 
     fun discard(ctx: Context, uri: Uri) {
