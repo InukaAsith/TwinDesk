@@ -66,6 +66,12 @@ class ViewerActivity : ComponentActivity() {
         }
         val core = Core.get(this)
         val h = WebHost(this, "viewer.html", core) { ev, data ->
+            if (ev == "videoState" && data != null) host?.let {
+                core.screen.videoState(it, data.optInt("generation"), data.optInt("session"), data.optBoolean("playing"))
+            }
+            if (ev == "videoDetail" && data != null) host?.let {
+                core.screen.videoDetail(it, data.optInt("generation"), data.optInt("session"), data.optInt("height", -1))
+            }
             if (ev == "playing" && data != null) core.screen.playing(data.optInt("w"), data.optInt("h"))
         }
         host = h

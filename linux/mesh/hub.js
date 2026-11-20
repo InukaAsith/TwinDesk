@@ -305,7 +305,7 @@ class Hub extends EventEmitter {
   // ---- internals: devices ----
 
   _attach(s) {
-    s.tap((msg) => this._fromDevice(s, msg));
+    s.tap((msg, ws) => this._fromDevice(s, msg, ws));
     s.onLife((up, replaced) => (up ? this._up(s) : this._down(s, replaced)));
     s.onState(() => this._stateOf(s));
     s.refresh(); // a device that is already connected comes up now
@@ -313,7 +313,7 @@ class Hub extends EventEmitter {
 
   // A message of one device: roster messages are the mesh's, the rest goes to the bus (any device)
   // and to the facade (the selected device). True keeps it away from the session's own handlers.
-  _fromDevice(s, msg) {
+  _fromDevice(s, msg, ws) {
     if (msg.t === ROSTER) {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
@@ -329,7 +329,7 @@ class Hub extends EventEmitter {
     // A feature's type from a device that is not selected: nobody reads it here, and it is not unknown.
     if (this._facadeHandlers.has(msg.t)) {
       consumed = true;
-      if (s.id === this.selectedId) this._facadeEmit(msg.t, msg);
+      if (s.id === this.selectedId) this._facadeEmit(msg.t, msg, ws);
     }
     if (this._audioRoute && this._audioRoute.targetId === s.id
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
@@ -420,9 +420,9 @@ class Hub extends EventEmitter {
     this._change();
   }
 
-  _facadeEmit(type, arg) {
+  _facadeEmit(type, arg, ws = null) {
     const fns = this._facadeHandlers.get(type);
-    if (fns) for (const fn of fns) fn(arg);
+    if (fns) for (const fn of fns) fn(arg, ws);
   }
 
   _facadeState() {
@@ -502,6 +502,13 @@ class Hub extends EventEmitter {
     const fx = require('../../shared/meshfx.js').facadeFx(() => hub.selected, () => hub.sessions.list(), hub.sessions.fxShared);
     return {
       fx,
+      screenSocket: () => {
+        const s = hub.selected;
+        if (!s || !s.connected) return null;
+        const ctx = s.hostUp ? s.ctx : null;
+        const ws = s.linkUp ? s.link.ws : ctx && ctx.authed === true && !ctx.released ? ctx.ws : null;
+        return ws && ws.readyState === 1 && !ws.released ? ws : null;
+      },
       on: (type, fn) => addTo(hub._facadeHandlers, type, fn),
       onState: (fn) => hub._facadeStateFns.push(fn),
       // A message to the selected device; while it is on Bluetooth, files may wait for Wi-Fi (netHold).

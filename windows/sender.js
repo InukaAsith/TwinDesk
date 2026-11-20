@@ -25,12 +25,18 @@ class Sender extends EventEmitter {
     this.windows = new Set(); // the live sessions that are app windows (tagged win: 'send')
     this.options = new Map();
     this.native = new Map();
+    this.detailOwners = new Map();
     this.nativeFailed = false;
 
     // `win: 'send'` is the other computer's own window sender talking to our viewer (peerapps.js).
     const ours = (m) => this.live.has(m.session) && m.win !== 'send';
     link.on(T.RTC2_ANSWER, (m) => ours(m) && typeof m.sdp === 'string' && this._toWin(m));
     link.on(T.RTC2_ICE, (m) => ours(m) && this._toWin(m));
+    link.on(T.RTC_DETAIL, (m, ws) => {
+      const owner = this.detailOwners.get(m.session);
+      if (!owner || ws !== owner || link.outbound?.() !== owner || !this.live.has(m.session)) return;
+      this._toWin({ t: T.RTC_DETAIL, session: m.session, height: m.height });
+    });
     link.on('closed', () => { for (const s of [...this.live]) this.stop(s, false); });
 
     ipcMain.on('sender-out', (e, m) => {
@@ -96,9 +102,11 @@ class Sender extends EventEmitter {
     const session = ++this.counter;
     this.live.add(session);
     this.options.set(session, opts);
+    const owner = this.link.peerOs === P.OS.ANDROID && opts.offer?.kind === 'screen' && this.link.outbound?.();
+    if (owner) this.detailOwners.set(session, owner);
     if (opts.offer && opts.offer.kind === 'window') this.windows.add(session);
     // codec: Share screen › Encoder (settings.pcScreen.codec, shared/screencodec.js), for every session.
-    this._toWin({ ...opts, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), net: this._net(), t: 'start', session });
+    this._toWin({ ...opts, detailSource: owner ? opts.detailSource : null, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), net: this._net(), t: 'start', session });
     return session;
   }
 
@@ -122,6 +130,7 @@ class Sender extends EventEmitter {
   stop(session, tellMac = true) {
     if (!this.live.delete(session)) return;
     this.options.delete(session);
+    this.detailOwners.delete(session);
     if (this.paths) this.paths.delete(session);
     const native = this.native.get(session);
     if (native) { this.native.delete(session); native.stop(); }

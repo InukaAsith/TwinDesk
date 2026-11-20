@@ -8,6 +8,7 @@ package com.twindesk.android
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.media.MediaCodecList
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -21,6 +22,10 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
     private val main = Handler(Looper.getMainLooper())
     private var ready = false
     private val queue = mutableListOf<JSONObject>()
+    private val videoDecoders by lazy {
+        runCatching { MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter { !it.isEncoder } }
+            .getOrDefault(emptyList())
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     val view: WebView = WebView(ctx).apply {
@@ -67,6 +72,27 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
             for (m in queue) deliver(m)
             queue.clear()
             onEvent("ready", null)
+        }.let { }
+        @JavascriptInterface fun videoState(generation: Int, session: Int, playing: Boolean, w: Int, h: Int) = main.post {
+            onEvent("videoState", msg("videoState", "generation" to generation, "session" to session, "playing" to playing, "w" to w, "h" to h))
+        }.let { }
+        @JavascriptInterface fun canDecodeVideo(codec: String, width: Int, height: Int, fps: Double): Boolean {
+            val mime = when (codec.lowercase()) {
+                "video/h264" -> "video/avc"
+                "video/h265", "video/hevc" -> "video/hevc"
+                "video/vp8" -> "video/x-vnd.on2.vp8"
+                "video/vp9" -> "video/x-vnd.on2.vp9"
+                "video/av1" -> "video/av01"
+                else -> return false
+            }
+            if (width !in 1..4096 || height !in 1..2160 || !fps.isFinite() || fps !in 1.0..120.0) return false
+            return videoDecoders.any { decoder ->
+                runCatching { decoder.getCapabilitiesForType(mime).videoCapabilities
+                    ?.areSizeAndRateSupported(width, height, fps) == true }.getOrDefault(false)
+            }
+        }
+        @JavascriptInterface fun detail(generation: Int, session: Int, height: Int) = main.post {
+            onEvent("videoDetail", msg("videoDetail", "generation" to generation, "session" to session, "height" to height))
         }.let { }
         @JavascriptInterface fun playing(w: Int, h: Int) = main.post { onEvent("playing", JSONObject().put("w", w).put("h", h)) }.let { }
         @JavascriptInterface fun haptic() = main.post { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }.let { }
@@ -136,6 +162,10 @@ class Screen(core: Core) : Feature(core) {
     @Volatile var size: Pair<Int, Int>? = null; private set // the picture playing now
     private var host: WebHost? = null
     private var lastInfo: JSONObject? = null
+    private var videoGeneration = 0
+    private var videoSession: Int? = null
+    private var videoMarker: Any? = null
+    private var videoPlaying = false
     private var wantStart = false // the viewer opened before we knew whether the Mac shares
     private var startedByUs = false // we started the Mac's sharing: stop it when the viewer closes
     @Volatile var autoOpened = false; private set // the computer started sharing and opened the viewer: it closes when that stops
@@ -163,6 +193,7 @@ class Screen(core: Core) : Feature(core) {
     // ViewerActivity opened: stream to us, at our screen's size (the Mac sizes Extend to it).
     fun attach(h: WebHost, w: Int, hpx: Int) {
         host = h
+        resetVideo()
         viewing = true
         h.post(opts()) // first: the computer's name for the messages below
         lastInfo?.let { h.post(it) }
@@ -234,6 +265,7 @@ class Screen(core: Core) : Feature(core) {
     fun detach(h: WebHost) {
         if (host !== h) return
         host = null
+        resetVideo()
         viewing = false
         size = null
         wantStart = false
@@ -268,6 +300,35 @@ class Screen(core: Core) : Feature(core) {
         core.changed()
     }
 
+    private fun resetVideo() {
+        videoGeneration++
+        videoSession = null
+        videoMarker = null
+        videoPlaying = false
+    }
+
+    fun detailOffer(m: JSONObject, source: okhttp3.WebSocket) {
+        resetVideo()
+        videoSession = m.optInt("session", -1)
+        videoMarker = source
+        host?.post(JSONObject(m.toString()).put("viewerGeneration", videoGeneration))
+    }
+
+    fun videoState(h: WebHost, generation: Int, session: Int, playing: Boolean) {
+        if (host !== h || !viewing || videoGeneration != generation || videoSession != session ||
+            videoMarker == null || core.link.sessionMarker() !== videoMarker || !core.link.connected) return
+        videoPlaying = playing
+    }
+
+    fun videoDetail(h: WebHost, generation: Int, session: Int, height: Int) {
+        if (host !== h || !viewing || !sharing || !videoPlaying ||
+            core.host?.os !in listOf("mac", "win", "linux") ||
+            videoGeneration != generation || videoSession != session ||
+            height !in 0..2160 || videoMarker == null || !core.link.connected ||
+            core.link.sessionMarker() !== videoMarker) return
+        core.link.sendFor(videoMarker, msg("rtc.detail", "session" to session, "height" to height))
+    }
+
     fun playing(w: Int, h: Int) {
         size = w to h
         core.changed()
@@ -281,7 +342,7 @@ class Screen(core: Core) : Feature(core) {
         if (mode != null) m.put("mode", mode)
         if (close) m.put("close", true)
         if (displayId != null) m.put("displayId", displayId)
-        if (share == false) startedByUs = false
+        if (share == false) { startedByUs = false; resetVideo() }
         core.send(m)
     }
 
@@ -308,9 +369,15 @@ class Screen(core: Core) : Feature(core) {
         control(share = true, mode = mode)
     }
 
+    override fun onWelcome(host: Host) {
+        resetVideo()
+        this.host?.post(msg("stream.stop"))
+    }
+
     override fun onClosed() {
         Notify.cancelScreen(core.ctx)
         state = null
+        resetVideo()
         lastInfo = null
         startedByUs = false
         host?.post(msg("stream.stop"))
@@ -325,13 +392,15 @@ class Screen(core: Core) : Feature(core) {
                 val on = m.optBoolean("on")
                 // Off -> on, not asked for here: the person pressed Share Screen on the computer.
                 if (was != null && !was.optBoolean("on") && on && !viewing && !startedByUs) autoOpen()
-                if (!on) Notify.cancelScreen(core.ctx)
+                if (!on) { resetVideo(); Notify.cancelScreen(core.ctx) }
                 if (wantStart) startIfNeeded()
                 core.changed()
             }
             "stream.input" -> { inputOn = m.optBoolean("on", true); core.changed() }
             "stream.info" -> { lastInfo = m; host?.post(m) }
-            "rtc.offer", "rtc.ice", "stream.stop" -> host?.post(m)
+            "rtc.offer" -> { resetVideo(); host?.post(m) }
+            "stream.stop" -> { resetVideo(); host?.post(m) }
+            "rtc.ice" -> host?.post(m)
             else -> return false
         }
         return true

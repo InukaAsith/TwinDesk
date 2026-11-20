@@ -266,7 +266,7 @@ class PcScreen {
     if (!this.mode || this.mode === 'off' || !this.mac.accept) { if (audio) loopback.release(); return; }
     this._stopSend(true);
     const mbps = this.cfg.mbps; // Share screen › Quality, for phones too
-    const session = this.sender.start({ sourceId: src.id, width, height, mbps, fps, steady, audio: false, audioLabel: audio, offer: { kind: 'screen', width, height } }); // its size: a viewer shapes its window to it (#255)
+    const session = this.sender.start({ sourceId: src.id, width, height, detailSource: !WAYLAND ? { width: rect.width, height: rect.height } : null, mbps, fps, steady, audio: false, audioLabel: audio, offer: { kind: 'screen', width, height } }); // its size: a viewer shapes its window to it (#255)
     this.live = false;
     this.sending = { session, displayId: d.id, rect, key, loop: !!audio };
     this.stats = null;

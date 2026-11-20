@@ -80,7 +80,53 @@ function fps(hz, cap) {
   return FPS_CAPS.includes(cap) && cap ? Math.min(cap, rate) : rate;
 }
 
-const api = { mode, features, negotiated, rank, order, steady, fps, FPS_CAPS, RTPMAP, H265_FEATURES, MODES, DEFAULT };
+// Keep the configured resolution as the baseline. Advertise only larger, aspect-preserving
+// sizes within the capture source and the viewer's 4K detail limit.
+function detailSizes(source, width, height) {
+  if (!source || source.width <= 0 || source.height <= 0) return [];
+  const maxHeight = Math.floor(Math.min(2160, source.height, 4096 * source.height / source.width) / 2) * 2;
+  return [...new Set([1440, maxHeight])]
+    .filter((h) => h > height && h <= maxHeight)
+    .map((h) => ({ width: Math.round(source.width * h / source.height / 2) * 2, height: h }))
+    .filter((size) => size.width > width && size.width <= source.width);
+}
+
+// Serialize resolution changes for one capture; the latest pending request wins. Retiring
+// that capture drops pending work without mutating the replacement track.
+function detailSession(source, { width, height, fps, alive, apply, failed }) {
+  const sizes = detailSizes(source, width, height);
+  if (!sizes.length) return null;
+  const base = { width, height };
+  let current = base, next = null, busy = false;
+  return {
+    offer: { baseline: height, fps, sizes },
+    async set(request) {
+      if (!Number.isInteger(request) || !alive()) return;
+      const size = request === 0 ? base : sizes.find((tier) => tier.height === request);
+      if (!size) return;
+      next = size;
+      if (busy) return;
+      busy = true;
+      try {
+        while (alive() && next) {
+          const size = next;
+          next = null;
+          if (size === current) continue;
+          try {
+            await apply(size);
+            current = size;
+          } catch (error) {
+            if (alive()) failed?.(error);
+          }
+        }
+      } finally {
+        busy = false;
+      }
+    },
+  };
+}
+
+const api = { mode, features, negotiated, rank, order, steady, fps, FPS_CAPS, RTPMAP, H265_FEATURES, MODES, DEFAULT, detailSizes, detailSession };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 if (typeof window !== 'undefined') window.TwinDeskScreenCodec = api;
 })();

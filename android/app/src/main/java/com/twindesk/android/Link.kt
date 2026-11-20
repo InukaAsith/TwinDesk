@@ -49,7 +49,7 @@ class Link(
     interface Events {
         fun onChange()
         fun onWelcome(host: Host)
-        fun onMessage(m: JSONObject)
+        fun onMessage(m: JSONObject, source: WebSocket)
         fun onClosed(host: Host, code: String?)
     }
 
@@ -296,6 +296,13 @@ class Link(
     // The session's socket now: its address and port (127.0.0.1 through the cable or Bluetooth).
     fun endpoint(): Pair<String, Int>? = ws?.let { endOf[it] }
 
+    // A deferred viewer request belongs to the socket that delivered its offer.
+    internal fun sendFor(marker: Any?, m: JSONObject): Boolean {
+        val socket = ws ?: return false
+        if (marker == null || socket !== marker || state != "connected" || parting) return false
+        return socket.send(m.toString())
+    }
+
     internal fun sessionMarker(): Any? = ws
     // Called synchronously before Core removes durable return intent. An already queued welcome
     // must not re-arm that intent after Stop, Forget or another explicit connection choice.
@@ -432,7 +439,7 @@ class Link(
                 val m = runCatching { JSONObject(text) }.getOrNull()
                 if (m?.optString("t") == Proto.T.WELCOME && m.optBoolean("resumed")) promote(webSocket)
                 else { pending = null; webSocket.cancel() }
-            } else if (webSocket === ws || webSocket === alt) onText(text)
+            } else if (webSocket === ws || webSocket === alt) onText(text, webSocket)
         }
         // The computer closed it (Disconnect, Forget…): answer at once. OkHttp waits for us to,
         // and until then neither side saw the session end.
@@ -484,7 +491,7 @@ class Link(
         helloTimer = exec.schedule({ if (state != "connected") { message = tr("No answer"); ws?.cancel() } }, if (ble) Proto.BLE_TIMEOUT_MS else Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
 
-    private fun onText(text: String) {
+    private fun onText(text: String, source: WebSocket) {
         val m = runCatching { JSONObject(text) }.getOrNull() ?: return
         val t = m.optString("t")
         lastRx = System.currentTimeMillis()
@@ -498,7 +505,7 @@ class Link(
             Proto.T.PONG -> { if (m.has("ts")) rttMs = maxOf(0, System.currentTimeMillis() - m.optLong("ts")); return }
             QUIET_IDLE -> { if (state == "connected") { val was = peerIdle; peerIdle = m.optBoolean("on"); if (was != peerIdle) nudge() }; return }
         }
-        if (state == "connected") events.onMessage(m)
+        if (state == "connected") events.onMessage(m, source)
     }
 
     private fun onNonce(m: JSONObject) {
