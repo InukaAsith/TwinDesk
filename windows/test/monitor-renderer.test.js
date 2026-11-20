@@ -73,13 +73,13 @@ test('screen encoder scales the whole native frame once; app-window capture reta
       return { getVideoTracks: () => [track], getAudioTracks: () => [], getTracks: () => [track] };
     };
     f.context.RTCRtpSender = { getCapabilities: () => ({ codecs: [] }) };
-    f.context.window.TwinDeskScreenCodec = { order: c => c, RTPMAP: /H264/ };
+    f.context.window.TwinDeskScreenCodec = { ...require('../../shared/screencodec'), order: c => c, RTPMAP: /H264/ };
     f.context.RTCPeerConnection.prototype.createOffer = async () => ({ sdp: '' });
     f.context.RTCPeerConnection.prototype.addTransceiver = () => ({ setCodecPreferences() {}, sender: {
       getParameters: () => ({ encodings: [{}] }), setParameters: async p => parameters.push(p),
     } });
     const command = { session: 1, sourceId: 'screen:1', width: 1920, height: 1080, mbps: 20, offer: { kind: native ? 'screen' : 'window' },
-      ...(native ? { captureWidth: 2560, captureHeight: 1440 } : { follow: true }) };
+      ...(native ? { captureWidth: 2560, captureHeight: 1440, detailSource: {width:2560,height:1440} } : { follow: true }) };
     f.context.command = command;
     await vm.runInContext('start(command)', f.context);
     assert.equal(f.states.some(s => s.status === 'failed'), false);
@@ -87,6 +87,17 @@ test('screen encoder scales the whole native frame once; app-window capture reta
     assert.equal(constraints.video.mandatory.minWidth, native ? 2560 : 2);
     assert.equal(parameters[0].encodings[0].scaleResolutionDownBy, native ? 4 / 3 : 1);
     assert.equal(parameters[0].encodings[0].maxBitrate, 20e6);
+    if (native) {
+      assert.equal(f.sent.find(m => m.t === P.T.RTC2_OFFER).detail.sizes[0].height, 1440);
+      f.callbacks.on({ t: 'rtc.detail', session: 1, height: 1440 }); await tick();
+      assert.equal(parameters.at(-1).encodings[0].scaleResolutionDownBy, 1);
+      f.callbacks.on({ t: 'rtc.detail', session: 1, height: 0 }); await tick();
+      assert.equal(parameters.at(-1).encodings[0].scaleResolutionDownBy, 4 / 3);
+      const count = parameters.length;
+      f.callbacks.on({ t: 'stop', session: 1 });
+      f.callbacks.on({ t: 'rtc.detail', session: 1, height: 1440 }); await tick();
+      assert.equal(parameters.length, count, 'a stopped sender cannot change resolution');
+    } else assert.equal(f.sent.find(m => m.t === P.T.RTC2_OFFER).detail, undefined);
   }
 });
 test('native cursor frames reach the same encoder without recapturing or changing resolution and bitrate', async () => {
