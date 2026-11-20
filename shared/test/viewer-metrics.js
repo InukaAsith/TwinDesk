@@ -91,6 +91,23 @@ async function retiredReports() {
   await tick();
   assert.deepEqual(f.metrics, [], 'backgrounding rejects an in-flight report');
 }
-measuredRates().then(retiredReports).then(() => {
+async function transientDisconnectRecovers() {
+  const f = fixture();
+  await f.connect();
+  let finish;
+  f.peers[0].stats = () => new Promise(resolve => { finish = resolve; });
+  f.advance(2000);
+  f.peers[0].connectionState = 'connecting';
+  finish(new Map([['in', { id: 'video', type: 'inbound-rtp', kind: 'video', timestamp: 1000, framesDecoded: 10, bytesReceived: 1000 }]]));
+  await tick();
+  assert.deepEqual(f.metrics, []);
+  f.peers[0].connectionState = 'connected';
+  f.peers[0].stats = async () => new Map([['in', { id: 'video', type: 'inbound-rtp', kind: 'video', timestamp: 3000, framesDecoded: 130, bytesReceived: 251000, framesDropped: 1 }]]);
+  f.peers[0].onconnectionstatechange();
+  f.decodedFrame();
+  f.advance(2000); await tick();
+  assert.equal(f.metrics.length, 1, 'polling resumes after transient non-connected getStats');
+}
+measuredRates().then(retiredReports).then(transientDisconnectRecovers).then(() => {
   console.log('viewer metrics: decoded frame rates, capture retirement and foreground ownership passed');
 }).catch(error => { console.error(error); process.exitCode = 1; });

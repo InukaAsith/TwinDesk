@@ -100,10 +100,10 @@
           doctorLast = inbound;
         }
       } catch { /* Statistics can be unavailable while the receiver changes tracks. */ }
-      if (current()) {
-        doctorTimer = null;
-        scheduleDoctor(owner);
+      finally {
+        if (revision === doctorRevision && doctorTimer === -1) doctorTimer = null;
       }
+      if (current()) scheduleDoctor(owner);
     }, 2000);
   }
 
