@@ -328,6 +328,7 @@
       // side hosts a network (Wi-Fi Direct group / Windows' legacy access point), the other joins
       // it, and the guest moves the session onto it (hello {resume}, below) without ending it.
       NET_CAPS: 'net.caps', // either {host, join, hotspot, band5?}: what this side can do (host = a network the other joins; band5 false = joins 2.4 GHz only)
+      NET_LAN: 'net.lan', // authenticated Bluetooth only: computer {addresses: IPv4[], port} (empty withdraws); Android {ask: true} after fallback
       NET_NEED: 'net.need', // either {why: 'files'|'screen'}: please host a network (I can't)
       NET_JOIN: 'net.join', // host->joiner {ssid, pass} | {error}: it's up, join it
       NET_JOINED: 'net.joined', // joiner->host {ok, error?}
