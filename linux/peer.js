@@ -50,7 +50,7 @@ class Peer {
     }
 
     link.onState(() => this._changed());
-    link.onAny = (msg) => this.fx.incoming(msg) || this._deliver(msg);
+    link.onAny = (msg, ws) => this.fx.incoming(msg) || this._deliver(msg, ws);
     link.on('welcome', (msg) => {
       if (this.fx2) this.fx2.need('guest', true);
       this.fx.reset();
@@ -118,9 +118,9 @@ class Peer {
       this._emit('transport', {});
       this._changed();
     });
-    server.on('message', (msg, ctx) => {
+    server.on('message', (msg, ctx, ws) => {
       if (ctx !== server.current) return;
-      for (const m of P.swapRole(msg, this.swapIn)) if (!this.fx.incoming(m)) this._deliver(m);
+      for (const m of P.swapRole(msg, this.swapIn)) if (!this.fx.incoming(m)) this._deliver(m, ws);
     });
     pairing.on('change', () => this._changed());
     pairing.on('request', () => this._changed());
@@ -189,6 +189,14 @@ class Peer {
     if (!this.link.authed) return null;
     const p = this.link.snapshot().paired;
     return p && { deviceId: p.macId, os: p.os, role: 'host', transport: this.link.transport === 'ble' ? 'ble' : 'ip', address: p.address };
+  }
+
+  // The authenticated physical connection carrying this viewer's screen session.
+  screenSocket() {
+    const ctx = this.hosting ? this.server.current : null;
+    if (ctx && (ctx.authed !== true || ctx.released)) return null;
+    const ws = ctx ? ctx.ws : this.link.authed ? this.link.ws : null;
+    return ws && ws.readyState === 1 && !ws.released ? ws : null;
   }
 
   send(obj) {
@@ -297,11 +305,11 @@ class Peer {
   respondPair(allow) { if (this.pairing) this.pairing.respond(allow); }
   forgetGuest(id) { if (this.pairing) this.pairing.forget(id); }
 
-  _deliver(msg) {
+  _deliver(msg, ws = null) {
     if (!this._allowed(msg.t)) return;
     if (this.tap) this.tap(msg);
     const fns = this.handlers.get(msg.t);
-    if (fns) for (const fn of fns) fn(msg);
+    if (fns) for (const fn of fns) fn(msg, ws);
     else if (!this.unknown.has(msg.t)) {
       this.unknown.add(msg.t);
       console.log('[peer] ignoring message type', msg.t);

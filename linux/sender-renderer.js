@@ -75,6 +75,17 @@ async function start(m) {
     captured.onended = () => alive(me) && report(me, 'ended', 'The captured ' + (m.offer.kind === 'window' ? 'window' : 'monitor') + ' went away');
     me.inset = m.inset || null;
     const track = m.offer.kind === 'window' ? cropped(captured, me) : captured;
+    if (m.detailSource && typeof track.applyConstraints === 'function') {
+      me.detail = window.TwinDeskScreenCodec.detailSession(m.detailSource, {
+        width: m.width, height: m.height, fps, alive: () => alive(me),
+        apply: (size) => track.applyConstraints({
+          width: { ideal: size.width, max: size.width },
+          height: { ideal: size.height, max: size.height },
+          frameRate: { ideal: fps, max: fps },
+        }),
+        failed: (e) => console.warn('Screen detail size unavailable:', e.message),
+      });
+    }
     track.contentHint = 'motion';
     const pc = (me.pc = new RTCPeerConnection(m.ice || { iceServers: [] }));
     const tr = pc.addTransceiver(track, { direction: 'sendonly', streams: [stream] });
@@ -100,7 +111,7 @@ async function start(m) {
     const kind = m.offer.kind === 'screen' && audio ? 'screen+audio' : m.offer.kind;
     // Playback › Steady: no "show it now" on the frames (shared/screencodec.js steady()).
     const sdp = m.steady ? window.TwinDeskScreenCodec.steady(pc.localDescription.sdp) : pc.localDescription.sdp;
-    api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp, kind });
+    api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp, kind, ...(me.detail ? { detail: me.detail.offer } : {}) });
     report(me, 'connecting');
     me.statsTimer = setInterval(() => stats(me), 1000);
   } catch (e) {
@@ -210,6 +221,7 @@ api.on((m) => {
     case 'start': start(m); break;
     case 'stop': stop(m.session); break;
     case 'inset': if (sessions.has(m.session)) sessions.get(m.session).inset = m.inset; break;
+    case T.RTC_DETAIL: sessions.get(m.session)?.detail?.set(m.height); break;
     case T.RTC2_ANSWER: onAnswer(m); break;
     case T.RTC2_ICE: onIce(m); break;
   }
