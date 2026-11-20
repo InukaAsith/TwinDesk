@@ -532,7 +532,7 @@ function updateTray() {
     lookAgain: () => actions.refreshDiscovery(),
     update: updates && updates.status.available ? { label: t('TwinDesk {version} available…', { version: updates.status.latest }), click: showUpdateWindow } : null,
     open: showWindow,
-    fileShelf: showFileShelf,
+    fileShelf: () => actions.showFileShelf(),
     log: () => require('../../shared/applog.js').open(),
     quit: () => app.quit(),
   })));

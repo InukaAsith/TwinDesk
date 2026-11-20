@@ -597,7 +597,7 @@ function updateTray() {
     disconnect: c ? { label: phone ? t('Disconnect Phone') : t('Disconnect {name}', { name }), click: () => actions.disconnect() } : null,
     update: updates && updates.status.available ? { label: t('TwinDesk {version} available…', { version: updates.status.latest }), click: showUpdateWindow } : null,
     rezume: rezumeItems(),
-    fileShelf: showFileShelf,
+    fileShelf: () => actions.showFileShelf(),
     open: showWindow,
     quit: () => app.quit(),
   };
