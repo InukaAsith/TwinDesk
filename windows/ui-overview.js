@@ -105,7 +105,7 @@ UI.tab({
     // A paired phone that dropped and may come back by itself (shared/reclaim.js): Disconnect stops it.
     const returnRow = UI.row('', t('Reconnecting…'), [UI.button(t('Disconnect'), () => api.disconnectPhone(), 'small')], { literal: true });
     const returnCard = UI.card('', [returnRow]);
-    const doctor = UI.connectionDoctor('windows');
+    const doctor = UI.connectionDoctor ? UI.connectionDoctor('windows') : null;
 
     body.append(
       ...(airplay ? [airplay.el] : []),
@@ -113,7 +113,7 @@ UI.tab({
       UI.card(t('Found nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
       hero,
-      doctor.el,
+      ...(doctor ? [doctor.el] : []),
       returnCard,
       adb.el,
       ...(tether ? [tether.el] : []),
@@ -190,7 +190,7 @@ UI.tab({
       return { busy: true, text: mine.kind === 'take' ? t('Taking over…') : t('Connecting…') };
     }
     const update = (s) => {
-      doctor.update(s);
+      if (doctor) doctor.update(s);
       const returning = s.phone && s.phone.returning;
       returnCard.hidden = !returning;
       if (returning) returnRow.label.textContent = returning.name;

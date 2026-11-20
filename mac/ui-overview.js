@@ -88,14 +88,14 @@ UI.tab({
     const returnRow = UI.row('', tr('Reconnecting…'), [UI.button(tr('Disconnect'), () => api.disconnectPhone(), 'small')], { literal: true });
     const returnCard = UI.card('', [returnRow]);
 
-    const doctor = UI.connectionDoctor('mac');
+    const doctor = UI.connectionDoctor ? UI.connectionDoctor('mac') : null;
     body.append(
       permCard,
       UI.card('', [addrRow, ipRow]),
       UI.card(tr('Nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
       hero,
-      doctor.el,
+      ...(doctor ? [doctor.el] : []),
       returnCard,
       adb.el,
       ...(tether ? [tether.el] : []),
@@ -164,7 +164,7 @@ UI.tab({
     const update = (s) => {
       if (webCard) webCard.render(s);
       last = s;
-      doctor.update(s);
+      if (doctor) doctor.update(s);
       const p = UI.names(s);
       bleSw.set(!s.net || s.net.ble !== false);
       blePcSw.set(!!s.net && s.net.blePc === true);
