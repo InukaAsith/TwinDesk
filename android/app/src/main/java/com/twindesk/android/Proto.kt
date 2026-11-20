@@ -135,6 +135,7 @@ object Proto {
         const val WOL_INFO = "wol.info"
         // Wi-Fi for a session through Bluetooth (Netlink.kt, shared/netlink.js)
         const val NET_CAPS = "net.caps"
+        const val NET_LAN = "net.lan"
         const val NET_NEED = "net.need"
         const val NET_JOIN = "net.join"
         const val NET_JOINED = "net.joined"

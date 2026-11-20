@@ -190,12 +190,11 @@ class Core private constructor(val ctx: Context) : Link.Events {
     private fun inBackground() = !reconnectBg && !MainActivity.shown
 
     // Every 2 s: Bluetooth scans while it may be needed (not connected, or connected through it),
-    // and a session through Bluetooth moves onto the network as soon as the computer is seen there
-    // (the same Wi-Fi, or a group Netlink made). On the same Wi-Fi, with General's Turn off Bluetooth
+    // and a session through Bluetooth tries the computer's LAN addresses from discovery or from
+    // the authenticated Bluetooth link. On the same Wi-Fi, with General's Turn off Bluetooth
     // on Wi-Fi connections on, Bluetooth goes altogether (its fallback, then its links): the Wi-Fi
     // dropping ends the session, which comes back over Bluetooth (resume). On a group Netlink made,
     // or a USB cable, it stays as the fallback.
-    private val resumeTried = HashMap<String, Long>()
     private fun bleTick() {
         ble.prune()
         if (bleWifiOff && link.connected && net.via == "Wi-Fi") {
@@ -208,15 +207,8 @@ class Core private constructor(val ctx: Context) : Link.Events {
         if (!bleOn && ble.found.isNotEmpty()) ble.stop()
         serve.advertise(bleOn && serve.allowed() && ble.radioOn && !link.connected && !peer.connected) // a phone holds the session: computers wait
         if (!bleOn && serve.found.isNotEmpty()) serve.stop()
-        val h = link.host
         if (link.connected && !link.ble) screen.onWifi()
-        if (h == null || !link.connected || !link.ble || link.resuming) return
-        val f = discovery.found[h.id] ?: return
-        val now = System.currentTimeMillis()
-        if (now - (resumeTried[f.address] ?: 0) < 8000) return
-        resumeTried[f.address] = now
-        Log.i("TwinDesk", "${h.name} is on the network at ${f.address}: moving the session there")
-        link.resume(f.address, f.port)
+        if (link.connected && link.ble) link.resume { id -> discovery.found[id]?.let { it.address to it.port } }
     }
 
     // Computers near: on the network, then the ones only Bluetooth sees.
