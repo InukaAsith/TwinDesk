@@ -281,7 +281,10 @@ class PhoneViews extends EventEmitter {
 
   openApp(pkg, name) {
     const open = [...this.views.values()].find((v) => v.kind === 'app' && v.app === pkg);
-    if (open) return open.win.show(), open.win.focus();
+    if (open) {
+      if (open.win.isMinimized()) open.win.restore();
+      return open.win.show(), open.win.focus();
+    }
     const w = 412;
     const h = 860;
     // At least 2 pixels per point (sharp at 100% scaling); the dpi keeps 1 dp = 1 point, so the
@@ -379,7 +382,14 @@ class PhoneViews extends EventEmitter {
     win.webContents.once('did-finish-load', () => {
       v.ready = true;
       for (const [ch, m] of v.queue.splice(0)) win.webContents.send(ch, m);
+      if (kind === 'app') this._send(v, 'phoneview:opts', { minimized: win.isMinimized() });
     });
+    if (kind === 'app') {
+      const paintState = () => this._send(v, 'phoneview:opts', { minimized: win.isMinimized() });
+      win.on('minimize', paintState);
+      win.on('restore', paintState);
+      win.on('show', paintState);
+    }
     // A camera's window: closed, it only hides (the camera stops with Camera's switch).
     if (kind === 'camera') {
       win.on('close', (e) => {
