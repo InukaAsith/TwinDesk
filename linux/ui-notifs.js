@@ -15,8 +15,15 @@ UI.tab({
   // other computer per pair (pair.sync), so flipping it there flips it here.
   master: { get: (s) => s.notifs.send || s.notifs.receive, set: (v) => UI.api.setNotifs({ send: v, receive: v }) },
   badge: (s) => (s.notifs.send || s.notifs.receive ? 'on' : ''),
-  build(body) {
+  build(body, page) {
     const { el, api } = UI;
+    const batteryLabel = I18n.t('Phone battery alerts');
+    const batterySw = UI.switch((v) => api.setNotifs({ batteryAlerts: v }), { label: batteryLabel });
+    batterySw.el.classList.add('local-setting');
+    // Keep the battery switch above the sync introduction, outside the hidden page body.
+    page.insertBefore(UI.card('', [
+      UI.row(batteryLabel, I18n.t('When the phone’s battery falls to 15% or reaches 100% while charging'), [batterySw]),
+    ], { cls: 'keep-on' }), page.querySelector('.feature-art') || body);
     const hideSw = UI.switch((v) => api.setNotifs({ hideText: v }), { label: I18n.t('Hide message text') });
     const hideRow = UI.row(I18n.t('Hide message text'), I18n.t('Only the app and the title'), [hideSw]);
     const note = UI.note('info', '');
@@ -34,6 +41,7 @@ UI.tab({
     let key = '';
     return (s) => {
       const n = s.notifs;
+      batterySw.set(n.batteryAlerts === true);
       if (showing) showing.update(s);
       hist.update(s);
       const p = UI.peer(s);

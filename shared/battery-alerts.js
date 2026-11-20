@@ -1,5 +1,5 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
-// Opt-in Mac alerts for a connected phone's battery. No protocol of its own: the phone already
+// Opt-in desktop alerts for a connected phone's battery. No protocol of its own: the phone already
 // sends battery and charging in phone.info. One alert per discharge cycle at or below 15% (not
 // charging), and one per charge cycle when it reaches 100% while charging. Each cycle re-arms
 // only after the level has left that zone. State belongs to one authenticated session
@@ -198,7 +198,8 @@ function createPhoneBatteryWatch({ getEnabled, notify } = {}) {
     reset() {
       alerts.reset();
       current.clear();
-      held.splice(0);
+      for (const timer of held.values()) clearTimeout(timer);
+      held.clear();
     },
     info(info, ctx) {
       syncEnabled();
@@ -220,10 +221,11 @@ function createPhoneBatteryWatch({ getEnabled, notify } = {}) {
   };
 }
 
-const held = [];
+const held = new Map();
 
-// Native Mac notification. Unsupported, denied or a thrown constructor is a no-op.
-function showMacNotification(alert, deps) {
+// Native desktop notification. Keep it alive for the click handler even when show() returns.
+function showDesktopNotification(alert, deps) {
+  let drop;
   try {
     const Notification = deps && deps.Notification;
     const t = deps && typeof deps.t === 'function' ? deps.t : (s) => s;
@@ -235,13 +237,13 @@ function showMacNotification(alert, deps) {
     const title = alert.kind === 'full' ? t('{name} is fully charged', { name }) : t('{name} battery is low', { name });
     const body = alert.kind === 'full' ? t('Battery is at {percent}%', { percent }) : t('{percent}% and not charging', { percent });
     const n = new Notification({ title, body });
-    held.push(n);
-    const drop = () => {
-      const i = held.indexOf(n);
-      if (i >= 0) held.splice(i, 1);
+    drop = () => {
+      clearTimeout(held.get(n));
+      held.delete(n);
     };
-    if (n && typeof n.on === 'function') {
+    if (typeof n.on === 'function') {
       n.on('close', drop);
+      n.on('failed', drop);
       if (onClick) {
         n.on('click', () => {
           drop();
@@ -250,10 +252,12 @@ function showMacNotification(alert, deps) {
       }
     }
     const timer = setTimeout(drop, 60000);
-    if (timer && typeof timer.unref === 'function') timer.unref();
-    if (n && typeof n.show === 'function') n.show();
+    held.set(n, timer);
+    timer.unref?.();
+    n.show();
     return true;
   } catch {
+    if (drop) drop();
     return false;
   }
 }
@@ -261,7 +265,8 @@ function showMacNotification(alert, deps) {
 module.exports = {
   BatteryAlerts,
   createPhoneBatteryWatch,
-  showMacNotification,
+  showDesktopNotification,
+  showMacNotification: showDesktopNotification,
   LOW_AT,
   LOW_REARM,
   FULL_AT,

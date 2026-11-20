@@ -316,8 +316,8 @@ input[type="text"]:focus, input[type="search"]:focus { outline: none; box-shadow
 @keyframes fa-march { to { stroke-dashoffset: -20; } }
 @media (prefers-reduced-motion: reduce) { .feature-art .fa-dash { animation: none; } }
 /* With nothing connected, the switches of what needs a device are dimmed and can't be changed (shared/feature-art.js) */
-.no-peer .page:not(.free) .switch, .no-peer .page.free .dir-card .switch { opacity: 0.45; cursor: not-allowed; }
-.no-peer .page:not(.free) .switch:checked, .no-peer .page.free .dir-card .switch:checked { background: var(--faint); }
+.no-peer .page:not(.free) .switch:not(.local-setting), .no-peer .page.free .dir-card .switch { opacity: 0.45; cursor: not-allowed; }
+.no-peer .page:not(.free) .switch:not(.local-setting):checked, .no-peer .page.free .dir-card .switch:checked { background: var(--faint); }
 
 /* A row's own progress (Found nearby: Connecting…, Waiting for Allow…). */
 .spin { width: 12px; height: 12px; flex: none; border: 2px solid var(--control-line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }

@@ -5,7 +5,8 @@
 'use strict';
 
 const assert = require('assert');
-const { BatteryAlerts, createPhoneBatteryWatch, showMacNotification } = require('../battery-alerts.js');
+const { mock } = require('node:test');
+const { BatteryAlerts, createPhoneBatteryWatch, showDesktopNotification, showMacNotification } = require('../battery-alerts.js');
 
 function sample(over) {
   return { deviceId: 'phone-a', sessionId: 'sess-1', name: 'Pixel', battery: 50, charging: false, ...over };
@@ -129,8 +130,9 @@ function kinds(list) {
   assert.deepStrictEqual(seen.filter((k) => k === 'low').length >= 4, true);
 }
 
-// The Mac notification helper does nothing when notifications are missing, and does not throw.
+// Both entry points use the same safe notification helper.
 {
+  assert.strictEqual(showMacNotification, showDesktopNotification);
   assert.strictEqual(showMacNotification({ kind: 'low', name: 'Pixel', battery: 10 }, {}), false);
   assert.strictEqual(showMacNotification({ kind: 'low', name: 'Pixel', battery: 10 }, { Notification: { isSupported: () => false } }), false);
   assert.strictEqual(showMacNotification({ kind: 'low', name: 'Pixel', battery: 10 }, {
@@ -143,7 +145,7 @@ function kinds(list) {
   Note.prototype.show = function () { this.shown = true; };
   Note.prototype.on = function (ev, fn) { this.handlers[ev] = fn; };
   let clicked = null;
-  assert.strictEqual(showMacNotification({ kind: 'full', name: 'Pixel', battery: 100 }, {
+  assert.strictEqual(showDesktopNotification({ kind: 'full', name: 'Pixel', battery: 100 }, {
     Notification: Note,
     t: (s, vars) => s.replace('{name}', vars && vars.name || '').replace('{percent}', vars && vars.percent != null ? String(vars.percent) : ''),
     onClick: (a) => { clicked = a; },
@@ -159,6 +161,19 @@ function kinds(list) {
   }), true);
   assert.doesNotThrow(() => listeners[1].click());
   assert.strictEqual(showMacNotification({ kind: 'nope', battery: 1 }, { Notification: Note }), false);
+
+  const timer = { unref() {} };
+  const schedule = mock.method(global, 'setTimeout', () => timer);
+  const cancel = mock.method(global, 'clearTimeout', () => {});
+  try {
+    class Denied extends Note { show() { throw new Error('permission denied'); } }
+    assert.strictEqual(showDesktopNotification({ kind: 'low', battery: 5 }, { Notification: Denied }), false);
+    assert.strictEqual(schedule.mock.callCount(), 1);
+    assert.deepStrictEqual(cancel.mock.calls.map(({ arguments: args }) => args), [[timer]]);
+  } finally {
+    schedule.mock.restore();
+    cancel.mock.restore();
+  }
 }
 
 console.log('battery-alerts: ok');

@@ -18,7 +18,7 @@
 
   // Nothing connected: a switch of a feature can't be turned on or off (it shows dimmed, styled from
   // .no-peer). Held here, before the page's own handler, so each page keeps setting its switches as it does.
-  const HELD = '.page:not(.free) .switch, .page.free .dir-card .switch';
+  const HELD = '.page:not(.free) .switch:not(.local-setting), .page.free .dir-card .switch';
   document.addEventListener('click', (e) => {
     if (document.body.classList.contains('no-peer') && e.target.matches && e.target.matches(HELD)) e.preventDefault();
   }, true);
