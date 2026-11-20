@@ -444,6 +444,9 @@ function setupIpc(ctx) {
       ctx.drop.clearRecent();
       if (ctx.fileSend) ctx.fileSend.clearRecent();
     },
+    showFileShelf() {
+      ctx.showFileShelf();
+    },
     cancelSend() {
       if (ctx.fileSend) ctx.fileSend.cancelSending();
     },

@@ -118,6 +118,7 @@ let startHidden = process.argv.includes('--hidden');
 let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web: this Mac as a page for iPhones and browsers (setupWeb)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is the Mac's sound capture (audiohub.js)
+let fileShelf = null;
 
 const state = {
   macName: '',
@@ -540,6 +541,12 @@ function phoneAdb(b) {
 // while nothing is connected. Set again only when what it shows changes: a menu replaced while it's open closes (or its click
 // goes nowhere), and the state is pushed every second (the ping time isn't in it for that reason).
 let trayKey = '';
+function showFileShelf() {
+  if (!svc || modulesAtStart.includes('files')) return;
+  fileShelf ||= new (require('./file-shelf').FileShelf)({ drop: svc.drop, t });
+  fileShelf.show();
+}
+
 function updateTray() {
   if (!tray) return;
   const c = state.client;
@@ -590,6 +597,7 @@ function updateTray() {
     disconnect: c ? { label: phone ? t('Disconnect Phone') : t('Disconnect {name}', { name }), click: () => actions.disconnect() } : null,
     update: updates && updates.status.available ? { label: t('TwinDesk {version} available…', { version: updates.status.latest }), click: showUpdateWindow } : null,
     rezume: rezumeItems(),
+    fileShelf: () => actions.showFileShelf(),
     open: showWindow,
     quit: () => app.quit(),
   };
@@ -1090,7 +1098,7 @@ app.whenReady().then(() => {
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
   setupWeb();
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates, applyRelay });
+  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, showFileShelf, login, refreshPermissions, updates, applyRelay });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   hud.keep = () => !!peer.current; // the popup's window lives while a session is on (mac/hud.js)
@@ -1544,6 +1552,7 @@ app.on('will-quit', () => {
 });
 app.on('before-quit', () => {
   if (svc && svc.mic) svc.mic.shutdown();
+  fileShelf?.shutdown();
   if (svc && svc.rzShelf) svc.rzShelf.shutdown();
   if (svc && svc.rz) svc.rz.shutdown();
   quitting = true;
