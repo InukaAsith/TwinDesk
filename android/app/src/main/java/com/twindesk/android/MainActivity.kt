@@ -115,6 +115,7 @@ class MainActivity : ComponentActivity() {
         Core.get(this).foreground() // a look at the session; one put off by Reconnect in the background
         Core.get(this).adb.check() // back from Settings: is wireless debugging on now?
         Core.get(this).hub.let { if (it.callsOn || it.messagesOn || it.mediaOn || it.filesOn) it.permsChanged() }
+        Core.get(this).taskAlerts.linkChanged()
         Core.get(this).share.let { if (it.on && it.serving != it.allowed) it.core.bg.execute { it.sync() } } // All files access just allowed (or taken away)
     }
 
@@ -1499,6 +1500,16 @@ private fun NotificationsPage(core: Core, v: Int) {
     val paired = core.adb.paired
     val inOn = core.sync.get("notifs", "in")
     val shown = core.notifs.shown
+    val taskRoute = core.link.currentTrustedRoute()
+    val taskOn = core.taskAlerts.enabled
+    val taskCanNotify = core.taskAlerts.canNotify
+    val taskHint = if (taskCanNotify)
+        tr("Receive completion alerts for tasks you start on {name}.", "name" to name)
+    else tr("Allow notifications in Android settings to receive task alerts.")
+    val askTaskNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        core.taskAlerts.linkChanged()
+        core.changed()
+    }
     if (!supported) Note(
         tr("This version of TwinDesk can’t read notifications, as Play Protect restricts downloaded apps. ") +
             tr("Once wireless debugging is set up, install the full version from the Phone page on {name}. Your settings and pairings are kept.", "name" to name),
@@ -1515,6 +1526,28 @@ private fun NotificationsPage(core: Core, v: Int) {
     MacCard {
         DirHead(name, false, me, true)
         SwitchRow(tr("Show {name}’s notifications here", "name" to name), tr("{count} shown", "count" to shown), inOn, first = true) { core.sync.set("notifs", "in", it) }
+        if (core.host?.os == "mac") {
+            SwitchRow(tr("Task alerts"), taskHint, taskOn) { on ->
+                core.taskAlerts.setEnabled(taskRoute, on)
+                if (on && !core.taskAlerts.canNotify) {
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        askTaskNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        val intent = if (Notify.nm(ctx).areNotificationsEnabled()) {
+                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                                .putExtra(Settings.EXTRA_CHANNEL_ID, Notify.CH_TASK)
+                        } else {
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                        }
+                        runCatching { ctx.startActivity(intent) }
+                    }
+                }
+            }
+        }
     }
     // Each app on its own (#102): every app on the phone, as a block list or an allow list (AppCards.kt).
     if (core.notifs.supported) NotifAppsCard(core, name)
@@ -1699,7 +1732,11 @@ private fun ModulesCard(core: Core) {
         if (open) for (t in Tab.entries) {
             val id = t.name.lowercase()
             if (id in Modules.FIXED) continue
-            SwitchRow(tr(t.title), "", id !in off) { Modules.set(core.store, id, it); off = Modules.off(core.store) }
+            SwitchRow(tr(t.title), "", id !in off) {
+                Modules.set(core.store, id, it)
+                if (id == "notifications") core.taskAlerts.modulesChanged()
+                off = Modules.off(core.store)
+            }
         }
     }
 }
@@ -1774,7 +1811,7 @@ private fun GeneralPage(core: Core, v: Int) {
     ) { core.changed() }
     val askNotify = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { core.changed() }
+    ) { core.taskAlerts.linkChanged(); core.changed() }
     // Every permission and feature in one place: each is asked for only when switched on elsewhere,
     // or here.
     MacCard(tr("Permissions")) {

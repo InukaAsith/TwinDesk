@@ -1250,5 +1250,11 @@
   "The computer closed the connection": "Bilgisayar bağlantıyı kapattı",
   "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "Bu telefon USB kablosu üzerinden {name} bilgisayarının internetini kullanabilir. İzin ver’e dokunun, ardından Android’in VPN isteğini onaylayın.",
   "Use {name}’s internet?": "{name} internetini kullanmak istiyor musunuz?",
-  "Using {name}’s internet over USB": "USB üzerinden {name} interneti kullanılıyor"
+  "Using {name}’s internet over USB": "USB üzerinden {name} interneti kullanılıyor",
+  "Task alerts": "Görev bildirimleri",
+  "Task completed": "Görev tamamlandı",
+  "Task failed": "Görev başarısız oldu",
+  "Terminal task": "Terminal görevi",
+  "Receive completion alerts for tasks you start on {name}.": "{name} üzerinde başlattığınız görevlerin tamamlanma bildirimlerini alın.",
+  "Allow notifications in Android settings to receive task alerts.": "Görev bildirimlerini almak için Android ayarlarında bildirimlere izin verin."
 }

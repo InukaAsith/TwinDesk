@@ -1250,5 +1250,11 @@
   "The computer closed the connection": "O computador fechou a conexão",
   "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "Este celular pode usar a internet de {name} pelo cabo USB. Toque em Permitir e confirme o pedido de VPN do Android.",
   "Use {name}’s internet?": "Usar a internet de {name}?",
-  "Using {name}’s internet over USB": "Usando a internet de {name} via USB"
+  "Using {name}’s internet over USB": "Usando a internet de {name} via USB",
+  "Task alerts": "Alertas de tarefas",
+  "Task completed": "Tarefa concluída",
+  "Task failed": "A tarefa falhou",
+  "Terminal task": "Tarefa do terminal",
+  "Receive completion alerts for tasks you start on {name}.": "Receba alertas de conclusão de tarefas que você inicia em {name}.",
+  "Allow notifications in Android settings to receive task alerts.": "Permita notificações nas configurações do Android para receber alertas de tarefas."
 }

@@ -14,8 +14,13 @@ const { LocalApi } = require('../localapi.js');
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-api-'));
 const file = path.join(dir, 'a.txt');
 fs.writeFileSync(file, 'a');
-const got = { sent: [], clip: [] };
-const api = new LocalApi({ dir, actions: { status: () => ({ connected: true, device: 'Studio' }), send: (p) => { got.sent.push(p); return 'sent'; }, clipboard: (t) => got.clip.push(t) } });
+const got = { sent: [], clip: [], tasks: [] };
+const taskAlerts = {
+  start: (b) => { got.tasks.push(['start', b]); return { code: 200, body: { ok: true, id: 'a'.repeat(32) } }; },
+  cancel: (b) => { got.tasks.push(['cancel', b]); return { code: 200, body: { ok: true } }; },
+  finish: (b) => { got.tasks.push(['finish', b]); return { code: 200, body: { ok: true } }; },
+};
+const api = new LocalApi({ dir, actions: { status: () => ({ connected: true, device: 'Studio' }), send: (p) => { got.sent.push(p); return 'sent'; }, clipboard: (t) => got.clip.push(t), taskAlerts } });
 
 function call(method, p, { headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -52,6 +57,10 @@ function call(method, p, { headers = {}, body } = {}) {
   assert.deepStrictEqual(r.body, { ok: true, status: 'sent' });
   assert.deepStrictEqual(got.sent, [[file]]);
   assert.strictEqual((await call('POST', '/v1/send', { headers: json, body: '{"paths":[]}' })).code, 400);
+  assert.deepStrictEqual((await call('POST', '/v1/task-alert/start', { headers: json, body: JSON.stringify({ title: 'Build' }) })).body, { ok: true, id: 'a'.repeat(32) });
+  assert.deepStrictEqual((await call('POST', '/v1/task-alert/cancel', { headers: json, body: JSON.stringify({ id: 'a'.repeat(32) }) })).body, { ok: true });
+  assert.deepStrictEqual((await call('POST', '/v1/task-alert/finish', { headers: json, body: JSON.stringify({ id: 'a'.repeat(32), ok: true }) })).body, { ok: true });
+  assert.deepStrictEqual(got.tasks, [['start', { title: 'Build' }], ['cancel', { id: 'a'.repeat(32) }], ['finish', { id: 'a'.repeat(32), ok: true }]]);
   assert.strictEqual((await call('POST', '/v1/nope', { headers: json, body: '{}' })).code, 404);
 
   const port = api.port;
