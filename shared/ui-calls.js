@@ -187,9 +187,9 @@ UI.tab({
     const which = UI.select([], (id) => id && api.hub({ do: 'opt', btDevice: id }));
     which.el.setAttribute('aria-label', tr('Which phone'));
     const statusRow = UI.row(tr('Bluetooth'), '', [which.el, retryBtn], { literal: true });
-    // What plays here: paused while a call rings or is under way, played again after (shared/callpause.js).
-    const pauseSw = UI.switch((v) => api.hub({ do: 'opt', callPause: v }), { label: tr('Pause what plays here during calls') });
-    const pauseRow = UI.row(tr('Pause what plays here during calls'), tr('Music and videos on {me} pause when a call comes in and play again when it ends'), [pauseSw]);
+    const pauseLabel = tr('Pause media during calls');
+    const pauseSw = UI.switch((v) => api.hub({ do: 'opt', callPause: v }), { label: pauseLabel });
+    const pauseRow = UI.row(pauseLabel, tr('Playback on this computer can resume when the call ends.'), [pauseSw]);
     const soundCard = UI.card(tr('Sound'), [audioRow, statusRow, pauseRow]);
 
     // Setting it up: the person pairs the two in the systems' own Bluetooth settings, over classic
@@ -307,7 +307,8 @@ UI.tab({
       recentCard.hidden = !ready || !(h.perm && !(h.perm.calls.missing || []).includes('numbers'));
 
       // Sound
-      soundCard.hidden = !h.calls || !h.canAudio;
+      soundCard.hidden = !h.calls || (!h.canAudio && !s.macId);
+      audioRow.hidden = statusRow.hidden = !h.canAudio;
       storeCard.hidden = !h.calls || !h.audioStore;
       if (!storeCard.hidden) storeRow.setHint(tr('Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}', { phone: UI.phoneName(s), me: UI.fill('{me}') }));
       audioSw.set(!!h.callAudio);
@@ -340,7 +341,7 @@ UI.tab({
       }
 
       // Setup: the steps until they're paired, Forget always at the bottom.
-      setupCard.hidden = soundCard.hidden || !h.callAudio || !h.connected || !a || ['off', 'starting', 'unavailable'].includes(a.state);
+      setupCard.hidden = soundCard.hidden || !h.canAudio || !h.callAudio || !h.connected || !a || ['off', 'starting', 'unavailable'].includes(a.state);
       const paired = !needsPair && !!(a && a.device);
       step1.hidden = paired;
       step2.hidden = paired;

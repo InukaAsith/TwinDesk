@@ -1328,6 +1328,8 @@
   "Take {name}’s": "{name} cihazınınkini al",
   "Taking over…": "Devralınıyor…",
   "Talk and listen on this computer": "Bu bilgisayarda konuşun ve dinleyin",
+  "Pause media during calls": "Aramalar sırasında medyayı duraklat",
+  "Playback on this computer can resume when the call ends.": "Arama sona erdiğinde bu bilgisayarda oynatma devam edebilir.",
   "Not in the Microsoft Store version": "Microsoft Store sürümünde yok",
   "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "{me} üzerinde Bluetooth ile konuşup dinlemek için GitHub’daki TwinDesk yükleyicisi gerekir. Aramalar {phone} üzerinde çalar",
   "Talk and listen on {me}": "{me} üzerinde konuşun ve dinleyin",

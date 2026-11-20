@@ -1328,6 +1328,8 @@
   "Take {name}’s": "Take {name}’s",
   "Taking over…": "Taking over…",
   "Talk and listen on this computer": "Talk and listen on this computer",
+  "Pause media during calls": "Pause media during calls",
+  "Playback on this computer can resume when the call ends.": "Playback on this computer can resume when the call ends.",
   "Not in the Microsoft Store version": "Not in the Microsoft Store version",
   "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}",
   "Talk and listen on {me}": "Talk and listen on {me}",

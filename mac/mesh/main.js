@@ -1224,6 +1224,9 @@ function loadHub() {
     callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
+  const callMedia = new (require('../../shared/callmedia.js').CallMedia)(hub);
+  peer.route.onState(() => callMedia.refresh()); // also sees socket changes on the same route
+  app.on('before-quit', () => callMedia.reset());
   hub.on('change', popup);
   if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
   return hub;

@@ -1328,6 +1328,8 @@
   "Take {name}’s": "接续 {name} 的内容",
   "Taking over…": "正在接管…",
   "Talk and listen on this computer": "在本机接听和通话",
+  "Pause media during calls": "通话期间暂停媒体播放",
+  "Playback on this computer can resume when the call ends.": "通话结束后，本机可以继续播放。",
   "Not in the Microsoft Store version": "Microsoft Store 版本不支持",
   "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "要通过蓝牙在 {me} 上接听和通话，需要使用 GitHub 上的 TwinDesk 安装程序。通话声音在 {phone} 上播放",
   "Talk and listen on {me}": "在 {me} 上接听和通话",
