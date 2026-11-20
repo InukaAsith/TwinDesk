@@ -105,14 +105,20 @@ function kinds(list) {
   assert.deepStrictEqual(kinds(watch.info({ battery: 5, charging: false }, galaxy)), ['low'], 'the other phone has its own cycle');
   assert.deepStrictEqual(watch.info({ battery: 4, charging: false }, pixel), [], 'the first phone stays latched');
   watch.begin(pixelAgain);
+  assert.deepStrictEqual(watch.info({ battery: 5, charging: false }, pixel), [], 'stale replaced session cannot trigger or mutate the new session');
   watch.end(pixel); // the replaced session closes after the new one is up
   assert.deepStrictEqual(kinds(watch.info({ battery: 5, charging: false }, pixelAgain)), ['low'], 'the new login starts a new cycle');
+  assert.deepStrictEqual(watch.info({ battery: 5, charging: false }, { ...pixelAgain, authed: false }), [], 'unauthenticated ctx is rejected');
+  assert.deepStrictEqual(watch.info({ battery: 5, charging: false }, { ...pixelAgain, released: true }), [], 'released ctx is rejected');
   watch.end(pixelAgain);
   assert.deepStrictEqual(watch.info({ battery: 5, charging: false }, pixelAgain), [], 'disconnect drops the session');
   watch.begin(pixelAgain);
   assert.deepStrictEqual(kinds(watch.info({ battery: 4, charging: false }, pixelAgain)), ['low']);
   watch.forget('pixel');
   assert.deepStrictEqual(watch.info({ battery: 3, charging: false }, pixelAgain), [], 'forget drops it until the next login');
+  watch.begin(pixelAgain);
+  watch.reset();
+  assert.deepStrictEqual(watch.info({ battery: 2, charging: false }, pixelAgain), [], 'reset clears active sessions on quit');
   on = false;
   watch.setting(false);
   watch.begin(galaxy);
@@ -131,16 +137,27 @@ function kinds(list) {
     Notification: class { static isSupported() { return true; } constructor() { throw new Error('denied'); } },
   }), false);
   const shown = [];
-  function Note(opts) { this.opts = opts; shown.push(opts); }
+  const listeners = [];
+  function Note(opts) { this.opts = opts; this.handlers = {}; shown.push(opts); listeners.push(this.handlers); }
   Note.isSupported = () => true;
   Note.prototype.show = function () { this.shown = true; };
-  Note.prototype.on = function () {};
+  Note.prototype.on = function (ev, fn) { this.handlers[ev] = fn; };
+  let clicked = null;
   assert.strictEqual(showMacNotification({ kind: 'full', name: 'Pixel', battery: 100 }, {
     Notification: Note,
     t: (s, vars) => s.replace('{name}', vars && vars.name || '').replace('{percent}', vars && vars.percent != null ? String(vars.percent) : ''),
+    onClick: (a) => { clicked = a; },
   }), true);
   assert.strictEqual(shown[0].title, 'Pixel is fully charged');
   assert.strictEqual(shown[0].body, 'Battery is at 100%');
+  assert.strictEqual(typeof listeners[0].click, 'function');
+  listeners[0].click();
+  assert.strictEqual(clicked && clicked.name, 'Pixel');
+  assert.strictEqual(showMacNotification({ kind: 'low', name: 'Pixel', battery: 10 }, {
+    Notification: Note,
+    onClick: () => { throw new Error('window gone'); },
+  }), true);
+  assert.doesNotThrow(() => listeners[1].click());
   assert.strictEqual(showMacNotification({ kind: 'nope', battery: 1 }, { Notification: Note }), false);
 }
 

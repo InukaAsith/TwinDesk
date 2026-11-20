@@ -783,7 +783,7 @@ app.whenReady().then(() => {
     const { createPhoneBatteryWatch, showMacNotification } = require('../../shared/battery-alerts.js');
     svc.batteryAlerts = createPhoneBatteryWatch({
       getEnabled: () => !!(settings.notifs && settings.notifs.batteryAlerts),
-      notify: (alert) => showMacNotification(alert, { Notification, t }),
+      notify: (alert) => showMacNotification(alert, { Notification, t, onClick: () => showWindow() }),
     });
   }
   svc.phone = new PhoneSet({
@@ -799,11 +799,29 @@ app.whenReady().then(() => {
     },
     onUnit: (u) => {
       u.phone.on('change', pushState);
-      u.link.on('client', (ctx) => ctx && P.isPhoneOs(ctx.os) && svc.batteryAlerts.begin(ctx));
-      u.link.on('closed', (ctx) => ctx && ctx.deviceId && svc.batteryAlerts.end(ctx));
-      u.phone.on('info', (info) => {
-        const ctx = u.link.current;
-        if (ctx && P.isPhoneOs(ctx.os)) svc.batteryAlerts.info(info, ctx);
+      const batteryCtx = (view) => {
+        const s = u.link && u.link.route && u.link.route.session;
+        if (!s || !s.connected || !P.isPhoneOs(s.peerOs)) return null;
+        if (view && view.deviceId && view.deviceId !== s.id) return null;
+        const c = s.hostUp && s.ctx ? s.ctx : null;
+        if (c && (c.authed === false || c.released === true)) return null;
+        if (c) return c;
+        return { deviceId: s.id, name: (view && view.name) || s.displayName(), os: s.peerOs, authed: true, session: s };
+      };
+      let activeBatteryCtx = null;
+      u.link.on('client', (view) => {
+        if (activeBatteryCtx) { svc.batteryAlerts.end(activeBatteryCtx); activeBatteryCtx = null; }
+        const ctx = batteryCtx(view);
+        if (ctx) { activeBatteryCtx = ctx; svc.batteryAlerts.begin(ctx); }
+      });
+      u.link.on('closed', (view) => {
+        if (activeBatteryCtx) { svc.batteryAlerts.end(activeBatteryCtx); activeBatteryCtx = null; }
+        else if (view && view.deviceId) svc.batteryAlerts.end(view);
+      });
+      u.link.on(`t:${P.T.PHONE_INFO}`, (msg, view) => {
+        if (!view || view.authed === false) return;
+        const ctx = batteryCtx(view);
+        if (ctx) svc.batteryAlerts.info(msg, ctx);
       });
       // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
       u.link.on('client', () => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
@@ -1323,6 +1341,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 app.on('before-quit', () => {
+  if (svc && svc.batteryAlerts) svc.batteryAlerts.reset();
   if (web) web.shutdown();
   if (svc && svc.mic) svc.mic.shutdown();
   quitting = true;

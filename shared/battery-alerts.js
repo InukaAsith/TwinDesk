@@ -143,15 +143,21 @@ function createPhoneBatteryWatch({ getEnabled, notify } = {}) {
 
   function sessionIdOf(ctx) {
     if (!ctx || typeof ctx !== 'object') return '';
+    if (typeof ctx.sessionId === 'string' && ctx.sessionId) return ctx.sessionId;
     if (typeof ctx.resumeKey === 'string' && ctx.resumeKey) return ctx.resumeKey;
     if (Number.isFinite(ctx.connectedAt)) return `t${ctx.connectedAt}`;
-    let id = ids.get(ctx);
+    const keyObj = ctx.session && typeof ctx.session === 'object' ? ctx.session : ctx;
+    let id = ids.get(keyObj);
     if (!id) {
       seq += 1;
       id = `s${seq}`;
-      ids.set(ctx, id);
+      ids.set(keyObj, id);
     }
     return id;
+  }
+
+  function isLiveCtx(ctx) {
+    return !!ctx && typeof ctx === 'object' && ctx.authed !== false && ctx.released !== true;
   }
 
   function syncEnabled() {
@@ -162,7 +168,7 @@ function createPhoneBatteryWatch({ getEnabled, notify } = {}) {
     alerts,
     begin(ctx) {
       syncEnabled();
-      if (!ctx || typeof ctx.deviceId !== 'string' || !ctx.deviceId || ctx.deviceId.length > 200) return;
+      if (!isLiveCtx(ctx) || typeof ctx.deviceId !== 'string' || !ctx.deviceId || ctx.deviceId.length > 200) return;
       const sessionId = sessionIdOf(ctx);
       const prev = current.get(ctx.deviceId);
       if (prev && prev.sessionId !== sessionId) alerts.reset(prev);
@@ -189,11 +195,16 @@ function createPhoneBatteryWatch({ getEnabled, notify } = {}) {
       alerts.reset({ deviceId });
       current.delete(deviceId);
     },
+    reset() {
+      alerts.reset();
+      current.clear();
+      held.splice(0);
+    },
     info(info, ctx) {
       syncEnabled();
-      if (!alerts.enabled || !ctx || typeof ctx.deviceId !== 'string') return [];
+      if (!alerts.enabled || !isLiveCtx(ctx) || typeof ctx.deviceId !== 'string') return [];
       const s = current.get(ctx.deviceId);
-      if (!s) return [];
+      if (!s || s.sessionId !== sessionIdOf(ctx)) return [];
       if (typeof ctx.name === 'string' && ctx.name) s.name = ctx.name.slice(0, 80);
       return alerts.update({
         deviceId: s.deviceId,
@@ -216,6 +227,7 @@ function showMacNotification(alert, deps) {
   try {
     const Notification = deps && deps.Notification;
     const t = deps && typeof deps.t === 'function' ? deps.t : (s) => s;
+    const onClick = deps && typeof deps.onClick === 'function' ? deps.onClick : null;
     if (!alert || (alert.kind !== 'low' && alert.kind !== 'full')) return false;
     if (!Notification || typeof Notification.isSupported !== 'function' || !Notification.isSupported()) return false;
     const name = typeof alert.name === 'string' && alert.name ? alert.name.slice(0, 80) : t('Phone');
@@ -228,7 +240,15 @@ function showMacNotification(alert, deps) {
       const i = held.indexOf(n);
       if (i >= 0) held.splice(i, 1);
     };
-    if (n && typeof n.on === 'function') n.on('close', drop);
+    if (n && typeof n.on === 'function') {
+      n.on('close', drop);
+      if (onClick) {
+        n.on('click', () => {
+          drop();
+          try { onClick(alert); } catch { /* window unavailable */ }
+        });
+      }
+    }
     const timer = setTimeout(drop, 60000);
     if (timer && typeof timer.unref === 'function') timer.unref();
     if (n && typeof n.show === 'function') n.show();

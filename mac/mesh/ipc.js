@@ -242,6 +242,7 @@ function setupIpc(ctx) {
       ctx.hub.forgetPeer(String(deviceId));
       ctx.kvm.forgetDevice(String(deviceId)); // it leaves the shared layout too (docs/mesh.md)
       ctx.terminal.forget(String(deviceId));
+      if (ctx.batteryAlerts) ctx.batteryAlerts.forget(String(deviceId));
     },
     confirmGuestCode() {
       ctx.link.confirmCode();
