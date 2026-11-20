@@ -719,6 +719,17 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
 
 @Composable
 private fun ConnectionDoctorCard(core: Core, version: Int) {
+    var expanded by remember { mutableStateOf(false) }
+    MacCard {
+        MacRow(tr("Connection Doctor"), first = true) {
+            Secondary(if (expanded) tr("Hide") else tr("Show")) { expanded = !expanded }
+        }
+        if (expanded) ConnectionDoctorDetails(core, version)
+    }
+}
+
+@Composable
+private fun ConnectionDoctorDetails(core: Core, version: Int) {
     @Suppress("UNUSED_EXPRESSION") version
     val link = core.link
     val selected = if (link.pair == null) link.host?.let { current -> core.hosts().find { it.id == current.id && it.fp == current.fp } } else null
@@ -743,20 +754,18 @@ private fun ConnectionDoctorCard(core: Core, version: Int) {
         ConnectionCloseReason.PAUSED -> tr("Reconnect paused")
         null -> tr("No connection event recorded")
     }
-    MacCard(tr("Connection Doctor")) {
-        MacRow(tr("Pairing"), selected?.let { tr("Paired · {name}", "name" to it.name) } ?: tr("No computer selected"), first = true)
-        MacRow(tr("Connection"), status)
-        if (link.connected) {
-            MacRow(tr("Transport"), doctorTransport(core))
-            MacRow(tr("Round-trip time"), link.rttMs?.let { "$it ms" } ?: tr("No reply measured yet"))
-        }
-        if (selected != null) {
-            val stamp = close?.let { android.text.format.DateFormat.getTimeFormat(LocalContext.current).format(java.util.Date(it.at)) }
-            MacRow(tr("Last connection event"), listOfNotNull(reason, stamp).joinToString(" · "))
-        }
-        MacRow(if (core.screen.viewing && core.screen.videoPlaying) tr("Stream") else tr("Last stream"),
-            core.screen.doctorSummary ?: tr("No stream measured on this connection"))
+    MacRow(tr("Pairing"), selected?.let { tr("Paired · {name}", "name" to it.name) } ?: tr("No computer selected"))
+    MacRow(tr("Connection"), status)
+    if (link.connected) {
+        MacRow(tr("Transport"), doctorTransport(core))
+        MacRow(tr("Round-trip time"), link.rttMs?.let { "$it ms" } ?: tr("No reply measured yet"))
     }
+    if (selected != null) {
+        val stamp = close?.let { android.text.format.DateFormat.getTimeFormat(LocalContext.current).format(java.util.Date(it.at)) }
+        MacRow(tr("Last connection event"), listOfNotNull(reason, stamp).joinToString(" · "))
+    }
+    MacRow(if (core.screen.viewing && core.screen.videoPlaying) tr("Stream") else tr("Last stream"),
+        core.screen.doctorSummary ?: tr("No stream measured on this connection"))
 }
 
 // The connected computer's controls, when it has them (an older TwinDesk says nothing: no card).

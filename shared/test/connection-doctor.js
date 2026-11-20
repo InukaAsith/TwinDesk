@@ -31,7 +31,7 @@ function mount(platform) {
     card: UI.connectionDoctor(platform),
     hint: label => byLabel.get(label).hint,
     visible: label => !byLabel.get(label).hidden,
-    expand: () => show.click(),
+    toggle: () => show.click(),
   };
 }
 
@@ -47,15 +47,21 @@ function showsObservedPlatformState() {
   const mac = mount('mac');
   mac.card.update({ client: peer, sharing: { on: true }, stream: { status: 'live', ...stats }, phone, permissions, discovery });
   assert.equal(mac.card.el.children[0].hidden, true, 'Doctor starts collapsed');
-  mac.expand();
+  mac.toggle();
   assert.match(mac.hint('Transport'), /USB cable.+21 ms/);
   assert.equal(mac.hint('Local Network'), 'Allowed');
   assert.equal(mac.hint('Screen Recording'), 'Allowed');
   assert.equal(mac.hint('Wireless debugging'), 'Ready');
   assert.equal(mac.hint('Screen sharing'), '2560 × 1440 · 30 fps · 8 Mb/s');
+  mac.toggle();
+  mac.card.update({ link: { state: 'reconnecting' } });
+  assert.equal(mac.card.el.children[0].hidden, true, 'connection updates leave Doctor collapsed');
+  mac.toggle();
+  assert.equal(mac.hint('Screen sharing'), 'Not connected', 'reopening uses the latest state');
+
 
   const windows = mount('windows');
-  windows.expand();
+  windows.toggle();
   windows.card.update({ link, session: peer, mesh: {}, pcScreen, firewall: { ok: true }, net: { lan: 'Ethernet' } });
   assert.match(windows.hint('Transport'), /Ethernet.+21 ms/);
   assert.equal(windows.hint('Firewall'), 'Ready');
@@ -63,7 +69,7 @@ function showsObservedPlatformState() {
   assert.equal(windows.visible('Wireless debugging'), false, 'unobserved ADB state stays hidden');
 
   const linux = mount('linux');
-  linux.expand();
+  linux.toggle();
   linux.card.update({ link, peerSession: peer, mesh: {}, pcScreen, firewall: { ok: false, tool: 'ufw' },
     session: { type: 'wayland', access: { uinput: false } }, net: { transport: 'ble' } });
   assert.match(linux.hint('Transport'), /Bluetooth.+21 ms/);
@@ -74,7 +80,7 @@ function showsObservedPlatformState() {
 
 function refusesUnobservedAndUnselectedFacts() {
   const windows = mount('windows');
-  windows.expand();
+  windows.toggle();
   windows.card.update({ link, session: { id: 'other', os: 'win' }, mesh: {}, phone, pcScreen,
     firewall: { ok: true, unread: true } });
   assert.match(windows.hint('Transport'), /^IP/);
@@ -83,7 +89,7 @@ function refusesUnobservedAndUnselectedFacts() {
   assert.equal(windows.hint('Firewall'), 'Unknown');
 
   const mac = mount('mac');
-  mac.expand();
+  mac.toggle();
   mac.card.update({ client: peer, sharing: { on: true }, stream: { status: 'live', width: 1920, height: 1080 },
     permissions: { screen: 'denied', accessibility: false }, discovery: { on: false, localNetwork: false } });
   assert.equal(mac.hint('Screen Recording'), 'Not allowed');
