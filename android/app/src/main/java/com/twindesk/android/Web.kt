@@ -255,6 +255,7 @@ class Screen(core: Core) : Feature(core) {
     // pen: a stylus is a pen on the computer (its pressure, tilt, eraser), else a mouse; penFast: a
     // stroke's samples batched per event (Fast writing), else each its own, paced (every point lands).
     fun opts(): JSONObject = msg("opts", "sound" to core.store.flag("screen.sound", false), "pacing" to (core.store.flag("screen.smooth", false).let { if (it) "smooth" else "fast" }),
+        "pointerCue" to (core.host?.os in listOf("mac", "win", "linux")),
         "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
         "speed" to core.remote.speed.toDouble(), "tap" to core.remote.tapClick, "pen" to core.store.flag("screen.pen", true),
         "penFast" to core.store.flag("screen.penFast", false))
@@ -313,6 +314,7 @@ class Screen(core: Core) : Feature(core) {
         state = null
         lastInfo = null
         startedByUs = false
+        host?.post(msg("viewer.input", "on" to false))
         host?.post(msg("stream.stop"))
     }
 
@@ -329,7 +331,11 @@ class Screen(core: Core) : Feature(core) {
                 if (wantStart) startIfNeeded()
                 core.changed()
             }
-            "stream.input" -> { inputOn = m.optBoolean("on", true); core.changed() }
+            "stream.input" -> {
+                inputOn = m.optBoolean("on", true)
+                if (!inputOn) host?.post(msg("viewer.input", "on" to false))
+                core.changed()
+            }
             "stream.info" -> { lastInfo = m; host?.post(m) }
             "rtc.offer", "rtc.ice", "stream.stop" -> host?.post(m)
             else -> return false

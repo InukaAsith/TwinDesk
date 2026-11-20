@@ -298,13 +298,25 @@ function publishState() {
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
 let screenStateKey = '';
+let screenInputOwner = null;
 
 function sendScreenState() {
   const c = peer && peer.current;
+  const scoped = c && svc && svc.stream.byId.get(c.deviceId)?.peer;
+  const socket = scoped && (scoped.current?.conn || scoped.current?.ws);
+  if (screenInputOwner && (screenInputOwner.peer !== scoped || screenInputOwner.socket !== socket)) {
+    const previous = screenInputOwner.peer.current;
+    if (previous && (previous.conn || previous.ws) === screenInputOwner.socket) {
+      screenInputOwner.peer.sendToClient({ t: P.T.STREAM_INPUT, on: false });
+    }
+    screenInputOwner = null;
+    screenStateKey = '';
+  }
   if (!c || !svc) return void (screenStateKey = '');
+  if (scoped && socket) screenInputOwner = { peer: scoped, socket };
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, input: !!svc.input.enabled(), modes: ['extend', 'mirror'] };
   const key = JSON.stringify([c.deviceId, msg]);
   if (key === screenStateKey) return;
   screenStateKey = key;
