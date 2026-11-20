@@ -69,7 +69,11 @@ class PhoneInput {
     if (action === ACTION.DOWN) this.tap(4); // KEYCODE_BACK
   }
 
-  stop() {}
+  stop() {
+    if (this.scrollAcc) clearTimeout(this.scrollAcc.timer);
+    this.scrollAcc = null;
+    this.lastMove = 0;
+  }
 }
 
 module.exports = { PhoneInput };

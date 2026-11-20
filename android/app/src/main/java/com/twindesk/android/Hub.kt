@@ -41,6 +41,10 @@ class Hub(core: Core) : Feature(core) {
     private var lastState = ""
 
     private var calls: Calls? = null
+    // Notifs: a call notification of an app (WhatsApp, Instagram…) is a call here while Calls is on (Calls.kt).
+    fun appCallPosted(sbn: android.service.notification.StatusBarNotification, appName: String, title: String): Boolean =
+        callsOn && (calls?.appPosted(sbn, appName, title) ?: false)
+    fun appCallRemoved(key: String) { calls?.appRemoved(key) }
     private var messages: Messages? = null
     private var media: Media? = null
     private var fs: FsBrowse? = null

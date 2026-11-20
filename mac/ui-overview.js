@@ -81,6 +81,7 @@ UI.tab({
 
     // ---- a connected phone's wireless debugging (shared/ui-adb.js) and pairing by QR code (shared/ui-qrpair.js) ----
     const adb = UI.adbCard();
+    const tether = UI.tetherCard ? UI.tetherCard() : null; // Internet over USB (shared/ui-adb.js)
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null;
     const pairedList = el('div');
     const webCard = UI.webConnCard ? UI.webConnCard() : null; // TwinDesk Web's paired devices (shared/ui-web.js)
@@ -95,6 +96,7 @@ UI.tab({
       hero,
       returnCard,
       adb.el,
+      ...(tether ? [tether.el] : []),
       UI.card(tr('Paired'), [pairedList]),
       ...(webCard ? [webCard.el] : []),
     );
@@ -255,6 +257,7 @@ UI.tab({
 
       // the phone's wireless debugging, and pairing a phone with a QR code
       adb.update(s);
+      if (tether) tether.update(s);
       if (qrPair) qrPair.update(s);
 
       // paired: guests (they connect to us) and hosts (we connect to them)

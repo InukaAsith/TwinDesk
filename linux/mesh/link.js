@@ -170,7 +170,7 @@ class Link {
       return this._scheduleReconnect();
     }
     this.yieldWanted = true;
-    if (this.ws) {
+    if (this.ws) { // still dialling: drop it, the inbound link is the one
       this._closeSocket();
       clearTimeout(this.timers.reconnect);
       this._scheduleReconnect();

@@ -35,12 +35,17 @@ UI.tab({
     const padSwitch = UI.switch((v) => UI.api.setRemote({ pad: v }), { label: tr('Real gamepad') });
     const padRow = UI.row(tr('Real gamepad'), '', [padSwitch]);
     const padNote = UI.note('info', '');
-    const padCard = UI.card(tr('Gamepad'), [padRow, padNote]);
+    // Which controller games see (#266): some take only a PlayStation one.
+    const kindSel = UI.select([{ value: 'xbox', label: tr('Xbox 360 controller') }, { value: 'ds4', label: tr('PlayStation (DualShock 4)') }], (v) => UI.api.setRemote({ padKind: v }));
+    const kindRow = UI.row(tr('Controller'), tr('For games that take only a PlayStation controller. Nintendo controllers can’t be made here'), [kindSel]);
+    const padCard = UI.card(tr('Gamepad'), [padRow, kindRow, padNote]);
     body.append(note, card, padCard);
     return (s) => {
       const r = s.remote || {};
       const p = r.pad || {};
       padSwitch.set(p.on);
+      kindRow.hidden = !(p.kinds && p.kinds.length > 1);
+      kindSel.set(p.kind || 'xbox');
       padSwitch.disable(!p.supported || !!p.busy);
       padRow.setHint(!p.supported ? tr('Not on this computer')
         : p.busy ? tr(p.busy)

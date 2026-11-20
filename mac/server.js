@@ -177,7 +177,7 @@ class Server extends EventEmitter {
       }
       return;
     }
-    this.emit('message', msg, ctx); // peer.js routes it by type
+    this.emit('message', msg, ctx, ws); // peer.js routes it by type
   }
 
   // Pings and silence checks every PING_MS while any socket is open; with none, nothing wakes the app.
@@ -221,12 +221,17 @@ class Server extends EventEmitter {
     }
   }
 
+  socketFor(ctx, msg) {
+    if (!ctx || !ctx.ws || ctx.ws.readyState !== ctx.ws.OPEN) return null;
+    // Cursor sharing can use Bluetooth while other traffic stays on the network socket.
+    return this.bleInput ? this.bleInput.route(ctx.ws, ctx.alt, msg) : ctx.ws;
+  }
+
   send(ctx, msg) {
-    if (!ctx || ctx.ws.readyState !== ctx.ws.OPEN) return;
+    const ws = this.socketFor(ctx, msg);
+    if (!ws) return;
     // A phone on the USB cable: its WebRTC goes through the relay too (wired.js).
     if (ctx.ice && ICE_OFFERS.has(msg.t)) msg = { ...msg, ice: ctx.ice };
-    // Cursor › Mouse and keyboard over Bluetooth: the pointer and keys on that socket (shared/bleinput.js; null: off).
-    const ws = this.bleInput ? this.bleInput.route(ctx.ws, ctx.alt, msg) : ctx.ws;
     Quiet.sent(ws, msg);
     ws.send(JSON.stringify(msg));
   }

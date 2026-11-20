@@ -80,7 +80,9 @@ class PhoneBridge extends EventEmitter {
     this.control = null; // control-only session
     // Without wireless debugging: the phone applies the input itself (shared/phoneinput.js), when
     // it says it can (phone.input {on}).
-    this.input = new PhoneInput((m) => this.server.sendToClient(m));
+    this.input = new PhoneInput((m) => {
+      if (this._currentPhone(this.server.current)) this.server.sendToClient(m);
+    });
     this.phoneInput = false;
     this.kvm = null; // the pointer while the Mac drives the phone: {route, x, y, push}
     this.keys = new KeyState();
@@ -95,7 +97,7 @@ class PhoneBridge extends EventEmitter {
     // across restarts.
     this.known = new Set(readJson(knownFile(), []));
     server.on(`t:${T.PHONE_INPUT}`, (m, ctx) => {
-      if (!isPhone(ctx)) return;
+      if (!this._currentPhone(ctx)) return;
       this.phoneInput = m.on === true;
       // The phone's choice of input (changed there, or on connecting): the same setting here.
       const ph = this.getSettings().phone;
@@ -107,16 +109,26 @@ class PhoneBridge extends EventEmitter {
       }
       this.emit('change');
     });
-    server.on('closed', () => { this.phoneInput = false; });
+    server.on('closed', () => {
+      // The old phone's socket closes after the new one is already current. Dropping the
+      // input path here would clear the phone that just took over.
+      if (isPhone(server.current)) return;
+      this.phoneInput = false;
+    });
     this.canPair = false; // still looking, but the code field shows (its pairing may be gone)
     this.inputBlocked = false; // Xiaomi with “USB debugging (Security settings)” off: touches and keys are refused
     this.wired = null; // wired.js: the phone on the USB cable
     this.install = null; // {state: 'installing'|'done'|'failed', message} for the full build
+    // The Android phone this bridge's serial, control session and adb work belong to.
+    // authenticate() points current at a new phone before the old socket closes, so the
+    // close of the phone that was replaced must not be what drops or keeps this state.
+    this._boundId = null;
+    this._epoch = 0; // bumps when that phone changes; a result from an older one is dropped
 
     phone.on('adb', () => this._kick());
     // The pairing code typed on the phone (its guide's notification), with its pairing port.
     server.on(`t:${T.ADB_PAIR}`, (m, ctx) => {
-      if (!isPhone(ctx)) return;
+      if (!this._currentPhone(ctx)) return;
       const port = Number(m.port) | 0;
       const address = this.adbAddress();
       this.pair(m.code, port > 0 && port < 65536 ? `${address}:${port}` : '');
@@ -125,6 +137,11 @@ class PhoneBridge extends EventEmitter {
     this.setup = false; // set up on purpose this session (Connection's Set Up, a pairing code)
     server.on('client', (ctx) => {
       if (isPhone(ctx)) {
+        const id = typeof ctx.deviceId === 'string' ? ctx.deviceId : '';
+        // Same phone again (its socket moved, or it connected once more): the adb session is
+        // the phone's, not the socket's, so it stays. A different phone takes the session over.
+        if (this._boundId && id && id !== this._boundId) this._switchPhone(id);
+        else if (id) this._boundId = id;
         this.setup = false;
         if (this.need) this.adb.wake();
         this._tellPhone();
@@ -140,17 +157,21 @@ class PhoneBridge extends EventEmitter {
       }
     });
     // The phone's own screen capture (Mirroring › Native): to its window.
-    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => ctx && P.isPhoneOs(ctx.os) && m && NativeScreen.state(m)); // an iPhone's too (its broadcast extension)
+    server.on(`t:${T.PHONE_MIRROR_STATE}`, (m, ctx) => {
+      if (!ctx || !P.isPhoneOs(ctx.os) || !m) return;
+      if (ctx.os === P.OS.ANDROID && !this._currentPhone(ctx)) return;
+      NativeScreen.state(m); // an iPhone's too (its broadcast extension)
+    });
     // The phone's sound without wireless debugging (Sound.kt there): asked for while adb can't carry
     // it; what comes plays in a hidden window (phoneview.js netSound).
     this.netSound = { asked: false, on: false, waiting: false, error: '' };
     const soundReset = () => Object.assign(this.netSound, { asked: false, on: false, waiting: false, error: '' });
     server.on(`t:${T.PHONE_SOUND_STATE}`, (m, ctx) => {
-      if (!isPhone(ctx)) return;
+      if (!this._currentPhone(ctx)) return;
       Object.assign(this.netSound, { on: m.on === true, waiting: m.waiting === true, error: typeof m.error === 'string' ? m.error.slice(0, 200) : '' });
       this.emit('change');
     });
-    server.on(`t:${T.PHONE_SOUND}`, (m, ctx) => isPhone(ctx) && this.netSound.asked && this.views && this.views.netAudio(m));
+    server.on(`t:${T.PHONE_SOUND}`, (m, ctx) => this._currentPhone(ctx) && this.netSound.asked && this.views && this.views.netAudio(m));
     // An iPhone's microphone (its app captures it, phone.mic.want): into the same window kind as Android's.
     this.iosMic = { asked: false, on: false, error: '' };
     server.on(`t:${T.PHONE_MIC}`, (m, ctx) => ctx && ctx.os === P.OS.IOS && this.views && this.views.netMicAudio(m));
@@ -163,7 +184,62 @@ class PhoneBridge extends EventEmitter {
     server.on('client', () => { soundReset(); this._sound(); });
     server.on('closed', () => { if (!isPhone(server.current)) soundReset(); this._sound(); });
     server.on('transport', () => this._sound());
-    setInterval(() => this._poll(), POLL_MS);
+    this.pollTimer = setInterval(() => this._poll(), POLL_MS);
+  }
+
+  // The Android phone selected now (not a socket it has already replaced).
+  _currentPhone(ctx) {
+    return isPhone(ctx) && ctx === this.server.current && !!this._boundId && ctx.deviceId === this._boundId;
+  }
+
+  _live(epoch) {
+    return epoch === this._epoch && isPhone(this.server.current) && this.server.current.deviceId === this._boundId;
+  }
+
+  // Buttons, keys and the hover the old phone was still holding. The up and the hover
+  // exit go out through whatever is driving it now, and only then does that path drop.
+  _releaseInput() {
+    this.input.stop();
+    if (this.pinch) this.pinch.cancel();
+    if (this.kvm) this._kvmEnd(false);
+    this.phoneInput = false;
+  }
+
+  // Drop the control session before stop(), which closes it at once: its closed handler
+  // must not treat that as the phone's link dying and schedule another poll.
+  _dropControl() {
+    const control = this.control;
+    this.control = null;
+    if (control && !control.closed) control.stop();
+  }
+
+  // phone.info / phone.adb still describe the phone that left. The next one sends its own.
+  _resetPhoneInfo() {
+    const phone = this.phone;
+    if (!phone || (!phone.info && !phone.adb)) return;
+    phone.info = null;
+    phone.adb = null;
+    phone.emit('change');
+  }
+
+  // Another Android phone took the session. Rediscovery starts with _kick() from the caller.
+  _switchPhone(id) {
+    this._epoch++;
+    this._releaseInput();
+    this._dropControl();
+    // Mark a native mirror closed before its window stops, so that stop does not tell the
+    // phone that just connected to end a mirror it never started.
+    NativeScreen.closeAll();
+    if (this.views) this.views.closeAll();
+    this.serial = null;
+    this.inputBlocked = false;
+    this.pairing = null;
+    this.misses = 0;
+    this.canPair = false;
+    this.install = null;
+    this._boundId = id;
+    this._resetPhoneInfo();
+    this._set('off', '');
   }
 
   get view() {
@@ -212,7 +288,9 @@ class PhoneBridge extends EventEmitter {
   // MIUI and HyperOS refuse adb's touches and keys (INJECT_EVENTS) until Developer options ›
   // “USB debugging (Security settings)” is on. It needs a Mi account, and adb can't switch it.
   async _checkInput(serial) {
+    const epoch = this._epoch;
     const r = await this.adb.shell(serial, 'getprop ro.product.manufacturer; getprop persist.security.adbinput', { timeout: 4000 });
+    if (!this._live(epoch) || serial !== this.serial) return;
     const [maker, on] = (r.out || '').trim().split(/\s+/);
     const blocked = /xiaomi|redmi|poco/i.test(maker || '') && on === '0';
     if (blocked === this.inputBlocked) return;
@@ -223,11 +301,18 @@ class PhoneBridge extends EventEmitter {
   }
 
   _stopAll(message) {
-    if (this.kvm) this._kvmEnd(false); // before the control session goes: its button up and hover exit
-    if (this.control) this.control.stop();
-    this.control = null;
+    this._epoch++; // an adb lookup still running for the phone that left must not land after this
+    this._releaseInput(); // before the control session goes: its button up and hover exit
+    this._boundId = null;
+    this._dropControl();
     if (this.views) this.views.closeAll();
     this.serial = null;
+    this.inputBlocked = false;
+    this.pairing = null;
+    this.misses = 0;
+    this.canPair = false;
+    this.install = null;
+    this._resetPhoneInfo();
     this._set('off', message);
   }
 
@@ -274,31 +359,40 @@ class PhoneBridge extends EventEmitter {
   async _poll() {
     this._sound();
     if (this.polling || !isPhone(this.server.current)) return;
+    const epoch = this._epoch;
     if (this.state === 'ready' && this.control && !this.control.closed) {
       const usb = this.wired && this.wired.serialOf(this.server.current.deviceId);
       if (usb && usb !== this.serial) {
         // The cable was plugged in: move onto it (windows opened from now on use it too).
+        // Same phone, so this does not retire the session; a different phone already went through _switchPhone.
         console.log(`[phone] moving onto the USB cable (${usb})`);
-        this.control.stop();
-        this.control = null;
+        this._dropControl();
       } else {
         // Watch for the switch going on (no restart needed).
         if (this.inputBlocked && this.serial) await this._checkInput(this.serial).catch(() => {});
         return;
       }
     }
+    if (!this._live(epoch)) return;
     this.polling = true;
     try {
-      await this._step();
+      await this._step(epoch);
     } catch (e) {
-      console.log(`[phone] ${e.message}`);
-      this._set('error', e.message);
+      if (this._live(epoch)) {
+        console.log(`[phone] ${e.message}`);
+        this._set('error', e.message);
+      }
     } finally {
       this.polling = false;
+      // The phone changed while this lookup ran. Its own poll was skipped because this one
+      // still held `polling`, so start it now. Not a delay: the old attempt has finished.
+      if (!this._live(epoch) && isPhone(this.server.current)) this._kick();
     }
   }
 
-  async _step() {
+  async _step(epoch = this._epoch) {
+    const live = () => this._live(epoch);
+    if (!live()) return;
     if (!this.adb.available) return this._set('missing', 'adb or the scrcpy server is missing from this build.');
     const a = this.phone.adb;
     if (!a) return this._set('connecting', 'Waiting for the phone…');
@@ -306,19 +400,23 @@ class PhoneBridge extends EventEmitter {
     // for a phone this computer reached before: connect quietly (Automatic then goes through it).
     // ReZume's phone apps (Mirror apps) open through it as well: with wireless debugging on there,
     // it's used even when the mouse, the screen and the sound are all Limited.
-    if (!this.need && !(a.wifi && (this.known.has(this.server.current.deviceId) || this._rzApps()))) {
+    if (!this.need && !(a.wifi && ((!!this.server.current && this.known.has(this.server.current.deviceId)) || this._rzApps()))) {
       this.misses = 0;
       return this._set('idle', 'Not in use: the mouse and keyboard, the screen and the sound are set to Limited.');
     }
     this.adb.wake();
     const address = this.adbAddress();
     const ready = await this._findDevice(address);
+    if (!live()) return;
     if (ready) {
       this._known(true);
       this.serial = ready;
       await this._setup(ready);
+      if (!live()) return;
       if (await this._tcpip(ready)) return; // adbd restarts: found again on the next poll
+      if (!live()) return;
       await this._checkInput(ready);
+      if (!live()) return;
       return this._startControl();
     }
     // TCP mode, switched on the last time we were in (USB cable or wireless debugging): works on a
@@ -330,12 +428,20 @@ class PhoneBridge extends EventEmitter {
     if (sessionIp && sessionIp === address) {
       const serial = `${address}:${TCPIP_PORT}`;
       const r = await this.adb.connect(address, TCPIP_PORT);
-      if (r.ok && await this._findDevice(address)) return this._kick();
+      if (!live()) return;
+      if (r.ok && await this._findDevice(address)) {
+        if (live()) this._kick();
+        return;
+      }
+      if (!live()) return;
       // Not allowed yet ("failed to authenticate", kept as unauthorized): the phone asks; keep that connection.
       if ((await this.adb.devices()).some((d) => d.serial === serial && d.state === 'unauthorized')) {
+        if (!live()) return;
         return this._set('waitingWifi', 'Tap Allow on the phone (“Allow USB debugging?”).');
       }
+      if (!live()) return;
       if (r.ok) await this.adb.disconnect(serial);
+      if (!live()) return;
     }
     // A direct Wi-Fi link without a Wi-Fi network on the phone: wireless debugging can’t come on. (On
     // its own Wi-Fi as well it can, reached at the session's address; older apps don't say: the address.)
@@ -353,20 +459,26 @@ class PhoneBridge extends EventEmitter {
     // One UI), so a refused or unseen port only means "not yet": only adb's "failed to
     // authenticate", or a phone never reached, asks for the pairing code again.
     await this._dropStale(address);
+    if (!live()) return;
     const services = await this.adb.mdns();
+    if (!live()) return;
     const seen = services.filter((s) => s.type === 'connect' && s.address === address).map((s) => s.port);
     const ports = [...new Set([a.port, ...seen, this.lastPort.get(address)])].filter((n) => n > 0 && n < 65536);
     let unpaired = false;
     for (const port of ports) {
       const r = await this.adb.connect(address, port);
+      if (!live()) return;
       if (r.ok && await this._findDevice(address)) {
+        if (!live()) return;
         this.lastPort.set(address, port);
         this.misses = 0;
         return this._kick();
       }
+      if (!live()) return;
       if (/authenticat|unauthorized/i.test(r.text)) unpaired = true;
       if (NO_ROUTE.test(r.text)) return this._set('error', LAN_BLOCKED);
     }
+    if (!live()) return;
     // Just paired: the pairing screen can linger in mDNS caches for a while; it's connecting now.
     const justPaired = Date.now() - (this.pairedAt || 0) < 60000;
     this.pairing = justPaired ? null : services.find((s) => s.type === 'pairing' && s.address === address) || null;
@@ -374,7 +486,7 @@ class PhoneBridge extends EventEmitter {
     // Paired before (this phone reached us since TwinDesk started): keep looking, with the code
     // field there in case its pairing really was removed.
     if (unpaired) this._known(false);
-    const known = !unpaired && this.known.has(this.server.current.deviceId);
+    const known = !unpaired && (!!this.server.current && this.known.has(this.server.current.deviceId));
     if (!unpaired && !this.pairing && (known || this.lastPort.has(address) || this.misses < 5)) {
       this.canPair = this.misses >= 5; // the code field (here and on the phone), in case its pairing really is gone
       return this._set('connecting', this.canPair
@@ -398,7 +510,9 @@ class PhoneBridge extends EventEmitter {
 
   // Old connections to this phone's earlier ports linger as "offline" and get in the way.
   async _dropStale(address) {
+    const epoch = this._epoch;
     for (const d of await this.adb.devices()) {
+      if (!this._live(epoch)) return;
       if (d.state !== 'device' && d.serial.startsWith(`${address}:`)) await this.adb.disconnect(d.serial);
     }
   }
@@ -424,15 +538,17 @@ class PhoneBridge extends EventEmitter {
   // The code from "Pair device with pairing code" (and its address:port when mDNS can't see it).
   // Paired some other way (wireless debugging's QR code, shared/adbqr.js): connect as after a code.
   pairedNow() {
+    const epoch = this._epoch;
     this.setup = true;
     this.pairedAt = Date.now();
     this.misses = 0;
     this._known(true);
     this._set('connecting', 'Paired. Connecting…');
-    setTimeout(() => this._kick(), 1000);
+    setTimeout(() => { if (this._live(epoch)) this._kick(); }, 1000);
   }
 
   async pair(code, where) {
+    const epoch = this._epoch;
     this.setup = true;
     code = String(code || '').replace(/\D/g, '');
     if (code.length !== 6) return this._set('needsPair', 'The pairing code has six digits.');
@@ -442,22 +558,26 @@ class PhoneBridge extends EventEmitter {
     else {
       const a = this.phone.adb || {};
       const services = await this.adb.mdns();
+      if (!this._live(epoch)) return;
       const p = services.find((s) => s.type === 'pairing' && (s.address === a.address || s.address === this.adbAddress())) || this.pairing;
       if (!p) return this._set('needsPair', 'Can’t see the phone’s pairing code screen. Keep it open, or type its address and port.');
       [address, port] = [this.adbAddress() || p.address, p.port];
     }
+    if (!this._live(epoch)) return;
     this._set('connecting', 'Pairing…');
     const r = await this.adb.pair(address, port, code);
+    if (!this._live(epoch)) return;
     if (!r.ok && NO_ROUTE.test(r.text)) return this._set('needsPair', LAN_BLOCKED);
     if (!r.ok) return this._set('needsPair', `Pairing didn’t work (${r.text.split('\n').pop() || 'no answer'}). Try a new code.`);
     this.pairedAt = Date.now();
     this.misses = 0;
     this._known(true);
     this._set('connecting', 'Paired. Connecting…');
-    setTimeout(() => this._kick(), 1000);
+    setTimeout(() => { if (this._live(epoch)) this._kick(); }, 1000);
   }
 
   async _setup(serial) {
+    const epoch = this._epoch;
     if (this.setupDone.has(serial)) return;
     this._set('connecting', 'Setting up the phone…');
     const cmds = [
@@ -482,39 +602,57 @@ class PhoneBridge extends EventEmitter {
       `cmd notification allow_listener ${APP_ID}/${APP_ID}.NotifListener`,
     ];
     if (this.getSettings().phone && this.getSettings().phone.wallpaper !== false) cmds.push(`appops set ${APP_ID} MANAGE_EXTERNAL_STORAGE allow`);
-    for (const c of cmds) await this.adb.shell(serial, c, { timeout: 8000 });
+    for (const c of cmds) {
+      await this.adb.shell(serial, c, { timeout: 8000 });
+      if (!this._live(epoch) || this.serial !== serial) return;
+    }
     this.setupDone.add(serial);
-    setTimeout(() => this.server.sendToClient({ t: T.PHONE_APPS_LIST }), 500);
+    setTimeout(() => {
+      if (this._live(epoch)) this.server.sendToClient({ t: T.PHONE_APPS_LIST });
+    }, 500);
   }
 
   // TCP mode on (once per phone restart), for a direct Wi-Fi link later. True: adbd restarts now.
   // On the USB cable wired.js has done it before the session moved onto it (here it would restart adbd under it).
   async _tcpip(serial) {
+    const epoch = this._epoch;
     if (this.tcpipDone.has(serial) || !serial.includes(':')) return false;
     this.tcpipDone.add(serial);
     const r = await this.adb.shell(serial, 'getprop service.adb.tcp.port', { timeout: 4000 });
+    if (!this._live(epoch) || this.serial !== serial) return false;
     if (r.out.trim() === String(TCPIP_PORT)) return false;
     this._set('connecting', 'Setting up the phone for Wi-Fi Direct…');
     await this.adb.run(['-s', serial, 'tcpip', String(TCPIP_PORT)], { timeout: 8000 });
-    setTimeout(() => this._kick(), 2000);
+    if (!this._live(epoch) || this.serial !== serial) return false;
+    setTimeout(() => { if (this._live(epoch)) this._kick(); }, 2000);
     return true;
   }
 
   async _startControl() {
+    const epoch = this._epoch;
+    const serial = this.serial;
     if (this.control && !this.control.closed) return this._set('ready');
+    if (!this._live(epoch) || !serial) return;
     this._set('connecting', 'Connecting to the phone’s screen…');
     // powerOn false: scrcpy presses the power key as it starts, and this session restarts whenever
     // the phone's adb drops (adb tcpip too), so a phone lying locked kept lighting up its lock screen.
-    const s = new Session(this.adb, this.serial, { video: false, audio: false, control: true, clipboardAutosync: true, powerOn: false });
-    s.on('clipboard', (text) => this._phoneCopied(text));
+    const s = new Session(this.adb, serial, { video: false, audio: false, control: true, clipboardAutosync: true, powerOn: false });
+    s.on('clipboard', (text) => {
+      if (this.control === s) this._phoneCopied(text);
+    });
     s.on('closed', (why) => {
       if (this.control !== s) return;
       this.control = null;
       if (this.kvm) this._kvmEnd(true);
       this._set('error', `The phone connection stopped (${why}).`);
-      setTimeout(() => this._kick(), 2000);
+      setTimeout(() => { if (this._live(epoch)) this._kick(); }, 2000);
     });
     await s.start();
+    // Another phone was selected while this session was opening: it belongs to the old one.
+    if (!this._live(epoch) || this.serial !== serial) {
+      s.stop();
+      return;
+    }
     this.control = s;
     if (!this.clipWatch) this.clipWatch = require('../shared/clippoll.js').clipWatch(this); // copies a missing listener doesn't report (#257)
     // A session that ended without its hover exit (the Wi-Fi gone, the app quit) left Android a mouse
@@ -537,6 +675,7 @@ class PhoneBridge extends EventEmitter {
   // Install the full build over the phone's TwinDesk: settings and pairing stay (same app, same
   // signature). The app restarts, so we grant notification access, open it and invite it back.
   async installFull() {
+    const epoch = this._epoch;
     const apk = fullApk();
     const c = this.server.current;
     if (!this.serial || !isPhone(c)) return this._install('failed', 'Set up wireless debugging first.', { key: 'Set up wireless debugging first.' });
@@ -545,6 +684,7 @@ class PhoneBridge extends EventEmitter {
     const serial = this.serial;
     this._install('installing', `Installing on ${c.name}…`);
     const r = await this.adb.run(['-s', serial, 'install', '-r', apk], { timeout: 180000 });
+    if (!this._live(epoch) || this.serial !== serial) return;
     const text = `${r.out}${r.err}`.trim();
     if (!/Success/.test(text)) {
       const why = /INSTALL_FAILED_USER_RESTRICTED/.test(text) ? 'The phone refused: allow “Install via USB” in Developer options (Xiaomi), then try again.'
@@ -552,9 +692,11 @@ class PhoneBridge extends EventEmitter {
       return this._install('failed', `Couldn’t install (${why})`, { key: 'Couldn’t install ({error})', vars: { error: /INSTALL_FAILED_USER_RESTRICTED/.test(text) ? { key: why } : text.split('\n').pop() || { key: 'no answer' } } });
     }
     await this.adb.shell(serial, `cmd notification allow_listener ${APP_ID}/${APP_ID}.NotifListener`, { timeout: 8000 });
+    if (!this._live(epoch) || this.serial !== serial) return;
     await this.adb.shell(serial, `am start -n ${APP_ID}/.MainActivity`, { timeout: 8000 });
+    if (!this._live(epoch) || this.serial !== serial) return;
     this._install('done', 'Installed. The phone’s notifications can show here now.', { key: 'Installed. The phone’s notifications can show here now.' });
-    setTimeout(() => this.phone.connect(id), 3000); // the app restarted: ask it to come back
+    setTimeout(() => { if (this._live(epoch)) this.phone.connect(id); }, 3000); // the app restarted: ask it to come back
   }
 
   _install(state, message, presentation) {
@@ -820,7 +962,7 @@ class PhoneBridge extends EventEmitter {
   _key(m) {
     if (!this.kvm || !this.ctl || typeof m.code !== 'string') return;
     const swap = this.server.keySwap(this.getSettings());
-    const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
+    let code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
 
     // Enter in a chat app sends (shared/phonechat.js; the setting is the phone windows' one). Its
@@ -847,9 +989,12 @@ class PhoneBridge extends EventEmitter {
       }
     }
 
-    const e = this.keys.event(code, down);
     // Phone › Type as a hardware keyboard: a HID keyboard on the phone, its own layout (#123).
-    if (uhidKey(this.ctl, (this.getSettings().phone || {}).uhid === true, code, down)) return;
+    const uhid = (this.getSettings().phone || {}).uhid === true;
+    // Else letters by what they type here (an AZERTY Ctrl+A is Ctrl+A there, shared/phonetype.js, #260).
+    if (!uhid) code = (this.keyType || (this.keyType = new (require('../shared/phonetype.js').PhoneType)())).fromHelper(code, down, m.ch).code || code;
+    const e = this.keys.event(code, down);
+    if (uhidKey(this.ctl, uhid, code, down)) return;
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
 
@@ -874,10 +1019,14 @@ class PhoneBridge extends EventEmitter {
   }
 
   async listCameras() {
-    if (!this.serial || this.state !== 'ready') return [];
+    const epoch = this._epoch;
+    const serial = this.serial;
+    if (!serial || this.state !== 'ready') return [];
     try {
       const { Session } = require('./scrcpy');
-      return await Session.listCameras(this.adb, this.serial);
+      const cameras = await Session.listCameras(this.adb, serial);
+      if (!this._live(epoch) || this.serial !== serial) return [];
+      return cameras;
     } catch (e) {
       console.log('[phone-bridge] listCameras failed:', e && e.message);
       return [];

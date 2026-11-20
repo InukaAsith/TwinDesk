@@ -34,7 +34,7 @@ class Session extends EventEmitter {
     this._up = false;
     this._linkMesh = false; // the guest link's welcome said mesh: 1
     this.meshCapable = false; // the device speaks the mesh (hello/welcome `mesh: 1`); set when it comes up
-    this.taps = []; // hub: fn(msg) -> true when it consumed the message (see _deliver)
+    this.taps = []; // hub: fn(msg, source) -> true when it consumed the message (see _deliver)
     this.lifeFns = []; // hub: fn(up, replaced) when the device becomes connected or stops being connected
     // Fast files (shared/fastfile.js): this device's file bytes over HTTPS, when both apps can (hello
     // fx: 1, welcome fx: token). Not the files engine (fx2): it serves one session at a time.
@@ -144,6 +144,21 @@ class Session extends EventEmitter {
     return false;
   }
 
+  // The socket send() writes right now, or null. Same choice as send(): the guest link when it
+  // is up, otherwise the host socket. A Save is bound to this object, not to the device id and
+  // not to the host ctx while the guest link is the one in use.
+  outbound() {
+    if (this.linkUp) {
+      const ws = this.link && this.link.ws;
+      return ws && ws.readyState === 1 && ws.released !== true ? ws : null;
+    }
+    if (this.hostUp && this.ctx && this.ctx.released !== true && this.ctx.authed !== false) {
+      const ws = this.server && typeof this.server.socketFor === 'function' ? this.server.socketFor(this.ctx) : this.ctx.ws;
+      return ws && ws.readyState === 1 && ws.released !== true ? ws : null;
+    }
+    return null;
+  }
+
   // A message as if the device had sent it.
   inject(msg) {
     if (this.connected) this._deliver(msg);
@@ -203,8 +218,8 @@ class Session extends EventEmitter {
     this.link = link;
     if (link && !this._subscribed.has(link)) {
       this._subscribed.add(link);
-      link.onAny = (msg) => {
-        if (this.link === link) this._fromLink(msg);
+      link.onAny = (msg, ws) => {
+        if (this.link === link) this._fromLink(msg, ws);
       };
       link.on('welcome', (msg) => {
         this._linkMesh = !!(msg && msg.mesh);
@@ -230,22 +245,27 @@ class Session extends EventEmitter {
     this._sync();
   }
 
-  // Messages from the server ctx (only the one that is current): delivered as they are.
-  fromHost(msg, ctx) {
+  // Messages from the server ctx (only the one that is current). ws is the socket that
+  // received this message (the primary or its fallback), not whichever send() would use now.
+  fromHost(msg, ctx, ws) {
     if (ctx !== this.ctx) return;
-    this._deliver(msg);
+    this._deliver(msg, false, ws && typeof ws === 'object' ? ws : null);
   }
 
   // ---- internals ----
 
-  _fromLink(msg) {
-    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m);
+  // ws: the socket link.js passed from the message callback. Not this.link.ws read again —
+  // a reconnect on that same Link replaces it.
+  _fromLink(msg, ws) {
+    const sock = ws && typeof ws === 'object' ? ws : null;
+    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, sock);
   }
 
   // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
-  _deliver(msg, raw = false) {
+  // source: the socket this message arrived on, or absent when it was injected.
+  _deliver(msg, raw = false, source) {
     if (!raw && this.fx.incoming(msg)) return;
-    for (const tap of this.taps) if (tap(msg) === true) return;
+    for (const tap of this.taps) if (tap(msg, source) === true) return;
     const fns = this.handlers.get(msg.t);
     if (fns) for (const fn of fns) fn(msg);
     else if (!this.unknown.has(msg.t)) {
@@ -320,9 +340,9 @@ class Sessions extends EventEmitter {
       const s = this.sessions.get(ctx.deviceId);
       if (s) s._changed();
     });
-    server.on('message', (msg, ctx) => {
+    server.on('message', (msg, ctx, ws) => {
       const s = this.sessions.get(ctx.deviceId);
-      if (s) s.fromHost(msg, ctx);
+      if (s) s.fromHost(msg, ctx, ws);
     });
     for (const ctx of server.clients.values()) this.ensure(ctx.deviceId).setCtx(ctx);
   }

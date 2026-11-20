@@ -4,7 +4,8 @@
 // windows/link.js; links.js (LinkManager) keeps one Link per host in hosts.json.
 //
 // Events (EventEmitter): 'welcome' (msg), 'closed' ({}), 'request' (a pairing code is ready).
-// After `welcome`, messages go to onAny(msg) when it is set (session.js), else to 'message'.
+// After `welcome`, messages go to onAny(msg, ws) when it is set (session.js), else to 'message'.
+// ws is this socket, so a reconnect that replaces this.ws does not rewrite a message already read.
 // onState(fn) is called on every status or pairing change.
 'use strict';
 
@@ -160,7 +161,7 @@ class Link extends EventEmitter {
       return this._scheduleReconnect();
     }
     this.yieldWanted = true;
-    if (this.ws) {
+    if (this.ws) { // still dialling: drop it, the inbound link is the one
       this._closeSocket();
       clearTimeout(this.timers.reconnect);
       this._scheduleReconnect();
@@ -267,7 +268,7 @@ class Link extends EventEmitter {
         return this._changed();
     }
     if (!this.authed) return;
-    if (this.onAny) return this.onAny(msg);
+    if (this.onAny) return this.onAny(msg, this.ws);
     this.emit('message', msg);
   }
 

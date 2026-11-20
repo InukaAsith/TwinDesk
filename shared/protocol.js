@@ -142,7 +142,8 @@
       // clipboard text
       CLIP: 'clip',
       CLIP_REQUEST: 'clip.request',
-      CLIP_POLICY: 'clip.policy', // either way: {accept, images} — whether this side applies clip (and clip.image) from the other
+      CLIP_POLICY: 'clip.policy', // either way: {accept, images, queue} — whether this side applies clip (and clip.image) from the other
+      CLIP_QUEUE: 'clip.queue', // either way: {items: [{text, at}]}: copies made while the other was away, for its Recent (shared/clipqueue.js); sent only to a side whose clip.policy has queue
       // The latest copy wins (shared/clipsync.js; Multi-device's clipboard for now): `clip` carries {ts, o}:
       // when the copy happened (a hybrid logical clock, ms) and on which device. An older item never replaces a newer one.
       CLIP_IMAGE: 'clip.image', // either way: {id, ts, o, w, h, png: base64} an image on the clipboard
@@ -368,6 +369,11 @@
       SHARE_OFFER: 'share.offer', // phone->computer {on, port, secret, name}: its folder over WebDAV at its address, http://<it>:<port>/<secret>/<name>/; sent again when the session moves
       SHARE_HOST: 'share.host', // computer->phone {on, port, token, name}: this computer's folder, http://<computer>:<port>/<token>/<op>?p= (list, stat, file, mkdir, delete, rename)
       SHARE_SET: 'share.set', // phone->computer {serve}: switch the computer's folder for the phone on or off (its setting; share.host says how it is)
+      // Internet over USB (#277, shared/tether.js, Tether.kt): the phone's VPN through adb reverse to a
+      // relay on the computer. An older phone never sends tether.state, so the computer offers nothing.
+      TETHER: 'tether', // computer->phone {on: true, port, token} (its 127.0.0.1:<port> is the computer's relay) | {on: false}
+      TETHER_STATE: 'tether.state', // phone->computer {can, state: 'off'|'ask'|'starting'|'on'|'error', why?}: as its session starts and on each change
+      TETHER_SET: 'tether.set', // phone->computer {on}: switched off on the phone (its notification's Stop, or the VPN permission refused)
       // Signing TwinDesk for iPhone with the person's own Apple ID (shared/iossign.js, ios-signer/,
       // Signer.swift): the iPhone keeps the signing state, the computer's helper does the work.
       SIGN_STATE: 'sign.state', // iPhone->computer {signedIn, email, until (ms: its session's end), auto}

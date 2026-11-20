@@ -27,6 +27,7 @@ function status() {
 
 const driver = {
   name: 'Xbox 360 controller',
+  kinds: ['xbox', 'ds4'], // or a PlayStation DualShock 4 (#266)
 
   async check() {
     if (!fs.existsSync(EXE)) return { supported: false, message: 'Not in this build of TwinDesk' };
@@ -49,8 +50,8 @@ const driver = {
   },
 
   // The controller, plugged in while this runs; pad states (12 bytes each) go to its stdin.
-  feed(onExit) {
-    const p = spawn(EXE, ['feed'], { windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'] });
+  feed(onExit, kind) {
+    const p = spawn(EXE, kind === 'ds4' ? ['feed', 'ds4'] : ['feed'], { windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'] });
     p.on('exit', onExit);
     p.on('error', onExit);
     p.stdin.on('error', () => {});

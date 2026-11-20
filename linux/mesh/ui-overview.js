@@ -130,6 +130,7 @@ UI.tab({
     // The phone's wireless debugging: the one-to-one app's card (shared/ui-adb.js): state, steps, pairing by code or
     // QR code, and the full app over the standard one. It follows the selected phone.
     const adb = UI.adbCard();
+    const tether = UI.tetherCard ? UI.tetherCard() : null; // Internet over USB (shared/ui-adb.js)
     const qrPair = UI.qrPairCard ? UI.qrPairCard() : null; // pair a phone with a QR code (shared/ui-qrpair.js)
 
     // Every phone whose screen/mouse/keyboard connection (wireless debugging or cable) is not working yet, each with
@@ -159,6 +160,7 @@ UI.tab({
       ...(qrPair ? [qrPair.el] : []),
       hero,
       adb.el,
+      ...(tether ? [tether.el] : []),
       pair.el,
       UI.card(t('Paired'), [pairedList]),
       ...(webCard ? [webCard.el] : []),
@@ -224,7 +226,9 @@ UI.tab({
 
       for (const r of m2p.concat(p2m)) r.update(s);
 
-      adb.update(s); // the phone's wireless debugging (shared/ui-adb.js)
+      adb.update(s);
+
+      if (tether) tether.update(s); // the phone's wireless debugging (shared/ui-adb.js)
       const ph = s.phone || {};
       if (qrPair) qrPair.update(s);
 

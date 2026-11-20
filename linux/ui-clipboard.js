@@ -40,6 +40,13 @@ UI.tab({
       { on: { get: (s) => s.clipboard.send, set: (v) => set({ send: v }) }, label: I18n.t('Copy on {me}, paste on {name}'), rows: [peerRow] },
     );
 
+    // While away (shared/clipqueue.js): copies made with the other device gone go to its Recent
+    // when it's back; only live copies change what it pastes, unless Put the latest is on there.
+    const queue = UI.switch((v) => set({ queue: v }), { label: I18n.t('Queue copies while away') });
+    const queueRow = UI.row(I18n.t('Queue copies while away'), '', [queue]);
+    const latest = UI.switch((v) => set({ queueLatest: v }), { label: I18n.t('Put the latest on the clipboard') });
+    const latestRow = UI.row(I18n.t('Put the latest on the clipboard'), I18n.t('When queued copies arrive here, the newest one is pasted next'), [latest]);
+    const awayCard = UI.card(I18n.t('While away'), [queueRow, latestRow]);
     const list = el('div', { class: 'history' });
     const clearBtn = UI.button(I18n.t('Clear'), () => api.clearHistory(), 'small');
 
@@ -54,6 +61,7 @@ UI.tab({
         maxKBRow,
         recentRow,
       ]),
+      awayCard,
       skipNote,
       UI.card(I18n.t('Recent'), [list], { actions: [clearBtn] }),
       hist.el,
@@ -76,6 +84,12 @@ UI.tab({
       maxKB.set(c.maxKB);
       maxKBRow.setHint(c.imageSupport ? I18n.t('Longer text isn’t sent. Pictures: up to 10 MB') : I18n.t('Longer text isn’t sent'));
       historySize.set(c.historySize);
+      awayCard.hidden = c.queued === undefined; // Multi-device: not yet
+      queue.set(c.queue !== false);
+      latest.set(!!c.queueLatest);
+      queueRow.setHint(c.queue === false ? I18n.t('Copies made while {name} is away aren’t kept')
+        : c.queued ? I18n.t('{count} waiting for {name}: they go in its Recent, not on its clipboard', { count: c.queued })
+          : I18n.t('Copies made while {name} is away go in its Recent when it’s back, not on its clipboard'));
       const refused = s.link.state === 'connected' && !c.peerAccepts;
       peerRow.hidden = !refused;
       peerRow.label.textContent = I18n.t('Turned off on {device}', { device: UI.peer(s).name });

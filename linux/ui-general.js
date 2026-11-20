@@ -27,6 +27,7 @@ UI.tab({
     const recvOpen = UI.button(t('Open'), () => api.openReceivedFolder(), 'small');
     const recvRow = UI.row(t('Received files'), '', [recvOpen, recvReset, recvChange], { literal: true });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: t('Show a popup when switching') });
+    const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: t('Keep the display awake') }); // #240, shared/keepawake.js
     const fwPill = el('span', { class: 'pill' });
     const fwCheck = UI.button(t('Check again'), () => api.checkFirewall(), 'small');
     const fwFix = UI.button(t('Fix'), () => api.fixFirewall(), 'small primary');
@@ -110,6 +111,7 @@ UI.tab({
       UI.card(t('Startup'), [
         UI.row(t('Open at login'), t('Starts in the tray'), [startup]),
         recvRow,
+        UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
       ]),
       UI.card(t('Appearance'), [
         styleRow,
@@ -160,6 +162,7 @@ UI.tab({
       for (const k of Object.keys(partSw)) partSw[k].set(ov[k] !== false);
       startup.set(s.startup);
       hudSw.set(s.app.hud);
+      awakeSw.set(s.app.keepAwake !== false);
       pingSw.set(s.app.keepPinging === true);
       apiRow.hidden = !s.localApi;
       if (s.localApi) {

@@ -53,9 +53,11 @@
     const bt = st.audio && st.audio.state === 'ready';
     if (!c) i18n.text($('sub'), e.missed ? 'Missed call' : 'Call ended');
     else if (c.state === 'ringing') {
-      if (show.name && show.number) i18n.text($('sub'), 'Incoming · {number}', { number: show.number });
+      if (c.app) i18n.text($('sub'), 'Incoming {app} call', { app: c.app });
+      else if (show.name && show.number) i18n.text($('sub'), 'Incoming · {number}', { number: show.number });
       else i18n.text($('sub'), st.phone ? 'Incoming call on {phone}' : 'Incoming call', { phone: st.phone });
-    } else i18n.text($('sub'), c.dir === 'out' ? 'Calling · {time}' : 'On a call · {time}', { time: time(Date.now() - c.since) }); // where the sound is: the button says
+    } else if (c.app) i18n.text($('sub'), '{app} call · {time}', { app: c.app, time: time(Date.now() - c.since) });
+    else i18n.text($('sub'), c.dir === 'out' ? 'Calling · {time}' : 'On a call · {time}', { time: time(Date.now() - c.since) }); // where the sound is: the button says
     document.body.classList.toggle('missed', !c && !!e.missed);
     $('answer').hidden = !c || c.state !== 'ringing';
     $('decline').hidden = !c || c.state !== 'ringing';

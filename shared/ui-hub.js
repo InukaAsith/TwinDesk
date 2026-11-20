@@ -34,6 +34,22 @@
     return dir ? dir.split(/[\\/]/).filter(Boolean).pop() || dir : tr('Downloads');
   };
 
+  // Photos and Phone Files: where Save puts things, and a way to change it (#266). The same folder
+  // as General › Received files (Windows, Linux) or Files › Save to (Mac).
+  UI.saveFolderButton = () => {
+    const b = UI.button('', () => {
+      const api = UI.api || {};
+      if (api.chooseReceivedFolder) api.chooseReceivedFolder();
+      else if (api.pickDropFolder) api.pickDropFolder();
+    }, 'small');
+    b.setAttribute('data-literal', '');
+    b.update = (s) => {
+      b.textContent = tr('Into {folder}…', { folder: UI.receivedName(s) });
+      b.title = tr('Choose the folder saved files go to');
+    };
+    return b;
+  };
+
   // That page can show the phone's things now.
   UI.hubReady = (s, what) => {
     const h = s && s.hub;

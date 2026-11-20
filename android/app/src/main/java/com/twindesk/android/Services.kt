@@ -109,6 +109,7 @@ class ActionReceiver : BroadcastReceiver() {
             FCLIP_SAVE -> core.fclip.fetch(arg, save = true)
             ADB_ON -> core.adb.turnOn()
             SOUND_STOP -> core.sound.stop()
+            TETHER_STOP -> core.tether.userStop()
             RING_STOP -> core.dev.stopRing()
             REZUME_DISMISS -> core.rezume.dismiss() // ReZume's notification: Dismiss
             PC_MEDIA -> core.pcMedia.control(arg.ifEmpty { "toggle" }) // the computer's media notification, or Play/Pause on ours
@@ -133,6 +134,7 @@ class ActionReceiver : BroadcastReceiver() {
         const val PAIR_CODE = "com.twindesk.android.PAIR_CODE"
         const val EXIT = "com.twindesk.android.EXIT"
         const val SOUND_STOP = "com.twindesk.android.SOUND_STOP"
+        const val TETHER_STOP = "com.twindesk.android.TETHER_STOP" // Internet over USB: Stop, Not now
         const val RING_STOP = "com.twindesk.android.RING_STOP"
         const val REZUME_DISMISS = "com.twindesk.android.REZUME_DISMISS"
         const val PC_MEDIA = "com.twindesk.android.PC_MEDIA"

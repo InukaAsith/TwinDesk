@@ -67,6 +67,7 @@ namespace MacShare
             touch = new Touch(injector);
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
+            injector.Stuck = delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "adminWindow"; Emit(e); }; // Inject.cs WatchStuck (#278)
             capture.ReleaseInjected = delegate { smoother.Clear(); stylus.Leave(); touch.Leave(); injector.ReleaseAll(); }; // the emergency return (Crossing.cs)
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move
@@ -569,6 +570,7 @@ namespace MacShare
             if (cmd == "displays") reply["displays"] = c["displays"];
             if (cmd == "caps" && c.ContainsKey("on")) reply["on"] = c["on"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];
+            if (cmd == "lane" && c.ContainsKey("port") && c.ContainsKey("lane")) reply["lane"] = c["lane"]; // a device lane (#273): an older helper never says it
             if (cmd == "usbWatch" && c.ContainsKey("present")) reply["present"] = c["present"];
             if (cmd == "wifiLowLatency" && c.ContainsKey("applied")) reply["applied"] = c["applied"];
             if ((cmd == "displayMode" || cmd == "displayExtend") && error == null) reply["changed"] = c["changed"];

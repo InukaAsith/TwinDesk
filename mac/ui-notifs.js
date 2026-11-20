@@ -51,7 +51,7 @@ UI.tab({
       fdaRow.hidden = n.access !== 'noAccess';
       sendRow.setHint(!n.send ? '' : n.access === 'noAccess' ? I18n.t('Needs Full Disk Access')
         : !s.client ? I18n.t('Also switches it on the other computer') : n.sent ? I18n.t('{count} sent', { count: n.sent }) : I18n.t('As native notifications there'));
-      recvRow.setHint(n.receive && n.shown ? I18n.t('{count} shown', { count: n.shown }) : (n.style === 'twindesk' ? I18n.t('In TwinDesk’s own pop-ups') : I18n.t('As native notifications, from TwinDesk')));
+      recvRow.setHint(n.receive && n.shown ? I18n.t('{count} shown', { count: n.shown }) : (n.style === 'none' ? I18n.t('In Recent only, no pop-ups') : n.style === 'twindesk' ? I18n.t('In TwinDesk’s own pop-ups') : I18n.t('As native notifications, from TwinDesk')));
       void p;
 
       const k = JSON.stringify([n.apps.map((a) => a.app), n.muted]);

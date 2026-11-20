@@ -69,7 +69,7 @@ class Peer extends EventEmitter {
     });
     server.on('rtt', (ctx) => this.emit('rtt', ctx));
     server.on('transport', (ctx) => this.emit('transport', ctx));
-    server.on('message', (msg, ctx) => (ctx !== server.current || !this.fx.incoming(msg)) && this._deliver(msg, ctx));
+    server.on('message', (msg, ctx, ws) => (ctx !== server.current || !this.fx.incoming(msg)) && this._deliver(msg, ctx, ws));
 
     link.on('welcome', (ctx) => {
       this.swapIn = P.newRoleSwapState(ctx.name);
@@ -86,10 +86,10 @@ class Peer extends EventEmitter {
       this.emit('closed', ctx);
     });
     link.on('rtt', (ctx) => this.emit('rtt', ctx));
-    link.on('message', (msg) => {
+    link.on('message', (msg, ws) => {
       const ctx = link.ctx;
       if (!ctx) return;
-      for (const m of P.swapRole(msg, this.swapIn)) if (!this.fx.incoming(m)) this._deliver(m, ctx);
+      for (const m of P.swapRole(msg, this.swapIn)) if (!this.fx.incoming(m)) this._deliver(m, ctx, ws);
     });
   }
 
@@ -168,6 +168,13 @@ class Peer extends EventEmitter {
     }
   }
 
+  // The non-input socket this direct peer would send a Save to.
+  outbound(ctx) {
+    if (!ctx || ctx !== this.current || !ctx.authed || ctx.released) return null;
+    if (ctx === this.link.ctx) return this.link.authed ? this.link.ws : null;
+    return this.server.socketFor(ctx);
+  }
+
   sendToClient(msg) {
     this.send(this.current, msg);
   }
@@ -178,13 +185,13 @@ class Peer extends EventEmitter {
     if (c) this._deliver(msg, c);
   }
 
-  _deliver(msg, ctx) {
+  _deliver(msg, ctx, ws = null) {
     if (this.listenerCount(`t:${msg.t}`) === 0 && !this.unknown.has(msg.t)) {
       this.unknown.add(msg.t);
       console.log(`[peer] no handler for "${msg.t}" (ignored)`);
     }
     if (this.tap) this.tap(msg);
-    this.emit(`t:${msg.t}`, msg, ctx);
+    this.emit(`t:${msg.t}`, msg, ctx, ws);
     this.emit('message', msg, ctx);
   }
 }

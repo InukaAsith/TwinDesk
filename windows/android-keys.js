@@ -9,7 +9,7 @@ const KEYCODE = {
   Minus: 69, Equal: 70, BracketLeft: 71, BracketRight: 72, Backslash: 73, Semicolon: 74, Quote: 75,
   Backquote: 68, Comma: 55, Period: 56, Slash: 76, IntlBackslash: 73,
   ArrowUp: 19, ArrowDown: 20, ArrowLeft: 21, ArrowRight: 22, PageUp: 92, PageDown: 93,
-  Home: 122, End: 123, Insert: 124, CapsLock: 115,
+  Home: 122, End: 123, Insert: 124, CapsLock: 115, NumLock: 143,
   ShiftLeft: 59, ShiftRight: 60, ControlLeft: 113, ControlRight: 114, AltLeft: 57, AltRight: 58,
   MetaLeft: 117, MetaRight: 118, ContextMenu: 82,
   NumpadDivide: 154, NumpadMultiply: 155, NumpadSubtract: 156, NumpadAdd: 157, NumpadDecimal: 158, NumpadEqual: 161,
@@ -21,6 +21,8 @@ for (let i = 0; i < 10; i++) {
   KEYCODE[`Numpad${i}`] = 144 + i;
 }
 for (let i = 1; i <= 12; i++) KEYCODE[`F${i}`] = 130 + i;
+
+const NUM_LOCK_ON = 0x200000; // KeyEvent.META_NUM_LOCK_ON
 
 // Modifier keys -> meta-state bits (KeyEvent.META_*).
 const META = {
@@ -51,7 +53,8 @@ class KeyState {
       else this.held.delete(code);
     }
     const keycode = KEYCODE[code];
-    return keycode ? { keycode, meta: this.meta() } : null;
+    // Numpad digits type digits only with Num Lock in the meta state; without it Android takes them for arrows and Home/End (#260).
+    return keycode ? { keycode, meta: this.meta() | (/^Numpad/.test(code) ? NUM_LOCK_ON : 0) } : null;
   }
 
   clear() {
