@@ -32,6 +32,7 @@ object SearchIndex {
         Entry("Browse the phone’s storage", { tr("Browse the phone’s storage") }, "phone files, file manager, storage, copy from phone, sd card", "FileAccess", "p2c"),
         Entry("Phone photos on the computer", { tr("Phone photos on the computer") }, "gallery, pictures, videos, copy photos", "Photos", "p2c"),
         Entry("Use the phone as a webcam", { tr("Use the phone as a webcam") }, "phone camera on pc, webcam, video call, zoom, share camera, virtual camera", "Camera", "p2c"),
+        Entry("Scan document to PDF", { tr("Scan document to PDF") }, "scan document, document scanner, continuity camera, multi page pdf, phone camera scan, pages to pdf", "Camera", "p2c"),
         Entry("Use the computer’s camera on the phone", { tr("Use the computer’s camera on the phone") }, "pc camera on phone, webcam", "Camera", "c2p"),
         Entry("Calls on the computer", { tr("Calls on the computer") }, "answer calls on pc, phone calls, dial, ringing", "Calls", "p2c"),
         Entry("Text messages on the computer", { tr("Text messages on the computer") }, "sms, texts, whatsapp, chat, send message", "Messages", "p2c"),

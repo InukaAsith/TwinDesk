@@ -390,7 +390,7 @@ function start() {
   });
   fileRecv.onBatch = (b) => {
     live.done('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), t('From {name}', { name: peerName() }));
-    if (b.kind === 'send' && phonePhoto && phonePhoto.arrived(b.placed)) return; // Take a photo: copied
+    if (b.kind === 'send' && phonePhoto && phonePhoto.arrived(b.placed)) return; // photo: copied; scan: the PDF stays in received files
     if (rezume && rezume.received(b)) return; // a document taken here: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
@@ -442,7 +442,7 @@ function start() {
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
   web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ takePhoto: () => !!phonePhoto && phonePhoto.take(), loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ takePhoto: () => !!phonePhoto && phonePhoto.take(), scanDocument: () => !!phonePhoto && phonePhoto.scan(), loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     iosSign: () => iosSign, devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -556,6 +556,7 @@ function startPhone(server, pairing) {
       copy: (f) => copyPicture(require('electron'), f),
     });
     pl.on('t:cam.capture', (m) => { if (m && m.on === false) phonePhoto.ended(); });
+    pl.on('closed', () => phonePhoto && phonePhoto.ended());
   }
   phone = new Phone({ server: pl, raw: server, discovery, pairing });
   setupHub(pl);

@@ -178,6 +178,7 @@ let modulesAtStart = []; // General › Modules: the ones off at start aren't lo
 let nowPlaying = null; // what plays on each phone, for the Overview's media controls (shared/perphone.js)
 let btAudio = null; // the phone's sound here over Bluetooth (shared/btaudio.js), for the first phone
 let phone = null; // A phone as the peer: phone.js (its .bridge: phone-bridge.js)
+let phonePhoto = null; // Camera › Take a photo / Scan document (shared/phonephoto.js), made in startPhone
 let phoneDrive = null; // its storage as a drive here (phonedrive.js), the first phone's
 let bleHost = null; // Bluetooth, for devices not on this network: we host (blepipe.js)
 let bleGuest = null; // … we connect to a host
@@ -410,6 +411,7 @@ function start() {
   });
   fileRecv.onBatch = (b) => {
     liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerName() }) : '');
+    if (b.kind === 'send' && phonePhoto && phonePhoto.arrived(b.placed)) return; // photo: copied; scan: the PDF stays in received files
     if (rezume && rezume.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
@@ -464,7 +466,7 @@ function start() {
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
-  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ takePhoto: () => !!phonePhoto && phonePhoto.take(), scanDocument: () => !!phonePhoto && phonePhoto.scan(), loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
@@ -631,6 +633,19 @@ function startPhone(server, pairing) {
     const u = phone.unit(m.originId);
     if (u && u.link.current) u.views.openNotified(m.app, m.appName);
   };
+  // Camera › Take a photo / Scan document (shared/phonephoto.js): the active Android phone.
+  {
+    const { PhonePhoto, copyPicture } = require('../../shared/phonephoto.js');
+    const phoneOn = () => { const c = phone.active.link.current; return !!(c && c.os === P.OS.ANDROID); };
+    phonePhoto = new PhonePhoto({
+      send: (m) => phone.active.link.sendToClient(m),
+      phoneOn,
+      popup: (key, vars) => hud && hud.show('driven', { key, vars }),
+      copy: (f) => copyPicture(require('electron'), f),
+    });
+    pl.on('t:cam.capture', (m) => { if (m && m.on === false) phonePhoto.ended(); });
+    pl.on('closed', () => { if (phonePhoto && !phoneOn()) phonePhoto.ended(); }); // a phone left, and no Android remains
+  }
   // Explorer's right-click › TwinDesk: Send to phone, Import / Capture from phone (the active phone).
   explorer = new Explorer({
     phoneOn: () => { const c = phone.active.link.current; return !!(c && c.os === P.OS.ANDROID); },

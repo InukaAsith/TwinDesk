@@ -100,8 +100,15 @@ class DevCtl(core: Core) : Feature(core) {
             STATE -> { computer = m; core.changed(); main.post { onComputer?.invoke() } }
             // Explorer's Capture from phone on the computer: the camera here, each photo there.
             CaptureActivity.T -> main.post {
-                if (m.optBoolean("on")) runCatching { ctx.startActivity(android.content.Intent(ctx, CaptureActivity::class.java).putExtra("once", m.optBoolean("once")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                else CaptureActivity.running?.end(tell = false)
+                if (m.optBoolean("on")) {
+                    CaptureActivity.running?.end(tell = false) // a photo or a scan already open closes before the next one
+                    runCatching {
+                        ctx.startActivity(android.content.Intent(ctx, CaptureActivity::class.java)
+                            .putExtra("once", m.optBoolean("once"))
+                            .putExtra("mode", m.optString("mode")) // "scan" or absent: a normal capture (older computers)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                } else CaptureActivity.running?.end(tell = false)
             }
             else -> return false
         }

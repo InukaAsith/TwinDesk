@@ -11,7 +11,7 @@ const ACTIONS = [
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'selectPeer', 'forgetPeer', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost',
   'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup', 'connectPhone', 'disconnectPhone', 'setPhone',
-  'phonePair', 'phoneScreen', 'phoneCamera', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount',
+  'phonePair', 'phoneScreen', 'phoneCamera', 'takePhoto', 'scanDocument', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount',
   'phoneUnmount', 'setMount', 'phoneAppMenu', 'deviceDo', 'setOverview', 'setChats', 'notifReply', 'adbQr', 'setUpdates', 'skipUpdate', 'unskipUpdate', 'checkUpdates', 'openUpdate',
   'openLink', 'setLayoutCell', 'moveOnMap', 'resetMap', 'setMapSkip', 'removeFromLayout', 'disconnect', 'connectAgain', 'setNet', 'netJoinHotspot',
   'netCancel', 'netWifi', 'hub',

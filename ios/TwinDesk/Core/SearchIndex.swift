@@ -31,6 +31,7 @@ enum SearchIndex {
         Entry(en: "Received files", title: { tr("Received files") }, k: "downloads, where are files, received folder, save to", page: "files", dir: ""),
         Entry(en: "Phone photos on the computer", title: { tr("Phone photos on the computer") }, k: "gallery, pictures, videos, copy photos", page: "photos", dir: "p2c"),
         Entry(en: "Use the phone as a webcam", title: { tr("Use the phone as a webcam") }, k: "phone camera on pc, webcam, video call, zoom, share camera, virtual camera", page: "camera", dir: "p2c"),
+        Entry(en: "Scan document to PDF", title: { tr("Scan document to PDF") }, k: "scan document, document scanner, continuity camera, multi page pdf, phone camera scan, pages to pdf", page: "camera", dir: "p2c"),
         Entry(en: "Use the computer’s camera on the phone", title: { tr("Use the computer’s camera on the phone") }, k: "pc camera on phone, webcam", page: "camera", dir: "c2p"),
         Entry(en: "Text messages on the computer", title: { tr("Text messages on the computer") }, k: "sms, texts, whatsapp, chat, send message", page: "messages", dir: "p2c"),
         Entry(en: "What’s playing on the computer", title: { tr("What’s playing on the computer") }, k: "media controls, play pause, music, spotify, volume, next track", page: "media", dir: "c2p"),

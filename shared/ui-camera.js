@@ -132,11 +132,13 @@
 
       const note = UI.note('info', '');
       note.setAttribute('data-literal', '');
-      // Take a photo with the phone (shared/phonephoto.js): its camera app opens, the photo comes
-      // here onto the clipboard. Where the app has it (one-to-one), with an Android phone.
+      // Take a photo / scan a document with the phone (shared/phonephoto.js). Each row is there
+      // only where that action is wired, so a window without it never calls a missing API.
       const photoBtn = UI.button(tr('Take a photo'), () => api.takePhoto && api.takePhoto());
       const photoRow = UI.row(tr('Take a photo with the phone'), tr('Its camera opens. The photo comes here, copied and ready to paste, and is kept with received files'), [photoBtn]);
-      const photoCard = UI.card('', [photoRow]);
+      const scanBtn = UI.button(tr('Scan document'), () => api.scanDocument && api.scanDocument());
+      const scanRow = UI.row(tr('Scan a document with the phone'), tr('The phone’s camera scans pages into a PDF. It arrives with received files'), [scanBtn]);
+      const photoCard = UI.card('', [photoRow, scanRow]);
       body.append(photoCard, picCard, vCard, ourCard, note);
 
       let listed = false;
@@ -175,7 +177,10 @@
         startBtn.disabled = !c.on || (!on && !!why);
         startBtn.title = !on && why ? UI.fill(why) : '';
         facingSeg.el.hidden = !phone;
-        photoCard.hidden = !(phone && api.takePhoto && s.phone && s.phone.connected);
+        const phoneHere = !!(phone && s.phone && s.phone.connected);
+        photoRow.hidden = !(phoneHere && api.takePhoto);
+        scanRow.hidden = !(phoneHere && api.scanDocument);
+        photoCard.hidden = photoRow.hidden && scanRow.hidden;
         rotate.disabled = !on;
         mirror.set(!!v.mirror);
         qualityRow.hidden = !phone;
