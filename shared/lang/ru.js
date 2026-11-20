@@ -2363,4 +2363,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Нажмите «Разрешить» в уведомлении TwinDesk на телефоне, затем подтвердите запрос VPN от Android.",
   "It stopped.": "Остановлено.",
   "Starting on the phone…": "Запуск на телефоне…",
+  "Activity": "Активность",
+  "Clipboard, notifications, files and calls, newest first.": "Буфер обмена, уведомления, файлы и звонки — сначала новые.",
+  "No activity yet": "Пока нет активности",
+  "No matching items": "Нет подходящих записей",
+  "Search activity": "Поиск по активности",
 });

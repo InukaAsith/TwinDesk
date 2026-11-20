@@ -2364,4 +2364,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "在手机上的 TwinDesk 通知中点按“允许”，然后确认 Android 的 VPN 请求。",
   "It stopped.": "已停止。",
   "Starting on the phone…": "正在手机上启动…",
+  "Activity": "活动",
+  "Clipboard, notifications, files and calls, newest first.": "剪贴板、通知、文件和通话，最新的在前。",
+  "No activity yet": "暂无活动",
+  "No matching items": "没有匹配的项目",
+  "Search activity": "搜索活动",
 });

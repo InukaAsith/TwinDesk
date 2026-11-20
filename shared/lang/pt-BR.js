@@ -2363,4 +2363,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Toque em Permitir na notificação do TwinDesk no celular e confirme o pedido de VPN do Android.",
   "It stopped.": "Parou.",
   "Starting on the phone…": "Iniciando no celular…",
+  "Activity": "Atividade",
+  "Clipboard, notifications, files and calls, newest first.": "Área de transferência, notificações, arquivos e chamadas, os mais recentes primeiro.",
+  "No activity yet": "Nenhuma atividade ainda",
+  "No matching items": "Nenhum item correspondente",
+  "Search activity": "Pesquisar atividade",
 });

@@ -2363,4 +2363,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Telefondaki TwinDesk bildiriminde İzin ver’e dokunun, ardından Android’in VPN isteğini onaylayın.",
   "It stopped.": "Durdu.",
   "Starting on the phone…": "Telefonda başlatılıyor…",
+  "Activity": "Etkinlik",
+  "Clipboard, notifications, files and calls, newest first.": "Pano, bildirimler, dosyalar ve aramalar; en yeniler üstte.",
+  "No activity yet": "Henüz etkinlik yok",
+  "No matching items": "Eşleşen öğe yok",
+  "Search activity": "Etkinlik ara",
 });
