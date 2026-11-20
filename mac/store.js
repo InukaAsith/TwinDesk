@@ -80,6 +80,8 @@ const DEFAULT_SETTINGS = {
     maxKB: 256,
     historySize: 20, // memory only
     images: false, // pictures too, up to 10 MB (shared/clipimage.js); screenshots put on the clipboard among them
+    queue: true, // copies made while the other device is away go to its Recent when it's back (shared/clipqueue.js)
+    queueLatest: false, // … and the latest of those it sends lands on this clipboard
   },
   // setupSkipped: the missing items when Setup was skipped; setupDone: Setup has been through once
   // (everything allowed, or skipped), so it never takes over the window again (General shows the rest).
@@ -105,7 +107,7 @@ const DEFAULT_SETTINGS = {
   drive: { on: false, folder: '' }, // File Sharing › TwinDesk Drive (shared/drive-host.js): off until turned on; folder '' = ~/TwinDesk Drive
   // Calls, Messages, Photos and Files from a phone (shared/phonehub.js), each off until switched on.
   // callAudio: the calls' sound on this Mac over Bluetooth (btDevices: which paired device each phone is).
-  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, callPause: false, shareMount: false, shareServe: false, shareFolder: '' }, // share*: shared folders (foldershare.js)
+  hub: { calls: false, messages: false, media: false, files: false, callAudio: true, callPause: false, shareMount: false, shareServe: false, shareFolder: '', tether: false }, // share*: shared folders (foldershare.js); tether: Internet over USB (tether.js)
   // Not on one network: Bluetooth for the session (blepipe.js), Wi-Fi for files and screens
   // (netlink.js). hotspots: {deviceId: {ssid, pass (safeStorage)}}, a phone's hotspot as typed once.
   net: { ble: true, blePc: false, bleWifiOff: true, hotspots: {}, tailscale: true, bleInput: false }, // ble: with phones, blePc: with computers; bleWifiOff: none on the same Wi-Fi (blepolicy.js wifiQuiet); tailscale: shared/tailnet.js; bleInput: mouse and keyboard over Bluetooth beside Wi-Fi (shared/bleinput.js)

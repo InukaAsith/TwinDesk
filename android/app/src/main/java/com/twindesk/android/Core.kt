@@ -82,6 +82,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val net = Netlink(this)
     val hub = Hub(this) // Calls, Messages and Photos on the computer: nothing runs until one is on
     val share = FolderShare(this) // shared folders with the computer, both ways
+    val tether = Tether(this) // Internet over USB: the computer's internet through the cable (only when it offers it)
     val sound = PhoneSound(this) // this phone's sound there without wireless debugging
     val mirror = PhoneMirror(this) // this phone's screen there without wireless debugging
     val shots = Screenshots(this) // screenshots both ways, onto the other clipboard
@@ -98,7 +99,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // shown and its features hear nothing from the computer.
     val modulesAtStart: Set<String> = Modules.off(store)
     fun moduleOn(id: String) = id in Modules.FIXED || id !in modulesAtStart
-    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia, deck)
+    private val features: List<Feature> = listOf(net, sync, clip, notifs, files, fclip, info, apps, wake, adb, pointer, input, drive, screen, macSound, shortcuts, kvm, remote, hub, share, sound, mirror, shots, nowPlaying, rezume, dev, pcMedia, deck, tether)
         .filter { f ->
             when (f) {
                 clip, fclip -> moduleOn("clipboard")
@@ -556,7 +557,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         returnAfter = 0L
         returnFailures = 0
         returnPrefs.edit().remove("host").commit()
-        if (h.os == "mac" && link.canReclaim && !link.ble) {
+        if (h.os in RETURN_OS && link.canReclaim && !link.ble) {
             returnPrefs.edit().putString("host", JSONObject().put("id", h.id).put("fp", h.fp).toString()).commit()
         }
     }
@@ -564,7 +565,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     private fun returnHost(): Host? {
         val saved = returnPrefs.getString("host", null) ?: return null
         val o = runCatching { JSONObject(saved) }.getOrNull() ?: return null
-        return store.hosts().find { it.os == "mac" && it.id == o.optString("id") && it.fp == o.optString("fp") }
+        return store.hosts().find { it.os in RETURN_OS && it.id == o.optString("id") && it.fp == o.optString("fp") }
     }
 
     @Synchronized private fun returnTick() {
@@ -573,7 +574,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
         val now = System.currentTimeMillis()
         if (now < returnAfter) return
         val seen = discovery.found[h.id]
-        if (seen != null && (seen.os != "mac" || !seen.rc)) return
+        if (seen != null && (seen.os !in RETURN_OS || !seen.rc)) return
         val gen = returnGeneration
         returnAfter = now + 5000L
         // Discovery refreshes a roamed LAN address. Without broadcasts (screen off), a pinned
@@ -607,6 +608,9 @@ class Core private constructor(val ctx: Context) : Link.Events {
     }
 
     companion object {
+        // Computers that take a paired phone back by itself after a long drop (hello rc:1,
+        // #192/#266). Each still has to advertise rc, so an older computer is never dialed this way.
+        val RETURN_OS = setOf("mac", "win", "linux")
         @Volatile private var instance: Core? = null
         fun get(ctx: Context): Core = instance ?: synchronized(this) {
             instance ?: Core(ctx.applicationContext).also { instance = it; it.start() }

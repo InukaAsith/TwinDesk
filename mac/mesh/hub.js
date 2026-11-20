@@ -120,7 +120,10 @@ class Hub extends EventEmitter {
       this.pairing.on('change', () => this._change());
       this.pairing.on('request', () => this._change());
     }
+    this.links.hostPairing = pairing; // mutual pairs: a device that holds us as its host
+    this.links.bindServer(server);
     this.sessions.attachServer(server); // new sessions are attached by the 'session' event
+    if (this.selectedId) server.setPrimary(this.selectedId);
     this._change();
   }
 
@@ -275,7 +278,7 @@ class Hub extends EventEmitter {
   // ---- internals: devices ----
 
   _attach(s) {
-    s.tap((msg) => this._fromDevice(s, msg));
+    s.tap((msg, source) => this._fromDevice(s, msg, source));
     s.onLife((up, replaced) => (up ? this._up(s) : this._down(s, replaced)));
     s.onState(() => this._stateOf(s));
     s.refresh(); // a device that is already connected comes up now
@@ -283,7 +286,9 @@ class Hub extends EventEmitter {
 
   // A message of one device: roster messages are the mesh's, the rest goes to the bus (any device)
   // and to the route that follows this device. True keeps it away from the session's own handlers.
-  _fromDevice(s, msg) {
+  // source: the socket the message arrived on (session.js). Passed through so a route does
+  // not rebuild the view from whichever connection send() would use now.
+  _fromDevice(s, msg, source) {
     if (msg.t === ROSTER) {
       if (this.mesh && this.mesh.handle(s.id, msg)) this._change();
       return true;
@@ -298,7 +303,7 @@ class Hub extends EventEmitter {
       // A route takes the message only when someone listens for it (as the Windows facade does).
       if (r.targetId !== s.id) continue;
       if (r.listenerCount(`t:${msg.t}`) > 0 || r.listenerCount('message') > 0) {
-        r.deliver(msg);
+        r.deliver(msg, source);
         consumed = true;
       }
     }

@@ -10,6 +10,7 @@ const { clipboard } = require('electron');
 const { EventEmitter } = require('events');
 const P = require('../shared/protocol.js');
 const { ClipImages, trimPictures, itemView } = require('../shared/clipimage.js');
+const { ClipQueue } = require('../shared/clipqueue.js');
 const { keysLabel } = require('../shared/cursorlock.js');
 
 // Electron 44's clipboard.readText() returns a Promise in the main process (older: a string).
@@ -29,6 +30,7 @@ class Clipboard extends EventEmitter {
     this.peerAccepts = true; // the PC's last clip.policy
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size} or a picture (clipimage.js)
     this.lastSkip = '';
+    this.queue = new ClipQueue(); // copies made while the other device was away
     const ws = () => this.server.current && this.server.current.ws;
     this.images = new ClipImages({
       cfg: () => this.cfg,
@@ -54,11 +56,13 @@ class Clipboard extends EventEmitter {
       this._watch();
     });
     server.on(`t:${P.T.CLIP}`, (msg) => this._onClip(msg));
+    server.on(`t:${P.T.CLIP_QUEUE}`, (msg) => this._onQueue(msg));
     server.on(`t:${P.T.CLIP_IMAGE}`, (msg) => this.images.header(msg));
     server.on(`t:${P.T.CLIP_IMAGE_PART}`, (msg) => this.images.part(msg));
     server.on(`t:${P.T.CLIP_POLICY}`, (msg) => {
       this.peerAccepts = msg.accept !== false;
       this.images.policy(msg);
+      if (msg.queue === true && msg.accept !== false) this._flushQueue();
       this.emit('change');
     });
     server.on(`t:${P.T.CLIP_REQUEST}`, () => this.sendIfChanged('request'));
@@ -66,6 +70,7 @@ class Clipboard extends EventEmitter {
       if (name !== 'clipboard') return;
       this.concealed = !!ev.concealed;
       this.remote = !!ev.remote;
+      if (!this.server.current && !ev.initial && !ev.remote) return this._queueNow(); // nobody to send it to: queued
       // Instant mode sends new copies only, not what was already on the clipboard when it began.
       if (this.cfg.mode === 'instant' && !ev.initial) this.sendIfChanged('instant');
     });
@@ -89,7 +94,7 @@ class Clipboard extends EventEmitter {
   // with nobody connected nothing would be sent (sendIfChanged), so nothing wakes the Mac for it.
   _watch(force = false) {
     const c = this.cfg;
-    const on = !!(c.enabled && c.send && this.server.current);
+    const on = !!(c.enabled && c.send && (this.server.current || c.queue !== false)); // away: for the queue (shared/clipqueue.js)
     if (!force && on === this.watching) return;
     this.watching = on;
     this.helper.send('clipboardWatch', { on });
@@ -97,10 +102,10 @@ class Clipboard extends EventEmitter {
 
   sendPolicy() {
     const c = this.cfg;
-    this.server.sendToClient({ t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept });
+    this.server.sendToClient({ t: P.T.CLIP_POLICY, accept: !!(c.enabled && c.receive), images: this.images.accept, queue: true }); // queue: clip.queue understood here
   }
 
-  _remember(dir, item) {
+  _remember(dir, item, at = Date.now()) {
     // What went out last is no longer on the other side once something came in, and the other way
     // round: copying it again must send it again (#223).
     if (dir === 'in') this.lastSent = null; else this.lastReceived = null;
@@ -110,7 +115,7 @@ class Clipboard extends EventEmitter {
       this.history = this.history.filter((h) => h.text !== item || h.dir !== dir);
       item = { text: item, size: Buffer.byteLength(item, 'utf8') };
     }
-    this.history.unshift({ dir, at: Date.now(), ...item });
+    this.history.unshift({ dir, at, ...item });
     if (this.history.length > n) this.history.length = n;
     trimPictures(this.history);
   }
@@ -206,12 +211,48 @@ class Clipboard extends EventEmitter {
     this.emit('change');
   }
 
+  // ---- Clipboard › Queue copies while away (shared/clipqueue.js) ----
+
+  async _queueNow() {
+    const c = this.cfg;
+    if (!c.enabled || !c.send || c.queue === false || this.server.current || this.concealed && c.skipConcealed) return;
+    const text = await readText().catch(() => '');
+    if (!text || require('../shared/otp.js').isQuiet(text)) return;
+    if (this.queue.add(text, c.maxKB)) this.emit('change');
+  }
+
+  _flushQueue() {
+    const c = this.cfg;
+    if (!c.enabled || !c.send || !this.queue.size || !this.server.current) return;
+    const m = this.queue.take();
+    this.server.sendToClient(m);
+    for (const x of m.items) this._remember('out', x.text, x.at);
+    this.emit('change');
+  }
+
+  // Copies the other side made while we were away: in Recent; on the clipboard only the latest,
+  // and only with Put the latest on the clipboard on.
+  async _onQueue(msg) {
+    const c = this.cfg;
+    if (!c.enabled || !c.receive) return;
+    const items = require('../shared/clipqueue.js').itemsOf(msg);
+    if (!items.length) return;
+    for (const x of items) this._remember('in', x.text, x.at);
+    if (c.queueLatest) {
+      const last = items[items.length - 1].text;
+      if (this.remote || (await readText().catch(() => '')) !== last) clipboard.writeText(last);
+      this.lastReceived = last;
+    }
+    this.emit('change');
+  }
+
   get view() {
     return {
       peerAccepts: this.peerAccepts,
       peerImages: this.images.peerImages,
       imageSupport: true, // the one-to-one clipboard (Multi-device's has no pictures yet)
       lastSkip: this.lastSkip,
+      queued: this.queue.size,
       history: this.history.map((h) => itemView(h, PREVIEW)),
     };
   }

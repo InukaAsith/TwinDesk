@@ -59,7 +59,8 @@ UI.tab({
       paint();
     }, 'small');
     const clearBtn = UI.button(tr('Done'), () => { chosen.clear(); confirmDelete = false; paint(); }, 'small');
-    const selBar = el('div', { class: 'hub-media-bar hub-fs-sel' }, [selText, el('span', { class: 'hub-grow' }), saveBtn, renameBtn, deleteBtn, clearBtn]);
+    const folderBtn = UI.saveFolderButton();
+    const selBar = el('div', { class: 'hub-media-bar hub-fs-sel' }, [selText, el('span', { class: 'hub-grow' }), folderBtn, saveBtn, renameBtn, deleteBtn, clearBtn]);
 
     // A new folder, named here.
     const newName = el('input', { class: 'hub-input hub-grow', type: 'text', attrs: { 'aria-label': tr('Folder name'), maxlength: '255' } });
@@ -193,6 +194,8 @@ UI.tab({
       selText.textContent = tr('{count} chosen', { count: chosen.size });
       saveBtn.setAttribute('data-literal', '');
       deleteBtn.setAttribute('data-literal', '');
+      folderBtn.hidden = !!importTo;
+      folderBtn.update(UI.state);
       saveBtn.textContent = importTo ? tr('Import to {folder}', { folder: importTo.name }) : tr('Save to {me}', { me: UI.fill('{me}') });
       renameBtn.hidden = chosen.size !== 1;
       deleteBtn.textContent = confirmDelete ? tr(chosen.size === 1 ? 'Delete {file}?' : 'Delete {count} items?', { file: [...chosen][0], count: chosen.size }) : tr('Delete');

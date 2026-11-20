@@ -220,7 +220,7 @@ class Link extends EventEmitter {
         }
         return;
     }
-    if (this.authed) this.emit('message', msg);
+    if (this.authed) this.emit('message', msg, this.ws);
   }
 
   _onNonce(msg) {

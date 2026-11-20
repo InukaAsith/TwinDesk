@@ -1,6 +1,8 @@
 /* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
  * tdfast: the input lane in the helpers (docs/protocol.md), the wire of shared/inputlane.js.
- * One lane per process. The callback runs on the lane's thread: hop to your own queue. */
+ * Lane 0 (the calls without an id) is the one-to-one app's; the multi-device apps make one per device
+ * with td_lane_* (id > 0). td_move / td_fence use the lane that drives. The callback runs on the
+ * lane's thread: hop to your own queue. */
 #ifndef TDFAST_H
 #define TDFAST_H
 #include <stddef.h>
@@ -30,5 +32,19 @@ void td_driven(uint32_t route, double speed);
 void td_hold(int32_t on);
 int32_t td_fence_apply(uint32_t route, uint32_t mn, double cx, double cy, double *dx, double *dy);
 void td_done(uint32_t es);
+
+/* multi-device: one lane per device, id > 0 (#273) */
+uint16_t td_lane_bind(uint32_t id);
+int32_t td_lane_start(uint32_t id, int32_t role, const char *key_hex, const char *ip, uint16_t port, td_callback cb, void *ctx);
+void td_lane_stop(uint32_t id);
+void td_lane_close(uint32_t id);
+int32_t td_lane_up(uint32_t id);
+void td_lane_active(uint32_t id, int32_t on);
+void td_lane_drive_reset(uint32_t id, uint32_t route);
+void td_lane_send_event(uint32_t id, const uint8_t *json, size_t len, uint32_t es);
+void td_lane_driven(uint32_t id, uint32_t route, double speed);
+void td_lane_hold(uint32_t id, int32_t on);
+int32_t td_lane_fence_apply(uint32_t id, uint32_t route, uint32_t mn, double cx, double cy, double *dx, double *dy);
+void td_lane_done(uint32_t id, uint32_t es);
 
 #endif

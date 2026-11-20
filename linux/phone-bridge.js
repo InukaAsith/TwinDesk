@@ -120,6 +120,11 @@ class PhoneBridge extends EventEmitter {
     this.setup = false; // set up on purpose this session (Connection's Set Up, a pairing code)
     server.on('client', (ctx) => {
       if (isPhone(ctx)) {
+        // Another Android phone took over before the first one's socket closed (#263): the first
+        // one's adb session, windows and address go, or its screen kept showing for the new one.
+        const id = typeof ctx.deviceId === 'string' ? ctx.deviceId : '';
+        if (this.boundId && id && id !== this.boundId) this._switchPhone();
+        if (id) this.boundId = id;
         this.setup = false;
         if (this.need) this.adb.wake();
         this._tellPhone();
@@ -217,6 +222,19 @@ class PhoneBridge extends EventEmitter {
     this.emit('change');
   }
 
+  _switchPhone() {
+    this.phoneEpoch = (this.phoneEpoch || 0) + 1; // a lookup still running for the old phone is redone
+    NativeScreen.closeAll();
+    this._stopAll('');
+    this.inputBlocked = false;
+    this.pairing = null;
+    this.misses = 0;
+    this.canPair = false;
+    // phone.adb / phone.info / its apps still describe the phone that left; the new one sends its own
+    // (after 'client'), so its adb address isn't the old phone's.
+    if (this.phone && typeof this.phone._reset === 'function') this.phone._reset();
+  }
+
   _stopAll(message) {
     if (this.kvm) this._kvmEnd(false); // before the control session goes: its button up and hover exit
     if (this.control) this.control.stop();
@@ -283,6 +301,7 @@ class PhoneBridge extends EventEmitter {
       }
     }
     this.polling = true;
+    const epoch = this.phoneEpoch || 0;
     try {
       await this._step();
     } catch (e) {
@@ -290,6 +309,12 @@ class PhoneBridge extends EventEmitter {
       this._set('error', e.message);
     } finally {
       this.polling = false;
+      // The phone changed while this ran: what it found was the old phone's. Start again.
+      if (epoch !== (this.phoneEpoch || 0) && isPhone(this.server.current)) {
+        if (this.control) this._stopAll('');
+        else this.serial = null;
+        this._kick();
+      }
     }
   }
 
@@ -304,7 +329,7 @@ class PhoneBridge extends EventEmitter {
     // for a phone this computer reached before: connect quietly (Automatic then goes through it).
     // ReZume's phone apps (Mirror apps) open through it as well: with wireless debugging on there,
     // it's used even when the mouse, the screen and the sound are all Limited.
-    if (!this.need && !(a.wifi && (this.known.has(this.server.current.deviceId) || this._rzApps()))) {
+    if (!this.need && !(a.wifi && ((!!this.server.current && this.known.has(this.server.current.deviceId)) || this._rzApps()))) {
       this.misses = 0;
       return this._set('idle', 'Not in use: the mouse and keyboard, the screen and the sound are set to Limited.');
     }
@@ -373,7 +398,7 @@ class PhoneBridge extends EventEmitter {
     // Paired before (this phone reached us since TwinDesk started): keep looking, with the code
     // field there in case its pairing really was removed.
     if (unpaired) this._known(false);
-    const known = !unpaired && this.known.has(this.server.current.deviceId);
+    const known = !unpaired && (!!this.server.current && this.known.has(this.server.current.deviceId));
     if (!unpaired && !this.pairing && (known || this.lastPort.has(address) || this.misses < 5)) {
       this.canPair = this.misses >= 5; // the code field (here and on the phone), in case its pairing really is gone
       return this._set('connecting', this.canPair
@@ -818,11 +843,14 @@ class PhoneBridge extends EventEmitter {
   _key(m) {
     if (!this.kvm || !this.ctl || typeof m.code !== 'string') return;
     const swap = this.server.keySwap(this.getSettings());
-    const code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
+    let code = swap ? P.mapKeyFromOtherPlatform(m.code) : m.code;
     const down = m.t === T.K_KEY_DOWN;
-    const e = this.keys.event(code, down);
     // Phone › Type as a hardware keyboard: a HID keyboard on the phone, its own layout (#123).
-    if (uhidKey(this.ctl, (this.getSettings().phone || {}).uhid === true, code, down)) return;
+    const uhid = (this.getSettings().phone || {}).uhid === true;
+    // Else letters by what they type here (an AZERTY Ctrl+A is Ctrl+A there, shared/phonetype.js, #260).
+    if (!uhid) code = (this.keyType || (this.keyType = new (require('../shared/phonetype.js').PhoneType)())).fromHelper(code, down, m.ch).code || code;
+    const e = this.keys.event(code, down);
+    if (uhidKey(this.ctl, uhid, code, down)) return;
     if (e) this.ctl.key(down ? ACTION.DOWN : ACTION.UP, e.keycode, e.meta);
   }
 

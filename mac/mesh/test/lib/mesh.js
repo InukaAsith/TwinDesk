@@ -66,7 +66,6 @@ async function node(name, { deviceId, now, tick, inboundWaitMs, storage } = {}) 
   const pairing = new Pairing(server, identity, { storage: store });
   const device = { id, name };
   const links = new LinkManager({ device, storage: store, hostPairing: pairing, inboundWaitMs });
-  links.bindServer(server);
   const mesh = new Mesh({ selfId: id });
   const hub = new Hub({ device, links, mesh, server, pairing });
   const n = { name, id, fp: c.fp, server, pairing, links, mesh, hub, storage: store, port: server.port, events: [] };

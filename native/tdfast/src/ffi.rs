@@ -35,22 +35,22 @@ pub extern "C" fn td_start(role: i32, key_hex: *const c_char, ip: *const c_char,
         (Some(k), Some(i)) => (k, i),
         _ => return 0,
     };
-    match cb {
-        Some(cb) => {
-            let c = Ctx(ctx);
-            lane::set_sink(Some(Box::new(move |o: Out| {
-                let c = &c;
-                match o {
-                    Out::Move(dx, dy) => cb(c.0, TD_MOVE, dx, dy, std::ptr::null(), 0),
-                    Out::Event(j) => cb(c.0, TD_EVENT, 0.0, 0.0, j.as_ptr(), j.len()),
-                    Out::Up(rtt) => cb(c.0, TD_UP, rtt, 0.0, std::ptr::null(), 0),
-                    Out::Down => cb(c.0, TD_DOWN, 0.0, 0.0, std::ptr::null(), 0),
-                }
-            })));
-        }
-        None => lane::set_sink(None),
-    }
+    lane::set_sink(sink(cb, ctx));
     lane::start(if role == 0 { "host" } else { "guest" }, key, ip, port) as i32
+}
+
+fn sink(cb: Option<TdCallback>, ctx: *mut c_void) -> Option<lane::Sink> {
+    let cb = cb?;
+    let c = Ctx(ctx);
+    Some(Box::new(move |o: Out| {
+        let c = &c;
+        match o {
+            Out::Move(dx, dy) => cb(c.0, TD_MOVE, dx, dy, std::ptr::null(), 0),
+            Out::Event(j) => cb(c.0, TD_EVENT, 0.0, 0.0, j.as_ptr(), j.len()),
+            Out::Up(rtt) => cb(c.0, TD_UP, rtt, 0.0, std::ptr::null(), 0),
+            Out::Down => cb(c.0, TD_DOWN, 0.0, 0.0, std::ptr::null(), 0),
+        }
+    }))
 }
 
 #[no_mangle]
@@ -157,3 +157,71 @@ pub extern "C" fn td_fence_apply(route: u32, mn: u32, cx: f64, cy: f64, dx: *mut
 pub extern "C" fn td_done(es: u32) {
     lane::done(es);
 }
+
+// ---- the multi-device apps: one lane per device, by id (> 0; 0 is the lane above) (#273) ----
+// td_move and td_fence go on whichever lane td_lane_drive_reset gave a route last.
+
+#[no_mangle]
+pub extern "C" fn td_lane_bind(id: u32) -> u16 {
+    if id == 0 { return 0; }
+    lane::bind_lane(id)
+}
+
+#[no_mangle]
+pub extern "C" fn td_lane_start(id: u32, role: i32, key_hex: *const c_char, ip: *const c_char, port: u16, cb: Option<TdCallback>, ctx: *mut c_void) -> i32 {
+    let (key, ip) = match (cstr(key_hex), cstr(ip)) {
+        (Some(k), Some(i)) => (k, i),
+        _ => return 0,
+    };
+    if id == 0 { return 0; }
+    lane::set_sink_lane(id, sink(cb, ctx));
+    lane::start_lane(id, if role == 0 { "host" } else { "guest" }, key, ip, port) as i32
+}
+
+#[no_mangle]
+pub extern "C" fn td_lane_stop(id: u32) { lane::stop_lane(id); }
+
+/// Its socket and thread go: the device is gone. Its id may be bound again later.
+#[no_mangle]
+pub extern "C" fn td_lane_close(id: u32) {
+    if id != 0 { lane::close_lane(id); }
+}
+
+#[no_mangle]
+pub extern "C" fn td_lane_up(id: u32) -> i32 { lane::is_up_lane(id) as i32 }
+
+#[no_mangle]
+pub extern "C" fn td_lane_active(id: u32, on: i32) { lane::active_lane(id, on != 0); }
+
+#[no_mangle]
+pub extern "C" fn td_lane_drive_reset(id: u32, route: u32) { lane::drive_reset_lane(id, route); }
+
+#[no_mangle]
+pub extern "C" fn td_lane_send_event(id: u32, json: *const u8, len: usize, es: u32) {
+    if json.is_null() { return; }
+    let s = unsafe { std::slice::from_raw_parts(json, len) };
+    lane::send_event_lane(id, s, es);
+}
+
+#[no_mangle]
+pub extern "C" fn td_lane_driven(id: u32, route: u32, speed: f64) { lane::driven_lane(id, route, speed); }
+
+#[no_mangle]
+pub extern "C" fn td_lane_hold(id: u32, on: i32) { lane::hold_lane(id, on != 0); }
+
+#[no_mangle]
+pub extern "C" fn td_lane_fence_apply(id: u32, route: u32, mn: u32, cx: f64, cy: f64, dx: *mut f64, dy: *mut f64) -> i32 {
+    match lane::fence_apply_lane(id, route, mn, cx, cy) {
+        Some((x, y)) => {
+            unsafe {
+                if !dx.is_null() { *dx = x; }
+                if !dy.is_null() { *dy = y; }
+            }
+            1
+        }
+        None => 0,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn td_lane_done(id: u32, es: u32) { lane::done_lane(id, es); }

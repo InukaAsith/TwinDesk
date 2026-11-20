@@ -70,7 +70,58 @@ class Clip(core: Core) : Feature(core) {
 
     fun sendPolicy() {
         val accept = core.sync.get("clipboard", "in")
-        core.send(msg(Proto.T.CLIP_POLICY, "accept" to accept, "images" to (accept && picturesOn)))
+        core.send(msg(Proto.T.CLIP_POLICY, "accept" to accept, "images" to (accept && picturesOn), "queue" to true)) // queue: clip.queue understood here
+    }
+
+    // ---- Clipboard › While away (shared/clipqueue.js on the computers) ----
+    // Copies made here while the computer is away wait (in memory, up to 50) and go to its Recent
+    // when it's back, not on its clipboard. Queued copies from it land in our Recent; on our
+    // clipboard only the latest, with Put the latest on the clipboard on.
+    val queueOn: Boolean get() = core.store.flag("clip.queue", true)
+    fun setQueue(v: Boolean) { core.store.setFlag("clip.queue", v); if (!v) synchronized(queue) { queue.clear() }; core.changed() }
+    val queueLatest: Boolean get() = core.store.flag("clip.queueLatest", false)
+    fun setQueueLatest(v: Boolean) { core.store.setFlag("clip.queueLatest", v); core.changed() }
+    private val queue = ArrayList<Pair<String, Long>>() // oldest first
+    val queued: Int get() = synchronized(queue) { queue.size }
+
+    private fun enqueue(text: String) {
+        if (!queueOn || !core.sync.get("clipboard", "out") || text.isEmpty() || text.toByteArray().size > Proto.CLIP_MAX_BYTES) return
+        synchronized(queue) {
+            if (queue.lastOrNull()?.first == text) return
+            queue.removeAll { it.first == text }
+            queue.add(text to System.currentTimeMillis())
+            while (queue.size > 50) queue.removeAt(0)
+            while (queue.size > 1 && queue.sumOf { it.first.toByteArray().size } > 1024 * 1024) queue.removeAt(0)
+        }
+        core.changed()
+    }
+
+    private fun flushQueue() {
+        val items = synchronized(queue) { queue.toList().also { queue.clear() } }
+        if (items.isEmpty()) return
+        val arr = org.json.JSONArray()
+        for ((t, at) in items) arr.put(JSONObject().put("text", t).put("at", at))
+        core.send(msg(Proto.T.CLIP_QUEUE, "items" to arr))
+        for ((t, _) in items) remember(Item("out", t))
+        core.changed()
+    }
+
+    private fun receiveQueue(m: JSONObject) {
+        if (!core.sync.get("clipboard", "in")) return
+        val arr = m.optJSONArray("items") ?: return
+        var last: String? = null
+        for (i in maxOf(0, arr.length() - 50) until arr.length()) {
+            val t = arr.optJSONObject(i)?.optString("text").orEmpty()
+            if (t.isEmpty() || t.toByteArray().size > Proto.CLIP_MAX_BYTES) continue
+            remember(Item("in", t))
+            last = t
+        }
+        val l = last ?: return
+        if (queueLatest) main.post {
+            lastIn = l
+            lastOut = null
+            runCatching { cm.setPrimaryClip(ClipData.newPlainText("TwinDesk", l)) }
+        }
     }
 
     override fun onWelcome(host: Host) {
@@ -113,6 +164,7 @@ class Clip(core: Core) : Feature(core) {
 
     fun sendText(text: String, force: Boolean = true): Boolean {
         runCatching { core.peer.clipOut(text) } // a phone connected with Connect with Android too (Peer.kt)
+        if (!core.link.connected && text != lastIn && text != lastOut) { enqueue(text); return false } // away: queued
         if (!core.link.connected || text.isEmpty()) return false
         if (!force && (text == lastOut || text == lastIn)) return false
         if (text.toByteArray().size > Proto.CLIP_MAX_BYTES) return false
@@ -246,6 +298,7 @@ class Clip(core: Core) : Feature(core) {
             Proto.T.CLIP_POLICY -> {
                 peerAccepts = m.optBoolean("accept")
                 peerImages = m.optBoolean("images")
+                if (peerAccepts && m.optBoolean("queue") && core.sync.get("clipboard", "out")) flushQueue()
             }
             Proto.T.CLIP -> {
                 outId = ""
@@ -253,6 +306,7 @@ class Clip(core: Core) : Feature(core) {
                 val text = m.optString("text")
                 if (core.sync.get("clipboard", "in") && text.isNotEmpty() && text.toByteArray().size <= Proto.CLIP_MAX_BYTES) receiveText(text)
             }
+            Proto.T.CLIP_QUEUE -> receiveQueue(m)
             Proto.T.CLIP_IMAGE -> pics.execute { header(m) }
             Proto.T.CLIP_IMAGE_PART -> pics.execute { part(m) }
             else -> return false

@@ -53,9 +53,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
@@ -374,45 +371,24 @@ fun App(core: Core, resumed: Int) {
                 Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)).background(pal.sheet)) {
                 if (more) MoreList(core, v, BOTTOM, Modifier.weight(1f)) { go(it, false) }
                 else Page(core, v, resumed, tab, Modifier.weight(1f))
-                // A Material navigation bar, as Google's own apps have it: line icons, the selected
-                // one in a pill of the accent colour, labels under them, the bar itself rounded and
-                // floating off the edges (the tablet keeps the Mac-like sidebar with coloured tiles).
-                // Search: its own round button at the bar's right end (Search.kt). Holding the bar: Arrange.
-                Row(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                NavigationBar(
-                    containerColor = pal.card, tonalElevation = 0.dp, windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-                    modifier = Modifier.weight(1f)
-                        .shadow(14.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
-                        .clip(RoundedCornerShape(28.dp)).height(72.dp).onHold { NavOrder.open.value = true },
-                ) {
-                    val item = @Composable { label: String, icon: ImageVector, selected: Boolean, dot: Boolean, go: () -> Unit ->
-                        NavigationBarItem(
-                            selected = selected, onClick = go,
-                            icon = {
-                                Box {
-                                    Icon(icon, label, modifier = Modifier.size(24.dp))
-                                    if (dot) Box(Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-2).dp)) { Dot(pal.good, 7) }
-                                }
-                            },
-                            label = { Text(label, maxLines = 1, softWrap = false, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = pal.accent, selectedTextColor = pal.text, indicatorColor = pal.accentSoft,
-                                unselectedIconColor = pal.muted, unselectedTextColor = pal.muted,
-                            ),
-                        )
+                // Line icons, the selected one on a pill of the accent colour, a label under each.
+                // The bar floats off the edges, rounded (the tablet keeps the sidebar). Search is the
+                // round button at the right (Search.kt). Holding the bar opens Arrange.
+                PhoneBottomChrome(buildList {
+                    for (t in BOTTOM) add(BottomDest(
+                        if (t == Tab.Connection) tr("Connect") else tr(t.title),
+                        t.icon, !more && tab == t, isOn(core, t),
+                    ) { go(t, false) })
+                    add(BottomDest(tr("More"), Ico.more, more || tab !in BOTTOM, false) { go(tab, true) })
+                }, search = if (NavOrder.searchButton(core.store)) {
+                    {
+                        Box(
+                            Modifier.size(60.dp).shadow(14.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
+                                .clip(RoundedCornerShape(50)).background(pal.card).clickable { Search.open.value = true },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Ico.search, tr("Search"), tint = pal.text, modifier = Modifier.size(24.dp)) }
                     }
-                    for (t in BOTTOM) item(if (t == Tab.Connection) tr("Connect") else tr(t.title), t.icon, !more && tab == t, isOn(core, t)) { go(t, false) }
-                    item(tr("More"), Ico.more, more || tab !in BOTTOM, false) { go(tab, true) }
-                }
-                if (NavOrder.searchButton(core.store)) { // Arrange › Search button
-                Spacer(Modifier.width(10.dp))
-                Box(
-                    Modifier.size(60.dp).shadow(14.dp, RoundedCornerShape(50), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.12f))
-                        .clip(RoundedCornerShape(50)).background(pal.card).clickable { Search.open.value = true },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Ico.search, tr("Search"), tint = pal.text, modifier = Modifier.size(24.dp)) }
-                }
-                }
+                } else null)
                 }
             }
         }
@@ -1260,6 +1236,13 @@ private fun CursorPage(core: Core, v: Int) {
         SwitchRow(tr("Reverse scrolling"), tr("Invert the scroll direction on this device"), core.sync.value("reverseScroll") == "true") { core.sync.setValue("reverseScroll", it) }
         MacRow(tr("Right-click"), tr("Back"))
         MacRow(tr("Middle click"), tr("Home"))
+        // Without the Accessibility service the arrow is an app's overlay: Android draws it under the
+        // notification shade and hides it on the lock screen (#261). The service's window is above both.
+        if (core.input.supported && InputService.running == null) {
+            MacRow(tr("Pointer over the lock screen"), tr("Android hides the pointer on the lock screen and under the notification shade unless TwinDesk’s Accessibility service is on")) {
+                Primary(tr("Allow")) { core.input.openSettings() }
+            }
+        }
     }
     MacCard(tr("Not on the same network")) {
         @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
@@ -1476,6 +1459,14 @@ private fun ClipboardPage(core: Core, v: Int) {
             if (shots.on && !shots.canRead) MacRow(tr("Allow photo access"), tr("TwinDesk only checks for new screenshots")) { Primary(tr("Allow")) { askPhotos.launch(shots.permission) } }
             if (shots.lastSent.isNotEmpty()) MacRow(tr("Last screenshot sent"), shots.lastSent)
         }
+    }
+    MacCard(tr("While away")) {
+        @Suppress("UNUSED_EXPRESSION") v // capture the revision in this remembered content
+        SwitchRow(tr("Queue copies while away"),
+            if (clip.queued > 0) tr("{count} waiting for {name}: they go in its Recent, not on its clipboard", "count" to clip.queued.toString(), "name" to name)
+            else tr("Copies made while {name} is away go in its Recent when it’s back, not on its clipboard", "name" to name),
+            clip.queueOn, first = true) { clip.setQueue(it) }
+        SwitchRow(tr("Put the latest on the clipboard"), tr("When queued copies arrive here, the newest one is pasted next"), clip.queueLatest) { clip.setQueueLatest(it) }
     }
     HistoryCard(core, "clip") // History.kt
     if (clip.history.isNotEmpty()) MacCard(tr("Recent")) {

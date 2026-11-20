@@ -20,7 +20,7 @@ const { CapsSync } = require('../../shared/capsync.js');
 const E = require('../../shared/kvm-edges.js');
 const blepipe = require('../../shared/blepipe.js');
 const { KvmMoves } = require('../../shared/kvm-moves.js');
-const { LaneMesh, LANE_TYPES } = require('../../shared/inputlane.js');
+const { LaneMesh, LANE_TYPES, meshNative } = require('../../shared/inputlane.js');
 const { KeyLayout } = require('../../shared/keylayout.js');
 const CL = require('../../shared/cursorlock.js');
 const { pairFor } = require('../../shared/pairfor.js');
@@ -68,6 +68,7 @@ class Kvm {
       route: () => this.peerRoute,
       move: (dx, dy, id) => this._laneMove(dx, dy, id),
       deliver: (m, id) => (m.t === P.T.K_GESTURE ? this._onGesture(m, id) : this._inject(m, id)),
+      speed: () => this.cfg.speed, // the helper's lane applies it to the moves it injects (#273)
     });
     // … and on the driven side, the moves that came in the same turn go to the helper as one.
     this.injectMoves = new KvmMoves({
@@ -129,7 +130,9 @@ class Kvm {
     hub.on('selected', (id) => this._onSelected(id));
 
     const helper = this.helper;
+    if (helper.running) meshNative(helper);
     helper.on('ready', () => {
+      meshNative(helper); // each device's own helper lane (#273)
       this.applyConfig();
       // A restarted helper has lost its state: nothing is captured or armed any more.
       if (this.mode === 'driving') this._release('');
@@ -519,15 +522,16 @@ class Kvm {
       case 'ev':
         if (this.mode === 'driving' && msg.ev && (K_TYPES.has(msg.ev.t) || (msg.ev.t === T.K_GESTURE && this.cfg.gestures !== false))) {
           if (this.local && this.local.drives(this.partner) && this._lockKeyHere(msg.ev)) break; // a phone has no lock key: ours counts there
-          if (this.fileClip && this.fileClip.intercept(msg.ev)) break; // copy/paste shortcut: done over there
+          if (this.fileClip && this.fileClip.intercept(msg.ev)) { this.lanes.drive.skip(msg.ev, this._driveWss); break; } // copy/paste shortcut: done over there
           if (msg.ev.t === T.K_MOVE) { // moves are summed (shared/kvm-moves.js)
+            this.lanes.drive.nativeTotals(msg.ev); // the helper's lane is down: its totals go with the move
             this.moves.add(Number(msg.ev.dx) || 0, Number(msg.ev.dy) || 0);
             break;
           }
           this._flushMove(); // a click goes where the moves before it took the pointer
           this._driveEvent(this.keys.tag(msg.ev)); // keys with the letter they type here (shared/keylayout.js)
           if (msg.ev.t === T.K_UP && msg.ev.b === P.BUTTON.LEFT) this.dragPending = false; // released on the Mac
-        }
+        } else if (msg.ev) this.lanes.drive.skip(msg.ev, this._driveWss); // numbered by the helper's lane but not sent: its number goes all the same
         break;
       // Shaken while driving (the helper's capture spots it, natively): the pointer comes home (kvm.shakeHome).
       case 'shake':
@@ -542,6 +546,12 @@ class Kvm {
         break;
       // A UAC prompt or the lock screen here: the other computer's input can't reach it, so it
       // goes home (else its pointer stays hidden there while nothing moves here).
+      // The pointer stopped over a window run as administrator here (Inject.cs WatchStuck): Windows
+      // lets no other app's input into it, so it goes home rather than sit there dead (#278).
+      case 'adminWindow':
+        console.log(`[kvm] the pointer stopped over a window run as administrator (${this.mode})`);
+        if (this.mode === 'driven') this._sendHome(undefined, 'A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build');
+        break;
       case 'secureDesktop':
         console.log(`[kvm] administrator prompt or lock screen ${msg.on ? 'up' : 'gone'} here (${this.mode})`); // #210
         if (msg.on && this.mode === 'driven') this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');
@@ -973,6 +983,7 @@ class Kvm {
   _setMode(mode, message) {
     const was = this.mode;
     this.mode = mode;
+    if (was === 'driving' && mode !== 'driving') this.lanes.drive.idle(); // the helper's lane: no more moves from the tap
     this.lanes.active(mode !== 'home'); // the partner's lane pinged more often
     // The partner link is busy while input is shared; idle at home.
     this._markBusy(mode === 'home' ? null : this.partner);

@@ -5,6 +5,8 @@
 // fence for Node. Driven: the lane's moves are injected here (deduplicated, speed applied, after the
 // event they wait for); its events go to Node as {"event":"laneEv"} and come back as `inject` in order.
 // Command `lane {op: bind | start | stop | active | route | event | driven | hold | fence | done}`.
+// With `lane: N` (N > 0, Multi-device, #273): that device's own lane (td_lane_*), `close` too, and its
+// events say `lane: N`; without it, lane 0 exactly as before (the one-to-one app).
 // Built only when build.sh found cargo (-DTDFAST); without it, `lane` is an unknown command and Node
 // keeps its own lane (shared/inputlane.js), which speaks the same wire.
 #include "helper.h"
@@ -17,6 +19,17 @@
 #include <unistd.h>
 
 static int driving, started;
+// Multi-device: the lane the capture's moves go on (route > 0 on it last; 0: the one-to-one lane) and
+// which device lanes have a session (#273).
+static uint32_t drive_lane;
+#define MAX_LANES 64
+static uint32_t lanes_on[MAX_LANES];
+static int lane_on(uint32_t id) { for (int i = 0; i < MAX_LANES; i++) if (lanes_on[i] == id) return 1; return 0; }
+static void lane_set(uint32_t id, int on) {
+  for (int i = 0; i < MAX_LANES; i++) if (lanes_on[i] == id) lanes_on[i] = 0;
+  if (!on) return;
+  for (int i = 0; i < MAX_LANES; i++) if (!lanes_on[i]) { lanes_on[i] = id; return; }
+}
 // The lane's thread hands moves to the main loop (where all injection happens) through a pipe.
 static int qpipe[2] = { -1, -1 };
 
@@ -32,7 +45,10 @@ static void hand_over(void) {
 }
 
 static void callback(void *ctx, int32_t kind, double dx, double dy, const uint8_t *json, size_t len) {
-  (void)ctx;
+  // ctx: the lane id (Multi-device); NULL for lane 0, whose events stay as they always were.
+  unsigned long lane = (unsigned long)(uintptr_t)ctx;
+  char tag[32] = "";
+  if (lane) snprintf(tag, sizeof tag, ",\"lane\":%lu", lane);
   if (kind == TD_MOVE) {
     held_dx += dx;
     held_dy += dy;
@@ -41,15 +57,17 @@ static void callback(void *ctx, int32_t kind, double dx, double dy, const uint8_
     hand_over(); // a click goes after the moves before it
     if (!json || len == 0 || len > 3000) return;
     char line[3100];
-    snprintf(line, sizeof line, "{\"event\":\"laneEv\",\"msg\":%.*s}", (int)len, (const char *)json);
+    snprintf(line, sizeof line, "{\"event\":\"laneEv\",\"msg\":%.*s%s}", (int)len, (const char *)json, tag);
     emit(line); // emit() is thread-safe
   } else if (kind == TD_UP) {
     char line[80];
-    snprintf(line, sizeof line, "{\"event\":\"lane\",\"up\":true,\"rtt\":%.3f}", dx);
+    snprintf(line, sizeof line, "{\"event\":\"lane\",\"up\":true,\"rtt\":%.3f%s}", dx, tag);
     emit(line);
   } else if (kind == TD_DOWN) {
-    held_dx = held_dy = 0; // that session is gone: its moves with it
-    emit("{\"event\":\"lane\",\"up\":false}");
+    if (!lane) held_dx = held_dy = 0; // that session is gone: its moves with it
+    char line[80];
+    snprintf(line, sizeof line, "{\"event\":\"lane\",\"up\":false%s}", tag);
+    emit(line);
   }
 }
 
@@ -75,8 +93,53 @@ static uint32_t u32(const JObj *c, const char *k) {
 }
 
 // error: set on a bad op; extra: reply fields. inject: a fence's move, on this (main) thread.
+// Multi-device: that device's lane (#273).
+static void lane_handle_id(uint32_t id, const char *op, const JObj *c, const char **error, char *extra, size_t n, void (*inject)(double dx, double dy)) {
+  if (!strcmp(op, "bind")) {
+    lane_fd();
+    uint16_t port = td_lane_bind(id);
+    if (!port) { *error = "no lane socket"; return; }
+    snprintf(extra, n, "\"port\":%u,\"lane\":%u", (unsigned)port, (unsigned)id);
+  } else if (!strcmp(op, "start")) {
+    const char *key = jstr(c, "key", NULL), *ip = jstr(c, "ip", NULL);
+    if (!key || !ip) { *error = "bad lane start"; return; }
+    int role = !strcmp(jstr(c, "role", ""), "host") ? 0 : 1;
+    double port = jnum(c, "port", 0);
+    int ok = td_lane_start(id, role, key, ip, (uint16_t)(port > 0 && port < 65536 ? port : 0), callback, (void *)(uintptr_t)id) == 1;
+    lane_set(id, ok);
+    if (drive_lane == id) driving = 0;
+    snprintf(extra, n, "\"ok\":%s", ok ? "true" : "false");
+  } else if (!strcmp(op, "stop") || !strcmp(op, "close")) {
+    if (!strcmp(op, "close")) td_lane_close(id); else td_lane_stop(id);
+    lane_set(id, 0);
+    if (drive_lane == id) { driving = 0; drive_lane = 0; }
+  } else if (!strcmp(op, "active")) {
+    td_lane_active(id, jbool(c, "on", 0));
+  } else if (!strcmp(op, "route")) {
+    uint32_t r = u32(c, "route");
+    td_lane_drive_reset(id, r);
+    if (r) { drive_lane = id; driving = lane_on(id); } else if (drive_lane == id) driving = 0;
+  } else if (!strcmp(op, "event")) {
+    const char *json = jstr(c, "json", NULL);
+    if (json) td_lane_send_event(id, (const uint8_t *)json, strlen(json), u32(c, "es"));
+  } else if (!strcmp(op, "driven")) {
+    td_lane_driven(id, u32(c, "route"), jnum(c, "speed", 1));
+  } else if (!strcmp(op, "hold")) {
+    td_lane_hold(id, jbool(c, "on", 0));
+  } else if (!strcmp(op, "fence")) {
+    double dx = 0, dy = 0;
+    if (td_lane_fence_apply(id, u32(c, "route"), u32(c, "mn"), jnum(c, "cx", 0), jnum(c, "cy", 0), &dx, &dy) == 1) inject(dx, dy);
+  } else if (!strcmp(op, "done")) {
+    td_lane_done(id, u32(c, "es"));
+  } else {
+    *error = "unknown lane op";
+  }
+}
+
 void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void (*inject)(double dx, double dy)) {
   const char *op = jstr(c, "op", "");
+  uint32_t id = u32(c, "lane");
+  if (id) return lane_handle_id(id, op, c, error, extra, n, inject);
   if (!strcmp(op, "bind")) {
     lane_fd();
     uint16_t port = td_bind();
@@ -88,18 +151,19 @@ void lane_handle(const JObj *c, const char **error, char *extra, size_t n, void 
     int role = !strcmp(jstr(c, "role", ""), "host") ? 0 : 1;
     double port = jnum(c, "port", 0);
     started = td_start(role, key, ip, (uint16_t)(port > 0 && port < 65536 ? port : 0), callback, NULL) == 1;
-    driving = 0;
+    if (!drive_lane) driving = 0;
     snprintf(extra, n, "\"ok\":%s", started ? "true" : "false");
   } else if (!strcmp(op, "stop")) {
     td_stop();
-    started = driving = 0;
+    started = 0;
+    if (!drive_lane) driving = 0;
     held_dx = held_dy = 0; // the lane thread is gone
   } else if (!strcmp(op, "active")) {
     td_active(jbool(c, "on", 0));
   } else if (!strcmp(op, "route")) {
     uint32_t r = u32(c, "route");
     td_drive_reset(r);
-    driving = started && r != 0;
+    if (r) { drive_lane = 0; driving = started; } else if (!drive_lane) driving = 0;
   } else if (!strcmp(op, "event")) {
     const char *json = jstr(c, "json", NULL); // Node sends the event as JSON text for us
     if (json) td_send_event((const uint8_t *)json, strlen(json), u32(c, "es"));
