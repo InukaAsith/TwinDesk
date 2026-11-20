@@ -2364,4 +2364,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.",
   "It stopped.": "It stopped.",
   "Starting on the phone…": "Starting on the phone…",
+  "Security": "Security",
+  "Lock Mac when the phone disconnects": "Lock Mac when the phone disconnects",
+  "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.",
+  "Phone disconnected": "Phone disconnected",
+  "Mac locks in {seconds} s": "Mac locks in {seconds} s",
 });

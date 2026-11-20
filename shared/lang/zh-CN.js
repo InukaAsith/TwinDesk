@@ -2364,4 +2364,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "在手机上的 TwinDesk 通知中点按“允许”，然后确认 Android 的 VPN 请求。",
   "It stopped.": "已停止。",
   "Starting on the phone…": "正在手机上启动…",
+  "Security": "安全",
+  "Lock Mac when the phone disconnects": "手机断开连接时锁定 Mac",
+  "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "当最后一部已连接的配对手机意外断开时，您有 15 秒时间取消锁定。",
+  "Phone disconnected": "手机已断开连接",
+  "Mac locks in {seconds} s": "{seconds} 秒后锁定 Mac",
 });

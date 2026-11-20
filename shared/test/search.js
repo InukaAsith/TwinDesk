@@ -17,6 +17,8 @@ assert.ok(S.match('share audio', S.forApp('windows')).slice(0, 3).every((e) => e
 assert.strictEqual(first('phone mic'), 'Use the phone as a microphone');
 assert.strictEqual(first('webcam'), 'Use the phone as a webcam');
 assert.strictEqual(first('dark mode'), 'Dark mode');
+assert.strictEqual(first('proximity lock'), 'Lock Mac when the phone disconnects');
+assert.ok(!S.forApp('windows').some((e) => e.t === 'Lock Mac when the phone disconnects'));
 assert.strictEqual(first('send file'), 'Send files');
 assert.strictEqual(first('mous'), 'One mouse and keyboard for both computers');
 assert.strictEqual(first('reorder tabs', 'ios'), 'Arrange the pages');

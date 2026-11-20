@@ -8,11 +8,12 @@
   const S = window.TDSearch;
   const t = (s, v) => I18n.t(s, v);
   if (!S) return;
+  const mac = /^Mac/.test(navigator.platform);
 
   // The pages in the sidebar now (their names as shown), and the entries for this app.
   function entries() {
     const ids = new Set(UI.tabs.map((d) => d.id).concat(UI.tabs.map((d) => UI.baseOf(d))));
-    const app = ids.has('pc-mac') ? 'windows' : 'mac';
+    const app = mac ? 'mac' : 'windows';
     const names = {};
     const web = new Set(UI.tabs.filter((d) => d.web).map((d) => UI.baseOf(d))); // a web device's own pages
     for (const b of document.querySelectorAll('#nav .nav-item[data-base]')) {
@@ -122,7 +123,6 @@
   }, true);
 
   // A glass pill in each page's header, level with its title: the magnifier and ⌘K (Ctrl K).
-  const mac = /^Mac/.test(navigator.platform);
   function pill() {
     const b = UI.el('button', { class: 'search-pill', attrs: { 'aria-label': t('Search'), title: t('Search') } }, [
       UI.icon('search'),

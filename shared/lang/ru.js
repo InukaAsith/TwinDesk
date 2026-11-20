@@ -2363,4 +2363,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Нажмите «Разрешить» в уведомлении TwinDesk на телефоне, затем подтвердите запрос VPN от Android.",
   "It stopped.": "Остановлено.",
   "Starting on the phone…": "Запуск на телефоне…",
+  "Security": "Безопасность",
+  "Lock Mac when the phone disconnects": "Блокировать Mac при отключении телефона",
+  "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "Если связь с последним подключённым сопряжённым телефоном внезапно пропадёт, у вас будет 15 секунд, чтобы отменить блокировку Mac.",
+  "Phone disconnected": "Телефон отключился",
+  "Mac locks in {seconds} s": "Mac заблокируется через {seconds} с",
 });

@@ -2363,4 +2363,9 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Telefondaki TwinDesk bildiriminde İzin ver’e dokunun, ardından Android’in VPN isteğini onaylayın.",
   "It stopped.": "Durdu.",
   "Starting on the phone…": "Telefonda başlatılıyor…",
+  "Security": "Güvenlik",
+  "Lock Mac when the phone disconnects": "Telefonun bağlantısı kesildiğinde Mac’i kilitle",
+  "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "Bağlı son eşleştirilmiş telefonun bağlantısı beklenmedik şekilde kesilirse bu Mac kilitlenmeden önce iptal etmek için 15 saniyeniz var.",
+  "Phone disconnected": "Telefonun bağlantısı kesildi",
+  "Mac locks in {seconds} s": "Mac {seconds} sn içinde kilitlenecek",
 });
