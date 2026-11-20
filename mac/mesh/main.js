@@ -778,6 +778,14 @@ app.whenReady().then(() => {
     });
   }
   const { PcNow } = require('../../shared/pcnow.js');
+  // Phone battery on this Mac (shared/battery-alerts.js): each phone's phone.info already carries the level.
+  {
+    const { createPhoneBatteryWatch, showMacNotification } = require('../../shared/battery-alerts.js');
+    svc.batteryAlerts = createPhoneBatteryWatch({
+      getEnabled: () => !!(settings.notifs && settings.notifs.batteryAlerts),
+      notify: (alert) => showMacNotification(alert, { Notification, t }),
+    });
+  }
   svc.phone = new PhoneSet({
     hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
     make: (scoped) => {
@@ -791,6 +799,12 @@ app.whenReady().then(() => {
     },
     onUnit: (u) => {
       u.phone.on('change', pushState);
+      u.link.on('client', (ctx) => ctx && P.isPhoneOs(ctx.os) && svc.batteryAlerts.begin(ctx));
+      u.link.on('closed', (ctx) => ctx && ctx.deviceId && svc.batteryAlerts.end(ctx));
+      u.phone.on('info', (info) => {
+        const ctx = u.link.current;
+        if (ctx && P.isPhoneOs(ctx.os)) svc.batteryAlerts.info(info, ctx);
+      });
       // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
       u.link.on('client', () => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
       u.bridge.on('change', pushState);

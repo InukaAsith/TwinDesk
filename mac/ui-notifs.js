@@ -15,7 +15,7 @@ UI.tab({
   // other computer per pair (pairsync.js), so flipping it there flips it here.
   master: { get: (s) => !!(s.notifs && (s.notifs.send || s.notifs.receive)), set: (v) => UI.api.setNotifs({ send: v, receive: v }) },
   badge: (s) => (s.notifs && (s.notifs.send || s.notifs.receive) ? 'on' : ''),
-  build(body) {
+  build(body, page) {
     const { el, api } = UI;
     const sendSw = UI.switch((v) => api.setNotifs({ send: v }), { label: I18n.t('Send notifications') });
     const sendRow = UI.row(I18n.t('Show {me}’s notifications on {name}'), '', [sendSw]);
@@ -31,6 +31,15 @@ UI.tab({
 
     const showing = UI.notifShowCard ? UI.notifShowCard() : null; // how they show here (shared/ui-notifrules.js)
 
+    // The phone's own battery, not the other device's notifications. Stays on the page when
+    // notification sync is off (that hides the body below).
+    const batSw = UI.switch((v) => api.setNotifs({ batteryAlerts: v }), { label: I18n.t('Phone battery alerts') });
+    const batCard = UI.card(I18n.t('Phone battery alerts'), [
+      UI.row(I18n.t('Phone battery alerts'), I18n.t('When the phone’s battery falls to 15% or reaches 100% while charging'), [batSw]),
+    ], { cls: 'keep-on' });
+    if (page && body.parentNode && typeof body.parentNode.insertBefore === 'function') page.insertBefore(batCard, body);
+    else body.append(batCard);
+
     body.append(
       UI.pair(UI.dir('m2w', [sendRow, fdaRow, hideRow]), UI.dir('w2m', [recvRow])),
       ...(showing ? [showing.el] : []),
@@ -41,6 +50,7 @@ UI.tab({
     let key = '';
     return (s) => {
       const n = s.notifs;
+      batSw.set(!!(n && n.batteryAlerts));
       if (showing && n) showing.update(s);
       hist.update(s);
       if (!n) return;
