@@ -2369,4 +2369,8 @@
   "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.",
   "Phone disconnected": "Phone disconnected",
   "Mac locks in {seconds} s": "Mac locks in {seconds} s",
+  "Lock this computer when the phone disconnects": "Lock this computer when the phone disconnects",
+  "If the last paired phone disconnects unexpectedly, you have 15 seconds to cancel.": "If the last paired phone disconnects unexpectedly, you have 15 seconds to cancel.",
+  "Computer locks in {seconds} s": "Computer locks in {seconds} s",
+  "Automatic screen locking is unavailable on this desktop.": "Automatic screen locking is unavailable on this desktop.",
 });

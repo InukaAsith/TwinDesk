@@ -112,6 +112,7 @@ const ENTRIES = [
   { t: 'Tour of TwinDesk', page: 'general', on: 'desk', k: 'tutorial, tour, guide, help, getting started, introduction, how to use, what is new, whats new, new features, changelog' },
   { t: 'Open at login', page: 'general', on: 'desk', k: 'startup, launch at login, autostart, boot' },
   { t: 'Lock Mac when the phone disconnects', page: 'general', on: 'mac', k: 'proximity lock, auto lock, walk away, security, paired phone' },
+  { t: 'Lock this computer when the phone disconnects', page: 'general', on: 'windows linux', k: 'proximity lock, auto lock, walk away, security, paired phone' },
   { t: 'Run in the background', page: 'general', on: 'android', k: 'background, battery, stay connected, keep running' },
   { t: 'Battery and performance', page: 'general', k: 'battery saver, power, prioritize performance, ping, idle' },
   { t: 'Permissions', page: 'general', k: 'allow, access, privacy, accessibility, screen recording, permission' },

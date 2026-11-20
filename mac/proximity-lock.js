@@ -3,8 +3,8 @@
 
 const { execFileSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
-const { BrowserWindow, nativeTheme, powerMonitor, screen } = require('electron');
+const { powerMonitor } = require('electron');
+const { countdownPrompt } = require('../shared/proximity-lock-prompt.js');
 const { DevLocal } = require('../shared/devlocal.js');
 const { ProximityLock, isAuthenticatedPhone } = require('../shared/proximity-lock.js');
 
@@ -17,63 +17,6 @@ function consoleUnlocked() {
   } catch {
     return false;
   }
-}
-
-function countdownPrompt(i18n) {
-  let win = null;
-  const message = (seconds) => i18n.t('Mac locks in {seconds} s', { seconds });
-  return {
-    show({ seconds, cancel, ready }) {
-      try {
-        const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
-        const width = 360, height = 102, margin = 12;
-        const title = i18n.t('Phone disconnected');
-        const w = win = new BrowserWindow({
-          x: area.x + area.width - width - margin, y: area.y + margin, width, height,
-          show: false, frame: false, resizable: false, minimizable: false, maximizable: false,
-          fullscreenable: false, skipTaskbar: true, focusable: true, title,
-          backgroundColor: nativeTheme.shouldUseDarkColors ? '#252527' : '#ffffff',
-          webPreferences: { preload: path.join(__dirname, 'preload-proximity-lock.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
-        });
-        w.setAlwaysOnTop(true, 'pop-up-menu');
-        w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-        w.setContentProtection(true);
-        w.on('closed', cancel);
-        w.on('hide', cancel);
-        w.on('unresponsive', cancel);
-        const wc = w.webContents;
-        wc.on('render-process-gone', cancel);
-        wc.on('preload-error', cancel);
-        wc.on('before-input-event', (e, input) => {
-          if (input.type === 'keyDown' && input.key === 'Escape') {
-            e.preventDefault();
-            cancel();
-          }
-        });
-        wc.ipc.on('proximity-lock:cancel', cancel);
-        wc.ipc.once('proximity-lock:ready', () => {
-          if (win !== w || w.isDestroyed()) return;
-          if (!consoleUnlocked()) return cancel();
-          w.showInactive();
-          if (w.isVisible()) ready();
-          else cancel();
-        });
-        w.loadFile(path.join(__dirname, 'proximity-lock.html'), {
-          query: { lang: i18n.locale, title, remaining: message(seconds), cancel: i18n.t('Cancel') },
-        }).catch(cancel);
-      } catch {
-        cancel();
-      }
-    },
-    update(seconds) {
-      if (win && !win.isDestroyed()) win.webContents.send('proximity-lock:tick', message(seconds));
-    },
-    hide() {
-      const w = win;
-      win = null;
-      if (w && !w.isDestroyed()) w.destroy();
-    },
-  };
 }
 
 function installProximityLock({ server, pairing, settings, i18n, getHelper, occupied }) {
@@ -98,7 +41,7 @@ function installProximityLock({ server, pairing, settings, i18n, getHelper, occu
         return false;
       }
     },
-    prompt: countdownPrompt(i18n),
+    prompt: countdownPrompt({ i18n, messageKey: 'Mac locks in {seconds} s', isUnlocked: consoleUnlocked }),
     lock: () => {
       if (consoleUnlocked()) devLocal.do({ do: 'lock' }).catch((err) => console.error(`[proximity lock] ${err.message}`));
     },

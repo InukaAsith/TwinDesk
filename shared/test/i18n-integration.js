@@ -9,7 +9,7 @@ const { createRequire } = require('module');
 const ROOT = path.resolve(__dirname, '../..');
 
 // Exercise each real IPC module, with only Electron's transport replaced.
-for (const mode of ['windows', 'windows/mesh']) {
+for (const mode of ['windows', 'windows/mesh', 'linux', 'linux/mesh']) {
   const handlers = new Map();
   const filename = path.join(ROOT, mode, 'ipc.js');
   const localRequire = createRequire(filename);
@@ -19,12 +19,13 @@ for (const mode of ['windows', 'windows/mesh']) {
     module: mod, __dirname: path.dirname(filename), console, process: { env: {} },
   }, { filename });
   const model = localRequire('./settings');
-  let stored = null, reloads = 0, pushes = 0;
+  let stored = null, reloads = 0, pushes = 0, cancels = 0;
   const ctx = {
     settings: model.normalize({ ui: { tab: 'general' } }),
     save() { stored = JSON.parse(JSON.stringify(this.settings)); },
     push() { pushes++; },
     onLanguage() { reloads++; },
+    proximityLock: { supported: false, cancel() { cancels++; } },
   };
   mod.exports(ctx);
   assert.ok(handlers.has('setLanguage'), `${mode} has the language action`);
@@ -41,6 +42,19 @@ for (const mode of ['windows', 'windows/mesh']) {
   set('en');
   assert.strictEqual(stored.ui.language, 'en');
   assert.strictEqual(reloads, 2);
+  assert.strictEqual(stored.app.proximityLock, false);
+  const setLock = (value) => handlers.get('setProximityLock')({}, value);
+  setLock(true);
+  assert.strictEqual(stored.app.proximityLock, false, 'the setting requires OS support');
+  ctx.proximityLock.supported = true;
+  setLock('true');
+  handlers.get('setApp')({}, { proximityLock: true });
+  assert.strictEqual(stored.app.proximityLock, false, 'only a boolean on the dedicated route opts in');
+  setLock(true);
+  assert.strictEqual(model.normalize(stored).app.proximityLock, true, 'the opt-in survives normalization');
+  setLock(false);
+  assert.strictEqual(stored.app.proximityLock, false);
+  assert.strictEqual(cancels, 1);
 }
 
 // Run the installer's actual resource-copy logic in a temporary staging directory.
@@ -58,7 +72,7 @@ try {
   context.FULL_KVM = false; // the normal build (docs/full-kvm.md)
   vm.runInContext(copyShared[0], context);
   assert.ok(!fs.existsSync(path.join(temp, 'shared', 'fullkvm')), 'the normal build has no Full KVM');
-  for (const filename of ['i18n.js', 'lang/en.js', 'lang/zh-CN.js']) {
+  for (const filename of ['i18n.js', 'lang/en.js', 'lang/zh-CN.js', 'proximity-lock.html', 'preload-proximity-lock.js']) {
     assert.ok(fs.existsSync(path.join(temp, 'shared', filename)), `${filename} is in the installed app`);
   }
   const installed = require(path.join(temp, 'shared/i18n.js'));
@@ -66,4 +80,4 @@ try {
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }
-console.log('i18n-integration: both IPC modes and installed translation resources passed');
+console.log('i18n-integration: Windows and Linux IPC in both modes and installed resources passed');

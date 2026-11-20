@@ -3,7 +3,11 @@
 
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
+const { readFileSync } = require('node:fs');
+const { createRequire } = require('node:module');
+const { PassThrough } = require('node:stream');
 const { test } = require('node:test');
+const vm = require('node:vm');
 const P = require('../protocol.js');
 const { ProximityLock } = require('../proximity-lock.js');
 
@@ -166,31 +170,35 @@ test('cancellation consumes the attempt and only a fresh authenticated phone can
   });
 });
 
-for (const [mode, file] of [['one-to-one', '../../mac/server'], ['Multi-device', '../../mac/mesh/server']]) {
-  test(`${mode} server classifies real close events, BYE, Forget, replacement and transport fallback`, () => {
-    const { Server } = require(file);
-    const server = Object.setPrototypeOf(new EventEmitter(), Server.prototype);
-    Object.assign(server, {
-      sockets: new Set(), blePorts: new Map(), _arm() {}, _now: Date.now, _phoneGrace() {},
-      ...(mode === 'one-to-one' ? { current: null } : { clients: new Map(), authSeq: 0, ilPool: { drop() {} } }),
+function hostFixture(platform, mesh) {
+  const { Server } = require(`../../${platform}/${mesh ? 'mesh/' : ''}server.js`);
+  const server = Object.setPrototypeOf(new EventEmitter(), Server.prototype);
+  Object.assign(server, {
+    sockets: new Set(), blePorts: new Map(), _arm() {}, _now: Date.now, _phoneGrace() {},
+    wss: { close() {} }, https: { close() {} },
+    ...(mesh ? { clients: new Map(), authSeq: 0, ilPool: { drop() {}, close() {} } } : { current: null }),
+  });
+  const socket = (remoteAddress = '127.0.0.1', remotePort = 0) => {
+    const ws = Object.assign(new EventEmitter(), {
+      OPEN: 1, readyState: 1, send() {}, close() { this.readyState = 3; }, terminate() { this.close(); },
     });
+    server._onConnection(ws, { socket: { remoteAddress, remotePort } });
+    return ws;
+  };
+  const authenticate = (ws) => server.authenticate(ws.ctx, { deviceId: 'phone', os: P.OS.ANDROID, name: 'Phone' }, {});
+  const hello = (...args) => { const ws = socket(...args); authenticate(ws); return ws; };
+  const close = (ws, code = 1006) => { ws.close(); ws.emit('close', code); };
+  return { server, socket, authenticate, hello, close };
+}
+
+for (const platform of ['mac', 'windows', 'linux']) for (const mesh of [false, true]) {
+  test(`${platform} ${mesh ? 'Multi-device' : 'one-to-one'} server classifies close events`, () => {
+    const { server, socket, hello, close } = hostFixture(platform, mesh);
     const f = fixture();
+    const classified = [];
     server.on('client', (ctx) => f.lock.connected(ctx));
-    server.on('closed', (ctx, unexpected) => f.lock.disconnected(ctx, unexpected));
+    server.on('closed', (ctx, unexpected) => { classified.push(unexpected); f.lock.disconnected(ctx, unexpected); });
     server.on('forget', (id) => f.lock.forget(id));
-    const socket = () => {
-      const ws = Object.assign(new EventEmitter(), {
-        OPEN: 1, readyState: 1, send() {}, close() { this.readyState = 3; }, terminate() { this.close(); },
-      });
-      server._onConnection(ws, { socket: { remoteAddress: '127.0.0.1', remotePort: 0 } });
-      return ws;
-    };
-    const hello = () => {
-      const ws = socket();
-      server.authenticate(ws.ctx, { deviceId: 'phone', os: P.OS.ANDROID, name: 'Phone' }, {});
-      return ws;
-    };
-    const close = (ws, code = 1006) => { ws.close(); ws.emit('close', code); };
 
     close(socket()); // unauthenticated
     close(hello(), 1000); // graceful closure without BYE
@@ -200,6 +208,11 @@ for (const [mode, file] of [['one-to-one', '../../mac/server'], ['Multi-device',
     const released = hello();
     server.release();
     close(released);
+    if (mesh) {
+      const phoneReleased = hello();
+      server.releasePhone(phoneReleased.ctx);
+      close(phoneReleased);
+    }
     const refused = hello();
     server.fail(refused.ctx, P.E.BAD_MESSAGE, 'protocol failure');
     close(refused);
@@ -207,17 +220,158 @@ for (const [mode, file] of [['one-to-one', '../../mac/server'], ['Multi-device',
     server.closeDevice('phone', P.E.BAD_TOKEN, 'forgotten');
     close(forgotten);
     const previous = hello();
+    server.blePorts.set(12345, 'phone');
     const attached = hello();
     close(previous);
-    const fallback = socket();
-    server._resume(fallback.ctx, { id: 'phone', resume: attached.ctx.resumeKey });
-    close(attached); // closing the old path of a successful resume
+    const moved = socket('127.0.0.1', 12345);
+    server._resume(moved.ctx, { id: 'phone', resume: attached.ctx.resumeKey });
+    assert.equal(moved.ctx.transport, 'ble');
+    const beforeFallback = classified.length;
+    close(moved); // the current Bluetooth path goes, but its IP fallback is alive
+    assert.equal(classified.length, beforeFallback, 'a transport fallback is not a session close');
+    assert.equal(attached.ctx.transport, 'ip');
+    assert.ok(classified.every((unexpected) => unexpected === false));
     assert.equal(f.opens, 0);
-    close(fallback); // genuine loss of the very same authenticated session
+    close(attached); // genuine loss of the very same authenticated session
+    assert.equal(classified.at(-1), true);
     assert.equal(f.opens, 1);
     server.closeDevice('phone', P.E.BAD_TOKEN, 'forgotten while disconnected');
     assert.equal(f.hides, 1);
     f.advance(15000);
     assert.deepEqual(f.locks, []);
+    const shuttingDown = hello();
+    server.close();
+    close(shuttingDown);
+    assert.equal(classified.at(-1), false);
+    assert.equal(f.opens, 1);
   });
 }
+
+function loadShared(file, stubs) {
+  const filename = require.resolve(`../${file}.js`);
+  const localRequire = createRequire(filename);
+  const module = { exports: {} };
+  vm.runInNewContext(readFileSync(filename, 'utf8'), {
+    module, process, console, require: (name) => stubs[name] || localRequire(name),
+  }, { filename });
+  return module.exports;
+}
+
+test('desktop guard suppresses deferred replacements, intentional network stops and stale sessions after wake', async () => {
+  for (const platform of ['windows', 'linux']) for (const mesh of [false, true]) {
+    const host = hostFixture(platform, mesh);
+    const { server, hello, close } = host;
+    const powerMonitor = Object.assign(new EventEmitter(), { getSystemIdleState: () => 'active' });
+    let prompt, tick;
+    let now = 0;
+    const locks = [];
+    let locked = false;
+    const sessionPath = '/org/freedesktop/login1/session/_31';
+    const monitor = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill() { this.stdout.end(); } });
+    const { watchLinuxSession } = loadShared('proximity-lock-linux', {
+      child_process: {
+        execFileSync: (_, args) => args.includes('org.freedesktop.login1.Manager.GetSession')
+          ? `(objectpath '${sessionPath}',)`
+          : `({'Id': <'1'>, 'Type': <'wayland'>, 'Active': <true>, 'LockedHint': <${locked}>},)`,
+        spawn: () => monitor,
+      },
+    });
+    const { installProximityLock } = loadShared('proximity-lock-desktop', {
+      electron: { powerMonitor },
+      './proximity-lock.js': {
+        ...require('../proximity-lock.js'),
+        ProximityLock: class extends ProximityLock {
+          constructor(options) {
+            super({ ...options, now: () => now, setTimer: (fn) => { tick = fn; return fn; }, clearTimer: () => { tick = null; } });
+          }
+        },
+      },
+      './proximity-lock-prompt.js': { countdownPrompt: () => ({ show: (p) => { prompt = p; }, update() {}, hide: () => { prompt = null; } }) },
+      './proximity-lock-linux.js': { watchLinuxSession },
+    });
+    const service = installProximityLock({ server, pairing: { list: () => [{ id: 'phone', os: P.OS.ANDROID }] },
+      settings: { app: { proximityLock: true } }, i18n: {}, occupied: () => false,
+      onChange() {},
+      local: { os: platform === 'windows' ? 'win32' : 'linux', can: () => ({ lock: true }), async do(command) { locks.push(command.do); } },
+    });
+    if (platform === 'linux') {
+      assert.equal(service.supported, false, 'the monitor must first subscribe to logind');
+      monitor.stdout.write('The name org.freedesktop.login1 is owned by :1.1\n');
+    }
+    assert.equal(service.supported, true);
+    try {
+      const existing = hello();
+      const replacement = host.socket();
+      replacement.ctx.fxWanted = replacement.ctx.fx2Wanted = server.fxOn = true;
+      let complete;
+      server.fx2Wait = () => new Promise((resolve) => { complete = resolve; });
+      host.authenticate(replacement);
+      assert.equal(replacement.ctx.pendingId, 'phone');
+      assert.equal(replacement.ctx.authed, false);
+      close(existing);
+      assert.equal(prompt, undefined);
+      complete();
+      await Promise.resolve();
+      assert.equal(replacement.ctx.authed, true);
+
+      powerMonitor.emit('suspend');
+      powerMonitor.emit('resume');
+      close(replacement);
+      assert.equal(prompt, undefined, 'a pre-sleep session is disarmed');
+      const beforeLock = hello();
+      if (platform === 'linux') {
+        for (const value of [true, false]) {
+          locked = value;
+          monitor.stdout.write(`${sessionPath}: org.freedesktop.DBus.Properties.PropertiesChanged ('org.freedesktop.login1.Session', {'LockedHint': <${value}>}, @as [])\n`);
+        }
+      } else {
+        powerMonitor.emit('lock-screen');
+        powerMonitor.emit('unlock-screen');
+      }
+      close(beforeLock);
+      assert.equal(prompt, undefined, 'a session from before the screen locked is disarmed');
+
+      const group = hello('192.168.43.1');
+      service.wifiDown();
+      close(group);
+      server.blePorts.set(12345, 'phone');
+      const bluetooth = hello('127.0.0.1', 12345);
+      service.bluetoothOff();
+      close(bluetooth);
+      assert.equal(prompt, undefined, 'intentional Wi-Fi and Bluetooth shutdowns are disarmed');
+
+      close(hello());
+      assert.equal(prompt.seconds, 15, 'a fresh authenticated session can arm again');
+      const reconnected = hello();
+      assert.equal(prompt, null, 'reconnecting cancels the pending lock');
+      assert.deepEqual(locks, []);
+      close(reconnected);
+      prompt.ready();
+      now += 15000;
+      tick();
+      assert.deepEqual(locks, ['lock']);
+    } finally {
+      service.shutdown();
+    }
+  }
+});
+
+test('Linux without native locking cannot show a prompt or attempt a lock', () => {
+  const { server, hello, close } = hostFixture('linux', false);
+  const powerMonitor = Object.assign(new EventEmitter(), { getSystemIdleState: () => 'active' });
+  const { installProximityLock } = loadShared('proximity-lock-desktop', {
+    electron: { powerMonitor },
+    './proximity-lock-prompt.js': { countdownPrompt: () => ({ show: () => assert.fail('unsupported lock showed a prompt') }) },
+    './proximity-lock-linux.js': { watchLinuxSession: () => assert.fail('unsupported lock began monitoring') },
+  });
+  const service = installProximityLock({ server, pairing: { list: () => [{ id: 'phone', os: P.OS.ANDROID }] },
+    settings: { app: { proximityLock: true } }, i18n: {}, occupied: () => false,
+    local: { os: 'linux', can: () => ({ lock: false }), do: () => assert.fail('unsupported native lock was attempted') },
+  });
+  try {
+    assert.equal(service.supported, false);
+    close(hello());
+  } finally {
+    service.shutdown();
+  }
+});

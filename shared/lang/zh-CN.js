@@ -2369,4 +2369,8 @@
   "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "当最后一部已连接的配对手机意外断开时，您有 15 秒时间取消锁定。",
   "Phone disconnected": "手机已断开连接",
   "Mac locks in {seconds} s": "{seconds} 秒后锁定 Mac",
+  "Lock this computer when the phone disconnects": "手机断开连接时锁定此电脑",
+  "If the last paired phone disconnects unexpectedly, you have 15 seconds to cancel.": "当最后一部已连接的配对手机意外断开时，您有 15 秒时间取消锁定。",
+  "Computer locks in {seconds} s": "{seconds} 秒后锁定电脑",
+  "Automatic screen locking is unavailable on this desktop.": "此桌面环境不支持自动锁屏。",
 });

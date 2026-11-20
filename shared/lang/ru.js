@@ -2368,4 +2368,8 @@
   "If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.": "Если связь с последним подключённым сопряжённым телефоном внезапно пропадёт, у вас будет 15 секунд, чтобы отменить блокировку Mac.",
   "Phone disconnected": "Телефон отключился",
   "Mac locks in {seconds} s": "Mac заблокируется через {seconds} с",
+  "Lock this computer when the phone disconnects": "Блокировать этот компьютер при отключении телефона",
+  "If the last paired phone disconnects unexpectedly, you have 15 seconds to cancel.": "Если связь с последним из подключённых сопряжённых телефонов прервётся, у вас будет 15 секунд, чтобы отменить блокировку.",
+  "Computer locks in {seconds} s": "Экран заблокируется через {seconds} с",
+  "Automatic screen locking is unavailable on this desktop.": "В этой среде рабочего стола автоматическая блокировка экрана недоступна.",
 });

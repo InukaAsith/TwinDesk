@@ -74,13 +74,14 @@ function setupIpc(ctx) {
   handle('confirmCode', () => link.confirmCode());
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
   handle('forget', () => {
+    ctx.proximityLock?.cancel();
     const id = hub.selectedId;
     link.forget();
     sshd.revokeAll(); // forgotten: it may not log in any more
     if (id) kvm.forgetDevice(id);
   });
   // Disconnect (either side of the session); Connect again / Take over the computer we're a guest of.
-  handle('disconnect', () => link.disconnect());
+  handle('disconnect', () => { ctx.proximityLock?.cancel(); return link.disconnect(); });
   handle('connectAgain', () => link.connect(true));
   // Connect on a paired device in our list that connects to us: a phone is asked as usual, a
   // computer is invited and its hello takes the session over.
@@ -97,6 +98,7 @@ function setupIpc(ctx) {
   handle('setActivePeer', (id) => typeof id === 'string' && hub.select(id.slice(0, 64)));
   handle('forgetPeer', (id) => {
     if (typeof id !== 'string') return;
+    ctx.proximityLock?.forget(id.slice(0, 64));
     hub.forgetPeer(id.slice(0, 64));
     kvm.forgetDevice(id.slice(0, 64));
   });
@@ -142,7 +144,16 @@ function setupIpc(ctx) {
     return layoutSync.remove(id);
   });
   handle('setKeys', (partial) => change('keys', partial, () => kvm.applyConfig())); // the hotkey lives in the helper
-  handle('setApp', (partial) => change('app', partial, () => ctx.onApp && ctx.onApp()));
+  handle('setApp', (partial) => {
+    if (!partial || typeof partial !== 'object') return;
+    const { proximityLock, ...appSettings } = partial;
+    change('app', appSettings, () => ctx.onApp && ctx.onApp());
+  });
+  handle('setProximityLock', (on) => {
+    if (typeof on !== 'boolean' || (on && !ctx.proximityLock?.supported)) return;
+    if (!on) ctx.proximityLock?.cancel();
+    change('app', { proximityLock: on });
+  });
   handle('setUpdates', (partial) => {
     const p = partial || {};
     const next = {};
@@ -271,8 +282,8 @@ function setupIpc(ctx) {
   handle('setPcScreenTarget', (id, choice) => typeof id === 'string' && choice && typeof choice === 'object' ? pcScreen.setTarget(id, choice) : undefined);
   // A phone as the peer (phone.js, phone-bridge.js, phoneview.js; there once our server runs)
   const phone = (name, fn) => handle(name, (...args) => (ctx.phone ? fn(...args) : undefined));
-  phone('connectPhone', (id) => ctx.phone.connect(String(id)));
-  phone('disconnectPhone', () => ctx.phone.disconnect());
+  phone('connectPhone', (id) => { ctx.proximityLock?.cancel(); return ctx.phone.connect(String(id)); });
+  phone('disconnectPhone', () => { ctx.proximityLock?.cancel(); return ctx.phone.disconnect(); });
   handle('setPhone', (partial) => change('phone', partial, () => {
     if (partial && 'input' in partial && ctx.phone) ctx.phone.bridge.tellVia();
     if (partial && ('input' in partial || 'mirror' in partial || 'soundVia' in partial) && ctx.phone) for (const u of ctx.phone.all || []) u.bridge.modesChanged(); // ADB or Native (shared/phonemodes.js), every phone
@@ -386,9 +397,12 @@ function setupIpc(ctx) {
   handle('fixFirewall', () => ctx.fixFirewall());
   handle('setStartup', (on) => ctx.setStartup(on === true));
   // Not on the same network: Bluetooth on/off, and giving up on moving to Wi-Fi (netlink.js).
-  handle('setNet', (partial) => change('net', partial, () => ctx.applyNet()));
+  handle('setNet', (partial) => {
+    if (partial?.ble === false && settings.net.ble !== false) ctx.proximityLock?.reset();
+    change('net', partial, () => ctx.applyNet());
+  });
   handle('setMesh', (partial) => change('mesh', partial, () => ctx.applyMesh && ctx.applyMesh()));
-  handle('netCancel', () => ctx.net && ctx.net.cancel());
+  handle('netCancel', () => { ctx.proximityLock?.reset(); return ctx.net?.cancel(); });
   handle('netJoinHotspot', (arg) => ctx.joinHotspot(arg));
   handle('netLocation', () => shell.openExternal('ms-settings:privacy-location')); // netsh's Wi-Fi commands need it (wifi.js)
   handle('openBluetoothSettings', () => shell.openExternal('ms-settings:bluetooth'));
@@ -397,6 +411,7 @@ function setupIpc(ctx) {
   handle('netWifi', (on) => {
     if (!ctx.net) return;
     if (on) return void ctx.net.need(on === 'hotspot' ? 'hotspot' : 'user');
+    ctx.proximityLock?.reset();
     ctx.net.drop();
     if (ctx.pcScreen.mode !== 'off') ctx.pcScreen.setMode('off'); // Bluetooth can't carry the screen
   });
