@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
 const P = require('../../shared/protocol.js');
+const { createPhoneBatteryWatch, showDesktopNotification } = require('../../shared/battery-alerts.js');
 const { receivedDir } = require('../../shared/received.js'); // General › Received files
 const CL = require('../../shared/cursorlock.js');
 const trayMenu = require('../../shared/traymenu.js');
@@ -135,6 +136,10 @@ let link = null; // hub.facade: the SELECTED device, for every one-to-one featur
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 let settings = null;
+const batteryAlerts = createPhoneBatteryWatch({
+  getEnabled: () => settings?.notifs?.batteryAlerts === true,
+  notify: (alert) => showDesktopNotification(alert, { Notification, t, onClick: () => { if (!quitting) showMain(); } }),
+});
 let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js createMesh), only once it's on
@@ -464,7 +469,7 @@ function start() {
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
-  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ batteryAlerts, loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, explorer: () => explorer, hub, link, discovery, screen, clip, kvm, layoutSync, terminal, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     get net() { return net; }, applyNet, joinHotspot, applyMesh: () => autoJoin && autoJoin.schedule(),
@@ -500,6 +505,11 @@ async function startHost() {
     pairing.on('request', showMain); // a code to compare: bring the window up
     hub.attachHost(server, pairing);
     hostServer = server;
+    const livePhone = (ctx) => !quitting && ctx && ctx.authed !== false && ctx.released !== true
+      && P.isPhoneOs(ctx.os) && server.clients.get(ctx.deviceId) === ctx && hub.sessions.get(ctx.deviceId)?.ctx === ctx;
+    server.on('client', (ctx) => { if (livePhone(ctx)) batteryAlerts.begin(ctx); });
+    server.on('closed', (ctx) => { if (ctx && P.isPhoneOs(ctx.os)) batteryAlerts.end(ctx); });
+    server.on(`t:${P.T.PHONE_INFO}`, (msg, ctx) => { if (livePhone(ctx)) batteryAlerts.info(msg, ctx); });
     bleHost = new BleHost({
       helper, server,
       info: () => ({ id: device.id, name: device.name.slice(0, 40), os: P.OS.WIN, port: server.port, fp: id.fp }),
@@ -1557,6 +1567,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  batteryAlerts.reset();
   if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;

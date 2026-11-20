@@ -179,6 +179,7 @@ function normalize(s) {
       send: bool(nf.send, false),
       receive: bool(nf.receive, false),
       hideText: bool(nf.hideText, false),
+      batteryAlerts: bool(nf.batteryAlerts, false),
       muted: Array.isArray(nf.muted) ? nf.muted.filter((x) => typeof x === 'string').map((x) => x.slice(0, 300)).slice(0, 500) : [],
       ...require('../shared/notifrules.js').saved(nf), // style, otpCopy, quiet, phoneApps: how a phone's show here
     },

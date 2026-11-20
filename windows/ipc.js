@@ -91,7 +91,11 @@ function setupIpc(ctx) {
     discovery.invite(d.address);
   });
   handle('respondPair', (allow) => link.respondPair(allow === true)); // host: Allow / Deny
-  handle('forgetGuest', (id) => typeof id === 'string' && link.forgetGuest(id));
+  handle('forgetGuest', (id) => {
+    if (typeof id !== 'string') return false;
+    ctx.batteryAlerts.forget(id);
+    return link.forgetGuest(id);
+  });
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
   handle('checkWake', () => wake.check());
@@ -263,8 +267,12 @@ function setupIpc(ctx) {
   handle('setNotifs', (partial) => {
     const p = partial && typeof partial === 'object' ? { send: partial.send, receive: partial.receive, hideText: partial.hideText } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+    if (partial && typeof partial.batteryAlerts === 'boolean') p.batteryAlerts = partial.batteryAlerts;
     Object.assign(p, require('../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
-    change('notifs', p, () => notifs.applySettings());
+    change('notifs', p, () => {
+      ctx.batteryAlerts.setting(settings.notifs.batteryAlerts);
+      notifs.applySettings();
+    });
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));
   handle('clearNotifHistory', () => notifs.clearHistory && notifs.clearHistory());

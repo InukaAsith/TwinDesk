@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { createPhoneBatteryWatch, showDesktopNotification } = require('../shared/battery-alerts.js');
 const { receivedDir } = require('../shared/received.js'); // General › Received files
 const CL = require('../shared/cursorlock.js');
 const trayMenu = require('../shared/traymenu.js');
@@ -148,6 +149,10 @@ let discovery = null;
 let link = null;
 let iosNet = null; // shared/iosnet.js: iPhones on a USB cable
 let settings = null;
+const batteryAlerts = createPhoneBatteryWatch({
+  getEnabled: () => settings?.notifs?.batteryAlerts === true,
+  notify: (alert) => showDesktopNotification(alert, { Notification, t, onClick: () => { if (!quitting) showMain(); } }),
+});
 let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
@@ -474,7 +479,7 @@ function start() {
   // TwinDesk Web (web.js): an iPhone's (or any browser's) own pages here, beside the one session.
   web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
-  const ipc = setupIpc({ takePhoto: () => !!phonePhoto && phonePhoto.take(), loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ batteryAlerts, takePhoto: () => !!phonePhoto && phonePhoto.take(), loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), deck: () => loadDeck(), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     iosSign: () => iosSign, devctl: () => devctl, chats: () => chats, explorer: () => explorer, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -519,6 +524,17 @@ async function startHost(guest) {
     guest.on('welcome', () => pairing.clearReturn()); // a guest of another computer now: the phone doesn't come back by itself (as on the Mac)
     link.attachHost(server, pairing);
     hostServer = server;
+    const liveClient = (ctx) => !quitting && hostServer === server && ctx && ctx === server.current
+      && ctx.authed !== false && ctx.released !== true;
+    server.on('client', (ctx) => {
+      if (!liveClient(ctx)) return;
+      if (P.isPhoneOs(ctx.os)) batteryAlerts.begin(ctx);
+      else batteryAlerts.reset();
+    });
+    server.on('closed', (ctx) => { if (ctx && P.isPhoneOs(ctx.os)) batteryAlerts.end(ctx); });
+    server.on(`t:${P.T.PHONE_INFO}`, (msg, ctx) => {
+      if (liveClient(ctx) && P.isPhoneOs(ctx.os)) batteryAlerts.info(msg, ctx);
+    });
     applyNet(); // your own relay, now that there's a server to hand its connections to
     bleHost = new BleHost({
       helper, server,
@@ -1630,6 +1646,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  batteryAlerts.reset();
   if (localApi) localApi.stop();
   if (web) web.shutdown();
   if (mic) mic.shutdown();

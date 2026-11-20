@@ -75,6 +75,7 @@ function setupIpc(ctx) {
   handle('cancelPair', () => { ctx.cancelPhoneInvite(); link.cancelPair(); });
   handle('forget', () => {
     const id = hub.selectedId;
+    if (id) ctx.batteryAlerts.forget(id);
     link.forget();
     sshd.revokeAll(); // forgotten: it may not log in any more
     if (id) kvm.forgetDevice(id);
@@ -92,13 +93,19 @@ function setupIpc(ctx) {
     discovery.invite(d.address);
   });
   handle('respondPair', (allow) => link.respondPair(allow === true)); // host: Allow / Deny
-  handle('forgetGuest', (id) => typeof id === 'string' && link.forgetGuest(id));
+  handle('forgetGuest', (id) => {
+    if (typeof id !== 'string') return false;
+    ctx.batteryAlerts.forget(id);
+    return link.forgetGuest(id);
+  });
   // Devices (docs/mesh.md): the selected one takes the one-to-one features; Forget drops one device.
   handle('setActivePeer', (id) => typeof id === 'string' && hub.select(id.slice(0, 64)));
   handle('forgetPeer', (id) => {
     if (typeof id !== 'string') return;
-    hub.forgetPeer(id.slice(0, 64));
-    kvm.forgetDevice(id.slice(0, 64));
+    const deviceId = id.slice(0, 64);
+    ctx.batteryAlerts.forget(deviceId);
+    hub.forgetPeer(deviceId);
+    kvm.forgetDevice(deviceId);
   });
   handle('wakePeer', (id) => typeof id === 'string' && wake.wake(id));
   handle('setWake', (on) => wake.set(on === true)); // A switch
@@ -229,8 +236,12 @@ function setupIpc(ctx) {
   handle('setNotifs', (partial) => {
     const p = partial && typeof partial === 'object' ? { send: partial.send, receive: partial.receive, hideText: partial.hideText } : {};
     Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+    if (partial && typeof partial.batteryAlerts === 'boolean') p.batteryAlerts = partial.batteryAlerts;
     Object.assign(p, require('../../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
-    change('notifs', p, () => notifs.applySettings());
+    change('notifs', p, () => {
+      ctx.batteryAlerts.setting(settings.notifs.batteryAlerts);
+      notifs.applySettings();
+    });
   });
   handle('muteNotifApp', (arg) => arg && typeof arg.app === 'string' && notifs.setMuted(arg.app.slice(0, 300), arg.muted === true));
   // General › Received files (shared/received.js): chosen here only, never by the page itself.

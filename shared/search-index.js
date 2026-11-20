@@ -79,6 +79,7 @@ const ENTRIES = [
   { t: 'Phone notifications on the computer', page: 'notifications', dir: 'p2c', k: 'notifications on pc, alerts, mirror notifications, messages on computer' },
   { t: 'Computer notifications on the phone', page: 'notifications', dir: 'c2p', k: 'pc notifications on phone, alerts' },
   { t: 'Notification history', page: 'notifications', k: 'past notifications, missed, old alerts, history' },
+  { t: 'Phone battery alerts', page: 'notifications', on: 'desk', k: 'low battery, fully charged, charging, battery level' },
   { t: 'Send files', page: 'files', k: 'send file, transfer, share file, airdrop, drag and drop, upload, photos to pc' },
   { t: 'Received files', page: 'files', k: 'downloads, where are files, received folder, save to' },
   { t: 'Browse the phone’s storage', page: 'phonefiles', dir: 'p2c', k: 'phone files, file manager, storage, copy from phone, sd card' },

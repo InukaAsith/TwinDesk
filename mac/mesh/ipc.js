@@ -47,7 +47,7 @@ const SCHEMA = {
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
   terminal: { allowPc: bool, connectPc: bool },
   files: { acceptDrops: bool, reveal: bool, dragEdge: bool, outboxHours: oneOf([0, 1, 24, 168], 24), clipReceived: bool, shortcuts: bool, copyKeys: accel('Control+Alt+C'), pasteKeys: accel('Control+Alt+V') },
-  notifs: { send: bool, receive: bool, hideText: bool },
+  notifs: { send: bool, receive: bool, hideText: bool, batteryAlerts: bool },
   smb: { connectPc: bool },
   apps: { offer: bool, onVirtual: bool, moveWindows: bool, moveKey: oneOf(['ControlRight', 'ControlLeft', 'ShiftRight', 'ShiftLeft', 'AltRight', 'AltLeft', 'MetaRight', 'MetaLeft'], 'MetaRight') }, // moveWindows: Apps › Move windows (movewin.js)
   receive: { on: bool, fullScreen: bool, input: bool, framegen: bool },
@@ -242,6 +242,7 @@ function setupIpc(ctx) {
       ctx.hub.forgetPeer(String(deviceId));
       ctx.kvm.forgetDevice(String(deviceId)); // it leaves the shared layout too (docs/mesh.md)
       ctx.terminal.forget(String(deviceId));
+      if (ctx.batteryAlerts) ctx.batteryAlerts.forget(String(deviceId));
     },
     confirmGuestCode() {
       ctx.link.confirmCode();
@@ -443,6 +444,7 @@ function setupIpc(ctx) {
       Object.assign(settings.notifs, require('../../shared/notifrules.js').clean(partial, settings.notifs)); // style, otpCopy, quiet, phoneApps
       save();
       ctx.notifs.applySettings();
+      if (ctx.batteryAlerts) ctx.batteryAlerts.setting(!!settings.notifs.batteryAlerts);
     },
     muteNotifApp(arg) {
       if (arg && typeof arg.app === 'string') ctx.notifs.setMuted(arg.app.slice(0, 200), !!arg.muted);
@@ -772,6 +774,7 @@ function setupIpc(ctx) {
       ctx.pairing.respond(!!allow);
     },
     forget(deviceId) {
+      if (ctx.batteryAlerts && deviceId != null && deviceId !== '') ctx.batteryAlerts.forget(String(deviceId));
       if (ctx.link.hosts.some((h) => h.id === String(deviceId))) return ctx.link.forget(String(deviceId));
       ctx.pairing.forget(String(deviceId));
       ctx.terminal.forget(String(deviceId));
