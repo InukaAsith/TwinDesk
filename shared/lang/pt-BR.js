@@ -2363,4 +2363,11 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Toque em Permitir na notificação do TwinDesk no celular e confirme o pedido de VPN do Android.",
   "It stopped.": "Parou.",
   "Starting on the phone…": "Iniciando no celular…",
+  "Connection Doctor": "Diagnóstico da conexão",
+  "Transport": "Tipo de conexão",
+  "Round-trip time": "Tempo de ida e volta",
+  "Identity could not be verified": "Não foi possível verificar a identidade do computador",
+  "{value} fps": "{value} qps",
+  "{value} Mb/s": "{value} Mb/s",
+  "Discovery": "Descoberta de dispositivos",
 });

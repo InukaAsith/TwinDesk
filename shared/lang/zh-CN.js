@@ -2364,4 +2364,11 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "在手机上的 TwinDesk 通知中点按“允许”，然后确认 Android 的 VPN 请求。",
   "It stopped.": "已停止。",
   "Starting on the phone…": "正在手机上启动…",
+  "Connection Doctor": "连接诊断",
+  "Transport": "连接方式",
+  "Round-trip time": "往返延迟",
+  "Identity could not be verified": "无法验证电脑身份",
+  "{value} fps": "{value} 帧/秒",
+  "{value} Mb/s": "{value} Mb/s",
+  "Discovery": "设备发现",
 });

@@ -116,12 +116,14 @@ UI.tab({
     // Devices: every computer and phone of the mesh. Use makes it the one the features talk to.
     const devicesList = el('div');
 
+    const doctor = UI.connectionDoctor ? UI.connectionDoctor('mac') : null;
     body.append(
       permCard,
       UI.card('', [addrRow, ipRow]),
       UI.card(tr('Nearby'), [discRow, foundList, ...bleRows], { actions: [refresh] }),
       ...(qrPair ? [qrPair.el] : []),
       hero,
+      ...(doctor ? [doctor.el] : []),
       adb.el,
       ...(tether ? [tether.el] : []),
       UI.pair(UI.dir('m2w', m2w.map((x) => x.row)), UI.dir('w2m', w2m.map((x) => x.row))),
@@ -134,6 +136,7 @@ UI.tab({
     let pairedKey = '';
     let devicesKey = '';
     return (s) => {
+      if (doctor) doctor.update(s);
       if (webCard) webCard.render(s);
       const p = UI.names(s);
       bleSw.set(!s.net || s.net.ble !== false);
