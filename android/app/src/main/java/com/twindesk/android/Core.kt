@@ -480,6 +480,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // ---- Link.Events ----
 
     override fun onChange() {
+        screen.doctorLinkChanged()
         runCatching { share.linkChanged() } // the session moved (Bluetooth <-> Wi-Fi): shared folders follow
         runCatching { remote.linkChanged() } // … and the Remote page's pace
         changed()
@@ -503,6 +504,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
         }
         for (f in features) runCatching { f.onWelcome(host) }.onFailure { Log.e("TwinDesk", "welcome", it) }
         changed()
+    }
+
+    override fun onOffer(m: JSONObject, ingress: Any) {
+        main.post { screen.onOffer(m, ingress) }
     }
 
     override fun onMessage(m: JSONObject) {

@@ -68,6 +68,13 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
             queue.clear()
             onEvent("ready", null)
         }.let { }
+        @JavascriptInterface fun videoState(generation: Int, session: Int, playing: Boolean, w: Int, h: Int) = main.post {
+            onEvent("videoState", msg("videoState", "generation" to generation, "session" to session, "playing" to playing, "w" to w, "h" to h))
+        }.let { }
+        @JavascriptInterface fun videoMetrics(generation: Int, session: Int, w: Int, h: Int, fps: Int, kbps: Int, dropped: Long) = main.post {
+            onEvent("videoMetrics", msg("videoMetrics", "generation" to generation, "session" to session,
+                "w" to w, "h" to h, "fps" to fps, "kbps" to kbps, "dropped" to dropped))
+        }.let { }
         @JavascriptInterface fun playing(w: Int, h: Int) = main.post { onEvent("playing", JSONObject().put("w", w).put("h", h)) }.let { }
         @JavascriptInterface fun haptic() = main.post { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }.let { }
         // A light tap (a gamepad or touchpad button going down).
@@ -127,6 +134,15 @@ data class MacDisplay(val id: String, val name: String, val w: Int, val h: Int) 
     }
 }
 
+data class StreamDoctorSample(val width: Int, val height: Int, val fps: Int?, val kbps: Int?, val droppedFrames: Long?) {
+    fun summary(): String = listOfNotNull(
+        "$width × $height",
+        fps?.let { tr("{value} fps", "value" to it) },
+        kbps?.let { tr("{value} Mb/s", "value" to String.format(java.util.Locale.ROOT, "%.1f", it / 1000.0)) },
+        droppedFrames?.let { tr("{count} dropped frames", "count" to it) },
+    ).joinToString(" · ")
+}
+
 // The Mac's screen: what it shares (screen.state), Start/Stop and Mirror/Extend (screen.ctl), and
 // the viewer page while ViewerActivity is open (screen.policy tells the Mac to stream).
 class Screen(core: Core) : Feature(core) {
@@ -136,6 +152,24 @@ class Screen(core: Core) : Feature(core) {
     @Volatile var size: Pair<Int, Int>? = null; private set // the picture playing now
     private var host: WebHost? = null
     private var lastInfo: JSONObject? = null
+    private var videoGeneration = 0
+    private var videoSession: Int? = null
+    private var videoMarker: Any? = null
+    @Volatile var videoPlaying = false; private set
+    private data class DoctorReading(val marker: Any, val sample: StreamDoctorSample)
+    @Volatile private var doctorReading: DoctorReading? = null
+    val lastDoctorSample: StreamDoctorSample?
+        get() = doctorReading?.takeIf { core.link.doctorSessionCurrent(it.marker) }?.sample
+
+    val doctorSummary: String? get() = lastDoctorSample?.summary()
+
+    fun doctorLinkChanged() {
+        val reading = doctorReading ?: return
+        if (!core.link.doctorSessionCurrent(reading.marker)) clearDoctor()
+    }
+
+    private fun clearDoctor() { doctorReading = null }
+
     private var wantStart = false // the viewer opened before we knew whether the Mac shares
     private var startedByUs = false // we started the Mac's sharing: stop it when the viewer closes
     @Volatile var autoOpened = false; private set // the computer started sharing and opened the viewer: it closes when that stops
@@ -163,6 +197,7 @@ class Screen(core: Core) : Feature(core) {
     // ViewerActivity opened: stream to us, at our screen's size (the Mac sizes Extend to it).
     fun attach(h: WebHost, w: Int, hpx: Int) {
         host = h
+        resetVideo()
         viewing = true
         h.post(opts()) // first: the computer's name for the messages below
         lastInfo?.let { h.post(it) }
@@ -234,6 +269,7 @@ class Screen(core: Core) : Feature(core) {
     fun detach(h: WebHost) {
         if (host !== h) return
         host = null
+        resetVideo(keepDoctor = true)
         viewing = false
         size = null
         wantStart = false
@@ -268,6 +304,47 @@ class Screen(core: Core) : Feature(core) {
         core.changed()
     }
 
+    private fun resetVideo(keepDoctor: Boolean = false) {
+        if (!keepDoctor) clearDoctor()
+        videoGeneration++
+        videoSession = null
+        videoMarker = null
+        videoPlaying = false
+    }
+
+    internal fun onOffer(m: JSONObject, marker: Any): Boolean {
+        if (!core.link.doctorSessionCurrent(marker)) return true
+        resetVideo()
+        videoSession = m.optInt("session", -1)
+        videoMarker = marker
+        host?.post(JSONObject(m.toString()).put("viewerGeneration", videoGeneration))
+        core.changed()
+        return true
+    }
+
+    fun videoState(h: WebHost, generation: Int, session: Int, playing: Boolean, width: Int, height: Int) {
+        if (host !== h || !viewing || videoGeneration != generation || videoSession != session ||
+            !core.link.doctorSessionCurrent(videoMarker)) return
+        if (videoPlaying != playing) {
+            videoPlaying = playing
+            core.changed()
+        }
+    }
+
+    fun videoMetrics(h: WebHost, generation: Int, session: Int, width: Int, height: Int, fps: Int, kbps: Int, dropped: Long) {
+        val marker = videoMarker ?: return
+        if (host !== h || !viewing || !sharing || !videoPlaying ||
+            videoGeneration != generation || videoSession != session || !core.link.doctorSessionCurrent(marker) ||
+            width !in 1..16384 || height !in 1..16384) return
+        val sample = StreamDoctorSample(width, height, fps.takeIf { it in 0..240 },
+            kbps.takeIf { it in 0..1_000_000 }, dropped.takeIf { it in 0..1_000_000_000 })
+        val previous = doctorReading
+        if (previous?.sample != sample || previous.marker !== marker) {
+            doctorReading = DoctorReading(marker, sample)
+            core.changed()
+        }
+    }
+
     fun playing(w: Int, h: Int) {
         size = w to h
         core.changed()
@@ -281,7 +358,10 @@ class Screen(core: Core) : Feature(core) {
         if (mode != null) m.put("mode", mode)
         if (close) m.put("close", true)
         if (displayId != null) m.put("displayId", displayId)
-        if (share == false) startedByUs = false
+        if (share == false) {
+            startedByUs = false
+            resetVideo(keepDoctor = true)
+        }
         core.send(m)
     }
 
@@ -308,7 +388,13 @@ class Screen(core: Core) : Feature(core) {
         control(share = true, mode = mode)
     }
 
+    override fun onWelcome(host: Host) {
+        resetVideo()
+        this.host?.post(msg("stream.stop"))
+    }
+
     override fun onClosed() {
+        resetVideo()
         Notify.cancelScreen(core.ctx)
         state = null
         lastInfo = null
@@ -331,7 +417,8 @@ class Screen(core: Core) : Feature(core) {
             }
             "stream.input" -> { inputOn = m.optBoolean("on", true); core.changed() }
             "stream.info" -> { lastInfo = m; host?.post(m) }
-            "rtc.offer", "rtc.ice", "stream.stop" -> host?.post(m)
+            "rtc.ice" -> host?.post(m)
+            "stream.stop" -> { resetVideo(keepDoctor = true); host?.post(m); core.changed() }
             else -> return false
         }
         return true

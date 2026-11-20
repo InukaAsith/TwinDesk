@@ -33,6 +33,9 @@
   let pc = null;
   let session = null;
   let pending = null;
+  let viewerGeneration = 0;
+  let videoOwner = null;
+  let frameProbe = 0;
   let name = t('the computer'); // the one we're connected to (opts)
   let streamAudio = false;
   let sound = true;
@@ -58,7 +61,84 @@
   }
   const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 
+  let doctorTimer = null, doctorRevision = 0;
+  let doctorLast = null;
+
+  function stopDoctor() {
+    clearTimeout(doctorTimer);
+    doctorTimer = null;
+    doctorLast = null;
+    doctorRevision++;
+  }
+
+  function scheduleDoctor(owner = videoOwner) {
+    if (doctorTimer !== null || typeof TD.videoMetrics !== 'function' || !owner?.playing ||
+        document.hidden) return;
+    const revision = doctorRevision;
+    const current = () => revision === doctorRevision && owner === videoOwner && owner.pc === pc &&
+      owner.playing && !document.hidden && video.srcObject === owner.stream &&
+      pc.connectionState === 'connected';
+    doctorTimer = setTimeout(async () => {
+      doctorTimer = null;
+      if (!current()) return;
+      doctorTimer = -1; // Do not overlap getStats calls for this owner.
+      try {
+        const report = await owner.pc.getStats();
+        if (!current()) return;
+        const inbound = [...report.values()].find(stat =>
+          stat.type === 'inbound-rtp' && (stat.kind === 'video' || stat.mediaType === 'video'));
+        if (inbound) {
+          const last = doctorLast;
+          const elapsed = last && inbound.id === last.id ? inbound.timestamp - last.timestamp : 0;
+          const rate = (key, factor) => elapsed >= 250 && elapsed <= 10000 &&
+            Number.isFinite(inbound[key]) && Number.isFinite(last[key]) && inbound[key] >= last[key]
+            ? Math.round((inbound[key] - last[key]) * factor / elapsed) : -1;
+          const dropped = Number.isSafeInteger(inbound.framesDropped) && inbound.framesDropped >= 0
+            ? inbound.framesDropped : -1;
+          TD.videoMetrics(owner.generation, owner.session, video.videoWidth, video.videoHeight,
+            rate('framesDecoded', 1000), rate('bytesReceived', 8), dropped);
+          doctorLast = inbound;
+        }
+      } catch { /* Statistics can be unavailable while the receiver changes tracks. */ }
+      if (current()) {
+        doctorTimer = null;
+        scheduleDoctor(owner);
+      }
+    }, 2000);
+  }
+
+  function reportVideo(playing, owner = videoOwner) {
+    if (!playing) { frameProbe++; stopDoctor(); if (owner) owner.playing = false; }
+    if (owner && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream &&
+        (!playing || owner.pc.connectionState === 'connected') && typeof TD.videoState === 'function' && Number.isInteger(owner.generation) && owner.generation > 0 && Number.isInteger(owner.session)) {
+      owner.playing = playing;
+      TD.videoState(owner.generation, owner.session, playing, video.videoWidth, video.videoHeight);
+      if (playing) scheduleDoctor(owner);
+    }
+  }
+
+  function requireCurrentFrame(owner = videoOwner) {
+    if (typeof TD.videoState !== 'function') return;
+    if (!owner || owner !== videoOwner || owner.pc !== pc || video.srcObject !== owner.stream) return;
+    const probe = ++frameProbe;
+    const current = () => probe === frameProbe && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream;
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      video.requestVideoFrameCallback(() => { if (current()) reportVideo(true, owner); });
+    } else {
+      const started = video.currentTime;
+      let left = 60;
+      const check = () => {
+        if (!current()) return;
+        if (video.currentTime > started && video.videoWidth > 0 && video.videoHeight > 0) reportVideo(true, owner);
+        else if (--left > 0) requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    }
+  }
+
   function closePc() {
+    reportVideo(false);
+    videoOwner = null;
     if (pc) pc.close();
     pc = null;
     session = null;
@@ -77,9 +157,11 @@
     // On a USB cable the computer sends its relay (msg.ice): the picture goes through adb.
     const my = (pc = new RTCPeerConnection(msg.ice || { iceServers: [] }));
     session = msg.session;
+    viewerGeneration = msg.viewerGeneration || 0;
     const queue = (pending = []);
     setOverlay(t('Connecting to {name}…', { name }));
     my.ontrack = (e) => {
+      if (my !== pc) return;
       if (e.track.kind === 'audio') {
         if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
         audio.srcObject = new MediaStream([e.track]);
@@ -87,7 +169,9 @@
         return;
       }
       pace(e.receiver);
-      video.srcObject = new MediaStream([e.track]);
+      const stream = new MediaStream([e.track]);
+      videoOwner = { pc: my, stream, generation: viewerGeneration, session: msg.session };
+      video.srcObject = stream;
       video.play().catch(() => {});
     };
     my.onicecandidate = (e) => {
@@ -95,8 +179,9 @@
     };
     my.onconnectionstatechange = () => {
       if (my !== pc) return;
-      if (my.connectionState === 'failed') setOverlay(t('Reconnecting…'));
-      else if (my.connectionState === 'disconnected') setOverlay(t('The video connection was interrupted…'));
+      if (my.connectionState === 'connected') requireCurrentFrame();
+      else if (my.connectionState === 'failed') { reportVideo(false); setOverlay(t('Reconnecting…')); }
+      else if (my.connectionState === 'disconnected') { reportVideo(false); setOverlay(t('The video connection was interrupted…')); }
     };
     try {
       await my.setRemoteDescription({ type: 'offer', sdp: steadySdp(msg.sdp) });
@@ -115,8 +200,16 @@
   video.addEventListener('playing', () => {
     setOverlay('');
     TD.playing(video.videoWidth, video.videoHeight);
+    requireCurrentFrame();
   });
-  video.addEventListener('resize', () => TD.playing(video.videoWidth, video.videoHeight));
+  video.addEventListener('resize', () => { TD.playing(video.videoWidth, video.videoHeight); requireCurrentFrame(); });
+  for (const event of ['waiting', 'stalled', 'emptied', 'ended']) video.addEventListener(event, () => {
+    reportVideo(false);
+    if (event === 'waiting' || event === 'stalled') requireCurrentFrame();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) reportVideo(false); else requireCurrentFrame();
+  });
 
   window.tdRecv = (msg) => {
     if (msg.t !== 'rtc.ice') console.log(`viewer <- ${msg.t}${msg.session != null ? ` #${msg.session}` : ''}`);
@@ -138,6 +231,7 @@
         break;
       case 'screen.state':
         if ('touch' in msg) realTouch = msg.touch === true;
+        if (msg.on === false) reportVideo(false);
         if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name }) : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
         break;
       case 'opts':

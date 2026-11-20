@@ -646,6 +646,8 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
     if (Modern.on) HeroCard { HeroBody(core, v, me, host, link, heroAccent) } else MacCard { HeroBody(core, v, me, host, link, heroAccent) }
 
 
+    if (connection) ConnectionDoctorCard(core, v)
+
     // The computer's own controls (dev.state, DevCtl.kt): ring, lock, sleep, Bluetooth, Do not disturb, volume.
     if (!connection && host != null) ComputerCard(core, host.name)
 
@@ -713,6 +715,48 @@ private fun OverviewPage(core: Core, v: Int, connection: Boolean) {
 
     // Connect with Android (PeerUi.kt): another phone, beside the computer, at the bottom.
     if (connection) AndroidSection(core, v)
+}
+
+@Composable
+private fun ConnectionDoctorCard(core: Core, version: Int) {
+    @Suppress("UNUSED_EXPRESSION") version
+    val link = core.link
+    val selected = if (link.pair == null) link.host?.let { current -> core.hosts().find { it.id == current.id && it.fp == current.fp } } else null
+    val close = selected?.let(link::doctorClose)
+    val status = when {
+        link.pair != null -> tr("Pairing…")
+        link.connected -> tr("Connected")
+        link.state == "connecting" -> tr("Connecting…")
+        link.state == "failed" -> tr("Connection failed")
+        core.returning != null -> tr("Reconnecting…")
+        else -> tr("Not connected")
+    }
+    val reason = when (close?.reason) {
+        ConnectionCloseReason.LOCAL -> tr("Disconnected here")
+        ConnectionCloseReason.INTERRUPTED -> tr("Connection interrupted")
+        ConnectionCloseReason.ASLEEP -> tr("Computer asleep")
+        ConnectionCloseReason.REPLACED -> tr("Another device took over")
+        ConnectionCloseReason.RELEASED -> tr("Computer ended the connection")
+        ConnectionCloseReason.BAD_PAIRING -> tr("Pairing no longer accepted")
+        ConnectionCloseReason.IDENTITY -> tr("Identity could not be verified")
+        ConnectionCloseReason.VERSION -> tr("Different app version")
+        ConnectionCloseReason.PAUSED -> tr("Reconnect paused")
+        null -> tr("No connection event recorded")
+    }
+    MacCard(tr("Connection Doctor")) {
+        MacRow(tr("Pairing"), selected?.let { tr("Paired · {name}", "name" to it.name) } ?: tr("No computer selected"), first = true)
+        MacRow(tr("Connection"), status)
+        if (link.connected) {
+            MacRow(tr("Transport"), doctorTransport(core))
+            MacRow(tr("Round-trip time"), link.rttMs?.let { "$it ms" } ?: tr("No reply measured yet"))
+        }
+        if (selected != null) {
+            val stamp = close?.let { android.text.format.DateFormat.getTimeFormat(LocalContext.current).format(java.util.Date(it.at)) }
+            MacRow(tr("Last connection event"), listOfNotNull(reason, stamp).joinToString(" · "))
+        }
+        MacRow(if (core.screen.viewing && core.screen.videoPlaying) tr("Stream") else tr("Last stream"),
+            core.screen.doctorSummary ?: tr("No stream measured on this connection"))
+    }
 }
 
 // The connected computer's controls, when it has them (an older TwinDesk says nothing: no card).

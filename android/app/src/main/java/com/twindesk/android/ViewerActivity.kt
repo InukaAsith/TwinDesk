@@ -66,6 +66,13 @@ class ViewerActivity : ComponentActivity() {
         }
         val core = Core.get(this)
         val h = WebHost(this, "viewer.html", core) { ev, data ->
+            if (ev == "videoState" && data != null) host?.let {
+                core.screen.videoState(it, data.optInt("generation"), data.optInt("session"), data.optBoolean("playing"), data.optInt("w"), data.optInt("h"))
+            }
+            if (ev == "videoMetrics" && data != null) host?.let {
+                core.screen.videoMetrics(it, data.optInt("generation"), data.optInt("session"), data.optInt("w"), data.optInt("h"),
+                    data.optInt("fps", -1), data.optInt("kbps", -1), data.optLong("dropped", -1))
+            }
             if (ev == "playing" && data != null) core.screen.playing(data.optInt("w"), data.optInt("h"))
         }
         host = h
@@ -148,9 +155,8 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(name, color = Color.White, modifier = Modifier.padding(start = 8.dp))
-                    // Which way the picture comes: the USB cable, or Wi-Fi.
                     Text(
-                        if (core.link.wired) "USB" else "Wi-Fi", color = Color.White, fontSize = 11.sp,
+                        doctorTransport(core), color = Color.White, fontSize = 11.sp,
                         modifier = Modifier.padding(end = 4.dp).clip(RoundedCornerShape(6.dp))
                             .background(if (core.link.wired) Color(0xFF30D158).copy(alpha = 0.35f) else Color(0x33FFFFFF)).padding(horizontal = 6.dp, vertical = 2.dp),
                     )
@@ -165,6 +171,12 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                     }
                     TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
                     TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
+                }
+                if (s.viewing && s.videoPlaying && s.sharing) s.doctorSummary?.let {
+                    Text(it, color = Color(0xFFB9BDC6), fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp)
+                            .clip(RoundedCornerShape(6.dp)).background(Color(0xE6202124))
+                            .padding(horizontal = 8.dp, vertical = 4.dp))
                 }
                 if (s.remote && s.displays.size > 1) {
                     Row(
