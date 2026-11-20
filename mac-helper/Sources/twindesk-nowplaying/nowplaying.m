@@ -7,6 +7,7 @@
 // and MediaRemote loads more as it goes) and perl sleeps: one JSON line on stdout whenever what plays changes
 //   {title, artist, album, app, bundle, playing, duration, art: 'data:image/jpeg;base64,…' | ''}
 // ({} when nothing plays), and commands one a line on stdin: play, pause, toggle, next, previous.
+// Calls can send "pause <revision>" or "play <revision>" to act on a fresh, matching snapshot.
 // stdin closed (TwinDesk gone): it exits.
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -30,6 +31,10 @@ static NSString *last = @"";
 static NSString *lastArtKey = @"";
 static NSString *lastArt = @"";
 static BOOL busy, again;
+static NSArray *lastTrack, *lastPlayback;
+static NSUInteger trackNumber, playbackRevision;
+static BOOL playbackKnown, playbackPlaying;
+static void (^afterRead)(void);
 
 static NSString *appName(NSString *bundle) {
     if (!bundle.length) return @"";
@@ -60,26 +65,52 @@ static NSString *thumb(NSData *d) {
     return out.length ? [@"data:image/jpeg;base64," stringByAppendingString:[out base64EncodedStringWithOptions:0]] : @"";
 }
 
-static void emit(NSDictionary *d) {
+static void emitLine(NSDictionary *d, BOOL onlyChanges) {
     NSData *j = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
     NSString *s = j ? [[NSString alloc] initWithData:j encoding:NSUTF8StringEncoding] : @"{}";
-    if ([s isEqualToString:last]) return;
-    last = s;
+    if (onlyChanges) {
+        if ([s isEqualToString:last]) return;
+        last = s;
+    }
     printf("%s\n", s.UTF8String);
     fflush(stdout);
+}
+
+static void updatePlayback(NSString *bundle, NSString *title, NSDictionary *info, BOOL playing) {
+    NSArray *track = @[ bundle ?: @"", title,
+                        info[@"kMRMediaRemoteNowPlayingInfoArtist"] ?: @"",
+                        info[@"kMRMediaRemoteNowPlayingInfoAlbum"] ?: @"",
+                        info[@"kMRMediaRemoteNowPlayingInfoContentItemIdentifier"] ?:
+                            info[@"kMRMediaRemoteNowPlayingInfoUniqueIdentifier"] ?: @"" ];
+    if (![track isEqual:lastTrack]) {
+        lastTrack = track;
+        trackNumber++;
+    }
+    NSNumber *elapsed = info[@"kMRMediaRemoteNowPlayingInfoElapsedTime"];
+    id position = !playing && [elapsed isKindOfClass:NSNumber.class] ? elapsed : NSNull.null;
+    NSArray *playback = @[ @(trackNumber), @(playing), position ];
+    if (![playback isEqual:lastPlayback]) {
+        lastPlayback = playback;
+        playbackRevision++;
+    }
+    playbackKnown = bundle.length && title.length;
+    playbackPlaying = playing;
 }
 
 static void read_(void) {
     if (busy) { again = YES; return; }
     busy = YES;
+    void (^done)(void) = afterRead;
+    afterRead = nil;
     getInfo(q, ^(NSDictionary *info) {
         getPlaying(q, ^(Boolean playing) {
             getClient(q, ^(id client) {
                 NSString *b = client && clientParent ? clientParent(client) : nil;
                 if (!b.length && client && clientBundle) b = clientBundle(client);
                 NSString *title = [info[@"kMRMediaRemoteNowPlayingInfoTitle"] description] ?: @"";
+                updatePlayback(b, title, info, playing ? YES : NO);
                 if (!title.length) {
-                    emit(@{});
+                    emitLine(@{}, YES);
                 } else {
                     NSData *art = info[@"kMRMediaRemoteNowPlayingInfoArtworkData"];
                     if (![art isKindOfClass:[NSData class]]) art = nil;
@@ -92,19 +123,34 @@ static void read_(void) {
                         lastArtKey = @""; lastArt = @"";
                     }
                     NSNumber *dur = info[@"kMRMediaRemoteNowPlayingInfoDuration"];
-                    emit(@{ @"title": title,
+                    emitLine(@{ @"title": title,
                             @"artist": [info[@"kMRMediaRemoteNowPlayingInfoArtist"] description] ?: @"",
                             @"album": [info[@"kMRMediaRemoteNowPlayingInfoAlbum"] description] ?: @"",
                             @"bundle": b ?: @"", @"app": appName(b),
                             @"playing": @(playing ? YES : NO),
+                            @"playback": playbackKnown ? @{ @"track": @(trackNumber), @"revision": @(playbackRevision), @"playing": @(playbackPlaying) } : NSNull.null,
                             @"duration": [dur isKindOfClass:[NSNumber class]] ? @(round(dur.doubleValue)) : @0,
-                            @"art": lastArt });
+                            @"art": lastArt }, YES);
                 }
+                if (done && again) afterRead = done; // a notification arrived during this read
+                else if (done) done();
                 busy = NO;
                 if (again) { again = NO; read_(); }
             });
         });
     });
+}
+
+static void guardedCommand(NSString *action, NSInteger revision) {
+    if (afterRead) return; // the caller sends at most one guarded command at a time
+    BOOL pause = [action isEqualToString:@"pause"];
+    afterRead = ^{
+        BOOL accepted = playbackKnown && playbackRevision == (NSUInteger)revision &&
+                        playbackPlaying == pause && sendCommand && sendCommand(pause ? 1 : 0, nil);
+        emitLine(@{ @"guarded": action, @"accepted": @(accepted) }, NO);
+        if (accepted) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 400 * NSEC_PER_MSEC), q, ^{ read_(); });
+    };
+    read_();
 }
 
 static void commands(void) {
@@ -114,6 +160,12 @@ static void commands(void) {
     while (fgets(line, sizeof line, stdin)) {
         NSString *c = [[NSString stringWithUTF8String:line] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
         NSNumber *n = codes[c];
+        if (!n) {
+            NSArray<NSString *> *parts = [c componentsSeparatedByString:@" "];
+            if (parts.count != 2 || ![@[@"pause", @"play"] containsObject:parts[0]] || parts[1].integerValue <= 0) continue;
+            dispatch_async(q, ^{ guardedCommand(parts[0], parts[1].integerValue); });
+            continue;
+        }
         if (n && sendCommand) sendCommand(n.intValue, nil);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 400 * NSEC_PER_MSEC), q, ^{ read_(); });
     }
@@ -134,7 +186,14 @@ static void run(void) {
     if (reg) reg(q);
     for (NSString *n in @[ @"kMRMediaRemoteNowPlayingInfoDidChangeNotification", @"kMRMediaRemoteNowPlayingApplicationIsPlayingDidChangeNotification",
                            @"kMRMediaRemoteNowPlayingApplicationDidChangeNotification" ]) {
-        [[NSNotificationCenter defaultCenter] addObserverForName:n object:nil queue:nil usingBlock:^(NSNotification *_) { dispatch_async(q, ^{ read_(); }); }];
+        [[NSNotificationCenter defaultCenter] addObserverForName:n object:nil queue:nil usingBlock:^(NSNotification *note) {
+            dispatch_async(q, ^{
+                NSNumber *playing = note.userInfo[@"kMRMediaRemoteNowPlayingApplicationIsPlayingUserInfoKey"];
+                // A quick resume and pause can arrive between snapshots.
+                if (playbackKnown && !playbackPlaying && [playing isKindOfClass:NSNumber.class] && playing.boolValue) playbackRevision++;
+                read_();
+            });
+        }];
     }
     // Some apps don't announce every change: a look every 3 s as well.
     dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);

@@ -1423,9 +1423,8 @@ function loadHub() {
     callwin.update(hub, { corner: 'top', open: goTab, getLanguage: () => i18n.locale });
   };
   hub.on('call', popup);
-  // Calls › Pause what plays here: what plays on this Mac pauses for a call (shared/callpause.js).
-  const callPause = new (require('../shared/callpause.js').CallPause)({ media: () => svc.pcNow && svc.pcNow.media, on: () => settings.hub.callPause === true });
-  hub.on('call', (c) => callPause.onCall(c));
+  const callMedia = new (require('../shared/callmedia.js').CallMedia)(hub);
+  app.on('before-quit', () => callMedia.reset());
   hub.on('change', popup);
   if (peer.current && P.isPhoneOs(peer.current.os)) hub.started();
   return hub;

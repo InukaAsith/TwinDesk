@@ -1328,6 +1328,8 @@
   "Take {name}’s": "Взять у {name}",
   "Taking over…": "Перехват…",
   "Talk and listen on this computer": "Говорите и слушайте на этом компьютере",
+  "Pause media during calls": "Приостанавливать воспроизведение во время звонков",
+  "Playback on this computer can resume when the call ends.": "Воспроизведение на этом компьютере может возобновиться после завершения звонка.",
   "Not in the Microsoft Store version": "Нет в версии из Microsoft Store",
   "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "Чтобы говорить и слушать на {me} через Bluetooth, нужен установщик TwinDesk с GitHub. Звонки звучат на {phone}",
   "Talk and listen on {me}": "Говорите и слушайте на {me}",

@@ -100,8 +100,7 @@ class PcMedia extends EventEmitter {
   active(on) {
     this.on = !!on;
     if (this.streamOk) {
-      if (on && !this.proc) this._stream();
-      if (!on && this.proc) { const p = this.proc; this.proc = null; try { p.kill(); } catch (_) {} }
+      this.watchMacPlayback(on);
       if (this.proc || !on) return;
     }
     if (!this.read || !!on === !!this.timer) return;
@@ -115,6 +114,27 @@ class PcMedia extends EventEmitter {
     this.poll();
   }
 
+  // Call-time automation needs the macOS stream and explicit transport commands.
+  watchMacPlayback(on) {
+    if (on && this.streamOk && !this.proc) this._stream();
+    if (!on && this.proc) {
+      const p = this.proc;
+      this.proc = null;
+      try { p.kill(); } catch (_) {}
+    }
+    return !!this.proc;
+  }
+
+  guardPlayback(action, revision) {
+    if (!this.proc?.stdin.writable || !['play', 'pause'].includes(action) || !Number.isSafeInteger(revision) || revision <= 0) return false;
+    try {
+      this.proc.stdin.write(`${action} ${revision}\n`);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // macOS's Now Playing, a JSON line on each change (mac-helper/Sources/twindesk-nowplaying).
   _stream() {
     let p;
@@ -125,24 +145,32 @@ class PcMedia extends EventEmitter {
     p.stdout.on('data', (d) => {
       buf += d;
       let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
+      while (this.proc === p && (i = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, i);
         buf = buf.slice(i + 1);
         let m = {};
         try { m = JSON.parse(line) || {}; } catch (_) { continue; }
         if (m.error) continue;
+        if (m.guarded) {
+          this.emit('guarded', m.guarded, m.accepted === true);
+          continue;
+        }
         got = true;
+        this.emit('playback', m.playback || null);
         this._set(m, typeof m.art === 'string' && m.art.startsWith('data:image/') && m.art.length < 400000 ? m.art : '');
       }
       if (buf.length > 1000000) buf = '';
     });
     p.stdin.on('error', () => {});
-    p.on('exit', () => {
+    const ended = () => {
       if (this.proc !== p) return; // stopped
       this.proc = null;
+      this.emit('playback', null);
       if (!got) this.streamOk = false; // it never worked here: AppleScript from now on
-      setTimeout(() => this.on && this.active(true), got ? 2000 : 0);
-    });
+      if (this.on) setTimeout(() => this.on && this.active(true), got ? 2000 : 0);
+    };
+    p.on('exit', ended);
+    p.on('error', ended);
   }
 
   _set(m, art) {

@@ -1320,6 +1320,8 @@
   "Take {name}’s": "Pegar de {name}",
   "Taking over…": "Assumindo…",
   "Talk and listen on this computer": "Falar e ouvir neste computador",
+  "Pause media during calls": "Pausar mídia durante chamadas",
+  "Playback on this computer can resume when the call ends.": "A reprodução neste computador pode continuar quando a chamada terminar.",
   "Not in the Microsoft Store version": "Não disponível na versão da Microsoft Store",
   "Talking and listening on {me} over Bluetooth needs the TwinDesk installer from GitHub. Calls sound on {phone}": "Falar e ouvir em {me} por Bluetooth requer o instalador do TwinDesk do GitHub. As chamadas tocam em {phone}",
   "Talk and listen on {me}": "Falar e ouvir em {me}",
