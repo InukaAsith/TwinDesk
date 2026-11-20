@@ -67,6 +67,7 @@ class Link {
     this.timers = {};
     this.handlers = new Map();
     this.stateFns = [];
+    this.yieldWanted = false; // inbound link came up before welcome: drop this outbound dial
     this.unknown = new Set();
   }
 
@@ -168,6 +169,7 @@ class Link {
       this._closeSocket();
       return this._scheduleReconnect();
     }
+    this.yieldWanted = true;
     if (this.ws) { // still dialling: drop it, the inbound link is the one
       this._closeSocket();
       clearTimeout(this.timers.reconnect);
@@ -430,6 +432,11 @@ class Link {
   _onWelcome(msg) {
     if (this.mode !== 'session' || this.authed) return;
     clearTimeout(this.timers.hello);
+    if (this.yieldWanted) {
+      this.yieldWanted = false;
+      this._closeSocket();
+      return this._scheduleReconnect();
+    }
     this.authed = true;
     this.attempt = 0;
     const tail = Tailnet.clean(msg.tail); // its Tailscale addresses (none: older, or not on it)
