@@ -140,6 +140,7 @@ object SearchIndex {
         Entry("Hide the message text", { tr("Hide the message text") }, "", "Notifications", ""),
         Entry("Notification access", { tr("Notification access") }, "", "Notifications", ""),
         Entry("Wireless debugging", { tr("Wireless debugging") }, "", "Notifications", ""),
+        Entry("Task alerts", { tr("Task alerts") }, "", "Notifications", ""),
         Entry("Apps", { tr("Apps") }, "", "Notifications", ""),
         Entry("Loading apps…", { tr("Loading apps…") }, "Apps", "Notifications", ""),
         Entry("Copy files", { tr("Copy files") }, "Send to {name}", "Files", ""),

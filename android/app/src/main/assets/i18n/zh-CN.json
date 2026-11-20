@@ -1250,5 +1250,11 @@
   "The computer closed the connection": "电脑关闭了连接",
   "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "此手机可以通过 USB 数据线使用 {name} 的网络。点按“允许”，然后确认 Android 的 VPN 请求。",
   "Use {name}’s internet?": "使用 {name} 的网络？",
-  "Using {name}’s internet over USB": "正在通过 USB 使用 {name} 的网络"
+  "Using {name}’s internet over USB": "正在通过 USB 使用 {name} 的网络",
+  "Task alerts": "任务提醒",
+  "Task completed": "任务已完成",
+  "Task failed": "任务失败",
+  "Terminal task": "终端任务",
+  "Receive completion alerts for tasks you start on {name}.": "接收你在 {name} 上启动的任务的完成提醒。",
+  "Allow notifications in Android settings to receive task alerts.": "请在 Android 设置中允许通知，以接收任务提醒。"
 }

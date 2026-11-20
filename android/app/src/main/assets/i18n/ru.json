@@ -1250,5 +1250,11 @@
   "The computer closed the connection": "Компьютер закрыл соединение",
   "This phone can use {name}’s internet through the USB cable. Tap Allow, then confirm Android’s VPN request.": "Этот телефон может пользоваться интернетом {name} через USB-кабель. Нажмите «Разрешить», затем подтвердите запрос VPN от Android.",
   "Use {name}’s internet?": "Пользоваться интернетом {name}?",
-  "Using {name}’s internet over USB": "Интернет {name} через USB"
+  "Using {name}’s internet over USB": "Интернет {name} через USB",
+  "Task alerts": "Уведомления о задачах",
+  "Task completed": "Задача завершена",
+  "Task failed": "Задача завершилась с ошибкой",
+  "Terminal task": "Задача в терминале",
+  "Receive completion alerts for tasks you start on {name}.": "Получайте уведомления о завершении задач, запущенных вами на {name}.",
+  "Allow notifications in Android settings to receive task alerts.": "Разрешите уведомления в настройках Android, чтобы получать уведомления о задачах."
 }

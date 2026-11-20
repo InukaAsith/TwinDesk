@@ -697,13 +697,19 @@ app.whenReady().then(() => {
   // General › Local API (shared/localapi.js): off unless switched on.
   {
     const { LocalApi } = require('../shared/localapi.js');
+    const { TaskAlerts } = require('./task-alerts.js');
+    const taskAlerts = new TaskAlerts(peer);
     const api = new LocalApi({ dir: app.getPath('userData'), actions: {
       status: () => ({ connected: !!peer.current, device: peer.current ? peer.current.name : '' }),
       send: (paths) => svc.fileSend.send(paths),
       clipboard: (text) => require('electron').clipboard.writeText(text),
+      taskAlerts,
     } });
     svc.localApi = api;
-    svc.applyLocalApi = () => api.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+    svc.applyLocalApi = () => {
+      if (!settings.app.localApi) taskAlerts.clear();
+      return api.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+    };
     if (settings.app.localApi) svc.applyLocalApi();
     app.on('will-quit', () => { api.stop(); });
   }

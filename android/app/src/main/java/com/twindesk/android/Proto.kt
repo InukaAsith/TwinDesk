@@ -58,6 +58,8 @@ object Proto {
         const val CLIP_IMAGE_PART = "clip.image.part" // either way {id, i, data (base64)}
         const val NOTIF = "notif"
         const val NOTIF_POLICY = "notif.policy"
+        const val TASK_ALERT = "task.alert"
+        const val TASK_ALERT_POLICY = "task.alert.policy"
         const val FILE_OFFER = "file.offer"
         const val FILE_ACCEPT = "file.accept"
         const val FILE_REFUSE = "file.refuse"
