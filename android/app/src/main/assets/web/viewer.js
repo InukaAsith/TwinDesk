@@ -20,6 +20,7 @@
   const video = document.getElementById('video');
   const audio = document.getElementById('audio');
   const overlay = document.getElementById('overlay');
+  const pointerCue = document.getElementById('pointer-cue');
   const kbd = document.getElementById('kbd');
   // The app's language (I18n.kt through TD.tr): {name} parts filled from vars, English without the app.
   const t = (text, vars = {}) => (typeof TD.tr === 'function' ? TD.tr(text, JSON.stringify(vars))
@@ -58,7 +59,34 @@
   }
   const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 
+  let cueFrame = null, cueTimer = null;
+  let cueEnabled = false, shareAllowsCue = false;
+
+  function hidePointerCue() {
+    clearTimeout(cueTimer);
+    if (cueFrame !== null) cancelAnimationFrame(cueFrame);
+    cueFrame = cueTimer = null;
+    if (pointerCue) pointerCue.hidden = true;
+  }
+
+  function previewPointer() {
+    if (!pointerCue || !cueEnabled || !shareAllowsCue || document.hidden ||
+        pc?.connectionState !== 'connected' || !video.srcObject ||
+        video.paused || video.readyState < video.HAVE_CURRENT_DATA) return;
+    clearTimeout(cueTimer);
+    cueTimer = setTimeout(hidePointerCue, 160);
+    if (cueFrame !== null) return;
+    cueFrame = requestAnimationFrame(() => {
+      cueFrame = null;
+      const r = drawn();
+      if (!r) return hidePointerCue();
+      pointerCue.style.transform = `translate(${r.x + cur.x * r.w}px, ${r.y + cur.y * r.h}px)`;
+      pointerCue.hidden = false;
+    });
+  }
+
   function closePc() {
+    hidePointerCue();
     if (pc) pc.close();
     pc = null;
     session = null;
@@ -80,6 +108,7 @@
     const queue = (pending = []);
     setOverlay(t('Connecting to {name}…', { name }));
     my.ontrack = (e) => {
+      if (my !== pc) return;
       if (e.track.kind === 'audio') {
         if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
         audio.srcObject = new MediaStream([e.track]);
@@ -87,6 +116,7 @@
         return;
       }
       pace(e.receiver);
+      hidePointerCue();
       video.srcObject = new MediaStream([e.track]);
       video.play().catch(() => {});
     };
@@ -95,6 +125,7 @@
     };
     my.onconnectionstatechange = () => {
       if (my !== pc) return;
+      if (my.connectionState !== 'connected') hidePointerCue();
       if (my.connectionState === 'failed') setOverlay(t('Reconnecting…'));
       else if (my.connectionState === 'disconnected') setOverlay(t('The video connection was interrupted…'));
     };
@@ -116,7 +147,8 @@
     setOverlay('');
     TD.playing(video.videoWidth, video.videoHeight);
   });
-  video.addEventListener('resize', () => TD.playing(video.videoWidth, video.videoHeight));
+  video.addEventListener('resize', () => { hidePointerCue(); TD.playing(video.videoWidth, video.videoHeight); });
+  for (const event of ['waiting', 'stalled', 'emptied', 'ended']) video.addEventListener(event, hidePointerCue);
 
   window.tdRecv = (msg) => {
     if (msg.t !== 'rtc.ice') console.log(`viewer <- ${msg.t}${msg.session != null ? ` #${msg.session}` : ''}`);
@@ -136,8 +168,13 @@
         closePc();
         setOverlay(t('{name} isn’t sharing its screen', { name }));
         break;
+      case 'viewer.input':
+        if (msg.on === false) { shareAllowsCue = false; hidePointerCue(); }
+        break;
       case 'screen.state':
         if ('touch' in msg) realTouch = msg.touch === true;
+        shareAllowsCue = msg.on === true && msg.input === true && !msg.spaceHold;
+        if (!shareAllowsCue) hidePointerCue();
         if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name }) : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
         break;
       case 'opts':
@@ -145,6 +182,8 @@
         sound = msg.sound !== false;
         pacing = ['smooth', 'steady'].includes(msg.pacing) ? msg.pacing : 'fast';
         touchMode = msg.touch === 'direct' ? 'direct' : 'pad';
+        cueEnabled = msg.pointerCue === true;
+        if (!cueEnabled || touchMode !== 'pad') hidePointerCue();
         if (Number(msg.speed) > 0) speed = Number(msg.speed);
         tapClick = msg.tap === true;
         if (msg.pen === false && penOn) penLeave(); // switched off while it is near
@@ -306,6 +345,7 @@
         TD.haptic();
       }, 550);
     } else if (touches.size === 2) {
+      hidePointerCue();
       if (one) { clearTimeout(one.timer); one = null; }
       const [a, b] = [...touches.values()];
       two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -329,9 +369,11 @@
     cur.x = Math.min(1, Math.max(0, cur.x + (dx * g) / r.w));
     cur.y = Math.min(1, Math.max(0, cur.y + (dy * g) / r.h));
     sendAt(cur.x, cur.y);
+    previewPointer();
   }
   function padUp(e) {
     if (e.pointerId !== one.id) return;
+    hidePointerCue();
     clearTimeout(one.timer);
     if (tapClick && !one.moved && !one.right && performance.now() - one.t0 < 300) {
       send({ t: 'in.md', x: cur.x, y: cur.y, b: B.LEFT });
@@ -395,6 +437,7 @@
     penAt = performance.now();
     if (!penNear) { // the hand comes with it: let go of what fingers were doing
       penNear = true;
+      hidePointerCue();
       if (one) {
         clearTimeout(one.timer);
         if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
@@ -600,6 +643,9 @@
     if (e.pointerType === 'pen') { if (penOn) penLeave(); }
     else if (e.pointerType === 'touch') fingerUp(e);
   });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) hidePointerCue(); });
+  window.addEventListener('blur', hidePointerCue);
+  window.addEventListener('resize', hidePointerCue);
   window.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
