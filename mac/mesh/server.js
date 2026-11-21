@@ -195,6 +195,7 @@ class Server extends EventEmitter {
   }
 
   _onMessage(ctx, data, isBinary, ws) {
+    if (ws?.detached) return;
     const now = this._now();
     ctx.lastRx = now;
     if (ws) ws.lastRx = now;
@@ -208,6 +209,7 @@ class Server extends EventEmitter {
     }
 
     if (!ctx.authed) {
+      if (this.asleep && msg.t === P.T.HELLO) return this.fail(ctx, P.E.ASLEEP, 'Asleep');
       if (msg.t === P.T.HELLO && typeof msg.resume === 'string') return this._resume(ctx, msg);
       if (msg.t === P.T.HELLO || msg.t.startsWith('pair.')) return this.emit('preauth', ctx, msg);
       return this.fail(ctx, P.E.BAD_MESSAGE, `"${msg.t}" is not allowed before welcome`);
@@ -322,10 +324,11 @@ class Server extends EventEmitter {
   authenticate(ctx, who, welcome) {
     // The files engine (fx2, shared/meshfx.js) starts on demand and its port goes in this welcome:
     // when it isn't listening yet the welcome waits for it, a few tens of ms, never long.
+    if (this.asleep) return this.fail(ctx, P.E.ASLEEP, 'Asleep');
     const wait = ctx.fxWanted && ctx.fx2Wanted && !ctx.fx2Waited && this.fx2Wait ? this.fx2Wait(1500) : null;
     if (wait) {
       ctx.fx2Waited = true;
-      const go = () => { if (!ctx.authed && this.sockets.has(ctx) && ctx.ws.readyState === ctx.ws.OPEN) this.authenticate(ctx, who, welcome); };
+      const go = () => { if (!ctx.released && !ctx.authed && this.sockets.has(ctx) && ctx.ws.readyState === ctx.ws.OPEN) this.authenticate(ctx, who, welcome); };
       return void wait.then(go, go);
     }
     const { deviceId, name, os } = who;
@@ -385,6 +388,28 @@ class Server extends EventEmitter {
       setTimeout(() => c.ws.terminate(), 1000); // an older phone app never answers the close
     }
     this.endPhoneGrace();
+  }
+
+  // Suspend closes the session and any welcome still waiting on fast files.
+  sleep(on) {
+    this.asleep = !!on;
+    if (!on) return [];
+    const guests = [...this.clients.keys()];
+    for (const ctx of this.sockets) {
+      const waiting = !ctx.authed && ctx.fx2Waited;
+      if (this.clients.get(ctx.deviceId) !== ctx && !waiting) continue;
+      const { ws, alt } = ctx;
+      ctx.released = true;
+      this.fail(ctx, P.E.ASLEEP, 'Asleep');
+      // End the session even if the guest never answers the Close frame.
+      if (this.sockets.has(ctx)) this._onSocketClose(ws);
+      ws.detached = true;
+      setTimeout(() => {
+        ws.terminate();
+        if (alt) alt.terminate();
+      }, 1000).unref();
+    }
+    return guests;
   }
 
   // Close every socket that belongs to a device id (used by Forget).

@@ -138,6 +138,7 @@ class Server extends EventEmitter {
   }
 
   _onMessage(ctx, data, isBinary, ws) {
+    if (ws?.detached) return;
     ctx.lastRx = ws.lastRx = Date.now();
     let msg;
     try {
@@ -149,6 +150,7 @@ class Server extends EventEmitter {
     }
 
     if (!ctx.authed) {
+      if (this.asleep && msg.t === P.T.HELLO) return this.fail(ctx, P.E.ASLEEP, 'Asleep');
       // Disconnect while hello is in flight (the phone is still "connecting"). Bye is allowed
       // here so a deferred welcome cannot commit afterwards. Only a phone is remembered.
       if (msg.t === P.T.BYE) {
@@ -265,6 +267,7 @@ class Server extends EventEmitter {
   // gate: reclaim only. Run at the commit, after the fast-files wait, before anyone is evicted.
   // Not ok: this socket is refused and the session already held stays.
   authenticate(ctx, who, welcome, gate) {
+    if (this.asleep) return this.fail(ctx, P.E.ASLEEP, 'Asleep');
     if (who && typeof who.deviceId === 'string') {
       ctx.pendingId = who.deviceId;
       ctx.pendingOs = who.os;
@@ -369,6 +372,30 @@ class Server extends EventEmitter {
       setTimeout(() => c.ws.terminate(), 1000); // an older app never answers the close
     }
     this.endPhoneGrace();
+  }
+
+  // Suspend closes the session and any welcome still waiting on fast files.
+  sleep(on) {
+    this.asleep = !!on;
+    if (!on) return '';
+    const guest = this.current;
+    for (const ctx of this.sockets) {
+      const waiting = !ctx.authed && ctx.fx2Waited;
+      if (ctx !== guest && !waiting) continue;
+      // Suppress grace for this socket while preserving the phone's saved return.
+      const { ws, alt } = ctx;
+      ctx.released = true;
+      this.fail(ctx, P.E.ASLEEP, 'Asleep');
+      // End the session even if the guest never answers the Close frame.
+      if (this.sockets.has(ctx)) this._onSocketClose(ws);
+      ws.detached = true;
+      setTimeout(() => {
+        ws.terminate();
+        if (alt) alt.terminate();
+      }, 1000).unref();
+    }
+    this.endPhoneGrace();
+    return guest?.deviceId || '';
   }
 
   // Close every socket that belongs to a device id (used by Forget).
