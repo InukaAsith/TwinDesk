@@ -5,6 +5,9 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { EventEmitter } = require('node:events');
+const { mock } = require('node:test');
+const { sleepWake } = require('../sleepwake');
 const { execFileSync } = require('child_process');
 process.env.NODE_PATH = [process.env.NODE_PATH, path.join(__dirname, '../../mac/node_modules')].filter(Boolean).join(path.delimiter);
 require('module').Module._initPaths();
@@ -65,11 +68,50 @@ async function mainPath(dir, tls) {
   assert.strictEqual(new Discovery(ID)._beaconMsg().rc, undefined);
   let h = host(dir, tls);
   try {
-    const first = hello(h.server);
+    const { server } = h;
+    const powerMonitor = new EventEmitter();
+    const invites = [];
+    const ended = [];
+    const closeEvents = [];
+    let noReclaim = 0;
+    assert.strictEqual(typeof server.sleep, 'function', 'Mac server handles suspend and resume');
+    const sleep = server.sleep.bind(server);
+    server.sleep = (on) => {
+      const id = sleep(on);
+      if (on) ended.push(id);
+      return id;
+    };
+    server.on('closed', (ctx, unexpected = false, ...extra) => closeEvents.push([ctx, unexpected, ...extra]));
+    server.on('noreclaim', () => noReclaim++);
+    mock.timers.enable({ apis: ['setInterval'] });
+    sleepWake({ powerMonitor, server: () => server, discovery: () => ({
+      get: (id) => id === ANDROID ? { address: '192.0.2.1' } : null,
+      invite: (address) => invites.push(address),
+    }) });
+    const first = hello(server);
+    first.ws.close = function () { this.readyState = 2; };
     assert.strictEqual(first.ctx.authed, true);
     assert.strictEqual(first.sent[0].rc, 1);
     assert.strictEqual(h.pairing.returnPhone, ANDROID);
-    closed(h.server, first);
+    powerMonitor.emit('suspend');
+    assert.deepStrictEqual(ended, [ANDROID]);
+    assert.strictEqual(server.current, null);
+    assert.strictEqual(server.phoneGrace, null);
+    assert.strictEqual(noReclaim, 0);
+    assert.strictEqual(error(first).code, P.E.ASLEEP);
+    assert.strictEqual(error(hello(h.server)).code, P.E.ASLEEP);
+    assert.strictEqual(error(hello(h.server, true)).code, P.E.ASLEEP);
+    assert.deepStrictEqual(store.read('phone-return.json', null), { id: ANDROID });
+    powerMonitor.emit('resume');
+    mock.timers.tick(2000);
+    mock.timers.reset();
+    assert.deepStrictEqual(invites, ['192.0.2.1']);
+    const awake = hello(h.server, true);
+    assert.strictEqual(awake.ctx.authed, true);
+    server._onSocketClose(first.ws, 1006);
+    assert.deepStrictEqual(closeEvents, [[first.ctx, false]]);
+    assert.strictEqual(server.current, awake.ctx);
+    closed(h.server, awake);
     h.server.endPhoneGrace();
     assert.strictEqual(h.server.current, null);
     // Restart with the persisted last-owner consent, after the legacy grace is gone.
@@ -94,8 +136,13 @@ async function mainPath(dir, tls) {
     assert.strictEqual(h.pairing.returnPhone, null);
     assert.strictEqual(h.server.phoneGrace, null);
     assert.strictEqual(error(hello(h.server, true)).code, P.E.RELEASED);
-    assert.strictEqual(hello(h.server).ctx.authed, true, 'explicit Connect restores consent');
-  } finally { h.server.close(); }
+    const restored = hello(h.server);
+    assert.strictEqual(restored.ctx.authed, true, 'explicit Connect restores consent');
+    restored.ws.close = first.ws.close;
+    h.server.sleep(true);
+    h.server.sleep(false);
+    assert.strictEqual(hello(h.server, false, DESKTOP).ctx.authed, true);
+  } finally { mock.timers.reset(); h.server.close(); }
 }
 
 async function failurePath(dir, tls) {
@@ -105,6 +152,13 @@ async function failurePath(dir, tls) {
   try {
     hello(server);
     free();
+    const slept = await deferred(server, () => {
+      server.sleep(true);
+      server.sleep(false);
+    });
+    assert.strictEqual(error(slept).code, P.E.ASLEEP);
+    assert.strictEqual(slept.ctx.authed, false);
+    assert.strictEqual(pairing.returnPhone, ANDROID);
     const raced = await deferred(server, () => { hello(server, false, DESKTOP); });
     assert.strictEqual(error(raced).code, P.E.RELEASED);
     assert.strictEqual(server.current.deviceId, DESKTOP);
