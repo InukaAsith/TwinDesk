@@ -53,7 +53,14 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     bus: meshHub.bus, takes: (id) => stream.watching(id),
     swapKeys: (id) => { const x = id && meshHub.sessions.get(id); return s().keys.swapCtrlCmd !== false && P.keySwapNeeded(P.OS.MAC, x && x.peerOs); }, // never between two Macs
   });
-  const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, consent, session: (id) => meshHub.sessions.get(id) });
+  // The pair a device's queued copies belong to (While away): the one its session authenticated now.
+  const guestPair = (id) => meshHub.pairing?.paired.find((pair) => pair.id === id);
+  const hostPair = (id) => meshHub.links.get(id)?.pairing;
+  const clipboard = new Clip({
+    bus: meshHub.bus, mesh, getSettings: s, helper, consent, session: (id) => meshHub.sessions.get(id),
+    activePair: (id) => meshHub.sessions.get(id)?.linkUp ? hostPair(id) : guestPair(id),
+    knownPair: (id, pair) => pair === guestPair(id) || pair === hostPair(id),
+  });
   // Files from every device, each on its own peer: the computer driving this Mac isn't selected here (dropset.js).
   const drop = new DropSet({
     hub: meshHub, server, make: (peer, id) => new Drop({ server: peer, helper, displays, getSettings: s, accepts: consent ? () => consent.get(id, 'files', 'in') : null }),

@@ -259,6 +259,69 @@ test('a request just before or during a receive does not lose a copy being read'
   }
 });
 
+test('a queued paste fences an older outgoing read', async () => {
+  const { clip, clipboard, helper, settings, texts } = setup();
+  settings.clipboard.queueLatest = true;
+  const socket = {};
+  clip.away.currentSocket = () => socket;
+  clipboard.text = 'old';
+  let finish;
+  helper.request = () => new Promise(resolve => { finish = resolve; });
+  const outgoing = clip.sendIfChanged('request');
+  await tick();
+
+  await clip.away.receive({ items: [{ text: 'queued', at: 42 }] }, 'peer');
+  finish({ concealed: false });
+  await outgoing;
+  assert.equal(clipboard.text, 'queued');
+  assert.equal(clip.lastSync.received, 'queued');
+  assert.deepEqual(texts(), []);
+});
+
+function queueSetup() {
+  const s = setup();
+  s.settings.clipboard.queueLatest = true;
+  s.socket = {};
+  s.clip.away.currentSocket = () => s.socket;
+  s.paste = () => s.clip.away.receive({ items: [{ text: 'queued', at: 42 }] }, 'peer');
+  return s;
+}
+
+test('a copy made during a queued paste is still sent', async () => {
+  const { clip, clipboard, helper, texts, paste } = queueSetup();
+  let release;
+  clipboard.writeText = (value) => {
+    clipboard.text = value;
+    return new Promise((resolve) => { release = resolve; });
+  };
+  const pasting = paste();
+  await tick();
+  assert.equal(clip.receiving, 1);
+  clipboard.text = 'user-copy';
+  helper.emit('event', 'clipboard', {});
+  release();
+  await pasting;
+  await tick();
+  assert.deepEqual(texts(), ['user-copy']);
+  assert.equal(clip.receiving, 0);
+});
+
+test('a queued paste whose socket changed during the read leaves the clipboard alone', async () => {
+  const s = queueSetup();
+  const { clip, clipboard, paste } = s;
+  let release;
+  clipboard.readText = () => new Promise((resolve) => { release = resolve; });
+  const pasting = paste();
+  await tick();
+  clipboard.text = 'mine';
+  s.socket = {};
+  release('');
+  await pasting;
+  assert.equal(clipboard.text, 'mine');
+  assert.equal(clip.lastSync.received, null);
+  assert.equal(clip.receiving, 0);
+});
+
 test('a phone echo does not overwrite a local copy waiting on the helper', async () => {
   const { clip, clipboard, helper, texts } = setup();
   clipboard.text = 'A';
@@ -333,4 +396,18 @@ test('a mesh device copying the text last sent is a copy, also during a read', a
   assert.equal(clip.lastSync.received, 'A');
   assert.deepEqual(texts(), ['A']);
   assert.equal(clip.readsInFlight, 0);
+});
+
+test('a live mesh clip that overtakes a queued paste wins', async () => {
+  const { clip, clipboard } = setup();
+  let release;
+  clip._readText = () => new Promise(resolve => { release = resolve; });
+  const pending = clip.away.applyLatest('queued', () => true);
+  await tick();
+  clip._readText = async () => clipboard.text;
+  await clip._onClip({ t: P.T.CLIP, text: 'live' }, 'peer');
+  release('');
+  await pending;
+  assert.deepEqual(clipboard.writes, ['live']);
+  assert.equal(clip.lastSync.received, 'live');
 });

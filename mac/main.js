@@ -683,7 +683,14 @@ app.whenReady().then(() => {
   peer.on('closed', pushState);
   peer.on('rtt', pushState);
 
-  svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
+  svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
+    clipboardPair: (ctx) => !ctx ? null : ctx.role === 'host'
+      ? !link.stopped && link.hosts.find((it) => it.id === ctx.deviceId)
+      : pairing.paired.find((it) => it.id === ctx.deviceId),
+  });
+  const checkClipboardPair = () => svc.clipboard.checkQueuePair();
+  link.on('change', checkClipboardPair);
+  pairing.on('change', checkClipboardPair);
 
   svc.kvm.laneReady.then(laneGo);
   // Camera › Take a photo with the phone (shared/phonephoto.js): its photo onto the clipboard.
