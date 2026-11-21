@@ -492,6 +492,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     // ---- Link.Events ----
 
     override fun onChange() {
+        screen.doctorLinkChanged()
         runCatching { share.linkChanged() } // the session moved (Bluetooth <-> Wi-Fi): shared folders follow
         runCatching { remote.linkChanged() } // … and the Remote page's pace
         changed()
@@ -520,7 +521,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     override fun onMessage(m: JSONObject, route: Link.TrustedRoute?, source: okhttp3.WebSocket) {
         val t = m.optString("t")
         main.post {
-            if (t == "rtc.offer" && m.has("detail")) {
+            if (t == "rtc.offer") {
                 screen.onOffer(m, route)
                 return@post
             }

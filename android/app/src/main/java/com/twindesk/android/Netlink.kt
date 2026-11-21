@@ -183,7 +183,8 @@ class Netlink(core: Core) : Feature(core) {
     val via: String get() {
         if (core.link.wired) return "USB"
         if (core.link.ble) return "Bluetooth"
-        val onGroup = state in setOf("hosting", "joined") && GROUP_NETS.any { core.host?.address?.startsWith(it) == true }
+        val address = core.link.endpoint()?.first ?: core.host?.address
+        val onGroup = state in setOf("hosting", "joined") && GROUP_NETS.any { address?.startsWith(it) == true }
         if (!onGroup) return "Wi-Fi"
         val name = if (hotspotAsked) "Hotspot" else "Wi-Fi Direct"
         val asked = synchronized(this) { "user" in needs || "user" in peerNeeds } || hotspotAsked
