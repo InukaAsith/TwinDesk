@@ -362,6 +362,8 @@ function setupIpc(ctx) {
       for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
     } else ctx.phoneViews.openCamera(opts);
   });
+  handle('takePhoto', () => !!ctx.takePhoto && ctx.takePhoto()); // Camera › Take a photo with the phone (shared/phonephoto.js)
+  handle('scanDocument', () => !!ctx.scanDocument && ctx.scanDocument()); // Camera › Scan document (shared/phonephoto.js)
   phone('phoneListCameras', () => (ctx.phone.bridge ? ctx.phone.bridge.listCameras() : []));
   phone('phoneOpenApp', (arg) => arg && typeof arg.id === 'string' && ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100)));
   phone('phoneCloseView', (id) => ctx.phoneViews.close(Number(id)));

@@ -4,4 +4,7 @@
     <cache-path name="clip" path="clip/" />
     <!-- An MMS from the computer, for Android to send (MmsPdu.kt), and pictures for a chat app (Notifs). -->
     <cache-path name="mms" path="mms/" />
+    <!-- Scan document: camera pages, and the PDF when Documents/TwinDesk can't be written. -->
+    <cache-path name="scan_pages" path="scan_pages/" />
+    <cache-path name="scan_pdf" path="scan_pdf/" />
 </paths>

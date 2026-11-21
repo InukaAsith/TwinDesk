@@ -811,6 +811,22 @@ app.whenReady().then(() => {
   });
   svc.phone.on('change', pushState);
   svc.phoneViews = svc.phone.viewsProxy; // the windows of the active phone
+  // Camera › Take a photo / Scan document (shared/phonephoto.js): the active Android phone.
+  {
+    const { PhonePhoto, copyPicture } = require('../../shared/phonephoto.js');
+    const phoneOn = () => { const c = svc.phone.active.link.current; return !!(c && c.os === P.OS.ANDROID); };
+    const pp = new PhonePhoto({
+      send: (m) => svc.phone.active.link.sendToClient(m),
+      phoneOn,
+      popup: (key, vars) => hud && hud.show('driven', { key, vars }),
+      copy: (f) => copyPicture(require('electron'), f),
+    });
+    phoneDir.on('t:cam.capture', (m) => { if (m && m.on === false) pp.ended(); });
+    phoneDir.on('closed', () => { if (!phoneOn()) pp.ended(); }); // a phone left, and no Android remains
+    svc.phonePhoto = pp;
+    svc.takePhoto = () => pp.take();
+    svc.scanDocument = () => pp.scan();
+  }
   // ReZume (shared/rezume.js) with one device of the mesh, picked on the ReZume page and the same on
   // both (shared/rezume-solo.js, settings.rezume.with); a phone alone without a pick. Loaded the
   // first time it's turned on; its offers in the Dock (dockstub.js), the menu bar and a notification.
@@ -1018,6 +1034,7 @@ app.whenReady().then(() => {
     hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : 'Cursor sharing off' }, sub);
   });
   svc.drop.on('batch', (b) => {
+    if (b.kind === 'send' && svc.phonePhoto && svc.phonePhoto.arrived(b.placed)) return; // photo: copied; scan: the PDF stays in received files
     if (svc.rz && svc.rz.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
   });
