@@ -456,20 +456,23 @@ class AirPlayReceiver extends EventEmitter {
           this.emit('change');
           resolve();
         });
-        server.listen(port, () => {
-          this.port = server.address().port;
-          this.error = '';
-          const host = `twindesk-ap-${this.identity.id.replace(/:/g, '').slice(-6).toLowerCase()}`;
-          this.adv = new Advertiser({
-            name: this.name, host, port: this.port,
-            airplayTxt: this.airplayTxt(), raopTxt: this.raopTxt(),
-            raopName: `${this.identity.id.replace(/:/g, '')}@${this.name}`,
-          });
-          this.adv.start();
-          this.emit('change');
-          resolve();
-        });
+        server.listen(port);
       };
+      // Once, not listen()'s callback: the EADDRINUSE retry would register that again, both would
+      // fire, and the first advertiser's socket and poll would outlive stop().
+      server.once('listening', () => {
+        this.port = server.address().port;
+        this.error = '';
+        const host = `twindesk-ap-${this.identity.id.replace(/:/g, '').slice(-6).toLowerCase()}`;
+        this.adv = new Advertiser({
+          name: this.name, host, port: this.port,
+          airplayTxt: this.airplayTxt(), raopTxt: this.raopTxt(),
+          raopName: `${this.identity.id.replace(/:/g, '')}@${this.name}`,
+        });
+        this.adv.start();
+        this.emit('change');
+        resolve();
+      });
       listen(this.wantPort);
     });
   }
