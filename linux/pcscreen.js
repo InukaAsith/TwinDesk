@@ -292,7 +292,7 @@ class PcScreen {
   // screen.state after welcome and whenever any of it changes (called with every state push).
   sendState() {
     if (this.link.status.state !== 'connected') return void (this.stateKey = '');
-    const msg = { t: T.SCREEN_STATE, on: this.mode !== 'off', mode: this.mode, remote: this.cfg.remote, modes: this._modes(), touch: true };
+    const msg = { t: T.SCREEN_STATE, on: this.mode !== 'off', mode: this.mode, remote: this.cfg.remote, input: !!this.input.allowed, modes: this._modes(), touch: true };
     const key = JSON.stringify(msg);
     if (key === this.stateKey) return;
     this.stateKey = key;

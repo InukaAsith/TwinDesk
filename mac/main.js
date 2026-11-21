@@ -316,6 +316,7 @@ function sendScreenState() {
   if (!c || !svc) return void (screenStateKey = '');
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], ...Pick.stateFields(svc.displays.list(), svc.displays.target(), settings.sharing.remote !== false && !appsHeld()) };
   const keyed = [c.deviceId, msg];
+  msg.input = !!svc.input.enabled();
   const key = JSON.stringify(keyed);
   if (key === screenStateKey) return;
   screenStateKey = key;
