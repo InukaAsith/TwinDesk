@@ -92,6 +92,7 @@
       // screen sharing
       STREAM_INFO: 'stream.info',
       STREAM_STOP: 'stream.stop',
+      // screen.state input (optional) reports whether the sharer currently accepts screen input.
       STREAM_INPUT: 'stream.input', // Mac -> Windows: {on} whether the Mac accepts in.* ("Receive input")
       RTC_OFFER: 'rtc.offer',
       RTC_ANSWER: 'rtc.answer',

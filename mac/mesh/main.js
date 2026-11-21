@@ -315,12 +315,14 @@ function publishState() {
 
 // Tell the viewer what we share, so it can show Start / Extend / Mirror itself
 // (screen.state); only when something changed or the peer is new.
+let screenInputOwner = null;
 let screenStateKey = '';
 let sharingBy = ''; // the device whose screen.ctl started our sharing ('' = this Mac's own menu): screen.state's by
 
 // To every connected device (each may watch this Mac's screen; the facade told the selected one only), once
 // per device and change.
 function sendScreenState() {
+  updateScreenInputOwner();
   if (!svc || !hub) return void (screenStateKey = '');
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
@@ -328,11 +330,27 @@ function sendScreenState() {
   // by: who asked for it. Only that device's Monitor 2 opens by itself; the others' would watch too, and
   // the picture went to whichever answered (a Monitor 2 on every computer of the mesh opened).
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], by: sharingBy };
+  msg.input = !!svc.input.enabled(); // the screen-input gate: Android shows its touchpad cue only while input applies (#288)
   const ids = hub.bus.connectedIds();
   const key = JSON.stringify([ids, msg]);
   if (key === screenStateKey) return;
   screenStateKey = key;
   for (const pid of ids) hub.bus.send(pid, msg);
+}
+
+function updateScreenInputOwner() {
+  const c = peer && peer.current;
+  const scoped = c && svc && svc.stream.byId.get(c.deviceId)?.peer;
+  const socket = scoped && (scoped.current?.conn || scoped.current?.ws);
+  if (screenInputOwner && (screenInputOwner.peer !== scoped || screenInputOwner.socket !== socket)) {
+    const previous = screenInputOwner.peer.current;
+    if (previous && (previous.conn || previous.ws) === screenInputOwner.socket) {
+      screenInputOwner.peer.sendToClient({ t: P.T.STREAM_INPUT, on: false });
+    }
+    screenInputOwner = null;
+    screenStateKey = '';
+  }
+  if (scoped && socket) screenInputOwner = { peer: scoped, socket };
 }
 
 function displayPick(m) {

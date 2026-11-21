@@ -280,6 +280,15 @@ class Screen(core: Core) : Feature(core) {
         core.changed()
     }
 
+    private fun pointerInput(): Boolean {
+        val input = state?.opt("input") as? Boolean
+        return when (core.host?.os) {
+            "mac" -> inputOn && input != false // older Macs already report stream.input
+            "win", "linux" -> input == true
+            else -> false
+        }
+    }
+
     // name: the computer we're connected to, for the viewer's messages (stream.info's is the
     // display it shares, e.g. the Mac's "TwinDesk (virtual)"; a PC or Linux sends none).
     // touch: "pad" (slide moves the pointer, tap clicks) or "direct" (the
@@ -287,7 +296,7 @@ class Screen(core: Core) : Feature(core) {
     // pen: a stylus is a pen on the computer (its pressure, tilt, eraser), else a mouse; penFast: a
     // stroke's samples batched per event (Fast writing), else each its own, paced (every point lands).
     fun opts(): JSONObject = msg("opts", "sound" to core.store.flag("screen.sound", false), "pacing" to (core.store.flag("screen.smooth", false).let { if (it) "smooth" else "fast" }),
-        "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
+        "inputOn" to pointerInput(), "name" to (core.host?.name ?: "the computer"), "touch" to (if (core.store.flag("screen.touchpad", true)) "pad" else "direct"),
         "speed" to core.remote.speed.toDouble(), "tap" to core.remote.tapClick, "pen" to core.store.flag("screen.pen", true),
         "penFast" to core.store.flag("screen.penFast", false))
 
@@ -389,6 +398,7 @@ class Screen(core: Core) : Feature(core) {
         lastInfo = null
         startedByUs = false
         host?.post(msg("stream.stop"))
+        host?.post(msg("viewer.input", "on" to false))
     }
 
     override fun onMessage(t: String, m: JSONObject): Boolean {
@@ -396,6 +406,7 @@ class Screen(core: Core) : Feature(core) {
             "screen.state" -> {
                 val was = state
                 state = m
+                host?.post(msg("viewer.input", "on" to pointerInput()))
                 host?.post(m)
                 val on = m.optBoolean("on")
                 // Off -> on, not asked for here: the person pressed Share Screen on the computer.
@@ -407,6 +418,7 @@ class Screen(core: Core) : Feature(core) {
             }
             "stream.input" -> {
                 inputOn = m.optBoolean("on", true)
+                host?.post(msg("viewer.input", "on" to pointerInput()))
                 core.changed()
             }
             "stream.info" -> { lastInfo = m; host?.post(m) }

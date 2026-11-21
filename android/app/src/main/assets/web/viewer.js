@@ -20,7 +20,13 @@
   const video = document.getElementById('video');
   const audio = document.getElementById('audio');
   const overlay = document.getElementById('overlay');
+  const pointerCue = document.getElementById('pointer-cue');
   const kbd = document.getElementById('kbd');
+  document.addEventListener('visibilitychange', () => { if (document.hidden) hidePointerCue(); });
+  window.addEventListener('blur', hidePointerCue);
+  window.addEventListener('resize', hidePointerCue);
+  video.addEventListener('resize', hidePointerCue);
+  for (const event of ['waiting', 'stalled', 'emptied', 'ended']) video.addEventListener(event, hidePointerCue);
   // The app's language (I18n.kt through TD.tr): {name} parts filled from vars, English without the app.
   const t = (text, vars = {}) => (typeof TD.tr === 'function' ? TD.tr(text, JSON.stringify(vars))
     : text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)));
@@ -192,6 +198,7 @@
     pending = null;
     video.srcObject = null;
     audio.srcObject = null;
+    hidePointerCue();
   }
 
   function applyAudio() {
@@ -218,6 +225,7 @@
         applyAudio();
         return;
       }
+      hidePointerCue();
       pace(e.receiver);
       const stream = new MediaStream([e.track]);
       videoOwner = { pc: my, stream, generation: viewerGeneration, session: msg.session };
@@ -229,6 +237,7 @@
     };
     my.onconnectionstatechange = () => {
       if (my !== pc) return;
+      if (my.connectionState !== 'connected') hidePointerCue();
       const connection = my.connectionState;
       if (connection === 'connected') requireCurrentFrame();
       else if (connection === 'failed') { reportVideo(false); setOverlay(t('Reconnecting…')); }
@@ -288,9 +297,15 @@
         closePc();
         setOverlay(t('{name} isn’t sharing its screen', { name }));
         break;
+      case 'viewer.input':
+        inputAllowsCue = msg.on === true;
+        if (!inputAllowsCue) hidePointerCue();
+        break;
       case 'screen.state': {
         const wasDirect = real();
         if ('touch' in msg) realTouch = msg.touch === true;
+        shareAllowsCue = msg.on === true;
+        if (!shareAllowsCue) hidePointerCue();
         if (viewGestures && !wasDirect && real()) resetLocalZoom();
         if (msg.on === false) reportVideo(false);
         if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name })
@@ -298,6 +313,8 @@
         break;
       }
       case 'opts': {
+        inputAllowsCue = msg.inputOn === true;
+        if (!inputAllowsCue) hidePointerCue();
         if (msg.name) name = msg.name;
         sound = msg.sound !== false;
         pacing = ['smooth', 'steady'].includes(msg.pacing) ? msg.pacing : 'fast';
@@ -557,6 +574,32 @@
   // Touchpad: the pointer moves by how far the finger slides (faster flicks go further) and the
   // finger never clicks; held still it right-clicks. cur is the pointer, normalized like in.mm.
   const cur = { x: 0.5, y: 0.5 };
+  let cueFrame = null, cueTimer = null;
+  let inputAllowsCue = false, shareAllowsCue = false;
+
+  function hidePointerCue() {
+    clearTimeout(cueTimer);
+    if (cueFrame !== null) cancelAnimationFrame(cueFrame);
+    cueFrame = cueTimer = null;
+    if (pointerCue) pointerCue.hidden = true;
+  }
+
+  function previewPointer() {
+    if (!pointerCue || !inputAllowsCue || !shareAllowsCue || document.hidden ||
+        pc?.connectionState !== 'connected' || !video.srcObject ||
+        video.paused || video.readyState < video.HAVE_CURRENT_DATA) return;
+    clearTimeout(cueTimer);
+    cueTimer = setTimeout(hidePointerCue, 160);
+    if (cueFrame !== null) return;
+    cueFrame = requestAnimationFrame(() => {
+      cueFrame = null;
+      const r = drawn();
+      if (!r) return hidePointerCue();
+      pointerCue.style.transform = `translate(${r.x + cur.x * r.w}px, ${r.y + cur.y * r.h}px)`;
+      pointerCue.hidden = false;
+    });
+  }
+
   function padDown(e) {
     if (touches.size === 1) {
       followCursor();
@@ -569,6 +612,7 @@
         TD.haptic();
       }, 550);
     } else if (touches.size === 2) {
+      hidePointerCue();
       if (one) { clearTimeout(one.timer); one = null; }
       const [a, b] = [...touches.values()];
       two = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -593,9 +637,11 @@
     cur.y = Math.min(1, Math.max(0, cur.y + (dy * g) / r.h));
     followCursor();
     sendAt(cur.x, cur.y);
+    previewPointer();
   }
   function padUp(e) {
     if (e.pointerId !== one.id) return;
+    hidePointerCue();
     clearTimeout(one.timer);
     if (tapClick && !one.moved && !one.right && performance.now() - one.t0 < 300) {
       send({ t: 'in.md', x: cur.x, y: cur.y, b: B.LEFT });
@@ -659,6 +705,7 @@
     penAt = performance.now();
     if (!penNear) { // the hand comes with it: let go of what fingers were doing
       penNear = true;
+      hidePointerCue();
       if (one) {
         clearTimeout(one.timer);
         if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
