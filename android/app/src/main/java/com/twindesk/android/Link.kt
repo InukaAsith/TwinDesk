@@ -5,6 +5,8 @@
 // reclaim a paired Mac that advertises rc without taking another session).
 package com.twindesk.android
 
+import android.net.InetAddresses
+import android.os.SystemClock
 import android.util.Log
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -12,6 +14,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.net.Inet4Address
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.util.concurrent.Executors
@@ -22,6 +25,9 @@ import javax.net.ssl.X509TrustManager
 
 private const val FALLBACK_MS = 5000L // on the network this long, answering: its Bluetooth fallback goes (dropAlt)
 private const val ANSWERING_MS = 3000L // … answering = something came through it this recently
+private const val CONNECT_TIMEOUT_MS = 5000L
+private const val RESUME_BACKOFF_MS = 8000L
+private const val MAX_LAN_ADDRESSES = 4
 // Quiet links (shared/quiet.js): the same numbers as the computers'.
 private const val QUIET_IDLE = "idle"
 private const val QUIET_ACTIVE_MS = 15000L
@@ -81,7 +87,11 @@ class Link(
     private var altBle = false
     private var movedAt = 0L // when the session moved onto the network (dropAlt)
     private var pending: WebSocket? = null
-    private var pendingAddress = ""
+    private data class LanOffer(val addresses: List<String>, val port: Int)
+    private var lanOffer: LanOffer? = null // only while this authenticated socket is primary on BLE
+    private var lanCapable = false
+    private var lanAskAfter = 0L
+    private val resumeTried = HashMap<String, Long>()
     private val lastRxOf = java.util.concurrent.ConcurrentHashMap<WebSocket, Long>()
     private var helloTimer: ScheduledFuture<*>? = null
     // The next hello is a reclaim (shared/reclaim.js): rc:1 plus a resume string older hosts refuse.
@@ -173,16 +183,46 @@ class Link(
         setState("connecting", "")
     }
 
-    // The session is through Bluetooth and the computer is on the network now (the same one, or a
-    // Wi-Fi Direct group / hotspot just made for it): move it there without ending it.
-    fun resume(address: String, port: Int) = run {
+    // Core's Bluetooth tick looks up discovery for the current host on this executor. Offers and
+    // retries live here too, so a tick queued before a socket change cannot dial the old peer's LAN.
+    fun resume(discover: (String) -> Pair<String, Int>?) = run {
         val h = host ?: return@run
-        if (state != "connected" || !ble || resumeKey.isEmpty() || pending != null) return@run
-        pendingAddress = address
-        pending = socket("wss://$address:$port", h.fp)
+        if (parting || !connected || !ble || resumeKey.isEmpty() || pending != null) return@run
+        val seen = discover(h.id)
+        val now = SystemClock.elapsedRealtime()
+        // A host that switched back to BLE first may have sent before our LAN socket closed.
+        if (seen == null && lanOffer == null && lanCapable && now >= lanAskAfter) {
+            lanAskAfter = now + RESUME_BACKOFF_MS
+            raw(msg(Proto.T.NET_LAN, "ask" to true))
+        }
+        val addresses = lanOffer?.addresses.orEmpty()
+        resumeTried.keys.retainAll(addresses + listOfNotNull(seen?.first))
+        // Try every offered address before repeating one, even if earlier dials took a long time.
+        val address = seen?.first ?: addresses.minByOrNull { resumeTried[it] ?: Long.MIN_VALUE } ?: return@run
+        val port = seen?.second ?: lanOffer?.port ?: return@run
+        if (resumeTried[address]?.let { now - it < RESUME_BACKOFF_MS } == true) return@run
+        resumeTried[address] = now
+        val w = socket("wss://$address:$port", h.fp)
+        pending = w
+        // Bound the entire attempt, including a TCP peer that never finishes TLS or the upgrade.
+        exec.schedule({ if (pending === w) { pending = null; w.cancel() } }, CONNECT_TIMEOUT_MS + Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
 
-    val resuming get() = pending != null
+    private fun onLanOffer(m: JSONObject) {
+        val port = m.opt("port") as? Int ?: return
+        val list = m.optJSONArray("addresses") ?: return
+        if (port !in 1..65535 || list.length() > MAX_LAN_ADDRESSES) return
+        val addresses = (0 until list.length()).map { i ->
+            val address = list.opt(i) as? String ?: return
+            if (address.length !in 7..15) return
+            val ip = runCatching { InetAddresses.parseNumericAddress(address) }.getOrNull() as? Inet4Address ?: return
+            val linkLocal = ip.isLinkLocalAddress && (ip.address[2].toInt() and 255) in 1..254
+            if (ip.hostAddress != address || !(ip.isSiteLocalAddress || linkLocal)) return
+            address
+        }
+        lanOffer = LanOffer(addresses.distinct(), port)
+        lanCapable = true
+    }
 
     fun disconnect() {
         parting = true
@@ -377,8 +417,8 @@ class Link(
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
             override fun checkServerTrusted(chain: Array<out X509Certificate>, authType: String?) {
                 val fp = Proto.sha256(chain[0].encoded).hex()
-                seenFp = fp
-                if (pinFp != null && fp != pinFp) throw CertificateException("identity changed")
+                if (pinFp == null) seenFp = fp
+                else if (fp != pinFp) throw CertificateException("identity changed")
             }
             override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
         }
@@ -387,7 +427,7 @@ class Link(
             .socketFactory(NoDelaySockets)
             .sslSocketFactory(ssl.socketFactory, trust)
             .hostnameVerifier { _, _ -> true }
-            .connectTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .build()
     }
@@ -405,25 +445,34 @@ class Link(
     }
 
     private fun onPendingOpen(w: WebSocket) {
+        if (parting) { pending = null; w.cancel(); return }
         val h = host ?: return
         lastRxOf[w] = System.currentTimeMillis()
         w.send(msg(Proto.T.HELLO, "v" to Proto.VERSION, "id" to store.deviceId, "name" to store.deviceName, "os" to Proto.OS, "token" to h.token, "resume" to resumeKey).toString())
-        exec.schedule({ if (pending === w) { pending = null; w.cancel() } }, Proto.TIMEOUT_MS, TimeUnit.MILLISECONDS)
     }
 
     // welcome {resumed}: the computer sends on the new socket from now on; so do we.
     private fun promote(w: WebSocket) {
         pending = null
+        lanOffer = null
+        lanAskAfter = 0L
+        resumeTried.clear()
         alt?.cancel()
         alt = ws
         altBle = ble
         ws = w
         ble = false
         movedAt = System.currentTimeMillis()
-        host?.let { h ->
-            if (h.address != pendingAddress) { h.address = pendingAddress; store.putHost(h, hostsKey) }
+        endOf[w]?.let { (address, port) ->
+            host?.let { h ->
+                if (h.address != address || h.port != port) {
+                    h.address = address
+                    h.port = port
+                    store.putHost(h, hostsKey)
+                }
+            }
+            Log.i("TwinDesk", "session moved to $address")
         }
-        Log.i("TwinDesk", "session moved to $pendingAddress")
         events.onChange()
     }
 
@@ -461,7 +510,7 @@ class Link(
             lastRxOf[webSocket] = System.currentTimeMillis()
             if (webSocket === pending) {
                 val m = runCatching { JSONObject(text) }.getOrNull()
-                if (m?.optString("t") == Proto.T.WELCOME && m.optBoolean("resumed")) promote(webSocket)
+                if (!parting && m?.optString("t") == Proto.T.WELCOME && m.optBoolean("resumed")) promote(webSocket)
                 else { pending = null; webSocket.cancel() }
             } else if (webSocket === ws || webSocket === alt) onText(text, webSocket)
         }
@@ -525,6 +574,10 @@ class Link(
             Proto.T.PAIR_CANCEL -> return pairFailed(tr("Pairing was cancelled on the computer."))
             Proto.T.WELCOME -> return onWelcome(m)
             Proto.T.ERROR -> return onError(m)
+            Proto.T.NET_LAN -> {
+                if (ingress === ws && !parting && connected && ble && resumeKey.isNotEmpty()) onLanOffer(m)
+                return
+            }
             Proto.T.PING -> { if (state == "connected") raw(msg(Proto.T.PONG, "ts" to m.opt("ts"))); return }
             Proto.T.PONG -> { if (m.has("ts")) rttMs = maxOf(0, System.currentTimeMillis() - m.optLong("ts")); return }
             QUIET_IDLE -> { if (state == "connected") { val was = peerIdle; peerIdle = m.optBoolean("on"); if (was != peerIdle) nudge() }; return }
@@ -714,6 +767,10 @@ class Link(
 
     private fun dropOthers() {
         resumeKey = ""
+        lanOffer = null
+        lanCapable = false
+        lanAskAfter = 0L
+        resumeTried.clear()
         alt?.cancel()
         alt = null
         pending?.cancel()

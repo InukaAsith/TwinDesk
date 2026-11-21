@@ -17,6 +17,7 @@
 const net = require('net');
 const { EventEmitter } = require('events');
 const P = require('./protocol.js');
+const { advertiseBleLan } = require('./blelan.js');
 
 const HIGH_WATER = 64 * 1024; // bytes handed to the helper and not sent yet: stop reading the socket
 const LOW_WATER = 16 * 1024;
@@ -94,6 +95,7 @@ class BleHost extends EventEmitter {
     this.refused = new Set(); // devs turned away (accept)
     this.pipes = new Map(); // dev -> Pipe
     server.blePorts = new Map(); // local port -> when bytes last came through it
+    advertiseBleLan(server);
     helper.on('event', (name, m) => this._event(name, m));
     helper.on('ready', () => { this.applied = null; this.apply(); });
     this.apply();
