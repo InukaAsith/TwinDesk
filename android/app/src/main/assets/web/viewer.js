@@ -153,13 +153,61 @@
   }
   const steadySdp = (sdp) => (pacing === 'steady' ? sdp.replace(/^a=extmap:[^\r\n]*\/playout-delay\r?\n/gm, '') : sdp);
 
+  let doctorTimer = null, doctorRevision = 0;
+  let doctorLast = null;
+
+  function stopDoctor() {
+    clearTimeout(doctorTimer);
+    doctorTimer = null;
+    doctorLast = null;
+    doctorRevision++;
+  }
+
+  function scheduleDoctor(owner = videoOwner) {
+    if (doctorTimer !== null || typeof TD.videoMetrics !== 'function' || !owner?.playing ||
+        document.hidden) return;
+    const revision = doctorRevision;
+    const current = () => revision === doctorRevision && owner === videoOwner && owner.pc === pc &&
+      owner.playing && !document.hidden && video.srcObject === owner.stream &&
+      pc.connectionState === 'connected';
+    doctorTimer = setTimeout(async () => {
+      doctorTimer = null;
+      if (!current()) return;
+      doctorTimer = -1; // Do not overlap getStats calls for this owner.
+      try {
+        const report = await owner.pc.getStats();
+        if (!current()) return;
+        const inbound = [...report.values()].find(stat =>
+          stat.type === 'inbound-rtp' && (stat.kind === 'video' || stat.mediaType === 'video'));
+        if (inbound) {
+          const last = doctorLast;
+          const elapsed = last && inbound.id === last.id ? inbound.timestamp - last.timestamp : 0;
+          const rate = (key, factor) => elapsed >= 250 && elapsed <= 10000 &&
+            Number.isFinite(inbound[key]) && Number.isFinite(last[key]) && inbound[key] >= last[key]
+            ? Math.round((inbound[key] - last[key]) * factor / elapsed) : -1;
+          const dropped = Number.isSafeInteger(inbound.framesDropped) && inbound.framesDropped >= 0
+            ? inbound.framesDropped : -1;
+          TD.videoMetrics(owner.generation, owner.session, video.videoWidth, video.videoHeight,
+            rate('framesDecoded', 1000), rate('bytesReceived', 8), dropped);
+          doctorLast = inbound;
+        }
+      } catch { /* Statistics can be unavailable while the receiver changes tracks. */ }
+      finally {
+        if (revision === doctorRevision && doctorTimer === -1) doctorTimer = null;
+      }
+      if (current()) scheduleDoctor(owner);
+    }, 2000);
+  }
+
   function reportVideo(playing, owner = videoOwner) {
+    if (!playing) stopDoctor();
     if (!playing) { frameProbe++; cancelDetail(); if (owner) owner.playing = false; }
     if (owner && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream &&
         (!playing || owner.pc.connectionState === 'connected') && typeof TD.videoState === 'function' && Number.isInteger(owner.generation) && owner.generation > 0 && Number.isInteger(owner.session)) {
       owner.playing = playing;
       TD.videoState(owner.generation, owner.session, playing, video.videoWidth, video.videoHeight);
       if (playing) scheduleDetail();
+      if (playing) scheduleDoctor(owner);
     }
   }
 
@@ -933,8 +981,10 @@
     }
   });
   document.addEventListener('visibilitychange', () => {
-    if (!viewGestures) return;
-    if (document.hidden) { cancelInput(); reportVideo(false); }
+    if (document.hidden) {
+      if (viewGestures) cancelInput();
+      reportVideo(false);
+    }
     else requireCurrentFrame();
   });
   window.addEventListener('blur', () => { if (viewGestures) cancelInput(); });

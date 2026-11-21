@@ -94,6 +94,10 @@ class WebHost(ctx: Context, page: String, private val core: Core, private val on
         @JavascriptInterface fun detail(generation: Int, session: Int, height: Int) = main.post {
             onEvent("videoDetail", msg("videoDetail", "generation" to generation, "session" to session, "height" to height))
         }.let { }
+        @JavascriptInterface fun videoMetrics(generation: Int, session: Int, w: Int, h: Int, fps: Int, kbps: Int, dropped: Long) = main.post {
+            onEvent("videoMetrics", msg("videoMetrics", "generation" to generation, "session" to session,
+                "w" to w, "h" to h, "fps" to fps, "kbps" to kbps, "dropped" to dropped))
+        }.let { }
         @JavascriptInterface fun playing(w: Int, h: Int) = main.post { onEvent("playing", JSONObject().put("w", w).put("h", h)) }.let { }
         @JavascriptInterface fun haptic() = main.post { view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS) }.let { }
         // A light tap (a gamepad or touchpad button going down).
@@ -151,6 +155,15 @@ data class MacDisplay(val id: String, val name: String, val w: Int, val h: Int) 
         append(name.ifBlank { id }.take(40))
         if (w > 0 && h > 0) append(" · ").append(w).append('×').append(h)
     }
+}
+
+data class StreamDoctorSample(val width: Int, val height: Int, val fps: Int?, val kbps: Int?, val droppedFrames: Long?) {
+    fun summary(): String = listOfNotNull(
+        "$width × $height",
+        fps?.let { tr("{value} fps", "value" to it) },
+        kbps?.let { tr("{value} Mb/s", "value" to String.format(java.util.Locale.ROOT, "%.1f", it / 1000.0)) },
+        droppedFrames?.let { tr("{count} dropped frames", "count" to it) },
+    ).joinToString(" · ")
 }
 
 // The Mac's screen: what it shares (screen.state), Start/Stop and Mirror/Extend (screen.ctl), and
@@ -265,7 +278,7 @@ class Screen(core: Core) : Feature(core) {
     fun detach(h: WebHost) {
         if (host !== h) return
         host = null
-        resetVideo()
+        resetVideo(keepDoctor = true)
         viewing = false
         size = null
         wantStart = false
@@ -309,7 +322,8 @@ class Screen(core: Core) : Feature(core) {
         core.changed()
     }
 
-    private fun resetVideo() {
+    private fun resetVideo(keepDoctor: Boolean = false) {
+        if (!keepDoctor) clearDoctor()
         videoGeneration++
         videoSession = null
         videoMarker = null
@@ -343,6 +357,34 @@ class Screen(core: Core) : Feature(core) {
         core.link.sendFor(videoMarker, msg("rtc.detail", "session" to session, "height" to height))
     }
 
+    private data class DoctorReading(val marker: Any, val sample: StreamDoctorSample)
+    @Volatile private var doctorReading: DoctorReading? = null
+    val lastDoctorSample: StreamDoctorSample?
+        get() = doctorReading?.takeIf { core.link.ownsVideoSession(it.marker) }?.sample
+
+    val doctorSummary: String? get() = lastDoctorSample?.summary()
+
+    fun doctorLinkChanged() {
+        val reading = doctorReading ?: return
+        if (!core.link.ownsVideoSession(reading.marker)) clearDoctor()
+    }
+
+    private fun clearDoctor() { doctorReading = null }
+
+    fun videoMetrics(h: WebHost, generation: Int, session: Int, width: Int, height: Int, fps: Int, kbps: Int, dropped: Long) {
+        val marker = videoMarker ?: return
+        if (host !== h || !viewing || !sharing || !videoPlaying ||
+            videoGeneration != generation || videoSession != session || !core.link.ownsVideoSession(marker) ||
+            width !in 1..16384 || height !in 1..16384) return
+        val sample = StreamDoctorSample(width, height, fps.takeIf { it in 0..240 },
+            kbps.takeIf { it in 0..1_000_000 }, dropped.takeIf { it in 0..1_000_000_000 })
+        val previous = doctorReading
+        if (previous?.sample != sample || previous.marker !== marker) {
+            doctorReading = DoctorReading(marker, sample)
+            core.changed()
+        }
+    }
+
     fun playing(w: Int, h: Int) {
         size = w to h
         core.changed()
@@ -358,7 +400,7 @@ class Screen(core: Core) : Feature(core) {
         if (displayId != null) m.put("displayId", displayId)
         if (share == false) {
             startedByUs = false
-            resetVideo()
+            resetVideo(keepDoctor = true)
         }
         core.send(m)
     }
@@ -411,7 +453,7 @@ class Screen(core: Core) : Feature(core) {
                 val on = m.optBoolean("on")
                 // Off -> on, not asked for here: the person pressed Share Screen on the computer.
                 if (was != null && !was.optBoolean("on") && on && !viewing && !startedByUs) autoOpen()
-                if (!on) { resetVideo(); Notify.cancelScreen(core.ctx) }
+                if (!on) { resetVideo(keepDoctor = true); Notify.cancelScreen(core.ctx) }
 
                 if (wantStart) startIfNeeded()
                 core.changed()
@@ -422,9 +464,8 @@ class Screen(core: Core) : Feature(core) {
                 core.changed()
             }
             "stream.info" -> { lastInfo = m; host?.post(m) }
-            "rtc.offer" -> { resetVideo(); host?.post(m) }
 
-            "stream.stop" -> { resetVideo(); host?.post(m); core.changed() }
+            "stream.stop" -> { resetVideo(keepDoctor = true); host?.post(m); core.changed() }
             "rtc.ice" -> host?.post(m)
             else -> return false
         }
