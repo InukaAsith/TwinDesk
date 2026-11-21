@@ -138,6 +138,40 @@ for (const file of ['windows/phoneview.js', 'mac/phoneview.js']) {
 }
 
 {
+  const f = fixture('mac/phoneview.js', 'en');
+  const owner = Object.create(f.exported.PhoneViews.prototype);
+  const keys = [];
+  owner.getSettings = () => f.settings;
+  owner._special = (_view, code) => { keys.push(code); return true; };
+  const view = { kind: 'app', session: { closed: false } };
+  const input = { t: 'key', code: 'MetaLeft', down: true };
+  owner._input(view, input);
+  f.settings.keys = { swapCtrlCmd: false };
+  owner._input(view, input);
+  assert.deepStrictEqual(keys, ['ControlLeft', 'MetaLeft'], 'Mac phone windows use the default key mapping if the keys setting is missing');
+}
+
+{
+  const f = fixture('mac/phoneview.js', 'en');
+  const owner = Object.create(f.exported.PhoneViews.prototype);
+  const app = 'com.example.app';
+  const opened = [], focused = [];
+  const old = { id: 1, kind: 'app', app, title: 'App', keepPanelOff: false, started: true,
+    session: { videoStarted: false }, win: { show() {}, focus() { focused.push(true); } } };
+  owner.views = new Map([[old.id, old]]);
+  owner.getSettings = () => f.settings;
+  owner.bridge = { sessionOpts: (_kind, options) => options };
+  owner.close = (id) => owner.views.delete(id);
+  owner._open = (options) => opened.push(options);
+  owner.applyOpts = () => {};
+  f.settings.phone.keepPanelOff = true;
+  owner.panelPreferenceChanged();
+  assert.equal(owner.views.size, 0);
+  assert.equal(opened[0].app, app);
+  assert.equal(focused.length, 0, 'turning on dark mode retries a stalled app instead of focusing it');
+}
+
+{
   const f = fixture('mac/pcview.js', 'zh-CN'), server = new EventEmitter(), messages = [];
   server.current = { name: 'PC {name} $&' };
   const owner = new f.exported.PcView({ server, getSettings: () => f.settings });

@@ -25,17 +25,19 @@ function component(out, pkg) {
 }
 
 // session: scrcpy Session (log, startApp); adb + serial: the phone's; maker: phone.info.maker.
-async function startApp(session, { adb, serial, maker, app }) {
+async function startApp(session, { adb, serial, maker, app, live = () => !session.closed }) {
+  if (!live()) return;
   const id = displayIdOf(session.log);
   if (id === null || !adb || !serial || !FREEFORM_MAKERS.test(maker || '') || !PKG.test(app || '')) return session.startApp(app);
   try {
     const r = await adb.shell(serial, `cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER ${app}`, { timeout: 5000 });
+    if (!live()) return;
     const comp = component(r.out, app);
     if (!comp) return session.startApp(app);
     const s = await adb.shell(serial, `am start --display ${id} --windowingMode 1 -n ${comp}`, { timeout: 8000 });
-    if (/Error|Exception|not found/i.test(`${s.out || ''}\n${s.err || ''}`)) return session.startApp(app);
+    if (live() && /Error|Exception|not found/i.test(`${s.out || ''}\n${s.err || ''}`)) return session.startApp(app);
   } catch (_) {
-    session.startApp(app);
+    if (live()) session.startApp(app);
   }
 }
 

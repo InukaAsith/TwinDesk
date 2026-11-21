@@ -67,13 +67,24 @@ class Session extends EventEmitter {
     this.height = 0;
     this.seq = 1n;
     this.log = [];
+    this.videoStarted = false;
+    this.pendingResize = null;
   }
 
   async start() {
     const { adb, serial, opts } = this;
+    const checkOpen = () => {
+      if (!this.closed) return;
+      this._stopRelay();
+      if (this.port) adb.unforward(serial, this.port);
+      if (this.jar) adb.shell(serial, `rm -f ${this.jar}`, { timeout: 5000 });
+      throw localError('closed');
+    };
+    checkOpen();
     // Two sessions starting together must not push over a jar the other is already running.
     if (!pushed.has(serial)) pushed.set(serial, adb.push(serial, adb.server, DEVICE_JAR));
     const r = await pushed.get(serial);
+    checkOpen();
     if (r.code !== 0) {
       pushed.delete(serial);
       throw localError('Couldn’t copy the screen helper to the phone ({error})', { error: r.err.trim() || r.out.trim() });
@@ -81,6 +92,7 @@ class Session extends EventEmitter {
     // Each session runs its own copy: a second app_process on a jar another one is running aborts.
     this.jar = `/data/local/tmp/twindesk-scrcpy-${this.scid}.jar`;
     const cp = await adb.shell(serial, `cp ${DEVICE_JAR} ${this.jar}`, { timeout: 8000 });
+    checkOpen();
     if (cp.code !== 0) throw localError('Couldn’t prepare the screen helper ({error})', { error: cp.err.trim() || cp.out.trim() });
     const kinds = [opts.video && 'video', opts.audio && 'audio', opts.control && 'control'].filter(Boolean);
     const host = opts.direct && directHost(serial);
@@ -91,7 +103,9 @@ class Session extends EventEmitter {
         return null;
       });
     }
+    checkOpen();
     if (!this.direct) this.port = await adb.forward(serial, `scrcpy_${this.scid}`);
+    checkOpen();
     // Only what differs from the server's defaults (video, audio, control, cleanup, power_on,
     // send_dummy_byte, clipboard_autosync and vd_destroy_content on; h264; audio from the output):
     // some Samsung phones (Galaxy A05, Android 15) abort in the video encoder's setup when the
@@ -140,6 +154,8 @@ class Session extends EventEmitter {
     let first = true;
     for (const kind of kinds) {
       const sock = first ? await this._connectFirst() : await this._connect();
+      if (this.closed) sock.destroy();
+      checkOpen();
       first = false;
       this.sockets.push(sock);
       this[kind] = sock;
@@ -275,8 +291,15 @@ class Session extends EventEmitter {
           const ptsFlags = h.readBigUInt64BE(0);
           const size = h.readUInt32BE(8);
           const data = Buffer.from(await read(size)); // own copy: it goes to the window
+          const config = !!(ptsFlags & (1n << 62n));
+          if (!config && !this.videoStarted) {
+            this.videoStarted = true;
+            const pending = this.pendingResize;
+            this.pendingResize = null;
+            if (pending) this.resizeDisplay(...pending);
+          }
           this.emit('video', {
-            config: !!(ptsFlags & (1n << 62n)), key: !!(ptsFlags & (1n << 61n)),
+            config, key: !!(ptsFlags & (1n << 61n)),
             pts: Number(ptsFlags & ((1n << 61n) - 1n)), data,
           });
         }
@@ -323,6 +346,7 @@ class Session extends EventEmitter {
   _close(why, metadata) {
     if (this.closed) return;
     this.closed = true;
+    this.pendingResize = null;
     this.why = why;
     this.closeMeta = metadata;
     for (const s of this.sockets) s.destroy();
@@ -460,6 +484,12 @@ class Session extends EventEmitter {
   }
 
   resizeDisplay(w, h) {
+    if (this.closed) return;
+    // Flex resize can arrive from the Mac's ResizeObserver before scrcpy initializes its encoder.
+    if (this.opts.newDisplay && !this.videoStarted) {
+      this.pendingResize = [w, h];
+      return;
+    }
     const b = Buffer.alloc(5);
     b[0] = TYPE.RESIZE_DISPLAY;
     b.writeUInt16BE(Math.max(1, Math.min(0xffff, w | 0)), 1);

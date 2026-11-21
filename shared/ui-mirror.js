@@ -79,6 +79,12 @@
         hover = UI.switch((v) => api.setPhone({ hover: v }), { label: tr('Mouse hover') });
         rows.push(UI.row(tr('Mouse hover'), tr('Apps on the phone see the pointer pass over them, as with a mouse plugged in. Off: only clicks and drags reach the phone.'), [hover]));
       }
+      // The phone's own screen stays dark while an app window is open (settings.phone.keepPanelOff, #247).
+      let keepOff = null;
+      if (mac) {
+        keepOff = UI.switch((v) => api.setPhone({ keepPanelOff: v }), { label: tr('Keep phone screen off while using apps') });
+        rows.push(UI.row(tr('Keep phone screen off while using apps'), tr('Opening from sleep can briefly light the phone, and the phone may require an unlock.'), [keepOff]));
+      }
       // The phone screen window's Rotate and screen off, here rather than in its title bar (Windows'
       // side panel has them too).
       let rotateBtn = null, screenOff = null, rotateRow = null, offRow = null;
@@ -125,6 +131,7 @@
         if (enterSends) enterSends.set(st.enterSends !== false);
         if (arrowSwipe) arrowSwipe.set(st.arrowSwipe === true);
         if (hover) hover.set(st.hover !== false);
+        if (keepOff) keepOff.set(st.keepPanelOff === true);
         const wins = br.windows || [];
         if (rotateBtn) {
           const scr = wins.find((w) => w.kind === 'screen');

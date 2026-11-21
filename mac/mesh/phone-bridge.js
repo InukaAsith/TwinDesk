@@ -226,6 +226,7 @@ class PhoneBridge extends EventEmitter {
 
   _stopAll(message) {
     if (this.kvm) this._kvmEnd(false); // before the control session goes: its button up and hover exit
+    this.views?.releaseAppPanel?.();
     if (this.control) this.control.stop();
     this.control = null;
     if (this.views) this.views.closeAll();
