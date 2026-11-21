@@ -66,6 +66,7 @@ test('minimized app retains one latest frame, restores static content and keeps 
   const visible = f.frame(1);
   f.output(visible);
   f.recv('opts', { minimized: true });
+  f.recv('status', { appFrame: 'capture-7' });
   const first = f.frame(2), latest = f.frame(3);
   f.output(first);
   f.recv('video', { key: true, pts: 123, data: Uint8Array.of(1) });
@@ -76,6 +77,7 @@ test('minimized app retains one latest frame, restores static content and keeps 
   assert.equal(first.closed, 1, 'replaced decoded frame is released');
   assert.equal(latest.closed, 0);
   assert.deepEqual(decoder.chunks.map(chunk => chunk.timestamp), [123, 124], 'decode input continues in order while painting pauses');
+  assert.deepEqual(f.sent, [{ t: 'appFrame', capture: 'capture-7' }], 'decoded frame readiness still reaches panel ownership');
 
   f.recv('opts', { minimized: false });
   assert.deepEqual(f.painted, [1, 3], 'static content repaints without another encoded frame');

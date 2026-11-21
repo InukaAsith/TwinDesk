@@ -61,6 +61,8 @@
 
   // ---- video ----
 
+  let appFrame = null;
+
   function codecOf(sps) {
     // Annex B: find the SPS NAL (type 7); profile, constraints and level are the next three bytes.
     for (let i = 0; i + 4 < sps.length; i++) {
@@ -115,6 +117,10 @@
           } finally { frame.close(); }
         }
         if (!status.hidden) setStatus('');
+        if (kind === 'app' && appFrame) {
+          api.send({ t: 'appFrame', capture: appFrame });
+          appFrame = null;
+        }
       },
       error: (e) => {
         if (epoch !== videoEpoch) return;
@@ -166,6 +172,7 @@
   });
 
   api.on('status', (s) => {
+    if (kind === 'app' && typeof s.appFrame === 'string') appFrame = s.appFrame;
     if (s.via) {
       const el = document.getElementById('via');
       I.literal(el, s.via === 'usb' ? 'USB' : 'Wi-Fi');
@@ -174,7 +181,7 @@
       I.translate(el);
       el.hidden = false;
     }
-    if (s.closed || s.error) releaseHeldFrame();
+    if (s.closed || s.error) { appFrame = null; releaseHeldFrame(); }
     if (s.closed) videoEpoch++;
     if (s.error) {
       closedStatus = null;

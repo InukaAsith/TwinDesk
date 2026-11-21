@@ -208,6 +208,7 @@ class PhoneBridge extends EventEmitter {
   // Drop the control session before stop(), which closes it at once: its closed handler
   // must not treat that as the phone's link dying and schedule another poll.
   _dropControl() {
+    this.views?.releaseAppPanel?.();
     const control = this.control;
     this.control = null;
     if (control && !control.closed) control.stop();
