@@ -25,6 +25,12 @@ class Clipboard extends EventEmitter {
     this.getSettings = getSettings;
     this.lastSent = null;
     this.lastReceived = null;
+    this.readSequence = 0;
+    this.readsInFlight = 0;
+    this.receiveSequence = 0;
+    this.lastAppliedText = 0;
+    this.receiving = 0;
+    this.pending = null; // a sendIfChanged held back while a clip is received: its why
     this.concealed = false; // last helper report for the current item
     this.remote = false; // … and whether it came from another Apple device (Universal Clipboard, #211)
     this.peerAccepts = true; // the PC's last clip.policy
@@ -39,6 +45,11 @@ class Clipboard extends EventEmitter {
       connected: () => !!this.server.current,
       ble: () => !!(this.server.current && this.server.current.transport === 'ble'),
       peerName: () => (this.server.current && this.server.current.name) || 'the other device',
+      onReceiveStart: () => { ++this.receiving; ++this.receiveSequence; },
+      onReceiveEnd: (written) => {
+        if (written) ++this.readSequence;
+        this._endReceive();
+      },
       remember: (dir, item) => this._remember(dir, item),
       popup: (kind, text, presentation) => this.emit('popup', kind, presentation || text),
       onChange: () => this.emit('change'),
@@ -121,15 +132,37 @@ class Clipboard extends EventEmitter {
   }
 
   async _onClip(msg) {
+    // The phone bridge can report our last send back while a newer local copy is being read.
+    if (msg.text === this.lastSent && (this.readsInFlight || this.pending)) return;
     const c = this.cfg;
     if (!c.enabled || !c.receive || !P.clipAllowed(msg.text)) return;
 
-    this.images.text();
-    this.lastReceived = msg.text;
-    // A Universal Clipboard item isn't read to compare: reading it fetches it from the other device.
-    if (this.remote || (await readText()) !== msg.text) clipboard.writeText(msg.text);
-    this._remember('in', msg.text);
-    this.emit('change');
+    const sequence = ++this.receiveSequence;
+    ++this.receiving;
+    try {
+      // A Universal Clipboard item isn't read to compare: reading it fetches it from the other device.
+      const write = this.remote || (await readText()) !== msg.text;
+      if (sequence !== this.receiveSequence) return; // a newer clip or picture came in meanwhile
+      if (write) await clipboard.writeText(msg.text);
+      // A newer clip may have been applied while this one was written.
+      if (sequence < this.lastAppliedText) return;
+      this.lastAppliedText = sequence;
+      ++this.readSequence;
+      this.images.text();
+      this.lastReceived = msg.text;
+      this._remember('in', msg.text);
+      this.emit('change');
+    } finally {
+      this._endReceive();
+    }
+  }
+
+  _endReceive() {
+    if (--this.receiving || !this.pending) return;
+    const why = this.pending;
+    this.pending = null;
+    if (why === 'instant' && this.cfg.mode !== 'instant') return;
+    this.sendIfChanged(why).catch((e) => console.error('[clip] clipboard not sent:', e.message));
   }
 
   // Send our clipboard if allowed and changed since it was last sent or received: its text, else
@@ -141,11 +174,33 @@ class Clipboard extends EventEmitter {
     // A Universal Clipboard copy from another Apple device: not read the moment it lands (that
     // fetches it from there, with macOS's "Pasting from …" dialog, #211); it goes on the switch.
     if (why === 'instant' && this.remote) return;
+    // While a clip is being put on the clipboard nothing is read: the call runs again after it.
+    const defer = () => {
+      if (!this.receiving) return false;
+      if (why !== 'instant' || !this.pending) this.pending = why;
+      return true;
+    };
+    if (defer()) return;
+    const sequence = ++this.readSequence;
+    const valid = () => sequence === this.readSequence && this.server.current && this.cfg.enabled && this.cfg.send && this.peerAccepts && !defer();
+    ++this.readsInFlight;
+    try {
+      return await this._readAndSend(why, valid);
+    } finally {
+      --this.readsInFlight;
+    }
+  }
+
+  // The read itself, counted by sendIfChanged while it runs.
+  async _readAndSend(why, valid) {
+    const c = this.cfg;
     const text = await readText();
+    if (!valid()) return;
     if (require('../shared/otp.js').isQuiet(text)) return; // a code copied by itself (Notifications): kept here only
     // Files copied in Finder: the clipboard also holds their names and icon, which aren't the copy.
     // Files go with the Files tab's shortcuts (fclip.js).
     const src = await this.helper.request('fileSource').catch(() => ({}));
+    if (!valid()) return;
     if (src.files && src.files.length) {
       this.lastSent = text;
       const f = this.getSettings().files;
@@ -157,6 +212,7 @@ class Clipboard extends EventEmitter {
     if (c.skipConcealed) {
       // The watcher's flag may be stale for a request; ask the helper about the current item.
       const info = why === 'instant' ? { concealed: this.concealed } : await this.helper.request('clipboardInfo').catch(() => ({}));
+      if (!valid()) return;
       if (info.concealed) {
         this.lastSent = text; // don't retry this item
         return this._skip('skipped a password (concealed item)');
