@@ -470,6 +470,9 @@ function setupIpc(ctx) {
       ctx.drop.clearRecent();
       if (ctx.fileSend) ctx.fileSend.clearRecent();
     },
+    showFileShelf() {
+      ctx.showFileShelf();
+    },
     setSmb(partial) {
       setGroup('smb', partial);
       if (settings.smb.connectPc) ctx.smb.mountPc();

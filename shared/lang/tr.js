@@ -750,6 +750,8 @@
   "Nothing is connected. Connect a phone or computer on the Connection page.": "Hiçbir şey bağlı değil. Bağlantı sayfasında bir telefon veya bilgisayar bağlayın.",
   "Nothing open": "Açık bir şey yok",
   "Nothing paired yet": "Henüz eşlenen bir şey yok",
+  "File Shelf": "Dosya Rafı",
+  "Drag a file into another app": "Bir dosyayı başka bir uygulamaya sürükleyin",
   "Nothing received": "Hiçbir şey alınmadı",
   "Nothing sent": "Hiçbir şey gönderilmedi",
   "Nothing to copy there": "Orada kopyalanacak bir şey yok",

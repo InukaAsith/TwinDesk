@@ -99,6 +99,7 @@ let startHidden = process.argv.includes('--hidden');
 let autoJoin, settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web (shared/web/webwire.js), beside the mesh as in the one-to-one app
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
+let fileShelf = null;
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
 
@@ -489,6 +490,12 @@ function showUpdateWindow() {
 
 // Menu bar: the app mark as a template icon; its menu by kind (shared/traymenu.js), only connecting
 // while nothing is connected.
+function showFileShelf() {
+  if (!svc || modulesAtStart.includes('files')) return;
+  fileShelf ||= new (require('../file-shelf').FileShelf)({ drop: svc.drop, t });
+  fileShelf.show();
+}
+
 function updateTray() {
   if (!tray) return;
   const c = state.client;
@@ -526,6 +533,7 @@ function updateTray() {
     lookAgain: () => actions.refreshDiscovery(),
     update: updates && updates.status.available ? { label: t('TwinDesk {version} available…', { version: updates.status.latest }), click: showUpdateWindow } : null,
     open: showWindow,
+    fileShelf: () => actions.showFileShelf(),
     log: () => require('../../shared/applog.js').open(),
     quit: () => app.quit(),
   })));
@@ -1005,6 +1013,7 @@ app.whenReady().then(() => {
     layoutSync,
     autoJoin,
     phoneHub: loadHub,
+    showFileShelf,
     login,
     refreshPermissions,
     updates,
@@ -1333,6 +1342,7 @@ app.on('will-quit', () => {
 app.on('before-quit', () => {
   if (web) web.shutdown();
   if (svc && svc.mic) svc.mic.shutdown();
+  fileShelf?.shutdown();
   quitting = true;
   if (svc && svc.phone) svc.phone.shutdown();
   if (svc && svc.phoneDrive) svc.phoneDrive.shutdown();

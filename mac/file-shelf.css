@@ -1,0 +1,30 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+:root { color-scheme: light dark; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #202124; background: #f5f5f7; }
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+header { flex: 0 0 auto; padding: 45px 20px 16px; -webkit-app-region: drag; }
+h1 { font-size: 20px; font-weight: 650; line-height: 1.2; margin: 0 0 6px; }
+p { margin: 0; color: #66666b; }
+main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 12px; }
+ul { margin: 0; padding: 0; list-style: none; }
+li { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-bottom: 1px solid #d8d8dc; }
+li:last-child { border-bottom: 0; }
+.item { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; border-radius: 8px; cursor: grab; padding: 4px; }
+.item:active { cursor: grabbing; }
+.icon { display: grid; place-items: center; flex: 0 0 40px; height: 44px; background: #e5e5ea; border: 1px solid #d8d8dc; border-radius: 8px; color: #626269; font-size: 9px; font-weight: 650; }
+.label { min-width: 0; }
+.name { font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.detail { font-size: 11px; color: #66666b; margin-top: 3px; }
+button { font: inherit; color: #006be6; padding: 8px 9px; background: transparent; border: 0; border-radius: 7px; min-height: 36px; cursor: pointer; }
+button:focus-visible, .item:focus-visible { outline: 2px solid #007aff; outline-offset: 2px; }
+#empty { padding: 42px 14px; text-align: center; }
+[hidden] { display: none !important; }
+@media (hover: hover) { button:hover, .item:hover { background: #e8e8ed; } }
+@media (prefers-color-scheme: dark) {
+  :root { color: #f5f5f7; background: #202124; }
+  p, .detail { color: #a5a5ad; }
+  li { border-color: #3a3a40; }
+  .icon { background: #303138; border-color: #42434b; color: #b3b3bd; }
+  button { color: #7ab5ff; }
+}
+@media (prefers-color-scheme: dark) and (hover: hover) { button:hover, .item:hover { background: #303138; } }

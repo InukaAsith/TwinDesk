@@ -750,6 +750,8 @@
   "Nothing is connected. Connect a phone or computer on the Connection page.": "Nothing is connected. Connect a phone or computer on the Connection page.",
   "Nothing open": "Nothing open",
   "Nothing paired yet": "Nothing paired yet",
+  "File Shelf": "File Shelf",
+  "Drag a file into another app": "Drag a file into another app",
   "Nothing received": "Nothing received",
   "Nothing sent": "Nothing sent",
   "Nothing to copy there": "Nothing to copy there",

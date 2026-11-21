@@ -87,7 +87,10 @@ UI.tab({
         UI.row(I18n.t('Show in Finder'), '', [reveal]),
         UI.row(I18n.t('Put received files on the clipboard'), I18n.t('Files sent here are ready to paste with ⌘V'), [clipSw]),
       ]),
-      UI.card(I18n.t('Recent'), [list], { actions: [UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small')] }),
+      UI.card(I18n.t('Recent'), [list], { actions: [
+        UI.button(I18n.t('File Shelf'), () => api.showFileShelf(), 'small'),
+        UI.button(I18n.t('Clear'), () => api.clearFiles(), 'small'),
+      ] }),
     );
 
     let key = '';

@@ -9,7 +9,7 @@
 //       popup: {checked, set}, screen: [{label, checked, set} | {sep: true}], clipboard: {checked, set},
 //       sound: {checked, set}, drag: {checked, set}, shortcuts: {label, checked, set},
 //       found: [{label, click}], byAddress(), lookAgain(), again?: {label, click},
-//       disconnect?: {label, click}, update?: {label, click}, windowsBack?: {label, click}, open(), quit(),
+//       disconnect?: {label, click}, update?: {label, click}, windowsBack?: {label, click}, fileShelf?(), open(), quit(),
 //       rezume?: [{label, click}] (Continue …, Send … to: shared/rezume.js),
 //       off?: [module ids] (General › Modules, shared/modules.js: their items aren't there)}
 'use strict';
@@ -61,8 +61,9 @@ function kinds(m, t, short = false) {
 function template(m) {
   const t = m.t || ((text) => text); // platforms opt in without changing their existing menus
   const status = { label: m.status, enabled: false };
+  const shelf = m.fileShelf && on(m, 'files') ? [{ label: t('File Shelf'), click: m.fileShelf }] : [];
   if (!m.connected) {
-    return [status, ...(m.again ? [m.again] : []), connectTo(m, t), sep, { label: t('Open TwinDesk…'), click: m.open }, { label: t('Quit TwinDesk'), click: m.quit }];
+    return [status, ...(m.again ? [m.again] : []), connectTo(m, t), sep, ...shelf, { label: t('Open TwinDesk…'), click: m.open }, { label: t('Quit TwinDesk'), click: m.quit }];
   }
   return [
     status,
@@ -74,6 +75,7 @@ function template(m) {
     ...kinds(m, t),
     sep,
     ...(m.update ? [m.update] : []),
+    ...shelf,
     { label: t('Open TwinDesk…'), click: m.open },
     { label: t('Quit TwinDesk'), click: m.quit },
   ];

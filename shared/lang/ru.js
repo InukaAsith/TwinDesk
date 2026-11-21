@@ -750,6 +750,8 @@
   "Nothing is connected. Connect a phone or computer on the Connection page.": "Ничего не подключено. Подключите телефон или компьютер на странице «Подключение».",
   "Nothing open": "Ничего не открыто",
   "Nothing paired yet": "Пока нет сопряжённых устройств",
+  "File Shelf": "Полка файлов",
+  "Drag a file into another app": "Перетащите файл в другое приложение",
   "Nothing received": "Ничего не получено",
   "Nothing sent": "Ничего не отправлено",
   "Nothing to copy there": "Там нечего копировать",
