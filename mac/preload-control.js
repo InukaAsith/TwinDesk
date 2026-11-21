@@ -7,7 +7,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const ACTIONS = [
   'setSharing', 'setStreamInput', 'selectDisplay', 'setDisplayMode', 'setVirtual', 'setStreamMaxHeight',
   'setBitrate', 'setKvm', 'setPortals', 'moveKvm', 'identifyDisplays', 'setApp', 'setAudio', 'camera', 'phoneMedia', 'phoneBtPick', 'setTerminal', 'setRemote', 'setRezume', 'rezumeDo', 'openSharingSettings', 'setFiles', 'setDrive', 'pickDriveFolder', 'resetDriveFolder', 'openDriveFolder', 'pickDropFolder', 'resetDropFolder', 'revealDrop', 'clearFiles', 'cancelSend', 'setSmb', 'setShareMac', 'chooseShareFolder', 'stopSharingFolder', 'openPcShare', 'setApps', 'setReceive', 'showPcView', 'closePcView', 'setPcApps', 'listPcApps', 'openPcApp', 'openPcShell', 'setScreenSound', 'setKeys', 'setClipboard', 'copyHistory', 'clearHistory', 'history', 'setTab', 'setLanguage', 'setLook', 'setSharingOpts', 'remoteScreen', 'wakePeer', 'setWakeOnLan',
-  'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti', 'setModules', 'deckSave', 'deckTry',
+  'pairRespond', 'forget', 'openSettings', 'relaunch', 'setMulti', 'setModules', 'setProximityLock', 'deckSave', 'deckTry',
   'keepPcAppInDock', 'sendFiles', 'chooseSendFiles', 'setNotifs', 'muteNotifApp', 'allowFullDisk',
   'connectAddress', 'pairWith', 'confirmGuestCode', 'cancelGuestPair', 'forgetHost', 'refreshDiscovery', 'copyText', 'allowPermission', 'skipSetup',
   'connectPhone', 'disconnectPhone', 'disconnect', 'connectAgain', 'setPhone', 'phonePair', 'phoneScreen', 'phoneCamera', 'takePhoto', 'phoneListCameras', 'phoneOpenApp', 'phoneCloseView', 'phoneScreenAct', 'phoneRetry', 'phoneInstallFull', 'phoneInstallApps', 'phoneMount', 'phoneUnmount', 'setMount', 'phoneAppMenu',

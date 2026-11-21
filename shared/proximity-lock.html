@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px;
+      background: light-dark(#fff, #252527);
+      color: light-dark(#1b1b1d, #f5f5f7);
+      font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+    h1 { margin: 0 0 5px; font-size: 15px; font-weight: 650; }
+    p { margin: 0; color: light-dark(#505056, #c5c5ca); font-variant-numeric: tabular-nums; }
+    button {
+      flex: 0 0 auto;
+      font: inherit;
+      font-weight: 600;
+      border: 0;
+      border-radius: 7px;
+      min-height: 36px;
+      padding: 0 14px;
+      color: light-dark(#1b1b1d, #f5f5f7);
+      background: light-dark(#ededf0, #424246);
+    }
+    button:hover { background: light-dark(#e0e0e5, #515157); }
+    button:active { background: light-dark(#d1d1d7, #5e5e65); }
+    button:focus-visible { outline: 2px solid Highlight; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <div>
+    <h1 id="title"></h1>
+    <p id="remaining" role="timer"></p>
+  </div>
+  <button id="cancel" type="button" autofocus></button>
+</body>
+</html>

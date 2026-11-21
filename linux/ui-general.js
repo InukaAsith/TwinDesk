@@ -28,6 +28,10 @@ UI.tab({
     const recvRow = UI.row(t('Received files'), '', [recvOpen, recvReset, recvChange], { literal: true });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: t('Show a popup when switching') });
     const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: t('Keep the display awake') }); // #240, shared/keepawake.js
+    const lockLabel = t('Lock this computer when the phone disconnects');
+    const lockSw = UI.switch((v) => api.setProximityLock(v), { label: lockLabel, disabled: true });
+    const lockHint = t('If the last paired phone disconnects unexpectedly, you have 15 seconds to cancel.');
+    const lockRow = UI.row(lockLabel, lockHint, [lockSw]);
     const fwPill = el('span', { class: 'pill' });
     const fwCheck = UI.button(t('Check again'), () => api.checkFirewall(), 'small');
     const fwFix = UI.button(t('Fix'), () => api.fixFirewall(), 'small primary');
@@ -113,6 +117,7 @@ UI.tab({
         recvRow,
         UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
       ]),
+      UI.card(t('Security'), [lockRow]),
       UI.card(t('Appearance'), [
         styleRow,
         themeRow,
@@ -163,6 +168,10 @@ UI.tab({
       startup.set(s.startup);
       hudSw.set(s.app.hud);
       awakeSw.set(s.app.keepAwake !== false);
+      const canLock = s.proximityLockSupported === true;
+      lockSw.disable(!canLock);
+      lockSw.set(canLock && s.app.proximityLock === true);
+      lockRow.setHint(canLock ? lockHint : t('Automatic screen locking is unavailable on this desktop.'));
       pingSw.set(s.app.keepPinging === true);
       apiRow.hidden = !s.localApi;
       if (s.localApi) {

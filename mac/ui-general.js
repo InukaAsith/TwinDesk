@@ -45,6 +45,8 @@ UI.tab({
     const deviceRow = UI.row(t('Computer name'), t('How other computers see this one'), [deviceName]);
     const loginSw = UI.switch((v) => api.setApp({ openAtLogin: v }), { label: t('Open at login') });
     const awakeSw = UI.switch((v) => api.setApp({ keepAwake: v }), { label: t('Keep the display awake') });
+    const proximityLockLabel = t('Lock Mac when the phone disconnects');
+    const proximityLockSw = UI.switch((v) => api.setProximityLock(v), { label: proximityLockLabel });
     const hudSw = UI.switch((v) => api.setApp({ hud: v }), { label: t('Show a popup when switching') });
     // Wake this Mac from the other computer; the Share menu entry.
     const wakeSw = UI.switch((v) => api.setWakeOnLan(v), { label: t('Wake from the network') });
@@ -112,6 +114,9 @@ UI.tab({
         UI.row(t('Open at login'), '', [loginSw]),
         UI.row(t('Keep the display awake'), t('While connected'), [awakeSw]),
       ]),
+      UI.card(t('Security'), [
+        UI.row(proximityLockLabel, t('If the last connected paired phone drops unexpectedly, you have 15 seconds to cancel before this Mac locks.'), [proximityLockSw]),
+      ]),
       UI.card(t('Appearance'), [
         styleRow,
         themeRow,
@@ -131,7 +136,7 @@ UI.tab({
       UI.card(t('Overview'), partRows),
       UI.card(t('Network and Bluetooth'), [bleRow, blePcRow, bleWifiRow, wakeRow, shareRow]),
       UI.card(t('Tailscale'), [tailRow, tailHere, tailHow]),
-      relayCard ? relayCard.el : null, // your own relay (shared/ui-relay.js)
+      ...(relayCard ? [relayCard.el] : []), // your own relay (shared/ui-relay.js)
       UI.card(t('This computer'), [deviceRow, helperRow]),
       UI.card(t('Connections'), [pingRow, apiRow]),
       ...(modules.card ? [modules.card] : []),
@@ -173,6 +178,7 @@ UI.tab({
       if (s.app) {
         loginSw.set(s.app.openAtLogin);
         awakeSw.set(s.app.keepAwake);
+        proximityLockSw.set(s.app.proximityLock === true);
         hudSw.set(s.app.hud !== false);
         pingSw.set(s.app.keepPinging === true);
         apiRow.hidden = !s.localApi;

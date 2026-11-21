@@ -111,6 +111,8 @@ const ENTRIES = [
   { t: 'Modules: turn pages off', page: 'general', k: 'modules, hide pages, disable features, lighter' },
   { t: 'Tour of TwinDesk', page: 'general', on: 'desk', k: 'tutorial, tour, guide, help, getting started, introduction, how to use, what is new, whats new, new features, changelog' },
   { t: 'Open at login', page: 'general', on: 'desk', k: 'startup, launch at login, autostart, boot' },
+  { t: 'Lock Mac when the phone disconnects', page: 'general', on: 'mac', k: 'proximity lock, auto lock, walk away, security, paired phone' },
+  { t: 'Lock this computer when the phone disconnects', page: 'general', on: 'windows linux', k: 'proximity lock, auto lock, walk away, security, paired phone' },
   { t: 'Run in the background', page: 'general', on: 'android', k: 'background, battery, stay connected, keep running' },
   { t: 'Battery and performance', page: 'general', k: 'battery saver, power, prioritize performance, ping, idle' },
   { t: 'Permissions', page: 'general', k: 'allow, access, privacy, accessibility, screen recording, permission' },
@@ -204,9 +206,9 @@ function match(q, entries, title = (e) => e.t) {
 // The entries for one app: 'mac', 'windows', 'linux', 'android', 'ios', each with its page id.
 function forApp(app) {
   const desk = ['mac', 'windows', 'linux'].includes(app);
-  const key = desk ? 'desk' : app;
   return ENTRIES.flatMap((e) => {
-    if (e.on && !e.on.split(' ').includes(key)) return [];
+    const on = e.on && e.on.split(' ');
+    if (on && !on.includes(app) && !(desk && on.includes('desk'))) return [];
     const p = PAGES[e.page] || {};
     const id = desk ? (app === 'mac' ? p.mac : p.win) || p.desk : p[app];
     return id ? [{ ...e, id }] : [];

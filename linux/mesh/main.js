@@ -32,6 +32,7 @@ const { LinkManager } = require('./links');
 const { Mesh } = require('../../shared/mesh.js');
 const { Hub } = require('./hub');
 const { Server } = require('./server');
+const { installProximityLock } = require('../../shared/proximity-lock-desktop.js');
 const { Pairing: HostPairing } = require('./hostpair');
 const identity = require('../identity');
 const Screen = require('../screen');
@@ -146,6 +147,7 @@ let peerApps = null;
 let pendingMacApp = null; // {id, until}: opened once the Mac connects (2 min)
 let wired = null; // wired.js, with the phone
 let hostServer = null; // server.js, once the certificate exists
+let proximityLock = null;
 let phoneRemote = null; // each phone's Remote page: touchpad, keyboard and gamepad here (shared/perphone.js phoneRemote)
 let deck = null; // the Deck (shared/deck.js): each phone's (and web device's) buttons run here
 let iosSign = null; // shared/iossign.js: TwinDesk iPhone, one iPhone at a time, as in the one-to-one app (shared/perphone.js anyPhone)
@@ -428,6 +430,7 @@ function start() {
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
+    get proximityLock() { return proximityLock; },
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
     checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
@@ -465,10 +468,15 @@ function sendScreens() {
 async function startHost(tries = 0) {
   try {
     const id = await identity.load();
+    if (quitting) return;
     discovery.self.fp = id.fp; // beacons carry it now
     const server = new Server(id);
     discovery.self.port = server.port;
     const pairing = new HostPairing(server, { id: device.id, name: device.name, fp: id.fp });
+    proximityLock = installProximityLock({ server, pairing, settings, i18n, onChange: pushState,
+      occupied: (ctx) => ['asking', 'joining', 'hotspot'].includes(net?.state) ||
+        (ctx.transport === 'ble' && (bleOff || net?.linked)),
+    });
     pairing.on('request', showMain); // a code to compare: bring the window up
     hub.attachHost(server, pairing);
     hostServer = server;
@@ -699,8 +707,16 @@ function setupNet() {
     os: P.OS.LINUX,
     send: (m) => link.sendNow(m),
     current: () => link.current,
-    host: { can: () => wifi.canHost(link.current && link.current.os), start: (ssid, pass) => wifi.host(ssid, pass), stop: () => wifi.unhost() },
-    join: { can: () => wifi.can(), start: (ssid, pass) => wifi.join(ssid, pass), stop: () => wifi.leave() },
+    host: {
+      can: () => wifi.canHost(link.current && link.current.os),
+      start: (ssid, pass) => wifi.host(ssid, pass),
+      stop: () => { proximityLock?.wifiDown(); return wifi.unhost(); },
+    },
+    join: {
+      can: () => wifi.can(),
+      start: (ssid, pass) => wifi.join(ssid, pass),
+      stop: () => { proximityLock?.wifiDown(); return wifi.leave(); },
+    },
     band5: () => wifi.band5,
     // Connect with hotspot (a phone): it switches its hotspot on, this computer joins it (the Overview asks
     // for its name and password once; joinHotspot).
@@ -851,6 +867,7 @@ function inviteIos() {
 function applyQuiet(off) {
   if (off === bleOff) return;
   bleOff = off;
+  if (off) proximityLock?.bluetoothOff();
   console.log(`[ble] ${off ? 'off: the session is on the same Wi-Fi' : 'on again'}`);
   pushState();
 }
@@ -934,6 +951,7 @@ function viaWifi(obj, method, why) {
 // An unpaired one: the popup says Pair has to be pressed on it, until it starts pairing or a minute went by.
 let phoneInvite = null; // {id, name, until}
 function connectPhoneDev(d) {
+  proximityLock?.cancel();
   discovery.clearInvite(d.id);
   const paired = phone && link.pairing && link.pairing.list().some((p) => p.id === d.id);
   if (!paired) {
@@ -1156,6 +1174,7 @@ function buildState() {
     ui: settings.ui,
     look: Look.view(settings.ui, null), // Linux has no system accent colour to read
     app: settings.app,
+    proximityLockSupported: proximityLock?.supported === true,
     engines: enginesView(),
     version: app.getVersion(),
     about: about || (about = aboutInfo(app)), // About page: this app and this computer
@@ -1565,6 +1584,7 @@ function loadMic() {
 }
 
 app.on('before-quit', () => {
+  proximityLock?.shutdown();
   if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;

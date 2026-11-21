@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('macshare', {
   devHelperEvent: call('devHelperEvent'), // dev only: the main process has no handler without MACSHARE_DEV_PORT
   setKeys: call('setKeys'),
   setApp: call('setApp'),
+  setProximityLock: call('setProximityLock'),
   setUpdates: call('setUpdates'),
   skipUpdate: call('skipUpdate'),
   unskipUpdate: call('unskipUpdate'),

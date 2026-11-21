@@ -33,7 +33,10 @@ function render(locale) {
     styleRow: () => Object.assign(el('row'), { render() {} }),
     themeRow: () => Object.assign(el('row'), { render() {} }),
     accentRow: () => Object.assign(el('row'), { render() {} }),
-    sections: (cards) => Object.assign(el('sections', {}, cards), { spy() {} }),
+    sections: (cards) => {
+      assert.ok(cards.every(Boolean), 'section navigation needs a card for every entry');
+      return Object.assign(el('sections', {}, cards), { spy() {} });
+    },
   };
   const ids = { content: el('content'), pages: el('pages') };
   const context = { UI: ui, I18n: { locale, t }, window: {}, document: { body: el('body'), getElementById: (id) => ids[id] } };
@@ -47,6 +50,13 @@ function render(locale) {
     updates: { available: true, skipped: true, latest: '2.0', current: '1.2.3', download: { name: 'Allowed {name} $&.dmg' } } };
   general(s); about(s); ui.setup.render(s);
   const translated = (text) => t(text);
+  const proximityLock = nodes.find((n) => n.tag === 'row' && n.label === translated('Lock Mac when the phone disconnects'));
+  general({ ...s, app: {} });
+  assert.strictEqual(proximityLock.children[0].value, false);
+  proximityLock.children[0].change(true);
+  assert.deepStrictEqual(calls.at(-1), ['setProximityLock', true]);
+  general({ ...s, app: { proximityLock: true } });
+  assert.strictEqual(proximityLock.children[0].value, true);
   const selectors = nodes.filter((n) => n.tag === 'select' && n.options.some((o) => o.value === 'en')); // the language pickers (Advanced has the input protocol's)
   assert.strictEqual(selectors.length, 2, 'General and Setup both expose the language selector');
   for (const selector of selectors) {
