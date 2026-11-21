@@ -142,13 +142,16 @@ function setupIpc(ctx) {
       connectTo(dev, address); // no answer: try the WSS port directly (a Mac host answers there)
     },
     connectPhone(deviceId) {
+      ctx.proximityLock?.cancel();
       ctx.phone.connect(String(deviceId));
     },
     disconnectPhone() {
+      ctx.proximityLock?.cancel();
       ctx.phone.disconnect();
     },
     // Disconnect the session (phone or computer); Connect again / Take over the Mac we're a guest of.
     disconnect() {
+      ctx.proximityLock?.cancel();
       if (ctx.server.current && P.isPhoneOs(ctx.server.current.os)) return ctx.phone.disconnect();
       ctx.server.disconnect();
     },
@@ -503,6 +506,7 @@ function setupIpc(ctx) {
     },
     // Bluetooth when not on one network (netlink.js, blepipe.js).
     setNet(partial) {
+      if (partial?.ble === false && settings.net.ble !== false) ctx.proximityLock?.reset();
       if (typeof partial.ble === 'boolean') settings.net.ble = partial.ble;
       if (typeof partial.blePc === 'boolean') settings.net.blePc = partial.blePc;
       if (typeof partial.bleWifiOff === 'boolean') settings.net.bleWifiOff = partial.bleWifiOff; // blepolicy.js wifiQuiet
@@ -617,6 +621,12 @@ function setupIpc(ctx) {
       ctx.login.apply(settings.app.openAtLogin);
       ctx.updateAwake();
       if (ctx.applyLocalApi) ctx.applyLocalApi();
+    },
+    setProximityLock(on) {
+      if (typeof on !== 'boolean') return;
+      settings.app.proximityLock = on;
+      if (!on) ctx.proximityLock?.cancel();
+      save();
     },
     setUpdates(partial) {
       setGroup('updates', partial);
@@ -733,6 +743,7 @@ function setupIpc(ctx) {
     },
     forget(deviceId) {
       // The device can be a saved host or a paired client.
+      ctx.proximityLock?.forget(String(deviceId));
       if (ctx.link.hosts.some((h) => h.id === String(deviceId))) return ctx.link.forget(String(deviceId));
       ctx.pairing.forget(String(deviceId));
       ctx.terminal.forget(String(deviceId));

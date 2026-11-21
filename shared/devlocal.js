@@ -71,8 +71,9 @@ function linuxBattery(root = '/sys/class/power_supply') {
 }
 
 class DevLocal {
-  constructor() {
+  constructor({ macLock } = {}) {
     this.os = process.platform;
+    this.macLock = macLock;
     this.ringer = null; // the ringing process
     this.caps = this._caps();
   }
@@ -161,6 +162,7 @@ $o | ConvertTo-Json -Compress`, 15000);
       case 'lock':
         if (this.os === 'win32') return run('rundll32.exe', ['user32.dll,LockWorkStation']);
         if (this.os === 'darwin') {
+          if (this.macLock) return this.macLock();
           const cg = '/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession';
           return fs.existsSync(cg) ? run(cg, ['-suspend']) : run('pmset', ['displaysleepnow']);
         }

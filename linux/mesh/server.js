@@ -14,7 +14,8 @@
 //   'preauth' (ctx, msg)  — hello / pair.* before auth (hostpair.js handles them)
 //   'client'  (ctx)       — a client got `welcome`
 //   'message' (msg, ctx)  — any message from the authenticated client except ping/pong (peer.js routes)
-//   'closed'  (ctx)       — a socket closed (authed or not)
+//   'closed'  (ctx, unexpected) — a socket closed, with abnormal loss of a current session flagged
+//   'forget'  (deviceId)  — the pairing was forgotten, even if its socket is already gone
 //   'rtt'     (ctx)       — ctx.rttMs updated
 //   'transport' (ctx)     — the session moved to another socket (hello {resume}) or back (ctx.transport)
 //   'listening' / 'listenError' (err)
@@ -164,9 +165,10 @@ class Server extends EventEmitter {
       return this.emit('transport', ctx);
     }
     this.sockets.delete(ctx);
-    if (ctx.authed && this.clients.get(ctx.deviceId) === ctx) this.clients.delete(ctx.deviceId);
+    const wasCurrent = !!ctx.authed && this.clients.get(ctx.deviceId) === ctx;
+    if (wasCurrent) this.clients.delete(ctx.deviceId);
     this.ilPool.drop(ctx); // its input lane (shared/inputlane.js)
-    this.emit('closed', ctx);
+    this.emit('closed', ctx, wasCurrent && code === 1006 && !ctx.expectedClose && !ctx.released && !this.closed);
   }
 
   // hello {resume}: the session's guest reached us another way (the network, once both are on one,
@@ -300,6 +302,7 @@ class Server extends EventEmitter {
 
   // Send an error and close the socket(s) of that client.
   fail(ctx, code, message) {
+    ctx.expectedClose = true;
     console.log(`[server] ${ctx.name || ctx.address}${ctx.transport === 'ble' ? ' (Bluetooth)' : ''}: ${code}: ${message}`);
     this.send(ctx, { t: P.T.ERROR, code, message });
     if (ctx.alt) { // the whole session goes, not just this path of it
@@ -314,6 +317,8 @@ class Server extends EventEmitter {
   // Mark ctx authenticated. A client with the same device id replaces the older socket of that
   // device only; other devices are untouched.
   authenticate(ctx, who, welcome) {
+    const { deviceId, name, os } = who;
+    ctx.pendingId = deviceId;
     // The files engine (fx2, shared/meshfx.js) starts on demand and its port goes in this welcome:
     // when it isn't listening yet the welcome waits for it, a few tens of ms, never long.
     const wait = ctx.fxWanted && ctx.fx2Wanted && !ctx.fx2Waited && this.fx2Wait ? this.fx2Wait(1500) : null;
@@ -322,7 +327,6 @@ class Server extends EventEmitter {
       const go = () => { if (!ctx.authed && this.sockets.has(ctx) && ctx.ws.readyState === ctx.ws.OPEN) this.authenticate(ctx, who, welcome); };
       return void wait.then(go, go);
     }
-    const { deviceId, name, os } = who;
     const old = this.clients.get(deviceId);
     if (old && old !== ctx) {
       this.clients.delete(deviceId);
@@ -399,10 +403,12 @@ class Server extends EventEmitter {
 
   // Close every socket that belongs to a device id (used by Forget).
   closeDevice(deviceId, code, message) {
+    this.emit('forget', deviceId);
     for (const ctx of this.sockets) if (ctx.deviceId === deviceId) this.fail(ctx, code, message);
   }
 
   close() {
+    this.closed = true;
     clearInterval(this.tick);
     if (this.unquiet) this.unquiet();
     this.ilPool.close();

@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('macshare', {
   identifyDisplays: call('identifyDisplays'),
   setKeys: call('setKeys'),
   setApp: call('setApp'),
+  setProximityLock: call('setProximityLock'),
   setUpdates: call('setUpdates'),
   skipUpdate: call('skipUpdate'),
   unskipUpdate: call('unskipUpdate'),

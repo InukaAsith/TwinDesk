@@ -5,7 +5,8 @@
 //   'preauth' (ctx, msg)  — hello / pair.* before auth (pairing.js handles them)
 //   'client'  (ctx)       — a client got `welcome`
 //   'message' (msg, ctx)  — any message from the authenticated client except ping/pong (peer.js routes)
-//   'closed'  (ctx)       — a socket closed (authed or not)
+//   'closed'  (ctx, unexpected) — a session/socket closed, with abnormal loss of the current session flagged
+//   'forget'  (deviceId)  — the pairing was forgotten, even if its socket is already gone
 //   'rtt'     (ctx)       — ctx.rttMs updated
 //   'transport' (ctx)     — the session moved to another socket (hello {resume}) or back (ctx.transport)
 //   'listening' / 'listenError' (err)
@@ -79,11 +80,11 @@ class Server extends EventEmitter {
     this.sockets.add(ctx);
     this._arm();
     ws.on('message', (data, isBinary) => this._onMessage(ws.ctx, data, isBinary, ws));
-    ws.on('close', () => this._onSocketClose(ws));
+    ws.on('close', (code) => this._onSocketClose(ws, code));
     ws.on('error', (err) => console.error(`[server] socket ${ws.address}: ${err.message}`));
   }
 
-  _onSocketClose(ws) {
+  _onSocketClose(ws, code) {
     const ctx = ws.ctx;
     if (ws.detached) return;
     if (ctx.alt === ws) {
@@ -100,11 +101,12 @@ class Server extends EventEmitter {
       return this.emit('transport', ctx);
     }
     this.sockets.delete(ctx);
-    if (this.current === ctx) {
+    const wasCurrent = this.current === ctx;
+    if (wasCurrent) {
       this.current = null;
       if (P.isPhoneOs(ctx.os) && !ctx.released) this._phoneGrace(ctx.deviceId);
     }
-    this.emit('closed', ctx);
+    this.emit('closed', ctx, wasCurrent && code === 1006 && !ctx.expectedClose && !ctx.released && !this.closed);
   }
 
   // hello {resume}: the session's guest reached us another way (the network, once both are on one).
@@ -245,6 +247,7 @@ class Server extends EventEmitter {
 
   // Send an error and close the socket.
   fail(ctx, code, message) {
+    ctx.expectedClose = true;
     this.send(ctx, { t: P.T.ERROR, code, message });
     if (ctx.alt) { // the whole session goes, not just this path of it
       const alt = ctx.alt;
@@ -377,7 +380,7 @@ class Server extends EventEmitter {
       // Suppress grace for this socket while preserving the phone's saved return.
       const { ws, alt } = ctx;
       ctx.released = true;
-      this.fail(ctx, P.E.ASLEEP, 'Asleep');
+      if (!ctx.expectedClose) this.fail(ctx, P.E.ASLEEP, 'Asleep');
       // End the session even if the guest never answers the Close frame.
       if (this.sockets.has(ctx)) this._onSocketClose(ws);
       ws.detached = true;
@@ -392,6 +395,7 @@ class Server extends EventEmitter {
 
   // Close every socket that belongs to a device id (used by Forget).
   closeDevice(deviceId, code, message) {
+    this.emit('forget', deviceId);
     for (const ctx of this.sockets) if (ctx.deviceId === deviceId) this.fail(ctx, code, message);
   }
 

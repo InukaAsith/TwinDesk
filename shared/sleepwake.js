@@ -34,7 +34,7 @@ function sleepWake({ powerMonitor, server, discovery, canInvite = () => true }) 
     timer = setInterval(() => {
       const host = server();
       // A session that sleep ended can still be here while its socket closes: that one doesn't count.
-      const live = (ctx) => !!ctx && ctx.ws.readyState === ctx.ws.OPEN;
+      const live = (ctx) => !!ctx && ctx.ws.readyState === ctx.ws.OPEN && !ctx.expectedClose;
       // One session at a time: an invite makes a computer take the session over, so once anyone
       // holds it nobody is invited. Multi-device: only the guests that aren't back yet.
       if (host && !host.clients) waiting = live(host.current) ? [] : waiting;

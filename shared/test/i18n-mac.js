@@ -14,10 +14,11 @@ try {
     const store = local('./store');
     store.init(path.join(temp, mode));
     assert.strictEqual(store.loadSettings().ui.language, '', 'a new Mac follows the system language');
-    store.saveSettings({ ui: { tab: 'general', language: '../invalid' } });
+    assert.strictEqual(store.loadSettings().app.proximityLock, false, 'a new Mac opts out of proximity lock');
+    store.saveSettings({ ui: { tab: 'general', language: '../invalid' }, app: { proximityLock: 'true' } });
     assert.strictEqual(store.loadSettings().ui.language, '', 'unknown saved locales are rejected');
     const settings = store.loadSettings();
-    let reloads = 0, pushes = 0;
+    let reloads = 0, pushes = 0, lockCancels = 0;
     const events = new Map();
     let appMenu;
     const mod = { exports: {} };
@@ -33,6 +34,7 @@ try {
       discovery: { get: () => device, invite() {} }, pairing: { list: () => [], expect() {} },
       server: Object.assign(new (require('events').EventEmitter)(), { current: null, server: { current: null } }), link: { hosts: [] }, // #76's Connect by address
       phoneViews: { openApp: (...args) => opened.push(args), pin() {} },
+      proximityLock: { cancel() { lockCancels++; } },
     });
     assert.ok(events.has('setLanguage'), `${mode} exposes a validated language action`);
     const set = (v) => events.get('setLanguage')({}, v);
@@ -46,6 +48,15 @@ try {
     set('zh-CN'); assert.strictEqual(reloads, 1);
     set('en'); assert.strictEqual(store.loadSettings().ui.language, 'en');
     assert.strictEqual(reloads, 2);
+    const setLock = (v) => events.get('setProximityLock')({}, v);
+    assert.equal(settings.app.proximityLock, false, 'the stored string cannot opt in');
+    setLock('true');
+    assert.equal(settings.app.proximityLock, false, 'IPC needs an explicit boolean');
+    setLock(true);
+    assert.equal(store.loadSettings().app.proximityLock, true, 'opt-in survives a reload');
+    setLock(false);
+    assert.equal(lockCancels, 1, 'opt-out immediately cancels the prompt');
+    assert.equal(store.loadSettings().app.proximityLock, false);
     actions.pairWith('peer');
     assert.strictEqual(connection.connect.message, `Asked ${device.name} to connect. Confirm on ${device.name}.`);
     assert.strictEqual(connection.connect.messageKey, 'Asked {name} to connect. Confirm on {name}.');
@@ -61,6 +72,7 @@ try {
       module: preload,
     });
     assert.strictEqual(typeof exposed.setLanguage, 'function');
+    assert.strictEqual(typeof exposed.setProximityLock, 'function');
     const html = fs.readFileSync(path.join(ROOT, mode, 'control.html'), 'utf8');
     for (const file of ['lang/en.js', 'lang/pick.js', 'i18n.js']) assert.ok(html.includes('../shared/' + file), `${mode} loads shared ${file}`);
   }

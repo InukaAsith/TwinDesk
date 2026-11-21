@@ -35,7 +35,17 @@ for (const f of ['windows/installer/build.js', 'linux/installer/build.js']) {
 }
 // The Windows filter applies at every depth: the receiver's wasm has to pass it too.
 assert.ok(/name === 'playfair\.wasm'/.test(read('windows/installer/build.js')), 'windows/installer/build.js stages shared/airplay/playfair.wasm');
-assert.ok(/cp "\$ROOT"\/shared\/\*\.js/.test(read('mac/build-app.sh')), 'mac/build-app.sh copies every shared/*.js');
-assert.ok(/cp -R "\$ROOT\/shared\/lang"/.test(read('mac/build-app.sh')), 'mac/build-app.sh stages shared/lang');
+const macBuild = read('mac/build-app.sh');
+const stageShared = macBuild.split('\n').find((line) => line.startsWith('cp "$ROOT"/shared/*.js') && line.endsWith('"$STAGE/shared/"'));
+assert.ok(stageShared, 'mac/build-app.sh copies every shared/*.js');
+assert.ok(stageShared.includes('"$ROOT"/shared/*.html'), 'mac/build-app.sh copies every shared/*.html');
+assert.ok(/cp -R "\$ROOT\/shared\/lang"/.test(macBuild), 'mac/build-app.sh stages shared/lang');
+const stageMac = macBuild.split('\n').find((line) => line.startsWith('rsync -a ') && line.endsWith('./ "$STAGE/mac/"'));
+assert.ok(stageMac, 'mac/build-app.sh stages the Mac app directory');
+assert.ok(fs.existsSync(path.join(ROOT, 'mac', 'proximity-lock.js')) && !stageMac.includes('--exclude proximity-lock.js'), 'the Mac lock action is staged');
+for (const file of ['proximity-lock.js', 'proximity-lock-desktop.js', 'proximity-lock-linux.js',
+  'proximity-lock-prompt.js', 'proximity-lock.html', 'preload-proximity-lock.js']) {
+  assert.ok(fs.existsSync(path.join(ROOT, 'shared', file)), `shared/${file} is staged by all three desktop installers`);
+}
 
 console.log(`packaging: passed (${required.size} shared modules required, all staged)`);

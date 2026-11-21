@@ -95,6 +95,7 @@ const { Server } = require('./server');
 const { Pairing } = require('./pairing');
 const { startServices } = require('./services');
 const { setupIpc, TABS } = require('./ipc');
+const { installProximityLock } = require('./proximity-lock');
 const login = require('./login');
 const { Hud } = require('./hud');
 const { PairSync } = require('./pairsync');
@@ -116,6 +117,7 @@ let hud = null;
 let quitting = false;
 let startHidden = process.argv.includes('--hidden');
 let settings, id, server, pairing, discovery, link, peer, svc, actions, pairSync, updates;
+let proximityLock = null;
 let web = null; // TwinDesk Web: this Mac as a page for iPhones and browsers (setupWeb)
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is the Mac's sound capture (audiohub.js)
 
@@ -655,7 +657,7 @@ app.whenReady().then(() => {
     resolve: (hostId) => { const d = discovery.get(hostId); return d && !d.ble ? d : null; }, // a Mac host: on the network only
   });
   link.on('change', pushState);
-  link.on('welcome', () => pairing.clearReturn());
+  link.on('welcome', () => { proximityLock.cancel(); pairing.clearReturn(); });
   link.on('request', showWindow);
   // Take over on a Mac we're a guest of: back to it, taking the session over (a device connected
   // to us goes first, as Take over here does).
@@ -667,6 +669,9 @@ app.whenReady().then(() => {
     } else link.connect(true);
   });
   pairing = new Pairing(server, id, { busy: () => !!link.ctx, yieldTo: () => link.stop() });
+  proximityLock = installProximityLock({ server, pairing, settings, i18n, getHelper: () => svc && svc.helper,
+    occupied: () => !!(server.current || link.ctx) || svc?.net?.state === 'joining',
+  });
   server.on('phoneFree', () => { link.poke(); pushState(); });
   pairing.on('change', pushState);
   pairing.on('request', showWindow);
@@ -1115,6 +1120,7 @@ app.whenReady().then(() => {
     refreshPermissions,
     updates,
     applyRelay,
+    proximityLock,
   });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
@@ -1327,7 +1333,10 @@ function setupNet() {
         await wifi('wifiLocation').catch(() => {}); // macOS shows scans only to apps with Location
         await wifi('wifiJoin', { ssid, password }, 90000);
       },
-      stop: () => wifi('wifiLeave', {}, 30000),
+      stop: () => {
+        if (svc.net.onGroup) proximityLock.reset(); // the still-live session is leaving its Wi-Fi group
+        return wifi('wifiLeave', {}, 30000);
+      },
     },
     // A phone's screen goes through adb: on the phone's hotspot the Mac keeps the internet.
     // 'user': Connect with Wi-Fi Direct; 'hotspot': Connect with hotspot.
@@ -1571,6 +1580,7 @@ app.on('before-quit', () => {
   if (svc && svc.mic) svc.mic.shutdown();
   if (svc && svc.rzShelf) svc.rzShelf.shutdown();
   if (svc && svc.rz) svc.rz.shutdown();
+  proximityLock?.shutdown();
   quitting = true;
   if (svc && svc.phoneViews) svc.phoneViews.shutdown();
   if (svc && svc.phoneDrive) svc.phoneDrive.shutdown();

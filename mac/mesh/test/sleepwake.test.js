@@ -96,7 +96,7 @@ test('a one-session host stops inviting its old guest once anyone holds the sess
   });
   powerMonitor.emit('suspend');
   // The session sleep ended is still closing: its guest is invited.
-  server.current = { deviceId: 'pc-a', ws: ws(2) };
+  server.current = { deviceId: 'pc-a', ws: ws(1), expectedClose: true };
   powerMonitor.emit('resume');
   t.mock.timers.tick(2000);
   assert.deepEqual(invites, ['192.0.2.7']);
@@ -106,4 +106,23 @@ test('a one-session host stops inviting its old guest once anyone holds the sess
   server.current = null;
   t.mock.timers.tick(2000);
   assert.deepEqual(invites, ['192.0.2.7']);
+});
+
+test('sleep sends no second error to an already-closing guest', () => {
+  const { Server: SingleServer } = require('../../server');
+  for (const Host of [SingleServer, Server]) {
+    const ws = { readyState: 1, close() {}, terminate() {} };
+    const ctx = { ws, authed: true, deviceId: 'pc', expectedClose: true };
+    const errors = [];
+    const host = Object.assign(Object.create(Host.prototype), {
+      clients: new Map([[ctx.deviceId, ctx]]), sockets: new Set([ctx]),
+      send(_ctx, msg) { errors.push(msg); },
+      _onSocketClose() { this.sockets.delete(ctx); },
+      endPhoneGrace() {},
+    });
+    Object.defineProperty(host, 'current', { value: ctx });
+    host.sleep(true);
+    assert.deepEqual(errors, [], Host === SingleServer ? 'single host' : 'mesh host');
+    assert.equal(host.sockets.size, 0);
+  }
 });
