@@ -67,12 +67,19 @@ function itemsOf(m) {
 // to it, not through the pool). clip: the mesh Clip (cfg, bus, lastSync, _readText, _remember,
 // clipboard, onChange); concealed(): the clipboard holds a password now.
 class MeshClipQueue {
-  constructor(clip, { concealed = async () => false, nameOf = (id) => id } = {}) {
+  constructor(clip, { concealed = async () => false, nameOf = (id) => id,
+    activePair = (id) => id, knownPair = () => true, currentSocket = () => null, changed = () => clip.onChange() } = {}) {
     this.clip = clip;
     this.concealed = concealed;
     this.nameOf = nameOf;
     this.queues = new Map(); // device id -> ClipQueue
-    this.known = new Set();
+    this.changed = changed;
+    this.activePair = activePair;
+    this.knownPair = knownPair;
+    this.currentSocket = currentSocket;
+    this.known = new Map();
+    this.epoch = 0;
+    this.pasteEpoch = 0;
     this.seen = null;
     this.timer = setInterval(() => this._look(), 2000);
     if (this.timer.unref) this.timer.unref();
@@ -84,62 +91,97 @@ class MeshClipQueue {
     return n;
   }
 
-  welcome(id) { this.known.add(id); }
+  welcome(id) {
+    const pair = this.activePair(id);
+    if (this.known.get(id) !== pair) this.queues.delete(id);
+    if (pair) this.known.set(id, pair);
+    else this.known.delete(id);
+    ++this.epoch;
+    ++this.pasteEpoch;
+  }
+
+  forget(id) {
+    this.known.delete(id);
+    this.queues.delete(id);
+    ++this.epoch;
+    ++this.pasteEpoch;
+    this.changed();
+  }
+
+  applies() {
+    const c = this.clip.cfg;
+    return c.enabled && c.send && c.queue !== false;
+  }
+
+  configure() {
+    ++this.epoch;
+    ++this.pasteEpoch;
+    if (!this.applies()) {
+      this.queues.clear();
+      this.seen = null;
+    }
+  }
 
   _away() {
     const on = new Set(this.clip.bus.connectedIds());
-    return [...this.known].filter((id) => !on.has(id));
+    return [...this.known].filter(([id, pair]) => !on.has(id) && this.knownPair(id, pair));
   }
 
   async _look() {
-    const c = this.clip.cfg;
-    const away = c.enabled && c.send && c.queue !== false ? this._away() : [];
+    const epoch = ++this.epoch;
+    const away = this.applies() ? this._away() : [];
     if (!away.length) { this.seen = null; return; }
-    let t;
-    try { t = await this.clip._readText(); } catch (_) { return; }
-    if (this.seen === null) { this.seen = t; return; } // what was there already isn't a copy
-    if (t === this.seen) return;
-    this.seen = t;
-    if (!t || t === this.clip.lastSync.received || require('./otp.js').isQuiet(t)) return;
-    if (c.skipConcealed && (await this.concealed().catch(() => false))) return;
+    let text;
+    try { text = await this.clip._readText(); } catch (_) { return; }
+    if (epoch !== this.epoch || !this.applies()) return;
+    const previous = this.seen;
+    this.seen = text;
+    if (previous === null || !text || text === previous || text === this.clip.lastSync.received || require('./otp.js').isQuiet(text)) return;
+    if (this.clip.cfg.skipConcealed && (await this.concealed().catch(() => true))) return;
+    if (epoch !== this.epoch || !this.applies()) return;
+    const stillAway = new Map(this._away());
     let added = false;
-    for (const id of this._away()) {
+    for (const [id, pair] of away) {
+      if (stillAway.get(id) !== pair) continue;
       if (!this.queues.has(id)) this.queues.set(id, new ClipQueue());
-      if (this.queues.get(id).add(t, c.maxKB)) added = true;
+      if (this.queues.get(id).add(text, this.clip.cfg.maxKB)) added = true;
     }
-    if (added) this.clip.onChange();
+    if (added) this.changed();
   }
 
-  // Its clip.policy: it takes queued copies (and the clipboard at all).
   policy(id, m) {
+    const pair = this.known.get(id);
     const q = this.queues.get(id);
-    const c = this.clip.cfg;
-    if (!q || !q.size || !m || m.queue !== true || m.accept === false || !c.enabled || !c.send) return;
+    if (!q?.size || !pair || this.activePair(id) !== pair || !this.knownPair(id, pair) ||
+        !this.applies() || m?.queue !== true || m.accept === false) return;
     const msg = q.take();
-    if (!this.clip.bus.send(id, msg)) { for (const x of msg.items) q.add(x.text, c.maxKB); return; }
-    this.clip.onChange();
+    if (!this.clip.bus.send(id, msg)) { q.items = msg.items; return; }
+    this.changed();
   }
 
-  // Copies a device made while we were away: in Recent; on the clipboard only the latest, with
-  // Put the latest on the clipboard on.
+  // Copies a device made while we were away: in Recent; on the clipboard only the latest.
   async receive(m, from) {
     const clip = this.clip;
-    const c = clip.cfg;
-    if (!c.enabled || !c.receive) return;
+    const socket = this.currentSocket(from);
+    const allowed = () => clip.cfg.enabled && clip.cfg.receive && socket === this.currentSocket(from);
+    if (!allowed()) return;
     const items = itemsOf(m);
     if (!items.length) return;
+    const epoch = ++this.pasteEpoch;
     const name = this.nameOf(from);
     for (const x of items) clip._remember('in', x.text, name, x.at);
-    if (c.queueLatest) {
+    this.changed();
+    if (clip.cfg.queueLatest) {
       const last = items[items.length - 1].text;
+      if (this.applyLatest) return this.applyLatest(last, () => epoch === this.pasteEpoch && allowed() && clip.cfg.queueLatest);
       let now = '';
       try { now = await clip._readText(); } catch (_) { /* write it */ }
-      if (now !== last) clip.clipboard.writeText(last);
+      if (epoch !== this.pasteEpoch || !allowed() || !clip.cfg.queueLatest) return;
       clip.lastSync.received = last;
       clip.seen = last;
       this.seen = last;
+      if (now !== last) clip.clipboard.writeText(last);
     }
-    clip.onChange();
   }
 
   destroy() { clearInterval(this.timer); }

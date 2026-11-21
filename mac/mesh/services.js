@@ -46,7 +46,13 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     swapKeys: () => server.keySwap(s()), // never between two Macs
   });
 
-  const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, session: (id) => meshHub.sessions.get(id) });
+  const guestPair = (id) => meshHub.pairing?.paired.find((pair) => pair.id === id);
+  const hostPair = (id) => meshHub.links.get(id)?.pairing;
+  const clipboard = new Clip({
+    bus: meshHub.bus, mesh, getSettings: s, helper, session: (id) => meshHub.sessions.get(id),
+    activePair: (id) => meshHub.sessions.get(id)?.linkUp ? hostPair(id) : guestPair(id),
+    knownPair: (id, pair) => pair === guestPair(id) || pair === hostPair(id),
+  });
   const drop = new Drop({ server, helper, displays, getSettings: s });
   const fileSend = new FileSend(server, s, { outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json') });
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
