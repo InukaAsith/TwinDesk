@@ -21,6 +21,7 @@ object Notify {
     const val CH_UPDATES = "updates"
     const val CH_SCREEN = "screen"
     const val CH_ASK = "ask"
+    const val CH_TASK = "task"
     const val CH_REZUME = "rezume.now" // what's in use on the computer: shown with the others, no sound ("rezume", silent, hid it)
     const val CH_REZUME_SENT = "rezume.sent" // … sent on purpose (Send to), rings
 
@@ -42,6 +43,7 @@ object Notify {
     const val ID_MEDIA_DEL = 17 // Remove on the computer's Photos page, without All files access: tap for Android's confirmation
     const val ID_PEER = 18 // Connect with Android (Peer.kt): a phone asks to connect, to pair, to see the screen
     const val ID_TETHER = 19 // Internet over USB (Tether.kt): Allow, then while it runs, Stop
+    private const val ID_TASK_BASE = 900
     const val ID_SOUND = 12 // the sound capture: asking for Start, then its service's own
     private const val ID_FILES_BASE = 1000
     private const val ID_COMPUTER_BASE = 100000
@@ -62,6 +64,9 @@ object Notify {
             description = tr("Files copied with the shortcut, ready to paste or save")
         })
         n.createNotificationChannel(NotificationChannel(CH_COMPUTER, tr("Your computer’s notifications"), NotificationManager.IMPORTANCE_HIGH))
+        n.createNotificationChannel(NotificationChannel(CH_TASK, tr("Task alerts"), NotificationManager.IMPORTANCE_DEFAULT).apply {
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
+        })
         n.createNotificationChannel(NotificationChannel(CH_SCREEN, tr("Shared screens"), NotificationManager.IMPORTANCE_HIGH).apply {
             description = tr("Your computer is sharing its screen with this phone")
         })
@@ -508,6 +513,25 @@ object Notify {
     }.let { }
 
     fun cancelPeer(ctx: Context) = runCatching { nm(ctx).cancel(ID_PEER) }.let { }
+
+    fun task(ctx: Context, label: String, ok: Boolean, key: Int) {
+        val title = if (ok) tr("Task completed") else tr("Task failed")
+        runCatching {
+            nm(ctx).notify(ID_TASK_BASE + key, Notification.Builder(ctx, CH_TASK)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle(title)
+                .setContentText(if (label == "Terminal task") tr("Terminal task") else label)
+                .setVisibility(Notification.VISIBILITY_SECRET)
+                .setContentIntent(openApp(ctx))
+                .setAutoCancel(true)
+                .setTimeoutAfter(24L * 60 * 60 * 1000)
+                .build())
+        }
+    }
+
+    fun cancelTask(ctx: Context) {
+        for (key in 0 until 8) runCatching { nm(ctx).cancel(ID_TASK_BASE + key) }
+    }
 
     // icon: the app's (from the computer), else TwinDesk's own shows.
     fun fromComputer(ctx: Context, key: String, app: String, title: String, body: String, computer: String, icon: android.graphics.Bitmap? = null) {

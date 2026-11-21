@@ -83,6 +83,7 @@ class LocalApi {
     if (route === 'GET /v1/status') return send(200, this.actions.status());
     if (req.method !== 'POST') return send(404, { error: 'not found' });
     if (!/^application\/json\b/i.test(String(h['content-type'] || ''))) return send(415, { error: 'JSON only' });
+    const token = this.token;
     let size = 0;
     const parts = [];
     req.on('data', (c) => {
@@ -96,6 +97,13 @@ class LocalApi {
       try { body = JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch (_) { return send(400, { error: 'bad JSON' }); }
       if (!body || typeof body !== 'object') return send(400, { error: 'bad JSON' });
       try {
+        if (this.actions.taskAlerts && (route === 'POST /v1/task-alert/start' || route === 'POST /v1/task-alert/finish' || route === 'POST /v1/task-alert/cancel')) {
+          if (this.token !== token) return send(401, { error: 'Local API restarted' });
+          const taskAlerts = this.actions.taskAlerts;
+          const result = route.endsWith('/start') ? taskAlerts.start(body)
+            : route.endsWith('/cancel') ? taskAlerts.cancel(body) : taskAlerts.finish(body);
+          return send(result.code, result.body);
+        }
         if (route === 'POST /v1/send') {
           const paths = (Array.isArray(body.paths) ? body.paths : []).filter((p) => typeof p === 'string' && path.isAbsolute(p) && fs.existsSync(p)).slice(0, 1000);
           if (!paths.length) return send(400, { error: 'no files' });

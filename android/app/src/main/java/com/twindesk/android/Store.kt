@@ -76,9 +76,16 @@ class Store(private val ctx: Context) {
 
     fun saveHosts(list: List<Host>, key: String = "hosts") = prefs.edit().putString(key, jsonArray(list.map { it.json() }).toString()).apply()
 
-    fun putHost(h: Host, key: String = "hosts") = saveHosts(listOf(h) + hosts(key).filter { it.id != h.id }, key)
+    fun putHost(h: Host, key: String = "hosts") {
+        val old = hosts(key)
+        if (key == "hosts" && old.any { it.id == h.id && it.fp != h.fp }) prefs.edit().remove("taskAlerts.${h.id}").apply()
+        saveHosts(listOf(h) + old.filter { it.id != h.id }, key)
+    }
 
-    fun forgetHost(id: String, key: String = "hosts") = saveHosts(hosts(key).filter { it.id != id }, key)
+    fun forgetHost(id: String, key: String = "hosts") {
+        if (key == "hosts") prefs.edit().remove("taskAlerts.$id").apply()
+        saveHosts(hosts(key).filter { it.id != id }, key)
+    }
 
     // Settings: one boolean per switch.
     fun flag(key: String, default: Boolean): Boolean = prefs.getBoolean(key, default)

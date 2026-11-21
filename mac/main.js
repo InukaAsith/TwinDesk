@@ -62,7 +62,7 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // costs bandwidth only while packets are being lost.
 app.commandLine.appendSwitch('force-fieldtrials', 'WebRTC-ForceSendPlayoutDelay/min_ms:0,max_ms:0/WebRTC-FlexFEC-03/Enabled/WebRTC-FlexFEC-03-Advertised/Enabled/');
 // Renamed to TwinDesk: settings, pairing and the identity stay in the old folder.
-app.setPath('userData', process.env.MACSHARE_PROFILE || path.join(app.getPath('appData'), 'MacShare')); // PROFILE: a second dev copy
+app.setPath('userData', require('./store').profilePath(app.getPath('appData'))); // PROFILE: a second dev copy
 require('../shared/applog.js').start(app); // console.* and crashes into the log folder, both apps
 // Screen share codec (shared/screencodec.js): H.265 available in WebRTC, so the
 // Encoder setting works on the next share. One enable-features switch for the app: Chromium keeps only the last one.
@@ -699,13 +699,19 @@ app.whenReady().then(() => {
   // General › Local API (shared/localapi.js): off unless switched on.
   {
     const { LocalApi } = require('../shared/localapi.js');
+    const { TaskAlerts } = require('./task-alerts.js');
+    const taskAlerts = new TaskAlerts(peer);
     const api = new LocalApi({ dir: app.getPath('userData'), actions: {
       status: () => ({ connected: !!peer.current, device: peer.current ? peer.current.name : '' }),
       send: (paths) => svc.fileSend.send(paths),
       clipboard: (text) => require('electron').clipboard.writeText(text),
+      taskAlerts,
     } });
     svc.localApi = api;
-    svc.applyLocalApi = () => api.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+    svc.applyLocalApi = () => {
+      if (!settings.app.localApi) taskAlerts.clear();
+      return api.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+    };
     if (settings.app.localApi) svc.applyLocalApi();
     app.on('will-quit', () => { api.stop(); });
   }

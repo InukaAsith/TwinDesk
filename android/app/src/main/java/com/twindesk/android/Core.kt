@@ -92,6 +92,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     val appList = AppList(this) // the phone's apps, for the pages that pick some (Notifications, Banking apps)
     val bank = BankGuard(this) // a banking app opened: debugging off, and TwinDesk exits (General › Banking apps)
     val pcMedia = PcMedia(this) // what plays on the computer: the Media page and a media notification here
+    val taskAlerts = TaskAlerts(this)
     // Connect with Android: another phone, on a session of its own beside the computer's (Peer.kt).
     // Not a Feature: the computer's messages never reach it, nor its the computer.
     val peer = Peer(this)
@@ -452,6 +453,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     fun forget(id: String) {
         if (returnHost()?.id == id) stopReturn()
+        taskAlerts.forget(id)
         if (link.host?.id == id) link.disconnect()
         store.forgetHost(id)
         changed()
@@ -482,6 +484,7 @@ class Core private constructor(val ctx: Context) : Link.Events {
     override fun onChange() {
         runCatching { share.linkChanged() } // the session moved (Bluetooth <-> Wi-Fi): shared folders follow
         runCatching { remote.linkChanged() } // … and the Remote page's pace
+        runCatching { taskAlerts.linkChanged() }
         changed()
     }
 
@@ -507,6 +510,11 @@ class Core private constructor(val ctx: Context) : Link.Events {
 
     override fun onMessage(m: JSONObject, route: Link.TrustedRoute?, source: okhttp3.WebSocket) {
         val t = m.optString("t")
+        if (t == Proto.T.TASK_ALERT) {
+            val alert = TaskAlertGate.parse(m.opt("id"), m.opt("title"), m.opt("ok"))
+            main.post { taskAlerts.receive(alert, route) }
+            return
+        }
         main.post {
             for (f in features) {
                 val mine = try { f.onMessage(t, m) } catch (e: Exception) { Log.e("TwinDesk", "message $t", e); true }

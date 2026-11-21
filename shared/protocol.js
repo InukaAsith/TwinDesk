@@ -181,6 +181,8 @@
       // Notifications, Send files, copy/paste files with shortcuts
       NOTIF: 'notif', // either {id, app, appName, title, subtitle, body, at}: a notification on the sender
       NOTIF_POLICY: 'notif.policy', // either {accept}: this side shows the other's notifications
+      TASK_ALERT_POLICY: 'task.alert.policy', // Android -> Mac {on}: per-pair task alerts are allowed on this socket
+      TASK_ALERT: 'task.alert', // Mac -> Android {id, title, ok}: local command completion, no command or output
       FCLIP_OFFER: 'fclip.offer', // either {id, items: [{name, dir, size}], files, bytes}: files copied with the shortcut
       FCLIP_PASTE: 'fclip.paste', // either {id}: paste them here now (the copier then sends file.offer drop:'paste')
       FCLIP_KEY: 'fclip.key', // owner->driven {action:'copy'|'paste'}: the copy/paste shortcut pressed while driving it — do it there

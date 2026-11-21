@@ -6,6 +6,11 @@ const fs = require('fs');
 const path = require('path');
 
 let baseDir = null;
+let profileName = 'MacShare';
+
+function profilePath(appData) {
+  return process.env.MACSHARE_PROFILE || path.join(appData, profileName);
+}
 
 function init(dir) {
   baseDir = dir;
@@ -154,4 +159,4 @@ function saveSettings(s) {
   write('settings.json', s);
 }
 
-module.exports = { init, filePath, read, write, loadSettings, saveSettings };
+module.exports = { init, filePath, read, write, loadSettings, saveSettings, profilePath };
