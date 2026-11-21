@@ -51,6 +51,7 @@ class Clip extends EventEmitter {
     this.latest = new Latest({ selfId: this.mesh.selfId }); // the latest copy wins (shared/clipsync.js)
     this.lastSync = { sent: null, received: null };
     this.readSequence = 0;
+    this.readsInFlight = 0;
     this.receiveSequence = 0;
     this.lastAppliedText = 0;
     this.receiving = 0;
@@ -201,6 +202,9 @@ class Clip extends EventEmitter {
   async _onClip(m, from) {
     const c = this.cfg;
     if (!c.enabled || !c.receive || !m || !P.clipAllowed(m.text)) return;
+    // The phone bridge can report our last send back while a newer local copy is being read. Its
+    // clips carry no origin; a mesh device's copy of the same text is a copy, and goes on.
+    if (m.o === undefined && m.text === this.lastSync.sent && (this.readsInFlight || this.pending)) return;
     const r = this.pool.receive(from, m);
     if (!r.fresh) return;
     // An older copy than the newest this device knows (its own last copy counts): not applied. The pool
@@ -253,6 +257,17 @@ class Clip extends EventEmitter {
     if (defer()) return;
     const sequence = ++this.readSequence;
     const valid = () => sequence === this.readSequence && this.cfg.enabled && this.cfg.send && !defer();
+    ++this.readsInFlight;
+    try {
+      return await this._readAndSend(why, valid);
+    } finally {
+      --this.readsInFlight;
+    }
+  }
+
+  // The read itself, counted by sendIfChanged while it runs.
+  async _readAndSend(why, valid) {
+    const c = this.cfg;
     const text = await this._readText();
     if (!valid()) return;
     if (!text) return this._picture(why, valid);

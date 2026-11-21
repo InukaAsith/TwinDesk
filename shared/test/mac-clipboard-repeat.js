@@ -174,3 +174,61 @@ test('a copy held back during a receive is not sent once the mode is no longer i
   assert.deepEqual(copies(), []);
   assert.equal(c.pending, null);
 });
+
+test('a phone echo does not overwrite a local copy waiting on the helper', async () => {
+  const { c, helper, copies } = setup();
+  text = 'A';
+  await c.sendIfChanged('request');
+  let release;
+  helper.request = () => new Promise(resolve => { release = resolve; });
+  text = 'B';
+  const outgoing = c.sendIfChanged('request');
+  await tick();
+  await c._onClip({ text: 'A' });
+  release({});
+  await outgoing;
+  assert.deepEqual(copies(), ['A', 'B']);
+  assert.equal(text, 'B');
+  assert.notEqual(c.lastReceived, 'A');
+  assert.equal(c.receiving, 0);
+  assert.equal(c.readsInFlight, 0);
+});
+
+test('an idle phone echo records the receive without writing', async () => {
+  const { c } = setup();
+  text = 'A';
+  await c.sendIfChanged('request');
+  clipboard.writeText = () => assert.fail('unchanged clipboard was written');
+  await c._onClip({ text: 'A' });
+  assert.equal(c.lastReceived, 'A');
+});
+
+test('a phone echo does not cancel a receive holding back a local read', async () => {
+  const { c } = setup();
+  text = 'A';
+  await c.sendIfChanged('request');
+  let release;
+  read = () => new Promise(resolve => { release = resolve; });
+  const incoming = c._onClip({ text: 'remote' });
+  await c.sendIfChanged('request');
+  assert.equal(c.pending, 'request');
+  read = async () => text;
+  await c._onClip({ text: 'A' });
+  release('A');
+  await incoming;
+  await tick();
+  assert.equal(text, 'remote');
+  assert.equal(c.lastReceived, 'remote');
+  assert.equal(c.receiving, 0);
+});
+
+test('outgoing reads release their count after an early return or rejection', async () => {
+  const { c } = setup();
+  text = 'A';
+  await c.sendIfChanged('request');
+  await c.sendIfChanged('request');
+  assert.equal(c.readsInFlight, 0, 'unchanged text');
+  read = async () => { throw new Error('read failed'); };
+  await assert.rejects(c.sendIfChanged('request'), /read failed/);
+  assert.equal(c.readsInFlight, 0, 'failed read');
+});

@@ -258,3 +258,79 @@ test('a request just before or during a receive does not lose a copy being read'
     assert.deepEqual(texts(), ['important'], when);
   }
 });
+
+test('a phone echo does not overwrite a local copy waiting on the helper', async () => {
+  const { clip, clipboard, helper, texts } = setup();
+  clipboard.text = 'A';
+  await clip.sendIfChanged('request');
+  let release;
+  helper.request = () => new Promise(resolve => { release = resolve; });
+  clipboard.text = 'B';
+  const outgoing = clip.sendIfChanged('request');
+  await tick();
+  await clip._onClip({ text: 'A' }, 'peer');
+  release({});
+  await outgoing;
+  assert.deepEqual(texts(), ['A', 'B']);
+  assert.equal(clipboard.text, 'B');
+  assert.notEqual(clip.lastSync.received, 'A');
+  assert.equal(clip.receiving, 0);
+  assert.equal(clip.readsInFlight, 0);
+});
+
+test('an idle phone echo records the receive without writing', async () => {
+  const { clip, clipboard } = setup();
+  clipboard.text = 'A';
+  await clip.sendIfChanged('request');
+  clipboard.writeText = () => assert.fail('unchanged clipboard was written');
+  await clip._onClip({ text: 'A' }, 'peer');
+  assert.equal(clip.lastSync.received, 'A');
+});
+
+test('a phone echo does not cancel a receive holding back a local read', async () => {
+  const { clip, clipboard } = setup();
+  clipboard.text = 'A';
+  await clip.sendIfChanged('request');
+  let release;
+  clip._readText = () => new Promise(resolve => { release = resolve; });
+  const incoming = clip._onClip({ text: 'remote' }, 'peer');
+  await clip.sendIfChanged('request');
+  assert.equal(clip.pending, 'request');
+  clip._readText = async () => clipboard.text;
+  await clip._onClip({ text: 'A' }, 'peer');
+  release('A');
+  await incoming;
+  await tick();
+  assert.equal(clipboard.text, 'remote');
+  assert.equal(clip.lastSync.received, 'remote');
+  assert.equal(clip.receiving, 0);
+});
+
+test('outgoing reads release their count after an early return or rejection', async () => {
+  const { clip, clipboard } = setup();
+  clipboard.text = 'A';
+  await clip.sendIfChanged('request');
+  await clip.sendIfChanged('request');
+  assert.equal(clip.readsInFlight, 0, 'unchanged text');
+  clip._readText = async () => { throw new Error('read failed'); };
+  await assert.rejects(clip.sendIfChanged('request'), /read failed/);
+  assert.equal(clip.readsInFlight, 0, 'failed read');
+});
+
+test('a mesh device copying the text last sent is a copy, also during a read', async () => {
+  const { clip, clipboard, helper, texts } = setup();
+  clipboard.text = 'A';
+  await clip.sendIfChanged('request');
+  let release;
+  helper.request = () => new Promise(resolve => { release = resolve; });
+  clipboard.text = 'B';
+  const outgoing = clip.sendIfChanged('request');
+  await tick();
+  await clip._onClip({ t: P.T.CLIP, text: 'A', o: 'other', s: 1, d: ['mac'], h: 0, ts: Date.now() + 1000 }, 'peer');
+  release({});
+  await outgoing;
+  assert.equal(clipboard.text, 'A');
+  assert.equal(clip.lastSync.received, 'A');
+  assert.deepEqual(texts(), ['A']);
+  assert.equal(clip.readsInFlight, 0);
+});
