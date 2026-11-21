@@ -32,7 +32,7 @@ function installProximityLock({ server, pairing, settings, i18n, occupied, onCha
     candidate.ws.readyState === candidate.ws.OPEN);
   const controller = new ProximityLock({
     enabled: () => settings.app.proximityLock === true,
-    canLock: (ctx) => !present(ctx) && !occupied() && !replacing(ctx) && paired(ctx) && isUnlocked(),
+    canLock: (ctx) => !present(ctx) && !occupied(ctx) && !replacing(ctx) && paired(ctx) && isUnlocked(),
     prompt: countdownPrompt({ i18n, messageKey: 'Computer locks in {seconds} s', isUnlocked,
       wayland: linux && (process.env.XDG_SESSION_TYPE === 'wayland' || !!process.env.WAYLAND_DISPLAY) }),
     lock() {

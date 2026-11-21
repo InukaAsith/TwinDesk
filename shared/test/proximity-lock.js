@@ -289,8 +289,15 @@ test('desktop guard suppresses deferred replacements, intentional network stops 
       './proximity-lock-prompt.js': { countdownPrompt: () => ({ show: (p) => { prompt = p; }, update() {}, hide: () => { prompt = null; } }) },
       './proximity-lock-linux.js': { watchLinuxSession },
     });
+    let bleQuiet = false;
+    const occupiedSeen = [];
     const service = installProximityLock({ server, pairing: { list: () => [{ id: 'phone', os: P.OS.ANDROID }] },
-      settings: { app: { proximityLock: true } }, i18n: {}, occupied: () => false,
+      settings: { app: { proximityLock: true } }, i18n: {},
+      occupied: (ctx) => {
+        assert.ok(ctx && typeof ctx.transport === 'string', 'occupied receives the closing session ctx');
+        occupiedSeen.push(ctx.transport);
+        return bleQuiet && ctx.transport === 'ble';
+      },
       onChange() {},
       local: { os: platform === 'windows' ? 'win32' : 'linux', can: () => ({ lock: true }), async do(command) { locks.push(command.do); } },
     });
@@ -339,6 +346,14 @@ test('desktop guard suppresses deferred replacements, intentional network stops 
       service.bluetoothOff();
       close(bluetooth);
       assert.equal(prompt, undefined, 'intentional Wi-Fi and Bluetooth shutdowns are disarmed');
+
+      server.blePorts.set(12346, 'phone');
+      const quietBle = hello('127.0.0.1', 12346);
+      bleQuiet = true;
+      close(quietBle);
+      bleQuiet = false;
+      assert.equal(prompt, undefined, 'BLE drop during BLE quiet/handoff is suppressed via occupied(ctx)');
+      assert.ok(occupiedSeen.includes('ble'), 'occupied inspected the BLE ctx transport');
 
       close(hello());
       assert.equal(prompt.seconds, 15, 'a fresh authenticated session can arm again');
