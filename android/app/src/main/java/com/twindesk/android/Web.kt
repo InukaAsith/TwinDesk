@@ -329,7 +329,10 @@ class Screen(core: Core) : Feature(core) {
                 if (wantStart) startIfNeeded()
                 core.changed()
             }
-            "stream.input" -> { inputOn = m.optBoolean("on", true); core.changed() }
+            "stream.input" -> {
+                inputOn = m.optBoolean("on", true)
+                core.changed()
+            }
             "stream.info" -> { lastInfo = m; host?.post(m) }
             "rtc.offer", "rtc.ice", "stream.stop" -> host?.post(m)
             else -> return false

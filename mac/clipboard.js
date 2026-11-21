@@ -123,6 +123,7 @@ class Clipboard extends EventEmitter {
   async _onClip(msg) {
     const c = this.cfg;
     if (!c.enabled || !c.receive || !P.clipAllowed(msg.text)) return;
+
     this.images.text();
     this.lastReceived = msg.text;
     // A Universal Clipboard item isn't read to compare: reading it fetches it from the other device.

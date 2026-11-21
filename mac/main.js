@@ -315,7 +315,8 @@ function sendScreenState() {
   const c = peer && peer.current;
   if (!c || !svc) return void (screenStateKey = '');
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], ...Pick.stateFields(svc.displays.list(), svc.displays.target(), settings.sharing.remote !== false && !appsHeld()) };
-  const key = JSON.stringify([c.deviceId, msg]);
+  const keyed = [c.deviceId, msg];
+  const key = JSON.stringify(keyed);
   if (key === screenStateKey) return;
   screenStateKey = key;
   peer.sendToClient(msg);
@@ -680,6 +681,7 @@ app.whenReady().then(() => {
   peer.on('rtt', pushState);
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions });
+
   svc.kvm.laneReady.then(laneGo);
   // Camera › Take a photo with the phone (shared/phonephoto.js): its photo onto the clipboard.
   {
@@ -1090,7 +1092,24 @@ app.whenReady().then(() => {
   // The system accent colour changed (General › Appearance › System follows it).
   try { systemPreferences.subscribeNotification('AppleColorPreferencesChangedNotification', () => pushState()); } catch {}
   setupWeb();
-  actions = setupIpc({ state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link, ...svc, hub: loadHub, login, refreshPermissions, updates, applyRelay });
+  actions = setupIpc({
+    state,
+    settings,
+    pushState,
+    onLanguage: changeLanguage,
+    onLook: applyLook,
+    t,
+    server: peer,
+    pairing,
+    discovery,
+    link,
+    ...svc,
+    hub: loadHub,
+    login,
+    refreshPermissions,
+    updates,
+    applyRelay,
+  });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   hud.keep = () => !!peer.current; // the popup's window lives while a session is on (mac/hud.js)

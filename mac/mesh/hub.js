@@ -297,7 +297,7 @@ class Hub extends EventEmitter {
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
       consumed = true;
-      for (const fn of fns) fn(msg, s.id);
+      for (const fn of fns) fn(msg, s.id, source);
     }
     for (const r of this.routes) {
       // A route takes the message only when someone listens for it (as the Windows facade does).

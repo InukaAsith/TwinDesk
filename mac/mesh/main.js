@@ -305,7 +305,8 @@ function sendScreenState() {
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
   const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
-  const key = JSON.stringify([c.deviceId, msg]);
+  const keyed = [c.deviceId, msg];
+  const key = JSON.stringify(keyed);
   if (key === screenStateKey) return;
   screenStateKey = key;
   peer.sendToClient(msg);
@@ -986,7 +987,28 @@ app.whenReady().then(() => {
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
   setupWeb();
-  actions = setupIpc({ devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({
+    devctl: () => devctl,
+    chats: () => chats,
+    state,
+    settings,
+    pushState,
+    onLanguage: changeLanguage,
+    onLook: applyLook,
+    t,
+    server: peer,
+    pairing,
+    discovery,
+    link: links,
+    ...svc,
+    hub,
+    layoutSync,
+    autoJoin,
+    phoneHub: loadHub,
+    login,
+    refreshPermissions,
+    updates,
+  });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
