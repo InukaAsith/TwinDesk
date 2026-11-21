@@ -525,4 +525,66 @@ for (const [platform, label] of [['Win32', 'Show in Explorer'], ['Linux x86_64',
   assert.deepStrictEqual(calls, [['lit', 'Ping\nhello']], platform);
 }
 
+// Runtime FileRecv checks (Windows & Linux): failed or zero-placed paused batches must never
+// record ok: true with a revealable reserved path in recent[].
+{
+  const Module = require('module');
+  const os = require('os');
+  const origLoad = Module._load;
+  const fakeElectron = {
+    app: { getPath: () => os.tmpdir() },
+    shell: { showItemInFolder: () => {} },
+  };
+  Module._load = function (req, parent, isMain) {
+    if (req === 'electron') return fakeElectron;
+    return origLoad.call(this, req, parent, isMain);
+  };
+  try {
+    for (const rel of ['../../windows/filerecv.js', '../../linux/filerecv.js']) {
+      delete require.cache[require.resolve(rel)];
+      const mod = require(rel);
+      const FileRecv = mod.FileRecv || mod;
+      const sent = [];
+      const link = { on() {}, send(m) { sent.push(m); } };
+      const recv = new FileRecv({
+        link,
+        helper: { request: () => Promise.resolve() },
+        settings: { files: { clipReceived: false } },
+        onChange() {},
+      });
+      // Failed batch: placed[0] was pre-reserved by _offerBatch, but ok === 0.
+      recv.batches.set('b-fail', {
+        kind: 'send', dir: os.tmpdir(), count: 1, done: 0, ok: 0,
+        tops: new Map(), placed: [path.join(os.tmpdir(), 'bad.txt')],
+      });
+      recv._batchStep('b-fail', false);
+      assert.strictEqual(recv.recent.length, 1, rel + ': failed batch recorded');
+      assert.strictEqual(recv.recent[0].name, 'bad.txt', rel);
+      assert.strictEqual(recv.recent[0].ok, false, rel + ': failed batch must be ok: false');
+      assert.strictEqual(recv.recent[0].path, '', rel + ': failed batch must have no revealable path');
+
+      // Paused batch with zero files placed must not record a revealable ok: true entry.
+      recv.recent.length = 0;
+      recv.batches.set('b-pause-0', {
+        kind: 'send', dir: os.tmpdir(), count: 2, done: 0, ok: 0,
+        tops: new Map(), placed: [path.join(os.tmpdir(), 'unwritten.txt')],
+      });
+      recv._paused('b-pause-0');
+      assert.strictEqual(recv.recent.length, 0, rel + ': paused batch with 0 ok must not record recent');
+
+      // Paused batch with >= 1 file placed records ok: true with its path.
+      recv.batches.set('b-pause-1', {
+        kind: 'send', dir: os.tmpdir(), count: 2, done: 1, ok: 1,
+        tops: new Map(), placed: [path.join(os.tmpdir(), 'done.txt')],
+      });
+      recv._paused('b-pause-1');
+      assert.strictEqual(recv.recent.length, 1, rel + ': paused batch with >=1 ok records recent');
+      assert.strictEqual(recv.recent[0].ok, true, rel);
+      assert.strictEqual(recv.recent[0].path, path.join(os.tmpdir(), 'done.txt'), rel);
+    }
+  } finally {
+    Module._load = origLoad;
+  }
+}
+
 console.log('timeline: ok');

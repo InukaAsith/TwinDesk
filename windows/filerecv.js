@@ -311,7 +311,7 @@ class FileRecv {
     this.batches.delete(batch);
     this._keep(batch, b);
     this.last = { name: b.placed.length === 1 ? path.basename(b.placed[0]) : b.placed.length + ' items', ok: true, text: 'Paused', at: Date.now() };
-    if (b.placed[0]) this._remember({ name: this.last.name, path: b.placed[0], ok: true, files: b.placed.length });
+    if (b.ok > 0 && b.placed[0]) this._remember({ name: this.last.name, path: b.placed[0], ok: true, files: b.placed.length });
     this.onChange();
   }
 
@@ -339,7 +339,7 @@ class FileRecv {
     this.link.send({ t: T.FILES_DONE, batch, ok: b.ok === b.count, where: b.dir, files: b.ok });
     const name = b.placed.length === 1 ? path.basename(b.placed[0]) : b.placed.length + ' items';
     this.last = { name, ok: b.ok > 0, text: b.ok === b.count ? 'Saved to ' + b.dir : (b.count - b.ok) + ' of ' + b.count + ' failed', at: Date.now() };
-    if (b.placed[0]) this._remember({ name, path: b.placed[0], ok: true, files: b.placed.length });
+    if (b.ok > 0 && b.placed[0]) this._remember({ name, path: b.placed[0], ok: true, files: b.placed.length });
     else this._remember({ name, ok: false });
     if (b.ok && !b.app) {
       if (b.kind === 'paste') this.helper.request('selectItems', { dir: b.dir, names: b.placed.map((p) => path.basename(p)) }).catch(() => {});
