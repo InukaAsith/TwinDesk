@@ -72,28 +72,63 @@
     return 'avc1.42e01f';
   }
 
+  let rail = null;
+  let minimized = false;
+  let heldFrame = null;
+  let videoEpoch = 0;
+
+  function releaseHeldFrame() {
+    if (heldFrame) heldFrame.close();
+    heldFrame = null;
+  }
+
+  function paintFrame(frame) {
+    if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+      canvas.width = frame.displayWidth;
+      canvas.height = frame.displayHeight;
+      fit();
+    }
+    ctx.drawImage(frame, 0, 0);
+  }
+
+  function paintHeldFrame() {
+    if (!heldFrame) return;
+    try { paintFrame(heldFrame); } finally { releaseHeldFrame(); }
+  }
+
+  window.addEventListener('beforeunload', () => { videoEpoch++; releaseHeldFrame(); });
   function makeDecoder(codec) {
     if (decoder && decoder.state !== 'closed') try { decoder.close(); } catch {}
+    releaseHeldFrame();
+    const epoch = ++videoEpoch;
     decoder = new VideoDecoder({
       output: (frame) => {
-        if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-          canvas.width = frame.displayWidth;
-          canvas.height = frame.displayHeight;
-          fit();
+        if (epoch !== videoEpoch) { frame.close(); return; }
+        if (kind === 'app' && minimized && !rail?.recording()) {
+          releaseHeldFrame();
+          heldFrame = frame;
+        } else {
+          releaseHeldFrame();
+          try {
+            paintFrame(frame);
+            if (vcam) vcam.push(frame, frame.displayWidth, frame.displayHeight);
+          } finally { frame.close(); }
         }
-        ctx.drawImage(frame, 0, 0);
-        if (vcam) vcam.push(frame, frame.displayWidth, frame.displayHeight);
-        frame.close();
         if (!status.hidden) setStatus('');
       },
       error: (e) => {
+        if (epoch !== videoEpoch) return;
+        releaseHeldFrame();
         console.warn('decoder', e.message);
         // The GPU's decoder refused this stream (some drivers, a high H.264 level): the window waited
         // for the picture for good (#233), as a closed decoder takes nothing more. Software from then on.
         if (hwDecode) {
           hwDecode = false;
           console.warn('decoder: trying software decoding');
-          setTimeout(() => { makeDecoder(codec); waitingKey = true; needKey(); }, 0);
+          setTimeout(() => {
+            if (epoch !== videoEpoch) return;
+            makeDecoder(codec); waitingKey = true; needKey();
+          }, 0);
           return;
         }
         needKey();
@@ -139,6 +174,8 @@
       I.translate(el);
       el.hidden = false;
     }
+    if (s.closed || s.error) releaseHeldFrame();
+    if (s.closed) videoEpoch++;
     if (s.error) {
       closedStatus = null;
       if (s.errorKey) setStatus(s.errorKey, s.errorVars);
@@ -458,6 +495,10 @@
   if (pinBtn) pinBtn.onclick = () => { api.send({ t: 'pin' }); canvas.focus(); };
   api.on('opts', (m) => {
     if (!m) return;
+    if (kind === 'app' && typeof m.minimized === 'boolean') {
+      minimized = m.minimized;
+      if (!minimized) paintHeldFrame();
+    }
     if (pinBtn && typeof m.pinned === 'boolean') { pinBtn.classList.toggle('active', m.pinned); pinBtn.setAttribute('aria-pressed', String(m.pinned)); }
     if (powerBtn && typeof m.screenOff === 'boolean') powerBtn.classList.toggle('active', m.screenOff);
     if (enterBtn && typeof m.enterSends === 'boolean') enterBtn.classList.toggle('active', m.enterSends);
@@ -489,7 +530,16 @@
   // The side rail (shared/mirror-rail.js): Screenshot, Record, volume, Rotate, Power; the title bar's
   // rail button shows or hides it. Not in the hidden sound and mic windows.
   if (window.MirrorRail && kind !== 'sound' && kind !== 'mic' && kind !== 'netsound') {
-    window.MirrorRail({ api, canvas, kind, sound: () => (actx && player ? { actx, node: player } : null) }).mount(document.querySelector('#bar .tools'));
+    rail = window.MirrorRail({ api, canvas, kind, sound: () => (actx && player ? { actx, node: player } : null) });
+    // Screenshots and new recordings consume the canvas, including a static frame held while minimized.
+    for (const control of rail.controls) {
+      if (control.k === 'shot' || control.k === 'rec') {
+        const orig = control.el.onclick;
+        if (typeof orig === 'function') control.el.onclick = function (e) { paintHeldFrame(); return orig.call(this, e); };
+        control.el.addEventListener('click', paintHeldFrame, { capture: true });
+      }
+    }
+    rail.mount(document.querySelector('#bar .tools'));
   }
   canvas.focus();
 })();
