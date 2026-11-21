@@ -230,6 +230,10 @@ class Server extends EventEmitter {
       }
       return;
     }
+    // Battery alerts need the original authenticated context, before the hub routes the message.
+    if (msg.t === P.T.PHONE_INFO && ws && !ws.detached && (ws === ctx.ws || ws === ctx.alt)) {
+      this.emit(`t:${P.T.PHONE_INFO}`, msg, ctx);
+    }
     this.emit('message', msg, ctx, ws); // session.js routes it by type
   }
 

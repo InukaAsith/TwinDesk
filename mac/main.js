@@ -743,6 +743,24 @@ app.whenReady().then(() => {
 
   svc.phone = new Phone({ server: peer, raw: server, discovery, pairing });
   svc.phone.on('change', pushState);
+  // Phone battery on this Mac (shared/battery-alerts.js): phone.info already carries the level.
+  {
+    const { createPhoneBatteryWatch, showMacNotification } = require('../shared/battery-alerts.js');
+    svc.batteryAlerts = createPhoneBatteryWatch({
+      getEnabled: () => !!(settings.notifs && settings.notifs.batteryAlerts),
+      notify: (alert) => showMacNotification(alert, { Notification, t, onClick: () => showWindow() }),
+    });
+    peer.on('client', (ctx) => {
+      if (ctx && P.isPhoneOs(ctx.os)) svc.batteryAlerts.begin(ctx);
+      else svc.batteryAlerts.reset();
+    });
+    peer.on('closed', (ctx) => ctx && P.isPhoneOs(ctx.os) && svc.batteryAlerts.end(ctx));
+    peer.on(`t:${P.T.PHONE_INFO}`, (msg, ctx) => {
+      if (ctx && ctx === peer.current && ctx.authed !== false && ctx.released !== true && P.isPhoneOs(ctx.os)) {
+        svc.batteryAlerts.info(msg, ctx);
+      }
+    });
+  }
   // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
   peer.on('client', (ctx) => P.isPhoneOs(ctx.os) && peer.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
   // The phone's screen, input, clipboard and app windows, through wireless debugging.
@@ -1563,6 +1581,7 @@ app.on('will-quit', () => {
 });
 app.on('before-quit', () => {
   if (svc && svc.mic) svc.mic.shutdown();
+  if (svc && svc.batteryAlerts) svc.batteryAlerts.reset();
   if (svc && svc.rzShelf) svc.rzShelf.shutdown();
   if (svc && svc.rz) svc.rz.shutdown();
   quitting = true;

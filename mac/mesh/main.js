@@ -779,6 +779,14 @@ app.whenReady().then(() => {
     });
   }
   const { PcNow } = require('../../shared/pcnow.js');
+  // Phone battery on this Mac (shared/battery-alerts.js): each phone's phone.info already carries the level.
+  {
+    const { createPhoneBatteryWatch, showMacNotification } = require('../../shared/battery-alerts.js');
+    svc.batteryAlerts = createPhoneBatteryWatch({
+      getEnabled: () => !!(settings.notifs && settings.notifs.batteryAlerts),
+      notify: (alert) => showMacNotification(alert, { Notification, t, onClick: () => showWindow() }),
+    });
+  }
   svc.phone = new PhoneSet({
     hub, link: phoneDir, raw: server, discovery, pairing, wired: svc.wired,
     make: (scoped) => {
@@ -792,6 +800,30 @@ app.whenReady().then(() => {
     },
     onUnit: (u) => {
       u.phone.on('change', pushState);
+      const batteryCtx = (view) => {
+        const s = u.link && u.link.route && u.link.route.session;
+        if (!s || !s.connected || !P.isPhoneOs(s.peerOs)) return null;
+        if (view && view.deviceId && view.deviceId !== s.id) return null;
+        const c = s.hostUp && s.ctx ? s.ctx : null;
+        if (c && (c.authed === false || c.released === true)) return null;
+        if (c) return c;
+        return { deviceId: s.id, name: (view && view.name) || s.displayName(), os: s.peerOs, authed: true, session: s };
+      };
+      let activeBatteryCtx = null;
+      u.link.on('client', (view) => {
+        if (activeBatteryCtx) { svc.batteryAlerts.end(activeBatteryCtx); activeBatteryCtx = null; }
+        const ctx = batteryCtx(view);
+        if (ctx) { activeBatteryCtx = ctx; svc.batteryAlerts.begin(ctx); }
+      });
+      u.link.on('closed', (view) => {
+        if (activeBatteryCtx) { svc.batteryAlerts.end(activeBatteryCtx); activeBatteryCtx = null; }
+        else if (view && view.deviceId) svc.batteryAlerts.end(view);
+      });
+      u.link.on(`t:${P.T.PHONE_INFO}`, (msg, view) => {
+        if (!view || view.authed === false) return;
+        const ctx = batteryCtx(view);
+        if (ctx) svc.batteryAlerts.info(msg, ctx);
+      });
       // The phone's Keyboard page names this Mac's hotkey (double-tap = everything back here).
       u.link.on('client', () => u.link.sendToClient({ t: 'phone.mac', hotkey: P.hotkeyName(settings.keys.hotkey || P.HOTKEY_MAC) }));
       u.bridge.on('change', pushState);
@@ -1332,6 +1364,7 @@ app.on('will-quit', () => {
 });
 app.on('before-quit', () => {
   if (web) web.shutdown();
+  if (svc && svc.batteryAlerts) svc.batteryAlerts.reset();
   if (svc && svc.mic) svc.mic.shutdown();
   quitting = true;
   if (svc && svc.phone) svc.phone.shutdown();

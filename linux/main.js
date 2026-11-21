@@ -24,6 +24,7 @@ const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
 const P = require('../shared/protocol.js');
+const { createPhoneBatteryWatch, showDesktopNotification } = require('../shared/battery-alerts.js');
 const { receivedDir } = require('../shared/received.js'); // General › Received files
 const CL = require('../shared/cursorlock.js');
 const trayMenu = require('../shared/traymenu.js');
@@ -125,6 +126,10 @@ let discovery = null;
 let link = null;
 let iosNet = null; // shared/iosnet.js: iPhones on a USB cable
 let settings = null;
+const batteryAlerts = createPhoneBatteryWatch({
+  getEnabled: () => settings?.notifs?.batteryAlerts === true,
+  notify: (alert) => showDesktopNotification(alert, { Notification, t, onClick: () => { if (!quitting) showMain(); } }),
+});
 let awake = null; // shared/keepawake.js
 let device = null;
 let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js), only once it's on
@@ -443,6 +448,7 @@ function start() {
   web = require('./web').setupWeb({ deck: (bus) => (loadDeck() ? deck.web(bus) : null), settings: () => settings, save: saveSettings, pushState, t, device: () => device, helper, smb, notifs, fileClip, vdd, pcScreen,
     kvm: () => kvm, devctl: () => devctl, loadVcam });
   const ipc = setupIpc({
+    batteryAlerts,
     takePhoto: () => !!phonePhoto && phonePhoto.take(),
     loadDrive,
     getDrive: () => drive,
@@ -504,6 +510,17 @@ async function startHost(guest, tries = 0) {
     guest.on('welcome', () => pairing.clearReturn()); // a guest of another computer now: the phone doesn't come back by itself (as on the Mac)
     link.attachHost(server, pairing);
     hostServer = server;
+    const liveClient = (ctx) => !quitting && hostServer === server && ctx && ctx === server.current
+      && ctx.authed !== false && ctx.released !== true;
+    server.on('client', (ctx) => {
+      if (!liveClient(ctx)) return;
+      if (P.isPhoneOs(ctx.os)) batteryAlerts.begin(ctx);
+      else batteryAlerts.reset();
+    });
+    server.on('closed', (ctx) => { if (ctx && P.isPhoneOs(ctx.os)) batteryAlerts.end(ctx); });
+    server.on(`t:${P.T.PHONE_INFO}`, (msg, ctx) => {
+      if (liveClient(ctx) && P.isPhoneOs(ctx.os)) batteryAlerts.info(msg, ctx);
+    });
     applyNet(); // your own relay, now that there's a server to hand its connections to
     bleHost = new BleHost({
       helper, server,
@@ -1677,6 +1694,7 @@ function loadMic() {
 
 app.on('before-quit', () => {
   if (localApi) localApi.stop();
+  batteryAlerts.reset();
   if (web) web.shutdown();
   if (mic) mic.shutdown();
   quitting = true;
