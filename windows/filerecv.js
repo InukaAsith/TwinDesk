@@ -20,6 +20,7 @@ class FileRecv {
   // opts: link, helper, settings (shared), onChange()
   constructor(opts) {
     Object.assign(this, opts);
+    this.recent = [];       // newest first; Activity indexes this. Not saved, never a renderer path.
     this.dir = path.join(app.getPath('userData'), 'incoming');
     // Fast files (shared/fastfile.js) wait while a file's bytes wait for the disk.
     if (this.link && this.link.fx) this.link.fx.pressure((id) => { const f = this.files.get(id) || (this.bfiles && this.bfiles.get(id)); return streamPressure(f && f.out); });
@@ -190,6 +191,7 @@ class FileRecv {
     if (!ok) { if (f.out) f.out.destroy(); removeTemp(f); }
     this.link.send(ok ? { t: T.FILE_DONE, id: f.id, ok: true, path: pathOrError } : { t: T.FILE_DONE, id: f.id, ok: false, error: pathOrError });
     this.last = { name: f.name, ok, text: ok ? 'Saved to ' + path.dirname(pathOrError) : pathOrError, at: Date.now() };
+    this._remember({ name: f.name, path: ok ? pathOrError : '', ok });
     if (!this.files.size) this.target = null;
     this.onChange();
   }
@@ -309,6 +311,7 @@ class FileRecv {
     this.batches.delete(batch);
     this._keep(batch, b);
     this.last = { name: b.placed.length === 1 ? path.basename(b.placed[0]) : b.placed.length + ' items', ok: true, text: 'Paused', at: Date.now() };
+    if (b.ok > 0 && b.placed[0]) this._remember({ name: this.last.name, path: b.placed[0], ok: true, files: b.placed.length });
     this.onChange();
   }
 
@@ -336,6 +339,8 @@ class FileRecv {
     this.link.send({ t: T.FILES_DONE, batch, ok: b.ok === b.count, where: b.dir, files: b.ok });
     const name = b.placed.length === 1 ? path.basename(b.placed[0]) : b.placed.length + ' items';
     this.last = { name, ok: b.ok > 0, text: b.ok === b.count ? 'Saved to ' + b.dir : (b.count - b.ok) + ' of ' + b.count + ' failed', at: Date.now() };
+    if (b.ok > 0 && b.placed[0]) this._remember({ name, path: b.placed[0], ok: true, files: b.placed.length });
+    else this._remember({ name, ok: false });
     if (b.ok && !b.app) {
       if (b.kind === 'paste') this.helper.request('selectItems', { dir: b.dir, names: b.placed.map((p) => path.basename(p)) }).catch(() => {});
       else spawn('explorer.exe', ['/select,', b.placed[0]], { detached: true, stdio: 'ignore' }).unref();
@@ -345,6 +350,34 @@ class FileRecv {
     if (b.ok && b.kind === 'send' && this.settings.files.clipReceived) this.helper.request('clipFiles', { paths: b.placed }).catch(() => {});
     if (this.onBatch) this.onBatch({ batch, kind: b.kind, files: b.ok, count: b.count, ok: b.ok === b.count, placed: b.placed });
     this.onChange();
+  }
+
+  // Newest first. Activity indexes this list. Never written to disk.
+  _remember(r) {
+    const name = typeof r.name === 'string' ? r.name : '';
+    const filePath = r.ok !== false && typeof r.path === 'string' ? r.path : '';
+    if (!name && !filePath) return;
+    const files = typeof r.files === 'number' && r.files > 1 ? Math.round(r.files) : 0;
+    this.recent.unshift({ name, path: filePath, at: Date.now(), ok: r.ok !== false, ...(files > 1 ? { files } : {}) });
+    if (this.recent.length > 30) this.recent.length = 30;
+  }
+
+  clearRecent() {
+    this.recent.length = 0;
+  }
+
+  // Index only. The path is one this process saved, and only while it is still a file or a folder.
+  reveal(index) {
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= this.recent.length) return;
+    const r = this.recent[index];
+    if (!r || r.ok === false || typeof r.path !== 'string' || !r.path) return;
+    let st;
+    try { st = fs.statSync(r.path); } catch (_) { return; }
+    if (!st.isFile() && !st.isDirectory()) return;
+    try {
+      const { shell } = require('electron');
+      if (shell && typeof shell.showItemInFolder === 'function') shell.showItemInFolder(r.path);
+    } catch (_) {}
   }
 
   view() {

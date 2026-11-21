@@ -15,6 +15,7 @@ const ICONS = {
   cursor: 'M5 3l10 6-4.5 1.2L8.5 15z',
   keyboard: 'M2.5 6h15v8h-15z M5.5 9h1 M8.5 9h1 M11.5 9h1 M14.5 9h0 M6.5 11.5h7',
   clipboard: 'M6 4h8v13H6z M8 3h4v2.5H8z M8 9h4 M8 12h4',
+  activity: 'M3.5 5h13 M3.5 10h13 M3.5 15h8', // a short list: Activity
   files: 'M3 5h5l1.5 2H17v9H3z',
   mount: 'M3 12h14v4H3z M14 14h.5 M10 3v6 M7 6l3 3 3-3',
   terminal: 'M3 4h14v12H3z M6 8l2.5 2L6 12 M10 12h4',

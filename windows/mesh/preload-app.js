@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('macshare', {
   connectAddress: call('connectAddress'),
   refreshFound: call('refreshFound'),
   copyText: call('copyText'),
+  copyLiteral: call('copyLiteral'), // Activity: a notification or a call, text only
   deviceDo: call('deviceDo'), // Overview: the selected device's controls
   setOverview: call('setOverview'), // General › Overview: what it shows
   setChats: call('setChats'), // Messages: chat apps in one inbox
@@ -90,6 +91,7 @@ contextBridge.exposeInMainWorld('macshare', {
   resumeSend: call('resumeSend'),
   forgetSend: call('forgetSend'),
   clearFiles: call('clearFiles'),
+  revealDrop: call('revealDrop'), // Activity: show a received file by its index
   setShareOn: call('setShareOn'),
   chooseReceivedFolder: call('chooseReceivedFolder'),
   resetReceivedFolder: call('resetReceivedFolder'),
