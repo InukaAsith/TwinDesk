@@ -508,6 +508,10 @@ class Core private constructor(val ctx: Context) : Link.Events {
     override fun onMessage(m: JSONObject, route: Link.TrustedRoute?, source: okhttp3.WebSocket) {
         val t = m.optString("t")
         main.post {
+            if (t == "rtc.offer" && m.has("detail")) {
+                screen.onOffer(m, route)
+                return@post
+            }
             for (f in features) {
                 val mine = try { f.onMessage(t, m) } catch (e: Exception) { Log.e("TwinDesk", "message $t", e); true }
                 if (mine) return@post

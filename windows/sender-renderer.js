@@ -155,10 +155,31 @@ async function start(m) {
     p.degradationPreference = 'maintain-framerate';
     await tr.sender.setParameters(p);
     if (!alive(me)) return;
+    if (m.detailSource && m.offer.kind === 'screen') {
+      me.detail = window.TwinDeskScreenCodec.detailSession(m.detailSource, {
+        width: m.width, height: m.height, fps, alive: () => alive(me),
+        apply: async (size) => {
+          if (m.captureWidth && m.captureHeight) {
+            const p = tr.sender.getParameters();
+            if (!p.encodings?.length) return;
+            let scale = Math.max(1, captured.width / size.width, captured.height / size.height);
+            if (scale < 1.01) scale = 1;
+            p.encodings[0].scaleResolutionDownBy = scale;
+            await tr.sender.setParameters(p);
+          } else {
+            await track.applyConstraints({
+              width: { ideal: size.width, max: size.width }, height: { ideal: size.height, max: size.height },
+              frameRate: { ideal: fps, max: fps },
+            });
+          }
+        },
+        failed: (error) => api.log('Screen detail unavailable: ' + error.message),
+      });
+    }
     const kind = m.offer.kind === 'screen' && audio ? 'screen+audio' : m.offer.kind;
     // Playback › Steady: no "show it now" on the frames (shared/screencodec.js steady()).
     const sdp = m.steady ? window.TwinDeskScreenCodec.steady(pc.localDescription.sdp) : pc.localDescription.sdp;
-    api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp, kind });
+    api.send({ ...m.offer, t: T.RTC2_OFFER, session: me.session, sdp, kind, ...(me.detail ? { detail: me.detail.offer } : {}) });
     report(me, 'connecting');
     me.statsTimer = setInterval(() => stats(me).catch(() => {}), 1000);
   } catch (e) {
@@ -263,6 +284,7 @@ api.on((m) => {
     case 'stop': stop(m.session); break;
     case T.RTC2_ANSWER: onAnswer(m); break;
     case T.RTC2_ICE: onIce(m); break;
+    case T.RTC_DETAIL: sessions.get(m.session)?.detail?.set(m.height); break;
     case 'native-error':
       if (sessions.has(m.session)) { report(sessions.get(m.session), 'ended', m.error); stop(m.session); }
       break;

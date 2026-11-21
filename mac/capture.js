@@ -89,7 +89,7 @@ async function getStream(sourceId, width, height, fps, audio) {
 
 // Every frame matters more than the last bit of sharpness: under pressure the encoder lowers
 // quality, never the frame rate (dropped frames are what feels jagged and what adds lag).
-async function start({ session, bitrateMbps, sourceId, width, height, audio, fps = 60, ice, codec, steady }) {
+async function start({ session, bitrateMbps, sourceId, width, height, audio, fps = 60, ice, codec, steady, detailSource }) {
   close();
   const me = { session, pendingIce: [], remoteSet: false, last: null };
   cur = me;
@@ -97,6 +97,17 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     me.stream = await getStream(sourceId, width, height, fps, audio);
     if (cur !== me) return me.stream.getTracks().forEach((t) => t.stop());
     const track = me.stream.getVideoTracks()[0];
+    if (typeof track.applyConstraints === 'function') {
+      me.detail = window.TwinDeskScreenCodec.detailSession(detailSource, {
+        width, height, fps, alive: () => cur === me,
+        apply: (size) => track.applyConstraints({
+          width: { ideal: size.width, max: size.width },
+          height: { ideal: size.height, max: size.height },
+          frameRate: { ideal: fps, max: fps },
+        }),
+        failed: (error) => console.warn('screen detail size unavailable:', error.message),
+      });
+    }
     track.contentHint = 'motion';
     track.onended = () => cur === me && api.state({ session, status: 'error: capture ended' });
 
@@ -136,7 +147,8 @@ async function start({ session, bitrateMbps, sourceId, width, height, audio, fps
     if (cur !== me) return;
     // Playback › Steady: no "show it now" on the frames (shared/screencodec.js steady()).
     const sdp = steady ? window.TwinDeskScreenCodec.steady(pc.localDescription.sdp) : pc.localDescription.sdp;
-    api.send({ t: P.T.RTC_OFFER, session, sdp });
+    const detail = me.detail?.offer;
+    api.send({ t: P.T.RTC_OFFER, session, sdp, ...(detail ? { detail } : {}) });
     const pl = /a=fmtp:\d+ .*profile-level-id=([0-9a-f]{6})/i.exec(pc.localDescription.sdp);
     console.log(`offer: first H.264 profile-level-id ${pl ? pl[1] : 'none'}`);
     api.state({ session, status: 'waiting for answer' });
@@ -151,7 +163,9 @@ async function onRemote(msg) {
   const me = cur;
   if (!me || !me.pc || msg.session !== me.session) return;
   try {
-    if (msg.t === P.T.RTC_ANSWER) {
+    if (msg.t === P.T.RTC_DETAIL) {
+      await me.detail?.set(msg.height);
+    } else if (msg.t === P.T.RTC_ANSWER) {
       await me.pc.setRemoteDescription({ type: 'answer', sdp: withOpus(withBitrate(msg.sdp, me.bitrateMbps)) });
       if (window.TwinDeskScreenCodec) console.log(`sending ${window.TwinDeskScreenCodec.negotiated(msg.sdp) || 'no video'} (Encoder: ${me.codec || 'h264'})`);
       me.remoteSet = true;

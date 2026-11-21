@@ -85,6 +85,14 @@ test('one unit per device, each on its own scoped link', async () => {
     await waitFor(() => set.byId.get(p2.id).got.length === 1, 'unit two heard it');
     assert.strictEqual(set.byId.get(p1.id).got.length, 0, 'unit one did not');
 
+    const detailReceived = [];
+    const scoped = set.byId.get(p2.id).link;
+    scoped.on('rtc.detail', (m, ws) => detailReceived.push({m, ws}));
+    p2.client.send({ t: 'rtc.detail', session: 9, height: 1440 });
+    await waitFor(() => detailReceived.length === 1, 'unit two received detail with its socket');
+    assert.strictEqual(detailReceived[0].ws, A.hub.sessions.get(p2.id).ctx.ws);
+    assert.strictEqual(detailReceived[0].ws, scoped.outbound());
+
     // the scoped link sends to its device only
     const heard = [];
     p1.client.on && p1.client.on('message', (m) => heard.push(m));

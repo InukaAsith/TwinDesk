@@ -92,6 +92,13 @@ class Stream extends EventEmitter {
     });
     server.on(`t:${P.T.RTC_ANSWER}`, (msg) => this._toWindow('remote', msg));
     server.on(`t:${P.T.RTC_ICE}`, (msg) => this._toWindow('remote', msg));
+    server.on(`t:${P.T.RTC_DETAIL}`, (msg, ctx, socket) => {
+      const owner = this.active?.detailOwner;
+      if (!owner || socket !== owner || server.outbound(ctx) !== owner ||
+          msg.session !== this.session || msg.session !== this.active.session ||
+          !this.getSettings().sharing.on || this.displays.target()?.id !== this.active.displayId) return;
+      this._toWindow('remote', { t: P.T.RTC_DETAIL, session: msg.session, height: msg.height });
+    });
     displays.on('change', () => this._displaysChanged());
 
     ipcMain.on('capture:out', (e, msg) => {
@@ -215,7 +222,8 @@ class Stream extends EventEmitter {
     }
     this.audio.on = !!audio;
     if (this.session !== s) return;
-    this.active = { session: s, displayId: target.id, width: target.pixelWidth, height: target.pixelHeight, transport: this.server.current.transport };
+    const detailOwner = this.server.current.os === P.OS.ANDROID ? this.server.outbound?.(this.server.current) : null;
+    this.active = { session: s, displayId: target.id, width: target.pixelWidth, height: target.pixelHeight, transport: this.server.current.transport, detailOwner };
     Object.assign(this.view, { display: target.label, width, height, fps: 0, mbps: 0 });
     this._setStatus('starting');
     console.log(`[stream] session ${s} (${reason}): ${target.label} ${target.pixelWidth}x${target.pixelHeight} -> ${width}x${height}`);
@@ -229,6 +237,7 @@ class Stream extends EventEmitter {
       this._toWindow('start', {
         session: s, bitrateMbps: set.bitrateMbps, // Share screen › Quality, for phones too
         sourceId: src.id, width, height, audio,
+        detailSource: detailOwner ? { width: target.pixelWidth, height: target.pixelHeight } : null,
         ice: (this.server.current && this.server.current.ice) || null, // a phone on the USB cable: through the relay
         fps: ScreenCodec.fps(target.hz, set.sharing && set.sharing.fps), // Share screen › Frame rate
         steady: !!(set.sharing && set.sharing.pace === 'steady'), // Playback › Steady (shared/screencodec.js)

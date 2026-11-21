@@ -305,7 +305,7 @@ class Hub extends EventEmitter {
   // ---- internals: devices ----
 
   _attach(s) {
-    s.tap((msg) => this._fromDevice(s, msg));
+    s.tap((msg, ws) => this._fromDevice(s, msg, ws));
     s.onLife((up, replaced) => (up ? this._up(s) : this._down(s, replaced)));
     s.onState(() => this._stateOf(s));
     s.refresh(); // a device that is already connected comes up now
@@ -313,7 +313,7 @@ class Hub extends EventEmitter {
 
   // A message of one device: roster messages are the mesh's, the rest goes to the bus (any device)
   // and to the facade (the selected device). True keeps it away from the session's own handlers.
-  _fromDevice(s, msg) {
+  _fromDevice(s, msg, ws) {
     if (msg.t === ROSTER) {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
@@ -324,12 +324,12 @@ class Hub extends EventEmitter {
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
       consumed = true;
-      for (const fn of fns) fn(msg, s.id);
+      for (const fn of fns) fn(msg, s.id, ws);
     }
     // A feature's type from a device that is not selected: nobody reads it here, and it is not unknown.
     if (this._facadeHandlers.has(msg.t)) {
       consumed = true;
-      if (s.id === this.selectedId) this._facadeEmit(msg.t, msg);
+      if (s.id === this.selectedId) this._facadeEmit(msg.t, msg, ws);
     }
     if (this._audioRoute && this._audioRoute.targetId === s.id
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
@@ -420,9 +420,9 @@ class Hub extends EventEmitter {
     this._change();
   }
 
-  _facadeEmit(type, arg) {
+  _facadeEmit(type, arg, ws = null) {
     const fns = this._facadeHandlers.get(type);
-    if (fns) for (const fn of fns) fn(arg);
+    if (fns) for (const fn of fns) fn(arg, ws);
   }
 
   _facadeState() {
@@ -470,9 +470,10 @@ class Hub extends EventEmitter {
       bind(next) { link.id = next; },
       on(type, fn) {
         if (type === 'welcome' || type === 'closed') addTo(hub._peerHandlers, type, (pid, info) => pid === link.id && fn(info));
-        else hub.bus.on(type, (m, from) => from === link.id && fn(m));
+        else hub.bus.on(type, (m, from, ws) => from === link.id && fn(m, ws));
       },
       onState(fn) { hub._facadeStateFns.push(fn); },
+      outbound() { return sess()?.outbound() || null; },
       send(obj) {
         const s = sess();
         return !!s && s.connected && s.send(obj) === true;
@@ -502,6 +503,7 @@ class Hub extends EventEmitter {
     const fx = require('../../shared/meshfx.js').facadeFx(() => hub.selected, () => hub.sessions.list(), hub.sessions.fxShared);
     return {
       fx,
+      outbound: () => hub.selected?.outbound() || null,
       on: (type, fn) => addTo(hub._facadeHandlers, type, fn),
       onState: (fn) => hub._facadeStateFns.push(fn),
       // A message to the selected device; while it is on Bluetooth, files may wait for Wi-Fi (netHold).
