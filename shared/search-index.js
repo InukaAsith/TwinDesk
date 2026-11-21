@@ -85,7 +85,7 @@ const ENTRIES = [
   { t: 'The phone as a drive', page: 'mount', dir: 'p2c', k: 'mount phone, finder, explorer, drive, disk' },
   { t: 'Phone photos on the computer', page: 'photos', dir: 'p2c', k: 'gallery, pictures, videos, copy photos' },
   { t: 'Use the phone as a webcam', page: 'camera', dir: 'p2c', k: 'phone camera on pc, webcam, video call, zoom, share camera, virtual camera' },
-  { t: 'Scan document to PDF', page: 'camera', dir: 'p2c', k: 'scan document, document scanner, continuity camera, multi page pdf, phone camera scan, pages to pdf' },
+  { t: 'Scan document to PDF', page: 'camera', on: 'desk android', dir: 'p2c', k: 'scan document, document scanner, continuity camera, multi page pdf, phone camera scan, pages to pdf' },
   { t: 'Use the computer’s camera on the phone', page: 'camera', dir: 'c2p', k: 'pc camera on phone, webcam' },
   { t: 'Calls on the computer', page: 'calls', dir: 'p2c', k: 'answer calls on pc, phone calls, dial, ringing' },
   { t: 'Text messages on the computer', page: 'messages', dir: 'p2c', k: 'sms, texts, whatsapp, chat, send message' },
