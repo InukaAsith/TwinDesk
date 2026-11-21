@@ -17,6 +17,7 @@ const ACTIONS = [
   'netCancel', 'netWifi', 'hub',
   // TwinDesk Web (shared/web/webwire.js)
   'webSet', 'webNewCode', 'webAllow', 'webChooseFolder', 'webForget', 'webDisconnect', 'webRename', 'webSendText', 'webSendFiles', 'webChooseFiles',
+  'copyLiteral',
   'webDeleteItem', 'webClearChat', 'webStopScreen', 'webStopCam', 'webOpenItem', 'webSaveItem', 'webCopy', 'webShareSet', 'webShareFolder',
 ];
 

@@ -72,6 +72,24 @@ kbd.key { font: 12px -apple-system, sans-serif; padding: 2px 7px; border-radius:
 .hist-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hist-text .hint { color: var(--muted); font-size: 12px; }
 
+/* Activity timeline */
+.tl-bar { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 4px; }
+.tl-search { width: 100%; box-sizing: border-box; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--control-line); background: var(--control); color: var(--text); font: inherit; box-shadow: var(--shadow); }
+.tl-search:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.tl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tl-chips button { border: 0; background: var(--track-off); color: inherit; border-radius: 999px; padding: 3px 10px; cursor: default; font: inherit; }
+.tl-chips button.on { background: var(--accent); color: #fff; }
+.tl-chips button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.tl-count { opacity: .75; font-variant-numeric: tabular-nums; }
+.tl-list { max-height: 520px; }
+.tl-empty { padding: 22px 16px; color: var(--muted); }
+.tl-kind { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.tl-kind svg { width: 13px; height: 13px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.tl-kind.clip { background: #30b0c7; }
+.tl-kind.notif { background: #ff9f0a; }
+.tl-kind.file { background: #0a84ff; }
+.tl-kind.call { background: #30d158; }
+
 /* Roadmap pages */
 .soon { padding: 6px 0; }
 .soon-head { padding: 10px 14px 4px; }

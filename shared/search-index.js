@@ -34,6 +34,7 @@ const PAGES = {
   deck: { desk: 'deck', android: 'Deck', ios: 'deck' },
   clipboard: { desk: 'clipboard', android: 'Clipboard', ios: 'clipboard' },
   notifications: { desk: 'notifications', android: 'Notifications', ios: 'notifications' },
+  activity: { desk: 'activity' }, // Mac, Windows and Linux. Phones have no Activity page.
   files: { desk: 'files', android: 'Files', ios: 'files' },
   rezume: { desk: 'rezume', android: 'Rezume' },
   audio: { desk: 'audio', android: 'Sound', ios: 'audio' },
@@ -79,6 +80,7 @@ const ENTRIES = [
   { t: 'Phone notifications on the computer', page: 'notifications', dir: 'p2c', k: 'notifications on pc, alerts, mirror notifications, messages on computer' },
   { t: 'Computer notifications on the phone', page: 'notifications', dir: 'c2p', k: 'pc notifications on phone, alerts' },
   { t: 'Notification history', page: 'notifications', k: 'past notifications, missed, old alerts, history' },
+  { t: 'Activity', page: 'activity', k: 'activity timeline, recent activity, what happened, newest first' },
   { t: 'Send files', page: 'files', k: 'send file, transfer, share file, airdrop, drag and drop, upload, photos to pc' },
   { t: 'Received files', page: 'files', k: 'downloads, where are files, received folder, save to' },
   { t: 'Browse the phone’s storage', page: 'phonefiles', dir: 'p2c', k: 'phone files, file manager, storage, copy from phone, sd card' },

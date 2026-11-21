@@ -12,7 +12,7 @@
   const COMPUTER_ONLY = ['mac-pc', 'receive', 'apps', 'terminal'];
   // Global sections: the same whichever device is selected.
   // Overview is the selected device's own page (shared/ui-device-*.js); Connection is everyone's.
-  const GLOBAL = ['connection', 'general', 'about', 'clipboard', 'notifications', 'setup'];
+  const GLOBAL = ['connection', 'general', 'about', 'activity', 'clipboard', 'notifications', 'setup'];
   // Where a device's own sections begin (the first one the app has).
   const FIRST = { phone: ['overview', 'phone', 'calls'], computer: ['overview', 'mac-pc', 'receive', 'pc-mac', 'share', 'cursor', 'files'], none: ['connection', 'overview'] };
 

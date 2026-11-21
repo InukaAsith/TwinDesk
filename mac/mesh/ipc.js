@@ -20,7 +20,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'activity', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -259,6 +259,11 @@ function setupIpc(ctx) {
     },
     copyText(text) {
       if (typeof text === 'string' && text.length < 200) clipboard.writeText(text);
+    },
+    // Activity copies a notification or a call. Text only, capped, never a path and never a shell.
+    copyLiteral(text) {
+      if (typeof text !== 'string' || !text || text.length > 256 * 1024 || !clipboard) return;
+      clipboard.writeText(text);
     },
     // Ask first (that puts TwinDesk in the System Settings list), then open the pane.
     async allowPermission(kind) {

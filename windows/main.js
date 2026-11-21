@@ -480,7 +480,8 @@ function start() {
     getDrive: () => drive,
     history: (r) => historyKeeper && historyKeeper.act(r),
     deck: () => loadDeck(),
-    clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+    get fileRecv() { return fileRecv; },
+    clearFiles: () => { fileDrop.last = null; if (fileDrop && fileDrop.sent) fileDrop.sent.length = 0; if (fileRecv) { fileRecv.last = null; if (fileRecv.clearRecent) fileRecv.clearRecent(); } if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     iosSign: () => iosSign, devctl: () => devctl, chats: () => chats, explorer: () => explorer, qrPair: qrPairView, adbQr: adbQrDo, link, discovery, screen, clip, kvm, sshd, fileDrop, smb, apps, sound, pcScreen, pcApps, peerApps, vdd, notifs, fileClip, wake, updates, settings, save: saveSettings, push: pushState, buildState,
     get rezume() { return rezume; }, loadReZume,
     get phone() { return phone; }, get phoneViews() { return phoneViews; }, get camShare() { return camShare; }, get vcam() { return vcam; }, get phoneRemote() { return phoneRemote; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, get phoneDrive() { return phoneDrive; }, get terminal() { return terminal; }, loadRemote, setCamera, loadNowPlaying, loadBtAudio, loadMic, loadTerminal, connectPhoneDev, cancelPhoneInvite, hub: loadHub,
@@ -1331,7 +1332,7 @@ function buildState() {
     pcApps: pcApps.view(),
     macApps: settings.macApps,
     terminal: { ...settings.terminal, ...(terminal ? terminal.view() : { status: 'off', message: '', command: 'ssh twindesk' }), installedKey: undefined, server: sshd.view() },
-    files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
+    files: { ...settings.files, importTo: explorer ? explorer.view : null, ...fileDrop.view(), recent: fileRecv ? fileRecv.recent : [], received: receivedDir(settings, app.getPath('downloads')), smb: smb.view(), incoming: fileRecv.view(), drag: kvm.dragRecv.view(), macDrags: kvm.peerDrags, clip: fileClip.view() },
     notifs: { ...settings.notifs, ...notifs.view() },
     history: historyKeeper ? historyKeeper.view() : null,
     chats: chats ? chats.view() : null, // Messages' WhatsApp, Instagram… conversations
