@@ -269,12 +269,19 @@ class ClipImages {
     this.out.cancel(); // theirs is newer than a picture of ours still going
     // Before the clipboard changes: the watcher's read of it must already know it came in.
     this.sig.received = sigOf(img);
-    await writeClipImage(this.clipboard, img, pic.png);
-    // As the clipboard holds it now (it may re-encode it): never sent back.
-    this.sig.received = sigOf(await this._read()) || sigOf(img);
-    this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot));
-    this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${this.o.peerName()} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name: this.o.peerName(), keys: this.o.pasteKeys || 'Ctrl+V' } });
-    this.o.onChange();
+    if (this.o.onReceiveStart) this.o.onReceiveStart();
+    let written = false;
+    try {
+      await writeClipImage(this.clipboard, img, pic.png);
+      written = true;
+      // As the clipboard holds it now (it may re-encode it): never sent back.
+      this.sig.received = sigOf(await this._read()) || sigOf(img);
+      this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot));
+      this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${this.o.peerName()} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name: this.o.peerName(), keys: this.o.pasteKeys || 'Ctrl+V' } });
+      this.o.onChange();
+    } finally {
+      if (this.o.onReceiveEnd) this.o.onReceiveEnd(written);
+    }
   }
 
   // A Recent item: a small preview, and the picture itself to copy again.
@@ -424,13 +431,20 @@ class MeshClipImages extends ClipImages {
     if (this.o.newest && !this.o.newest(pic)) return void this.log(`${what}: older than the newest copy here, not applied`);
     for (const p of this.peers.values()) p.out.cancel(); // theirs is newer than a picture of ours still going
     this.sig.received = sigOf(img);
-    await writeClipImage(this.clipboard, img, pic.png);
-    this.sig.received = sigOf(await this._read()) || sigOf(img);
-    this.log(`${what}: on the clipboard`);
-    const name = this.o.peerName(from) || 'another device';
-    this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot), name);
-    this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${name} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name, keys: this.o.pasteKeys || 'Ctrl+V' } });
-    this.o.onChange();
+    if (this.o.onReceiveStart) this.o.onReceiveStart();
+    let written = false;
+    try {
+      await writeClipImage(this.clipboard, img, pic.png);
+      written = true;
+      this.sig.received = sigOf(await this._read()) || sigOf(img);
+      this.log(`${what}: on the clipboard`);
+      const name = this.o.peerName(from) || 'another device';
+      this.o.remember('in', this._item({ png: pic.png, w: pic.w || img.getSize().width, h: pic.h || img.getSize().height }, img, pic.shot), name);
+      this.o.popup('driven', `${pic.shot ? 'Screenshot' : 'Picture'} from ${name} copied: paste it with ${this.o.pasteKeys || 'Ctrl+V'}`, { key: pic.shot ? 'Screenshot from {name} copied: paste it with {keys}' : 'Picture from {name} copied: paste it with {keys}', vars: { name, keys: this.o.pasteKeys || 'Ctrl+V' } });
+      this.o.onChange();
+    } finally {
+      if (this.o.onReceiveEnd) this.o.onReceiveEnd(written);
+    }
   }
 }
 

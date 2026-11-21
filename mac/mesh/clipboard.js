@@ -53,6 +53,12 @@ class Clip extends EventEmitter {
     this.pool = new Pool({ name: 'clip', selfId: this.mesh.selfId, peers: () => clipPeers(this.mesh, this) });
     this.latest = new Latest({ selfId: this.mesh.selfId }); // the latest copy wins (shared/clipsync.js)
     this.lastSync = { sent: null, received: null };
+    this.readSequence = 0;
+    this.readsInFlight = 0;
+    this.receiveSequence = 0;
+    this.lastAppliedText = 0;
+    this.receiving = 0;
+    this.pending = null; // a sendIfChanged held back while a clip is received: its why
     this.history = []; // newest first: {dir: 'out'|'in', at, text, size, from}
     this.lastSkip = '';
     this.concealed = false; // the helper's last report for the current copy
@@ -60,6 +66,11 @@ class Clip extends EventEmitter {
     const sess = (id) => (opts.session ? opts.session(id) : null);
     this.images = new MeshClipImages({
       cfg: () => this.cfg, clipboard: this.clipboard,
+      onReceiveStart: () => { ++this.receiving; ++this.receiveSequence; },
+      onReceiveEnd: (written) => {
+        if (written) ++this.readSequence;
+        this._endReceive();
+      },
       ids: () => this.bus.connectedIds().filter((id) => this._accepts(id)),
       sendsTo: (id) => this._sendsTo(id), takes: (id) => this._takes(id),
       send: (id, m) => this.bus.send(id, m),
@@ -217,6 +228,9 @@ class Clip extends EventEmitter {
   async _onClip(m, from) {
     const c = this.cfg;
     if (!c.enabled || !this._takes(from) || !m || !P.clipAllowed(m.text)) return;
+    // The phone bridge can report our last send back while a newer local copy is being read. Its
+    // clips carry no origin; a mesh device's copy of the same text is a copy, and goes on.
+    if (m.o === undefined && m.text === this.lastSync.sent && (this.readsInFlight || this.pending)) return;
     const r = this.pool.receive(from, m);
     if (!r.fresh) return;
     if (r.msg.o && r.msg.o !== from && !this._takes(r.msg.o)) return; // relayed from a device whose clipboard we don't take
@@ -224,14 +238,34 @@ class Clip extends EventEmitter {
     // relayed it anyway, so each device decides for itself.
     const name = this._nameOf(r.msg.o, m.on, from);
     if (!this.latest.accept(r.msg, 'text')) return void console.log(`[clip] text from ${name} (${m.text.length} characters, by ${this._name(from)}) is older than the newest copy here: not applied`);
+    const sequence = ++this.receiveSequence;
     const text = m.text;
-    console.log(`[clip] text from ${name} (${text.length} characters, by ${this._name(from)}): on the clipboard`);
-    this.images.text(); // a picture still on its way either way is out of date
-    this.lastSync.received = text;
-    this.seen = text; // so instant mode doesn't publish it back
-    if (this.remote || (await this._readText()) !== text) this.clipboard.writeText(text);
-    this._remember('in', text, name);
-    this._changed();
+    ++this.receiving;
+    try {
+      const write = this.remote || (await this._readText()) !== text;
+      if (sequence !== this.receiveSequence) return void console.log(`[clip] text from ${name}: a newer copy came in meanwhile, not applied`);
+      this.images.text(); // a picture still on its way either way is out of date
+      if (write) await this.clipboard.writeText(text);
+      // A newer clip may have been applied while this one was written.
+      if (sequence < this.lastAppliedText) return;
+      this.lastAppliedText = sequence;
+      ++this.readSequence;
+      this.lastSync.received = text;
+      this.seen = text; // so instant mode doesn't publish it back
+      console.log(`[clip] text from ${name} (${text.length} characters, by ${this._name(from)}): on the clipboard`);
+      this._remember('in', text, name);
+      this._changed();
+    } finally {
+      this._endReceive();
+    }
+  }
+
+  _endReceive() {
+    if (--this.receiving || !this.pending) return;
+    const why = this.pending;
+    this.pending = null;
+    if (why === 'instant' && this.cfg.mode !== 'instant') return;
+    this.sendIfChanged(why).catch((e) => console.error('[clip] clipboard not sent:', e.message));
   }
 
   // Send this Mac's clipboard text to the pool if allowed and changed since it was last sent or
@@ -242,14 +276,37 @@ class Clip extends EventEmitter {
     if (!this._anySend()) return;
     if (!this.peerAccepts) return this._skip("A connected device doesn’t accept this Mac’s clipboard");
     if (why === 'instant' && this.remote) return; // Universal Clipboard: see ../clipboard.js (#211)
+    // While a clip is being put on the clipboard nothing is read: the call runs again after it.
+    const defer = () => {
+      if (!this.receiving) return false;
+      if (why !== 'instant' || !this.pending) this.pending = why;
+      return true;
+    };
+    if (defer()) return;
+    const sequence = ++this.readSequence;
+    const valid = () => sequence === this.readSequence && this.cfg.enabled && this.cfg.send && !defer();
+    ++this.readsInFlight;
+    try {
+      return await this._readAndSend(why, valid);
+    } finally {
+      --this.readsInFlight;
+    }
+  }
+
+  // The read itself, counted by sendIfChanged while it runs.
+  async _readAndSend(why, valid) {
+    const c = this.cfg;
     const text = await this._readText();
-    if (!text) return this._picture(why);
+    if (!valid()) return;
+    if (!text) return this._picture(why, valid);
     if (require('../../shared/otp.js').isQuiet(text)) return; // a code copied by itself (Notifications): kept here only
     if (text === this.lastSync.sent || text === this.lastSync.received) return;
     if (c.skipConcealed && (await this._isConcealed(why))) {
+      if (!valid()) return;
       this.lastSync.sent = text; // don't retry this item
       return this._skip('skipped a password (concealed item)');
     }
+    if (!valid()) return;
     const size = Buffer.byteLength(text, 'utf8');
     if (size > c.maxKB * 1024 || !P.clipAllowed(text)) {
       this.lastSync.sent = text;
@@ -275,9 +332,12 @@ class Clip extends EventEmitter {
 
   // No text on the clipboard: its picture, if any, to the devices that take pictures.
   // Nobody takes it: offerClipboard() logs why it stays here.
-  async _picture(why) {
+  async _picture(why, valid) {
+    if (!valid()) return;
     const concealed = this.images.canSend && this.cfg.skipConcealed && (await this._isConcealed(why));
+    if (!valid()) return;
     const r = await this.images.offerClipboard(!!concealed);
+    if (!valid()) return;
     if (r === 'sent') {
       this.lastSkip = '';
       this._changed();
