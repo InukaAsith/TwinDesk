@@ -44,7 +44,7 @@ class Hub extends EventEmitter {
     this.selectedId = null;
     this.sessions = new Sessions({ links });
     this.bus = this._makeBus();
-    this._busHandlers = new Map(); // type -> [fn(msg, fromId)]
+    this._busHandlers = new Map(); // type -> [fn(msg, fromId, source)]
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];
@@ -286,27 +286,39 @@ class Hub extends EventEmitter {
 
   // A message of one device: roster messages are the mesh's, the rest goes to the bus (any device)
   // and to the route that follows this device. True keeps it away from the session's own handlers.
-  // source: the socket the message arrived on (session.js). Passed through so a route does
-  // not rebuild the view from whichever connection send() would use now.
+  // An arrival from session.js is { arrived, conn, ws }. conn is the guest link or host ctx
+  // when that object is still the live session connection and still holds this socket — not a
+  // session rebuilt from the device id. ws is the socket the callback passed, so a route does
+  // not rebuild the view from whichever connection send() would use now. inject() has no source.
   _fromDevice(s, msg, source) {
     if (msg.t === ROSTER) {
       if (this.mesh && this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
-    let consumed = false;
+    const arrived = !!(source && source.arrived === true);
+    const conn = arrived && source.conn ? source.conn : null;
+    const ws = arrived && source.ws && typeof source.ws === 'object' ? source.ws : null;
     const fns = this._busHandlers.get(msg.t);
-    if (fns) {
-      consumed = true;
-      for (const fn of fns) fn(msg, s.id, source);
+    // Bus handlers see a message only with its live connection, or when nothing arrived
+    // (inject). A released or replaced socket is not stamped onto the bus.
+    const desktopRequest = msg.t === P.T.SCREEN_SPACE || msg.t === P.T.SCREEN_DESKTOPS;
+    const busSource = desktopRequest ? s.inbound() : conn;
+    let consumed = !!fns && (desktopRequest || !arrived || !!conn);
+    if (consumed && (!desktopRequest || busSource)) {
+      for (const fn of fns) fn(msg, s.id, arrived ? busSource : undefined, ws);
     }
     for (const r of this.routes) {
       // A route takes the message only when someone listens for it (as the Windows facade does).
       if (r.targetId !== s.id) continue;
       if (r.listenerCount(`t:${msg.t}`) > 0 || r.listenerCount('message') > 0) {
-        r.deliver(msg, source);
+        if (arrived) r.deliver(msg, ws);
+        else r.deliver(msg);
         consumed = true;
       }
     }
+    // The socket arrived, but it is not this session's live connection. The route already
+    // saw it (duplex: ingress is null). Session handlers must not treat it as this device.
+    if (arrived && !conn) return true;
     return consumed;
   }
 

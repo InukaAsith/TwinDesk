@@ -299,20 +299,98 @@ function publishState() {
 // (screen.state); only when something changed or the peer is new.
 let screenInputOwner = null;
 let screenStateKey = '';
+let previewShots = null;
+
+// This viewer's picture only. The socket is the one session.send writes, which is the guest
+// link while that link is up and the host socket otherwise. A released host is not used.
+// Mesh still offers only the display this viewer is being shown.
+function previewSample() {
+  const Preview = require('../../shared/display-preview.js');
+  if (!svc || !peer || !peer.current || !hub) return null;
+  const session = hub.sessions.get(peer.current.deviceId);
+  const conn = Preview.outbound(session);
+  if (!Preview.liveConn(conn)) return null;
+  const Spaces = require('../../shared/mac-spaces.js');
+  const deviceId = peer.current.deviceId;
+  const st = svc.stream && svc.stream.byId && deviceId != null ? svc.stream.byId.get(deviceId) : null;
+  const look = svc.spaceLook ? svc.spaceLook.current() : null;
+  const viewed = st && st.viewedDisplay ? st.viewedDisplay() : null;
+  const held = !!(svc.displays.holds && svc.displays.holds.has('apps-open'));
+  const offer = Spaces.catalogOffer(svc.displays.list(), { remote: settings.sharing.remote !== false, held, mesh: true });
+  const catalog = Spaces.desktopCatalog(look, viewed, offer.named, { offerDisplays: false });
+  const capture = viewed && Number.isSafeInteger(viewed.session) ? viewed.session : 0;
+  const viewGen = viewed && Number.isSafeInteger(viewed.generation) ? viewed.generation : -1;
+  const input = settings.sharing.remote !== false && settings.streamInput !== false;
+  return { conn, sharing: settings.sharing.on === true, input, catalog, capture, viewGen };
+}
+
+// The ask is the message that just arrived on this session. The outbound socket is the
+// guest link while that link is up, otherwise the host socket. The route's view object
+// is not that socket.
+function onPreviewWant(m) {
+  const Preview = require('../../shared/display-preview.js');
+  if (!previewShots || !peer || !peer.current || !hub) return;
+  const session = hub.sessions.get(peer.current.deviceId);
+  const inbound = session ? session.inbound() : null;
+  const sample = previewSample();
+  const auth = Preview.authorizeWant(sample && sample.conn, inbound);
+  if (!auth || !inbound || auth.ws !== inbound.ws) return;
+  if (!m || m.on !== true) {
+    if (previewShots.watched && Preview.askEpoch(m && m.epoch) === previewShots.watched.epoch) previewShots.cancel('close');
+    return;
+  }
+  if (!sample.sharing || !sample.input) {
+    previewShots.cancel('session');
+    return;
+  }
+  const ask = Preview.askEpoch(m.epoch);
+  if (ask == null) return;
+  previewShots.watch(auth.conn, ask);
+}
 
 function sendScreenState() {
   updateScreenInputOwner();
   const c = peer && peer.current;
-  if (!c || !svc) return void (screenStateKey = '');
+  if (!c || !svc) {
+    screenStateKey = '';
+    if (previewShots) previewShots.kick();
+    return;
+  }
   // No display list. Mesh has one capture and one input target, and each device can be off or on
   // its own screen. A phone pick would clear that choice and move every viewer that follows it.
-  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'] };
+  // spaces is true only for the display this device is being shown, and only when that
+  // display has its own other desktop and on-screen windows belong to the current ones.
+  // A window still visible from another desktop keeps it false. This read does not open
+  // Mission Control or call a space setter (mac-helper Spaces.swift).
+  if (svc.spaceLook) svc.spaceLook.refresh({
+    view: () => {
+      const deviceId = c.deviceId;
+      const row = svc.stream && svc.stream.byId && deviceId != null ? svc.stream.byId.get(deviceId) : null;
+      return row && row.viewedDisplay ? row.viewedDisplay() : null;
+    },
+  });
+  const st = svc.stream && svc.stream.byId && c.deviceId != null ? svc.stream.byId.get(c.deviceId) : null;
+  const look = svc.spaceLook ? svc.spaceLook.current() : null;
+  const Spaces = require('../../shared/mac-spaces.js');
+  const viewed = st && st.viewedDisplay ? st.viewedDisplay() : null;
+  const spaces = Spaces.offerSpaces(look, viewed);
+  // This device's picture only. Another viewer's display is not a choice here.
+  const offer = Spaces.catalogOffer(svc.displays.list(), { remote: settings.sharing.remote !== false, held: !!(svc.displays.holds && svc.displays.holds.has('apps-open')), mesh: true });
+  const msg = { t: P.T.SCREEN_STATE, on: !!settings.sharing.on, mode: displayMode(), remote: settings.sharing.remote !== false, modes: ['extend', 'mirror'], spaces };
+  const desktops = Spaces.desktopCatalog(look, viewed, offer.named, { offerDisplays: false });
+  if (desktops) msg.desktops = desktops;
+  const spaceHold = Spaces.spaceHold(look);
+  if (spaceHold) msg.spaceHold = spaceHold;
   const keyed = [c.deviceId, msg];
   msg.input = !!svc.input.enabled();
   const key = JSON.stringify(keyed);
-  if (key === screenStateKey) return;
+  if (key === screenStateKey) {
+    if (previewShots) previewShots.kick();
+    return;
+  }
   screenStateKey = key;
   peer.sendToClient(msg);
+  if (previewShots) previewShots.kick();
 }
 
 function updateScreenInputOwner() {
@@ -638,9 +716,13 @@ app.whenReady().then(() => {
   peer.on('client', (ctx) => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
     peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
+    if (previewShots) previewShots.cancel('session');
     pushState();
   });
-  peer.on('closed', pushState);
+  peer.on('closed', () => {
+    if (previewShots) previewShots.cancel('session');
+    pushState();
+  });
   peer.on('rtt', pushState);
   // Overview's controls of the selected device, and this Mac's for it (shared/devctl.js).
   {
@@ -683,6 +765,22 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
     hub, mesh, layoutSync, selfName: () => id.macName });
+  previewShots = new (require('../display-shots.js').DisplayShots)({
+    helper: svc.helper,
+    readLocked: () => require('../console-lock').readLocked(),
+    freshLook: () => svc.helper.request('spacesLook', {}, 2000),
+    sample: previewSample,
+    send: (conn, msg) => {
+      const Preview = require('../../shared/display-preview.js');
+      const session = peer && peer.current && hub ? hub.sessions.get(peer.current.deviceId) : null;
+      const bound = session ? Preview.outbound(session) : null;
+      if (!session || bound !== conn || !conn || !conn.ws || bound.ws !== conn.ws) return;
+      session.send(msg);
+    },
+  });
+  require('electron').powerMonitor.on('lock-screen', () => {
+    if (previewShots) previewShots.cancel('session');
+  });
   // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
   svc.loadMic = () => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
@@ -972,6 +1070,7 @@ app.whenReady().then(() => {
   svc.kvm.blockEdge = () => blockEdge() || svc.phone.focused; // moving inside the phone window never crosses
   svc.apps.setSharing = (on, by) => actions.setSharing(on, by);
   peer.on(`t:${P.T.SCREEN_CTL}`, (m) => onScreenCtl(m));
+  peer.on(`t:${P.T.SCREEN_PREVIEW_WANT}`, (m) => onPreviewWant(m));
   // Two-way switches shared with the other computer, per pair (pairsync.js).
   const SYNC_ACTIONS = {
     clipboard: (dir, on) => actions.setClipboard({ [dir === 'out' ? 'send' : 'receive']: on }),
@@ -987,6 +1086,7 @@ app.whenReady().then(() => {
     peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; },
     getSettings: () => settings, saveSettings: () => store.saveSettings(settings), only: Object.keys(SYNC_ACTIONS), // no ReZume or Remote here
     apply: (f, dir, on) => (f !== 'value' ? SYNC_ACTIONS[f](dir, on)
+      : dir === 'res' ? actions.setStreamMaxHeight(on)
       : ['gestures', 'keyboard', 'speed', 'reverseScroll', 'syncPads'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({

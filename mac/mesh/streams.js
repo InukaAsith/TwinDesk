@@ -91,9 +91,15 @@ class StreamSet extends EventEmitter {
       this.table = r.table;
       st.choice = choice.mode === 'mirror' ? { mode: 'mirror', displayId: Number(choice.displayId) } : { mode: choice.mode };
     }
+    if (typeof st.noteViewIdentity === 'function') st.noteViewIdentity();
     st.restart('target choice');
     this.emit('change');
     return { ok: true };
+  }
+
+  // Every device's selection epoch, after the shared display changes.
+  noteViewIdentity() {
+    for (const st of this.all) if (st && typeof st.noteViewIdentity === 'function') st.noteViewIdentity();
   }
 
   restart(reason) {

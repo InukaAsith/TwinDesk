@@ -35,6 +35,7 @@ class Session extends EventEmitter {
     this._linkMesh = false; // the guest link's welcome said mesh: 1
     this.meshCapable = false; // the device speaks the mesh (hello/welcome `mesh: 1`); set when it comes up
     this.taps = []; // hub: fn(msg, source) -> true when it consumed the message (see _deliver)
+    this._inbound = null; // the guest link or host ctx of the delivery now running, else null
     this.lifeFns = []; // hub: fn(up, replaced) when the device becomes connected or stops being connected
     // Fast files (shared/fastfile.js): this device's file bytes over HTTPS, when both apps can (hello
     // fx: 1, welcome fx: token). Not the files engine (fx2): it serves one session at a time.
@@ -245,33 +246,67 @@ class Session extends EventEmitter {
     this._sync();
   }
 
-  // Messages from the server ctx (only the one that is current). ws is the socket that
-  // received this message (the primary or its fallback), not whichever send() would use now.
+  // Messages from the server ctx (only the one that is current). ws, when the server
+  // passes it, is the socket that received this message (the primary or its fallback),
+  // not whichever send() would use now. The bus stamp is this ctx only while it is still
+  // that live connection. A two-argument call (no ws) is the ctx's own socket.
   fromHost(msg, ctx, ws) {
     if (ctx !== this.ctx) return;
-    this._deliver(msg, false, ws && typeof ws === 'object' ? ws : null);
+    const explicitWs = arguments.length >= 3;
+    let sock = null;
+    let stamp = null;
+    if (!explicitWs) {
+      sock = (ctx && ctx.ws) || null;
+      stamp = physical(ctx) ? ctx : null;
+    } else {
+      sock = ws && typeof ws === 'object' ? ws : null;
+      const owns = !!(sock && ctx && (ctx.ws === sock || ctx.alt === sock));
+      stamp = owns && physical(ctx) ? ctx : null;
+    }
+    this._deliver(msg, false, { arrived: true, conn: stamp, ws: sock });
   }
 
   // ---- internals ----
 
   // ws: the socket link.js passed from the message callback. Not this.link.ws read again —
-  // a reconnect on that same Link replaces it.
+  // a reconnect on that same Link replaces it. Without ws, the link's current socket is
+  // the one, and a link that is not live is not delivered.
   _fromLink(msg, ws) {
-    const sock = ws && typeof ws === 'object' ? ws : null;
-    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, sock);
+    const link = this.link;
+    const explicitWs = arguments.length >= 2;
+    if (!explicitWs && !physical(link)) return;
+    const sock = explicitWs ? (ws && typeof ws === 'object' ? ws : null) : ((link && link.ws) || null);
+    const stamp = !explicitWs ? link : (sock && link && link.ws === sock && physical(link) ? link : null);
+    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, { arrived: true, conn: stamp, ws: sock });
   }
 
   // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
-  // source: the socket this message arrived on, or absent when it was injected.
+  // source: an arrival { arrived, conn, ws }, or absent when inject() built the message.
+  // inbound() exposes conn only for arrivals on its primary socket. This binds a desktop
+  // preview to the authenticated connection that received it. ws is the
+  // socket the callback passed, for the route's duplex check. A nested delivery restores
+  // the previous inbound connection.
   _deliver(msg, raw = false, source) {
     if (!raw && this.fx.incoming(msg)) return;
-    for (const tap of this.taps) if (tap(msg, source) === true) return;
-    const fns = this.handlers.get(msg.t);
-    if (fns) for (const fn of fns) fn(msg);
-    else if (!this.unknown.has(msg.t)) {
-      this.unknown.add(msg.t);
-      console.log('[session] ignoring message type', msg.t, 'from', this.id);
+    const arrived = !!(source && source.arrived === true);
+    const prev = this._inbound;
+    this._inbound = arrived && source.conn && source.ws === source.conn.ws ? source.conn : null;
+    try {
+      for (const tap of this.taps) if (tap(msg, source) === true) return;
+      const fns = this.handlers.get(msg.t);
+      if (fns) for (const fn of fns) fn(msg);
+      else if (!this.unknown.has(msg.t)) {
+        this.unknown.add(msg.t);
+        console.log('[session] ignoring message type', msg.t, 'from', this.id);
+      }
+    } finally {
+      this._inbound = prev;
     }
+  }
+
+  // The authenticated primary connection this delivery arrived on, or null.
+  inbound() {
+    return this._inbound || null;
   }
 
   // Emits 'welcome' when the device becomes connected and 'closed' when it stops being connected.
@@ -371,6 +406,11 @@ class Sessions extends EventEmitter {
     const id = link.pairing && link.pairing.macId;
     if (id) this.ensure(id).setLink(link);
   }
+}
+
+// The same shape meshGate rechecks. A missing socket, a release, or a closed socket is not live.
+function physical(conn) {
+  return !!(conn && conn.authed === true && !conn.released && conn.ws && conn.ws.readyState === 1);
 }
 
 module.exports = { Session, Sessions };

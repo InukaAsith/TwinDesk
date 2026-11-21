@@ -26,24 +26,33 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
-class MirrorRail(private val activity: Activity, private val surface: () -> SurfaceView? = { null }) {
-    private val prefs = activity.getSharedPreferences("mirror-rail", Context.MODE_PRIVATE)
+class MirrorRail(
+    private val activity: Activity,
+    // Null: this screen follows the phone (another phone). The computer viewer passes its own rule.
+    private val orient: ((Boolean) -> Int?)? = null,
+    private val surface: () -> SurfaceView? = { null },
+) {
+    private val prefs = activity.getSharedPreferences(ViewerOrientation.PREFS, Context.MODE_PRIVATE)
     private val dp = activity.resources.displayMetrics.density
+    private lateinit var overlay: FrameLayout
     private lateinit var rail: LinearLayout
     private lateinit var tab: TextView
     private lateinit var rotateBtn: TextView
 
     // Over the activity's content, at its right edge.
     fun attach() {
-        val root = FrameLayout(activity)
+        val root = FrameLayout(activity).also { overlay = it }
         rail = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             background = GradientDrawable().apply { setColor(0xE6202124.toInt()); cornerRadius = 16 * dp }
             setPadding((6 * dp).toInt(), (8 * dp).toInt(), (6 * dp).toInt(), (8 * dp).toInt())
         }
-        rotateBtn = button("⟳") { setAuto(!auto) }
+        rotateBtn = button("⟳", ::toggleRotation)
         rail.addView(rotateBtn)
         rail.addView(button("◉") { shot() }.also { it.contentDescription = tr("Screenshot (saved in Pictures › TwinDesk)") })
         tab = TextView(activity).apply {
@@ -60,7 +69,7 @@ class MirrorRail(private val activity: Activity, private val surface: () -> Surf
         activity.addContentView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.isClickable = false
         show(prefs.getBoolean("shown", false))
-        setAuto(prefs.getBoolean("auto", true))
+        setAuto(prefs.getBoolean(ViewerOrientation.AUTO, true))
     }
 
     private fun button(glyph: String, onClick: () -> Unit) = TextView(activity).apply {
@@ -80,17 +89,30 @@ class MirrorRail(private val activity: Activity, private val surface: () -> Surf
         prefs.edit().putBoolean("shown", on).apply()
     }
 
-    private var auto = true
+    fun showEdge(show: Boolean) {
+        if (::overlay.isInitialized) overlay.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    var autoRotate by mutableStateOf(true)
+        private set
+
+    fun toggleRotation() = setAuto(!autoRotate)
+    fun capture() = shot()
+
     private fun setAuto(on: Boolean) {
-        auto = on
+        autoRotate = on
         // Off: locked the way it is now (Android keeps the current orientation).
-        activity.requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_FULL_USER else ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        // The computer viewer supplies the host rule. Another phone's screen turns with this one.
+        val chosen = if (orient != null) orient.invoke(on)
+        else if (on) ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        else ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        if (chosen != null) activity.requestedOrientation = chosen
         rotateBtn.alpha = if (on) 1f else 0.5f
         rotateBtn.text = if (on) "⟳" else "🔒"
         val label = if (on) tr("Auto-rotate is on: the screen turns with this phone") else tr("Auto-rotate is off: the screen stays as it is")
         rotateBtn.contentDescription = label
-        if (on != prefs.getBoolean("auto", true)) Toast.makeText(activity, label, Toast.LENGTH_SHORT).show()
-        prefs.edit().putBoolean("auto", on).apply()
+        if (on != prefs.getBoolean(ViewerOrientation.AUTO, true)) Toast.makeText(activity, label, Toast.LENGTH_SHORT).show()
+        prefs.edit().putBoolean(ViewerOrientation.AUTO, on).apply()
     }
 
     // The picture as it is on this screen (PixelCopy: the video too), into Pictures › TwinDesk.

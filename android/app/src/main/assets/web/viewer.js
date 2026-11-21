@@ -42,6 +42,7 @@
   let viewerGeneration = 0;
   let videoOwner = null;
   let frameProbe = 0;
+  let frameAllowed = true;
   let name = t('the computer'); // the one we're connected to (opts)
   let streamAudio = false;
   let sound = true;
@@ -53,7 +54,10 @@
   let penFast = false; // Fast writing (opts.penFast): a stroke's samples in one in.mm (pts); off: each its own, paced
   let realTouch = false; // the computer injects real touch (screen.state touch): Direct sends in.tc
   let zoom = 1, panX = 0, panY = 0;
-  let viewGestures = false; // A host advertises per-stream detail sizes to enable local pinch/pan.
+  const PRESETS = ['fit', 'fill', 'actual'];
+  let scalePreset = 'fit', scaleMode = 'fit';
+  let viewGestures = false; // Mac controls or a desktop detail offer enable local gestures.
+  let macViewGestures = false;
   let detail = null;
   let detailTimer = null;
   let detailRevision = 0;
@@ -80,9 +84,9 @@
     const owner = videoOwner, revision = detailRevision;
     if (!detail || !viewGestures || typeof TD.detail !== 'function' ||
         typeof TD.canDecodeVideo !== 'function' || !owner?.playing ||
-        (zoom <= 1 && detailHeight === 0)) return;
+        (scaleMode !== 'custom' && detailHeight === 0)) return;
     const current = () => revision === detailRevision && owner === videoOwner &&
-      owner.pc === pc && owner.playing && !document.hidden &&
+      owner.pc === pc && owner.playing && frameAllowed && !document.hidden &&
       pc.connectionState === 'connected' && !touches.size;
     detailTimer = setTimeout(async () => {
       detailTimer = null;
@@ -91,7 +95,7 @@
       const r = fitRect();
       if (!r) return;
       const need = r.h * zoom * (window.devicePixelRatio || 1) / 1.04;
-      if (zoom > 1 && need > detail.baseline) {
+      if (scaleMode === 'custom' && zoom > 1 && need > detail.baseline) {
         if (!owner.detailSizes?.length) {
           let codec;
           try {
@@ -120,8 +124,35 @@
     const k = Math.min(W / vw, H / vh);
     return { x: (W - vw * k) / 2, y: (H - vh * k) / 2, w: vw * k, h: vh * k };
   }
-  function resetLocalZoom() {
-    if (zoom === 1) return;
+  function presetZoom(mode, r) {
+    if (!r) return 1;
+    if (mode === 'fill') return Math.max(window.innerWidth / r.w, window.innerHeight / r.h);
+    if (mode === 'actual') return video.videoWidth / (r.w * (window.devicePixelRatio || 1));
+    return 1;
+  }
+
+  function reportScale(mode) {
+    if (scaleMode === mode) return;
+    scaleMode = mode;
+    if (macViewGestures && typeof TD.event === 'function') TD.event('viewer.scale.' + mode);
+  }
+
+  function selectScale(mode) {
+    if (!viewGestures || !PRESETS.includes(mode)) return;
+    cancelInput();
+    scalePreset = mode;
+    reportScale(mode);
+    panX = panY = 0;
+    applyViewport();
+    scheduleDetail();
+  }
+
+  function updateTouch(nextRealTouch, nextTouchMode) {
+    const wasDirect = real();
+    if (nextTouchMode !== touchMode) cancelInput();
+    realTouch = nextRealTouch;
+    touchMode = nextTouchMode;
+    if (macViewGestures || !detail || wasDirect || !real() || zoom === 1) return;
     cancelInput();
     zoom = 1;
     panX = panY = 0;
@@ -129,15 +160,22 @@
     scheduleDetail();
   }
 
+  function updateSharingOverlay(on) {
+    if (!pc) setOverlay(on ? t('Waiting for {name}…', { name })
+      : viewGestures ? t('{name} isn’t sharing its screen', { name })
+      : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
+  }
+
   function applyViewport() {
     const r = fitRect();
+    if (scaleMode !== 'custom') zoom = presetZoom(scaleMode, r);
     const dx = r ? Math.max(0, (r.w * zoom - window.innerWidth) / 2) : 0;
     const dy = r ? Math.max(0, (r.h * zoom - window.innerHeight) / 2) : 0;
     panX = Math.max(-dx, Math.min(dx, panX));
     panY = Math.max(-dy, Math.min(dy, panY));
     video.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
   }
-  window.addEventListener('resize', () => { if (viewGestures) cancelViewTouch(); applyViewport(); scheduleDetail(); });
+  window.addEventListener('resize', () => { if (viewGestures) cancelViewTouch(); else hidePointerCue(); applyViewport(); scheduleDetail(); });
 
   function setOverlay(t) {
     overlay.textContent = t || '';
@@ -165,10 +203,10 @@
 
   function scheduleDoctor(owner = videoOwner) {
     if (doctorTimer !== null || typeof TD.videoMetrics !== 'function' || !owner?.playing ||
-        document.hidden) return;
+        document.hidden || !frameAllowed) return;
     const revision = doctorRevision;
     const current = () => revision === doctorRevision && owner === videoOwner && owner.pc === pc &&
-      owner.playing && !document.hidden && video.srcObject === owner.stream &&
+      owner.playing && frameAllowed && !document.hidden && video.srcObject === owner.stream &&
       pc.connectionState === 'connected';
     doctorTimer = setTimeout(async () => {
       doctorTimer = null;
@@ -200,8 +238,8 @@
   }
 
   function reportVideo(playing, owner = videoOwner) {
-    if (!playing) stopDoctor();
-    if (!playing) { frameProbe++; cancelDetail(); if (owner) owner.playing = false; }
+    if (!playing) { frameProbe++; cancelDetail(); hidePointerCue(); stopDoctor(); if (owner) owner.playing = false; }
+    else if (!frameAllowed) return;
     if (owner && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream &&
         (!playing || owner.pc.connectionState === 'connected') && typeof TD.videoState === 'function' && Number.isInteger(owner.generation) && owner.generation > 0 && Number.isInteger(owner.session)) {
       owner.playing = playing;
@@ -213,7 +251,7 @@
 
   function requireCurrentFrame(owner = videoOwner) {
     if (typeof TD.videoState !== 'function') return;
-    if (!owner || owner !== videoOwner || owner.pc !== pc || video.srcObject !== owner.stream) return;
+    if (!frameAllowed || !owner || owner !== videoOwner || owner.pc !== pc || video.srcObject !== owner.stream) return;
     const probe = ++frameProbe;
     const current = () => probe === frameProbe && owner === videoOwner && owner.pc === pc && video.srcObject === owner.stream;
     if (typeof video.requestVideoFrameCallback === 'function') {
@@ -233,13 +271,15 @@
   function closePc() {
     reportVideo(false);
     videoOwner = null;
-    if (detail) {
-      zoom = 1; panX = panY = 0;
+    if (detail && !macViewGestures) {
+      cancelInput();
+      reportScale('fit');
+      panX = panY = 0;
       applyViewport();
     }
     detail = null;
     detailHeight = 0;
-    viewGestures = false;
+    viewGestures = macViewGestures;
     if (pc) pc.close();
     pc = null;
     session = null;
@@ -261,8 +301,9 @@
     const my = (pc = new RTCPeerConnection(msg.ice || { iceServers: [] }));
     session = msg.session;
     detail = readDetail(msg.detail);
-    viewGestures = !!detail;
+    viewGestures = macViewGestures || !!detail;
     viewerGeneration = msg.viewerGeneration || 0;
+    frameAllowed = true;
     const queue = (pending = []);
     setOverlay(t('Connecting to {name}…', { name }));
     my.ontrack = (e) => {
@@ -318,7 +359,8 @@
   let videoAspect = 0;
   video.addEventListener('resize', () => {
     const aspect = video.videoHeight ? video.videoWidth / video.videoHeight : 0;
-    if (viewGestures && videoAspect && Math.abs(aspect - videoAspect) > 0.001) cancelInput();
+    const nextZoom = scaleMode === 'custom' ? zoom : presetZoom(scaleMode, fitRect());
+    if (viewGestures && videoAspect && (Math.abs(aspect - videoAspect) > 0.001 || nextZoom !== zoom)) cancelInput();
     videoAspect = aspect;
     applyViewport(); TD.playing(video.videoWidth, video.videoHeight);
     requireCurrentFrame();
@@ -327,6 +369,15 @@
   window.tdRecv = (msg) => {
     if (msg.t !== 'rtc.ice') console.log(`viewer <- ${msg.t}${msg.session != null ? ` #${msg.session}` : ''}`);
     switch (msg.t) {
+      case 'viewer.probe':
+        if (pc && msg.session === session && Number.isInteger(msg.viewerGeneration) && msg.viewerGeneration > viewerGeneration) {
+          reportVideo(false);
+          viewerGeneration = msg.viewerGeneration;
+          if (videoOwner) videoOwner = { ...videoOwner, generation: viewerGeneration };
+          frameAllowed = msg.accept === true;
+          if (frameAllowed) requireCurrentFrame();
+        }
+        break;
       case 'stream.info': // its name is the display shared, not the computer
         streamAudio = msg.audio === true;
         applyAudio();
@@ -349,28 +400,34 @@
         inputAllowsCue = msg.on === true;
         if (!inputAllowsCue) hidePointerCue();
         break;
-      case 'screen.state': {
-        const wasDirect = real();
-        if ('touch' in msg) realTouch = msg.touch === true;
-        shareAllowsCue = msg.on === true;
+      case 'screen.state':
+        updateTouch('touch' in msg ? msg.touch === true : realTouch, touchMode);
+        shareAllowsCue = msg.on === true && !msg.spaceHold;
         if (!shareAllowsCue) hidePointerCue();
-        if (viewGestures && !wasDirect && real()) resetLocalZoom();
         if (msg.on === false) reportVideo(false);
-        if (!pc) setOverlay(msg.on ? t('Waiting for {name}…', { name })
-          : t('{name} isn’t sharing its screen. Start it with the button below.', { name }));
+        updateSharingOverlay(msg.on);
         break;
-      }
+      case 'viewer.scale':
+        selectScale(msg.mode);
+        break;
       case 'opts': {
         inputAllowsCue = msg.inputOn === true;
         if (!inputAllowsCue) hidePointerCue();
+        macViewGestures = msg.viewGestures === true;
+        const gestures = macViewGestures || !!detail;
+        if (viewGestures !== gestures) {
+          cancelInput();
+          viewGestures = gestures;
+          scalePreset = 'fit';
+          reportScale('fit');
+          panX = panY = 0;
+          applyViewport();
+        }
+        if (macViewGestures && msg.viewScale !== scalePreset) selectScale(msg.viewScale);
         if (msg.name) name = msg.name;
         sound = msg.sound !== false;
         pacing = ['smooth', 'steady'].includes(msg.pacing) ? msg.pacing : 'fast';
-        const touch = msg.touch === 'direct' ? 'direct' : 'pad';
-        const wasDirect = real();
-        if (touch !== touchMode) cancelInput();
-        touchMode = touch;
-        if (viewGestures && !wasDirect && real()) resetLocalZoom();
+        updateTouch(realTouch, msg.touch === 'direct' ? 'direct' : 'pad');
         if (Number(msg.speed) > 0) speed = Number(msg.speed);
         tapClick = msg.tap === true;
         if (msg.pen === false && penOn) penLeave(); // switched off while it is near
@@ -416,6 +473,7 @@
   const SLOP = 10;
   let gesture = null;
   function cancelFinger() {
+    hidePointerCue();
     if (one) {
       clearTimeout(one.timer);
       if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
@@ -436,11 +494,11 @@
     if (gesture && gesture.frozen) return;
     if (gesture && gesture.latched) {
       if (gesture.ids.length !== 2 || touches.size !== 3 || performance.now() - gesture.started >= 150) return;
-      zoom = gesture.zoom; panX = gesture.panX; panY = gesture.panY; applyViewport();
+      zoom = gesture.zoom; panX = gesture.panX; panY = gesture.panY; reportScale(gesture.scale); applyViewport();
     }
     const ids = [...touches.keys()];
     const at = fingerGeometry(ids);
-    gesture = { ids, at, last: at, zoom, panX, panY, started: performance.now(), latched: false, frozen: false, mode: null, queued: false };
+    gesture = { ids, at, last: at, zoom, panX, panY, scale: scaleMode, started: performance.now(), latched: false, frozen: false, mode: null, queued: false };
   }
   function moveGesture(e) {
     const g = gesture;
@@ -485,9 +543,11 @@
       applyViewport();
       return;
     }
-    const min = 1;
-    const max = Math.max(4, g.zoom);
+    const preset = presetZoom(scalePreset, fitRect());
+    const min = Math.min(1, preset, g.zoom);
+    const max = Math.max(4, preset, g.zoom);
     const next = Math.max(min, Math.min(max, g.at.span > 0 ? g.zoom * at.span / g.at.span : g.zoom));
+    reportScale('custom');
     zoom = Math.abs(next - 1) < 0.05 ? 1 : next;
     panX = at.x - window.innerWidth / 2 - (g.at.x - window.innerWidth / 2 - g.panX) * zoom / g.zoom;
     panY = at.y - window.innerHeight / 2 - (g.at.y - window.innerHeight / 2 - g.panY) * zoom / g.zoom;
@@ -623,7 +683,7 @@
   // finger never clicks; held still it right-clicks. cur is the pointer, normalized like in.mm.
   const cur = { x: 0.5, y: 0.5 };
   let cueFrame = null, cueTimer = null;
-  let inputAllowsCue = false, shareAllowsCue = false;
+  let shareAllowsCue = false, inputAllowsCue = false;
 
   function hidePointerCue() {
     clearTimeout(cueTimer);
@@ -633,9 +693,8 @@
   }
 
   function previewPointer() {
-    if (!pointerCue || !inputAllowsCue || !shareAllowsCue || document.hidden ||
-        pc?.connectionState !== 'connected' || !video.srcObject ||
-        video.paused || video.readyState < video.HAVE_CURRENT_DATA) return;
+    if (!pointerCue || !shareAllowsCue || !inputAllowsCue || document.hidden ||
+        !frameAllowed || !videoOwner?.playing || pc?.connectionState !== 'connected') return;
     clearTimeout(cueTimer);
     cueTimer = setTimeout(hidePointerCue, 160);
     if (cueFrame !== null) return;
@@ -931,6 +990,7 @@
   let mouseLast = { x: 0.5, y: 0.5 };
   function cancelInput() {
     cancelDetail();
+    hidePointerCue();
     if (one) {
       clearTimeout(one.timer);
       if (one.dragging) send({ t: 'in.mu', x: one.p.x, y: one.p.y, b: B.LEFT });
@@ -981,13 +1041,10 @@
     }
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      if (viewGestures) cancelInput();
-      reportVideo(false);
-    }
+    if (document.hidden) { stopDoctor(); if (viewGestures) cancelInput(); else hidePointerCue(); }
     else requireCurrentFrame();
   });
-  window.addEventListener('blur', () => { if (viewGestures) cancelInput(); });
+  window.addEventListener('blur', () => { if (viewGestures) cancelInput(); else hidePointerCue(); });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('wheel', (e) => {
     e.preventDefault();

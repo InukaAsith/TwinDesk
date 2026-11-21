@@ -71,7 +71,6 @@ android {
 }
 
 dependencies {
-    testImplementation("junit:junit:4.13.2")
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
@@ -83,4 +82,5 @@ dependencies {
     // Scan QR code (pairing): Google's scanner, no camera permission. Not in the F-Droid build (proprietary).
     "standardImplementation"("com.google.android.gms:play-services-code-scanner:16.1.0")
     "fullImplementation"("com.google.android.gms:play-services-code-scanner:16.1.0")
+    testImplementation("junit:junit:4.13.2")
 }
