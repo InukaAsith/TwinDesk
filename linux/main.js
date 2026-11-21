@@ -390,7 +390,7 @@ function start() {
   });
   fileRecv.onBatch = (b) => {
     live.done('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), t('From {name}', { name: peerName() }));
-    if (b.kind === 'send' && phonePhoto && phonePhoto.arrived(b.placed)) return; // Take a photo: copied
+    if (b.kind === 'send' && phonePhoto && phonePhoto.arrived(b.placed)) return; // photo: copied; scan: the PDF stays in received files
     if (rezume && rezume.received(b)) return; // a document taken here: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
@@ -444,6 +444,7 @@ function start() {
     kvm: () => kvm, devctl: () => devctl, loadVcam });
   const ipc = setupIpc({
     takePhoto: () => !!phonePhoto && phonePhoto.take(),
+    scanDocument: () => !!phonePhoto && phonePhoto.scan(),
     loadDrive,
     getDrive: () => drive,
     history: (r) => historyKeeper && historyKeeper.act(r),
@@ -562,6 +563,7 @@ function startPhone(server, pairing) {
       copy: (f) => copyPicture(require('electron'), f),
     });
     pl.on('t:cam.capture', (m) => { if (m && m.on === false) phonePhoto.ended(); });
+    pl.on('closed', () => phonePhoto && phonePhoto.ended());
   }
   phone = new Phone({ server: pl, raw: server, discovery, pairing });
   setupHub(pl);

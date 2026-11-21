@@ -178,6 +178,9 @@ function setupIpc(ctx) {
     takePhoto() { // Camera › Take a photo with the phone (shared/phonephoto.js)
       return !!ctx.takePhoto && ctx.takePhoto();
     },
+    scanDocument() { // Camera › Scan document: the phone builds a PDF (shared/phonephoto.js)
+      return !!ctx.scanDocument && ctx.scanDocument();
+    },
     phoneListCameras() {
       return ctx.phone && ctx.phone.bridge ? ctx.phone.bridge.listCameras() : [];
     },

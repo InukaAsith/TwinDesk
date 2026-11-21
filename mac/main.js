@@ -693,8 +693,10 @@ app.whenReady().then(() => {
       copy: (f) => copyPicture(require('electron'), f),
     });
     peer.on('t:cam.capture', (m) => { if (m && m.on === false) pp.ended(); });
+    peer.on('closed', () => pp.ended());
     svc.phonePhoto = pp;
     svc.takePhoto = () => pp.take();
+    svc.scanDocument = () => pp.scan();
   }
   // General › Local API (shared/localapi.js): off unless switched on.
   {
@@ -1175,7 +1177,7 @@ app.whenReady().then(() => {
   });
   svc.drop.on('batch', (b) => {
     liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerLabel() }) : '');
-    if (b.kind === 'send' && svc.phonePhoto && svc.phonePhoto.arrived(b.placed)) return; // Take a photo: copied
+    if (b.kind === 'send' && svc.phonePhoto && svc.phonePhoto.arrived(b.placed)) return; // photo: copied; scan: the PDF stays in received files
     if (svc.rz && svc.rz.received(b)) return; // a document taken here: it opens
     if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
   });

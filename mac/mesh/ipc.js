@@ -189,6 +189,12 @@ function setupIpc(ctx) {
         for (const v of ctx.phoneViews.list()) if (v.kind === 'camera') ctx.phoneViews.close(v.id);
       } else ctx.phoneViews.openCamera(opts);
     },
+    takePhoto() { // Camera › Take a photo with the phone (shared/phonephoto.js), the active Android phone
+      return !!ctx.takePhoto && ctx.takePhoto();
+    },
+    scanDocument() { // Camera › Scan document (shared/phonephoto.js), the active Android phone
+      return !!ctx.scanDocument && ctx.scanDocument();
+    },
     phoneOpenApp(arg) {
       if (arg && typeof arg.id === 'string') ctx.phoneViews.openApp(arg.id.slice(0, 200), String(arg.name || '').slice(0, 100));
     },
