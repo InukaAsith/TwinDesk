@@ -11,6 +11,8 @@ const ScreenCodec = require('../shared/screencodec.js');
 
 const T = P.T;
 
+const linkOs = (link) => link.current?.os || link.peerOs;
+
 class Sender extends EventEmitter {
   constructor(link) {
     super();
@@ -20,12 +22,18 @@ class Sender extends EventEmitter {
     this.queue = [];
     this.counter = 0;
     this.live = new Set(); // sessions started and not stopped
+    this.detailOwners = new Map(); // physical socket for each Android full-screen viewer
     this.windows = new Set(); // the live sessions that are app windows (tagged win: 'send')
 
     // `win: 'send'` is the other computer's own window sender talking to our viewer (peerapps.js).
     const ours = (m) => this.live.has(m.session) && m.win !== 'send';
     link.on(T.RTC2_ANSWER, (m) => ours(m) && typeof m.sdp === 'string' && this._toWin(m));
     link.on(T.RTC2_ICE, (m) => ours(m) && this._toWin(m));
+    link.on(T.RTC_DETAIL, (m, ws) => {
+      if (!this.live.has(m.session) || !ws || this.detailOwners.get(m.session) !== ws ||
+          this.link.screenSocket?.() !== ws) return;
+      this._toWin({ t: T.RTC_DETAIL, session: m.session, height: m.height });
+    });
     link.on('closed', () => { for (const s of [...this.live]) this.stop(s, false); });
 
     ipcMain.on('sender-out', (e, m) => {
@@ -49,9 +57,11 @@ class Sender extends EventEmitter {
   start(opts) {
     const session = ++this.counter;
     this.live.add(session);
+    const owner = opts.offer?.kind === 'screen' && linkOs(this.link) === P.OS.ANDROID && this.link.screenSocket?.();
+    if (owner) this.detailOwners.set(session, owner);
     if (opts.offer && opts.offer.kind === 'window') this.windows.add(session);
     // codec: Share screen › Encoder (settings.pcScreen.codec, shared/screencodec.js), for every session.
-    this._toWin({ ...opts, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), t: 'start', session });
+    this._toWin({ ...opts, detailSource: owner ? opts.detailSource : null, codec: ScreenCodec.mode(this.codec ? this.codec() : undefined), ice: this._ice(), t: 'start', session });
     return session;
   }
 
@@ -68,6 +78,7 @@ class Sender extends EventEmitter {
 
   stop(session, tellMac = true) {
     if (!this.live.delete(session)) return;
+    this.detailOwners.delete(session);
     const win = this.windows.delete(session);
     this._toWin({ t: 'stop', session });
     if (tellMac && this.link.status.state === 'connected') this.link.send(win ? { t: T.RTC2_STOP, session, win: 'send' } : { t: T.RTC2_STOP, session });

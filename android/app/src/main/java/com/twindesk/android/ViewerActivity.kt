@@ -66,6 +66,12 @@ class ViewerActivity : ComponentActivity() {
         }
         val core = Core.get(this)
         val h = WebHost(this, "viewer.html", core) { ev, data ->
+            if (ev == "videoState" && data != null) host?.let {
+                core.screen.videoState(it, data.optInt("generation"), data.optInt("session"), data.optBoolean("playing"), data.optInt("w"), data.optInt("h"))
+            }
+            if (ev == "videoDetail" && data != null) host?.let {
+                core.screen.videoDetail(it, data.optInt("generation"), data.optInt("session"), data.optInt("height", -1))
+            }
             if (ev == "playing" && data != null) core.screen.playing(data.optInt("w"), data.optInt("h"))
         }
         host = h
@@ -166,6 +172,7 @@ private fun Viewer(core: Core, host: WebHost, close: () -> Unit) {
                     TextButton(onClick = { keyboard = !keyboard; s.keyboard(keyboard); bar = true }) { Text(if (keyboard) tr("Hide keyboard") else tr("Keyboard"), color = Color.White) }
                     TextButton(onClick = { s.end(); close() }) { Text(tr("Close"), color = Color.White) }
                 }
+
                 if (s.remote && s.displays.size > 1) {
                     Row(
                         Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xE6202124)).padding(horizontal = 8.dp, vertical = 2.dp),

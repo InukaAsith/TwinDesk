@@ -245,3 +245,28 @@ test('the picture gets the session network: our adapter on the peer subnet, else
     assert.equal(net(null), null);
   } finally { os.networkInterfaces = interfaces; }
 });
+
+test('screen detail stays with its authenticated socket and capture session', () => {
+  const f = fixture(), socket = { readyState: 1 };
+  let current = socket;
+  f.link.peerOs = P.OS.ANDROID;
+  f.link.outbound = () => current;
+  const sender = new Sender(f.link);
+  const source = { width: 3840, height: 2160 };
+  const session = sender.start({ offer: { kind: 'screen' }, detailSource: source });
+  const delivered = [];
+  sender._toWin = (m) => delivered.push(m);
+  const detail = { t: 'rtc.detail', session, height: 1440 };
+  f.link.emit('rtc.detail', detail, {});
+  assert.equal(delivered.length, 0, 'a fallback or unrelated socket is refused');
+  f.link.emit('rtc.detail', detail, socket);
+  assert.deepEqual(delivered, [detail]);
+  current = { readyState: 1 };
+  f.link.emit('rtc.detail', detail, socket);
+  assert.equal(delivered.length, 1, 'the old socket loses access after replacement');
+  current = socket;
+  sender.stop(session, false);
+  delivered.length = 0;
+  f.link.emit('rtc.detail', detail, socket);
+  assert.equal(delivered.length, 0, 'a stopped session stays retired');
+});

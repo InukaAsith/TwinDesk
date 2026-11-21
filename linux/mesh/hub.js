@@ -342,7 +342,7 @@ class Hub extends EventEmitter {
   // ---- internals: devices ----
 
   _attach(s) {
-    s.tap((msg) => this._fromDevice(s, msg));
+    s.tap((msg, ws) => this._fromDevice(s, msg, ws));
     s.onLife((up, replaced) => (up ? this._up(s) : this._down(s, replaced)));
     s.onState(() => this._stateOf(s));
     s.refresh(); // a device that is already connected comes up now
@@ -350,7 +350,7 @@ class Hub extends EventEmitter {
 
   // A message of one device: roster messages are the mesh's, the rest goes to the bus (any device)
   // and to the facade (the selected device). True keeps it away from the session's own handlers.
-  _fromDevice(s, msg) {
+  _fromDevice(s, msg, ws = null) {
     if (msg.t === ROSTER) {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
@@ -362,7 +362,7 @@ class Hub extends EventEmitter {
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
       consumed = true;
-      for (const fn of fns) fn(msg, s.id);
+      for (const fn of fns) fn(msg, s.id, ws);
     }
     if (this._audioRoute && this._audioRoute.targetId === s.id
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
@@ -505,7 +505,7 @@ class Hub extends EventEmitter {
       bind(next) { link.id = next; },
       on(type, fn) {
         if (type === 'welcome' || type === 'closed') addTo(hub._peerHandlers, type, (pid, info) => pid === link.id && fn(info));
-        else hub.bus.on(type, (m, from) => from === link.id && fn(m));
+        else hub.bus.on(type, (m, from, ws) => from === link.id && fn(m, ws));
       },
       onState(fn) { hub._facadeStateFns.push(fn); },
       send(obj) {
@@ -514,6 +514,15 @@ class Hub extends EventEmitter {
         // The net hook's device on Bluetooth: files wait for Wi-Fi (netHold), whichever link sends them.
         if (hub.netHold && link.id === hub.netTarget && hub.netHold(obj)) return true;
         return s.send(obj) === true;
+      },
+      // The authenticated physical socket this device's session runs on now (#286: a screen's detail
+      // request counts only from the socket the screen session was offered on).
+      screenSocket() {
+        const s = sess();
+        if (!s || !s.connected) return null;
+        const ctx = s.hosting ? s.ctx : null;
+        const ws = s.linkUp ? s.link.ws : ctx && ctx.authed === true && !ctx.released ? ctx.ws : null;
+        return ws && ws.readyState === 1 && !ws.released ? ws : null;
       },
       inject(msg) {
         const s = sess();

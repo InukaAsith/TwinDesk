@@ -342,7 +342,7 @@ class Hub extends EventEmitter {
   // ---- internals: devices ----
 
   _attach(s) {
-    s.tap((msg) => this._fromDevice(s, msg));
+    s.tap((msg, ws) => this._fromDevice(s, msg, ws));
     s.onLife((up, replaced) => (up ? this._up(s) : this._down(s, replaced)));
     s.onState(() => this._stateOf(s));
     s.refresh(); // a device that is already connected comes up now
@@ -350,7 +350,7 @@ class Hub extends EventEmitter {
 
   // A message of one device: roster messages are the mesh's, the rest goes to the bus (any device)
   // and to the facade (the selected device). True keeps it away from the session's own handlers.
-  _fromDevice(s, msg) {
+  _fromDevice(s, msg, ws = null) {
     if (msg.t === ROSTER) {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
@@ -362,7 +362,7 @@ class Hub extends EventEmitter {
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
       consumed = true;
-      for (const fn of fns) fn(msg, s.id);
+      for (const fn of fns) fn(msg, s.id, ws);
     }
     if (this._audioRoute && this._audioRoute.targetId === s.id
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
@@ -505,9 +505,10 @@ class Hub extends EventEmitter {
       bind(next) { link.id = next; },
       on(type, fn) {
         if (type === 'welcome' || type === 'closed') addTo(hub._peerHandlers, type, (pid, info) => pid === link.id && fn(info));
-        else hub.bus.on(type, (m, from) => from === link.id && fn(m));
+        else hub.bus.on(type, (m, from, ws) => from === link.id && fn(m, ws));
       },
       onState(fn) { hub._facadeStateFns.push(fn); },
+      outbound() { return sess()?.outbound() || null; },
       send(obj) {
         const s = sess();
         if (!s || !s.connected) return false;

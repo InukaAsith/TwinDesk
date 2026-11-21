@@ -194,8 +194,8 @@ class Session extends EventEmitter {
     this.link = link;
     if (link && !this._subscribed.has(link)) {
       this._subscribed.add(link);
-      link.onAny = (msg) => {
-        if (this.link === link) this._fromGuest(msg);
+      link.onAny = (msg, ws) => {
+        if (this.link === link) this._fromGuest(msg, ws);
       };
       link.on('welcome', (msg) => {
         this._linkMesh = !!(msg && msg.mesh);
@@ -224,22 +224,22 @@ class Session extends EventEmitter {
   }
 
   // Messages from the host ctx (only the one that is current).
-  fromHost(msg, ctx) {
+  fromHost(msg, ctx, ws) {
     if (ctx !== this.ctx) return;
-    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m);
+    for (const m of P.swapRole(msg, this.swapIn)) this._deliver(m, false, ws);
   }
 
   // ---- internals ----
 
-  _fromGuest(msg) {
-    this._deliver(msg);
+  _fromGuest(msg, ws) {
+    this._deliver(msg, false, ws);
   }
 
   // raw: from FastFiles itself (its file.chunk / held file.end), not for it again.
-  _deliver(msg, raw = false) {
+  _deliver(msg, raw = false, ws = null) {
     if (!this._allowed(msg.t)) return;
     if (!raw && this.fx.incoming(msg)) return;
-    for (const tap of this.taps) if (tap(msg) === true) return;
+    for (const tap of this.taps) if (tap(msg, ws) === true) return;
     const fns = this.handlers.get(msg.t);
     if (fns) for (const fn of fns) fn(msg);
     else if (!this.unknown.has(msg.t)) {
@@ -319,9 +319,9 @@ class Sessions extends EventEmitter {
       const s = this.sessions.get(ctx.deviceId);
       if (s && s.ctx === ctx) s.setCtx(null);
     });
-    server.on('message', (msg, ctx) => {
+    server.on('message', (msg, ctx, ws) => {
       const s = this.sessions.get(ctx.deviceId);
-      if (s) s.fromHost(msg, ctx);
+      if (s) s.fromHost(msg, ctx, ws);
     });
     // Clients that authenticated before the server was bound (none today, but cheap to be right).
     for (const c of server.clients.values()) this.ensure(c.deviceId).setCtx(c);
