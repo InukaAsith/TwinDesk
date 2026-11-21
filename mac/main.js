@@ -641,6 +641,12 @@ app.whenReady().then(() => {
   });
 
   discovery = new Discovery(id, server.port, { rc: true }); // Android may reclaim after the grace window (#192)
+  require('../shared/sleepwake.js').sleepWake({
+    powerMonitor: require('electron').powerMonitor, server: () => server, discovery: () => discovery,
+    // A plain invite can reconnect a phone after Stop. Only invite paired computers seen since wake.
+    canInvite: (d, wokeAt) => d.lastSeen >= wokeAt && !P.isPhoneOs(d.os)
+      && pairing.list().some((p) => p.id === d.id && p.os === d.os),
+  });
   discovery.on('change', pushState);
   discovery.start();
   link = new Link(id, {
