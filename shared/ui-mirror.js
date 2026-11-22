@@ -41,6 +41,10 @@
       const modeRow = UI.row(tr('Show the screen through'), '', [mode.el]);
       const showBtn = UI.button(tr('Show Phone Screen'), () => api.phoneScreen(true), 'primary');
       const showRow = UI.row(tr('Phone screen'), tr('Opens in its own window. Close it any time; the phone keeps running.'), [showBtn]);
+      // Two phones or more (Multi-device on the Mac): which one this page is for (#263).
+      const pick = api.phonePick ? UI.select([], (v) => api.phonePick(v)) : null;
+      const pickRow = pick && typeof pick.options === 'function' ? UI.row(tr('Phone'), tr('Which phone Show Phone Screen opens, and this page shows'), [pick.el]) : null;
+      if (pickRow) pickRow.hidden = true;
       const winList = el('div');
       const winCard = UI.card(tr('Open on {computer}', { computer: here }), [winList]);
 
@@ -86,13 +90,19 @@
       const optsCard = UI.card(tr('Phone windows'), rows);
       const kbRow = UI.row(tr('Mouse and keyboard'), tr('Push the pointer past the screen edge to use the phone.'), [UI.button(tr('Mouse Settings'), () => UI.go('cursor'), 'small')]);
 
-      body.append(UI.card('', [modeRow]), adb.el, UI.card('', [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
+      body.append(UI.card('', [modeRow]), adb.el, UI.card('', pickRow ? [pickRow, showRow] : [showRow]), winCard, UI.card('', [kbRow]), optsCard); // the settings last
 
       let winKey = '';
       return (s) => {
         adb.update(s);
         const ph = s.phone || {};
         const br = ph.bridge || {};
+        if (pickRow) {
+          const list = Array.isArray(ph.phones) ? ph.phones : [];
+          pickRow.hidden = list.length < 2;
+          pick.options(list.map((p) => ({ value: p.id, label: p.name || p.id })));
+          if (ph.activeId) pick.set(ph.activeId);
+        }
         const native = br.mirror === 'native';
         mode.set(br.mirrorMode || (native ? 'native' : 'adb'));
         const ready = br.state === 'ready';

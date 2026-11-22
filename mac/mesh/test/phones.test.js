@@ -132,6 +132,42 @@ test('a hook set on the views proxy reaches every phone stack, later ones too', 
   }
 });
 
+// #263: two phones connected in turn; the first was selected by itself, and Show screen opened its screen for
+// the second one too. The phone that just connected is the one the Phone pages show; the picker and a
+// selection change it; a picked phone that leaves hands back to the selected one.
+test('the Phone pages show the phone that just connected, then the one picked or selected', async () => {
+  const A = await node('A');
+  const clients = [];
+  try {
+    const set = new PhoneSet({ hub: A.hub, link: new PhoneDir(A.hub, A.server), raw: A.server, discovery: { list: () => [], get: () => null }, pairing: { list: () => [] }, make: fakeStack([]) });
+    const p1 = await pairPhone(A, { name: 'One' });
+    const p2 = await pairPhone(A, { name: 'Two' });
+    clients.push(p1.client, p2.client);
+    await helloPhone(p1.client, { id: p1.id, name: 'One', token: p1.token });
+    await waitFor(() => set.byId.has(p1.id), 'phone one');
+    assert.strictEqual(A.hub.selectedId, p1.id, 'the first phone is selected by itself');
+    await helloPhone(p2.client, { id: p2.id, name: 'Two', token: p2.token });
+    await waitFor(() => set.byId.has(p2.id), 'phone two');
+    assert.strictEqual(A.hub.selectedId, p1.id, 'the selection stays on phone one');
+    assert.strictEqual(set.active, set.byId.get(p2.id), 'the phone that just connected');
+    assert.strictEqual(set.view.activeId, p2.id);
+
+    assert.strictEqual(set.pick(p1.id), true);
+    assert.strictEqual(set.active, set.byId.get(p1.id), 'picked on the Mirroring page');
+    assert.strictEqual(set.pick('nobody'), false);
+    A.hub.select(p2.id);
+    assert.strictEqual(set.active, set.byId.get(p2.id), 'a phone made the selected device');
+
+    set.pick(p1.id);
+    p1.client.close();
+    await waitFor(() => !set.byId.get(p1.id).link.current, 'phone one is gone');
+    assert.strictEqual(set.active, set.byId.get(p2.id), 'the picked phone left: the selected one');
+  } finally {
+    for (const c of clients) { try { c.close(); } catch (_) { /* already */ } }
+    close(A);
+  }
+});
+
 // A phone this Mac can't drive itself goes through a connected computer that can (kvm.take with `via`):
 // the hub's sessions are a Sessions, listed, not a Map ("this.hub.sessions is not iterable" at an edge).
 test('a phone driven through another computer: the relay is found among the sessions', () => {

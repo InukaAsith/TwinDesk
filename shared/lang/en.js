@@ -2364,4 +2364,5 @@
   "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.": "Tap Allow in TwinDesk’s notification on the phone, then confirm Android’s VPN request.",
   "It stopped.": "It stopped.",
   "Starting on the phone…": "Starting on the phone…",
+  "Which phone Show Phone Screen opens, and this page shows": "Which phone Show Phone Screen opens, and this page shows",
 });

@@ -88,6 +88,9 @@ class PhoneSet extends EventEmitter {
     this.all = []; // every stack, the first one made before any phone is there
     this.connecting = null; // {id, name, timer}
     this.hooks = {}; // key ('views', ...) -> {name: value} set through a proxy, given to each new stack
+    this.picked = null; // the phone the Phone pages show (#263): picked there, selected, or the one that just connected
+    // A phone made the selected device (the device list, a crossing) is the one the Phone pages show.
+    if (typeof hub.on === 'function') hub.on('selected', (id) => { if (id && this.byId.has(id)) this.picked = id; });
     this.message = '';
     // Before the stacks are made: the stack of a phone must be bound before its own listeners hear 'client'.
     link.on('client', (ctx) => this._client(ctx));
@@ -115,15 +118,31 @@ class PhoneSet extends EventEmitter {
     unit.id = ctx.deviceId;
     unit.seq = ++this.seq;
     this.byId.set(ctx.deviceId, unit);
+    // The phone just connected is the one the Phone pages show: the first one auto-selected kept them
+    // on it, and Show screen opened the first phone's screen (#263). The Mirroring page picks another.
+    this.picked = ctx.deviceId;
     this._doneConnecting('');
+    this.emit('change');
+  }
+
+  // The Phone pages show phone `id` (the Mirroring page's phone picker). False: not a connected phone.
+  pick(id) {
+    const u = id ? this.byId.get(id) : null;
+    if (!u || !u.link.current) return false;
+    this.picked = id;
+    this.emit('change');
+    return true;
   }
 
   unit(id) {
     return id ? this.byId.get(id) || null : this.active;
   }
 
-  // The phone the Phone page shows: the selected device when it is a phone, else the one that connected last.
+  // The phone the Phone page shows: the one picked (on the Mirroring page, by selecting it, or by connecting
+  // last) while it is connected, else the selected device when it is a phone, else the one that connected last.
   get active() {
+    const pick = this.picked ? this.byId.get(this.picked) : null;
+    if (pick && pick.link.current) return pick;
     const sel = this.hub.selectedId ? this.byId.get(this.hub.selectedId) : null;
     if (sel) return sel;
     let best = null;

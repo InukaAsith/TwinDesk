@@ -178,10 +178,18 @@ function setupIpc(ctx) {
     phonePair(arg) {
       if (arg && typeof arg === 'object') ctx.phone.bridge.pair(arg.code, arg.where);
     },
-    phoneScreen(open) {
+    // open: true | false, or {open, id}: that phone's screen (#263), else the active phone's.
+    phoneScreen(arg) {
+      const { open, id } = arg && typeof arg === 'object' ? arg : { open: arg };
+      const u = id && ctx.phone.unit ? ctx.phone.unit(String(id)) : null;
+      const views = u ? u.views : ctx.phoneViews;
       if (open === false) {
-        for (const v of ctx.phoneViews.list()) if (v.kind === 'screen') ctx.phoneViews.close(v.id);
-      } else ctx.phoneViews.openScreen();
+        for (const v of views.list()) if (v.kind === 'screen') views.close(v.id);
+      } else views.openScreen();
+    },
+    // The phone the Phone pages show (Mirroring's phone picker, #263).
+    phonePick(id) {
+      if (typeof id === 'string' && ctx.phone.pick) ctx.phone.pick(id);
     },
     phoneCamera(m) {
       const { open, opts } = m && typeof m === 'object' ? m : { open: m }; // preload-control: {open, opts}
