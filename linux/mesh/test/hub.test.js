@@ -591,6 +591,81 @@ test('three devices: audio route stays on B when selection moves to C until the 
   }
 });
 
+// shared/peerstate.js: a device's policies sent while another one was selected reach the facade when it
+// is selected (the sound to Ryzen9 never started: its audio.policy was dropped and never sent again).
+test('(h) the facade gets what a device said while another was selected; the device it leaves hears our policies go off', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    const got = [];
+    A.hub.facade.on('welcome', (m) => got.push(['welcome', m.macId]));
+    A.hub.facade.on('cam.policy', (m) => got.push(['cam.policy', m.share]));
+    A.hub.facade.on('screen.state', (m) => got.push(['screen.state', m.on]));
+    const atB = [];
+    B.hub.bus.on('cam.policy', (m, from) => from === A.id && atB.push(m.share));
+    assert.strictEqual(A.hub.select(B.id), true);
+
+    // C says it shares its camera and its screen while B is selected: the facade doesn't hear it now.
+    C.hub.bus.send(A.id, { t: 'cam.policy', share: true });
+    C.hub.bus.send(A.id, { t: 'screen.state', on: false, mode: '' });
+    C.hub.bus.send(A.id, { t: 'screen.state', on: true, mode: 'extend', ask: true });
+    await waitFor(() => (A.hub.heard.by.get(C.id) || new Map()).get('screen.state')?.on === true, 'A keeps what C said');
+    assert.ok(!got.some((x) => x[0] === 'cam.policy'), 'not delivered while C is not selected');
+
+    // The facade tells B our camera policy; selecting C switches it off on B, and replays C's.
+    assert.strictEqual(A.hub.facade.send({ t: 'cam.policy', share: true }), true);
+    await waitFor(() => atB.length === 1, 'B gets our policy');
+    got.length = 0;
+    assert.strictEqual(A.hub.select(C.id), true);
+    assert.deepStrictEqual(got, [['welcome', C.id], ['cam.policy', true], ['screen.state', true]], 'welcome, then the latest of each, once');
+    await waitFor(() => atB.length === 2, 'B hears the camera policy go off');
+    assert.deepStrictEqual(atB, [true, false]);
+
+    // Back to B: nothing to switch off on C (the facade sent it nothing), and B said nothing to replay.
+    got.length = 0;
+    A.hub.select(B.id);
+    assert.deepStrictEqual(got, [['welcome', B.id]]);
+
+    // A device that drops is forgotten: its next session says it all again.
+    A.links.get(C.id).ws.terminate();
+    await waitFor(() => !up(A, C), 'C down');
+    assert.strictEqual(A.hub.heard.replay(C.id).length, 0, 'nothing kept for C');
+    await waitFor(() => up(A, C), 'C back');
+  } finally {
+    close3(N);
+  }
+});
+
+test('(h2) the audio route gets the audio.policy a device sent before the route moved to it, and the device it leaves hears accept: false', async () => {
+  const N = await world(['A', 'B', 'C'], TRIANGLE);
+  const { A, B, C } = N;
+  try {
+    const route = A.hub.audioRoute();
+    const got = [];
+    route.on('client', (v) => got.push(['client', v.deviceId]));
+    route.on('t:audio.policy', (m) => got.push(['audio.policy', m.accept]));
+    const atB = [];
+    B.hub.bus.on('audio.policy', (m, from) => from === A.id && atB.push(m.accept));
+    A.hub.select(B.id);
+    route.refresh();
+    assert.strictEqual(route.targetId, B.id);
+
+    C.hub.bus.send(A.id, { t: 'audio.policy', accept: true });
+    await waitFor(() => !!(A.hub.heard.by.get(C.id) || new Map()).get('audio.policy'), 'A keeps C policy');
+    assert.strictEqual(route.send({ t: 'audio.policy', accept: true }), true);
+    await waitFor(() => atB.length === 1, 'B gets our policy');
+
+    got.length = 0;
+    A.hub.select(C.id);
+    assert.strictEqual(route.targetId, C.id);
+    assert.deepStrictEqual(got, [['client', C.id], ['audio.policy', true]], 'C policy played after client');
+    await waitFor(() => atB.length === 2, 'B hears accept: false');
+    assert.deepStrictEqual(atB, [true, false]);
+  } finally {
+    close3(N);
+  }
+});
+
 async function main() {
   await runTests(tests);
 }

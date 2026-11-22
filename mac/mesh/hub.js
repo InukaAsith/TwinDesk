@@ -22,6 +22,7 @@
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const { Route, viewOf } = require('../../shared/hub-route.js');
+const { Heard } = require('../../shared/peerstate.js');
 const { Sessions } = require('./session.js');
 
 const ROSTER = 'mesh.roster';
@@ -48,6 +49,7 @@ class Hub extends EventEmitter {
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];
+    this.heard = new Heard(); // each device's last policies and states; a route plays them on 'client' (peerstate.js)
     this._audioSticky = {};
     this.facade = this.route(() => this.selectedId);
     this._addFacadeApi(this.facade);
@@ -293,6 +295,7 @@ class Hub extends EventEmitter {
       if (this.mesh && this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
+    this.heard.note(s.id, msg);
     let consumed = false;
     const fns = this._busHandlers.get(msg.t);
     if (fns) {
@@ -323,6 +326,7 @@ class Hub extends EventEmitter {
 
   // replaced: the device got a new socket, so it is down and up again at once. Its selection stays.
   _down(s, replaced = false) {
+    this.heard.forget(s.id); // its next session says it all again
     if (this.mesh) this.mesh.removePeer(s.id);
     this._rosterAll();
     this._peerEvent('closed', s.id, {});
@@ -410,6 +414,12 @@ class Hub extends EventEmitter {
 
   _change() {
     this.emit('change');
+  }
+
+  // A message as if device `id` had sent it (a phone's copy that scrcpy reported for it).
+  receive(id, msg) {
+    const s = id ? this.sessions.get(id) : null;
+    if (s && s.connected) this._fromDevice(s, msg);
   }
 
   _makeBus() {

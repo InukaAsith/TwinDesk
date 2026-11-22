@@ -539,7 +539,10 @@ class PhoneBridge extends EventEmitter {
     if (!text || typeof text !== 'string') return;
     if (text === this.lastPhoneClip) return;
     this.lastPhoneClip = text;
-    this.server.inject({ t: T.CLIP, text });
+    const msg = { t: T.CLIP, text };
+    // To the clipboard pool on the bus, as the phone's own app sends it (#257); a plain peer: its route.
+    if (typeof this.server.receive === 'function') this.server.receive(msg);
+    else this.server.inject(msg);
   }
 
   // Install the full build over the phone's TwinDesk: settings and pairing stay (same app, same

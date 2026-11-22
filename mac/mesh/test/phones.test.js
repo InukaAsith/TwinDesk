@@ -81,6 +81,57 @@ test('two phones: a stack each, routed by id, what each says about itself stays 
   }
 });
 
+// #257: a copy scrcpy reports for a phone (phone-bridge.js _phoneCopied) reaches the clipboard pool on the bus,
+// as the phone's own app sends it, from that phone, whichever device is selected. inject() reached only the phone's route.
+test('a phone copy reported for the phone reaches the bus as that phone\'s message', async () => {
+  const A = await node('A');
+  const clients = [];
+  try {
+    const set = new PhoneSet({ hub: A.hub, link: new PhoneDir(A.hub, A.server), raw: A.server, discovery: { list: () => [], get: () => null }, pairing: { list: () => [] }, make: fakeStack([]) });
+    const p1 = await pairPhone(A, { name: 'One' });
+    const p2 = await pairPhone(A, { name: 'Two' });
+    clients.push(p1.client, p2.client);
+    await helloPhone(p1.client, { id: p1.id, name: 'One', token: p1.token });
+    await helloPhone(p2.client, { id: p2.id, name: 'Two', token: p2.token });
+    await waitFor(() => set.byId.has(p1.id) && set.byId.has(p2.id), 'both phones have a stack');
+    A.hub.select(p1.id);
+    const bus = [];
+    A.hub.bus.on(T.CLIP, (m, from) => bus.push([from, m.text]));
+    const onRoute = [];
+    set.byId.get(p2.id).link.on(`t:${T.CLIP}`, (m) => onRoute.push(m.text));
+    set.byId.get(p2.id).link.receive({ t: T.CLIP, text: 'from two' });
+    assert.deepStrictEqual(bus, [[p2.id, 'from two']], 'the bus hears it, from phone two, with phone one selected');
+    assert.deepStrictEqual(onRoute, ['from two'], 'phone two\'s own route still hears it (clippoll.js)');
+  } finally {
+    for (const c of clients) { try { c.close(); } catch (_) { /* already */ } }
+    close(A);
+  }
+});
+
+// main.js sets phoneViews.onNoAdb (Wi-Fi first for a phone on Bluetooth) on the proxy of the active phone's
+// windows: it reaches every phone's PhoneViews, the stack waiting now and the ones made later.
+test('a hook set on the views proxy reaches every phone stack, later ones too', async () => {
+  const A = await node('A');
+  const clients = [];
+  try {
+    const set = new PhoneSet({ hub: A.hub, link: new PhoneDir(A.hub, A.server), raw: A.server, discovery: { list: () => [], get: () => null }, pairing: { list: () => [] }, make: fakeStack([]) });
+    const hook = () => true;
+    set.viewsProxy.onNoAdb = hook;
+    assert.strictEqual(set.first.views.onNoAdb, hook, 'the waiting stack');
+    const p1 = await pairPhone(A, { name: 'One' });
+    const p2 = await pairPhone(A, { name: 'Two' });
+    clients.push(p1.client, p2.client);
+    await helloPhone(p1.client, { id: p1.id, name: 'One', token: p1.token });
+    await helloPhone(p2.client, { id: p2.id, name: 'Two', token: p2.token });
+    await waitFor(() => set.byId.has(p1.id) && set.byId.has(p2.id), 'both phones have a stack');
+    assert.strictEqual(set.byId.get(p2.id).views.onNoAdb, hook, 'a stack made later');
+    assert.strictEqual(typeof set.viewsProxy.onNoAdb, 'function', 'read back through the proxy (bound to the active phone)');
+  } finally {
+    for (const c of clients) { try { c.close(); } catch (_) { /* already */ } }
+    close(A);
+  }
+});
+
 // A phone this Mac can't drive itself goes through a connected computer that can (kvm.take with `via`):
 // the hub's sessions are a Sessions, listed, not a Map ("this.hub.sessions is not iterable" at an edge).
 test('a phone driven through another computer: the relay is found among the sessions', () => {

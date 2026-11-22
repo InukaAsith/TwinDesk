@@ -87,6 +87,7 @@ class PhoneSet extends EventEmitter {
     this.reply = null; // kvm.attachLocal: a phone's answers (accept, refuse, home) go to Kvm as the partner's messages
     this.all = []; // every stack, the first one made before any phone is there
     this.connecting = null; // {id, name, timer}
+    this.hooks = {}; // key ('views', ...) -> {name: value} set through a proxy, given to each new stack
     this.message = '';
     // Before the stacks are made: the stack of a phone must be bound before its own listeners hear 'client'.
     link.on('client', (ctx) => this._client(ctx));
@@ -97,6 +98,7 @@ class PhoneSet extends EventEmitter {
     const scoped = this.link.scoped(null);
     const unit = this.make(scoped);
     unit.link = scoped;
+    for (const [key, set] of Object.entries(this.hooks)) if (unit[key]) Object.assign(unit[key], set);
     unit.seq = 0;
     unit.bridge.reply = (msg) => this.reply && this.reply(msg, unit.link.id);
     this.all.push(unit);
@@ -146,6 +148,14 @@ class PhoneSet extends EventEmitter {
         const target = this.active[key];
         const v = target[name];
         return typeof v === 'function' ? v.bind(target) : v;
+      },
+      // A hook set on it (main.js: phoneViews.onNoAdb) goes to every phone's, and to the ones made later:
+      // set on the proxy alone, no PhoneViews ever saw it.
+      set: (_t, name, value) => {
+        if (!this.hooks[key]) this.hooks[key] = {};
+        this.hooks[key][name] = value;
+        for (const u of this.all) if (u[key]) u[key][name] = value;
+        return true;
       },
     });
   }

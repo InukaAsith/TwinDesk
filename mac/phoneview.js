@@ -86,6 +86,8 @@ class PhoneViews extends EventEmitter {
     });
     // Files dropped on a phone window go to the phone (its Downloads).
     ipcMain.on('phoneview:drop', (e, paths) => {
+      // Only this phone's windows: in Multi-device every phone has a PhoneViews listening here.
+      if (![...this.views.values()].some((x) => x.win && !x.win.isDestroyed() && x.win.webContents === e.sender)) return;
       if (!Array.isArray(paths) || !paths.length || !this.server.current) return;
       const b = this.fileSend.sendBatch(paths.filter((p) => typeof p === 'string' && p.startsWith('/')).slice(0, 1000), 'send');
       if (b) this.bridge.emit('popup', 'away', `Sending ${b.name} to ${this.server.current.name}`);

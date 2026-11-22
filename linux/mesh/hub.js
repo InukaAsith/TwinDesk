@@ -20,6 +20,7 @@
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const { Route } = require('../../shared/hub-route.js');
+const { Heard, Said } = require('../../shared/peerstate.js');
 const { Sessions } = require('./session.js');
 
 const ROSTER = 'mesh.roster';
@@ -48,6 +49,8 @@ class Hub extends EventEmitter {
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this._facadeHandlers = new Map(); // type | 'welcome' | 'closed' -> [fn(arg)]
     this._facadeStateFns = [];
+    this.heard = new Heard(); // each device's last policies and states, selected or not (peerstate.js)
+    this._facadeSaid = new Said(); // the policies the facade told the selected device
     this._audioSticky = {};
     this._audioRoute = null;
     this._audioLink = null;
@@ -318,6 +321,7 @@ class Hub extends EventEmitter {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
+    this.heard.note(s.id, msg);
     // The selected device's messages reach the net hook first (netlink.js: its net.* and file chunks).
     if (this.netTap && s.id === this.selectedId) this.netTap(msg);
     let consumed = false;
@@ -352,6 +356,8 @@ class Hub extends EventEmitter {
 
   // replaced: the device got a new socket, so it is down and up again at once. Its selection stays.
   _down(s, replaced = false) {
+    this.heard.forget(s.id); // its next session says it all again
+    this._facadeSaid.forget(s.id);
     this.mesh.removePeer(s.id);
     this._rosterAll();
     this._peerEvent('closed', s.id, {});
@@ -407,17 +413,33 @@ class Hub extends EventEmitter {
   _select(id) {
     const next = id || null;
     if (next === this.selectedId) return;
-    if (this.selectedId !== null) this._facadeEmit('closed', {});
+    if (this.selectedId !== null) {
+      this._facadeEmit('closed', {});
+      // The device stays connected: what the facade told it is on goes off (peerstate.js GOODBYE).
+      const old = this.sessions.get(this.selectedId);
+      for (const m of this._facadeSaid.goodbyes(this.selectedId)) if (old && old.connected) old.send(m);
+    }
     this.selectedId = next;
     if (this.server) this.server.setPrimary(next);
     if (next) {
       const s = this.sessions.get(next);
-      if (s) this._facadeEmit('welcome', this._welcomeInfo(s));
+      if (s) {
+        this._facadeEmit('welcome', this._welcomeInfo(s));
+        // What it said while another device was selected: the features reset it on 'welcome'.
+        for (const m of this.heard.replay(next)) if (this._facadeHandlers.has(m.t)) this._facadeEmit(m.t, m);
+      }
     }
     this._facadeState();
     if (this._audioRoute) this._audioRoute.refresh();
     this.emit('selected', next);
     this._change();
+  }
+
+  _facadeSend(obj) {
+    const s = this.selected;
+    const ok = !!s && s.send(obj) === true;
+    if (ok) this._facadeSaid.note(s.id, obj);
+    return ok;
   }
 
   _facadeEmit(type, arg) {
@@ -508,13 +530,11 @@ class Hub extends EventEmitter {
       send: (obj) => {
         chunk(obj);
         if (hub.netHold && hub.netHold(obj)) return true;
-        const s = hub.selected;
-        return !!s && s.send(obj) === true;
+        return hub._facadeSend(obj);
       },
       sendNow: (obj) => {
         chunk(obj);
-        const s = hub.selected;
-        return !!s && s.send(obj) === true;
+        return hub._facadeSend(obj);
       },
       // What the one-to-one features see of the selected device's link (netlink.js, the Overview).
       get current() {

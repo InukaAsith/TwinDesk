@@ -72,7 +72,11 @@ class Wake {
       const macs = (Array.isArray(m.macs) ? m.macs : []).map((x) => String(x).toLowerCase()).filter((x) => MAC_RE.test(x)).slice(0, 8);
       if (!s || !s.id || !macs.length) return;
       const address = typeof m.address === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(m.address) ? m.address : '';
-      this.settings.wake.peers[s.id] = { name: String(s.name || '').slice(0, 200), os: s.os, macs, address, at: Date.now() };
+      const name = String(s.name || '').slice(0, 200);
+      const was = this.settings.wake.peers[s.id];
+      // In Multi-device the hub plays it again on every selection change (shared/peerstate.js): saved only when it changed.
+      if (was && was.name === name && was.os === s.os && was.address === address && String(was.macs) === String(macs)) return;
+      this.settings.wake.peers[s.id] = { name, os: s.os, macs, address, at: Date.now() };
       this.save();
       this.onChange();
     });

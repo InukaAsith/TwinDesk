@@ -3,6 +3,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
+const { Said } = require('./peerstate.js');
 
 // What a feature sees of its device: the one-to-one "client" object (role 'guest' = it connected to
 // this computer, 'host' = this computer is its guest).
@@ -70,6 +71,7 @@ class Route extends EventEmitter {
     this.targetId = null;
     this.lastView = null;
     this.stateFns = [];
+    this.said = new Said(); // the policies this route told its device (shared/peerstate.js)
   }
 
   get session() {
@@ -93,6 +95,8 @@ class Route extends EventEmitter {
       this.targetId = next;
       this.lastView = viewOf(this.hub.sessions.get(next));
       this.emit('client', this.lastView);
+      // What the device said while this route was elsewhere: its features reset it on 'client'.
+      if (this.hub.heard) for (const m of this.hub.heard.replay(next)) this.deliver(m);
     }
     this._stateChanged();
   }
@@ -100,6 +104,9 @@ class Route extends EventEmitter {
   drop(id) {
     if (!this.targetId || (id && id !== this.targetId)) return;
     const v = this.lastView || {};
+    // Leaving a device that stays connected: what we told it is on goes off (peerstate.js GOODBYE).
+    const s = this.session;
+    for (const m of this.said.goodbyes(this.targetId)) if (s && s.connected) s.send(m);
     this.targetId = null;
     this.lastView = null;
     this.emit('closed', v);
@@ -136,7 +143,9 @@ class Route extends EventEmitter {
 
   sendNow(obj) {
     const s = this.session;
-    return !!s && s.send(obj) === true;
+    const ok = !!s && s.send(obj) === true;
+    if (ok) this.said.note(this.targetId, obj);
+    return ok;
   }
 
   inject(msg) {
