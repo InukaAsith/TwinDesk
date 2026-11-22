@@ -172,7 +172,11 @@ class Fx2 extends EventEmitter {
       this.child = child;
       this.post = (m) => { try { child.postMessage(m); } catch (_) { /* gone */ } };
       child.on('message', (m) => this._on(m));
+      const { app } = require('electron');
+      const close = () => this.close(); // Electron stops its children when the app quits.
+      app.once('will-quit', close);
       child.on('exit', (code) => {
+        app.removeListener('will-quit', close);
         if (child.stopped) return; // stopped on purpose (_stop): the next need starts another
         if (this.child !== child) return;
         const was = { port: this.port, plain: this.plainPort }; // taken again in this process: the other side has them
