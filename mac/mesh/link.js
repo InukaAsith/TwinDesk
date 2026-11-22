@@ -168,6 +168,7 @@ class Link extends EventEmitter {
 
   // Stop for good: no socket, no reconnect (the manager closes its links this way).
   destroy() {
+    if (this.destroyed) return;
     this.destroyed = true;
     if (this.ilLane) this.ilLane.close();
     clearTimeout(this.timers.reconnect);

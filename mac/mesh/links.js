@@ -281,6 +281,7 @@ class LinkManager extends EventEmitter {
     this.links.delete(id);
     this.entries = this.entries.filter((e) => e.macId !== id);
     this._write();
+    link.destroy(); // A peer can forget us without going through the manager's Forget action.
     this.emit('remove', id);
   }
 
