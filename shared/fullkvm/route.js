@@ -68,9 +68,9 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
 
   request(cmd, args = {}, ms) {
     if (this.viaService && KVM.has(cmd)) return this.svc.request(cmd, args, ms);
-    // Not while the service is still being connected to either: a lane bound in ours then takes the moves
-    // past the service's helper, which watches the edges (armReturn), and the pointer can't come back.
-    if (cmd === 'lane' && this.svc && (this.viaService || this.svc.exists(this.svc.where))) return Promise.reject(new Error('no native lane through Full KVM'));
+    // Not before the service is up either: a lane bound on our helper while it starts (kvm.js asks at
+    // once) took the moves there, past the service's return watch, and the pointer never came back.
+    if (this.svc && cmd === 'lane') return Promise.reject(new Error('no native lane with Full KVM'));
     return super.request(cmd, args, ms);
   }
 
