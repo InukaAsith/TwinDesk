@@ -6,6 +6,7 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+const P = require('../../../shared/protocol.js');
 const L = require('../../../shared/layout.js');
 const { Mesh } = require('../../../shared/mesh.js');
 const { Server } = require('../server.js');
@@ -19,6 +20,50 @@ const { close, waitFor, pair, memoryStorage } = require('./lib/mesh.js');
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
+
+test('BAD_TOKEN closes the forgotten link lane and prevents reconnect', async () => {
+  const entry = { macId: 'host', macName: 'Host', address: '127.0.0.1', port: 1, fp: 'fixture', token: 'fixture' };
+  let entries = [entry];
+  const manager = new LinkManager({
+    device: { id: 'guest', name: 'Guest' },
+    storage: { read: () => entries, write: (_file, value) => { entries = value; } },
+  });
+  const [link] = manager.list();
+  if (link.ilLane) { await link.ilLane._binding; link.ilLane.close(); } // the real lane, once its socket is bound
+  let closes = 0;
+  link.ilLane = { close: () => { closes++; } };
+  const events = [];
+  manager.on('remove', (id) => events.push(['remove', id]));
+  manager.on('change', (changed) => events.push(['change', changed.status.state, changed.status.message]));
+  link.mode = 'session';
+  let socketCloses = 0;
+  link.ws = { readyState: 1, close: () => { socketCloses++; } };
+  const reconnect = setTimeout(() => assert.fail('forgotten link retried'), 1000);
+  link.timers.reconnect = reconnect;
+  try {
+    link._onError({ code: P.E.BAD_TOKEN });
+    assert.strictEqual(closes, 1, 'the dropped link closes its lane');
+    assert.strictEqual(socketCloses, 1);
+    assert.strictEqual(link.ws, null);
+    assert.deepStrictEqual(manager.list(), []);
+    assert.deepStrictEqual(entries, []);
+    assert.deepStrictEqual(events, [
+      ['remove', 'host'],
+      ['change', 'not_paired', ''],
+      ['change', 'not_paired', 'Your Mac forgot {me}. Pair again.'],
+    ]);
+    link._scheduleReconnect();
+    assert.strictEqual(link.timers.reconnect, reconnect, 'no new reconnect timer');
+    link.blocked = () => assert.fail('forgotten link attempted to connect');
+    link._connect('session');
+    link.destroy();
+    assert.strictEqual(closes, 1, 'destroy is safe twice');
+  } finally {
+    link.destroy();
+    manager.close();
+  }
+});
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // A computer with the layout. Its settings.layout is kept in n.settings (as main.js keeps it).

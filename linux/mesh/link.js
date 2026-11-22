@@ -177,6 +177,7 @@ class Link {
 
   // Stop for good: no socket, no reconnect (the mesh manager closes its links this way).
   destroy() {
+    if (this.destroyed) return;
     this.destroyed = true;
     if (this.ilLane) this.ilLane.close();
     clearTimeout(this.timers.reconnect);
