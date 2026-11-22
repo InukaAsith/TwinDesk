@@ -38,6 +38,7 @@ const firewall = require('../firewall');
 const Terminal = require('../terminal');
 const FileDrop = require('../filedrop');
 const Smb = require('../smb');
+const { SmbSet } = require('../../shared/smb-mesh.js');
 const Apps = require('../apps');
 const Sound = require('../sound');
 const FileRecv = require('../filerecv');
@@ -293,7 +294,7 @@ function start() {
   screen.apps = apps;
   sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
   loadMic();
-  smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
+  smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   helper = new Helper();
   require('../../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
@@ -778,15 +779,10 @@ function setupNet() {
   });
   // The other computer's folder through Bluetooth: not mapped there (its address is the pipe's);
   // Open moves the session onto Wi-Fi Direct and maps it then, kept up while it's mapped.
-  const smbMount = smb.mount.bind(smb);
+  const smbMount = () => smb.mountNow();
   let smbWait = false;
-  smb.canWifi = () => net.onBle;
-  smb.mount = () => {
-    if (!net.onBle) return smbMount();
-    smb.mountMessage = '';
-    smb.onChange();
-    return Promise.resolve();
-  };
+  // Each device's folder waits for Wi-Fi while that device is reached through Bluetooth (shared/smb-mesh.js).
+  smb.canMount = (id) => { const s = hub.sessions.get(id); return !(s && s.transport === 'ble'); };
   smb.openOverWifi = () => {
     if (smbWait) return;
     smbWait = true;

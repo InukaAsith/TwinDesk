@@ -47,6 +47,7 @@ const FileRecv = require('../filerecv');
 const DragRecv = require('../dragrecv');
 const FileClip = require('../fclip');
 const Smb = require('../smb');
+const { SmbSet } = require('../../shared/smb-mesh.js');
 const SendTo = require('../sendto');
 const Vdd = require('../vdd');
 const PcScreen = require('../pcscreen');
@@ -269,7 +270,7 @@ function start() {
   });
   sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
   loadMic();
-  smb = new Smb({ link, settings, save: saveSettings, onChange: pushState });
+  smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   terminal = new Terminal({ link, settings, onChange: pushState });
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
   // The helper: X11 (XInput2 + XTest), or on Wayland its uinput backend when /dev/uinput is ours.
@@ -733,15 +734,10 @@ function setupNet() {
   });
   // The other computer's folder through Bluetooth: not connected there (its address is the pipe's);
   // Open moves the session onto Wi-Fi Direct and connects it then, kept up while it's connected.
-  const smbMount = smb.mount.bind(smb);
+  const smbMount = () => smb.mountNow();
   let smbWait = false;
-  smb.canWifi = () => net.onBle;
-  smb.mount = () => {
-    if (!net.onBle) return smbMount();
-    smb.mountMessage = '';
-    smb.onChange();
-    return Promise.resolve();
-  };
+  // Each device's folder waits for Wi-Fi while that device is reached through Bluetooth (shared/smb-mesh.js).
+  smb.canMount = (id) => { const s = hub.sessions.get(id); return !(s && s.transport === 'ble'); };
   smb.openOverWifi = () => {
     if (smbWait) return;
     smbWait = true;

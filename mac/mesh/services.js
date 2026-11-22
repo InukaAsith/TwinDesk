@@ -16,6 +16,7 @@ const { Kvm } = require('./kvm');
 const { Terminal } = require('../terminal');
 const { Drop } = require('../drop');
 const { Smb } = require('../smb');
+const { SmbSet } = require('./smbset');
 const { Apps } = require('../apps');
 const { SshClient } = require('../ssh-client');
 const { AudioHub } = require('../audiohub');
@@ -51,7 +52,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   const terminal = new Terminal(server, s);
-  const smb = new Smb({ server, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) });
+  const smb = new SmbSet({ Smb, hub: meshHub, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) }); // a folder per device, this Mac's to all (smbset.js)
 
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
   const sshClient = new SshClient(server, s);
