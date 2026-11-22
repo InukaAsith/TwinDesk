@@ -332,8 +332,11 @@ class InputLane extends EventEmitter {
     this._binding = Promise.resolve(p.port);
     if (!this._natHooked) {
       this._natHooked = true;
-      p.helper.on('event', (name, ev) => this._onNative(name, ev));
-      p.helper.on('exit', () => { this._natPending = null; this._nativeLost(); });
+      const onEvent = (name, ev) => this._onNative(name, ev);
+      const onExit = () => { this._natPending = null; this._nativeLost(); };
+      p.helper.on('event', onEvent);
+      p.helper.on('exit', onExit);
+      this._natUnhook = () => { p.helper.removeListener('event', onEvent); p.helper.removeListener('exit', onExit); };
     }
     console.log(`[lane] native lane ${p.id} (the helper's), port ${p.port}`);
   }
@@ -639,6 +642,8 @@ class InputLane extends EventEmitter {
     }
     this._natPending = null;
     if (this.native && this.natLane) { this.native = false; this.nat = null; this.natLane = 0; }
+    // …and its listeners on the helper, which outlives it (a lane per connection would pile them up).
+    if (this._natUnhook) { this._natUnhook(); this._natUnhook = null; this._natHooked = false; }
     meshLanes.delete(this);
     if (this.sock) try { this.sock.close(); } catch (_) { /* gone */ }
     this.sock = null;
