@@ -478,6 +478,11 @@ class Kvm {
         console.log(`[kvm] the pointer stopped over a window run as administrator (${this.mode})`);
         if (this.mode === 'driven') this._sendHome(undefined, 'A window run as administrator here doesn’t take another computer’s mouse. Use this PC’s own, or the Full KVM build');
         break;
+      // We froze with a button the helper pressed for the other computer still down (Inject.cs WatchSilence):
+      // it let go of it, which ended Windows' title-bar loop on our window.
+      case 'letGo':
+        console.log(`[kvm] the helper let go of button(s) ${msg.buttons} after ${msg.silentMs} ms without a word from us (${this.mode})`);
+        break;
       case 'secureDesktop':
         console.log(`[kvm] administrator prompt or lock screen ${msg.on ? 'up' : 'gone'} here (${this.mode})`); // #210
         if (msg.on && this.mode === 'driven') this._sendHome(undefined, 'Use this PC’s own mouse for the administrator prompt or lock screen');
@@ -794,14 +799,17 @@ class Kvm {
     if (mode !== 'driving' && this.fileClip) this.fileClip.resetKeys();
     if (mode !== 'driving') this.moves.drop();
     if (mode !== 'driven') this.injectMoves.drop();
-    if (mode === 'driving' && was !== 'driving') {
+    // Driving: the capture's dead-man. Driven: we're alive while the helper injects for us, so a button it
+    // pressed is let go there if we freeze (Windows' title-bar loop on our own window: Inject.cs WatchSilence).
+    if (mode !== 'home' && was !== mode) {
       clearInterval(this.keepalive);
-      this.keepalive = setInterval(() => this.helper.send('keepalive'), P.HELPER_KEEPALIVE_MS);
-    } else if (mode !== 'driving') {
+      const args = mode === 'driven' ? { driven: true } : {};
+      this.keepalive = setInterval(() => this.helper.send('keepalive', args), P.HELPER_KEEPALIVE_MS);
+    } else if (mode === 'home') {
       clearInterval(this.keepalive);
       this.keepalive = null;
-      this._clearAccept();
     }
+    if (mode !== 'driving') this._clearAccept();
     // Silence watch while input is shared.
     clearInterval(this.silence);
     this.silence = null;

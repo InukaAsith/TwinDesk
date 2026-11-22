@@ -68,6 +68,14 @@ namespace MacShare
             injector.Moved = capture.FeedReturn;
             injector.Stops = capture.ReturnStops;
             injector.Stuck = delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "adminWindow"; Emit(e); }; // Inject.cs WatchStuck (#278)
+            injector.LetGo = delegate (List<int> buttons, int silentMs) // Inject.cs WatchSilence
+            {
+                Dictionary<string, object> e = new Dictionary<string, object>();
+                e["event"] = "letGo";
+                e["buttons"] = string.Join(",", buttons.ConvertAll(b => b.ToString()).ToArray());
+                e["silentMs"] = (double)silentMs;
+                Emit(e);
+            };
             capture.ReleaseInjected = delegate { smoother.Clear(); stylus.Leave(); touch.Leave(); injector.ReleaseAll(); }; // the emergency return (Crossing.cs)
             smoother = new Smoother(delegate (double x, double y) { invoker.BeginInvoke((MethodInvoker)delegate { injector.Move(x, y); }); });
             Action<double, double> laneMove = injector.Move; // one delegate, not one per move
@@ -277,13 +285,15 @@ namespace MacShare
             catch (Exception) { return; }
             if (c == null) return;
             capture.Touch(); // any command resets the dead-man timer
+            Injector.Heard(); // … and says main isn't frozen (Inject.cs WatchSilence)
             string cmd = Json.Str(c, "cmd", "");
             string error = null;
             try
             {
                 switch (cmd)
                 {
-                    case "ping": case "keepalive": break;
+                    case "ping": break;
+                    case "keepalive": if (Json.Bool(c, "driven", false)) injector.Heartbeat(); break; // driven: main is alive (WatchSilence)
                     case "kvmConfig":
                         capture.TakeBack = Json.Bool(c, "takeBack", true);
 #if MULTI

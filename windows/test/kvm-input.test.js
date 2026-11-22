@@ -75,3 +75,14 @@ test('huge finite zoom finishes promptly and emits a bounded wheel event', { tim
   const wheel = f.injected.find(m => m.ev?.t === P.T.K_WHEEL);
   assert.ok(wheel); assert.ok(Math.abs(wheel.ev.dy) <= 67);
 });
+test('driven: keepalive {driven} for the helper (it lets go of a held button if we freeze); none at home', t => {
+  const f = fixture(t); f.kvm._setMode('home', '');
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const alive = () => f.injected.filter(m => m.cmd === 'keepalive');
+  f.kvm._setMode('driven', ''); t.mock.timers.tick(P.HELPER_KEEPALIVE_MS * 2);
+  assert.equal(alive().length, 2); assert.ok(alive().every(m => m.driven === true));
+  f.kvm._setMode('home', ''); f.injected.length = 0; t.mock.timers.tick(P.HELPER_KEEPALIVE_MS * 2);
+  assert.equal(alive().length, 0);
+  f.kvm.link.lastRx = Date.now(); f.kvm._setMode('driving', ''); t.mock.timers.tick(P.HELPER_KEEPALIVE_MS);
+  assert.equal(alive().length, 1); assert.equal(alive()[0].driven, undefined); // driving: the capture's dead-man, as before
+});
