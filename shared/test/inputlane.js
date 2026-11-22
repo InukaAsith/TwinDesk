@@ -267,6 +267,49 @@ const keepAlive = setInterval(() => {}, 1000); // the lane's own timers don't ho
     h.close();
   }
 
+  // ---- close before bind resolves (a link can end at once) ----
+  {
+    // unref() drops a live UDP socket from process._getActiveHandles(), so the leaked one would
+    // not show up there. Count the sockets this bind created and ask each if it is still running.
+    const dgram = require('dgram');
+    const made = [];
+    const orig = dgram.createSocket;
+    dgram.createSocket = function (...args) {
+      const s = orig.apply(this, args);
+      made.push(s);
+      return s;
+    };
+    const running = () => made.filter((s) => { try { return s.address().port > 0; } catch (_) { return false; } });
+    const il = { v: 1, port: 9, key: 'ab'.repeat(32) };
+    try {
+      const lane = new L.InputLane();
+      const pending = lane.bind();
+      assert.strictEqual(lane.sock, null, 'not stored until bind resolves');
+      lane.close();
+      assert.strictEqual(await pending, 0, 'the bind promise still resolves: no port');
+      assert.strictEqual(running().length, 0, 'no socket stays open');
+      assert.ok(made.every((s) => s.listenerCount('message') === 0), 'no message listener left on it');
+      assert.strictEqual(lane.port, 0);
+      assert.strictEqual(lane.helloField(), null, 'a closed lane reports no port');
+      assert.strictEqual(lane.offer({ v: 1, port: 9 }, '127.0.0.1'), null, 'a closed lane offers no session');
+      assert.strictEqual(lane.accept(il, '127.0.0.1'), false, 'a closed lane accepts no session');
+      const again = made.length;
+      assert.strictEqual(await lane.bind(), 0, 'bind after close resolves to no port');
+      assert.strictEqual(made.length, again, 'bind after close opens no socket');
+
+      // The other order: bind, then close.
+      const live = new L.InputLane();
+      const port = await live.bind();
+      assert.ok(port > 0 && live.port === port && running().length === 1, 'bind then close: the socket is up');
+      live.close();
+      assert.strictEqual(running().length, 0, 'close after bind drops the socket');
+      assert.strictEqual(live.helloField(), null);
+      assert.strictEqual(live.accept(il, '127.0.0.1'), false);
+    } finally {
+      dgram.createSocket = orig;
+    }
+  }
+
   // ---- golden vectors (the native lane checks the same bytes) ----
   {
     const file = path.join(__dirname, 'inputlane-vectors.json');
