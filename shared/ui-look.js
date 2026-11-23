@@ -91,6 +91,9 @@
   };
 
   UI.sections = (cards) => {
+    // A card a page has only sometimes comes as null (General's relay card where ui-relay.js isn't
+    // loaded: the Mac's Multi-device window, whose General then didn't build at all).
+    cards = cards.filter(Boolean);
     const list = UI.el('div', { class: 'sec-nav', attrs: { role: 'navigation' } });
     const col = UI.el('div', { class: 'sec-body' }, cards);
     const wrap = UI.el('div', { class: 'sections' }, [list, col]);
