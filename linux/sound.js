@@ -28,7 +28,7 @@ class Sound {
     this.meshHub = opts.meshHub || null;
     this.lastApply = '';      // the last apply() decision logged
     link.on('welcome', () => { this._log('with', this._who()); this.macAccepts = false; this.apply(); this._syncAudioSticky(); });
-    link.on('closed', (v) => { this._log('left', (v && v.name) || '-'); this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this._syncAudioSticky(); });
+    link.on('closed', (v) => { this._log('left', (v && v.name) || this._who()); this.macAccepts = false; this._stopSend(false); this._toWin({ t: 'stop-all' }); this._syncAudioSticky(); });
     link.on(T.AUDIO_POLICY, (m) => {
       const accept = m.accept === true;
       this._log('policy from', this._who(), 'accept', accept);
@@ -121,7 +121,8 @@ class Sound {
 
   _who() {
     const c = this.link.current;
-    return c && c.deviceId ? `${c.name || '?'} (${String(c.deviceId).slice(0, 8)})` : 'nobody';
+    if (c && c.deviceId) return `${c.name || '?'} (${String(c.deviceId).slice(0, 8)})`;
+    return this.link.id ? `(${String(this.link.id).slice(0, 8)}, not connected)` : 'nobody'; // Multi-device: the device this Sound is for
   }
 
   _log(...a) {
