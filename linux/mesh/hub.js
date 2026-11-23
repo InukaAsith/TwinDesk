@@ -141,12 +141,15 @@ class Hub extends EventEmitter {
   audioRoute() {
     if (!this._audioRoute) {
       this._audioRoute = new Route(this, (hub) => hub._pickAudioRoute());
+      this._audioRoute.on('client', (v) => console.log('[audio-route] sound and mic go to', this._nameOf(v.deviceId), '(selected', this._nameOf(this.selectedId) + ', staying', JSON.stringify(this._audioSticky) + ')'));
+      this._audioRoute.on('closed', (v) => console.log('[audio-route] left', (v && v.name) || '-'));
       this._audioRoute.refresh();
     }
     return this._audioRoute;
   }
 
   setAudioSticky(which, id) {
+    if ((this._audioSticky[which] || null) !== (id || null)) console.log('[audio-route]', which, id ? 'stays with ' + this._nameOf(id) : 'no longer stays');
     if (id) this._audioSticky[which] = id;
     else delete this._audioSticky[which];
     if (this._audioRoute) this._audioRoute.refresh();
@@ -339,8 +342,16 @@ class Hub extends EventEmitter {
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
       consumed = true;
       this._audioRoute.deliver(msg);
+    } else if (msg.t === 'audio.policy' || msg.t === 'audio.offer' || msg.t === 'mic.policy') {
+      const to = this._audioRoute && this._audioRoute.targetId;
+      console.log('[audio-route]', msg.t, 'from', this._nameOf(s.id), 'kept for later: sound is with', to ? this._nameOf(to) : 'nobody', msg.t.endsWith('policy') ? 'accept ' + msg.accept : '');
     }
     return consumed;
+  }
+
+  _nameOf(id) {
+    const s = id ? this.sessions.get(id) : null;
+    return id ? `${s ? s.displayName() : '?'} (${String(id).slice(0, 8)})` : 'nobody';
   }
 
   _up(s) {
