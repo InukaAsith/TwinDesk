@@ -87,6 +87,7 @@ const { wifiQuiet } = require('../../shared/blepolicy.js');
 const { NetLink } = require('../../shared/netlink.js');
 const { aboutInfo } = require('../../shared/about.js');
 const { PeerLogs } = require('../../shared/peerlogs.js');
+const { MeshShadow } = require('../../shared/mesh-shadow.js');
 
 let win = null;
 let tray = null;
@@ -241,6 +242,8 @@ function publishState() {
     state.mesh = settings.mesh;
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
+    // The device the pointer is with, for the Overview's sentence (not the selected one; docs/mesh-graph.md).
+    if (kvm && state.input) { const ps = kvm.partner ? hub.sessions.get(kvm.partner) : null; state.input = { ...state.input, partnerName: ps ? ps.displayName() : '' }; }
     if (kvm && lockKey) {
       lockKey.sync(kvm.hub.bus.connectedIds().length > 0 ? settings.keys.lockKeys : '');
       state.input.lockError = lockKey.error;
@@ -667,6 +670,7 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
     hub, mesh, layoutSync, selfName: () => id.macName });
+  new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
   // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
   svc.loadMic = () => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
@@ -993,7 +997,9 @@ app.whenReady().then(() => {
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {
-    const name = peer.current ? peer.current.name : { key: 'the other computer' };
+    // The device the pointer is with (the input peer, docs/mesh-graph.md), not the selected one.
+    const ps = svc.kvm.partner ? hub.sessions.get(svc.kvm.partner) : null;
+    const name = ps ? ps.displayName() : peer.current ? peer.current.name : { key: 'the other computer' };
     if (mode === 'driving') hud.show('away', { key: settings.kvm.mouse ? 'Using {name}' : 'Typing on {name}', vars: { name } });
     else if (mode === 'driven') hud.show('driven', { key: '{name} is using {me}', vars: { name, me: id.macName } });
     else hud.show('home', { key: 'Back on {me}', vars: { me: id.macName } });

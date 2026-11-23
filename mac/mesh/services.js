@@ -29,6 +29,7 @@ const { FileClip } = require('../fclip');
 const { Wake } = require('../wake');
 const { AppSend } = require('../appsend');
 const { Peer } = require('./peer');
+const { AudioSet } = require('./audioset');
 const store = require('./store');
 
 // hub: the mesh hub (hub.js) for the pooled features; mesh: the shared/mesh.js registry; selfName():
@@ -57,7 +58,8 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
   const sshClient = new SshClient(server, s);
   const audioPeer = new Peer(meshHub.audioRoute(), meshHub.server);
-  const audio = new Audio({ server: audioPeer, hub, stream, getSettings: s, meshHub });
+  // Sound: an Audio per device, both ways at once (audioset.js); the audio route stays the microphone's.
+  const audio = new AudioSet({ Audio, Peer, hub: meshHub, audioHub: hub, stream, getSettings: s });
   const pcView = new PcView({ server, getSettings: s, saveSettings: () => store.saveSettings(s()) });
   const pcApps = new PcApps({ server, getSettings: s });
   const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, saveSettings: () => store.saveSettings(s()), selfName });

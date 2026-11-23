@@ -16,9 +16,11 @@ const { pairFor } = require('../shared/pairfor.js');
 const DROP_MS = 30000;
 
 class Audio extends EventEmitter {
-  constructor({ server, hub, stream, getSettings, meshHub = null }) {
+  // capName: this one's consumer in the capture hub (audiohub.js); Multi-device has one Audio per device,
+  // each its own (mesh/audioset.js).
+  constructor({ server, hub, stream, getSettings, meshHub = null, capName = 'audio' }) {
     super();
-    Object.assign(this, { server, hub, stream, getSettings, meshHub });
+    Object.assign(this, { server, hub, stream, getSettings, meshHub, capName });
     this.win = null;
     this.peerAccepts = false; // the PC plays our sound
     this.sendSession = 0;
@@ -116,7 +118,7 @@ class Audio extends EventEmitter {
       this.emit('change');
       await this._ensureWin();
       if (!this.sending || this.sending.session !== session) return;
-      if (!(await this.hub.acquire('audio', this.win.webContents))) {
+      if (!(await this.hub.acquire(this.capName, this.win.webContents))) {
         this.sending = { session, status: `error: ${this.hub.error}` };
         return this.emit('change');
       }
@@ -131,7 +133,7 @@ class Audio extends EventEmitter {
   _stopSend(tell) {
     if (!this.sending) return;
     this.sending = null;
-    this.hub.release('audio');
+    this.hub.release(this.capName);
     this._toWin('send-stop', {});
     if (tell && this.server.current) this.server.sendToClient({ t: P.T.AUDIO_STOP, dir: 'm2w' });
     this._syncAudioSticky();

@@ -219,7 +219,7 @@ UI.tab({
       const inp = s.input || { where: 'home' };
       const bad = s.serverError || (g.status.state === 'identity_changed' && tr(g.status.message || ''));
       status.textContent = bad
-        || (c ? tr(WHERE[inp.where] || 'Connected', p)
+        || (c ? tr(WHERE[inp.where] || 'Connected', inp.partnerName ? { ...p, name: inp.partnerName } : p)
           : pairedIds.size ? tr('Open TwinDesk on the other computer to connect.')
             : tr('Pick a computer above, or connect by address.'));
       // Disconnected (here or by the other side), taken over, or the Mac we connect to is in use.

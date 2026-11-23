@@ -65,22 +65,8 @@ class SoundSet {
     return link;
   }
 
-  // The sound graph from here (docs/mesh-graph.md): is the edge to `id` active?
   _sends(id) {
-    const hub = this.hub;
-    const self = hub.device && hub.device.id;
-    if (!self) return false;
-    const nodes = [{ id: self, os: osOf(process.platform), name: hub.device.name }]
-      .concat(hub.sessions.list().filter((s) => s.connected).map((s) => ({ id: s.id, os: s.peerOs, name: s.displayName() })));
-    const a = this.settings.audio || {};
-    const edges = resolve('sound', {
-      nodes,
-      from: self,
-      selected: () => hub.selectedId,
-      allowed: (svc, from, to) => (pairFor(this.settings, hub.selectedId, to, 'audio', 'out', !!a.send) ? true : 'Send is off for it'),
-    });
-    const e = edges.find((x) => x.to === id);
-    return !!e && e.stage === 'active';
+    return sendsTo(this.hub, this.settings, id);
   }
 
   // A settings change, a selection change (whose switches settings.audio holds), a device gone.
@@ -109,8 +95,27 @@ class SoundSet {
   }
 }
 
+// The sound graph from here (docs/mesh-graph.md): is this computer's edge to device `id` active? hub: a
+// mesh hub (device, sessions, selectedId) of Windows, Linux or the Mac; settings: whose audio.send is the
+// selected device's switch and pairSync every other's (pairFor).
+function sendsTo(hub, settings, id) {
+  const self = hub.device && hub.device.id;
+  if (!self) return false;
+  const nodes = [{ id: self, os: osOf(process.platform), name: hub.device.name }]
+    .concat(hub.sessions.list().filter((s) => s.connected).map((s) => ({ id: s.id, os: s.peerOs, name: s.displayName() })));
+  const a = settings.audio || {};
+  const edges = resolve('sound', {
+    nodes,
+    from: self,
+    selected: () => hub.selectedId,
+    allowed: (svc, from, to) => (pairFor(settings, hub.selectedId, to, 'audio', 'out', !!a.send) ? true : 'Send is off for it'),
+  });
+  const e = edges.find((x) => x.to === id);
+  return !!e && e.stage === 'active';
+}
+
 function osOf(platform) {
   return platform === 'darwin' ? 'mac' : platform === 'win32' ? 'win' : 'linux';
 }
 
-module.exports = { SoundSet };
+module.exports = { SoundSet, sendsTo };
