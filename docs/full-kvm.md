@@ -60,7 +60,7 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
     uinput injection, below every display server, so it works the same at the lock screen and greeter.
 - **The kvm pipe.** JSON lines, the helper's own protocol, for the KVM commands only (`kvmConfig`,
   `screens`, `capture`, `place`, `armReturn`, `inject`, `releaseAll`, `watchRelease`, `moveTo`, `info`,
-  `ping`): anything else (files, clipboard, windows) is refused, so the privileged side never reads a
+  `ping`, and on Windows `dragCross`, `dragHold`): anything else (files, clipboard, windows) is refused, so the privileged side never reads a
   file or runs anything for its client. Who may connect:
   - Windows: `\\.\pipe\TwinDesk.kvm`, its ACL the console session's user (or LOCAL SERVICE, the machine
     node, while nobody is signed in), network logons denied; the service checks the client's image is
@@ -71,6 +71,13 @@ Both need an administrator once (UAC on Windows, pkexec on Linux), from the tab'
 - **The app.** With the service there, `shared/fullkvm/route.js` (wrapping `linux/helper.js`,
   `windows/helper.js`) sends the KVM commands down the pipe and takes
   the KVM events from it; everything else stays with its own helper. No service: as before.
+- **File drags past the edge (Windows).** The strip that catches an Explorer drag at the edge
+  (`windows-helper/src/DropEdge.cs`) is the app's own helper's, not the agent's: Windows doesn't let a
+  program of the user's drop onto a window of SYSTEM's, so on the agent's strip a drag stopped at the edge
+  (and the agent's capture doesn't cross with a button held). `route.js` tells the app's helper what the
+  agent's capture does (`dragStrip`: the sides, the way back, capturing), and a drag caught there comes back
+  as `dragCross` / `dragHold`, which it sends down the pipe: the agent's capture crosses with the files
+  (`DragRelay.cs`). The agent shows no strip.
 - **The machine node (System-wide).** The mesh core without Electron's windows (`electron` stubbed:
   `app.getPath` is the machine folder), started by the service while nobody is signed in and stopped
   when someone is (their app takes over the same port). It runs as an unprivileged account (Linux

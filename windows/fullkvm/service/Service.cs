@@ -116,7 +116,8 @@ namespace TwinDesk.FullKvm
     class KvmService : ServiceBase
     {
         static readonly HashSet<string> Allowed = new HashSet<string>(new string[] {
-            "ping", "keepalive", "kvmConfig", "screens", "capture", "place", "armReturn", "inject", "pen", "touch", "releaseAll", "watchRelease", "moveTo", "info" });
+            "ping", "keepalive", "kvmConfig", "screens", "capture", "place", "armReturn", "inject", "pen", "touch", "releaseAll", "watchRelease", "moveTo", "info",
+            "dragCross", "dragHold" }); // a file drag the user's helper caught on its strip (windows-helper/src/DragRelay.cs)
         // Kept and given again to an agent started on another desktop, in this order.
         static readonly string[] Replayed = new string[] { "kvmConfig", "armReturn", "capture" };
 

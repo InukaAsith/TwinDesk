@@ -8,6 +8,8 @@
 // While the Mac drives this PC the strip covers the way back instead, for the Mac's button held in
 // an Explorer drag here: caught the same way, the input goes home with it (`return {offset,
 // drag:{paths}}`, Capture.ReturnWithDrag) and the Mac carries the drag on.
+// What it knows of the capture comes through IDragEdge: this helper's own (LocalEdge), or with Full
+// KVM the service's, which can't have the strip (DragRelay.cs).
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -15,10 +17,70 @@ using System.Windows.Forms;
 
 namespace MacShare
 {
-    class DropEdge : Form
+    // What the strip needs of a capture.
+    interface IDragEdge
+    {
+        bool Capturing { get; }
+        bool DragFiles { get; }
+        List<string> HomeSides(); // the sides a drag crosses at home (none: edge crossing off)
+        List<string> ReturnStops(); // the way back while driven (none: not driven)
+        DateTime LastCross { get; }
+        void Hold(bool on); // a drag caught on the way back: the return waits for its drop
+        void Cross(Point at, string side, bool back, string[] paths); // Explorer's drag ended on the strip
+    }
+
+    // This helper's own capture: the drag crosses here.
+    class LocalEdge : IDragEdge
     {
         readonly Capture capture;
         readonly Action<Dictionary<string, object>> emit;
+
+        public LocalEdge(Capture capture, Action<Dictionary<string, object>> emit)
+        {
+            this.capture = capture;
+            this.emit = emit;
+        }
+
+        public bool Capturing { get { return capture.Capturing; } }
+        public bool DragFiles { get { return capture.DragFiles; } }
+        public DateTime LastCross { get { return capture.LastCross; } }
+        public List<string> ReturnStops() { return capture.ReturnStops(); }
+        public void Hold(bool on) { capture.HoldReturn = on; }
+
+        public List<string> HomeSides()
+        {
+            List<string> l = new List<string>();
+            if (!capture.DriveOther) return l;
+#if MULTI
+            l.AddRange(capture.Sides); // every watched side, each to its device
+#else
+            if (capture.Side != null) l.Add(capture.Side);
+#endif
+            return l;
+        }
+
+        // Capture starts (the user's real button-up is swallowed from here and goes to the Mac) and
+        // main gets the paths with the crossing; on the way back the input goes home with them.
+        public void Cross(Point at, string side, bool back, string[] paths)
+        {
+            if (back) { capture.ReturnWithDrag(at, side, paths); return; }
+            capture.HoldReturn = false;
+            if (capture.Capturing) return;
+            capture.Begin(true, capture.EdgeKeyboard);
+            Dictionary<string, object> d = new Dictionary<string, object>();
+            d["event"] = "edge";
+            d["offset"] = Math.Round(Screens.Offset(at.X, at.Y, side), 4);
+            d["side"] = side;
+            Dictionary<string, object> drag = new Dictionary<string, object>();
+            drag["paths"] = paths;
+            d["drag"] = drag;
+            emit(d);
+        }
+    }
+
+    class DropEdge : Form
+    {
+        readonly IDragEdge edge;
         readonly Timer timer = new Timer();
         const int STRIP = 3; // px
         bool taken; // a drag entered and is being handed to the Mac
@@ -37,10 +99,9 @@ namespace MacShare
                 : (e.AllowedEffect & DragDropEffects.Link) != 0 ? DragDropEffects.Link : DragDropEffects.None;
         }
 
-        public DropEdge(Capture capture, Action<Dictionary<string, object>> emit)
+        public DropEdge(IDragEdge edge)
         {
-            this.capture = capture;
-            this.emit = emit;
+            this.edge = edge;
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             TopMost = true;
@@ -74,22 +135,23 @@ namespace MacShare
         // while driven the way back (the button is the Mac's then).
         void Follow()
         {
-            List<string> back = capture.Capturing ? new List<string>() : capture.ReturnStops();
+            List<string> back = edge.Capturing ? new List<string>() : edge.ReturnStops();
             bool held = (Native.GetAsyncKeyState(0x01) & 0x8000) != 0;
             if (taken) return; // stays while Explorer's drag ends on it
-            if (!held || !capture.DragFiles || capture.Capturing || (back.Count == 0 && (capture.Side == null || !capture.DriveOther))) { if (Visible) Hide(); return; }
+            List<string> sides = back.Count > 0 ? back : edge.HomeSides();
+            if (!held || !edge.DragFiles || edge.Capturing || sides.Count == 0) { if (Visible) Hide(); return; }
             Native.POINT p;
             Native.GetCursorPos(out p);
             Rectangle m = Screen.FromPoint(new Point(p.x, p.y)).Bounds;
             string side = null;
-            foreach (string s in back.Count > 0 ? back : new List<string> { capture.Side })
+            foreach (string s in sides)
             {
                 Point probe = s == "left" ? new Point(m.Left, p.y) : s == "right" ? new Point(m.Right - 1, p.y)
                     : s == "top" ? new Point(p.x, m.Top) : new Point(p.x, m.Bottom - 1);
                 if (Screens.OnOuterEdge(probe.X, probe.Y, s)) { side = s; break; }
             }
             if (side == null) { if (Visible) Hide(); return; }
-            if (capture.LastCross != seenCross) { seenCross = capture.LastCross; away = false; }
+            if (edge.LastCross != seenCross) { seenCross = edge.LastCross; away = false; }
             int dist = side == "left" ? p.x - m.Left : side == "right" ? m.Right - 1 - p.x : side == "top" ? p.y - m.Top : m.Bottom - 1 - p.y;
             if (dist > 16) away = true;
             if (!away) { if (Visible) Hide(); return; }
@@ -106,7 +168,7 @@ namespace MacShare
         void OnDragEnter(object sender, DragEventArgs e)
         {
             e.Effect = DragDropEffects.None;
-            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || capture.Capturing) return;
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || edge.Capturing) return;
             string[] paths = e.Data.GetData(DataFormats.FileDrop) as string[];
             if (paths == null || paths.Length == 0) return;
             e.Effect = Copy(e);
@@ -114,7 +176,7 @@ namespace MacShare
             taken = true;
             pending = paths;
             pendingBack = stripBack;
-            if (pendingBack) capture.HoldReturn = true; // the input goes home with the drag, at the drop
+            if (pendingBack) edge.Hold(true); // the input goes home with the drag, at the drop
             Native.POINT p;
             Native.GetCursorPos(out p);
             pendingAt = new Point(p.x, p.y);
@@ -123,38 +185,22 @@ namespace MacShare
             BeginInvoke((MethodInvoker)delegate { Native2.Button(false); });
             System.Windows.Forms.Timer t = new System.Windows.Forms.Timer();
             t.Interval = 600;
-            t.Tick += delegate { t.Stop(); t.Dispose(); if (taken) { taken = false; pending = null; capture.HoldReturn = false; Hide(); } }; // no drop came
+            t.Tick += delegate { t.Stop(); t.Dispose(); if (taken) { taken = false; pending = null; edge.Hold(false); Hide(); } }; // no drop came
             t.Start();
         }
 
-        // Explorer's drag ended on the strip: now cross. Capture starts (the user's real button-up
-        // is swallowed from here and goes to the Mac) and main gets the paths.
+        // Explorer's drag ended on the strip: now cross, through the side the strip covers.
         void OnDrop()
         {
             string[] paths = pending;
             pending = null;
             taken = false;
             Hide();
-            if (paths == null || capture.Capturing) { capture.HoldReturn = false; return; }
-            if (pendingBack)
-            {
-                Point at = pendingAt;
-                string side = stripSide;
-                BeginInvoke((MethodInvoker)delegate { capture.ReturnWithDrag(at, side, paths); });
-                return;
-            }
-            BeginInvoke((MethodInvoker)delegate
-            {
-                double offset = Screens.Offset(pendingAt.X, pendingAt.Y, capture.Side);
-                capture.Begin(true, capture.EdgeKeyboard);
-                Dictionary<string, object> d = new Dictionary<string, object>();
-                d["event"] = "edge";
-                d["offset"] = Math.Round(offset, 4);
-                Dictionary<string, object> drag = new Dictionary<string, object>();
-                drag["paths"] = paths;
-                d["drag"] = drag;
-                emit(d);
-            });
+            if (paths == null || edge.Capturing) { edge.Hold(false); return; }
+            Point at = pendingAt;
+            string side = stripSide;
+            bool back = pendingBack;
+            BeginInvoke((MethodInvoker)delegate { edge.Cross(at, side, back, paths); });
         }
     }
 }

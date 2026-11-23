@@ -31,6 +31,8 @@ namespace MacShare
         static Smoother smoother; // the phone Remote's moves, eased out (k.mm with smooth)
         static ClipWatch clipWatch; // "clipboard" events: something was copied (ClipWatch.cs)
         static DropEdge dropEdge;
+        static LocalEdge localEdge; // the strip's view of our capture (DropEdge.cs)
+        static DragRelay dragRelay; // …or, with Full KVM, of the service's (DragRelay.cs)
         static DragSession drag; // the drag from the Mac on this PC
 
         [STAThread]
@@ -93,7 +95,15 @@ namespace MacShare
             capture.Start();
             capture.Flash = new Flash();
             if (!agent) AppWindows.Watch(delegate { Dictionary<string, object> e = new Dictionary<string, object>(); e["event"] = "winShown"; Emit(e); }); // Menus
-            dropEdge = new DropEdge(capture, Emit);
+            localEdge = new LocalEdge(capture, Emit);
+            // The agent (Full KVM, as SYSTEM) shows no strip: Explorer can't drop onto a SYSTEM window, and
+            // it would cover the user's helper's, which has it then (DragRelay.cs). Its capture still
+            // crosses with the drags that one catches (dragCross).
+            if (!agent)
+            {
+                dragRelay = new DragRelay(localEdge, Emit);
+                dropEdge = new DropEdge(dragRelay);
+            }
             if (!agent) { try { clipWatch = new ClipWatch(Emit); } catch (Exception) { /* no clipboard events: clip.js polls */ } }
             if (!agent) Notifs.Emit = Emit; // // file drags across the edge (shown only while dragging)
 
@@ -324,6 +334,19 @@ namespace MacShare
                         capture.Emergency = new EmergencyShortcut(Json.Str(c, "emergencyKeys", EmergencyShortcut.Fallback));
                         break;
                     case "crossingWatch": capture.WatchCrossingFlags(); break; // hold-to-cross (Crossing.cs)
+                    case "dragStrip": if (dragRelay != null) dragRelay.Update(c); break; // Full KVM: the service's capture (DragRelay.cs)
+                    case "dragHold": capture.HoldReturn = Json.Bool(c, "on", false); break; // Full KVM: a drag on the way back, caught by the user's helper
+                    case "dragCross": // Full KVM: a file drag the user's helper caught on its strip: our capture crosses with it
+                        {
+                            List<string> dragPaths = Json.Strs(c, "paths");
+                            string dragSide = Json.Str(c, "side", null);
+                            bool dragBack = Json.Bool(c, "back", false);
+                            bool dragOk = dragPaths != null && dragPaths.Count > 0 && dragSide != null && capture.DragFiles
+                                && (dragBack ? capture.ReturnStops().Contains(dragSide) : !capture.Capturing && localEdge.HomeSides().Contains(dragSide));
+                            if (!dragOk) { capture.HoldReturn = false; break; }
+                            localEdge.Cross(new Point((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0)), dragSide, dragBack, dragPaths.ToArray());
+                        }
+                        break;
                     case "crossingFlags": capture.RemoteCrossingBits = (int)Json.Num(c, "flags", 0) & 15; break;
                     case "emergencyActive": capture.SetEmergencyActive(Json.Bool(c, "on", false)); break;
                     case "capture":

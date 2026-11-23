@@ -7,6 +7,10 @@
 // there; everything else stays with ours. Ours lets go of the mouse and keyboard while the service has them, and takes them back
 // when it goes. No native input lane through the service (it has no network): the Node lane injects
 // through it. One-to-one and Multi-device alike (mesh/helper.js extends ../helper.js).
+//
+// Windows: the file-drag strip at the edge (windows-helper/src/DropEdge.cs) is ours, not the service's:
+// Explorer can't drop onto a window of SYSTEM's. Ours is told what the service's capture does
+// (dragStrip), and a drag it catches goes to the service (dragCross, dragHold), whose capture crosses.
 'use strict';
 
 const { SvcLink, KVM } = require('./svc-link.js');
@@ -14,6 +18,8 @@ const { SvcLink, KVM } = require('./svc-link.js');
 const SVC_SOCK = process.env.TWINDESK_KVM_SOCK || (process.platform === 'win32' ? '\\\\.\\pipe\\TwinDesk.kvm' : '/run/twindesk/kvm.sock');
 // The helpers' mouse-and-keyboard events (linux-helper/src: capture.c, wl.c; windows-helper/src: Capture*.cs).
 const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv', 'hooksReinstalled', 'secureDesktop', 'letGo']);
+// Our helper's events for the service: a file drag caught on our strip (windows-helper/src/DragRelay.cs).
+const TO_SERVICE = new Set(['dragCross', 'dragHold']);
 
 module.exports = (Helper) => class FullKvmHelper extends Helper {
   constructor(...args) {
@@ -21,14 +27,23 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
     this.svc = null;
     if (!require('../edition.js').fullKvm()) return; // General › Modules › Full KVM is off: our own helper only
     this.svc = new SvcLink(SVC_SOCK);
+    this.strip = { on: false, sides: [], driveOther: false, dragFiles: true, back: [], capturing: false, cross: 0 };
     this.svc.on('ready', () => {
       console.log('[fullkvm] the service has the mouse and keyboard (' + SVC_SOCK + ')');
       this._quietOwn();
+      this._strip({ on: true, capturing: false, back: [] });
       this.emit('ready'); // kvm.js and main.js send their config and screens again: to the service now
     });
-    this.svc.on('event', (name, msg) => this.emit('event', name, msg));
+    this.svc.on('event', (name, msg) => {
+      // The service's capture began (an edge) or the input went home: our strip waits until the pointer has left the edge.
+      if (name === 'edge') this._strip({ capturing: true, cross: this.strip.cross + 1 });
+      else if (name === 'return') this._strip({ cross: this.strip.cross + 1 });
+      else if (name === 'captureEnded') this._strip({ capturing: false });
+      this.emit('event', name, msg);
+    });
     this.svc.on('exit', () => {
       console.log('[fullkvm] the service let go: our own helper again');
+      this._strip({ on: false });
       if (this.proc) this.emit('ready'); else this.emit('exit', 1);
     });
     this.svc.start();
@@ -56,8 +71,31 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
     super.send('kvmConfig', { side: null, sides: [], zones: 'none', driveOther: false, keyboard: false, takeBack: false, hotkey: 'none' });
   }
 
+  // Our file-drag strip's view of the service's capture (Windows: windows-helper/src/DragRelay.cs).
+  _strip(change) {
+    if (process.platform !== 'win32' || !this.svc) return;
+    this.strip = { ...this.strip, ...change };
+    if (this.proc) super.send('dragStrip', this.strip);
+  }
+
+  // What kvm.js tells the service's capture, our strip hears too.
+  _follow(cmd, args) {
+    if (cmd === 'kvmConfig') {
+      this._strip({ sides: Array.isArray(args.sides) ? args.sides : args.side ? [args.side] : [], driveOther: !!args.driveOther, dragFiles: args.dragFiles !== false });
+    } else if (cmd === 'armReturn') {
+      this._strip({ back: args.on ? (Array.isArray(args.sides) ? args.sides : args.side ? [args.side] : []) : [] });
+    } else if (cmd === 'capture') {
+      this._strip({ capturing: !!args.on });
+    } else if (cmd === 'place') {
+      this._strip({ cross: this.strip.cross + 1 }); // the pointer came here: it starts at the edge
+    }
+  }
+
   send(cmd, args = {}) {
-    if (this.viaService && KVM.has(cmd)) return this.svc.send(cmd, args);
+    if (this.viaService && KVM.has(cmd)) {
+      this._follow(cmd, args);
+      return this.svc.send(cmd, args);
+    }
     return super.send(cmd, args);
   }
 
@@ -77,7 +115,16 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
   // Our own helper's events: its mouse-and-keyboard ones (KVM_EVENTS) are dropped while the service
   // has them; the rest (Bluetooth, shortcuts) are ours as ever.
   emit(name, ...rest) {
-    if (this._fromOwn && this.viaService && (name === 'ready' || (name === 'event' && KVM_EVENTS.has(rest[0])))) return false;
+    if (this._fromOwn && name === 'event' && TO_SERVICE.has(rest[0])) {
+      if (this.viaService) this.svc.send(rest[0], rest[1] || {}); // our strip caught a drag: the service's capture crosses with it
+      return false;
+    }
+    if (this._fromOwn && this.viaService && name === 'ready') { // ours started again while the service has them
+      this._quietOwn();
+      this._strip({});
+      return false;
+    }
+    if (this._fromOwn && this.viaService && name === 'event' && KVM_EVENTS.has(rest[0])) return false;
     return super.emit(name, ...rest);
   }
 
