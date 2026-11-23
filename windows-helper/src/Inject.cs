@@ -240,6 +240,31 @@ namespace MacShare
             return appPid;
         }
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, int flags, System.Text.StringBuilder name, ref int size);
+
+        // TwinDesk's own process: our parent, or (the Full KVM build: the service started this helper, so
+        // our parent is the service) any process whose program is TwinDesk.exe.
+        static uint twinPid; // the last one found by its name
+        static bool IsTwinDesk(uint pid)
+        {
+            if (pid == 0) return false;
+            uint app = AppPid();
+            if (app != 0 && pid == app) return true;
+            if (pid == twinPid) return true;
+            IntPtr h = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, pid);
+            if (h == IntPtr.Zero) return false;
+            try
+            {
+                System.Text.StringBuilder name = new System.Text.StringBuilder(1024);
+                int size = name.Capacity;
+                if (!QueryFullProcessImageName(h, 0, name, ref size)) return false;
+                bool twin = string.Equals(System.IO.Path.GetFileName(name.ToString()), "TwinDesk.exe", StringComparison.OrdinalIgnoreCase);
+                if (twin) twinPid = pid;
+                return twin;
+            }
+            finally { CloseHandle(h); }
+        }
+
         // The pointer is on the minimize, maximize, close or help button of one of TwinDesk's own windows.
         static bool OnOwnCaptionButton()
         {
@@ -250,8 +275,7 @@ namespace MacShare
             IntPtr root = GetAncestor(h, 2); // GA_ROOT
             uint pid;
             GetWindowThreadProcessId(root != IntPtr.Zero ? root : h, out pid);
-            uint app = AppPid();
-            if (app == 0 || pid != app) return false;
+            if (!IsTwinDesk(pid)) return false;
             IntPtr hit;
             IntPtr l = new IntPtr(((p.y & 0xFFFF) << 16) | (p.x & 0xFFFF));
             if (SendMessageTimeout(h, 0x84 /* WM_NCHITTEST */, IntPtr.Zero, l, 2 /* SMTO_ABORTIFHUNG */, 100, out hit) == IntPtr.Zero) return false;
