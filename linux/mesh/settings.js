@@ -19,7 +19,8 @@ function normalize(s) {
   out.layoutDisplays = s.layoutDisplays && typeof s.layoutDisplays === 'object' && !Array.isArray(s.layoutDisplays) ? s.layoutDisplays : null;
   // Joining everyone (docs/mesh.md): on unless switched off in the Multi-device tab, so every computer
   // the mouse goes through is connected to the others; a paired device can add others without a code.
-  out.mesh = { autoJoin: bool(ms.autoJoin, true) };
+  // The other devices' logs (docs/peer-logs.md): ours to them, and theirs copied here; on unless switched off.
+  out.mesh = { autoJoin: bool(ms.autoJoin, true), shareLogs: bool(ms.shareLogs, true), collectLogs: bool(ms.collectLogs, true) };
   return out;
 }
 
@@ -68,7 +69,7 @@ function save(store, settings) {
   const { edges, ...kvm } = settings.kvm;
   store.write('settings.json', { ...rest, kvm });
   const off = mesh && mesh.autoJoin === false;
-  store.write(MULTI, { ...store.read(MULTI, {}), kvm: { edges }, layout, layoutDisplays, mesh: off ? { autoJoin: false, chosen: true } : { autoJoin: true } });
+  store.write(MULTI, { ...store.read(MULTI, {}), kvm: { edges }, layout, layoutDisplays, mesh: { ...(off ? { autoJoin: false, chosen: true } : { autoJoin: true }), shareLogs: !mesh || mesh.shareLogs !== false, collectLogs: !mesh || mesh.collectLogs !== false } });
 }
 
 module.exports = { normalize, apply, migrateKvm, load, save };

@@ -86,6 +86,7 @@ const { BleHost, BleLook } = require('../../shared/blepipe.js');
 const { wifiQuiet } = require('../../shared/blepolicy.js');
 const { NetLink } = require('../../shared/netlink.js');
 const { aboutInfo } = require('../../shared/about.js');
+const { PeerLogs } = require('../../shared/peerlogs.js');
 
 let win = null;
 let tray = null;
@@ -582,6 +583,8 @@ app.whenReady().then(() => {
   links.on('request', showWindow);
   hub = new Hub({ device: { id: id.macId, name: id.macName }, links, mesh, server, pairing });
   hub.on('change', pushState);
+  // The other devices' logs, copied into this Mac's log folder (docs/peer-logs.md).
+  new PeerLogs({ bus: hub.bus, nameOf: (pid) => { const x = hub.sessions.get(pid); return x ? x.displayName() : pid; }, dir: () => require('../../shared/applog.js').dir(), share: () => settings.mesh.shareLogs !== false, collect: () => settings.mesh.collectLogs !== false }).start();
   // Joining everyone (autojoin.js, shared/intro.js): the devices a connected device knows are linked by themselves.
   autoJoin = new AutoJoin({
     hub, mesh, pairing, links, identity: id, server,

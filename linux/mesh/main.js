@@ -50,6 +50,7 @@ const Smb = require('../smb');
 const { SmbSet } = require('../../shared/smb-mesh.js');
 const { MeshShadow } = require('../../shared/mesh-shadow.js');
 const { SoundSet } = require('../../shared/sound-mesh.js');
+const { PeerLogs } = require('../../shared/peerlogs.js');
 const SendTo = require('../sendto');
 const Vdd = require('../vdd');
 const PcScreen = require('../pcscreen');
@@ -302,6 +303,7 @@ function start() {
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
   new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  new PeerLogs({ bus: hub.bus, nameOf: (id) => { const s = hub.sessions.get(id); return s ? s.displayName() : id; }, dir: () => require('../../shared/applog.js').dir(), share: () => settings.mesh.shareLogs !== false, collect: () => settings.mesh.collectLogs !== false }).start(); // the other devices' logs, copied here (docs/peer-logs.md)
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   // Popups: a {key, vars} is translated in the popup (hud-renderer.js) with the device names added;
   // English text with {me}/{name} (from modules not translated yet) gets the names filled in here.
@@ -1139,7 +1141,7 @@ function buildState() {
     peer: peerView(),
     // Every paired device (connected or not), and the mesh's selection and live links.
     peers: hub.peers({ indirect: true }),
-    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin === true, pcBle: false },
+    mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin === true, pcBle: false, shareLogs: settings.mesh.shareLogs !== false, collectLogs: settings.mesh.collectLogs !== false },
     found: discovery.list(),
     discovery: { ...discovery.status },
     addresses: ownAddresses(),
