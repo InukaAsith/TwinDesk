@@ -39,6 +39,7 @@ const Terminal = require('../terminal');
 const FileDrop = require('../filedrop');
 const Smb = require('../smb');
 const { SmbSet } = require('../../shared/smb-mesh.js');
+const { MeshShadow } = require('../../shared/mesh-shadow.js');
 const Apps = require('../apps');
 const Sound = require('../sound');
 const FileRecv = require('../filerecv');
@@ -321,6 +322,7 @@ function start() {
   });
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
+  new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   hud = new Hud(() => settings);
   // Cursor sharing switched on/off (hotkey double-tap, tray, or the other computer): the big card.

@@ -48,6 +48,7 @@ const DragRecv = require('../dragrecv');
 const FileClip = require('../fclip');
 const Smb = require('../smb');
 const { SmbSet } = require('../../shared/smb-mesh.js');
+const { MeshShadow } = require('../../shared/mesh-shadow.js');
 const SendTo = require('../sendto');
 const Vdd = require('../vdd');
 const PcScreen = require('../pcscreen');
@@ -299,6 +300,7 @@ function start() {
   });
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
+  new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   // Popups: a {key, vars} is translated in the popup (hud-renderer.js) with the device names added;
   // English text with {me}/{name} (from modules not translated yet) gets the names filled in here.
