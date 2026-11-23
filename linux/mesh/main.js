@@ -319,7 +319,9 @@ function start() {
     hud.show(on ? 'linkOn' : 'linkOff', { key: on ? 'Cursor sharing on' : ble ? 'Cursor sharing off over Bluetooth' : 'Cursor sharing off' }, sub);
   };
   kvm.onWhere = (mode) => { // the switching popup
-    const name = peerName();
+    // The device the pointer is with (the input peer, docs/mesh-graph.md), not the selected one.
+    const p = kvm.partner ? hub.sessions.get(kvm.partner) : null;
+    const name = p ? p.displayName() : peerName();
     if (mode === 'driving') hud.show('away', { key: kvm.keyboardOnly ? 'Typing on {name}' : 'Using {name}', vars: { name } });
     else if (mode === 'driven') hud.show('driven', { key: '{name} is using {me}', vars: { name, me: device.name } });
     else hud.show('home', { key: 'Back on {me}', vars: { me: device.name } });
@@ -1145,7 +1147,7 @@ function buildState() {
     wake: wake.view(),
     macInput: screen.macInput,
     input: kvm.mode,
-    kvmState: { ...kvm.view(), message: fillNames(kvm.message) },
+    kvmState: { ...kvm.view(), message: fillNames(kvm.message), partnerName: kvm.partner && hub.sessions.get(kvm.partner) ? hub.sessions.get(kvm.partner).displayName() : '' }, // who the pointer is with (the Overview's sentence)
     kvm: { ...settings.kvm },
     layout: layoutSync.state(), // the shared layout: { rev, by, cells (this device's view), grid, targets }
     keys: settings.keys,
