@@ -28,7 +28,7 @@ const { Notifs } = require('./notifs');
 const { FileClip } = require('../fclip');
 const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip, { mac: true });
 const { DropSet } = require('./dropset');
-const { ScopedPhonePeer: ScopedPeer } = require('./phones');
+const { SendSet } = require('./sendset');
 const { Wake } = require('../wake');
 const { AppSend } = require('../appsend');
 const { Peer } = require('./peer');
@@ -56,7 +56,11 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     hub: meshHub, server, make: (peer) => new Drop({ server: peer, helper, displays, getSettings: s }),
     partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
   });
-  const fileSend = new FileSend(server, s, { outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json') });
+  // Sending: a FileSend per device (sendset.js), so a crossing mid-send doesn't stop it.
+  const fileSend = new SendSet({
+    hub: meshHub, server, FileSend, getSettings: s, outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json'),
+    partner: () => (kvm && kvm.mode === 'driving' ? kvm.partner : null),
+  });
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   const terminal = new Terminal(server, s);
@@ -76,7 +80,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   // device asks for goes to it through a FileSend on its own peer.
   const fileClip = new MeshFileClip({
     hub: meshHub, files: drop, helper, fileSend, getSettings: s,
-    makeSender: (id) => { const p = new ScopedPeer(meshHub, server, null); p.bind(id); return new FileSend(p, s); },
+    makeSender: (id) => fileSend.unit(id),
   });
   kvm.fileClip = fileClip;
   fileClip.kvm = kvm; // the shortcut while the pointer is over there (keyboard not shared)
