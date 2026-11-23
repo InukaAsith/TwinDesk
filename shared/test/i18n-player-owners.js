@@ -188,13 +188,14 @@ for (const file of ['windows/main.js', 'windows/mesh/main.js', 'linux/main.js', 
 
 for (const file of ['windows/main.js', 'windows/mesh/main.js']) {
   const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
-  const callback = source.match(/onProgress: (\(v\) => \{[^\r\n]+ \}) \}\);/)[1];
+  // One-to-one: the FileDrop's view(v); Multi-device: the set's merged view (shared/filedrop-mesh.js).
+  const callback = (source.match(/onProgress: (\(v\) => \{[^\r\n]+ \}) \}\);/) || source.match(/onProgress: (\(\) => \{ screen\.sendDropProgress[^\r\n]+ \}) \}\),/))[1];
   let sent, pushes = 0;
+  const value = { current: { name: 'File {name} $&' }, last: { text: 'Native {me} error' } };
   const update = vm.runInNewContext('(' + callback + ')', {
-    screen: { sendDropProgress: (value) => { sent = value; } }, peerName: () => 'Peer {name} $&',
+    screen: { sendDropProgress: (v) => { sent = v; } }, peerName: () => 'Peer {name} $&', fileDrop: { view: () => value },
     pushState: () => { pushes++; }, fillAll: () => { throw new Error('player data must stay literal'); },
   });
-  const value = { current: { name: 'File {name} $&' }, last: { text: 'Native {me} error' } };
   update(value);
   assert.strictEqual(sent.current, value.current);
   assert.strictEqual(sent.last, value.last);

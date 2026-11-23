@@ -47,6 +47,7 @@ const Sound = require('../sound');
 const FileRecv = require('../filerecv');
 const DragRecv = require('../dragrecv');
 const { FilesSet } = require('../../shared/files-mesh.js');
+const { FileDropSet } = require('../../shared/filedrop-mesh.js');
 const Sshd = require('../sshd');
 const PcScreen = require('./pcscreen');
 const { PcScreenSet } = require('./pcscreenset');
@@ -283,7 +284,11 @@ function start() {
   });
   terminal = new Terminal({ link, settings, onChange: pushState });
   sshd = new Sshd({ link, settings, save: saveSettings, onChange: pushState });
-  fileDrop = new FileDrop({ link, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'), peer: () => { const v = link.snapshot().session; return v ? { id: v.id || v.name || '', name: v.name || '' } : null; }, onProgress: (v) => { screen.sendDropProgress({ ...v, peerName: peerName() }); pushState(); } });
+  // Sending: a FileDrop per device (shared/filedrop-mesh.js), so a crossing mid-send doesn't stop it.
+  fileDrop = new FileDropSet({
+    hub, FileDrop, settings, outboxFile: path.join(app.getPath('userData'), 'outbox.json'),
+    make: (scoped, id, outbox) => new FileDrop({ link: scoped, settings, outbox, onProgress: () => { screen.sendDropProgress({ ...fileDrop.view(), peerName: peerName() }); pushState(); } }),
+  });
   screen.fileDrop = fileDrop;
   // Monitor 2 shows the selected device's screen. Open and showing nothing, it follows a device that
   // starts sharing (#256: a PC driving this one shared its Extend screen while another device was
@@ -378,11 +383,7 @@ function start() {
   // device asks for goes to it through a sender of its own.
   fileClip = new MeshFileClip({
     hub, files, helper, fileDrop, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
-    makeSender: (id) => {
-      const d = new FileDrop({ link: hub.scoped(id), settings, onProgress: () => pushState() });
-      d.onBatchProgress = (b) => { const x = hub.sessions.get(id); sendProgress(b, x ? x.displayName() : peerName()); };
-      return d;
-    },
+    makeSender: (id) => fileDrop.unit(id),
   });
   dragRecv.onPasted = (b) => fileClip.pasted(b);
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
@@ -412,7 +413,9 @@ function start() {
   };
   // The device a batch came from (shared/files-mesh.js: b.from), not the selected one.
   const fromName = (b) => { const x = b && b.from ? hub.sessions.get(b.from) : null; return x ? x.displayName() : peerName(); };
+  const liveFor = { recv: null, send: null }; // the device each progress notification is about
   fileRecv.onBatchProgress = (b) => {
+    liveFor.recv = b.from || null;
     if (Date.now() - b.at < 400) return; // small batches: only the "Pasted" / "Received" popup
     const part = b.total ? pct(b.got, b.total) : pct(b.done, b.count);
     const key = b.kind === 'paste'
@@ -422,7 +425,7 @@ function start() {
     progressPopup('driven', { key: key + ' · {percent} %', vars });
     liveToast('recv', t(key, vars), b.total ? b.got : b.done, b.total || b.count);
   };
-  // Sending: Send files and drags (the selected device), and a paste another device asked for.
+  // Sending: Send files, drags and pastes other devices asked for, each named by the device it goes to.
   const sendProgress = (b, name = peerName()) => {
     if (!(b.bytes > 5 * 1024 * 1024)) return;
     const file = b.itemCount > 1 ? { key: '{count} items', vars: { count: b.itemCount } } : b.name;
@@ -434,10 +437,12 @@ function start() {
     progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name, percent: pct(b.sent, b.bytes) } });
     liveToast('send', t('Sending {file}', { file: label }), b.sent, b.bytes);
   };
-  fileDrop.onBatchProgress = (b) => sendProgress(b);
-  link.on('closed', () => {
-    liveDone('recv', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
-    liveDone('send', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
+  fileDrop.onBatchProgress = (b) => { liveFor.send = b.to || null; const x = b.to ? hub.sessions.get(b.to) : null; sendProgress(b, x ? x.displayName() : peerName()); }; // b.to: the device it goes to
+  // A device that really left (not the selection moving on: its files go on, shared/filedrop-mesh.js).
+  hub.bus.onPeer('closed', (id) => {
+    const x = hub.sessions.get(id);
+    const name = x ? x.displayName() : peerName();
+    for (const tag of ['recv', 'send']) if (!liveFor[tag] || liveFor[tag] === id) liveDone(tag, t('Files stopped'), t('{name} disconnected', { name }));
   });
   fileRecv.onBatch = (b) => {
     liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: fromName(b) }) : '');

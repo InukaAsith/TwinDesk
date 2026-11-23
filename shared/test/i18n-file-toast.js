@@ -12,8 +12,11 @@ for (const file of ['windows/main.js', 'windows/mesh/main.js']) {
     const source = fs.readFileSync(path.join(__dirname, '../..', file), 'utf8');
     const block = source.slice(source.indexOf('  const pct = '), source.indexOf('  wake = new Wake('));
     const messages = [], hud = [], link = new EventEmitter(), t = I18n.create(locale).t;
+    // Multi-device: a device that really left (hub.bus.onPeer 'closed'), not the facade's selection moving on.
+    const left = [];
+    const hub = { sessions: { get: () => null }, bus: { onPeer: (event, fn) => event === 'closed' && left.push(fn) } };
     let now = 10000;
-    const context = { t, Date: { now: () => now }, AUMID: 'test', helper: { send: (...args) => messages.push(args) }, hud: { show: (...args) => hud.push(args) }, peerName: () => literal, fileRecv: {}, fileDrop: {}, fileClip: { pasted() {} }, rezume: null, link };
+    const context = { t, Date: { now: () => now }, AUMID: 'test', helper: { send: (...args) => messages.push(args) }, hud: { show: (...args) => hud.push(args) }, peerName: () => literal, fileRecv: {}, fileDrop: {}, fileClip: { pasted() {} }, rezume: null, link, hub };
     vm.runInNewContext(block, context);
     context.fileRecv.onBatchProgress({ at: 0, total: 100, got: 50, count: 1, kind: 'paste' });
     assert.equal(messages.at(-1)[0], 'toastProgress');
@@ -34,7 +37,7 @@ for (const file of ['windows/main.js', 'windows/mesh/main.js']) {
     now += 1000;
     context.fileDrop.onBatchProgress({ ...batch, name: literal, itemCount: 1 });
     assert.equal(messages.at(-1)[1].title, t('Sending {file}', { file: literal }), 'real filename is literal');
-    link.emit('closed');
+    if (left.length) for (const fn of left) fn('gone-device'); else link.emit('closed');
     assert.equal(messages.at(-1)[1].title, t('Files stopped'));
     assert.equal(messages.at(-1)[1].text, t('{name} disconnected', { name: literal }));
   }

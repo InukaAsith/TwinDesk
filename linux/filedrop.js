@@ -41,7 +41,8 @@ class FileDrop {
     // Files › Send files waiting for the other device: sent while away, paused, cut off (shared/outbox.js).
     // opts.peer() → {id, name} of the device connected now; opts.outboxFile.
     const peerNow = () => (this.link.status && this.link.status.state === 'connected' && this.peer ? this.peer() : null);
-    this.outbox = new Outbox({
+    // opts.outbox: given in Multi-device, each device's FileDrop a view of one list (shared/filedrop-mesh.js).
+    if (!this.outbox) this.outbox = new Outbox({
       file: this.outboxFile || null,
       hours: () => ((this.settings && this.settings.files) || {}).outboxHours,
       // Before any session since an update: the computer this one is paired with.
