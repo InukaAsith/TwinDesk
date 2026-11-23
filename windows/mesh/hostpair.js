@@ -160,7 +160,12 @@ class Pairing extends EventEmitter {
     if (typeof id !== 'string' || !id || id === this.id.id) return null;
     const token = P.randomHex(32);
     const now = Date.now();
-    const entry = { id, name: String(name || 'Device').slice(0, 64), os: Object.values(P.OS).includes(os) ? os : P.OS.WIN, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now };
+    // The token it has may still be one of the last ones: a grant can be lost on its way (the introducer
+    // gone, or the device already linked), and with only the new one valid it was 'not paired' at its
+    // next connect and forgot this computer for good. The last two stay valid with the new one.
+    const prev = this.paired.find((x) => x.id === id);
+    const oldHashes = prev ? [prev.tokenHash].concat(prev.oldHashes || []).filter((h) => typeof h === 'string').slice(0, 2) : [];
+    const entry = { id, name: String(name || 'Device').slice(0, 64), os: Object.values(P.OS).includes(os) ? os : P.OS.WIN, tokenHash: P.sha256Hex(token), pairedAt: now, lastSeen: now, ...(oldHashes.length ? { oldHashes } : {}) };
     this.paired = this.paired.filter((x) => x.id !== id);
     this.paired.push(entry);
     this._save();
@@ -174,7 +179,7 @@ class Pairing extends EventEmitter {
       return this.server.fail(ctx, P.E.VERSION_MISMATCH, `This PC speaks protocol v${P.PROTOCOL_VERSION}`);
     }
     const e = this.paired.find((x) => x.id === msg.id);
-    if (!e || !P.tokenMatches(msg.token, e.tokenHash)) {
+    if (!e || !(P.tokenMatches(msg.token, e.tokenHash) || (e.oldHashes || []).some((h) => P.tokenMatches(msg.token, h)))) {
       return this.server.fail(ctx, P.E.BAD_TOKEN, 'Not paired with this computer');
     }
     if (typeof msg.name === 'string' && msg.name && msg.name !== e.name) e.name = msg.name.slice(0, 64);

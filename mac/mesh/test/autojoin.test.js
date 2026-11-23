@@ -175,6 +175,10 @@ test('addGrant: stored like a pairing, once, and the list is capped', async () =
     M.links.on('add', (l) => added.push(l.pairing.macId));
     assert.strictEqual(M.links.addGrant(g(1)), true);
     assert.strictEqual(M.links.addGrant(g(1)), false, 'already a link');
+    // … whose host made a new token for us (introduced again): kept, for the next connect.
+    assert.strictEqual(M.links.addGrant({ ...g(1), token: 'cd'.repeat(16) }), false);
+    assert.strictEqual(M.links.get('id-1').pairing.token, 'cd'.repeat(16));
+    assert.strictEqual(M.storage.read('hosts.json', []).find((e) => e.macId === 'id-1').token, 'cd'.repeat(16));
     assert.strictEqual(M.links.addGrant({ ...g(2), token: 5 }), false, 'invalid');
     assert.deepStrictEqual(added, ['id-1']);
     assert.strictEqual(M.storage.read('hosts.json', []).length, 1);

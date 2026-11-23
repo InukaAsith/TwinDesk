@@ -28,12 +28,17 @@ class AutoJoin {
     hub.mesh.on('roster', again);
     hub.on('peerAdded', again);
     hub.on('peerRemoved', again);
+    // And again now and then: a pair asked within RETRY_MS is skipped (I.plan), and with nothing
+    // changing after it, a pair whose introduction got lost stayed apart (seen only 'via' another).
+    this.retry = setInterval(again, I.RETRY_MS);
+    if (this.retry.unref) this.retry.unref();
     hub.bus.on(I.ASK, (m, from) => this.onAsk(m, from));
     hub.bus.on(I.REPLY, (m, from) => this.onReply(m, from));
     hub.bus.on(I.GRANT, (m, from) => this.onGrant(m, from));
   }
 
   close() {
+    clearInterval(this.retry);
     clearTimeout(this.timer);
     this.timer = null;
   }

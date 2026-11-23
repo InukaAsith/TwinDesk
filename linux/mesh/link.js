@@ -465,6 +465,7 @@ class Link {
       return this._pairFailed((code === P.E.VERSION_MISMATCH && versionMessage(msg, name)) || PAIR_ERRORS[code] || 'Pairing failed (' + code + ').');
     }
     if (code === P.E.BAD_TOKEN) {
+      console.log(`[link] ${this.pairing ? `${this.pairing.macName} (${this.pairing.macId})` : 'the host'} doesn't take our token any more: forgotten here`);
       this.forget();
       this._setStatus('not_paired', 'Your Mac forgot {me}. Pair again.');
       return;

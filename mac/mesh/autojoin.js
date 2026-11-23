@@ -39,6 +39,10 @@ class AutoJoin {
     mesh.on('roster', () => this.schedule());
     links.on('add', () => this.schedule());
     links.on('remove', () => this.schedule());
+    // And again now and then: a pair asked within RETRY_MS is skipped (I.plan), and with nothing
+    // changing after it, a pair whose introduction got lost stayed apart (seen only 'via' another).
+    this.retry = setInterval(() => this.schedule(), I.RETRY_MS);
+    if (this.retry.unref) this.retry.unref();
   }
 
   on() {
@@ -60,6 +64,7 @@ class AutoJoin {
   }
 
   stop() {
+    clearInterval(this.retry);
     clearTimeout(this.timer);
     this.timer = null;
   }

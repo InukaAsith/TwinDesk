@@ -111,7 +111,14 @@ class LinkManager extends EventEmitter {
     if (!valid(p)) return '';
     const old = this.links.get(p.macId);
     if (old) {
-      if (old.authed || this.inbound.has(p.macId)) return ''; // already linked: nothing to do
+      if (old.authed || this.inbound.has(p.macId)) {
+        // Already linked, but the host made this token for us and may no longer take the one we have:
+        // kept for the next connect (else 'not paired' then, and the host forgotten here for good).
+        if (old.pairing.token === p.token) return '';
+        old.pairing.token = p.token;
+        old.store.save(old.pairing);
+        return 'kept the new token of';
+      }
       Object.assign(old.pairing, p);
       old.store.save(old.pairing);
       this.alts.set(p.macId, { addrs, port: p.port, i: 0 });
