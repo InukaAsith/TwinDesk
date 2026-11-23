@@ -265,7 +265,16 @@ namespace MacShare
             finally { CloseHandle(h); }
         }
 
+        [StructLayout(LayoutKind.Sequential)] struct RECT { public int left, top, right, bottom; }
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT value, int size);
+        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+
         // The pointer is on the minimize, maximize, close or help button of one of TwinDesk's own windows.
+        // The buttons' bounds come from DWM (DWMWA_CAPTION_BUTTON_BOUNDS), which doesn't ask our app's main
+        // thread: WM_NCHITTEST does, and a main busy for its 100 ms missed the button (#209: minimize froze
+        // AMXLPDL for 3-5 s, until WatchSilence let go). WM_NCHITTEST stays for a window DWM has no bounds
+        // for. Every left press on TwinDesk's own window is logged with what was found, as long as that
+        // is still being checked on a real machine.
         static bool OnOwnCaptionButton()
         {
             Native.POINT p;
@@ -273,13 +282,26 @@ namespace MacShare
             IntPtr h = WindowFromPoint(p);
             if (h == IntPtr.Zero) return false;
             IntPtr root = GetAncestor(h, 2); // GA_ROOT
+            if (root == IntPtr.Zero) root = h;
             uint pid;
-            GetWindowThreadProcessId(root != IntPtr.Zero ? root : h, out pid);
+            GetWindowThreadProcessId(root, out pid);
             if (!IsTwinDesk(pid)) return false;
+            RECT win, btn;
+            if (GetWindowRect(root, out win) && DwmGetWindowAttribute(root, 5 /* DWMWA_CAPTION_BUTTON_BOUNDS */, out btn, Marshal.SizeOf(typeof(RECT))) == 0 && btn.right > btn.left)
+            {
+                bool on = p.x >= win.left + btn.left && p.x < win.left + btn.right && p.y >= win.top + btn.top && p.y < win.top + btn.bottom;
+                Console.Error.WriteLine("[caption] left press on TwinDesk's window at " + p.x + "," + p.y + ": buttons " + (win.left + btn.left) + "," + (win.top + btn.top) + "-" + (win.left + btn.right) + "," + (win.top + btn.bottom) + (on ? ", on them: held until the release" : ", not on them"));
+                if (on) return true;
+            }
             IntPtr hit;
             IntPtr l = new IntPtr(((p.y & 0xFFFF) << 16) | (p.x & 0xFFFF));
-            if (SendMessageTimeout(h, 0x84 /* WM_NCHITTEST */, IntPtr.Zero, l, 2 /* SMTO_ABORTIFHUNG */, 100, out hit) == IntPtr.Zero) return false;
+            if (SendMessageTimeout(root, 0x84 /* WM_NCHITTEST */, IntPtr.Zero, l, 2 /* SMTO_ABORTIFHUNG */, 100, out hit) == IntPtr.Zero)
+            {
+                Console.Error.WriteLine("[caption] left press on TwinDesk's window at " + p.x + "," + p.y + ": its hit test didn't answer in 100 ms");
+                return false;
+            }
             int ht = (int)hit.ToInt64();
+            Console.Error.WriteLine("[caption] left press on TwinDesk's window at " + p.x + "," + p.y + ": hit test " + ht);
             return ht == 8 || ht == 9 || ht == 20 || ht == 21; // HTMINBUTTON, HTMAXBUTTON, HTCLOSE, HTHELP
         }
 
