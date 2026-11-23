@@ -58,6 +58,7 @@ const Vdd = require('../vdd');
 const Hud = require('../hud');
 const Notifs = require('./notifs');
 const FileClip = require('../fclip');
+const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip);
 const Wake = require('../wake');
 const SendTo = require('../sendto');
 const { PairSync } = require('../pairsync');
@@ -373,7 +374,16 @@ function start() {
     bus: hub.bus, mesh, helper, settings, save: saveSettings, selfIds: [AUMID, 'org.macshare.windows'],
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
-  fileClip = new FileClip({ link, helper, fileDrop, fileRecv, dragRecv, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState });
+  // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another
+  // device asks for goes to it through a sender of its own.
+  fileClip = new MeshFileClip({
+    hub, files, helper, fileDrop, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
+    makeSender: (id) => {
+      const d = new FileDrop({ link: hub.scoped(id), settings, onProgress: () => pushState() });
+      d.onBatchProgress = (b) => { const x = hub.sessions.get(id); sendProgress(b, x ? x.displayName() : peerName()); };
+      return d;
+    },
+  });
   dragRecv.onPasted = (b) => fileClip.pasted(b);
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
@@ -412,17 +422,19 @@ function start() {
     progressPopup('driven', { key: key + ' · {percent} %', vars });
     liveToast('recv', t(key, vars), b.total ? b.got : b.done, b.total || b.count);
   };
-  fileDrop.onBatchProgress = (b) => {
+  // Sending: Send files and drags (the selected device), and a paste another device asked for.
+  const sendProgress = (b, name = peerName()) => {
     if (!(b.bytes > 5 * 1024 * 1024)) return;
     const file = b.itemCount > 1 ? { key: '{count} items', vars: { count: b.itemCount } } : b.name;
     const label = b.itemCount > 1 ? t('{count} items', { count: b.itemCount }) : b.name;
     if (b.done) {
-      liveDone('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t(b.ok ? 'On {name}' : 'On {name}: some files didn’t make it', { name: peerName() }));
-      return progressPopup('away', { key: b.ok ? 'Sent {file} to {name}' : 'Not everything arrived on {name}', vars: { file, name: peerName() } }, true);
+      liveDone('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t(b.ok ? 'On {name}' : 'On {name}: some files didn’t make it', { name }));
+      return progressPopup('away', { key: b.ok ? 'Sent {file} to {name}' : 'Not everything arrived on {name}', vars: { file, name } }, true);
     }
-    progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name: peerName(), percent: pct(b.sent, b.bytes) } });
+    progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name, percent: pct(b.sent, b.bytes) } });
     liveToast('send', t('Sending {file}', { file: label }), b.sent, b.bytes);
   };
+  fileDrop.onBatchProgress = (b) => sendProgress(b);
   link.on('closed', () => {
     liveDone('recv', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
     liveDone('send', t('Files stopped'), t('{name} disconnected', { name: peerName() }));

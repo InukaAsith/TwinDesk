@@ -47,6 +47,7 @@ const FileRecv = require('../filerecv');
 const DragRecv = require('../dragrecv');
 const { FilesSet } = require('../../shared/files-mesh.js');
 const FileClip = require('../fclip');
+const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip);
 const Smb = require('../smb');
 const { SmbSet } = require('../../shared/smb-mesh.js');
 const { MeshShadow } = require('../../shared/mesh-shadow.js');
@@ -370,17 +371,19 @@ function start() {
     progressPopup('driven', { key: key + ' · {percent} %', vars });
     live.progress('recv', t(key, vars), t('From {name}', { name: fromName(b) }), part);
   };
-  fileDrop.onBatchProgress = (b) => {
+  // Sending: Send files and drags (the selected device), and a paste another device asked for.
+  const sendProgress = (b, name = peerName()) => {
     if (!(b.bytes > 5 * 1024 * 1024)) return;
     const file = b.itemCount > 1 ? { key: '{count} items', vars: { count: b.itemCount } } : b.name;
     const label = b.itemCount > 1 ? t('{count} items', { count: b.itemCount }) : b.name;
     if (b.done) {
-      live.done('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t('On {name}', { name: peerName() }));
-      return progressPopup('away', { key: b.ok ? 'Sent {file} to {name}' : 'Not everything arrived on {name}', vars: { file, name: peerName() } }, true);
+      live.done('send', b.ok ? t('Sent {file}', { file: label }) : t('Not everything arrived'), t('On {name}', { name }));
+      return progressPopup('away', { key: b.ok ? 'Sent {file} to {name}' : 'Not everything arrived on {name}', vars: { file, name } }, true);
     }
-    progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name: peerName(), percent: pct(b.sent, b.bytes) } });
-    live.progress('send', t('Sending {file}', { file: label }), t('To {name}', { name: peerName() }), pct(b.sent, b.bytes));
+    progressPopup('away', { key: 'Sending {file} to {name} · {percent} %', vars: { file, name, percent: pct(b.sent, b.bytes) } });
+    live.progress('send', t('Sending {file}', { file: label }), t('To {name}', { name }), pct(b.sent, b.bytes));
   };
+  fileDrop.onBatchProgress = (b) => sendProgress(b);
   link.on('closed', () => {
     live.done('recv', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
     live.done('send', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
@@ -391,8 +394,16 @@ function start() {
     if (b.kind === 'paste') fileClip.pasted(b);
     else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: fromName(b) } });
   };
-  // Copy/paste files with shortcuts (the helper watches the keys), the file managers' Send to.
-  fileClip = new FileClip({ link, helper, fileDrop, fileRecv, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState });
+  // Copy and paste files with the shortcuts (the helper watches the keys), with every device
+  // (shared/fclip-mesh.js): a paste another device asks for goes to it through a sender of its own.
+  fileClip = new MeshFileClip({
+    hub, files, helper, fileDrop, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState,
+    makeSender: (id) => {
+      const d = new FileDrop({ link: hub.scoped(id), settings, onProgress: () => pushState() });
+      d.onBatchProgress = (b) => { const x = hub.sessions.get(id); sendProgress(b, x ? x.displayName() : peerName()); };
+      return d;
+    },
+  });
   kvm.fileClip = fileClip; // our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
   sendTo = new SendTo({ link, fileDrop, peerName: () => (peerView() || {}).name || '', popup: (kind, text, sub) => hud.show(kind, text, sub) });

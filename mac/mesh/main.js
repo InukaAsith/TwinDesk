@@ -1028,7 +1028,9 @@ app.whenReady().then(() => {
   });
   svc.drop.on('batch', (b) => {
     if (svc.rz && svc.rz.received(b)) return; // a document taken here with ReZume: it opens
-    if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peer.current ? peer.current.name : { key: 'the other computer' } } });
+    // The device it came from (dropset.js: b.from), not the selected one.
+    const from = b.from ? hub.sessions.get(b.from) : null;
+    if (b.kind === 'send') hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: from ? from.displayName() : peer.current ? peer.current.name : { key: 'the other computer' } } });
   });
   createWindow();
   refreshPermissions();

@@ -26,6 +26,9 @@ const { PcView } = require('../pcview');
 const { PcApps } = require('../pcapps');
 const { Notifs } = require('./notifs');
 const { FileClip } = require('../fclip');
+const MeshFileClip = require('../../shared/fclip-mesh.js').meshFileClip(FileClip, { mac: true });
+const { DropSet } = require('./dropset');
+const { ScopedPhonePeer: ScopedPeer } = require('./phones');
 const { Wake } = require('../wake');
 const { AppSend } = require('../appsend');
 const { Peer } = require('./peer');
@@ -48,7 +51,11 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     swapKeys: () => server.keySwap(s()), // never between two Macs
   });
   const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, session: (id) => meshHub.sessions.get(id) });
-  const drop = new Drop({ server, helper, displays, getSettings: s });
+  // Files from every device, each on its own peer: the computer driving this Mac isn't selected here (dropset.js).
+  const drop = new DropSet({
+    hub: meshHub, server, make: (peer) => new Drop({ server: peer, helper, displays, getSettings: s }),
+    partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
+  });
   const fileSend = new FileSend(server, s, { outboxFile: require('path').join(require('electron').app.getPath('userData'), 'outbox.json') });
   kvm = new Kvm({ hub: meshHub, layoutSync, helper, getSettings: s, clipboard, input, drop, fileSend });
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
@@ -65,7 +72,12 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, saveSettings: () => store.saveSettings(s()), selfName });
   // History › Keep history: the clipboard's and notifications' history kept, encrypted (shared/histkeeper.js).
   const history = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: require('electron').app.getPath('userData'), clip: clipboard, notifs, changed: pushState });
-  const fileClip = new FileClip({ server, helper, fileSend, drop, getSettings: s });
+  // Copy and paste files with the shortcuts, with every device (shared/fclip-mesh.js): a paste another
+  // device asks for goes to it through a FileSend on its own peer.
+  const fileClip = new MeshFileClip({
+    hub: meshHub, files: drop, helper, fileSend, getSettings: s,
+    makeSender: (id) => { const p = new ScopedPeer(meshHub, server, null); p.bind(id); return new FileSend(p, s); },
+  });
   kvm.fileClip = fileClip;
   fileClip.kvm = kvm; // the shortcut while the pointer is over there (keyboard not shared)
   const appSend = new AppSend({ server, helper, getSettings: s }); // This Mac's apps on another Mac
