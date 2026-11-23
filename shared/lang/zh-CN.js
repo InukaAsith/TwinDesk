@@ -1466,6 +1466,7 @@
   "Turn on Multi-device? ": "启用多设备？",
   "Turn on Notifications to see chats here": "开启“通知”以在此查看聊天",
   "Turn on Pictures on {device} too (TwinDesk 2.3 or later there)": "请在 {device} 上也开启“图片”（对方需使用 TwinDesk 2.3 或更高版本）",
+  "Install wl-clipboard (wl-paste and wl-copy): without it, copies made in other apps aren’t seen here on this Wayland desktop": "请安装 wl-clipboard（wl-paste 和 wl-copy）：没有它，在此 Wayland 桌面上从其他应用复制的内容在这里看不到",
   "Turn on Remote Login on {device}": "请在 {device} 上开启“远程登录”",
   "Turn on Remote Login on {name}": "请在 {name} 上开启远程登录",
   "Turn on Terminal in TwinDesk on {device}": "请在 {device} 的 TwinDesk 中开启终端",

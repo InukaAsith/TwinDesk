@@ -301,6 +301,7 @@ function start() {
   helper = new Helper();
   require('../../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
+  clip.useHelper(helper); // its "clipboard" event: something was copied (a picture after a picture too)
   fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
   const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
   // Settings from before the cursor edges: one paired device takes the side its old pcSide gave it.

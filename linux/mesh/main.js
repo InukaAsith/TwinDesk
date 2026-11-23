@@ -119,6 +119,7 @@ let drive = null; // File Sharing › TwinDesk Drive (shared/drive-host.js creat
 let web = null; // TwinDesk Web (../web.js), beside the mesh as in the one-to-one app
 let screen = null;
 let clip = null;
+let wlClipboardMissing = false;
 let helper = null;
 let kvm = null;
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
@@ -250,6 +251,8 @@ function start() {
   startHost();
   autoJoin = new AutoJoin({ hub, enabled: () => settings.mesh.autoJoin !== false, addrs: () => ownAddresses() });
   clip = new Clip({ bus: hub.bus, mesh, getSettings: () => settings.clipboard, onChange: pushState, clipboard: require('../wlclip').clipboard(), session: (id) => hub.sessions.get(id), popup: (kind, text) => hud && hud.show(kind, text) }); // wl-clipboard where Wayland needs it (#97)
+  wlClipboardMissing = require('../wlclip').missing(); // other apps' copies unseen here (#97)
+  if (wlClipboardMissing) console.log('[clip] Wayland without wl-clipboard (wl-paste, wl-copy): copies made in other apps aren’t seen here, so they aren’t sent');
   screen = new Screen({
     link,
     clip,
@@ -1154,7 +1157,7 @@ function buildState() {
     layout: layoutSync.state(), // the shared layout: { rev, by, cells (this device's view), grid, targets }
     keys: settings.keys,
     monitor: settings.monitor,
-    clipboard: { ...settings.clipboard, ...clip.view },
+    clipboard: { ...settings.clipboard, ...clip.view, needsWlClipboard: wlClipboardMissing },
     web: web ? web.view() : { cfg: { ...settings.web }, devices: [] }, // TwinDesk Web
     ui: settings.ui,
     look: Look.view(settings.ui, null), // Linux has no system accent colour to read

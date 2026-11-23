@@ -1466,6 +1466,7 @@
   "Turn on Multi-device? ": "Turn on Multi-device? ",
   "Turn on Notifications to see chats here": "Turn on Notifications to see chats here",
   "Turn on Pictures on {device} too (TwinDesk 2.3 or later there)": "Turn on Pictures on {device} too (TwinDesk 2.3 or later there)",
+  "Install wl-clipboard (wl-paste and wl-copy): without it, copies made in other apps aren’t seen here on this Wayland desktop": "Install wl-clipboard (wl-paste and wl-copy): without it, copies made in other apps aren’t seen here on this Wayland desktop",
   "Turn on Remote Login on {device}": "Turn on Remote Login on {device}",
   "Turn on Remote Login on {name}": "Turn on Remote Login on {name}",
   "Turn on Terminal in TwinDesk on {device}": "Turn on Terminal in TwinDesk on {device}",

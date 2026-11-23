@@ -78,7 +78,9 @@ UI.tab({
       picturesRow.hidden = !c.imageSupport;
       pictures.set(!!c.images);
       picturesRow.setHint(!c.images ? I18n.t('Pictures and screenshots you copy, up to 10 MB, both ways')
-        : s.link.state === 'connected' && !c.peerImages ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: UI.peer(s).name })
+        // Multi-device: every connected device without Pictures, not only the selected one
+        : c.noPictures && c.noPictures.length ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: c.noPictures.join(', ') })
+        : !c.noPictures && s.link.state === 'connected' && !c.peerImages ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: UI.peer(s).name })
           : I18n.t('Pictures and screenshots you copy, up to 10 MB, both ways. Not over Bluetooth'));
       concealed.set(c.skipConcealed);
       maxKB.set(c.maxKB);

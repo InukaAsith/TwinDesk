@@ -17,6 +17,7 @@ UI.tab({
 
     const peerRow = UI.row('', '', [], { literal: true });
     const skipNote = UI.note('info', '', { literal: true });
+    const wlNote = UI.note('warn', '', { literal: true }); // linux/wlclip.js missing()
     const mode = UI.segmented([
       { value: 'instant', label: I18n.t('Instantly') }, // the default
       { value: 'switch', label: I18n.t('When you switch') },
@@ -54,6 +55,7 @@ UI.tab({
     const hist = UI.historyCard('clip');
 
     body.append(
+      wlNote,
       pair.el,
       UI.card('', [modeRow, picturesRow]),
       UI.card(I18n.t('Privacy'), [
@@ -75,10 +77,13 @@ UI.tab({
       pair.update(s);
       mode.set(c.mode);
       modeRow.setHint(c.mode === 'instant' ? I18n.t('As soon as you copy') : I18n.t('When you move to the other computer'));
+      wlNote.set(c.enabled && c.needsWlClipboard ? I18n.t('Install wl-clipboard (wl-paste and wl-copy): without it, copies made in other apps aren’t seen here on this Wayland desktop') : '');
       picturesRow.hidden = !c.imageSupport;
       pictures.set(!!c.images);
       picturesRow.setHint(!c.images ? I18n.t('Pictures and screenshots you copy, up to 10 MB, both ways')
-        : s.link.state === 'connected' && !c.peerImages ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: UI.peer(s).name })
+        // Multi-device: every connected device without Pictures, not only the selected one
+        : c.noPictures && c.noPictures.length ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: c.noPictures.join(', ') })
+        : !c.noPictures && s.link.state === 'connected' && !c.peerImages ? I18n.t('Turn on Pictures on {device} too (TwinDesk 2.3 or later there)', { device: UI.peer(s).name })
           : I18n.t('Pictures and screenshots you copy, up to 10 MB, both ways. Not over Bluetooth'));
       concealed.set(c.skipConcealed);
       maxKB.set(c.maxKB);

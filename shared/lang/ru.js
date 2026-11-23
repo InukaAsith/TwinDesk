@@ -1466,6 +1466,7 @@
   "Turn on Multi-device? ": "Включить несколько устройств? ",
   "Turn on Notifications to see chats here": "Включите уведомления, чтобы видеть чаты здесь",
   "Turn on Pictures on {device} too (TwinDesk 2.3 or later there)": "Включите «Изображения» и на {device} (там TwinDesk 2.3 или новее)",
+  "Install wl-clipboard (wl-paste and wl-copy): without it, copies made in other apps aren’t seen here on this Wayland desktop": "Установите wl-clipboard (wl-paste и wl-copy): без него то, что копируется в других приложениях, здесь не видно на этом рабочем столе Wayland",
   "Turn on Remote Login on {device}": "Включите удалённый вход на {device}",
   "Turn on Remote Login on {name}": "Включите удалённый вход на {name}",
   "Turn on Terminal in TwinDesk on {device}": "Включите «Терминал» в TwinDesk на {device}",

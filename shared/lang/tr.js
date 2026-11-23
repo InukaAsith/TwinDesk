@@ -1466,6 +1466,7 @@
   "Turn on Multi-device? ": "Çoklu cihaz açılsın mı? ",
   "Turn on Notifications to see chats here": "Sohbetleri burada görmek için Bildirimler'i açın",
   "Turn on Pictures on {device} too (TwinDesk 2.3 or later there)": "{device} üzerinde de Resimler'i açın (orada TwinDesk 2.3 veya üzeri)",
+  "Install wl-clipboard (wl-paste and wl-copy): without it, copies made in other apps aren’t seen here on this Wayland desktop": "wl-clipboard'u (wl-paste ve wl-copy) yükleyin: o olmadan, bu Wayland masaüstünde diğer uygulamalarda kopyalananlar burada görülmez",
   "Turn on Remote Login on {device}": "{device} üzerinde Uzaktan Giriş'i açın",
   "Turn on Remote Login on {name}": "{name} üzerinde Uzaktan Giriş'i açın",
   "Turn on Terminal in TwinDesk on {device}": "{device} üzerindeki TwinDesk'te Terminal'i açın",
