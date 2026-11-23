@@ -183,6 +183,7 @@ class FileDrop {
     if (!this.drag || m.drag !== this.drag.drag) return;
     const d = this.drag;
     this.drag = null;
+    console.log('[drag] out, ' + m.result + (typeof m.where === 'string' && m.where ? ' in ' + m.where.slice(0, 200) : '') + ' (' + d.name + ')');
     if (m.result === 'dropped') {
       const folder = typeof m.where === 'string' ? m.where : '';
       this._report(d.name, true, 'Dropped on {name}' + (folder ? ' in ' + folder : ''),

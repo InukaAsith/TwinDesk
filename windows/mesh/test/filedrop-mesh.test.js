@@ -92,7 +92,7 @@ test('a send goes on when the pointer crosses to another device mid-send', async
     assert.strictEqual(atB[0].files, 6, 'every file arrived');
     for (let i = 0; i < 6; i++) assert.ok(fs.readFileSync(path.join(into, 'photos', `p${i}.bin`)).equals(data[i]));
     assert.deepStrictEqual(drops.outbox.view, [], 'nothing kept as cut off');
-    assert.ok(drops.last && drops.last.ok, 'the result: sent');
+    await waitFor(() => drops.last && drops.last.ok, 'the result: sent (B’s files.done, just after its batch)');
     assert.ok(progress.every((to) => to === B.id), 'its progress says it goes to B');
     // Send files now goes to the selected device, C, through C's own FileDrop.
     assert.strictEqual(drops.selected, drops.byId.get(C.id));

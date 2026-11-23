@@ -81,7 +81,8 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
   // What kvm.js tells the service's capture, our strip hears too.
   _follow(cmd, args) {
     if (cmd === 'kvmConfig') {
-      this._strip({ sides: Array.isArray(args.sides) ? args.sides : args.side ? [args.side] : [], driveOther: !!args.driveOther, dragFiles: args.dragFiles !== false });
+      const sides = Array.isArray(args.dragSides) ? args.dragSides : Array.isArray(args.sides) ? args.sides : args.side ? [args.side] : []; // those whose device takes drags
+      this._strip({ sides, driveOther: !!args.driveOther, dragFiles: args.dragFiles !== false });
     } else if (cmd === 'armReturn') {
       this._strip({ back: args.on ? (Array.isArray(args.sides) ? args.sides : args.side ? [args.side] : []) : [] });
     } else if (cmd === 'capture') {

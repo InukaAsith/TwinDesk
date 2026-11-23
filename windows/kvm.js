@@ -259,7 +259,7 @@ class Kvm {
       takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
     });
     // Our switch, for the Mac (it doesn't pick up drags towards us while it's off).
-    const accept = !!this.settings.files.edgeDrag;
+    const accept = !!(this.settings.files.edgeDrag && this.settings.files.acceptFromMac); // dragrecv.js takes a drag only with both
     if (this.connected && accept !== this.sentDragPolicy) {
       this.sentDragPolicy = accept;
       this.link.send({ t: T.DRAG_POLICY, accept });

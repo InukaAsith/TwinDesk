@@ -25,6 +25,7 @@ namespace MacShare
         public bool DriveOther;      // edge detection on
         public bool EdgeKeyboard = true; // an edge crossing also captures the keyboard
         public bool DragFiles = true; // file drags at the edge go to the Mac (drag.policy + the Files switches)
+        public List<string> DragSides; // …through these sides only (kvmConfig dragSides; null: every watched side)
         public int DeadmanMs = 1500, DoubleTapMs = 400;
         public bool Gestures = true; // Touchpad gestures go over as k.ge (Touchpad.cs)
         Touchpad pad;

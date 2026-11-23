@@ -327,6 +327,7 @@ namespace MacShare
                         capture.DriveOther = Json.Bool(c, "driveOther", false);
                         capture.EdgeKeyboard = Json.Bool(c, "keyboard", true);
                         capture.DragFiles = Json.Bool(c, "dragFiles", true);
+                        capture.DragSides = Json.Strs(c, "dragSides");
                         capture.DeadmanMs = (int)Json.Num(c, "deadmanMs", 1500);
                         capture.DoubleTapMs = (int)Json.Num(c, "doubleTapMs", 400);
                         capture.Gestures = Json.Bool(c, "gestures", true);

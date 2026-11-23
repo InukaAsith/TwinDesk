@@ -120,6 +120,7 @@ class Kvm {
       if (this.mode !== 'home' && from === this.partner) this.setLocked(m.on === true, false);
     });
     bus.on(T.DRAG_POLICY, (m, from) => {
+      if (this.dragPolicyBy.get(from) !== (m.accept !== false)) console.log('[drag] ' + this._dragName(from) + (m.accept !== false ? ' takes' : ' doesn’t take') + ' file drags');
       this.dragPolicyBy.set(from, m.accept !== false);
       this.applyConfig();
     });
@@ -335,6 +336,20 @@ class Kvm {
     return this.layoutSync.edgeConfig((id) => this._connectedTo(id) && this._peerOs(id) !== P.OS.IOS && this._linkedFor(id) && !this._pausedFor(id) && this._driveOtherFor(id));
   }
 
+  _dragName(id) {
+    const s = id ? this.hub.sessions.get(id) : null;
+    return s ? s.displayName() : String(id || '?').slice(0, 8);
+  }
+
+  // Why a drag that crossed isn't sent (the log).
+  _dragWhyNot(id, paths) {
+    const f = this.settings.files;
+    if (!f.edgeDrag) return 'Drag across the edge is off here';
+    if (!f.dropToMac) return 'Send files is off here';
+    if (this.dragPolicyBy.get(id) === false) return this._dragName(id) + ' doesn’t take drags: its Drag across the edge or Receive files is off';
+    return paths.length ? 'nothing that can be sent' : 'no file paths';
+  }
+
   _dragsOut(id) {
     const f = this.settings.files;
     return !!(f.edgeDrag && f.dropToMac) && this.dragPolicyBy.get(id) !== false;
@@ -358,8 +373,9 @@ class Kvm {
       this.home();
       this._note('Cursor sharing is off over Bluetooth');
     }
+    const dragSides = sides.filter((s) => this._dragsOut(this.edges[s]));
     this.helper.send('kvmConfig', {
-      side: sides[0] || null, // the first side also drives the file-drag strip (DropEdge)
+      side: sides[0] || null,
       sides,
       zones: edge.zones, // only where the monitors touch (shared/layout-world.js, #225)
       resistancePx: k.resistancePx,
@@ -372,12 +388,16 @@ class Kvm {
       doubleTapMs: P.DOUBLE_TAP_MS,
       cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
       dwellMs: P.KVM_EDGE_DWELL_MS,
-      dragFiles: this._dragsOut(sides.length ? this.edges[sides[0]] : null), // the edge strip that picks up file drags
+      // The edge strip that picks up file drags (DropEdge.cs): on the sides whose device takes them. One
+      // flag for the first side alone turned it off everywhere when that device didn't take drags.
+      dragFiles: dragSides.length > 0,
+      dragSides,
       gestures: k.gestures !== false, // Touchpad gestures go over as k.ge while capturing
       takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
     });
-    // Our switch, for every connected device (it doesn't pick up drags towards us while it's off).
-    const accept = !!this.settings.files.edgeDrag;
+    // Our switches, for every connected device (it doesn't pick up drags towards us while they're off):
+    // dragrecv.js takes a drag only with both, so a device told yes for edgeDrag alone had every drag cancelled.
+    const accept = !!(this.settings.files.edgeDrag && this.settings.files.acceptFromMac);
     if (accept !== this.sentDragPolicy) {
       this.sentDragPolicy = accept;
       for (const id of this.hub.bus.connectedIds()) this._send(id, { t: T.DRAG_POLICY, accept });
@@ -580,6 +600,7 @@ class Kvm {
     // A file/folder drag crossed: the other device shows it as its own drag; the data follows.
     const paths = msg.drag && Array.isArray(msg.drag.paths) && this._dragsOut(id) ? msg.drag.paths.filter((p) => typeof p === 'string') : [];
     const drag = paths.length ? this.fileDrop.prepareDrag(paths) : null;
+    if (msg.drag) console.log('[drag] out to ' + this._dragName(id) + ': ' + (drag ? drag.count + ' item(s)' : 'not sent (' + this._dragWhyNot(id, paths) + ')'));
     this._take({ side: P.opposite(side), offset: r.offset, ...(drag ? { drag: { count: drag.count } } : {}) }, id, before);
     if (!drag && msg.moving && this.onMoveWindow) this.onMoveWindow(msg, id); // a window grabbed with the move key (main.js)
     if (drag) { // order: kvm.take, drag.start, then the files
@@ -735,6 +756,7 @@ class Kvm {
   // ---- driven (a device drives this PC) ----
 
   _onTake(m, from) {
+    if (m.drag) console.log('[drag] in from ' + this._dragName(from) + ': ' + (Number(m.drag.count) || 0) + ' item(s)');
     console.log('[kvm] take from ' + from + ' route ' + m.route + ' side ' + m.side + ' (this PC is ' + this.mode + ')');
     const route = Number(m.route) || 0;
     if (this.mode === 'driving') {

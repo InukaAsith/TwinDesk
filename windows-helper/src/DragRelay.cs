@@ -59,6 +59,7 @@ namespace MacShare
         public void Cross(Point at, string side, bool toHome, string[] paths)
         {
             if (!on) { local.Cross(at, side, toHome, paths); return; }
+            Console.Error.WriteLine("[drag] handed to the Full KVM service: its capture crosses with it");
             Dictionary<string, object> d = new Dictionary<string, object>();
             d["event"] = "dragCross";
             d["x"] = at.X;

@@ -56,6 +56,7 @@ namespace MacShare
 #else
             if (capture.Side != null) l.Add(capture.Side);
 #endif
+            if (capture.DragSides != null) l.RemoveAll(delegate (string s) { return !capture.DragSides.Contains(s); }); // those whose device takes drags
             return l;
         }
 
@@ -162,17 +163,18 @@ namespace MacShare
                 : side == "top" ? new Rectangle(m.Left, m.Top, m.Width, STRIP)
                 : new Rectangle(m.Left, m.Bottom - STRIP, m.Width, STRIP);
             if (Bounds != r) Bounds = r;
-            if (!Visible) Show();
+            if (!Visible) { Show(); Console.Error.WriteLine("[drag] strip on the " + side + " edge (" + (stripBack ? "the way back" : "out") + ")"); }
         }
 
         void OnDragEnter(object sender, DragEventArgs e)
         {
             e.Effect = DragDropEffects.None;
-            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || edge.Capturing) return;
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop) || edge.Capturing) { Console.Error.WriteLine("[drag] strip: a drag came that isn't files"); return; }
             string[] paths = e.Data.GetData(DataFormats.FileDrop) as string[];
             if (paths == null || paths.Length == 0) return;
             e.Effect = Copy(e);
-            if (e.Effect == DragDropEffects.None) return;
+            if (e.Effect == DragDropEffects.None) { Console.Error.WriteLine("[drag] strip: the drag can't be copied"); return; }
+            Console.Error.WriteLine("[drag] strip: " + paths.Length + " item(s) caught, ending Explorer's drag here");
             taken = true;
             pending = paths;
             pendingBack = stripBack;
@@ -185,7 +187,7 @@ namespace MacShare
             BeginInvoke((MethodInvoker)delegate { Native2.Button(false); });
             System.Windows.Forms.Timer t = new System.Windows.Forms.Timer();
             t.Interval = 600;
-            t.Tick += delegate { t.Stop(); t.Dispose(); if (taken) { taken = false; pending = null; edge.Hold(false); Hide(); } }; // no drop came
+            t.Tick += delegate { t.Stop(); t.Dispose(); if (taken) { taken = false; pending = null; edge.Hold(false); Hide(); Console.Error.WriteLine("[drag] strip: Explorer didn't drop in 600 ms"); } }; // no drop came
             t.Start();
         }
 
@@ -200,6 +202,7 @@ namespace MacShare
             Point at = pendingAt;
             string side = stripSide;
             bool back = pendingBack;
+            Console.Error.WriteLine("[drag] strip: dropped, crossing through the " + side + " edge");
             BeginInvoke((MethodInvoker)delegate { edge.Cross(at, side, back, paths); });
         }
     }
