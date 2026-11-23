@@ -40,6 +40,7 @@ const FileDrop = require('../filedrop');
 const Smb = require('../smb');
 const { SmbSet } = require('../../shared/smb-mesh.js');
 const { MeshShadow } = require('../../shared/mesh-shadow.js');
+const { SoundSet } = require('../../shared/sound-mesh.js');
 const Apps = require('../apps');
 const Sound = require('../sound');
 const FileRecv = require('../filerecv');
@@ -293,7 +294,7 @@ function start() {
   });
   apps = new Apps({ link, allowed: () => settings.macApps.on, getLanguage: () => i18n.locale, getMonitor: () => screen.win, popup: (kind, text) => hud && hud.show(kind, text), peerName, onChange: pushState, onWatch: () => screen.policy() });
   screen.apps = apps;
-  sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
+  sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
   smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   helper = new Helper();

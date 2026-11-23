@@ -69,9 +69,11 @@ class Sound {
     });
 
     // getDisplayMedia in the sound window → the system sound (loopback), optionally muting it here.
+    // One handler for the app: in Multi-device every device's Sound sets it (shared/sound-mesh.js), and
+    // the last one answers for all, so it reads the setting they share, not its own sender.
     session.defaultSession.setDisplayMediaRequestHandler((req, cb) => {
       desktopCapturer.getSources({ types: ['screen'] }).then((s) => {
-        const mute = this.sending && this.sending.muteLocal;
+        const mute = !!this.cfg.muteLocal;
         cb({ video: s[0], audio: mute ? 'loopbackWithMute' : 'loopback' });
       }).catch(() => cb({}));
     });

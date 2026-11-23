@@ -174,6 +174,24 @@ Allowed comes from today's switches through the same reads the features make (`p
 `pair.sync` keeps the same on both devices; today's `audio.policy` isn't used for it, because it says
 where that device routes its sound, not whether it would play ours.
 
+### Step 2 as built
+
+`shared/sound-mesh.js` (`SoundSet`) makes a `Sound` per connected device on `hub.scoped(id)`, the link
+`pcscreenset.js` builds screen sharing on: each hears only its device and sends only to it, with its
+own policy both ways. Whether an edge sends is the sound graph's (`resolve('sound')`, every allowed edge
+up to 6); the edge's `Sound` does the rest as in one-to-one. Nothing holds sound to a device any more
+(the audio route is the microphone's alone). A new selection re-applies every edge, because
+`settings.audio` is the selected device's pair (`pairFor`).
+
+For now each edge's `Sound` has its own hidden window and its own capture: on Linux they share the one
+`twindesk_sound` source (loopback.js counts its users); on Windows each takes the loopback, and the one
+`setDisplayMediaRequestHandler` reads `audio.muteLocal` for all. One capture feeding several
+connections in one window is the next refinement; it changes nothing on the wire.
+
+The other side needs nothing new: an older app hears our policy and offers on its own session as
+ever. Between two apps that both have `SoundSet`, sound goes both ways to every device at once;
+an older app still sends its own sound only to its route's device.
+
 A line is written only when a service's would or does changes:
 
 ```

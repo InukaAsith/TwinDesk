@@ -49,6 +49,7 @@ const FileClip = require('../fclip');
 const Smb = require('../smb');
 const { SmbSet } = require('../../shared/smb-mesh.js');
 const { MeshShadow } = require('../../shared/mesh-shadow.js');
+const { SoundSet } = require('../../shared/sound-mesh.js');
 const SendTo = require('../sendto');
 const Vdd = require('../vdd');
 const PcScreen = require('../pcscreen');
@@ -269,7 +270,7 @@ function start() {
     console.log(`[screen] Monitor 2 follows ${from}: it shares its screen`);
     hub.select(from);
   });
-  sound = new Sound({ link: hub.audioLink(), settings, onChange: pushState, meshHub: hub });
+  sound = new SoundSet({ Sound, hub, settings, onChange: pushState }); // a Sound per device, both ways at once (shared/sound-mesh.js)
   loadMic();
   smb = new SmbSet({ Smb, hub, settings, save: saveSettings, onChange: pushState }); // a folder per device, ours to all (shared/smb-mesh.js)
   terminal = new Terminal({ link, settings, onChange: pushState });

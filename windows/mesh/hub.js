@@ -342,7 +342,7 @@ class Hub extends EventEmitter {
       && (this._audioRoute.listenerCount(`t:${msg.t}`) > 0 || this._audioRoute.listenerCount('message') > 0)) {
       consumed = true;
       this._audioRoute.deliver(msg);
-    } else if (msg.t === 'audio.policy' || msg.t === 'audio.offer' || msg.t === 'mic.policy') {
+    } else if (!consumed && (msg.t === 'audio.policy' || msg.t === 'audio.offer' || msg.t === 'mic.policy')) {
       const to = this._audioRoute && this._audioRoute.targetId;
       console.log('[audio-route]', msg.t, 'from', this._nameOf(s.id), 'kept for later: sound is with', to ? this._nameOf(to) : 'nobody', msg.t.endsWith('policy') ? 'accept ' + msg.accept : '');
     }

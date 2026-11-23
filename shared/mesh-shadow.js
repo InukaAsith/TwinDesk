@@ -96,8 +96,13 @@ class MeshShadow {
     return (on.length ? on.join(', ') : 'nobody') + (off.length ? ` (${off.join('; ')})` : '');
   }
 
-  // What a Sound or Mic does now: the device its route is on, and whether it sends.
+  // What a Sound or Mic does now: the device its route is on, and whether it sends. A SoundSet (a Sound
+  // per device, shared/sound-mesh.js): the devices it sends to.
   _does(f, name) {
+    if (f && typeof f.devices === 'function') {
+      const on = f.devices().filter((d) => d.sound.view().sending).sort((a, b) => (a.id < b.id ? -1 : 1)).map((d) => name(d.id)); // by id, as would
+      return on.length ? `${on.join(', ')}, sending` : 'nobody, not sending';
+    }
     if (!f || !f.link) return 'nothing';
     const c = f.link.current;
     if (!c || !c.deviceId) return 'nobody';
