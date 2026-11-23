@@ -14,7 +14,7 @@ const { script, scriptElevated } = require('./ps');
 const T = P.T;
 const SSH_DATA = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ssh');
 const ADMIN_KEYS = path.join(SSH_DATA, 'administrators_authorized_keys');
-const OPTIONS = 'no-agent-forwarding,no-X11-forwarding';
+const OPTIONS = 'no-agent-forwarding,no-X11-forwarding,no-port-forwarding';
 const OURS = / macshare:[A-Za-z0-9._-]*$/; // the marker at the end of each line we add
 
 class Sshd {
