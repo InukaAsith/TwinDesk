@@ -46,6 +46,7 @@ const Apps = require('../apps');
 const Sound = require('../sound');
 const FileRecv = require('../filerecv');
 const DragRecv = require('../dragrecv');
+const { FilesSet } = require('../../shared/files-mesh.js');
 const Sshd = require('../sshd');
 const PcScreen = require('./pcscreen');
 const { PcScreenSet } = require('./pcscreenset');
@@ -302,8 +303,17 @@ function start() {
   require('../../shared/web/pcmedia.js').PcMedia.useHelper((cmd, args) => helper.request(cmd, args, 8000)); // what plays, without PowerShell
   if (require('../../shared/edition.js').fullKvm()) require('../fullkvm/manager.js').attach({ helper }); // the Full KVM build: its tab and service (docs/full-kvm.md)
   clip.useHelper(helper); // its "clipboard" event: something was copied (a picture after a picture too)
-  fileRecv = new FileRecv({ link, helper, settings, onChange: pushState });
-  const dragRecv = new DragRecv({ link, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState });
+  // Files from every device, each on its own link: the computer driving this one isn't selected here
+  // (shared/files-mesh.js). fileRecv and dragRecv are the set's single-receiver API.
+  const files = new FilesSet({
+    hub, partner: () => (kvm && kvm.mode === 'driven' ? kvm.partner : null),
+    make: (scoped) => ({
+      fileRecv: new FileRecv({ link: scoped, helper, settings, onChange: pushState }),
+      dragRecv: new DragRecv({ link: scoped, helper, settings, isDriven: () => kvm && kvm.mode === 'driven', onChange: pushState }),
+    }),
+  });
+  fileRecv = files.fileRecv;
+  const dragRecv = files.dragRecv;
   // Settings from before the cursor edges: one paired device takes the side its old pcSide gave it.
   if (migrateKvm(settings, hub.peers().map((p) => p.id))) saveSettings();
   // The shared layout: one map of the paired devices for the whole mesh (its own pool, docs/mesh.md).
@@ -364,8 +374,6 @@ function start() {
     peerName: (id) => ((mesh.get(id) || {}).name || ''), selfName: () => device.name, onChange: pushState,
   });
   fileClip = new FileClip({ link, helper, fileDrop, fileRecv, dragRecv, settings, peerName, popup: (kind, text) => hud.show(kind, text), onChange: pushState });
-  // A paste Windows copies itself (dragrecv.js) — its files skip filerecv.js.
-  fileRecv.claims = (m) => dragRecv._pasteOf(m);
   dragRecv.onPasted = (b) => fileClip.pasted(b);
   kvm.fileClip = fileClip; // Our copy/paste shortcut while driving → fclip.key
   fileClip.kvm = kvm; // …also when the keyboard isn't shared
@@ -392,13 +400,15 @@ function start() {
     live[tag] = 0;
     helper.send('toastDone', { aumid: AUMID, tag, title, text });
   };
+  // The device a batch came from (shared/files-mesh.js: b.from), not the selected one.
+  const fromName = (b) => { const x = b && b.from ? hub.sessions.get(b.from) : null; return x ? x.displayName() : peerName(); };
   fileRecv.onBatchProgress = (b) => {
     if (Date.now() - b.at < 400) return; // small batches: only the "Pasted" / "Received" popup
     const part = b.total ? pct(b.got, b.total) : pct(b.done, b.count);
     const key = b.kind === 'paste'
       ? b.count === 1 ? 'Pasting {count} file from {name}' : 'Pasting {count} files from {name}'
       : b.count === 1 ? 'Receiving {count} file from {name}' : 'Receiving {count} files from {name}';
-    const vars = { count: b.count, name: peerName(), percent: part };
+    const vars = { count: b.count, name: fromName(b), percent: part };
     progressPopup('driven', { key: key + ' · {percent} %', vars });
     liveToast('recv', t(key, vars), b.total ? b.got : b.done, b.total || b.count);
   };
@@ -418,10 +428,10 @@ function start() {
     liveDone('send', t('Files stopped'), t('{name} disconnected', { name: peerName() }));
   });
   fileRecv.onBatch = (b) => {
-    liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: peerName() }) : '');
+    liveDone('recv', b.files ? t(b.files === 1 ? 'Received {count} file' : 'Received {count} files', { count: b.files }) : t('Nothing arrived'), b.files ? t('From {name}', { name: fromName(b) }) : '');
     if (rezume && rezume.received(b)) return; // a document taken here with ReZume: it opens
     if (b.kind === 'paste') fileClip.pasted(b);
-    else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: peerName() } });
+    else if (b.files) hud.show('driven', { key: b.files === 1 ? 'Received {count} file from {name}' : 'Received {count} files from {name}', vars: { count: b.files, name: fromName(b) } });
   };
   wake = new Wake({ link, settings, save: saveSettings, onChange: pushState, address: () => ownAddresses()[0] }); // Wake over the network
   const sender = new Sender(link); // every rtc2 video session we send (screen, app windows)

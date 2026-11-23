@@ -64,7 +64,12 @@ class DragRecv {
     link.on('closed', () => this.cancel('cancelled', false));
     this.helper.on('event', (name, m) => this._event(name, m));
     this.helper.on('exit', () => this.cancel('failed', false));
-    try { fs.rmSync(this.root, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    // Leftovers of an earlier run, once: Multi-device has a DragRecv per device (shared/files-mesh.js),
+    // made when each one comes, and their drags share this folder.
+    if (!DragRecv.cleaned) {
+      DragRecv.cleaned = true;
+      try { fs.rmSync(this.root, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    }
   }
 
   _start(m) {

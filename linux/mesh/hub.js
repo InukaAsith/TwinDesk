@@ -525,6 +525,8 @@ class Hub extends EventEmitter {
       get server() { return hub.server; },
       get pairing() { return hub.pairing; },
     };
+    // Fast files of this device (shared/meshfx.js): its receivers' hooks join every session's.
+    link.fx = require('../../shared/meshfx.js').facadeFx(sess, () => hub.sessions.list(), hub.sessions.fxShared);
     return link;
   }
 

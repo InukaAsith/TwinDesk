@@ -63,7 +63,12 @@ class FileRecv {
       this.batches.clear();
       this.target = null;
     });
-    try { fs.rmSync(this.dir, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    // Leftovers of an earlier run, once: Multi-device has a FileRecv per device (shared/files-mesh.js),
+    // made when each one comes, and their parts share this folder.
+    if (!FileRecv.cleaned) {
+      FileRecv.cleaned = true;
+      try { fs.rmSync(this.dir, { recursive: true, force: true }); } catch (_) { /* leftovers */ }
+    }
   }
 
   // The phone was asked for files here (Photos › Save, Files › Save: PhoneHub 'asked'): a Send batch
