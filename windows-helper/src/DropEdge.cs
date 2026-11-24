@@ -87,6 +87,7 @@ namespace MacShare
         [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
         readonly IDragEdge edge;
         bool looked; // what's under the pointer on the strip was logged, for this showing
@@ -184,6 +185,9 @@ namespace MacShare
                 : side == "top" ? new Rectangle(m.Left, m.Top, m.Width, STRIP)
                 : new Rectangle(m.Left, m.Bottom - STRIP, m.Width, STRIP);
             if (Bounds != r) Bounds = r;
+            // On top again, every tick: the taskbar, top-most too, came up over the strip at the bottom edge
+            // (AMXLPDL: 'under the pointer is Shell_TrayWnd') and Explorer's drag went onto it.
+            if (Visible) SetWindowPos(Handle, new IntPtr(-1) /* HWND_TOPMOST */, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE, NOMOVE, NOACTIVATE */);
             if (!Visible) { Show(); looked = false; Console.Error.WriteLine("[drag] strip on the " + side + " edge (" + (stripBack ? "the way back" : "out") + "), " + r.X + "," + r.Y + " " + r.Width + "x" + r.Height); }
             else if (!looked && r.Contains(p.x, p.y)) Look(p);
         }
