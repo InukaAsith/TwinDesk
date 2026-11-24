@@ -44,6 +44,13 @@ namespace MacShare
         public Action<Dictionary<string, object>> Emit;
         volatile bool finished;
         DateTime started;
+        // A drag of ours is starting or on (DropEdge.cs: no strip meanwhile. It came in with the driver's pointer,
+        // at the edge where the way-back strip goes: on top, the strip took the press that starts the drag here,
+        // and after 1.5 s it 'failed'. Its way back is kvm.js's drag.back, not the strip).
+        static int running;
+        public static bool Running { get { return System.Threading.Thread.VolatileRead(ref running) > 0; } }
+        public static void Begin() { System.Threading.Interlocked.Increment(ref running); }
+        public static void End() { System.Threading.Interlocked.Decrement(ref running); } // LocalDrag's too
 
         // ---- running the drag (own STA thread) ----
 
@@ -59,6 +66,13 @@ namespace MacShare
         // one: a tiny, almost invisible window under the pointer gets an (injected, marked) left-button
         // press, and DoDragDrop runs from its mouse-down.
         void Run(List<string> names)
+        {
+            Begin();
+            try { RunDrag(names); }
+            finally { End(); }
+        }
+
+        void RunDrag(List<string> names)
         {
             Native2.OleInitialize(IntPtr.Zero);
             if (DropDir != null) { DropInto(); return; }
@@ -84,7 +98,7 @@ namespace MacShare
                 Native2.Button(true);
                 System.Windows.Forms.Timer t = new System.Windows.Forms.Timer();
                 t.Interval = 1500;
-                t.Tick += delegate { t.Stop(); if (!began) { began = true; Event("dragState", "result", "failed", 0); finished = true; f.Close(); } };
+                t.Tick += delegate { t.Stop(); if (!began) { began = true; Console.Error.WriteLine("[drag] the press that starts the drag here didn't reach it in 1.5 s (another window under the pointer?)"); Event("dragState", "result", "failed", 0); finished = true; f.Close(); } };
                 t.Start();
             };
             Application.Run(f);
@@ -201,7 +215,7 @@ namespace MacShare
         {
             List<string> have = paths.FindAll(delegate (string p) { return File.Exists(p) || Directory.Exists(p); });
             if (have.Count == 0) { Done(emit, id, "failed"); return; }
-            Thread t = new Thread(delegate () { Run(have, id, emit); });
+            Thread t = new Thread(delegate () { DragSession.Begin(); try { Run(have, id, emit); } finally { DragSession.End(); } });
             t.SetApartmentState(ApartmentState.STA);
             t.IsBackground = true;
             t.Start();

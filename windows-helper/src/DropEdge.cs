@@ -148,6 +148,7 @@ namespace MacShare
             List<string> back = edge.Capturing ? new List<string>() : edge.ReturnStops();
             bool held = (Native.GetAsyncKeyState(0x01) & 0x8000) != 0;
             if (taken) return; // stays while Explorer's drag ends on it
+            if (DragSession.Running) { if (Visible) Hide(); return; } // a drag of ours: its press, not the strip's
             List<string> sides = back.Count > 0 ? back : edge.HomeSides();
             if (held && !edge.Capturing)
             {
