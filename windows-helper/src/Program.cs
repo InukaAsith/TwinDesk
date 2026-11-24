@@ -337,6 +337,7 @@ namespace MacShare
                     case "crossingWatch": capture.WatchCrossingFlags(); break; // hold-to-cross (Crossing.cs)
                     case "dragStrip": if (dragRelay != null) dragRelay.Update(c); break; // Full KVM: the service's capture (DragRelay.cs)
                     case "dragHold": capture.HoldReturn = Json.Bool(c, "on", false); break; // Full KVM: a drag on the way back, caught by the user's helper
+                    case "unswallow": capture.Unswallow((int)Json.Num(c, "button", 0)); break; // Full KVM: a drag that came home starts in the user's helper (dragStart home, dragLocal): its button's release must reach it
                     case "dragCross": // Full KVM: a file drag the user's helper caught on its strip: our capture crosses with it
                         {
                             List<string> dragPaths = Json.Strs(c, "paths");

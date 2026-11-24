@@ -70,6 +70,14 @@ h._fromOwn = false;
 const again = h.own.slice(before).map(([c]) => c);
 assert.ok(again.includes('capture') && again.includes('dragStrip'));
 
+// A drag that came home with the button held starts in ours, and the service lets that button's release through.
+svc.sent.length = 0;
+h.send('dragStart', { drag: 'd', home: true, entries: [] });
+h.send('dragLocal', { paths: ['C:\\b.txt'] });
+h.send('dragStart', { drag: 'e', entries: [] }); // driven: the button isn't the service's capture's
+assert.deepStrictEqual(svc.sent.map(([c, a]) => [c, a.button]), [['unswallow', 0], ['unswallow', 0]]);
+assert.deepStrictEqual(h.own.slice(-3).map(([c]) => c), ['dragStart', 'dragLocal', 'dragStart'], 'the drags themselves are ours');
+
 // The service goes: the strip is our own capture's again.
 svc.connected = false;
 svc.emit('exit');

@@ -117,7 +117,8 @@ namespace TwinDesk.FullKvm
     {
         static readonly HashSet<string> Allowed = new HashSet<string>(new string[] {
             "ping", "keepalive", "kvmConfig", "screens", "capture", "place", "armReturn", "inject", "pen", "touch", "releaseAll", "watchRelease", "moveTo", "info",
-            "dragCross", "dragHold" }); // a file drag the user's helper caught on its strip (windows-helper/src/DragRelay.cs)
+            "dragCross", "dragHold", // a file drag the user's helper caught on its strip (windows-helper/src/DragRelay.cs)
+            "unswallow" }); // …and one that came home with the button held: its release goes through (route.js)
         // Kept and given again to an agent started on another desktop, in this order.
         static readonly string[] Replayed = new string[] { "kvmConfig", "armReturn", "capture" };
 

@@ -97,6 +97,10 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
       this._follow(cmd, args);
       return this.svc.send(cmd, args);
     }
+    // A drag that came home with the button held starts in ours (Windows' DragSession, LocalDrag), but the
+    // button is held in the service's capture, which swallows its release (a press made while capturing):
+    // let it through there, or Explorer's drag here never ends (stuck in the middle of the screen).
+    if (this.viaService && process.platform === 'win32' && (cmd === 'dragLocal' || (cmd === 'dragStart' && args.home))) this.svc.send('unswallow', { button: 0 });
     return super.send(cmd, args);
   }
 
