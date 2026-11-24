@@ -159,12 +159,17 @@ namespace MacShare
             Native.POINT p;
             Native.GetCursorPos(out p);
             Rectangle m = Screen.FromPoint(new Point(p.x, p.y)).Bounds;
+            // The nearest of them to the pointer: on a monitor with two (Ryzen9's right one: the Mac to the
+            // right, AMXLPDL above) the first in the list took the strip, and a drag to the other never got one.
             string side = null;
+            int nearest = int.MaxValue;
             foreach (string s in sides)
             {
                 Point probe = s == "left" ? new Point(m.Left, p.y) : s == "right" ? new Point(m.Right - 1, p.y)
                     : s == "top" ? new Point(p.x, m.Top) : new Point(p.x, m.Bottom - 1);
-                if (Screens.OnOuterEdge(probe.X, probe.Y, s)) { side = s; break; }
+                if (!Screens.OnOuterEdge(probe.X, probe.Y, s)) continue;
+                int d = s == "left" ? p.x - m.Left : s == "right" ? m.Right - 1 - p.x : s == "top" ? p.y - m.Top : m.Bottom - 1 - p.y;
+                if (d < nearest) { nearest = d; side = s; }
             }
             if (side == null) { if (Visible) Hide(); return; }
             if (edge.LastCross != seenCross) { seenCross = edge.LastCross; away = false; }

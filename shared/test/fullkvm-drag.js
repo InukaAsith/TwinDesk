@@ -16,9 +16,11 @@ class Base extends EventEmitter {
 }
 const Helper = require('../fullkvm/route.js')(Base);
 
+(async () => {
 const h = new Helper();
 h.svc.stop();
-const svc = Object.assign(new EventEmitter(), { connected: true, sent: [], send(cmd, args) { this.sent.push([cmd, args]); return true; }, request(cmd, args) { this.sent.push([cmd, args]); return Promise.resolve({ ok: true }); } });
+let answer = { ok: true };
+const svc = Object.assign(new EventEmitter(), { connected: true, sent: [], send(cmd, args) { this.sent.push([cmd, args]); return true; }, request(cmd, args) { this.sent.push([cmd, args]); return Promise.resolve(answer); } });
 // The route's own handlers, on our fake service link.
 for (const ev of ['ready', 'event', 'exit']) for (const fn of h.svc.listeners(ev)) svc.on(ev, fn);
 h.svc.removeAllListeners();
@@ -72,11 +74,21 @@ assert.ok(again.includes('capture') && again.includes('dragStrip'));
 
 // A drag that came home with the button held starts in ours, and the service lets that button's release through.
 svc.sent.length = 0;
+answer = { ok: true, held: true };
 h.send('dragStart', { drag: 'd', home: true, entries: [] });
 h.send('dragLocal', { paths: ['C:\\b.txt'] });
 h.send('dragStart', { drag: 'e', entries: [] }); // driven: the button isn't the service's capture's
 assert.deepStrictEqual(svc.sent.map(([c, a]) => [c, a.button]), [['unswallow', 0], ['unswallow', 0]]);
 assert.deepStrictEqual(h.own.slice(-3).map(([c]) => c), ['dragStart', 'dragLocal', 'dragStart'], 'the drags themselves are ours');
+assert.strictEqual(h.own.slice(-3)[0][1].svc, true, 'ours doesn’t ask its own capture about the button');
+// Already let go before the drag came: it drops at the pointer (dragDrop), not at the next click.
+answer = { ok: true, held: false };
+h.send('dragStart', { drag: 'f', home: true, entries: [] });
+await new Promise((r) => setImmediate(r));
+assert.deepStrictEqual(h.own.slice(-2).map(([c, a]) => [c, a.drag]), [['dragStart', 'f'], ['dragDrop', 'f']]);
+// The service link writes only its list: these were missing, so none of them ever got to the service.
+const { KVM } = require('../fullkvm/svc-link.js');
+for (const c of ['dragCross', 'dragHold', 'unswallow']) assert.ok(KVM.has(c), c + ' goes down the pipe');
 
 // The service goes: the strip is our own capture's again.
 svc.connected = false;
@@ -89,3 +101,4 @@ h._fromOwn = false;
 assert.strictEqual(svc.sent.length, sentBefore, 'no service: nothing sent on');
 
 console.log('fullkvm-drag: ok');
+})().catch((e) => { console.error(e); process.exit(1); });

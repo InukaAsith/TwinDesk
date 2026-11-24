@@ -337,7 +337,7 @@ namespace MacShare
                     case "crossingWatch": capture.WatchCrossingFlags(); break; // hold-to-cross (Crossing.cs)
                     case "dragStrip": if (dragRelay != null) dragRelay.Update(c); break; // Full KVM: the service's capture (DragRelay.cs)
                     case "dragHold": capture.HoldReturn = Json.Bool(c, "on", false); break; // Full KVM: a drag on the way back, caught by the user's helper
-                    case "unswallow": capture.Unswallow((int)Json.Num(c, "button", 0)); break; // Full KVM: a drag that came home starts in the user's helper (dragStart home, dragLocal): its button's release must reach it
+                    case "unswallow": c["held"] = capture.Unswallow((int)Json.Num(c, "button", 0)); break; // Full KVM: a drag that came home starts in the user's helper (dragStart home, dragLocal): its button's release must reach it; held false: already let go
                     case "dragCross": // Full KVM: a file drag the user's helper caught on its strip: our capture crosses with it
                         {
                             List<string> dragPaths = Json.Strs(c, "paths");
@@ -460,7 +460,10 @@ namespace MacShare
                         if (nl != null) foreach (object o in nl) dnames.Add(Convert.ToString(o));
                         string into = Json.Str(c, "into", ""); // Paste = drop onto this folder
                         if (into != "") drag.DropDir = into;
-                        if (Json.Bool(c, "home", false)) capture.Unswallow(0); // came home with our button held: its release drops it
+                        // Came home with our button held: its release drops it. Already let go (our capture swallowed
+                        // the release before the drag got here): it drops now, at the pointer, not at the next click.
+                        // svc: Full KVM, the service's capture has the button and route.js asks it instead.
+                        if (Json.Bool(c, "home", false) && !Json.Bool(c, "svc", false) && !capture.Unswallow(0)) drag.DropRequested = true;
                         drag.Start(dnames);
                         break;
                     case "dragLocal": // our own files, dragged back home with the button still held: Explorer's kind of drag of them
@@ -607,6 +610,7 @@ namespace MacShare
             reply["ok"] = error == null;
             if (error != null) reply["error"] = error;
             if (cmd == "info") { reply["cursor"] = c["cursor"]; reply["capturing"] = c["capturing"]; }
+            if (cmd == "unswallow" && c.ContainsKey("held")) reply["held"] = c["held"];
             if (cmd == "displays") reply["displays"] = c["displays"];
             if (cmd == "caps" && c.ContainsKey("on")) reply["on"] = c["on"];
             if (cmd == "lane" && c.ContainsKey("port")) reply["port"] = c["port"];

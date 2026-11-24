@@ -100,7 +100,17 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
     // A drag that came home with the button held starts in ours (Windows' DragSession, LocalDrag), but the
     // button is held in the service's capture, which swallows its release (a press made while capturing):
     // let it through there, or Explorer's drag here never ends (stuck in the middle of the screen).
-    if (this.viaService && process.platform === 'win32' && (cmd === 'dragLocal' || (cmd === 'dragStart' && args.home))) this.svc.send('unswallow', { button: 0 });
+    if (this.viaService && process.platform === 'win32' && (cmd === 'dragLocal' || (cmd === 'dragStart' && args.home))) {
+      const sent = super.send(cmd, cmd === 'dragStart' ? { ...args, svc: true } : args); // svc: the button is the service's, not ours to ask
+      // Already let go (before the drag got here): nothing would drop it, and it waited for a click. It drops now.
+      this.svc.request('unswallow', { button: 0 }).then((r) => {
+        if (r && r.held === false && cmd === 'dragStart') {
+          console.log('[drag] the button was let go before the drag came: it drops at the pointer');
+          super.send('dragDrop', { drag: args.drag });
+        }
+      }, (e) => console.log('[drag] the Full KVM service didn’t let the button go: ' + e.message));
+      return sent;
+    }
     return super.send(cmd, args);
   }
 

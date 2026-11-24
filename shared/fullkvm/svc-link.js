@@ -13,7 +13,8 @@ const net = require('net');
 const fs = require('fs');
 const { EventEmitter } = require('events');
 
-const KVM = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture', 'place', 'armReturn', 'inject', 'pen', 'touch', 'releaseAll', 'watchRelease', 'moveTo', 'info']);
+const KVM = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture', 'place', 'armReturn', 'inject', 'pen', 'touch', 'releaseAll', 'watchRelease', 'moveTo', 'info',
+  'dragCross', 'dragHold', 'unswallow']); // Windows: file drags our helper's strip catches (shared/fullkvm/route.js); _write sends nothing else
 const RETRY_MS = 2000;
 const REQUEST_MS = 3000;
 

@@ -307,7 +307,8 @@ namespace MacShare
 
         // A button pressed while capturing has its release swallowed at home (Stop). A drag that came
         // home with it (dragStart home, dragLocal) is dropped by that release: let it through.
-        public void Unswallow(int button) { swallowButtons.Remove(button); }
+        // True when it was still held (its release now goes through); false: already let go (and swallowed).
+        public bool Unswallow(int button) { return swallowButtons.Remove(button); }
 
         // A file drag caught on the way back (DropEdge.cs, while driven): the input goes home with its
         // files, `return {offset, drag:{paths}}`.
