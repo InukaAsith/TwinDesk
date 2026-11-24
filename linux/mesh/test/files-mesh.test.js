@@ -31,6 +31,7 @@ Module._load = function (id, ...args) {
 };
 const FileRecv = require('../../filerecv.js');
 Module._load = load;
+require('../../fm.js').showItems = () => {}; // no file manager window popping up on this desktop for a test's folder
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -97,4 +98,5 @@ test('a file from a device that is not selected arrives, and the answers go to i
   }
 });
 
-runTests(tests).finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true })); // runTests exits the process: no .finally after it
+runTests(tests);

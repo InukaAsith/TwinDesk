@@ -35,6 +35,7 @@ const FileDrop = require('../../filedrop.js');
 const MeshFileClip = meshFileClip(require('../../fclip.js'));
 const fm = require('../../fm.js');
 Module._load = load;
+require('../../fm.js').showItems = () => {}; // no file manager window popping up on this desktop for a test's folder
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -112,4 +113,5 @@ test('a copy made on a device that is not selected is pasted from it', async () 
   }
 });
 
-runTests(tests).finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true })); // runTests exits the process: no .finally after it
+runTests(tests);

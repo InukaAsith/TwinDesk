@@ -33,6 +33,7 @@ Module._load = function (id, ...args) {
 const FileRecv = require('../../filerecv.js');
 const FileDrop = require('../../filedrop.js');
 Module._load = load;
+require('../../fm.js').showItems = () => {}; // no file manager window popping up on this desktop for a test's folder
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -100,4 +101,5 @@ test('a send goes on when the pointer crosses to another device mid-send', async
   }
 });
 
-runTests(tests).finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true })); // runTests exits the process: no .finally after it
+runTests(tests);

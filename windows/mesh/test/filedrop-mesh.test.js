@@ -101,4 +101,5 @@ test('a send goes on when the pointer crosses to another device mid-send', async
   }
 });
 
-runTests(tests).finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true })); // runTests exits the process: no .finally after it
+runTests(tests);

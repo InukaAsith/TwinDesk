@@ -98,4 +98,5 @@ test('a file from a device that is not selected arrives, and the answers go to i
   }
 });
 
-runTests(tests).finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true })); // runTests exits the process: no .finally after it
+runTests(tests);
