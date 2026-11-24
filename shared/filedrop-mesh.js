@@ -140,8 +140,10 @@ class FileDropSet {
   drop(...args) { const u = this.selected; if (u) u.drop(...args); }
   plan(paths) { return this.FileDrop.prototype.plan(paths); }
 
-  prepareDrag(paths) {
-    this.dragUnit = this.selected; // kvm.js selected the device it crosses to
+  // to: the device (a drag going back home to the device that drives us); else the selected one, which
+  // kvm.js selected as the one it crosses to.
+  prepareDrag(paths, to) {
+    this.dragUnit = to ? this.unit(to) : this.selected;
     return this.dragUnit ? this.dragUnit.prepareDrag(paths) : null;
   }
 

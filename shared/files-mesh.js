@@ -82,6 +82,10 @@ class FilesSet {
       onRelease: () => { for (const u of set._pointer()) u.dragRecv.onRelease(); },
       onHome: () => { for (const u of set.units) u.dragRecv.onHome(); },
       get dragging() { return set.units.some((u) => u.dragRecv.dragging); },
+      // The drag going on (kvm.js: it goes back home with the pointer, still held).
+      get cur() { const u = set.units.find((x) => x.dragRecv.dragging); return u ? u.dragRecv.cur : null; },
+      // The pointer came home with that device's files held in a drag: its drag.start follows (kvm.home drag).
+      expectHome: (from) => { const u = set.byId.get(from); if (u && u.dragRecv.expectHome) u.dragRecv.expectHome(); },
       cancel: (...args) => { for (const u of set.units) if (u.dragRecv.dragging) u.dragRecv.cancel(...args); },
       get last() { return set._newest((u) => u.dragRecv); },
       set last(v) { for (const u of set.units) u.dragRecv.last = v; },
