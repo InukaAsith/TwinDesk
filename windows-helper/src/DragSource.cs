@@ -64,6 +64,42 @@ namespace MacShare
             return inside;
         }
 
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
+        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+
+        // The window the press that starts a drag goes to covers the whole work area of the pointer's screen,
+        // nearly invisible, for that instant (it goes out of the way at its mouse-down): a 32 px one under the
+        // pointer missed it, the pointer moving on with the driver's hand, or another top-most window there.
+        public static void Cover(Form f)
+        {
+            Point cur = Clear();
+            f.Bounds = Screen.FromPoint(cur).WorkingArea;
+        }
+
+        // On top again (a popup shown since is top-most too), then the press.
+        public static void Press(Form f)
+        {
+            SetWindowPos(f.Handle, new IntPtr(-1) /* HWND_TOPMOST */, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE, NOMOVE, NOACTIVATE */);
+            Native2.Button(true);
+        }
+
+        // What Windows has under the pointer (the log, when the press didn't arrive).
+        public static string Under()
+        {
+            Point p = Cursor.Position;
+            IntPtr w = GetAncestor(WindowFromPoint(new Native.POINT(p.X, p.Y)), 2); // GA_ROOT
+            StringBuilder cls = new StringBuilder(128);
+            GetClassName(w, cls, cls.Capacity);
+            uint pid;
+            GetWindowThreadProcessId(w, out pid);
+            string proc = "?";
+            try { proc = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch (Exception) { /* gone, or not ours to open */ }
+            return cls + " of " + proc + " (" + pid + ") at " + p.X + "," + p.Y;
+        }
+
         public static void Begin() { System.Threading.Interlocked.Increment(ref running); }
         public static void End() { System.Threading.Interlocked.Decrement(ref running); } // LocalDrag's too
 
@@ -97,8 +133,7 @@ namespace MacShare
             f.TopMost = true;
             f.StartPosition = FormStartPosition.Manual;
             f.Opacity = 0.02; // layered with alpha > 0: still gets the click
-            Point cur = DragSession.Clear();
-            f.Bounds = new Rectangle(cur.X - 16, cur.Y - 16, 32, 32);
+            DragSession.Cover(f);
             bool began = false;
             f.MouseDown += delegate (object o, MouseEventArgs e)
             {
@@ -110,10 +145,10 @@ namespace MacShare
             };
             f.Shown += delegate
             {
-                Native2.Button(true);
+                DragSession.Press(f);
                 System.Windows.Forms.Timer t = new System.Windows.Forms.Timer();
                 t.Interval = 1500;
-                t.Tick += delegate { t.Stop(); if (!began) { began = true; Console.Error.WriteLine("[drag] the press that starts the drag here didn't reach it in 1.5 s (another window under the pointer?)"); Event("dragState", "result", "failed", 0); finished = true; f.Close(); } };
+                t.Tick += delegate { t.Stop(); if (!began) { began = true; Native2.Button(false); Console.Error.WriteLine("[drag] the press that starts the drag here didn't reach it in 1.5 s: under the pointer is " + DragSession.Under()); Event("dragState", "result", "failed", 0); finished = true; f.Close(); } };
                 t.Start();
             };
             Application.Run(f);
@@ -254,8 +289,7 @@ namespace MacShare
             f.TopMost = true;
             f.StartPosition = FormStartPosition.Manual;
             f.Opacity = 0.02; // layered with alpha > 0: still gets the click
-            Point cur = DragSession.Clear();
-            f.Bounds = new Rectangle(cur.X - 16, cur.Y - 16, 32, 32);
+            DragSession.Cover(f);
             bool began = false;
             f.MouseDown += delegate (object o, MouseEventArgs e)
             {
@@ -269,10 +303,10 @@ namespace MacShare
             };
             f.Shown += delegate
             {
-                Native2.Button(true);
+                DragSession.Press(f);
                 System.Windows.Forms.Timer t = new System.Windows.Forms.Timer();
                 t.Interval = 1500;
-                t.Tick += delegate { t.Stop(); if (!began) { began = true; Native2.Button(false); Done(emit, id, "failed"); f.Close(); } };
+                t.Tick += delegate { t.Stop(); if (!began) { began = true; Native2.Button(false); Console.Error.WriteLine("[drag] the press that starts our drag here didn't reach it in 1.5 s: under the pointer is " + DragSession.Under()); Done(emit, id, "failed"); f.Close(); } };
                 t.Start();
             };
             Application.Run(f);
