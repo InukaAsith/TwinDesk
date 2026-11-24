@@ -152,6 +152,16 @@ void wl_touch(void);
 int wl_active(void);
 void wl_position(int *x, int *y);
 void wl_shutdown(void);
+const char *wl_drag_cross(const char *pathsText, int side, int back); // a caught file drag crosses (wlstrip.c, `dragCross`)
+void wl_strip_caught(const char *pathsText, int side, int back);
+// wlstrip.c: the drag strip on Wayland, an XWayland dock window
+int wlstrip_available(void);
+int wlstrip_fd(void);
+void wlstrip_show(int x, int y, int w, int h, int side, int back, int fromMain);
+void wlstrip_hide(void);
+void wlstrip_read(void);
+void wlstrip_tick(void);
+void wlstrip_shutdown(void);
 int wl_devices(void);
 
 // ---- pen.c: a phone's stylus as a uinput tablet pen (both backends; wl: on Wayland) ----

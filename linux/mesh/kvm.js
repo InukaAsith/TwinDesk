@@ -386,6 +386,13 @@ class Kvm {
       this._note('Cursor sharing is off over Bluetooth');
     }
     const f = this.settings.files;
+    const dragSides = sides.filter((s) => this._dragsOut(this.edges[s]));
+    const dragKey = dragSides.join() + '|' + sides.join();
+    if (dragKey !== this.dragKey) {
+      this.dragKey = dragKey;
+      console.log('[drag] the edge strip: ' + (dragSides.length ? dragSides.map((s) => s + ' (' + this._dragName(this.edges[s]) + ')').join(', ')
+        : 'none (' + (!sides.length ? 'no side leads to a device' : !f.edgeDrag ? 'Drag across the edge is off here' : !f.dropToMac ? 'Send files is off here' : 'no device there takes drags') + ')'));
+    }
     this.helper.send('kvmConfig', {
       side: sides[0] || null, // the first side also drives the file-drag strip (DropEdge)
       sides,
@@ -403,7 +410,10 @@ class Kvm {
       dwellMs: P.KVM_EDGE_DWELL_MS,
       // the same sides for linux-helper, whose JSON reader skips arrays: its -multi build reads this one
       sideList: sides.join(','),
-      dragFiles: this._dragsOut(sides.length ? this.edges[sides[0]] : null), // the edge strip that picks up file drags (X11)
+      // The edge strip that picks up file drags (drop.c on X11, wlstrip.c on Wayland): our own switches; at
+      // home on the sides whose device takes them (dragSideList), and on the way back when driven.
+      dragFiles: !!(f.edgeDrag && f.dropToMac),
+      dragSideList: dragSides.join(','),
       shortcuts: !!f.shortcuts && this.hub.bus.connectedIds().length > 0, // the copy/paste-files shortcuts at home (fclip.js), while connected
       copyKeys: f.copyKeys,
       pasteKeys: f.pasteKeys,

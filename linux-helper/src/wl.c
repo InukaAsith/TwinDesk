@@ -65,6 +65,10 @@ static double speed = 1.0;
 static int accelFlat;          // the desktop's pointer profile is flat (no acceleration)
 static double accelSpeed;       // the desktop's pointer speed, libinput's -1..1
 static int padTap = 1, padNatural; // the desktop's touchpad: tap to click, natural scrolling (kvmConfig)
+// Drags of files across the edge (wlstrip.c): kvmConfig dragFiles (our switches), dragSideList (the
+// sides whose device takes drags; absent: every watched side).
+static int dragFiles = 1, dragSides[4], nDragSides = -1;
+static void strip_tick(void);
 
 // state
 static double px, py;                 // where we think the pointer is (logical px)
@@ -535,6 +539,8 @@ void wl_config(const JObj *c) {
   else { hotkeyEvs[0] = 100; hotkeyEvs[1] = -1; }
   driveOther = jbool(c, "driveOther", 0);
   edgeKeyboard = jbool(c, "keyboard", 1);
+  dragFiles = jbool(c, "dragFiles", 1);
+  nDragSides = jhas(c, "dragSideList") ? parse_side_list(jstr(c, "dragSideList", ""), SIDE_NONE, dragSides) : -1;
   accelFlat = !strcmp(jstr(c, "accelProfile", "adaptive"), "flat");
   accelSpeed = fmax(-1, fmin(1, jnum(c, "accelSpeed", 0)));
   padTap = jbool(c, "padTap", 1);
@@ -964,6 +970,8 @@ void wl_read(struct pollfd *p, int n) {
 void wl_tick(void) {
   double now = now_ms();
   shortcut_tick();
+  strip_tick();
+  wlstrip_tick();
   if (now - lastScan > 3000) scan(); // hot-plugged devices
   if (wantCapture && ((!any(localKeys, 256) && !any(localButtons, 8)) || now - wantSince > 1000)) really_begin(wantMouse, wantKeys);
   if (capturing && now - lastCmd > deadmanMs) {
@@ -976,7 +984,124 @@ void wl_tick(void) {
   }
 }
 
+// ---- file drags across the edge (wlstrip.c) ----
+
+static int stripOn, stripX, stripY, stripW, stripH, stripSideNow, stripBackNow;
+
+// The nearest of these sides to the pointer whose edge, on the pointer's monitor, is an outer one.
+static int nearest_side(const int *list, int n, int mx, int my, int mw, int mh) {
+  int best = SIDE_NONE;
+  double bestD = 1e9;
+  for (int i = 0; i < n; i++) {
+    int s = list[i];
+    int ex = s == SIDE_LEFT ? mx : s == SIDE_RIGHT ? mx + mw - 1 : (int)px;
+    int ey = s == SIDE_TOP ? my : s == SIDE_BOTTOM ? my + mh - 1 : (int)py;
+    if (!screens_on_outer_edge(ex, ey, s)) continue;
+    double d = s == SIDE_LEFT ? px - mx : s == SIDE_RIGHT ? mx + mw - 1 - px : s == SIDE_TOP ? py - my : my + mh - 1 - py;
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  return best;
+}
+
+// While the left button is held at home near an edge whose device takes drags (or the driver's, on the
+// way back while driven): the strip there. Shown here when this helper has XWayland, else said to main
+// (`dragStrip`: the service's helper, which main relays to the user's own).
+static void strip_tick(void) {
+  int s = SIDE_NONE, back = 0, mx, my, mw, mh;
+  if (!capturing && dragFiles && screens_monitor((int)px, (int)py, &mx, &my, &mw, &mh)) {
+    if (retArmed && injButtons[0]) { back = 1; s = nearest_side(retSides, nRetSides, mx, my, mw, mh); }
+    else if (driveOther && localButtons[0]) s = nearest_side(nDragSides >= 0 ? dragSides : edgeSides, nDragSides >= 0 ? nDragSides : nEdgeSides, mx, my, mw, mh);
+  }
+  int on = s != SIDE_NONE, x = 0, y = 0, w = 0, h = 0;
+  if (on) {
+    x = s == SIDE_RIGHT ? mx + mw - 2 : mx; y = s == SIDE_BOTTOM ? my + mh - 2 : my;
+    w = s == SIDE_LEFT || s == SIDE_RIGHT ? 2 : mw; h = s == SIDE_TOP || s == SIDE_BOTTOM ? 2 : mh;
+  }
+  if (on == stripOn && (!on || (x == stripX && y == stripY && w == stripW && h == stripH && s == stripSideNow && back == stripBackNow))) return;
+  stripOn = on; stripX = x; stripY = y; stripW = w; stripH = h; stripSideNow = s; stripBackNow = back;
+  if (wlstrip_available()) {
+    if (on) wlstrip_show(x, y, w, h, s, back, 0);
+    else wlstrip_hide();
+  }
+  JOut o;
+  jo_begin(&o);
+  jo_str(&o, "event", "dragStrip");
+  jo_bool(&o, "on", on);
+  if (on) {
+    jo_num(&o, "x", x); jo_num(&o, "y", y); jo_num(&o, "w", w); jo_num(&o, "h", h);
+    jo_str(&o, "side", side_name(s));
+    jo_bool(&o, "back", back);
+  }
+  emit(jo_end(&o));
+}
+
+// Paths one per line → a JSON array (malloc'd); n: how many.
+static char *paths_json(const char *text, int *n) {
+  size_t cap = strlen(text) * 2 + 16, len = 0;
+  char *out = malloc(cap);
+  *n = 0;
+  out[len++] = '[';
+  const char *p = text;
+  while (*p) {
+    const char *e = strchr(p, '\n');
+    if (!e) e = p + strlen(p);
+    if (e > p) {
+      if (*n) out[len++] = ',';
+      out[len++] = '"';
+      for (const char *q = p; q < e && len + 4 < cap; q++) {
+        if (*q == '"' || *q == '\\') out[len++] = '\\';
+        out[len++] = *q;
+      }
+      out[len++] = '"';
+      (*n)++;
+    }
+    p = *e ? e + 1 : e;
+  }
+  out[len++] = ']';
+  out[len] = 0;
+  return out;
+}
+
+// A file drag caught on the strip (wlstrip.c here, or the user's helper's: the `dragCross` command):
+// home, it crosses with the files (`edge {side, offset, drag:{paths}}`): the compositor's drag ends on
+// the strip (our virtual mouse lets the button go there, where the drop does nothing), the real button,
+// grabbed now, goes over and drops them there. The way back (driven): the input goes home with them
+// (`return {…, drag}`), the driver's button that holds the drag here let go on the strip.
+const char *wl_drag_cross(const char *text, int s, int back) {
+  int n = 0;
+  char *json = paths_json(text, &n);
+  const char *why = !n ? "no paths" : s == SIDE_NONE ? "no side"
+    : back ? (retArmed ? NULL : "not driven any more")
+    : capturing ? "already capturing" : !driveOther ? "crossing to the other device is off now" : !localButtons[0] ? "the button was let go already" : NULL;
+  fprintf(stderr, "[drag] %s: %s\n", back ? "back home" : "crossing", why ? why : "with the files");
+  if (why) { free(json); return why; } // why not: the command's error (route.js logs it)
+  size_t cap = strlen(json) + 200;
+  char *line = malloc(cap);
+  double offset = round(screens_offset((int)px, (int)py, s) * 10000) / 10000;
+  if (back) {
+    retArmed = 0;
+    memset(retPushBy, 0, sizeof retPushBy);
+    lastCross = now_ms();
+    snprintf(line, cap, "{\"event\":\"return\",\"side\":\"%s\",\"offset\":%.4f,\"drag\":{\"paths\":%s}}", side_name(s), offset, json);
+    emit(line);
+    inj_button(0, 0);
+  } else {
+    inj_button(0, 1); // the compositor's button, from our virtual mouse: down and up, so its drag drops on the strip
+    inj_button(0, 0);
+    really_begin(1, edgeKeyboard);
+    sentButtons[0] = 1; // the real button is held: its release goes over and drops the files there
+    snprintf(line, cap, "{\"event\":\"edge\",\"side\":\"%s\",\"offset\":%.4f,\"drag\":{\"paths\":%s}}", side_name(s), offset, json);
+    emit(line);
+  }
+  free(line);
+  free(json);
+  return NULL;
+}
+
+void wl_strip_caught(const char *text, int s, int back) { wl_drag_cross(text, s, back); }
+
 void wl_shutdown(void) {
+  wlstrip_shutdown();
   if (capturing) wl_capture_stop(SIDE_NONE, 0, 0);
   wl_release_all();
   grab_all(0);

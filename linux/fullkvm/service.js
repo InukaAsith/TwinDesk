@@ -30,7 +30,8 @@ const BIN_ONE = path.join(ROOT, 'linux-helper', 'bin', 'macshare-linuxhelper');
 const SEAT_MS = 1000;
 const MAX_LINE = 256 * 1024;
 // The helper's mouse-and-keyboard commands (linux-helper/src/main.c, its uinput branch).
-const ALLOWED = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture', 'place', 'armReturn', 'inject', 'pen', 'touch', 'releaseAll', 'watchRelease', 'moveTo', 'info']);
+const ALLOWED = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture', 'place', 'armReturn', 'inject', 'pen', 'touch', 'releaseAll', 'watchRelease', 'moveTo', 'info',
+  'dragCross']); // a file drag the user's helper caught on its strip (linux-helper/src/wlstrip.c)
 
 const log = (...a) => console.log('[fullkvm]', ...a);
 

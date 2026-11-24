@@ -35,6 +35,8 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
       this.emit('ready'); // kvm.js and main.js send their config and screens again: to the service now
     });
     this.svc.on('event', (name, msg) => {
+      // Linux (Wayland): the service's helper wants the drag strip, which only ours can show (wlstrip.c, XWayland).
+      if (name === 'dragStrip') { if (process.platform === 'linux' && this.proc) super.send('dragStrip', msg); return; }
       // The service's capture began (an edge) or the input went home: our strip waits until the pointer has left the edge.
       if (name === 'edge') this._strip({ capturing: true, cross: this.strip.cross + 1 });
       else if (name === 'return') this._strip({ cross: this.strip.cross + 1 });

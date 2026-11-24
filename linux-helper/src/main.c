@@ -126,6 +126,11 @@ static void dispatch(const char *line) {
       wl_watch_release(!jbool(c, "off", 0));
     } else if (!strcmp(cmd, "moveTo")) {
       wl_move_to((int)jnum(c, "x", 0), (int)jnum(c, "y", 0));
+    } else if (!strcmp(cmd, "dragStrip")) { // Full KVM: the service's helper wants the strip; we have the X display (wlstrip.c)
+      if (jbool(c, "on", 0) && wlstrip_available()) wlstrip_show((int)jnum(c, "x", 0), (int)jnum(c, "y", 0), (int)jnum(c, "w", 2), (int)jnum(c, "h", 2), side_of(jstr(c, "side", NULL)), jbool(c, "back", 0), 1);
+      else wlstrip_hide();
+    } else if (!strcmp(cmd, "dragCross")) { // Full KVM: the user's helper caught a drag on its strip: cross with it
+      error = wl_drag_cross(jstr(c, "pathsText", ""), side_of(jstr(c, "side", NULL)), jbool(c, "back", 0));
     } else if (!strcmp(cmd, "info")) {
       int x, y;
       wl_position(&x, &y);
@@ -300,7 +305,10 @@ static int run_wayland(void) {
     int lf = n;
     p[n++] = (struct pollfd){ lane_fd(), POLLIN, 0 };
 #endif
+    int xf = wlstrip_fd(); // the drag strip's XWayland connection, once it's open
+    if (xf >= 0) p[n++] = (struct pollfd){ xf, POLLIN, 0 };
     poll(p, (nfds_t)n, 20);
+    wlstrip_read();
     if (p[0].revents & (POLLIN | POLLHUP | POLLERR)) read_stdin();
 #ifdef TDFAST
     wl_read(p + 1, lf - 1);
