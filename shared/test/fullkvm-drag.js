@@ -18,7 +18,7 @@ const Helper = require('../fullkvm/route.js')(Base);
 
 const h = new Helper();
 h.svc.stop();
-const svc = Object.assign(new EventEmitter(), { connected: true, sent: [], send(cmd, args) { this.sent.push([cmd, args]); return true; } });
+const svc = Object.assign(new EventEmitter(), { connected: true, sent: [], send(cmd, args) { this.sent.push([cmd, args]); return true; }, request(cmd, args) { this.sent.push([cmd, args]); return Promise.resolve({ ok: true }); } });
 // The route's own handlers, on our fake service link.
 for (const ev of ['ready', 'event', 'exit']) for (const fn of h.svc.listeners(ev)) svc.on(ev, fn);
 h.svc.removeAllListeners();
@@ -49,6 +49,7 @@ h.emit('event', 'dragHold', { event: 'dragHold', on: true });
 h._fromOwn = false;
 assert.deepStrictEqual(svc.sent.map(([c]) => c), ['dragCross', 'dragHold']);
 assert.deepStrictEqual(svc.sent[0][1].paths, ['C:\\a.txt']);
+assert.ok(!('event' in svc.sent[0][1]), 'as a command, not an event');
 assert.deepStrictEqual(app, [], 'the app never hears them');
 
 // The service's capture crosses (with the drag): its edge goes to the app, our strip knows it captures.

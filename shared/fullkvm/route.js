@@ -117,7 +117,11 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
   // has them; the rest (Bluetooth, shortcuts) are ours as ever.
   emit(name, ...rest) {
     if (this._fromOwn && name === 'event' && TO_SERVICE.has(rest[0])) {
-      if (this.viaService) this.svc.send(rest[0], rest[1] || {}); // our strip caught a drag: the service's capture crosses with it
+      if (!this.viaService) return false;
+      const { event: _e, ...args } = rest[1] || {};
+      if (rest[0] === 'dragCross') { // our strip caught a drag: the service's capture crosses with it, or says why not
+        this.svc.request('dragCross', args).then(() => console.log('[drag] the Full KVM service crosses with it'), (e) => console.log('[drag] the Full KVM service didn’t cross: ' + e.message));
+      } else this.svc.send(rest[0], args);
       return false;
     }
     if (this._fromOwn && this.viaService && name === 'ready') { // ours started again while the service has them

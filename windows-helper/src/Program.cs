@@ -342,9 +342,14 @@ namespace MacShare
                             List<string> dragPaths = Json.Strs(c, "paths");
                             string dragSide = Json.Str(c, "side", null);
                             bool dragBack = Json.Bool(c, "back", false);
-                            bool dragOk = dragPaths != null && dragPaths.Count > 0 && dragSide != null && capture.DragFiles
-                                && (dragBack ? capture.ReturnStops().Contains(dragSide) : !capture.Capturing && localEdge.HomeSides().Contains(dragSide));
-                            if (!dragOk) { capture.HoldReturn = false; break; }
+                            // Why not, in the answer (route.js logs it) and here (our stderr reaches the app's log).
+                            string dragWhy = dragPaths == null || dragPaths.Count == 0 ? "no paths" : dragSide == null ? "no side"
+                                : !capture.DragFiles ? "file drags are off here"
+                                : dragBack ? (capture.ReturnStops().Contains(dragSide) ? null : "not driven through the " + dragSide + " edge")
+                                : capture.Capturing ? "already capturing"
+                                : !localEdge.HomeSides().Contains(dragSide) ? "the " + dragSide + " edge takes no drags (" + string.Join(",", localEdge.HomeSides().ToArray()) + ")" : null;
+                            Console.Error.WriteLine("[drag] agent: " + (dragWhy == null ? "crossing through the " + dragSide + " edge with " + dragPaths.Count + " item(s)" : "not crossing: " + dragWhy));
+                            if (dragWhy != null) { capture.HoldReturn = false; error = dragWhy; break; }
                             localEdge.Cross(new Point((int)Json.Num(c, "x", 0), (int)Json.Num(c, "y", 0)), dragSide, dragBack, dragPaths.ToArray());
                         }
                         break;

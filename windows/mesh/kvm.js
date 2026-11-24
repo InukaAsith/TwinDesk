@@ -395,9 +395,10 @@ class Kvm {
       doubleTapMs: P.DOUBLE_TAP_MS,
       cooldownMs: P.KVM_CROSS_COOLDOWN_MS,
       dwellMs: P.KVM_EDGE_DWELL_MS,
-      // The edge strip that picks up file drags (DropEdge.cs): on the sides whose device takes them. One
-      // flag for the first side alone turned it off everywhere when that device didn't take drags.
-      dragFiles: dragSides.length > 0,
+      // The edge strip that picks up file drags (DropEdge.cs): our own switches; at home on the sides whose
+      // device takes them (one flag for the first side alone turned it off everywhere), and on the way back
+      // when driven (a PC that drives nobody has no side, yet a drag goes back to its driver).
+      dragFiles: !!(this.settings.files.edgeDrag && this.settings.files.dropToMac),
       dragSides,
       gestures: k.gestures !== false, // Touchpad gestures go over as k.ge while capturing
       takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
