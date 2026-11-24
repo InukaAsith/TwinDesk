@@ -49,6 +49,21 @@ namespace MacShare
         // and after 1.5 s it 'failed'. Its way back is kvm.js's drag.back, not the strip).
         static int running;
         public static bool Running { get { return System.Threading.Thread.VolatileRead(ref running) > 0; } }
+        // Where the press that starts a drag here can land: the pointer, moved into the screen's work area when
+        // it came in over the taskbar or at the very edge (it does, from the device below or beside): there the
+        // taskbar, top-most too, took the press and the drag 'failed' (AMXLPDL, its taskbar at the bottom).
+        public static Point Clear()
+        {
+            Point cur = Cursor.Position;
+            Rectangle wa = Screen.FromPoint(cur).WorkingArea;
+            wa.Inflate(-24, -24);
+            Point inside = new Point(Math.Max(wa.Left, Math.Min(wa.Right - 1, cur.X)), Math.Max(wa.Top, Math.Min(wa.Bottom - 1, cur.Y)));
+            if (inside == cur) return cur;
+            Cursor.Position = inside;
+            Console.Error.WriteLine("[drag] the pointer came in at " + cur.X + "," + cur.Y + ", over the taskbar or the edge: the drag starts at " + inside.X + "," + inside.Y);
+            return inside;
+        }
+
         public static void Begin() { System.Threading.Interlocked.Increment(ref running); }
         public static void End() { System.Threading.Interlocked.Decrement(ref running); } // LocalDrag's too
 
@@ -82,7 +97,7 @@ namespace MacShare
             f.TopMost = true;
             f.StartPosition = FormStartPosition.Manual;
             f.Opacity = 0.02; // layered with alpha > 0: still gets the click
-            Point cur = Cursor.Position;
+            Point cur = DragSession.Clear();
             f.Bounds = new Rectangle(cur.X - 16, cur.Y - 16, 32, 32);
             bool began = false;
             f.MouseDown += delegate (object o, MouseEventArgs e)
@@ -239,7 +254,7 @@ namespace MacShare
             f.TopMost = true;
             f.StartPosition = FormStartPosition.Manual;
             f.Opacity = 0.02; // layered with alpha > 0: still gets the click
-            Point cur = Cursor.Position;
+            Point cur = DragSession.Clear();
             f.Bounds = new Rectangle(cur.X - 16, cur.Y - 16, 32, 32);
             bool began = false;
             f.MouseDown += delegate (object o, MouseEventArgs e)
