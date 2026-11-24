@@ -13,6 +13,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 
 namespace MacShare
@@ -81,7 +83,14 @@ namespace MacShare
 
     class DropEdge : Form
     {
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Native.POINT p);
+        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
+
         readonly IDragEdge edge;
+        bool looked; // what's under the pointer on the strip was logged, for this showing
+        string told = ""; // why there's no strip, as last logged (again only when it changes)
         readonly Timer timer = new Timer();
         const int STRIP = 3; // px
         bool taken; // a drag entered and is being handed to the Mac
@@ -140,6 +149,12 @@ namespace MacShare
             bool held = (Native.GetAsyncKeyState(0x01) & 0x8000) != 0;
             if (taken) return; // stays while Explorer's drag ends on it
             List<string> sides = back.Count > 0 ? back : edge.HomeSides();
+            if (held && !edge.Capturing)
+            {
+                string why = !edge.DragFiles ? "file drags are off here (Send files or Drag across the edge, or no device takes them)"
+                    : sides.Count == 0 ? "no side leads to a device that takes drags" : "";
+                if (why != told) { told = why; if (why != "") Console.Error.WriteLine("[drag] no strip: " + why); }
+            }
             if (!held || !edge.DragFiles || edge.Capturing || sides.Count == 0) { if (Visible) Hide(); return; }
             Native.POINT p;
             Native.GetCursorPos(out p);
@@ -163,7 +178,24 @@ namespace MacShare
                 : side == "top" ? new Rectangle(m.Left, m.Top, m.Width, STRIP)
                 : new Rectangle(m.Left, m.Bottom - STRIP, m.Width, STRIP);
             if (Bounds != r) Bounds = r;
-            if (!Visible) { Show(); Console.Error.WriteLine("[drag] strip on the " + side + " edge (" + (stripBack ? "the way back" : "out") + ")"); }
+            if (!Visible) { Show(); looked = false; Console.Error.WriteLine("[drag] strip on the " + side + " edge (" + (stripBack ? "the way back" : "out") + "), " + r.X + "," + r.Y + " " + r.Width + "x" + r.Height); }
+            else if (!looked && r.Contains(p.x, p.y)) Look(p);
+        }
+
+        // The pointer is on the strip and no drag came: what Windows has there (another window on top of
+        // it, the agent's or a top-most app's), once per showing.
+        void Look(Native.POINT p)
+        {
+            looked = true;
+            IntPtr w = GetAncestor(WindowFromPoint(p), 2); // GA_ROOT
+            if (w == Handle) { Console.Error.WriteLine("[drag] strip: the pointer is on it (" + p.x + "," + p.y + ")"); return; }
+            StringBuilder cls = new StringBuilder(128);
+            GetClassName(w, cls, cls.Capacity);
+            uint pid;
+            GetWindowThreadProcessId(w, out pid);
+            string proc = "?";
+            try { proc = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch (Exception) { /* gone, or not ours to open */ }
+            Console.Error.WriteLine("[drag] strip: under the pointer (" + p.x + "," + p.y + ") is " + cls + " of " + proc + " (" + pid + "), not the strip");
         }
 
         void OnDragEnter(object sender, DragEventArgs e)

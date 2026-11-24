@@ -374,6 +374,13 @@ class Kvm {
       this._note('Cursor sharing is off over Bluetooth');
     }
     const dragSides = sides.filter((s) => this._dragsOut(this.edges[s]));
+    const dragKey = dragSides.join() + '|' + sides.join();
+    if (dragKey !== this.dragKey) {
+      this.dragKey = dragKey;
+      const f = this.settings.files;
+      console.log('[drag] the edge strip: ' + (dragSides.length ? dragSides.map((s) => s + ' (' + this._dragName(this.edges[s]) + ')').join(', ')
+        : 'none (' + (!sides.length ? 'no side leads to a device' : !f.edgeDrag ? 'Drag across the edge is off here' : !f.dropToMac ? 'Send files is off here' : 'no device there takes drags') + ')'));
+    }
     this.helper.send('kvmConfig', {
       side: sides[0] || null,
       sides,
