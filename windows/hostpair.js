@@ -44,7 +44,7 @@ class Pairing extends EventEmitter {
     this.returnGeneration = (this.returnGeneration || 0) + 1;
     this.returnPhone = null; // persistence must succeed before automatic return is authorized
     try {
-      store.write('phone-return.json', id ? { id } : null);
+      if (!store.write('phone-return.json', id ? { id } : null)) throw new Error('not saved'); // store.js logs why
       this.returnPhone = id;
       this.returnStorageFailed = false;
       return true;
