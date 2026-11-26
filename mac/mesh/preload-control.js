@@ -37,6 +37,9 @@ api.deckApps = () => ipcRenderer.invoke('deckApps'); // the Deck page's app pick
 api.deckState = () => ipcRenderer.invoke('deckState'); // its sound, Bluetooth and display pickers
 api.deckPick = (o) => ipcRenderer.invoke('deckPick', o); // a file, folder or script for a tile
 api.deckRun = (action) => ipcRenderer.invoke('deckRun', action); // Try: {ok, why}
+api.debugAsk = (to, op, args) => ipcRenderer.invoke('debugAsk', to, op, args); // Debug: ask a device of the mesh (or 'self')
+api.setDebug = (o) => ipcRenderer.invoke('setDebug', o); // Debug › This computer: who may debug it, Allow any command
+api.debugShow = (p) => ipcRenderer.invoke('debugShow', p); // Debug: show a kept log or screenshot in its folder
 api.qrPair = () => ipcRenderer.invoke('qrPair'); // Connection: pair a phone with a QR code (its link)
 api.phoneListCameras = () => ipcRenderer.invoke('phoneListCameras');
 

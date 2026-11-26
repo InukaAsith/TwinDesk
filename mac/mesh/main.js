@@ -88,6 +88,7 @@ const { NetLink } = require('../../shared/netlink.js');
 const { aboutInfo } = require('../../shared/about.js');
 const { PeerLogs } = require('../../shared/peerlogs.js');
 const { MeshShadow } = require('../../shared/mesh-shadow.js');
+const { startDebug } = require('../../shared/debug-start.js');
 
 let win = null;
 let tray = null;
@@ -100,6 +101,12 @@ let startHidden = process.argv.includes('--hidden');
 // peer: the SELECTED device for the one-to-one features; phonePeer: the phone, wherever it is selected.
 let autoJoin, settings, id, server, pairing, discovery, links, hub, mesh, layoutSync, peer, phonePeer, svc, actions, pairSync, updates;
 let web = null; // TwinDesk Web (shared/web/webwire.js), beside the mesh as in the one-to-one app
+let dbg = null; // Debug (shared/debug-start.js): this computer's tools and the mesh's
+let localApi = null; // General › Local API (shared/localapi.js), with Debug's calls
+function applyLocalApi() {
+  if (!localApi) return;
+  localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+}
 let phoneHub = null; // Calls, Messages and Photos (loadHub); svc.hub is not used: the mesh's hub is `hub`
 let devctl = null; // Overview's controls of the selected device (shared/devctl.js)
 let chats = null; // Messages' chat apps from a phone, kept per phone (shared/chats.js)
@@ -240,6 +247,8 @@ function publishState() {
     state.ui = settings.ui;
     state.look = Look.view(settings.ui, systemPreferences); // General › Appearance
     state.mesh = settings.mesh;
+    state.debug = dbg ? dbg.view() : null; // Debug tab (shared/debug-start.js)
+    state.localApi = localApi ? localApi.view() : null; // General › Local API
     state.app = settings.app;
     if (kvm) state.input = kvm.view;
     // The device the pointer is with, for the Overview's sentence (not the selected one; docs/mesh-graph.md).
@@ -670,7 +679,21 @@ app.whenReady().then(() => {
 
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
     hub, mesh, layoutSync, selfName: () => id.macName });
-  new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  const shadow = new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
+    app, hub, device: { id: id.macId, name: id.macName }, settings, save: () => store.saveSettings(settings),
+    kvm: () => svc.kvm, shadow, onChange: () => pushState(),
+  });
+  { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)
+    const { LocalApi } = require('../../shared/localapi.js');
+    localApi = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => { const x = hub.selectedId && hub.sessions.get(hub.selectedId); return { connected: !!(x && x.connected), device: x && x.connected ? x.displayName() : '' }; },
+      send: () => null, // Send files of the selected device is the window's; not here yet
+      clipboard: (text) => require('electron').clipboard.writeText(text), // then Clipboard shares it by its rules
+      debug: dbg.api,
+    } });
+    if (settings.app.localApi) applyLocalApi();
+  }
   // Audio › Microphone (shared/mic.js): loaded the first time one of its switches is on.
   svc.loadMic = () => {
     if (svc.mic || !(settings.audio.micSend || settings.audio.micReceive)) return svc.mic || null;
@@ -993,7 +1016,7 @@ app.whenReady().then(() => {
   Look.applyTheme(nativeTheme, settings.ui.theme);
   nativeTheme.on('updated', () => pushState());
   setupWeb();
-  actions = setupIpc({ devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
+  actions = setupIpc({ dbg: () => dbg, applyLocalApi, devctl: () => devctl, chats: () => chats, state, settings, pushState, onLanguage: changeLanguage, onLook: applyLook, t, server: peer, pairing, discovery, link: links, ...svc, hub, layoutSync, autoJoin, phoneHub: loadHub, login, refreshPermissions, updates });
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'trayTemplate.png'))); // "Template": macOS tints it
   hud = new Hud(() => settings);
   svc.kvm.on('where', (mode) => {

@@ -383,6 +383,21 @@ function setupIpc(ctx) {
     change('net', rest, () => ctx.applyNet());
   });
   handle('setMesh', (partial) => change('mesh', partial, () => ctx.applyMesh && ctx.applyMesh()));
+  // Debug (shared/debug-start.js, docs/debug.md): ask any device of the mesh; who may debug this computer.
+  handle('debugAsk', (to, op, args) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (!d || typeof to !== 'string' || typeof op !== 'string') return { ok: false, error: 'off' };
+    return d.ask(to, op, args && typeof args === 'object' ? args : {});
+  });
+  handle('setDebug', (o) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (d && o && typeof o === 'object') change('mesh', { debug: d.next(o) });
+  });
+  // Only what Debug kept, in the log folder.
+  handle('debugShow', (p) => {
+    const dir = require('../../shared/applog.js').dir();
+    if (typeof p === 'string' && dir && path.resolve(p).startsWith(path.resolve(dir) + path.sep)) shell.showItemInFolder(p);
+  });
   handle('netCancel', () => ctx.net && ctx.net.cancel());
   handle('wifiSetup', () => ctx.wifi && ctx.wifi.setup()); // Keep Wi-Fi while hosting: the password prompt (wifi.js)
   handle('netJoinHotspot', (arg) => ctx.joinHotspot(arg));

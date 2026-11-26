@@ -20,7 +20,7 @@ const SETTINGS_URLS = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   extensions: 'x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing',
 };
-const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'web', 'airplay', 'iossign', 'general', 'about'];
+const TABS = ['phone', 'overview', 'connection', 'mirror', 'papps', 'calls', 'messages', 'media', 'pfiles', 'share', 'receive', 'cursor', 'keyboard', 'clipboard', 'notifications', 'files', 'mount', 'terminal', 'audio', 'camera', 'remote', 'deck', 'rezume', 'apps', 'multi', 'debug', 'web', 'airplay', 'iossign', 'general', 'about'];
 
 const bool = (v) => !!v;
 const clamp = (lo, hi, dflt) => (v) => {
@@ -41,7 +41,7 @@ const SCHEMA = {
     resistancePx: (v) => Math.round(clamp(0, 400, 120)(v)), crossingModifier: Crossing.modifier, speed: clamp(0.25, 4, 1), reverseScroll: bool, hotkeySwitch: bool, linked: bool, gestures: bool, ble: bool, syncPads: bool, shakeHome: bool,
   },
   keys: { swapCtrlCmd: bool, hotkey: oneOf(P.HOTKEYS, 'AltRight'), lockKeys: (v) => CL.validKeys(v, CL.DEFAULT_KEYS.mac), emergencyKeys: Crossing.emergency },
-  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool },
+  app: { openAtLogin: bool, keepAwake: bool, hud: bool, inputProtocol: oneOf(['udp', 'tcp'], 'udp'), keepPinging: bool, localApi: bool }, // localApi: General › Local API (Debug's MCP server too)
   mesh: { autoJoin: bool, shareLogs: bool, collectLogs: bool },
   updates: { auto: bool, skipped: (v) => (typeof v === 'string' ? v.slice(0, 40) : ''), install: bool },
   audio: { send: bool, receive: bool, muteLocal: bool, volume: clamp(0, 1, 1), phoneMedia: bool, micSend: bool, micReceive: bool, micDevice: devId, micOut: devId }, // mic*: shared/mic.js
@@ -672,6 +672,7 @@ function setupIpc(ctx) {
       setGroup('app', partial);
       ctx.login.apply(settings.app.openAtLogin);
       ctx.updateAwake();
+      if (ctx.applyLocalApi) ctx.applyLocalApi(); // General › Local API
     },
     setUpdates(partial) {
       setGroup('updates', partial);
@@ -797,6 +798,23 @@ function setupIpc(ctx) {
   };
 
   ipcMain.handle('getState', () => ctx.state);
+  // Debug (shared/debug-start.js, docs/debug.md): ask any device of the mesh; who may debug this Mac.
+  ipcMain.handle('debugAsk', (_e, to, op, args) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (!d || typeof to !== 'string' || typeof op !== 'string') return { ok: false, error: 'off' };
+    return d.ask(to, op, args && typeof args === 'object' ? args : {});
+  });
+  ipcMain.handle('setDebug', (_e, o) => {
+    const d = ctx.dbg && ctx.dbg();
+    if (!d || !o || typeof o !== 'object') return;
+    settings.mesh.debug = require('../../shared/debug-settings.js').normalizeDebug(d.next(o));
+    save();
+  });
+  ipcMain.handle('debugShow', (_e, p) => { // only what Debug kept, in the log folder
+    const path = require('path');
+    const dir = require('../../shared/applog.js').dir();
+    if (typeof p === 'string' && dir && path.resolve(p).startsWith(path.resolve(dir) + path.sep)) shell.showItemInFolder(p);
+  });
   ipcMain.handle('qrPair', () => (ctx.qrPair ? ctx.qrPair() : { url: '' })); // Connection: the phone pairing QR code's link
   ipcMain.handle('phoneAssets', () => ctx.phone.assetsView());
   ipcMain.handle('deckApps', () => (ctx.deck ? ctx.deck.apps().catch(() => []) : [])); // the Deck page's app picker

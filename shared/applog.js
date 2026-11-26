@@ -33,6 +33,7 @@ let started = false;
 let terminal = console.error.bind(console); // the console before start(): the terminal only
 let consoleDead = false; // its pipe is gone (no terminal when launched from the menu): nothing more goes out to it
 const crashes = new Map(); // kind + the first line of the stack -> how often it came back, and when it started
+const verboseTags = new Map(); // Debug › Verbose log (shared/meshdebug.js): tag -> until (ms); 'all' for every tag
 
 function dir() {
   return folder;
@@ -280,4 +281,38 @@ function linkStats(sample, everyMs = STATS_MS, sampleMs = 1000) {
   };
 }
 
-module.exports = { start, dir, open, linkStats, crash };
+// Debug › Verbose log: more lines for some tags (link, lane, kvm, quiet, bus; 'all'), for a while only
+// (VERBOSE_MAX at most), so a forgotten switch can't fill the disk. tags [] or until in the past: off.
+const VERBOSE_MAX = 2 * 60 * 60 * 1000;
+function verbose(tags, until) {
+  verboseTags.clear();
+  const now = Date.now();
+  until = Math.min(Number(until) || 0, now + VERBOSE_MAX);
+  if (until > now) for (const t of tags || []) if (typeof t === 'string' && t) verboseTags.set(t, until);
+  const on = [...verboseTags.keys()];
+  console.log(on.length ? `[debug] verbose log: ${on.join(', ')} until ${new Date(until).toISOString()}` : '[debug] verbose log off');
+  return verboseState();
+}
+
+function verboseOn(tag) {
+  const until = verboseTags.get(tag) || verboseTags.get('all');
+  if (!until) return false;
+  if (Date.now() <= until) return true;
+  verboseTags.clear();
+  console.log('[debug] verbose log off (its time is up)');
+  return false;
+}
+
+function verboseState() {
+  const now = Date.now();
+  const tags = [...verboseTags].filter(([, u]) => u > now).map(([t]) => t);
+  return { tags, until: tags.length ? verboseTags.get(tags[0]) : 0 };
+}
+
+// A line only while its tag is verbose: v('link', 'rx', 120, 'ms ago').
+function v(tag, ...args) {
+  if (!verboseTags.size || !verboseOn(tag)) return;
+  console.log(`VERBOSE [${tag}]`, ...args);
+}
+
+module.exports = { start, dir, open, linkStats, crash, verbose, verboseOn, verboseState, v };

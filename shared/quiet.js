@@ -101,7 +101,23 @@ function sent(ws, msg) {
   if (ws && ws.quietSince && counts(msg) && !ws.quietProbe) ws.quietProbe = Date.now();
 }
 
+// Debug › Verbose log (shared/applog.js v()): 'link', a socket that has heard nothing for over STALL_MS
+// (each second while it lasts: 11-25's links died 4 s after connecting); 'quiet', probes and closes.
+const STALL_MS = 2000;
+let applog = null;
+function v(tag, ...args) {
+  try { (applog || (applog = require('./applog.js'))).v(tag, ...args); } catch (_) { /* no log */ }
+}
+const who = (ws) => ws.address || (ws.url ? String(ws.url).replace(/^wss?:\/\//, '').replace(/\/.*$/, '') : '') || 'a socket';
+
 function tick(ws, now, rx, raw, busy = false) {
+  const r = tickInner(ws, now, rx, raw, busy);
+  if (now - r.rx > STALL_MS) v('link', `${who(ws)}: nothing heard for ${((now - r.rx) / 1000).toFixed(1)} s, sent ${ws.lastTx ? ((now - ws.lastTx) / 1000).toFixed(1) + ' s ago' : 'never'}, ${ws.bufferedAmount || 0} bytes queued${busy ? ', busy' : ''}${r.quiet ? ', quiet' : ''}`);
+  if (r.quiet && (r.dead || (r.ping && ws.quietProbe))) v('quiet', `${who(ws)}: ${r.dead ? 'dead: closing' : 'probe'}`);
+  return r;
+}
+
+function tickInner(ws, now, rx, raw, busy = false) {
   if (!ws.quietOpened) ws.quietOpened = now;
   const mine = !busy && idleHere(ws, now);
   if ((ws.quietSaid || false) !== mine) { // nothing said yet = busy (what an older app assumes)
@@ -155,5 +171,7 @@ function watchPower() {
 module.exports = {
   ACTIVE_MS, QUIET_PING_MS, QUIET_TIMEOUT_MS, PROBE_MS, T_IDLE,
   setKeep, keep: keeping, use, hold, wake, onChange, seen, sent, tick, watchPower,
+  // Debug › status (shared/meshdebug.js): what holds the links busy here, keep pinging, the last wake.
+  state: () => ({ holds: [...holds], keep: keeping(), wokeAt }),
   _reset() { holds.clear(); listeners.clear(); keep = false; keepFn = null; wokeAt = 0; },
 };
