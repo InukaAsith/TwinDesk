@@ -30,6 +30,21 @@ function addTo(map, key, fn) {
   map.get(key).push(fn);
 }
 
+// Debug › Verbose log › bus (shared/applog.js v()): a message's type, sender and size, once per type and
+// sender every 10 s (not every move: the log would be the moves).
+const busSaid = new Map();
+function busVerbose(s, msg) {
+  const applog = require('../../shared/applog.js');
+  if (!applog.verboseOn || (!applog.verboseOn('bus'))) return;
+  const key = s.id + msg.t;
+  const now = Date.now();
+  if (now - (busSaid.get(key) || 0) < 10000) return;
+  busSaid.set(key, now);
+  let size = 0;
+  try { size = JSON.stringify(msg).length; } catch (_) { /* not plain */ }
+  applog.v('bus', `${s.displayName ? s.displayName() : s.id}: ${msg.t} (${size} bytes)`);
+}
+
 class Hub extends EventEmitter {
   // device {id, name}; links: LinkManager (links.js); mesh: Mesh (shared/mesh.js), whose selfId is
   // device.id. server (Server, server.js) and pairing (Pairing, hostpair.js) may come now or later:
@@ -325,6 +340,7 @@ class Hub extends EventEmitter {
       return true;
     }
     this.heard.note(s.id, msg);
+    busVerbose(s, msg); // Debug › Verbose log › bus
     // The selected device's messages reach the net hook first (netlink.js: its net.* and file chunks).
     if (this.netTap && s.id === this.selectedId) this.netTap(msg);
     let consumed = false;

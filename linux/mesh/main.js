@@ -54,6 +54,7 @@ const { SmbSet } = require('../../shared/smb-mesh.js');
 const { MeshShadow } = require('../../shared/mesh-shadow.js');
 const { SoundSet } = require('../../shared/sound-mesh.js');
 const { PeerLogs } = require('../../shared/peerlogs.js');
+const { startDebug } = require('../../shared/debug-start.js');
 const SendTo = require('../sendto');
 const Vdd = require('../vdd');
 const PcScreen = require('../pcscreen');
@@ -125,6 +126,8 @@ let clip = null;
 let wlClipboardMissing = false;
 let helper = null;
 let kvm = null;
+let dbg = null; // Debug (shared/debug-start.js): this computer's tools and the mesh's
+let localApi = null; // General › Local API (shared/localapi.js), with Debug's calls
 let layoutSync = null; // layout-sync.js: where every paired device sits; the kvm's edges come from it
 let sound = null;
 let mic = null; // Audio › Microphone (shared/mic.js), loaded only while one of its switches is on
@@ -321,7 +324,21 @@ function start() {
   });
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) require('electron').screen.on(ev, () => layoutSync.displaysChanged());
   kvm = new Kvm({ hub, layoutSync, helper, clip, fileDrop, fileRecv, dragRecv, settings, save: saveSettings, onChange: onKvmChange });
-  new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  const shadow = new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
+  dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
+    app, hub, device, settings, save: saveSettings, kvm: () => kvm, shadow, helper, onChange: () => pushState(),
+    fullkvm: require('../../shared/edition.js').fullKvm() ? require('../fullkvm/manager.js') : null,
+  });
+  { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)
+    const { LocalApi } = require('../../shared/localapi.js');
+    localApi = new LocalApi({ dir: app.getPath('userData'), actions: {
+      status: () => { const s = hub.selectedId && hub.sessions.get(hub.selectedId); return { connected: !!(s && s.connected), device: s && s.connected ? s.displayName() : '' }; },
+      send: () => null, // Send files of the selected device is the window's; not here yet
+      clipboard: (text) => require('electron').clipboard.writeText(text), // then Clipboard shares it by its rules
+      debug: dbg.api,
+    } });
+    if (settings.app.localApi) applyLocalApi();
+  }
   new PeerLogs({ bus: hub.bus, nameOf: (id) => { const s = hub.sessions.get(id); return s ? s.displayName() : id; }, dir: () => require('../../shared/applog.js').dir(), share: () => settings.mesh.shareLogs !== false, collect: () => settings.mesh.collectLogs !== false }).start(); // the other devices' logs, copied here (docs/peer-logs.md)
   require('../../shared/applog.js').linkStats(() => kvm.linkSample()); // the link's line in the log every 30 s
   // Popups: a {key, vars} is translated in the popup (hud-renderer.js) with the device names added;
@@ -463,12 +480,12 @@ function start() {
   loadCamera(); // only while it's on
   loadReZume(); // only while it's on
   if (settings.drive.on) loadDrive();
-  const ipc = setupIpc({ loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
+  const ipc = setupIpc({ dbg: () => dbg, loadDrive, getDrive: () => drive, history: (r) => historyKeeper && historyKeeper.act(r), clearFiles: () => { fileDrop.last = null; if (fileRecv) fileRecv.last = null; if (kvm && kvm.dragRecv) kvm.dragRecv.last = null; pushState(); }, // Files › Recent › Clear: only the list
     devctl: () => devctl, chats: () => chats, qrPair: qrPairView, adbQr: adbQrDo, hub, link, discovery, screen, clip, kvm, layoutSync, fileDrop, smb, fileClip, vdd, sound, pcScreen, notifs, wake, terminal, sshd, apps, pcApps, peerApps, updates, settings, save: saveSettings, push: pushState, buildState,
     get phone() { return phone; }, get phoneViews() { return phone ? phone.views : null; }, get camShare() { return camShare; }, iosSign: () => iosSign, deck: () => loadDeck(), get phoneRemote() { return phoneRemote && phoneRemote.loaded ? phoneRemote : null; }, loadRemote, get rezume() { return rezume; }, loadReZume, rezumeWith: (id) => rzSolo && rzSolo.choose(id), get vcam() { return vcam; }, setCamera, get phoneDrive() { return phoneDrive; }, get nowPlaying() { return nowPlaying; }, get btAudio() { return btAudio; }, loadNowPlaying: () => nowPlaying, loadBtAudio, connectPhoneDev, cancelPhoneInvite, phoneHub: loadHub, loadMic,
     applyMesh: () => autoJoin && autoJoin.schedule(),
     get net() { return net; }, get wifi() { return wifi; }, applyNet, joinHotspot, openBluetoothSettings,
-    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
+    checkFirewall, fixFirewall, fixInput, leaveInputGroup, removeInput, setStartup, onApp: () => { updateTray(buildState()); applyLocalApi(); if (awake) awake.update(); }, onLanguage: changeLanguage, onLook: () => theme.setPref(settings.ui.theme) });
   pairSync = new PairSync({ link, settings, save: saveSettings, set: ipc.set, only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'],
     bus: hub.bus,
     peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
@@ -1013,6 +1030,11 @@ function openMacApp(id) {
 let pushQueued = false;
 // Queued: one state push per tick. It never throws (an exception here became an Electron error
 // dialog, or a window that stopped updating): a failure is logged and the next push tries again.
+function applyLocalApi() {
+  if (!localApi) return;
+  localApi.apply(!!settings.app.localApi).catch((e) => console.error('[api] ' + e.message)).then(() => pushState());
+}
+
 function pushState() {
   if (pushQueued) return;
   pushQueued = true;
@@ -1173,6 +1195,8 @@ function buildState() {
     // Every paired device (connected or not), and the mesh's selection and live links.
     peers: hub.peers({ indirect: true }),
     mesh: { selectedId: hub.selectedId, connectedIds: hub.bus.connectedIds(), autoJoin: settings.mesh.autoJoin === true, pcBle: false, shareLogs: settings.mesh.shareLogs !== false, collectLogs: settings.mesh.collectLogs !== false },
+    debug: dbg ? dbg.view() : null, // Debug tab (shared/debug-start.js)
+    localApi: localApi ? localApi.view() : null, // General › Local API
     found: discovery.list(),
     discovery: { ...discovery.status },
     addresses: ownAddresses(),

@@ -29,7 +29,7 @@ const electronVersion = require(path.join(WIN, 'node_modules', 'electron', 'pack
 // (the service, its agent and the tab); the normal installers have none of it, and the
 // Full KVM one is named apart. Never the Store's (its MSIX can't carry services).
 const FULL_KVM = process.env.TWINDESK_EDITION === 'full-kvm';
-const SKIP = new Set(['node_modules', 'dist', 'installer', 'test', 'package-lock.json', ...(FULL_KVM ? ['service', 'build.cmd'] : ['fullkvm'])]); // tests (mesh/test) stay out of the package
+const SKIP = new Set(['node_modules', 'dist', 'installer', 'docker', 'test', 'package-lock.json', ...(FULL_KVM ? ['service', 'build.cmd'] : ['fullkvm'])]); // tests (mesh/test) stay out of the package
 const STORE = process.argv.includes('store');
 const PORTABLE = process.argv.includes('portable');
 if (PORTABLE && (FULL_KVM || STORE)) throw new Error('TwinDesk Portable is the normal build only (no Full KVM, no Store)');

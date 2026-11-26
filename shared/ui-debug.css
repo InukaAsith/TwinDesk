@@ -1,0 +1,41 @@
+/* TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE. */
+/* Debug tab (shared/ui-debug.js): output boxes, the screenshot, the command and search fields. */
+
+.debug-out {
+  margin: 0 14px 10px;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  font: 11.5px/1.45 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text, inherit);
+  background: var(--field, rgba(127, 127, 127, .08));
+  border: 1px solid var(--line, rgba(127, 127, 127, .2));
+  border-radius: 6px;
+  user-select: text;
+}
+.debug-out[hidden] { display: none; }
+
+.debug-shot {
+  display: block;
+  margin: 0 14px 10px;
+  max-width: calc(100% - 28px);
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid var(--line, rgba(127, 127, 127, .2));
+  border-radius: 6px;
+}
+.debug-shot[hidden] { display: none; }
+
+.debug-find,
+.debug-cmd {
+  min-width: 160px;
+  font: inherit;
+}
+.debug-cmd {
+  flex: 1;
+  min-width: 260px;
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+.debug-activity .row .label { font-variant-numeric: tabular-nums; }

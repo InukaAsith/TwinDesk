@@ -13,6 +13,17 @@ Everyone who sent code, reported a problem or tested is thanked under their vers
 
 ### New
 
+- **Debug** (a new tab in Multi-device, on Windows, Linux and the Mac; off until a device lets another
+  in): from any computer, every device of the mesh, connected directly or through another one. Its
+  live status (each link: how long since anything was heard, its round trip, queued bytes, quiet
+  links, the input lane; the cursor's mode, Full KVM, the last wake), a verbose log for a while, any
+  of its logs (whole, the end, a search; the Full KVM service's too, which only it may read), a
+  screenshot, fixed diagnostics (network, adapter power saving, sleep and wake events, reaching
+  another device, sockets, firewall), any command while *Allow any command* is on (an hour), and a
+  restart. Each device chooses who may debug it; a relayed request counts only if the device that
+  passed it on is let in too. Big answers go in pieces that wait for the link, so the link's pings
+  keep going. For a code agent on the same computer, **tools/twindesk-mcp** (an MCP server) has the
+  same tools through General › Local API, now in Multi-device too ([docs](docs/debug.md)).
 - **Internet over USB** (Connection page, Android, off until switched on): the phone on the cable
   uses this computer's internet, through a VPN on the phone and USB debugging, with nothing else to
   install. It comes back by itself when the phone is plugged in again; Stop in the phone's

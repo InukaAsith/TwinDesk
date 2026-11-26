@@ -35,6 +35,34 @@ const ALLOWED = new Set(['ping', 'keepalive', 'kvmConfig', 'screens', 'capture',
 
 const log = (...a) => console.log('[fullkvm]', ...a);
 
+// Its own output, the last RING_MAX bytes (Debug › Logs › Full KVM service, docs/debug.md): systemd's
+// journal or OpenRC's log file is root's, so the user's app asks for it here (serviceLog), which reads
+// nothing from disk. Offsets count from the service's start; what's older than the ring is gone.
+const RING_MAX = 1024 * 1024;
+const PIECE = 128 * 1024;
+let ring = Buffer.alloc(0);
+let ringEnd = 0; // bytes written since start
+for (const stream of [process.stdout, process.stderr]) {
+  const write = stream.write.bind(stream);
+  stream.write = (chunk, ...rest) => {
+    try {
+      const b = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+      ring = Buffer.concat([ring, b]);
+      if (ring.length > RING_MAX) ring = ring.subarray(ring.length - RING_MAX);
+      ringEnd += b.length;
+    } catch (_) { /* the log goes on */ }
+    return write(chunk, ...rest);
+  };
+}
+function serviceLog(msg) {
+  const start = ringEnd - ring.length;
+  let from = Number(msg.from);
+  if (!Number.isFinite(from) || from < start || from > ringEnd) from = start;
+  const len = Math.max(0, Math.min(PIECE, Number(msg.len) || PIECE, ringEnd - from));
+  const data = ring.subarray(from - start, from - start + len).toString('base64');
+  return { id: msg.id, ok: true, size: ringEnd, from, data };
+}
+
 function readConf() {
   try {
     const c = JSON.parse(fs.readFileSync(CONF, 'utf8'));
@@ -166,6 +194,7 @@ class Service {
       let msg;
       try { msg = JSON.parse(line); } catch (_) { continue; }
       if (!msg || typeof msg !== 'object' || Array.isArray(msg)) continue;
+      if (msg.cmd === 'serviceLog') { c.sock.write(JSON.stringify(serviceLog(msg)) + '\n'); continue; } // its own log, answered here
       if (!ALLOWED.has(msg.cmd)) {
         if (msg.id !== undefined) c.sock.write(JSON.stringify({ id: msg.id, ok: false, error: 'not allowed through Full KVM' }) + '\n');
         continue;

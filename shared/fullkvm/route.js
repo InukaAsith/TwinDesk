@@ -55,6 +55,13 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
     return !!this.svc && this.svc.connected;
   }
 
+  // Debug › Logs › Full KVM service (shared/debuglocal.js): {size, from, data: base64} of its log `file`
+  // ('fullkvm' | 'node' on Windows; Linux keeps one, in memory). Only while the service is connected.
+  serviceLog(file, from, len) {
+    if (!this.viaService) return Promise.reject(new Error('the Full KVM service isn’t connected'));
+    return this.svc.request('serviceLog', { file, from, len }, 5000);
+  }
+
   // What the mouse and keyboard go through now ('uinput' through the service).
   get kvmBackend() {
     return this.viaService ? this.svc.backend : this.backend;

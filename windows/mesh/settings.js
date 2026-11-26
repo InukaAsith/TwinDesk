@@ -5,6 +5,7 @@
 const base = require('../settings.js');
 const E = require('../../shared/kvm-edges.js');
 const L = require('../../shared/layout.js');
+const { normalizeDebug } = require('../../shared/debug-settings.js');
 
 const bool = (v, d) => (typeof v === 'boolean' ? v : d);
 
@@ -20,7 +21,8 @@ function normalize(s) {
   // Joining everyone (docs/mesh.md): on unless switched off in the Multi-device tab, so every computer
   // the mouse goes through is connected to the others; a paired device can add others without a code.
   // The other devices' logs (docs/peer-logs.md): ours to them, and theirs copied here; on unless switched off.
-  out.mesh = { autoJoin: bool(ms.autoJoin, true), shareLogs: bool(ms.shareLogs, true), collectLogs: bool(ms.collectLogs, true) };
+  // Debug (docs/debug.md): who may debug this computer, Allow any command, the verbose log.
+  out.mesh = { autoJoin: bool(ms.autoJoin, true), shareLogs: bool(ms.shareLogs, true), collectLogs: bool(ms.collectLogs, true), debug: normalizeDebug(ms.debug) };
   return out;
 }
 
@@ -69,7 +71,7 @@ function save(store, settings) {
   const { edges, ...kvm } = settings.kvm;
   store.write('settings.json', { ...rest, kvm });
   const off = mesh && mesh.autoJoin === false;
-  store.write(MULTI, { ...store.read(MULTI, {}), kvm: { edges }, layout, layoutDisplays, mesh: { ...(off ? { autoJoin: false, chosen: true } : { autoJoin: true }), shareLogs: !mesh || mesh.shareLogs !== false, collectLogs: !mesh || mesh.collectLogs !== false } });
+  store.write(MULTI, { ...store.read(MULTI, {}), kvm: { edges }, layout, layoutDisplays, mesh: { ...(off ? { autoJoin: false, chosen: true } : { autoJoin: true }), shareLogs: !mesh || mesh.shareLogs !== false, collectLogs: !mesh || mesh.collectLogs !== false, debug: normalizeDebug(mesh && mesh.debug) } });
 }
 
 module.exports = { normalize, apply, migrateKvm, load, save };
