@@ -2,7 +2,7 @@
 // Fetches adb for Windows (Android platform-tools: adb.exe and its two DLLs) into a folder,
 // windows/vendor/adb by default. installer/build.js runs it for the installer; run it once
 // (`npm run fetch-adb`) for a dev copy that has no Android SDK. Needs tar (Windows 10 and later,
-// macOS) to unpack the zip.
+// macOS) to unpack the zip, or unzip on Linux (GNU tar doesn't read zips: windows/docker's build).
 'use strict';
 
 const fs = require('fs');
@@ -46,7 +46,8 @@ async function fetchAdb(dest = path.join(__dirname, '..', 'vendor', 'adb')) {
     await download(ZIP_URL, zip);
     const got = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex').toUpperCase();
     if (got !== ZIP_SHA256) throw new Error('adb zip SHA-256 mismatch: got ' + got + ', expected ' + ZIP_SHA256);
-    execFileSync('tar', ['-xf', zip, '-C', tmp], { stdio: 'inherit' });
+    if (process.platform === 'linux') execFileSync('unzip', ['-q', zip, '-d', tmp], { stdio: 'inherit' });
+    else execFileSync('tar', ['-xf', zip, '-C', tmp], { stdio: 'inherit' });
     fs.mkdirSync(dest, { recursive: true });
     for (const f of FILES) fs.copyFileSync(path.join(tmp, 'platform-tools', f), path.join(dest, f));
     for (const f of ['NOTICE.txt', 'source.properties']) {
