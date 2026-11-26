@@ -13,7 +13,7 @@ const { SvcLink, KVM } = require('./svc-link.js');
 
 const SVC_SOCK = process.env.TWINDESK_KVM_SOCK || (process.platform === 'win32' ? '\\\\.\\pipe\\TwinDesk.kvm' : '/run/twindesk/kvm.sock');
 // The helpers' mouse-and-keyboard events (linux-helper/src: capture.c, wl.c; windows-helper/src: Capture*.cs).
-const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv', 'hooksReinstalled', 'secureDesktop']);
+const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv', 'hooksReinstalled', 'secureDesktop', 'letGo']);
 
 module.exports = (Helper) => class FullKvmHelper extends Helper {
   constructor(...args) {
@@ -57,7 +57,8 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
   }
 
   send(cmd, args = {}) {
-    if (this.viaService && KVM.has(cmd)) return this.svc.send(cmd, args);
+    if (this.viaService && KVM.has(cmd)) return this.svc.send(cmd,
+      cmd === 'kvmConfig' && process.platform === 'win32' ? { ...args, appPid: process.pid } : args);
     return super.send(cmd, args);
   }
 
@@ -67,7 +68,8 @@ module.exports = (Helper) => class FullKvmHelper extends Helper {
   }
 
   request(cmd, args = {}, ms) {
-    if (this.viaService && KVM.has(cmd)) return this.svc.request(cmd, args, ms);
+    if (this.viaService && KVM.has(cmd)) return this.svc.request(cmd,
+      cmd === 'kvmConfig' && process.platform === 'win32' ? { ...args, appPid: process.pid } : args, ms);
     if (this.viaService && cmd === 'lane') return Promise.reject(new Error('no native lane through Full KVM'));
     return super.request(cmd, args, ms);
   }
