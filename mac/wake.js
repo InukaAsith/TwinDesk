@@ -49,7 +49,13 @@ class Wake extends EventEmitter {
     server.on(`t:${P.T.WOL_INFO}`, (m, ctx) => {
       const macs = (Array.isArray(m.macs) ? m.macs : []).map((x) => String(x).toLowerCase()).filter((x) => MAC_RE.test(x)).slice(0, 8);
       if (!ctx || !macs.length) return;
-      this.peers[ctx.deviceId] = { name: ctx.name, os: ctx.os, macs, address: String(m.address || ctx.address || '').slice(0, 64), at: Date.now() };
+      const name = String(ctx.name || '').slice(0, 200);
+      const address = String(m.address || ctx.address || '').slice(0, 64);
+      const was = this.peers[ctx.deviceId];
+      // In Multi-device the hub plays it again on every selection change (shared/peerstate.js): saved only
+      // when it changed, not on every crossing.
+      if (was && was.name === name && was.os === ctx.os && was.address === address && String(was.macs) === String(macs)) return;
+      this.peers[ctx.deviceId] = { name, os: ctx.os, macs, address, at: Date.now() };
       this.saveSettings();
       this.emit('change');
     });

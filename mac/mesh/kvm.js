@@ -359,7 +359,7 @@ class Kvm extends EventEmitter {
         dwellMs: P.KVM_EDGE_DWELL_MS,
         gestures: k.gestures !== false, // Trackpad gestures go over as k.ge
         takeBack: !k.syncPads, // off with Sync touchpads: our own trackpad never takes the computer back (the 'local' watch)
-        dragFiles: this.fileSend.dragOn && this.fileSend.peerDrag, // drag.policy, both sides
+        dragFiles: this.fileSend.dragOn && this.fileSend.anyPeerDrag, // drag.policy, both sides; each crossing checks its device (_take)
       })
       .then(() => this._setTapError(null), (e) => this._setTapError(e.message));
   }
@@ -534,7 +534,10 @@ class Kvm extends EventEmitter {
     this._setMode('driving', '');
     this.input.releaseAll();
     const take = { t: P.T.KVM_TAKE, route: this.route, mouse: !!k.mouse && !this.keyboardOnly, keyboard: !!k.keyboard, ...fields.where, ...(via ? { via } : {}) };
-    const plan = fields.paths && fields.paths.length ? this.fileSend.planDrag(fields.paths) : null;
+    // Only to a device that takes drags (its drag.policy; the helper picks one up if any device does).
+    const takes = this.fileSend.peerDragOf(this.partner);
+    const plan = fields.paths && fields.paths.length && takes ? this.fileSend.planDrag(fields.paths) : null;
+    if (fields.paths && fields.paths.length && !takes) console.log('[drag] out: not sent (' + this._them('{them} doesn’t take file drags') + ')');
     if (plan) take.drag = { count: plan.items.length };
     this._drive(take);
     const to = this.partner;
@@ -542,7 +545,7 @@ class Kvm extends EventEmitter {
     if (plan) {
       this.dragOut = this.fileSend.startDrag(plan); // drag.start right after kvm.take
       console.log(`[drag] out ${this.dragOut}: ${plan.items.length} item(s), ${plan.files} file(s), ${plan.bytes} bytes`);
-    } else if (fields.paths && fields.paths.length) console.log('[drag] out: nothing sendable in', fields.paths);
+    } else if (fields.paths && fields.paths.length && takes) console.log('[drag] out: nothing sendable in', fields.paths);
     this.clipboard.sendIfChanged('switch');
     clearTimeout(this.acceptTimer);
     const route = this.route;

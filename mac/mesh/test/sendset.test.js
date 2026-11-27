@@ -88,4 +88,39 @@ test('a send goes on when the selection moves to another device mid-send', async
   }
 });
 
+test('each device’s drag.policy is its own, and the selection’s is the Files tab’s', async () => {
+  const A = await node('A');
+  const clients = [];
+  try {
+    const settings = { files: { dragEdge: true, outboxHours: 24 } };
+    const set = new SendSet({ hub: A.hub, server: A.server, FileSend, getSettings: () => settings });
+    const p1 = await pairPhone(A, { name: 'One' });
+    const p2 = await pairPhone(A, { name: 'Two' });
+    clients.push(p1.client, p2.client);
+    await helloPhone(p1.client, { id: p1.id, name: 'One', token: p1.token });
+    await helloPhone(p2.client, { id: p2.id, name: 'Two', token: p2.token });
+    await waitFor(() => set.byId.has(p1.id) && set.byId.has(p2.id), 'a FileSend for each');
+    const policies = [];
+    set.on('policy', (id) => policies.push(id));
+    assert.ok(A.hub.select(p1.id));
+
+    p2.client.send({ t: T.DRAG_POLICY, accept: false }); // Two doesn't take drags; One, selected, does
+    await waitFor(() => !set.peerDragOf(p2.id), 'Two’s policy heard');
+    assert.deepStrictEqual(policies, [p2.id], 'the event says whose');
+    assert.strictEqual(set.peerDragOf(p1.id), true);
+    assert.strictEqual(set.peerDrag, true, 'the selected device’s (One)');
+    assert.strictEqual(set.anyPeerDrag, true, 'the helper still picks drags up: One takes them');
+    assert.ok(A.hub.select(p2.id));
+    assert.strictEqual(set.peerDrag, false, 'now Two’s');
+
+    p1.client.send({ t: T.DRAG_POLICY, accept: false });
+    await waitFor(() => !set.peerDragOf(p1.id), 'One’s policy heard');
+    assert.strictEqual(set.anyPeerDrag, false, 'no device takes drags');
+    assert.strictEqual(set.peerDragOf('nobody'), true, 'a device not heard yet: assumed to');
+  } finally {
+    for (const c of clients) c.close();
+    close(A);
+  }
+});
+
 runTests(tests);

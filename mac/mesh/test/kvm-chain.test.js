@@ -101,7 +101,7 @@ class RecHelper extends EventEmitter {
 // A real Kvm on node n, with a recording helper and the kvm messages of its bus recorded.
 function kvmOn(n) {
   n.helper = new RecHelper();
-  const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
+  const fileSend = Object.assign(new EventEmitter(), { dragOn: false, peerDrag: false, anyPeerDrag: false, peerDragOf: () => false, planDrag: () => null, startDrag: () => null, cancelDrag() {} });
   const drop = { dragIn: { dragging: false, armDrag() {}, onDriven() {}, cancel() {}, release() {} }, cancelDrag() {}, release() {}, armDrag() {} };
   n.kvm = new Kvm({
     hub: n.hub,
