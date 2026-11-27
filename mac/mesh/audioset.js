@@ -20,7 +20,7 @@ class AudioSet extends EventEmitter {
     this.byId = new Map(); // device id -> Audio
     // What each Audio reads of the hub: the selection, for whose switches are in settings.audio.
     // Nothing holds sound to a device (no sticky route): every device has its own.
-    this.meshHub = { get selectedId() { return hub.selectedId; }, setAudioSticky() {} };
+    this.meshHub = { get selectedId() { return hub.selectedId; }, get consent() { return hub.consent || null; }, setAudioSticky() {} }; // each device's own pair (hub.consent)
     hub.on('peerAdded', (id) => this._ensure(id));
     hub.on('peerRemoved', () => this.evaluate()); // the graph without it
     this.selectedId = hub.selectedId;

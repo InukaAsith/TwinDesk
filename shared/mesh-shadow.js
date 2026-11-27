@@ -7,7 +7,6 @@
 'use strict';
 
 const { resolve, InputPeer } = require('./mesh-graph.js');
-const { pairFor } = require('./pairfor.js');
 
 const TICK_MS = 1000;
 
@@ -85,7 +84,7 @@ class MeshShadow {
   // Today's switches, read the way the features read them (Sound._on, Mic).
   _allowed(svc, from, to, settings) {
     const a = settings.audio || {};
-    if (svc === 'sound') return pairFor(settings, this.hub.selectedId, to, 'audio', 'out', !!a.send) ? true : 'Send is off for it';
+    if (svc === 'sound') return (this.hub.consent ? this.hub.consent.get(to, 'audio', 'out') : !!a.send) ? true : 'Send is off for it';
     if (svc === 'mic') return a.micSend ? true : 'Send microphone is off';
     return 'not in the shadow yet';
   }

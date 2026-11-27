@@ -207,8 +207,9 @@ const MAC = { id: '788f', os: 'mac', name: 'MacBook-Air-de-Ortega' };
   const hub = { device: { id: NITRO.id, name: NITRO.name }, selectedId: MAC.id, sessions: { list: () => sessions } };
   const kvm = { mode: 'home', partner: null };
   const sound = { link: { current: { deviceId: MAC.id } }, status: { sending: false } };
-  // The Mac is selected: its switches are settings.audio itself (pairFor); Ryzen9's are its pair's.
+  // The Mac is selected: its switches are settings.audio itself (hub.consent); Ryzen9's are its pair's.
   const settings = { audio: { send: false, micSend: false }, pairSync: { [RYZEN.id]: { audio: { out: true, in: false } } } };
+  hub.consent = require('../consent.js').consent({ features: { audio: { out: ['audio', 'send'], in: ['audio', 'receive'] } }, settings: () => settings, selectedId: () => hub.selectedId });
   const sh = new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => null, settings: () => settings, log: (l) => lines.push(l), now: () => t, os: 'linux' });
 
   sh.tick();

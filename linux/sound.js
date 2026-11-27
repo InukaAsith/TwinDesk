@@ -7,7 +7,6 @@
 const { BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const P = require('../shared/protocol.js');
-const { pairFor } = require('../shared/pairfor.js');
 const loopback = require('./loopback');
 
 const T = P.T;
@@ -79,8 +78,8 @@ class Sound {
   // device's pair; sound that stays with another device (the sticky route) goes by that device's own (#245).
   _on(key) {
     const c = this.link.current;
-    const sel = this.meshHub ? this.meshHub.selectedId : null;
-    return !!pairFor(this.settings, sel, c && c.deviceId, 'audio', key === 'send' ? 'out' : 'in', !!this.cfg[key]);
+    const consent = this.meshHub && this.meshHub.consent; // Multi-device: this device's own pair (shared/consent.js)
+    return consent && c ? !!consent.get(c.deviceId, 'audio', key === 'send' ? 'out' : 'in') : !!this.cfg[key];
   }
 
   // Mesh (#196): while sound plays, its route stays on that device when another one is selected. Only

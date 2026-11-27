@@ -317,3 +317,14 @@ What still ran on the facade and only served (or heard) the selected device:
   while they're free, one that asks while they're in use is told so. One virtual display, so one
   computer at a time.
 - **Terminal page**: shows `ssh twindesk` (the selected device's) again; `twindesk-<name>` is written too.
+
+### Step 5, phase 5a as built: the pairs on the bus, pairFor gone
+
+- **Two-way switches** (`shared/pairsync-mesh.js`, Windows, Linux and the Mac): every device's pair on its
+  own session, not the facade's. The host tells a device its pair when its session starts (`pair.sync
+  {all}`, as before, so an older app is unchanged); a `pair.sync` from any device is kept for it; the
+  settings hold the pair of the device the pages show and take the next one's when the hub says the
+  selection changed ('selected'); a change on the pages goes to that device alone. The one-to-one
+  `pairsync.js` is unchanged.
+- **`pairFor` is gone**: sound (`windows|linux/sound.js`, `mac/audio.js`, `shared/sound-mesh.js`), the
+  shadow and the pointer (`*/mesh/kvm.js`) ask `hub.consent` (shared/consent.js) for each device's pair.

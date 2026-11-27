@@ -62,7 +62,7 @@ class PairSync {
       if (ctx.role !== 'host') server.send(ctx, { t: P.T.PAIR_SYNC, all: this.last }); // we are the host
     });
     // Before the selection moves on (or the device goes): that pair is kept as it is now, so a device that
-    // isn't selected goes by its own up-to-date pair (shared/pairfor.js, #245). The route has no target
+    // isn't selected goes by its own up-to-date pair (shared/consent.js, #245). The route has no target
     // any more here, so nothing is sent; values only the pair had (a phone's) stay as they were saved.
     server.on('closed', () => {
       if (this.last && this.peerId) {
@@ -253,4 +253,4 @@ class PairSync {
   }
 }
 
-module.exports = { PairSync, FEATURES };
+module.exports = { PairSync, FEATURES, VALUES };

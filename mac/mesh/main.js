@@ -74,7 +74,7 @@ const { startServices } = require('./services');
 const { setupIpc, TABS } = require('./ipc');
 const login = require('../login');
 const { Hud } = require('../hud');
-const { PairSync, FEATURES: PAIR_FEATURES } = require('../pairsync');
+const { FEATURES: PAIR_FEATURES, VALUES: PAIR_VALUES } = require('../pairsync');
 const { Phone } = require('../phone');
 const { PhoneBridge } = require('./phone-bridge');
 const { PhoneSet, PhoneDir } = require('./phones');
@@ -702,6 +702,7 @@ app.whenReady().then(() => {
     features: PAIR_FEATURES, settings: () => settings, selectedId: () => hub.selectedId,
     send: (to, m) => hub.bus.send(to, m), save: () => store.saveSettings(settings),
   });
+  hub.consent = consent; // sound and the pointer read each device's own pair from the hub (shared/sound-mesh.js, kvm.js)
   svc = startServices({ server: peer, getSettings: () => settings, pushState, onHelperReady: refreshPermissions,
     hub, mesh, layoutSync, selfName: () => id.macName, consent });
   consent.on('change', () => { // a device's pair: its policies (and its Terminal key) again
@@ -1044,12 +1045,20 @@ app.whenReady().then(() => {
     terminal: (dir, on) => { actions.setTerminal({ [dir === 'out' ? 'allowPc' : 'connectPc']: on }); if (dir === 'in') svc.sshClient.applySettings(); }, // already set: setTerminal sees no change
     files: (dir, on) => actions.setFiles({ acceptDrops: on }),
   };
-  pairSync = new PairSync({ server: peer, bus: hub.bus, onPair: (pid) => consent.changed(pid),
-    peerRole: (id) => { const s = hub.sessions.get(id); return s ? s.role : null; },
-    peerOs: (id) => { const s = hub.sessions.get(id); return s ? s.peerOs : null; },
-    getSettings: () => settings, saveSettings: () => store.saveSettings(settings), only: Object.keys(SYNC_ACTIONS), // no ReZume or Remote here
-    apply: (f, dir, on) => (f !== 'value' ? SYNC_ACTIONS[f](dir, on)
-      : ['gestures', 'keyboard', 'speed', 'reverseScroll', 'syncPads'].includes(dir) ? actions.setKvm({ [dir]: on }) : actions.setSharingOpts({ [dir]: on })) });
+  // Per pair (shared/pairsync-mesh.js): every device's pair on its own session; the settings hold the pair of
+  // the device the pages show (no ReZume or Remote here).
+  {
+    const features = Object.fromEntries(Object.entries(PAIR_FEATURES).filter(([f]) => SYNC_ACTIONS[f]));
+    const KVM_VALUES = ['gestures', 'keyboard', 'speed', 'reverseScroll', 'syncPads'];
+    pairSync = require('../../shared/pairsync-mesh.js').pairSyncMesh({
+      bus: hub.bus, hub, features, values: PAIR_VALUES, settings: () => settings, save: () => store.saveSettings(settings),
+      setFeature: (f, dir, on) => SYNC_ACTIONS[f](dir, on),
+      setValue: (k, v) => (KVM_VALUES.includes(k) ? actions.setKvm({ [k]: v }) : actions.setSharingOpts({ [k]: v })),
+      peerRole: (pid) => { const x = hub.sessions.get(pid); return x ? x.role : null; },
+      peerOs: (pid) => { const x = hub.sessions.get(pid); return x ? x.peerOs : null; },
+      onPair: (pid) => consent.changed(pid),
+    });
+  }
   // New releases on GitHub: a notification once per version, the menu bar item and About › Updates.
   updates = new Updates({
     current: app.getVersion(), platform: 'mac', getSettings: () => settings, getLanguage: () => i18n.locale,

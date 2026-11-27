@@ -1,7 +1,7 @@
 // TwinDesk — Copyright (C) 2026 inukaasith. GPL-3.0, see LICENSE.
 // Sound that plays with one device while another is selected (#245): three real hubs on real sockets (A, B,
-// C linked to each other), the real PairSync on A's facade (as mesh/main.js wires it, set() re-applying the
-// sound as ipc.js does) and the real sound engines, windows/sound.js and linux/sound.js, one per device in
+// C linked to each other), the real per-pair switches (shared/pairsync-mesh.js and shared/consent.js, as
+// mesh/main.js wires them, setFeature() re-applying the sound as ipc.js does) and the real sound engines, windows/sound.js and linux/sound.js, one per device in
 // a SoundSet (shared/sound-mesh.js) as mesh/main.js makes them, with `electron`
 // (and Linux's loopback) stubbed. A sends its sound to B; selecting C, whose pair has the sound off, must
 // not stop it; turning B's own switch off still does.
@@ -20,7 +20,9 @@ const { Server } = require('../../linux/mesh/server.js');
 const { Pairing } = require('../../linux/mesh/hostpair.js');
 const { normalize } = require('../../linux/mesh/settings.js');
 const { SoundSet } = require('../sound-mesh.js');
-const { PairSync } = require('../../linux/pairsync.js');
+const { FEATURES, VALUES } = require('../../linux/pairsync.js');
+const { pairSyncMesh } = require('../pairsync-mesh.js');
+const { consent } = require('../consent.js');
 const { waitFor, pair, memoryStorage, close } = require('../../linux/mesh/test/lib/mesh.js');
 const { loadTestCert } = require('../../linux/mesh/test/lib/testcert.js');
 
@@ -92,12 +94,15 @@ async function run(platform) {
     // A Sound per device (shared/sound-mesh.js), as mesh/main.js makes them now.
     A.sound = new SoundSet({ Sound: SOUNDS[platform], hub: A.hub, settings: A.settings, onChange() {} });
     const toB = () => A.sound.byId.get(B.id);
-    A.pairSync = new PairSync({
-      link: A.hub.facade, settings: A.settings, save() {},
-      set: (section, partial) => { Object.assign(A.settings[section], partial); if (section === 'audio') A.sound.apply(); },
-      only: ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'], bus: A.hub.bus,
-      peerRole: (id) => { const s = A.hub.sessions.get(id); return s ? s.role : null; },
-      peerOs: (id) => { const s = A.hub.sessions.get(id); return s ? s.peerOs : null; },
+    A.hub.consent = consent({ features: FEATURES, settings: () => A.settings, selectedId: () => A.hub.selectedId });
+    const only = ['clipboard', 'notifs', 'apps', 'audio', 'cursor', 'terminal', 'files'];
+    const features = Object.fromEntries(Object.entries(FEATURES).filter(([f]) => only.includes(f)));
+    A.pairSync = pairSyncMesh({
+      bus: A.hub.bus, hub: A.hub, features, values: VALUES, settings: () => A.settings, save() {},
+      setFeature: (f, dir, on) => { const [sec, key] = features[f][dir]; A.settings[sec][key] = on; if (sec === 'audio') A.sound.apply(); },
+      setValue: (k, v) => { const [sec, key] = VALUES[k].path; A.settings[sec][key] = v; },
+      peerRole: (id) => { const x = A.hub.sessions.get(id); return x ? x.role : null; },
+      peerOs: (id) => { const x = A.hub.sessions.get(id); return x ? x.peerOs : null; },
     });
     B.hub.bus.on(T.AUDIO_STOP, (m, from) => B.stops.push({ m, from }));
 

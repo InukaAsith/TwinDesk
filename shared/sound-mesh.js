@@ -11,7 +11,6 @@
 'use strict';
 
 const { resolve } = require('./mesh-graph.js');
-const { pairFor } = require('./pairfor.js');
 const { viewOf } = require('./hub-route.js');
 
 class SoundSet {
@@ -19,9 +18,9 @@ class SoundSet {
   constructor({ Sound, hub, settings, onChange }) {
     Object.assign(this, { Sound, hub, settings, onChange });
     this.byId = new Map(); // device id -> Sound
-    // What each edge's Sound reads of the hub: the selection, for whose switches are in settings.audio
-    // (pairFor). Nothing holds sound to a device any more (no sticky route).
-    this.meshHub = { get selectedId() { return hub.selectedId; }, setAudioSticky() {} };
+    // What each edge's Sound reads of the hub: the selection and each device's own pair (hub.consent,
+    // shared/consent.js). Nothing holds sound to a device any more (no sticky route).
+    this.meshHub = { get selectedId() { return hub.selectedId; }, get consent() { return hub.consent || null; }, setAudioSticky() {} };
     hub.on('peerAdded', (id) => this._ensure(id));
     hub.on('peerRemoved', () => this.apply()); // the graph without it: another edge may send now
     // settings.audio is the selected device's pair: a new selection changes every edge's switches. Only
@@ -96,8 +95,8 @@ class SoundSet {
 }
 
 // The sound graph from here (docs/mesh-graph.md): is this computer's edge to device `id` active? hub: a
-// mesh hub (device, sessions, selectedId) of Windows, Linux or the Mac; settings: whose audio.send is the
-// selected device's switch and pairSync every other's (pairFor).
+// mesh hub (device, sessions, selectedId, consent) of Windows, Linux or the Mac; settings: audio.send, the
+// switch when the hub has no consent (each device's own pair, shared/consent.js).
 function sendsTo(hub, settings, id) {
   const self = hub.device && hub.device.id;
   if (!self) return false;
@@ -108,7 +107,7 @@ function sendsTo(hub, settings, id) {
     nodes,
     from: self,
     selected: () => hub.selectedId,
-    allowed: (svc, from, to) => (pairFor(settings, hub.selectedId, to, 'audio', 'out', !!a.send) ? true : 'Send is off for it'),
+    allowed: (svc, from, to) => ((hub.consent ? hub.consent.get(to, 'audio', 'out') : !!a.send) ? true : 'Send is off for it'),
   });
   const e = edges.find((x) => x.to === id);
   return !!e && e.stage === 'active';
