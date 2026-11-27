@@ -22,7 +22,6 @@
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const { Route, viewOf } = require('../../shared/hub-route.js');
-const { Heard } = require('../../shared/peerstate.js');
 const { Sessions } = require('./session.js');
 
 const ROSTER = 'mesh.roster';
@@ -64,7 +63,6 @@ class Hub extends EventEmitter {
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this.forgotten = new Set(); // forgetPeer(): not listed as "via" until it connects again
     this.routes = [];
-    this.heard = new Heard(); // each device's last policies and states; a route plays them on 'client' (peerstate.js)
     this._audioSticky = {};
     this._inputPeer = null; // the device using this Mac (setInputPeer), for the microphone
     this.facade = this.route(() => this.selectedId);
@@ -80,15 +78,16 @@ class Hub extends EventEmitter {
     if (server) this.attachHost(server, pairing);
   }
 
-  // A route for a feature: pick(hub) -> the device id it follows.
   // The device the net hook serves (netlink.js: Bluetooth to Wi-Fi): the one main binds it to (netId),
   // else the selected one. Its messages go to netTap; files to it on any route wait in netHold.
   get netTarget() {
     return this.netId !== undefined ? this.netId : this.selectedId;
   }
 
-  route(pick) {
-    const r = new Route(this, pick);
+  // A route for a feature: pick(hub) -> the device id it follows.
+  // opts.remember: the state messages its features need again when it moves (shared/link-memory.js).
+  route(pick, opts = {}) {
+    const r = new Route(this, pick, opts);
     this.routes.push(r);
     r.refresh();
     return r;
@@ -96,12 +95,12 @@ class Hub extends EventEmitter {
 
   // The phone's route: the connected phone, whichever computer is selected.
   phoneRoute() {
-    return this.route((hub) => hub._connectedIdWhere((s) => P.isPhoneOs(s.peerOs)));
+    return this.route((hub) => hub._connectedIdWhere((s) => P.isPhoneOs(s.peerOs)), { remember: ['hub.state', 'call.state'] }); // the phone's permissions, its call
   }
 
   // Sound and microphone: stay on the device of an active session until it ends (mesh #194).
   audioRoute() {
-    if (!this._audioRoute) this._audioRoute = this.route((hub) => hub._pickAudioRoute());
+    if (!this._audioRoute) this._audioRoute = this.route((hub) => hub._pickAudioRoute(), { remember: ['audio.policy', 'mic.policy'] }); // whether that device takes our microphone
     return this._audioRoute;
   }
 
@@ -327,7 +326,6 @@ class Hub extends EventEmitter {
       if (this.mesh && this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
-    this.heard.note(s.id, msg);
     busVerbose(s, msg); // Debug › Verbose log › bus
     // The net hook's device's messages reach it first (netlink.js: its net.* and file chunks).
     if (this.netTap && s.id === this.netTarget) this.netTap(msg);
@@ -361,7 +359,6 @@ class Hub extends EventEmitter {
 
   // replaced: the device got a new socket, so it is down and up again at once. Its selection stays.
   _down(s, replaced = false) {
-    this.heard.forget(s.id); // its next session says it all again
     if (this.mesh) this.mesh.removePeer(s.id);
     this._rosterAll();
     this._peerEvent('closed', s.id, {});

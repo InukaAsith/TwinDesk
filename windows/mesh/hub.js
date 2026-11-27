@@ -22,7 +22,7 @@
 const { EventEmitter } = require('events');
 const P = require('../../shared/protocol.js');
 const { Route } = require('../../shared/hub-route.js');
-const { Heard, Said } = require('../../shared/peerstate.js');
+const { LinkMemory, Goodbyes } = require('../../shared/link-memory.js');
 const { Sessions } = require('./session.js');
 
 const ROSTER = 'mesh.roster';
@@ -65,7 +65,6 @@ class Hub extends EventEmitter {
     this._busHandlers = new Map(); // type -> [fn(msg, fromId)]
     this._peerHandlers = new Map(); // 'welcome' | 'closed' -> [fn(peerId, info)]
     this._facadeStateFns = [];
-    this.heard = new Heard(); // each device's last policies and states, selected or not (peerstate.js)
     this._audioSticky = {};
     this._audioRoute = null;
     this._inputPeer = null; // the device using this computer (setInputPeer), for the microphone
@@ -156,7 +155,7 @@ class Hub extends EventEmitter {
   // Sound and microphone (mesh #194): same target rules as mac/mesh/hub.js audioRoute().
   audioRoute() {
     if (!this._audioRoute) {
-      this._audioRoute = new Route(this, (hub) => hub._pickAudioRoute());
+      this._audioRoute = new Route(this, (hub) => hub._pickAudioRoute(), { remember: ['audio.policy', 'mic.policy'] }); // whether that device takes our microphone
       this._audioRoute.on('client', (v) => console.log('[audio-route] the microphone goes to', this._nameOf(v.deviceId), '(input peer', this._nameOf(this._inputPeer) + ', selected', this._nameOf(this.selectedId) + ', staying', JSON.stringify(this._audioSticky) + ')'));
       this._audioRoute.on('closed', (v) => console.log('[audio-route] left', (v && v.name) || '-'));
       this._audioRoute.refresh();
@@ -356,7 +355,6 @@ class Hub extends EventEmitter {
       if (this.mesh.handle(s.id, msg)) this._change();
       return true;
     }
-    this.heard.note(s.id, msg);
     busVerbose(s, msg); // Debug › Verbose log › bus
     // The net hook's device's messages reach it first (netlink.js: its net.* and file chunks).
     if (this.netTap && s.id === this.netTarget) this.netTap(msg);
@@ -394,7 +392,6 @@ class Hub extends EventEmitter {
 
   // replaced: the device got a new socket, so it is down and up again at once. Its selection stays.
   _down(s, replaced = false) {
-    this.heard.forget(s.id); // its next session says it all again
     this.mesh.removePeer(s.id);
     this._rosterAll();
     this._peerEvent('closed', s.id, {});
@@ -541,14 +538,15 @@ class Hub extends EventEmitter {
   // A link that follows the selection, except while hold() says it's in use: it stays with its device then
   // (Apps › Move windows, #313: a pointer visit to a third device took the moved windows home, their copies
   // there kept a frozen picture, and closing one couldn't bring its window back). Moving to another device
-  // is a 'closed' for the one it leaves and a 'welcome' for the next, with what that one said meanwhile
-  // (peerstate.js), as the facade's are; its device going is the scoped link's own 'closed'. follow():
-  // look again (hold() just ended). current: that device, as the facade's current.
-  sticky(hold = () => false) {
+  // is a 'closed' for the one it leaves (the policies it turned on there go off) and a 'welcome' for the
+  // next, with the last of `remember` that one said meanwhile (shared/link-memory.js); its device going is
+  // the scoped link's own 'closed'. follow(): look again (hold() just ended). current: that device.
+  sticky(hold = () => false, { remember = [] } = {}) {
     const hub = this;
     const link = this.scoped(this.selectedId);
     const fns = new Map(); // type -> [fn]: told again on a move
-    const said = new Said(); // the policies it told its device: switched off there when it leaves (GOODBYE)
+    const said = new Goodbyes(); // the policies it turned on at its device: switched off there when it leaves
+    const memory = new LinkMemory(this.bus, remember);
     let moves = 0;
     const on = link.on;
     link.on = (type, fn) => { addTo(fns, type, fn); on(type, fn); };
@@ -563,7 +561,7 @@ class Hub extends EventEmitter {
       const s = id ? hub.sessions.get(id) : null;
       if (!s || !s.connected) return;
       for (const fn of fns.get('welcome') || []) fn(hub._welcomeInfo(s));
-      for (const m of hub.heard.replay(id)) for (const fn of fns.get(m.t) || []) fn(m);
+      for (const m of memory.replay(id)) for (const fn of fns.get(m.t) || []) fn(m);
     };
     // To another device: 'closed' here, what it told the old one switched off there, 'welcome' for the new.
     link.moveTo = (next) => {
@@ -573,7 +571,8 @@ class Hub extends EventEmitter {
       if (was) {
         for (const fn of fns.get('closed') || []) fn({});
         const old = hub.sessions.get(was);
-        for (const m of said.goodbyes(was)) if (old && old.connected) old.send(m);
+        const bye = said.take(was);
+        if (old && old.connected) for (const m of bye) old.send(m);
       }
       link.bind(next);
       moves++;

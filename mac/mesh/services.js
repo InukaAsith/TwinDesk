@@ -141,7 +141,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     const keep = !!(pcViewRef && pcViewRef.isOpen && at && at.connected);
     viewTo = keep ? viewTo : h.selectedId;
     return viewTo;
-  });
+  }, { remember: ['screen.state'] }); // whether that device shares its screen
   const pcView = new PcView({ server: new Peer(viewRoute, meshHub.server), getSettings: s, saveSettings: () => store.saveSettings(s()) });
   pcViewRef = pcView;
   pcView.on('change', () => setImmediate(() => viewRoute.refresh())); // closed: it follows the selection again (later: never inside a move)
@@ -193,7 +193,7 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     const keep = !!(appSendRef && appSendRef.moved && appSendRef.moved.size && s && s.connected);
     appsTo = keep ? appsTo : h.selectedId;
     return appsTo;
-  });
+  }, { remember: ['papp.policy'] }); // whether that device takes our windows
   const appSend = new AppSend({ server: new Peer(appsRoute, meshHub.server), helper, getSettings: s });
   appSendRef = appSend;
   appSend.on('change', () => appsRoute.refresh()); // windows back: it follows the selection again

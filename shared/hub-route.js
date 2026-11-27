@@ -3,7 +3,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const { Said } = require('./peerstate.js');
+const { LinkMemory, Goodbyes } = require('./link-memory.js');
 
 // What a feature sees of its device: the one-to-one "client" object (role 'guest' = it connected to
 // this computer, 'host' = this computer is its guest).
@@ -63,15 +63,17 @@ function viewOf(s) {
 }
 
 // Events: 'client' (view), 'closed' (view), 'rtt' (view), 't:<type>' (msg, view), 'message' (msg, view).
+// opts.remember: the state messages its features need again when it moves to a device (shared/link-memory.js).
 class Route extends EventEmitter {
-  constructor(hub, pick) {
+  constructor(hub, pick, opts = {}) {
     super();
     this.hub = hub;
     this.pick = pick;
     this.targetId = null;
     this.lastView = null;
     this.stateFns = [];
-    this.said = new Said(); // the policies this route told its device (shared/peerstate.js)
+    this.said = new Goodbyes(); // the policies this route turned on at its device
+    this.memory = opts.remember && opts.remember.length && hub.bus ? new LinkMemory(hub.bus, opts.remember) : null;
   }
 
   get session() {
@@ -96,7 +98,7 @@ class Route extends EventEmitter {
       this.lastView = viewOf(this.hub.sessions.get(next));
       this.emit('client', this.lastView);
       // What the device said while this route was elsewhere: its features reset it on 'client'.
-      if (this.hub.heard) for (const m of this.hub.heard.replay(next)) this.deliver(m);
+      if (this.memory) for (const m of this.memory.replay(next)) this.deliver(m);
     }
     this._stateChanged();
   }
@@ -104,9 +106,10 @@ class Route extends EventEmitter {
   drop(id) {
     if (!this.targetId || (id && id !== this.targetId)) return;
     const v = this.lastView || {};
-    // Leaving a device that stays connected: what we told it is on goes off (peerstate.js GOODBYE).
+    // Leaving a device that stays connected: what we turned on there goes off.
     const s = this.session;
-    for (const m of this.said.goodbyes(this.targetId)) if (s && s.connected) s.send(m);
+    const bye = this.said.take(this.targetId);
+    if (s && s.connected) for (const m of bye) s.send(m);
     this.targetId = null;
     this.lastView = null;
     this.emit('closed', v);
