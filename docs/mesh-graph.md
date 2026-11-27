@@ -223,3 +223,20 @@ Linux (`camLink`) and a route on the Mac (`camRoute`):
   move's goodbye.
 
 Nothing new on the wire: an older app sees an ordinary one-to-one camera.
+
+### Step 4 as built
+
+**The phone decides** on its side already: the phone app keeps one link, to the computer chosen on the
+phone. A phone's own stack on a computer (its screen, bridge, Remote page, media, chats) was already one
+per phone (`PhoneSet`, `shared/perphone.js`, `shared/chats.js`; the Mac's `PhoneDir`).
+
+What was left is Calls, Messages, Photos and Files (`PhoneHub`), which ran on a link that heard every
+phone and sent to the active one. Now it has a link of its own, `shared/phonehub-link.js`, with one
+phone at a time (a computer takes one phone's services, `perIn` 1):
+
+- the active phone (the selected device when it's a phone, else the one that connected last), held by
+  its phone while a call is on;
+- only that phone is heard; another phone leaving no longer stops the hub (and the call on the other
+  phone with it);
+- moving to another phone is `closed` for the one it leaves, which is told the hub is off here
+  (`hub.policy`, all false), and `client` for the next.
