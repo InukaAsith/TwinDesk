@@ -49,7 +49,9 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   // Stream input only when "Receive input" is on and shared input is home.
   const input = new Input(server, helper, displays, {
     enabled: () => s().streamInput !== false && (!kvm || kvm.mode === 'home'),
-    swapKeys: () => server.keySwap(s()), // never between two Macs
+    // Every device watching this Mac's stream (its own Stream has a session), each with its own key swap.
+    bus: meshHub.bus, takes: (id) => stream.watching(id),
+    swapKeys: (id) => { const x = id && meshHub.sessions.get(id); return s().keys.swapCtrlCmd !== false && P.keySwapNeeded(P.OS.MAC, x && x.peerOs); }, // never between two Macs
   });
   const clipboard = new Clip({ bus: meshHub.bus, mesh, getSettings: s, helper, consent, session: (id) => meshHub.sessions.get(id) });
   // Files from every device, each on its own peer: the computer driving this Mac isn't selected here (dropset.js).
@@ -68,7 +70,33 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
   const smb = new SmbSet({ Smb, hub: meshHub, helper, getSettings: s, saveSettings: () => store.saveSettings(s()) }); // a folder per device, this Mac's to all (smbset.js)
 
   const apps = new Apps({ server, helper, displays, stream, getSettings: s });
-  const sshClient = new SshClient(server, s);
+  // Terminal, this Mac to another computer: one per computer (shared/papps-mesh.js), each with its own
+  // alias, `ssh twindesk-<name>`, and its own pair's switch; `ssh twindesk` is the selected device's (#313).
+  const SshConfig = require('../../shared/sshconfig.js');
+  const sshClient = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => meshHub.selectedId, viewAs: 'getter', empty: { ready: false, why: null, user: null, alias: SshConfig.ALIAS },
+    all: ['applySettings'], selected: ['openShell'],
+  });
+  const sshUnit = (pid) => {
+    const x = meshHub.sessions.get(pid);
+    if (!x || P.isPhoneOs(x.peerOs)) return;
+    sshClient.ensure(pid, () => {
+      const p = new (require('./phones').ScopedPhonePeer)(meshHub, meshHub.server, null);
+      const u = new SshClient(p, s, {
+        alias: SshConfig.aliasFor(x.displayName(), pid), isDefault: () => meshHub.selectedId === pid,
+        enabled: () => (consent ? consent.get(pid, 'terminal', 'in') : !!s().terminal.connectPc),
+      });
+      p.bind(pid); // after it listens: its 'client' now
+      return u;
+    });
+  };
+  meshHub.bus.onPeer('welcome', sshUnit);
+  for (const x of meshHub.sessions.list()) if (x.connected) sshUnit(x.id);
+  meshHub.on('selected', (pid) => { // `ssh twindesk`: the selected device's, or none
+    const u = sshClient.byId.get(pid);
+    if (u) u.takeDefault();
+    else try { SshConfig.setHost(null); } catch { /* config not writable */ }
+  });
   const audioPeer = new Peer(meshHub.audioRoute(), meshHub.server);
   // Sound: an Audio per device, both ways at once (audioset.js); the audio route stays the microphone's.
   const audio = new AudioSet({ Audio, Peer, hub: meshHub, audioHub: hub, stream, getSettings: s });
@@ -96,7 +124,24 @@ function startServices({ server, getSettings, pushState, onHelperReady, hub: mes
     viewTo = from; // open, it doesn't follow the selection by itself
     viewRoute.refresh();
   });
-  const pcApps = new PcApps({ server, getSettings: s });
+  // Another computer's apps here: a PcApps per device, each on its own peer (shared/papps-mesh.js), so
+  // windows from several computers stay open and a crossing closes none of them (#313).
+  const { ScopedPhonePeer } = require('./phones');
+  const pcApps = require('../../shared/papps-mesh.js').appsSet({
+    selectedId: () => meshHub.selectedId, viewAs: 'getter',
+    empty: { apps: [], listing: false, launch: {}, windows: [] },
+    merge: (v, all) => ({ ...v, windows: all.flatMap((x) => x.windows || []) }), // the Apps tab: the selected device's list, every window
+    all: ['acceptReZume', 'applySettings', 'shutdown', 'setDriven'], selected: ['list', 'open', 'openFromLink', 'keepInDock'],
+    any: ['returnWindow'], anyGet: ['focused'],
+  });
+  const appsUnit = (pid) => pcApps.ensure(pid, () => {
+    const p = new ScopedPhonePeer(meshHub, meshHub.server, null);
+    const u = new PcApps({ server: p, getSettings: s });
+    p.bind(pid); // after it listens: its 'client' now
+    return u;
+  });
+  meshHub.bus.onPeer('welcome', appsUnit);
+  for (const x of meshHub.sessions.list()) if (x.connected) appsUnit(x.id);
   const notifs = new Notifs({ bus: meshHub.bus, mesh, helper, getSettings: s, consent, saveSettings: () => store.saveSettings(s()), selfName });
   // History › Keep history: the clipboard's and notifications' history kept, encrypted (shared/histkeeper.js).
   const history = new (require('../../shared/histkeeper.js').HistoryKeeper)({ dir: require('electron').app.getPath('userData'), clip: clipboard, notifs, changed: pushState });

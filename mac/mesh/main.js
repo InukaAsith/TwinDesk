@@ -635,9 +635,10 @@ app.whenReady().then(() => {
   peer = new Peer(hub.facade, server);
   peer.on('client', (ctx) => {
     console.log(`[peer] session with ${ctx.name} (${ctx.os}, ${ctx.role === 'host' ? 'we are its guest' : 'it is our guest'})`);
-    peer.send(ctx, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false });
     pushState();
   });
+  // Whether this Mac takes input from its stream: to every device (each may watch it), not only the selected one.
+  hub.bus.onPeer('welcome', (pid) => hub.bus.send(pid, { t: P.T.STREAM_INPUT, on: settings.streamInput !== false }));
   peer.on('closed', pushState);
   peer.on('rtt', pushState);
   // Overview's controls of the selected device, and this Mac's for it (shared/devctl.js).
@@ -707,6 +708,7 @@ app.whenReady().then(() => {
     svc.clipboard.applySettings();
     svc.notifs.applySettings();
     svc.terminal.applySettings();
+    svc.sshClient.applySettings();
     pushState();
   });
   const shadow = new MeshShadow({ hub, kvm: () => svc.kvm, sound: () => svc.audio, mic: () => svc.mic, settings: () => settings, os: 'mac' }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)

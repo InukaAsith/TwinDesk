@@ -21,10 +21,17 @@ const KNOWN = path.join(SSH_DIR, 'macshare_known_hosts');
 const safe = (s) => /^[A-Za-z0-9._@ -]{1,100}$/.test(s);
 
 class SshClient extends EventEmitter {
-  constructor(server, getSettings) {
+  // mesh (Multi-device, one per device): { alias (its `Host twindesk-<name>`), enabled() (its pair's
+  // switch, shared/consent.js), isDefault() (it's the selected device: `ssh twindesk` is it too) }
+  constructor(server, getSettings, mesh = null) {
     super();
     this.server = server;
     this.getSettings = getSettings;
+    this.alias = (mesh && mesh.alias) || SshConfig.ALIAS;
+    this.enabledFn = mesh && mesh.enabled;
+    this.isDefault = mesh && mesh.isDefault;
+    this.known = this.alias === SshConfig.ALIAS ? KNOWN : path.join(SSH_DIR, `macshare_known_hosts-${this.alias}`);
+    this.host = null; // the entry written last (takeDefault)
     this.status = { ready: false, why: null, user: null };
     server.on('client', () => this._offer());
     // Through Bluetooth the session's address is the pipe's own end (127.0.0.1: ssh would reach
@@ -34,7 +41,18 @@ class SshClient extends EventEmitter {
   }
 
   get enabled() {
-    return !!this.getSettings().terminal.connectPc;
+    return this.enabledFn ? !!this.enabledFn() : !!this.getSettings().terminal.connectPc;
+  }
+
+  _setHost(host) {
+    this.host = host;
+    SshConfig.setHost(host, this.alias);
+    if (this.alias !== SshConfig.ALIAS && this.isDefault && this.isDefault()) SshConfig.setHost(host); // `ssh twindesk` too
+  }
+
+  // Multi-device: this device was just selected; `ssh twindesk` is it now (or nothing, while it isn't ready).
+  takeDefault() {
+    try { SshConfig.setHost(this.status.ready ? this.host : null); } catch { /* config not writable */ }
   }
 
   _pub() {
@@ -63,7 +81,7 @@ class SshClient extends EventEmitter {
       return this.emit('change');
     }
     if (ctx.transport === 'ble') {
-      SshConfig.setHost(null);
+      this._setHost(null);
       this.status = { ready: false, why: 'bluetooth', user: null };
       return this.emit('change');
     }
@@ -74,8 +92,8 @@ class SshClient extends EventEmitter {
       this.status = { ready: false, why: 'bad answer from the other computer', user: null };
       return this.emit('change');
     }
-    fs.writeFileSync(KNOWN, SshConfig.knownHosts(keys), { mode: 0o600 });
-    SshConfig.setHost({ address: ctx.address, port, user, identityFile: KEY, knownHostsFile: KNOWN });
+    fs.writeFileSync(this.known, SshConfig.knownHosts(keys, [...new Set([this.alias, SshConfig.ALIAS])]), { mode: 0o600 });
+    this._setHost({ address: ctx.address, port, user, identityFile: KEY, knownHostsFile: this.known });
     this.status = { ready: true, why: null, user };
     this.emit('change');
   }
@@ -84,19 +102,19 @@ class SshClient extends EventEmitter {
   applySettings() {
     if (this.enabled) return this._offer();
     if (this.server.current) this.server.sendToClient({ t: P.T.SSH_FORGET });
-    SshConfig.setHost(null);
-    fs.rmSync(KNOWN, { force: true });
+    SshConfig.setHost(null, this.alias);
+    fs.rmSync(this.known, { force: true });
     this.status = { ready: false, why: null, user: null };
     this.emit('change');
   }
 
   openShell() {
     if (!this.status.ready) return;
-    execFile('/usr/bin/osascript', ['-e', `tell application "Terminal" to do script "ssh ${SshConfig.ALIAS}"`, '-e', 'tell application "Terminal" to activate'], () => {});
+    execFile('/usr/bin/osascript', ['-e', `tell application "Terminal" to do script "ssh ${this.alias}"`, '-e', 'tell application "Terminal" to activate'], () => {});
   }
 
   get view() {
-    return { ...this.status, alias: SshConfig.ALIAS };
+    return { ...this.status, alias: this.alias };
   }
 }
 

@@ -287,3 +287,18 @@ What still ran on the facade and only served (or heard) the selected device:
 - **Overview's controls** (`shared/devctl-mesh.js`): a DevCtl per device, one DevLocal. Another device's
   Overview can ring, lock or read this computer whichever device is selected here; a ring stops when the
   device that rang goes, not on a crossing. Overview shows the selected device's.
+
+### Step 5, phase 3 as built: the medium sets per device
+
+- **Another computer's apps here** (`shared/papps-mesh.js`): a PeerApps (Windows, Linux) or PcApps (the
+  Mac) per device, each on its own link (`shared/scoped-link.js`). Windows from several computers stay
+  open at once and a crossing closes none (the facade's 'closed' closed every window of the device left,
+  moved windows too, and that device kept capturing them: `papp.policy` has no goodbye). The Apps tab
+  lists and opens the selected device's apps; switch changes reach every unit.
+- **Terminal, this computer to another** (`*/terminal.js`, `mac/ssh-client.js`): one per computer, each
+  with its own `Host twindesk-<name>` block (`shared/sshconfig.js` `aliasFor`), known_hosts and pair's
+  switch, so `ssh twindesk-ryzen9` reaches Ryzen9 whichever device is selected; `ssh twindesk` is the
+  selected device's (rewritten when the selection moves, removed while that device isn't ready).
+- **The Mac's input** (`mac/input.js`, `bus`): from every device watching this Mac's stream (StreamSet
+  streams to all of them; only the selected one's input was taken), each with its own Ctrl/Cmd swap;
+  what one device holds is let go when another's input comes. `stream.input` goes to every device.

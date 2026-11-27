@@ -10,12 +10,13 @@
 //   devCtlSet({ selectedId(), make(id) → DevCtl, local })
 //     ensure(id)   a device that connected (or is known): its DevCtl, made once and kept
 //     view / app / do(cmd) / look() / local: the single DevCtl API, for the selected device
-//   onHub(hub, { make(link, id) → DevCtl, local }): Windows and Linux; a DevCtl per device on
-//     hub.scoped(id) (with current, and its 'welcome' again: the hub's went before the DevCtl listened)
+//   onHub(hub, { make(link, id) → DevCtl, local }): Windows and Linux; a DevCtl per device on its own
+//     link (shared/scoped-link.js)
 //   Events: 'change', 'outdated' (as DevCtl's).
 'use strict';
 
 const { EventEmitter } = require('events');
+const { eachDevice } = require('./scoped-link.js');
 
 class DevCtlSet extends EventEmitter {
   constructor({ selectedId, make, local = null }) {
@@ -26,9 +27,9 @@ class DevCtlSet extends EventEmitter {
     if (local) local.onStop = this._onStop;
   }
 
-  ensure(id) {
+  ensure(id, make = this.make) {
     if (!id || this.byId.has(id)) return this.byId.get(id) || null;
-    const d = this.make(id);
+    const d = make(id);
     if (this.local) this.local.onStop = this._onStop; // a DevCtl made without sharedLocal takes it for itself
     d.on('change', () => this.emit('change'));
     d.on('outdated', (o) => this.emit('outdated', o));
@@ -65,37 +66,10 @@ class DevCtlSet extends EventEmitter {
   }
 }
 
-// hub.scoped(id) with what DevCtl reads besides: current ({deviceId, name, os}), and welcome() to give
-// a DevCtl made after its device's 'welcome' that welcome.
-function scopedLink(hub, id) {
-  const link = hub.scoped(id);
-  const welcomes = [];
-  const on = link.on.bind(link);
-  link.on = (type, fn) => {
-    if (type === 'welcome') welcomes.push(fn);
-    on(type, fn);
-  };
-  link.welcome = () => { for (const fn of welcomes) fn({}); };
-  Object.defineProperty(link, 'current', {
-    get: () => { const x = hub.sessions.get(id); return x && x.connected ? { deviceId: id, name: x.displayName(), os: x.peerOs } : null; },
-  });
-  return link;
-}
-
 function onHub(hub, { make, local = null }) {
-  const links = new Map();
-  const set = new DevCtlSet({
-    selectedId: () => hub.selectedId, local,
-    make: (id) => { const l = scopedLink(hub, id); links.set(id, l); return make(l, id); },
-  });
-  const up = (id) => {
-    const had = set.byId.has(id);
-    set.ensure(id);
-    if (!had) links.get(id).welcome();
-  };
-  hub.on('peerAdded', up);
-  for (const id of hub._connectedIds()) up(id);
+  const set = new DevCtlSet({ selectedId: () => hub.selectedId, local, make: () => null });
+  eachDevice(hub, (id, link) => set.ensure(id, () => make(link, id)));
   return set;
 }
 
-module.exports = { DevCtlSet, devCtlSet: (opts) => new DevCtlSet(opts), onHub, scopedLink };
+module.exports = { DevCtlSet, devCtlSet: (opts) => new DevCtlSet(opts), onHub };

@@ -322,7 +322,7 @@ function setupIpc(ctx) {
       settings.streamInput = !!on;
       save();
       if (!on) ctx.input.releaseAll();
-      ctx.server.sendToClient({ t: P.T.STREAM_INPUT, on: !!on }); // Windows goes view-only when off
+      for (const pid of ctx.hub.bus.connectedIds()) ctx.hub.bus.send(pid, { t: P.T.STREAM_INPUT, on: !!on }); // every viewer goes view-only when off
     },
     // Share this Mac's screen with one device its own way: { mode: 'default'|'none'|'mirror'|'virtual', displayId? }.
     setStreamTarget(id, choice) {
