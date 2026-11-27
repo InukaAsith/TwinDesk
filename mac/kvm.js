@@ -114,6 +114,8 @@ class Kvm extends EventEmitter {
     // host tells it so both computers agree; after that kvm.link keeps them in step.
     server.on('client', (ctx) => {
       this.lastName = ctx.name;
+      // So a session that is "connected but the keyboard is dead" can be told from a healthy one in the log (#337).
+      console.log(`[kvm] ${ctx.name} connected: ${this.mode}, cursor sharing ${this.linked ? 'on' : 'off'}${this.locked ? ', locked' : ''}`);
       this.map.reset();
       this.map.sendDisplays();
       const by = this.cfg.linkedBy || {};

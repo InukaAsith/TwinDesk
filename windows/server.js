@@ -82,13 +82,17 @@ class Server extends EventEmitter {
     this.sockets.add(ctx);
     this._arm();
     ws.on('message', (data, isBinary) => this._onMessage(ws.ctx, data, isBinary, ws));
-    ws.on('close', () => this._onSocketClose(ws));
+    ws.on('close', (code, reason) => this._onSocketClose(ws, code, String(reason || '')));
     ws.on('error', (err) => console.error(`[server] socket ${ws.address}: ${err.message}`));
   }
 
-  _onSocketClose(ws) {
+  _onSocketClose(ws, code, reason) {
     const ctx = ws.ctx;
     if (ws.detached) return;
+    if (ctx.authed) { // which path went, and how (1000/1001: closed on purpose there; 1006: the connection dropped, #327)
+      const path = ws.transport === 'ble' ? 'Bluetooth' : ws.address;
+      console.log(`[server] ${ctx.name}: ${ctx.alt === ws ? 'fallback' : 'session'} socket on ${path} closed (${code || '?'}${reason ? ` ${reason}` : ''}) after ${Math.round((Date.now() - ctx.connectedAt) / 1000)} s`);
+    }
     if (ctx.alt === ws) {
       ctx.alt = null;
       return this.emit('transport', ctx);
