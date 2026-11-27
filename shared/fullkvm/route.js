@@ -13,7 +13,7 @@ const { SvcLink, KVM } = require('./svc-link.js');
 
 const SVC_SOCK = process.env.TWINDESK_KVM_SOCK || (process.platform === 'win32' ? '\\\\.\\pipe\\TwinDesk.kvm' : '/run/twindesk/kvm.sock');
 // The helpers' mouse-and-keyboard events (linux-helper/src: capture.c, wl.c; windows-helper/src: Capture*.cs).
-const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv', 'hooksReinstalled', 'secureDesktop']);
+const KVM_EVENTS = new Set(['edge', 'return', 'ev', 'hotkey', 'captureEnded', 'released', 'local', 'shake', 'lane', 'laneEv', 'hooksReinstalled', 'secureDesktop', 'letGo']);
 
 module.exports = (Helper) => class FullKvmHelper extends Helper {
   constructor(...args) {

@@ -121,6 +121,38 @@ namespace MacShare
             if (Stuck != null && (Elevated(WindowFromPoint(after)) || Elevated(Native.GetForegroundWindow()))) Stuck();
         }
 
+        // Main froze with a button we pressed for the other computer still down (#312): a press on our own
+        // app's title bar (a drag, or a caption button OnOwnCaptionButton missed) or borders runs Windows'
+        // modal loop on main's thread, the thread that has to bring us the release, so nothing came until
+        // this computer's own mouse moved. Main says it's alive with `keepalive {driven}` while it's driven;
+        // with no word from it for SilentMs and a button down, the button is let go here and the loop ends.
+        // Off until main sends that keepalive: an older one doesn't, and a button held still stays held.
+        const int SilentMs = 1500;
+        static int heard; // Environment.TickCount of main's last command
+        System.Windows.Forms.Timer silence; // on the UI thread: made by Heartbeat (Dispatch)
+        public Action<List<int>, int> LetGo; // the buttons let go, how long main was silent
+
+        public static void Heard() { heard = Environment.TickCount; }
+
+        public void Heartbeat()
+        {
+            if (silence != null) return;
+            silence = new System.Windows.Forms.Timer { Interval = 250 };
+            silence.Tick += delegate { WatchSilence(); };
+            silence.Start();
+        }
+
+        void WatchSilence()
+        {
+            int quiet = unchecked(Environment.TickCount - heard);
+            if (quiet < SilentMs) return;
+            List<int> down = new List<int>();
+            foreach (int b in heldButtons) if (!(b == 0 && captionHeld)) down.Add(b); // a held-back caption click was never pressed
+            if (down.Count == 0) return;
+            foreach (int b in down) Button(b, false);
+            if (LetGo != null) LetGo(down, quiet);
+        }
+
         [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
         [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
         [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
