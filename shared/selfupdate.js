@@ -41,6 +41,7 @@ class SelfUpdate {
     this.app = app;
     this.fetch = fetch;
     this.log = log || ((...a) => console.log('[update]', ...a));
+    this.quitMs = 300; // from install() to quitting; an update through the mesh (debuglocal.js) gives its answer time to leave
     this.kind = this._kind();
   }
 
@@ -185,7 +186,7 @@ class SelfUpdate {
     const p = spawn('/bin/sh', ['-c', script, 'twindesk-update', String(process.pid), app, staged], { detached: true, stdio: 'ignore' });
     p.unref();
     this.log(`swapping in ${version} at ${app} after quitting`);
-    setTimeout(() => this.app.quit(), 300);
+    setTimeout(() => this.app.quit(), this.quitMs);
   }
 
   // The new app must be signed by the same certificate as this one (its designated requirement),
@@ -235,7 +236,7 @@ class SelfUpdate {
     fs.renameSync(tmp, target); // the running image keeps its own inode
     this.log(`replaced ${target}`);
     this.app.relaunch({ execPath: target, args: [] });
-    setTimeout(() => this.app.quit(), 300);
+    setTimeout(() => this.app.quit(), this.quitMs);
   }
 
   async _deb(file) {
@@ -246,7 +247,7 @@ class SelfUpdate {
     if (r.code !== 0) throw new Error(`The package didn’t install: ${(r.err || r.out).trim().split('\n').pop() || r.code}`);
     this.log('installed the .deb');
     this.app.relaunch();
-    setTimeout(() => this.app.quit(), 300);
+    setTimeout(() => this.app.quit(), this.quitMs);
   }
 }
 

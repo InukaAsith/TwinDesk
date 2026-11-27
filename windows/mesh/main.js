@@ -350,6 +350,7 @@ function start() {
     app, hub, device, settings, save: saveSettings, kvm: () => kvm, shadow, helper, onChange: () => pushState(),
     fullkvm: require('../../shared/edition.js').fullKvm() ? require('../fullkvm/manager.js') : null,
     ps: require('../ps').script,
+    updates: () => updates, // its SelfUpdate: an update sent through the mesh installs as the app's own would
   });
   { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)
     const { LocalApi } = require('../../shared/localapi.js');

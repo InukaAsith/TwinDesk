@@ -246,6 +246,48 @@ setInterval(() => {}, 1000); // meshdebug's timers are unref'd (as in the app): 
     assert.strictEqual(await code(w.nodes.A.d.ask('B', 'format-disk')), 'unknown op');
   }
 
+  // An update through the mesh: put's pieces carry bytes (through a relay too), only with Allow any
+  // command; never through Bluetooth; update follows the same rule.
+  {
+    const w = world(['A', 'B', 'C'], ['AB', 'BC'], { allow: { C: ['A', 'B'] }, any: {} });
+    const got = [];
+    w.nodes.C.d.local.put = async (a, bin) => { got.push([a.at, bin.length, bin[0]]); return { got: bin.length }; };
+    w.nodes.C.d.local.update = async (a) => ({ installing: 'appimage', file: a.name });
+    const piece = Buffer.alloc(PIECE, 9);
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'put', { name: 'x.AppImage', size: PIECE, sha256: 'f'.repeat(64), at: 0 }, piece)), 'any command is off');
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'update', { name: 'x.AppImage' })), 'any command is off');
+    w.nodes.C.d.anyCommand = () => true;
+    const r = await w.nodes.A.d.ask('C', 'put', { name: 'x.AppImage', size: PIECE, sha256: 'f'.repeat(64), at: 0 }, piece);
+    assert.deepStrictEqual(got, [[0, PIECE, 9]], 'the piece arrived whole through B');
+    assert.deepStrictEqual(r.data, { got: PIECE });
+    assert.strictEqual((await w.nodes.A.d.ask('C', 'update', { name: 'x.AppImage' })).data.installing, 'appimage');
+    const puts = () => w.nodes.C.lines.filter((l) => /asked put/.test(l)).length;
+    const before = puts();
+    await w.nodes.A.d.ask('C', 'put', { name: 'x.AppImage', size: 3 * PIECE, sha256: 'f'.repeat(64), at: PIECE }, piece);
+    assert.strictEqual(puts(), before, 'a line for the first piece only, not one per piece');
+    // The switch turning itself off mid-transfer: pieces of the update already begun go on, and its install;
+    // a new one doesn't start.
+    w.nodes.C.d.anyCommand = () => false;
+    w.nodes.C.d.local.granted = (op, a) => (op === 'put' ? a.sha256 === 'f'.repeat(64) : a.name === 'x.AppImage');
+    assert.deepStrictEqual((await w.nodes.A.d.ask('C', 'put', { name: 'x.AppImage', size: 3 * PIECE, sha256: 'f'.repeat(64), at: 2 * PIECE }, piece)).data, { got: PIECE });
+    assert.strictEqual((await w.nodes.A.d.ask('C', 'update', { name: 'x.AppImage' })).data.installing, 'appimage');
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'put', { name: 'x.AppImage', size: 3 * PIECE, sha256: 'f'.repeat(64), at: 0 }, piece)), 'any command is off', 'a first piece always asks');
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'put', { name: 'y.AppImage', size: 3 * PIECE, sha256: 'e'.repeat(64), at: PIECE }, piece)), 'any command is off');
+    w.nodes.C.d.anyCommand = () => true;
+    // Too big a piece, or bytes on another op: refused before sending.
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'put', {}, Buffer.alloc(PIECE + 1))), 'bad piece');
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'status', {}, piece)), 'bad piece');
+    // A put without bytes is refused there.
+    assert.strictEqual(await code(w.nodes.A.d.ask('C', 'put', { at: 0 })), 'bad piece');
+    // Through Bluetooth: neither the asker's own link nor a relay's.
+    const wb = world(['A', 'B', 'C'], ['AB', 'BC'], { allow: { B: ['A'], C: ['A', 'B'] }, any: { B: true, C: true }, ble: ['AB', 'BC'] });
+    wb.nodes.B.d.local.put = async () => ({});
+    assert.strictEqual(await code(wb.nodes.A.d.ask('B', 'put', { at: 0 }, piece)), 'bluetooth');
+    const wr = world(['A', 'B', 'C'], ['AB', 'BC'], { allow: { C: ['A', 'B'] }, any: { C: true }, ble: ['BC'] });
+    wr.nodes.C.d.local.put = async () => ({});
+    assert.strictEqual(await code(wr.nodes.A.d.ask('C', 'put', { at: 0 }, piece)), 'bluetooth', 'B doesn’t pass a piece on over Bluetooth');
+  }
+
   console.log('meshdebug: all passed');
   process.exit(0);
 })().catch((e) => {

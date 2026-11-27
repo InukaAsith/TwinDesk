@@ -15,7 +15,15 @@
 //              is left out
 //   run()      any command, as this user (only while Allow any command is on: meshdebug.js checks)
 //   restart()  TwinDesk, or the Full KVM service
+//   put()      a piece of an installer sent from another device (Debug's update, only while Allow any
+//              command is on), written at its offset in the app's mesh-update folder; the last piece
+//              checks the whole file's SHA-256
+//   update()   installs that file as the app's own updater would (shared/selfupdate.js): the Mac app
+//              swapped in place (same signer), the Windows installer run silently (its UAC prompt shows
+//              there), an AppImage replaced. Then TwinDesk restarts, as the new version
 'use strict';
+
+const crypto = require('crypto');
 
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -24,6 +32,10 @@ const os = require('os');
 const path = require('path');
 
 const OUT_MAX = 1024 * 1024; // a diagnostic's or command's output, at most
+const PUT_MAX = 1024 * 1024 * 1024; // an installer sent through the mesh, at most
+const GRANT_MS = 10 * 60 * 1000; // a file received whole may be installed this long after, switch or not
+const PUT_IDLE_MS = 2 * 60 * 1000; // a file being received, closed after this long without a piece
+const PUT_EXT = /\.(dmg|exe|AppImage|deb)$/i;
 const DIAG_MS = 60000;
 const RUN_MAX_MS = 120000;
 const LOGS = ['TwinDesk.log', 'TwinDesk.1.log', 'TwinDesk.2.log', 'crash.log', 'crash.1.log', 'link-stats.log', 'link-stats.1.log'];
@@ -152,7 +164,10 @@ class DebugLocal {
       ps: null,
       electron: null,
       startedAt: Date.now(),
+      selfUpdate: () => null, // the app's SelfUpdate (shared/selfupdate.js), or null where it can't update itself
+      updatesCfg: () => null, // settings.updates: {auto, install}
     }, opts);
+    this.puts = new Map(); // name -> {size, sha256, at: Set of offsets written, got}
     this.parts = new Map();
   }
 
@@ -169,7 +184,18 @@ class DebugLocal {
       edition: this.edition(),
       uptime: Math.round((Date.now() - this.startedAt) / 1000),
       diags: this.diagNames(),
+      update: await this.updateInfo(),
     };
+  }
+
+  // How this copy updates: kind ('mac', 'win', 'appimage', 'deb', '' when it can't, as installed), and
+  // whether it checks GitHub (auto) and installs releases by itself (install).
+  async updateInfo() {
+    const su = this.selfUpdate();
+    let kind = '';
+    try { kind = su ? (await su.check()) || '' : ''; } catch (_) { /* unknown: can't */ }
+    const cfg = this.updatesCfg() || {};
+    return { kind, auto: cfg.auto !== false, install: cfg.install === true };
   }
 
   // Every part, each on its own: one that throws is its error, not the whole snapshot's.
@@ -401,6 +427,98 @@ class DebugLocal {
       ? await exec(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${cmd}"`], { timeout: ms, verbatim: true })
       : await exec(this.platform === 'darwin' ? '/bin/zsh' : '/bin/sh', ['-c', cmd], { timeout: ms });
     return { cmd, code: r.code, out: r.out };
+  }
+
+  // ---- an update sent from another device ----
+
+  _updateDir() {
+    return path.join(this.app ? this.app.getPath('userData') : os.tmpdir(), 'mesh-update');
+  }
+
+  // {name, size, sha256, at} and that piece's bytes. The first piece (at 0) starts the file over and
+  // drops any other one; the piece that completes it checks the SHA-256 (a mismatch deletes it).
+  // The file stays open from the first piece to the last, written without blocking: opened and closed
+  // for each piece, Windows' antivirus scanned it at every close while the main thread waited, and
+  // AMXLPDL's pings were answered 4 s late (130 MB at 160 KB/s). Let go after PUT_IDLE_MS without a piece.
+  async put({ name, size, sha256, at }, buf) {
+    const base = path.basename(String(name || ''));
+    if (!PUT_EXT.test(base) || /[^\w.@+ -]/.test(base)) throw new Error('put: not an installer name');
+    size = Number(size);
+    at = Number(at);
+    if (!Number.isInteger(size) || size <= 0 || size > PUT_MAX) throw new Error('put: bad size');
+    if (!/^[0-9a-f]{64}$/i.test(String(sha256 || ''))) throw new Error('put: no sha256');
+    if (!Buffer.isBuffer(buf) || !Number.isInteger(at) || at < 0 || at + buf.length > size) throw new Error('put: bad piece');
+    const dir = this._updateDir();
+    const part = path.join(dir, base + '.part');
+    let p = this.puts.get(base);
+    if (at === 0 || !p || p.size !== size || p.sha256 !== sha256.toLowerCase()) {
+      await this._putClose();
+      await fs.promises.rm(dir, { recursive: true, force: true });
+      await fs.promises.mkdir(dir, { recursive: true });
+      p = { size, sha256: sha256.toLowerCase(), at: new Set(), got: 0, fh: await fs.promises.open(part, 'w+'), part };
+      this.puts.set(base, p);
+      console.log(`[debug] receiving ${base} (${size} bytes) for an update`);
+    }
+    clearTimeout(p.idle);
+    p.idle = setTimeout(() => this._putClose(), PUT_IDLE_MS);
+    if (p.idle.unref) p.idle.unref();
+    await p.fh.write(buf, 0, buf.length, at);
+    if (!p.at.has(at)) { p.at.add(at); p.got += buf.length; }
+    if (p.got < size) return { name: base, got: p.got, size, done: false };
+    await this._putClose();
+    const h = crypto.createHash('sha256');
+    await new Promise((resolve, reject) => fs.createReadStream(part).on('data', (c) => h.update(c)).on('end', resolve).on('error', reject));
+    if (h.digest('hex') !== p.sha256) {
+      fs.rmSync(part, { force: true });
+      throw new Error('put: the file didn’t arrive whole (SHA-256)');
+    }
+    fs.renameSync(part, path.join(dir, base));
+    this.received = { name: base, at: Date.now() };
+    console.log(`[debug] ${base} received whole`);
+    return { name: base, got: p.got, size, done: true };
+  }
+
+  // Whether an update already let in may go on without Allow any command (meshdebug.js): a later piece
+  // of the file being received (its name and SHA-256), or installing what was received whole within
+  // GRANT_MS. Its first piece needed the switch on.
+  granted(op, { name, sha256 } = {}) {
+    const base = path.basename(String(name || ''));
+    if (op === 'put') {
+      const p = this.puts.get(base);
+      return !!p && p.sha256 === String(sha256 || '').toLowerCase();
+    }
+    if (op === 'update') return !!this.received && this.received.name === base && Date.now() - this.received.at < GRANT_MS;
+    return false;
+  }
+
+  // The file being received closed, and forgotten (a later piece starts it over).
+  async _putClose() {
+    const all = [...this.puts.values()];
+    this.puts.clear();
+    for (const p of all) {
+      clearTimeout(p.idle);
+      try { if (p.fh) await p.fh.close(); } catch (_) { /* closed */ }
+    }
+  }
+
+  // {name, force}: installs the file put() received. An installer of the other edition (Full KVM or
+  // not: told by its name) only with force. Answers once the install is under way; the app quits a
+  // little later (quitMs), or the Windows installer closes it.
+  async update({ name, force }) {
+    const base = path.basename(String(name || ''));
+    const file = path.join(this._updateDir(), base);
+    if (!base || !fs.existsSync(file)) throw new Error('update: send the file first');
+    const su = this.selfUpdate();
+    const kind = su ? await su.check() : '';
+    if (!kind) throw new Error('update: this copy of TwinDesk can’t update itself (as it was installed)');
+    if (!su.fits({ name: base })) throw new Error(`update: ${base} isn’t what a ${kind} install takes`);
+    const full = this.edition() === 'fullkvm';
+    if (!force && /full-?kvm/i.test(base) !== full) throw new Error(`update: ${base} is ${full ? 'not ' : ''}the Full KVM edition, this computer's is ${full ? 'Full KVM' : 'standard'} (force to change it)`);
+    const was = this.app ? this.app.getVersion() : '';
+    console.log(`[debug] updating TwinDesk ${was} with ${base} (asked through Debug)`);
+    su.quitMs = 2500;
+    await su.install(file, '');
+    return { installing: kind, file: base, was };
   }
 
   // Answers first (meshdebug sends it), then does it.

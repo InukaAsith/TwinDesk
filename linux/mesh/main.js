@@ -328,6 +328,7 @@ function start() {
   const shadow = new MeshShadow({ hub, kvm: () => kvm, sound: () => sound, mic: () => mic, settings: () => settings }).start(); // the graph beside today's routing, logs only (docs/mesh-graph.md, step 1)
   dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
     app, hub, device, settings, save: saveSettings, kvm: () => kvm, shadow, helper, onChange: () => pushState(),
+    updates: () => updates, // its SelfUpdate: an update sent through the mesh installs as the app's own would
     fullkvm: require('../../shared/edition.js').fullKvm() ? require('../fullkvm/manager.js') : null,
   });
   { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)

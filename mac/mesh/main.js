@@ -684,6 +684,7 @@ app.whenReady().then(() => {
   dbg = startDebug({ // Debug: any device of the mesh, from here or the code agent's MCP server (docs/debug.md)
     app, hub, device: { id: id.macId, name: id.macName }, settings, save: () => store.saveSettings(settings),
     kvm: () => svc.kvm, shadow, onChange: () => pushState(),
+    updates: () => updates, // its SelfUpdate: an update sent through the mesh installs as the app's own would
   });
   { // General › Local API (shared/localapi.js): in Multi-device, Debug's too, for the code agent's MCP server (docs/debug.md)
     const { LocalApi } = require('../../shared/localapi.js');
