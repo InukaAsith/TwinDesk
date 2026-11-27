@@ -159,6 +159,7 @@ int wlstrip_available(void);
 int wlstrip_fd(void);
 void wlstrip_show(int x, int y, int w, int h, int side, int back, int fromMain);
 void wlstrip_hide(void);
+void wlstrip_identify(const char *list);
 void wlstrip_read(void);
 void wlstrip_tick(void);
 void wlstrip_shutdown(void);

@@ -77,6 +77,10 @@ class Link(
     private var pinger: ScheduledFuture<*>? = null
     // Resume (hello {resume}): the session's other socket, and one being opened.
     private var resumeKey = ""
+    // The computer's LAN addresses and port from its welcome (Lan.kt, #287): where a Bluetooth session may
+    // move to the Wi-Fi when discovery doesn't see it there.
+    @Volatile var hostLan: List<String> = emptyList(); private set
+    @Volatile var hostLanPort = 0; private set
     private var alt: WebSocket? = null
     private var altBle = false
     private var movedAt = 0L // when the session moved onto the network (dropAlt)
@@ -579,6 +583,8 @@ class Link(
         reclaimHello = false
         m.optString("macName").takeIf { it.isNotEmpty() }?.let { h.name = it.take(64) }
         if (m.has("tail")) h.tail = Tailnet.clean(m.optJSONArray("tail")) // its Tailscale addresses (Tailnet.kt)
+        hostLan = Lan.clean(m.optJSONArray("lan")) // its LAN addresses (Lan.kt): an older computer sends none
+        hostLanPort = m.optInt("lanPort", 0).takeIf { it in 1..65535 } ?: 0
         if (m.has("relay")) h.relay = RelayInfo.from(m.optJSONObject("relay")) // its own relay, or none now (Relay.kt)
         h.lastSeen = System.currentTimeMillis()
         // Through the relay: this attempt's address is the local pipe, never the computer's to keep.

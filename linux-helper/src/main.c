@@ -129,6 +129,8 @@ static void dispatch(const char *line) {
     } else if (!strcmp(cmd, "dragStrip")) { // Full KVM: the service's helper wants the strip; we have the X display (wlstrip.c)
       if (jbool(c, "on", 0) && wlstrip_available()) wlstrip_show((int)jnum(c, "x", 0), (int)jnum(c, "y", 0), (int)jnum(c, "w", 2), (int)jnum(c, "h", 2), side_of(jstr(c, "side", NULL)), jbool(c, "back", 0), 1);
       else wlstrip_hide();
+    } else if (!strcmp(cmd, "identify")) { // Identify's numbers, one per monitor (wlstrip.c, #182)
+      wlstrip_identify(jstr(c, "list", ""));
     } else if (!strcmp(cmd, "dragCross")) { // Full KVM: the user's helper caught a drag on its strip: cross with it
       error = wl_drag_cross(jstr(c, "pathsText", ""), side_of(jstr(c, "side", NULL)), jbool(c, "back", 0));
     } else if (!strcmp(cmd, "info")) {

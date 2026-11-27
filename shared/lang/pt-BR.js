@@ -2370,4 +2370,6 @@
   "Scrolling speed here": "Velocidade de rolagem aqui",
   "Another computer’s mouse wheel on this Mac": "A roda do mouse de outro computador neste Mac",
   "Open {device}’s shared folder": "Abrir a pasta compartilhada de {device}",
+  "Lock together": "Bloquear juntos",
+  "This computer locks when another connected computer locks, and the other way round. On each computer": "Este computador bloqueia quando outro computador conectado bloqueia, e vice-versa. Ative em cada computador",
 });

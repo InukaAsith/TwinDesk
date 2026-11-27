@@ -211,12 +211,22 @@ class Core private constructor(val ctx: Context) : Link.Events {
         val h = link.host
         if (link.connected && !link.ble) screen.onWifi()
         if (h == null || !link.connected || !link.ble || link.resuming) return
-        val f = discovery.found[h.id] ?: return
         val now = System.currentTimeMillis()
-        if (now - (resumeTried[f.address] ?: 0) < 8000) return
-        resumeTried[f.address] = now
-        Log.i("TwinDesk", "${h.name} is on the network at ${f.address}: moving the session there")
-        link.resume(f.address, f.port)
+        val f = discovery.found[h.id]
+        if (f != null) {
+            if (now - (resumeTried[f.address] ?: 0) < 8000) return
+            resumeTried[f.address] = now
+            Log.i("TwinDesk", "${h.name} is on the network at ${f.address}: moving the session there")
+            link.resume(f.address, f.port)
+            return
+        }
+        // Not seen on the network (it drops broadcasts, #287): the computer's own LAN addresses from its
+        // welcome, one per try, each again after 30 s; a dial that fails leaves the session on Bluetooth.
+        if (link.hostLanPort == 0) return
+        val a = Lan.reachable(link.hostLan).firstOrNull { now - (resumeTried[it] ?: 0) >= 30000 } ?: return
+        resumeTried[a] = now
+        Log.i("TwinDesk", "${h.name} not seen on the network: trying its address $a from the session")
+        link.resume(a, link.hostLanPort)
     }
 
     // Computers near: on the network, then the ones only Bluetooth sees.

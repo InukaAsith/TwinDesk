@@ -467,6 +467,13 @@ function start() {
     pcApps.moveOut(wid, m.fromX !== undefined ? { x: Number(m.fromX), y: Number(m.fromY) } : undefined).then((ok) => ok || console.log(`[apps] window not moved: ${pcApps.macAccepts ? 'it can’t go (Bluetooth, gone, already there)' : 'Move windows is off on the other computer'}`));
   };
   helper.on('exit', pushState);
+  // General › Lock together (#322, shared/locksync.js): this computer locked, every connected computer locks too.
+  const isPc = (id) => { const s = hub.sessions.get(id); return !!s && s.connected && !P.isPhoneOs(s.peerOs); };
+  const lockSync = new (require('../../shared/locksync.js').LockSync)({
+    platform: 'linux', helper, enabled: () => settings.app.lockTogether === true,
+    send: (m) => { for (const id of hub.bus.connectedIds()) if (isPc(id)) hub.bus.send(id, m); },
+  }).start();
+  hub.bus.on('lock.now', (m, from) => isPc(from) && lockSync.onMessage(hub.sessions.get(from).displayName()));
   helper.on('ready', () => { sendScreens(); pushState(); });
   const { screen: displays } = require('electron');
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) displays.on(ev, sendScreens);

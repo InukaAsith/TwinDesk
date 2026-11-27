@@ -193,6 +193,7 @@ class Pairing extends EventEmitter {
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.id, macName: this.id.name, os: P.OS.LINUX, mesh: 1,
       tail: require('../../shared/tailnet.js').mine(), // its Tailscale addresses, for reconnecting away from this network (#161)
+      lan: require('../../shared/lanaddrs.js').mine(), lanPort: this.server.port, // its LAN addresses: a phone on Bluetooth moves to the Wi-Fi without discovery (#287)
     });
     this.emit('change');
   }

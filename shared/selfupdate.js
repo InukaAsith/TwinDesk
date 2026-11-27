@@ -8,7 +8,9 @@
 //             keeps Screen Recording, Accessibility and the other permissions by that requirement
 //             and the app's path, so the new app is swapped in at the same path once this one has
 //             quit, and nothing is asked again. A different signer (an ad-hoc repair, a self-built
-//             app) is refused: the DMG is opened instead, as before.
+//             app) is refused: the DMG is opened instead, as before. The old app is kept until the new
+//             one says it started (markStarted, STARTED_MS): one that doesn't is put aside and the old
+//             one opened again (#204), which logs it.
 //   win       the release's NSIS installer runs silently (/S --updated --force-run): one UAC prompt,
 //             as the installer is per-machine; it closes TwinDesk, replaces the app folder and
 //             starts the new version. Declined: this TwinDesk keeps running.
@@ -30,6 +32,7 @@ const run = (cmd, args, opts = {}) => new Promise((resolve) => {
     resolve({ code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, out: String(stdout || ''), err: String(stderr || ''), error: err });
   });
 });
+const STARTED_MS = 90 * 1000; // a new Mac app that hasn't said it started by then is taken back (#204)
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
 const writable = (p) => { try { fs.accessSync(p, fs.constants.W_OK); return true; } catch { return false; } };
 
@@ -61,6 +64,20 @@ class SelfUpdate {
       return 'deb?'; // confirmed by dpkg-query in check()
     }
     return '';
+  }
+
+  // The new version's sign of life (markStarted) and the note of one that didn't start (#204).
+  markerFile() { return path.join(path.dirname(this.dir), '.update-started'); }
+  failedFile() { return path.join(path.dirname(this.dir), '.update-failed'); }
+
+  // Called by the app once it's up: an update waiting for it keeps it; a failed one is said once.
+  // -> the version that didn't start ('' when none).
+  markStarted() {
+    try { fs.writeFileSync(this.markerFile(), String(Date.now())); } catch {}
+    let failed = '';
+    try { failed = fs.readFileSync(this.failedFile(), 'utf8').trim() || '?'; fs.rmSync(this.failedFile(), { force: true }); } catch {}
+    if (failed) this.log(`the update to ${failed} didn’t start within ${STARTED_MS / 1000} s: this version was put back`);
+    return failed;
   }
 
   // The .app this runs from (…/TwinDesk.app/Contents/MacOS/TwinDesk).
@@ -173,17 +190,26 @@ class SelfUpdate {
     // Copied by us, never quarantined; cleared anyway in case the disk image carried it.
     await run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', staged]);
     // After this app has quit: the old bundle aside, the new one in its place (a rename on the same
-    // volume), the old one gone, then the new one opened. Back as it was if the rename fails.
+    // volume), then the new one opened. Back as it was if the rename fails. The old one goes only once
+    // the new one wrote its marker; if it doesn't within STARTED_MS, the new one is stopped and put aside,
+    // the old one back and opened, and a note says so (failedNote, read by markStarted).
+    const marker = this.markerFile();
+    const note = this.failedFile();
     const script = [
-      'pid="$1"; app="$2"; new="$3"; old="$app.old-$$"',
+      'pid="$1"; app="$2"; new="$3"; marker="$4"; note="$5"; ver="$6"; old="$app.old-$$"',
       'i=0; while kill -0 "$pid" 2>/dev/null && [ $i -lt 600 ]; do sleep 0.2; i=$((i+1)); done',
-      'if mv "$app" "$old"; then',
-      '  if mv "$new" "$app"; then rm -rf "$old"; else mv "$old" "$app"; fi',
-      'fi',
-      'rm -rf "$new"',
+      'if ! mv "$app" "$old"; then rm -rf "$new"; open "$app"; exit 0; fi',
+      'if ! mv "$new" "$app"; then mv "$old" "$app"; rm -rf "$new"; open "$app"; exit 0; fi',
+      'rm -f "$marker"',
+      'open "$app"',
+      `i=0; while [ ! -f "$marker" ] && [ $i -lt ${Math.round(STARTED_MS / 200)} ]; do sleep 0.2; i=$((i+1)); done`,
+      'if [ -f "$marker" ]; then rm -rf "$old"; exit 0; fi',
+      'pkill -f "$app/Contents/MacOS/" 2>/dev/null; sleep 2',
+      'rm -rf "$app.failed"; mv "$app" "$app.failed" && mv "$old" "$app" && rm -rf "$app.failed"',
+      'echo "$ver" > "$note"',
       'open "$app"',
     ].join('\n');
-    const p = spawn('/bin/sh', ['-c', script, 'twindesk-update', String(process.pid), app, staged], { detached: true, stdio: 'ignore' });
+    const p = spawn('/bin/sh', ['-c', script, 'twindesk-update', String(process.pid), app, staged, marker, note, String(version || '')], { detached: true, stdio: 'ignore' });
     p.unref();
     this.log(`swapping in ${version} at ${app} after quitting`);
     setTimeout(() => this.app.quit(), this.quitMs);
@@ -257,4 +283,4 @@ function digestOf(d) {
   return m ? m[1].toLowerCase() : '';
 }
 
-module.exports = { SelfUpdate, digestOf };
+module.exports = { SelfUpdate, digestOf, STARTED_MS };

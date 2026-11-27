@@ -261,6 +261,7 @@ class Pairing extends EventEmitter {
     this.server.authenticate(ctx, { deviceId: e.id, name: e.name, os: e.os || P.OS.WIN }, {
       t: P.T.WELCOME, v: P.PROTOCOL_VERSION, macId: this.id.id, macName: this.id.name, os: P.OS.WIN,
       tail: require('../shared/tailnet.js').mine(), // its Tailscale addresses, for reconnecting away from this network (#161)
+      lan: require('../shared/lanaddrs.js').mine(), lanPort: this.server.port, // its LAN addresses: a phone on Bluetooth moves to the Wi-Fi without discovery (#287)
       relay: require('../shared/relay.js').welcome() || null, // your own relay (shared/relay.js), for reconnecting away from this network; null: none
       rc: 1, // a paired Android may come back by itself (shared/reclaim.js)
     }, gate);
