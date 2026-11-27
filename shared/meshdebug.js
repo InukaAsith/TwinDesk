@@ -4,7 +4,7 @@
 // person there let the asking device debug it (Debug › Let other devices debug this computer).
 //
 // Wire (new types; an older app or a phone ignores them, logging the type once):
-//   dbg.req {req, from, to, hops, op, args}
+//   dbg.req {req, from, to, hops, op, args, bin? (put: a base64 piece of the file sent, at most PIECE)}
 //   dbg.res {req, from, to, part, more, data? (the first part), bin? (base64 piece), error?}
 // from/to: device ids (the asker, the device asked); req: unique for the asker.
 //
@@ -25,7 +25,9 @@
 //   - not through Bluetooth: a screenshot or a big log would stall the mouse for seconds;
 //   - a relayed request is the asker's word only: it's done if the asker AND the device that passed it
 //     on are both let in here;
-//   - one log line per request served, none per piece.
+//   - one log line per request served, none per piece (put's pieces: none);
+//   - an update (put, then update: Debug's or the MCP server's) only while Allow any command is on there,
+//     as it runs an installer; never through Bluetooth.
 'use strict';
 
 const fs = require('fs');
@@ -42,7 +44,9 @@ const RUN_LIMIT_MS = 130000;
 const BLE_MAX = 64 * 1024; // what may go through Bluetooth in one answer
 const GREP_SCAN = 16 * 1024 * 1024; // a search reads at most this much of a file
 const OUT_MAX = 16 * 1024 * 1024; // an answer's bytes, at most
-const OPS = ['hello', 'status', 'verbose', 'files', 'log', 'shot', 'diag', 'run', 'restart'];
+const OPS = ['hello', 'status', 'verbose', 'files', 'log', 'shot', 'diag', 'run', 'restart', 'put', 'update'];
+const COMMAND = new Set(['run', 'put', 'update']); // only while Allow any command is on there
+const BIN_IN = Math.ceil(PIECE / 3) * 4; // a put's piece, as base64
 const BIG = new Set(['log', 'shot']); // their answers may be big: not through Bluetooth beyond BLE_MAX
 
 class MeshDebug {
@@ -89,9 +93,11 @@ class MeshDebug {
 
   // -> Promise<{data, bin: Buffer | null}>; rejects with an Error whose code is the device's answer
   // ('not allowed', 'bluetooth', …), 'unreachable', 'no answer' or 'timeout'.
-  ask(to, op, args = {}) {
+  // bin: put's piece (a Buffer, at most PIECE).
+  ask(to, op, args = {}, bin = null) {
     if (!OPS.includes(op)) return Promise.reject(err('unknown op'));
-    if (to === this.self) return this._serveSelf(op, args);
+    if (bin && (op !== 'put' || !Buffer.isBuffer(bin) || bin.length > PIECE)) return Promise.reject(err('bad piece'));
+    if (to === this.self) return this._serveSelf(op, args, bin);
     const quiet = this.silent.get(to);
     if (quiet && op !== 'hello' && this.now() - quiet < RETRY_MS) return Promise.reject(err('no answer'));
     const hop = this.route(to);
@@ -113,11 +119,16 @@ class MeshDebug {
         this.silent.set(to, this.now());
         done(err('no answer'));
       }, NO_ANSWER_MS);
-      p.all = setTimeout(() => done(err('timeout')), op === 'run' ? RUN_LIMIT_MS : LIMIT_MS);
+      p.all = setTimeout(() => done(err('timeout')), op === 'run' || op === 'update' ? RUN_LIMIT_MS : LIMIT_MS);
       for (const t of [p.first, p.all]) if (t.unref) t.unref();
       this.pending.set(req, p);
-      const sent = this.bus.send(hop, { t: 'dbg.req', req, from: this.self, to, hops: 0, op, args: clean(args) });
-      if (!sent) done(err('unreachable'));
+      if (bin && this.transportOf(hop) === 'ble') return done(err('bluetooth'));
+      const msg = { t: 'dbg.req', req, from: this.self, to, hops: 0, op, args: clean(args), ...(bin ? { bin: bin.toString('base64') } : {}) };
+      if (!bin) {
+        if (!this.bus.send(hop, msg)) done(err('unreachable'));
+        return;
+      }
+      this._sendTo(hop, msg); // a piece waits its turn behind what's queued on that socket
     });
   }
 
@@ -181,6 +192,10 @@ class MeshDebug {
         this.log(`[debug] passing on ${line} (through ${this.nameOf(next)})`);
       }
     }
+    // A put's piece never through Bluetooth.
+    if (!answer && typeof m.bin === 'string' && this.transportOf(next) === 'ble') {
+      return this._sendTo(sender, { t: 'dbg.res', req: m.req, from: m.to, to: m.from, part: 0, more: false, error: 'bluetooth' });
+    }
     // Over Bluetooth only small answers (the piece itself decides; a request is small).
     if (answer && this.transportOf(next) === 'ble' && typeof m.bin === 'string' && m.bin.length > BLE_MAX) {
       return this._sendTo(next, { t: 'dbg.res', req: m.req, from: m.from, to: m.to, part: m.part, more: false, error: 'bluetooth' });
@@ -218,7 +233,7 @@ class MeshDebug {
     if (!op) return reply({ error: 'unknown op' });
     const allowed = this._letIn(m, sender);
     const entry = { at: this.now(), from: m.from, op, ok: false, error: '' };
-    if (op !== 'hello') this.log(`[debug] ${this.nameOf(m.from)} asked ${op}${allowed ? '' : ' (not let in)'}`);
+    if (op !== 'hello' && (op !== 'put' || !allowed || Number(m.args && m.args.at) === 0)) this.log(`[debug] ${this.nameOf(m.from)} asked ${op}${allowed ? '' : ' (not let in)'}`);
     if (op !== 'hello' && !allowed) {
       entry.error = 'not allowed';
       this.onServed(entry);
@@ -228,14 +243,16 @@ class MeshDebug {
     // without data, and waits for the rest as before).
     if (op !== 'hello') this._sendTo(sender, { t: 'dbg.res', req: m.req, from: this.self, to: m.from, part: 0, more: true, ack: true });
     const ble = this.transportOf(sender) === 'ble';
-    if (op === 'shot' && ble) {
+    if ((op === 'shot' || op === 'put' || op === 'update') && ble) {
       entry.error = 'bluetooth';
       this.onServed(entry);
       return reply({ error: 'bluetooth' });
     }
     let out;
     try {
-      out = await this._do(op, clean(m.args), { allowed, ble });
+      const bin = op === 'put' && typeof m.bin === 'string' && m.bin.length <= BIN_IN ? Buffer.from(m.bin, 'base64') : null;
+      if (op === 'put' && !bin) throw err('bad piece');
+      out = await this._do(op, clean(m.args), { allowed, ble, bin });
     } catch (e) {
       entry.error = String((e && (e.code || e.message)) || e).slice(0, 200);
       this.onServed(entry);
@@ -265,13 +282,18 @@ class MeshDebug {
   }
 
   // This computer's own tools, without the bus (the Debug tab's own device, the Local API's `self`).
-  async _serveSelf(op, args) {
-    const out = await this._do(op, clean(args), { allowed: true, ble: false, self: true });
+  async _serveSelf(op, args, bin = null) {
+    const out = await this._do(op, clean(args), { allowed: true, ble: false, self: true, bin });
     return { data: out ? out.data : null, bin: out && Buffer.isBuffer(out.bin) ? out.bin : null };
   }
 
-  async _do(op, args, { allowed, ble, self }) {
+  async _do(op, args, { allowed, ble, self, bin }) {
     const L = this.local;
+    // An update that began while Allow any command was on goes on to its end (its later pieces, then its
+    // install), even if the switch turns itself off meanwhile: a 130 MB file took longer than what was left
+    // of that hour.
+    const begun = (op === 'put' && Number(args.at) > 0) || op === 'update' ? !!(L.granted && L.granted(op, args)) : false;
+    if (COMMAND.has(op) && !self && !begun && !this.anyCommand()) throw err('any command is off');
     switch (op) {
       case 'hello':
         return { data: { ...(await L.hello()), ops: OPS, allowed, anyCommand: !!this.anyCommand(), transport: ble ? 'ble' : 'ip' } };
@@ -288,8 +310,11 @@ class MeshDebug {
       case 'diag':
         return { data: await L.diag(args) };
       case 'run':
-        if (!self && !this.anyCommand()) throw err('any command is off');
         return { data: await L.run(args) };
+      case 'put':
+        return { data: await L.put(args, bin) };
+      case 'update':
+        return { data: await L.update(args) };
       case 'restart':
         return { data: await L.restart(args) };
       default:

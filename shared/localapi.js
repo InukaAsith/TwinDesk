@@ -112,6 +112,15 @@ class LocalApi {
           if (typeof body.to !== 'string' || typeof body.op !== 'string') return send(400, { error: 'to and op' });
           return answer(this.actions.debug.ask(body.to, body.op, body.args && typeof body.args === 'object' ? body.args : {}));
         }
+        if (route === 'POST /v1/debug/update') { // an installer of this computer, sent and installed there (docs/debug.md)
+          if (!this.actions.debug || !this.actions.debug.update) return send(404, { error: 'not in Multi-device' });
+          if (typeof body.to !== 'string' || typeof body.path !== 'string' || !path.isAbsolute(body.path) || !fs.existsSync(body.path)) return send(400, { error: 'to and an absolute path' });
+          return answer(this.actions.debug.update(body.to, body.path, body.force === true));
+        }
+        if (route === 'POST /v1/debug/job') {
+          if (!this.actions.debug || !this.actions.debug.job) return send(404, { error: 'not in Multi-device' });
+          return answer(this.actions.debug.job(body.job));
+        }
         if (route === 'POST /v1/clipboard') {
           if (typeof body.text !== 'string' || body.text.length > 200000) return send(400, { error: 'text' });
           this.actions.clipboard(body.text);

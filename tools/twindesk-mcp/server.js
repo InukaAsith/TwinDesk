@@ -90,7 +90,9 @@ const TOOLS = [
         const how = d.state === 'self' ? 'this computer' : d.state === 'via' ? `through ${(d.via || []).join(', ')}` : d.state + (d.rtt != null ? ` ${d.rtt} ms` : '');
         const can = h.error ? explain(h.error) : h.allowed ? `lets this computer debug it${h.anyCommand ? ', any command allowed' : ''}` : 'doesn’t let this computer debug it';
         const diags = (h.diags || []).map((x) => x.name).join(', ');
-        return `${d.name} (${d.os}, id ${d.id}): ${how}; ${can}${h.version ? `; TwinDesk ${h.version}` : ''}${diags ? `; diagnostics: ${diags}` : ''}`;
+        const u = h.update;
+        const upd = u ? `; updates: ${u.kind ? `through the mesh (${u.kind})` : 'not through the mesh (as installed)'}, GitHub ${u.auto ? (u.install ? 'checked and installed by itself' : 'checked') : 'not checked'}` : '';
+        return `${d.name} (${d.os}, id ${d.id}): ${how}; ${can}${h.version ? `; TwinDesk ${h.version}` : ''}${h.edition ? ` (${h.edition})` : ''}${upd}${diags ? `; diagnostics: ${diags}` : ''}`;
       }).join('\n'));
     },
   },
@@ -177,12 +179,52 @@ const TOOLS = [
     },
   },
   {
+    name: 'device_update',
+    description: 'Update TwinDesk on a device of the mesh with an installer on this computer: the file goes there through the mesh (in 128 KB pieces, its SHA-256 checked), it installs as TwinDesk\'s own updater would (the Mac: TwinDesk-<v>-<arch>.dmg, swapped in place, the same signer kept; Windows: the Setup .exe run silently, its administrator prompt shows there; Linux: an .AppImage replaced), then TwinDesk restarts as the new build. Only while that device has Allow any command on. An installer of the other edition (Full KVM or standard, told by "FullKVM" in its name) needs force. Waits up to `wait` seconds (default 300) for it to come back; device_update_status follows a longer one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        device: DEVICE,
+        file: { type: 'string', description: 'The installer\'s absolute path on this computer' },
+        force: { type: 'boolean', description: 'Install it even if its edition (Full KVM or not) isn\'t that device\'s' },
+        wait: { type: 'number', minimum: 0, maximum: 600, description: 'seconds to wait for the result (0: start it and return)' },
+      },
+      required: ['device', 'file'],
+    },
+    run: async ({ device, file, force, wait }) => {
+      const r = await call('POST', 'debug/update', { to: device, path: file, force: !!force });
+      if (!r.ok) throw new Error(`${r.device || device}: ${explain(r.error)}`);
+      return text(await follow(r.job, wait === undefined ? 300 : wait));
+    },
+  },
+  {
+    name: 'device_update_status',
+    description: 'How an update started by device_update goes: sending (bytes sent), installing, restarting, done (with the version it came back as) or failed (why). Waits up to `wait` seconds for it to end.',
+    inputSchema: { type: 'object', properties: { job: { type: 'string' }, wait: { type: 'number', minimum: 0, maximum: 600 } }, required: ['job'] },
+    run: async ({ job, wait }) => text(await follow(job, wait || 0)),
+  },
+  {
     name: 'device_restart',
     description: 'Restart TwinDesk on a device (what: app). It answers first, then restarts; its links come back by themselves.',
     inputSchema: { type: 'object', properties: { device: DEVICE, what: { type: 'string', enum: ['app'] } }, required: ['device'] },
     run: async ({ device, what }) => text(JSON.stringify((await ask(device, 'restart', { what: what || 'app' })).data)),
   },
 ];
+
+// An update job (device_update): polled until it ends or `wait` seconds pass; one line of what it did.
+async function follow(job, wait) {
+  const until = Date.now() + wait * 1000;
+  for (;;) {
+    const j = await call('POST', 'debug/job', { job });
+    if (!j.ok) throw new Error(explain(j.error));
+    const secs = Math.round((Date.now() - j.started) / 1000);
+    const what = j.state === 'done' ? `done in ${secs} s: ${j.device} runs TwinDesk ${j.version} (was ${j.was || '?'}), up ${j.uptime} s`
+      : j.state === 'failed' ? `failed after ${secs} s: ${explain(j.error)}`
+        : `${j.state}${j.state === 'sending' && j.size ? ` ${Math.round((j.sent || 0) / 1048576)} of ${Math.round(j.size / 1048576)} MB` : ''} (${secs} s so far; device_update_status job ${job} follows it)`;
+    if (['done', 'failed'].includes(j.state) || Date.now() >= until) return `Update of ${j.device} with ${path.basename(j.file)}: ${what}`;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
 
 // ---- MCP over stdio ----
 

@@ -133,6 +133,8 @@ function startDebug(opts) {
     fullkvm: opts.fullkvm ? { state: () => opts.fullkvm.state() } : null,
     ps: opts.ps || null,
     service,
+    selfUpdate: () => (opts.updates && opts.updates() && opts.updates().self) || null,
+    updatesCfg: () => settings.updates || null,
   });
   local
     .part('device', async () => ({ id: device.id, name: local.name(), version: app.getVersion(), selected: hub.selectedId || null }))
@@ -228,7 +230,96 @@ function startDebug(opts) {
       || peers.find((x) => x.id.startsWith(to) && to.length >= 6);
     return p ? p.id : null;
   };
+  // An update through the mesh (docs/debug.md): a file of this computer sent to a device in pieces
+  // (put, PUT_WINDOW at a time), installed there (update), then waited for until it answers again as
+  // the new start (its uptime from 0). Jobs: what the Local API's update/job routes report.
+  const jobs = new Map();
+  const PUT_WINDOW = 3;
+  async function pushUpdate(job, id, file, force) {
+    const fs = require('fs');
+    const crypto = require('crypto');
+    const path = require('path');
+    const set = (x) => Object.assign(job, x, { at: Date.now() });
+    try {
+      const st = fs.statSync(file);
+      if (!st.isFile()) throw new Error('not a file');
+      const name = path.basename(file);
+      set({ state: 'checking', size: st.size });
+      const before = (await debug.ask(id, 'hello')).data || {};
+      set({ was: before.version || '', kind: (before.update && before.update.kind) || '' });
+      if (before.update && !before.update.kind) throw new Error('that copy of TwinDesk can’t update itself (as it was installed)');
+      const h = crypto.createHash('sha256');
+      await new Promise((resolve, reject) => fs.createReadStream(file).on('data', (c) => h.update(c)).on('end', resolve).on('error', reject));
+      const sha256 = h.digest('hex');
+      set({ state: 'sending', sha256, sent: 0 });
+      const { PIECE } = require('./meshdebug.js');
+      const fd = fs.openSync(file, 'r');
+      try {
+        const offsets = [];
+        for (let at = 0; at < st.size; at += PIECE) offsets.push(at);
+        const one = async (at) => {
+          const buf = Buffer.alloc(Math.min(PIECE, st.size - at));
+          fs.readSync(fd, buf, 0, buf.length, at);
+          let tries = 0;
+          for (;;) {
+            try { return await debug.ask(id, 'put', { name, size: st.size, sha256, at }, buf); } catch (e) {
+              if (++tries >= 3 || !['timeout', 'unreachable'].includes(e.code)) throw e;
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+          }
+        };
+        // The first piece alone (it starts the file there), then PUT_WINDOW at a time, the last one alone
+        // (it checks the whole file).
+        await one(0);
+        set({ sent: Math.min(PIECE, st.size) });
+        const mid = offsets.slice(1, -1);
+        for (let i = 0; i < mid.length; i += PUT_WINDOW) {
+          await Promise.all(mid.slice(i, i + PUT_WINDOW).map(one));
+          set({ sent: Math.min(st.size, mid[Math.min(mid.length - 1, i + PUT_WINDOW - 1)] + PIECE) });
+        }
+        if (offsets.length > 1) await one(offsets[offsets.length - 1]);
+        set({ sent: st.size });
+      } finally {
+        fs.closeSync(fd);
+      }
+      set({ state: 'installing' });
+      const r = await debug.ask(id, 'update', { name, force: !!force });
+      set({ state: 'restarting', installing: r.data });
+      // Back as the new start: a hello whose uptime is less than the time since the install began.
+      const since = Date.now();
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 5000));
+        if (Date.now() - since > 10 * 60 * 1000) throw new Error('it didn’t come back within 10 minutes (on Windows: is its administrator prompt waiting?)');
+        let hello = null;
+        try { hello = (await debug.ask(id, 'hello')).data; } catch (_) { continue; }
+        if (hello && Number(hello.uptime) * 1000 < Date.now() - since + 5000) {
+          return set({ state: 'done', version: hello.version || '', uptime: hello.uptime });
+        }
+      }
+    } catch (e) {
+      set({ state: 'failed', error: e.code || e.message || String(e) });
+    }
+  }
+
   const api = {
+    // {to, path, force} -> {ok, job}: started; job(job) says how it goes.
+    update: async (to, file, force) => {
+      const id = idOf(to);
+      if (!id) return { ok: false, error: 'no such device' };
+      if (id === device.id) return { ok: false, error: 'not this computer: update it as it was installed' };
+      if (typeof file !== 'string' || !require('path').isAbsolute(file)) return { ok: false, error: 'an absolute path' };
+      for (const j of jobs.values()) if (j.id === id && !['done', 'failed'].includes(j.state)) return { ok: false, error: `already updating ${j.device}` };
+      const job = { job: Math.random().toString(36).slice(2, 10), id, device: nameOf(id), file, state: 'starting', started: Date.now() };
+      jobs.set(job.job, job);
+      if (jobs.size > 20) jobs.delete(jobs.keys().next().value);
+      console.log(`[debug] updating ${job.device} with ${file}`);
+      pushUpdate(job, id, file, force).then(() => console.log(`[debug] update of ${job.device}: ${job.state}${job.error ? ' (' + job.error + ')' : ''}`));
+      return { ok: true, job: job.job, device: job.device };
+    },
+    job: async (j) => {
+      const job = jobs.get(String(j));
+      return job ? { ok: true, ...job, id: undefined } : { ok: false, error: 'no such job' };
+    },
     devices: async () => {
       const peers = hub.peers({ indirect: true });
       const hellos = await Promise.all(peers.map((p) => (P.isPhoneOs && P.isPhoneOs(p.os) ? Promise.resolve({ error: 'phone' })

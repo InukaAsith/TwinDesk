@@ -2,10 +2,11 @@
 // The MCP server (tools/twindesk-mcp/server.js) end to end, as a code agent uses it: the server, spawned,
 // over stdio → this computer's Local API (shared/localapi.js, its key file) → Debug (shared/debug-start.js)
 // → another device on real sockets (windows/mesh: Server, Pairing, LinkManager, Hub). The tools list, the
-// devices, a status, a log, a refusal said plainly, and no Local API at all.
+// devices, a status, a log, a refusal said plainly, an update sent through the mesh, and no Local API at all.
 // Run: node tools/twindesk-mcp/test.js
 'use strict';
 
+process.env.TWINDESK_NO_FULLKVM = '1'; // the standard edition (a checkout carries Full KVM's files): its installer is TwinDesk-Setup-…
 const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -40,8 +41,12 @@ async function node(name) {
   links.bindServer(server);
   const mesh = new Mesh({ selfId: id });
   const hub = new Hub({ device: { id, name }, links, server, pairing, mesh });
-  const n = { name, id, fp: cert.fp, port: server.port, server, pairing, links, storage, mesh, hub, settings: { device: { name }, mesh: {} } };
-  n.dbg = startDebug({ app: { getVersion: () => '9.9.9' }, hub, device: { id, name }, settings: n.settings, save: () => {}, kvm: () => null });
+  const n = { name, id, fp: cert.fp, port: server.port, server, pairing, links, storage, mesh, hub, settings: { device: { name }, mesh: {} }, version: '9.9.9', installed: [] };
+  // Its updater (shared/selfupdate.js): installing "restarts" it as 9.9.10 (Debug's uptime from 0).
+  const self = { quitMs: 300, check: async () => 'win', fits: (d) => /\.exe$/i.test(d.name),
+    install: async (file) => { n.installed.push(fs.readFileSync(file)); setTimeout(() => { n.version = '9.9.10'; n.dbg.local.startedAt = Date.now(); }, 500); } };
+  const app = { getVersion: () => n.version, getPath: () => path.join(tmp, name) };
+  n.dbg = startDebug({ app, hub, device: { id, name }, settings: n.settings, save: () => {}, kvm: () => null, updates: () => ({ self }) });
   n.log = path.join(tmp, `${name}.log`);
   fs.writeFileSync(n.log, `${name} started\n[lane] down\n[server] nitro silent for 8000 ms, closing\n`);
   n.dbg.local.files = async () => [{ name: 'TwinDesk.log', path: n.log, size: fs.statSync(n.log).size }];
@@ -88,7 +93,7 @@ function mcp(apiFile) {
     const init = await m.req('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
     assert.strictEqual(init.result.serverInfo.name, 'twindesk');
     const tools = (await m.req('tools/list', {})).result.tools.map((t) => t.name);
-    assert.deepStrictEqual(tools, ['mesh_devices', 'device_status', 'device_verbose', 'device_files', 'device_log', 'device_screenshot', 'device_diag', 'device_run', 'device_restart']);
+    assert.deepStrictEqual(tools, ['mesh_devices', 'device_status', 'device_verbose', 'device_files', 'device_log', 'device_screenshot', 'device_diag', 'device_run', 'device_update', 'device_update_status', 'device_restart']);
 
     // Not let in yet: the list says so, and a status says what to do.
     let r = await m.tool('mesh_devices', {});
@@ -111,6 +116,23 @@ function mcp(apiFile) {
     assert.strictEqual(r.isError, true);
     r = await m.tool('device_status', { device: 'Nobody' });
     assert.match(r.content[0].text, /no device of that name/);
+
+    // An update: refused while Allow any command is off there; then sent (in pieces, checked), installed and
+    // waited for until it's back as the new version.
+    const setup = path.join(tmp, 'TwinDesk-Setup-9.9.10.exe');
+    const bytes = crypto.randomBytes(700 * 1024 + 5);
+    fs.writeFileSync(setup, bytes);
+    r = await m.tool('mesh_devices', {});
+    assert.match(r.content[0].text, /Ryzen9 [^\n]*updates: through the mesh \(win\), GitHub checked/);
+    r = await m.tool('device_update', { device: 'Ryzen9', file: setup, wait: 30 });
+    assert.match(r.content[0].text, /failed after .*Allow any command is off/);
+    B.settings.mesh.debug.anyCommandUntil = Date.now() + 60000;
+    r = await m.tool('device_update', { device: 'Ryzen9', file: setup, wait: 60 });
+    assert.match(r.content[0].text, /Update of Ryzen9 with TwinDesk-Setup-9\.9\.10\.exe: done in \d+ s: Ryzen9 runs TwinDesk 9\.9\.10 \(was 9\.9\.9\)/);
+    assert.strictEqual(B.installed.length, 1);
+    assert.ok(B.installed[0].equals(bytes), 'the very file');
+    r = await m.tool('device_update', { device: 'Ryzen9', file: path.join(tmp, 'TwinDesk-FullKVM-Setup-9.9.10.exe'), wait: 0 });
+    assert.strictEqual(r.isError, true, 'no such file');
     m.end();
 
     // TwinDesk's Local API off: said plainly.

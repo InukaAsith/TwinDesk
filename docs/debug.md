@@ -29,7 +29,7 @@ one switch per paired computer (`mesh.debug.allow` in `multi.json`).
 `shared/meshdebug.js`, on the hub's bus. New types; an older app or a phone ignores them.
 
 ```
-dbg.req {req, from, to, hops, op, args}
+dbg.req {req, from, to, hops, op, args, bin? (put: a base64 piece of the file, at most 128 KB)}
 dbg.res {req, from, to, part, more, data? (first part), bin? (base64 piece), error?, ack?}
 ```
 
@@ -38,7 +38,7 @@ data. The answer follows when it's done, so a slow diagnostic or command is neve
 
 | op | args | answer |
 |---|---|---|
-| `hello` | | name, version, os, edition, uptime, diagnostics, `allowed`, `anyCommand`, `transport` |
+| `hello` | | name, version, os, edition, uptime, diagnostics, `update` (below), `allowed`, `anyCommand`, `transport` |
 | `status` | | the snapshot (below) |
 | `verbose` | `{tags, minutes}` | on for at most 120 min; `minutes: 0` turns it off |
 | `files` | | the logs and their sizes |
@@ -47,6 +47,8 @@ data. The answer follows when it's done, so a slow diagnostic or command is neve
 | `diag` | `{name, peer?, hours?}` | the output of a fixed diagnostic |
 | `run` | `{cmd, timeout}` | only with *Allow any command* on |
 | `restart` | `{what: 'app'}` | answers, then restarts |
+| `put` | `{name, size, sha256, at}` + `bin` | a piece of an installer, written at `at`; the last one checks the SHA-256. Only with *Allow any command* on |
+| `update` | `{name, force?}` | installs it, then TwinDesk restarts as the new build. Only with *Allow any command* on |
 
 **Through other devices.** The bus reaches only direct sessions, so a device that gets a request for
 another passes it on: to that device if it's connected, else to the first connected device it's
@@ -113,6 +115,37 @@ installed is skipped. On Windows they're the app's own scripts (`windows/scripts
 | `reach` | ping + a TCP connect to that device's address and port | same | same |
 | `sockets`, `processes`, `firewall`, `fullkvm` | netstat, tasklist, firewall rules, the service's state | ss, ps, firewall-cmd/ufw, systemctl or rc-service | lsof, ps, socketfilterfw |
 
+## Updating through the mesh
+
+TwinDesk's own updater (`shared/updates.js`) checks the main project's GitHub releases: on start and
+every 6 hours (General › Check for updates), and installs one by itself only with *Install
+automatically* on. In Multi-device it waits for no device to be connected, which is almost never. A
+build of your own (this fork's, the same version number as the release) doesn't come from there, so
+it's sent through the mesh instead, from a computer that has the installer:
+
+1. The file goes to the device in `put` pieces of 128 KB, 3 at a time, each acknowledged. The device
+   writes them to `<userData>/mesh-update/` and checks the whole file's SHA-256 when the last piece
+   arrives.
+2. `update` installs it as the updater would (`shared/selfupdate.js`):
+   - **Mac:** the `.dmg`'s app is swapped in place. It must have the same signer as the installed app,
+     so macOS keeps its permissions.
+   - **Windows:** the `Setup .exe` runs silently. Its administrator prompt shows on that PC; with Full KVM
+     it can be answered from another computer.
+   - **Linux:** an `.AppImage` the app runs from is replaced; a `.deb` installs through pkexec.
+   - A copy installed otherwise can't take it: `hello`'s `update.kind` is `''`. For example, nitro's
+     unpacked AppImage in `/opt/twindesk`.
+3. The sender asks `hello` every 5 s until the device answers as a new start (its uptime from 0), and
+   reports its version.
+
+Rules:
+- Only while that device has *Allow any command* on, since it runs an installer.
+- Never through Bluetooth.
+- An installer of the other edition is refused unless `force`. The edition is told by `FullKVM` in the
+  file's name.
+
+`hello`'s `update`: `{kind, auto, install}`, how this copy updates and what it does with GitHub's
+releases.
+
 ## Screenshot
 
 Electron's `desktopCapturer` on Windows, X11 and the Mac (which needs Screen Recording). On Wayland
@@ -125,7 +158,10 @@ the portal would ask the person every time, so the first installed tool takes it
 TwinDesk through the Local API (`shared/localapi.js`), now in Multi-device too:
 
 - `GET /v1/debug/devices`;
-- `POST /v1/debug/ask {to, op, args}`, where `to` is a device's name, its id, or `self`.
+- `POST /v1/debug/ask {to, op, args}`, where `to` is a device's name, its id, or `self`;
+- `POST /v1/debug/update {to, path, force}` starts an update with the installer at `path` on this
+  computer and answers `{job}`. `POST /v1/debug/job {job}` says how it goes: `sending` (`sent` of
+  `size`), `installing`, `restarting`, `done` (`version`) or `failed` (`error`).
 
 Setup on the computer the agent runs on:
 
@@ -135,7 +171,9 @@ Setup on the computer the agent runs on:
    `claude mcp add twindesk -- node tools/twindesk-mcp/server.js`.
 
 Tools: `mesh_devices`, `device_status`, `device_verbose`, `device_files`, `device_log`,
-`device_screenshot`, `device_diag`, `device_run`, `device_restart`. Each takes `device`.
+`device_screenshot`, `device_diag`, `device_run`, `device_update` (`file`: an installer's path here;
+it waits up to `wait` seconds), `device_update_status` (`job`), `device_restart`. Each takes `device`,
+except `device_update_status`.
 
 ## Tests
 
